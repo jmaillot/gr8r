@@ -19,12 +19,19 @@ COPY --from=build /app/server.js ./server.js
 COPY --from=build /app/seed.json ./seed.json
 COPY --from=build /app/dist ./dist
 
-RUN mkdir -p /data && chown -R node:node /app /data
-USER node
+RUN apk add --no-cache su-exec \
+  && mkdir -p /data \
+  && chown -R node:node /app /data
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 VOLUME ["/data"]
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+# The entrypoint starts as root, fixes ownership of /data, then drops to PUID:PGID.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

@@ -144,10 +144,16 @@ ADMIN_EMAIL=you@example.com
 ADMIN_PASSWORD=<long unique password>
 ADMIN_NAME=Your Name
 WORKSPACE_NAME=Gr8r Studio
+PUID=1000
+PGID=1000
 ALLOW_SIGNUP=false
 SESSION_DAYS=30
 SECURE_COOKIE=auto
 ```
+
+`PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
+The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
+restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
 
 Generate a strong password if you like:
 
@@ -191,6 +197,11 @@ Then open `https://gr8r.example.com` and sign in.
 - Login works and a page refresh keeps you signed in.
 - In DevTools → Application → Cookies, `gr8r_session` is **HttpOnly**, **Secure** and
   **SameSite=Lax**.
+- The process runs as your `PUID` and `/data` is owned by it:
+  ```sh
+  docker top gr8r-studio -o user | tail -1
+  docker compose exec gr8r ls -ldn /data
+  ```
 - Make an edit, reload, and confirm it persisted.
 - `docker compose logs gr8r` shows no errors.
 
@@ -284,17 +295,15 @@ docker cp /var/backups/gr8r/backup-2026-10-21-0315.db gr8r-studio:/data/gr8r.db
 
 VOL=$(docker inspect gr8r-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
-docker run --rm --user root -v "$VOL":/data gr8r-studio:1.0.0 \
-  sh -c 'chown -R node:node /data && rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
+docker run --rm --user root --entrypoint sh -v "$VOL":/data gr8r-studio:1.0.0 \
+  -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
 
 docker compose start gr8r
 docker compose logs --tail=20 gr8r
 ```
 
-`docker cp` preserves the snapshot's owner. Backups written by root (for example from
-cron) are root-owned, and the server runs as `node` (uid 1000); the `chown` step is what
-lets it reopen the database. Skipping it produces `unable to open database file` at
-startup.
+`docker cp` preserves the snapshot's owner. The entrypoint runs `chown` on `/data` before
+dropping to `PUID:PGID`, so a backup written by root is usable without extra steps.
 
 ## 10. Updates and rollback
 
@@ -320,36 +329,46 @@ migrations are additive, so the volume survives rebuilds — but take the backup
 
 ## 11. Troubleshooting
 
-| Symptom                                   | Check                                                                                                                             |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `set ADMIN_EMAIL in .env` on `compose up` | You are not in `/opt/gr8r`, or `.env` is missing.                                                                                 |
-| Traefik returns 404                       | The container is not on the `traefik` network, or the `Host(...)` label does not match DNS. Try `docker network inspect traefik`. |
-| 502 Bad Gateway                           | The container is down or unhealthy: `docker compose ps`, `docker compose logs gr8r`.                                              |
-| No certificate                            | DNS not propagated, ports 80/443 blocked, or the resolver is not named `letsencrypt`. Check the Traefik logs.                     |
-| Login bounces back to the form            | The cookie was rejected. Confirm HTTPS, that Traefik sends `X-Forwarded-Proto`, and try `SECURE_COOKIE=true`.                     |
-| "Could not reach the server" in the UI    | `/api` is not routed. Test `https://host/api/health`.                                                                             |
-| Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' gr8r node server.js --set-password you@example.com`                                   |
-| Which accounts exist?                     | See the command below.                                                                                                            |
-| Data disappeared                          | Someone ran `docker compose down -v`, which deletes the volume. Restore from backup.                                              |
-| `unable to open database file` at startup | `/data` or `gr8r.db` is not writable by uid 1000 (`node`). See the fix below.                                                     |
-| `./data:/data` bind mount fails           | Docker created the host directory as root. Either use the named volume, or `sudo chown -R 1000:1000 ./data`.                      |
+| Symptom                                   | Check                                                                                                                                   |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `set ADMIN_EMAIL in .env` on `compose up` | You are not in `/opt/gr8r`, or `.env` is missing.                                                                                       |
+| Traefik returns 404                       | The container is not on the `traefik` network, or the `Host(...)` label does not match DNS. Try `docker network inspect traefik`.       |
+| 502 Bad Gateway                           | The container is down or unhealthy: `docker compose ps`, `docker compose logs gr8r`.                                                    |
+| No certificate                            | DNS not propagated, ports 80/443 blocked, or the resolver is not named `letsencrypt`. Check the Traefik logs.                           |
+| Login bounces back to the form            | The cookie was rejected. Confirm HTTPS, that Traefik sends `X-Forwarded-Proto`, and try `SECURE_COOKIE=true`.                           |
+| "Could not reach the server" in the UI    | `/api` is not routed. Test `https://host/api/health`.                                                                                   |
+| Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' gr8r node server.js --set-password you@example.com`                                         |
+| Which accounts exist?                     | See the command below.                                                                                                                  |
+| Data disappeared                          | Someone ran `docker compose down -v`, which deletes the volume. Restore from backup.                                                    |
+| `unable to open database file` at startup | `/data` is not writable by the configured `PUID` (default 1000). Usually an old image, or a manual `user:` override. See the fix below. |
+| `./data:/data` bind mount fails           | The entrypoint should chown it at startup. Rebuild; if you override `user:`, chown it yourself.                                         |
 
 ### Fix `unable to open database file`
 
-This is a permissions error, not a missing path: the server runs as `node` (uid 1000), and
-either `/data`, the database file, or a WAL file is owned by root.
+This is a permissions error, not a missing path: `/data`, `gr8r.db`, or a WAL file is not
+writable by the user the server runs as (`PUID`, default 1000).
 
-Find out what is mounted at `/data`:
+First make sure the current image is running — the entrypoint chowns `/data` on every
+start:
+
+```sh
+cd /opt/gr8r
+docker compose up -d --build
+docker compose logs --tail=30 gr8r
+```
+
+If it still fails, inspect the mount:
 
 ```sh
 docker inspect gr8r-studio --format '{{json .Mounts}}'
 ```
 
-If it is a **bind mount** (a host path is listed as `Source`):
+If it is a **bind mount** (a host path is listed as `Source`), and you override the
+container user yourself, give it ownership. Replace `1026:1026` with your `PUID:PGID`:
 
 ```sh
 docker compose down
-sudo chown -R 1000:1000 /path/to/data
+sudo chown -R 1026:1026 /path/to/data
 docker compose up -d
 ```
 
@@ -360,11 +379,11 @@ VOL=$(docker inspect gr8r-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
 docker compose down
 docker run --rm --user root -v "$VOL":/data alpine:3.21 \
-  sh -c 'chown -R 1000:1000 /data && ls -ldn /data'
+  sh -c 'chown -R 1026:1026 /data && ls -ldn /data'
 docker compose up -d
 ```
 
-Do not fix this by running the container as root, and do not store the database in the
+Do not fix this by running the app as root, and do not store the database in the
 repository: the named volume is the intended location.
 
 List accounts:
@@ -406,6 +425,9 @@ the client falls back to local demo mode.
   if you outgrow it, the storage layer is isolated in `server.js` and can move to Postgres.
 - **Sessions** are opaque random tokens stored hashed, sent in an httpOnly `SameSite=Lax`
   cookie. Passwords are scrypt hashes.
+- **The entrypoint** starts as root only long enough to make `/data` writable, then drops to
+  `PUID:PGID` with `su-exec`. Because the image has no default `USER`, `docker compose exec`
+  runs as root; use it for the documented CLI commands, nothing else.
 - **`TRUST_PROXY=true`** trusts `X-Forwarded-*`. Keep the container behind Traefik; it
   publishes no port. Direct exposure would let clients spoof their IP for throttling.
 - **Rate limiting** is in memory and resets when the container restarts.

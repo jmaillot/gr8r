@@ -10,6 +10,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
       ADMIN_NAME: ${ADMIN_NAME:-Admin}
       WORKSPACE_NAME: ${WORKSPACE_NAME:-Gr8r Studio}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
       SESSION_DAYS: ${SESSION_DAYS:-30}
       SECURE_COOKIE: ${SECURE_COOKIE:-auto}
