@@ -102,6 +102,26 @@ addEventListener('gr8r:save-error', e => {
   const h = (location.hash || '').slice(1);
   const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding'];
   const withServer = await api.init();
+  const joinToken = (location.pathname.match(/^\/join\/([A-Za-z0-9_-]{16,128})\/?$/) || [])[1];
+
+  if (joinToken) {
+    if (!withServer) {
+      S.ui.auth = 'login';
+      render();
+      return;
+    }
+    const signedIn = await api.me();
+    if (signedIn) {
+      // Already a member: don't consume the invite, just go to the workspace.
+      history.replaceState(null, '', '/');
+    } else {
+      const inv = await api.invite(joinToken);
+      S.ui.join = { token: joinToken, ...(inv.ok ? inv.data : { error: inv.error || 'This invite link is not valid.' }) };
+      S.ui.auth = 'join';
+      render();
+      return;
+    }
+  }
 
   if (withServer) {
     const user = await api.me();

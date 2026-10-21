@@ -15,6 +15,7 @@ services:
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
       SEED_DATA: ${SEED_DATA:-true}
       SESSION_DAYS: ${SESSION_DAYS:-30}
+      INVITE_DAYS: ${INVITE_DAYS:-7}
       SECURE_COOKIE: ${SECURE_COOKIE:-auto}
       TRUST_PROXY: 'true'
       DATA_DIR: /data

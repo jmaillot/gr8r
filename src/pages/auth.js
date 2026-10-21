@@ -37,6 +37,24 @@ export function renderAuth() {
     ${api.enabled ? (api.allowSignup ? `<p class="auth-foot">Don't have an account? <button type="button" class="link" data-a="auth" data-v="signup">Sign up</button></p>` : `<p class="auth-foot">Accounts are created by your workspace admin.</p>`) : `<p class="auth-foot">Don't have an account? <button type="button" class="link" data-a="auth" data-v="signup">Sign up</button></p>`}</form>`,
       api.enabled ? '' : `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="signup">Sign up</button>`,
     );
+  if (s === 'join') {
+    const j = S.ui.join || {};
+    if (j.error)
+      return authShell(
+        `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center"><span class="ftype" style="--c:var(--red);width:44px;height:44px;border-radius:11px">${ic('link', 20)}</span></div><h1>Invite unavailable</h1><p class="sub">${esc(j.error)}</p><button class="btn btn-primary btn-lg btn-block" data-a="auth" data-v="login">Go to sign in</button></div>`,
+      );
+    const email = j.email || S.ui.af.email;
+    return authShell(
+      `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doJoin" novalidate>
+    <div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>Join ${esc(j.workspace || D().ws.name)}</h1><p class="sub">Create your account to get access to this workspace.</p>
+    ${e.join ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.join)}</span></div>` : ''}
+    <div class="field"><label class="label" for="j-name">Full name</label><input class="input input-lg ${icls('name')}" id="j-name" value="${esc(S.ui.af.name || '')}" autocomplete="name" autofocus placeholder="Your name">${ferr('name')}</div>
+    <div class="field"><label class="label" for="j-email">Email</label><input class="input input-lg ${icls('email')}" id="j-email" type="email" value="${esc(email)}" autocomplete="email" ${j.email ? 'readonly' : ''}>${ferr('email') || (j.email ? '<span class="hint">This invite is for this address.</span>' : '')}</div>
+    <div class="field"><label class="label" for="j-pw">Password</label><input class="input input-lg ${icls('pw')}" id="j-pw" type="password" data-in="pwStrength" value="${esc(S.ui.pwNew || '')}" autocomplete="new-password">${strengthMeter(S.ui.pwNew || '')}${ferr('pw') || '<span class="hint">At least 10 characters with a number or symbol.</span>'}</div>
+    <button class="btn btn-primary btn-lg btn-block" data-a="doJoin" id="join-btn">Create account &amp; join</button>
+    <p class="auth-foot">Already have an account? <button type="button" class="link" data-a="auth" data-v="login">Sign in</button></p></form>`,
+    );
+  }
   if (s === 'signup')
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doSignup" novalidate>

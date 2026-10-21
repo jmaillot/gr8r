@@ -1514,10 +1514,42 @@ IN.shareAccess = el => {
 };
 A.invite = () => {
   S.ui.inviteDraft = '';
+  S.ui.inviteLinks = null;
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'invite' });
 };
+const API_ROLE = { Admin: 'admin', Member: 'member', Guest: 'viewer' };
+
+function addInvitedMember(invites, role, team) {
+  invites.forEach(inv => {
+    if (!inv.email) return;
+    const email = inv.email.toLowerCase();
+    const existing = D().members.find(m => (m.email || '').toLowerCase() === email);
+    if (existing) {
+      existing.status = 'invited';
+      existing.role = role;
+      existing.team = team;
+      return;
+    }
+    D().members.push({
+      id: uid('m'),
+      name: inv.email
+        .split('@')[0]
+        .replace(/[._-]+/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase()),
+      email: inv.email,
+      role,
+      team,
+      title: role,
+      c: '#6B7280',
+      status: 'invited',
+      last: null,
+      tz: '—',
+    });
+  });
+}
+
 A.submitInvite = () => {
   const raw = $('#inv-emails').value;
   S.ui.inviteDraft = raw;
@@ -1538,41 +1570,68 @@ A.submitInvite = () => {
     render();
     return;
   }
-  loadingBtn('inv-submit', 600, () => {
-    if (
-      !mutate(() =>
-        list.forEach(e => {
-          if (!D().members.some(m => m.email === e))
-            D().members.push({
-              id: uid('m'),
-              name: e
-                .split('@')[0]
-                .replace(/[._-]+/g, ' ')
-                .replace(/\b\w/g, c => c.toUpperCase()),
-              email: e,
-              role,
-              team,
-              title: role,
-              c: '#6B7280',
-              status: 'invited',
-              last: null,
-              tz: '—',
-            });
-        }),
+  if (!api.enabled) {
+    loadingBtn('inv-submit', 600, () => {
+      if (
+        !mutate(() =>
+          addInvitedMember(
+            list.map(email => ({ email })),
+            role,
+            team,
+          ),
+        )
       )
-    )
+        return;
+      S.ui.modals.pop();
+      S.ui.errors = {};
+      render();
+      toast(`${list.length} invitation${list.length > 1 ? 's' : ''} sent`);
+    });
+    return;
+  }
+  loadingBtn('inv-submit', 0, async () => {
+    const btn = document.getElementById('inv-submit');
+    const done = () => {
+      btn?.classList.remove('is-loading');
+      btn?.removeAttribute('aria-busy');
+    };
+    const res = await api.createInvites(list, API_ROLE[role] || 'member', team || null);
+    done();
+    if (!res.ok) {
+      S.ui.errors = { invite: res.error || 'Could not create the invites' };
+      render();
       return;
-    S.ui.modals.pop();
+    }
+    mutate(() =>
+      addInvitedMember(
+        list.map(email => ({ email })),
+        role,
+        team,
+      ),
+    );
+    S.ui.inviteLinks = res.data.invites;
     S.ui.errors = {};
     render();
-    toast(`${list.length} invitation${list.length > 1 ? 's' : ''} sent`);
+    toast(`${list.length} invite link${list.length > 1 ? 's' : ''} created`);
   });
 };
-A.copyInviteLink = () => copy(`https://gr8rstudio.com/join/${D().ws.url}-7f3k2`, 'Invite link copied');
-A.resendInvite = el => {
+A.copyInviteLink = async () => {
+  if (!api.enabled) return copy(`https://gr8rstudio.com/join/${D().ws.url}-7f3k2`, 'Invite link copied');
+  const role = API_ROLE[$('#inv-role')?.value] || 'member';
+  const team = $('#inv-team')?.value || null;
+  const res = await api.createInvites([], role, team);
+  if (!res.ok) return toast(res.error || 'Could not create an invite link', { kind: 'err' });
+  await copy(res.data.invites[0].url, 'Invite link copied');
+};
+A.resendInvite = async el => {
+  const m = mem(el.dataset.id);
   S.ui.pop = null;
   render();
-  toast(`Invite resent to ${mem(el.dataset.id).email}`);
+  if (!api.enabled) return toast(`Invite resent to ${m.email}`);
+  if (!m) return;
+  const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', m.team || null);
+  if (!res.ok) return toast(res.error || 'Could not create a new invite', { kind: 'err' });
+  await copy(res.data.invites[0].url, 'New invite link copied');
 };
 A.viewProfile = el => go('member', { id: el.dataset.id });
 A.assignToMember = el => {
@@ -2151,6 +2210,48 @@ A.socialAuth = el => {
   if (api.enabled) return toast('Social sign-in is not configured on this server.', { kind: 'info' });
   el.classList.add('is-loading');
   setTimeout(() => enterApp(`Signed in with ${el.dataset.v}`), 800);
+};
+A.doJoin = () => {
+  const j = S.ui.join;
+  if (!j?.token) return;
+  const e = (S.ui.errors = {});
+  S.ui.af = S.ui.af || { email: '', name: '' };
+  const nm = $('#j-name').value.trim();
+  const em = (j.email || $('#j-email').value).trim();
+  const pw = $('#j-pw').value;
+  S.ui.af.name = nm;
+  S.ui.af.email = em;
+  if (!nm) e.name = 'Enter your name';
+  if (!EMAIL_RE.test(em)) e.email = 'Enter a valid email address';
+  if (pw.length < 10 || !/[0-9\W]/.test(pw)) e.pw = 'Use at least 10 characters, including a number or symbol';
+  if (Object.keys(e).length) {
+    render();
+    return;
+  }
+  loadingBtn('join-btn', 0, async () => {
+    const btn = document.getElementById('join-btn');
+    const done = () => {
+      btn?.classList.remove('is-loading');
+      btn?.removeAttribute('aria-busy');
+    };
+    const res = await api.acceptInvite(j.token, nm, em, pw);
+    if (!res.ok) {
+      done();
+      S.ui.errors = { join: res.error || 'Could not join the workspace' };
+      render();
+      return;
+    }
+    const ws = await hydrateFromServer();
+    if (!ws.ok) {
+      done();
+      S.ui.errors = { join: 'Account created, but the workspace could not be loaded.' };
+      render();
+      return;
+    }
+    S.ui.pwNew = '';
+    history.replaceState(null, '', '/');
+    enterApp(`Welcome, ${nm}`);
+  });
 };
 A.doSignup = () => {
   const e = (S.ui.errors = {});

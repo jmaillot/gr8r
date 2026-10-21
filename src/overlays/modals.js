@@ -3,6 +3,7 @@ import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
 import { D, S, mem, pColor, proj, task, teamsList } from '../core/store.js';
+import { api } from '../core/api.js';
 import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
@@ -215,7 +216,8 @@ export function shareModal(m, H) {
 }
 export function inviteModal(m, H) {
   const err = S.ui.errors.invite;
-  return `${H('Invite to ' + esc(D().ws.name), 'Invited people get an email with a link to join.')}
+  const links = S.ui.inviteLinks || [];
+  return `${H('Invite to ' + esc(D().ws.name), api.enabled ? 'Create a link for each person, then send it yourself. Links expire automatically.' : 'Invited people get an email with a link to join.')}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">Email addresses</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : '<span class="hint">Separate multiple addresses with commas.</span>'}</div>
     <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">Role</label><select class="select" id="inv-role">${['Member', 'Admin', 'Guest'].map(r => `<option>${r}</option>`).join('')}</select></div>
@@ -223,8 +225,20 @@ export function inviteModal(m, H) {
       .map(t => `<option value="${t.id}">${t.name}</option>`)
       .join('')}</select></div></div>
     <div class="alert info">${ic('info', 14)}<span><b>Guests</b> can only see projects they're added to and can't create projects.</span></div>
+    ${
+      links.length
+        ? `<div class="field"><span class="label">Invite links</span>${links
+            .map(
+              l =>
+                `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="Invite link${l.email ? ' for ' + esc(l.email) : ''}" style="font-size:12px"><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">Copy</button></div>`,
+            )
+            .join(
+              '',
+            )}<span class="hint">${links.some(l => l.email) ? 'Each address has its own single-use link.' : 'This link works until it expires.'}</span></div>`
+        : ''
+    }
   </form>
-  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}Copy invite link</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">Send invites</button></div>`;
+  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}Copy invite link</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">${api.enabled ? 'Create links' : 'Send invites'}</button></div>`;
 }
 export function confirmModal(m) {
   const needs = m.typeName;

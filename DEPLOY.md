@@ -247,6 +247,26 @@ docker compose exec -e USER_PASSWORD='another long password' \
 Accounts created this way get the `member` role (read/write). The API also enforces a
 read-only `viewer` role, but there is no role-management UI yet.
 
+### Invite links
+
+Admins and owners can invite people from **Members → Invite**. The server creates the links;
+no email is sent, so copy them and send them yourself.
+
+- Links expire after `INVITE_DAYS` (default 7).
+- An invite created for a specific address is single-use, and only that address can accept it.
+- **Copy invite link** creates a reusable workspace link with the role selected in the dialog;
+  anyone holding it can join until it expires.
+- Sign-ups stay disabled. Invite links are the only way to create accounts besides the CLI.
+- Removing a member from the workspace UI does not yet revoke access or pending links.
+
+There is no revoke UI; let links expire. To invalidate every pending link immediately, delete
+them from the database and restart:
+
+```sh
+docker compose exec gr8r node -e \
+  "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/gr8r.db');db.exec('delete from invites');console.log('pending invites cleared')"
+```
+
 Password reset (also revokes that user's sessions):
 
 ```sh

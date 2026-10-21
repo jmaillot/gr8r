@@ -78,4 +78,15 @@ export const api = {
     if (r.ok) this.revision = r.data.revision;
     return r;
   },
+  async createInvites(emails, role, team) {
+    return call('POST', '/api/invites', { emails, role, team });
+  },
+  async invite(token) {
+    return call('GET', `/api/invites/${encodeURIComponent(token)}`);
+  },
+  async acceptInvite(token, name, email, password) {
+    const r = await call('POST', `/api/invites/${encodeURIComponent(token)}/accept`, { name, email, password });
+    if (r.ok) state.user = r.data.user;
+    return r;
+  },
 };

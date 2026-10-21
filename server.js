@@ -17,6 +17,7 @@
      ALLOW_SIGNUP=false     let visitors create accounts
      SEED_DATA=true         false = start with an empty workspace
      SESSION_DAYS=30
+     INVITE_DAYS=7          invite link lifetime
      SECURE_COOKIE=auto     auto | true | false
      TRUST_PROXY=true       read X-Forwarded-* (behind Traefik)
      MAX_BODY_BYTES=8388608
@@ -44,6 +45,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
 const SEED_DATA = process.env.SEED_DATA !== 'false';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
+const INVITE_DAYS = Number(process.env.INVITE_DAYS || 7);
 const SECURE_COOKIE = process.env.SECURE_COOKIE || 'auto';
 const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
@@ -82,6 +84,18 @@ const SCHEMA = `
     role         text not null check (role in ('owner','admin','member','viewer')),
     primary key (workspace_id, user_id)
   );
+  create table if not exists invites (
+    token_hash text primary key,
+    email      text,
+    role       text not null check (role in ('admin','member','viewer')),
+    team       text,
+    created_by text not null references users(id) on delete cascade,
+    created_at integer not null,
+    expires_at integer not null,
+    used_at    integer,
+    used_by    text
+  );
+  create index if not exists invites_expiry on invites(expires_at);
 `;
 
 function openDb() {
@@ -230,6 +244,7 @@ function ensureMember(doc, user) {
   if (match) {
     if (!match.id) match.id = `m_${user.id.slice(0, 8)}`;
     if (user.name && (!match.name || match.name === 'Member')) match.name = user.name;
+    if (match.status === 'invited') match.status = 'active';
     return match.id;
   }
   const id = `m_${user.id.slice(0, 8)}`;
@@ -301,6 +316,23 @@ function json(res, status, body) {
 function proto(req) {
   if (TRUST_PROXY && req.headers['x-forwarded-proto']) return String(req.headers['x-forwarded-proto']).split(',')[0].trim();
   return req.socket.encrypted ? 'https' : 'http';
+}
+
+function publicBase(req) {
+  const forwarded = TRUST_PROXY
+    ? String(req.headers['x-forwarded-host'] || '')
+        .split(',')[0]
+        .trim()
+    : '';
+  return `${proto(req)}://${forwarded || req.headers.host || 'localhost'}`;
+}
+
+/* UI labels map to the API's membership roles. */
+function inviteRole(value) {
+  const role = String(value || '').toLowerCase();
+  if (role === 'admin' || role === 'member' || role === 'viewer') return role;
+  if (role === 'guest') return 'viewer';
+  return 'member';
 }
 
 function clientIp(req) {
@@ -480,6 +512,125 @@ async function handleApi(req, res, url) {
     );
     setSessionCookie(req, res, token);
     return json(res, 201, { user: { ...publicUser(user), role: 'member' } });
+  }
+
+  if (pathname === '/api/invites' && method === 'POST') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    const actorRole = roleOf(user.id);
+    if (actorRole !== 'owner' && actorRole !== 'admin') {
+      return json(res, 403, { error: 'Only workspace admins can invite people' });
+    }
+
+    const body = await readJson(req);
+    const role = inviteRole(body?.role);
+    const team = body?.team ? String(body.team).slice(0, 40) : null;
+    let emails = Array.isArray(body?.emails) ? body.emails : [];
+    emails = [
+      ...new Set(
+        emails
+          .map(e =>
+            String(e || '')
+              .trim()
+              .toLowerCase(),
+          )
+          .filter(Boolean),
+      ),
+    ];
+    if (emails.length > 20) return json(res, 400, { error: 'Create at most 20 invites at a time' });
+    for (const email of emails) if (!emailOk(email)) return json(res, 400, { error: `Invalid email: ${email}` });
+
+    const t = now();
+    const expiresAt = t + INVITE_DAYS * 86400 * 1000;
+    const rows = [];
+    db.exec('begin immediate');
+    try {
+      db.prepare('delete from invites where expires_at < ?').run(t);
+      for (const email of emails.length ? emails : [null]) {
+        if (email && db.prepare('select 1 from users where email = ?').get(email)) {
+          db.exec('rollback');
+          return json(res, 409, { error: `${email} already has an account` });
+        }
+        const token = crypto.randomBytes(24).toString('base64url');
+        db.prepare('insert into invites (token_hash, email, role, team, created_by, created_at, expires_at) values (?,?,?,?,?,?,?)').run(
+          sha256(token),
+          email,
+          role,
+          team,
+          user.id,
+          t,
+          expiresAt,
+        );
+        rows.push({ email, role, url: `${publicBase(req)}/join/${token}`, expiresAt });
+      }
+      db.exec('commit');
+    } catch (err) {
+      db.exec('rollback');
+      throw err;
+    }
+    return json(res, 201, { invites: rows });
+  }
+
+  const inviteMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})$/);
+  if (inviteMatch && method === 'GET') {
+    const row = db.prepare('select * from invites where token_hash = ?').get(sha256(inviteMatch[1]));
+    if (!row) return json(res, 404, { error: 'This invite link is not valid' });
+    if (row.used_at) return json(res, 410, { error: 'This invite has already been used' });
+    if (row.expires_at <= now()) return json(res, 410, { error: 'This invite has expired' });
+    const ws = getWorkspace();
+    return json(res, 200, { workspace: ws.name, email: row.email, role: row.role, expiresAt: row.expires_at });
+  }
+
+  const acceptMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})\/accept$/);
+  if (acceptMatch && method === 'POST') {
+    if (tooMany(`invite|${clientIp(req)}`, 5, 60 * 60 * 1000)) {
+      return json(res, 429, { error: 'Too many attempts. Try again later.' });
+    }
+    const body = await readJson(req);
+    const name = String(body?.name || '').trim();
+    const email = String(body?.email || '')
+      .trim()
+      .toLowerCase();
+    const password = String(body?.password || '');
+    if (!name) return json(res, 400, { error: 'Enter your name' });
+    if (!emailOk(email)) return json(res, 400, { error: 'Enter a valid email address' });
+    if (password.length < 10 || !/[0-9\W]/.test(password)) {
+      return json(res, 400, { error: 'Use at least 10 characters, including a number or symbol' });
+    }
+
+    const tokenHash = sha256(acceptMatch[1]);
+    const invite = db.prepare('select * from invites where token_hash = ?').get(tokenHash);
+    if (!invite) return json(res, 404, { error: 'This invite link is not valid' });
+    if (invite.used_at) return json(res, 410, { error: 'This invite has already been used' });
+    if (invite.expires_at <= now()) return json(res, 410, { error: 'This invite has expired' });
+    if (invite.email && invite.email !== email) {
+      return json(res, 400, { error: `This invite is for ${invite.email}` });
+    }
+    if (db.prepare('select 1 from users where email = ?').get(email)) {
+      return json(res, 409, { error: 'An account with this email already exists. Sign in instead.' });
+    }
+
+    let user;
+    try {
+      user = createUser(email, name, password, invite.role);
+    } catch (err) {
+      return json(res, err.status || 500, { error: err.message });
+    }
+    // Links sent to a specific address are single-use; a generic link can add several people.
+    if (invite.email) db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);
+
+    const token = crypto.randomBytes(32).toString('base64url');
+    const t = now();
+    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at) values (?,?,?,?)').run(
+      sha256(token),
+      user.id,
+      t,
+      t + SESSION_DAYS * 86400 * 1000,
+    );
+    db.prepare('update users set last_login_at = ? where id = ?').run(t, user.id);
+    setSessionCookie(req, res, token);
+    return json(res, 201, { user: { ...publicUser(user), role: invite.role } });
   }
 
   if (pathname === '/api/workspace' && method === 'GET') {
