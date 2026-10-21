@@ -2,8 +2,21 @@
    API CLIENT — talks to the built-in server when it is present.
    If nothing answers at /api/config (static hosting, `npm run dev` without
    the server), the app falls back to its original local-only demo mode.
+
+   Multi-workspace: every workspace call is scoped to a slug, and the
+   server decides what the signed-in account may read or write there.
    ===================================================================== */
-const state = { enabled: false, signup: false, mail: false, user: null, url: '' };
+const state = {
+  enabled: false,
+  signup: false,
+  mail: false,
+  creation: 'admins', // 'open' | 'admins'
+  user: null,
+  url: '',
+  workspaces: [],
+  workspace: null,
+  memberId: null,
+};
 
 /* Base URL for links the user can share. Set by the server (APP_URL or the
    request host); location.origin covers static hosting and the dev server. */
@@ -12,6 +25,12 @@ export function appUrl() {
 }
 export function appHost() {
   return appUrl().replace(/^https?:\/\//, '');
+}
+
+/* Path of a workspace in the app, e.g. "/w/acme/project/p1". */
+export function wsPath(slug, rest = '') {
+  const base = `/w/${slug}`;
+  return rest ? `${base}/${String(rest).replace(/^\/+/, '')}` : base;
 }
 
 async function call(method, path, body, { keepalive = false } = {}) {
@@ -39,6 +58,12 @@ async function call(method, path, body, { keepalive = false } = {}) {
   return { ok: res.ok, status: res.status, data, error: data?.error };
 }
 
+function applyUser(data) {
+  state.user = data?.user || null;
+  state.workspaces = Array.isArray(state.user?.workspaces) ? state.user.workspaces : [];
+  return state.user;
+}
+
 export const api = {
   revision: 0,
   get enabled() {
@@ -53,11 +78,28 @@ export const api = {
   get user() {
     return state.user;
   },
+  get workspaces() {
+    return state.workspaces;
+  },
+  get workspace() {
+    return state.workspace;
+  },
+  get memberId() {
+    return state.memberId;
+  },
+  /* Anyone may create a workspace when sign-ups are open; otherwise only an
+     owner or admin of an existing workspace may. */
+  get canCreateWorkspace() {
+    return state.creation === 'open' || state.workspaces.some(w => w.role === 'owner' || w.role === 'admin');
+  },
   get url() {
     return appUrl();
   },
   get host() {
     return appHost();
+  },
+  rolesIn(slug) {
+    return state.workspaces.find(w => w.slug === slug)?.role || null;
   },
 
   async init() {
@@ -65,48 +107,92 @@ export const api = {
     state.enabled = !!(r.ok && r.data?.app === 'gr8r');
     state.signup = !!r.data?.signup;
     state.mail = !!r.data?.mail;
+    state.creation = r.data?.workspaceCreation === 'open' ? 'open' : 'admins';
     state.url = typeof r.data?.url === 'string' ? r.data.url.replace(/\/+$/, '') : '';
     return state.enabled;
   },
   async me() {
     if (!state.enabled) return null;
     const r = await call('GET', '/api/auth/me');
-    state.user = r.ok ? r.data.user : null;
+    if (r.ok) applyUser(r.data);
     return state.user;
   },
   async login(email, password) {
     const r = await call('POST', '/api/auth/login', { email, password });
-    if (r.ok) state.user = r.data.user;
+    if (r.ok) applyUser(r.data);
     return r;
   },
   async signup(name, email, password) {
     const r = await call('POST', '/api/auth/signup', { name, email, password });
-    if (r.ok) state.user = r.data.user;
+    if (r.ok) applyUser(r.data);
     return r;
   },
   async logout() {
     await call('POST', '/api/auth/logout');
     state.user = null;
+    state.workspaces = [];
+    state.workspace = null;
+    state.memberId = null;
+    this.revision = 0;
   },
-  async workspace() {
-    const r = await call('GET', '/api/workspace');
-    if (r.ok) this.revision = r.data.revision;
+  async listWorkspaces() {
+    const r = await call('GET', '/api/workspaces');
+    if (r.ok) state.workspaces = r.data.workspaces || [];
+    return r;
+  },
+  async loadWorkspace(slug) {
+    const r = await call('GET', `/api/workspaces/${encodeURIComponent(slug)}`);
+    if (r.ok) {
+      state.workspace = {
+        id: r.data.id,
+        name: r.data.name,
+        slug: r.data.slug,
+        color: r.data.color,
+        role: r.data.role,
+      };
+      state.memberId = r.data.memberId || null;
+      this.revision = r.data.revision;
+      state.workspaces = state.workspaces.map(w => (w.id === r.data.id ? { ...w, name: r.data.name, slug: r.data.slug, color: r.data.color } : w));
+    } else if (r.status === 404) {
+      state.workspace = null;
+      state.memberId = null;
+    }
+    return r;
+  },
+  async createWorkspace(name, slug) {
+    const r = await call('POST', '/api/workspaces', { name, slug: slug || undefined });
+    if (r.ok) state.workspaces = [...state.workspaces, r.data.workspace];
+    return r;
+  },
+  async patchWorkspace(patch) {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    const r = await call('PATCH', `/api/workspaces/${encodeURIComponent(slug)}`, patch);
+    if (r.ok) {
+      const next = r.data.workspace;
+      state.workspace = { ...state.workspace, ...next };
+      state.workspaces = state.workspaces.map(w => (w.id === next.id ? { ...w, ...next } : w));
+    }
     return r;
   },
   async putWorkspace(doc, opts) {
-    const r = await call('PUT', '/api/workspace', { revision: this.revision, doc }, opts);
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    const r = await call('PUT', `/api/workspaces/${encodeURIComponent(slug)}`, { revision: this.revision, doc }, opts);
     if (r.ok) this.revision = r.data.revision;
     return r;
   },
   async createInvites(emails, role, team) {
-    return call('POST', '/api/invites', { emails, role, team });
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/invites`, { emails, role, team });
   },
   async invite(token) {
     return call('GET', `/api/invites/${encodeURIComponent(token)}`);
   },
   async acceptInvite(token, name, email, password) {
     const r = await call('POST', `/api/invites/${encodeURIComponent(token)}/accept`, { name, email, password });
-    if (r.ok) state.user = r.data.user;
+    if (r.ok) applyUser(r.data);
     return r;
   },
 };

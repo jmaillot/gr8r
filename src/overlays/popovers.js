@@ -2,7 +2,7 @@
 import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
-import { D, S, allTasks, canSee, me, mem, pColor, proj, task, visibleProjects } from '../core/store.js';
+import { D, S, allTasks, canSee, currentSlug, me, mem, pColor, proj, roleLabel, task, visibleProjects, workspaceList as wsList } from '../core/store.js';
 import { api } from '../core/api.js';
 import { av, avStack, prIcon, stIcon } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -216,10 +216,10 @@ export function popHtml(p) {
       break;
     }
     case 'ws':
-      inner = `<div class="mh">Workspaces</div>${D()
-        .workspaces.map(
+      inner = `<div class="mh">Workspaces</div>${wsList()
+        .map(
           w =>
-            `<button class="mi" data-a="switchWs" data-v="${w.id}">${wsLogo(w, 20)}<span class="grow">${esc(w.name)}</span><span class="faint" style="font-size:11px">${w.plan}</span>${w.name === D().ws.name ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+            `<button class="mi" data-a="switchWs" data-v="${esc(w.slug)}">${wsLogo({ name: w.name, c: w.color }, 20)}<span class="grow trunc">${esc(w.name)}</span><span class="faint" style="font-size:11px">${esc(roleLabel(w.role))}</span>${w.slug === currentSlug() ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
         )
         .join(
           '',

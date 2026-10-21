@@ -12,6 +12,7 @@ import {
   canSee,
   clearLocalCache,
   commentsOf,
+  flushPending,
   hydrateFromServer,
   logAct,
   me,
@@ -480,7 +481,7 @@ A.copyLink = el => {
           : d.id && proj(d.id)
             ? `project/${proj(d.id).key.toLowerCase()}`
             : '';
-  copy(`${api.url}/${D().ws.url}/${path}`);
+  copy(`${api.url}/w/${D().ws.url}${path ? `/${path}` : ''}`);
 };
 A.copyText = el => copy(el.dataset.text, 'Copied to clipboard');
 A.copyEmail = el => {
@@ -1830,33 +1831,55 @@ A.setSearch = el => {
 };
 
 /* workspace, account, prototype controls */
-A.switchWs = el => {
-  const w = D().workspaces.find(x => x.id === el.dataset.v);
+A.switchWs = async el => {
   S.ui.pop = null;
-  D().ws = { name: w.name, url: w.name.toLowerCase().replace(/[^a-z0-9]+/g, ''), c: w.c, brand: !!w.brand };
-  save();
+  const slug = el.dataset.v;
+  if (!api.enabled) {
+    const w = D().workspaces.find(x => x.id === slug || x.name === slug);
+    if (!w) return;
+    D().ws = { name: w.name, url: w.name.toLowerCase().replace(/[^a-z0-9]+/g, ''), c: w.c, brand: !!w.brand };
+    save();
+    go('home');
+    toast(`Switched to ${w.name}`);
+    return;
+  }
+  const target = api.workspaces.find(w => w.slug === slug);
+  if (!target) return;
+  if (api.workspace?.slug === slug) {
+    go('home');
+    return;
+  }
+  const res = await openWorkspace(slug);
+  if (!res.ok) return toast(res.error || 'Could not switch workspace', { kind: 'err' });
+  S.ui.pop = null;
   go('home');
-  toast(`Switched to ${w.name}`);
+  toast(`Switched to ${target.name}`);
 };
 A.newWorkspace = () => {
   S.ui.pop = null;
+  if (api.enabled && !api.canCreateWorkspace) {
+    return toast('Ask a workspace administrator to create one for you', { kind: 'err' });
+  }
   S.ui.auth = 'onboarding';
   S.ui.onb = 1;
   S.ui.onbData.ws = '';
   S.ui.onbData.url = '';
   render();
 };
-A.signOut = () => {
+A.signOut = async () => {
   if (api.enabled) {
-    api.logout();
+    await flushPending();
+    await api.logout();
     api.revision = 0;
     clearLocalCache();
+    history.replaceState(null, '', '/');
   }
   S.ui.conflict = false;
   S.ui.pop = null;
   S.ui.palette = null;
   S.ui.drawer = null;
   S.ui.modals = [];
+  S.ui.wantedSlug = null;
   S.ui.auth = 'login';
   S.ui.errors = {};
   render();
@@ -1985,9 +2008,15 @@ IN.prefSel = el => {
   toast('Preference saved', { ms: 1500 });
 };
 A.wsColor = el => {
-  D().ws.c = el.dataset.v;
+  const c = el.dataset.v;
+  D().ws.c = c;
   save();
   render();
+  if (api.enabled && api.workspace) {
+    api.patchWorkspace({ color: c }).then(r => {
+      if (!r.ok) toast(r.error || 'Could not save the workspace color', { kind: 'err' });
+    });
+  }
 };
 A.saveWorkspace = () => {
   const n = $('#ws-name').value.trim();
@@ -1997,6 +2026,33 @@ A.saveWorkspace = () => {
     .replace(/[^a-z0-9-]+/g, '-');
   if (!n) {
     toast("Workspace name can't be empty", { kind: 'err' });
+    return;
+  }
+  if (api.enabled) {
+    const current = api.workspace?.slug;
+    const rename = () => {
+      loadingBtn('ws-save', 600, async () => {
+        const patch = { name: n };
+        if (u && u !== current) patch.slug = u;
+        const res = await api.patchWorkspace(patch);
+        if (!res.ok) return toast(res.error || 'Could not save workspace settings', { kind: 'err' });
+        D().ws.name = res.data.workspace.name;
+        D().ws.url = res.data.workspace.slug;
+        if (patch.slug) history.replaceState(null, '', `/w/${res.data.workspace.slug}`);
+        save();
+        toast('Workspace settings saved');
+      });
+    };
+    if (u && u !== current) {
+      confirmDlg({
+        title: 'Change the workspace URL?',
+        body: `Links to this workspace will change from /w/${current} to /w/${u}. Anyone using the old address will need to sign in again.`,
+        ok: 'Change URL',
+        run: rename,
+      });
+      return;
+    }
+    rename();
     return;
   }
   loadingBtn('ws-save', 600, () => {
@@ -2012,8 +2068,9 @@ A.saveWorkspace = () => {
       toast('Workspace settings saved');
   });
 };
-A.delWorkspace = () =>
-  confirmDlg({
+A.delWorkspace = () => {
+  if (api.enabled) return toast('Deleting a workspace is not available yet.', { kind: 'info' });
+  return confirmDlg({
     title: `Delete ${D().ws.name}?`,
     body: 'Every project, task, file, and comment in this workspace will be permanently deleted for all members.',
     ok: 'Delete workspace',
@@ -2028,6 +2085,7 @@ A.delWorkspace = () =>
       toast('Workspace deleted. Demo data was restored for this prototype.', { kind: 'info', ms: 5000 });
     },
   });
+};
 A.avColor = el => {
   me().c = el.dataset.v;
   save();
@@ -2175,6 +2233,32 @@ A.toggleShowPw = () => {
   }
 };
 export const EMAIL_RE = /^\S+@\S+\.\S+$/;
+/* Load a workspace by slug and land on the default route for it. */
+export async function openWorkspace(slug) {
+  if (!slug) return { ok: false, status: 0, error: 'No workspace to open' };
+  await flushPending();
+  const res = await hydrateFromServer(slug);
+  if (!res.ok) return res;
+  history.replaceState(null, '', `/w/${slug}`);
+  S.ui.route = 'home';
+  S.ui.params = {};
+  S.ui.history = [];
+  S.ui.drawer = null;
+  S.ui.expanded = {};
+  return res;
+}
+
+/* Signed in but with no workspace yet: either create one or wait for an invite. */
+function enterNoWorkspace() {
+  S.ui.auth = api.canCreateWorkspace ? 'onboarding' : 'no-workspace';
+  if (api.canCreateWorkspace) {
+    S.ui.onb = 1;
+    S.ui.onbData = { ...S.ui.onbData, ws: '', url: '', urlTouched: false };
+  }
+  S.ui.errors = {};
+  render();
+}
+
 export function enterApp(msg) {
   S.ui.auth = null;
   S.ui.errors = {};
@@ -2212,13 +2296,22 @@ A.doLogin = () => {
       render();
       return;
     }
-    const ws = await hydrateFromServer();
+    const slug = (S.ui.wantedSlug && api.rolesIn(S.ui.wantedSlug) ? S.ui.wantedSlug : null) || api.workspaces[0]?.slug;
+    if (!slug) {
+      done();
+      S.ui.wantedSlug = null;
+      enterNoWorkspace();
+      return;
+    }
+    const ws = await hydrateFromServer(slug);
     if (!ws.ok) {
       done();
       S.ui.errors = { login: 'Signed in, but the workspace could not be loaded.' };
       render();
       return;
     }
+    history.replaceState(null, '', `/w/${slug}`);
+    S.ui.wantedSlug = null;
     enterApp(`Signed in as ${api.user?.name || em}`);
   });
 };
@@ -2257,7 +2350,15 @@ A.doJoin = () => {
       render();
       return;
     }
-    const ws = await hydrateFromServer();
+    const slug = res.data?.workspace?.slug || api.workspaces[0]?.slug;
+    if (!slug) {
+      done();
+      S.ui.pwNew = '';
+      history.replaceState(null, '', '/');
+      enterNoWorkspace();
+      return;
+    }
+    const ws = await hydrateFromServer(slug);
     if (!ws.ok) {
       done();
       S.ui.errors = { join: 'Account created, but the workspace could not be loaded.' };
@@ -2265,7 +2366,7 @@ A.doJoin = () => {
       return;
     }
     S.ui.pwNew = '';
-    history.replaceState(null, '', '/');
+    history.replaceState(null, '', `/w/${slug}`);
     enterApp(`Welcome, ${nm}`);
   });
 };
@@ -2310,13 +2411,21 @@ A.doSignup = () => {
       render();
       return;
     }
-    const ws = await hydrateFromServer();
+    const slug = api.workspaces[0]?.slug;
+    if (!slug) {
+      done();
+      S.ui.af.pw = '';
+      enterNoWorkspace();
+      return;
+    }
+    const ws = await hydrateFromServer(slug);
     if (!ws.ok) {
       done();
       S.ui.errors = { email: 'Account created, but the workspace could not be loaded.' };
       render();
       return;
     }
+    history.replaceState(null, '', `/w/${slug}`);
     S.ui.af.pw = '';
     enterApp(`Welcome, ${nm}`);
   });
@@ -2446,11 +2555,29 @@ A.onbExit = () => {
   S.ui.auth = null;
   render();
 };
-A.onbFinish = () => {
+A.onbFinish = async () => {
   const o = S.ui.onbData;
+  const emails = (o.invites || '')
+    .split(',')
+    .map(x => x.trim())
+    .filter(x => EMAIL_RE.test(x));
+  if (api.enabled) {
+    const res = await api.createWorkspace(o.ws.trim() || 'Workspace', o.url || undefined);
+    if (!res.ok) {
+      S.ui.errors = { ws: res.error || 'Could not create the workspace' };
+      toast(res.error || 'Could not create the workspace', { kind: 'err' });
+      render();
+      return;
+    }
+    const loaded = await openWorkspace(res.data.workspace.slug);
+    if (!loaded.ok) {
+      toast('Workspace created, but it could not be loaded', { kind: 'err' });
+      return;
+    }
+  }
   let p;
   mutate(() => {
-    if (o.ws.trim()) {
+    if (!api.enabled && o.ws.trim()) {
       const c = ['#2F2E2A', '#5A67D8', '#23918A', '#C54B78'][D().workspaces.length % 4];
       D().ws = { name: o.ws.trim(), url: o.url || 'workspace', c };
       if (!D().workspaces.some(w => w.name === D().ws.name)) D().workspaces.push({ id: uid('w'), name: D().ws.name, c, plan: 'Free' });
@@ -2468,10 +2595,8 @@ A.onbFinish = () => {
       },
       tm.id,
     );
-    (o.invites || '')
-      .split(',')
-      .filter(x => EMAIL_RE.test(x))
-      .forEach(e =>
+    if (!api.enabled)
+      emails.forEach(e =>
         D().members.push({
           id: uid('m'),
           name: e.split('@')[0].replace(/\b\w/g, c => c.toUpperCase()),
@@ -2486,6 +2611,10 @@ A.onbFinish = () => {
         }),
       );
   });
+  if (api.enabled && emails.length) {
+    const inv = await api.createInvites(emails, 'member', null);
+    if (!inv.ok) toast(inv.error || 'Could not send the invites', { kind: 'err' });
+  }
   S.ui.auth = null;
   go('project', { id: p.id, tab: S.prefs.defaultTab });
   toast(`Welcome to ${D().ws.name}`);

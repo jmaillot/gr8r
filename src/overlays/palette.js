@@ -2,7 +2,7 @@
 import { MOD, clamp, esc } from '../core/utils.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
-import { D, S, allTasks, pColor, proj, save, task } from '../core/store.js';
+import { D, S, allTasks, pColor, proj, roleLabel, save, task, workspaceList as wsList } from '../core/store.js';
 import { FT, av, hl, stIcon } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { go, render } from '../shell/render.js';
@@ -64,9 +64,14 @@ export function paletteItems() {
   if (pl.mode === 'ws') {
     groups.push({
       name: 'Switch workspace',
-      items: D()
-        .workspaces.filter(w => !q || w.name.toLowerCase().includes(ql))
-        .map(w => ({ html: `${wsLogo(w, 20)}`, name: w.name, sub: w.plan + ' plan', run: () => A.switchWs({ dataset: { v: w.id } }) })),
+      items: wsList()
+        .filter(w => !q || w.name.toLowerCase().includes(ql))
+        .map(w => ({
+          html: `${wsLogo({ name: w.name, c: w.color }, 20)}`,
+          name: w.name,
+          sub: `${roleLabel(w.role)} · /w/${w.slug}`,
+          run: () => A.switchWs({ dataset: { v: w.slug } }),
+        })),
     });
     return groups;
   }

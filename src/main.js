@@ -89,6 +89,27 @@ addEventListener('gr8r:save-error', e => {
   });
 });
 
+/* Restore a shared link such as /w/acme/project/website-launch. */
+function applyDeepLink(rest) {
+  const [seg, key] = String(rest).split('/');
+  const data = D();
+  if (!seg) return;
+  if (key) {
+    const find = (list, field) => list.find(x => String(x[field] || '').toLowerCase() === key.toLowerCase());
+    if (seg === 'project') {
+      const p = find(data.projects || [], 'key');
+      if (p) return go('project', { id: p.id });
+    }
+    if (seg === 'task') {
+      const t = find(data.tasks || [], 'key');
+      if (t) return go('task', { id: t.id });
+    }
+    if (seg === 'file' && (data.files || []).some(f => f.id === key)) return go('file', { id: key });
+    if (seg === 'member' && (data.members || []).some(m => m.id === key)) return go('member', { id: key });
+  }
+  if (ROUTE_NAMES[seg]) return go(seg, {});
+}
+
 (async function init() {
   document.documentElement.lang = 'en';
   if (!document.getElementById('sr-live')) {
@@ -103,6 +124,9 @@ addEventListener('gr8r:save-error', e => {
   const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding'];
   const withServer = await api.init();
   const joinToken = (location.pathname.match(/^\/join\/([A-Za-z0-9_-]{16,128})\/?$/) || [])[1];
+  const slugFromPath = (location.pathname.match(/^\/w\/([a-z0-9-]{2,40})(?:\/|$)/) || [])[1];
+  const restFromPath = (location.pathname.match(/^\/w\/[a-z0-9-]{2,40}\/(.+?)\/?$/) || [])[1] || '';
+  let deepLink = '';
 
   if (joinToken) {
     if (!withServer) {
@@ -127,22 +151,37 @@ addEventListener('gr8r:save-error', e => {
     const user = await api.me();
     if (!user) {
       // The server is authoritative: no session means the app is not usable yet.
+      S.ui.wantedSlug = slugFromPath || null;
       S.ui.auth = authRoutes.includes(h) ? h : 'login';
       render();
       return;
     }
-    const ws = await hydrateFromServer();
+    const slug = slugFromPath && api.rolesIn(slugFromPath) ? slugFromPath : api.workspaces[0]?.slug;
+    if (!slug) {
+      // Signed in, but not a member of any workspace yet.
+      S.ui.auth = api.canCreateWorkspace ? 'onboarding' : 'no-workspace';
+      if (api.canCreateWorkspace) {
+        S.ui.onb = 1;
+        S.ui.onbData = { ...S.ui.onbData, ws: '', url: '', urlTouched: false };
+      }
+      render();
+      return;
+    }
+    if (slug !== slugFromPath) history.replaceState(null, '', `/w/${slug}`);
+    const ws = await hydrateFromServer(slug);
     if (ws.status === 401) {
       S.ui.auth = 'login';
       render();
       return;
     }
-    if (!ws.ok) toast('Could not load the shared workspace. Check the server logs.', { kind: 'err', ms: 8000 });
+    if (!ws.ok) toast('Could not load this workspace. Check the server logs.', { kind: 'err', ms: 8000 });
+    deepLink = restFromPath;
   }
 
   if (!withServer && authRoutes.includes(h)) S.ui.auth = h;
   else if (h && ROUTE_NAMES[h]) S.ui.route = h;
   else S.ui.route = S.prefs.home || 'home';
+  if (deepLink) applyDeepLink(deepLink);
   render();
 })();
 

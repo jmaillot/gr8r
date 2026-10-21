@@ -89,17 +89,19 @@ export function settingsBody(sec, title) {
   const np = d.notifPrefs;
   const H = lead => `<h1>${title}</h1><p class="lead">${lead}</p>`;
   switch (sec) {
-    case 'workspace':
+    case 'workspace': {
+      const wsAdmin = !api.enabled || api.workspace?.role === 'owner' || api.workspace?.role === 'admin';
       return (
         H('Your workspace name, address, and identity.') +
         `
       <form data-submit="saveWorkspace">
       <div class="sblock" style="margin-top:0"><div class="row" style="gap:14px;margin-bottom:18px">${wsLogo(d.ws, 52)}<div><div class="label" style="margin-bottom:6px">Workspace icon</div><div class="swatches">${['#2F2E2A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'].map(c => `<button type="button" class="sw ${d.ws.c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="wsColor" data-v="${c}" aria-label="Color ${c}"></button>`).join('')}</div></div></div>
-      <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">Workspace name</label><input class="input" id="ws-name" value="${esc(d.ws.name)}"></div>
-      <div class="field"><label class="label" for="ws-url">Workspace URL</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0"></div><span class="hint">Changing the URL will break existing links.</span></div>
-      <div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">Save changes</button></div></div></div></form>
-      <div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>${srow('Delete workspace', 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="delWorkspace">Delete workspace</button>`)}</div>`
+      <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">Workspace name</label><input class="input" id="ws-name" value="${esc(d.ws.name)}" ${wsAdmin ? '' : 'readonly'}></div>
+      <div class="field"><label class="label" for="ws-url">Workspace URL</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? 'Changing the URL will break existing links.' : 'Only workspace admins can change these settings.'}</span></div>
+      ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">Save changes</button></div>` : ''}</div></div></form>
+      ${api.enabled ? '' : `<div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>${srow('Delete workspace', 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="delWorkspace">Delete workspace</button>`)}</div>`}`
       );
+    }
     case 'appearance':
       return (
         H('Customize how Gr8r looks on this device.') +
@@ -373,7 +375,8 @@ export function settingsBody(sec, title) {
         <div class="grow col" style="gap:10px;min-width:220px"><div><b>1. Scan the QR code</b><div class="muted" style="font-size:13px">Use 1Password, Authy, or Google Authenticator.</div></div><div><b>2. Enter the 6-digit code</b></div><form data-submit="verify2fa" class="row"><input class="input mono ${S.ui.errors.tfa ? 'is-error' : ''}" id="tfa-code" inputmode="numeric" maxlength="6" placeholder="000000" style="width:130px;letter-spacing:.2em;font-size:15px" autofocus><button class="btn btn-primary" data-a="verify2fa">Verify</button><button type="button" class="btn btn-ghost" data-a="cancel2fa">Cancel</button></form>${S.ui.errors.tfa ? `<span class="err">${ic('circle-alert', 12)}${S.ui.errors.tfa}</span>` : '<span class="hint">Any 6 digits work in this prototype.</span>'}</div></div>`
             : `<div class="panel" style="padding:18px" ><div class="row" style="gap:14px;align-items:flex-start"><span class="ftype" style="--c:var(--amber);width:36px;height:36px">${ic('shield-alert', 18)}</span><div class="grow"><b>Two-factor authentication is off</b><p class="muted" style="margin:4px 0 12px;font-size:13px">Protect your account with a code from an authenticator app in addition to your password.</p><button class="btn btn-primary" data-a="setup2fa">Set up two-factor authentication</button></div></div></div>`)
       );
-    case 'plan':
+    case 'plan': {
+      const planAdmin = !api.enabled || api.workspace?.role === 'owner';
       return (
         H('Your subscription and usage.') +
         `<div class="panel" style="padding:18px;margin-bottom:18px"><div class="row" style="flex-wrap:wrap"><div><div class="eyebrow">Current plan</div><div style="font-size:20px;font-weight:600;letter-spacing:-.015em;margin-top:4px">${esc(d.plan || 'Team')} <span class="muted" style="font-size:14px;font-weight:400">· $12 per member / month</span></div><div class="muted" style="font-size:13px">Renews ${fmtDate(dOff(7), true)} · Billed monthly</div></div><span class="sp"></span><button class="btn btn-secondary" data-a="go" data-r="settings" data-sec="invoices">View invoices</button></div>
@@ -394,10 +397,11 @@ export function settingsBody(sec, title) {
       ]
         .map(([n, pr, fs]) => {
           const cur = (d.plan || 'Team') === n;
-          return `<div class="plan ${cur ? 'cur' : ''}"><div class="row"><b>${n}</b>${cur ? '<span class="badge accent">Current</span>' : ''}</div><div class="pr">${pr}<span class="muted" style="font-size:12.5px;font-weight:400"> /member/mo</span></div><ul>${fs.map(f => `<li>${ic('check', 13)}${f}</li>`).join('')}</ul><div style="margin-top:8px">${cur ? `<button class="btn btn-secondary btn-block" disabled>Current plan</button>` : `<button class="btn ${n === 'Business' ? 'btn-primary' : 'btn-secondary'} btn-block" data-a="changePlan" data-v="${n}">${n === 'Free' ? 'Downgrade' : 'Upgrade'}</button>`}</div></div>`;
+          return `<div class="plan ${cur ? 'cur' : ''}"><div class="row"><b>${n}</b>${cur ? '<span class="badge accent">Current</span>' : ''}</div><div class="pr">${pr}<span class="muted" style="font-size:12.5px;font-weight:400"> /member/mo</span></div><ul>${fs.map(f => `<li>${ic('check', 13)}${f}</li>`).join('')}</ul><div style="margin-top:8px">${cur ? `<button class="btn btn-secondary btn-block" disabled>Current plan</button>` : planAdmin ? `<button class="btn ${n === 'Business' ? 'btn-primary' : 'btn-secondary'} btn-block" data-a="changePlan" data-v="${n}">${n === 'Free' ? 'Downgrade' : 'Upgrade'}</button>` : `<button class="btn btn-secondary btn-block" disabled title="Only the workspace owner can change the plan">Contact the owner</button>`}</div></div>`;
         })
         .join('')}</div>`
       );
+    }
     case 'payment':
       return (
         H('Payment method and billing details.') +

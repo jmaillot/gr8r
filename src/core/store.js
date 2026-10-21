@@ -57,6 +57,7 @@ export const S = {
     palette: null,
     loading: false,
     offline: false,
+    wantedSlug: null,
     sel: new Set(),
     composer: null,
     editCell: null,
@@ -172,7 +173,7 @@ export function applyDoc(doc, revision) {
   S.ui.collapsed = !!doc.collapsed;
   S.ui.conflict = false;
   if (Number.isInteger(revision)) api.revision = revision;
-  const mid = api.user?.memberId;
+  const mid = api.memberId || S.data.members?.find(m => m.userId && m.userId === api.user?.id)?.id;
   if (mid && S.data.members?.some(m => m.id === mid)) S.data.me = mid;
   const current = S.data.members?.find(m => m.id === S.data.me);
   if (current) {
@@ -182,11 +183,18 @@ export function applyDoc(doc, revision) {
   return true;
 }
 
-export async function hydrateFromServer() {
+export async function hydrateFromServer(slug) {
   if (!api.enabled) return { ok: false, status: 0 };
-  const res = await api.workspace();
+  const res = await api.loadWorkspace(slug);
   if (res.ok) applyDoc(res.data.doc, res.data.revision);
   return res;
+}
+
+/* Write any pending change before leaving this workspace (switching, sign-out). */
+export async function flushPending() {
+  if (!api.enabled || !api.user || S.ui.conflict || !api.workspace) return;
+  clearTimeout(_pushT);
+  for (let i = 0; i < 5 && dirty && !S.ui.conflict; i++) await push();
 }
 
 /* Signing out must not leave the previous account's workspace in this browser. */
@@ -232,8 +240,46 @@ export function logAct(verb, t, extra = '') {
   if (t) t.updated = Date.now();
 }
 
-/* ---------- teams (workspace data, seeded on first use) ---------- */
-export const NO_TEAM = { id: '', name: 'No team', icon: 'users', c: '#8A867E', desc: '' };
+/* ---------- workspaces (server-backed, or the demo switcher) ---------- */
+export const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
+export const roleLabel = role => ROLE_LABELS[role] || 'Member';
+
+/* The signed-in account's workspaces; falls back to the demo list locally. */
+export function workspaceList() {
+  if (api.enabled) {
+    return api.workspaces.map(w => ({ id: w.id, slug: w.slug, name: w.name, color: w.color, role: w.role }));
+  }
+  return D().workspaces.map(w => ({
+    id: w.id,
+    slug:
+      w.url ||
+      String(w.name)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, ''),
+    name: w.name,
+    color: w.c,
+    role: 'owner',
+  }));
+}
+
+export function currentSlug() {
+  return (
+    D().ws.url ||
+    String(D().ws.name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+  );
+}
+
+/* ---------- teams (workspace data, seeded on first use) ---------- */ export const NO_TEAM = {
+  id: '',
+  name: 'No team',
+  icon: 'users',
+  c: '#8A867E',
+  desc: '',
+};
 export function teamsList() {
   const d = D();
   if (!d.teams) d.teams = TEAMS_SEED.map(t => ({ ...t }));
