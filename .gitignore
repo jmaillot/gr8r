@@ -9,3 +9,6 @@ __MACOSX/
 /data/
 /seed.json
 /.playwright-mcp/
+test-results/
+playwright-report/
+blob-report/
