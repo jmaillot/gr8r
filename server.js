@@ -332,6 +332,18 @@ function hiddenTaskIds(doc, hiddenProjects) {
   return seen;
 }
 
+/* Drop hidden project ids from a filter list; remove a project filter left empty. */
+function scrubProjectFilters(filters, hiddenProjects) {
+  if (!Array.isArray(filters)) return filters;
+  return filters
+    .map(f => {
+      if (!f || f.f !== 'project' || !Array.isArray(f.v)) return f;
+      const v = f.v.filter(id => !hiddenProjects.has(id));
+      return v.length ? { ...f, v } : null;
+    })
+    .filter(Boolean);
+}
+
 /* Keep view-state keys and project filters for hidden projects out of the served document. */
 function redactViews(views, hiddenProjects, hiddenViews) {
   if (!views || typeof views !== 'object') return views;
@@ -343,13 +355,7 @@ function redactViews(views, hiddenProjects, hiddenViews) {
       continue;
     }
     if (!value || typeof value !== 'object' || !Array.isArray(value.filters)) continue;
-    value.filters = value.filters
-      .map(f => {
-        if (!f || f.f !== 'project' || !Array.isArray(f.v)) return f;
-        const v = f.v.filter(id => !hiddenProjects.has(id));
-        return v.length ? { ...f, v } : null;
-      })
-      .filter(Boolean);
+    value.filters = scrubProjectFilters(value.filters, hiddenProjects);
   }
   return views;
 }
@@ -371,6 +377,9 @@ function redactDoc(doc, memberId) {
   data.notifs = Array.isArray(data.notifs) ? data.notifs.filter(n => !hiddenProjects.has(n.project) && !hiddenTasks.has(n.task)) : data.notifs;
   data.events = drop(data.events);
   data.savedViews = (data.savedViews || []).filter(v => !hiddenProjects.has(v.project));
+  for (const view of data.savedViews) {
+    if (view && Array.isArray(view.filters)) view.filters = scrubProjectFilters(view.filters, hiddenProjects);
+  }
   redactViews(doc.views, hiddenProjects, hiddenViews);
   return doc;
 }
@@ -466,6 +475,9 @@ function mergeClientDoc(incoming, stored, membership) {
   nextData.events = mergeList(storedData.events, nextData.events, reservedDependants(storedData.events, nextData.events, eventHidden));
   const savedHidden = v => hiddenProjects.has(v?.project);
   nextData.savedViews = mergeList(storedData.savedViews, nextData.savedViews, reservedDependants(storedData.savedViews, nextData.savedViews, savedHidden));
+  for (const view of nextData.savedViews) {
+    if (view && Array.isArray(view.filters)) view.filters = scrubProjectFilters(view.filters, hiddenProjects);
+  }
 
   // Per-user view state: hidden keys stay from storage, hidden project ids leave filter values.
   const hiddenViewIds = new Set((storedData.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
@@ -480,13 +492,7 @@ function mergeClientDoc(incoming, stored, membership) {
     const viewId = key.startsWith('sv:') ? key.slice(3) : null;
     if ((projectId && hiddenProjects.has(projectId)) || (viewId && hiddenViewIds.has(viewId))) continue;
     if (value && typeof value === 'object' && Array.isArray(value.filters)) {
-      value.filters = value.filters
-        .map(f => {
-          if (!f || f.f !== 'project' || !Array.isArray(f.v)) return f;
-          const v = f.v.filter(id => !hiddenProjects.has(id));
-          return v.length ? { ...f, v } : null;
-        })
-        .filter(Boolean);
+      value.filters = scrubProjectFilters(value.filters, hiddenProjects);
     }
     mergedViews[key] = value;
   }
