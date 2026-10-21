@@ -28,6 +28,8 @@ const env = {
   PORT: String(PORT),
   HOST,
   DATA_DIR: dataDir,
+  /* DB_PATH wins over DATA_DIR in server.js; force it so an exported DB_PATH cannot leak in. */
+  DB_PATH: path.join(dataDir, 'gr8r.db'),
   SEED_DATA: 'false',
   ALLOW_SIGNUP: 'true',
   ADMIN_EMAIL: 'e2e-owner@e2e.local',

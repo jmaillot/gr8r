@@ -49,7 +49,7 @@ export async function startServer({ dataDir = null, env = {} } = {}) {
   let output = '';
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
-    env: { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env },
+    env: { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env, DB_PATH: path.join(dir, 'gr8r.db') },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', chunk => (output += chunk));
