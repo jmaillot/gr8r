@@ -8,12 +8,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "node server.js",
+    "seed:json": "node scripts/export-seed.mjs > seed.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -1,0 +1,49 @@
+services:
+  gr8r:
+    build: .
+    image: gr8r-studio:1.0.0
+    container_name: gr8r-studio
+    restart: unless-stopped
+    stop_grace_period: 10s
+    environment:
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ADMIN_NAME: ${ADMIN_NAME:-Admin}
+      WORKSPACE_NAME: ${WORKSPACE_NAME:-Gr8r Studio}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+      SECURE_COOKIE: ${SECURE_COOKIE:-auto}
+      TRUST_PROXY: 'true'
+      DATA_DIR: /data
+    volumes:
+      - gr8r-data:/data
+    # No published port: Traefik reaches the container over the shared network.
+    expose:
+      - '8080'
+    networks:
+      - traefik
+    labels:
+      traefik.enable: 'true'
+      # Must name the network shared with Traefik.
+      traefik.docker.network: 'traefik'
+
+      traefik.http.routers.gr8r.rule: 'Host(`${GR8R_HOST:-gr8r.example.com}`)'
+      traefik.http.routers.gr8r.entrypoints: 'websecure'
+      traefik.http.routers.gr8r.tls: 'true'
+      traefik.http.routers.gr8r.tls.certresolver: 'letsencrypt'
+      traefik.http.routers.gr8r.middlewares: 'gr8r-compress'
+      traefik.http.services.gr8r.loadbalancer.server.port: '8080'
+
+      traefik.http.routers.gr8r-http.rule: 'Host(`${GR8R_HOST:-gr8r.example.com}`)'
+      traefik.http.routers.gr8r-http.entrypoints: 'web'
+      traefik.http.routers.gr8r-http.middlewares: 'gr8r-https'
+      traefik.http.middlewares.gr8r-https.redirectscheme.scheme: 'https'
+
+      traefik.http.middlewares.gr8r-compress.compress: 'true'
+
+volumes:
+  gr8r-data:
+
+networks:
+  traefik:
+    external: true

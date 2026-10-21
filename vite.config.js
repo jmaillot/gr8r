@@ -49,5 +49,10 @@ function lucideSubset() {
 
 export default defineConfig({
   plugins: [lucideSubset()],
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    /* `npm start` serves the API on 8080. Without it, /api fails and the app stays
+       in its built-in local-demo mode, so `npm run dev` alone still works. */
+    proxy: { '/api': process.env.API_ORIGIN || 'http://localhost:8080' },
+  },
 });

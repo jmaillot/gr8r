@@ -4,7 +4,25 @@
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
 import { seed } from '../data/seed.js';
-import { D, DEFAULT_PREFS, S, allTasks, canSee, commentsOf, logAct, me, mem, proj, save, task, tasksOf, visibleProjects } from '../core/store.js';
+import {
+  D,
+  DEFAULT_PREFS,
+  S,
+  allTasks,
+  canSee,
+  clearLocalCache,
+  commentsOf,
+  hydrateFromServer,
+  logAct,
+  me,
+  mem,
+  proj,
+  save,
+  task,
+  tasksOf,
+  visibleProjects,
+} from '../core/store.js';
+import { api } from '../core/api.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -1754,6 +1772,12 @@ A.newWorkspace = () => {
   render();
 };
 A.signOut = () => {
+  if (api.enabled) {
+    api.logout();
+    api.revision = 0;
+    clearLocalCache();
+  }
+  S.ui.conflict = false;
   S.ui.pop = null;
   S.ui.palette = null;
   S.ui.drawer = null;
@@ -1788,6 +1812,7 @@ A.retryOnline = el => {
   }, 700);
 };
 A.resetDemo = () => {
+  if (api.enabled) return toast('Demo data can only be reset in local demo mode.', { kind: 'info' });
   S.ui.pop = null;
   confirmDlg({
     title: 'Reset demo data?',
@@ -2095,9 +2120,35 @@ A.doLogin = () => {
     if (!e.email) $('#l-pw').value = pw;
     return;
   }
-  loadingBtn('login-btn', 750, () => enterApp(`Signed in as ${em}`));
+  if (!api.enabled) {
+    loadingBtn('login-btn', 750, () => enterApp(`Signed in as ${em}`));
+    return;
+  }
+  loadingBtn('login-btn', 0, async () => {
+    const btn = document.getElementById('login-btn');
+    const done = () => {
+      btn?.classList.remove('is-loading');
+      btn?.removeAttribute('aria-busy');
+    };
+    const res = await api.login(em, pw);
+    if (!res.ok) {
+      done();
+      S.ui.errors = { login: res.error || 'Could not sign in' };
+      render();
+      return;
+    }
+    const ws = await hydrateFromServer();
+    if (!ws.ok) {
+      done();
+      S.ui.errors = { login: 'Signed in, but the workspace could not be loaded.' };
+      render();
+      return;
+    }
+    enterApp(`Signed in as ${api.user?.name || em}`);
+  });
 };
 A.socialAuth = el => {
+  if (api.enabled) return toast('Social sign-in is not configured on this server.', { kind: 'info' });
   el.classList.add('is-loading');
   setTimeout(() => enterApp(`Signed in with ${el.dataset.v}`), 800);
 };
@@ -2116,10 +2167,41 @@ A.doSignup = () => {
     $('#s-email').value = em;
     return;
   }
-  loadingBtn('signup-btn', 800, () => {
-    S.ui.auth = 'verify';
-    startResend();
+  if (!api.enabled) {
+    loadingBtn('signup-btn', 800, () => {
+      S.ui.auth = 'verify';
+      startResend();
+      render();
+    });
+    return;
+  }
+  if (!api.allowSignup) {
+    S.ui.errors = { email: 'Sign-ups are disabled. Ask a workspace admin for an account.' };
     render();
+    return;
+  }
+  loadingBtn('signup-btn', 0, async () => {
+    const btn = document.getElementById('signup-btn');
+    const done = () => {
+      btn?.classList.remove('is-loading');
+      btn?.removeAttribute('aria-busy');
+    };
+    const res = await api.signup(nm, em, pw);
+    if (!res.ok) {
+      done();
+      S.ui.errors = { email: res.error || 'Could not create the account' };
+      render();
+      return;
+    }
+    const ws = await hydrateFromServer();
+    if (!ws.ok) {
+      done();
+      S.ui.errors = { email: 'Account created, but the workspace could not be loaded.' };
+      render();
+      return;
+    }
+    S.ui.af.pw = '';
+    enterApp(`Welcome, ${nm}`);
   });
 };
 export function startResend() {

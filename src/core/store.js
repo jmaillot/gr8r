@@ -2,6 +2,7 @@
 import { TODAY, diffD, iso, parse, uid } from './utils.js';
 import { PCOLORS, TEAMS_SEED } from './constants.js';
 import { seed } from '../data/seed.js';
+import { api } from './api.js';
 
 export const STORE_KEY = 'gr8r.v2';
 export const DEFAULT_PREFS = {
@@ -83,15 +84,113 @@ export const S = {
   },
 };
 export let _saveT;
+let _pushT;
+let pushing = false;
+let pushQueued = false;
+let flushing = false;
+let dirty = false;
+let changeSeq = 0;
+
+const docSnapshot = () => ({ data: S.data, prefs: S.prefs, views: S.views, collapsed: S.ui.collapsed });
+
+function notify(detail) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('gr8r:save-error', { detail }));
+}
+
+/* Push the whole document to the server. A revision mismatch means another
+   session saved in the meantime; we stop writing instead of clobbering it. */
+async function push() {
+  if (!api.enabled || !api.user || S.ui.conflict) return;
+  if (pushing) {
+    pushQueued = true;
+    return;
+  }
+  pushing = true;
+  const seq = changeSeq;
+  const res = await api.putWorkspace(docSnapshot());
+  pushing = false;
+  if (!res.ok) {
+    if (res.status === 409 || res.status === 401 || res.status === 403) S.ui.conflict = true;
+    notify({ status: res.status, error: res.error });
+    return;
+  }
+  dirty = changeSeq !== seq;
+  if (dirty || pushQueued) {
+    pushQueued = false;
+    _pushT = setTimeout(push, 450);
+  }
+}
+
 export function save() {
+  changeSeq++;
+  if (api.enabled && api.user && !S.ui.conflict) dirty = true;
   clearTimeout(_saveT);
   _saveT = setTimeout(() => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ data: S.data, prefs: S.prefs, views: S.views, collapsed: S.ui.collapsed }));
+      localStorage.setItem(STORE_KEY, JSON.stringify(docSnapshot()));
     } catch {
-      /* storage full or blocked: keep working in memory */
+      /* storage full or blocked: the server copy is authoritative when enabled */
+    }
+    if (api.enabled && api.user && !S.ui.conflict) {
+      clearTimeout(_pushT);
+      _pushT = setTimeout(push, 450);
     }
   }, 150);
+}
+
+/* Last chance to save when the tab is hidden or closed. keepalive lets the
+   browser finish the request even if the page is going away. */
+function flushNow() {
+  if (flushing || pushing || !dirty || !api.enabled || !api.user || S.ui.conflict) return;
+  clearTimeout(_pushT);
+  flushing = true;
+  const seq = changeSeq;
+  dirty = false;
+  api
+    .putWorkspace(docSnapshot(), { keepalive: true })
+    .then(r => {
+      if (!r.ok || changeSeq !== seq) dirty = true;
+    })
+    .finally(() => {
+      flushing = false;
+    });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushNow);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushNow();
+  });
+}
+
+/* Replace local state with the server copy (used at boot and after sign-in). */
+export function applyDoc(doc, revision) {
+  if (!doc || typeof doc !== 'object') return false;
+  if (doc.data) S.data = doc.data;
+  S.prefs = Object.assign({}, DEFAULT_PREFS, doc.prefs || {});
+  S.views = doc.views || {};
+  S.ui.collapsed = !!doc.collapsed;
+  S.ui.conflict = false;
+  if (Number.isInteger(revision)) api.revision = revision;
+  const mid = api.user?.memberId;
+  if (mid && S.data.members?.some(m => m.id === mid)) S.data.me = mid;
+  return true;
+}
+
+export async function hydrateFromServer() {
+  if (!api.enabled) return { ok: false, status: 0 };
+  const res = await api.workspace();
+  if (res.ok) applyDoc(res.data.doc, res.data.revision);
+  return res;
+}
+
+/* Signing out must not leave the previous account's workspace in this browser. */
+export function clearLocalCache() {
+  try {
+    localStorage.removeItem(STORE_KEY);
+  } catch {
+    /* storage blocked */
+  }
 }
 
 /* ---------- lookups ---------- */

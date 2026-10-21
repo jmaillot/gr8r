@@ -54,11 +54,42 @@ import './features/archive.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
-import { S, D } from './core/store.js';
+import { S, D, hydrateFromServer, save } from './core/store.js';
+import { api } from './core/api.js';
 import { A } from './actions/actions.js';
+import { toast } from './ui/toast.js';
 import { ROUTE_NAMES, render, go } from './shell/render.js';
 
-(function init() {
+addEventListener('gr8r:save-error', e => {
+  const { status, error } = e.detail || {};
+  if (status === 401) {
+    S.ui.auth = 'login';
+    S.ui.errors = {};
+    render();
+    toast('Your session expired. Sign in again.', { kind: 'err' });
+    return;
+  }
+  if (status === 403) return toast(error || 'Your account has read-only access.', { kind: 'err', ms: 6000 });
+  if (status === 409) {
+    return toast('This workspace changed in another session. Reload to see the latest version.', {
+      kind: 'err',
+      ms: 9000,
+      action: 'Reload',
+      onAction: () => location.reload(),
+    });
+  }
+  toast("Couldn't save to the server — changes are still in this browser.", {
+    kind: 'err',
+    ms: 8000,
+    action: 'Retry',
+    onAction: () => {
+      S.ui.conflict = false;
+      save();
+    },
+  });
+});
+
+(async function init() {
   document.documentElement.lang = 'en';
   if (!document.getElementById('sr-live')) {
     const l = document.createElement('div');
@@ -67,9 +98,29 @@ import { ROUTE_NAMES, render, go } from './shell/render.js';
     l.setAttribute('aria-live', 'polite');
     document.body.appendChild(l);
   }
+
   const h = (location.hash || '').slice(1);
   const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding'];
-  if (authRoutes.includes(h)) S.ui.auth = h;
+  const withServer = await api.init();
+
+  if (withServer) {
+    const user = await api.me();
+    if (!user) {
+      // The server is authoritative: no session means the app is not usable yet.
+      S.ui.auth = authRoutes.includes(h) ? h : 'login';
+      render();
+      return;
+    }
+    const ws = await hydrateFromServer();
+    if (ws.status === 401) {
+      S.ui.auth = 'login';
+      render();
+      return;
+    }
+    if (!ws.ok) toast('Could not load the shared workspace. Check the server logs.', { kind: 'err', ms: 8000 });
+  }
+
+  if (!withServer && authRoutes.includes(h)) S.ui.auth = h;
   else if (h && ROUTE_NAMES[h]) S.ui.route = h;
   else S.ui.route = S.prefs.home || 'home';
   render();

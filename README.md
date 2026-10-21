@@ -79,4 +79,7 @@ Every push and pull request runs lint, the format check and a production build
 
 ## Deploy
 
-`vercel.json` builds with Vite and serves `dist/`.
+`vercel.json` builds with Vite and serves `dist/` as a static, browser-local demo.
+
+For a self-hosted instance — one Node container, accounts and server-side SQLite storage —
+see [DEPLOY.md](DEPLOY.md).

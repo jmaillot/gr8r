@@ -1,0 +1,15 @@
+node_modules
+dist
+data
+seed.json
+.git
+.github
+.vscode
+*.log
+docs
+README.md
+
+# local secrets
+.env
+.env.*
+backups

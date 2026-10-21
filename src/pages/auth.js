@@ -2,6 +2,7 @@
 import { esc } from '../core/utils.js';
 import { LOGO, ic } from '../core/icons.js';
 import { D, S } from '../core/store.js';
+import { api } from '../core/api.js';
 import { effectiveDark } from '../core/theme.js';
 import { TEMPLATES } from '../overlays/modals.js';
 import { strengthMeter } from './settings.js';
@@ -20,7 +21,7 @@ export const icls = k => (S.ui.errors[k] ? 'is-error' : '');
 export function renderAuth() {
   const s = S.ui.auth;
   const e = S.ui.errors;
-  const f = S.ui.af || (S.ui.af = { email: 'hello@gr8rstudio.com', name: '' });
+  const f = S.ui.af || (S.ui.af = { email: '', name: '' });
   if (s === 'onboarding') return renderOnboarding();
   if (s === 'login')
     return authShell(
@@ -28,19 +29,19 @@ export function renderAuth() {
     <div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>Welcome back</h1><p class="sub">Sign in to ${esc(D().ws.name)}</p>
     ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${e.login}</span></div>` : ''}
     <div class="field"><label class="label" for="l-email">Email</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
-    <div class="field"><div class="row"><label class="label" for="l-pw">Password</label><span class="sp"></span><button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">Forgot password?</button></div>
+    <div class="field"><div class="row"><label class="label" for="l-pw">Password</label><span class="sp"></span>${api.enabled ? '' : `<button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">Forgot password?</button>`}</div>
       <div class="inwrap"><input class="input input-lg ${icls('pw')}" id="l-pw" type="${S.ui.showPw ? 'text' : 'password'}" autocomplete="current-password" style="padding-right:38px" aria-invalid="${!!e.pw}"><button type="button" class="ibtn ibtn-sm" style="position:absolute;right:5px" data-a="toggleShowPw" aria-label="${S.ui.showPw ? 'Hide' : 'Show'} password">${ic(S.ui.showPw ? 'eye-off' : 'eye', 15)}</button></div>${ferr('pw')}</div>
     <label class="row" style="font-size:13px;gap:8px;cursor:pointer"><input type="checkbox" class="check" id="l-rem" checked>Remember me for 30 days</label>
     <button class="btn btn-primary btn-lg btn-block" data-a="doLogin" id="login-btn">Sign in</button>
-    <div class="or">or</div>${socialBtns()}
-    <p class="auth-foot">Don't have an account? <button type="button" class="link" data-a="auth" data-v="signup">Sign up</button></p></form>`,
-      `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="signup">Sign up</button>`,
+    ${api.enabled ? '' : `<div class="or">or</div>${socialBtns()}`}
+    ${api.enabled ? (api.allowSignup ? `<p class="auth-foot">Don't have an account? <button type="button" class="link" data-a="auth" data-v="signup">Sign up</button></p>` : `<p class="auth-foot">Accounts are created by your workspace admin.</p>`) : `<p class="auth-foot">Don't have an account? <button type="button" class="link" data-a="auth" data-v="signup">Sign up</button></p>`}</form>`,
+      api.enabled ? '' : `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="signup">Sign up</button>`,
     );
   if (s === 'signup')
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doSignup" novalidate>
-    <div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>Create your account</h1><p class="sub">Free for up to 3 members. No credit card required.</p>
-    ${socialBtns()}<div class="or">or sign up with email</div>
+    <div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>Create your account</h1><p class="sub">${api.enabled ? 'Join this workspace.' : 'Free for up to 3 members. No credit card required.'}</p>
+    ${api.enabled ? '' : `${socialBtns()}<div class="or">or sign up with email</div>`}
     <div class="field"><label class="label" for="s-name">Full name</label><input class="input input-lg ${icls('name')}" id="s-name" value="${esc(f.name)}" autocomplete="name" placeholder="Tanjim Islam">${ferr('name')}</div>
     <div class="field"><label class="label" for="s-email">Work email</label><input class="input input-lg ${icls('email')}" id="s-email" type="email" value="" autocomplete="email" placeholder="you@company.com">${ferr('email')}</div>
     <div class="field"><label class="label" for="s-pw">Password</label><input class="input input-lg ${icls('pw')}" id="s-pw" type="password" data-in="pwStrength" value="${esc(S.ui.pwNew || '')}" autocomplete="new-password">${strengthMeter(S.ui.pwNew || '')}${ferr('pw') || '<span class="hint">At least 10 characters with a number or symbol.</span>'}</div>
