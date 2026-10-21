@@ -262,6 +262,8 @@ function hasAdminRole(userId) {
 function normalizeDoc(doc, meta) {
   const out = doc && typeof doc === 'object' ? doc : {};
   out.data = out.data && typeof out.data === 'object' ? out.data : {};
+  out.data.savedViews = Array.isArray(out.data.savedViews) ? out.data.savedViews : [];
+  out.data.recentSearches = Array.isArray(out.data.recentSearches) ? out.data.recentSearches : [];
   out.data.ws = { name: meta.name, url: meta.slug, c: meta.color, brand: true };
   out.data.me = null;
   delete out.data.workspaces;

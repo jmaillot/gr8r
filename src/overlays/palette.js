@@ -107,7 +107,7 @@ export function paletteItems() {
   if (pl.mode === 'search' && !q) {
     groups.push({
       name: 'Recent searches',
-      items: D().recentSearches.map(s => ({
+      items: (D().recentSearches || []).map(s => ({
         icon: 'history',
         name: s,
         run: () => {
@@ -185,8 +185,9 @@ export function paletteItems() {
         run: () => {
           S.ui.searchQ = q;
           S.ui.searchCat = sc;
-          if (!D().recentSearches.includes(q)) D().recentSearches.unshift(q);
-          D().recentSearches = D().recentSearches.slice(0, 5);
+          const recents = Array.isArray(D().recentSearches) ? D().recentSearches : [];
+          if (!recents.includes(q)) recents.unshift(q);
+          D().recentSearches = recents.slice(0, 5);
           save();
           go('search');
         },

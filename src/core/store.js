@@ -168,6 +168,8 @@ if (typeof window !== 'undefined') {
 export function applyDoc(doc, revision) {
   if (!doc || typeof doc !== 'object') return false;
   if (doc.data) S.data = doc.data;
+  S.data.recentSearches = Array.isArray(S.data.recentSearches) ? S.data.recentSearches : [];
+  S.data.savedViews = Array.isArray(S.data.savedViews) ? S.data.savedViews : [];
   S.prefs = Object.assign({}, DEFAULT_PREFS, doc.prefs || {});
   S.views = doc.views || {};
   S.ui.collapsed = !!doc.collapsed;
