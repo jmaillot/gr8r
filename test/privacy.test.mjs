@@ -176,7 +176,18 @@ function fixture(baseDoc, ids) {
   doc.data.savedViews = [
     { id: 'sv_pub', project: 'p_pub', name: 'Public view', type: 'board', filters: [] },
     { id: 'sv_sec', project: 'p_sec', name: 'Secret view', type: 'list', filters: [] },
+    {
+      id: 'sv_all',
+      project: null,
+      name: 'All work',
+      type: 'board',
+      filters: [
+        { f: 'project', v: ['p_pub', 'p_sec'] },
+        { f: 'status', v: ['todo'] },
+      ],
+    },
   ];
+  doc.data.recentSearches = ['Classified Nebula', 'classified', 'Public Launch', 'wireframe'];
   doc.views = {
     'p:p_pub': { filters: [], sort: { f: 'manual', dir: 1 } },
     'p:p_sec': { filters: [], sort: { f: 'manual', dir: 1 } },
@@ -239,6 +250,37 @@ test('a member never receives a private project or anything that references it',
   assert.equal(proj(bobView.doc, 'p_cust'), undefined, 'custodian-only project is hidden from Bob');
   assert.equal(proj(bobView.doc, 'p_ownerblind'), undefined, 'Owner Blind is hidden from Bob');
   assert.equal(proj(bobView.doc, 'p_legacy'), undefined, 'legacy private project is hidden from Bob');
+  assert.deepEqual(bobView.doc.data.recentSearches, ['Public Launch', 'wireframe'], 'no recent search references a hidden project');
+  for (const v of bobView.doc.data.savedViews) {
+    const ids = (v.filters || []).flatMap(f => (f.f === 'project' && Array.isArray(f.v) ? f.v : []));
+    assert.equal(ids.includes('p_sec'), false, `saved view ${v.id} has no hidden project filter`);
+  }
+  const allView = bobView.doc.data.savedViews.find(v => v.id === 'sv_all');
+  assert.ok(allView, 'a workspace-level saved view is served');
+  assert.deepEqual(
+    allView.filters,
+    [
+      { f: 'project', v: ['p_pub'] },
+      { f: 'status', v: ['todo'] },
+    ],
+    'hidden project ids are scrubbed from saved-view filters',
+  );
+});
+
+test('a non-member cannot erase or rewrite recent searches that name a hidden project', async () => {
+  const live = (await bob.get('/api/workspaces/acme')).data;
+  const cleared = structuredClone(live.doc);
+  cleared.data.recentSearches = ['erased by Bob', 'Bob knows Classified Nebula'];
+  assert.equal((await bob.put('/api/workspaces/acme', { revision: live.revision, doc: cleared })).status, 200, 'Bob can save his visible document');
+
+  const ownerView = (await owner.get('/api/workspaces/acme')).data;
+  assert.ok(ownerView.doc.data.recentSearches.includes('Classified Nebula'), 'hidden search history is restored on write');
+  assert.ok(ownerView.doc.data.recentSearches.includes('Public Launch'), 'other members’ stored searches survive');
+  assert.equal(ownerView.doc.data.recentSearches.includes('Bob knows Classified Nebula'), false, 'a hidden project name cannot be injected');
+  assert.ok(ownerView.doc.data.recentSearches.includes('erased by Bob'), 'a non-member can still add their own search');
+
+  const bobAgain = (await bob.get('/api/workspaces/acme')).data;
+  assert.equal(bobAgain.doc.data.recentSearches.includes('Classified Nebula'), false, 'the redacted read stays clean');
 });
 
 test('a project member receives the private project they are on', async () => {
