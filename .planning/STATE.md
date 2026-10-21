@@ -1,15 +1,15 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.1
-status: executing
-stopped_at: Phase 4 plan 04-03 complete (Playwright two-tenant UAT and CI wiring)
-last_updated: "2026-10-21T19:50:00.000Z"
-state_head: e5817127754483bf5b9b2d93bd5a6a7862547401
+status: complete
+stopped_at: Phase 4 plan 04-04 complete (single-workspace demo, release docs, 1.1.0, Node 24)
+last_updated: "2026-10-21T19:42:00.000Z"
+state_head: 623f8cd
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # STATE
@@ -18,9 +18,9 @@ Last updated: 2026-10-21
 
 ## Position
 
-- Milestone: **Multitenant (v1.1)**
-- Phase: **4 — Hardening and ship: in progress** (plan 3 of 4 complete)
-- Next: **Phase 4, plan 04-04 — demo single-workspace cleanup, release docs, 1.1.0, Node 24**
+- Milestone: **Multitenant (v1.1)** — complete
+- Phase: **4 — Hardening and ship: complete** (plan 4 of 4 complete)
+- Next: **`/gsd-ship`** — open the PR for milestone v1.1
 
 ## Where things stand
 
@@ -70,11 +70,20 @@ private project while its owner still opens it. CI keeps the lint/format/build j
 `npm test`, and gains a required Chromium e2e job that installs with system dependencies and
 uploads traces only on failure.
 
+Phase 4 plan 4 closes the milestone. The browser demo is honestly single-workspace: the seed has
+no `data.workspaces` array, `workspaceList()` derives one entry from the current `ws` object, the
+demo switch branch and create path are gone, the popover shows a static header, and the palette
+omits the switch command — all gated on `api.enabled`, so server mode is untouched.
+`test/demo-workspace.test.mjs` (2 tests, `npm test` now 42) guards it. `CHANGELOG.md` ships
+1.1.0 notes; README/DEPLOY/.env.example document Node 24, `npm test`, `npm run test:privacy`,
+`npm run e2e`, both CI jobs, `TRUST_PROXY`, `MAX_BODY_BYTES`, and the upgrade/rollback path.
+`package.json` and `package-lock.json` are 1.1.0 and `.nvmrc` is 24.
+
 Known limitations carried forward:
 
 - Plans remain display-only labels; nothing is billed or limited.
 - Invite email delivery still requires `SMTP_HOST`; links are copied by hand otherwise.
-- `.nvmrc` still pins Node 22 until plan 04-04 bumps it to 24; the e2e and Node suites need 24.
+- File contents are metadata only; no binary upload backend.
 
 ## Decisions
 
@@ -93,6 +102,12 @@ Known limitations carried forward:
   local e2e run fail.
 - E2E assertions stay in the browser with role/label/text selectors; the API client only creates
   fixtures.
+- Demo mode renders no workspace switcher, create entry or palette command at all; the actions are
+  no-ops as a second layer, and onboarding renames the single `ws` object.
+- The demo workspace is derived from `D().ws` at call time, so a stale cached `data.workspaces`
+  array cannot resurrect a second workspace.
+- Release order is feature/docs commits first, then one `chore(release): X.Y.Z` commit carrying the
+  manifest and lockfile version bump.
 
 ## Verification commands used
 
@@ -114,6 +129,6 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-21T19:50:00.000Z
-**Stopped at:** Phase 4 plan 04-03 complete (Playwright two-tenant UAT and CI wiring)
-**Resume file:** .planning/phases/04-hardening-and-ship/04-04-PLAN.md
+**Last session:** 2026-10-21T19:42:00.000Z
+**Stopped at:** Phase 4 plan 04-04 complete (single-workspace demo, release docs, 1.1.0, Node 24)
+**Resume file:** None

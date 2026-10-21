@@ -42,14 +42,15 @@ Deliverable: a member who is not on a private project receives no trace of it, a
 write to it (directly or by clobbering the document). — met, see
 `phases/03-private-project-isolation/SUMMARY.md` for the record and deviations.
 
-## Phase 4: Hardening and ship
+## Phase 4: Hardening and ship ✅ complete
 
 `node:test` suite, CI wiring, migration dry-run on a copy, Playwright two-tenant UAT, docs
 (`README`, `DEPLOY`, `.env.example`), removal of the demo workspace switch, release notes.
 
-Deliverable: mergeable, documented, tested, deployable.
+Deliverable: mergeable, documented, tested, deployable. — met, see
+`phases/04-hardening-and-ship/04-04-SUMMARY.md` for the release record.
 
-**Plans:** 4 plans — 3 complete
+**Plans:** 4 plans — 4 complete
 
 - [x] `04-01-PLAN.md` — shared `node:test` server harness, tenancy/membership/privacy suites,
   `npm test` (R1, R2, R4, R5, R7, R8) — done, see
@@ -58,4 +59,5 @@ Deliverable: mergeable, documented, tested, deployable.
   (R6, R8) — done, see `phases/04-hardening-and-ship/04-02-SUMMARY.md`
 - [x] `04-03-PLAN.md` — Playwright Chromium two-tenant and private-project UAT, CI wiring
   (R3, R4, R5, R8) — done, see `phases/04-hardening-and-ship/04-03-SUMMARY.md`
-- [ ] `04-04-PLAN.md` — demo single-workspace cleanup, release docs, 1.1.0, Node 24 (R7, R8)
+- [x] `04-04-PLAN.md` — demo single-workspace cleanup, release docs, 1.1.0, Node 24 (R7, R8) —
+  done, see `phases/04-hardening-and-ship/04-04-SUMMARY.md`
