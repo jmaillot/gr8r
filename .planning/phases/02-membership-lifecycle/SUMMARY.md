@@ -21,7 +21,7 @@ the membership on every read and ignored on write for account profiles.
   account profiles whose user is not a member, and always keeps the stored `data.plan`.
 - `GET /api/workspaces/:slug/members` (viewer; the invite list is admin-only inside the same
   payload), `PATCH`/`DELETE /api/workspaces/:slug/members/:userId` (admin), `POST
-  /api/workspaces/:slug/leave` (viewer).
+/api/workspaces/:slug/leave` (viewer).
 - Role ordering: owner > admin > member/viewer. Owners can act on anyone except the last owner;
   admins can act on members, viewers and guests, and may grant admin, but cannot touch another
   admin or an owner. Self-management through the member routes is refused and redirected to
@@ -36,7 +36,7 @@ the membership on every read and ignored on write for account profiles.
 - `GET`/`DELETE /api/workspaces/:slug/invites[/:id]` (admin) list and revoke pending invites by
   token hash.
 - `POST /api/workspaces/:slug/plan` (owner) updates only the plan. `DELETE
-  /api/workspaces/:slug` (owner) deletes memberships, invites, the workspace row, and returns
+/api/workspaces/:slug` (owner) deletes memberships, invites, the workspace row, and returns
   `nextSlug`.
 
 ### Client

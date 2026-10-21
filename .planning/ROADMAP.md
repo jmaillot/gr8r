@@ -33,13 +33,14 @@ Deliverable: the membership table is the single source of truth for access; the 
 works through dedicated endpoints instead of rewriting the document. — met, see
 `phases/02-membership-lifecycle/SUMMARY.md` for the record and deviations.
 
-## Phase 3 — Private project isolation
+## Phase 3 — Private project isolation ✅ complete
 
 Server-side redaction on read and merge on write, protection of `private`/`members` changes,
 saved views and activity filtered consistently.
 
 Deliverable: a member who is not on a private project receives no trace of it, and cannot
-write to it (directly or by clobbering the document).
+write to it (directly or by clobbering the document). — met, see
+`phases/03-private-project-isolation/SUMMARY.md` for the record and deviations.
 
 ## Phase 4 — Hardening and ship
 

@@ -2,7 +2,7 @@
    SHELL: render loop, router, sidebar, topbar, skeletons, filter engine
    ===================================================================== */
 import { $, $$ } from '../core/utils.js';
-import { D, S, mem, proj, team } from '../core/store.js';
+import { D, S, canSee, mem, proj, team } from '../core/store.js';
 import { applyPrefs } from '../core/theme.js';
 import { enhanceSelects, selectMenu } from '../ui/select.js';
 import { renderShell } from './layout.js';
@@ -109,7 +109,8 @@ export function pageTitle() {
   const u = S.ui;
   if (u.auth) return 'Gr8r Studio';
   let t = ROUTE_NAMES[u.route] || 'Not found';
-  if (u.route === 'project' && proj(u.params.id)) t = `${(PTABS.find(x => x[0] === u.params.tab) || [0, 'Saved view'])[1]} · ${proj(u.params.id).name}`;
+  if (u.route === 'project' && proj(u.params.id) && canSee(proj(u.params.id)))
+    t = `${(PTABS.find(x => x[0] === u.params.tab) || [0, 'Saved view'])[1]} · ${proj(u.params.id).name}`;
   if (u.route === 'member' && mem(u.params.id)) t = mem(u.params.id).name;
   if (u.route === 'team' && team(u.params.id)) t = team(u.params.id).name;
   return `${t} · ${D().ws.name}`;

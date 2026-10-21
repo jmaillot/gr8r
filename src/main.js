@@ -99,6 +99,7 @@ function applyDeepLink(rest) {
     if (seg === 'project') {
       const p = find(data.projects || [], 'key');
       if (p) return go('project', { id: p.id });
+      return go('project', { id: '__missing' });
     }
     if (seg === 'task') {
       const t = find(data.tasks || [], 'key');

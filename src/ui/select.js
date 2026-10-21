@@ -28,13 +28,19 @@ export function enhanceSelects(root = document) {
     sel.classList.add('select-native');
     sel.tabIndex = -1;
     sel.setAttribute('aria-hidden', 'true');
+    if (sel.disabled) {
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+    }
     sel.after(btn);
     sel.addEventListener('change', sync);
     btn.addEventListener('click', e => {
       e.stopPropagation();
+      if (sel.disabled) return;
       selectMenu.toggle(sel, btn);
     });
     btn.addEventListener('keydown', e => {
+      if (sel.disabled) return;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         selectMenu.open(sel, btn);

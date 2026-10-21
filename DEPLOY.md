@@ -270,7 +270,12 @@ create more from the workspace menu; with `ALLOW_SIGNUP=false`, only an owner or
 existing workspace can. The creator becomes its owner.
 
 Data is isolated per workspace: members only ever receive the document of a workspace they
-belong to, and a request for any other slug answers `404`. Roles are enforced by the server:
+belong to, and a request for any other slug answers `404`. Inside a workspace, a **private
+project** is redacted server-side for anyone who is not on its access list — its project, tasks,
+comments, files, activity, notifications and saved views are absent from the served document.
+Writes are merged with the stored document, so a redacted copy cannot delete or rewrite a
+project it cannot see. The project lead, an admin or the owner can change who has access.
+Roles are enforced by the server:
 
 | Role     | Read | Write projects/tasks | Edit members | Edit workspace (name, slug, colour) | Invite people | Change the plan |
 | -------- | ---- | -------------------- | ------------ | ----------------------------------- | ------------- | --------------- |
@@ -325,8 +330,6 @@ previous image. The added columns are ignored by the old code.
 
 ### Known limits
 
-- Private projects are still filtered in the browser only. Until the isolation phase lands, any
-  member of a workspace can read the whole document through the API.
 - Plans (`Free`/`Team`/`Business`) are labels only; nothing is billed or limited yet.
 
 ### Invite links and email
@@ -603,8 +606,6 @@ the client falls back to local demo mode.
   passwords with the CLI.
 - **CSP allows Google Fonts.** For an air-gapped deployment, self-host the fonts and
   tighten `Content-Security-Policy` in `server.js`.
-- **Private projects are browser-only.** Roles are enforced by the server, but project
-  visibility is still filtered in the browser until the isolation phase lands.
 
 ## Appendix: minimal Traefik
 

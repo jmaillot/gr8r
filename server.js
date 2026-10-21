@@ -268,15 +268,241 @@ function normalizeDoc(doc, meta) {
   return out;
 }
 
-function docForClient(doc, ws) {
-  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
-  syncProfiles(out, ws.id);
+function projectIsPrivate(p) {
+  if (!p || typeof p !== 'object') return false;
+  if (typeof p.private === 'boolean') return p.private;
+  return p.access === 'private';
+}
+
+/* A private project is visible to its access list only. */
+function canSeeProject(p, memberId) {
+  if (!projectIsPrivate(p)) return true;
+  return !!memberId && Array.isArray(p.members) && p.members.includes(memberId);
+}
+
+function canManageProject(p, memberId, role) {
+  if (role === 'owner' || role === 'admin') return true;
+  return !!memberId && p?.lead === memberId;
+}
+
+/*
+ * Normalises project access in place. The document is the source of truth, but legacy rows and
+ * crafted documents can carry strings, missing lists, retired `access` flags or no manager.
+ * Private projects always keep a manager and a non-empty access list.
+ */
+function normalizeProjects(doc) {
+  const data = doc?.data;
+  if (!data || !Array.isArray(data.projects)) return;
+  const profiles = Array.isArray(data.members) ? data.members : [];
+  const ownerId = profiles.find(m => String(m?.role || '').toLowerCase() === 'owner')?.id || null;
+  for (const p of data.projects) {
+    if (!p || typeof p !== 'object') continue;
+    if (!Array.isArray(p.members)) p.members = [];
+    if (p.lead && !p.members.includes(p.lead)) p.members.push(p.lead);
+    if (projectIsPrivate(p)) {
+      p.private = true;
+      // A private project must always have a manager, otherwise nobody can add members or open it.
+      if (!p.lead || !p.members.includes(p.lead)) p.lead = p.members[0] || ownerId || null;
+      if (p.lead && !p.members.includes(p.lead)) p.members.push(p.lead);
+      if (!p.members.length && ownerId) {
+        p.members.push(ownerId);
+        p.lead = ownerId;
+      }
+      // No workspace member at all: leave it accessible rather than sealed forever.
+      if (!p.members.length) p.private = false;
+    } else {
+      p.private = false;
+    }
+    if (p.perms && typeof p.perms !== 'object') delete p.perms;
+    delete p.access;
+  }
+}
+
+function hiddenProjectIds(doc, memberId) {
+  const seen = new Set();
+  for (const p of doc?.data?.projects || []) {
+    if (p?.id && !canSeeProject(p, memberId)) seen.add(p.id);
+  }
+  return seen;
+}
+
+function hiddenTaskIds(doc, hiddenProjects) {
+  const seen = new Set();
+  for (const t of doc?.data?.tasks || []) if (t?.id && hiddenProjects.has(t.project)) seen.add(t.id);
+  return seen;
+}
+
+/* Keep view-state keys and project filters for hidden projects out of the served document. */
+function redactViews(views, hiddenProjects, hiddenViews) {
+  if (!views || typeof views !== 'object') return views;
+  for (const [key, value] of Object.entries(views)) {
+    const projectId = key.startsWith('p:') ? key.slice(2) : null;
+    const viewId = key.startsWith('sv:') ? key.slice(3) : null;
+    if ((projectId && hiddenProjects.has(projectId)) || (viewId && hiddenViews.has(viewId))) {
+      delete views[key];
+      continue;
+    }
+    if (!value || typeof value !== 'object' || !Array.isArray(value.filters)) continue;
+    value.filters = value.filters
+      .map(f => {
+        if (!f || f.f !== 'project' || !Array.isArray(f.v)) return f;
+        const v = f.v.filter(id => !hiddenProjects.has(id));
+        return v.length ? { ...f, v } : null;
+      })
+      .filter(Boolean);
+  }
+  return views;
+}
+
+function redactDoc(doc, memberId) {
+  const data = doc?.data;
+  if (!data) return doc;
+  const hiddenProjects = hiddenProjectIds(doc, memberId);
+  if (!hiddenProjects.size) return doc;
+  const hiddenTasks = hiddenTaskIds(doc, hiddenProjects);
+  const hiddenViews = new Set((data.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
+  const drop = list => (Array.isArray(list) ? list.filter(x => x && !hiddenProjects.has(x.project)) : list);
+  data.projects = (data.projects || []).filter(p => !hiddenProjects.has(p.id));
+  data.projOrder = Array.isArray(data.projOrder) ? data.projOrder.filter(id => !hiddenProjects.has(id)) : data.projOrder;
+  data.tasks = (data.tasks || []).filter(t => !hiddenProjects.has(t.project));
+  data.comments = Array.isArray(data.comments) ? data.comments.filter(c => !hiddenTasks.has(c.task)) : data.comments;
+  data.files = Array.isArray(data.files) ? data.files.filter(f => !hiddenProjects.has(f.project) && !hiddenTasks.has(f.task)) : data.files;
+  data.activity = Array.isArray(data.activity) ? data.activity.filter(a => !hiddenProjects.has(a.project) && !hiddenTasks.has(a.task)) : data.activity;
+  data.notifs = Array.isArray(data.notifs) ? data.notifs.filter(n => !hiddenProjects.has(n.project) && !hiddenTasks.has(n.task)) : data.notifs;
+  data.events = drop(data.events);
+  data.savedViews = (data.savedViews || []).filter(v => !hiddenProjects.has(v.project));
+  redactViews(doc.views, hiddenProjects, hiddenViews);
+  return doc;
+}
+
+/* Merge a redacted client document with the stored copy, restoring hidden rows. */
+function mergeList(storedList, incomingList, reserved) {
+  const stored = Array.isArray(storedList) ? storedList : [];
+  const incoming = Array.isArray(incomingList) ? incomingList : [];
+  const out = [];
+  const seen = new Set();
+  for (const row of incoming) {
+    if (!row?.id || reserved.has(row.id) || seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  const held = [];
+  stored.forEach((row, index) => {
+    if (row?.id && reserved.has(row.id)) held.push([index, row]);
+  });
+  for (const [index, row] of held) out.splice(Math.min(index, out.length), 0, row);
   return out;
 }
 
-function docFromClient(incoming, stored, ws, role) {
-  const next = JSON.parse(JSON.stringify(incoming));
+function mergeIds(storedList, incomingList, reserved) {
+  const stored = Array.isArray(storedList) ? storedList : [];
+  const incoming = Array.isArray(incomingList) ? incomingList : [];
+  const out = [];
+  const seen = new Set();
+  for (const id of incoming) {
+    if (!id || reserved.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  stored.forEach((id, index) => {
+    if (id && reserved.has(id)) out.splice(Math.min(index, out.length), 0, id);
+  });
+  return out;
+}
+
+function mergeClientDoc(incoming, stored, membership) {
+  const next = incoming && typeof incoming === 'object' ? JSON.parse(JSON.stringify(incoming)) : {};
   next.data = next.data && typeof next.data === 'object' ? next.data : {};
+  normalizeProjects(stored);
+  normalizeProjects(next);
+  const memberId = membership?.member_id || null;
+  const role = membership?.role || 'member';
+  const hiddenProjects = hiddenProjectIds(stored, memberId);
+  const storedData = stored?.data || {};
+  const nextData = next.data;
+
+  // Tasks reserved by a hidden project, whether they are stored there or being moved there.
+  const reservedTasks = hiddenTaskIds(stored, hiddenProjects);
+  for (const t of nextData.tasks || []) if (t?.id && hiddenProjects.has(t.project)) reservedTasks.add(t.id);
+
+  nextData.projects = mergeList(storedData.projects, nextData.projects, hiddenProjects);
+  const storedProjects = new Map((storedData.projects || []).map(p => [p.id, p]));
+  for (const p of nextData.projects) {
+    if (!p?.id) continue;
+    const prev = storedProjects.get(p.id);
+    if (prev && !canManageProject(prev, memberId, role)) {
+      // Access fields belong to a manager even when the project is visible.
+      p.private = prev.private;
+      p.members = prev.members;
+      p.perms = prev.perms;
+      p.lead = prev.lead;
+    }
+    const wasPrivate = projectIsPrivate(prev);
+    if (prev && projectIsPrivate(p) && !wasPrivate && memberId && !p.members.includes(memberId)) {
+      // Whoever restricts an existing project keeps access to it, even if they were not listed.
+      p.members.push(memberId);
+    }
+  }
+  nextData.projOrder = mergeIds(storedData.projOrder, nextData.projOrder, hiddenProjects);
+
+  const reservedDependants = (storedList, incomingList, isHidden) => {
+    const ids = new Set();
+    for (const row of storedList || []) if (row?.id && isHidden(row)) ids.add(row.id);
+    for (const row of incomingList || []) if (row?.id && isHidden(row)) ids.add(row.id);
+    return ids;
+  };
+  const taskHidden = t => hiddenProjects.has(t?.project) || reservedTasks.has(t?.id);
+  nextData.tasks = mergeList(storedData.tasks, nextData.tasks, reservedDependants(storedData.tasks, nextData.tasks, taskHidden));
+
+  const commentHidden = c => reservedTasks.has(c?.task);
+  nextData.comments = mergeList(storedData.comments, nextData.comments, reservedDependants(storedData.comments, nextData.comments, commentHidden));
+  const fileHidden = f => hiddenProjects.has(f?.project) || reservedTasks.has(f?.task);
+  nextData.files = mergeList(storedData.files, nextData.files, reservedDependants(storedData.files, nextData.files, fileHidden));
+  const activityHidden = a => hiddenProjects.has(a?.project) || reservedTasks.has(a?.task);
+  nextData.activity = mergeList(storedData.activity, nextData.activity, reservedDependants(storedData.activity, nextData.activity, activityHidden));
+  const notifHidden = n => hiddenProjects.has(n?.project) || reservedTasks.has(n?.task);
+  nextData.notifs = mergeList(storedData.notifs, nextData.notifs, reservedDependants(storedData.notifs, nextData.notifs, notifHidden));
+  const eventHidden = e => hiddenProjects.has(e?.project);
+  nextData.events = mergeList(storedData.events, nextData.events, reservedDependants(storedData.events, nextData.events, eventHidden));
+  const savedHidden = v => hiddenProjects.has(v?.project);
+  nextData.savedViews = mergeList(storedData.savedViews, nextData.savedViews, reservedDependants(storedData.savedViews, nextData.savedViews, savedHidden));
+
+  // Per-user view state: hidden keys stay from storage, hidden project ids leave filter values.
+  const hiddenViewIds = new Set((storedData.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
+  const mergedViews = {};
+  for (const [key, value] of Object.entries(stored?.views || {})) {
+    const projectId = key.startsWith('p:') ? key.slice(2) : null;
+    const viewId = key.startsWith('sv:') ? key.slice(3) : null;
+    if ((projectId && hiddenProjects.has(projectId)) || (viewId && hiddenViewIds.has(viewId))) mergedViews[key] = value;
+  }
+  for (const [key, value] of Object.entries(next.views || {})) {
+    const projectId = key.startsWith('p:') ? key.slice(2) : null;
+    const viewId = key.startsWith('sv:') ? key.slice(3) : null;
+    if ((projectId && hiddenProjects.has(projectId)) || (viewId && hiddenViewIds.has(viewId))) continue;
+    if (value && typeof value === 'object' && Array.isArray(value.filters)) {
+      value.filters = value.filters
+        .map(f => {
+          if (!f || f.f !== 'project' || !Array.isArray(f.v)) return f;
+          const v = f.v.filter(id => !hiddenProjects.has(id));
+          return v.length ? { ...f, v } : null;
+        })
+        .filter(Boolean);
+    }
+    mergedViews[key] = value;
+  }
+  next.views = mergedViews;
+  return next;
+}
+
+function docForClient(doc, ws, membership) {
+  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
+  normalizeProjects(out);
+  syncProfiles(out, ws.id);
+  return membership ? redactDoc(out, membership.member_id) : out;
+}
+
+function docFromClient(incoming, stored, ws, role, membership) {
+  const next = mergeClientDoc(incoming, stored, membership);
   delete next.data.workspaces;
   next.data.me = null;
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
@@ -299,6 +525,7 @@ function docFromClient(incoming, stored, ws, role) {
   }
   // The plan is a label with its own owner-only endpoint; the document never sets it.
   next.data.plan = stored?.data?.plan;
+  normalizeProjects(next);
   return next;
 }
 
@@ -383,6 +610,7 @@ function syncProfiles(doc, workspaceId) {
 function stripMember(doc, memberId, userId = null) {
   const d = doc?.data;
   if (!d) return;
+  normalizeProjects(doc);
   const ids = new Set(
     [memberId, ...(d.members || []).filter(m => (userId && m.userId === userId) || (memberId && m.id === memberId)).map(m => m.id)].filter(Boolean),
   );
@@ -396,12 +624,18 @@ function stripMember(doc, memberId, userId = null) {
     }
     return next;
   });
-  d.projects = (d.projects || []).map(p => ({
-    ...p,
-    lead: hit(p.lead) ? null : p.lead,
-    members: Array.isArray(p.members) ? p.members.filter(x => !hit(x)) : p.members,
-    perms: p.perms && typeof p.perms === 'object' ? Object.fromEntries(Object.entries(p.perms).filter(([k]) => !hit(k))) : p.perms,
-  }));
+  d.projects = (d.projects || []).map(p => {
+    const members = Array.isArray(p.members) ? p.members.filter(x => !hit(x)) : p.members;
+    const perms = p.perms && typeof p.perms === 'object' ? Object.fromEntries(Object.entries(p.perms).filter(([k]) => !hit(k))) : p.perms;
+    let lead = hit(p.lead) ? null : p.lead;
+    if (projectIsPrivate(p)) {
+      if (!Array.isArray(members) || !members.length) {
+        throw httpError(409, 'Promote someone before removing the last member of a private project');
+      }
+      if (!lead || !members.includes(lead)) lead = members[0];
+    }
+    return { ...p, lead, members, perms };
+  });
   d.teams = (d.teams || []).map(t => (Array.isArray(t.members) ? { ...t, members: t.members.filter(x => !hit(x)) } : t));
 }
 
@@ -946,7 +1180,7 @@ async function handleApi(req, res, url) {
       ...workspacePayload(ctx.ws, ctx.membership),
       revision: ctx.ws.revision,
       updatedAt: ctx.ws.updated_at,
-      doc: docForClient(JSON.parse(ctx.ws.doc), ctx.ws),
+      doc: docForClient(JSON.parse(ctx.ws.doc), ctx.ws, ctx.membership),
     });
   }
 
@@ -973,7 +1207,7 @@ async function handleApi(req, res, url) {
         db.exec('rollback');
         return json(res, 409, { error: 'Workspace changed elsewhere', revision: row.revision });
       }
-      const next = docFromClient(doc, JSON.parse(row.doc), row, ctx.membership.role);
+      const next = docFromClient(doc, JSON.parse(row.doc), row, ctx.membership.role, ctx.membership);
       const t = now();
       db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
       db.exec('commit');

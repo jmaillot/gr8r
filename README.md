@@ -94,5 +94,12 @@ per-account `me` is derived from the session instead of being stored in the shar
 Workspaces are listed in the sidebar menu and the command palette, and new ones are created
 from the setup wizard.
 
+Projects inside a workspace can be **private** to an invited list instead of shared with
+everyone. The server filters hidden projects, tasks, comments, files, activity, notifications
+and saved views out of every response, and refuses writes that try to touch a project the
+caller cannot see. Owners and admins can always manage a project; its lead manages the access
+list and the private switch.
+
 The browser-only demo (Vite dev without the server, and the static Vercel build) falls back to
-a single localStorage workspace and a fake switcher, so the UI is fully explorable offline.
+a single localStorage workspace and a fake switcher, so the UI is fully explorable offline. It
+applies the same private-project visibility in the browser.

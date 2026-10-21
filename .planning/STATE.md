@@ -5,8 +5,8 @@ Last updated: 2026-10-21
 ## Position
 
 - Milestone: **Multitenant (v1.1)**
-- Phase: **2 — Membership lifecycle: complete**
-- Next: **Phase 3 — Private project isolation**
+- Phase: **3 — Private project isolation: complete**
+- Next: **Phase 4 — Hardening and ship**
 
 ## Where things stand
 
@@ -23,9 +23,15 @@ pending invite listing/revocation, owner-only plan changes, and workspace delete
 implemented. The members page and settings read and write through the API; demo mode keeps its
 local behaviour.
 
+Phase 3 moved private-project isolation to the server. The served document omits private
+projects and every row that references them, including saved view state and project filters.
+Writes are merged with stored rows by id, so a redacted document cannot delete or rewrite a
+project it cannot see, and access fields are restored unless the caller is an owner, an admin
+or the project lead. The last member of a private project cannot leave or be removed until
+someone else is promoted or the project is made workspace-wide.
+
 Known limitations carried forward:
 
-- Private projects are filtered in the browser only (phase 3).
 - Plans remain display-only labels; nothing is billed or limited.
 - Invite email delivery still requires `SMTP_HOST`; links are copied by hand otherwise.
 
@@ -33,7 +39,8 @@ Known limitations carried forward:
 
 ```sh
 npm run lint && npm run format:check && npm run build
-node server.js            # with DATA_DIR pointing at a copy of a real database
+npm run test:privacy    # isolated server + privacy matrix
+node server.js          # with DATA_DIR pointing at a copy of a real database
 ```
 
 ## Useful environment

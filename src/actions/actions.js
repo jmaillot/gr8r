@@ -9,6 +9,7 @@ import {
   DEFAULT_PREFS,
   S,
   allTasks,
+  canManageProject,
   canSee,
   clearLocalCache,
   commentsOf,
@@ -1468,6 +1469,8 @@ IN.shareQ = el => {
 A.shareAdd = el => {
   const p = proj(el.dataset.id);
   const m = mem(el.dataset.mid);
+  if (!p || !m) return;
+  if (!canManageProject(p)) return toast('Only the project lead, an admin or the owner can change access', { kind: 'err' });
   mutate(() => {
     p.members.push(m.id);
   });
@@ -1478,6 +1481,8 @@ A.shareAdd = el => {
 A.shareInvite = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const p = proj(m.id);
+  if (!p) return;
+  if (!canManageProject(p)) return toast('Only the project lead, an admin or the owner can change access', { kind: 'err' });
   const v = ($('#share-in')?.value || '').trim();
   const perm = $('#share-perm')?.value;
   if (!v) {
@@ -1495,6 +1500,11 @@ A.shareInvite = () => {
     S.ui.shareQ = '';
     render();
     toast(`Shared with ${ex.name}`);
+    return;
+  }
+  if (api.enabled) {
+    // Project access lists only reference workspace members; invite the person from Members first.
+    toast('Invite them to the workspace first, then add them to this project', { kind: 'err' });
     return;
   }
   if (!/^\S+@\S+\.\S+$/.test(v)) {
@@ -1519,10 +1529,14 @@ A.shareInvite = () => {
 IN.sharePerm = el => {
   const p = proj(el.dataset.id);
   const mid = el.dataset.mid;
+  if (!p) return;
+  if (!canManageProject(p)) return toast('Only the project lead, an admin or the owner can change access', { kind: 'err' });
   if (el.value === '__remove') {
+    if (p.members.length <= 1) return toast('Promote someone else before removing the last member', { kind: 'err' });
     const snap = snapshot();
     mutate(() => {
       p.members = p.members.filter(x => x !== mid);
+      if (p.lead === mid) p.lead = p.members[0] || null;
     });
     toast(`Removed ${mem(mid).name}`, { action: 'Undo', onAction: () => restore(snap) });
   } else {
@@ -1535,9 +1549,14 @@ IN.sharePerm = el => {
 };
 IN.shareAccess = el => {
   const p = proj(el.dataset.id);
+  if (!p) return;
+  if (!canManageProject(p)) return;
+  const priv = el.value === 'private';
   mutate(() => {
-    p.access = el.value;
+    p.private = priv;
+    if (priv && D().me && !p.members.includes(D().me)) p.members.push(D().me);
   });
+  toast(priv ? 'Only people invited can open this project' : `Everyone at ${D().ws.name} can open this project`);
 };
 A.invite = () => {
   S.ui.inviteDraft = '';
