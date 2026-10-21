@@ -1,7 +1,7 @@
 services:
   gr8r:
     build: .
-    image: gr8r-studio:1.0.0
+    image: gr8r-studio:1.1.0
     container_name: gr8r-studio
     restart: unless-stopped
     stop_grace_period: 10s

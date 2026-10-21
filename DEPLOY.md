@@ -344,7 +344,8 @@ To upgrade:
 ```sh
 cd /opt/gr8r
 git pull
-docker compose images gr8r          # note the tag you are replacing
+# record the exact image the container runs, before the rebuild replaces its tag
+docker inspect --format '{{.Image}}' gr8r-studio > /tmp/gr8r-previous-image-id
 docker compose up -d --build
 docker compose logs --tail=40 gr8r  # expect: pre-migration backup written to /data/gr8r-premultitenant-<stamp>.db
 ```
@@ -360,8 +361,13 @@ VOL=$(docker inspect gr8r-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
 docker run --rm --user root -v "$VOL":/data alpine:3.21 \
   sh -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
-docker compose up -d            # redeploy the previous image tag
+# re-tag the captured image id; Compose cannot address an untagged image
+docker tag "$(cat /tmp/gr8r-previous-image-id)" gr8r-studio:rollback
 ```
+
+Set `image: gr8r-studio:rollback` in `docker-compose.yml` for the rollback, then run
+`docker compose up -d`. Revert that line with `git checkout docker-compose.yml` once the
+previous release is running, so the next upgrade starts from the pinned tag again.
 
 The added tenancy columns are ignored by the old code, so a restored pre-migration database
 starts cleanly on the previous image. Delete the backup only once the new release is verified.
@@ -507,7 +513,7 @@ docker cp /var/backups/gr8r/backup-2026-10-21-0315.db gr8r-studio:/data/gr8r.db
 
 VOL=$(docker inspect gr8r-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
-docker run --rm --user root --entrypoint sh -v "$VOL":/data gr8r-studio:1.0.0 \
+docker run --rm --user root --entrypoint sh -v "$VOL":/data gr8r-studio:1.1.0 \
   -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
 
 docker compose start gr8r
