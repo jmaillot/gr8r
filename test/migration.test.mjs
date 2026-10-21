@@ -133,3 +133,41 @@ test('the migrated owner signs in and reads the preserved workspace', async () =
   assert.equal('workspaces' in read.data.doc.data, false);
   assert.equal(read.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project');
 });
+
+/* Everything the migration owns, compared byte-for-byte across a reboot. */
+function snapshot() {
+  const row = workspaceRow();
+  const invite = withDb(server.dbPath, db => db.prepare('select workspace_id from invites').get());
+  return {
+    backups: backups(),
+    slug: row.slug,
+    name: row.name,
+    color: row.color,
+    revision: row.revision,
+    doc: row.doc,
+    updatedAt: row.updated_at,
+    memberIds: membershipRows().map(r => [r.user_id, r.member_id]),
+    inviteWorkspaceId: invite.workspace_id,
+  };
+}
+
+test('a second boot is a no-op and both accounts keep access', async () => {
+  const firstBoot = snapshot();
+  await server.stop();
+  assert.ok(fs.existsSync(dataDir), 'the harness keeps the caller-supplied fixture directory');
+
+  server = await startServer({ dataDir });
+  const secondBoot = snapshot();
+  assert.deepEqual(secondBoot, firstBoot, 'no slug/doc/member_id/revision drift');
+  assert.equal(secondBoot.backups.length, 1, 'no second backup');
+
+  const bob = await login(server.base, 'bob@legacy.local', LEGACY_PASSWORD);
+  assert.equal(bob.status, 200);
+  const me = await bob.client.get('/api/auth/me');
+  assert.equal(me.data.user.workspaces.find(w => w.slug === SLUG)?.role, 'member');
+
+  const read = await bob.client.get(`/api/workspaces/${SLUG}`);
+  assert.equal(read.status, 200);
+  assert.equal(read.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project');
+  assert.equal((await bob.client.get('/api/workspaces/unknown-tenant')).status, 404);
+});
