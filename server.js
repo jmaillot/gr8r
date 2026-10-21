@@ -973,7 +973,13 @@ function parseCookies(header = '') {
   for (const part of String(header).split(';')) {
     const i = part.indexOf('=');
     if (i < 1) continue;
-    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    let value;
+    try {
+      value = decodeURIComponent(part.slice(i + 1).trim());
+    } catch {
+      continue; // malformed cookie: ignore it, the request is simply unauthenticated
+    }
+    out[part.slice(0, i).trim()] = value;
   }
   return out;
 }
