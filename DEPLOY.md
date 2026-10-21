@@ -140,6 +140,7 @@ Set at least:
 
 ```dotenv
 GR8R_HOST=gr8r.example.com
+APP_URL=
 ADMIN_EMAIL=you@example.com
 ADMIN_PASSWORD=<long unique password>
 ADMIN_NAME=Your Name
@@ -155,6 +156,12 @@ SECURE_COOKIE=auto
 `PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
 The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
 restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
+
+`APP_URL` is the absolute URL the app prints in share and invite links and shows in the
+workspace URL fields, e.g. `https://gr8r.example.com`. Leave it empty when the browser
+requests the same hostname users should see: the app then uses the request host (honouring
+`X-Forwarded-Host`/`X-Forwarded-Proto`). Set it explicitly when a proxy, tunnel or alternate
+domain makes the request host differ from the public address.
 
 `SEED_DATA=false` creates a workspace with no sample projects, tasks, comments or activity —
 just your admin account (the default team categories are created on first use). It only

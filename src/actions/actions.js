@@ -480,7 +480,7 @@ A.copyLink = el => {
           : d.id && proj(d.id)
             ? `project/${proj(d.id).key.toLowerCase()}`
             : '';
-  copy(`https://gr8rstudio.com/${D().ws.url}/${path}`);
+  copy(`${api.url}/${D().ws.url}/${path}`);
 };
 A.copyText = el => copy(el.dataset.text, 'Copied to clipboard');
 A.copyEmail = el => {
@@ -1630,7 +1630,7 @@ A.submitInvite = () => {
   });
 };
 A.copyInviteLink = async () => {
-  if (!api.enabled) return copy(`https://gr8rstudio.com/join/${D().ws.url}-7f3k2`, 'Invite link copied');
+  if (!api.enabled) return copy(`${api.url}/join/${D().ws.url}-7f3k2`, 'Invite link copied');
   const role = API_ROLE[$('#inv-role')?.value] || 'member';
   const team = $('#inv-team')?.value || null;
   const res = await api.createInvites([], role, team);

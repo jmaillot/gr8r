@@ -56,6 +56,10 @@ const SEED_DATA = process.env.SEED_DATA !== 'false';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const INVITE_DAYS = Number(process.env.INVITE_DAYS || 7);
 const SECURE_COOKIE = process.env.SECURE_COOKIE || 'auto';
+/* Public base URL (no trailing slash). Empty means "use the request host". */
+const APP_URL = String(process.env.APP_URL || '')
+  .trim()
+  .replace(/\/+$/, '');
 const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const WS_ID = 'ws_default';
@@ -337,6 +341,11 @@ function publicBase(req) {
   return `${proto(req)}://${forwarded || req.headers.host || 'localhost'}`;
 }
 
+/* Absolute base for links shown to users: APP_URL when set, else the request host. */
+function appBase(req) {
+  return APP_URL || publicBase(req);
+}
+
 /* UI labels map to the API's membership roles. */
 function inviteRole(value) {
   const role = String(value || '').toLowerCase();
@@ -448,7 +457,7 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/config' && method === 'GET') {
-    return json(res, 200, { app: 'gr8r', signup: ALLOW_SIGNUP, mail: MAILER.enabled });
+    return json(res, 200, { app: 'gr8r', signup: ALLOW_SIGNUP, mail: MAILER.enabled, url: appBase(req) });
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
@@ -572,7 +581,7 @@ async function handleApi(req, res, url) {
           t,
           expiresAt,
         );
-        rows.push({ email, role, url: `${publicBase(req)}/join/${token}`, expiresAt });
+        rows.push({ email, role, url: `${appBase(req)}/join/${token}`, expiresAt });
       }
       db.exec('commit');
     } catch (err) {

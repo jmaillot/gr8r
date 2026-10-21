@@ -3,7 +3,16 @@
    If nothing answers at /api/config (static hosting, `npm run dev` without
    the server), the app falls back to its original local-only demo mode.
    ===================================================================== */
-const state = { enabled: false, signup: false, mail: false, user: null };
+const state = { enabled: false, signup: false, mail: false, user: null, url: '' };
+
+/* Base URL for links the user can share. Set by the server (APP_URL or the
+   request host); location.origin covers static hosting and the dev server. */
+export function appUrl() {
+  return state.url || location.origin;
+}
+export function appHost() {
+  return appUrl().replace(/^https?:\/\//, '');
+}
 
 async function call(method, path, body, { keepalive = false } = {}) {
   let res;
@@ -44,12 +53,19 @@ export const api = {
   get user() {
     return state.user;
   },
+  get url() {
+    return appUrl();
+  },
+  get host() {
+    return appHost();
+  },
 
   async init() {
     const r = await call('GET', '/api/config');
     state.enabled = !!(r.ok && r.data?.app === 'gr8r');
     state.signup = !!r.data?.signup;
     state.mail = !!r.data?.mail;
+    state.url = typeof r.data?.url === 'string' ? r.data.url.replace(/\/+$/, '') : '';
     return state.enabled;
   },
   async me() {
