@@ -50,7 +50,7 @@ write to it (directly or by clobbering the document). — met, see
 Deliverable: mergeable, documented, tested, deployable. — met, see
 `phases/04-hardening-and-ship/04-04-SUMMARY.md` for the release record.
 
-**Plans:** 4 plans — 4 complete
+**Plans:** 4/4 plans complete — 4 complete
 
 - [x] `04-01-PLAN.md` — shared `node:test` server harness, tenancy/membership/privacy suites,
   `npm test` (R1, R2, R4, R5, R7, R8) — done, see

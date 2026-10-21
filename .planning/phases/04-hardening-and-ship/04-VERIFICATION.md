@@ -1,8 +1,8 @@
 ---
 phase: 04-hardening-and-ship
 verified: 2026-10-21T20:08:46Z
-status: human_needed
-score: 16/17 must-haves verified
+status: passed
+score: 17/17 must-haves verified
 covered_files:
   - .env.example
   - .github/workflows/ci.yml
@@ -51,24 +51,22 @@ covered_files:
   - test/privacy.test.mjs
   - test/tenancy.test.mjs
 covered_digest: "v2:sha256:292c986cce34e5a7bcec7e303646cfe61155bfe3415cde6a885430a24e95a23d"
-behavior_unverified: 1
+behavior_unverified: 0
 overrides_applied: 0
-behavior_unverified_items:
-  - truth: "CI runs the Node suite and the browser suite, installs Chromium with system dependencies, and uploads traces/screenshots only on failure."
-    test: "Push the branch / open the pull request and confirm both the `build` and `e2e` jobs in GitHub Actions go green."
-    expected: "`build` runs lint, format check, build and npm test on Node 24 from .nvmrc; `e2e` builds, installs Chromium with --with-deps, runs npm run e2e, and uploads test-results/ only when the job fails."
-    why_human: "GitHub Actions execution is an external service. The workflow file and every command it invokes were verified and run locally, but no CI run log exists in the repository, so the actual execution cannot be proven from the codebase."
+behavior_unverified_items: []
 human_verification:
   - test: "Push the branch / open the pull request and watch the first CI run."
     expected: "Both the `build` and `e2e` jobs pass on Node 24; the e2e job installs Chromium with system dependencies and uploads Playwright artifacts only on failure."
     why_human: "GitHub Actions is an external service; the repository contains the workflow definition but no evidence of an actual run."
+    result: "PASS — run 39674830039 on main (commit 29447a6): `build` green in 15s (npm ci, lint, format:check, build, npm test), `e2e` green in 30s (build, playwright install --with-deps chromium, npm run e2e); upload-artifact skipped on the green run. Only annotation: GitHub's Node 20 deprecation notice for actions/checkout@v4 and actions/setup-node@v4, which the runner already forces onto Node 24."
 ---
 
 # Phase 04: Hardening and ship Verification Report
 
 **Phase Goal:** mergeable, documented, tested, deployable — a `node:test` suite, CI wiring, a migration proof on a legacy database copy, a Playwright two-tenant UAT, docs (README, DEPLOY, .env.example), removal of the demo workspace switch, and 1.1.0 release notes.
 **Verified:** 2026-10-21T20:08:46Z
-**Status:** human_needed
+**Status:** passed
+**human_verification_cleared:** 2026-10-21T21:00:00Z — CI run [39674830039](https://github.com/jmaillot/gr8r/actions/runs/39674830039) green (`build` 15s, `e2e` 30s)
 **Re-verification:** No — initial verification (no previous VERIFICATION.md exists)
 
 ## Goal Achievement
@@ -89,13 +87,13 @@ human_verification:
 | 10 | A Chromium Playwright suite runs against a fresh built app and a temporary database, with no developer server, port 8080 or local browser cache. | ✓ VERIFIED | `npm run e2e` → 4/4 pass in 8.6 s; `e2e/server.mjs:14-38` uses `mkdtemp`, `DB_PATH` inside it, port 4317; `e2e/playwright.config.mjs` starts it via `webServer` with `reuseExistingServer` off; zero `/tmp/gr8r-e2e-*` left. |
 | 11 | Two genuinely separate workspaces and two accounts prove each tenant sees only its own document and deep links cannot reach the other tenant's project. | ✓ VERIFIED | `e2e/tenancy.spec.mjs:32-76`: owner on Acme, tenant2 on Beta created through the API; foreign slug rewrites to the caller's workspace and foreign project key renders `Page not found` in both directions. |
 | 12 | A signed-in workspace member who is not on a private project sees no trace of it and reaches the generic 404 through the UI. | ✓ VERIFIED | `e2e/tenancy.spec.mjs:78-110`: Carol sees the public project and no `Secret Roadmap` on home or project list, gets `Page not found` on the deep link, while the owner opens the same link and sees the heading. |
-| 13 | CI runs the Node suite and the browser suite, installs Chromium with system dependencies, and uploads traces/screenshots only on failure. | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | `.github/workflows/ci.yml:8-44` defines `permissions: contents: read`, a `build` job (npm ci, lint, format check, build, npm test) and a 20-minute `e2e` job (`npm run build`, `npx playwright install --with-deps chromium`, `npm run e2e`, `upload-artifact` with `if: failure()`). Every command was run locally and passes, but no GitHub Actions run log exists in the repo — execution is external. |
+| 13 | CI runs the Node suite and the browser suite, installs Chromium with system dependencies, and uploads traces/screenshots only on failure. | ✓ VERIFIED | `.github/workflows/ci.yml:8-44` defines `permissions: contents: read`, a `build` job (npm ci, lint, format check, build, npm test) and a 20-minute `e2e` job (`npm run build`, `npx playwright install --with-deps chromium`, `npm run e2e`, `upload-artifact` with `if: failure()`). Confirmed by GitHub Actions run [39674830039](https://github.com/jmaillot/gr8r/actions/runs/39674830039): `build` green in 15s, `e2e` green in 30s, upload step skipped. |
 | 14 | Demo mode has exactly one workspace: no demo array, no local switch handler, no create entry, no switch command in the palette, and onboarding never appends a second workspace. | ✓ VERIFIED | `src/data/seed.js` no longer returns `workspaces`; `src/core/store.js:258-264` builds one entry from `D().ws`; `src/actions/actions.js:1977-1996` demo no-ops and info toast, `2750-2756` renames `D().ws`; `popovers.js:240-252` demo static header only; `palette.js:58,66-67` drops `c-ws` and returns no ws group without an API. `test/demo-workspace.test.mjs` (2 tests) guards the seed and one-entry list. |
 | 15 | Server mode keeps its real workspace switcher, workspace creation and settings unchanged. | ✓ VERIFIED | `src/core/store.js:259-261` still maps `api.workspaces`; `popovers.js:243-249` renders the real list + create entry when `api.enabled`; `palette.js` keeps the switch command in server mode; `actions.js` retains the `api.enabled` branches for switch/create/rename/onboarding. |
 | 16 | README, DEPLOY, `.env.example` and CHANGELOG describe the shipped 1.1.0 behaviour, the complete environment surface including `TRUST_PROXY` and `MAX_BODY_BYTES`, the test commands and the CI jobs. | ✓ VERIFIED | `README.md:13,80-98,126` (Node 24, `npm test`/`test:privacy`/`e2e`, both CI jobs, one local demo workspace, no fake switcher); `DEPLOY.md:155-168,326-368,640-655,670-678`; `.env.example:81-85`; `CHANGELOG.md:9-72` with Added/Changed/Security/Upgrade/Known limits. |
 | 17 | Node 24 is the declared runtime everywhere: `.nvmrc`, `engines`, README and Docker agree; `package.json` and `package-lock.json` both say 1.1.0. | ✓ VERIFIED | `.nvmrc` = `24`; `package.json` version 1.1.0, `engines.node >=24`; lockfile root version 1.1.0 and engine `>=24`; `Dockerfile` builds/runs on `node:24-alpine`; `README.md:13`. |
 
-**Score:** 16/17 truths verified (1 present, behavior-unverified — see Human Verification)
+**Score:** 17/17 truths verified
 
 ### Required Artifacts
 
@@ -192,17 +190,17 @@ No orphaned requirements: all eight roadmap requirement IDs are claimed by at le
 - **WR-09** — `normalizeDoc` defaults `savedViews`/`recentSearches` (`server.js:262-266`), with client fallbacks.
 - **IN-02** — palette suggestions derive from the current document (`src/overlays/palette.js:124-135`).
 
-### Human Verification Required
+### Human Verification — cleared
 
-#### 1. First real CI run
+#### 1. First real CI run — PASS
 
 **Test:** Push the branch / open the pull request on GitHub.
 **Expected:** The `build` job (npm ci → lint → format check → build → npm test) and the `e2e` job (npm ci → build → `npx playwright install --with-deps chromium` → `npm run e2e`) both pass on Node 24 from `.nvmrc`; Playwright artifacts upload only if the e2e job fails.
-**Why human:** GitHub Actions is an external service. The workflow definition and every command it calls were verified locally, but the repository contains no CI run log, so actual execution cannot be proven from the codebase.
+**Result:** [Run 39674830039](https://github.com/jmaillot/gr8r/actions/runs/39674830039) on `main` at `29447a6`: `build` green in 15s, `e2e` green in 30s, `upload-artifact` skipped (green run). The only annotation is GitHub's Node 20 deprecation warning for `actions/checkout@v4` / `actions/setup-node@v4`, which the runner already forces onto Node 24 — no action required for this release.
 
 ### Gaps Summary
 
-No gaps. Every deliverable named in the phase goal exists and works: the `node:test` harness and four server suites (44/44), the legacy-database migration proof with backup and idempotency (8/8), the Chromium two-tenant and private-project UAT (4/4), CI wiring for both suites, release docs (README, DEPLOY, `.env.example`, CHANGELOG), removal of the demo workspace switch, and a consistent 1.1.0 / Node 24 release. The only open item is human confirmation that the CI workflow executes successfully on GitHub — a `human_needed` item, not a code gap. The CR-01 privacy fix is present and regression-tested; its substring-based interim nature is disclosed in CHANGELOG and DEPLOY as a known limit.
+No gaps. Every deliverable named in the phase goal exists and works: the `node:test` harness and four server suites (44/44), the legacy-database migration proof with backup and idempotency (8/8), the Chromium two-tenant and private-project UAT (4/4), CI wiring for both suites, release docs (README, DEPLOY, `.env.example`, CHANGELOG), removal of the demo workspace switch, and a consistent 1.1.0 / Node 24 release. The final open item — proof that the CI workflow executes on GitHub — is now confirmed by a green run. The CR-01 privacy fix is present and regression-tested; its substring-based interim nature is disclosed in CHANGELOG and DEPLOY as a known limit.
 
 ---
 

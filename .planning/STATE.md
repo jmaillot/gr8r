@@ -2,14 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v1.1
 status: complete
-stopped_at: Phase 4 plan 04-04 complete (single-workspace demo, release docs, 1.1.0, Node 24)
-last_updated: "2026-10-21T19:42:00.000Z"
-state_head: 623f8cd
+stopped_at: Phase 04 complete — all phases complete
+last_updated: "2026-10-21T21:00:06.458Z"
+state_head: 29447a63a0eb4e63d031362f66713d7ad4b29f61
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 7
   completed_plans: 7
+  percent: 100
 ---
 
 # STATE
@@ -46,8 +47,10 @@ someone else is promoted or the project is made workspace-wide.
 
 Phase 4 plan 1 replaced the standalone privacy script with a `node:test` suite. One shared
 `test/helpers/server.mjs` harness spawns real `server.js` processes on ephemeral loopback ports
-with `mkdtemp` `DATA_DIR`s, and three suites cover phases 1–3 (32 tests): tenancy, membership
-lifecycle and the ported 70-check privacy matrix. `npm test` is the entry point;
+with `mkdtemp` `DATA_DIR`s, and three suites cover phases 1–3 (the full `npm test` run is now
+44 tests across the tenancy, membership, privacy, migration, harness and demo suites). Tenancy,
+membership lifecycle and the ported 70-check privacy matrix are the original three. `npm test` is
+the entry point;
 `npm run test:privacy` remains the phase 3 release alias. `.planning` and `.gsd` are now
 prettier-ignored so tooling-written planning artifacts stop failing `format:check`.
 
@@ -59,10 +62,10 @@ any rewrite, the workspace derives `legacy-studio` / `Legacy Studio` / `#3D8E5F`
 linked, the invite is scoped, `data.workspaces` is dropped, `data.me` is retired, and
 `p_keep`/`t_keep` survive. A second boot is byte-identical and creates no backup. The suite
 exposed one real gap: `migrateTenancy()` never scoped legacy invites, now fixed by
-`backfillInvites()`. `npm test` is 40 tests.
+`backfillInvites()`. `npm test` now runs 44 tests.
 
 Phase 4 plan 3 puts the contract in a real browser and in CI. `e2e/server.mjs` boots its own
-server on `127.0.0.1:4173` with a `mkdtemp` `DATA_DIR` and removes it on SIGTERM;
+server on `127.0.0.1:4317` with a `mkdtemp` `DATA_DIR` and removes it on SIGTERM;
 `e2e/helpers/setup.mjs` creates two workspaces and three accounts through the API; and
 `e2e/tenancy.spec.mjs` (4 Chromium tests) proves document isolation in both directions, the
 foreign-slug fallback, cross-tenant project 404s, and that a plain member sees no trace of a
@@ -74,10 +77,19 @@ Phase 4 plan 4 closes the milestone. The browser demo is honestly single-workspa
 no `data.workspaces` array, `workspaceList()` derives one entry from the current `ws` object, the
 demo switch branch and create path are gone, the popover shows a static header, and the palette
 omits the switch command — all gated on `api.enabled`, so server mode is untouched.
-`test/demo-workspace.test.mjs` (2 tests, `npm test` now 42) guards it. `CHANGELOG.md` ships
-1.1.0 notes; README/DEPLOY/.env.example document Node 24, `npm test`, `npm run test:privacy`,
-`npm run e2e`, both CI jobs, `TRUST_PROXY`, `MAX_BODY_BYTES`, and the upgrade/rollback path.
-`package.json` and `package-lock.json` are 1.1.0 and `.nvmrc` is 24.
+`test/demo-workspace.test.mjs` (2 tests; `npm test` is 44 after the review fixes) guards it.
+`CHANGELOG.md` ships 1.1.0 notes; README/DEPLOY/.env.example document Node 24, `npm test`,
+`npm run test:privacy`, `npm run e2e`, both CI jobs, `TRUST_PROXY`, `MAX_BODY_BYTES`, and the
+upgrade/rollback path. `package.json` and `package-lock.json` are 1.1.0 and `.nvmrc` is 24.
+
+The post-execution code review (`04-REVIEW.md`, 1 Critical + 9 Warnings + 2 Info) was fully
+disposed in `04-REVIEW-DISPOSITION.md`: `data.recentSearches` and saved-view filters are redacted
+for hidden projects, recent searches merge instead of being clobbered, the palette tolerates a
+missing array, malformed cookies return 401, the e2e server moved to port 4317, Compose forwards
+`WORKSPACE_SLUG`/`MAX_BODY_BYTES`, and DEPLOY/image-tag claims match 1.1.0. Residual risk: the
+CR-01 redaction is substring-based, so a hidden project name embedded in a free-text search
+string can still leak in part; disclosed in CHANGELOG and DEPLOY. The first real CI run
+(39674830039) passed both `build` and `e2e`, closing the last verification item.
 
 Known limitations carried forward:
 
@@ -130,5 +142,5 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-21T19:42:00.000Z
-**Stopped at:** Phase 4 plan 04-04 complete (single-workspace demo, release docs, 1.1.0, Node 24)
+**Stopped at:** Phase 04 complete — all phases complete
 **Resume file:** None
