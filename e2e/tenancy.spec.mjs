@@ -74,3 +74,37 @@ test('tenant two sees Beta, and never the Acme document', async ({ browser }) =>
     await context.close();
   }
 });
+
+test('a private project is invisible to a member who is not on it, and reachable by its owner', async ({ browser }) => {
+  /* Carol is a plain member of Acme and is not on Secret Roadmap. */
+  const carol = await signIn(browser, fixtures.accounts.carol);
+  try {
+    const { page } = carol;
+    await page.goto(`/w/${fixtures.slugs.acme}/project/${fixtures.keys.publicProject}`);
+    await expect(page.getByRole('heading', { name: fixtures.keys.publicProjectName, level: 1 })).toBeVisible();
+
+    /* Neither the workspace home (sidebar included) nor the project list names it. */
+    await page.goto(`/w/${fixtures.slugs.acme}`);
+    await expect(page.getByText(fixtures.keys.publicProjectName).first()).toBeVisible();
+    await expect(page.getByText(fixtures.keys.privateProjectName)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Projects' }).first().click();
+    await expect(page.getByText(fixtures.keys.publicProjectName).first()).toBeVisible();
+    await expect(page.getByText(fixtures.keys.privateProjectName)).toHaveCount(0);
+
+    /* The deep link answers the generic 404 and still leaks nothing. */
+    await page.goto(`/w/${fixtures.slugs.acme}/project/${fixtures.keys.privateProject}`);
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await expect(page.getByText(fixtures.keys.privateProjectName)).toHaveCount(0);
+  } finally {
+    await carol.context.close();
+  }
+
+  /* The owner is on the project: the 404 above is caused by access, not a broken fixture. */
+  const owner = await signIn(browser, fixtures.accounts.owner);
+  try {
+    await owner.page.goto(`/w/${fixtures.slugs.acme}/project/${fixtures.keys.privateProject}`);
+    await expect(owner.page.getByRole('heading', { name: fixtures.keys.privateProjectName, level: 1 })).toBeVisible();
+  } finally {
+    await owner.context.close();
+  }
+});
