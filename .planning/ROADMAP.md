@@ -52,7 +52,7 @@ Deliverable: mergeable, documented, tested, deployable.
 **Plans:** 4 plans
 
 - [ ] `04-01-PLAN.md` — shared `node:test` server harness, tenancy/membership/privacy suites,
-  `npm test` (R1, R2, R4, R5, R8)
+  `npm test` (R1, R2, R4, R5, R7, R8)
 - [ ] `04-02-PLAN.md` — pre-tenancy SQLite fixture, migration backup and idempotency test
   (R6, R8)
 - [ ] `04-03-PLAN.md` — Playwright Chromium two-tenant and private-project UAT, CI wiring
