@@ -10,7 +10,7 @@ UI framework and no runtime dependency.
 
 ## Getting started
 
-Requires Node.js 18 or newer (`.nvmrc` pins 22).
+Requires Node.js 24 or newer (`.nvmrc` pins 24, and the Docker image uses `node:24-alpine`).
 
 ```bash
 npm install
@@ -28,7 +28,7 @@ index.html              HTML entry; loads src/main.js
 public/favicon.svg      brand mark
 vite.config.js          Vite config, including the Lucide icon-subset plugin
 eslint.config.js        lint rules (ESLint flat config); formatting by Prettier (.prettierrc.json)
-.github/workflows/      CI: lint, format check, build
+.github/workflows/      CI: lint, format check, build, server tests, browser UAT
 docs/preview.png        README screenshot
 src/
   main.js               entry: imports styles and modules, then boots the app
@@ -74,8 +74,30 @@ Dependencies point downward:
 
 ## Continuous integration
 
-Every push and pull request runs lint, the format check and a production build
-(`.github/workflows/ci.yml`).
+Every push to `main` and every pull request runs two required jobs
+(`.github/workflows/ci.yml`), both reading the Node version from `.nvmrc` (24):
+
+- **build** — `npm ci`, `npm run lint`, `npm run format:check`, `npm run build` and `npm test`.
+- **e2e** — builds `dist/`, installs Chromium with system dependencies
+  (`npx playwright install --with-deps chromium`) and runs `npm run e2e`. Playwright traces and
+  screenshots are uploaded as an artifact only when the job fails.
+
+## Testing
+
+```bash
+npm test              # isolated Node suite: tenancy, membership, privacy, migration
+npm run test:privacy  # the phase 3 privacy matrix on its own
+npm run build && npx playwright install chromium && npm run e2e
+```
+
+`npm test` spawns real `server.js` processes on ephemeral loopback ports, each with its own
+temporary `DATA_DIR`, so no developer database, port 8080 or prebuilt `dist/` is involved.
+`npm run test:privacy` stays available as the phase 3 release gate.
+
+The browser suite needs a production build (`npm run build`) and Chromium
+(`npx playwright install chromium`). It boots its own throwaway server and database, creates two
+workspaces and three accounts through the API, and asserts the tenancy and private-project
+contract in Chromium.
 
 ## Deploy
 
@@ -100,6 +122,7 @@ and saved views out of every response, and refuses writes that try to touch a pr
 caller cannot see. Owners and admins can always manage a project; its lead manages the access
 list and the private switch.
 
-The browser-only demo (Vite dev without the server, and the static Vercel build) falls back to
-a single localStorage workspace and a fake switcher, so the UI is fully explorable offline. It
-applies the same private-project visibility in the browser.
+The browser-only demo (Vite dev without the server, and the static Vercel build) has exactly
+one local workspace backed by `localStorage`: there is no workspace switcher and no workspace
+creation, so nothing implies server-backed multi-tenancy. It applies the same private-project
+visibility in the browser.

@@ -152,11 +152,22 @@ ALLOW_SIGNUP=false
 SEED_DATA=true
 SESSION_DAYS=30
 SECURE_COOKIE=auto
+TRUST_PROXY=true
+MAX_BODY_BYTES=8388608
 ```
 
 `PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
 The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
 restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
+
+`TRUST_PROXY=true` (the default) makes the app read `X-Forwarded-For`, `X-Forwarded-Host` and
+`X-Forwarded-Proto` from the proxy in front of it. The container publishes no port, so keep it
+behind Traefik; direct exposure would let a client spoof its address and escape the per-IP
+throttles. Set it to `false` only when nothing proxies the app and clients connect directly.
+
+`MAX_BODY_BYTES=8388608` (8 MiB, the default) caps the size of a JSON request body — one whole
+workspace document is saved at a time. Raise it only if a workspace legitimately grows past
+that; a lower value is a cheap guard against oversized writes.
 
 `APP_URL` is the absolute URL the app prints in share and invite links and shows in the
 workspace URL fields, e.g. `https://gr8r.example.com`. Leave it empty when the browser
@@ -312,7 +323,7 @@ Pending address invites appear under **Members → Pending invites** for admins 
 they can be resent (a fresh link and expiry) or revoked. Revoked and expired links answer `404`
 and `410` respectively.
 
-### Upgrading an existing install
+### Upgrading an existing install to 1.1.0
 
 The first start after this update migrates the single-workspace database in place:
 
@@ -322,11 +333,38 @@ The first start after this update migrates the single-workspace database in plac
   empty;
 - member profiles are linked to the accounts that own them; the `data.me` field previously
   shared by every account is retired (each browser now derives it from its own session);
+- legacy pending invites are scoped to the migrated workspace;
 - the demo-only workspace switcher list is dropped, and the real one takes over.
 
 The migration is idempotent: restarting does not create another backup or change the workspace
-again. To roll back, stop the container, restore that backup over `gr8r.db`, and redeploy the
-previous image. The added columns are ignored by the old code.
+again, and a second boot is byte-identical.
+
+To upgrade:
+
+```sh
+cd /opt/gr8r
+git pull
+docker compose images gr8r          # note the tag you are replacing
+docker compose up -d --build
+docker compose logs --tail=40 gr8r  # expect: pre-migration backup written to /data/gr8r-premultitenant-<stamp>.db
+```
+
+To roll back to the previous image:
+
+```sh
+cd /opt/gr8r
+docker compose stop gr8r
+docker cp gr8r-studio:/data/gr8r-premultitenant-<stamp>.db ./pre-1.1.0.db
+docker cp ./pre-1.1.0.db gr8r-studio:/data/gr8r.db
+VOL=$(docker inspect gr8r-studio \
+  --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
+docker run --rm --user root -v "$VOL":/data alpine:3.21 \
+  sh -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
+docker compose up -d            # redeploy the previous image tag
+```
+
+The added tenancy columns are ignored by the old code, so a restored pre-migration database
+starts cleanly on the previous image. Delete the backup only once the new release is verified.
 
 ### Known limits
 
@@ -585,9 +623,30 @@ npm run dev            # Vite proxies /api to localhost:8080
 `API_ORIGIN` overrides the proxy target. If the API is not running, `/api/config` fails and
 the client falls back to local demo mode.
 
+### Tests
+
+```sh
+npm test              # tenancy, membership, privacy and migration suites (real servers)
+npm run test:privacy  # phase 3 privacy matrix only
+```
+
+Both spawn `server.js` on an ephemeral loopback port with a temporary `DATA_DIR`; they need
+Node 24 (for `node:sqlite`), no developer database and no built `dist/`.
+
+The browser suite needs a production build and Chromium first:
+
+```sh
+npm run build
+npx playwright install chromium   # add --with-deps on a fresh Linux host
+npm run e2e
+```
+
+CI runs `npm test` in the build job and `npm run e2e` in a separate job that uploads Playwright
+traces when it fails (`.github/workflows/ci.yml`).
+
 ## 13. Operational limits
 
-- **One workspace, one JSON document.** Saves carry an integer `revision`; a stale write
+- **One JSON document per workspace.** Saves carry an integer `revision`; a stale write
   gets `409` instead of overwriting someone else's work, and the client asks you to reload.
   This is not real-time collaboration — changes appear after a save or reload.
 - **Single Node process, SQLite WAL.** Fine for a small team. Concurrent writers serialize;
@@ -602,8 +661,11 @@ the client falls back to local demo mode.
 - **Rate limiting** is in memory and resets when the container restarts.
 - **Uploads are still simulated.** Attachment names and sizes live in the workspace
   document; file contents are not stored. Do not treat them as backed-up files.
-- **No email.** There is no self-service password reset or verification; admins reset
-  passwords with the CLI.
+- **Plans are display-only.** `Free`/`Team`/`Business` are labels; nothing is billed, limited
+  or enforced.
+- **Email is optional.** Without `SMTP_HOST` the server still creates invite links for you to
+  copy; there is no self-service password reset or email verification either way.
+- **No self-service account recovery.** Admins reset passwords with the CLI.
 - **CSP allows Google Fonts.** For an air-gapped deployment, self-host the fonts and
   tighten `Content-Security-Policy` in `server.js`.
 
