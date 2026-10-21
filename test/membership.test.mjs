@@ -1,5 +1,10 @@
 /* Phase 2 membership lifecycle over HTTP: invites, roles, guards, removal
-   cleanup, leave and workspace deletion, against an isolated server. */
+   cleanup, leave and workspace deletion, against an isolated server.
+
+   The server throttles invite accepts to five per IP per hour. This suite spends
+   exactly five attempts (Bob, Cara, Eve's needsSignIn refusal, Eve's accept and
+   the expired link), so a sixth accept would need its own server instance. */
+
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { ADMIN, client, inviteToken, login, signup, startServer, withDb } from './helpers/server.mjs';
