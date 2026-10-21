@@ -3,6 +3,7 @@ import { MOD, clamp, esc } from '../core/utils.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
 import { D, S, allTasks, pColor, proj, roleLabel, save, task, workspaceList as wsList } from '../core/store.js';
+import { api } from '../core/api.js';
 import { FT, av, hl, stIcon } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { go, render } from '../shell/render.js';
@@ -54,7 +55,7 @@ export function commands() {
     { id: 'c-side', name: 'Toggle sidebar', icon: 'panel-left', kbd: '[', run: () => A.toggleSide() },
     { id: 'c-keys', name: 'Keyboard shortcuts', icon: 'keyboard', kbd: '?', run: () => A.shortcuts() },
     { id: 'c-out', name: 'Sign out', icon: 'log-out', run: () => A.signOut() },
-  ];
+  ].filter(c => api.enabled || c.id !== 'c-ws');
 }
 export function paletteItems() {
   const pl = S.ui.palette;
@@ -62,6 +63,8 @@ export function paletteItems() {
   const ql = q.toLowerCase();
   const groups = [];
   if (pl.mode === 'ws') {
+    /* The local demo has one workspace, so there is nothing to switch to. */
+    if (!api.enabled) return [];
     groups.push({
       name: 'Switch workspace',
       items: wsList()

@@ -1977,15 +1977,8 @@ A.setSearch = el => {
 A.switchWs = async el => {
   S.ui.pop = null;
   const slug = el.dataset.v;
-  if (!api.enabled) {
-    const w = D().workspaces.find(x => x.id === slug || x.name === slug);
-    if (!w) return;
-    D().ws = { name: w.name, url: w.name.toLowerCase().replace(/[^a-z0-9]+/g, ''), c: w.c, brand: !!w.brand };
-    save();
-    go('home');
-    toast(`Switched to ${w.name}`);
-    return;
-  }
+  /* The local demo has exactly one workspace and renders no switcher. */
+  if (!api.enabled) return;
   const target = api.workspaces.find(w => w.slug === slug);
   if (!target) return;
   if (api.workspace?.slug === slug) {
@@ -2000,7 +1993,8 @@ A.switchWs = async el => {
 };
 A.newWorkspace = () => {
   S.ui.pop = null;
-  if (api.enabled && !api.canCreateWorkspace) {
+  if (!api.enabled) return toast('The local demo has a single workspace.', { kind: 'info' });
+  if (!api.canCreateWorkspace) {
     return toast('Ask a workspace administrator to create one for you', { kind: 'err' });
   }
   S.ui.auth = 'onboarding';
@@ -2201,11 +2195,8 @@ A.saveWorkspace = () => {
   loadingBtn('ws-save', 600, () => {
     if (
       mutate(() => {
-        const old = D().ws.name;
         D().ws.name = n;
         D().ws.url = u || D().ws.url;
-        const w = D().workspaces.find(x => x.name === old);
-        if (w) w.name = n;
       })
     )
       toast('Workspace settings saved');
@@ -2759,9 +2750,9 @@ A.onbFinish = async () => {
   let p;
   mutate(() => {
     if (!api.enabled && o.ws.trim()) {
-      const c = ['#2F2E2A', '#5A67D8', '#23918A', '#C54B78'][D().workspaces.length % 4];
-      D().ws = { name: o.ws.trim(), url: o.url || 'workspace', c };
-      if (!D().workspaces.some(w => w.name === D().ws.name)) D().workspaces.push({ id: uid('w'), name: D().ws.name, c, plan: 'Free' });
+      /* The demo keeps a single workspace: rename it instead of adding another. */
+      D().ws.name = o.ws.trim();
+      D().ws.url = o.url || D().ws.url;
     }
     S.prefs.defaultTab = { kanban: 'board', list: 'list', timeline: 'timeline', table: 'table' }[o.team] || 'board';
     const tm = TEMPLATES.find(t => t.id === o.tmpl) || TEMPLATES[2];

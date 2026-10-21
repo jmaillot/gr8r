@@ -244,30 +244,21 @@ export function logAct(verb, t, extra = '') {
   if (t) t.updated = Date.now();
 }
 
-/* ---------- workspaces (server-backed, or the demo switcher) ---------- */
+/* ---------- workspaces (server-backed, or the single local workspace) ---------- */
 export const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
 export const roleLabel = role => ROLE_LABELS[role] || 'Member';
 
 /* Owner or admin: who may invite people and manage the roster. */
 export const isMemberAdmin = () => ['Owner', 'Admin'].includes(me()?.role || '');
 
-/* The signed-in account's workspaces; falls back to the demo list locally. */
+/* The signed-in account's workspaces in server mode; the local demo has exactly
+   one workspace, derived from the current `ws` object (never a stored list). */
 export function workspaceList() {
   if (api.enabled) {
     return api.workspaces.map(w => ({ id: w.id, slug: w.slug, name: w.name, color: w.color, role: w.role }));
   }
-  return D().workspaces.map(w => ({
-    id: w.id,
-    slug:
-      w.url ||
-      String(w.name)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, ''),
-    name: w.name,
-    color: w.c,
-    role: 'owner',
-  }));
+  const ws = D().ws || {};
+  return [{ id: 'demo', slug: currentSlug(), name: ws.name || 'Workspace', color: ws.c || '#1D1C1A', role: 'owner' }];
 }
 
 export function currentSlug() {

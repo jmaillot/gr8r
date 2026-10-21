@@ -499,11 +499,6 @@ export function seed() {
   tmp.updated = minsAgo(38);
   return {
     ws: { name: 'Gr8r Studio', url: 'gr8rstudio', c: '#1D1C1A', brand: true },
-    workspaces: [
-      { id: 'w1', name: 'Gr8r Studio', c: '#1D1C1A', plan: 'Team', brand: true },
-      { id: 'w2', name: 'Personal', c: '#3D8E5F', plan: 'Free' },
-      { id: 'w3', name: 'Acme Labs', c: '#3B82C4', plan: 'Business' },
-    ],
     me: 'm1',
     members,
     projects,

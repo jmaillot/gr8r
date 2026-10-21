@@ -237,17 +237,20 @@ export function popHtml(p) {
       style = 'width:300px';
       break;
     }
-    case 'ws':
-      inner = `<div class="mh">Workspaces</div>${wsList()
-        .map(
-          w =>
-            `<button class="mi" data-a="switchWs" data-v="${esc(w.slug)}">${wsLogo({ name: w.name, c: w.color }, 20)}<span class="grow trunc">${esc(w.name)}</span><span class="faint" style="font-size:11px">${esc(roleLabel(w.role))}</span>${w.slug === currentSlug() ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
-        )
-        .join(
-          '',
-        )}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button>${isMemberAdmin() ? `<button class="mi" data-a="invite">${ic('user-plus', 15)}Invite members</button>` : ''}<div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
+    case 'ws': {
+      const actions = `<div class="msep"></div><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button>${isMemberAdmin() ? `<button class="mi" data-a="invite">${ic('user-plus', 15)}Invite members</button>` : ''}<div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
+      /* Demo mode has one local workspace: no switcher, no creation entry. */
+      inner = api.enabled
+        ? `<div class="mh">Workspaces</div>${wsList()
+            .map(
+              w =>
+                `<button class="mi" data-a="switchWs" data-v="${esc(w.slug)}">${wsLogo({ name: w.name, c: w.color }, 20)}<span class="grow trunc">${esc(w.name)}</span><span class="faint" style="font-size:11px">${esc(roleLabel(w.role))}</span>${w.slug === currentSlug() ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+            )
+            .join('')}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button>${actions}`
+        : `<div class="mh">${esc(D().ws.name)}</div><div style="padding:0 8px 6px" class="faint trunc">Your local demo workspace</div>${actions}`;
       style = 'width:260px';
       break;
+    }
     case 'user':
       inner = `<div class="row" style="padding:8px 8px 10px;gap:10px">${av(D().me, 'lg', false)}<div style="min-width:0"><div style="font-weight:600">${esc(S.prefs.name)}</div><div class="faint trunc" style="font-size:12px">${esc(me().email)}</div></div></div><div class="msep"></div>
       <button class="mi" data-a="go" data-r="member" data-id="${D().me}">${ic('user', 15)}View profile</button><button class="mi" data-a="go" data-r="settings" data-sec="profile">${ic('settings', 15)}Account settings</button>
