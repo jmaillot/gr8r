@@ -244,6 +244,9 @@ export function logAct(verb, t, extra = '') {
 export const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
 export const roleLabel = role => ROLE_LABELS[role] || 'Member';
 
+/* Owner or admin: who may invite people and manage the roster. */
+export const isMemberAdmin = () => ['Owner', 'Admin'].includes(me()?.role || '');
+
 /* The signed-in account's workspaces; falls back to the demo list locally. */
 export function workspaceList() {
   if (api.enabled) {
