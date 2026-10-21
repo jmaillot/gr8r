@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v1.1
 status: executing
-stopped_at: Phase 4 plan 04-02 complete (legacy migration and idempotency proof)
-last_updated: "2026-10-21T19:25:00.000Z"
-state_head: af41b7c3451181d7d0c32ef8fbfa2457e5f52822
+stopped_at: Phase 4 plan 04-03 complete (Playwright two-tenant UAT and CI wiring)
+last_updated: "2026-10-21T19:50:00.000Z"
+state_head: e5817127754483bf5b9b2d93bd5a6a7862547401
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # STATE
@@ -19,8 +19,8 @@ Last updated: 2026-10-21
 ## Position
 
 - Milestone: **Multitenant (v1.1)**
-- Phase: **4 — Hardening and ship: in progress** (plan 2 of 4 complete)
-- Next: **Phase 4, plan 04-03 — Playwright two-tenant UAT and CI wiring**
+- Phase: **4 — Hardening and ship: in progress** (plan 3 of 4 complete)
+- Next: **Phase 4, plan 04-04 — demo single-workspace cleanup, release docs, 1.1.0, Node 24**
 
 ## Where things stand
 
@@ -61,10 +61,21 @@ linked, the invite is scoped, `data.workspaces` is dropped, `data.me` is retired
 exposed one real gap: `migrateTenancy()` never scoped legacy invites, now fixed by
 `backfillInvites()`. `npm test` is 40 tests.
 
+Phase 4 plan 3 puts the contract in a real browser and in CI. `e2e/server.mjs` boots its own
+server on `127.0.0.1:4173` with a `mkdtemp` `DATA_DIR` and removes it on SIGTERM;
+`e2e/helpers/setup.mjs` creates two workspaces and three accounts through the API; and
+`e2e/tenancy.spec.mjs` (4 Chromium tests) proves document isolation in both directions, the
+foreign-slug fallback, cross-tenant project 404s, and that a plain member sees no trace of a
+private project while its owner still opens it. CI keeps the lint/format/build job, adds
+`npm test`, and gains a required Chromium e2e job that installs with system dependencies and
+uploads traces only on failure.
+
 Known limitations carried forward:
 
 - Plans remain display-only labels; nothing is billed or limited.
 - Invite email delivery still requires `SMTP_HOST`; links are copied by hand otherwise.
+- `.nvmrc` still pins Node 22 until plan 04-04 bumps it to 24; the e2e and Node suites need 24.
+
 ## Decisions
 
 - Each test file owns one server and one temporary database; the harness deletes only directories
@@ -76,12 +87,19 @@ Known limitations carried forward:
   snapshot across a reboot, including `updated_at` and the raw document string.
 - Legacy invites are scoped by `migrateTenancy()`; an unscoped legacy invite is a migration bug,
   not an accepted state.
+- Playwright's `webServer` needs an explicit `gracefulShutdown`; otherwise it SIGKILLs the process
+  group and the e2e server wrapper cannot remove its temporary database.
+- Browser fixtures present a run-unique `X-Forwarded-For` so per-IP throttles never make a second
+  local e2e run fail.
+- E2E assertions stay in the browser with role/label/text selectors; the API client only creates
+  fixtures.
 
 ## Verification commands used
 
 ```sh
 npm test                # tenancy, membership, privacy and migration suites (real servers)
 npm run test:privacy    # phase 3 privacy matrix alias
+npm run build && npm run e2e   # Chromium UAT against a throwaway server
 npm run lint && npm run format:check && npm run build
 node server.js          # with DATA_DIR pointing at a copy of a real database
 ```
@@ -96,6 +114,6 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-21T19:25:00.000Z
-**Stopped at:** Phase 4 plan 04-02 complete (legacy migration and idempotency proof)
-**Resume file:** .planning/phases/04-hardening-and-ship/04-03-PLAN.md
+**Last session:** 2026-10-21T19:50:00.000Z
+**Stopped at:** Phase 4 plan 04-03 complete (Playwright two-tenant UAT and CI wiring)
+**Resume file:** .planning/phases/04-hardening-and-ship/04-04-PLAN.md
