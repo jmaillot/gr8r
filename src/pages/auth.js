@@ -43,6 +43,14 @@ export function renderAuth() {
       return authShell(
         `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center"><span class="ftype" style="--c:var(--red);width:44px;height:44px;border-radius:11px">${ic('link', 20)}</span></div><h1>Invite unavailable</h1><p class="sub">${esc(j.error)}</p><button class="btn btn-primary btn-lg btn-block" data-a="auth" data-v="login">Go to sign in</button></div>`,
       );
+    // The address already has an account: joining means signing in, not signing up.
+    if (j.existing)
+      return authShell(
+        `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>Join ${esc(j.workspace?.name || D().ws.name)}</h1><p class="sub">${esc(j.email || 'This address')} already has a Gr8r account. Sign in with it to join this workspace.</p>
+    ${S.ui.errors.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(S.ui.errors.login)}</span></div>` : ''}
+    <button class="btn btn-primary btn-lg btn-block" data-a="auth" data-v="login">${ic('log-in', 15)}Sign in and join</button>
+    <p class="auth-foot">Invited with the wrong address? Ask an administrator of ${esc(j.workspace?.name || D().ws.name)} for a new invite.</p></div>`,
+      );
     const email = j.email || S.ui.af.email;
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doJoin" novalidate>

@@ -2,7 +2,8 @@
 import { ago, esc, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ROLES } from '../core/constants.js';
-import { D, S, TM, allTasks, canSee, isOver, me, mem, progressOf, team, teamsList, visibleProjects } from '../core/store.js';
+import { D, S, TM, allTasks, canSee, isMemberAdmin, isOver, me, mem, progressOf, team, teamsList, visibleProjects } from '../core/store.js';
+import { api } from '../core/api.js';
 import { av, avStack, empty, pIcon, pStatus, progBar } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
@@ -13,10 +14,14 @@ export function pageMembers() {
   const q = (u.memQ || '').toLowerCase();
   const role = u.memRole || 'all';
   const ms = D().members.filter(m => (role === 'all' || m.role === role) && (!q || m.name.toLowerCase().includes(q) || m.email.includes(q)));
-  const isAdmin = ['Owner', 'Admin'].includes(me().role);
+  const isAdmin = isMemberAdmin();
+  const isOwner = me().role === 'Owner';
+  const canManage = m => isAdmin && m.id !== D().me && (isOwner || (m.role !== 'Owner' && m.role !== 'Admin'));
+  const pending = api.enabled ? u.pendingInvites || [] : [];
+  const pendingCount = api.enabled ? pending.length : D().members.filter(m => m.status === 'invited').length;
   const tab = u.membersTab;
   return `<div class="page wide" style="max-width:1200px">
-    <div class="ph"><div><h1>Members</h1><p>${D().members.length} people in ${esc(D().ws.name)} · ${D().members.filter(m => m.status === 'invited').length} pending</p></div><div class="acts"><button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}Invite member</button></div></div>
+    <div class="ph"><div><h1>Members</h1><p>${D().members.length} people in ${esc(D().ws.name)} · ${pendingCount} pending</p></div><div class="acts">${isAdmin ? `<button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}Invite member</button>` : ''}</div></div>
     <div class="tabs" style="margin-bottom:14px">${[
       ['members', 'Members'],
       ['teams', 'Teams'],
@@ -40,7 +45,7 @@ export function pageMembers() {
         const ap = visibleProjects().filter(p => p.members.includes(m.id) && p.status !== 'complete').length;
         const ot = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
         return `<tr data-ctx="member" data-id="${m.id}"><td style="padding-left:14px"><button class="row" data-a="go" data-r="member" data-id="${m.id}" style="gap:10px;text-align:left">${av(m.id, 'md', false)}<span class="col"><b style="font-weight:500">${esc(m.name)}${m.id === D().me ? ' <span class="faint" style="font-weight:400">(you)</span>' : ''}</b><span class="faint" style="font-size:12px">${esc(m.email)}</span></span></button></td>
-      <td style="text-align:left">${isAdmin && m.role !== 'Owner' ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}</td>
+      <td style="text-align:left">${canManage(m) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}</td>
       <td style="text-align:left"><span class="row">${ic(TM[m.team].icon, 13)}${TM[m.team].name}</span></td><td class="num">${ap}</td><td class="num">${ot}</td>
       <td style="text-align:left" class="muted">${m.last == null ? '—' : m.last < 5 ? '<span style="color:var(--green)">Online</span>' : ago(minsAgo(m.last))}</td>
       <td style="text-align:left">${m.status === 'invited' ? '<span class="badge amber"><span class="dot"></span>Invited</span>' : m.status === 'deactivated' ? '<span class="badge gray">Deactivated</span>' : '<span class="badge green"><span class="dot"></span>Active</span>'}</td>
@@ -49,7 +54,17 @@ export function pageMembers() {
       .join('')}
     </tbody></table>`
         : empty('search-x', 'No results found', 'No members match that search.', '', 'sm')
-    }</div>`
+    }</div>
+    ${
+      pending.length && isAdmin
+        ? `<div class="panel" style="margin-top:14px"><div class="panel-h"><h2>Pending invites</h2><span class="faint">${pending.length}</span></div>${pending
+            .map(
+              p =>
+                `<div class="mini" style="min-height:48px"><span class="picon" style="--c:#6B7280">${ic('mail', 14)}</span><div class="grow"><div style="font-weight:500">${esc(p.email || 'Anyone with the link')}</div><div class="faint" style="font-size:12px">Invited as ${esc(p.roleLabel)} · expires in ${Math.max(0, Math.round((p.expiresAt - Date.now()) / 86400000))} days</div></div>${p.email ? `<button class="btn btn-secondary btn-sm" data-a="resendPendingInvite" data-id="${esc(p.id)}">Resend</button>` : ''}<button class="btn btn-secondary btn-sm" data-a="revokeInvite" data-id="${esc(p.id)}">Revoke</button></div>`,
+            )
+            .join('')}</div>`
+        : ''
+    }`
     }
   </div>`;
 }
@@ -100,7 +115,7 @@ export function pageTeam() {
   const ps = visibleProjects().filter(p => p.team === t.id);
   const ts = allTasks().filter(x => ms.some(m => m.id === x.assignee) && x.status !== 'done');
   return `<div class="page">
-    <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${t.c}">${ic(t.icon, 18)}</span><div><h1>${t.name}</h1><p style="margin:2px 0 0">${t.desc}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${t.id}">${ic('pencil', 14)}Edit team</button><button class="btn btn-secondary" data-a="invite">${ic('user-plus', 14)}Invite to workspace</button></div></div>
+    <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${t.c}">${ic(t.icon, 18)}</span><div><h1>${t.name}</h1><p style="margin:2px 0 0">${t.desc}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${t.id}">${ic('pencil', 14)}Edit team</button>${isMemberAdmin() ? `<button class="btn btn-secondary" data-a="invite">${ic('user-plus', 14)}Invite to workspace</button>` : ''}</div></div>
     <div class="grid2"><div class="stack">
       <section class="panel"><div class="panel-h"><h2>Projects</h2><span class="faint">${ps.length}</span></div>${ps.map(p => `<div class="mini" data-a="go" data-r="project" data-id="${p.id}">${pIcon(p, '', 14)}<span class="tt">${esc(p.name)}</span>${pStatus(p.status)}<span class="row" style="width:120px">${progBar(progressOf(p.id))}</span></div>`).join('') || '<div class="panel-b faint">No projects</div>'}</section>
       <section class="panel"><div class="panel-h"><h2>Open tasks</h2><span class="faint">${ts.length}</span></div>${sortTasks(ts, { f: 'due', dir: 1 })

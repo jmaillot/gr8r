@@ -1,7 +1,7 @@
 /* ---------------- CONTEXT MENUS ---------------- */
 import { ic } from '../core/icons.js';
 import { ST } from '../core/constants.js';
-import { D, mem, proj, task, visibleProjects } from '../core/store.js';
+import { D, mem, me, proj, task, visibleProjects, isMemberAdmin } from '../core/store.js';
 
 export function ctxMenu(p) {
   const I = (act, icon, label, extra = '', r = '') =>
@@ -58,7 +58,7 @@ export function ctxMenu(p) {
   if (p.ctx === 'member') {
     const m = mem(p.id);
     if (!m) return '';
-    const canRm = m.role !== 'Owner' && m.id !== D().me;
+    const canRm = isMemberAdmin() && m.id !== D().me && (me()?.role === 'Owner' || (m.role !== 'Owner' && m.role !== 'Admin'));
     return (
       I('viewProfile', 'user', 'View profile') +
       I('assignToMember', 'plus', 'Assign a task') +

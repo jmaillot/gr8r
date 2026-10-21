@@ -56,7 +56,7 @@ import './actions/subtasks.js';
 import './actions/archive.js';
 import { S, D, hydrateFromServer, save } from './core/store.js';
 import { api } from './core/api.js';
-import { A } from './actions/actions.js';
+import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_NAMES, render, go } from './shell/render.js';
 
@@ -183,6 +183,7 @@ function applyDeepLink(rest) {
   else S.ui.route = S.prefs.home || 'home';
   if (deepLink) applyDeepLink(deepLink);
   render();
+  if (withServer && S.ui.route === 'members') refreshMembers();
 })();
 
 // Dev-only handle for debugging and screenshot tooling; stripped from production builds.

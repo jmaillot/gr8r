@@ -3,7 +3,7 @@
    ===================================================================== */
 import { dOff, esc, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { D, S, me } from '../core/store.js';
+import { D, S, isMemberAdmin, me } from '../core/store.js';
 import { api } from '../core/api.js';
 import { av, pIcon } from '../ui/helpers.js';
 import { permsTable, teamsGrid } from './members.js';
@@ -99,7 +99,21 @@ export function settingsBody(sec, title) {
       <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">Workspace name</label><input class="input" id="ws-name" value="${esc(d.ws.name)}" ${wsAdmin ? '' : 'readonly'}></div>
       <div class="field"><label class="label" for="ws-url">Workspace URL</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? 'Changing the URL will break existing links.' : 'Only workspace admins can change these settings.'}</span></div>
       ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">Save changes</button></div>` : ''}</div></div></form>
-      ${api.enabled ? '' : `<div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>${srow('Delete workspace', 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="delWorkspace">Delete workspace</button>`)}</div>`}`
+      ${
+        api.enabled
+          ? `<div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>
+      ${srow('Leave workspace', 'You lose access to this workspace until someone invites you back.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="leaveWorkspace">Leave workspace</button>`)}
+      ${
+        api.workspace?.role === 'owner'
+          ? srow(
+              'Delete workspace',
+              'Permanently delete this workspace, its projects, tasks and files for every member. You will be asked to type the workspace URL.',
+              `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="deleteWorkspace">Delete workspace</button>`,
+            )
+          : ''
+      }</div>`
+          : `<div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>${srow('Delete workspace', 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="delWorkspace">Delete workspace</button>`)}</div>`
+      }`
       );
     }
     case 'appearance':
@@ -214,8 +228,8 @@ export function settingsBody(sec, title) {
     case 'members':
       return (
         H(`${d.members.length} people have access to ${esc(d.ws.name)}.`) +
-        `<div class="row" style="margin-bottom:12px"><button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}Invite member</button><button class="btn btn-secondary" data-a="go" data-r="members">Open member directory</button></div>
-      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${m.id}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${m.status === 'invited' ? '<span class="badge amber">Invited</span>' : ''}${m.role === 'Owner' ? `<span class="pillbtn">${ic('crown', 13)}Owner</span>` : `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
+        `<div class="row" style="margin-bottom:12px">${isMemberAdmin() ? `<button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}Invite member</button>` : ''}<button class="btn btn-secondary" data-a="go" data-r="members">Open member directory</button></div>
+      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${m.id}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${m.status === 'invited' ? '<span class="badge amber">Invited</span>' : ''}${isMemberAdmin() && m.id !== d.me && (me().role === 'Owner' || (m.role !== 'Owner' && m.role !== 'Admin')) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
       );
     case 'teams':
       return H('Teams group people and projects.') + teamsGrid();
@@ -377,9 +391,11 @@ export function settingsBody(sec, title) {
       );
     case 'plan': {
       const planAdmin = !api.enabled || api.workspace?.role === 'owner';
+      const planName = d.plan || 'Team';
+      const planPrice = { Free: '$0', Team: '$12', Business: '$24' }[planName] || '$12';
       return (
         H('Your subscription and usage.') +
-        `<div class="panel" style="padding:18px;margin-bottom:18px"><div class="row" style="flex-wrap:wrap"><div><div class="eyebrow">Current plan</div><div style="font-size:20px;font-weight:600;letter-spacing:-.015em;margin-top:4px">${esc(d.plan || 'Team')} <span class="muted" style="font-size:14px;font-weight:400">· $12 per member / month</span></div><div class="muted" style="font-size:13px">Renews ${fmtDate(dOff(7), true)} · Billed monthly</div></div><span class="sp"></span><button class="btn btn-secondary" data-a="go" data-r="settings" data-sec="invoices">View invoices</button></div>
+        `<div class="panel" style="padding:18px;margin-bottom:18px"><div class="row" style="flex-wrap:wrap"><div><div class="eyebrow">Current plan</div><div style="font-size:20px;font-weight:600;letter-spacing:-.015em;margin-top:4px">${esc(planName)} <span class="muted" style="font-size:14px;font-weight:400">· ${planPrice} per member / month</span></div><div class="muted" style="font-size:13px">${planName === 'Free' ? 'No renewal · Free forever' : `Renews ${fmtDate(dOff(7), true)} · Billed monthly`}</div></div><span class="sp"></span><button class="btn btn-secondary" data-a="go" data-r="settings" data-sec="invoices">View invoices</button></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:18px">${[
         ['Members', d.members.length, 10, ''],
         ['Storage', 12.4, 100, ' GB'],

@@ -192,6 +192,7 @@ A.go = el => {
   S.ui.palette = null;
   const tabOnly = r === 'project' && S.ui.route === 'project' && S.ui.params.id === p.id;
   go(r, p, { tab: tabOnly });
+  if (r === 'members' && api.enabled) refreshMembers();
 };
 A.back = () => {
   const h = S.ui.history.pop();
@@ -331,10 +332,35 @@ A.popPick = el => {
   }
   if (p.type === 'role') {
     const m = mem(p.id);
+    S.ui.pop = null;
+    if (v === m.role) {
+      render();
+      return;
+    }
+    if (api.enabled) {
+      if (!m.userId) {
+        render();
+        toast(`${m.name} has no account yet`, { kind: 'err' });
+        return;
+      }
+      const previous = m.role;
+      m.role = v;
+      render();
+      api.setMember(m.userId, { role: API_ROLE[v] || 'member' }).then(res => {
+        if (!res.ok) {
+          m.role = previous;
+          render();
+          toast(res.error || 'Could not change that role', { kind: 'err' });
+          return;
+        }
+        toast(`${m.name} is now ${v === 'Admin' || v === 'Owner' ? 'an' : 'a'} ${v}`);
+        refreshMembers();
+      });
+      return;
+    }
     mutate(() => {
       m.role = v;
     });
-    S.ui.pop = null;
     render();
     toast(`${m.name} is now ${v === 'Admin' ? 'an' : 'a'} ${v}`);
     return;
@@ -1520,7 +1546,7 @@ A.invite = () => {
   S.ui.pop = null;
   openModal({ type: 'invite' });
 };
-const API_ROLE = { Admin: 'admin', Member: 'member', Guest: 'viewer' };
+const API_ROLE = { Owner: 'owner', Admin: 'admin', Member: 'member', Guest: 'viewer' };
 
 function addInvitedMember(invites, role, team) {
   invites.forEach(inv => {
@@ -1603,13 +1629,7 @@ A.submitInvite = () => {
       render();
       return;
     }
-    mutate(() =>
-      addInvitedMember(
-        list.map(email => ({ email })),
-        role,
-        team,
-      ),
-    );
+    refreshMembers();
     const invites = res.data.invites || [];
     const count = invites.length;
     S.ui.inviteLinks = invites;
@@ -1655,6 +1675,101 @@ A.assignToMember = el => {
   S.ui.pop = null;
   A.newTask({ dataset: { assignee: el.dataset.id } });
 };
+/* Mirror the server's member list into the document, keeping the cosmetic
+   fields that only exist client-side (colour, last-seen, timezone). */
+export async function refreshMembers() {
+  if (!api.enabled) return null;
+  const res = await api.members();
+  if (!res.ok) return null;
+  const rows = res.data.members || [];
+  const profiles = rows.map(row => {
+    const existing = D().members.find(m => (row.memberId && m.id === row.memberId) || m.userId === row.userId);
+    return {
+      id: row.memberId || existing?.id || uid('m'),
+      userId: row.userId,
+      name: row.name,
+      email: row.email,
+      role: row.roleLabel,
+      team: row.team ?? existing?.team ?? '',
+      title: row.title || existing?.title || '',
+      c: existing?.c || '#6B7280',
+      status: row.status,
+      last: row.lastLoginAt ? Math.max(0, Math.round((Date.now() - row.lastLoginAt) / 60000)) : null,
+      tz: existing?.tz || '—',
+    };
+  });
+  const emails = new Set(rows.map(r => (r.email || '').toLowerCase()));
+  const withoutAccount = D().members.filter(m => !m.userId && !emails.has((m.email || '').toLowerCase()));
+  D().members = [...profiles, ...withoutAccount];
+  S.ui.pendingInvites = res.data.invites || [];
+  render();
+  return res.data;
+}
+
+A.resendPendingInvite = async el => {
+  const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
+  if (!row?.email) return;
+  const res = await api.createInvites([row.email], row.role, row.team || null);
+  if (!res.ok) return toast(res.error || 'Could not create a new invite', { kind: 'err' });
+  const invite = res.data.invites?.[0];
+  await refreshMembers();
+  if (invite?.sent) return toast(`Invitation sent to ${row.email}`);
+  await copy(invite?.url || '', api.mailEnabled ? 'Email failed — new invite link copied' : 'New invite link copied');
+};
+
+A.revokeInvite = async el => {
+  const id = el.dataset.id;
+  const row = (S.ui.pendingInvites || []).find(i => i.id === id);
+  S.ui.pop = null;
+  const res = await api.revokeInvite(id);
+  if (!res.ok) return toast(res.error || 'Could not revoke that invite', { kind: 'err' });
+  toast(`Invite for ${row?.email || 'that address'} revoked`);
+  await refreshMembers();
+};
+
+/* Leaving and deleting are both one-way; both navigate with the server's answer. */
+async function leaveTo(nextSlug) {
+  if (nextSlug) {
+    await openWorkspace(nextSlug);
+    go(S.prefs.home || 'home');
+    return;
+  }
+  enterNoWorkspace();
+}
+A.leaveWorkspace = () => {
+  const name = D().ws.name;
+  confirmDlg({
+    title: `Leave ${name}?`,
+    body: `You'll lose access to its projects, tasks and files. Someone will have to invite you back.`,
+    ok: 'Leave workspace',
+    danger: true,
+    icon: 'log-out',
+    run: async () => {
+      const res = await api.leave();
+      if (!res.ok) return toast(res.error || 'Could not leave this workspace', { kind: 'err' });
+      toast(`You left ${name}`);
+      await leaveTo(res.data?.nextSlug);
+    },
+  });
+};
+A.deleteWorkspace = () => {
+  const ws = D().ws;
+  confirmDlg({
+    title: `Delete ${ws.name}?`,
+    body: 'Every project, task, file, and comment in this workspace will be permanently deleted for all members.',
+    ok: 'Delete workspace',
+    danger: true,
+    icon: 'trash-2',
+    typeName: ws.url,
+    run: async () => {
+      const res = await api.deleteWorkspace();
+      if (!res.ok) return toast(res.error || 'Could not delete this workspace', { kind: 'err' });
+      toast(`${ws.name} deleted`);
+      await leaveTo(res.data?.nextSlug);
+    },
+  });
+};
+
 A.removeMember = el => {
   const m = mem(el.dataset.id);
   S.ui.pop = null;
@@ -1665,7 +1780,16 @@ A.removeMember = el => {
     ok: 'Remove member',
     danger: true,
     icon: 'user-minus',
-    run: () => {
+    run: async () => {
+      if (api.enabled) {
+        if (!m.userId) return toast(`${m.name} has no account to remove`, { kind: 'err' });
+        const res = await api.removeMember(m.userId);
+        if (!res.ok) return toast(res.error || 'Could not remove that member', { kind: 'err' });
+        await refreshMembers();
+        if (S.ui.route === 'member') go('members');
+        toast(`Removed ${m.name}`);
+        return;
+      }
       const snap = snapshot();
       if (
         mutate(() => {
@@ -2202,10 +2326,20 @@ A.changePlan = el => {
   const price = { Free: 0, Team: 12, Business: 24 }[v];
   confirmDlg({
     title: `${v === 'Free' ? 'Downgrade' : 'Upgrade'} to ${v}?`,
-    body: `${D().members.length} members × $${price}/month = <b>$${D().members.length * price}/month</b>, prorated from today and billed to Visa ending 4242.`,
+    body: api.enabled
+      ? `Every member moves to ${v} today. Plans are a label for now — nothing is charged.`
+      : `${D().members.length} members × $${price}/month = <b>$${D().members.length * price}/month</b>, prorated from today and billed to Visa ending 4242.`,
     ok: v === 'Free' ? 'Downgrade' : `Upgrade to ${v}`,
     icon: 'gem',
-    run: () => {
+    run: async () => {
+      if (api.enabled) {
+        const res = await api.setPlan(v);
+        if (!res.ok) return toast(res.error || 'Could not change the plan', { kind: 'err' });
+        S.data.plan = v;
+        render();
+        toast(`You're now on the ${v} plan`);
+        return;
+      }
       mutate(() => {
         D().plan = v;
       });
@@ -2296,6 +2430,27 @@ A.doLogin = () => {
       render();
       return;
     }
+    // Signing in from an invite link accepts it, so the person lands in the workspace.
+    const queued = S.ui.join;
+    if (queued?.token) {
+      const inv = await api.acceptInvite(queued.token);
+      S.ui.join = null;
+      if (!inv.ok) {
+        done();
+        S.ui.errors = { login: inv.error || 'Signed in, but the invite could not be accepted.' };
+        render();
+        return;
+      }
+      const joinSlug = inv.data?.workspace?.slug || api.workspaces[0]?.slug;
+      if (joinSlug) {
+        const joined = await hydrateFromServer(joinSlug);
+        if (joined.ok) {
+          history.replaceState(null, '', `/w/${joinSlug}`);
+          enterApp(`Welcome to ${api.workspace?.name || joinSlug}`);
+          return;
+        }
+      }
+    }
     const slug = (S.ui.wantedSlug && api.rolesIn(S.ui.wantedSlug) ? S.ui.wantedSlug : null) || api.workspaces[0]?.slug;
     if (!slug) {
       done();
@@ -2346,6 +2501,13 @@ A.doJoin = () => {
     const res = await api.acceptInvite(j.token, nm, em, pw);
     if (!res.ok) {
       done();
+      // Existing account: send them to sign in; the token stays queued for after login.
+      if (res.data?.needsSignIn) {
+        S.ui.errors = { login: `${em} already has an account. Sign in to accept the invite.` };
+        S.ui.auth = 'login';
+        render();
+        return;
+      }
       S.ui.errors = { join: res.error || 'Could not join the workspace' };
       render();
       return;

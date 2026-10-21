@@ -2,7 +2,22 @@
 import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
-import { D, S, allTasks, canSee, currentSlug, me, mem, pColor, proj, roleLabel, task, visibleProjects, workspaceList as wsList } from '../core/store.js';
+import {
+  D,
+  S,
+  allTasks,
+  canSee,
+  currentSlug,
+  isMemberAdmin,
+  me,
+  mem,
+  pColor,
+  proj,
+  roleLabel,
+  task,
+  visibleProjects,
+  workspaceList as wsList,
+} from '../core/store.js';
 import { api } from '../core/api.js';
 import { av, avStack, prIcon, stIcon } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -98,7 +113,7 @@ export function popHtml(p) {
   const t = ['status', 'priority', 'assignee', 'labels', 'date', 'project', 'deps', 'recur', 'estimate'].includes(p.type) ? tgt(p) : null;
   switch (p.type) {
     case 'create':
-      inner = `<div class="mh">Create</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}Task<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}Project<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}Team</button><div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}Invite member</button>`;
+      inner = `<div class="mh">Create</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}Task<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}Project<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}Team</button>${isMemberAdmin() ? `<div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}Invite member</button>` : ''}`;
       style = 'width:220px';
       break;
     case 'subassignee': {
@@ -204,12 +219,19 @@ export function popHtml(p) {
     }
     case 'role': {
       const m = mem(p.id);
+      const options = me()?.role === 'Owner' ? ['Owner', 'Admin', 'Member', 'Guest'] : ['Admin', 'Member', 'Guest'];
+      const desc = {
+        Owner: 'Full control, including the plan and deleting the workspace',
+        Admin: 'Manage members, settings, and all projects',
+        Member: 'Create projects and work on tasks',
+        Guest: 'Only sees projects they are invited to',
+      };
       inner =
         `<div class="mh">Role for ${esc(m.name)}</div>` +
-        ['Admin', 'Member', 'Guest']
+        options
           .map(
             r =>
-              `<button class="mi" data-a="popPick" data-v="${r}" style="height:auto;padding:7px 8px;align-items:flex-start"><div class="grow" style="white-space:normal"><div style="font-weight:500">${r}</div><div class="faint" style="font-size:11.5px">${{ Admin: 'Manage members, settings, and all projects', Member: 'Create projects and work on tasks', Guest: 'Only sees projects they are invited to' }[r]}</div></div>${m.role === r ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+              `<button class="mi" data-a="popPick" data-v="${r}" style="height:auto;padding:7px 8px;align-items:flex-start"><div class="grow" style="white-space:normal"><div style="font-weight:500">${r}</div><div class="faint" style="font-size:11.5px">${desc[r]}</div></div>${m.role === r ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
           )
           .join('');
       style = 'width:300px';
@@ -223,7 +245,7 @@ export function popHtml(p) {
         )
         .join(
           '',
-        )}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button><button class="mi" data-a="invite">${ic('user-plus', 15)}Invite members</button><div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
+        )}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button>${isMemberAdmin() ? `<button class="mi" data-a="invite">${ic('user-plus', 15)}Invite members</button>` : ''}<div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
       style = 'width:260px';
       break;
     case 'user':
