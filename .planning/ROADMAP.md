@@ -48,3 +48,13 @@ write to it (directly or by clobbering the document). — met, see
 (`README`, `DEPLOY`, `.env.example`), removal of the demo workspace switch, release notes.
 
 Deliverable: mergeable, documented, tested, deployable.
+
+**Plans:** 4 plans
+
+- [ ] `04-01-PLAN.md` — shared `node:test` server harness, tenancy/membership/privacy suites,
+  `npm test` (R1, R2, R4, R5, R8)
+- [ ] `04-02-PLAN.md` — pre-tenancy SQLite fixture, migration backup and idempotency test
+  (R6, R8)
+- [ ] `04-03-PLAN.md` — Playwright Chromium two-tenant and private-project UAT, CI wiring
+  (R3, R4, R5, R8)
+- [ ] `04-04-PLAN.md` — demo single-workspace cleanup, release docs, 1.1.0, Node 24 (R7, R8)
