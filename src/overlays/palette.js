@@ -117,21 +117,22 @@ export function paletteItems() {
         },
       })),
     });
-    groups.push({
-      name: 'Suggested',
-      items: [
-        { icon: 'clock-alert', name: 'Overdue tasks', run: () => A.goTasks({ dataset: { f: 'overdue' } }) },
-        { icon: 'user', name: 'Tasks assigned to me', run: () => go('mytasks') },
-        {
-          icon: 'signal-high',
-          name: 'High priority in Website Redesign',
-          run: () => {
-            go('project', { id: 'p1', tab: 'v:v1' });
-          },
+    const suggested = [
+      { icon: 'clock-alert', name: 'Overdue tasks', run: () => A.goTasks({ dataset: { f: 'overdue' } }) },
+      { icon: 'user', name: 'Tasks assigned to me', run: () => go('mytasks') },
+    ];
+    const target = D().projects?.find(p => p.id === 'p1') || D().projects?.[0];
+    if (target) {
+      suggested.push({
+        icon: 'signal-high',
+        name: `High priority in ${target.name}`,
+        run: () => {
+          go('project', { id: target.id, tab: 'v:v1' });
         },
-        { icon: 'paperclip', name: 'Files in Website Redesign', run: () => go('project', { id: 'p1', tab: 'files' }) },
-      ],
-    });
+      });
+      suggested.push({ icon: 'paperclip', name: `Files in ${target.name}`, run: () => go('project', { id: target.id, tab: 'files' }) });
+    }
+    groups.push({ name: 'Suggested', items: suggested });
     return groups;
   }
   if (!q) return groups;
