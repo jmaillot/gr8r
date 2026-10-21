@@ -14,7 +14,9 @@
      ADMIN_PASSWORD         first-run admin password (generated if absent)
      ADMIN_NAME=Admin
      WORKSPACE_NAME=Gr8r Studio
-     ALLOW_SIGNUP=false     let visitors create accounts
+     WORKSPACE_SLUG         optional slug for a fresh install (defaults to the name)
+     APP_URL                public base URL for share/invite links
+     ALLOW_SIGNUP=false     let visitors create accounts and workspaces
      SEED_DATA=true         false = start with an empty workspace
      SESSION_DAYS=30
      INVITE_DAYS=7          invite link lifetime
@@ -31,7 +33,7 @@
      MAIL_REPLY_TO          optional Reply-To address
 
    CLI:
-     node server.js --add-user <email> [name]     (USER_PASSWORD env or generated)
+     node server.js --add-user <email> [name] [workspace-slug]  (USER_PASSWORD env or generated)
      node server.js --set-password <email>        (revokes that user's sessions)
      node server.js --backup [file]               (consistent SQLite snapshot)
    ===================================================================== */
@@ -53,6 +55,8 @@ const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
 const SEED_DATA = process.env.SEED_DATA !== 'false';
+const WORKSPACE_NAME = (process.env.WORKSPACE_NAME || 'Gr8r Studio').trim() || 'Gr8r Studio';
+const WORKSPACE_SLUG = String(process.env.WORKSPACE_SLUG || '').trim();
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const INVITE_DAYS = Number(process.env.INVITE_DAYS || 7);
 const SECURE_COOKIE = process.env.SECURE_COOKIE || 'auto';
@@ -62,8 +66,12 @@ const APP_URL = String(process.env.APP_URL || '')
   .replace(/\/+$/, '');
 const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
-const WS_ID = 'ws_default';
+const DEFAULT_WS_ID = 'ws_default';
 const COOKIE = 'gr8r_session';
+const ROLE_RANK = { viewer: 1, member: 2, admin: 3, owner: 4 };
+const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
+const RESERVED_SLUGS = new Set(['api', 'w', 'join', 'assets', 'static', 'health', 'login', 'signup', 'onboarding', 'settings', 'admin']);
 const MAILER = createMailer();
 
 /* ------------------------------- database ------------------------------ */
@@ -86,7 +94,9 @@ const SCHEMA = `
   create index if not exists sessions_expiry on sessions(expires_at);
   create table if not exists workspaces (
     id         text primary key,
+    slug       text,
     name       text not null,
+    color      text,
     doc        text not null,
     revision   integer not null default 1,
     created_at integer not null,
@@ -96,21 +106,28 @@ const SCHEMA = `
     workspace_id text not null references workspaces(id) on delete cascade,
     user_id      text not null references users(id) on delete cascade,
     role         text not null check (role in ('owner','admin','member','viewer')),
+    member_id    text,
     primary key (workspace_id, user_id)
   );
   create table if not exists invites (
-    token_hash text primary key,
-    email      text,
-    role       text not null check (role in ('admin','member','viewer')),
-    team       text,
-    created_by text not null references users(id) on delete cascade,
-    created_at integer not null,
-    expires_at integer not null,
-    used_at    integer,
-    used_by    text
+    token_hash   text primary key,
+    email        text,
+    role         text not null check (role in ('admin','member','viewer')),
+    team         text,
+    workspace_id text references workspaces(id) on delete cascade,
+    created_by   text not null references users(id) on delete cascade,
+    created_at   integer not null,
+    expires_at   integer not null,
+    used_at      integer,
+    used_by      text
   );
   create index if not exists invites_expiry on invites(expires_at);
 `;
+
+function ensureColumn(conn, table, name, def) {
+  const cols = conn.prepare(`pragma table_info(${table})`).all();
+  if (!cols.some(c => c.name === name)) conn.exec(`alter table ${table} add column ${name} ${def}`);
+}
 
 function openDb() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -120,6 +137,12 @@ function openDb() {
   db.exec('pragma busy_timeout = 5000');
   db.exec('pragma synchronous = normal');
   db.exec(SCHEMA);
+  // Additive migration for databases created before multi-workspace support.
+  ensureColumn(db, 'workspaces', 'slug', 'text');
+  ensureColumn(db, 'workspaces', 'color', 'text');
+  ensureColumn(db, 'memberships', 'member_id', 'text');
+  ensureColumn(db, 'invites', 'workspace_id', 'text');
+  db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
   return db;
 }
 
@@ -157,72 +180,171 @@ function verifyPassword(password, stored) {
 // Always spend the same work on unknown accounts, so login timing doesn't leak emails.
 const DUMMY_HASH = hashPassword(crypto.randomBytes(16).toString('hex'));
 
-function publicUser(row) {
-  return { id: row.id, email: row.email, name: row.name, memberId: row.member_id };
+/* --------------------------- tenancy helpers --------------------------- */
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
 }
 
-function roleOf(userId) {
-  return db.prepare('select role from memberships where workspace_id = ? and user_id = ?').get(WS_ID, userId)?.role || null;
+function sanitizeSlug(value) {
+  const slug = slugify(value);
+  return SLUG_RE.test(slug) && !RESERVED_SLUGS.has(slug) ? slug : null;
 }
 
-function getWorkspace() {
-  return db.prepare('select * from workspaces where id = ?').get(WS_ID);
+/* Readable slug for a new workspace; appends -2, -3… when taken. */
+function uniqueSlug(base, excludeId = null) {
+  let root = sanitizeSlug(base) || 'workspace';
+  root = root.slice(0, 32).replace(/-+$/g, '');
+  let slug = root;
+  let n = 2;
+  while (db.prepare('select 1 from workspaces where slug = ? collate nocase and id is not ?').get(slug, excludeId)) {
+    slug = `${root}-${n++}`;
+  }
+  return slug;
 }
 
-function emptyDoc() {
-  const name = process.env.WORKSPACE_NAME || 'Gr8r Studio';
+function wsBySlug(slug) {
+  return db.prepare('select * from workspaces where slug = ? collate nocase').get(String(slug || '')) || null;
+}
+
+function membershipOf(workspaceId, userId) {
+  return db.prepare('select * from memberships where workspace_id = ? and user_id = ?').get(workspaceId, userId) || null;
+}
+
+function membershipsOf(userId) {
+  return db
+    .prepare(
+      `select w.*, m.role, m.member_id
+         from memberships m join workspaces w on w.id = m.workspace_id
+        where m.user_id = ?
+        order by w.created_at, w.name collate nocase`,
+    )
+    .all(userId);
+}
+
+function workspacePayload(row, membership = null) {
+  const color = row.color || '#1D1C1A';
   return {
-    data: {
-      ws: { name, url: '', c: '#1D1C1A', brand: true },
-      workspaces: [{ id: 'w1', name, c: '#1D1C1A', plan: 'Team', brand: true }],
-      me: null,
-      members: [],
-      projects: [],
-      tasks: [],
-      comments: [],
-      activity: [],
-      notifs: [],
-      files: [],
-      events: [],
-      projOrder: [],
-      savedViews: [],
-      recentSearches: [],
-      sessions: [],
-      invoices: [],
-      tfa: false,
-      notifPrefs: {
-        email_mention: true,
-        email_assign: true,
-        email_digest: true,
-        email_comment: false,
-        push_mention: true,
-        push_assign: true,
-        push_comment: true,
-        push_due: true,
-        mention_all: true,
-        assign_self: true,
-      },
-    },
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    color,
+    c: color,
+    role: membership?.role || null,
+    memberId: membership?.member_id || null,
   };
 }
 
+function userPayload(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    workspaces: membershipsOf(user.id).map(row => workspacePayload(row, row)),
+  };
+}
+
+function firstWorkspace() {
+  return db.prepare('select * from workspaces order by created_at, name collate nocase limit 1').get() || null;
+}
+
+function hasAdminRole(userId) {
+  return !!db.prepare("select 1 from memberships where user_id = ? and role in ('owner','admin') limit 1").get(userId);
+}
+
+/* Tenancy metadata is owned by the columns; the document never overrides it. */
+function normalizeDoc(doc, meta) {
+  const out = doc && typeof doc === 'object' ? doc : {};
+  out.data = out.data && typeof out.data === 'object' ? out.data : {};
+  out.data.ws = { name: meta.name, url: meta.slug, c: meta.color, brand: true };
+  out.data.me = null;
+  delete out.data.workspaces;
+  return out;
+}
+
+function docForClient(doc, ws) {
+  return normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
+}
+
+function docFromClient(incoming, stored, ws, role) {
+  const next = JSON.parse(JSON.stringify(incoming));
+  next.data = next.data && typeof next.data === 'object' ? next.data : {};
+  delete next.data.workspaces;
+  next.data.me = null;
+  next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
+  // Membership and plan edits stay with the roles that are allowed to make them.
+  if (ROLE_RANK[role] < ROLE_RANK.admin) next.data.members = stored?.data?.members || [];
+  if (role !== 'owner') next.data.plan = stored?.data?.plan;
+  return next;
+}
+
+function emptyDoc(meta) {
+  return normalizeDoc(
+    {
+      data: {
+        plan: 'Team',
+        members: [],
+        projects: [],
+        tasks: [],
+        comments: [],
+        activity: [],
+        notifs: [],
+        files: [],
+        events: [],
+        projOrder: [],
+        savedViews: [],
+        recentSearches: [],
+        sessions: [],
+        invoices: [],
+        tfa: false,
+        notifPrefs: {
+          email_mention: true,
+          email_assign: true,
+          email_digest: true,
+          email_comment: false,
+          push_mention: true,
+          push_assign: true,
+          push_comment: true,
+          push_due: true,
+          mention_all: true,
+          assign_self: true,
+        },
+      },
+    },
+    meta,
+  );
+}
+
 function seedDoc() {
-  if (!SEED_DATA) return emptyDoc();
+  if (!SEED_DATA) return null;
   try {
     return JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
   } catch {
-    return emptyDoc();
+    return null;
   }
 }
 
-/* Create the workspace and, when the database is empty, the first admin. */
+/* Create the default workspace and, when the database is empty, the first admin. */
 function ensureWorkspace() {
-  if (getWorkspace()) return;
+  if (db.prepare('select count(*) as n from workspaces').get().n > 0) return;
+  const name = WORKSPACE_NAME;
+  const slug = uniqueSlug(WORKSPACE_SLUG || name);
+  const color = '#1D1C1A';
+  const meta = { name, slug, color };
+  const doc = normalizeDoc(seedDoc() || emptyDoc(meta), meta);
   const t = now();
-  db.prepare('insert into workspaces (id, name, doc, revision, created_at, updated_at) values (?,?,?,?,?,?)').run(
-    WS_ID,
-    process.env.WORKSPACE_NAME || 'Gr8r Studio',
-    JSON.stringify(seedDoc()),
+  db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+    DEFAULT_WS_ID,
+    slug,
+    name,
+    color,
+    JSON.stringify(doc),
     1,
     t,
     t,
@@ -239,7 +361,8 @@ function ensureAdmin({ quiet = false } = {}) {
     password = crypto.randomBytes(12).toString('base64url');
     generated = true;
   }
-  createUser(email, name, password, 'owner');
+  const user = createUser(email, name, password);
+  addMembership(firstWorkspace(), user, 'owner');
   if (!quiet) {
     console.log(`  bootstrap account: ${email}`);
     if (generated) console.log(`  generated password: ${password}\n  (set ADMIN_PASSWORD and recreate the volume to choose your own)`);
@@ -248,25 +371,91 @@ function ensureAdmin({ quiet = false } = {}) {
 
 function bootstrap(opts) {
   ensureWorkspace();
+  migrateTenancy();
   ensureAdmin(opts);
 }
 
-function ensureMember(doc, user) {
+/*
+ * In-place migration for databases created before multi-workspace support:
+ * backfills slugs/colors, links member profiles to accounts, and drops the
+ * demo-only `data.workspaces` switcher from the shared document.
+ */
+function migrateTenancy() {
+  const rows = db.prepare('select * from workspaces').all();
+  if (rows.some(row => !row.slug)) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backup = path.join(DATA_DIR, `gr8r-premultitenant-${stamp}.db`);
+    try {
+      fs.mkdirSync(path.dirname(backup), { recursive: true });
+      db.exec('pragma wal_checkpoint(truncate)');
+      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+      console.log(`  pre-migration backup: ${backup}`);
+    } catch (err) {
+      console.error(`  pre-migration backup failed: ${err.message}`);
+    }
+    for (const row of rows) {
+      if (row.slug) continue;
+      let doc = {};
+      try {
+        doc = JSON.parse(row.doc);
+      } catch {
+        /* unreadable document: fall back to the workspace row */
+      }
+      const meta = doc?.data?.ws || {};
+      const name = String(meta.name || row.name || '').trim() || 'Workspace';
+      const slug = uniqueSlug(meta.url || name, row.id);
+      const color = /^#[0-9a-f]{6}$/i.test(meta.c || '') ? meta.c : '#1D1C1A';
+      db.prepare('update workspaces set slug = ?, name = ?, color = ? where id = ?').run(slug, name, color, row.id);
+    }
+  }
+  backfillMemberships();
+}
+
+function backfillMemberships() {
+  for (const ws of db.prepare('select * from workspaces').all()) {
+    let doc;
+    try {
+      doc = JSON.parse(ws.doc);
+    } catch {
+      continue;
+    }
+    if (!doc?.data) continue;
+    const before = JSON.stringify(doc);
+    for (const m of db.prepare('select m.*, u.email, u.name from memberships m join users u on u.id = m.user_id where m.workspace_id = ?').all(ws.id)) {
+      const memberId = ensureMember(doc, { id: m.user_id, email: m.email, name: m.name }, m.role);
+      if (memberId && memberId !== m.member_id) {
+        db.prepare('update memberships set member_id = ? where workspace_id = ? and user_id = ?').run(memberId, ws.id, m.user_id);
+      }
+    }
+    delete doc.data.workspaces;
+    doc.data.me = null;
+    if (JSON.stringify(doc) !== before) {
+      db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
+    }
+  }
+}
+
+function ensureMember(doc, user, role = 'member') {
   const members = doc?.data?.members;
   if (!Array.isArray(members)) return null;
-  const match = members.find(m => (m.email || '').toLowerCase() === user.email.toLowerCase());
+  const email = (user.email || '').toLowerCase();
+  const match = members.find(m => (m.userId && m.userId === user.id) || (email && (m.email || '').toLowerCase() === email));
   if (match) {
     if (!match.id) match.id = `m_${user.id.slice(0, 8)}`;
+    match.userId = user.id;
     if (user.name && (!match.name || match.name === 'Member')) match.name = user.name;
     if (match.status === 'invited') match.status = 'active';
+    match.role = ROLE_LABEL[role] || match.role;
     return match.id;
   }
-  const id = `m_${user.id.slice(0, 8)}`;
+  let id = `m_${user.id.slice(0, 8)}`;
+  if (members.some(m => m.id === id)) id = `m_${user.id}`;
   members.push({
     id,
+    userId: user.id,
     name: user.name,
     email: user.email,
-    role: 'Member',
+    role: ROLE_LABEL[role] || 'Member',
     team: null,
     title: '',
     c: ['#5A67D8', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][members.length % 6],
@@ -277,38 +466,57 @@ function ensureMember(doc, user) {
   return id;
 }
 
-function createUser(email, name, password, role) {
+function addMembership(ws, user, role) {
+  if (!ws) throw httpError(500, 'No workspace available');
+  const doc = JSON.parse(ws.doc);
+  const memberId = ensureMember(doc, user, role);
+  db.exec('begin immediate');
+  try {
+    db.prepare(
+      `insert into memberships (workspace_id, user_id, role, member_id) values (?,?,?,?)
+       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
+    ).run(ws.id, user.id, role, memberId);
+    db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
+    db.exec('commit');
+  } catch (err) {
+    db.exec('rollback');
+    throw err;
+  }
+  return memberId;
+}
+
+function createUser(email, name, password) {
   const clean = email.trim().toLowerCase();
   if (!emailOk(clean)) throw httpError(400, 'Enter a valid email address');
   if (String(password).length < 10) throw httpError(400, 'Use at least 10 characters');
   if (db.prepare('select 1 from users where email = ?').get(clean)) throw httpError(409, 'An account with that email already exists');
 
   const id = uid();
-  const user = { id, email: clean, name: (name || '').trim() || clean.split('@')[0] };
+  const cleanName = (name || '').trim() || clean.split('@')[0];
+  db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(id, clean, cleanName, hashPassword(password), now());
+  return { id, email: clean, name: cleanName };
+}
 
-  const ws = getWorkspace();
-  const doc = JSON.parse(ws.doc);
-  const memberId = ensureMember(doc, user);
-  if (!doc.data.me) doc.data.me = memberId;
-
-  db.exec('begin immediate');
-  try {
-    db.prepare('insert into users (id, email, name, password_hash, member_id, created_at) values (?,?,?,?,?,?)').run(
-      id,
-      clean,
-      user.name,
-      hashPassword(password),
-      memberId,
-      now(),
-    );
-    db.prepare('insert into memberships (workspace_id, user_id, role) values (?,?,?)').run(WS_ID, id, role);
-    db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), WS_ID);
-    db.exec('commit');
-  } catch (err) {
-    db.exec('rollback');
-    throw err;
-  }
-  return { id, email: clean, name: user.name, member_id: memberId };
+/* Create a workspace and make its creator the owner. */
+function createWorkspace(name, slugBase, user) {
+  const slug = uniqueSlug(slugBase || name);
+  const color = ['#1D1C1A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'][db.prepare('select count(*) as n from workspaces').get().n % 6];
+  const id = uid();
+  const doc = emptyDoc({ name, slug, color });
+  const t = now();
+  db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+    id,
+    slug,
+    name,
+    color,
+    JSON.stringify(doc),
+    1,
+    t,
+    t,
+  );
+  const ws = db.prepare('select * from workspaces where id = ?').get(id);
+  addMembership(ws, user, 'owner');
+  return wsBySlug(slug);
 }
 
 function httpError(status, message) {
@@ -408,6 +616,25 @@ function requireUser(req, res) {
   return user;
 }
 
+/* Resolve a workspace by slug and enforce a minimum role. Unknown slugs 404. */
+function requireWorkspace(req, res, slug, minRole = 'viewer') {
+  const user = requireUser(req, res);
+  if (!user) return null;
+  const ws = wsBySlug(slug);
+  const membership = ws ? membershipOf(ws.id, user.id) : null;
+  if (!ws || !membership) {
+    json(res, 404, { error: 'Workspace not found' });
+    return null;
+  }
+  if (ROLE_RANK[membership.role] < ROLE_RANK[minRole]) {
+    json(res, 403, {
+      error: minRole === 'admin' ? 'Only workspace admins can do that' : 'Your account has read-only access',
+    });
+    return null;
+  }
+  return { user, ws, membership };
+}
+
 /* In-memory throttle: a handful of attempts per IP+email per window. */
 const attempts = new Map();
 function tooMany(key, max = 10, windowMs = 15 * 60 * 1000) {
@@ -457,7 +684,13 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/config' && method === 'GET') {
-    return json(res, 200, { app: 'gr8r', signup: ALLOW_SIGNUP, mail: MAILER.enabled, url: appBase(req) });
+    return json(res, 200, {
+      app: 'gr8r',
+      signup: ALLOW_SIGNUP,
+      mail: MAILER.enabled,
+      url: appBase(req),
+      workspaceCreation: ALLOW_SIGNUP ? 'open' : 'admins',
+    });
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
@@ -484,7 +717,7 @@ async function handleApi(req, res, url) {
     );
     db.prepare('update users set last_login_at = ? where id = ?').run(t, row.id);
     setSessionCookie(req, res, token);
-    return json(res, 200, { user: { ...publicUser(row), role: roleOf(row.id) } });
+    return json(res, 200, { user: userPayload(row) });
   }
 
   if (pathname === '/api/auth/logout' && method === 'POST') {
@@ -499,7 +732,7 @@ async function handleApi(req, res, url) {
     // boot doesn't log a console error in every browser.
     const user = currentUser(req);
     if (!user) return json(res, 200, { user: null });
-    return json(res, 200, { user: { ...publicUser(user), role: roleOf(user.id) } });
+    return json(res, 200, { user: userPayload(user) });
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
@@ -517,7 +750,7 @@ async function handleApi(req, res, url) {
     }
     let user;
     try {
-      user = createUser(email, name, password, 'member');
+      user = createUser(email, name, password);
     } catch (err) {
       return json(res, err.status || 500, { error: err.message });
     }
@@ -530,17 +763,117 @@ async function handleApi(req, res, url) {
       t + SESSION_DAYS * 86400 * 1000,
     );
     setSessionCookie(req, res, token);
-    return json(res, 201, { user: { ...publicUser(user), role: 'member' } });
+    return json(res, 201, { user: userPayload(user) });
   }
 
-  if (pathname === '/api/invites' && method === 'POST') {
+  /* ------------------------------ workspaces ----------------------------- */
+  if (pathname === '/api/workspaces' && method === 'GET') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    return json(res, 200, { workspaces: userPayload(user).workspaces });
+  }
+
+  if (pathname === '/api/workspaces' && method === 'POST') {
     const user = requireUser(req, res);
     if (!user) return;
     if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
-    const actorRole = roleOf(user.id);
-    if (actorRole !== 'owner' && actorRole !== 'admin') {
-      return json(res, 403, { error: 'Only workspace admins can invite people' });
+    if (!ALLOW_SIGNUP && !hasAdminRole(user.id)) {
+      return json(res, 403, { error: 'Ask a workspace administrator to create one for you' });
     }
+    const body = await readJson(req);
+    const name = String(body?.name || '')
+      .trim()
+      .slice(0, 60);
+    if (!name) return json(res, 400, { error: 'Enter a workspace name' });
+    let slug = null;
+    if (body?.slug) {
+      slug = sanitizeSlug(body.slug);
+      if (!slug) return json(res, 400, { error: 'Use 2–40 lowercase letters, numbers, or hyphens' });
+      if (wsBySlug(slug)) return json(res, 409, { error: 'That URL is already taken', suggestion: uniqueSlug(slug) });
+    }
+    const ws = createWorkspace(name, slug, user);
+    return json(res, 201, { workspace: workspacePayload(ws, membershipOf(ws.id, user.id)) });
+  }
+
+  const wsMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})$/);
+  if (wsMatch && method === 'GET') {
+    const ctx = requireWorkspace(req, res, wsMatch[1]);
+    if (!ctx) return;
+    return json(res, 200, {
+      ...workspacePayload(ctx.ws, ctx.membership),
+      revision: ctx.ws.revision,
+      updatedAt: ctx.ws.updated_at,
+      doc: docForClient(JSON.parse(ctx.ws.doc), ctx.ws),
+    });
+  }
+
+  if (wsMatch && method === 'PUT') {
+    const ctx = requireWorkspace(req, res, wsMatch[1], 'member');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+
+    const body = await readJson(req);
+    const revision = Number(body?.revision);
+    const doc = body?.doc;
+    if (!Number.isInteger(revision) || revision < 1) return json(res, 400, { error: 'Missing revision' });
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return json(res, 400, { error: 'Missing workspace document' });
+    if (JSON.stringify(doc).length > MAX_BODY) return json(res, 413, { error: 'Workspace document is too large' });
+
+    db.exec('begin immediate');
+    try {
+      const row = db.prepare('select * from workspaces where id = ?').get(ctx.ws.id);
+      if (!row) {
+        db.exec('rollback');
+        return json(res, 404, { error: 'Workspace not found' });
+      }
+      if (row.revision !== revision) {
+        db.exec('rollback');
+        return json(res, 409, { error: 'Workspace changed elsewhere', revision: row.revision });
+      }
+      const next = docFromClient(doc, JSON.parse(row.doc), row, ctx.membership.role);
+      const t = now();
+      db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
+      db.exec('commit');
+      return json(res, 200, { revision: revision + 1, updatedAt: t });
+    } catch (err) {
+      db.exec('rollback');
+      throw err;
+    }
+  }
+
+  if (wsMatch && method === 'PATCH') {
+    const ctx = requireWorkspace(req, res, wsMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    const body = await readJson(req);
+    let name = ctx.ws.name;
+    let slug = ctx.ws.slug;
+    let color = ctx.ws.color || '#1D1C1A';
+    if (body?.name !== undefined) {
+      name = String(body.name).trim().slice(0, 60);
+      if (!name) return json(res, 400, { error: 'Enter a workspace name' });
+    }
+    if (body?.slug !== undefined && body.slug !== slug) {
+      const next = sanitizeSlug(body.slug);
+      if (!next) return json(res, 400, { error: 'Use 2–40 lowercase letters, numbers, or hyphens' });
+      if (wsBySlug(next)) return json(res, 409, { error: 'That URL is already taken' });
+      slug = next;
+    }
+    if (body?.color !== undefined) {
+      if (!/^#[0-9a-f]{6}$/i.test(String(body.color))) return json(res, 400, { error: 'Use a hex color like #1D1C1A' });
+      color = String(body.color);
+    }
+    db.prepare('update workspaces set name = ?, slug = ?, color = ?, updated_at = ? where id = ?').run(name, slug, color, now(), ctx.ws.id);
+    const ws = db.prepare('select * from workspaces where id = ?').get(ctx.ws.id);
+    return json(res, 200, { workspace: workspacePayload(ws, membershipOf(ws.id, ctx.user.id)) });
+  }
+
+  /* ------------------------------- invites ------------------------------- */
+  const wsInviteMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites$/);
+  if (wsInviteMatch && method === 'POST') {
+    const ctx = requireWorkspace(req, res, wsInviteMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
 
     const body = await readJson(req);
     const role = inviteRole(body?.role);
@@ -572,12 +905,13 @@ async function handleApi(req, res, url) {
           return json(res, 409, { error: `${email} already has an account` });
         }
         const token = crypto.randomBytes(24).toString('base64url');
-        db.prepare('insert into invites (token_hash, email, role, team, created_by, created_at, expires_at) values (?,?,?,?,?,?,?)').run(
+        db.prepare('insert into invites (token_hash, email, role, team, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?)').run(
           sha256(token),
           email,
           role,
           team,
-          user.id,
+          ctx.ws.id,
+          ctx.user.id,
           t,
           expiresAt,
         );
@@ -591,8 +925,8 @@ async function handleApi(req, res, url) {
 
     // Email delivery happens after the invites are committed, so a temporary
     // SMTP failure never loses the links. The client also receives the URL.
-    const workspace = getWorkspace();
-    const inviter = db.prepare('select name from users where id = ?').get(user.id);
+    const workspace = ctx.ws;
+    const inviter = db.prepare('select name from users where id = ?').get(ctx.user.id);
     const emailRows = rows.filter(row => row.email);
     if (emailRows.length && MAILER.enabled) {
       let cursor = 0;
@@ -627,8 +961,13 @@ async function handleApi(req, res, url) {
     if (!row) return json(res, 404, { error: 'This invite link is not valid' });
     if (row.used_at) return json(res, 410, { error: 'This invite has already been used' });
     if (row.expires_at <= now()) return json(res, 410, { error: 'This invite has expired' });
-    const ws = getWorkspace();
-    return json(res, 200, { workspace: ws.name, email: row.email, role: row.role, expiresAt: row.expires_at });
+    const ws = row.workspace_id ? db.prepare('select name, slug from workspaces where id = ?').get(row.workspace_id) : null;
+    return json(res, 200, {
+      workspace: ws ? { name: ws.name, slug: ws.slug } : null,
+      email: row.email,
+      role: row.role,
+      expiresAt: row.expires_at,
+    });
   }
 
   const acceptMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})\/accept$/);
@@ -662,10 +1001,13 @@ async function handleApi(req, res, url) {
 
     let user;
     try {
-      user = createUser(email, name, password, invite.role);
+      user = createUser(email, name, password);
     } catch (err) {
       return json(res, err.status || 500, { error: err.message });
     }
+    const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
+    if (!ws) return json(res, 410, { error: 'This workspace no longer exists' });
+    addMembership(ws, user, invite.role);
     // Links sent to a specific address are single-use; a generic link can add several people.
     if (invite.email) db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);
 
@@ -679,57 +1021,10 @@ async function handleApi(req, res, url) {
     );
     db.prepare('update users set last_login_at = ? where id = ?').run(t, user.id);
     setSessionCookie(req, res, token);
-    return json(res, 201, { user: { ...publicUser(user), role: invite.role } });
-  }
-
-  if (pathname === '/api/workspace' && method === 'GET') {
-    const user = requireUser(req, res);
-    if (!user) return;
-    const ws = getWorkspace();
-    return json(res, 200, {
-      id: ws.id,
-      name: ws.name,
-      revision: ws.revision,
-      updatedAt: ws.updated_at,
-      doc: JSON.parse(ws.doc),
-      role: roleOf(user.id),
+    return json(res, 201, {
+      user: userPayload(user),
+      workspace: { id: ws.id, name: ws.name, slug: ws.slug },
     });
-  }
-
-  if (pathname === '/api/workspace' && method === 'PUT') {
-    const user = requireUser(req, res);
-    if (!user) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
-    const role = roleOf(user.id);
-    if (!role) return json(res, 403, { error: 'You are not a member of this workspace' });
-    if (role === 'viewer') return json(res, 403, { error: 'Your account has read-only access' });
-
-    const body = await readJson(req);
-    const revision = Number(body?.revision);
-    const doc = body?.doc;
-    if (!Number.isInteger(revision) || revision < 1) return json(res, 400, { error: 'Missing revision' });
-    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return json(res, 400, { error: 'Missing workspace document' });
-    if (JSON.stringify(doc).length > MAX_BODY) return json(res, 413, { error: 'Workspace document is too large' });
-
-    db.exec('begin immediate');
-    try {
-      const ws = db.prepare('select revision from workspaces where id = ?').get(WS_ID);
-      if (!ws) {
-        db.exec('rollback');
-        return json(res, 404, { error: 'Workspace not found' });
-      }
-      if (ws.revision !== revision) {
-        db.exec('rollback');
-        return json(res, 409, { error: 'Workspace changed elsewhere', revision: ws.revision });
-      }
-      const t = now();
-      db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), t, WS_ID);
-      db.exec('commit');
-      return json(res, 200, { revision: revision + 1, updatedAt: t });
-    } catch (err) {
-      db.exec('rollback');
-      throw err;
-    }
   }
 
   return json(res, 404, { error: 'Not found' });
@@ -826,7 +1121,8 @@ function serveStatic(req, res, url) {
   } catch {
     return notFound(res);
   }
-  if (rel.endsWith('/')) rel += 'index.html';
+  const trailing = rel.endsWith('/');
+  if (trailing) rel += 'index.html';
   const file = path.resolve(ROOT, `.${rel}`);
   if (file !== ROOT && !file.startsWith(ROOT + path.sep)) return notFound(res);
 
@@ -840,7 +1136,7 @@ function serveStatic(req, res, url) {
   if (stat?.isFile()) return sendFile(req, res, file, stat);
 
   // Hash routes don't need this, but it keeps deep links and bookmarks working.
-  if (!path.extname(rel)) {
+  if (trailing || !path.extname(rel)) {
     const index = path.join(ROOT, 'index.html');
     try {
       return sendFile(req, res, index, fs.statSync(index));
@@ -890,15 +1186,22 @@ function backupCli(target) {
 function addUserCli(args) {
   const email = args[0];
   const name = args[1];
+  const slug = args[2];
   if (!email) {
-    console.error('usage: node server.js --add-user <email> [name]');
+    console.error('usage: node server.js --add-user <email> [name] [workspace-slug]');
     process.exit(1);
   }
   ensureWorkspace();
+  const ws = slug ? wsBySlug(slug) : firstWorkspace();
+  if (!ws) {
+    console.error(slug ? `no workspace with slug ${slug}` : 'no workspace available');
+    process.exit(1);
+  }
   const password = process.env.USER_PASSWORD || crypto.randomBytes(9).toString('base64url');
   try {
-    const user = createUser(email, name, password, 'member');
-    console.log(`created ${user.email}`);
+    const user = createUser(email, name, password);
+    addMembership(ws, user, 'member');
+    console.log(`created ${user.email} in ${ws.slug}`);
     if (!process.env.USER_PASSWORD) console.log(`password: ${password}`);
   } catch (err) {
     console.error(err.message);
