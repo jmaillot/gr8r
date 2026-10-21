@@ -284,12 +284,17 @@ docker cp /var/backups/gr8r/backup-2026-10-21-0315.db gr8r-studio:/data/gr8r.db
 
 VOL=$(docker inspect gr8r-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
-docker run --rm -v "$VOL":/data gr8r-studio:1.0.0 \
-  sh -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
+docker run --rm --user root -v "$VOL":/data gr8r-studio:1.0.0 \
+  sh -c 'chown -R node:node /data && rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
 
 docker compose start gr8r
 docker compose logs --tail=20 gr8r
 ```
+
+`docker cp` preserves the snapshot's owner. Backups written by root (for example from
+cron) are root-owned, and the server runs as `node` (uid 1000); the `chown` step is what
+lets it reopen the database. Skipping it produces `unable to open database file` at
+startup.
 
 ## 10. Updates and rollback
 
@@ -326,6 +331,41 @@ migrations are additive, so the volume survives rebuilds — but take the backup
 | Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' gr8r node server.js --set-password you@example.com`                                   |
 | Which accounts exist?                     | See the command below.                                                                                                            |
 | Data disappeared                          | Someone ran `docker compose down -v`, which deletes the volume. Restore from backup.                                              |
+| `unable to open database file` at startup | `/data` or `gr8r.db` is not writable by uid 1000 (`node`). See the fix below.                                                     |
+| `./data:/data` bind mount fails           | Docker created the host directory as root. Either use the named volume, or `sudo chown -R 1000:1000 ./data`.                      |
+
+### Fix `unable to open database file`
+
+This is a permissions error, not a missing path: the server runs as `node` (uid 1000), and
+either `/data`, the database file, or a WAL file is owned by root.
+
+Find out what is mounted at `/data`:
+
+```sh
+docker inspect gr8r-studio --format '{{json .Mounts}}'
+```
+
+If it is a **bind mount** (a host path is listed as `Source`):
+
+```sh
+docker compose down
+sudo chown -R 1000:1000 /path/to/data
+docker compose up -d
+```
+
+If it is a **named volume**:
+
+```sh
+VOL=$(docker inspect gr8r-studio \
+  --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
+docker compose down
+docker run --rm --user root -v "$VOL":/data alpine:3.21 \
+  sh -c 'chown -R 1000:1000 /data && ls -ldn /data'
+docker compose up -d
+```
+
+Do not fix this by running the container as root, and do not store the database in the
+repository: the named volume is the intended location.
 
 List accounts:
 
