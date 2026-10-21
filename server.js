@@ -269,7 +269,9 @@ function normalizeDoc(doc, meta) {
 }
 
 function docForClient(doc, ws) {
-  return normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
+  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
+  syncProfiles(out, ws.id);
+  return out;
 }
 
 function docFromClient(incoming, stored, ws, role) {
@@ -279,9 +281,150 @@ function docFromClient(incoming, stored, ws, role) {
   next.data.me = null;
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
   // Membership and plan edits stay with the roles that are allowed to make them.
-  if (ROLE_RANK[role] < ROLE_RANK.admin) next.data.members = stored?.data?.members || [];
-  if (role !== 'owner') next.data.plan = stored?.data?.plan;
+  const storedMembers = stored?.data?.members || [];
+  if (ROLE_RANK[role] < ROLE_RANK.admin) {
+    next.data.members = storedMembers;
+  } else {
+    // Access fields of an account-backed profile belong to the membership, not the document.
+    // A profile claiming a userId that has no membership is dropped: only the server adds accounts.
+    const official = new Map(storedMembers.filter(m => m.userId).map(m => [m.userId, m]));
+    const incomingMembers = Array.isArray(next.data.members) ? next.data.members : storedMembers;
+    next.data.members = incomingMembers
+      .map(m => {
+        if (!m?.userId) return m;
+        const prev = official.get(m.userId);
+        return prev ? { ...m, id: prev.id, userId: prev.userId, email: prev.email, role: prev.role, status: prev.status } : null;
+      })
+      .filter(Boolean);
+  }
+  // The plan is a label with its own owner-only endpoint; the document never sets it.
+  next.data.plan = stored?.data?.plan;
   return next;
+}
+
+/* --------------------------- membership helpers ------------------------- */
+function roleRank(role) {
+  return ROLE_RANK[role] || 0;
+}
+
+/* Memberships joined with the account, in the order people joined. */
+function membersOf(workspaceId) {
+  return db
+    .prepare(
+      `select m.role, m.member_id, u.id as user_id, u.email, u.name, u.last_login_at, u.created_at
+         from memberships m join users u on u.id = m.user_id
+        where m.workspace_id = ?
+        order by u.created_at, u.email collate nocase`,
+    )
+    .all(workspaceId);
+}
+
+function memberPayload(row, doc, selfId) {
+  const profile = (doc?.data?.members || []).find(p => (row.user_id && p.userId === row.user_id) || (row.member_id && p.id === row.member_id));
+  return {
+    userId: row.user_id,
+    memberId: row.member_id || profile?.id || null,
+    name: profile?.name || row.name,
+    email: row.email,
+    role: row.role,
+    roleLabel: ROLE_LABEL[row.role] || row.role,
+    team: profile?.team ?? null,
+    title: profile?.title || '',
+    status: profile?.status || 'active',
+    lastLoginAt: row.last_login_at || null,
+    joinedAt: row.created_at || null,
+    isSelf: row.user_id === selfId,
+  };
+}
+
+/* Pending invites; the hash is a safe identifier because the token is not derivable from it. */
+function invitesOf(workspaceId) {
+  return db
+    .prepare(
+      `select token_hash, email, role, team, created_at, expires_at
+         from invites
+        where workspace_id = ? and used_at is null and expires_at > ?
+        order by created_at desc`,
+    )
+    .all(workspaceId, now())
+    .map(r => ({
+      id: r.token_hash,
+      email: r.email,
+      role: r.role,
+      roleLabel: ROLE_LABEL[r.role] || r.role,
+      team: r.team,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+    }));
+}
+
+function ownerCount(workspaceId, excludeUserId = null) {
+  return db.prepare("select count(*) as n from memberships where workspace_id = ? and role = 'owner' and user_id is not ?").get(workspaceId, excludeUserId).n;
+}
+
+/* Overlay the authority fields of every profile that belongs to an account. */
+function syncProfiles(doc, workspaceId) {
+  if (!doc?.data || !Array.isArray(doc.data.members)) return;
+  const rows = db.prepare('select user_id, role, member_id from memberships where workspace_id = ?').all(workspaceId);
+  const byUser = new Map(rows.map(r => [r.user_id, r]));
+  for (const profile of doc.data.members) {
+    if (!profile?.userId) continue;
+    const row = byUser.get(profile.userId);
+    if (!row) continue;
+    if (row.member_id && profile.id !== row.member_id) profile.id = row.member_id;
+    profile.role = ROLE_LABEL[row.role] || profile.role;
+    if (profile.status === 'invited') profile.status = 'active';
+    // The document stores minutes since last activity; older rows stored a timestamp.
+    if (typeof profile.last === 'number' && profile.last > 1e11) profile.last = Math.max(0, Math.round((now() - profile.last) / 60000));
+  }
+}
+
+/* Remove someone from the document: profiles, assignments and project rosters. */
+function stripMember(doc, memberId, userId = null) {
+  const d = doc?.data;
+  if (!d) return;
+  const ids = new Set(
+    [memberId, ...(d.members || []).filter(m => (userId && m.userId === userId) || (memberId && m.id === memberId)).map(m => m.id)].filter(Boolean),
+  );
+  if (!ids.size && !userId) return;
+  const hit = v => !!v && ids.has(v);
+  d.members = (d.members || []).filter(m => !(userId && m.userId === userId) && !hit(m.id));
+  d.tasks = (d.tasks || []).map(t => {
+    const next = hit(t.assignee) ? { ...t, assignee: null } : t;
+    if (Array.isArray(next.subtasks) && next.subtasks.some(s => hit(s?.assignee))) {
+      next.subtasks = next.subtasks.map(s => (hit(s?.assignee) ? { ...s, assignee: null } : s));
+    }
+    return next;
+  });
+  d.projects = (d.projects || []).map(p => ({
+    ...p,
+    lead: hit(p.lead) ? null : p.lead,
+    members: Array.isArray(p.members) ? p.members.filter(x => !hit(x)) : p.members,
+    perms: p.perms && typeof p.perms === 'object' ? Object.fromEntries(Object.entries(p.perms).filter(([k]) => !hit(k))) : p.perms,
+  }));
+  d.teams = (d.teams || []).map(t => (Array.isArray(t.members) ? { ...t, members: t.members.filter(x => !hit(x)) } : t));
+}
+
+/* Read-modify-write the workspace document inside the caller's transaction. */
+function updateDoc(workspaceId, edit) {
+  const row = db.prepare('select doc from workspaces where id = ?').get(workspaceId);
+  if (!row) throw httpError(404, 'Workspace not found');
+  const doc = JSON.parse(row.doc);
+  edit(doc);
+  db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), workspaceId);
+  return doc;
+}
+
+function transaction(fn) {
+  db.exec('begin immediate');
+  try {
+    const out = fn();
+    db.exec('commit');
+    return out;
+  } catch (err) {
+    db.exec('rollback');
+    throw err;
+  }
 }
 
 function emptyDoc(meta) {
@@ -460,7 +603,7 @@ function ensureMember(doc, user, role = 'member') {
     title: '',
     c: ['#5A67D8', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][members.length % 6],
     status: 'active',
-    last: now(),
+    last: 0,
     tz: '',
   });
   return id;
@@ -868,6 +1011,122 @@ async function handleApi(req, res, url) {
     return json(res, 200, { workspace: workspacePayload(ws, membershipOf(ws.id, ctx.user.id)) });
   }
 
+  if (wsMatch && method === 'DELETE') {
+    const ctx = requireWorkspace(req, res, wsMatch[1], 'owner');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    transaction(() => {
+      db.prepare('delete from memberships where workspace_id = ?').run(ctx.ws.id);
+      db.prepare('delete from invites where workspace_id = ?').run(ctx.ws.id);
+      db.prepare('delete from workspaces where id = ?').run(ctx.ws.id);
+    });
+    return json(res, 200, { deleted: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
+  }
+
+  /* ------------------------------- members ------------------------------- */
+  const wsMembersMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members$/);
+  if (wsMembersMatch && method === 'GET') {
+    const ctx = requireWorkspace(req, res, wsMembersMatch[1]);
+    if (!ctx) return;
+    const doc = JSON.parse(ctx.ws.doc);
+    return json(res, 200, {
+      members: membersOf(ctx.ws.id).map(row => memberPayload(row, doc, ctx.user.id)),
+      invites: roleRank(ctx.membership.role) >= ROLE_RANK.admin ? invitesOf(ctx.ws.id) : [],
+    });
+  }
+
+  const wsLeaveMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/leave$/);
+  if (wsLeaveMatch && method === 'POST') {
+    const ctx = requireWorkspace(req, res, wsLeaveMatch[1]);
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (ctx.membership.role === 'owner' && ownerCount(ctx.ws.id, ctx.user.id) === 0) {
+      return json(res, 409, { error: 'Promote someone else to owner before you leave' });
+    }
+    transaction(() => {
+      db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
+      updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
+    });
+    return json(res, 200, { left: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
+  }
+
+  const wsMemberMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})$/);
+  if (wsMemberMatch && (method === 'PATCH' || method === 'DELETE')) {
+    const ctx = requireWorkspace(req, res, wsMemberMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    const target = db.prepare('select * from users where id = ?').get(wsMemberMatch[2]);
+    const row = target ? membershipOf(ctx.ws.id, target.id) : null;
+    if (!target || !row) return json(res, 404, { error: 'That person is not a member of this workspace' });
+    if (target.id === ctx.user.id) return json(res, 409, { error: 'Use “Leave workspace” to remove yourself' });
+    const actorRank = roleRank(ctx.membership.role);
+    if (actorRank < ROLE_RANK.owner && roleRank(row.role) >= ROLE_RANK.admin) {
+      return json(res, 403, { error: 'Only an owner can manage admins and owners' });
+    }
+
+    if (method === 'DELETE') {
+      if (row.role === 'owner' && ownerCount(ctx.ws.id, target.id) === 0) return json(res, 409, { error: 'Every workspace needs an owner' });
+      transaction(() => {
+        db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+        updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
+      });
+      return json(res, 200, { removed: true, userId: target.id });
+    }
+
+    const body = await readJson(req);
+    const nextRole = body?.role === undefined ? row.role : String(body.role).toLowerCase();
+    if (!(nextRole in ROLE_RANK)) return json(res, 400, { error: 'Unknown role' });
+    if (nextRole !== row.role && nextRole === 'owner' && actorRank < ROLE_RANK.owner) {
+      return json(res, 403, { error: 'Only an owner can transfer ownership' });
+    }
+    if (row.role === 'owner' && nextRole !== 'owner' && ownerCount(ctx.ws.id, target.id) === 0) {
+      return json(res, 409, { error: 'Every workspace needs an owner' });
+    }
+    const team = body?.team === undefined ? undefined : body.team ? String(body.team).slice(0, 40) : null;
+    const title = body?.title === undefined ? undefined : String(body.title).slice(0, 60);
+    transaction(() => {
+      if (nextRole !== row.role) {
+        db.prepare('update memberships set role = ? where workspace_id = ? and user_id = ?').run(nextRole, ctx.ws.id, target.id);
+      }
+      updateDoc(ctx.ws.id, doc => {
+        const memberId = ensureMember(doc, target, nextRole) || row.member_id;
+        const profile = (doc.data.members || []).find(m => m.id === memberId || m.userId === target.id);
+        if (!profile) return;
+        profile.role = ROLE_LABEL[nextRole] || profile.role;
+        if (team !== undefined) profile.team = team;
+        if (title !== undefined) profile.title = title;
+      });
+    });
+    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
+    return json(res, 200, {
+      member: memberPayload(
+        {
+          role: nextRole,
+          member_id: row.member_id,
+          user_id: target.id,
+          email: target.email,
+          name: target.name,
+          last_login_at: target.last_login_at,
+          created_at: target.created_at,
+        },
+        doc,
+        ctx.user.id,
+      ),
+    });
+  }
+
+  const wsPlanMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/plan$/);
+  if (wsPlanMatch && method === 'POST') {
+    const ctx = requireWorkspace(req, res, wsPlanMatch[1], 'owner');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    const body = await readJson(req);
+    const plan = String(body?.plan || '');
+    if (!['Free', 'Team', 'Business'].includes(plan)) return json(res, 400, { error: 'Unknown plan' });
+    transaction(() => updateDoc(ctx.ws.id, doc => (doc.data.plan = plan)));
+    return json(res, 200, { plan });
+  }
+
   /* ------------------------------- invites ------------------------------- */
   const wsInviteMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites$/);
   if (wsInviteMatch && method === 'POST') {
@@ -900,9 +1159,14 @@ async function handleApi(req, res, url) {
     try {
       db.prepare('delete from invites where expires_at < ?').run(t);
       for (const email of emails.length ? emails : [null]) {
-        if (email && db.prepare('select 1 from users where email = ?').get(email)) {
-          db.exec('rollback');
-          return json(res, 409, { error: `${email} already has an account` });
+        if (email) {
+          const account = db.prepare('select * from users where email = ?').get(email);
+          if (account && membershipOf(ctx.ws.id, account.id)) {
+            db.exec('rollback');
+            return json(res, 409, { error: `${email} is already a member of ${ctx.ws.name}` });
+          }
+          // One live invite per address: a fresh link replaces the previous one.
+          db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(t, ctx.ws.id, email);
         }
         const token = crypto.randomBytes(24).toString('base64url');
         db.prepare('insert into invites (token_hash, email, role, team, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?)').run(
@@ -955,6 +1219,23 @@ async function handleApi(req, res, url) {
     return json(res, 201, { invites: rows });
   }
 
+  if (wsInviteMatch && method === 'GET') {
+    const ctx = requireWorkspace(req, res, wsInviteMatch[1], 'admin');
+    if (!ctx) return;
+    return json(res, 200, { invites: invitesOf(ctx.ws.id) });
+  }
+
+  const wsInviteIdMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites\/([0-9a-f]{64})$/);
+  if (wsInviteIdMatch && method === 'DELETE') {
+    const ctx = requireWorkspace(req, res, wsInviteIdMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    const row = db.prepare('select token_hash from invites where token_hash = ? and workspace_id = ?').get(wsInviteIdMatch[2], ctx.ws.id);
+    if (!row) return json(res, 404, { error: 'That invite is no longer pending' });
+    db.prepare('delete from invites where token_hash = ?').run(row.token_hash);
+    return json(res, 200, { revoked: true });
+  }
+
   const inviteMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})$/);
   if (inviteMatch && method === 'GET') {
     const row = db.prepare('select * from invites where token_hash = ?').get(sha256(inviteMatch[1]));
@@ -967,6 +1248,7 @@ async function handleApi(req, res, url) {
       email: row.email,
       role: row.role,
       expiresAt: row.expires_at,
+      existing: !!(row.email && db.prepare('select 1 from users where email = ?').get(row.email)),
     });
   }
 
@@ -975,53 +1257,61 @@ async function handleApi(req, res, url) {
     if (tooMany(`invite|${clientIp(req)}`, 5, 60 * 60 * 1000)) {
       return json(res, 429, { error: 'Too many attempts. Try again later.' });
     }
-    const body = await readJson(req);
-    const name = String(body?.name || '').trim();
-    const email = String(body?.email || '')
-      .trim()
-      .toLowerCase();
-    const password = String(body?.password || '');
-    if (!name) return json(res, 400, { error: 'Enter your name' });
-    if (!emailOk(email)) return json(res, 400, { error: 'Enter a valid email address' });
-    if (password.length < 10 || !/[0-9\W]/.test(password)) {
-      return json(res, 400, { error: 'Use at least 10 characters, including a number or symbol' });
-    }
-
     const tokenHash = sha256(acceptMatch[1]);
     const invite = db.prepare('select * from invites where token_hash = ?').get(tokenHash);
     if (!invite) return json(res, 404, { error: 'This invite link is not valid' });
     if (invite.used_at) return json(res, 410, { error: 'This invite has already been used' });
     if (invite.expires_at <= now()) return json(res, 410, { error: 'This invite has expired' });
-    if (invite.email && invite.email !== email) {
-      return json(res, 400, { error: `This invite is for ${invite.email}` });
-    }
-    if (db.prepare('select 1 from users where email = ?').get(email)) {
-      return json(res, 409, { error: 'An account with this email already exists. Sign in instead.' });
+
+    const body = await readJson(req);
+    const session = currentUser(req);
+    const account = invite.email ? db.prepare('select * from users where email = ?').get(invite.email) : null;
+    let user = session && (!invite.email || session.email === invite.email) ? session : null;
+    if (!user && account) {
+      return json(res, 409, { error: 'An account with this email already exists. Sign in to accept the invite.', needsSignIn: true });
     }
 
-    let user;
-    try {
-      user = createUser(email, name, password);
-    } catch (err) {
-      return json(res, err.status || 500, { error: err.message });
+    if (!user) {
+      const name = String(body?.name || '').trim();
+      const email = String(body?.email || '')
+        .trim()
+        .toLowerCase();
+      const password = String(body?.password || '');
+      if (!name) return json(res, 400, { error: 'Enter your name' });
+      if (!emailOk(email)) return json(res, 400, { error: 'Enter a valid email address' });
+      if (invite.email && invite.email !== email) return json(res, 400, { error: `This invite is for ${invite.email}` });
+      if (password.length < 10 || !/[0-9\W]/.test(password)) {
+        return json(res, 400, { error: 'Use at least 10 characters, including a number or symbol' });
+      }
+      try {
+        user = createUser(email, name, password);
+      } catch (err) {
+        return json(res, err.status || 500, { error: err.message });
+      }
     }
+
     const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
     if (!ws) return json(res, 410, { error: 'This workspace no longer exists' });
-    addMembership(ws, user, invite.role);
-    // Links sent to a specific address are single-use; a generic link can add several people.
-    if (invite.email) db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);
+    if (!membershipOf(ws.id, user.id)) addMembership(ws, user, invite.role);
+    // Links sent to a specific address are single-use; joining clears every pending one for that address.
+    if (invite.email) {
+      db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);
+      db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(now(), ws.id, invite.email);
+    }
 
-    const token = crypto.randomBytes(32).toString('base64url');
     const t = now();
-    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at) values (?,?,?,?)').run(
-      sha256(token),
-      user.id,
-      t,
-      t + SESSION_DAYS * 86400 * 1000,
-    );
+    if (!session) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at) values (?,?,?,?)').run(
+        sha256(token),
+        user.id,
+        t,
+        t + SESSION_DAYS * 86400 * 1000,
+      );
+      setSessionCookie(req, res, token);
+    }
     db.prepare('update users set last_login_at = ? where id = ?').run(t, user.id);
-    setSessionCookie(req, res, token);
-    return json(res, 201, {
+    return json(res, session ? 200 : 201, {
       user: userPayload(user),
       workspace: { id: ws.id, name: ws.name, slug: ws.slug },
     });
