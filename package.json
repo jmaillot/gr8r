@@ -11,6 +11,7 @@
     "start": "node server.js",
     "seed:json": "node scripts/export-seed.mjs > seed.json",
     "lint": "eslint .",
+    "test": "node --test --test-concurrency=2 test/*.test.mjs",
     "test:privacy": "node scripts/verify-private-projects.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
