@@ -2,7 +2,7 @@
    E2E SERVER WRAPPER: one throwaway server per Playwright run.
 
    Creates a fresh mkdtemp DATA_DIR, boots the real server.js on loopback
-   port 4173 with SEED_DATA=false, and removes the directory when it stops.
+   port 4317 with SEED_DATA=false, and removes the directory when it stops.
    Playwright starts and stops this process through `webServer`; it never
    touches a developer database, a running dev server or port 8080.
    ===================================================================== */
@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const PORT = Number(process.env.E2E_PORT || 4173);
+const PORT = Number(process.env.E2E_PORT || 4317);
 const HOST = '127.0.0.1';
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-e2e-'));
 

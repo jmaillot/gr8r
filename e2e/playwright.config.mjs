@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const PORT = Number(process.env.E2E_PORT || 4173);
+const PORT = Number(process.env.E2E_PORT || 4317);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
@@ -24,7 +24,7 @@ export default defineConfig({
     command: 'node e2e/server.mjs',
     cwd: ROOT,
     url: `${BASE_URL}/api/health`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === 'true',
     timeout: 120_000,
     /* Without this Playwright SIGKILLs the group, skipping the wrapper's temp-dir cleanup. */
     gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },

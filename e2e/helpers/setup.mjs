@@ -13,7 +13,7 @@
    ===================================================================== */
 import { createHash } from 'node:crypto';
 
-export const BASE_URL = `http://127.0.0.1:${process.env.E2E_PORT || 4173}`;
+export const BASE_URL = `http://127.0.0.1:${process.env.E2E_PORT || 4317}`;
 
 export const OWNER = Object.freeze({ email: 'e2e-owner@e2e.local', password: 'e2e-owner-password', name: 'E2E Owner' });
 
