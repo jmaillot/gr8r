@@ -95,7 +95,8 @@ Restore:
 ```sh
 docker compose stop gr8r
 docker cp ./backups/backup-2026-10-21.db gr8r-studio:/data/gr8r.db
-docker compose exec gr8r sh -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
+VOL=$(docker inspect gr8r-studio --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
+docker run --rm -v "$VOL":/data gr8r-studio:1.0.0 sh -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
 docker compose start gr8r
 ```
 
