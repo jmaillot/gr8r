@@ -362,6 +362,42 @@ function redactViews(views, hiddenProjects, hiddenViews) {
   return views;
 }
 
+/* Names and keys of the projects this caller must not see. */
+function hiddenProjectTerms(doc, hiddenProjects) {
+  const terms = [];
+  for (const p of doc?.data?.projects || []) {
+    if (!p?.id || !hiddenProjects.has(p.id)) continue;
+    for (const value of [p.name, p.key]) {
+      if (typeof value === 'string' && value.trim()) terms.push(value.trim().toLowerCase());
+    }
+  }
+  return terms;
+}
+
+/* A free-text term that names a project the caller cannot see. Non-strings never match. */
+const referencesHidden = (term, hiddenTerms) => typeof term === 'string' && hiddenTerms.some(name => term.toLowerCase().includes(name));
+
+/*
+ * Merge workspace-wide recent searches. They are free text shared by the workspace, so a
+ * caller who cannot see every project must not be able to erase or rewrite the stored
+ * history, and a term that names a hidden project never enters or leaves their document.
+ */
+function mergeRecentSearches(storedList, incomingList, hiddenTerms, keepStored) {
+  const stored = Array.isArray(storedList) ? storedList : [];
+  const incoming = Array.isArray(incomingList) ? incomingList : [];
+  const out = [];
+  for (const term of incoming) {
+    if (typeof term !== 'string' || referencesHidden(term, hiddenTerms) || out.includes(term)) continue;
+    out.push(term);
+  }
+  stored.forEach((term, index) => {
+    if (typeof term !== 'string' || out.includes(term)) return;
+    if (!keepStored && !referencesHidden(term, hiddenTerms)) return;
+    out.splice(Math.min(index, out.length), 0, term);
+  });
+  return out.slice(0, 5);
+}
+
 function redactDoc(doc, memberId) {
   const data = doc?.data;
   if (!data) return doc;
@@ -369,6 +405,7 @@ function redactDoc(doc, memberId) {
   if (!hiddenProjects.size) return doc;
   const hiddenTasks = hiddenTaskIds(doc, hiddenProjects);
   const hiddenViews = new Set((data.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
+  const hiddenTerms = hiddenProjectTerms(doc, hiddenProjects);
   const drop = list => (Array.isArray(list) ? list.filter(x => x && !hiddenProjects.has(x.project)) : list);
   data.projects = (data.projects || []).filter(p => !hiddenProjects.has(p.id));
   data.projOrder = Array.isArray(data.projOrder) ? data.projOrder.filter(id => !hiddenProjects.has(id)) : data.projOrder;
@@ -382,6 +419,7 @@ function redactDoc(doc, memberId) {
   for (const view of data.savedViews) {
     if (view && Array.isArray(view.filters)) view.filters = scrubProjectFilters(view.filters, hiddenProjects);
   }
+  if (Array.isArray(data.recentSearches)) data.recentSearches = data.recentSearches.filter(term => !referencesHidden(term, hiddenTerms));
   redactViews(doc.views, hiddenProjects, hiddenViews);
   return doc;
 }
@@ -480,6 +518,14 @@ function mergeClientDoc(incoming, stored, membership) {
   for (const view of nextData.savedViews) {
     if (view && Array.isArray(view.filters)) view.filters = scrubProjectFilters(view.filters, hiddenProjects);
   }
+  // Recent searches are workspace-wide free text: a caller who cannot see every project
+  // keeps the stored history, so a redacted save cannot erase or rewrite it.
+  nextData.recentSearches = mergeRecentSearches(
+    storedData.recentSearches,
+    nextData.recentSearches,
+    hiddenProjectTerms(stored, hiddenProjects),
+    hiddenProjects.size > 0,
+  );
 
   // Per-user view state: hidden keys stay from storage, hidden project ids leave filter values.
   const hiddenViewIds = new Set((storedData.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));

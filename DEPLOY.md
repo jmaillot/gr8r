@@ -369,6 +369,10 @@ starts cleanly on the previous image. Delete the backup only once the new releas
 ### Known limits
 
 - Plans (`Free`/`Team`/`Business`) are labels only; nothing is billed or limited yet.
+- Recent searches are workspace-wide rather than per user. A term that names a private project
+  is redacted for members who cannot see it, and a non-member cannot erase or rewrite the stored
+  history, but every workspace member shares one list. Per-user storage is planned for the next
+  release.
 
 ### Invite links and email
 

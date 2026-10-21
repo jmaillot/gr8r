@@ -67,3 +67,7 @@ membership list, isolation is enforced by the server, and the app ships with a r
 - Invite email is optional: without `SMTP_HOST`, the server still creates copyable invite links.
 - File contents are not stored; attachments are names and sizes in the workspace document.
 - There is no real-time collaboration: saves carry a revision and a stale write gets `409`.
+- Recent searches are workspace-wide rather than per user. A term that names a private project
+  is redacted for members who cannot see it, and a non-member cannot erase or rewrite the stored
+  history, but every workspace member still shares one list. Per-user storage is planned for the
+  next release.
