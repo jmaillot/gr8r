@@ -174,6 +174,11 @@ export function applyDoc(doc, revision) {
   if (Number.isInteger(revision)) api.revision = revision;
   const mid = api.user?.memberId;
   if (mid && S.data.members?.some(m => m.id === mid)) S.data.me = mid;
+  const current = S.data.members?.find(m => m.id === S.data.me);
+  if (current) {
+    S.prefs.name = current.name;
+    S.prefs.title = current.title || '';
+  }
   return true;
 }
 
