@@ -111,7 +111,7 @@ export function legacyDoc() {
           perms: {},
         },
       ],
-      tasks: [{ id: 't_keep', projectId: 'p_keep', title: 'Surviving task', assignee: 'm_alice', status: 'todo', subtasks: [] }],
+      tasks: [{ id: 't_keep', project: 'p_keep', title: 'Surviving task', assignee: 'm_alice', status: 'todo', subtasks: [] }],
       comments: [],
       activity: [],
       notifs: [],

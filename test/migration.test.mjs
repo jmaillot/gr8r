@@ -94,7 +94,12 @@ test('the migrated document drops the demo switcher, retires data.me and keeps i
   assert.equal(doc.data.ws.url, SLUG);
   assert.deepEqual(doc.data.projOrder, ['p_keep']);
   assert.equal(doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project');
-  assert.equal(doc.data.tasks.find(t => t.id === 't_keep')?.projectId, 'p_keep');
+  assert.equal(doc.data.tasks.find(t => t.id === 't_keep')?.project, 'p_keep', 'the task keeps the project key the client reads');
+  assert.deepEqual(
+    doc.data.tasks.filter(t => t.project === 'p_keep').map(t => t.id),
+    ['t_keep'],
+    'the client resolution path (tasks.filter(t => t.project === id)) finds the migrated task',
+  );
 });
 
 test('both member profiles and memberships are linked to their accounts', () => {
@@ -132,6 +137,11 @@ test('the migrated owner signs in and reads the preserved workspace', async () =
   assert.equal(read.data.doc.data.me, null);
   assert.equal('workspaces' in read.data.doc.data, false);
   assert.equal(read.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project');
+  assert.deepEqual(
+    read.data.doc.data.tasks.filter(t => t.project === 'p_keep').map(t => t.id),
+    ['t_keep'],
+    'the served document resolves the migrated task through the client path',
+  );
 });
 
 /* Everything the migration owns, compared byte-for-byte across a reboot. */
