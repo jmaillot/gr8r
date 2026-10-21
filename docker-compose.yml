@@ -13,6 +13,7 @@ services:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      SEED_DATA: ${SEED_DATA:-true}
       SESSION_DAYS: ${SESSION_DAYS:-30}
       SECURE_COOKIE: ${SECURE_COOKIE:-auto}
       TRUST_PROXY: 'true'

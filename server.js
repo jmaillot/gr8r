@@ -15,6 +15,7 @@
      ADMIN_NAME=Admin
      WORKSPACE_NAME=Gr8r Studio
      ALLOW_SIGNUP=false     let visitors create accounts
+     SEED_DATA=true         false = start with an empty workspace
      SESSION_DAYS=30
      SECURE_COOKIE=auto     auto | true | false
      TRUST_PROXY=true       read X-Forwarded-* (behind Traefik)
@@ -41,6 +42,7 @@ const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'gr8r.db
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
+const SEED_DATA = process.env.SEED_DATA !== 'false';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const SECURE_COOKIE = process.env.SECURE_COOKIE || 'auto';
 const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
@@ -139,28 +141,49 @@ function getWorkspace() {
   return db.prepare('select * from workspaces where id = ?').get(WS_ID);
 }
 
+function emptyDoc() {
+  const name = process.env.WORKSPACE_NAME || 'Gr8r Studio';
+  return {
+    data: {
+      ws: { name, url: '', c: '#1D1C1A', brand: true },
+      workspaces: [{ id: 'w1', name, c: '#1D1C1A', plan: 'Team', brand: true }],
+      me: null,
+      members: [],
+      projects: [],
+      tasks: [],
+      comments: [],
+      activity: [],
+      notifs: [],
+      files: [],
+      events: [],
+      projOrder: [],
+      savedViews: [],
+      recentSearches: [],
+      sessions: [],
+      invoices: [],
+      tfa: false,
+      notifPrefs: {
+        email_mention: true,
+        email_assign: true,
+        email_digest: true,
+        email_comment: false,
+        push_mention: true,
+        push_assign: true,
+        push_comment: true,
+        push_due: true,
+        mention_all: true,
+        assign_self: true,
+      },
+    },
+  };
+}
+
 function seedDoc() {
+  if (!SEED_DATA) return emptyDoc();
   try {
     return JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
   } catch {
-    return {
-      data: {
-        ws: { name: 'Gr8r Studio' },
-        members: [],
-        projects: [],
-        tasks: [],
-        comments: [],
-        activity: [],
-        notifs: [],
-        files: [],
-        events: [],
-        savedViews: [],
-        recentSearches: [],
-        sessions: [],
-        invoices: [],
-        me: null,
-      },
-    };
+    return emptyDoc();
   }
 }
 
@@ -237,6 +260,7 @@ function createUser(email, name, password, role) {
   const ws = getWorkspace();
   const doc = JSON.parse(ws.doc);
   const memberId = ensureMember(doc, user);
+  if (!doc.data.me) doc.data.me = memberId;
 
   db.exec('begin immediate');
   try {

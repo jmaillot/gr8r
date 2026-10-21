@@ -147,6 +147,7 @@ WORKSPACE_NAME=Gr8r Studio
 PUID=1000
 PGID=1000
 ALLOW_SIGNUP=false
+SEED_DATA=true
 SESSION_DAYS=30
 SECURE_COOKIE=auto
 ```
@@ -154,6 +155,22 @@ SECURE_COOKIE=auto
 `PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
 The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
 restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
+
+`SEED_DATA=false` creates a workspace with no sample projects, tasks, comments or activity —
+just your admin account (the default team categories are created on first use). It only
+applies when the database is first created; on an existing install:
+
+```sh
+# keep a copy first if you might want the current data back
+docker compose exec gr8r node server.js --backup /data/pre-reset.db
+docker cp gr8r-studio:/data/pre-reset.db ./pre-reset.db
+# set SEED_DATA=false in .env, then:
+docker compose down -v
+docker compose up -d --build
+```
+
+`down -v` deletes the volume, including all accounts and the database. The admin account is
+recreated from `.env` on the next start.
 
 Generate a strong password if you like:
 
