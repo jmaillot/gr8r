@@ -217,7 +217,7 @@ export function shareModal(m, H) {
 export function inviteModal(m, H) {
   const err = S.ui.errors.invite;
   const links = S.ui.inviteLinks || [];
-  return `${H('Invite to ' + esc(D().ws.name), api.enabled ? 'Create a link for each person, then send it yourself. Links expire automatically.' : 'Invited people get an email with a link to join.')}
+  return `${H('Invite to ' + esc(D().ws.name), api.mailEnabled ? "We'll email each person a private, single-use link. Links expire automatically." : api.enabled ? 'Create a link for each person, then send it yourself. Links expire automatically.' : 'Invited people get an email with a link to join.')}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">Email addresses</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : '<span class="hint">Separate multiple addresses with commas.</span>'}</div>
     <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">Role</label><select class="select" id="inv-role">${['Member', 'Admin', 'Guest'].map(r => `<option>${r}</option>`).join('')}</select></div>
@@ -228,17 +228,17 @@ export function inviteModal(m, H) {
     ${
       links.length
         ? `<div class="field"><span class="label">Invite links</span>${links
-            .map(
-              l =>
-                `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="Invite link${l.email ? ' for ' + esc(l.email) : ''}" style="font-size:12px"><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">Copy</button></div>`,
-            )
+            .map(l => {
+              const status = l.sent ? 'Sent' : l.error ? 'Not sent' : '';
+              return `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="Invite link${l.email ? ' for ' + esc(l.email) : ''}" style="font-size:12px"><span class="faint" style="font-size:11px;white-space:nowrap" title="${esc(l.error || '')}">${status}</span><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">Copy</button></div>`;
+            })
             .join(
               '',
-            )}<span class="hint">${links.some(l => l.email) ? 'Each address has its own single-use link.' : 'This link works until it expires.'}</span></div>`
+            )}<span class="hint">${links.some(l => l.email) ? (api.mailEnabled ? (links.every(l => !l.email || l.sent) ? 'Emails sent. Copy a link as a backup if you need it.' : 'Some emails could not be sent. Copy those links and send them yourself.') : 'Each address has its own single-use link.') : 'This link works until it expires.'}</span></div>`
         : ''
     }
   </form>
-  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}Copy invite link</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">${api.enabled ? 'Create links' : 'Send invites'}</button></div>`;
+  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}Copy invite link</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">Cancel</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">${api.mailEnabled ? 'Send invites' : api.enabled ? 'Create links' : 'Send invites'}</button></div>`;
 }
 export function confirmModal(m) {
   const needs = m.typeName;

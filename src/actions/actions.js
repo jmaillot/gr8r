@@ -1609,10 +1609,24 @@ A.submitInvite = () => {
         team,
       ),
     );
-    S.ui.inviteLinks = res.data.invites;
+    const invites = res.data.invites || [];
+    const count = invites.length;
+    S.ui.inviteLinks = invites;
     S.ui.errors = {};
     render();
-    toast(`${list.length} invite link${list.length > 1 ? 's' : ''} created`);
+    const sent = invites.filter(invite => invite.sent).length;
+    const failed = invites.filter(invite => invite.email && !invite.sent).length;
+    if (!api.mailEnabled) {
+      toast(`${count} invite link${count > 1 ? 's' : ''} created`);
+    } else if (sent && !failed) {
+      toast(`${sent} invitation${sent > 1 ? 's' : ''} sent`);
+    } else if (sent) {
+      toast(`${sent} sent, ${failed} couldn't be emailed. Copy the missing link${failed > 1 ? 's' : ''}.`, { kind: 'err' });
+    } else {
+      toast(`Invite${count > 1 ? 's' : ''} created, but email couldn't be sent. Copy the link${count > 1 ? 's' : ''}.`, {
+        kind: 'err',
+      });
+    }
   });
 };
 A.copyInviteLink = async () => {
@@ -1631,7 +1645,9 @@ A.resendInvite = async el => {
   if (!m) return;
   const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', m.team || null);
   if (!res.ok) return toast(res.error || 'Could not create a new invite', { kind: 'err' });
-  await copy(res.data.invites[0].url, 'New invite link copied');
+  const invite = res.data.invites?.[0];
+  if (invite?.sent) return toast(`Invitation sent to ${m.email}`);
+  await copy(invite?.url || '', api.mailEnabled ? 'Email failed — new invite link copied' : 'New invite link copied');
 };
 A.viewProfile = el => go('member', { id: el.dataset.id });
 A.assignToMember = el => {

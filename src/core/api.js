@@ -3,7 +3,7 @@
    If nothing answers at /api/config (static hosting, `npm run dev` without
    the server), the app falls back to its original local-only demo mode.
    ===================================================================== */
-const state = { enabled: false, signup: false, user: null };
+const state = { enabled: false, signup: false, mail: false, user: null };
 
 async function call(method, path, body, { keepalive = false } = {}) {
   let res;
@@ -38,6 +38,9 @@ export const api = {
   get allowSignup() {
     return state.signup;
   },
+  get mailEnabled() {
+    return state.mail;
+  },
   get user() {
     return state.user;
   },
@@ -46,6 +49,7 @@ export const api = {
     const r = await call('GET', '/api/config');
     state.enabled = !!(r.ok && r.data?.app === 'gr8r');
     state.signup = !!r.data?.signup;
+    state.mail = !!r.data?.mail;
     return state.enabled;
   },
   async me() {

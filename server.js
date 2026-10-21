@@ -21,6 +21,14 @@
      SECURE_COOKIE=auto     auto | true | false
      TRUST_PROXY=true       read X-Forwarded-* (behind Traefik)
      MAX_BODY_BYTES=8388608
+     SMTP_HOST              optional; enables automatic invite emails
+     SMTP_PORT              587 (STARTTLS) or 465 (implicit TLS)
+     SMTP_SECURE            true | false; inferred from the port when unset
+     SMTP_USER/SMTP_PASS    optional SMTP AUTH credentials
+     SMTP_REQUIRE_TLS       require TLS; default true
+     MAIL_FROM              sender address (required with SMTP_HOST)
+     MAIL_FROM_NAME         sender display name
+     MAIL_REPLY_TO          optional Reply-To address
 
    CLI:
      node server.js --add-user <email> [name]     (USER_PASSWORD env or generated)
@@ -34,6 +42,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { createMailer } from './mailer.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
@@ -51,6 +60,7 @@ const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const WS_ID = 'ws_default';
 const COOKIE = 'gr8r_session';
+const MAILER = createMailer();
 
 /* ------------------------------- database ------------------------------ */
 const SCHEMA = `
@@ -438,7 +448,7 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/config' && method === 'GET') {
-    return json(res, 200, { app: 'gr8r', signup: ALLOW_SIGNUP });
+    return json(res, 200, { app: 'gr8r', signup: ALLOW_SIGNUP, mail: MAILER.enabled });
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
@@ -568,6 +578,36 @@ async function handleApi(req, res, url) {
     } catch (err) {
       db.exec('rollback');
       throw err;
+    }
+
+    // Email delivery happens after the invites are committed, so a temporary
+    // SMTP failure never loses the links. The client also receives the URL.
+    const workspace = getWorkspace();
+    const inviter = db.prepare('select name from users where id = ?').get(user.id);
+    const emailRows = rows.filter(row => row.email);
+    if (emailRows.length && MAILER.enabled) {
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < emailRows.length) {
+          const row = emailRows[cursor++];
+          try {
+            await MAILER.sendInvite({
+              to: row.email,
+              url: row.url,
+              workspace: workspace.name,
+              inviter: inviter?.name,
+              role: row.role,
+              expiresAt: row.expiresAt,
+            });
+            row.sent = true;
+          } catch (err) {
+            console.error(`invite email to ${row.email} failed: ${err.message}`);
+            row.sent = false;
+            row.error = 'Email could not be sent. Copy the link instead.';
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, emailRows.length) }, worker));
     }
     return json(res, 201, { invites: rows });
   }
@@ -892,6 +932,9 @@ function main() {
   server.listen(PORT, HOST, () => {
     console.log(`gr8r studio listening on http://${HOST}:${PORT}`);
     console.log(`database: ${DB_PATH}`);
+    if (MAILER.enabled) console.log(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
+    else if (MAILER.error) console.warn(`invite email: disabled — ${MAILER.error}`);
+    else console.log('invite email: disabled (set SMTP_HOST to email invitations)');
   });
 
   const shutdown = signal => {

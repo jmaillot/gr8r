@@ -247,17 +247,62 @@ docker compose exec -e USER_PASSWORD='another long password' \
 Accounts created this way get the `member` role (read/write). The API also enforces a
 read-only `viewer` role, but there is no role-management UI yet.
 
-### Invite links
+### Invite links and email
 
-Admins and owners can invite people from **Members → Invite**. The server creates the links;
-no email is sent, so copy them and send them yourself.
+Admins and owners can invite people from **Members → Invite**. Set `SMTP_HOST` to have the
+server email each address-bound invite automatically; without it, the server still creates
+the links and you copy them yourself.
 
 - Links expire after `INVITE_DAYS` (default 7).
 - An invite created for a specific address is single-use, and only that address can accept it.
 - **Copy invite link** creates a reusable workspace link with the role selected in the dialog;
-  anyone holding it can join until it expires.
+  anyone holding it can join until it expires. It is never emailed automatically.
 - Sign-ups stay disabled. Invite links are the only way to create accounts besides the CLI.
+- If an email cannot be delivered, the invite still exists. The dialog shows **Not sent** and
+  the copyable link, so you can retry with **Resend invite** or send it yourself.
 - Removing a member from the workspace UI does not yet revoke access or pending links.
+
+#### Configure SMTP
+
+Add these values to `/opt/gr8r/.env` (the file is already git-ignored; keep it at mode
+`600`):
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=notifications@example.com
+SMTP_PASS=your-app-password
+MAIL_FROM=notifications@example.com
+MAIL_FROM_NAME=Gr8r Studio
+```
+
+- Use port **587** with `SMTP_SECURE=false` for STARTTLS (the usual choice), or port **465**
+  with `SMTP_SECURE=true` for implicit TLS. Leave `SMTP_SECURE` empty to infer it from the port.
+- `SMTP_USER`/`SMTP_PASS` are optional for a trusted relay. When set, the app authenticates
+  with AUTH PLAIN or LOGIN. Use an app password, not your main account password.
+- `MAIL_FROM` must be an address the SMTP server allows you to send from. Some providers
+  require it to match `SMTP_USER`.
+- `SMTP_REJECT_UNAUTHORIZED=true` (default) verifies the server certificate. Only set it to
+  `false` for a self-signed test server.
+- `SMTP_REQUIRE_TLS=true` (default) refuses to send if the server offers neither STARTTLS nor
+  implicit TLS, so invite links are not exposed in transit. Set it to `false` only for a
+  trusted relay on a private network.
+- `SMTP_ALLOW_INSECURE_AUTH` is only for a local SMTP sink without TLS. Never enable it with
+  real credentials.
+
+Recreate the container so Compose picks up the new environment, then check the startup log:
+
+```sh
+docker compose up -d
+docker compose logs --tail=30 gr8r
+# expect: invite email: enabled via smtp.example.com:587 as notifications@example.com
+```
+
+Invite a test address once to test. If the log says `invite email: disabled`, `SMTP_HOST` is
+missing or `MAIL_FROM` is invalid. Delivery errors are logged without credentials or message
+contents. For reliable inbox delivery, configure SPF and DKIM for the sending domain with
+your mail provider; otherwise messages may land in spam.
 
 There is no revoke UI; let links expire. To invalidate every pending link immediately, delete
 them from the database and restart:
