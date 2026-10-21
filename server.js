@@ -754,8 +754,8 @@ function bootstrap(opts) {
 
 /*
  * In-place migration for databases created before multi-workspace support:
- * backfills slugs/colors, links member profiles to accounts, and drops the
- * demo-only `data.workspaces` switcher from the shared document.
+ * backfills slugs/colors, scopes legacy invites, links member profiles to
+ * accounts, and drops the demo-only `data.workspaces` switcher from the document.
  */
 function migrateTenancy() {
   const rows = db.prepare('select * from workspaces').all();
@@ -785,7 +785,18 @@ function migrateTenancy() {
       db.prepare('update workspaces set slug = ?, name = ?, color = ? where id = ?').run(slug, name, color, row.id);
     }
   }
+  backfillInvites();
   backfillMemberships();
+}
+
+/*
+ * Invites created before workspaces were addressable belong to the workspace that
+ * existed then. Scoped invites always carry an id, so later boots change nothing.
+ */
+function backfillInvites() {
+  const ws = firstWorkspace();
+  if (!ws) return;
+  db.prepare('update invites set workspace_id = ? where workspace_id is null').run(ws.id);
 }
 
 function backfillMemberships() {
