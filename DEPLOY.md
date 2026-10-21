@@ -433,8 +433,9 @@ missing or `MAIL_FROM` is invalid. Delivery errors are logged without credential
 contents. For reliable inbox delivery, configure SPF and DKIM for the sending domain with
 your mail provider; otherwise messages may land in spam.
 
-There is no revoke UI; let links expire. To invalidate every pending link immediately, delete
-them from the database and restart:
+To revoke one pending invite, use the **Revoke** button next to it under **Members → Pending
+invites**; the link stops working immediately. To invalidate _every_ pending link at once — for
+example after a leak — delete them from the database:
 
 ```sh
 docker compose exec gr8r node -e \
