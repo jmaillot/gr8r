@@ -1,3 +1,6 @@
 dist
 node_modules
 package-lock.json
+# GSD-managed planning artifacts: written by tooling, not hand-formatted source.
+.planning
+.gsd
