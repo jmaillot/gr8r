@@ -16,7 +16,7 @@ Requirements:
   existing account can accept an invite.
 - **R8** — Lint, format, build and the new server tests pass in CI.
 
-## Phase 1 — Tenancy foundation ✅ complete
+## Phase 1: Tenancy foundation ✅ complete
 
 Schema migration, workspace-scoped document API, `/w/:slug` routing, real workspace switcher,
 minimal workspace creation. No private-project redaction yet.
@@ -24,7 +24,7 @@ minimal workspace creation. No private-project redaction yet.
 Deliverable: two accounts in two workspaces never receive each other's document. — met, see
 `phases/01-tenancy-foundation/SUMMARY.md` for the record and deviations.
 
-## Phase 2 — Membership lifecycle ✅ complete
+## Phase 2: Membership lifecycle ✅ complete
 
 Workspace-scoped invites (including for existing accounts), role changes, member removal and
 self-leave, workspace rename/slug/colour, delete/leave, owner-only plan change. UI for all of it.
@@ -33,7 +33,7 @@ Deliverable: the membership table is the single source of truth for access; the 
 works through dedicated endpoints instead of rewriting the document. — met, see
 `phases/02-membership-lifecycle/SUMMARY.md` for the record and deviations.
 
-## Phase 3 — Private project isolation ✅ complete
+## Phase 3: Private project isolation ✅ complete
 
 Server-side redaction on read and merge on write, protection of `private`/`members` changes,
 saved views and activity filtered consistently.
@@ -42,7 +42,7 @@ Deliverable: a member who is not on a private project receives no trace of it, a
 write to it (directly or by clobbering the document). — met, see
 `phases/03-private-project-isolation/SUMMARY.md` for the record and deviations.
 
-## Phase 4 — Hardening and ship
+## Phase 4: Hardening and ship
 
 `node:test` suite, CI wiring, migration dry-run on a copy, Playwright two-tenant UAT, docs
 (`README`, `DEPLOY`, `.env.example`), removal of the demo workspace switch, release notes.
