@@ -83,3 +83,16 @@ Every push and pull request runs lint, the format check and a production build
 
 For a self-hosted instance — one Node container, accounts and server-side SQLite storage —
 see [DEPLOY.md](DEPLOY.md).
+
+## Workspaces
+
+The self-hosted server keeps **several workspaces in one SQLite file**. Each has its own URL
+(`/w/<slug>`), its own document (projects, tasks, members, settings) and its own membership
+list. Every API call is scoped to a slug and the server enforces the signed-in account's role
+on both reads and writes; an account that is not a member of a workspace gets `404`, and the
+per-account `me` is derived from the session instead of being stored in the shared document.
+Workspaces are listed in the sidebar menu and the command palette, and new ones are created
+from the setup wizard.
+
+The browser-only demo (Vite dev without the server, and the static Vercel build) falls back to
+a single localStorage workspace and a fake switcher, so the UI is fully explorable offline.

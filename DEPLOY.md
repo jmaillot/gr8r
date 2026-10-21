@@ -145,6 +145,7 @@ ADMIN_EMAIL=you@example.com
 ADMIN_PASSWORD=<long unique password>
 ADMIN_NAME=Your Name
 WORKSPACE_NAME=Gr8r Studio
+WORKSPACE_SLUG=gr8r-studio
 PUID=1000
 PGID=1000
 ALLOW_SIGNUP=false
@@ -238,7 +239,7 @@ docker compose exec -e USER_PASSWORD='a new long password' \
 
 Existing sessions are revoked; sign in again.
 
-## 8. Create accounts
+## 8. Create accounts and workspaces
 
 Sign-ups stay disabled with `ALLOW_SIGNUP=false`.
 
@@ -249,10 +250,66 @@ docker compose exec gr8r node server.js --add-user alice@example.com "Alice"
 # or choose the password yourself
 docker compose exec -e USER_PASSWORD='another long password' \
   gr8r node server.js --add-user bob@example.com "Bob"
+
+# add someone straight into a second workspace
+docker compose exec gr8r node server.js --add-user carol@example.com "Carol" acme
 ```
 
-Accounts created this way get the `member` role (read/write). The API also enforces a
-read-only `viewer` role, but there is no role-management UI yet.
+Accounts created this way get the `member` role in the workspace you name (the first one by
+default). Without a slug, the CLI adds the account to the oldest workspace.
+
+### Workspaces
+
+Every workspace has a URL of its own: `https://<GR8R_HOST>/w/<slug>`. The slug comes from
+`WORKSPACE_SLUG` or the workspace name when the database is first created — an existing
+workspace keeps the slug it was migrated with, so changing `WORKSPACE_SLUG` later has no
+effect.
+
+There is one workspace after a fresh install. With `ALLOW_SIGNUP=true`, any signed-in user can
+create more from the workspace menu; with `ALLOW_SIGNUP=false`, only an owner or admin of an
+existing workspace can. The creator becomes its owner.
+
+Data is isolated per workspace: members only ever receive the document of a workspace they
+belong to, and a request for any other slug answers `404`. Roles are enforced by the server:
+
+| Role     | Read | Write projects/tasks | Edit members | Edit workspace (name, slug, colour) | Invite people | Change the plan |
+| -------- | ---- | -------------------- | ------------ | ----------------------------------- | ------------- | --------------- |
+| `owner`  | yes  | yes                  | yes          | yes                                 | yes           | yes             |
+| `admin`  | yes  | yes                  | yes          | yes                                 | yes           | no              |
+| `member` | yes  | yes                  | no           | no                                  | no            | no              |
+| `viewer` | yes  | no                   | no           | no                                  | no            | no              |
+
+Switching workspaces is part of the workspace menu in the sidebar, or with the command palette
+(`Ctrl/Cmd+K`, then **Workspaces**).
+
+Signing in with no workspace yet — a fresh account, or an invite to a workspace you have not
+accepted — shows either the create-workspace wizard or a page telling you to ask for an
+invitation, depending on the policy above.
+
+### Upgrading an existing install
+
+The first start after this update migrates the single-workspace database in place:
+
+- it writes a consistent backup to `DATA_DIR/gr8r-premultitenant-<timestamp>.db` before touching
+  anything;
+- the existing workspace gets a slug derived from its URL field, or from its name if that is
+  empty;
+- member profiles are linked to the accounts that own them; the `data.me` field previously
+  shared by every account is retired (each browser now derives it from its own session);
+- the demo-only workspace switcher list is dropped, and the real one takes over.
+
+The migration is idempotent: restarting does not create another backup or change the workspace
+again. To roll back, stop the container, restore that backup over `gr8r.db`, and redeploy the
+previous image. The added columns are ignored by the old code.
+
+### Known limits
+
+- Invitations are bound to the workspace they were created in, but they are still managed from
+  **Members → Invite**, and there is no UI to remove or change a member's role yet — that is the
+  next phase, together with workspace rename/delete for members.
+- Private projects are still filtered in the browser only. Until the isolation phase lands, any
+  member of a workspace can read the whole document through the API.
+- Plans (`Free`/`Team`/`Business`) are labels only; nothing is billed or limited yet.
 
 ### Invite links and email
 
