@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v1.1
 status: executing
-stopped_at: Phase 4 plan 04-01 complete (test harness and server suites)
-last_updated: "2026-10-21T19:20:00.000Z"
-state_head: cd80fd0596c660e678d07cc0c91ac8f415c51af5
+stopped_at: Phase 4 plan 04-02 complete (legacy migration and idempotency proof)
+last_updated: "2026-10-21T19:25:00.000Z"
+state_head: af41b7c3451181d7d0c32ef8fbfa2457e5f52822
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # STATE
@@ -19,8 +19,8 @@ Last updated: 2026-10-21
 ## Position
 
 - Milestone: **Multitenant (v1.1)**
-- Phase: **4 — Hardening and ship: in progress** (plan 1 of 4 complete)
-- Next: **Phase 4, plan 04-02 — legacy migration fixture and idempotency test**
+- Phase: **4 — Hardening and ship: in progress** (plan 2 of 4 complete)
+- Next: **Phase 4, plan 04-03 — Playwright two-tenant UAT and CI wiring**
 
 ## Where things stand
 
@@ -51,6 +51,16 @@ lifecycle and the ported 70-check privacy matrix. `npm test` is the entry point;
 `npm run test:privacy` remains the phase 3 release alias. `.planning` and `.gsd` are now
 prettier-ignored so tooling-written planning artifacts stop failing `format:check`.
 
+Phase 4 plan 2 proves the in-place migration automatically. `test/helpers/legacy-fixture.mjs`
+builds the exact pre-tenancy schema and rows (no `workspaces.slug`/`color`, no
+`memberships.member_id`, no `invites.workspace_id`, demo switcher and `data.me` present), and
+`test/migration.test.mjs` boots the real server against it: exactly one backup is written before
+any rewrite, the workspace derives `legacy-studio` / `Legacy Studio` / `#3D8E5F`, both members are
+linked, the invite is scoped, `data.workspaces` is dropped, `data.me` is retired, and
+`p_keep`/`t_keep` survive. A second boot is byte-identical and creates no backup. The suite
+exposed one real gap: `migrateTenancy()` never scoped legacy invites, now fixed by
+`backfillInvites()`. `npm test` is 40 tests.
+
 Known limitations carried forward:
 
 - Plans remain display-only labels; nothing is billed or limited.
@@ -62,11 +72,15 @@ Known limitations carried forward:
 - The privacy matrix keeps its exact phase 3 fixture and checks rather than being rewritten around
   the new harness.
 - Server tests never mock SQLite or HTTP.
+- The migration test asserts the backup before any rewritten row and compares a byte-for-byte
+  snapshot across a reboot, including `updated_at` and the raw document string.
+- Legacy invites are scoped by `migrateTenancy()`; an unscoped legacy invite is a migration bug,
+  not an accepted state.
 
 ## Verification commands used
 
 ```sh
-npm test                # tenancy, membership and privacy suites (real servers)
+npm test                # tenancy, membership, privacy and migration suites (real servers)
 npm run test:privacy    # phase 3 privacy matrix alias
 npm run lint && npm run format:check && npm run build
 node server.js          # with DATA_DIR pointing at a copy of a real database
@@ -82,6 +96,6 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-21T19:20:00.000Z
-**Stopped at:** Phase 4 plan 04-01 complete (test harness and server suites)
-**Resume file:** .planning/phases/04-hardening-and-ship/04-02-PLAN.md
+**Last session:** 2026-10-21T19:25:00.000Z
+**Stopped at:** Phase 4 plan 04-02 complete (legacy migration and idempotency proof)
+**Resume file:** .planning/phases/04-hardening-and-ship/04-03-PLAN.md

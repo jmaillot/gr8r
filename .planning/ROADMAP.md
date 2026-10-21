@@ -49,13 +49,13 @@ write to it (directly or by clobbering the document). — met, see
 
 Deliverable: mergeable, documented, tested, deployable.
 
-**Plans:** 4 plans — 1 complete
+**Plans:** 4 plans — 2 complete
 
 - [x] `04-01-PLAN.md` — shared `node:test` server harness, tenancy/membership/privacy suites,
   `npm test` (R1, R2, R4, R5, R7, R8) — done, see
   `phases/04-hardening-and-ship/04-01-SUMMARY.md`
-- [ ] `04-02-PLAN.md` — pre-tenancy SQLite fixture, migration backup and idempotency test
-  (R6, R8)
+- [x] `04-02-PLAN.md` — pre-tenancy SQLite fixture, migration backup and idempotency test
+  (R6, R8) — done, see `phases/04-hardening-and-ship/04-02-SUMMARY.md`
 - [ ] `04-03-PLAN.md` — Playwright Chromium two-tenant and private-project UAT, CI wiring
   (R3, R4, R5, R8)
 - [ ] `04-04-PLAN.md` — demo single-workspace cleanup, release docs, 1.1.0, Node 24 (R7, R8)
