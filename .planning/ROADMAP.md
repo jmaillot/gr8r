@@ -24,13 +24,14 @@ minimal workspace creation. No private-project redaction yet.
 Deliverable: two accounts in two workspaces never receive each other's document. — met, see
 `phases/01-tenancy-foundation/SUMMARY.md` for the record and deviations.
 
-## Phase 2 — Membership lifecycle
+## Phase 2 — Membership lifecycle ✅ complete
 
 Workspace-scoped invites (including for existing accounts), role changes, member removal and
 self-leave, workspace rename/slug/colour, delete/leave, owner-only plan change. UI for all of it.
 
 Deliverable: the membership table is the single source of truth for access; the members page
-works through dedicated endpoints instead of rewriting the document.
+works through dedicated endpoints instead of rewriting the document. — met, see
+`phases/02-membership-lifecycle/SUMMARY.md` for the record and deviations.
 
 ## Phase 3 — Private project isolation
 

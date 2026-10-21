@@ -286,6 +286,27 @@ Signing in with no workspace yet — a fresh account, or an invite to a workspac
 accepted — shows either the create-workspace wizard or a page telling you to ask for an
 invitation, depending on the policy above.
 
+### Members, roles and leaving
+
+**Members** lists everyone in the workspace with the role kept in the membership table, not in
+the workspace document. Owners can promote anyone to owner or admin; admins can change members,
+viewers and guests but cannot touch another admin or an owner. Nobody can change their own role
+or remove themselves from the member list — use **Settings → Workspace → Leave workspace**
+instead. The last owner cannot be demoted, removed or leave until another owner exists.
+
+Removing a member or leaving takes effect immediately: their membership is deleted, their tasks
+and subtasks are unassigned, they are removed from project membership and teams, and their
+profile disappears from the workspace. The next request from that account answers `404`.
+
+Owners can change the workspace name, URL and colour, change the plan, and delete the whole
+workspace from **Settings → Workspace**. Deleting asks for the workspace URL as confirmation,
+removes every membership and returns the browser to its next workspace or the setup screen.
+Admins see **Leave workspace** but not **Delete workspace**.
+
+Pending address invites appear under **Members → Pending invites** for admins and owners, where
+they can be resent (a fresh link and expiry) or revoked. Revoked and expired links answer `404`
+and `410` respectively.
+
 ### Upgrading an existing install
 
 The first start after this update migrates the single-workspace database in place:
@@ -304,9 +325,6 @@ previous image. The added columns are ignored by the old code.
 
 ### Known limits
 
-- Invitations are bound to the workspace they were created in, but they are still managed from
-  **Members → Invite**, and there is no UI to remove or change a member's role yet — that is the
-  next phase, together with workspace rename/delete for members.
 - Private projects are still filtered in the browser only. Until the isolation phase lands, any
   member of a workspace can read the whole document through the API.
 - Plans (`Free`/`Team`/`Business`) are labels only; nothing is billed or limited yet.
@@ -324,7 +342,9 @@ the links and you copy them yourself.
 - Sign-ups stay disabled. Invite links are the only way to create accounts besides the CLI.
 - If an email cannot be delivered, the invite still exists. The dialog shows **Not sent** and
   the copyable link, so you can retry with **Resend invite** or send it yourself.
-- Removing a member from the workspace UI does not yet revoke access or pending links.
+- Pending address invites are listed under **Members → Pending invites**; resending replaces the
+  old link, and revoking it invalidates the link immediately. Removing a member ends their
+  access immediately but leaves their pending invites to be revoked separately.
 
 #### Configure SMTP
 
@@ -583,8 +603,8 @@ the client falls back to local demo mode.
   passwords with the CLI.
 - **CSP allows Google Fonts.** For an air-gapped deployment, self-host the fonts and
   tighten `Content-Security-Policy` in `server.js`.
-- **No multi-workspace UI or role management.** The schema has memberships, but the app
-  exposes one workspace.
+- **Private projects are browser-only.** Roles are enforced by the server, but project
+  visibility is still filtered in the browser until the isolation phase lands.
 
 ## Appendix: minimal Traefik
 
