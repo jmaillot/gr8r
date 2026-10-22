@@ -76,54 +76,6 @@
     "text": "View"
   },
   {
-    "file": "src/pages/notifications.js",
-    "text": "All"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Mark all as read"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Mark as read"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Mark as unread"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "No unread notifications. We'll let you know when something needs you."
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Notification preferences"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Notifications"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Show all"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Toggle read"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Unread"
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "Updates on tasks and projects you follow."
-  },
-  {
-    "file": "src/pages/notifications.js",
-    "text": "You're all caught up."
-  },
-  {
     "file": "src/pages/overview.js",
     "text": "Completion rate"
   },

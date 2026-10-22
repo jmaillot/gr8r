@@ -1404,5 +1404,12 @@
   "page.inbox.conversation": "Conversation",
   "page.inbox.replyPlaceholder": "Reply… use @ to mention",
   "page.inbox.reply": "Reply",
-  "page.inbox.sendHint": "{mod}+Enter to send"
+  "page.inbox.sendHint": "{mod}+Enter to send",
+  "page.notifications.title": "Notifications",
+  "page.notifications.unreadCount": "{n} unread",
+  "page.notifications.subtitle": "Updates on tasks and projects you follow.",
+  "page.notifications.prefs": "Notification preferences",
+  "page.notifications.toggleRead": "Toggle read",
+  "page.notifications.emptyBody": "No unread notifications. We'll let you know when something needs you.",
+  "page.notifications.showAll": "Show all"
 }
