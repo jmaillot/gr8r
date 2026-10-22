@@ -140,6 +140,12 @@ const ORACLE = [
   ['toast.signedInWith', { provider: 'Google' }, 'Signed in with Google'],
   ['toast.welcomeUser', { name: 'Bob' }, 'Welcome, Bob'],
   ['toast.recurringNext', { title: 'T', date: 'Jul 24' }, 'Next “T” scheduled for Jul 24'],
+  // Task 2: the toast options' action-button labels (the display-named
+  // `action:` property). The kind: and ms: options are machine values and
+  // stay as they are.
+  ['toast.undo', undefined, 'Undo'],
+  ['toast.open', undefined, 'Open'],
+  ['toast.tryAgain', undefined, 'Try again'],
 ];
 
 /* The literal texts the sweep removed from the file — the trimmed
@@ -242,6 +248,10 @@ const GONE = [
   'Workspace created, but it could not be loaded',
   'Could not send the invites',
   'Welcome to',
+  // Task 2: the action-button labels
+  'Undo',
+  'Open',
+  'Try again',
 ];
 
 test('every toast message of the action surface renders its previous English exactly', () => {
