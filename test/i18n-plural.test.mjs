@@ -189,6 +189,19 @@ test('the two-count bulk-invite message composes into the original sentence', ()
   assert.equal(createdPlural, "Invites created, but email couldn't be sent. Copy the links.");
 });
 
-/* ---------- 3. the absence of the hand-written rule ----------
-   Added with the call-site conversions: first the five files outside
-   src/actions/actions.js, then the whole src/ tree. */
+/* ---------- 3. the absence of the hand-written rule ---------- */
+
+/* The English rule written into the source: the idiom this phase removes. */
+const IDIOM = "? 's' : ''";
+
+/* The six expressions outside src/actions/actions.js live in five files. */
+const CONVERTED_FILES = ['src/overlays/drawer.js', 'src/overlays/modals.js', 'src/pages/auth.js', 'src/actions/drag-drop.js', 'src/actions/teams.js'];
+
+function readSrc(rel) {
+  return fs.readFileSync(path.join(SRC, rel.slice('src/'.length)), 'utf8');
+}
+
+test('no hand-written plural rule survives in the five converted files', () => {
+  const offenders = CONVERTED_FILES.filter(f => readSrc(f).includes(IDIOM));
+  assert.deepEqual(offenders, [], `the idiom is gone from every converted file (${offenders.join(', ')})`);
+});
