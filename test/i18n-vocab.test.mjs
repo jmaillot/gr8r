@@ -74,13 +74,6 @@ const ROLE_ORACLE = [
   ['viewer', 'Guest'],
 ];
 
-const ORACLES = [
-  ['task.status.', STATUS_ORACLE],
-  ['task.priority.', PRIORITY_ORACLE],
-  ['task.label.', LABEL_ORACLE],
-  ['project.status.', PROJECT_STATUS_ORACLE],
-];
-
 const constantsSrc = fs.readFileSync(path.join(ROOT, 'src/core/constants.js'), 'utf8');
 const storeSrc = fs.readFileSync(path.join(ROOT, 'src/core/store.js'), 'utf8');
 
@@ -109,7 +102,11 @@ const DEMO_TEAM_ORACLE = [
 
 test('every stored status id has a task.status.* key that renders its previous English', () => {
   const ids = tableIds('STATUSES', /id: '(\w+)'/g);
-  assert.deepEqual(ids, STATUS_ORACLE.map(([id]) => id), 'the status ids moved');
+  assert.deepEqual(
+    ids,
+    STATUS_ORACLE.map(([id]) => id),
+    'the status ids moved',
+  );
   for (const [id, name] of STATUS_ORACLE) {
     assert.ok(Object.hasOwn(en, 'task.status.' + id), `missing key: task.status.${id}`);
     assert.equal(t('task.status.' + id), name, `task.status.${id}`);
@@ -118,7 +115,11 @@ test('every stored status id has a task.status.* key that renders its previous E
 
 test('every stored priority id has a task.priority.* key that renders its previous English', () => {
   const ids = tableIds('PRIOS', /id: '(\w+)'/g);
-  assert.deepEqual(ids, PRIORITY_ORACLE.map(([id]) => id), 'the priority ids moved');
+  assert.deepEqual(
+    ids,
+    PRIORITY_ORACLE.map(([id]) => id),
+    'the priority ids moved',
+  );
   for (const [id, name] of PRIORITY_ORACLE) {
     assert.ok(Object.hasOwn(en, 'task.priority.' + id), `missing key: task.priority.${id}`);
     assert.equal(t('task.priority.' + id), name, `task.priority.${id}`);
@@ -127,7 +128,11 @@ test('every stored priority id has a task.priority.* key that renders its previo
 
 test('every stored label id has a task.label.* key that renders its previous English', () => {
   const ids = tableIds('LABELS', /id: '(\w+)'/g);
-  assert.deepEqual(ids, LABEL_ORACLE.map(([id]) => id), 'the label ids moved');
+  assert.deepEqual(
+    ids,
+    LABEL_ORACLE.map(([id]) => id),
+    'the label ids moved',
+  );
   for (const [id, name] of LABEL_ORACLE) {
     assert.ok(Object.hasOwn(en, 'task.label.' + id), `missing key: task.label.${id}`);
     assert.equal(t('task.label.' + id), name, `task.label.${id}`);
@@ -135,8 +140,12 @@ test('every stored label id has a task.label.* key that renders its previous Eng
 });
 
 test('every stored project-status id has a project.status.* key that renders its previous English', () => {
-  const ids = tableIds('PSTAT', /^  (\w+):/gm);
-  assert.deepEqual(ids, PROJECT_STATUS_ORACLE.map(([id]) => id), 'the project-status ids moved');
+  const ids = tableIds('PSTAT', /^ {2}(\w+):/gm);
+  assert.deepEqual(
+    ids,
+    PROJECT_STATUS_ORACLE.map(([id]) => id),
+    'the project-status ids moved',
+  );
   for (const [id, name] of PROJECT_STATUS_ORACLE) {
     assert.ok(Object.hasOwn(en, 'project.status.' + id), `missing key: project.status.${id}`);
     assert.equal(t('project.status.' + id), name, `project.status.${id}`);
@@ -156,10 +165,11 @@ test('every stored role id has a common.role.* key that renders its previous Eng
 /* ---------- 2. the lookup shape ---------- */
 
 test('the display of a stored id is a catalogue lookup built from the id', () => {
-  assert.ok(constantsSrc.includes("t('task.status.' +"), 'the status display is not an id-keyed lookup');
-  assert.ok(constantsSrc.includes("t('task.priority.' +"), 'the priority display is not an id-keyed lookup');
-  assert.ok(constantsSrc.includes("t('task.label.' +"), 'the label display is not an id-keyed lookup');
-  assert.ok(constantsSrc.includes("t('project.status.' +"), 'the project-status display is not an id-keyed lookup');
+  for (const [id] of STATUS_ORACLE) assert.ok(constantsSrc.includes(`t('task.status.${id}')`), `the status display of ${id} is not a catalogue lookup`);
+  for (const [id] of PRIORITY_ORACLE) assert.ok(constantsSrc.includes(`t('task.priority.${id}')`), `the priority display of ${id} is not a catalogue lookup`);
+  for (const [id] of LABEL_ORACLE) assert.ok(constantsSrc.includes(`t('task.label.${id}')`), `the label display of ${id} is not a catalogue lookup`);
+  for (const [id] of PROJECT_STATUS_ORACLE)
+    assert.ok(constantsSrc.includes(`t('project.status.${id}')`), `the project-status display of ${id} is not a catalogue lookup`);
   assert.ok(storeSrc.includes("t('common.role.' +"), 'the role display is not an id-keyed lookup');
 });
 

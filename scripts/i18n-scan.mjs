@@ -128,6 +128,14 @@ const MONTH_WEEKDAY_NAMES = new Set([
 /* The consts whose flat string array is a MACHINE list, not a display table. */
 const MACHINE_CONSTS = new Set(['ROLES']);
 
+/* The consts whose display-shaped object values are DEMO CONTENT, not
+   interface text: TEAMS_SEED's team names and their descriptions are copied
+   into the document the first time the feature is used (the plan's
+   demo-content rule), so they are data the interface shows, never literals
+   to extract. Position-based, like every machine rule here: the same word
+   outside such a const is still display text. */
+const DEMO_CONSTS = new Set(['TEAMS_SEED']);
+
 /* The permission names the document stores and the interface compares against
    (src/overlays/modals.js): the DISPLAY of a stored value is a catalogue
    lookup, not the value itself. */
@@ -471,6 +479,7 @@ function analyse(tokens) {
         constName: null,
         elements: null,
         machineList: false,
+        parent: stack.length ? stack[stack.length - 1] : null,
       };
       if (frame.type === 'call') {
         const p = tokens[i - 1];
@@ -604,6 +613,17 @@ function propertySeparator(tokens, from, to) {
 }
 
 /* ---------- the machine-identifier guards ---------- */
+
+/* An object literal whose declaration chain is a demo-content const
+   (TEAMS_SEED's inner objects sit inside the array the const names). */
+function inDemoConst(slot) {
+  let frame = slot ? slot.frame : null;
+  while (frame) {
+    if (frame.constName && DEMO_CONSTS.has(frame.constName)) return true;
+    frame = frame.parent;
+  }
+  return false;
+}
 
 function isMachineLexical(text) {
   if (LOWERCASE_TOKEN.test(text)) return true; // a lowercase machine token
@@ -1026,6 +1046,7 @@ function scanStringLiterals(tokens, file, findings, lineAt, info, catalogue) {
     if (slot.object && slot.object.propName === 'role') continue;
     if (slot.array && slot.frame.machineList) continue;
     if (slot.array && slot.frame.constName && MACHINE_CONSTS.has(slot.frame.constName)) continue;
+    if (inDemoConst(slot)) continue;
 
     let kind = displayPosition(tokens, info, i, text);
     if (!kind && PROSE.test(text)) kind = 'ruleProse';
@@ -1305,6 +1326,7 @@ function machineCategory(occ) {
   }
   if (slot.object && slot.object.propIsKey) return 'OBJECT_KEY';
   if (slot.object && slot.object.propName === 'role') return 'ROLE_IDS';
+  if (inDemoConst(slot)) return 'DEMO_CONTENT';
   if (slot.array) {
     if (slot.frame.constName && MACHINE_CONSTS.has(slot.frame.constName)) return 'MACHINE_CONST';
     if (slot.frame.machineList) {

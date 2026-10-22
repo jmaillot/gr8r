@@ -1,5 +1,6 @@
 /* ---------- store ---------- */
 import { TODAY, diffD, iso, parse, uid } from './utils.js';
+import { t } from './i18n.js';
 import { PCOLORS, TEAMS_SEED } from './constants.js';
 import { seed } from '../data/seed.js';
 import { api } from './api.js';
@@ -247,8 +248,18 @@ export function logAct(verb, t, extra = '') {
 }
 
 /* ---------- workspaces (server-backed, or the single local workspace) ---------- */
-export const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
-export const roleLabel = role => ROLE_LABELS[role] || 'Member';
+/* The role display: the document stores the capitalised id ('Owner', compared
+   as such in src/pages/settings.js) while the catalogue key shape is lowercase,
+   so the lookup LOWERCASES the stored id before it builds the key — the stored
+   value never changes, only the display does (D-08, I18N-07's groundwork).
+   `viewer` is the workspace role the server returns and renders the Guest
+   label, exactly as ROLE_LABELS did; an unknown id falls back to the member
+   label instead of showing the key itself (T-06-45). */
+const ROLE_KEYS = new Set(['owner', 'admin', 'member', 'viewer', 'guest']);
+export const roleLabel = role => {
+  const id = String(role || '').toLowerCase();
+  return ROLE_KEYS.has(id) ? t('common.role.' + id) : t('common.role.member');
+};
 
 /* Owner or admin: who may invite people and manage the roster. */
 export const isMemberAdmin = () => ['Owner', 'Admin'].includes(me()?.role || '');
@@ -260,7 +271,7 @@ export function workspaceList() {
     return api.workspaces.map(w => ({ id: w.id, slug: w.slug, name: w.name, color: w.color, role: w.role }));
   }
   const ws = D().ws || {};
-  return [{ id: 'demo', slug: currentSlug(), name: ws.name || 'Workspace', color: ws.c || '#1D1C1A', role: 'owner' }];
+  return [{ id: 'demo', slug: currentSlug(), name: ws.name || t('common.workspace'), color: ws.c || '#1D1C1A', role: 'owner' }];
 }
 
 export function currentSlug() {
@@ -273,9 +284,15 @@ export function currentSlug() {
   );
 }
 
-/* ---------- teams (workspace data, seeded on first use) ---------- */ export const NO_TEAM = {
+/* ---------- teams (workspace data, seeded on first use) ---------- */
+/* The pseudo-team the interface shows when a member belongs to no team: its
+   display name is a catalogue value read at access time, its icon and colour
+   are machine values. */
+export const NO_TEAM = {
   id: '',
-  name: 'No team',
+  get name() {
+    return t('common.noTeam');
+  },
   icon: 'users',
   c: '#8A867E',
   desc: '',
