@@ -1,6 +1,6 @@
 /* ---------------- POPOVERS ---------------- */
 import { $, MOD, TODAY, addD, dOff, diffD, esc, fmtDate, foldForSearch, iso, parse } from '../core/utils.js';
-import { monthName, weekdayName } from '../core/i18n.js';
+import { t, monthName, weekdayName } from '../core/i18n.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
 import {
@@ -27,6 +27,15 @@ import { TCOLS } from '../views/table.js';
 import { startOfWeek } from '../views/calendar.js';
 import { ctxMenu } from './context-menu.js';
 
+/* The recurrence vocabulary: the STORED values the document holds and the
+   catalogue keys their displays read — same treatment as the statuses. */
+const RECUR = [
+  { stored: 'Does not repeat', key: 'popover.recurNone' },
+  { stored: 'Daily', key: 'popover.recurDaily' },
+  { stored: 'Weekly', key: 'popover.recurWeekly' },
+  { stored: 'Every 2 weeks', key: 'popover.recurBiweekly' },
+  { stored: 'Monthly', key: 'popover.recurMonthly' },
+];
 export function openPop(el, extra = {}) {
   const r = el.getBoundingClientRect();
   const d = el.dataset;
@@ -87,7 +96,7 @@ export function popList(items, opt = {}) {
   const q = foldForSearch(S.ui.pop.q || '').text;
   const list = items.filter(it => !q || foldForSearch(it.name).text.includes(q));
   return `${opt.search ? `<div class="pin"><input data-pop-q data-in="popQ" id="pop-q" placeholder="${opt.search}" value="${esc(S.ui.pop.q || '')}" aria-label="${opt.search}"></div>` : ''}
-    ${list.map(it => `<button class="mi" data-a="${it.act || 'popPick'}" data-v="${esc(it.id)}" role="menuitemradio" aria-checked="${!!it.on}">${it.html || ''}<span class="trunc">${esc(it.name)}</span>${it.kbd ? `<span class="r"><kbd>${it.kbd}</kbd></span>` : ''}${it.on ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`).join('') || `<div class="mi faint" style="cursor:default">No matches</div>`}`;
+    ${list.map(it => `<button class="mi" data-a="${it.act || 'popPick'}" data-v="${esc(it.id)}" role="menuitemradio" aria-checked="${!!it.on}">${it.html || ''}<span class="trunc">${esc(it.name)}</span>${it.kbd ? `<span class="r"><kbd>${it.kbd}</kbd></span>` : ''}${it.on ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`).join('') || `<div class="mi faint" style="cursor:default">${t('popover.noMatches')}</div>`}`;
 }
 export function miniCal(p, val) {
   const m = parse(p.m);
@@ -99,7 +108,7 @@ export function miniCal(p, val) {
      byte for byte what the source rendered, and the French header is the locale's own. */
   const wdn = Array.from({ length: 7 }, (_, i) => weekdayName(addD(start, i), 'short').slice(0, 2));
   return `<div style="padding:6px 6px 2px;width:252px">
-    <div class="row" style="margin-bottom:6px"><b style="font-weight:600;font-size:13px;padding-left:4px">${monthName(m, 'long')} ${m.getFullYear()}</b><span class="sp"></span><button class="ibtn ibtn-xs" data-a="popMonth" data-d="-1" aria-label="Previous month">${ic('chevron-left', 14)}</button><button class="ibtn ibtn-xs" data-a="popMonth" data-d="1" aria-label="Next month">${ic('chevron-right', 14)}</button></div>
+    <div class="row" style="margin-bottom:6px"><b style="font-weight:600;font-size:13px;padding-left:4px">${monthName(m, 'long')} ${m.getFullYear()}</b><span class="sp"></span><button class="ibtn ibtn-xs" data-a="popMonth" data-d="-1" aria-label="${t('a11y.prevMonth')}">${ic('chevron-left', 14)}</button><button class="ibtn ibtn-xs" data-a="popMonth" data-d="1" aria-label="${t('a11y.nextMonth')}">${ic('chevron-right', 14)}</button></div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:11px">${wdn.map(d => `<span class="faint" style="padding:3px 0">${d}</span>`).join('')}
     ${cells
       .map(d => {
@@ -117,7 +126,7 @@ export function popHtml(p) {
   const t = ['status', 'priority', 'assignee', 'labels', 'date', 'project', 'deps', 'recur', 'estimate'].includes(p.type) ? tgt(p) : null;
   switch (p.type) {
     case 'create':
-      inner = `<div class="mh">Create</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}Task<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}Project<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}Team</button>${isMemberAdmin() ? `<div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}Invite member</button>` : ''}`;
+      inner = `<div class="mh">${t('popover.create')}</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}${t('page.columns.task')}<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}${t('page.field.project')}<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}${t('nav.route.team')}</button>${isMemberAdmin() ? `<div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}${t('palette.inviteMember')}</button>` : ''}`;
       style = 'width:220px';
       break;
     case 'subassignee': {
@@ -126,12 +135,12 @@ export function popHtml(p) {
       if (!sb) break;
       inner = popList(
         [
-          { id: '', name: 'Unassigned', html: av(null, 'sm', false), on: !sb.assignee },
+          { id: '', name: t('common.unassigned'), html: av(null, 'sm', false), on: !sb.assignee },
           ...D()
             .members.filter(m => m.status !== 'deactivated')
-            .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? ' (you)' : ''), html: av(m.id, 'sm', false), on: sb.assignee === m.id })),
+            .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? t('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: sb.assignee === m.id })),
         ],
-        { search: 'Assign subtask to…' },
+        { search: t('a11y.assignSubtask') },
       );
       break;
     }
@@ -144,12 +153,12 @@ export function popHtml(p) {
     case 'assignee':
       inner = popList(
         [
-          { id: '', name: 'Unassigned', html: av(null, 'sm', false), on: !t?.assignee },
+          { id: '', name: t('common.unassigned'), html: av(null, 'sm', false), on: !t?.assignee },
           ...D()
             .members.filter(m => m.status !== 'deactivated')
-            .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? ' (you)' : ''), html: av(m.id, 'sm', false), on: t?.assignee === m.id })),
+            .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? t('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: t?.assignee === m.id })),
         ],
-        { search: 'Assign to…' },
+        { search: t('a11y.assignTo') },
       );
       break;
     case 'labels':
@@ -161,7 +170,7 @@ export function popHtml(p) {
           on: t?.labels.includes(l.id),
           act: 'popToggleLabel',
         })),
-        { search: 'Filter labels…' },
+        { search: t('a11y.filterLabels') },
       );
       break;
     case 'project':
@@ -169,16 +178,16 @@ export function popHtml(p) {
         visibleProjects()
           .filter(q => canSee(q) && q.status !== 'complete')
           .map(q => ({ id: q.id, name: q.name, html: `<span class="pdot" style="--c:${pColor(q)}"></span>`, on: t?.project === q.id })),
-        { search: 'Move to project…' },
+        { search: t('a11y.moveToProject') },
       );
       break;
     case 'recur':
       inner = popList(
-        ['Does not repeat', 'Daily', 'Weekly', 'Every 2 weeks', 'Monthly'].map(x => ({
-          id: x,
-          name: x,
+        RECUR.map(x => ({
+          id: x.stored,
+          name: t(x.key),
           html: ic('repeat', 14),
-          on: (t?.recur || 'Does not repeat') === x,
+          on: (t?.recur || RECUR[0].stored) === x.stored,
         })),
       );
       break;
@@ -186,26 +195,26 @@ export function popHtml(p) {
       inner = popList(
         ['30m', '1h', '2h', '4h', '1d', '2d', '3d', '5d', '8d']
           .map(x => ({ id: x, name: x, html: ic('timer', 14), on: t?.estimate === x }))
-          .concat([{ id: '', name: 'Clear estimate', html: ic('x', 14) }]),
+          .concat([{ id: '', name: t('popover.clearEstimate'), html: ic('x', 14) }]),
       );
       break;
     case 'deps': {
       const cands = D().tasks.filter(x => x.project === t.project && x.id !== t.id && !x.archived);
       inner = popList(
         cands.map(x => ({ id: x.id, name: `${x.key}  ${x.title}`, html: stIcon(x.status), on: t.deps.includes(x.id), act: 'popToggleDep' })),
-        { search: 'Blocked by…' },
+        { search: t('a11y.blockedBy') },
       );
       break;
     }
     case 'date': {
       const val = p.field === 'subdue' ? t?.subtasks[p.i]?.due : t?.[p.field];
       const q = [
-        ['Today', 0],
-        ['Tomorrow', 1],
-        ['Next week', 7 - ((TODAY.getDay() + 6) % 7)],
-        ['In 2 weeks', 14],
+        [t('common.today'), 0],
+        [t('common.tomorrow'), 1],
+        [t('popover.nextWeek'), 7 - ((TODAY.getDay() + 6) % 7)],
+        [t('popover.in2Weeks'), 14],
       ];
-      inner = `<div class="row" style="gap:4px;padding:4px;flex-wrap:wrap">${q.map(([n, d]) => `<button class="badge" data-a="popPick" data-v="${dOff(d)}" style="cursor:pointer">${n}</button>`).join('')}${val ? `<button class="badge" data-a="popPick" data-v="" style="cursor:pointer;color:var(--red)">Clear</button>` : ''}</div><div class="msep"></div>${miniCal(p, val)}`;
+      inner = `<div class="row" style="gap:4px;padding:4px;flex-wrap:wrap">${q.map(([n, d]) => `<button class="badge" data-a="popPick" data-v="${dOff(d)}" style="cursor:pointer">${n}</button>`).join('')}${val ? `<button class="badge" data-a="popPick" data-v="" style="cursor:pointer;color:var(--red)">${t('common.clear')}</button>` : ''}</div><div class="msep"></div>${miniCal(p, val)}`;
       style = 'min-width:0';
       break;
     }
@@ -224,93 +233,94 @@ export function popHtml(p) {
     case 'role': {
       const m = mem(p.id);
       const options = me()?.role === 'Owner' ? ['Owner', 'Admin', 'Member', 'Guest'] : ['Admin', 'Member', 'Guest'];
+      /* The role descriptions are display text over the STORED role ids. */
       const desc = {
-        Owner: 'Full control, including the plan and deleting the workspace',
-        Admin: 'Manage members, settings, and all projects',
-        Member: 'Create projects and work on tasks',
-        Guest: 'Only sees projects they are invited to',
+        Owner: 'popover.roleDescOwner',
+        Admin: 'popover.roleDescAdmin',
+        Member: 'popover.roleDescMember',
+        Guest: 'popover.roleDescGuest',
       };
       inner =
-        `<div class="mh">Role for ${esc(m.name)}</div>` +
+        `<div class="mh">${t('popover.roleFor', { name: m.name })}</div>` +
         options
           .map(
             r =>
-              `<button class="mi" data-a="popPick" data-v="${r}" style="height:auto;padding:7px 8px;align-items:flex-start"><div class="grow" style="white-space:normal"><div style="font-weight:500">${r}</div><div class="faint" style="font-size:11.5px">${desc[r]}</div></div>${m.role === r ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
+              `<button class="mi" data-a="popPick" data-v="${r}" style="height:auto;padding:7px 8px;align-items:flex-start"><div class="grow" style="white-space:normal"><div style="font-weight:500">${t('common.role.' + r.toLowerCase())}</div><div class="faint" style="font-size:11.5px">${t(desc[r])}</div></div>${m.role === r ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
           )
           .join('');
       style = 'width:300px';
       break;
     }
     case 'ws': {
-      const actions = `<div class="msep"></div><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}Workspace settings</button>${isMemberAdmin() ? `<button class="mi" data-a="invite">${ic('user-plus', 15)}Invite members</button>` : ''}<div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
+      const actions = `<div class="msep"></div><button class="mi" data-a="go" data-r="settings" data-sec="workspace">${ic('settings', 15)}${t('popover.workspaceSettings')}</button>${isMemberAdmin() ? `<button class="mi" data-a="invite">${ic('user-plus', 15)}${t('popover.inviteMembers')}</button>` : ''}<div class="msep"></div><button class="mi" data-a="signOut">${ic('log-out', 15)}${t('palette.signOut')}</button>`;
       /* Demo mode has one local workspace: no switcher, no creation entry. */
       inner = api.enabled
-        ? `<div class="mh">Workspaces</div>${wsList()
+        ? `<div class="mh">${t('popover.workspaces')}</div>${wsList()
             .map(
               w =>
                 `<button class="mi" data-a="switchWs" data-v="${esc(w.slug)}">${wsLogo({ name: w.name, c: w.color }, 20)}<span class="grow trunc">${esc(w.name)}</span><span class="faint" style="font-size:11px">${esc(roleLabel(w.role))}</span>${w.slug === currentSlug() ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
             )
-            .join('')}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}Create workspace</button>${actions}`
-        : `<div class="mh">${esc(D().ws.name)}</div><div style="padding:0 8px 6px" class="faint trunc">Your local demo workspace</div>${actions}`;
+            .join('')}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}${t('popover.createWorkspace')}</button>${actions}`
+        : `<div class="mh">${esc(D().ws.name)}</div><div style="padding:0 8px 6px" class="faint trunc">${t('popover.localDemo')}</div>${actions}`;
       style = 'width:260px';
       break;
     }
     case 'user':
       inner = `<div class="row" style="padding:8px 8px 10px;gap:10px">${av(D().me, 'lg', false)}<div style="min-width:0"><div style="font-weight:600">${esc(S.prefs.name)}</div><div class="faint trunc" style="font-size:12px">${esc(me().email)}</div></div></div><div class="msep"></div>
-      <button class="mi" data-a="go" data-r="member" data-id="${D().me}">${ic('user', 15)}View profile</button><button class="mi" data-a="go" data-r="settings" data-sec="profile">${ic('settings', 15)}Account settings</button>
-      <div class="msep"></div><div class="mh">Theme</div><div style="padding:2px 6px 6px"><div class="seg" style="width:100%">${[
-        ['light', 'sun', 'Light'],
-        ['dark', 'moon', 'Dark'],
-        ['system', 'monitor', 'System'],
+      <button class="mi" data-a="go" data-r="member" data-id="${D().me}">${ic('user', 15)}${t('act.viewProfile')}</button><button class="mi" data-a="go" data-r="settings" data-sec="profile">${ic('settings', 15)}${t('popover.accountSettings')}</button>
+      <div class="msep"></div><div class="mh">${t('popover.theme')}</div><div style="padding:2px 6px 6px"><div class="seg" style="width:100%">${[
+        ['light', 'sun', t('popover.themeLight')],
+        ['dark', 'moon', t('popover.themeDark')],
+        ['system', 'monitor', t('popover.themeSystem')],
       ]
         .map(
           ([k, i, n]) =>
             `<button class="${S.prefs.theme === k ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setTheme" data-v="${k}">${ic(i, 13)}${n}</button>`,
         )
         .join('')}</div></div>
-      <div class="msep"></div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}Keyboard shortcuts<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="signOut">${ic('log-out', 15)}Sign out</button>`;
+      <div class="msep"></div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}${t('palette.keyboardShortcuts')}<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="signOut">${ic('log-out', 15)}${t('palette.signOut')}</button>`;
       style = 'width:260px';
       break;
     case 'help':
-      inner = `<div class="mh">Help & resources</div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}Keyboard shortcuts<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="openPalette">${ic('command', 15)}Command menu<span class="r"><kbd>${MOD}K</kbd></span></button><button class="mi" data-a="go" data-r="system">${ic('component', 15)}Design system</button><button class="mi" data-a="go" data-r="states">${ic('layers', 15)}System states</button>
-      ${api.enabled ? '' : `<div class="msep"></div><div class="mh">Prototype</div><button class="mi" data-a="startOnboarding">${ic('sparkles', 15)}Replay onboarding</button><button class="mi" data-a="toggleOffline">${ic(S.ui.offline ? 'wifi' : 'wifi-off', 15)}${S.ui.offline ? 'Go back online' : 'Simulate offline'}</button><button class="mi" data-a="go" data-r="nowhere">${ic('file-question', 15)}Open a broken link</button><button class="mi" data-a="resetDemo">${ic('rotate-ccw', 15)}Reset demo data</button>`}`;
+      inner = `<div class="mh">${t('popover.helpAndResources')}</div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}${t('palette.keyboardShortcuts')}<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="openPalette">${ic('command', 15)}${t('palette.commandMenu')}<span class="r"><kbd>${MOD}K</kbd></span></button><button class="mi" data-a="go" data-r="system">${ic('component', 15)}${t('popover.designSystem')}</button><button class="mi" data-a="go" data-r="states">${ic('layers', 15)}${t('popover.systemStates')}</button>
+      ${api.enabled ? '' : `<div class="msep"></div><div class="mh">${t('popover.prototype')}</div><button class="mi" data-a="startOnboarding">${ic('sparkles', 15)}${t('popover.replayOnboarding')}</button><button class="mi" data-a="toggleOffline">${ic(S.ui.offline ? 'wifi' : 'wifi-off', 15)}${S.ui.offline ? t('popover.goBackOnline') : t('popover.simulateOffline')}</button><button class="mi" data-a="go" data-r="nowhere">${ic('file-question', 15)}${t('popover.openBrokenLink')}</button><button class="mi" data-a="resetDemo">${ic('rotate-ccw', 15)}${t('popover.resetDemoData')}</button>`}`;
       style = 'width:260px';
       break;
     case 'sort': {
       const v = viewOf(p.key);
       inner =
-        `<div class="mh">Sort by</div>` +
+        `<div class="mh">${t('sort.by')}</div>` +
         [
-          ['manual', 'Manual'],
-          ['priority', 'Priority'],
-          ['due', 'Due date'],
-          ['start', 'Start date'],
-          ['title', 'Title'],
-          ['status', 'Status'],
-          ['assignee', 'Assignee'],
-          ['created', 'Created'],
-          ['updated', 'Last updated'],
+          ['manual', t('sort.manual')],
+          ['priority', t('sort.priority')],
+          ['due', t('sort.dueDate')],
+          ['start', t('sort.startDate')],
+          ['title', t('sort.title')],
+          ['status', t('sort.status')],
+          ['assignee', t('sort.assignee')],
+          ['created', t('sort.created')],
+          ['updated', t('sort.lastUpdated')],
         ]
           .map(
             ([k, n]) =>
               `<button class="mi" data-a="setSort" data-key="${p.key}" data-v="${k}">${n}${v.sort.f === k ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
           )
           .join('') +
-        `<div class="msep"></div><div style="padding:4px 6px"><div class="seg" style="width:100%"><button class="${v.sort.dir > 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${p.key}" data-v="1">${ic('arrow-up', 12)}Ascending</button><button class="${v.sort.dir < 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${p.key}" data-v="-1">${ic('arrow-down', 12)}Descending</button></div></div>`;
+        `<div class="msep"></div><div style="padding:4px 6px"><div class="seg" style="width:100%"><button class="${v.sort.dir > 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${p.key}" data-v="1">${ic('arrow-up', 12)}${t('sort.ascending')}</button><button class="${v.sort.dir < 0 ? 'on' : ''}" style="flex:1;justify-content:center" data-a="setSortDir" data-key="${p.key}" data-v="-1">${ic('arrow-down', 12)}${t('sort.descending')}</button></div></div>`;
       style = 'width:240px';
       break;
     }
     case 'group': {
       const v = viewOf(p.key);
       inner =
-        `<div class="mh">Group by</div>` +
+        `<div class="mh">${t('sort.groupBy')}</div>` +
         [
-          ['status', 'Status', 'circle-dot'],
-          ['priority', 'Priority', 'signal-high'],
-          ['assignee', 'Assignee', 'user'],
-          ['project', 'Project', 'folder'],
-          ['due', 'Due date', 'calendar'],
-          ['none', 'No grouping', 'minus'],
+          ['status', t('sort.status'), 'circle-dot'],
+          ['priority', t('sort.priority'), 'signal-high'],
+          ['assignee', t('sort.assignee'), 'user'],
+          ['project', t('sort.project'), 'folder'],
+          ['due', t('sort.dueDate'), 'calendar'],
+          ['none', t('sort.none'), 'minus'],
         ]
           .map(
             ([k, n, i]) =>
@@ -322,14 +332,14 @@ export function popHtml(p) {
     case 'cols': {
       const v = viewOf(p.key);
       inner =
-        `<div class="mh">Visible columns</div>` +
+        `<div class="mh">${t('popover.visibleColumns')}</div>` +
         TCOLS.filter(c => c[0] !== 'title')
           .map(
             c =>
               `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="toggleCol2" data-key="${p.key}" data-v="${c[0]}" ${v.hidden.includes(c[0]) ? '' : 'checked'}>${c[1]}</label>`,
           )
           .join('') +
-        `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${p.key}">${ic('rotate-ccw', 14)}Reset widths</button>`;
+        `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${p.key}">${ic('rotate-ccw', 14)}${t('popover.resetWidths')}</button>`;
       break;
     }
     case 'filter':
@@ -342,7 +352,7 @@ export function popHtml(p) {
       const f = v.filters[p.i];
       if (!f) break;
       inner =
-        `<div class="mh">${FIELDS[f.f].name} ${f.op === 'not' ? 'is not' : 'is'}</div>` +
+        `<div class="mh">${FIELDS[f.f].name} ${f.op === 'not' ? t('filter.isNot') : t('filter.is')}</div>` +
         FIELDS[f.f]
           .opts()
           .map(
@@ -376,12 +386,12 @@ export function popHtml(p) {
     case 'event': {
       const e = D().events.find(x => x.id === p.id);
       const pr = proj(e.project);
-      inner = `<div style="padding:10px 10px 6px"><div class="row" style="gap:8px;margin-bottom:6px"><span class="pdot" style="--c:${pColor(pr)};border-radius:50%"></span><b style="font-size:14px;font-weight:600">${esc(e.title)}</b></div><div class="muted" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px"><span class="row" style="gap:6px">${ic('calendar', 13)}${fmtDate(e.date, true)} · ${e.time}</span><span class="row" style="gap:6px">${ic('folder', 13)}${esc(pr.name)}</span><span class="row" style="gap:6px">${ic('users', 13)}${avStack(pr.members, 5)}</span></div></div><div class="msep"></div><button class="mi" data-a="go" data-r="project" data-id="${pr.id}" data-tab="overview">${ic('arrow-up-right', 14)}Open project</button>`;
+      inner = `<div style="padding:10px 10px 6px"><div class="row" style="gap:8px;margin-bottom:6px"><span class="pdot" style="--c:${pColor(pr)};border-radius:50%"></span><b style="font-size:14px;font-weight:600">${esc(e.title)}</b></div><div class="muted" style="font-size:12.5px;display:flex;flex-direction:column;gap:4px"><span class="row" style="gap:6px">${ic('calendar', 13)}${fmtDate(e.date, true)} · ${e.time}</span><span class="row" style="gap:6px">${ic('folder', 13)}${esc(pr.name)}</span><span class="row" style="gap:6px">${ic('users', 13)}${avStack(pr.members, 5)}</span></div></div><div class="msep"></div><button class="mi" data-a="go" data-r="project" data-id="${pr.id}" data-tab="overview">${ic('arrow-up-right', 14)}${t('popover.openProject')}</button>`;
       style = 'width:270px';
       break;
     }
     case 'emoji':
-      inner = `<div class="row" style="gap:2px;padding:2px">${['👍', '🎉', '❤️', '👀', '🚀', '✅'].map(e => `<button class="ibtn" data-a="react" data-id="${p.id}" data-e="${e}" style="font-size:16px" aria-label="React ${e}">${e}</button>`).join('')}</div>`;
+      inner = `<div class="row" style="gap:2px;padding:2px">${['👍', '🎉', '❤️', '👀', '🚀', '✅'].map(e => `<button class="ibtn" data-a="react" data-id="${p.id}" data-e="${e}" style="font-size:16px" aria-label="${t('a11y.react', { e: e })}">${e}</button>`).join('')}</div>`;
       style = 'min-width:0';
       break;
     case 'ctx':
@@ -394,7 +404,7 @@ export function popHtml(p) {
       inner = PRIOS.map(s => `<button class="mi" data-a="bulkSet" data-f="priority" data-v="${s.id}">${prIcon(s.id)}${s.name}</button>`).join('');
       break;
     case 'bulk-assignee':
-      inner = [{ id: '', name: 'Unassigned' }, ...D().members]
+      inner = [{ id: '', name: t('common.unassigned') }, ...D().members]
         .map(m => `<button class="mi" data-a="bulkSet" data-f="assignee" data-v="${m.id}">${av(m.id || null, 'sm', false)}${esc(m.name)}</button>`)
         .join('');
       break;
@@ -410,19 +420,19 @@ export function filterBuilder(p) {
       const opts = F.opts();
       const names = f.v.map(id => opts.find(o => o.id === id)?.name || id);
       const open = p.edit === i;
-      return `<div class="frow"><span class="conj">${i ? 'and' : 'Where'}</span>
-      <select class="select" data-in="fField" data-key="${p.key}" data-i="${i}" aria-label="Field">${Object.entries(FIELDS)
+      return `<div class="frow"><span class="conj">${i ? t('filter.and') : t('filter.where')}</span>
+      <select class="select" data-in="fField" data-key="${p.key}" data-i="${i}" aria-label="${t('a11y.filterField')}">${Object.entries(FIELDS)
         .map(([k, x]) => `<option value="${k}" ${f.f === k ? 'selected' : ''}>${x.name}</option>`)
         .join('')}</select>
-      <select class="select" data-in="fOp" data-key="${p.key}" data-i="${i}" aria-label="Operator"><option value="is" ${f.op === 'is' ? 'selected' : ''}>is</option><option value="not" ${f.op === 'not' ? 'selected' : ''}>is not</option></select>
-      <button class="valbtn" data-a="fEdit" data-i="${i}" aria-expanded="${open}"><span class="trunc grow">${names.length ? esc(names.join(', ')) : '<span class="faint">Select…</span>'}</span>${ic('chevron-down', 12)}</button>
-      <button class="ibtn ibtn-xs" data-a="rmFilter" data-key="${p.key}" data-i="${i}" aria-label="Remove filter">${ic('trash-2', 13)}</button></div>
+      <select class="select" data-in="fOp" data-key="${p.key}" data-i="${i}" aria-label="${t('a11y.filterOperator')}"><option value="is" ${f.op === 'is' ? 'selected' : ''}>${t('filter.is')}</option><option value="not" ${f.op === 'not' ? 'selected' : ''}>${t('filter.isNot')}</option></select>
+      <button class="valbtn" data-a="fEdit" data-i="${i}" aria-expanded="${open}"><span class="trunc grow">${names.length ? esc(names.join(', ')) : `<span class="faint">${t('common.select')}</span>`}</span>${ic('chevron-down', 12)}</button>
+      <button class="ibtn ibtn-xs" data-a="rmFilter" data-key="${p.key}" data-i="${i}" aria-label="${t('a11y.removeFilter')}">${ic('trash-2', 13)}</button></div>
       ${open ? `<div style="margin-left:50px;border:1px solid var(--border);border-radius:var(--r);padding:4px;max-height:200px;overflow:auto">${opts.map(o => `<label class="mi" style="cursor:pointer;min-height:28px"><input type="checkbox" class="check" data-a="fToggleVal" data-key="${p.key}" data-i="${i}" data-v="${o.id}" ${f.v.includes(o.id) ? 'checked' : ''}>${o.html || ''}${esc(o.name)}</label>`).join('')}</div>` : ''}`;
     })
     .join('');
-  return `<div class="mh fb-h">Filter by${v.filters.length ? `<button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${p.key}">Clear all</button>` : ''}</div>
-    ${rows ? `<div class="fb-rows">${rows}</div>` : '<p class="fb-empty">No filters applied. Combine filters to narrow the task list, e.g. Status is In Progress and Assignee is Sarah.</p>'}
-    <div class="msep"></div><div class="fb-add"><span class="faint">Add filter:</span>${Object.entries(FIELDS)
+  return `<div class="mh fb-h">${t('popover.filterBy')}${v.filters.length ? `<button class="btn btn-sm btn-ghost" data-a="clearFilters" data-key="${p.key}">${t('act.clearAll')}</button>` : ''}</div>
+    ${rows ? `<div class="fb-rows">${rows}</div>` : `<p class="fb-empty">${t('popover.noFiltersApplied')}</p>`}
+    <div class="msep"></div><div class="fb-add"><span class="faint">${t('popover.addFilter')}</span>${Object.entries(FIELDS)
       .map(([k, x]) => `<button class="badge" style="cursor:pointer" data-a="addFilter" data-key="${p.key}" data-f="${k}">${ic(x.icon, 11)}${x.name}</button>`)
       .join('')}</div>`;
 }

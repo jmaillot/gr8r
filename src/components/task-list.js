@@ -117,7 +117,7 @@ export function listHtml(groups, key, opt = {}) {
 export function bulkBar(ids) {
   const n = ids.filter(id => S.ui.sel.has(id)).length;
   if (!n) return '';
-  return `<div class="bulkbar${S.ui.fx.bulk ? ' enter' : ''}" role="toolbar" aria-label="${tMsg('a11y.bulkActions')}"><b style="font-weight:600">${tMsg('act.selectedCount', { n })}</b><span class="sep"></span>
+  return `<div class="bulkbar${S.ui.fx.bulk ? ' enter' : ''}" role="toolbar" aria-label="${tMsg('a11y.bulkActions')}"><b style="font-weight:600">${tMsg('act.selectedCount', { n: n })}</b><span class="sep"></span>
     <button class="btn btn-sm" data-a="pop" data-pop="bulk-status">${ic('circle-dot', 14)}${tMsg('page.field.status')}</button>
     <button class="btn btn-sm" data-a="pop" data-pop="bulk-assignee">${ic('user', 14)}${tMsg('page.field.assignee')}</button>
     <button class="btn btn-sm" data-a="pop" data-pop="bulk-priority">${ic('signal-high', 14)}${tMsg('page.field.priority')}</button>

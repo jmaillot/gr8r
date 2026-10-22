@@ -139,7 +139,7 @@ const DEMO_CONSTS = new Set(['TEAMS_SEED', 'TEMPLATES']);
 /* The permission names the document stores and the interface compares against
    (src/overlays/modals.js): the DISPLAY of a stored value is a catalogue
    lookup, not the value itself. */
-const STORED_VOCABULARY = new Set(['Can view', 'Can comment', 'Can edit', 'Full access']);
+const STORED_VOCABULARY = new Set(['Can view', 'Can comment', 'Can edit', 'Full access', 'Does not repeat', 'Daily', 'Weekly', 'Every 2 weeks', 'Monthly']);
 
 /* The stored preference values the application displays verbatim. Each entry
    is a stored value, not interface text; phase 8 (LOC-02, LOC-04) replaces
@@ -728,6 +728,9 @@ function scanTemplateHtml(tpl, file, findings, lineAt) {
     }
   });
 
+  /* A text node inside a <kbd> element is a keyboard key name ('Esc', 'Tab',
+     'G H'…): a machine identifier, never interface prose (D-08). */
+  let kbdDepth = 0;
   const flush = (from, to) => {
     let p = from;
     while (p < to) {
@@ -737,7 +740,7 @@ function scanTemplateHtml(tpl, file, findings, lineAt) {
       let segStart = p;
       const lead = seg.length - seg.trimStart().length;
       segStart += lead;
-      ruleTextNode(seg, map[segStart] ?? map[p] ?? p, file, findings, lineAt);
+      if (kbdDepth === 0) ruleTextNode(seg, map[segStart] ?? map[p] ?? p, file, findings, lineAt);
       if (next < 0 || next >= to) break;
       p = next + 1;
     }
@@ -748,6 +751,9 @@ function scanTemplateHtml(tpl, file, findings, lineAt) {
   while (i < html.length) {
     if (html[i] === '<' && /^<\/?[a-zA-Z]/.test(html.slice(i))) {
       flush(textStart, i);
+      const lower = html.slice(i, i + 12).toLowerCase();
+      if (/^<kbd[\s>]/.test(lower)) kbdDepth++;
+      else if (/^<\/kbd/.test(lower)) kbdDepth = Math.max(0, kbdDepth - 1);
       i = scanTag(html, i, map, file, findings, lineAt);
       textStart = i;
       continue;
@@ -1050,6 +1056,9 @@ function scanStringLiterals(tokens, file, findings, lineAt, info, catalogue) {
     if (slot.call && slot.call.callee === 'includes') continue;
     if (slot.call && slot.call.callee === 'call' && slot.call.argIndex === 0) continue;
     if (slot.object && slot.object.propName === 'role') continue;
+    /* A keyboard-shortcut sequence ('G H', 'G I'…): the value of a kbd
+       property is a machine identifier, never interface prose. */
+    if (slot.object && slot.object.propName === 'kbd') continue;
     if (slot.array && slot.frame.machineList) continue;
     if (slot.array && slot.frame.constName && MACHINE_CONSTS.has(slot.frame.constName)) continue;
     if (inDemoConst(slot)) continue;

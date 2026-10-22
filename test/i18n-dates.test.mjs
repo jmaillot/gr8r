@@ -165,7 +165,7 @@ test("the French timeline labels are the locale's own: '24 juil.' shape is the f
 
 test('the mini-calendar, the greeting line and the timeline read their names from the locale, not from the arrays', () => {
   const pop = source('src/overlays/popovers.js');
-  assert.match(pop, /import \{ monthName, weekdayName \} from '\.\.\/core\/i18n\.js'/);
+  assert.match(pop, /import \{ t, monthName, weekdayName \} from '\.\.\/core\/i18n\.js'/);
   assert.doesNotMatch(pop, /\b(MON|MONL|WD|WDL)\b/);
   /* The header keeps today's two-character truncation, applied to the locale's short
      weekday name over the mini-calendar's own first cell (startOfWeek(first)). */
