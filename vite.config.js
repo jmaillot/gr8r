@@ -1,14 +1,19 @@
 import { defineConfig } from 'vite';
 import { lucideIconNames, lucideIconMarkup } from './scripts/icons.mjs';
 
+/* The base locale. It is the catalogue every other one falls back to (D-08), so it ships in
+   EVERY build: a build without it would leave the interface without a language. */
+const BASE_LOCALE = 'en';
+
 /* The build's locale set, read from the environment at config load time. The default ships every
    locale; LOCALES=en is the English-only build. No build script may change the default. */
-const BUILD_LOCALES = new Set(
-  (process.env.LOCALES || 'en,fr')
+const BUILD_LOCALES = new Set([
+  BASE_LOCALE,
+  ...(process.env.LOCALES || 'en,fr')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean),
-);
+]);
 
 /* `virtual:icons` exports only the Lucide icons the source actually names, as inline SVG markup,
    so the bundle carries ~170 icons instead of the full set. The scan is the shared one in
