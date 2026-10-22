@@ -1,6 +1,7 @@
 /* =====================================================================
    SETTINGS · AUTH · ONBOARDING · DESIGN SYSTEM · SYSTEM STATES
    ===================================================================== */
+import { formatDate, formatTime, isAutoDateFmt, t } from '../core/i18n.js';
 import { dOff, esc, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { D, S, isMemberAdmin, me } from '../core/store.js';
@@ -9,6 +10,11 @@ import { av, pIcon } from '../ui/helpers.js';
 import { permsTable, teamsGrid } from './members.js';
 import { page404 } from './errors.js';
 import { SHORTCUTS } from '../overlays/modals.js';
+
+/* The samples the format previews are computed from: a fixed day and a fixed
+   time, so a preview never changes with the current date. */
+const SAMPLE_DATE = new Date(2026, 9, 1);
+const SAMPLE_TIME = new Date(2026, 9, 1, 14, 30);
 
 export const SET_NAV = [
   [
@@ -191,12 +197,17 @@ export function settingsBody(sec, title) {
           sel(
             'dateFmt',
             [
-              ['MMM d', 'Oct 1'],
-              ['d/M', '1/10'],
-              ['M/d', '10/1'],
-              ['yyyy-MM-dd', '2026-10-01'],
+              /* The 'auto' option IS the stored 'MMM d': the document cannot tell a
+                 preference that was never touched from one the user picked as the
+                 default, so the stored default means "follow the locale" (D-04).
+                 The preview is the LOCALE's own date form, computed from a fixed
+                 sample — never a hard-coded English string. */
+              ['auto', formatDate(SAMPLE_DATE, { pattern: 'auto', year: 'never' })],
+              ['d/M', t('settings.dateFormat.dayMonth')],
+              ['M/d', t('settings.dateFormat.monthDay')],
+              ['yyyy-MM-dd', t('settings.dateFormat.iso')],
             ],
-            P.dateFmt,
+            isAutoDateFmt(P.dateFmt) ? 'auto' : P.dateFmt,
           ),
         ) +
         srow(
@@ -218,10 +229,15 @@ export function settingsBody(sec, title) {
           sel(
             'timeFmt',
             [
-              ['12', '12-hour (2:30 PM)'],
-              ['24', '24-hour (14:30)'],
+              /* The clock follows the locale when the preference is unset: a
+                 12-hour clock in English, a 24-hour one in French. The two
+                 explicit choices keep their text, and the sample is rendered by
+                 the formatter instead of being typed into the label. */
+              ['auto', `${t('settings.timeFormat.auto')} (${formatTime(SAMPLE_TIME, { cycle: 'auto' })})`],
+              ['12', `${t('settings.timeFormat.h12')} (${formatTime(SAMPLE_TIME, { cycle: '12' })})`],
+              ['24', `${t('settings.timeFormat.h24')} (${formatTime(SAMPLE_TIME, { cycle: '24' })})`],
             ],
-            P.timeFmt || '12',
+            P.timeFmt || 'auto',
           ),
         )
       );
