@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import en from '../src/locales/en.json' with { type: 'json' };
-import { BASE_LOCALE, LOCALES, availableLocales, escHtml, getLocale, registerCatalogue, t } from '../src/core/i18n.js';
+import fr from '../src/locales/fr.json' with { type: 'json' };
+import { BASE_LOCALE, LOCALES, availableLocales, escHtml, getLocale, registerCatalogue, setLocale, t } from '../src/core/i18n.js';
 
 test('a base catalogue key returns the string carried by the English catalogue file', () => {
   assert.equal(t('nav.projects'), 'Projects');
@@ -56,4 +57,60 @@ test('the module exports the locale registry and the layer surface', () => {
     availableLocales().some(l => l.code === 'en'),
     'the base locale is available',
   );
+});
+
+/* ---------- the plural engine ---------- */
+
+const ENGLISH_COUNTS = [
+  { n: 0, expected: '0 tasks' },
+  { n: 1, expected: '1 task' },
+  { n: 2, expected: '2 tasks' },
+  { n: 1000000, expected: '1000000 tasks' },
+];
+
+const FRENCH_COUNTS = [
+  { n: 0, expected: '0 tâche' },
+  { n: 1, expected: '1 tâche' },
+  { n: 2, expected: '2 tâches' },
+  { n: 1000000, expected: '1000000 de tâches' },
+];
+
+test('the plural engine selects the English CLDR categories', () => {
+  for (const { n, expected } of ENGLISH_COUNTS) assert.equal(t('task.count', { n }), expected, `English ${n}`);
+});
+
+test('the plural engine selects the French CLDR categories', async () => {
+  registerCatalogue('fr', fr);
+  try {
+    await setLocale('fr');
+    for (const { n, expected } of FRENCH_COUNTS) assert.equal(t('task.count', { n }), expected, `French ${n}`);
+  } finally {
+    await setLocale('en');
+  }
+});
+
+test('a plural member that is missing falls back to other', async () => {
+  registerCatalogue('fr', fr);
+  try {
+    await setLocale('fr');
+    assert.equal(t('file.count', { n: 1000000 }), '1000000 fichiers', 'the French catalogue has no many member for this key');
+  } finally {
+    await setLocale('en');
+  }
+});
+
+test('a plural value with neither the selected member nor other makes t return the key', async () => {
+  registerCatalogue('fr', { ...fr, 'task.count': { many: '{n} de tâches' } });
+  try {
+    await setLocale('fr');
+    assert.equal(t('task.count', { n: 2 }), 'task.count');
+  } finally {
+    registerCatalogue('fr', fr);
+    await setLocale('en');
+  }
+});
+
+test('a plural value with no count is a string, never an object', () => {
+  assert.equal(t('task.count'), '{n} task');
+  assert.equal(typeof t('task.count'), 'string');
 });
