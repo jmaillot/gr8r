@@ -286,6 +286,19 @@ test("the six view modules keep the earlier waves' formatter and search wiring",
   assert.ok(files.includes('foldForSearch'), 'files.js lost the accent-insensitive filter');
 });
 
+/* ---------- the entry module and the empty allow-list ---------- */
+
+const WAVE_TEN_ENTRY = ['src/main.js', 'src/pages/errors.js'];
+
+test('the entry module carries no user-visible literal and the allow-list is EMPTY', () => {
+  const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue: {} });
+  const fromEntry = findings.filter(f => WAVE_TEN_ENTRY.includes(f.file) && f.kind.startsWith('rule'));
+  assert.deepEqual(texts(fromEntry), [], `the entry still carries literals: ${texts(fromEntry).join(' | ')}`);
+  const list = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  assert.ok(Array.isArray(list), 'the allow-list is not an array');
+  assert.deepEqual(list, [], 'the allow-list is not EMPTY — the sweep is not finished');
+});
+
 /* ---------- the machine-identifier guard ---------- */
 
 test('no data-a, data-r or data-v site of the live tree is ever reported', () => {
