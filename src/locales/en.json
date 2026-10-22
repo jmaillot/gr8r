@@ -1362,5 +1362,21 @@
   "page.member.lead": "Lead",
   "page.members.noActiveProjects": "No active projects",
   "page.members.noRecentActivity": "No recent activity",
-  "page.members.col.lastActive": "Last active"
+  "page.members.col.lastActive": "Last active",
+  "page.project.tab.overview": "Overview",
+  "page.project.tab.board": "Board",
+  "page.project.tab.list": "List",
+  "page.project.tab.table": "Table",
+  "page.project.tab.timeline": "Timeline",
+  "page.project.tab.files": "Files",
+  "page.project.removeFav": "Remove from favorites",
+  "page.project.addFav": "Add to favorites",
+  "a11y.projectStatus": "Project status",
+  "a11y.addMember": "Add member",
+  "a11y.projectSettings": "Project settings",
+  "a11y.projectViews": "Project views",
+  "a11y.saveCurrentFilters": "Save current filters as a view",
+  "a11y.saveView": "Save view",
+  "page.project.noTasksMatch": "No tasks match these filters.",
+  "act.clearFilters": "Clear filters"
 }
