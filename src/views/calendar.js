@@ -1,5 +1,6 @@
 /* ---------- CALENDAR ---------- */
-import { MONL, TODAY, WD, addD, diffD, esc, fmtDate, iso, parse, sod } from '../core/utils.js';
+import { TODAY, addD, diffD, esc, fmtDate, iso, parse, sod } from '../core/utils.js';
+import { monthName, weekdayName } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, pColor, proj } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
@@ -17,7 +18,11 @@ export function calendarHtml(ts, opt = {}) {
   const mode = S.ui.calMode;
   const evs = opt.events ? D().events.filter(e => !opt.project || e.project === opt.project) : [];
   const itemsOn = ds => [...evs.filter(e => e.date === ds).map(e => ({ ev: e })), ...ts.filter(t => t.due === ds).map(t => ({ t }))];
-  const wdn = Array.from({ length: 7 }, (_, i) => WD[(i + S.prefs.weekStart) % 7]);
+  /* The header reads the week-start arithmetic instead of re-implementing it: startOfWeek()
+     already honours S.prefs.weekStart, so the first column is the same day it is today, and the
+     names come from the locale, not from an English array. */
+  const start = startOfWeek(cur);
+  const wdn = Array.from({ length: 7 }, (_, i) => weekdayName(addD(start, i), 'short'));
   const chip = it => {
     if (it.ev) {
       const p = proj(it.ev.project);
@@ -29,7 +34,7 @@ export function calendarHtml(ts, opt = {}) {
   };
   let label, body;
   if (mode === 'month') {
-    label = `${MONL[cur.getMonth()]} ${cur.getFullYear()}`;
+    label = `${monthName(cur, 'long')} ${cur.getFullYear()}`;
     const first = new Date(cur.getFullYear(), cur.getMonth(), 1);
     const start = startOfWeek(first);
     const cells = Array.from({ length: 42 }, (_, i) => addD(start, i));
@@ -57,7 +62,7 @@ export function calendarHtml(ts, opt = {}) {
         const ds = iso(d);
         const items = itemsOn(ds).sort((a, b) => (a.ev ? 0 : 1) - (b.ev ? 0 : 1));
         const today = diffD(d, TODAY) === 0;
-        return `<div class="wcol"><div class="wcol-h ${today ? 'today' : ''}"><span class="n">${d.getDate()}</span><span class="muted" style="font-size:12px">${WD[d.getDay()]}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="Add task">${ic('plus', 13)}</button></div>
+        return `<div class="wcol"><div class="wcol-h ${today ? 'today' : ''}"><span class="n">${d.getDate()}</span><span class="muted" style="font-size:12px">${weekdayName(d, 'short')}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="Add task">${ic('plus', 13)}</button></div>
         <div class="wcol-b" data-drop-day="${ds}">${
           items
             .map(it => {
