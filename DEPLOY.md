@@ -323,6 +323,19 @@ Pending address invites appear under **Members → Pending invites** for admins 
 they can be resent (a fresh link and expiry) or revoked. Revoked and expired links answer `404`
 and `410` respectively.
 
+### Upgrading to 1.1.1
+
+1.1.1 is a patch release. It changes no schema and writes no backup: pull, rebuild and restart
+as usual. It fixes the browser losing the workspace revision after a role, member-removal or
+plan change, which made the next write fail with `409` and drop the edit.
+
+```sh
+cd /opt/gr8r
+git pull
+docker compose up -d --build
+docker compose logs --tail=20 gr8r
+```
+
 ### Upgrading an existing install to 1.1.0
 
 The first start after this update migrates the single-workspace database in place:
@@ -513,7 +526,7 @@ docker cp /var/backups/gr8r/backup-2026-10-21-0315.db gr8r-studio:/data/gr8r.db
 
 VOL=$(docker inspect gr8r-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
-docker run --rm --user root --entrypoint sh -v "$VOL":/data gr8r-studio:1.1.0 \
+docker run --rm --user root --entrypoint sh -v "$VOL":/data gr8r-studio:1.1.1 \
   -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
 
 docker compose start gr8r

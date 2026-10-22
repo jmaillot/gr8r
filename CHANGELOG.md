@@ -5,6 +5,27 @@ All notable changes to Gr8r Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-10-22
+
+A patch release found by the v1.1 milestone audit.
+
+### Fixed
+
+- **The workspace no longer stops accepting writes after a role or plan change.** Changing a
+  member's role, removing a member and changing the plan all edit the workspace document, so
+  they move the document's revision. The server now reports that revision and the browser
+  follows it. Before this fix the browser kept the old revision, so every following write was
+  rejected with `409`, the session entered conflict mode and the edit was dropped — while the
+  interface still announced it as saved.
+
+### Added
+
+- **Regression coverage for the sequence, not just the endpoint.** The server suite now asserts
+  that a role change, a plan change and a member removal report the new revision and that the
+  next write is accepted with it, a new client suite pins the adoption, and the Chromium suite
+  changes a role in the Members page, creates a project and reloads to prove the server really
+  stored it.
+
 ## [1.1.0] - 2026-10-21
 
 The multitenant milestone: a workspace is now a real tenant with its own URL, document and
