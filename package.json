@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:en": "LOCALES=en vite build",
     "preview": "vite preview",
     "start": "node server.js",
     "seed:json": "node scripts/export-seed.mjs > seed.json",
