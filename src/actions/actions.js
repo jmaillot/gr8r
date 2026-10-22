@@ -534,7 +534,14 @@ A.dupTask = el => {
   S.ui.pop = null;
   let n;
   mutate(() => {
-    n = createTask({ ...JSON.parse(JSON.stringify(tk)), id: uid('t'), key: undefined, title: `${tk.title} ${t('act.copySuffix')}`, created: Date.now(), fav: false });
+    n = createTask({
+      ...JSON.parse(JSON.stringify(tk)),
+      id: uid('t'),
+      key: undefined,
+      title: `${tk.title} ${t('act.copySuffix')}`,
+      created: Date.now(),
+      fav: false,
+    });
     n.key = nextKey(proj(n.project));
   });
   toast(t('toast.taskDuplicated'), { action: t('toast.open'), onAction: () => A.openTask({ dataset: { id: n.id } }) });
@@ -1536,7 +1543,18 @@ A.shareInvite = () => {
     .replace(/\b\w/g, c => c.toUpperCase());
   mutate(() => {
     const id = uid('m');
-    D().members.push({ id, name: nm, email: v, role: 'Guest', team: p.team, title: t('member.titleGuest'), c: '#6B7280', status: 'invited', last: null, tz: '—' });
+    D().members.push({
+      id,
+      name: nm,
+      email: v,
+      role: 'Guest',
+      team: p.team,
+      title: t('member.titleGuest'),
+      c: '#6B7280',
+      status: 'invited',
+      last: null,
+      tz: '—',
+    });
     p.members.push(id);
     p.perms = p.perms || {};
     p.perms[id] = perm;

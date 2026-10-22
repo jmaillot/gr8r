@@ -50,7 +50,11 @@ const ORACLE = [
   ['err.taskNameRequired', undefined, 'Give the task a name'],
   ['err.projectNameRequired', undefined, 'Give the project a name'],
   ['act.archiveTitle', { name: 'Alpha' }, 'Archive Alpha?'],
-  ['act.archiveProjectBody', undefined, 'The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings → Projects.'],
+  [
+    'act.archiveProjectBody',
+    undefined,
+    'The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings → Projects.',
+  ],
   ['act.archiveProject', undefined, 'Archive project'],
   ['act.deleteTitle', { name: 'Alpha' }, 'Delete Alpha?'],
   ['act.deleteProjectBodyHead', undefined, 'This permanently deletes the project and its'],
@@ -80,7 +84,11 @@ const ORACLE = [
   ['act.archiveDemoTitle', undefined, 'Archive Marketing Website?'],
   ['act.archiveDemoBody', undefined, 'The project will be hidden from the sidebar. You can restore it any time.'],
   ['act.changeUrlTitle', undefined, 'Change the workspace URL?'],
-  ['act.changeUrlBody', { from: 'acme', to: 'acme-2' }, 'Links to this workspace will change from /w/acme to /w/acme-2. Anyone using the old address will need to sign in again.'],
+  [
+    'act.changeUrlBody',
+    { from: 'acme', to: 'acme-2' },
+    'Links to this workspace will change from /w/acme to /w/acme-2. Anyone using the old address will need to sign in again.',
+  ],
   ['act.changeUrl', undefined, 'Change URL'],
   // account modals
   ['err.enterName', undefined, 'Enter your name'],

@@ -55,7 +55,7 @@ const ORACLE = [
 /* The literal texts the sweep removed from the four modules. */
 const GONE = [
   // archive.js
-  ', its subtasks, comments, and attachments will be deleted for everyone. This can\'t be undone.',
+  ", its subtasks, comments, and attachments will be deleted for everyone. This can't be undone.",
   'Delete permanently',
   'Delete task permanently?',
   'Deleted “',
@@ -108,13 +108,35 @@ test('the dispatcher and the shortcut map report nothing at all', () => {
   }
 });
 
+/* ---------- the wave's proof (plan 06-11, task 3) ---------- */
+
+test('none of the seven action modules reports a finding any more', () => {
+  const files = ['src/actions/actions.js', ...FILES_WITH_FINDINGS, ...MACHINE_ONLY_FILES];
+  for (const file of files) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    const findings = scanSource(src, file);
+    assert.deepEqual(findings, [], `${file} still reports: ${findings.map(f => `${f.kind}:${f.line} ${f.text}`).join(' | ')}`);
+  }
+});
+
+test('the allow-list carries no entry of the seven action modules', () => {
+  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  const files = new Set(['src/actions/actions.js', ...FILES_WITH_FINDINGS, ...MACHINE_ONLY_FILES]);
+  const left = list.filter(e => files.has(e.file));
+  assert.deepEqual(left, [], 'the seven modules still have allow-list entries');
+});
+
 test('the A[el.dataset.a] dispatch is unchanged — the action key is a machine identifier', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/actions/events.js'), 'utf8');
   assert.ok(src.includes('const fn = A[el.dataset.a];'), 'the dispatch line moved');
   /* The only action key the file mentions is a comparison against the
      mention picker's key — a machine value, not an attribute literal. */
   assert.ok(src.includes("el.dataset.a === 'pickMention'"), 'the pickMention action key moved');
-  assert.deepEqual([...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]), [], 'data-a attribute sites of events.js');
+  assert.deepEqual(
+    [...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]),
+    [],
+    'data-a attribute sites of events.js',
+  );
 });
 
 test('the keyboard map keeps its route keys and its action ids', () => {
@@ -122,7 +144,10 @@ test('the keyboard map keeps its route keys and its action ids', () => {
   /* The route map's keys are single-letter shortcuts and its values are
      route ids — machine identifiers (D-08). A byte-stable anchor for the
      map itself and one action call. */
-  assert.ok(src.includes("{ h: 'home', t: 'mytasks', p: 'projects', i: 'inbox', c: 'calendar', s: 'settings', n: 'notifications', a: 'activity', m: 'members' }"), 'the route map moved');
+  assert.ok(
+    src.includes("{ h: 'home', t: 'mytasks', p: 'projects', i: 'inbox', c: 'calendar', s: 'settings', n: 'notifications', a: 'activity', m: 'members' }"),
+    'the route map moved',
+  );
   assert.ok(src.includes('A.toggleDark()'), 'an action id moved');
 });
 
