@@ -279,3 +279,51 @@ test('no two keys of this wave carry the same value', () => {
     seen.set(flat, key);
   }
 });
+
+/* ---------- the wave's proof (plan 06-07, task 3) ---------- */
+
+test('the toast surface of src/actions/actions.js reports nothing at all', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src/actions/actions.js'), 'utf8');
+  const findings = scanSource(src, 'src/actions/actions.js');
+  const toastFindings = findings.filter(f => f.kind === 'ruleToast');
+  assert.deepEqual(toastFindings, [], `ruleToast findings survive: ${toastFindings.map(f => `${f.line} ${f.text}`).join(' | ')}`);
+  const unresolved = findings.filter(f => f.kind === 'unresolved' || f.kind === 'placeholder-mismatch');
+  assert.deepEqual(unresolved, [], `catalogue-key violations: ${unresolved.map(f => `${f.kind}:${f.line} ${f.text}`).join(' | ')}`);
+});
+
+test('the machine identifiers survived the wave — tree-wide data-a / data-r / data-v counts', () => {
+  // 438 / 58 / 76, measured before the wave (D-08): a translated identifier
+  // resolves A[el.dataset.a] to undefined and no test would show it.
+  let a = 0,
+    r = 0,
+    v = 0;
+  const walk = dir =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? walk(p) : /\.js$/.test(e.name) ? [p] : [];
+    });
+  for (const file of walk(path.join(ROOT, 'src'))) {
+    const text = fs.readFileSync(file, 'utf8');
+    a += [...text.matchAll(/data-a="/g)].length;
+    r += [...text.matchAll(/data-r="/g)].length;
+    v += [...text.matchAll(/data-v="/g)].length;
+  }
+  assert.equal(a, 438, 'data-a sites');
+  assert.equal(r, 58, 'data-r sites');
+  assert.equal(v, 76, 'data-v sites');
+});
+
+test("the action module's own data-a sites are byte-identical to what they were", () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src/actions/actions.js'), 'utf8');
+  const keys = [...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]);
+  assert.deepEqual(keys, ['confirmOk', 'confirmOk']);
+});
+
+test('the allow-list stays sorted by file then text and no longer carries this wave', () => {
+  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  const keys = list.map(e => `${e.file}::${e.text}`);
+  assert.deepEqual(keys, [...keys].sort(), 'the allow-list is not sorted');
+  const texts = new Set(list.filter(e => e.file === 'src/actions/actions.js').map(e => e.text));
+  const leaked = GONE.filter(text => texts.has(text));
+  assert.deepEqual(leaked, [], `this wave's literals are still listed: ${leaked.join(' | ')}`);
+});
