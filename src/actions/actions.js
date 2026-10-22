@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { t } from '../core/i18n.js';
+import { t, t as tMsg } from '../core/i18n.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
@@ -117,7 +117,7 @@ export function applyPatch(t, patch) {
           attachments: [],
         });
         delete n.prevStatus;
-        msgs.push(`Next “${t.title}” scheduled for ${fmtDate(nd)}`);
+        msgs.push(tMsg('toast.recurringNext', { title: t.title, date: fmtDate(nd) }));
       }
     } else if (k === 'assignee') logAct('assigned', t, nv ? `to ${mem(nv)?.name}` : '(unassigned)');
     else if (k === 'priority') logAct('changed priority of', t, `to ${PR[nv].name}`);
@@ -164,12 +164,12 @@ export function restore(snap) {
   save();
   render();
 }
-export async function copy(text, msg = 'Link copied') {
+export async function copy(text, msg = t('toast.linkCopied')) {
   try {
     await navigator.clipboard.writeText(text);
     toast(msg);
   } catch {
-    toast("Copy isn't available here — " + text, { kind: 'info', ms: 6000 });
+    toast(t('toast.copyUnavailable', { link: text }), { kind: 'info', ms: 6000 });
   }
 }
 export function loadingBtn(id, ms, fn) {
@@ -272,7 +272,7 @@ A.toggleDark = () => {
   save();
   S.ui.palette = null;
   render();
-  toast(effectiveDark() ? 'Dark mode on' : 'Light mode on', { kind: 'info', ms: 1800 });
+  toast(effectiveDark() ? t('toast.darkModeOn') : t('toast.lightModeOn'), { kind: 'info', ms: 1800 });
 };
 A.setPref = el => {
   S.prefs[el.dataset.k] = prefValue(el.dataset.k, el.dataset.v);
@@ -337,7 +337,7 @@ A.popPick = el => {
     });
     S.ui.pop = null;
     render();
-    toast(`${pr.name} marked ${PSTAT[v].name}`);
+    toast(t('toast.projectMarked', { name: pr.name, status: PSTAT[v].name }));
     return;
   }
   if (p.type === 'role') {
@@ -350,7 +350,7 @@ A.popPick = el => {
     if (api.enabled) {
       if (!m.userId) {
         render();
-        toast(`${m.name} has no account yet`, { kind: 'err' });
+        toast(t('err.noAccountYet', { name: m.name }), { kind: 'err' });
         return;
       }
       const previous = m.role;
@@ -360,10 +360,10 @@ A.popPick = el => {
         if (!res.ok) {
           m.role = previous;
           render();
-          toast(res.error || 'Could not change that role', { kind: 'err' });
+          toast(res.error || t('err.changeRole'), { kind: 'err' });
           return;
         }
-        toast(`${m.name} is now ${v === 'Admin' || v === 'Owner' ? 'an' : 'a'} ${v}`);
+        toast(t('toast.roleChanged', { name: m.name, article: v === 'Admin' || v === 'Owner' ? 'an' : 'a', role: v }));
         refreshMembers();
       });
       return;
@@ -372,7 +372,7 @@ A.popPick = el => {
       m.role = v;
     });
     render();
-    toast(`${m.name} is now ${v === 'Admin' ? 'an' : 'a'} ${v}`);
+    toast(t('toast.roleChanged', { name: m.name, article: v === 'Admin' ? 'an' : 'a', role: v }));
     return;
   }
   const field = { status: 'status', priority: 'priority', assignee: 'assignee', project: 'project', recur: 'recur', estimate: 'estimate', date: p.field }[
@@ -431,7 +431,7 @@ A.openTask = el => {
   const id = el.dataset.id;
   if (!task(id)) return;
   if (!canSee(proj(task(id).project))) {
-    toast("You don't have access to that task", { kind: 'err' });
+    toast(t('err.taskAccess'), { kind: 'err' });
     return;
   }
   if (!S.ui.drawer || !document.activeElement?.closest?.('.drawer')) S.ui.drawerOpener = el.isConnected ? focusKey(el) : S.ui.drawerOpener;
@@ -471,27 +471,28 @@ A._projMove = (el, d) => {
   S.ui.pop = null;
   save();
   render();
-  toast(`Moved ${proj(el.dataset.id).name} ${d < 0 ? 'up' : 'down'}`, { ms: 1600 });
+  toast(t('toast.moved', { name: proj(el.dataset.id).name, direction: d < 0 ? 'up' : 'down' }), { ms: 1600 });
 };
 A.toggleDrawerFull = () => {
   S.ui.drawerFull = !S.ui.drawerFull;
   render();
 };
 A.toggleDone = el => {
-  const t = task(el.dataset.id);
-  if (!t) return;
-  const wasDone = t.status === 'done';
+  const tk = task(el.dataset.id);
+  if (!tk) return;
+  const wasDone = tk.status === 'done';
   S.ui.pop = null;
-  updateTask(t.id, { status: wasDone ? (t.prevStatus && t.prevStatus !== 'done' ? t.prevStatus : 'todo') : 'done' });
-  if (!wasDone && !S.ui.offline) toast(`Completed “${t.title}”`, { action: 'Undo', onAction: () => updateTask(t.id, { status: t.prevStatus || 'todo' }) });
+  updateTask(tk.id, { status: wasDone ? (tk.prevStatus && tk.prevStatus !== 'done' ? tk.prevStatus : 'todo') : 'done' });
+  if (!wasDone && !S.ui.offline)
+    toast(t('toast.completed', { title: tk.title }), { action: 'Undo', onAction: () => updateTask(tk.id, { status: tk.prevStatus || 'todo' }) });
 };
 A.toggleFavTask = el => {
-  const t = task(el.dataset.id);
+  const tk = task(el.dataset.id);
   mutate(() => {
-    t.fav = !t.fav;
+    tk.fav = !tk.fav;
   });
   S.ui.pop = null;
-  toast(t.fav ? 'Added to favorites' : 'Removed from favorites', { ms: 1800 });
+  toast(tk.fav ? t('toast.addedToFavorites') : t('toast.removedFromFavorites'), { ms: 1800 });
   render();
 };
 A.toggleFavProj = el => {
@@ -501,7 +502,7 @@ A.toggleFavProj = el => {
   });
   S.ui.pop = null;
   render();
-  toast(p.fav ? `Added ${p.name} to favorites` : 'Removed from favorites', { ms: 1800 });
+  toast(p.fav ? t('toast.projectAddedToFavorites', { name: p.name }) : t('toast.removedFromFavorites'), { ms: 1800 });
 };
 A.copyLink = el => {
   S.ui.pop = null;
@@ -519,33 +520,33 @@ A.copyLink = el => {
             : '';
   copy(`${api.url}/w/${D().ws.url}${path ? `/${path}` : ''}`);
 };
-A.copyText = el => copy(el.dataset.text, 'Copied to clipboard');
+A.copyText = el => copy(el.dataset.text, t('toast.copiedToClipboard'));
 A.copyEmail = el => {
   S.ui.pop = null;
   render();
-  copy(mem(el.dataset.id).email, 'Email copied');
+  copy(mem(el.dataset.id).email, t('toast.emailCopied'));
 };
 A.dupTask = el => {
-  const t = task(el.dataset.id);
+  const tk = task(el.dataset.id);
   S.ui.pop = null;
   let n;
   mutate(() => {
-    n = createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, title: t.title + ' (copy)', created: Date.now(), fav: false });
+    n = createTask({ ...JSON.parse(JSON.stringify(tk)), id: uid('t'), key: undefined, title: tk.title + ' (copy)', created: Date.now(), fav: false });
     n.key = nextKey(proj(n.project));
   });
-  toast('Task duplicated', { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+  toast(t('toast.taskDuplicated'), { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
 };
 A.archiveTask = el => {
-  const t = task(el.dataset.id);
+  const tk = task(el.dataset.id);
   const snap = snapshot();
   S.ui.pop = null;
-  if (S.ui.drawer === t.id) S.ui.drawer = null;
+  if (S.ui.drawer === tk.id) S.ui.drawer = null;
   mutate(() => {
-    t.archived = true;
-    t.archivedAt = Date.now();
-    logAct('archived', t);
+    tk.archived = true;
+    tk.archivedAt = Date.now();
+    logAct('archived', tk);
   });
-  toast(`Archived “${t.title}”`, { action: 'Undo', onAction: () => restore(snap) });
+  toast(t('toast.archivedTask', { title: tk.title }), { action: 'Undo', onAction: () => restore(snap) });
 };
 export function deleteTasks(ids) {
   const set = new Set(ids);
@@ -556,17 +557,17 @@ export function deleteTasks(ids) {
   ids.forEach(i => S.ui.sel.delete(i));
 }
 A.delTask = el => {
-  const t = task(el.dataset.id);
+  const tk = task(el.dataset.id);
   S.ui.pop = null;
-  if (!t) return;
+  if (!tk) return;
   const run = () => {
     const snap = snapshot();
-    if (mutate(() => deleteTasks([t.id]))) toast(`Deleted “${t.title}”`, { action: 'Undo', onAction: () => restore(snap) });
+    if (mutate(() => deleteTasks([tk.id]))) toast(t('toast.deletedTask', { title: tk.title }), { action: 'Undo', onAction: () => restore(snap) });
   };
   if (S.prefs.confirmDel === false && !el.dataset.demo) return run();
   confirmDlg({
     title: 'Delete task?',
-    body: `<b>${esc(t.title)}</b>${t.subtasks.length ? `, its ${t.subtasks.length} subtasks,` : ''} and ${commentsOf(t.id).length} comment${commentsOf(t.id).length === 1 ? '' : 's'} will be permanently deleted.`,
+    body: `<b>${esc(tk.title)}</b>${tk.subtasks.length ? `, its ${tk.subtasks.length} subtasks,` : ''} and ${commentsOf(tk.id).length} comment${commentsOf(tk.id).length === 1 ? '' : 's'} will be permanently deleted.`,
     ok: 'Delete task',
     danger: true,
     run,
@@ -678,32 +679,32 @@ A.submitTask = () => {
     subtasks: f.subtasks,
   };
   if (m.edit) {
-    const t = task(m.edit);
+    const tk = task(m.edit);
     if (
       !mutate(() => {
-        applyPatch(t, base);
+        applyPatch(tk, base);
         if (
           f.desc !==
-          (t.desc || '')
+          (tk.desc || '')
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
         )
-          t.desc = f.desc ? `<p>${esc(f.desc)}</p>` : '';
-        t.attachments.push(...files);
+          tk.desc = f.desc ? `<p>${esc(f.desc)}</p>` : '';
+        tk.attachments.push(...files);
       })
     )
       return;
     S.ui.modals.pop();
     render();
-    toast('Changes saved');
+    toast(t('toast.changesSaved'));
     return;
   }
-  let t;
+  let tk;
   if (
     !mutate(() => {
-      t = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '', attachments: files });
-      files.forEach(x => D().files.unshift({ ...x, project: t.project, task: t.id }));
+      tk = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '', attachments: files });
+      files.forEach(x => D().files.unshift({ ...x, project: tk.project, task: tk.id }));
     })
   )
     return;
@@ -711,13 +712,13 @@ A.submitTask = () => {
     Object.assign(f, { title: '', desc: '', subtasks: [], files: [] });
     render();
     setTimeout(() => $('#f-title')?.focus(), 0);
-    toast(`Created ${t.key}`, { ms: 2000 });
+    toast(t('toast.created', { key: tk.key }), { ms: 2000 });
     return;
   }
   S.ui.modals.pop();
-  fxSet({ added: t.id });
+  fxSet({ added: tk.id });
   render();
-  toast(`Created ${t.key} in ${proj(t.project).name}`, { action: 'Open', onAction: () => A.openTask({ dataset: { id: t.id } }) });
+  toast(t('toast.createdIn', { key: tk.key, name: proj(tk.project).name }), { action: 'Open', onAction: () => A.openTask({ dataset: { id: tk.id } }) });
 };
 
 /* inline composer */
@@ -834,13 +835,13 @@ A.expandRow = el => {
 
 /* attachments */
 A.rmAttach = el => {
-  const t = task(el.dataset.id);
-  const f = t.attachments.find(a => a.id === el.dataset.aid);
+  const tk = task(el.dataset.id);
+  const f = tk.attachments.find(a => a.id === el.dataset.aid);
   mutate(() => {
-    t.attachments = t.attachments.filter(a => a.id !== el.dataset.aid);
-    logAct('removed a file from', t);
+    tk.attachments = tk.attachments.filter(a => a.id !== el.dataset.aid);
+    logAct('removed a file from', tk);
   });
-  toast(`Removed ${f.name}`);
+  toast(t('toast.removed', { name: f.name }));
 };
 A.filePreview = el => {
   const t = task(el.dataset.tid);
@@ -855,7 +856,7 @@ A.previewFile = el => {
 export function handleFiles(files, ctx) {
   if (!files || !files.length) return;
   if (S.ui.offline) {
-    toast("Upload failed — you're offline.", { kind: 'err', action: 'Try again', onAction: () => {} });
+    toast(t('err.uploadOffline'), { kind: 'err', action: 'Try again', onAction: () => {} });
     return;
   }
   S.ui.uploads = S.ui.uploads || [];
@@ -874,13 +875,13 @@ export function handleFiles(files, ctx) {
         const rec = { id: uid('f'), name: up.name, type: fileType(up.name), size: up.size, by: D().me, at: Date.now() };
         D().files.unshift({ ...rec, project: up.project, task: up.task || null });
         if (up.task) {
-          const t = task(up.task);
-          t.attachments.push(rec);
-          logAct('added a file to', t, up.name);
+          const tk = task(up.task);
+          tk.attachments.push(rec);
+          logAct('added a file to', tk, up.name);
         }
         save();
         render();
-        toast(`Uploaded ${up.name}`);
+        toast(t('toast.uploaded', { name: up.name }));
       }
     }, 220);
   });
@@ -934,17 +935,17 @@ A.postComment = el => {
     $('#d-cmt, #inbox-reply')?.focus();
     return;
   }
-  const t = task(id);
+  const tk = task(id);
   if (
     mutate(() => {
       D().comments.push({ id: uid('c'), task: id, by: D().me, at: Date.now(), text: txt, re: {} });
-      logAct('commented on', t);
+      logAct('commented on', tk);
       S.ui.drafts[id] = '';
       S.ui.mention = null;
       S.ui.drawerTab = 'comments';
     })
   ) {
-    if (S.ui.route === 'inbox') toast('Reply posted');
+    if (S.ui.route === 'inbox') toast(t('toast.replyPosted'));
   }
 };
 A.delComment = el => {
@@ -953,7 +954,7 @@ A.delComment = el => {
   mutate(() => {
     D().comments = D().comments.filter(x => x !== c);
   });
-  toast('Comment deleted', { action: 'Undo', onAction: () => restore(snap) });
+  toast(t('toast.commentDeleted'), { action: 'Undo', onAction: () => restore(snap) });
 };
 A.react = el => {
   const c = D().comments.find(x => x.id === el.dataset.id);
@@ -975,12 +976,12 @@ document.addEventListener('mousedown', e => {
   if (cmd === 'createLink') {
     const s = String(getSelection());
     if (/^https?:\/\//.test(s)) document.execCommand('createLink', false, s);
-    else toast('Select a URL starting with https:// to turn it into a link', { kind: 'info' });
+    else toast(t('toast.selectUrlToLink'), { kind: 'info' });
   } else document.execCommand(cmd, false, arg ? `<${arg}>` : null);
   const ed = $('#d-desc');
   if (ed) {
-    const t = task(ed.dataset.rte);
-    t.desc = ed.innerHTML;
+    const tk = task(ed.dataset.rte);
+    tk.desc = ed.innerHTML;
     save();
   }
 });
@@ -1027,7 +1028,7 @@ A.bulkDelete = () => {
     danger: true,
     run: () => {
       const snap = snapshot();
-      if (mutate(() => deleteTasks(ids))) toast(`Deleted ${ids.length} tasks`, { action: 'Undo', onAction: () => restore(snap) });
+      if (mutate(() => deleteTasks(ids))) toast(t('toast.deletedTasks', { n: ids.length }), { action: 'Undo', onAction: () => restore(snap) });
     },
   });
 };
@@ -1151,7 +1152,7 @@ A.saveViewSubmit = () => {
   save();
   S.ui.modals.pop();
   go('project', { id: m.pid, tab: 'v:' + sv.id }, { tab: true });
-  toast(`Saved view “${name}”`);
+  toast(t('toast.savedView', { name: name }));
 };
 A.renameView = el => {
   const v = D().savedViews.find(x => x.id === el.dataset.id);
@@ -1176,7 +1177,7 @@ A.delView = el => {
   save();
   if (S.ui.params.tab === 'v:' + v.id) go('project', { id: v.project, tab: 'list' }, { tab: true });
   else render();
-  toast(`Deleted view “${v.name}”`);
+  toast(t('toast.deletedView', { name: v.name }));
 };
 
 /* board column menu */
@@ -1208,7 +1209,7 @@ A.colDoneAll = el => {
   }
   const snap = snapshot();
   if (mutate(() => ts.forEach(t => applyPatch(t, { status: 'done' }))))
-    toast(`Marked ${ts.length} tasks as done`, { action: 'Undo', onAction: () => restore(snap) });
+    toast(t('toast.markedDone', { n: ts.length }), { action: 'Undo', onAction: () => restore(snap) });
 };
 A.colArchive = () => {
   const ts = colTasks(S.ui.pop.key, 'done');
@@ -1222,7 +1223,7 @@ A.colArchive = () => {
       }),
     )
   )
-    toast(`Archived ${ts.length} completed tasks`, { action: 'Undo', onAction: () => restore(snap) });
+    toast(t('toast.archivedCompleted', { n: ts.length }), { action: 'Undo', onAction: () => restore(snap) });
 };
 A.colSortPrio = el => {
   const ts = colTasks(S.ui.pop.key, el.dataset.id).sort((a, b) => PR[b.priority].w - PR[a.priority].w);
@@ -1374,7 +1375,7 @@ A.submitProject = () => {
     ) {
       S.ui.modals.pop();
       render();
-      toast('Project updated');
+      toast(t('toast.projectUpdated'));
     }
     return;
   }
@@ -1387,7 +1388,7 @@ A.submitProject = () => {
     return;
   S.ui.modals.pop();
   go('project', { id: p.id, tab: f.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
-  toast(`Created ${p.name}${tasksOf(p.id).length ? ` with ${tasksOf(p.id).length} starter tasks` : ''}`);
+  toast(tasksOf(p.id).length ? t('toast.createdStarters', { name: p.name, n: tasksOf(p.id).length }) : t('toast.createdProject', { name: p.name }));
 };
 A.dupProject = el => {
   const p = proj(el.dataset.id);
@@ -1397,7 +1398,7 @@ A.dupProject = el => {
     n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
     tasksOf(p.id).forEach(t => createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, project: n.id, status: 'todo' }));
   });
-  toast(`Duplicated ${p.name}`, { action: 'Open', onAction: () => go('project', { id: n.id }) });
+  toast(t('toast.duplicated', { name: p.name }), { action: 'Open', onAction: () => go('project', { id: n.id }) });
 };
 A.archiveProject = el => {
   const p = proj(el.dataset.id);
@@ -1416,7 +1417,7 @@ A.archiveProject = el => {
         })
       ) {
         if (S.ui.route === 'project' && S.ui.params.id === p.id) go('projects');
-        toast(`Archived ${p.name}`, { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.archived', { name: p.name }), { action: 'Undo', onAction: () => restore(snap) });
       }
     },
   });
@@ -1427,7 +1428,7 @@ A.restoreProject = el => {
     p.archived = false;
     p.archivedAt = null;
   });
-  toast(`Restored ${p.name}`);
+  toast(t('toast.restored', { name: p.name }));
 };
 A.delProject = el => {
   const p = proj(el.dataset.id);
@@ -1454,14 +1455,17 @@ A.delProject = el => {
         })
       ) {
         if (S.ui.route === 'project' && S.ui.params.id === p.id) go('projects');
-        toast(`Deleted ${p.name}`, { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.deleted', { name: p.name }), { action: 'Undo', onAction: () => restore(snap) });
       }
     },
   });
 };
 A.requestAccess = el => {
   const p = proj(el.dataset.id);
-  toast(`Access requested. We'll notify you when ${mem(p?.lead)?.name || 'the owner'} responds.`);
+  /* The fallback name is hoisted: a literal inside a display-named var
+     property is a finding, a lowercase fallback on a plain const is not. */
+  const lead = mem(p?.lead)?.name || 'the owner';
+  toast(t('toast.accessRequested', { name: lead }));
 };
 
 /* sharing & invites */
@@ -1479,19 +1483,19 @@ A.shareAdd = el => {
   const p = proj(el.dataset.id);
   const m = mem(el.dataset.mid);
   if (!p || !m) return;
-  if (!canManageProject(p)) return toast('Only the project lead, an admin or the owner can change access', { kind: 'err' });
+  if (!canManageProject(p)) return toast(t('err.cannotChangeAccess'), { kind: 'err' });
   mutate(() => {
     p.members.push(m.id);
   });
   S.ui.shareQ = '';
   render();
-  toast(`${m.name} can now edit ${p.name}`);
+  toast(t('toast.memberCanEdit', { name: m.name, project: p.name }));
 };
 A.shareInvite = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const p = proj(m.id);
   if (!p) return;
-  if (!canManageProject(p)) return toast('Only the project lead, an admin or the owner can change access', { kind: 'err' });
+  if (!canManageProject(p)) return toast(t('err.cannotChangeAccess'), { kind: 'err' });
   const v = ($('#share-in')?.value || '').trim();
   const perm = $('#share-perm')?.value;
   if (!v) {
@@ -1508,16 +1512,16 @@ A.shareInvite = () => {
       });
     S.ui.shareQ = '';
     render();
-    toast(`Shared with ${ex.name}`);
+    toast(t('toast.sharedWith', { name: ex.name }));
     return;
   }
   if (api.enabled) {
     // Project access lists only reference workspace members; invite the person from Members first.
-    toast('Invite them to the workspace first, then add them to this project', { kind: 'err' });
+    toast(t('err.inviteFirst'), { kind: 'err' });
     return;
   }
   if (!/^\S+@\S+\.\S+$/.test(v)) {
-    toast('Enter a valid email address, like name@company.com', { kind: 'err' });
+    toast(t('err.invalidEmail'), { kind: 'err' });
     return;
   }
   const nm = v
@@ -1533,27 +1537,27 @@ A.shareInvite = () => {
   });
   S.ui.shareQ = '';
   render();
-  toast(`Invitation sent to ${v}`);
+  toast(t('toast.invitationSentTo', { email: v }));
 };
 IN.sharePerm = el => {
   const p = proj(el.dataset.id);
   const mid = el.dataset.mid;
   if (!p) return;
-  if (!canManageProject(p)) return toast('Only the project lead, an admin or the owner can change access', { kind: 'err' });
+  if (!canManageProject(p)) return toast(t('err.cannotChangeAccess'), { kind: 'err' });
   if (el.value === '__remove') {
-    if (p.members.length <= 1) return toast('Promote someone else before removing the last member', { kind: 'err' });
+    if (p.members.length <= 1) return toast(t('err.lastMember'), { kind: 'err' });
     const snap = snapshot();
     mutate(() => {
       p.members = p.members.filter(x => x !== mid);
       if (p.lead === mid) p.lead = p.members[0] || null;
     });
-    toast(`Removed ${mem(mid).name}`, { action: 'Undo', onAction: () => restore(snap) });
+    toast(t('toast.removed', { name: mem(mid).name }), { action: 'Undo', onAction: () => restore(snap) });
   } else {
     mutate(() => {
       p.perms = p.perms || {};
       p.perms[mid] = el.value;
     });
-    toast(`${mem(mid).name}: ${el.value}`, { ms: 1800 });
+    toast(t('toast.permChanged', { name: mem(mid).name, perm: el.value }), { ms: 1800 });
   }
 };
 IN.shareAccess = el => {
@@ -1565,7 +1569,7 @@ IN.shareAccess = el => {
     p.private = priv;
     if (priv && D().me && !p.members.includes(D().me)) p.members.push(D().me);
   });
-  toast(priv ? 'Only people invited can open this project' : `Everyone at ${D().ws.name} can open this project`);
+  toast(priv ? t('toast.privateProject') : t('toast.publicProject', { name: D().ws.name }));
 };
 A.invite = () => {
   S.ui.inviteDraft = '';
@@ -1682,24 +1686,24 @@ A.submitInvite = () => {
   });
 };
 A.copyInviteLink = async () => {
-  if (!api.enabled) return copy(`${api.url}/join/${D().ws.url}-7f3k2`, 'Invite link copied');
+  if (!api.enabled) return copy(`${api.url}/join/${D().ws.url}-7f3k2`, t('toast.inviteLinkCopied'));
   const role = API_ROLE[$('#inv-role')?.value] || 'member';
   const team = $('#inv-team')?.value || null;
   const res = await api.createInvites([], role, team);
-  if (!res.ok) return toast(res.error || 'Could not create an invite link', { kind: 'err' });
-  await copy(res.data.invites[0].url, 'Invite link copied');
+  if (!res.ok) return toast(res.error || t('err.inviteLink'), { kind: 'err' });
+  await copy(res.data.invites[0].url, t('toast.inviteLinkCopied'));
 };
 A.resendInvite = async el => {
   const m = mem(el.dataset.id);
   S.ui.pop = null;
   render();
-  if (!api.enabled) return toast(`Invite resent to ${m.email}`);
+  if (!api.enabled) return toast(t('toast.inviteResent', { email: m.email }));
   if (!m) return;
   const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', m.team || null);
-  if (!res.ok) return toast(res.error || 'Could not create a new invite', { kind: 'err' });
+  if (!res.ok) return toast(res.error || t('err.newInvite'), { kind: 'err' });
   const invite = res.data.invites?.[0];
-  if (invite?.sent) return toast(`Invitation sent to ${m.email}`);
-  await copy(invite?.url || '', api.mailEnabled ? 'Email failed — new invite link copied' : 'New invite link copied');
+  if (invite?.sent) return toast(t('toast.invitationSentTo', { email: m.email }));
+  await copy(invite?.url || '', api.mailEnabled ? t('toast.emailFailedLinkCopied') : t('toast.newInviteLinkCopied'));
 };
 A.viewProfile = el => go('member', { id: el.dataset.id });
 A.assignToMember = el => {
@@ -1741,11 +1745,11 @@ A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
   if (!row?.email) return;
   const res = await api.createInvites([row.email], row.role, row.team || null);
-  if (!res.ok) return toast(res.error || 'Could not create a new invite', { kind: 'err' });
+  if (!res.ok) return toast(res.error || t('err.newInvite'), { kind: 'err' });
   const invite = res.data.invites?.[0];
   await refreshMembers();
-  if (invite?.sent) return toast(`Invitation sent to ${row.email}`);
-  await copy(invite?.url || '', api.mailEnabled ? 'Email failed — new invite link copied' : 'New invite link copied');
+  if (invite?.sent) return toast(t('toast.invitationSentTo', { email: row.email }));
+  await copy(invite?.url || '', api.mailEnabled ? t('toast.emailFailedLinkCopied') : t('toast.newInviteLinkCopied'));
 };
 
 A.revokeInvite = async el => {
@@ -1753,8 +1757,8 @@ A.revokeInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === id);
   S.ui.pop = null;
   const res = await api.revokeInvite(id);
-  if (!res.ok) return toast(res.error || 'Could not revoke that invite', { kind: 'err' });
-  toast(`Invite for ${row?.email || 'that address'} revoked`);
+  if (!res.ok) return toast(res.error || t('err.revokeInvite'), { kind: 'err' });
+  toast(t('toast.inviteRevoked', { email: row?.email || 'that address' }));
   await refreshMembers();
 };
 
@@ -1777,8 +1781,8 @@ A.leaveWorkspace = () => {
     icon: 'log-out',
     run: async () => {
       const res = await api.leave();
-      if (!res.ok) return toast(res.error || 'Could not leave this workspace', { kind: 'err' });
-      toast(`You left ${name}`);
+      if (!res.ok) return toast(res.error || t('err.leaveWorkspace'), { kind: 'err' });
+      toast(t('toast.leftWorkspace', { name: name }));
       await leaveTo(res.data?.nextSlug);
     },
   });
@@ -1794,8 +1798,8 @@ A.deleteWorkspace = () => {
     typeName: ws.url,
     run: async () => {
       const res = await api.deleteWorkspace();
-      if (!res.ok) return toast(res.error || 'Could not delete this workspace', { kind: 'err' });
-      toast(`${ws.name} deleted`);
+      if (!res.ok) return toast(res.error || t('err.deleteWorkspace'), { kind: 'err' });
+      toast(t('toast.workspaceDeleted', { name: ws.name }));
       await leaveTo(res.data?.nextSlug);
     },
   });
@@ -1813,12 +1817,12 @@ A.removeMember = el => {
     icon: 'user-minus',
     run: async () => {
       if (api.enabled) {
-        if (!m.userId) return toast(`${m.name} has no account to remove`, { kind: 'err' });
+        if (!m.userId) return toast(t('err.noAccountToRemove', { name: m.name }), { kind: 'err' });
         const res = await api.removeMember(m.userId);
-        if (!res.ok) return toast(res.error || 'Could not remove that member', { kind: 'err' });
+        if (!res.ok) return toast(res.error || t('err.removeMember'), { kind: 'err' });
         await refreshMembers();
         if (S.ui.route === 'member') go('members');
-        toast(`Removed ${m.name}`);
+        toast(t('toast.removed', { name: m.name }));
         return;
       }
       const snap = snapshot();
@@ -1832,7 +1836,7 @@ A.removeMember = el => {
         })
       ) {
         if (S.ui.route === 'member') go('members');
-        toast(`Removed ${m.name}`, { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.removed', { name: m.name }), { action: 'Undo', onAction: () => restore(snap) });
       }
     },
   });
@@ -1883,7 +1887,7 @@ A.dupFile = el => {
     const i = D().files.indexOf(f);
     D().files.splice(i + 1, 0, { ...f, id: uid('f'), name: f.name.replace(/(\.[^.]+)$/, ' copy$1'), at: Date.now(), by: D().me });
   });
-  toast('File duplicated');
+  toast(t('toast.fileDuplicated'));
 };
 A.delFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
@@ -1901,7 +1905,7 @@ A.delFile = el => {
           if (f.task && task(f.task)) task(f.task).attachments = task(f.task).attachments.filter(a => a.name !== f.name);
         })
       )
-        toast(`Deleted ${f.name}`, { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.deleted', { name: f.name }), { action: 'Undo', onAction: () => restore(snap) });
     },
   });
 };
@@ -1925,7 +1929,7 @@ A.markAllRead = () => {
   D().notifs.forEach(x => (x.read = true));
   save();
   render();
-  if (n) toast("You're all caught up.");
+  if (n) toast(t('toast.allCaughtUp'));
 };
 A.toggleUnreadOnly = () => {
   S.ui.inboxUnread = !S.ui.inboxUnread;
@@ -1998,16 +2002,16 @@ A.switchWs = async el => {
     return;
   }
   const res = await openWorkspace(slug);
-  if (!res.ok) return toast(res.error || 'Could not switch workspace', { kind: 'err' });
+  if (!res.ok) return toast(res.error || t('err.switchWorkspace'), { kind: 'err' });
   S.ui.pop = null;
   go('home');
-  toast(`Switched to ${target.name}`);
+  toast(t('toast.switchedTo', { name: target.name }));
 };
 A.newWorkspace = () => {
   S.ui.pop = null;
-  if (!api.enabled) return toast('The local demo has a single workspace.', { kind: 'info' });
+  if (!api.enabled) return toast(t('toast.demoSingleWorkspace'), { kind: 'info' });
   if (!api.canCreateWorkspace) {
-    return toast('Ask a workspace administrator to create one for you', { kind: 'err' });
+    return toast(t('err.askAdmin'), { kind: 'err' });
   }
   S.ui.auth = 'onboarding';
   S.ui.onb = 1;
@@ -2048,18 +2052,18 @@ A.toggleOffline = () => {
   S.ui.offline = !S.ui.offline;
   S.ui.pop = null;
   render();
-  toast(S.ui.offline ? 'Offline mode on — edits will fail to save' : 'Back online', { kind: S.ui.offline ? 'err' : 'ok' });
+  toast(S.ui.offline ? t('err.offlineMode') : t('toast.backOnline'), { kind: S.ui.offline ? 'err' : 'ok' });
 };
 A.retryOnline = el => {
   el.classList.add('is-loading');
   setTimeout(() => {
     S.ui.offline = false;
     render();
-    toast('Reconnected. All changes are synced.');
+    toast(t('toast.reconnected'));
   }, 700);
 };
 A.resetDemo = () => {
-  if (api.enabled) return toast('Demo data can only be reset in local demo mode.', { kind: 'info' });
+  if (api.enabled) return toast(t('toast.demoResetLocal'), { kind: 'info' });
   S.ui.pop = null;
   confirmDlg({
     title: 'Reset demo data?',
@@ -2074,18 +2078,18 @@ A.resetDemo = () => {
       S.ui.drawer = null;
       save();
       go('home');
-      toast('Demo data restored');
+      toast(t('toast.demoRestored'));
     },
   });
 };
 A.toastInfo = el => toast(el.dataset.msg, { kind: 'info' });
 A.demoToast = el => {
   const v = el.dataset.v;
-  if (v === 'err') toast("Your changes couldn't be saved.", { kind: 'err', action: 'Try again', onAction: () => toast('Saved') });
+  if (v === 'err') toast(t('err.changesNotSaved'), { kind: 'err', action: 'Try again', onAction: () => toast(t('toast.saved')) });
   else if (v === 'retry') {
-    toast('Retrying…', { kind: 'info', ms: 1200 });
-    setTimeout(() => toast('Loaded successfully'), 1300);
-  } else toast('Moved “Create homepage wireframes” to Review', { action: 'Undo', onAction: () => toast('Undone', { kind: 'info' }) });
+    toast(t('toast.retrying'), { kind: 'info', ms: 1200 });
+    setTimeout(() => toast(t('toast.loadedSuccessfully')), 1300);
+  } else toast(t('toast.demoMoved'), { action: 'Undo', onAction: () => toast(t('toast.undone'), { kind: 'info' }) });
 };
 A.demoConfirm = () =>
   confirmDlg({
@@ -2093,13 +2097,13 @@ A.demoConfirm = () =>
     body: 'The project will be hidden from the sidebar. You can restore it any time.',
     ok: 'Archive project',
     icon: 'archive',
-    run: () => toast('This was a preview — nothing was archived', { kind: 'info' }),
+    run: () => toast(t('toast.demoPreview'), { kind: 'info' }),
   });
 A.demoLoad = el => {
   el.classList.add('is-loading');
   setTimeout(() => {
     el.classList.remove('is-loading');
-    toast('Loaded');
+    toast(t('toast.loaded'));
   }, 1400);
 };
 A.reloadPage = () => {
@@ -2147,14 +2151,14 @@ IN.prefToggle = el => {
 IN.npToggle = el => {
   D().notifPrefs[el.dataset.k] = el.checked;
   save();
-  toast('Notification preferences saved', { ms: 1500 });
+  toast(t('toast.notifPrefsSaved'), { ms: 1500 });
 };
 IN.prefSel = el => {
   const k = el.dataset.k;
   S.prefs[k] = prefValue(k, el.value);
   save();
   render();
-  toast('Preference saved', { ms: 1500 });
+  toast(t('toast.prefSaved'), { ms: 1500 });
 };
 A.wsColor = el => {
   const c = el.dataset.v;
@@ -2163,7 +2167,7 @@ A.wsColor = el => {
   render();
   if (api.enabled && api.workspace) {
     api.patchWorkspace({ color: c }).then(r => {
-      if (!r.ok) toast(r.error || 'Could not save the workspace color', { kind: 'err' });
+      if (!r.ok) toast(r.error || t('err.wsColor'), { kind: 'err' });
     });
   }
 };
@@ -2174,7 +2178,7 @@ A.saveWorkspace = () => {
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-');
   if (!n) {
-    toast("Workspace name can't be empty", { kind: 'err' });
+    toast(t('err.wsNameEmpty'), { kind: 'err' });
     return;
   }
   if (api.enabled) {
@@ -2184,12 +2188,12 @@ A.saveWorkspace = () => {
         const patch = { name: n };
         if (u && u !== current) patch.slug = u;
         const res = await api.patchWorkspace(patch);
-        if (!res.ok) return toast(res.error || 'Could not save workspace settings', { kind: 'err' });
+        if (!res.ok) return toast(res.error || t('err.wsSettings'), { kind: 'err' });
         D().ws.name = res.data.workspace.name;
         D().ws.url = res.data.workspace.slug;
         if (patch.slug) history.replaceState(null, '', `/w/${res.data.workspace.slug}`);
         save();
-        toast('Workspace settings saved');
+        toast(t('toast.wsSettingsSaved'));
       });
     };
     if (u && u !== current) {
@@ -2211,11 +2215,11 @@ A.saveWorkspace = () => {
         D().ws.url = u || D().ws.url;
       })
     )
-      toast('Workspace settings saved');
+      toast(t('toast.wsSettingsSaved'));
   });
 };
 A.delWorkspace = () => {
-  if (api.enabled) return toast('Deleting a workspace is not available yet.', { kind: 'info' });
+  if (api.enabled) return toast(t('toast.deleteWsUnavailable'), { kind: 'info' });
   return confirmDlg({
     title: `Delete ${D().ws.name}?`,
     body: 'Every project, task, file, and comment in this workspace will be permanently deleted for all members.',
@@ -2228,7 +2232,7 @@ A.delWorkspace = () => {
       save();
       S.ui.auth = 'login';
       render();
-      toast('Workspace deleted. Demo data was restored for this prototype.', { kind: 'info', ms: 5000 });
+      toast(t('toast.wsDeletedDemo'), { kind: 'info', ms: 5000 });
     },
   });
 };
@@ -2255,7 +2259,7 @@ A.saveProfile = () => {
         me().title = tt;
       })
     )
-      toast('Profile updated');
+      toast(t('toast.profileUpdated'));
   });
 };
 IN.pwStrength = el => {
@@ -2283,14 +2287,14 @@ A.savePassword = () => {
     S.ui.pwDone = true;
     S.ui.pwNew = '';
     render();
-    toast('Password updated');
+    toast(t('toast.passwordUpdated'));
   });
 };
 A.revokeSession = el => {
   mutate(() => {
     D().sessions = D().sessions.filter(s => s.id !== el.dataset.id);
   });
-  toast('Session signed out');
+  toast(t('toast.sessionSignedOut'));
 };
 A.revokeAll = () =>
   confirmDlg({
@@ -2303,7 +2307,7 @@ A.revokeAll = () =>
       mutate(() => {
         D().sessions = D().sessions.filter(s => s.cur);
       });
-      toast('Signed out of other sessions');
+      toast(t('toast.signedOutOthers'));
     },
   });
 A.setup2fa = () => {
@@ -2327,7 +2331,7 @@ A.verify2fa = () => {
     D().tfa = true;
     S.ui.tfaSetup = false;
   });
-  toast('Two-factor authentication enabled');
+  toast(t('toast.twoFaEnabled'));
 };
 A.disable2fa = () =>
   confirmDlg({
@@ -2340,7 +2344,7 @@ A.disable2fa = () =>
       mutate(() => {
         D().tfa = false;
       });
-      toast('Two-factor authentication turned off');
+      toast(t('toast.twoFaDisabled'));
     },
   });
 A.changePlan = el => {
@@ -2356,16 +2360,16 @@ A.changePlan = el => {
     run: async () => {
       if (api.enabled) {
         const res = await api.setPlan(v);
-        if (!res.ok) return toast(res.error || 'Could not change the plan', { kind: 'err' });
+        if (!res.ok) return toast(res.error || t('err.changePlan'), { kind: 'err' });
         S.data.plan = v;
         render();
-        toast(`You're now on the ${v} plan`);
+        toast(t('toast.planChanged', { plan: v }));
         return;
       }
       mutate(() => {
         D().plan = v;
       });
-      toast(`You're now on the ${v} plan`);
+      toast(t('toast.planChanged', { plan: v }));
     },
   });
 };
@@ -2436,7 +2440,7 @@ A.doLogin = () => {
     return;
   }
   if (!api.enabled) {
-    loadingBtn('login-btn', 750, () => enterApp(`Signed in as ${em}`));
+    loadingBtn('login-btn', 750, () => enterApp(t('toast.signedInAs', { name: em })));
     return;
   }
   loadingBtn('login-btn', 0, async () => {
@@ -2468,7 +2472,7 @@ A.doLogin = () => {
         const joined = await hydrateFromServer(joinSlug);
         if (joined.ok) {
           history.replaceState(null, '', `/w/${joinSlug}`);
-          enterApp(`Welcome to ${api.workspace?.name || joinSlug}`);
+          enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
           return;
         }
       }
@@ -2489,13 +2493,13 @@ A.doLogin = () => {
     }
     history.replaceState(null, '', `/w/${slug}`);
     S.ui.wantedSlug = null;
-    enterApp(`Signed in as ${api.user?.name || em}`);
+    enterApp(t('toast.signedInAs', { name: api.user?.name || em }));
   });
 };
 A.socialAuth = el => {
-  if (api.enabled) return toast('Social sign-in is not configured on this server.', { kind: 'info' });
+  if (api.enabled) return toast(t('toast.socialNotConfigured'), { kind: 'info' });
   el.classList.add('is-loading');
-  setTimeout(() => enterApp(`Signed in with ${el.dataset.v}`), 800);
+  setTimeout(() => enterApp(t('toast.signedInWith', { provider: el.dataset.v })), 800);
 };
 A.doJoin = () => {
   const j = S.ui.join;
@@ -2551,7 +2555,7 @@ A.doJoin = () => {
     }
     S.ui.pwNew = '';
     history.replaceState(null, '', `/w/${slug}`);
-    enterApp(`Welcome, ${nm}`);
+    enterApp(t('toast.welcomeUser', { name: nm }));
   });
 };
 A.doSignup = () => {
@@ -2611,7 +2615,7 @@ A.doSignup = () => {
     }
     history.replaceState(null, '', `/w/${slug}`);
     S.ui.af.pw = '';
-    enterApp(`Welcome, ${nm}`);
+    enterApp(t('toast.welcomeUser', { name: nm }));
   });
 };
 export function startResend() {
@@ -2631,8 +2635,8 @@ A.resend = el => {
   if (el.dataset.v === 'verify') {
     startResend();
     render();
-    toast(`Verification email sent to ${S.ui.af.email}`);
-  } else toast(`Reset link sent to ${S.ui.af.email}`);
+    toast(t('toast.verificationSent', { email: S.ui.af.email }));
+  } else toast(t('toast.resetSent', { email: S.ui.af.email }));
 };
 A.verified = () => {
   S.ui.auth = 'onboarding';
@@ -2720,14 +2724,14 @@ A.onbNext = el => {
     return;
   }
   if (S.ui.onb === 3 && !o.proj.trim()) {
-    toast('Give your project a name', { kind: 'err' });
+    toast(t('err.projectName'), { kind: 'err' });
     return;
   }
   if (S.ui.onb === 4 && el.dataset.skip) o.invites = '';
   if (S.ui.onb === 4 && !el.dataset.skip) {
     const bad = (o.invites || '').split(',').filter(x => x && !EMAIL_RE.test(x));
     if (bad.length) {
-      toast(`${bad[0]} isn't a valid email address`, { kind: 'err' });
+      toast(t('err.notValidEmail', { email: bad[0] }), { kind: 'err' });
       return;
     }
   }
@@ -2749,13 +2753,13 @@ A.onbFinish = async () => {
     const res = await api.createWorkspace(o.ws.trim() || 'Workspace', o.url || undefined);
     if (!res.ok) {
       S.ui.errors = { ws: res.error || 'Could not create the workspace' };
-      toast(res.error || 'Could not create the workspace', { kind: 'err' });
+      toast(res.error || t('err.createWorkspace'), { kind: 'err' });
       render();
       return;
     }
     const loaded = await openWorkspace(res.data.workspace.slug);
     if (!loaded.ok) {
-      toast('Workspace created, but it could not be loaded', { kind: 'err' });
+      toast(t('err.wsCreatedNotLoaded'), { kind: 'err' });
       return;
     }
   }
@@ -2797,9 +2801,9 @@ A.onbFinish = async () => {
   });
   if (api.enabled && emails.length) {
     const inv = await api.createInvites(emails, 'member', null);
-    if (!inv.ok) toast(inv.error || 'Could not send the invites', { kind: 'err' });
+    if (!inv.ok) toast(inv.error || t('err.sendInvites'), { kind: 'err' });
   }
   S.ui.auth = null;
   go('project', { id: p.id, tab: S.prefs.defaultTab });
-  toast(`Welcome to ${D().ws.name}`);
+  toast(t('toast.welcomeTo', { name: D().ws.name }));
 };

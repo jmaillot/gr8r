@@ -13,19 +13,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Access requested. We'll notify you when"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Account created, but the workspace could not be loaded."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Added"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Added to favorites"
   },
   {
     "file": "src/actions/actions.js",
@@ -45,63 +33,11 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Archived"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Archived “"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Ask a workspace administrator to create one for you"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Back online"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Change URL"
   },
   {
     "file": "src/actions/actions.js",
     "text": "Change the workspace URL?"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Changes saved"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Comment deleted"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Completed “"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Copied to clipboard"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Copy isn't available here —"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not change that role"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not change the plan"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not create a new invite"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not create an invite link"
   },
   {
     "file": "src/actions/actions.js",
@@ -117,35 +53,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Could not delete this workspace"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Could not join the workspace"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not leave this workspace"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not remove that member"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not revoke that invite"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not save the workspace color"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not save workspace settings"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Could not send the invites"
   },
   {
     "file": "src/actions/actions.js",
@@ -153,19 +61,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Could not switch workspace"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Created"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Created during setup from the"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Dark mode on"
   },
   {
     "file": "src/actions/actions.js",
@@ -197,51 +93,11 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Deleted"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Deleted view “"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Deleted “"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Deleting a workspace is not available yet."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Demo data can only be reset in local demo mode."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Demo data restored"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Downgrade"
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Duplicated"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Email copied"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Email failed — new invite link copied"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Enter a valid email address"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Enter a valid email address, like name@company.com"
   },
   {
     "file": "src/actions/actions.js",
@@ -293,14 +149,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Everyone at"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "File duplicated"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "File name"
   },
   {
@@ -313,31 +161,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Give your project a name"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Guest"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Invitation sent to"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Invite for"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Invite link copied"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Invite resent to"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Invite them to the workspace first, then add them to this project"
   },
   {
     "file": "src/actions/actions.js",
@@ -349,43 +173,11 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Light mode on"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Link copied"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Loaded"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Loaded successfully"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Marked"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Member"
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Moved"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Moved “Create homepage wireframes” to Review"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Name your workspace to continue"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "New invite link copied"
   },
   {
     "file": "src/actions/actions.js",
@@ -397,22 +189,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Notification preferences saved"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Offline mode on — edits will fail to save"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Only people invited can open this project"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Only the project lead, an admin or the owner can change access"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Open"
   },
   {
@@ -421,31 +197,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Password updated"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Passwords don't match"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Preference saved"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Profile updated"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Project updated"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Promote someone else before removing the last member"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Reconnected. All changes are synced."
   },
   {
     "file": "src/actions/actions.js",
@@ -457,14 +209,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Removed"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Removed from favorites"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Rename file"
   },
   {
@@ -473,43 +217,11 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Reply posted"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Reset data"
   },
   {
     "file": "src/actions/actions.js",
     "text": "Reset demo data?"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Reset link sent to"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Restored"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Retrying…"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Saved"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Saved view “"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Session signed out"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Shared with"
   },
   {
     "file": "src/actions/actions.js",
@@ -533,26 +245,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Signed out of other sessions"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Social sign-in is not configured on this server."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Switched to"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Task duplicated"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "The local demo has a single workspace."
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings → Projects."
   },
   {
@@ -573,10 +265,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "This was a preview — nothing was archived"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Try again"
   },
   {
@@ -589,19 +277,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Two-factor authentication enabled"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Two-factor authentication turned off"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Undo"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Undone"
   },
   {
     "file": "src/actions/actions.js",
@@ -621,19 +297,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Upload failed — you're offline."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Uploaded"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Use at least 10 characters, including a number or symbol"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Verification email sent to"
   },
   {
     "file": "src/actions/actions.js",
@@ -641,35 +305,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Welcome to"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Workspace"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Workspace created, but it could not be loaded"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Workspace deleted. Demo data was restored for this prototype."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Workspace name can't be empty"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Workspace settings saved"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "You don't have access to that task"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "You left"
   },
   {
     "file": "src/actions/actions.js",
@@ -677,19 +313,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "You're all caught up."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "You're now on the"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Your account will be protected by your password only."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Your changes couldn't be saved."
   },
   {
     "file": "src/actions/archive.js",
