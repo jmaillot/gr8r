@@ -94,7 +94,7 @@ test("the French weekday header is the locale's own: 'dim.', never a slice of an
 
 test('the calendar reads its weekday and month names from the locale, not from the arrays', () => {
   const cal = source('src/views/calendar.js');
-  assert.match(cal, /import \{ monthName, weekdayName \} from '\.\.\/core\/i18n\.js'/);
+  assert.match(cal, /import \{ monthName, t as tk, weekdayName \} from '\.\.\/core\/i18n\.js'/);
   assert.doesNotMatch(cal, /\b(MON|MONL|WD|WDL)\b/);
 });
 
@@ -180,7 +180,7 @@ test('the mini-calendar, the greeting line and the timeline read their names fro
   assert.match(home, /\$\{weekdayName\(TODAY, 'long'\)\}, \$\{monthName\(TODAY, 'long'\)\} \$\{TODAY\.getDate\(\)\}/);
 
   const tl = source('src/views/timeline.js');
-  assert.match(tl, /import \{ monthName \} from '\.\.\/core\/i18n\.js'/);
+  assert.match(tl, /import \{ monthName, t as tk \} from '\.\.\/core\/i18n\.js'/);
   assert.doesNotMatch(tl, /\b(MON|MONL|WD|WDL)\b/);
   assert.match(tl, /\$\{monthName\(d, 'short'\)\} \$\{d\.getDate\(\)\}/);
   assert.match(tl, /\$\{monthName\(m\.d, 'long'\)\} \$\{m\.d\.getFullYear\(\)\}/);

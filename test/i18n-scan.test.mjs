@@ -14,8 +14,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
+import { execFileSync } from 'node:child_process';
 
-import { scanSource, scanTree, compare, EXCLUDED_FILES, main } from '../scripts/i18n-scan.mjs';
+import { scanSource, scanTree, compare, EXCLUDED_FILES, main, sweepDisplayLabels } from '../scripts/i18n-scan.mjs';
+import en from '../src/locales/en.json' with { type: 'json' };
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
@@ -297,6 +299,68 @@ test('the entry module carries no user-visible literal and the allow-list is EMP
   const list = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
   assert.ok(Array.isArray(list), 'the allow-list is not an array');
   assert.deepEqual(list, [], 'the allow-list is not EMPTY — the sweep is not finished');
+});
+
+/* ---------- the phase's final proof: the five success criteria on the real tree ---------- */
+
+test('the scan finds NO user-visible literal anywhere under src/', () => {
+  const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue: {} });
+  assert.deepEqual(
+    findings.filter(f => f.kind.startsWith('rule')),
+    [],
+    'a user-visible literal survived the sweep',
+  );
+});
+
+test('the allow-list is EMPTY and the scan verdict over the real tree is green', () => {
+  const list = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  assert.ok(Array.isArray(list), 'the allow-list is not an array');
+  assert.deepEqual(list, [], 'the allow-list is not EMPTY');
+  const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue: en });
+  const verdict = compare(findings, list);
+  assert.equal(verdict.pending.length, 0);
+  assert.equal(verdict.unlisted.length, 0);
+  assert.equal(verdict.stale.length, 0);
+  assert.equal(verdict.unresolved.length, 0);
+  assert.equal(verdict.mismatch.length, 0);
+});
+
+test('the raw coverage sweep reports no unexplained capitalised single-word occurrence', () => {
+  const sweep = sweepDisplayLabels('src');
+  assert.ok(sweep.total > 0, 'the raw sweep swept nothing — the shape regex is broken');
+  assert.deepEqual(
+    sweep.unexplained.map(u => `${u.file} '${u.text}'`),
+    [],
+    `a user-visible literal CLASS is left unreported: ${sweep.unexplained.map(u => `${u.file} '${u.text}'`).join(' | ')}`,
+  );
+});
+
+test('every t() call site under src/ resolves in the English catalogue with matching placeholders', () => {
+  const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue: en });
+  const bad = findings.filter(f => f.kind === 'unresolved' || f.kind === 'placeholder-mismatch');
+  assert.deepEqual(
+    bad.map(f => `${f.file}:${f.line} ${f.kind} ${f.text}`),
+    [],
+    'a t() call site would render its raw key in the interface',
+  );
+});
+
+test('the build gate fails on the real tree when a user-visible literal is added and not put in the catalogue', () => {
+  const file = path.join(REPO_ROOT, 'src/views/table.js');
+  const original = fs.readFileSync(file, 'utf8');
+  let code = 0;
+  try {
+    fs.writeFileSync(file, `${original}\nexport const probe = 'A literal that was never extracted';\n`, 'utf8');
+    try {
+      execFileSync(process.execPath, [path.join(REPO_ROOT, 'scripts/i18n-scan.mjs')], { stdio: 'pipe' });
+    } catch (e) {
+      code = e.status;
+    }
+  } finally {
+    fs.writeFileSync(file, original, 'utf8');
+  }
+  assert.notEqual(code, 0, 'the scanner accepted a new unlisted literal — the gate is vacuous');
+  assert.equal(fs.readFileSync(file, 'utf8'), original, 'the probe did not restore the source file');
 });
 
 /* ---------- the machine-identifier guard ---------- */

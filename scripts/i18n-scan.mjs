@@ -1309,6 +1309,10 @@ export function sweepDisplayLabels(root = 'src') {
     while ((m = re.exec(text))) {
       const offset = m.index;
       const lit = at.get(offset);
+      /* A match that is not a string literal of the file is a comment
+         fragment or a quote inside a regex: the rule families can only carry
+         a real string token, so the sweep reports the token positions. */
+      if (!lit) continue;
       occurrences.push({
         file: rel,
         offset,
@@ -1347,6 +1351,9 @@ function machineCategory(occ) {
     return 'COMPARISON_OPERAND';
   }
   if (KEYBOARD_KEYS.has(occ.text)) return 'KEYBOARD_KEYS';
+  /* A Unicode normalisation form: the argument of String.prototype.normalize
+     is a machine value (foldForSearch's 'NFD'), never interface text. */
+  if (slot.call && slot.call.callee === 'normalize') return 'NORMALIZATION_FORM';
   if (slot.object && slot.object.propIsKey) return 'OBJECT_KEY';
   if (slot.object && slot.object.propName === 'role') return 'ROLE_IDS';
   if (inDemoConst(slot)) return 'DEMO_CONTENT';
