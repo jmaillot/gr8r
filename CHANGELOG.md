@@ -17,14 +17,20 @@ A patch release found by the v1.1 milestone audit.
   follows it. Before this fix the browser kept the old revision, so every following write was
   rejected with `409`, the session entered conflict mode and the edit was dropped — while the
   interface still announced it as saved.
+- **An invite accepted in another session no longer locks the workspace out of writing.**
+  Joining a workspace used to edit the document, which moved its revision and left the inviter's
+  open session with a stale one. The membership table is now the only thing a join writes, and
+  the roster is repaired when the document is read, so a join no longer disturbs anybody's
+  pending edit.
 
 ### Added
 
 - **Regression coverage for the sequence, not just the endpoint.** The server suite now asserts
   that a role change, a plan change and a member removal report the new revision and that the
-  next write is accepted with it, a new client suite pins the adoption, and the Chromium suite
-  changes a role in the Members page, creates a project and reloads to prove the server really
-  stored it.
+  next write is accepted with it, that an invite accepted elsewhere leaves the revision alone
+  and still completes the roster, a new client suite pins the adoption, and the Chromium suite
+  changes a role in the Members page and joins a workspace from another session, creates a
+  project and reloads to prove the server really stored it.
 
 ## [1.1.0] - 2026-10-21
 

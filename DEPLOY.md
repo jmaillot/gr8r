@@ -327,7 +327,8 @@ and `410` respectively.
 
 1.1.1 is a patch release. It changes no schema and writes no backup: pull, rebuild and restart
 as usual. It fixes the browser losing the workspace revision after a role, member-removal or
-plan change, which made the next write fail with `409` and drop the edit.
+plan change, and after an invite is accepted in another session, which made the next write fail
+with `409` and drop the edit.
 
 ```sh
 cd /opt/gr8r
