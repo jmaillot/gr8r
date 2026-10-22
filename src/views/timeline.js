@@ -1,5 +1,6 @@
 /* ---------- TIMELINE ---------- */
-import { $, MON, MONL, TODAY, addD, diffD, esc, fmtDate, parse } from '../core/utils.js';
+import { $, TODAY, addD, diffD, esc, fmtDate, parse } from '../core/utils.js';
+import { monthName } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { S, allTasks, canSee, pColor, proj, task, taskProg, visibleProjects } from '../core/store.js';
 import { av, empty, stIcon } from '../ui/helpers.js';
@@ -71,7 +72,7 @@ export function timelineHtml(ts, key, p) {
         }).join('')
       : Array.from({ length: nDays / 7 }, (_, i) => {
           const d = addD(rs, i * 7);
-          return `<div style="width:${dw * 7}px">${MON[d.getMonth()]} ${d.getDate()}</div>`;
+          return `<div style="width:${dw * 7}px">${monthName(d, 'short')} ${d.getDate()}</div>`;
         }).join('');
   const weekend =
     S.ui.tlZoom === 'week'
@@ -133,7 +134,7 @@ export function timelineHtml(ts, key, p) {
   return `<div class="tl" data-tl-today="${todayX}" data-tl-key="${key}">
     <div class="tl-left"><div class="tl-head">Task</div><div class="tl-rows" id="tl-rows">${left}<div style="height:40px"></div></div></div>
     <div class="tl-right" id="tl-right" data-keep="tl:${key}:${S.ui.tlZoom}">
-      <div class="tl-head" style="width:${W}px"><div class="tl-months">${months.map(m => `<div style="width:${m.n * dw}px"><span>${MONL[m.d.getMonth()]} ${m.d.getFullYear()}</span></div>`).join('')}</div><div class="tl-days">${days}</div></div>
+      <div class="tl-head" style="width:${W}px"><div class="tl-months">${months.map(m => `<div style="width:${m.n * dw}px"><span>${monthName(m.d, 'long')} ${m.d.getFullYear()}</span></div>`).join('')}</div><div class="tl-days">${days}</div></div>
       <div class="tl-grid" style="width:${W}px;height:${H + 40}px">
         ${weekend}${glines}
         <div class="tl-today" style="left:${todayX + dw / 2}px" title="Today"></div>

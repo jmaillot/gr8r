@@ -29,6 +29,9 @@ const source = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const SUNDAY = new Date(2026, 9, 18);
 const weekOf = start => Array.from({ length: 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
 const JULY_24 = new Date(2026, 6, 24);
+/* A genuine Thursday in July 2026 — the plan's 'Thursday, July 24' example mislabeled the
+   weekday (24 July 2026 is a Friday); the composition is the contract, so a real Thursday pins it. */
+const THURSDAY = new Date(2026, 6, 23);
 
 /* The French assertions run inside the French locale and leave the module in the base one. */
 async function inFrench(fn) {
@@ -132,8 +135,11 @@ test("the French mini-calendar header is the locale's own two-letter header: 'di
   });
 });
 
-test("the English greeting line reads 'Thursday, July 24' for a Thursday in July — byte-identical to the WDL/MONL line", () => {
-  assert.equal(`${weekdayName(JULY_24, 'long')}, ${monthName(JULY_24, 'long')} ${JULY_24.getDate()}`, 'Thursday, July 24');
+test("the English greeting line reads 'Thursday, July 23' for a Thursday in July — the WDL/MONL composition, byte-identical", () => {
+  assert.equal(`${weekdayName(THURSDAY, 'long')}, ${monthName(THURSDAY, 'long')} ${THURSDAY.getDate()}`, 'Thursday, July 23');
+  /* The 24th is a Friday: the same composition renders 'Friday, July 24', exactly what the
+     arrays rendered for that date. */
+  assert.equal(`${weekdayName(JULY_24, 'long')}, ${monthName(JULY_24, 'long')} ${JULY_24.getDate()}`, 'Friday, July 24');
 });
 
 test("the French greeting line is the locale's own: 'vendredi, juillet 24'", async () => {

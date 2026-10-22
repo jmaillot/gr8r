@@ -1,5 +1,6 @@
 /* ---------------- POPOVERS ---------------- */
-import { $, MOD, MONL, TODAY, WD, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
+import { $, MOD, TODAY, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
+import { monthName, weekdayName } from '../core/i18n.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
 import {
@@ -93,9 +94,12 @@ export function miniCal(p, val) {
   const first = new Date(m.getFullYear(), m.getMonth(), 1);
   const start = startOfWeek(first);
   const cells = Array.from({ length: 42 }, (_, i) => addD(start, i));
-  const wdn = Array.from({ length: 7 }, (_, i) => WD[(i + S.prefs.weekStart) % 7].slice(0, 2));
+  /* The header keeps today's two-character truncation, applied to the locale's short weekday
+     name over the mini-calendar's own first cell — 'Su Mo Tu We Th Fr Sa' in English stays
+     byte for byte what the source rendered, and the French header is the locale's own. */
+  const wdn = Array.from({ length: 7 }, (_, i) => weekdayName(addD(start, i), 'short').slice(0, 2));
   return `<div style="padding:6px 6px 2px;width:252px">
-    <div class="row" style="margin-bottom:6px"><b style="font-weight:600;font-size:13px;padding-left:4px">${MONL[m.getMonth()]} ${m.getFullYear()}</b><span class="sp"></span><button class="ibtn ibtn-xs" data-a="popMonth" data-d="-1" aria-label="Previous month">${ic('chevron-left', 14)}</button><button class="ibtn ibtn-xs" data-a="popMonth" data-d="1" aria-label="Next month">${ic('chevron-right', 14)}</button></div>
+    <div class="row" style="margin-bottom:6px"><b style="font-weight:600;font-size:13px;padding-left:4px">${monthName(m, 'long')} ${m.getFullYear()}</b><span class="sp"></span><button class="ibtn ibtn-xs" data-a="popMonth" data-d="-1" aria-label="Previous month">${ic('chevron-left', 14)}</button><button class="ibtn ibtn-xs" data-a="popMonth" data-d="1" aria-label="Next month">${ic('chevron-right', 14)}</button></div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:11px">${wdn.map(d => `<span class="faint" style="padding:3px 0">${d}</span>`).join('')}
     ${cells
       .map(d => {
