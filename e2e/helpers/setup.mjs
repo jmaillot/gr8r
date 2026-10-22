@@ -114,6 +114,23 @@ function project({ id, key, name, members, lead, isPrivate }) {
  * Two real workspaces owned by two accounts, plus a plain member of the first.
  * Returns the fixture ids the spec navigates with.
  */
+/*
+ * An account that joins while a browser session is already open. The join
+ * happens in another session, which is the case a browser test needs: the
+ * workspace must keep accepting the open session's writes.
+ */
+export async function acceptInvite(base, { email, role = 'member', inviterIp, joinerIp, name = 'Late Joiner' }) {
+  const inviter = apiClient(base, { name: 'inviter', ip: inviterIp });
+  expectStatus('owner sign-in', await inviter.post('/api/auth/login', { email: OWNER.email, password: OWNER.password }), [200]);
+
+  const joiner = apiClient(base, { name: 'joiner', ip: joinerIp });
+  expectStatus('joiner signup', await joiner.post('/api/auth/signup', { name, email, password: PASSWORD }), [201]);
+
+  const invite = expectStatus('joiner invite', await inviter.post('/api/workspaces/acme/invites', { emails: [email], role }), [201]).invites[0];
+  expectStatus('joiner accept', await joiner.post(`/api/invites/${inviteToken(invite.url)}/accept`, {}), [200, 201]);
+  return email;
+}
+
 export async function setupTenants(base = BASE_URL, run = newRunId()) {
   const ownerClient = apiClient(base, { name: 'owner', ip: clientIp(run, 'owner') });
   expectStatus('owner sign-in', await ownerClient.post('/api/auth/login', { email: OWNER.email, password: OWNER.password }), [200]);

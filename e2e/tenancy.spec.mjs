@@ -6,7 +6,7 @@
    CSS implementation details, no direct API assertions.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, setupTenants } from './helpers/setup.mjs';
+import { BASE_URL, acceptInvite, clientIp, setupTenants } from './helpers/setup.mjs';
 
 let fixtures;
 
@@ -139,6 +139,31 @@ test('a role change does not lock the workspace out of writing', async ({ browse
     await carolAfter.getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: /^Member Create projects/ }).click();
     await expect(page.getByText(/Carol Member is now a Member/)).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test('an invite accepted elsewhere does not lock the workspace out of writing', async ({ browser }) => {
+  /* The join happens in another session, so the open browser session cannot
+     learn about it. The workspace must keep accepting its writes anyway. */
+  const { context, page } = await signIn(browser, fixtures.accounts.owner);
+  try {
+    await expect(page).toHaveURL(new RegExp(`/w/${fixtures.slugs.acme}$`));
+
+    await acceptInvite(BASE_URL, {
+      email: `late-${fixtures.run}@e2e.local`,
+      inviterIp: fixtures.accounts.owner.ip,
+      joinerIp: clientIp(fixtures.run, 'late'),
+    });
+
+    await page.getByRole('button', { name: 'New project' }).first().click();
+    await page.getByLabel('Project name').fill('Joined Elsewhere');
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await expect(page.getByText('Joined Elsewhere').first()).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText('Joined Elsewhere').first()).toBeVisible();
   } finally {
     await context.close();
   }
