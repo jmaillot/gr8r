@@ -1032,6 +1032,12 @@ function scanStringLiterals(tokens, file, findings, lineAt, info, catalogue) {
     }
     if (isMachineLexical(text)) continue;
 
+    /* A keyboard key name ('Del', 'Esc', 'Tab', 'Shift'…): the shortcut hint a
+       control displays. A key name is a machine identifier (D-08) and is never
+       interface prose, wherever it appears — the same word in another position
+       would have to be a different category, and no display rule names one. */
+    if (KEYBOARD_KEYS.has(text)) continue;
+
     /* The machine positions come first: a comparison operand, a switch case,
        an object key, an import specifier, a computed member. */
     const slot = info.ctx[i];
@@ -1324,6 +1330,7 @@ function machineCategory(occ) {
     if (HTTP_VERBS.has(occ.text)) return 'HTTP_VERBS';
     return 'COMPARISON_OPERAND';
   }
+  if (KEYBOARD_KEYS.has(occ.text)) return 'KEYBOARD_KEYS';
   if (slot.object && slot.object.propIsKey) return 'OBJECT_KEY';
   if (slot.object && slot.object.propName === 'role') return 'ROLE_IDS';
   if (inDemoConst(slot)) return 'DEMO_CONTENT';

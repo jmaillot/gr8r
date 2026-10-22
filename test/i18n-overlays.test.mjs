@@ -119,6 +119,12 @@ test('task 1: the oracle renders the previous English', () => {
   }
 });
 
+test('task 1: every oracle key exists in the English catalogue file', () => {
+  for (const [key] of TASK1_ORACLE) {
+    assert.ok(Object.hasOwn(en, key), key);
+  }
+});
+
 test('task 1: no two keys of the wave carry the same value', () => {
   const seen = new Map();
   for (const [key, , expected] of TASK1_ORACLE) {
@@ -130,7 +136,11 @@ test('task 1: no two keys of the wave carry the same value', () => {
 test('task 1: the scanner reports no finding for the two files', () => {
   for (const file of TASK1_FILES) {
     const found = scanSource(read(file), file).filter(f => f.kind.startsWith('rule'));
-    assert.deepEqual(found.map(f => `${f.line}:${f.text}`), [], file);
+    assert.deepEqual(
+      found.map(f => `${f.line}:${f.text}`),
+      [],
+      file,
+    );
   }
 });
 
@@ -148,23 +158,45 @@ test('task 1: the context menu action keys and icon names are byte-identical', (
   // the action keys and the icon names, in source order (the toggleDone row's
   // icon is a ternary over the task's status and is asserted separately)
   assert.deepEqual(pairs, [
-    ['openTask', 'panel-right-open'], ['editTask', 'pencil'], ['ctxStatus', 'circle-dot'],
-    ['ctxAssign', 'user'], ['ctxPrio', 'signal-high'], ['ctxMove', 'folder-input'],
-    ['toggleFavTask', 'star'], ['copyLink', 'link'], ['dupTask', 'copy'], ['archiveTask', 'archive'],
-    ['delTask', 'trash-2'], ['openProject', 'arrow-up-right'], ['toggleFavProj', 'star'],
-    ['editProject', 'pencil'], ['share', 'share-2'], ['copyLink', 'link'], ['dupProject', 'copy'],
-    ['projUp', 'arrow-up'], ['projDown', 'arrow-down'], ['archiveProject', 'archive'],
-    ['delProject', 'trash-2'], ['colAdd', 'plus'], ['colCollapse', 'fold-horizontal'],
-    ['colDoneAll', 'check-check'], ['colArchive', 'archive'], ['colSortPrio', 'arrow-down-wide-narrow'],
-    ['viewProfile', 'user'], ['assignToMember', 'plus'], ['copyEmail', 'mail'],
-    ['ctxRole', 'shield'], ['resendInvite', 'send'], ['removeMember', 'user-minus'],
-    ['previewFile', 'eye'], ['renameFile', 'pencil'], ['copyLink', 'link'], ['dupFile', 'copy'],
+    ['openTask', 'panel-right-open'],
+    ['editTask', 'pencil'],
+    ['ctxStatus', 'circle-dot'],
+    ['ctxAssign', 'user'],
+    ['ctxPrio', 'signal-high'],
+    ['ctxMove', 'folder-input'],
+    ['toggleFavTask', 'star'],
+    ['copyLink', 'link'],
+    ['dupTask', 'copy'],
+    ['archiveTask', 'archive'],
+    ['delTask', 'trash-2'],
+    ['openProject', 'arrow-up-right'],
+    ['toggleFavProj', 'star'],
+    ['editProject', 'pencil'],
+    ['share', 'share-2'],
+    ['copyLink', 'link'],
+    ['dupProject', 'copy'],
+    ['projUp', 'arrow-up'],
+    ['projDown', 'arrow-down'],
+    ['archiveProject', 'archive'],
+    ['delProject', 'trash-2'],
+    ['colAdd', 'plus'],
+    ['colCollapse', 'fold-horizontal'],
+    ['colDoneAll', 'check-check'],
+    ['colArchive', 'archive'],
+    ['colSortPrio', 'arrow-down-wide-narrow'],
+    ['viewProfile', 'user'],
+    ['assignToMember', 'plus'],
+    ['copyEmail', 'mail'],
+    ['ctxRole', 'shield'],
+    ['resendInvite', 'send'],
+    ['removeMember', 'user-minus'],
+    ['previewFile', 'eye'],
+    ['renameFile', 'pencil'],
+    ['copyLink', 'link'],
+    ['dupFile', 'copy'],
     ['delFile', 'trash-2'],
   ]);
-  assert.ok(
-    /I\('toggleDone', t\.status === 'done' \? 'rotate-ccw' : 'circle-check'/.test(src),
-    'the toggleDone action key and its status ternary icons moved',
-  );
+  assert.ok(/I\('toggleDone', t\.status === 'done' \? 'rotate-ccw' : 'circle-check'/.test(src), 'the toggleDone action key and its status ternary icons moved');
   // the Del key hint is a keyboard key, not a label
   assert.ok(src.includes(", 'danger', 'Del'"), 'the Del key hint moved');
 });
