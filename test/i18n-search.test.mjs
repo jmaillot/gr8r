@@ -86,7 +86,10 @@ test('a precomposed accented character folds to one folded character at its own 
 test('a character whose lower-case form is longer (İ) folds to a single character and the map stays exact', () => {
   const f = foldForSearch('İstanbul');
   assert.equal(f.text, 'istanbul');
-  assert.deepEqual(f.map, [0, 1, 2, 3, 4, 5, 6, 7]);
+  /* 'İ' lower-cases to i + U+0307 (two units); the i folds to one character at original
+     index 0 and the combining dot is dropped, so the next entry is the 's' at index 2 —
+     every folded character reports the ORIGINAL index it came from. */
+  assert.deepEqual(f.map, [0, 2, 3, 4, 5, 6, 7, 8]);
 });
 
 /* ---------- the highlight ---------- */
@@ -101,7 +104,12 @@ test('hl and its unaccented twin highlight the same window: both wrap the whole 
 });
 
 test('the highlight window maps back through a combining mark to the original characters', () => {
-  assert.equal(hl('e\u0301lodie', 'elodie'), '<mark>e\u0301lodi</mark>e');
+  /* 'e\u0301lodie' is 7 source characters folding to 6; the query 'elod' matches 4 folded
+     characters whose mapped window is the 5 original units 'e\u0301lod' — a window computed
+     on the folded text alone would slice only 'e\u0301lo' and land one character short. */
+  assert.equal(hl('e\u0301lodie', 'elod'), '<mark>e\u0301lod</mark>ie');
+  /* a full match marks the whole word, the mark's end mapped back past the combining mark */
+  assert.equal(hl('e\u0301lodie', 'elodie'), '<mark>e\u0301lodie</mark>');
 });
 
 test('hl escapes the text it does not mark, exactly once', () => {

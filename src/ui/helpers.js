@@ -1,5 +1,5 @@
 /* ---------- small render helpers ---------- */
-import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
+import { TODAY, diffD, esc, foldForSearch, parse, relDate } from '../core/utils.js';
 import { formatFileSize } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { LB, PR, PSTAT, ST } from '../core/constants.js';
@@ -60,10 +60,19 @@ export function empty(icon, title, text, btn = '', cls = '', level = 2) {
   return `<div class="empty-state ${cls}"><div class="glyph">${ic(icon, 20)}</div><h${level} class="es-h">${esc(title)}</h${level}><p>${esc(text)}</p>${btn}</div>`;
 }
 export function hl(text, q) {
-  if (!q) return esc(text);
-  const i = text.toLowerCase().indexOf(q.toLowerCase());
-  if (i < 0) return esc(text);
-  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
+  /* The comparison and the highlight use the SAME folded string: the window is computed on
+     the folded text and mapped back to the original characters, so a mark for "elodie" lands
+     on "Élodie" — including through a combining mark, whose folded form has no character of
+     its own. The three slices are escaped separately, so nothing is escaped twice. */
+  const raw = String(text ?? '');
+  const needle = foldForSearch(q).text;
+  if (!needle) return esc(raw);
+  const { text: folded, map } = foldForSearch(raw);
+  const i = folded.indexOf(needle);
+  if (i < 0) return esc(raw);
+  const start = map[i];
+  const end = map[i + needle.length - 1] + 1;
+  return esc(raw.slice(0, start)) + '<mark>' + esc(raw.slice(start, end)) + '</mark>' + esc(raw.slice(end));
 }
 export function fmtComment(txt) {
   let h = esc(txt);

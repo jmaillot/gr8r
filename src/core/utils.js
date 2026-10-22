@@ -10,6 +10,25 @@ document.querySelectorAll('link[data-font]').forEach(l => {
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+/* ---------- search ---------- */
+/* The search folds both sides: NFD, then the combining marks are dropped, so "elodie"
+   finds "Élodie". The map keeps the index of the ORIGINAL character behind every folded
+   character, so a highlight computed on the folded text still lands on the right
+   characters of the original string. */
+export function foldForSearch(s) {
+  const src = String(s ?? '').toLowerCase();
+  let text = '';
+  const map = [];
+  for (let i = 0; i < src.length; i++) {
+    const folded = src[i].normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (const c of folded) {
+      text += c;
+      map.push(i);
+    }
+  }
+  return { text, map };
+}
 export const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 8);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
