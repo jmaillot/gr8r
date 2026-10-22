@@ -55,6 +55,14 @@ export async function setLocale(code) {
       registerCatalogue(target, (mod && mod.default) || mod);
     }
   }
+  /* The change is announced on the global document, never on an imported renderer: the
+     dependency graph stays acyclic. The document is read at call time, and a process without
+     one — plain Node — simply has no listener to notify. The dispatch comes after the
+     catalogue is ready, so a listener that re-renders sees the new language, not a promise
+     of one. */
+  if (typeof document !== 'undefined' && document && typeof document.dispatchEvent === 'function') {
+    document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target } }));
+  }
   return target;
 }
 

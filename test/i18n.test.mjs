@@ -121,10 +121,10 @@ test('the locale is the base locale before any switch', () => {
   assert.equal(getLocale(), 'en');
 });
 
-test('the locale switch announces itself with a gr8r:locale event', async t => {
+test('the locale switch announces itself with a gr8r:locale event', async ctx => {
   const events = [];
   globalThis.document = { dispatchEvent: e => events.push(e) };
-  t.after(() => {
+  ctx.after(() => {
     delete globalThis.document;
   });
   registerCatalogue('fr', fr);
@@ -142,10 +142,10 @@ test('the locale switch announces itself with a gr8r:locale event', async t => {
   }
 });
 
-test('an unknown locale code resolves to the base locale and still announces the change', async t => {
+test('an unknown locale code resolves to the base locale and still announces the change', async ctx => {
   const events = [];
   globalThis.document = { dispatchEvent: e => events.push(e) };
-  t.after(() => {
+  ctx.after(() => {
     delete globalThis.document;
   });
   await setLocale('zz');
