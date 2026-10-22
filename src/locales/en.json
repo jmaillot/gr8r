@@ -1411,5 +1411,7 @@
   "page.notifications.prefs": "Notification preferences",
   "page.notifications.toggleRead": "Toggle read",
   "page.notifications.emptyBody": "No unread notifications. We'll let you know when something needs you.",
-  "page.notifications.showAll": "Show all"
+  "page.notifications.showAll": "Show all",
+  "page.myTasks.subtitle": "{n} due today · {m} overdue · {k} upcoming",
+  "a11y.view": "View"
 }

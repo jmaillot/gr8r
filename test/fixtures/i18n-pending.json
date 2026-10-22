@@ -40,42 +40,6 @@
     "text": "ERROR 404"
   },
   {
-    "file": "src/pages/my-tasks.js",
-    "text": "Calendar"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "Completed"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "List"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "My Tasks"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "New task"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "Overdue"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "Today"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "Upcoming"
-  },
-  {
-    "file": "src/pages/my-tasks.js",
-    "text": "View"
-  },
-  {
     "file": "src/pages/overview.js",
     "text": "Completion rate"
   },
