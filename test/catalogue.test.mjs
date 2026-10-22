@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { BASE_LOCALE } from '../src/core/i18n.js';
+import en from '../src/locales/en.json' with { type: 'json' };
+import fr from '../src/locales/fr.json' with { type: 'json' };
+import { BASE_LOCALE, LOCALES } from '../src/core/i18n.js';
 import { ROOT } from './helpers/server.mjs';
 
 const LOCALES_DIR = path.join(ROOT, 'src', 'locales');
@@ -324,6 +326,59 @@ test('the lint accepts a bare hash', () => {
     const breaches = lintSynthetic({ 'common.hash': value }, 'en.json').filter(v => v.rule === 'icu');
     assert.deepEqual(breaches, [], `${value} is plain text (${breaches.map(describeViolation).join(' | ')})`);
   }
+});
+
+/* ---------- the registry, the location and the manifest (D-13, D-14, D-15) ---------- */
+
+test('the locale registry and the catalogue files agree, in both directions', () => {
+  const files = catalogueFiles().map(name => name.replace(/\.json$/, ''));
+  const registered = LOCALES.map(l => l.code);
+  for (const code of registered) {
+    assert.ok(files.includes(code), `${code} is registered and has a catalogue file (${files.join(', ')})`);
+  }
+  for (const file of files) {
+    assert.ok(registered.includes(file), `the catalogue file ${file}.json is registered (${registered.join(', ')})`);
+  }
+});
+
+test('the base locale is registered and is the English catalogue', () => {
+  assert.equal(BASE_LOCALE, 'en');
+  assert.ok(
+    LOCALES.some(l => l.code === BASE_LOCALE),
+    'the base locale is registered',
+  );
+  assert.ok(catalogueFiles().includes(`${BASE_LOCALE}.json`), 'the base locale has a catalogue file');
+});
+
+test('src/locales holds JSON files only, so the icon scan can never read a catalogue', () => {
+  /* The lucideSubset() plugin in vite.config.js:12-15 walks src/ and keeps only the files
+     ending in .js, then matches every quoted lowercase kebab-case token against the Lucide
+     names. A catalogue authored as .js would have its VALUES swept into the icon bundle. */
+  const entries = fs.readdirSync(LOCALES_DIR);
+  const offending = entries.filter(name => !name.endsWith('.json'));
+  assert.deepEqual(offending, [], `no non-JSON entry may live in src/locales (found ${offending.join(', ')})`);
+  assert.ok(entries.length > 0, 'the directory carries at least the two catalogues');
+});
+
+test('both catalogues are importable by bare Node with the json import attribute', () => {
+  /* The proof is the import itself: this file is loaded by bare Node, so a catalogue Node
+     could not import would stop the suite from loading at all. */
+  const enFile = readCatalogue('en.json');
+  const frFile = readCatalogue('fr.json');
+  assert.deepEqual(en, enFile, 'the imported English catalogue is the file, key for key');
+  assert.deepEqual(fr, frFile, 'the imported French catalogue is the file, key for key');
+  assert.equal(Object.keys(en).length, Object.keys(enFile).length, 'the imported English catalogue carries every key of the file');
+  assert.equal(Object.keys(fr).length, Object.keys(frFile).length, 'the imported French catalogue carries every key of the file');
+  assert.ok(Object.keys(en).length > 0, 'the English catalogue is not empty');
+  assert.ok(Object.keys(fr).length > 0, 'the French catalogue is not empty');
+});
+
+test('the project declares no runtime dependency', () => {
+  /* The zero-runtime-dependency identity is an invariant, not a convention. The devDependencies
+     are build-time tools and stay: this guard says nothing about them. */
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const dependencies = manifest.dependencies || {};
+  assert.deepEqual(Object.keys(dependencies), [], `package.json must carry no runtime dependency (found ${Object.keys(dependencies).join(', ')})`);
 });
 
 /* ---------- the seed catalogues ---------- */
