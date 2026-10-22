@@ -253,6 +253,39 @@ test('the CLI exits 1 on an unlisted finding, a stale entry, an unresolved key a
   );
 });
 
+/* ---------- the final wave: the six view modules and the entry ---------- */
+
+const WAVE_TEN_VIEWS = [
+  'src/views/board.js',
+  'src/views/calendar.js',
+  'src/views/files.js',
+  'src/views/project-overview.js',
+  'src/views/table.js',
+  'src/views/timeline.js',
+];
+
+test('the six view modules carry no user-visible literal and no allow-list entry', () => {
+  const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue: {} });
+  const fromWave = findings.filter(f => WAVE_TEN_VIEWS.includes(f.file) && f.kind.startsWith('rule'));
+  assert.deepEqual(texts(fromWave), [], `the view files still carry literals: ${[...new Set(fromWave.map(f => f.file))].join(', ')}`);
+  const list = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  assert.deepEqual(
+    list.filter(e => WAVE_TEN_VIEWS.includes(e.file)),
+    [],
+    'the allow-list still carries the entries of the six view modules',
+  );
+});
+
+test('the six view modules keep the earlier waves\' formatter and search wiring', () => {
+  const cal = fs.readFileSync(path.join(REPO_ROOT, 'src/views/calendar.js'), 'utf8');
+  assert.ok(cal.includes('weekdayName(') && cal.includes('monthName('), 'calendar.js lost its locale-driven names');
+  const tl = fs.readFileSync(path.join(REPO_ROOT, 'src/views/timeline.js'), 'utf8');
+  assert.ok(tl.includes('monthName('), 'timeline.js lost its locale-driven month names');
+  const files = fs.readFileSync(path.join(REPO_ROOT, 'src/views/files.js'), 'utf8');
+  assert.ok(files.includes('a.name.localeCompare(b.name)'), 'files.js lost its localeCompare sort');
+  assert.ok(files.includes('foldForSearch'), 'files.js lost the accent-insensitive filter');
+});
+
 /* ---------- the machine-identifier guard ---------- */
 
 test('no data-a, data-r or data-v site of the live tree is ever reported', () => {
