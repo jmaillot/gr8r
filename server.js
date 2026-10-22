@@ -703,6 +703,14 @@ function updateDoc(workspaceId, edit) {
   return doc;
 }
 
+/* The workspace revision after a server-side document change. Every endpoint
+   that edits the document must return it, or the client keeps a stale
+   revision and its next write is rejected with 409. */
+function wsRevision(workspaceId) {
+  const row = db.prepare('select revision from workspaces where id = ?').get(workspaceId);
+  return row ? row.revision : 0;
+}
+
 function transaction(fn) {
   db.exec('begin immediate');
   try {
@@ -1375,7 +1383,7 @@ async function handleApi(req, res, url) {
         db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
         updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
       });
-      return json(res, 200, { removed: true, userId: target.id });
+      return json(res, 200, { removed: true, userId: target.id, revision: wsRevision(ctx.ws.id) });
     }
 
     const body = await readJson(req);
@@ -1404,6 +1412,7 @@ async function handleApi(req, res, url) {
     });
     const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
     return json(res, 200, {
+      revision: wsRevision(ctx.ws.id),
       member: memberPayload(
         {
           role: nextRole,
@@ -1429,7 +1438,7 @@ async function handleApi(req, res, url) {
     const plan = String(body?.plan || '');
     if (!['Free', 'Team', 'Business'].includes(plan)) return json(res, 400, { error: 'Unknown plan' });
     transaction(() => updateDoc(ctx.ws.id, doc => (doc.data.plan = plan)));
-    return json(res, 200, { plan });
+    return json(res, 200, { plan, revision: wsRevision(ctx.ws.id) });
   }
 
   /* ------------------------------- invites ------------------------------- */

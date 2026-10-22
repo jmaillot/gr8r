@@ -64,6 +64,15 @@ function applyUser(data) {
   return state.user;
 }
 
+/* Adopt the revision reported by a server-side document change. Endpoints that
+   edit the document (member role, member removal, plan) bump the revision, so
+   the client has to follow it — a stale revision makes the next write fail
+   with 409 and the edit is lost. */
+function adoptRevision(data) {
+  const revision = Number(data?.revision);
+  if (Number.isInteger(revision) && revision > 0) api.revision = revision;
+}
+
 export const api = {
   revision: 0,
   get enabled() {
@@ -196,12 +205,16 @@ export const api = {
   async setMember(userId, patch) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
-    return call('PATCH', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, patch);
+    const r = await call('PATCH', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, patch);
+    if (r.ok) adoptRevision(r.data);
+    return r;
   },
   async removeMember(userId) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
-    return call('DELETE', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`);
+    const r = await call('DELETE', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`);
+    if (r.ok) adoptRevision(r.data);
+    return r;
   },
   async leave() {
     const slug = state.workspace?.slug;
@@ -218,7 +231,9 @@ export const api = {
   async setPlan(plan) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
-    return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/plan`, { plan });
+    const r = await call('POST', `/api/workspaces/${encodeURIComponent(slug)}/plan`, { plan });
+    if (r.ok) adoptRevision(r.data);
+    return r;
   },
   async deleteWorkspace() {
     const slug = state.workspace?.slug;
