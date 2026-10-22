@@ -272,6 +272,8 @@ const TABLES = [
     ['page.design.lab.progress', undefined, 'Progress'],
     ['page.design.badge.overdue', undefined, '3 overdue'],
     ['page.design.feedbackTitle', undefined, 'Feedback'],
+    ['page.design.triggers', undefined, 'Triggers'],
+    ['page.design.is', undefined, 'is'],
     ['page.design.alert.headsUp', undefined, 'Heads up.'],
     ['page.design.alert.timelineDeps', undefined, 'Timeline dependencies are shown as dashed when out of order.'],
     ['page.design.alert.archived', undefined, 'Project archived.'],
