@@ -185,3 +185,48 @@ test('the mini-calendar, the greeting line and the timeline read their names fro
   assert.match(tl, /\$\{monthName\(d, 'short'\)\} \$\{d\.getDate\(\)\}/);
   assert.match(tl, /\$\{monthName\(m\.d, 'long'\)\} \$\{m\.d\.getFullYear\(\)\}/);
 });
+
+/* ---------- the arrays are gone ---------- */
+
+const MONTH_WEEKDAY_NAMES = new Set([
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'January', 'February', 'March', 'April', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
+  'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat',
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+]);
+
+function walkSrc(dir, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walkSrc(p, out);
+    else if (/\.js$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
+test('the four English arrays no longer exist in src/core/utils.js', () => {
+  const utils = source('src/core/utils.js');
+  assert.doesNotMatch(utils, /export const (MON|MONL|WD|WDL)\b/);
+  /* Every other export survives: the arrays' deletion removes nothing else. */
+  for (const name of ['esc', 'uid', 'clamp', 'isMac', 'MOD', 'DAY', 'sod', 'TODAY', 'iso', 'parse', 'addD', 'dOff', 'diffD', 'dateFormat', 'setDateFormat', 'fmtDate', 'relDate', 'ago', 'minsAgo', 'dayBucket']) {
+    assert.match(utils, new RegExp(`\\b${name}\\b`));
+  }
+});
+
+test('no file under src/ imports MON, MONL, WD or WDL', () => {
+  const offenders = walkSrc(path.join(ROOT, 'src')).filter(f => /\b(MON|MONL|WD|WDL)\b/.test(fs.readFileSync(f, 'utf8')));
+  assert.deepEqual(offenders, []);
+});
+
+test("the allow-list carries none of the arrays' month or weekday names, and it stays sorted by file then text", () => {
+  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  /* The scanner classifies the four arrays as machine lists (MONTH_WEEKDAY_NAMES in the scan),
+     so their thirty-eight values were never allow-list entries: the entries the arrays carried
+     are exactly the src/core/utils.js ones, and none of them is a month or weekday name. The
+     'Sunday'/'Monday'/'Saturday' entries of src/pages/settings.js are that file's own live
+     literals — plan 06-09's sweep — and stay. */
+  const fromArraysFile = list.filter(e => e.file === 'src/core/utils.js' && MONTH_WEEKDAY_NAMES.has(e.text));
+  assert.deepEqual(fromArraysFile, []);
+  const sorted = [...list].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.text < b.text ? -1 : a.text > b.text ? 1 : 0));
+  assert.deepEqual(list, sorted);
+});
