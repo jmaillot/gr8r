@@ -6,6 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "i18n:scan": "node scripts/i18n-scan.mjs",
+    "prebuild": "node scripts/i18n-scan.mjs",
+    "prebuild:en": "node scripts/i18n-scan.mjs",
     "build": "vite build",
     "build:en": "LOCALES=en vite build",
     "preview": "vite preview",

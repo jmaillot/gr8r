@@ -1352,11 +1352,14 @@ function readAllowList(file) {
   }
 }
 
-export function main(argv = process.argv.slice(2)) {
+export function main(argv = process.argv.slice(2), options = {}) {
   const report = argv.includes('--report');
-  const catalogue = readCatalogue(path.join(REPO_ROOT, 'src/locales/en.json')) || {};
-  const findings = scanTree('src', { catalogue });
-  const allowList = readAllowList(path.join(REPO_ROOT, ALLOW_LIST));
+  const root = options.root || 'src';
+  const allowListFile = options.allowList || path.join(REPO_ROOT, ALLOW_LIST);
+  const catalogueFile = options.catalogue || path.join(REPO_ROOT, 'src/locales/en.json');
+  const catalogue = readCatalogue(catalogueFile) || {};
+  const findings = scanTree(root, { catalogue });
+  const allowList = readAllowList(allowListFile);
   const verdict = compare(findings, allowList);
 
   if (report) {

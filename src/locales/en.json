@@ -1,5 +1,6 @@
 {
   "app.name": "Gr8r Studio",
+  "a11y.dismiss": "Dismiss",
   "common.cancel": "Cancel",
   "common.save": "Save",
   "nav.projects": "Projects",

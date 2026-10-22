@@ -49,7 +49,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Archived “"
+    "text": "Archived \u201c"
   },
   {
     "file": "src/actions/actions.js",
@@ -77,7 +77,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Completed “"
+    "text": "Completed \u201c"
   },
   {
     "file": "src/actions/actions.js",
@@ -85,7 +85,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Copy isn't available here —"
+    "text": "Copy isn't available here \u2014"
   },
   {
     "file": "src/actions/actions.js",
@@ -201,11 +201,11 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Deleted view “"
+    "text": "Deleted view \u201c"
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Deleted “"
+    "text": "Deleted \u201c"
   },
   {
     "file": "src/actions/actions.js",
@@ -233,7 +233,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Email failed — new invite link copied"
+    "text": "Email failed \u2014 new invite link copied"
   },
   {
     "file": "src/actions/actions.js",
@@ -381,7 +381,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Moved “Create homepage wireframes” to Review"
+    "text": "Moved \u201cCreate homepage wireframes\u201d to Review"
   },
   {
     "file": "src/actions/actions.js",
@@ -405,7 +405,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Offline mode on — edits will fail to save"
+    "text": "Offline mode on \u2014 edits will fail to save"
   },
   {
     "file": "src/actions/actions.js",
@@ -497,7 +497,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Retrying…"
+    "text": "Retrying\u2026"
   },
   {
     "file": "src/actions/actions.js",
@@ -505,7 +505,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Saved view “"
+    "text": "Saved view \u201c"
   },
   {
     "file": "src/actions/actions.js",
@@ -557,7 +557,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings → Projects."
+    "text": "The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings \u2192 Projects."
   },
   {
     "file": "src/actions/actions.js",
@@ -577,7 +577,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "This was a preview — nothing was archived"
+    "text": "This was a preview \u2014 nothing was archived"
   },
   {
     "file": "src/actions/actions.js",
@@ -629,7 +629,7 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Upload failed — you're offline."
+    "text": "Upload failed \u2014 you're offline."
   },
   {
     "file": "src/actions/actions.js",
@@ -721,7 +721,7 @@
   },
   {
     "file": "src/actions/archive.js",
-    "text": "Deleted “"
+    "text": "Deleted \u201c"
   },
   {
     "file": "src/actions/archive.js",
@@ -729,15 +729,15 @@
   },
   {
     "file": "src/actions/archive.js",
-    "text": "Restored “"
+    "text": "Restored \u201c"
   },
   {
     "file": "src/actions/drag-drop.js",
-    "text": "Moved “"
+    "text": "Moved \u201c"
   },
   {
     "file": "src/actions/drag-drop.js",
-    "text": "Rescheduled “"
+    "text": "Rescheduled \u201c"
   },
   {
     "file": "src/actions/drag-drop.js",
@@ -905,7 +905,7 @@
   },
   {
     "file": "src/components/task-list.js",
-    "text": "Task name — press Enter to add, Esc to cancel"
+    "text": "Task name \u2014 press Enter to add, Esc to cancel"
   },
   {
     "file": "src/components/task-list.js",
@@ -1149,7 +1149,7 @@
   },
   {
     "file": "src/features/subtasks.js",
-    "text": "Add details, links, or acceptance criteria…"
+    "text": "Add details, links, or acceptance criteria\u2026"
   },
   {
     "file": "src/features/subtasks.js",
@@ -1289,7 +1289,7 @@
   },
   {
     "file": "src/main.js",
-    "text": "Couldn't save to the server — changes are still in this browser."
+    "text": "Couldn't save to the server \u2014 changes are still in this browser."
   },
   {
     "file": "src/main.js",
@@ -1341,11 +1341,11 @@
   },
   {
     "file": "src/overlays/context-menu.js",
-    "text": "Assign to…"
+    "text": "Assign to\u2026"
   },
   {
     "file": "src/overlays/context-menu.js",
-    "text": "Change role…"
+    "text": "Change role\u2026"
   },
   {
     "file": "src/overlays/context-menu.js",
@@ -1397,7 +1397,7 @@
   },
   {
     "file": "src/overlays/context-menu.js",
-    "text": "Move to project…"
+    "text": "Move to project\u2026"
   },
   {
     "file": "src/overlays/context-menu.js",
@@ -1413,7 +1413,7 @@
   },
   {
     "file": "src/overlays/context-menu.js",
-    "text": "Priority…"
+    "text": "Priority\u2026"
   },
   {
     "file": "src/overlays/context-menu.js",
@@ -1453,7 +1453,7 @@
   },
   {
     "file": "src/overlays/context-menu.js",
-    "text": "Status…"
+    "text": "Status\u2026"
   },
   {
     "file": "src/overlays/context-menu.js",
@@ -1589,7 +1589,7 @@
   },
   {
     "file": "src/overlays/drawer.js",
-    "text": "Leave a comment… type @ to mention"
+    "text": "Leave a comment\u2026 type @ to mention"
   },
   {
     "file": "src/overlays/drawer.js",
@@ -1705,7 +1705,7 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Add a description… (optional)"
+    "text": "Add a description\u2026 (optional)"
   },
   {
     "file": "src/overlays/modals.js",
@@ -2041,11 +2041,11 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "No filters are active — the view will show all tasks. You can add filters after saving."
+    "text": "No filters are active \u2014 the view will show all tasks. You can add filters after saving."
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "No matching members — enter an email to invite someone new"
+    "text": "No matching members \u2014 enter an email to invite someone new"
   },
   {
     "file": "src/overlays/modals.js",
@@ -2205,7 +2205,7 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Share “"
+    "text": "Share \u201c"
   },
   {
     "file": "src/overlays/modals.js",
@@ -2345,7 +2345,7 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "· Uploaded by"
+    "text": "\u00b7 Uploaded by"
   },
   {
     "file": "src/overlays/palette.js",
@@ -2389,7 +2389,7 @@
   },
   {
     "file": "src/overlays/palette.js",
-    "text": "Find a workspace…"
+    "text": "Find a workspace\u2026"
   },
   {
     "file": "src/overlays/palette.js",
@@ -2497,7 +2497,7 @@
   },
   {
     "file": "src/overlays/palette.js",
-    "text": "Search tasks, projects, people, files, comments…"
+    "text": "Search tasks, projects, people, files, comments\u2026"
   },
   {
     "file": "src/overlays/palette.js",
@@ -2529,7 +2529,7 @@
   },
   {
     "file": "src/overlays/palette.js",
-    "text": "Switch workspace…"
+    "text": "Switch workspace\u2026"
   },
   {
     "file": "src/overlays/palette.js",
@@ -2553,11 +2553,11 @@
   },
   {
     "file": "src/overlays/palette.js",
-    "text": "Type a command or search…"
+    "text": "Type a command or search\u2026"
   },
   {
     "file": "src/overlays/palette.js",
-    "text": "View all results for “"
+    "text": "View all results for \u201c"
   },
   {
     "file": "src/overlays/palette.js",
@@ -2577,11 +2577,11 @@
   },
   {
     "file": "src/overlays/popovers.js",
-    "text": "Assign subtask to…"
+    "text": "Assign subtask to\u2026"
   },
   {
     "file": "src/overlays/popovers.js",
-    "text": "Assign to…"
+    "text": "Assign to\u2026"
   },
   {
     "file": "src/overlays/popovers.js",
@@ -2589,7 +2589,7 @@
   },
   {
     "file": "src/overlays/popovers.js",
-    "text": "Blocked by…"
+    "text": "Blocked by\u2026"
   },
   {
     "file": "src/overlays/popovers.js",
@@ -2661,7 +2661,7 @@
   },
   {
     "file": "src/overlays/popovers.js",
-    "text": "Filter labels…"
+    "text": "Filter labels\u2026"
   },
   {
     "file": "src/overlays/popovers.js",
@@ -2717,7 +2717,7 @@
   },
   {
     "file": "src/overlays/popovers.js",
-    "text": "Move to project…"
+    "text": "Move to project\u2026"
   },
   {
     "file": "src/overlays/popovers.js",
@@ -2797,7 +2797,7 @@
   },
   {
     "file": "src/overlays/popovers.js",
-    "text": "Select…"
+    "text": "Select\u2026"
   },
   {
     "file": "src/overlays/popovers.js",
@@ -3345,7 +3345,7 @@
   },
   {
     "file": "src/pages/auth.js",
-    "text": "Waiting for verification…"
+    "text": "Waiting for verification\u2026"
   },
   {
     "file": "src/pages/auth.js",
@@ -3425,7 +3425,7 @@
   },
   {
     "file": "src/pages/auth.js",
-    "text": "© 2026 Gr8r Studio · Terms · Privacy"
+    "text": "\u00a9 2026 Gr8r Studio \u00b7 Terms \u00b7 Privacy"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3437,7 +3437,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Add a description…"
+    "text": "Add a description\u2026"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3449,7 +3449,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Add…"
+    "text": "Add\u2026"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3513,7 +3513,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Checkbox · Radio · Toggle"
+    "text": "Checkbox \u00b7 Radio \u00b7 Toggle"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3649,7 +3649,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Geist · Geist Mono"
+    "text": "Geist \u00b7 Geist Mono"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3717,7 +3717,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Loading project…"
+    "text": "Loading project\u2026"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3729,7 +3729,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Lucide · 1.8px stroke · 12–18px"
+    "text": "Lucide \u00b7 1.8px stroke \u00b7 12\u201318px"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3789,7 +3789,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Nothing matches “brand guidlines”. Check the spelling or try a broader term."
+    "text": "Nothing matches \u201cbrand guidlines\u201d. Check the spelling or try a broader term."
   },
   {
     "file": "src/pages/design-system.js",
@@ -3813,7 +3813,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "Primary · Secondary · Ghost · Destructive · Icon"
+    "text": "Primary \u00b7 Secondary \u00b7 Ghost \u00b7 Destructive \u00b7 Icon"
   },
   {
     "file": "src/pages/design-system.js",
@@ -3973,7 +3973,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "These open the real dialogs. Confirming performs the action on demo data; use Help → Reset demo data to restore."
+    "text": "These open the real dialogs. Confirming performs the action on demo data; use Help \u2192 Reset demo data to restore."
   },
   {
     "file": "src/pages/design-system.js",
@@ -4029,7 +4029,7 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "WEB-109 · Due tomorrow"
+    "text": "WEB-109 \u00b7 Due tomorrow"
   },
   {
     "file": "src/pages/design-system.js",
@@ -4101,7 +4101,7 @@
   },
   {
     "file": "src/pages/errors.js",
-    "text": "This page failed to load. Your data is safe — try again in a moment."
+    "text": "This page failed to load. Your data is safe \u2014 try again in a moment."
   },
   {
     "file": "src/pages/errors.js",
@@ -4277,7 +4277,7 @@
   },
   {
     "file": "src/pages/home.js",
-    "text": "· Here's what's happening across your workspace."
+    "text": "\u00b7 Here's what's happening across your workspace."
   },
   {
     "file": "src/pages/inbox.js",
@@ -4341,7 +4341,7 @@
   },
   {
     "file": "src/pages/inbox.js",
-    "text": "Reply… use @ to mention"
+    "text": "Reply\u2026 use @ to mention"
   },
   {
     "file": "src/pages/inbox.js",
@@ -4981,7 +4981,7 @@
   },
   {
     "file": "src/pages/projects.js",
-    "text": "Restricted — request access to see tasks"
+    "text": "Restricted \u2014 request access to see tasks"
   },
   {
     "file": "src/pages/projects.js",
@@ -5037,7 +5037,7 @@
   },
   {
     "file": "src/pages/search.js",
-    "text": "Nothing matches “"
+    "text": "Nothing matches \u201c"
   },
   {
     "file": "src/pages/search.js",
@@ -5065,7 +5065,7 @@
   },
   {
     "file": "src/pages/search.js",
-    "text": "”. Check the spelling or try a broader term."
+    "text": "\u201d. Check the spelling or try a broader term."
   },
   {
     "file": "src/pages/settings.js",
@@ -5309,7 +5309,7 @@
   },
   {
     "file": "src/pages/settings.js",
-    "text": "Expires 08/2028 · Default"
+    "text": "Expires 08/2028 \u00b7 Default"
   },
   {
     "file": "src/pages/settings.js",
@@ -5449,7 +5449,7 @@
   },
   {
     "file": "src/pages/settings.js",
-    "text": "No renewal · Free forever"
+    "text": "No renewal \u00b7 Free forever"
   },
   {
     "file": "src/pages/settings.js",
@@ -5785,7 +5785,7 @@
   },
   {
     "file": "src/pages/settings.js",
-    "text": "US EIN ••-•••4410"
+    "text": "US EIN \u2022\u2022-\u2022\u2022\u20224410"
   },
   {
     "file": "src/pages/settings.js",
@@ -6373,10 +6373,6 @@
   },
   {
     "file": "src/ui/toast.js",
-    "text": "Dismiss"
-  },
-  {
-    "file": "src/ui/toast.js",
     "text": "Try again"
   },
   {
@@ -6417,7 +6413,7 @@
   },
   {
     "file": "src/views/board.js",
-    "text": "Enter to add · Esc to cancel"
+    "text": "Enter to add \u00b7 Esc to cancel"
   },
   {
     "file": "src/views/board.js",
@@ -6573,7 +6569,7 @@
   },
   {
     "file": "src/views/files.js",
-    "text": "— up to 250 MB each"
+    "text": "\u2014 up to 250 MB each"
   },
   {
     "file": "src/views/project-overview.js",

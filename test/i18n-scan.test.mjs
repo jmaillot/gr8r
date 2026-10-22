@@ -219,18 +219,38 @@ test('a finding covered by the allow-list is accepted, an unlisted finding and a
   assert.equal(stale.stale[0].text, 'Gone');
 });
 
+test('the build gate is not vacuous: a literal in neither the catalogue nor the allow-list is unlisted', () => {
+  const dir = fixtureTree({
+    'src/x.js': "const label = 'A brand new literal nobody extracted';\n",
+    'src/locales/en.json': JSON.stringify({ 'a11y.dismiss': 'Dismiss' }),
+    'test/fixtures/i18n-pending.json': JSON.stringify([]),
+  });
+  const options = {
+    root: path.join(dir, 'src'),
+    allowList: path.join(dir, 'test/fixtures/i18n-pending.json'),
+    catalogue: path.join(dir, 'src/locales/en.json'),
+  };
+  const findings = scanTree(options.root, { catalogue: { 'a11y.dismiss': 'Dismiss' } });
+  const verdict = compare(findings, []);
+  assert.equal(verdict.unlisted.length, 1);
+  assert.equal(verdict.unlisted[0].text, 'A brand new literal nobody extracted');
+  assert.equal(main([], options), 1);
+});
+
 test('the CLI exits 1 on an unlisted finding, a stale entry, an unresolved key and a placeholder mismatch', () => {
   const dir = fixtureTree({
     'src/x.js': "import { t } from '../core/i18n.js';\nconst a = t('nope.missing');\nconst b = t('a11y.dismiss', { name: 'x' });\n",
+    'src/locales/en.json': JSON.stringify({ 'a11y.dismiss': 'Dismiss {title}' }),
     'test/fixtures/i18n-pending.json': JSON.stringify([{ file: 'src/x.js', text: 'Gone' }], null, 2),
   });
-  const cwd = process.cwd();
-  process.chdir(dir);
-  try {
-    assert.equal(main([]), 1);
-  } finally {
-    process.chdir(cwd);
-  }
+  assert.equal(
+    main([], {
+      root: path.join(dir, 'src'),
+      allowList: path.join(dir, 'test/fixtures/i18n-pending.json'),
+      catalogue: path.join(dir, 'src/locales/en.json'),
+    }),
+    1,
+  );
 });
 
 /* ---------- the machine-identifier guard ---------- */
