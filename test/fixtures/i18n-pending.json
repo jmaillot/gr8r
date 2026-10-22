@@ -189,10 +189,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Open"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "PRJ"
   },
   {
@@ -265,19 +261,11 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Try again"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Turn off"
   },
   {
     "file": "src/actions/actions.js",
     "text": "Turn off two-factor authentication?"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "Undo"
   },
   {
     "file": "src/actions/actions.js",

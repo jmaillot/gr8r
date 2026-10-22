@@ -484,7 +484,7 @@ A.toggleDone = el => {
   S.ui.pop = null;
   updateTask(tk.id, { status: wasDone ? (tk.prevStatus && tk.prevStatus !== 'done' ? tk.prevStatus : 'todo') : 'done' });
   if (!wasDone && !S.ui.offline)
-    toast(t('toast.completed', { title: tk.title }), { action: 'Undo', onAction: () => updateTask(tk.id, { status: tk.prevStatus || 'todo' }) });
+    toast(t('toast.completed', { title: tk.title }), { action: t('toast.undo'), onAction: () => updateTask(tk.id, { status: tk.prevStatus || 'todo' }) });
 };
 A.toggleFavTask = el => {
   const tk = task(el.dataset.id);
@@ -534,7 +534,7 @@ A.dupTask = el => {
     n = createTask({ ...JSON.parse(JSON.stringify(tk)), id: uid('t'), key: undefined, title: tk.title + ' (copy)', created: Date.now(), fav: false });
     n.key = nextKey(proj(n.project));
   });
-  toast(t('toast.taskDuplicated'), { action: 'Open', onAction: () => A.openTask({ dataset: { id: n.id } }) });
+  toast(t('toast.taskDuplicated'), { action: t('toast.open'), onAction: () => A.openTask({ dataset: { id: n.id } }) });
 };
 A.archiveTask = el => {
   const tk = task(el.dataset.id);
@@ -546,7 +546,7 @@ A.archiveTask = el => {
     tk.archivedAt = Date.now();
     logAct('archived', tk);
   });
-  toast(t('toast.archivedTask', { title: tk.title }), { action: 'Undo', onAction: () => restore(snap) });
+  toast(t('toast.archivedTask', { title: tk.title }), { action: t('toast.undo'), onAction: () => restore(snap) });
 };
 export function deleteTasks(ids) {
   const set = new Set(ids);
@@ -562,7 +562,7 @@ A.delTask = el => {
   if (!tk) return;
   const run = () => {
     const snap = snapshot();
-    if (mutate(() => deleteTasks([tk.id]))) toast(t('toast.deletedTask', { title: tk.title }), { action: 'Undo', onAction: () => restore(snap) });
+    if (mutate(() => deleteTasks([tk.id]))) toast(t('toast.deletedTask', { title: tk.title }), { action: t('toast.undo'), onAction: () => restore(snap) });
   };
   if (S.prefs.confirmDel === false && !el.dataset.demo) return run();
   confirmDlg({
@@ -718,7 +718,10 @@ A.submitTask = () => {
   S.ui.modals.pop();
   fxSet({ added: tk.id });
   render();
-  toast(t('toast.createdIn', { key: tk.key, name: proj(tk.project).name }), { action: 'Open', onAction: () => A.openTask({ dataset: { id: tk.id } }) });
+  toast(t('toast.createdIn', { key: tk.key, name: proj(tk.project).name }), {
+    action: t('toast.open'),
+    onAction: () => A.openTask({ dataset: { id: tk.id } }),
+  });
 };
 
 /* inline composer */
@@ -856,7 +859,7 @@ A.previewFile = el => {
 export function handleFiles(files, ctx) {
   if (!files || !files.length) return;
   if (S.ui.offline) {
-    toast(t('err.uploadOffline'), { kind: 'err', action: 'Try again', onAction: () => {} });
+    toast(t('err.uploadOffline'), { kind: 'err', action: t('toast.tryAgain'), onAction: () => {} });
     return;
   }
   S.ui.uploads = S.ui.uploads || [];
@@ -954,7 +957,7 @@ A.delComment = el => {
   mutate(() => {
     D().comments = D().comments.filter(x => x !== c);
   });
-  toast(t('toast.commentDeleted'), { action: 'Undo', onAction: () => restore(snap) });
+  toast(t('toast.commentDeleted'), { action: t('toast.undo'), onAction: () => restore(snap) });
 };
 A.react = el => {
   const c = D().comments.find(x => x.id === el.dataset.id);
@@ -1028,7 +1031,7 @@ A.bulkDelete = () => {
     danger: true,
     run: () => {
       const snap = snapshot();
-      if (mutate(() => deleteTasks(ids))) toast(t('toast.deletedTasks', { n: ids.length }), { action: 'Undo', onAction: () => restore(snap) });
+      if (mutate(() => deleteTasks(ids))) toast(t('toast.deletedTasks', { n: ids.length }), { action: t('toast.undo'), onAction: () => restore(snap) });
     },
   });
 };
@@ -1209,7 +1212,7 @@ A.colDoneAll = el => {
   }
   const snap = snapshot();
   if (mutate(() => ts.forEach(t => applyPatch(t, { status: 'done' }))))
-    toast(t('toast.markedDone', { n: ts.length }), { action: 'Undo', onAction: () => restore(snap) });
+    toast(t('toast.markedDone', { n: ts.length }), { action: t('toast.undo'), onAction: () => restore(snap) });
 };
 A.colArchive = () => {
   const ts = colTasks(S.ui.pop.key, 'done');
@@ -1223,7 +1226,7 @@ A.colArchive = () => {
       }),
     )
   )
-    toast(t('toast.archivedCompleted', { n: ts.length }), { action: 'Undo', onAction: () => restore(snap) });
+    toast(t('toast.archivedCompleted', { n: ts.length }), { action: t('toast.undo'), onAction: () => restore(snap) });
 };
 A.colSortPrio = el => {
   const ts = colTasks(S.ui.pop.key, el.dataset.id).sort((a, b) => PR[b.priority].w - PR[a.priority].w);
@@ -1398,7 +1401,7 @@ A.dupProject = el => {
     n = createProject({ ...p, name: p.name + ' copy' }, 'blank');
     tasksOf(p.id).forEach(t => createTask({ ...JSON.parse(JSON.stringify(t)), id: uid('t'), key: undefined, project: n.id, status: 'todo' }));
   });
-  toast(t('toast.duplicated', { name: p.name }), { action: 'Open', onAction: () => go('project', { id: n.id }) });
+  toast(t('toast.duplicated', { name: p.name }), { action: t('toast.open'), onAction: () => go('project', { id: n.id }) });
 };
 A.archiveProject = el => {
   const p = proj(el.dataset.id);
@@ -1417,7 +1420,7 @@ A.archiveProject = el => {
         })
       ) {
         if (S.ui.route === 'project' && S.ui.params.id === p.id) go('projects');
-        toast(t('toast.archived', { name: p.name }), { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.archived', { name: p.name }), { action: t('toast.undo'), onAction: () => restore(snap) });
       }
     },
   });
@@ -1455,7 +1458,7 @@ A.delProject = el => {
         })
       ) {
         if (S.ui.route === 'project' && S.ui.params.id === p.id) go('projects');
-        toast(t('toast.deleted', { name: p.name }), { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.deleted', { name: p.name }), { action: t('toast.undo'), onAction: () => restore(snap) });
       }
     },
   });
@@ -1551,7 +1554,7 @@ IN.sharePerm = el => {
       p.members = p.members.filter(x => x !== mid);
       if (p.lead === mid) p.lead = p.members[0] || null;
     });
-    toast(t('toast.removed', { name: mem(mid).name }), { action: 'Undo', onAction: () => restore(snap) });
+    toast(t('toast.removed', { name: mem(mid).name }), { action: t('toast.undo'), onAction: () => restore(snap) });
   } else {
     mutate(() => {
       p.perms = p.perms || {};
@@ -1836,7 +1839,7 @@ A.removeMember = el => {
         })
       ) {
         if (S.ui.route === 'member') go('members');
-        toast(t('toast.removed', { name: m.name }), { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.removed', { name: m.name }), { action: t('toast.undo'), onAction: () => restore(snap) });
       }
     },
   });
@@ -1905,7 +1908,7 @@ A.delFile = el => {
           if (f.task && task(f.task)) task(f.task).attachments = task(f.task).attachments.filter(a => a.name !== f.name);
         })
       )
-        toast(t('toast.deleted', { name: f.name }), { action: 'Undo', onAction: () => restore(snap) });
+        toast(t('toast.deleted', { name: f.name }), { action: t('toast.undo'), onAction: () => restore(snap) });
     },
   });
 };
@@ -2085,11 +2088,11 @@ A.resetDemo = () => {
 A.toastInfo = el => toast(el.dataset.msg, { kind: 'info' });
 A.demoToast = el => {
   const v = el.dataset.v;
-  if (v === 'err') toast(t('err.changesNotSaved'), { kind: 'err', action: 'Try again', onAction: () => toast(t('toast.saved')) });
+  if (v === 'err') toast(t('err.changesNotSaved'), { kind: 'err', action: t('toast.tryAgain'), onAction: () => toast(t('toast.saved')) });
   else if (v === 'retry') {
     toast(t('toast.retrying'), { kind: 'info', ms: 1200 });
     setTimeout(() => toast(t('toast.loadedSuccessfully')), 1300);
-  } else toast(t('toast.demoMoved'), { action: 'Undo', onAction: () => toast(t('toast.undone'), { kind: 'info' }) });
+  } else toast(t('toast.demoMoved'), { action: t('toast.undo'), onAction: () => toast(t('toast.undone'), { kind: 'info' }) });
 };
 A.demoConfirm = () =>
   confirmDlg({
