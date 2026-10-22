@@ -88,7 +88,7 @@ Requirements:
   a static scan of the sources fails the build on a new user-visible literal that was never put in a
   catalogue.
 
-## Phase 5: i18n foundation & catalogue contract
+## Phase 5: i18n foundation & catalogue contract ✅ complete
 
 The `t()` layer, the catalogue format, the escaping contract, the plural engine and the build
 layout — fixed before a single string moves, because changing any of them later means redoing 37
@@ -119,7 +119,9 @@ Success criteria (what must be TRUE):
    icon to the bundle.
 
 Deliverable: one `t()` over JSON catalogues, with the escaping, plural and build contracts pinned by
-tests before any string moves.
+tests before any string moves. — met, see
+`phases/05-i18n-foundation-catalogue-contract/05-VERIFICATION.md` (5/5 success criteria, 20/20
+must-haves) and the three plan summaries.
 
 ## Phase 6: English extraction & locale-aware formats
 
@@ -280,7 +282,7 @@ image.
 
 ## Phase list
 
-- [ ] **Phase 5: i18n foundation & catalogue contract** — `t()`, JSON catalogues, the escaping,
+- [x] **Phase 5: i18n foundation & catalogue contract** — `t()`, JSON catalogues, the escaping,
   plural and build contracts, pinned by tests
 - [ ] **Phase 6: English extraction & locale-aware formats** — every user-visible string in the
   catalogue, every date and number formatted for the locale, English behaviour unchanged, search

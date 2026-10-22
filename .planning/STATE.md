@@ -19,12 +19,25 @@ Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — roadmap created, not started
+- Milestone: **v1.2 — Localization** — phase 5 complete, 6 phases to go
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-discuss-phase 5`** → `/gsd-plan-phase 5`
+- Next: **`/gsd-discuss-phase 6`** → `/gsd-plan-phase 6` → `/gsd-execute-phase 6`
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
+
+## Where things stand
+
+Phase 5 built the i18n layer and pinned its contract before a single string moves. `src/core/i18n.js`
+is a leaf module over two JSON catalogues: `t()` never escapes (the catalogue values are plain
+text made inert by a test, and the call sites escape the interpolated values), plurals are objects
+keyed by CLDR category selected with `Intl.PluralRules`, and the interpolation subset is `{name}`
+plus a count placeholder. The catalogue is JSON — never a `.js` file under `src/` — so the
+`lucideSubset()` icon scan cannot swallow it, and every key is flat, dotted and namespaced. The
+English catalogue is imported statically and the other locales through `import.meta.glob`, so the
+build emits the French catalogue as its own chunk and an English-only build carries none of its
+bytes. The layer is importable by bare Node, no runtime dependency was added, and the interface
+renders exactly as it did before: 98 `node:test` cases and 6 Chromium tests green.
 
 ## Roadmap — v1.2 (7 phases, 5–11)
 
@@ -33,8 +46,8 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 
 | Phase | Name | Requirements |
 |-------|------|--------------|
-| 5 | i18n foundation & catalogue contract | I18N-06, I18N-08 |
-| 6 | English extraction & locale-aware formats | I18N-01, I18N-03, I18N-04 |
+| 5 ✅ | i18n foundation & catalogue contract | I18N-06, I18N-08 — complete |
+| 6 | English extraction & locale-aware formats | I18N-01, I18N-03, I18N-04, SEARCH-01 |
 | 7 | French catalogue & French typography | I18N-02, I18N-05, I18N-07 |
 | 8 | Per-user locale & the honest selector | LOC-01 … LOC-06 |
 | 9 | Server messages & activity history | ERR-01, ERR-02, ACT-01, ACT-02 |
@@ -42,7 +55,7 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 | 11 | French sweep, build gate & ship hardening | UAT-10 |
 
 **Coverage:** 29/29 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
-phase without a requirement.
+phase without a requirement. 2/29 complete (phase 5).
 
 **Ordering notes (deviations from the research sketch, both deliberate):**
 
