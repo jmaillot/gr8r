@@ -108,3 +108,38 @@ test('a private project is invisible to a member who is not on it, and reachable
     await owner.context.close();
   }
 });
+
+test('a role change does not lock the workspace out of writing', async ({ browser }) => {
+  /* A role change edits the document, so it moves the workspace revision. The
+     client has to follow it, or its next write is rejected with 409 and the
+     edit is dropped while the UI still announces it. */
+  const { context, page } = await signIn(browser, fixtures.accounts.owner);
+  try {
+    await page.getByRole('button', { name: 'Members', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Members', level: 1 })).toBeVisible();
+
+    const carol = page.getByRole('row').filter({ hasText: 'Carol Member' });
+    await carol.getByRole('button', { name: 'Member', exact: true }).click();
+    await page.getByRole('button', { name: /^Admin Manage members/ }).click();
+    await expect(page.getByText(/Carol Member is now an Admin/)).toBeVisible();
+
+    /* The workspace must still accept writes. The project is only really
+       created if the server stored it, so the page is reloaded to prove it. */
+    await page.getByRole('button', { name: 'New project' }).first().click();
+    await page.getByLabel('Project name').fill('Revision Guard');
+    await page.getByRole('button', { name: 'Create project' }).click();
+    await expect(page.getByText('Revision Guard').first()).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText('Revision Guard').first()).toBeVisible();
+
+    /* Leave the roster as it was for the tests above. */
+    await page.getByRole('button', { name: 'Members', exact: true }).click();
+    const carolAfter = page.getByRole('row').filter({ hasText: 'Carol Member' });
+    await carolAfter.getByRole('button', { name: 'Admin', exact: true }).click();
+    await page.getByRole('button', { name: /^Member Create projects/ }).click();
+    await expect(page.getByText(/Carol Member is now a Member/)).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});

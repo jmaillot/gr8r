@@ -205,6 +205,32 @@ test('roles move between member, admin and owner under owner control', async () 
   assert.equal((await owner.patch('/api/workspaces/acme/members/not-a-user', { role: 'member' })).status, 404);
 });
 
+test('a server-side change reports the new revision so the next write is accepted', async () => {
+  const live = (await owner.get('/api/workspaces/acme')).data;
+  const caraId = find((await roster(owner)).members, 'cara@test.local').userId;
+
+  /* A role change edits the document, so it moves the revision. The client
+     has to be told, or its next write is rejected with 409 and the edit is
+     silently lost. */
+  const changed = await owner.patch(`/api/workspaces/acme/members/${caraId}`, { role: 'admin' });
+  assert.equal(changed.status, 200);
+  assert.equal(typeof changed.data.revision, 'number', 'the role change reports the new revision');
+  assert.ok(changed.data.revision > live.revision, 'the revision moved forward');
+
+  const doc = structuredClone(live.doc);
+  const saved = await owner.put('/api/workspaces/acme', { revision: changed.data.revision, doc });
+  assert.equal(saved.status, 200, 'the client can keep writing with the revision it was given');
+
+  const back = await owner.patch(`/api/workspaces/acme/members/${caraId}`, { role: 'member' });
+  assert.equal(back.status, 200);
+  assert.ok(back.data.revision > changed.data.revision, 'the next change moves the revision again');
+
+  const plan = await owner.post('/api/workspaces/acme/plan', { plan: 'Team' });
+  assert.equal(plan.status, 200);
+  assert.ok(plan.data.revision > back.data.revision, 'a plan change reports the new revision');
+  assert.equal((await owner.post('/api/workspaces/acme/plan', { plan: 'Free' })).status, 200);
+});
+
 test('the last owner cannot leave', async () => {
   const res = await owner.post('/api/workspaces/acme/leave');
   assert.equal(res.status, 409);
@@ -263,6 +289,7 @@ test('removing a member cleans up their assignments and access', async () => {
 
   const after = (await owner.get('/api/workspaces/acme')).data;
   assert.equal(after.revision, before.revision + 1, 'removal bumps the document revision');
+  assert.equal(removed.data.revision, after.revision, 'the removal reports the new revision');
   assert.equal(
     after.doc.data.members.some(m => m.email === 'cara@test.local'),
     false,
