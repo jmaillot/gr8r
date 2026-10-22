@@ -175,7 +175,7 @@ test('the mini-calendar, the greeting line and the timeline read their names fro
   assert.match(pop, /import \{ startOfWeek \} from '\.\.\/views\/calendar\.js';/);
 
   const home = source('src/pages/home.js');
-  assert.match(home, /import \{ monthName, weekdayName \} from '\.\.\/core\/i18n\.js'/);
+  assert.match(home, /import \{ monthName, t, weekdayName \} from '\.\.\/core\/i18n\.js'/);
   assert.doesNotMatch(home, /\b(MON|MONL|WD|WDL)\b/);
   assert.match(home, /\$\{weekdayName\(TODAY, 'long'\)\}, \$\{monthName\(TODAY, 'long'\)\} \$\{TODAY\.getDate\(\)\}/);
 
