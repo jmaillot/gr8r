@@ -205,3 +205,19 @@ test('no hand-written plural rule survives in the five converted files', () => {
   const offenders = CONVERTED_FILES.filter(f => readSrc(f).includes(IDIOM));
   assert.deepEqual(offenders, [], `the idiom is gone from every converted file (${offenders.join(', ')})`);
 });
+
+function jsFilesUnder(dir) {
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .flatMap(e => (e.isDirectory() ? jsFilesUnder(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
+}
+
+test('no hand-written plural rule survives anywhere under src/', () => {
+  /* The direct proof of I18N-04's "never by a hand-written rule": every .js
+     file under src/ is read and the `n > 1 ? 's' : ''` idiom must appear in
+     none of them. It fails the moment one is written back. */
+  const offenders = jsFilesUnder(SRC)
+    .map(f => path.relative(SRC, f).split(path.sep).join('/'))
+    .filter(rel => readSrc(rel).includes(IDIOM));
+  assert.deepEqual(offenders, [], `the idiom is gone from every file under src/ (${offenders.join(', ')})`);
+});
