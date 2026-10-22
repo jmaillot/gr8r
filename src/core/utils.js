@@ -1,6 +1,8 @@
 /* =====================================================================
    QUIRE — core: utils, icons, seed data, store, render loop, events
    ===================================================================== */
+import { dayBucketId, formatDate, formatRelativeDay, formatRelativeTime } from './i18n.js';
+
 // Web fonts load without blocking first paint (the link starts as media=print).
 document.querySelectorAll('link[data-font]').forEach(l => {
   l.media = 'all';
@@ -47,38 +49,22 @@ export function setDateFormat(f) {
   dateFormat = f || 'MMM d';
 }
 export function fmtDate(s, long) {
-  const d = typeof s === 'string' ? parse(s) : s;
-  if (!d) return '';
-  const fmt = dateFormat;
-  if (fmt === 'd/M') return `${d.getDate()}/${d.getMonth() + 1}${long ? '/' + d.getFullYear() : ''}`;
-  if (fmt === 'M/d') return `${d.getMonth() + 1}/${d.getDate()}${long ? '/' + d.getFullYear() : ''}`;
-  if (fmt === 'yyyy-MM-dd') return iso(d);
-  return `${MON[d.getMonth()]} ${d.getDate()}${long || d.getFullYear() !== TODAY.getFullYear() ? ', ' + d.getFullYear() : ''}`;
+  /* The date API delegates to the formatters: the locale owns the shape, and the pattern
+     travels through untouched — 'MMM d' IS the 'auto' sentinel (D-04), while 'd/M', 'M/d' and
+     'yyyy-MM-dd' are explicit choices that always win, in every locale. */
+  return formatDate(s, { long: !!long, pattern: dateFormat });
 }
 export function relDate(s) {
-  if (!s) return '';
-  const n = diffD(parse(s), TODAY);
-  if (n === 0) return 'Today';
-  if (n === 1) return 'Tomorrow';
-  if (n === -1) return 'Yesterday';
-  if (n > 1 && n < 7) return WD[parse(s).getDay()];
-  return fmtDate(s);
+  /* The date-format preference travels through: the hand-rolled relDate() fell through to
+     fmtDate(), which honoured an explicit pattern, so the pattern must win here too. */
+  return formatRelativeDay(s, { pattern: dateFormat });
 }
 export function ago(ts) {
-  const m = Math.round((Date.now() - ts) / 6e4);
-  if (m < 1) return 'just now';
-  if (m < 60) return m + 'm ago';
-  const h = Math.round(m / 60);
-  if (h < 24) return h + 'h ago';
-  const d = Math.round(h / 24);
-  if (d < 7) return d + 'd ago';
-  return fmtDate(iso(new Date(ts)));
+  return formatRelativeTime(ts, { pattern: dateFormat });
 }
 export const minsAgo = m => Date.now() - m * 6e4;
+/* The bucket is a STABLE id, never a label: the grouping key never depends on the language,
+   and the label is mapped at render. */
 export function dayBucket(ts) {
-  const n = diffD(new Date(ts), TODAY);
-  if (n === 0) return 'Today';
-  if (n === -1) return 'Yesterday';
-  if (n > -7) return 'This week';
-  return 'Earlier';
+  return dayBucketId(ts);
 }

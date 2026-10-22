@@ -1,5 +1,6 @@
 /* ---------- OVERVIEW ---------- */
 import { TODAY, dayBucket, diffD, esc, fmtDate, parse } from '../core/utils.js';
+import { bucketLabel } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { STATUSES } from '../core/constants.js';
 import { D, TM, isOver, mem, pColor, progressOf, task, tasksOf } from '../core/store.js';
@@ -65,7 +66,7 @@ export function projActivity(p) {
   return `<div class="page" style="max-width:780px;padding-top:18px">${
     all.length
       ? Object.entries(b)
-          .map(([k, list]) => `<div class="day-h">${k}</div><div class="feed lined">${list.map(a => actHtml(a)).join('')}</div>`)
+          .map(([k, list]) => `<div class="day-h">${bucketLabel(k)}</div><div class="feed lined">${list.map(a => actHtml(a)).join('')}</div>`)
           .join('')
       : empty('activity', 'No activity yet', 'Changes to this project will appear here.')
   }</div>`;

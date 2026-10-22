@@ -1,5 +1,6 @@
 /* ---------- ACTIVITY ---------- */
 import { dayBucket, esc } from '../core/utils.js';
+import { bucketLabel } from '../core/i18n.js';
 import { D, S, canSee, proj } from '../core/store.js';
 import { empty } from '../ui/helpers.js';
 import { actHtml } from '../components/task-list.js';
@@ -37,7 +38,7 @@ export function pageActivity() {
     ${
       as.length
         ? Object.entries(b)
-            .map(([k, list]) => `<div class="day-h">${k}</div><div class="feed lined">${list.map(a => actHtml(a, { proj: true })).join('')}</div>`)
+            .map(([k, list]) => `<div class="day-h">${bucketLabel(k)}</div><div class="feed lined">${list.map(a => actHtml(a, { proj: true })).join('')}</div>`)
             .join('')
         : empty('activity', 'No activity yet', 'Changes to tasks and projects will appear here.')
     }

@@ -317,8 +317,12 @@ export function formatDate(value, options = {}) {
 
    The sign matters and the branch is asymmetric: the hand-rolled
    relDate() tested n > 1 && n < 7, so a date two days in the PAST fell
-   through to fmtDate() and never showed a weekday. */
-export function formatRelativeDay(value) {
+   through to fmtDate() and never showed a weekday.
+
+   The options travel through to the date: the hand-rolled relDate() fell
+   through to fmtDate(), which honoured the date-format preference, so an
+   explicit pattern must win here too. */
+export function formatRelativeDay(value, options = {}) {
   if (!value) return '';
   const d = toDate(value);
   if (!d) return '';
@@ -327,7 +331,7 @@ export function formatRelativeDay(value) {
   if (n === 1) return t('common.tomorrow');
   if (n === -1) return t('common.yesterday');
   if (n > 1 && n < 7) return weekdayName(d, 'short');
-  return formatDate(value);
+  return formatDate(value, options);
 }
 
 /* The relative time. The thresholds mirror the hand-rolled ago() EXACTLY,
@@ -336,18 +340,18 @@ export function formatRelativeDay(value) {
 
    The relative time is never built with numeric:'auto', which turns minus
    two days into 'avant-hier' in French. */
-export function formatRelativeTime(timestamp) {
+export function formatRelativeTime(timestamp, options = {}) {
   const ts = timestampOf(timestamp);
   if (!Number.isFinite(ts)) return '';
-  const options = { style: formatsFor(locale).relativeStyle, numeric: 'always' };
+  const relative = { style: formatsFor(locale).relativeStyle, numeric: 'always' };
   const m = Math.round((Date.now() - ts) / 6e4);
   if (m < 1) return t('common.justNow');
-  if (m < 60) return relativeFor(locale, options).format(-m, 'minute');
+  if (m < 60) return relativeFor(locale, relative).format(-m, 'minute');
   const h = Math.round(m / 60);
-  if (h < 24) return relativeFor(locale, options).format(-h, 'hour');
+  if (h < 24) return relativeFor(locale, relative).format(-h, 'hour');
   const d = Math.round(h / 24);
-  if (d < 7) return relativeFor(locale, options).format(-d, 'day');
-  return formatDate(isoDate(new Date(ts)));
+  if (d < 7) return relativeFor(locale, relative).format(-d, 'day');
+  return formatDate(isoDate(new Date(ts)), options);
 }
 
 /* The day bucket: a STABLE id, never a label. The label is mapped at

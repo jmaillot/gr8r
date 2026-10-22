@@ -1,5 +1,6 @@
 /* ---------- NOTIFICATIONS ---------- */
 import { ago, dayBucket, esc } from '../core/utils.js';
+import { bucketLabel } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, proj, task } from '../core/store.js';
 import { empty, fmtComment } from '../ui/helpers.js';
@@ -29,7 +30,7 @@ export function pageNotifications() {
         ? Object.entries(buckets)
             .map(
               ([b, list]) =>
-                `<div class="day-h">${b}</div><div class="panel" style="overflow:hidden">${list
+                `<div class="day-h">${bucketLabel(b)}</div><div class="panel" style="overflow:hidden">${list
                   .map(n => {
                     const t = n.task ? task(n.task) : null;
                     const p = n.project ? proj(n.project) : t ? proj(t.project) : null;

@@ -130,6 +130,17 @@ test('a relative day of MINUS two days is the date, not a weekday', () => {
   assert.notEqual(formatRelativeDay(d), weekday);
 });
 
+test('the relative day and the relative time honour an explicit date pattern', () => {
+  /* The hand-rolled relDate() and ago() fell through to fmtDate(), which honoured the
+     date-format preference: an explicit pattern wins there too. */
+  const past = shift(-400);
+  assert.equal(formatRelativeDay(past, { pattern: 'd/M' }), formatDate(past, { pattern: 'd/M' }));
+  assert.equal(formatRelativeDay(past, { pattern: 'yyyy-MM-dd' }), formatDate(past, { pattern: 'yyyy-MM-dd' }));
+  assert.notEqual(formatRelativeDay(past, { pattern: 'd/M' }), formatDate(past), 'the pattern wins over the locale form');
+  const ts = ago(9 * 864e5);
+  assert.equal(formatRelativeTime(ts, { pattern: 'yyyy-MM-dd' }), formatDate(new Date(ts), { pattern: 'yyyy-MM-dd' }));
+});
+
 /* ---------- the relative time ---------- */
 
 test('the relative time is just now, 5m ago, 3h ago, 2d ago', () => {
