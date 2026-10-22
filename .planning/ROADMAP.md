@@ -148,6 +148,27 @@ Success criteria (what must be TRUE):
 5. Search finds an accented name from an unaccented query — "elodie" finds "Élodie" — and the sort
    order does not change.
 
+**Plans:** 10 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — the static source scan, the shrinking allow-list, the build gate and the
+  end-to-end tracer on one literal (wave 1)
+- [ ] 06-02-PLAN.md — the `Intl` primitives, the per-locale format table and the ten formatters;
+  the hand-rolled date API delegates (wave 2)
+- [ ] 06-03-PLAN.md — the `'auto'` sentinel, the settings date/time rows and the preference write
+  path (wave 3)
+- [ ] 06-04-PLAN.md — the locale-driven weekday and month names; the four English arrays are
+  deleted (wave 3)
+- [ ] 06-05-PLAN.md — the accent-insensitive search, with the highlight window mapped back to the
+  original text (wave 4)
+- [ ] 06-06-PLAN.md — the 16 measured plural expressions become catalogue plural objects (wave 5)
+- [ ] 06-07-PLAN.md — the sweep of the seven action modules (wave 6)
+- [ ] 06-08-PLAN.md — the sweep of the shell, the ui helpers, the vocabulary, the task list, the
+  overlays and the features (wave 7)
+- [ ] 06-09-PLAN.md — the sweep of the sixteen page modules (wave 8)
+- [ ] 06-10-PLAN.md — the sweep of the six views and the entry; the allow-list reaches zero and
+  the five success criteria are proven (wave 9)
+
 Deliverable: the interface carries no inline user-visible string and formats dates, numbers and
 counts for the active locale, with its English behaviour unchanged.
 
