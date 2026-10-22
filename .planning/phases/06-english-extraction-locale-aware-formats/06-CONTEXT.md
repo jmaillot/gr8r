@@ -476,6 +476,30 @@ or the English interface changes; and the roadmap's « il y a 2 jours » needs
 
 </deferred>
 
+## Declared English deltas
+
+The phase is behaviour-preserving (D-01) and the roadmap's success criterion 2 says the interface
+behaves exactly as it did before the extraction. One delta is declared here, so the phase's own
+verification reads it where it matters — in the roadmap criterion itself and in this file.
+
+### The time-format selector's default
+
+`prefs.timeFmt` is genuinely unset today: it is not in `DEFAULT_PREFS` at all, and it is read
+only at `src/pages/settings.js:219,224` as `P.timeFmt || '12'`. D-04 says an unset preference
+follows the locale, so the settings page's time-format row shows the new `'auto'` option as
+selected instead of the `'12-hour'` one.
+
+- The English clock is still 12-hour: the English locale's `timeStyle: 'short'` is a 12-hour
+  clock, so the rendered time is unchanged.
+- No stored document changes: the preference is only written when the user picks an option.
+- The revert is real: removing the `'auto'` option from the time-format row restores the previous
+  rendering exactly. The date-format row's `'auto'` option is NOT a delta — it replaces the
+  `'MMM d'` option, which was the stored default anyway, and the rendered English text of the row
+  does not change.
+
+The roadmap's success criterion 2 carries the same carve-out inline, and plan 06-03 records the
+delta in its plan summary.
+
 ## Corrections to the research
 
 The four research documents were written before the code was measured. These figures were

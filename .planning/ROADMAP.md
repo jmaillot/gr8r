@@ -139,35 +139,47 @@ Requirements: **I18N-01**, **I18N-03**, **I18N-04**, **SEARCH-01**
 Success criteria (what must be TRUE):
 
 1. No user-visible literal is left inline in the interface sources: the static scan finds none, and
-   the build fails when a new one is added.
+   the build fails when a new one is added. The scan reports every user-visible literal CLASS the
+   interface renders — prose, attributes, toasts, helper arguments, display tables and the
+   single-word capitalised display labels — and a raw coverage sweep proves that no class is
+   left unreported.
 2. The interface behaves exactly as it did before the extraction: every existing Chromium test
-   stays green and no string changed its meaning.
+   stays green and no string changed its meaning. **Declared exception:** the settings page's
+   time-format selector now shows the new `'auto'` option as selected when the preference is
+   unset, because an unset preference follows the locale (D-04). The revert is real — removing
+   the `'auto'` option from that row restores the previous rendering exactly. The exception is
+   recorded in `06-CONTEXT.md` under "Declared English deltas".
 3. The formatters are locale-driven — a test proves the French formatter produces `24/07/2026`, a
    24-hour clock and « il y a 2 jours », and the English build renders exactly as it did before.
 4. Item counts use the locale's plural form rather than an English `+ 's'` rule.
 5. Search finds an accented name from an unaccented query — "elodie" finds "Élodie" — and the sort
    order does not change.
 
-**Plans:** 10 plans
+**Plans:** 14 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — the static source scan, the shrinking allow-list, the build gate and the
-  end-to-end tracer on one literal (wave 1)
+- [ ] 06-01-PLAN.md — the static source scan, the catalogue-key resolution, the shrinking
+  allow-list, the build gate and the end-to-end tracer on one literal (wave 1)
 - [ ] 06-02-PLAN.md — the `Intl` primitives, the per-locale format table and the ten formatters;
   the hand-rolled date API delegates (wave 2)
 - [ ] 06-03-PLAN.md — the `'auto'` sentinel, the settings date/time rows and the preference write
   path (wave 3)
 - [ ] 06-04-PLAN.md — the locale-driven weekday and month names; the four English arrays are
-  deleted (wave 3)
+  deleted (wave 4)
 - [ ] 06-05-PLAN.md — the accent-insensitive search, with the highlight window mapped back to the
-  original text (wave 4)
-- [ ] 06-06-PLAN.md — the 16 measured plural expressions become catalogue plural objects (wave 5)
-- [ ] 06-07-PLAN.md — the sweep of the seven action modules (wave 6)
-- [ ] 06-08-PLAN.md — the sweep of the shell, the ui helpers, the vocabulary, the task list, the
-  overlays and the features (wave 7)
-- [ ] 06-09-PLAN.md — the sweep of the sixteen page modules (wave 8)
+  original text (wave 5)
+- [ ] 06-06-PLAN.md — the 16 measured plural expressions become catalogue plural objects (wave 6)
+- [ ] 06-07-PLAN.md — the sweep of the toast surface of the action module (wave 7)
+- [ ] 06-11-PLAN.md — the sweep of the action module's modals, confirmations and accessible
+  names, and of the six small action modules (wave 8)
+- [ ] 06-08-PLAN.md — the sweep of the shell chrome and the shared ui helpers (wave 9)
+- [ ] 06-12-PLAN.md — the sweep of the stored vocabulary, the core modules and the three feature
+  modules (wave 10)
+- [ ] 06-13-PLAN.md — the sweep of the task list and the five overlays (wave 11)
+- [ ] 06-09-PLAN.md — the sweep of the three heaviest page modules (wave 12)
+- [ ] 06-14-PLAN.md — the sweep of the thirteen remaining page modules (wave 13)
 - [ ] 06-10-PLAN.md — the sweep of the six views and the entry; the allow-list reaches zero and
-  the five success criteria are proven (wave 9)
+  the five success criteria are proven (wave 14)
 
 Deliverable: the interface carries no inline user-visible string and formats dates, numbers and
 counts for the active locale, with its English behaviour unchanged.
