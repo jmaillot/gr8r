@@ -16,3 +16,6 @@ blob-report/
 .gsd/
 .planning/milestone.lock
 .planning/state.json
+
+# GSD research scratch cache (tooling artifacts)
+.planning/research/.cache/
