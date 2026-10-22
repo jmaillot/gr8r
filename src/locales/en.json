@@ -1378,5 +1378,17 @@
   "a11y.saveCurrentFilters": "Save current filters as a view",
   "a11y.saveView": "Save view",
   "page.project.noTasksMatch": "No tasks match these filters.",
-  "act.clearFilters": "Clear filters"
+  "act.clearFilters": "Clear filters",
+  "a11y.privateProject": "Private project",
+  "page.projects.restricted": "Restricted — request access to see tasks",
+  "page.projects.noMatch": "No projects match your search or filters. Try a different term.",
+  "page.projects.subtitle": "{a} active · {c} completed",
+  "a11y.searchProjects": "Search projects",
+  "a11y.filterByStatus": "Filter by status",
+  "page.projects.allStatuses": "All statuses",
+  "a11y.sort": "Sort",
+  "page.projects.col.start": "Start",
+  "page.projects.col.lastActivity": "Last activity",
+  "page.projects.sortRecent": "Recently active",
+  "page.projects.sortName": "Name"
 }
