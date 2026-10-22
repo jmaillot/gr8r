@@ -133,3 +133,97 @@ test('the five search call sites still call hl(text, query) with the same signat
   for (const site of ['hl(t.title, q)', 'hl(p.name, q)', 'hl(m.name, q)', 'hl(f.name, q)', 'hl(c.text, q)'])
     assert.ok(s.includes(site), `search.js must keep calling ${site}`);
 });
+
+/* ---------- the global search folds both sides ---------- */
+
+const store = await import('../src/core/store.js');
+const { searchAll } = await import('../src/pages/search.js');
+
+/* The suite seeds one accented fixture of each kind, once. The queries the other
+   assertions use are distinctive enough that these fixtures cannot leak into their
+   results, and the fixtures' emails/keys avoid the query strings so only the folded
+   NAME can match. */
+const d = store.D();
+d.members.push({
+  id: 'm-elo',
+  name: 'Élodie',
+  email: 'e.laurent@gr8r.dev',
+  role: 'Member',
+  title: 'Designer',
+  c: '#123456',
+  status: 'active',
+  last: 0,
+});
+d.projects.push({
+  id: 'p-elo',
+  key: 'ELN',
+  name: 'Élan',
+  icon: 'globe',
+  color: 'indigo',
+  status: 'active',
+  lead: 'm1',
+  members: ['m1'],
+  desc: 'Accent fixtures for the search suite',
+  last: 0,
+  due: '2026-11-01',
+});
+d.projOrder.push('p-elo');
+d.tasks.push({
+  id: 't-elo',
+  key: 'ELN-1',
+  project: 'p-elo',
+  title: 'Élodie onboarding',
+  status: 'todo',
+  priority: 'none',
+  desc: 'plain text body',
+  created: 0,
+  updated: 0,
+  order: 99,
+});
+d.files.push({ id: 'f-elo', project: 'p-elo', name: 'élodie-notes.md', type: 'doc', size: '1 KB', by: 'm1', at: 0 });
+d.comments.push({ id: 'c-elo', task: 't-elo', by: 'm1', at: 0, text: 'élodie says hi' });
+
+test('searchAll("elodie") finds the task, the member, the file and the comment whose text is accented', () => {
+  const r = searchAll('elodie');
+  assert.deepEqual(
+    r.tasks.map(t => t.title),
+    ['Élodie onboarding'],
+  );
+  assert.deepEqual(
+    r.people.map(m => m.name),
+    ['Élodie'],
+  );
+  assert.deepEqual(
+    r.files.map(f => f.name),
+    ['élodie-notes.md'],
+  );
+  assert.deepEqual(
+    r.comments.map(c => c.text),
+    ['élodie says hi'],
+  );
+});
+
+test('searchAll("elan") finds the project named "Élan"', () => {
+  assert.deepEqual(
+    searchAll('elan').projects.map(p => p.name),
+    ['Élan'],
+  );
+});
+
+test('an empty query returns five empty collections, exactly as before', () => {
+  for (const q of ['', '   ']) {
+    const r = searchAll(q);
+    assert.deepEqual(r, { tasks: [], projects: [], people: [], files: [], comments: [] });
+  }
+});
+
+test('a query that matched nothing before still matches nothing', () => {
+  assert.deepEqual(searchAll('zzzquux'), { tasks: [], projects: [], people: [], files: [], comments: [] });
+});
+
+test('the query is folded ONCE before the filter runs, and the search never sorts', () => {
+  const s = source('src/pages/search.js');
+  assert.ok(s.includes('const needle = foldForSearch(q).text;'), 'the query must be folded once, before the filter');
+  assert.ok(s.includes('const has = s => foldForSearch(s).text.includes(needle);'), 'every candidate must be folded as it is tested');
+  assert.ok(!/\.sort\(|localeCompare|Collator/.test(s), 'the search must not sort — the order is untouched (D-06)');
+});
