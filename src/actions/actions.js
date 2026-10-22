@@ -57,10 +57,13 @@ export function nextKey(p) {
 export function createTask(f) {
   const p = proj(f.project) || visibleProjects().find(canSee);
   const maxO = Math.max(0, ...D().tasks.map(t => t.order));
-  const t = Object.assign(
+  /* tk, not t: the default title reads the catalogue inside the object
+     literal that this const initialises, so a local named t would be in its
+     temporal dead zone while the literal evaluates. */
+  const tk = Object.assign(
     {
       project: p.id,
-      title: 'Untitled',
+      title: t('task.untitled'),
       status: 'todo',
       assignee: null,
       priority: 'none',
@@ -81,12 +84,12 @@ export function createTask(f) {
     f,
     { project: p.id },
   );
-  t.id = f.id || uid('t');
-  t.key = f.key || nextKey(p);
-  D().tasks.push(t);
-  fxSet({ added: t.id });
-  logAct('created', t);
-  return t;
+  tk.id = f.id || uid('t');
+  tk.key = f.key || nextKey(p);
+  D().tasks.push(tk);
+  fxSet({ added: tk.id });
+  logAct('created', tk);
+  return tk;
 }
 export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
 export function applyPatch(t, patch) {
@@ -531,7 +534,7 @@ A.dupTask = el => {
   S.ui.pop = null;
   let n;
   mutate(() => {
-    n = createTask({ ...JSON.parse(JSON.stringify(tk)), id: uid('t'), key: undefined, title: tk.title + ' (copy)', created: Date.now(), fav: false });
+    n = createTask({ ...JSON.parse(JSON.stringify(tk)), id: uid('t'), key: undefined, title: `${tk.title} ${t('act.copySuffix')}`, created: Date.now(), fav: false });
     n.key = nextKey(proj(n.project));
   });
   toast(t('toast.taskDuplicated'), { action: t('toast.open'), onAction: () => A.openTask({ dataset: { id: n.id } }) });
@@ -566,9 +569,9 @@ A.delTask = el => {
   };
   if (S.prefs.confirmDel === false && !el.dataset.demo) return run();
   confirmDlg({
-    title: 'Delete task?',
+    title: t('act.deleteTaskTitle'),
     body: `<b>${esc(tk.title)}</b>${tk.subtasks.length ? `, its ${tk.subtasks.length} subtasks,` : ''} and ${commentsOf(tk.id).length} comment${commentsOf(tk.id).length === 1 ? '' : 's'} will be permanently deleted.`,
-    ok: 'Delete task',
+    ok: t('act.deleteTask'),
     danger: true,
     run,
   });
@@ -659,7 +662,7 @@ A.submitTask = () => {
   f.title = title;
   f.desc = $('#f-desc')?.value ?? f.desc;
   if (!title) {
-    S.ui.errors.title = 'Give the task a name';
+    S.ui.errors.title = t('err.taskNameRequired');
     render();
     $('#f-title')?.focus();
     return;
@@ -1026,7 +1029,7 @@ A.bulkDelete = () => {
   const ids = [...S.ui.sel];
   confirmDlg({
     title: t('act.deleteTasksTitle', { n: ids.length }),
-    body: 'The selected tasks, their subtasks, and comments will be permanently deleted.',
+    body: t('act.deleteTasksBody'),
     ok: t('act.deleteTasksConfirm', { n: ids.length }),
     danger: true,
     run: () => {
@@ -1148,7 +1151,7 @@ A.saveView = el => {
 };
 A.saveViewSubmit = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
-  const name = $('#sv-name').value.trim() || 'Untitled view';
+  const name = $('#sv-name').value.trim() || t('act.untitledView');
   const type = $('#sv-type').value;
   const sv = { id: uid('v'), project: m.pid, name, type, filters: JSON.parse(JSON.stringify(viewOf('p:' + m.pid).filters)) };
   D().savedViews.push(sv);
@@ -1162,8 +1165,8 @@ A.renameView = el => {
   S.ui.pop = null;
   openModal({
     type: 'prompt',
-    title: 'Rename view',
-    label: 'View name',
+    title: t('act.renameView'),
+    label: t('act.viewName'),
     value: v.name,
     run: val => {
       if (val) {
@@ -1310,7 +1313,7 @@ export function makeKey(name) {
       name
         .replace(/[^A-Za-z]/g, '')
         .slice(0, 3)
-        .toUpperCase() || 'PRJ';
+        .toUpperCase() || t('act.projectKeyFallback');
   while (D().projects.some(p => p.key === k)) k += 'X';
   return k;
 }
@@ -1328,7 +1331,7 @@ export function createProject(f, tmplId) {
     start: dOff(0),
     fav: false,
     members: [...new Set([D().me, f.lead])],
-    desc: f.desc || 'No description yet.',
+    desc: f.desc || t('common.noDescriptionYet'),
     milestones: [],
     last: 0,
   };
@@ -1355,7 +1358,7 @@ A.submitProject = () => {
   f.name = ($('#p-name')?.value || '').trim();
   f.desc = $('#p-desc')?.value || '';
   if (!f.name) {
-    S.ui.errors.pname = 'Give the project a name';
+    S.ui.errors.pname = t('err.projectNameRequired');
     render();
     $('#p-name')?.focus();
     return;
@@ -1407,9 +1410,9 @@ A.archiveProject = el => {
   const p = proj(el.dataset.id);
   S.ui.pop = null;
   confirmDlg({
-    title: `Archive ${p.name}?`,
-    body: 'The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings → Projects.',
-    ok: 'Archive project',
+    title: t('act.archiveTitle', { name: p.name }),
+    body: t('act.archiveProjectBody'),
+    ok: t('act.archiveProject'),
     icon: 'archive',
     run: () => {
       const snap = snapshot();
@@ -1438,9 +1441,9 @@ A.delProject = el => {
   S.ui.pop = null;
   const n = tasksOf(p.id).length;
   confirmDlg({
-    title: `Delete ${p.name}?`,
-    body: `This permanently deletes the project and its <b>${n} task${n === 1 ? '' : 's'}</b>, files, and comments for everyone. This can't be undone.`,
-    ok: 'Delete project',
+    title: t('act.deleteTitle', { name: p.name }),
+    body: `${t('act.deleteProjectBodyHead')} <b>${n} task${n === 1 ? '' : 's'}</b>${t('act.deleteProjectBodyTail')}`,
+    ok: t('act.deleteProject'),
     danger: true,
     typeName: p.name,
     run: () => {
@@ -1533,7 +1536,7 @@ A.shareInvite = () => {
     .replace(/\b\w/g, c => c.toUpperCase());
   mutate(() => {
     const id = uid('m');
-    D().members.push({ id, name: nm, email: v, role: 'Guest', team: p.team, title: 'Guest', c: '#6B7280', status: 'invited', last: null, tz: '—' });
+    D().members.push({ id, name: nm, email: v, role: 'Guest', team: p.team, title: t('member.titleGuest'), c: '#6B7280', status: 'invited', last: null, tz: '—' });
     p.members.push(id);
     p.perms = p.perms || {};
     p.perms[id] = perm;
@@ -1623,7 +1626,7 @@ A.submitInvite = () => {
     .filter(Boolean);
   const bad = list.filter(e => !/^\S+@\S+\.\S+$/.test(e));
   if (!list.length) {
-    S.ui.errors.invite = 'Enter at least one email address';
+    S.ui.errors.invite = t('err.enterEmails');
     render();
     return;
   }
@@ -1660,7 +1663,7 @@ A.submitInvite = () => {
     const res = await api.createInvites(list, API_ROLE[role] || 'member', team || null);
     done();
     if (!res.ok) {
-      S.ui.errors = { invite: res.error || 'Could not create the invites' };
+      S.ui.errors = { invite: res.error || t('err.invitesCreateFailed') };
       render();
       return;
     }
@@ -1777,9 +1780,9 @@ async function leaveTo(nextSlug) {
 A.leaveWorkspace = () => {
   const name = D().ws.name;
   confirmDlg({
-    title: `Leave ${name}?`,
-    body: `You'll lose access to its projects, tasks and files. Someone will have to invite you back.`,
-    ok: 'Leave workspace',
+    title: t('act.leaveTitle', { name: name }),
+    body: t('act.leaveWorkspaceBody'),
+    ok: t('act.leaveWorkspace'),
     danger: true,
     icon: 'log-out',
     run: async () => {
@@ -1793,9 +1796,9 @@ A.leaveWorkspace = () => {
 A.deleteWorkspace = () => {
   const ws = D().ws;
   confirmDlg({
-    title: `Delete ${ws.name}?`,
-    body: 'Every project, task, file, and comment in this workspace will be permanently deleted for all members.',
-    ok: 'Delete workspace',
+    title: t('act.deleteTitle', { name: ws.name }),
+    body: t('act.deleteWorkspaceBody'),
+    ok: t('act.deleteWorkspace'),
     danger: true,
     icon: 'trash-2',
     typeName: ws.url,
@@ -1813,9 +1816,9 @@ A.removeMember = el => {
   S.ui.pop = null;
   const n = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
   confirmDlg({
-    title: `Remove ${m.name}?`,
-    body: `${esc(m.name)} will lose access to ${esc(D().ws.name)} immediately.${n ? ` Their <b>${t('act.removeAccess.openTasks', { n: n })}</b> will become unassigned.` : ''}`,
-    ok: 'Remove member',
+    title: t('act.removeTitle', { name: m.name }),
+    body: `${esc(m.name)} will lose access to ${esc(D().ws.name)} immediately.${n ? ` ${t('act.removeAccess.their')} <b>${t('act.removeAccess.openTasks', { n: n })}</b> will become unassigned.` : ''}`,
+    ok: t('act.removeMember'),
     danger: true,
     icon: 'user-minus',
     run: async () => {
@@ -1871,8 +1874,8 @@ A.renameFile = el => {
   S.ui.pop = null;
   openModal({
     type: 'prompt',
-    title: 'Rename file',
-    label: 'File name',
+    title: t('act.renameFile'),
+    label: t('act.fileName'),
     value: f.name,
     run: v => {
       if (v)
@@ -1896,9 +1899,9 @@ A.delFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
   S.ui.pop = null;
   confirmDlg({
-    title: 'Delete file?',
-    body: `<b>${esc(f.name)}</b> will be removed from the project${f.task ? ' and its task' : ''}.`,
-    ok: 'Delete file',
+    title: t('act.deleteFileTitle'),
+    body: `<b>${esc(f.name)}</b> ${f.task ? t('act.deleteFileBodyTask') : t('act.deleteFileBody')}.`,
+    ok: t('act.deleteFile'),
     danger: true,
     run: () => {
       const snap = snapshot();
@@ -2069,9 +2072,9 @@ A.resetDemo = () => {
   if (api.enabled) return toast(t('toast.demoResetLocal'), { kind: 'info' });
   S.ui.pop = null;
   confirmDlg({
-    title: 'Reset demo data?',
-    body: 'All projects, tasks, and settings in this browser go back to the original sample workspace.',
-    ok: 'Reset data',
+    title: t('act.resetDemoTitle'),
+    body: t('act.resetDemoBody'),
+    ok: t('act.resetData'),
     danger: true,
     icon: 'rotate-ccw',
     run: () => {
@@ -2096,9 +2099,9 @@ A.demoToast = el => {
 };
 A.demoConfirm = () =>
   confirmDlg({
-    title: 'Archive Marketing Website?',
-    body: 'The project will be hidden from the sidebar. You can restore it any time.',
-    ok: 'Archive project',
+    title: t('act.archiveDemoTitle'),
+    body: t('act.archiveDemoBody'),
+    ok: t('act.archiveProject'),
     icon: 'archive',
     run: () => toast(t('toast.demoPreview'), { kind: 'info' }),
   });
@@ -2201,9 +2204,9 @@ A.saveWorkspace = () => {
     };
     if (u && u !== current) {
       confirmDlg({
-        title: 'Change the workspace URL?',
-        body: `Links to this workspace will change from /w/${current} to /w/${u}. Anyone using the old address will need to sign in again.`,
-        ok: 'Change URL',
+        title: t('act.changeUrlTitle'),
+        body: t('act.changeUrlBody', { from: current, to: u }),
+        ok: t('act.changeUrl'),
         run: rename,
       });
       return;
@@ -2224,9 +2227,9 @@ A.saveWorkspace = () => {
 A.delWorkspace = () => {
   if (api.enabled) return toast(t('toast.deleteWsUnavailable'), { kind: 'info' });
   return confirmDlg({
-    title: `Delete ${D().ws.name}?`,
-    body: 'Every project, task, file, and comment in this workspace will be permanently deleted for all members.',
-    ok: 'Delete workspace',
+    title: t('act.deleteTitle', { name: D().ws.name }),
+    body: t('act.deleteWorkspaceBody'),
+    ok: t('act.deleteWorkspace'),
     danger: true,
     typeName: D().ws.name,
     run: () => {
@@ -2247,7 +2250,7 @@ A.avColor = el => {
 A.saveProfile = () => {
   const n = $('#pf-name').value.trim();
   if (!n) {
-    S.ui.errors.pname2 = 'Enter your name';
+    S.ui.errors.pname2 = t('err.enterName');
     render();
     return;
   }
@@ -2279,9 +2282,9 @@ A.savePassword = () => {
     nw = $('#pw-new').value,
     cf = $('#pw-conf').value;
   S.ui.pwDone = false;
-  if (!cur) e.pwCur = 'Enter your current password';
-  if (nw.length < 10 || !/[0-9\W]/.test(nw)) e.pwNew = 'Use at least 10 characters, including a number or symbol';
-  if (nw !== cf) e.pwConf = "Passwords don't match";
+  if (!cur) e.pwCur = t('err.enterCurrentPassword');
+  if (nw.length < 10 || !/[0-9\W]/.test(nw)) e.pwNew = t('err.passwordWeak');
+  if (nw !== cf) e.pwConf = t('err.passwordMismatch');
   if (Object.keys(e).length) {
     render();
     return;
@@ -2301,9 +2304,9 @@ A.revokeSession = el => {
 };
 A.revokeAll = () =>
   confirmDlg({
-    title: 'Sign out of all other sessions?',
-    body: "You'll stay signed in on this device. Other devices will need to sign in again.",
-    ok: 'Sign out others',
+    title: t('act.signOutOthersTitle'),
+    body: t('act.signOutOthersBody'),
+    ok: t('act.signOutOthers'),
     danger: true,
     icon: 'log-out',
     run: () => {
@@ -2325,7 +2328,7 @@ A.cancel2fa = () => {
 A.verify2fa = () => {
   const v = $('#tfa-code').value.trim();
   if (!/^\d{6}$/.test(v)) {
-    S.ui.errors.tfa = 'Enter the 6-digit code from your app';
+    S.ui.errors.tfa = t('err.tfaCode');
     render();
     return;
   }
@@ -2338,9 +2341,9 @@ A.verify2fa = () => {
 };
 A.disable2fa = () =>
   confirmDlg({
-    title: 'Turn off two-factor authentication?',
-    body: 'Your account will be protected by your password only.',
-    ok: 'Turn off',
+    title: t('act.disable2faTitle'),
+    body: t('act.disable2faBody'),
+    ok: t('act.turnOff'),
     danger: true,
     icon: 'shield-off',
     run: () => {
@@ -2354,11 +2357,11 @@ A.changePlan = el => {
   const v = el.dataset.v;
   const price = { Free: 0, Team: 12, Business: 24 }[v];
   confirmDlg({
-    title: `${v === 'Free' ? 'Downgrade' : 'Upgrade'} to ${v}?`,
+    title: v === 'Free' ? t('act.downgradeToTitle', { plan: v }) : t('act.upgradeToTitle', { plan: v }),
     body: api.enabled
-      ? `Every member moves to ${v} today. Plans are a label for now — nothing is charged.`
-      : `${D().members.length} members × $${price}/month = <b>$${D().members.length * price}/month</b>, prorated from today and billed to Visa ending 4242.`,
-    ok: v === 'Free' ? 'Downgrade' : `Upgrade to ${v}`,
+      ? t('act.planCloudBody', { plan: v })
+      : `${t('act.planLocalHead', { n: D().members.length, price: price })}<b>$${D().members.length * price}/month</b>${t('act.planLocalTail')}`,
+    ok: v === 'Free' ? t('act.downgrade') : t('act.upgradeTo', { plan: v }),
     icon: 'gem',
     run: async () => {
       if (api.enabled) {
@@ -2398,7 +2401,7 @@ A.toggleShowPw = () => {
 export const EMAIL_RE = /^\S+@\S+\.\S+$/;
 /* Load a workspace by slug and land on the default route for it. */
 export async function openWorkspace(slug) {
-  if (!slug) return { ok: false, status: 0, error: 'No workspace to open' };
+  if (!slug) return { ok: false, status: 0, error: t('err.noWorkspace') };
   await flushPending();
   const res = await hydrateFromServer(slug);
   if (!res.ok) return res;
@@ -2433,9 +2436,9 @@ A.doLogin = () => {
   const em = $('#l-email').value.trim(),
     pw = $('#l-pw').value;
   S.ui.af.email = em;
-  if (!em) e.email = 'Enter your email address';
-  else if (!EMAIL_RE.test(em)) e.email = 'Enter a valid email, like name@company.com';
-  if (!pw) e.pw = 'Enter your password';
+  if (!em) e.email = t('err.enterEmail');
+  else if (!EMAIL_RE.test(em)) e.email = t('err.emailInvalidExample');
+  if (!pw) e.pw = t('err.enterPassword');
   if (Object.keys(e).length) {
     render();
     (e.email ? $('#l-email') : $('#l-pw'))?.focus();
@@ -2455,7 +2458,7 @@ A.doLogin = () => {
     const res = await api.login(em, pw);
     if (!res.ok) {
       done();
-      S.ui.errors = { login: res.error || 'Could not sign in' };
+      S.ui.errors = { login: res.error || t('err.signinFailed') };
       render();
       return;
     }
@@ -2466,7 +2469,7 @@ A.doLogin = () => {
       S.ui.join = null;
       if (!inv.ok) {
         done();
-        S.ui.errors = { login: inv.error || 'Signed in, but the invite could not be accepted.' };
+        S.ui.errors = { login: inv.error || t('err.inviteAcceptFailed') };
         render();
         return;
       }
@@ -2490,7 +2493,7 @@ A.doLogin = () => {
     const ws = await hydrateFromServer(slug);
     if (!ws.ok) {
       done();
-      S.ui.errors = { login: 'Signed in, but the workspace could not be loaded.' };
+      S.ui.errors = { login: t('err.workspaceLoadFailed') };
       render();
       return;
     }
@@ -2514,9 +2517,9 @@ A.doJoin = () => {
   const pw = $('#j-pw').value;
   S.ui.af.name = nm;
   S.ui.af.email = em;
-  if (!nm) e.name = 'Enter your name';
-  if (!EMAIL_RE.test(em)) e.email = 'Enter a valid email address';
-  if (pw.length < 10 || !/[0-9\W]/.test(pw)) e.pw = 'Use at least 10 characters, including a number or symbol';
+  if (!nm) e.name = t('err.enterName');
+  if (!EMAIL_RE.test(em)) e.email = t('err.emailInvalid');
+  if (pw.length < 10 || !/[0-9\W]/.test(pw)) e.pw = t('err.passwordWeak');
   if (Object.keys(e).length) {
     render();
     return;
@@ -2537,7 +2540,7 @@ A.doJoin = () => {
         render();
         return;
       }
-      S.ui.errors = { join: res.error || 'Could not join the workspace' };
+      S.ui.errors = { join: res.error || t('err.joinFailed') };
       render();
       return;
     }
@@ -2552,7 +2555,7 @@ A.doJoin = () => {
     const ws = await hydrateFromServer(slug);
     if (!ws.ok) {
       done();
-      S.ui.errors = { join: 'Account created, but the workspace could not be loaded.' };
+      S.ui.errors = { join: t('err.accountCreatedLoadFailed') };
       render();
       return;
     }
@@ -2568,9 +2571,9 @@ A.doSignup = () => {
     pw = $('#s-pw').value;
   S.ui.af.name = nm;
   S.ui.af.email = em;
-  if (!nm) e.name = 'Enter your name';
-  if (!EMAIL_RE.test(em)) e.email = 'Enter a valid work email';
-  if (pw.length < 10 || !/[0-9\W]/.test(pw)) e.pw = 'Use at least 10 characters, including a number or symbol';
+  if (!nm) e.name = t('err.enterName');
+  if (!EMAIL_RE.test(em)) e.email = t('err.workEmailInvalid');
+  if (pw.length < 10 || !/[0-9\W]/.test(pw)) e.pw = t('err.passwordWeak');
   if (Object.keys(e).length) {
     render();
     $('#s-email').value = em;
@@ -2585,7 +2588,7 @@ A.doSignup = () => {
     return;
   }
   if (!api.allowSignup) {
-    S.ui.errors = { email: 'Sign-ups are disabled. Ask a workspace admin for an account.' };
+    S.ui.errors = { email: t('err.signupDisabled') };
     render();
     return;
   }
@@ -2598,7 +2601,7 @@ A.doSignup = () => {
     const res = await api.signup(nm, em, pw);
     if (!res.ok) {
       done();
-      S.ui.errors = { email: res.error || 'Could not create the account' };
+      S.ui.errors = { email: res.error || t('err.accountCreateFailed') };
       render();
       return;
     }
@@ -2612,7 +2615,7 @@ A.doSignup = () => {
     const ws = await hydrateFromServer(slug);
     if (!ws.ok) {
       done();
-      S.ui.errors = { email: 'Account created, but the workspace could not be loaded.' };
+      S.ui.errors = { email: t('err.accountCreatedLoadFailed') };
       render();
       return;
     }
@@ -2653,7 +2656,7 @@ A.doForgot = () => {
   S.ui.af.email = em;
   S.ui.errors = {};
   if (!EMAIL_RE.test(em)) {
-    S.ui.errors.email = 'Enter the email you use to sign in';
+    S.ui.errors.email = t('err.forgotEmailInvalid');
     render();
     return;
   }
@@ -2666,8 +2669,8 @@ A.doReset = () => {
   const a = $('#r-pw').value,
     b = $('#r-pw2').value;
   const e = (S.ui.errors = {});
-  if (a.length < 10 || !/[0-9\W]/.test(a)) e.pw = 'Use at least 10 characters, including a number or symbol';
-  if (a !== b) e.pw2 = "Passwords don't match";
+  if (a.length < 10 || !/[0-9\W]/.test(a)) e.pw = t('err.passwordWeak');
+  if (a !== b) e.pw2 = t('err.passwordMismatch');
   if (Object.keys(e).length) {
     render();
     return;
@@ -2721,7 +2724,7 @@ A.onbBack = () => {
 A.onbNext = el => {
   const o = S.ui.onbData;
   if (S.ui.onb === 1 && !o.ws.trim()) {
-    S.ui.errors.ws = 'Name your workspace to continue';
+    S.ui.errors.ws = t('err.wsNameRequired');
     render();
     $('#o-ws')?.focus();
     return;
@@ -2753,9 +2756,9 @@ A.onbFinish = async () => {
     .map(x => x.trim())
     .filter(x => EMAIL_RE.test(x));
   if (api.enabled) {
-    const res = await api.createWorkspace(o.ws.trim() || 'Workspace', o.url || undefined);
+    const res = await api.createWorkspace(o.ws.trim() || t('common.workspace'), o.url || undefined);
     if (!res.ok) {
-      S.ui.errors = { ws: res.error || 'Could not create the workspace' };
+      S.ui.errors = { ws: res.error || t('err.createWorkspace') };
       toast(res.error || t('err.createWorkspace'), { kind: 'err' });
       render();
       return;
@@ -2782,7 +2785,7 @@ A.onbFinish = async () => {
         color: 'indigo',
         team: me().team,
         lead: D().me,
-        desc: `Created during setup from the ${tm.name} template.`,
+        desc: t('act.createdFromTemplate', { name: tm.name }),
       },
       tm.id,
     );
@@ -2794,7 +2797,7 @@ A.onbFinish = async () => {
           email: e,
           role: 'Member',
           team: me().team,
-          title: 'Member',
+          title: t('member.titleMember'),
           c: '#6B7280',
           status: 'invited',
           last: null,

@@ -118,7 +118,6 @@ const ORACLE = [
   ['err.accountCreateFailed', undefined, 'Could not create the account'],
   ['err.forgotEmailInvalid', undefined, 'Enter the email you use to sign in'],
   ['err.wsNameRequired', undefined, 'Name your workspace to continue'],
-  ['common.workspace', undefined, 'Workspace'],
   ['err.createWorkspace', undefined, 'Could not create the workspace'],
   ['act.createdFromTemplate', { name: 'Engineering' }, 'Created during setup from the Engineering template.'],
   // the reused toast labels this task wires
