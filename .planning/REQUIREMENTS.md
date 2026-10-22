@@ -47,6 +47,12 @@ the server is the only boundary that counts.
 - [ ] **LOC-06**: The account's language is applied before the first render, so the interface
       never flashes English.
 
+### Search
+
+- [ ] **SEARCH-01**: Search matches an accented name from an unaccented query — "elodie" finds
+      "Élodie" — by normalising both sides before the comparison. The sort order does not change
+      in this milestone.
+
 ### Server messages
 
 - [ ] **ERR-01**: A server error carries a stable machine code next to its English message, and
@@ -91,12 +97,13 @@ Deferred, tracked but not in this roadmap.
 
 ### Search and formats
 
-- **FMT-01**: Search matches an accented name from an unaccented query ("elodie" finds
-  "Élodie").
+- **FMT-01**: The sort order of a search result follows the locale's collation rules
+      (`Intl.Collator`), so an accented name sorts where a French speaker expects it. Deferred
+      because it changes an order the existing tests assume.
 - **FMT-02**: The time zone preference becomes an IANA zone, so `Intl` can format with it. It
-  stores display labels today, which `Intl` rejects.
+      stores display labels today, which `Intl` rejects.
 - **FMT-03**: The date format preference follows the locale by default and stays an explicit
-  override when the user picks one.
+      override when the user picks one.
 
 ### Workspace
 
@@ -109,6 +116,7 @@ Deferred, tracked but not in this roadmap.
 |---------|--------|
 | The invitation email in the user's language | the server image ships no catalogue; it would need a Dockerfile change and `Accept-Language` negotiation — materially larger than the interface itself |
 | Translating the demo seed's sample content (project names, task titles, comments) | sample data, not interface chrome — the demo should read as a neutral playground, not as a French product |
+| Translating the two prototype pages (`design-system`, `states`) | internal design-system demonstrations reachable from Settings, not product surfaces; their link labels are translated, their content is excluded from the catalogue and allow-listed out of the leak test |
 | A translation-management UI or runtime machine translation | the catalogues are files in the repository, edited like code |
 | Right-to-left support | no RTL locale is offered; the catalogue format must not block one later |
 | Locale-specific currency formatting | the plan prices are display-only labels; nothing is billed |
@@ -122,13 +130,43 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _pending_ | _pending_ | Pending |
+| I18N-01 | Phase 6 | Pending |
+| I18N-02 | Phase 7 | Pending |
+| I18N-03 | Phase 6 | Pending |
+| I18N-04 | Phase 6 | Pending |
+| I18N-05 | Phase 7 | Pending |
+| I18N-06 | Phase 5 | Pending |
+| I18N-07 | Phase 7 | Pending |
+| I18N-08 | Phase 5 | Pending |
+| LOC-01 | Phase 8 | Pending |
+| LOC-02 | Phase 8 | Pending |
+| LOC-03 | Phase 8 | Pending |
+| LOC-04 | Phase 8 | Pending |
+| LOC-05 | Phase 8 | Pending |
+| LOC-06 | Phase 8 | Pending |
+| SEARCH-01 | Phase 6 | Pending |
+| ERR-01 | Phase 9 | Pending |
+| ERR-02 | Phase 9 | Pending |
+| ACT-01 | Phase 9 | Pending |
+| ACT-02 | Phase 9 | Pending |
+| UAT-01 | Phase 10 | Pending |
+| UAT-02 | Phase 10 | Pending |
+| UAT-03 | Phase 10 | Pending |
+| UAT-04 | Phase 10 | Pending |
+| UAT-05 | Phase 10 | Pending |
+| UAT-06 | Phase 10 | Pending |
+| UAT-07 | Phase 10 | Pending |
+| UAT-08 | Phase 10 | Pending |
+| UAT-09 | Phase 10 | Pending |
+| UAT-10 | Phase 11 | Pending |
 
 **Coverage:**
-- v1.2 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️
+- v1.2 requirements: 29 total
+- Mapped to phases: 29
+- Unmapped: 0 ✓
+- Phases: 7 (5–11) — every requirement appears in exactly one phase, every phase carries at least
+  one requirement
 
 ---
 *Requirements defined: 2026-10-22*
-*Last updated: 2026-10-22 after initial definition*
+*Last updated: 2026-10-22 after roadmap creation (v1.2, phases 5–11)*

@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Localization
 status: planning
-last_updated: "2026-10-22T09:17:18.998Z"
+last_updated: "2026-10-22T11:45:00.000Z"
 last_activity: 2026-10-22
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,12 +19,50 @@ Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — defining requirements
+- Milestone: **v1.2 — Localization** — roadmap created, not started
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-new-milestone`** continues with research → requirements → roadmap
+- Next: **`/gsd-discuss-phase 5`** → `/gsd-plan-phase 5`
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
+
+## Roadmap — v1.2 (7 phases, 5–11)
+
+The phase numbering continues v1.1 (which used 1–4). The roadmap is in
+`.planning/ROADMAP.md`; the requirement-to-phase mapping is in `.planning/REQUIREMENTS.md`.
+
+| Phase | Name | Requirements |
+|-------|------|--------------|
+| 5 | i18n foundation & catalogue contract | I18N-06, I18N-08 |
+| 6 | English extraction & locale-aware formats | I18N-01, I18N-03, I18N-04 |
+| 7 | French catalogue & French typography | I18N-02, I18N-05, I18N-07 |
+| 8 | Per-user locale & the honest selector | LOC-01 … LOC-06 |
+| 9 | Server messages & activity history | ERR-01, ERR-02, ACT-01, ACT-02 |
+| 10 | Browser coverage in both locales | UAT-01 … UAT-09 |
+| 11 | French sweep, build gate & ship hardening | UAT-10 |
+
+**Coverage:** 28/28 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
+phase without a requirement.
+
+**Ordering notes (deviations from the research sketch, both deliberate):**
+
+- The per-user locale phase (8) comes **after** the French catalogue (7), not second. `LOC-01`
+  (switch without a reload) and `LOC-06` (no English flash) are only observable once French
+  exists. The locale plumbing itself has no dependency on catalogue contents — it could be built
+  in parallel with phases 5–7 in practice.
+- The research's "locale-aware formats" phase is folded into the English extraction (6): both are
+  behaviour-preserving refactors, and the French author then writes against a frozen format
+  surface either way.
+
+**Two open items to settle at Phase 5 planning:**
+
+- `I18N-08` (the French catalogue ships as its own chunk, an English-only build carries no French
+  string) contradicts the research's resolved conflict 10 ("both catalogues statically imported").
+  `REQUIREMENTS.md` is the source of truth for scope, so the requirement wins: the catalogues stay
+  JSON files importable by plain Node, while the browser build keeps French out of the English
+  bundle.
+- `LOC-02` sits with the selector (phase 8), not with the registry (phase 5): the selector must not
+  offer a language that is not yet translated.
 
 ## Where things stand
 
@@ -178,13 +216,15 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 5 — i18n foundation & catalogue contract (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-10-22 — Milestone v1.2 started
+Status: Roadmap created, awaiting discussion
+Last activity: 2026-10-22 — Roadmap for v1.2 created (7 phases, 5–11)
 
 ## Operator Next Steps
 
-- Define the milestone requirements and roadmap (`/gsd-new-milestone` continues here)
+- `/gsd-discuss-phase 5` — the i18n foundation: the `t()` contract, the escaping rule, the plural
+  subset, the catalogue location and the build layout
+- Then `/gsd-plan-phase 5`; phases 6–11 are already ordered and scoped in `.planning/ROADMAP.md`
 - Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
   per-user locale with a migration, and Chromium coverage for the 8 untested UI flows

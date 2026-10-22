@@ -74,17 +74,53 @@ French, every user has their own locale — and the full app journey is covered 
 5. **Migrate in place.** The existing database became the first workspace: name, colour and
    slug derived from `data.ws`; accounts, roles and memberships preserved. — shipped
 
-## Decisions for milestone v1.2 (validated by the owner)
+## Decisions for milestone v1.2 (validated by the owner, or defaulted from the research)
 
 1. **The i18n layer is hand-made.** No runtime dependency: `t()` plus JSON catalogues, the
    English source strings as the base catalogue. The app has no framework and no runtime
-   dependency, and adding one for translations would break that.
+   dependency, and adding one for translations would break that. Every candidate library
+   measured is bigger than the layer it would replace.
 2. **French is the second language, and it is complete.** The selector only lists what really
    exists — English and French. The four other languages (Deutsch, Español, Français, 日本語
    are currently listed) disappear from the selector until they are genuinely translated.
 3. **The locale is per user.** A French speaker in an English workspace keeps their own
    language. That needs a per-account column and a migration; the migration machinery exists
    and is proven by `test/migration.test.mjs`.
+4. **The server never writes the locale at boot.** A nullable column and a client-side
+   `PATCH /api/auth/me` keep the "second boot is a byte-identical no-op" guarantee intact.
+5. **`t()` never escapes.** `toast()` and `empty()` already escape, and `document.title` and
+   the ARIA live region are `textContent` sinks. Catalogue values are plain text, made inert
+   by a test; interpolated values are escaped at the call site with the existing `esc()`.
+6. **The plural subset is `{name}` plus `{count, plural, …}`**, selected with
+   `Intl.PluralRules` — which has three categories in French (`one`, `many`, `other`) and says
+   "0 fichier" where English says "0 files". `Intl.MessageFormat` does not exist in Node 24 or
+   Chromium, so any richer ICU syntax would need a hand-written parser.
+7. **Server errors gain a stable code beside their unchanged English message.** The payload
+   shape does not change; the client translates the code and falls back to the English string
+   when it does not know it. No toast is ever empty.
+8. **The activity log stores machine verbs, not prose.** The filters stop parsing English and
+   classify the stored verb instead, so existing documents keep filtering correctly with no
+   migration, and legacy English detail is suppressed at render rather than leaked.
+9. **Vouvoiement**, applied consistently across the whole catalogue.
+10. **No middle-dot forms** (`invité·e`): noun forms ("Invité", "Membre") and invariable
+    constructions, which read naturally in chips, table cells and `aria-label`s.
+11. **French-France house style**: a no-break space before `:`, a narrow no-break space before
+    `; ! ?`, a no-break space inside guillemets, the curly apostrophe, the ellipsis, NFC
+    accents, lowercase months.
+12. **The invitation email is deferred out of this milestone.** The server image ships no
+    catalogue; it would need a Dockerfile change, a Node-side `t()` and `Accept-Language`
+    negotiation. The catalogue stays importable by plain Node, so v1.3 needs no relocation.
+13. **The plan wire values stay English** ("Free", "Team", "Business" — the server validates
+    those ids); only the displayed label is translated.
+14. **`dateFmt`, `weekStart` and `tz` stay workspace-shared.** This milestone must not
+    half-solve the open per-user-settings requirement. An `'auto'` sentinel lets an unset
+    date format follow the locale while an explicit user choice still wins.
+15. **The demo seed content stays English.** It is sample data, not interface chrome. The two
+    prototype pages (`design-system`, `states`) are excluded from the catalogue and
+    allow-listed out of the leak test; their link labels are translated.
+16. **Accent-insensitive search is in scope** — "elodie" finds "Élodie" — because it is a basic
+    expectation as soon as the interface is French. The `Intl.Collator` sort order is
+    deferred, because it changes an order the existing tests assume.
 
 ## Requirements
 
@@ -129,8 +165,17 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
 - File storage: files are metadata only today; no binary upload backend.
 - Translating the four remaining languages (Deutsch, Español, 日本語, English UK). The selector
   will not offer a language that is not translated.
+- The invitation email in the user's language — the server image ships no catalogue, so it would
+  need a Dockerfile change and `Accept-Language` negotiation.
 - A translation-management UI or machine-translation pipeline: the catalogues are files in the
   repository, edited like code.
+- Right-to-left support: no RTL locale is offered, and the catalogue format must not block one
+  later.
+- Locale-specific currency formatting: the plan prices are display-only labels.
+- The demo seed's sample content and the two prototype pages: sample data and design-system
+  demonstrations, not product surfaces.
+- Accent-insensitive *sorting* (`Intl.Collator`): it changes an order the existing tests assume,
+  so it is deferred even though accent-insensitive *matching* is in scope.
 
 ## Context
 
