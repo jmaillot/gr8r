@@ -189,10 +189,43 @@ test('the mini-calendar, the greeting line and the timeline read their names fro
 /* ---------- the arrays are gone ---------- */
 
 const MONTH_WEEKDAY_NAMES = new Set([
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  'January', 'February', 'March', 'April', 'June', 'July', 'August', 'September', 'October', 'November', 'December',
-  'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat',
-  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+  'January',
+  'February',
+  'March',
+  'April',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
 ]);
 
 function walkSrc(dir, out = []) {
@@ -208,7 +241,28 @@ test('the four English arrays no longer exist in src/core/utils.js', () => {
   const utils = source('src/core/utils.js');
   assert.doesNotMatch(utils, /export const (MON|MONL|WD|WDL)\b/);
   /* Every other export survives: the arrays' deletion removes nothing else. */
-  for (const name of ['esc', 'uid', 'clamp', 'isMac', 'MOD', 'DAY', 'sod', 'TODAY', 'iso', 'parse', 'addD', 'dOff', 'diffD', 'dateFormat', 'setDateFormat', 'fmtDate', 'relDate', 'ago', 'minsAgo', 'dayBucket']) {
+  for (const name of [
+    'esc',
+    'uid',
+    'clamp',
+    'isMac',
+    'MOD',
+    'DAY',
+    'sod',
+    'TODAY',
+    'iso',
+    'parse',
+    'addD',
+    'dOff',
+    'diffD',
+    'dateFormat',
+    'setDateFormat',
+    'fmtDate',
+    'relDate',
+    'ago',
+    'minsAgo',
+    'dayBucket',
+  ]) {
     assert.match(utils, new RegExp(`\\b${name}\\b`));
   }
 });
