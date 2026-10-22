@@ -40,30 +40,6 @@
     "text": "ERROR 404"
   },
   {
-    "file": "src/pages/tasks.js",
-    "text": "Board"
-  },
-  {
-    "file": "src/pages/tasks.js",
-    "text": "Every task across"
-  },
-  {
-    "file": "src/pages/tasks.js",
-    "text": "List"
-  },
-  {
-    "file": "src/pages/tasks.js",
-    "text": "New task"
-  },
-  {
-    "file": "src/pages/tasks.js",
-    "text": "Table"
-  },
-  {
-    "file": "src/pages/tasks.js",
-    "text": "Tasks"
-  },
-  {
     "file": "src/views/board.js",
     "text": "Add"
   },

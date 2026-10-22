@@ -1433,5 +1433,6 @@
   "page.overview.workload": "Workload",
   "page.overview.workloadHint": "Open tasks per person",
   "page.overview.milestones": "Upcoming milestones",
-  "page.overview.noMilestones": "No upcoming milestones"
+  "page.overview.noMilestones": "No upcoming milestones",
+  "page.tasks.subtitle": "Every task across {n} projects."
 }
