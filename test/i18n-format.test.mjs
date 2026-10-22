@@ -181,12 +181,26 @@ test('the bucket label is a catalogue value', () => {
 /* ---------- the number and the file size ---------- */
 
 test('the number is the locale format', async () => {
-  assert.equal(formatNumber(1250000), '1,250,000');
+  assert.equal(formatNumber(1250000), '1250000');
   assert.equal(formatNumber(0.45), '0.45');
   await inFrench(async () => {
     /* The French thousands separator is the narrow no-break space (U+202F). */
     assert.equal(formatNumber(1250000), '1\u202F250\u202F000');
     assert.equal(formatNumber(0.45), '0,45');
+  });
+});
+
+test('the English number does not group thousands, the way the hand-rolled code did not', async () => {
+  /* The old fsize() and the raw counters never grouped: a file of 1 023 KB
+     read '1023 KB' and a count of 1 234 read '1234'. The English output must
+     stay byte-identical, so the base locale opts out of grouping. */
+  assert.equal(formatNumber(1234), '1234');
+  assert.equal(formatNumber(1250000), '1250000');
+  assert.equal(formatFileSize(1047552), '1023 KB');
+  await inFrench(async () => {
+    /* The French locale keeps its own habit: the narrow no-break space. */
+    assert.equal(formatNumber(1234), '1\u202F234');
+    assert.equal(formatFileSize(1047552), '1\u202F023 ko');
   });
 });
 
@@ -196,8 +210,10 @@ test('the English file size is byte-identical to the hand-rolled fsize()', () =>
   assert.equal(formatFileSize(1536), '2 KB');
   assert.equal(formatFileSize(1048576), '1.0 MB');
   assert.equal(formatFileSize(1048576 * 1.5), '1.5 MB');
-  /* The number is the locale's number format, so a four-digit kilobyte count is grouped. */
-  assert.equal(formatFileSize(1048575), '1,024 KB');
+  /* The English number does not group: the hand-rolled fsize() never did, so
+     a four-digit kilobyte count read '1024 KB' and must still read so. */
+  assert.equal(formatFileSize(1048575), '1024 KB');
+  assert.equal(formatFileSize(1047552), '1023 KB');
 });
 
 test('the French file size groups with the narrow no-break space and uses the French unit', async () => {

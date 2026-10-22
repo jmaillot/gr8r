@@ -478,6 +478,20 @@ or the English interface changes; and the roadmap's « il y a 2 jours » needs
 
 ## Declared English deltas
 
+Two visible English changes are declared for this phase. Everything else must stay byte-identical.
+
+1. **The settings' time-format selector gains an `'auto'` option**, which becomes its default
+   (plan 06-03). The English clock is still 12-hour; no stored document changes. The revert —
+   removing the option — is real, but it would remove what the phase goal mandates, so the delta
+   is declared rather than reverted.
+2. **The English number does not group thousands** (plan 06-02, corrected). The plan originally
+   asserted `Intl.NumberFormat('en-US')`'s grouped form, which would have turned a
+   `1023 KB` file into `1,023 KB` — a change to an *existing* output that nobody had declared,
+   and exactly what the roadmap's criterion 2 forbids. The base locale therefore opts out of
+   grouping (`useGrouping: false`), the English output stays byte-identical, and the French
+   locale keeps its own narrow no-break space. Adopting the grouping in English is a possible
+   later editorial decision; it is not this phase's.
+
 The phase is behaviour-preserving (D-01) and the roadmap's success criterion 2 says the interface
 behaves exactly as it did before the extraction. One delta is declared here, so the phase's own
 verification reads it where it matters — in the roadmap criterion itself and in this file.

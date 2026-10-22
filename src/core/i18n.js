@@ -197,6 +197,12 @@ const LOCALE_FORMATS = {
       withYear: { month: 'short', day: 'numeric', year: 'numeric' },
     },
     relativeStyle: 'narrow',
+    /* The English output must stay byte-identical to what the hand-rolled
+       formatters produced, and they never grouped thousands: a 1 023 KB file
+       read '1023 KB'. Grouping is a locale's own habit, so it belongs to the
+       non-base locales; the English one keeps the old shape until a
+       deliberate change says otherwise. */
+    number: { useGrouping: false },
   },
   fr: {
     date: {
@@ -372,7 +378,7 @@ export function bucketLabel(id) {
 
 /* The number, in the locale's format. */
 export function formatNumber(value, options = {}) {
-  return numberFor(locale, options).format(value);
+  return numberFor(locale, { ...formatsFor(locale).number, ...options }).format(value);
 }
 
 /* The unit token of a file size: the locale's own table entry when it has
