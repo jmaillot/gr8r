@@ -16,56 +16,70 @@ import { SHORTCUTS } from '../overlays/modals.js';
 const SAMPLE_DATE = new Date(2026, 9, 1);
 const SAMPLE_TIME = new Date(2026, 9, 1, 14, 30);
 
+/* The lookup tables that turn a stored preference value into its catalogue
+   key: the accent swatches' data-tip and the density segments' label. The
+   stored values stay the machine ids (data-v / data-k), the display reads
+   the catalogue. */
+const ACCENT_TIPS = {
+  indigo: 'settings.accent.indigo',
+  blue: 'settings.accent.blue',
+  violet: 'settings.accent.violet',
+  teal: 'settings.accent.teal',
+  rose: 'settings.accent.rose',
+  graphite: 'settings.accent.graphite',
+};
+const DENSITY_LABELS = { comfortable: 'settings.density.comfortable', compact: 'settings.density.compact' };
+
 export const SET_NAV = [
   [
-    'General',
+    'modal.sc.general',
     [
-      ['workspace', 'Workspace', 'building-2'],
-      ['appearance', 'Appearance', 'palette'],
-      ['language', 'Language', 'languages'],
-      ['datetime', 'Date & time', 'clock'],
+      ['workspace', 'settings.nav.workspace', 'building-2'],
+      ['appearance', 'settings.nav.appearance', 'palette'],
+      ['language', 'settings.language.title', 'languages'],
+      ['datetime', 'settings.nav.datetime', 'clock'],
     ],
   ],
   [
-    'Workspace',
+    'common.workspace',
     [
-      ['members', 'Members', 'users'],
-      ['teams', 'Teams', 'users-round'],
-      ['projects', 'Projects', 'folder-kanban'],
-      ['permissions', 'Permissions', 'shield'],
+      ['members', 'nav.route.members', 'users'],
+      ['teams', 'nav.route.teams', 'users-round'],
+      ['projects', 'nav.route.projects', 'folder-kanban'],
+      ['permissions', 'settings.nav.permissions', 'shield'],
     ],
   ],
   [
-    'Notifications',
+    'nav.route.notifications',
     [
-      ['notif-email', 'Email', 'mail'],
-      ['notif-push', 'Push', 'smartphone'],
-      ['notif-mentions', 'Mentions', 'at-sign'],
-      ['notif-assign', 'Task assignments', 'user-check'],
+      ['notif-email', 'settings.nav.email', 'mail'],
+      ['notif-push', 'settings.nav.push', 'smartphone'],
+      ['notif-mentions', 'settings.nav.mentions', 'at-sign'],
+      ['notif-assign', 'settings.nav.assignments', 'user-check'],
     ],
   ],
   [
-    'Personal',
+    'settings.group.personal',
     [
-      ['profile', 'Profile', 'user'],
-      ['preferences', 'Preferences', 'sliders-horizontal'],
-      ['shortcuts', 'Keyboard shortcuts', 'keyboard'],
+      ['profile', 'settings.nav.profile', 'user'],
+      ['preferences', 'settings.nav.preferences', 'sliders-horizontal'],
+      ['shortcuts', 'settings.nav.shortcuts', 'keyboard'],
     ],
   ],
   [
-    'Security',
+    'settings.group.security',
     [
-      ['password', 'Password', 'key-round'],
-      ['sessions', 'Sessions', 'monitor-smartphone'],
-      ['2fa', 'Two-factor authentication', 'shield-check'],
+      ['password', 'settings.nav.password', 'key-round'],
+      ['sessions', 'settings.nav.sessions', 'monitor-smartphone'],
+      ['2fa', 'settings.nav.twoFactor', 'shield-check'],
     ],
   ],
   [
-    'Billing',
+    'settings.group.billing',
     [
-      ['plan', 'Plan', 'gem'],
-      ['payment', 'Payment', 'credit-card'],
-      ['invoices', 'Invoices', 'receipt'],
+      ['plan', 'settings.nav.plan', 'gem'],
+      ['payment', 'settings.nav.payment', 'credit-card'],
+      ['invoices', 'settings.nav.invoices', 'receipt'],
     ],
   ],
 ];
@@ -83,9 +97,9 @@ export const sel = (k, opts, v) =>
     .join('')}</select>`;
 export function pageSettings() {
   const sec = S.ui.params.sec || S.ui.settings || 'appearance';
-  const title = SET_NAV.flatMap(g => g[1]).find(x => x[0] === sec) || ['appearance', 'Appearance'];
+  const title = SET_NAV.flatMap(g => g[1]).find(x => x[0] === sec) || ['appearance', 'settings.nav.appearance'];
   return `<div class="set">
-    <nav class="set-nav" aria-label="Settings">${SET_NAV.map(([g, items]) => `<div class="gh">${g}</div>${items.map(([k, n, i]) => `<button class="sitem ${sec === k ? 'on' : ''}" data-a="go" data-r="settings" data-sec="${k}">${ic(i, 15)}<span>${t(n)}</span></button>`).join('')}`).join('')}</nav>
+    <nav class="set-nav" aria-label="${t('nav.route.settings')}">${SET_NAV.map(([g, items]) => `<div class="gh">${t(g)}</div>${items.map(([k, n, i]) => `<button class="sitem ${sec === k ? 'on' : ''}" data-a="go" data-r="settings" data-sec="${k}">${ic(i, 15)}<span>${t(n)}</span></button>`).join('')}`).join('')}</nav>
     <div class="set-body" data-keep="set:${sec}"><div class="set-in">${settingsBody(sec, title[1])}</div></div>
   </div>`;
 }
@@ -93,56 +107,56 @@ export function settingsBody(sec, title) {
   const P = S.prefs;
   const d = D();
   const np = d.notifPrefs;
-  const H = lead => `<h1>${title}</h1><p class="lead">${lead}</p>`;
+  const H = lead => `<h1>${t(title)}</h1><p class="lead">${lead}</p>`;
   switch (sec) {
     case 'workspace': {
       const wsAdmin = !api.enabled || api.workspace?.role === 'owner' || api.workspace?.role === 'admin';
       return (
-        H('Your workspace name, address, and identity.') +
+        H(t('settings.ws.lead')) +
         `
       <form data-submit="saveWorkspace">
-      <div class="sblock" style="margin-top:0"><div class="row" style="gap:14px;margin-bottom:18px">${wsLogo(d.ws, 52)}<div><div class="label" style="margin-bottom:6px">Workspace icon</div><div class="swatches">${['#2F2E2A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'].map(c => `<button type="button" class="sw ${d.ws.c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="wsColor" data-v="${c}" aria-label="Color ${c}"></button>`).join('')}</div></div></div>
-      <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">Workspace name</label><input class="input" id="ws-name" value="${esc(d.ws.name)}" ${wsAdmin ? '' : 'readonly'}></div>
-      <div class="field"><label class="label" for="ws-url">Workspace URL</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? 'Changing the URL will break existing links.' : 'Only workspace admins can change these settings.'}</span></div>
-      ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">Save changes</button></div>` : ''}</div></div></form>
+      <div class="sblock" style="margin-top:0"><div class="row" style="gap:14px;margin-bottom:18px">${wsLogo(d.ws, 52)}<div><div class="label" style="margin-bottom:6px">${t('settings.ws.icon')}</div><div class="swatches">${['#2F2E2A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'].map(c => `<button type="button" class="sw ${d.ws.c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="wsColor" data-v="${c}" aria-label="${t('common.color')} ${c}"></button>`).join('')}</div></div></div>
+      <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">${t('common.wsName')}</label><input class="input" id="ws-name" value="${esc(d.ws.name)}" ${wsAdmin ? '' : 'readonly'}></div>
+      <div class="field"><label class="label" for="ws-url">${t('common.wsUrl')}</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? t('settings.ws.urlWarning') : t('settings.ws.urlReadonly')}</span></div>
+      ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">${t('settings.ws.saveChanges')}</button></div>` : ''}</div></div></form>
       ${
         api.enabled
-          ? `<div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>
-      ${srow('Leave workspace', 'You lose access to this workspace until someone invites you back.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="leaveWorkspace">Leave workspace</button>`)}
+          ? `<div class="sblock"><h2 style="color:var(--red)">${t('settings.ws.dangerZone')}</h2>
+      ${srow(t('settings.ws.leaveTitle'), t('settings.ws.leaveBody'), `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="leaveWorkspace">${t('settings.ws.leaveTitle')}</button>`)}
       ${
         api.workspace?.role === 'owner'
           ? srow(
-              'Delete workspace',
-              'Permanently delete this workspace, its projects, tasks and files for every member. You will be asked to type the workspace URL.',
-              `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="deleteWorkspace">Delete workspace</button>`,
+              t('settings.ws.deleteTitle'),
+              t('settings.ws.deleteBodyApi'),
+              `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="deleteWorkspace">${t('settings.ws.deleteTitle')}</button>`,
             )
           : ''
       }</div>`
-          : `<div class="sblock"><h2 style="color:var(--red)">Danger zone</h2>${srow('Delete workspace', 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.', `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="delWorkspace">Delete workspace</button>`)}</div>`
+          : `<div class="sblock"><h2 style="color:var(--red)">${t('settings.ws.dangerZone')}</h2>${srow(t('settings.ws.deleteTitle'), t('settings.ws.deleteBodyLocal'), `<button class="btn btn-danger-ghost" style="border:1px solid color-mix(in srgb,var(--red) 35%,transparent)" data-a="delWorkspace">${t('settings.ws.deleteTitle')}</button>`)}</div>`
       }`
       );
     }
     case 'appearance':
       return (
-        H('Customize how Gr8r looks on this device.') +
+        H(t('settings.appearance.lead')) +
         `
-      <div class="sblock" style="margin-top:0"><h2>Theme</h2><div class="themecards" style="margin-top:12px" role="radiogroup" aria-label="Theme">${[
-        ['light', 'Light'],
-        ['dark', 'Dark'],
-        ['system', 'System'],
+      <div class="sblock" style="margin-top:0"><h2>${t('popover.theme')}</h2><div class="themecards" style="margin-top:12px" role="radiogroup" aria-label="${t('popover.theme')}">${[
+        ['light', 'popover.themeLight'],
+        ['dark', 'popover.themeDark'],
+        ['system', 'popover.themeSystem'],
       ]
         .map(([k, n]) => {
           const L = { bg: '#FBFAF8', s: '#F2F1EE', t: '#1D1C1A', b: '#E3E1DC', a: '#4B5BD6' },
             Dk = { bg: '#1D1D1C', s: '#151514', t: '#ECEAE5', b: '#333230', a: '#8E9AF3' };
           const pv = c =>
             `<div class="s" style="background:${c.s}"><i style="background:${c.b};width:70%"></i><i style="background:${c.a};width:55%"></i><i style="background:${c.b};width:80%"></i><i style="background:${c.b};width:60%"></i></div><div class="m" style="background:${c.bg}"><i style="background:${c.t};width:45%;height:7px"></i><i style="background:${c.b}"></i><i style="background:${c.b};width:80%"></i><i style="background:${c.a};width:30%;height:10px;margin-top:4px"></i></div>`;
-          return `<button class="tcard ${P.theme === k ? 'on' : ''}" role="radio" aria-checked="${P.theme === k}" data-a="setTheme" data-v="${k}"><div class="tprev" style="${k === 'system' ? 'grid-template-columns:1fr 1fr;display:grid' : ''}">${k === 'system' ? `<div style="display:grid;grid-template-columns:30% 1fr">${pv(L)}</div><div style="display:grid;grid-template-columns:30% 1fr">${pv(Dk)}</div>` : pv(k === 'light' ? L : Dk)}</div><span class="row" style="font-weight:500;font-size:13px;gap:6px">${ic(k === 'light' ? 'sun' : k === 'dark' ? 'moon' : 'monitor', 14)}${n}${P.theme === k ? `<span class="sp"></span><span style="color:var(--accent)">${ic('circle-check', 15)}</span>` : ''}</span></button>`;
+          return `<button class="tcard ${P.theme === k ? 'on' : ''}" role="radio" aria-checked="${P.theme === k}" data-a="setTheme" data-v="${k}"><div class="tprev" style="${k === 'system' ? 'grid-template-columns:1fr 1fr;display:grid' : ''}">${k === 'system' ? `<div style="display:grid;grid-template-columns:30% 1fr">${pv(L)}</div><div style="display:grid;grid-template-columns:30% 1fr">${pv(Dk)}</div>` : pv(k === 'light' ? L : Dk)}</div><span class="row" style="font-weight:500;font-size:13px;gap:6px">${ic(k === 'light' ? 'sun' : k === 'dark' ? 'moon' : 'monitor', 14)}${t(n)}${P.theme === k ? `<span class="sp"></span><span style="color:var(--accent)">${ic('circle-check', 15)}</span>` : ''}</span></button>`;
         })
         .join('')}</div></div>
-      <div class="sblock"><h2>Accent color</h2>${srow(
-        'Accent',
-        'Used for primary buttons, focus rings, and selection.',
-        `<div class="swatches" role="radiogroup" aria-label="Accent color">${[
+      <div class="sblock"><h2>${t('settings.appearance.accentTitle')}</h2>${srow(
+        t('settings.appearance.accent'),
+        t('settings.appearance.accentDesc'),
+        `<div class="swatches" role="radiogroup" aria-label="${t('a11y.settings.accentColor')}">${[
           ['indigo', '#4B5BD6'],
           ['blue', '#2F6CD4'],
           ['violet', '#7348CC'],
@@ -152,21 +166,21 @@ export function settingsBody(sec, title) {
         ]
           .map(
             ([k, c]) =>
-              `<button class="sw ${P.accent === k ? 'on' : ''}" style="--c:${c}" role="radio" aria-checked="${P.accent === k}" data-a="setPref" data-k="accent" data-v="${k}" aria-label="${k}" data-tip="${k[0].toUpperCase() + k.slice(1)}">${P.accent === k ? ic('check', 13) : ''}</button>`,
+              `<button class="sw ${P.accent === k ? 'on' : ''}" style="--c:${c}" role="radio" aria-checked="${P.accent === k}" data-a="setPref" data-k="accent" data-v="${k}" aria-label="${k}" data-tip="${t(ACCENT_TIPS[k])}">${P.accent === k ? ic('check', 13) : ''}</button>`,
           )
           .join('')}</div>`,
       )}</div>
-      <div class="sblock"><h2>Density</h2>
-        ${srow('Sidebar density', 'Compact fits more projects on screen.', `<div class="seg">${['comfortable', 'compact'].map(k => `<button class="${P.side === k ? 'on' : ''}" data-a="setPref" data-k="side" data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>`)}
-        ${srow('Task display', 'Row height in lists and card padding on boards.', `<div class="seg">${['comfortable', 'compact'].map(k => `<button class="${P.density === k ? 'on' : ''}" data-a="setPref" data-k="density" data-v="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>`)}
+      <div class="sblock"><h2>${t('settings.appearance.density')}</h2>
+        ${srow(t('settings.density.sidebarTitle'), t('settings.density.sidebarDesc'), `<div class="seg">${['comfortable', 'compact'].map(k => `<button class="${P.side === k ? 'on' : ''}" data-a="setPref" data-k="side" data-v="${k}">${t(DENSITY_LABELS[k])}</button>`).join('')}</div>`)}
+        ${srow(t('settings.density.taskTitle'), t('settings.density.taskDesc'), `<div class="seg">${['comfortable', 'compact'].map(k => `<button class="${P.density === k ? 'on' : ''}" data-a="setPref" data-k="density" data-v="${k}">${t(DENSITY_LABELS[k])}</button>`).join('')}</div>`)}
         ${srow(
-          'Motion',
-          'Reduce animations for drawers, modals, and transitions.',
+          t('settings.density.motionTitle'),
+          t('settings.density.motionDesc'),
           sel(
             'motion',
             [
-              ['system', 'Follow system'],
-              ['reduce', 'Reduce motion'],
+              ['system', t('settings.motion.system')],
+              ['reduce', t('settings.motion.reduce')],
             ],
             P.motion,
           ),
@@ -175,25 +189,25 @@ export function settingsBody(sec, title) {
       );
     case 'language':
       return (
-        H('Language and regional formats.') +
+        H(t('settings.language.lead')) +
         srow(
-          'Language',
-          'The language used throughout the interface.',
+          t('settings.language.title'),
+          t('settings.language.rowDesc'),
           sel('lang', ['English (US)', 'English (UK)', 'Deutsch', 'Español', 'Français', '日本語'], P.lang),
         ) +
-        srow('Spellcheck', 'Check spelling in descriptions and comments.', tog('spell', P.spell !== false))
+        srow(t('settings.language.spellcheck'), t('settings.language.spellcheckDesc'), tog('spell', P.spell !== false))
       );
     case 'datetime':
       return (
-        H('How dates and times appear across the workspace.') +
+        H(t('settings.datetime.lead')) +
         srow(
-          'Time zone',
-          'Used for due dates and reminders.',
+          t('settings.datetime.tzTitle'),
+          t('settings.datetime.tzDesc'),
           sel('tz', ['(GMT-08:00) Pacific Time', '(GMT-05:00) Eastern Time', '(GMT+00:00) London', '(GMT+01:00) Berlin', '(GMT+08:00) Singapore'], P.tz),
         ) +
         srow(
-          'Date format',
-          `Preview: <b>${fmtDate(dOff(8))}</b>`,
+          t('settings.datetime.dateTitle'),
+          `${t('settings.datetime.preview')} <b>${fmtDate(dOff(8))}</b>`,
           sel(
             'dateFmt',
             [
@@ -211,20 +225,20 @@ export function settingsBody(sec, title) {
           ),
         ) +
         srow(
-          'Start week on',
-          'Affects calendars and the timeline.',
+          t('settings.datetime.weekTitle'),
+          t('settings.datetime.weekDesc'),
           sel(
             'weekStart',
             [
-              ['1', 'Monday'],
-              ['0', 'Sunday'],
-              ['6', 'Saturday'],
+              ['1', t('settings.datetime.monday')],
+              ['0', t('settings.datetime.sunday')],
+              ['6', t('settings.datetime.saturday')],
             ],
             P.weekStart,
           ),
         ) +
         srow(
-          'Time format',
+          t('settings.datetime.timeTitle'),
           '',
           sel(
             'timeFmt',
@@ -243,156 +257,156 @@ export function settingsBody(sec, title) {
       );
     case 'members':
       return (
-        H(`${d.members.length} people have access to ${esc(d.ws.name)}.`) +
-        `<div class="row" style="margin-bottom:12px">${isMemberAdmin() ? `<button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}Invite member</button>` : ''}<button class="btn btn-secondary" data-a="go" data-r="members">Open member directory</button></div>
-      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${m.id}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${m.status === 'invited' ? '<span class="badge amber">Invited</span>' : ''}${isMemberAdmin() && m.id !== d.me && (me().role === 'Owner' || (m.role !== 'Owner' && m.role !== 'Admin')) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="Options">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
+        H(t('settings.members.lead', { n: d.members.length, name: esc(d.ws.name) })) +
+        `<div class="row" style="margin-bottom:12px">${isMemberAdmin() ? `<button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}${t('settings.members.invite')}</button>` : ''}<button class="btn btn-secondary" data-a="go" data-r="members">${t('settings.members.openDirectory')}</button></div>
+      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${m.id}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${m.status === 'invited' ? `<span class="badge amber">${t('common.invited')}</span>` : ''}${isMemberAdmin() && m.id !== d.me && (me().role === 'Owner' || (m.role !== 'Owner' && m.role !== 'Admin')) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.settings.options')}">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
       );
     case 'teams':
-      return H('Teams group people and projects.') + teamsGrid();
+      return H(t('settings.teams.lead')) + teamsGrid();
     case 'projects': {
       const arch = d.projects.filter(p => p.archived);
       return (
-        H('Defaults for new projects and archived work.') +
+        H(t('settings.projects.lead')) +
         srow(
-          'Default project view',
-          'The tab that opens when you open a project.',
+          t('settings.projects.defaultView'),
+          t('settings.projects.defaultViewDesc'),
           sel(
             'defaultTab',
             [
-              ['board', 'Board'],
-              ['list', 'List'],
-              ['table', 'Table'],
-              ['overview', 'Overview'],
-              ['timeline', 'Timeline'],
+              ['board', t('nav.tab.board')],
+              ['list', t('nav.tab.list')],
+              ['table', t('nav.tab.table')],
+              ['overview', t('nav.route.overview')],
+              ['timeline', t('nav.route.timeline')],
             ],
             P.defaultTab || 'board',
           ),
         ) +
-        srow('Show completed tasks on boards', '', tog('showDoneBoard', P.showDoneBoard !== false)) +
-        `<div class="sblock"><h2>Archived projects</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">Restore</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">Delete</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">No archived projects. Archived projects are hidden from the sidebar but keep all their tasks.</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}Open archive</button></div></div>`
+        srow(t('settings.projects.showDone'), '', tog('showDoneBoard', P.showDoneBoard !== false)) +
+        `<div class="sblock"><h2>${t('settings.projects.archived')}</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">${t('act.restore')}</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">${t('act.delete')}</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">${t('settings.projects.noArchived')}</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}${t('settings.projects.openArchive')}</button></div></div>`
       );
     }
     case 'permissions':
       return (
-        H('Control what each role can do.') +
-        srow('Members can create projects', '', tog('permCreate', P.permCreate !== false)) +
-        srow('Members can invite guests', 'Guests only see projects they are added to.', tog('permGuests', P.permGuests !== false)) +
-        srow('Allow public share links', 'Anyone with the link can view a project.', tog('permPublic', !!P.permPublic)) +
-        `<div class="sblock"><h2>Role permissions</h2><div style="margin-top:12px">${permsTable()}</div></div>`
+        H(t('settings.perms.lead')) +
+        srow(t('settings.perms.create'), '', tog('permCreate', P.permCreate !== false)) +
+        srow(t('settings.perms.guests'), t('settings.perms.guestsDesc'), tog('permGuests', P.permGuests !== false)) +
+        srow(t('settings.perms.public'), t('settings.perms.publicDesc'), tog('permPublic', !!P.permPublic)) +
+        `<div class="sblock"><h2>${t('settings.perms.roleTable')}</h2><div style="margin-top:12px">${permsTable()}</div></div>`
       );
     case 'notif-email':
       return (
-        H('Choose which emails you receive.') +
-        srow('Mentions', 'When someone @mentions you.', tog('email_mention', np.email_mention, 'np')) +
-        srow('Assignments', 'When a task is assigned to you.', tog('email_assign', np.email_assign, 'np')) +
-        srow('Comments', 'On tasks you created or are assigned.', tog('email_comment', np.email_comment, 'np')) +
-        srow('Daily digest', 'A summary of what changed, every weekday at 8:00.', tog('email_digest', np.email_digest, 'np'))
+        H(t('settings.notif.emailLead')) +
+        srow(t('settings.notif.mentions'), t('settings.notif.mentionsDesc'), tog('email_mention', np.email_mention, 'np')) +
+        srow(t('settings.notif.assignments'), t('settings.notif.assignmentsDesc'), tog('email_assign', np.email_assign, 'np')) +
+        srow(t('settings.notif.comments'), t('settings.notif.commentsDesc'), tog('email_comment', np.email_comment, 'np')) +
+        srow(t('settings.notif.digest'), t('settings.notif.digestDesc'), tog('email_digest', np.email_digest, 'np'))
       );
     case 'notif-push':
       return (
-        H('Notifications on desktop and mobile.') +
-        srow('Mentions', '', tog('push_mention', np.push_mention, 'np')) +
-        srow('Assignments', '', tog('push_assign', np.push_assign, 'np')) +
-        srow('Comments', '', tog('push_comment', np.push_comment, 'np')) +
-        srow('Due date reminders', 'One day before a task is due.', tog('push_due', np.push_due, 'np'))
+        H(t('settings.notif.pushLead')) +
+        srow(t('settings.notif.mentions'), '', tog('push_mention', np.push_mention, 'np')) +
+        srow(t('settings.notif.assignments'), '', tog('push_assign', np.push_assign, 'np')) +
+        srow(t('settings.notif.comments'), '', tog('push_comment', np.push_comment, 'np')) +
+        srow(t('settings.notif.dueReminders'), t('settings.notif.dueDesc'), tog('push_due', np.push_due, 'np'))
       );
     case 'notif-mentions':
       return (
-        H('Decide which mentions reach you.') +
-        srow('@mentions in comments and descriptions', '', tog('mention_all', np.mention_all, 'np')) +
-        srow('@team mentions', 'When your team is mentioned, e.g. @Product.', tog('mention_team', np.mention_team !== false, 'np')) +
-        srow('@workspace mentions', 'Announcements to everyone.', tog('mention_ws', !!np.mention_ws, 'np'))
+        H(t('settings.notif.mentionsLead')) +
+        srow(t('settings.notif.atAll'), '', tog('mention_all', np.mention_all, 'np')) +
+        srow(t('settings.notif.atTeam'), t('settings.notif.atTeamDesc'), tog('mention_team', np.mention_team !== false, 'np')) +
+        srow(t('settings.notif.atWorkspace'), t('settings.notif.atWorkspaceDesc'), tog('mention_ws', !!np.mention_ws, 'np'))
       );
     case 'notif-assign':
       return (
-        H('Updates about tasks assigned to you.') +
-        srow("When I'm assigned a task", '', tog('assign_self', np.assign_self, 'np')) +
-        srow('When my task changes status', '', tog('assign_status', np.assign_status !== false, 'np')) +
-        srow('When my task is overdue', '', tog('assign_over', np.assign_over !== false, 'np'))
+        H(t('settings.notif.assignLead')) +
+        srow(t('settings.notif.assignedMe'), '', tog('assign_self', np.assign_self, 'np')) +
+        srow(t('settings.notif.statusChange'), '', tog('assign_status', np.assign_status !== false, 'np')) +
+        srow(t('settings.notif.overdue'), '', tog('assign_over', np.assign_over !== false, 'np'))
       );
     case 'profile': {
       const err = S.ui.errors.pname2;
       return (
-        H('How you appear to others in the workspace.') +
+        H(t('settings.profile.lead')) +
         `<form data-submit="saveProfile" class="col" style="gap:16px;max-width:440px">
-      <div class="row" style="gap:14px">${av(d.me, 'xl', false)}<div><div class="label" style="margin-bottom:6px">Avatar color</div><div class="swatches">${['#5A67D8', '#C54B78', '#3B82C4', '#23918A', '#C48A1E', '#8662C9'].map(c => `<button type="button" class="sw ${me().c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="avColor" data-v="${c}" aria-label="Color"></button>`).join('')}</div></div></div>
-      <div class="field"><label class="label" for="pf-name">Full name</label><input class="input ${err ? 'is-error' : ''}" id="pf-name" value="${esc(P.name)}">${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
-      <div class="field"><label class="label" for="pf-title">Title</label><input class="input" id="pf-title" value="${esc(P.title)}"></div>
-      <div class="field"><label class="label" for="pf-email">Email</label><input class="input" id="pf-email" value="${esc(me().email)}" disabled><span class="hint">Contact a workspace owner to change your sign-in email.</span></div>
-      <div><button class="btn btn-primary" data-a="saveProfile" id="pf-save">Save profile</button></div></form>`
+      <div class="row" style="gap:14px">${av(d.me, 'xl', false)}<div><div class="label" style="margin-bottom:6px">${t('settings.profile.avatarColor')}</div><div class="swatches">${['#5A67D8', '#C54B78', '#3B82C4', '#23918A', '#C48A1E', '#8662C9'].map(c => `<button type="button" class="sw ${me().c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="avColor" data-v="${c}" aria-label="${t('common.color')}"></button>`).join('')}</div></div></div>
+      <div class="field"><label class="label" for="pf-name">${t('common.fullName')}</label><input class="input ${err ? 'is-error' : ''}" id="pf-name" value="${esc(P.name)}">${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
+      <div class="field"><label class="label" for="pf-title">${t('settings.profile.title')}</label><input class="input" id="pf-title" value="${esc(P.title)}"></div>
+      <div class="field"><label class="label" for="pf-email">${t('common.email')}</label><input class="input" id="pf-email" value="${esc(me().email)}" disabled><span class="hint">${t('settings.profile.emailHint')}</span></div>
+      <div><button class="btn btn-primary" data-a="saveProfile" id="pf-save">${t('settings.profile.save')}</button></div></form>`
       );
     }
     case 'preferences':
       return (
-        H('Personal defaults for how you work.') +
+        H(t('settings.prefs.lead')) +
         srow(
-          'Open on launch',
-          'The page you see when Gr8r opens.',
+          t('settings.prefs.launch'),
+          t('settings.prefs.launchDesc'),
           sel(
             'home',
             [
-              ['home', 'Home'],
-              ['mytasks', 'My Tasks'],
-              ['inbox', 'Inbox'],
+              ['home', t('nav.route.home')],
+              ['mytasks', t('nav.route.mytasks')],
+              ['inbox', t('nav.route.inbox')],
             ],
             P.home,
           ),
         ) +
         srow(
-          'Open tasks in',
-          'Side panel keeps your place in the list.',
+          t('settings.prefs.openTasks'),
+          t('settings.prefs.openTasksDesc'),
           sel(
             'openTasks',
             [
-              ['drawer', 'Side panel'],
-              ['full', 'Full page'],
+              ['drawer', t('settings.prefs.sidePanel')],
+              ['full', t('settings.prefs.fullPage')],
             ],
             P.openTasks,
           ),
         ) +
-        srow('Confirm before deleting tasks', '', tog('confirmDel', P.confirmDel !== false))
+        srow(t('settings.prefs.confirmDel'), '', tog('confirmDel', P.confirmDel !== false))
       );
     case 'shortcuts':
       return (
-        H('Move faster with the keyboard.') +
+        H(t('settings.shortcuts.lead')) +
         SHORTCUTS.map(
           ([g, list]) =>
-            `<div class="sblock" style="margin-top:18px"><h2>${t(g)}</h2>${list.map(([n, k]) => `<div class="srow" style="padding:9px 0"><span>${n}</span><span class="row" style="gap:4px">${k.map((x, i) => `${i && k[0] === 'G' ? '<span class="faint" style="font-size:11px">then</span>' : ''}<kbd>${x}</kbd>`).join('')}</span></div>`).join('')}</div>`,
+            `<div class="sblock" style="margin-top:18px"><h2>${t(g)}</h2>${list.map(([n, k]) => `<div class="srow" style="padding:9px 0"><span>${t(n)}</span><span class="row" style="gap:4px">${k.map((x, i) => `${i && k[0] === 'G' ? '<span class="faint" style="font-size:11px">then</span>' : ''}<kbd>${x}</kbd>`).join('')}</span></div>`).join('')}</div>`,
         ).join('')
       );
     case 'password': {
       const e = S.ui.errors;
       const pw = S.ui.pwNew || '';
       return (
-        H("Use a long password you don't use anywhere else.") +
-        `${S.ui.pwDone ? `<div class="alert ok" style="margin-bottom:14px">${ic('circle-check', 15)}<span>Password updated. Other sessions stay signed in.</span></div>` : ''}<form data-submit="savePassword" class="col" style="gap:14px;max-width:400px">
-      <div class="field"><label class="label" for="pw-cur">Current password</label><input type="password" class="input ${e.pwCur ? 'is-error' : ''}" id="pw-cur" autocomplete="current-password">${e.pwCur ? `<span class="err">${ic('circle-alert', 12)}${e.pwCur}</span>` : ''}</div>
-      <div class="field"><label class="label" for="pw-new">New password</label><input type="password" class="input ${e.pwNew ? 'is-error' : ''}" id="pw-new" data-in="pwStrength" value="${esc(pw)}" autocomplete="new-password">${strengthMeter(pw)}${e.pwNew ? `<span class="err">${ic('circle-alert', 12)}${e.pwNew}</span>` : '<span class="hint">At least 10 characters with a number or symbol.</span>'}</div>
-      <div class="field"><label class="label" for="pw-conf">Confirm new password</label><input type="password" class="input ${e.pwConf ? 'is-error' : ''}" id="pw-conf" autocomplete="new-password">${e.pwConf ? `<span class="err">${ic('circle-alert', 12)}${e.pwConf}</span>` : ''}</div>
-      <div><button class="btn btn-primary" data-a="savePassword" id="pw-save">Update password</button></div></form>`
+        H(t('settings.pw.lead')) +
+        `${S.ui.pwDone ? `<div class="alert ok" style="margin-bottom:14px">${ic('circle-check', 15)}<span>${t('settings.pw.done')}</span></div>` : ''}<form data-submit="savePassword" class="col" style="gap:14px;max-width:400px">
+      <div class="field"><label class="label" for="pw-cur">${t('settings.pw.current')}</label><input type="password" class="input ${e.pwCur ? 'is-error' : ''}" id="pw-cur" autocomplete="current-password">${e.pwCur ? `<span class="err">${ic('circle-alert', 12)}${e.pwCur}</span>` : ''}</div>
+      <div class="field"><label class="label" for="pw-new">${t('settings.pw.new')}</label><input type="password" class="input ${e.pwNew ? 'is-error' : ''}" id="pw-new" data-in="pwStrength" value="${esc(pw)}" autocomplete="new-password">${strengthMeter(pw)}${e.pwNew ? `<span class="err">${ic('circle-alert', 12)}${e.pwNew}</span>` : `<span class="hint">${t('common.pwHint')}</span>`}</div>
+      <div class="field"><label class="label" for="pw-conf">${t('settings.pw.confirm')}</label><input type="password" class="input ${e.pwConf ? 'is-error' : ''}" id="pw-conf" autocomplete="new-password">${e.pwConf ? `<span class="err">${ic('circle-alert', 12)}${e.pwConf}</span>` : ''}</div>
+      <div><button class="btn btn-primary" data-a="savePassword" id="pw-save">${t('settings.pw.update')}</button></div></form>`
       );
     }
     case 'sessions':
       return (
-        H('Devices currently signed in to your account.') +
+        H(t('settings.sessions.lead')) +
         d.sessions
           .map(s =>
             srow(
-              `<span class="row" style="gap:8px">${ic(s.dev.includes('iPhone') ? 'smartphone' : 'monitor', 15)}${esc(s.dev)}${s.cur ? '<span class="badge green">This device</span>' : ''}</span>`,
+              `<span class="row" style="gap:8px">${ic(s.dev.includes('iPhone') ? 'smartphone' : 'monitor', 15)}${esc(s.dev)}${s.cur ? `<span class="badge green">${t('settings.sessions.thisDevice')}</span>` : ''}</span>`,
               `${esc(s.loc)} · ${esc(s.at)}`,
-              s.cur ? '' : `<button class="btn btn-secondary btn-sm" data-a="revokeSession" data-id="${s.id}">Sign out</button>`,
+              s.cur ? '' : `<button class="btn btn-secondary btn-sm" data-a="revokeSession" data-id="${s.id}">${t('palette.signOut')}</button>`,
             ),
           )
           .join('') +
-        `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${d.sessions.length > 1 ? '' : 'disabled'}>Sign out of all other sessions</button></div>`
+        `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${d.sessions.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
       );
     case '2fa':
       return (
-        H('Add a second step when signing in.') +
+        H(t('settings.tfa.lead')) +
         (d.tfa
-          ? `<div class="alert ok">${ic('shield-check', 16)}<div><b>Two-factor authentication is on.</b><div class="muted">You'll enter a code from your authenticator app when signing in on a new device.</div></div></div><div class="sblock"><h2>Recovery codes</h2><p class="muted" style="font-size:13px">Store these somewhere safe. Each code works once.</p><div style="display:grid;grid-template-columns:repeat(2,max-content);gap:6px 28px;font-family:var(--mono);font-size:13px;padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--sunken);user-select:all">${['7KQ2-M8PX', 'D4TN-9WRE', 'HV3C-QZ6L', 'P2YB-J7SK', 'R9FG-4NUD', 'X6MA-T3HE'].map(c => `<span>${c}</span>`).join('')}</div><div style="margin-top:14px"><button class="btn btn-danger-ghost" data-a="disable2fa">Turn off two-factor authentication</button></div></div>`
+          ? `<div class="alert ok">${ic('shield-check', 16)}<div><b>${t('settings.tfa.on')}</b><div class="muted">${t('settings.tfa.onDesc')}</div></div></div><div class="sblock"><h2>${t('settings.tfa.recovery')}</h2><p class="muted" style="font-size:13px">${t('settings.tfa.recoveryDesc')}</p><div style="display:grid;grid-template-columns:repeat(2,max-content);gap:6px 28px;font-family:var(--mono);font-size:13px;padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--sunken);user-select:all">${['7KQ2-M8PX', 'D4TN-9WRE', 'HV3C-QZ6L', 'P2YB-J7SK', 'R9FG-4NUD', 'X6MA-T3HE'].map(c => `<span>${c}</span>`).join('')}</div><div style="margin-top:14px"><button class="btn btn-danger-ghost" data-a="disable2fa">${t('settings.tfa.turnOff')}</button></div></div>`
           : S.ui.tfaSetup
-            ? `<div class="panel" style="padding:18px;display:flex;gap:20px;flex-wrap:wrap"><div style="width:132px;height:132px;display:grid;grid-template-columns:repeat(11,1fr);gap:1px;padding:8px;background:#fff;border-radius:8px;border:1px solid var(--border)" aria-label="QR code">${Array.from(
+            ? `<div class="panel" style="padding:18px;display:flex;gap:20px;flex-wrap:wrap"><div style="width:132px;height:132px;display:grid;grid-template-columns:repeat(11,1fr);gap:1px;padding:8px;background:#fff;border-radius:8px;border:1px solid var(--border)" aria-label="${t('a11y.settings.qr')}">${Array.from(
                 { length: 121 },
                 (_, i) => {
                   const r = Math.floor(i / 11),
@@ -402,58 +416,66 @@ export function settingsBody(sec, title) {
                   return `<i style="background:${on ? '#1D1C1A' : '#fff'}"></i>`;
                 },
               ).join('')}</div>
-        <div class="grow col" style="gap:10px;min-width:220px"><div><b>1. Scan the QR code</b><div class="muted" style="font-size:13px">Use 1Password, Authy, or Google Authenticator.</div></div><div><b>2. Enter the 6-digit code</b></div><form data-submit="verify2fa" class="row"><input class="input mono ${S.ui.errors.tfa ? 'is-error' : ''}" id="tfa-code" inputmode="numeric" maxlength="6" placeholder="000000" style="width:130px;letter-spacing:.2em;font-size:15px" autofocus><button class="btn btn-primary" data-a="verify2fa">Verify</button><button type="button" class="btn btn-ghost" data-a="cancel2fa">Cancel</button></form>${S.ui.errors.tfa ? `<span class="err">${ic('circle-alert', 12)}${S.ui.errors.tfa}</span>` : '<span class="hint">Any 6 digits work in this prototype.</span>'}</div></div>`
-            : `<div class="panel" style="padding:18px" ><div class="row" style="gap:14px;align-items:flex-start"><span class="ftype" style="--c:var(--amber);width:36px;height:36px">${ic('shield-alert', 18)}</span><div class="grow"><b>Two-factor authentication is off</b><p class="muted" style="margin:4px 0 12px;font-size:13px">Protect your account with a code from an authenticator app in addition to your password.</p><button class="btn btn-primary" data-a="setup2fa">Set up two-factor authentication</button></div></div></div>`)
+        <div class="grow col" style="gap:10px;min-width:220px"><div><b>${t('settings.tfa.scan')}</b><div class="muted" style="font-size:13px">${t('settings.tfa.appHint')}</div></div><div><b>${t('settings.tfa.enterCode')}</b></div><form data-submit="verify2fa" class="row"><input class="input mono ${S.ui.errors.tfa ? 'is-error' : ''}" id="tfa-code" inputmode="numeric" maxlength="6" placeholder="000000" style="width:130px;letter-spacing:.2em;font-size:15px" autofocus><button class="btn btn-primary" data-a="verify2fa">${t('settings.tfa.verify')}</button><button type="button" class="btn btn-ghost" data-a="cancel2fa">${t('common.cancel')}</button></form>${S.ui.errors.tfa ? `<span class="err">${ic('circle-alert', 12)}${S.ui.errors.tfa}</span>` : `<span class="hint">${t('settings.tfa.anyDigits')}</span>`}</div></div>`
+            : `<div class="panel" style="padding:18px" ><div class="row" style="gap:14px;align-items:flex-start"><span class="ftype" style="--c:var(--amber);width:36px;height:36px">${ic('shield-alert', 18)}</span><div class="grow"><b>${t('settings.tfa.off')}</b><p class="muted" style="margin:4px 0 12px;font-size:13px">${t('settings.tfa.offDesc')}</p><button class="btn btn-primary" data-a="setup2fa">${t('settings.tfa.setup')}</button></div></div></div>`)
       );
     case 'plan': {
       const planAdmin = !api.enabled || api.workspace?.role === 'owner';
       const planName = d.plan || 'Team';
       const planPrice = { Free: '$0', Team: '$12', Business: '$24' }[planName] || '$12';
       return (
-        H('Your subscription and usage.') +
-        `<div class="panel" style="padding:18px;margin-bottom:18px"><div class="row" style="flex-wrap:wrap"><div><div class="eyebrow">Current plan</div><div style="font-size:20px;font-weight:600;letter-spacing:-.015em;margin-top:4px">${esc(planName)} <span class="muted" style="font-size:14px;font-weight:400">· ${planPrice} per member / month</span></div><div class="muted" style="font-size:13px">${planName === 'Free' ? 'No renewal · Free forever' : `Renews ${fmtDate(dOff(7), true)} · Billed monthly`}</div></div><span class="sp"></span><button class="btn btn-secondary" data-a="go" data-r="settings" data-sec="invoices">View invoices</button></div>
+        H(t('settings.plan.lead')) +
+        `<div class="panel" style="padding:18px;margin-bottom:18px"><div class="row" style="flex-wrap:wrap"><div><div class="eyebrow">${t('settings.plan.current')}</div><div style="font-size:20px;font-weight:600;letter-spacing:-.015em;margin-top:4px">${esc(planName)} <span class="muted" style="font-size:14px;font-weight:400">· ${planPrice} ${t('settings.plan.perMember')}</span></div><div class="muted" style="font-size:13px">${planName === 'Free' ? t('settings.plan.noRenewal') : t('settings.plan.renews', { date: fmtDate(dOff(7), true) })}</div></div><span class="sp"></span><button class="btn btn-secondary" data-a="go" data-r="settings" data-sec="invoices">${t('settings.plan.viewInvoices')}</button></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:18px">${[
-        ['Members', d.members.length, 10, ''],
-        ['Storage', 12.4, 100, ' GB'],
-        ['Projects', d.projects.length, 50, ''],
+        ['nav.route.members', d.members.length, 10, ''],
+        ['settings.plan.storage', 12.4, 100, ' GB'],
+        ['nav.route.projects', d.projects.length, 50, ''],
       ]
         .map(
           ([n, v, m, u]) =>
-            `<div><div class="row" style="font-size:12.5px;margin-bottom:6px"><span class="muted">${n}</span><span class="sp"></span><span class="num">${v}${u} of ${m}${u}</span></div><div class="meter"><i style="width:${(v / m) * 100}%;${v / m > 0.75 ? 'background:var(--amber)' : ''}"></i></div></div>`,
+            `<div><div class="row" style="font-size:12.5px;margin-bottom:6px"><span class="muted">${t(n)}</span><span class="sp"></span><span class="num">${t('settings.plan.of', { v: v, u: u, m: m })}</span></div><div class="meter"><i style="width:${(v / m) * 100}%;${v / m > 0.75 ? 'background:var(--amber)' : ''}"></i></div></div>`,
         )
         .join('')}</div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">${[
-        ['Free', '$0', ['Up to 3 members', 'Unlimited tasks', '5 GB storage']],
-        ['Team', '$12', ['Up to 50 members', 'Timelines & custom views', '100 GB storage', 'Guest access']],
-        ['Business', '$24', ['Unlimited members', 'Advanced permissions', 'SAML SSO', '1 TB storage']],
+        ['Free', '$0', ['settings.plan.feature.members3', 'settings.plan.feature.tasksUnlimited', 'settings.plan.feature.storage5']],
+        [
+          'Team',
+          '$12',
+          ['settings.plan.feature.members50', 'settings.plan.feature.timelines', 'settings.plan.feature.storage100', 'settings.plan.feature.guests'],
+        ],
+        [
+          'Business',
+          '$24',
+          ['settings.plan.feature.membersUnlimited', 'settings.plan.feature.advancedPerms', 'settings.plan.feature.saml', 'settings.plan.feature.storage1tb'],
+        ],
       ]
         .map(([n, pr, fs]) => {
           const cur = (d.plan || 'Team') === n;
-          return `<div class="plan ${cur ? 'cur' : ''}"><div class="row"><b>${n}</b>${cur ? '<span class="badge accent">Current</span>' : ''}</div><div class="pr">${pr}<span class="muted" style="font-size:12.5px;font-weight:400"> /member/mo</span></div><ul>${fs.map(f => `<li>${ic('check', 13)}${f}</li>`).join('')}</ul><div style="margin-top:8px">${cur ? `<button class="btn btn-secondary btn-block" disabled>Current plan</button>` : planAdmin ? `<button class="btn ${n === 'Business' ? 'btn-primary' : 'btn-secondary'} btn-block" data-a="changePlan" data-v="${n}">${n === 'Free' ? 'Downgrade' : 'Upgrade'}</button>` : `<button class="btn btn-secondary btn-block" disabled title="Only the workspace owner can change the plan">Contact the owner</button>`}</div></div>`;
+          return `<div class="plan ${cur ? 'cur' : ''}"><div class="row"><b>${n}</b>${cur ? `<span class="badge accent">${t('settings.plan.currentBadge')}</span>` : ''}</div><div class="pr">${pr}<span class="muted" style="font-size:12.5px;font-weight:400"> /member/mo</span></div><ul>${fs.map(f => `<li>${ic('check', 13)}${t(f)}</li>`).join('')}</ul><div style="margin-top:8px">${cur ? `<button class="btn btn-secondary btn-block" disabled>${t('settings.plan.current')}</button>` : planAdmin ? `<button class="btn ${n === 'Business' ? 'btn-primary' : 'btn-secondary'} btn-block" data-a="changePlan" data-v="${n}">${n === 'Free' ? t('settings.plan.downgrade') : t('settings.plan.upgrade')}</button>` : `<button class="btn btn-secondary btn-block" disabled title="${t('a11y.settings.ownerOnly')}">${t('settings.plan.contactOwner')}</button>`}</div></div>`;
         })
         .join('')}</div>`
       );
     }
     case 'payment':
       return (
-        H('Payment method and billing details.') +
+        H(t('settings.pay.lead')) +
         srow(
-          `<span class="row" style="gap:10px"><span class="ftype" style="--c:var(--blue)">${ic('credit-card', 15)}</span>Visa ending in 4242</span>`,
-          'Expires 08/2028 · Default',
-          `<button class="btn btn-secondary btn-sm" data-a="toastInfo" data-msg="Card updates open in a secure payment window">Update</button>`,
+          `<span class="row" style="gap:10px"><span class="ftype" style="--c:var(--blue)">${ic('credit-card', 15)}</span>${t('settings.pay.card')}</span>`,
+          t('settings.pay.expiry'),
+          `<button class="btn btn-secondary btn-sm" data-a="toastInfo" data-msg="${t('settings.pay.cardUpdateMsg')}">${t('settings.pay.update')}</button>`,
         ) +
-        srow('Billing email', 'Invoices and receipts are sent here.', `<span class="muted" style="user-select:all">hello@gr8rstudio.com</span>`) +
+        srow(t('settings.pay.emailTitle'), t('settings.pay.emailDesc'), `<span class="muted" style="user-select:all">hello@gr8rstudio.com</span>`) +
         srow(
-          'Billing address',
-          '2150 Mission St, San Francisco, CA 94110',
-          `<button class="btn btn-secondary btn-sm" data-a="toastInfo" data-msg="Address editing opens in the billing portal">Edit</button>`,
+          t('settings.pay.addrTitle'),
+          t('settings.pay.address'),
+          `<button class="btn btn-secondary btn-sm" data-a="toastInfo" data-msg="${t('settings.pay.addressUpdateMsg')}">${t('act.edit')}</button>`,
         ) +
-        srow('Tax ID', 'Shown on invoices', `<span class="muted">US EIN ••-•••4410</span>`)
+        srow(t('settings.pay.taxTitle'), t('settings.pay.taxDesc'), `<span class="muted">${t('settings.pay.taxId')}</span>`)
       );
     case 'invoices':
       return (
-        H('Past invoices for this workspace.') +
-        `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:480px"><thead><tr><th style="padding-left:14px">Invoice</th><th style="text-align:left">Date</th><th style="text-align:left">Amount</th><th style="text-align:left">Status</th></tr></thead><tbody>${d.invoices.map(i => `<tr><td style="padding-left:14px" class="mono">${i.id}</td><td style="text-align:left" class="num">${fmtDate(i.date, true)}</td><td style="text-align:left" class="num">${i.amt}</td><td style="text-align:left"><span class="badge green">${ic('check', 11)}${i.st}</span></td></tr>`).join('')}</tbody></table></div>`
+        H(t('settings.inv.lead')) +
+        `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:480px"><thead><tr><th style="padding-left:14px">${t('settings.inv.invoice')}</th><th style="text-align:left">${t('settings.inv.date')}</th><th style="text-align:left">${t('settings.inv.amount')}</th><th style="text-align:left">${t('page.field.status')}</th></tr></thead><tbody>${d.invoices.map(i => `<tr><td style="padding-left:14px" class="mono">${i.id}</td><td style="text-align:left" class="num">${fmtDate(i.date, true)}</td><td style="text-align:left" class="num">${i.amt}</td><td style="text-align:left"><span class="badge green">${ic('check', 11)}${i.st}</span></td></tr>`).join('')}</tbody></table></div>`
       );
   }
   return page404();
@@ -465,7 +487,7 @@ export function strengthMeter(pw) {
   if (/[0-9]/.test(pw) && /[a-zA-Z]/.test(pw)) s++;
   if (/[^a-zA-Z0-9]/.test(pw)) s++;
   const c = ['var(--red)', 'var(--red)', 'var(--amber)', 'var(--green)', 'var(--green)'][s];
-  const n = ['Too short', 'Weak', 'Fair', 'Good', 'Strong'][s];
+  const n = t(['settings.pw.meter.tooShort', 'settings.pw.meter.weak', 'settings.pw.meter.fair', 'settings.pw.meter.good', 'settings.pw.meter.strong'][s]);
   return pw
     ? `<div class="row" style="gap:8px"><div class="strength grow" aria-hidden="true">${[0, 1, 2, 3].map(i => `<i class="${i < s ? 'on' : ''}" style="--c:${c}"></i>`).join('')}</div><span style="font-size:11.5px;color:${c};width:60px;text-align:right">${n}</span></div>`
     : '';

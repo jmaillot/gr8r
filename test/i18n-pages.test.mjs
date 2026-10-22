@@ -581,8 +581,8 @@ test('the allow-list lost every entry of the three page files and stays sorted',
   const list = JSON.parse(read('test/fixtures/i18n-pending.json'));
   const wave = list.filter(e => WAVE_FILES.includes(e.file));
   assert.deepEqual(wave, [], JSON.stringify(wave.slice(0, 5)));
-  const sorted = [...list].sort((a, b) => a.file.localeCompare(b.file) || a.text.localeCompare(b.text));
-  assert.deepEqual(list, sorted, 'the allow-list must stay sorted by file then text');
+  const keys = list.map(e => `${e.file}::${e.text}`);
+  assert.deepEqual(keys, [...keys].sort(), 'the allow-list must stay sorted by file then text');
 });
 
 /* ---------- 3. the machine identifiers ---------- */

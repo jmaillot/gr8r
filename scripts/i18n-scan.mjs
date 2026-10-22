@@ -162,6 +162,9 @@ const STORED_VALUES = new Set([
   'M/d',
   'yyyy-MM-dd',
   'Head of Product', // the stored default member title (DEFAULT_PREFS.title)
+  'Free', // the stored plan tier ids (d.plan), displayed verbatim
+  'Team',
+  'Business',
 ]);
 
 /* The demo content values that live outside src/data/seed.js and are shown to
