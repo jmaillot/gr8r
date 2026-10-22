@@ -22,6 +22,10 @@ A patch release found by the v1.1 milestone audit.
   open session with a stale one. The membership table is now the only thing a join writes, and
   the roster is repaired when the document is read, so a join no longer disturbs anybody's
   pending edit.
+- **A restart no longer locks the workspace out of writing.** The boot-time repair of the
+  document wrote it back with a revision bump, so a session that was open across the restart
+  held a stale revision. A restart is not an edit, and a client cannot be told about it, so the
+  repair no longer moves the revision.
 
 ### Added
 
