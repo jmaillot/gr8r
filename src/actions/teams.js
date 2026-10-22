@@ -75,7 +75,7 @@ A.submitTeam = () => {
         if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
       });
     } else {
-      t = { id: uid('tm'), name: f.name, desc: f.desc || t('common.noDescriptionYet'), icon: f.icon, c: PCOLORS[f.color] };
+      t = { id: uid('tm'), name: f.name, desc: f.desc || tMsg('common.noDescriptionYet'), icon: f.icon, c: PCOLORS[f.color] };
       teamsList().push(t);
     }
     f.members.forEach(id => {
