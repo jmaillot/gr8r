@@ -15,7 +15,13 @@ export function pageMyTasks() {
     v.sort.f === 'manual' ? { ...v, sort: { f: 'due', dir: 1 } } : v,
   );
   const groups = [
-    { key: 'overdue', name: t('page.filter.overdue'), html: `<span style="color:var(--red)">${ic('clock-alert', 14)}</span>`, tasks: mine.filter(isOver), set: {} },
+    {
+      key: 'overdue',
+      name: t('page.filter.overdue'),
+      html: `<span style="color:var(--red)">${ic('clock-alert', 14)}</span>`,
+      tasks: mine.filter(isOver),
+      set: {},
+    },
     {
       key: 'today',
       name: t('common.today'),

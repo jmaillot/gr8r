@@ -92,7 +92,8 @@ export function pageHome() {
                       t =>
                         `<div class="row" style="height:30px;cursor:pointer;gap:8px;font-size:13px" data-a="openTask" data-id="${t.id}"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span><span class="trunc grow">${esc(t.title)}</span>${prIcon(t.priority, 13)}${av(t.assignee, 'sm')}</div>`,
                     )
-                    .join('') + (g.ts.length > 4 ? `<div class="faint" style="font-size:11.5px;padding-left:16px">${t('page.home.more', { n: g.ts.length - 4 })}</div>` : '')
+                    .join('') +
+                  (g.ts.length > 4 ? `<div class="faint" style="font-size:11.5px;padding-left:16px">${t('page.home.more', { n: g.ts.length - 4 })}</div>` : '')
                 : `<div class="faint" style="font-size:12.5px;padding:4px 0 2px">${t('page.home.nothingDue')}</div>`
             }</div>`,
             )

@@ -121,7 +121,10 @@ export function pageTeam() {
     <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${tm.c}">${ic(tm.icon, 18)}</span><div><h1>${tm.name}</h1><p style="margin:2px 0 0">${tm.desc}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${tm.id}">${ic('pencil', 14)}${t('act.editTeam')}</button>${isMemberAdmin() ? `<button class="btn btn-secondary" data-a="invite">${ic('user-plus', 14)}${t('act.inviteToWorkspace')}</button>` : ''}</div></div>
     <div class="grid2"><div class="stack">
       <section class="panel"><div class="panel-h"><h2>${t('nav.route.projects')}</h2><span class="faint">${ps.length}</span></div>${ps.map(p => `<div class="mini" data-a="go" data-r="project" data-id="${p.id}">${pIcon(p, '', 14)}<span class="tt">${esc(p.name)}</span>${pStatus(p.status)}<span class="row" style="width:120px">${progBar(progressOf(p.id))}</span></div>`).join('') || `<div class="panel-b faint">${t('page.team.noProjects')}</div>`}</section>
-      <section class="panel"><div class="panel-h"><h2>${t('page.home.stat.openTasks')}</h2><span class="faint">${ts.length}</span></div>${sortTasks(ts, { f: 'due', dir: 1 })
+      <section class="panel"><div class="panel-h"><h2>${t('page.home.stat.openTasks')}</h2><span class="faint">${ts.length}</span></div>${sortTasks(ts, {
+        f: 'due',
+        dir: 1,
+      })
         .slice(0, 8)
         .map(x => miniRow(x))
         .join('')}</section>
