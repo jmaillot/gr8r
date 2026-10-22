@@ -21,11 +21,13 @@ import { test } from 'node:test';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
 import { formatDate, formatTime, isAutoDateFmt, registerCatalogue, setLocale } from '../src/core/i18n.js';
+import { prefValue } from '../src/core/prefs.js';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const STORE_SOURCE = path.join(ROOT, 'src', 'core', 'store.js');
 const UTILS_SOURCE = path.join(ROOT, 'src', 'core', 'utils.js');
 const SETTINGS_SOURCE = path.join(ROOT, 'src', 'pages', 'settings.js');
+const ACTIONS_SOURCE = path.join(ROOT, 'src', 'actions', 'actions.js');
 const PENDING_FIXTURE = path.join(ROOT, 'test', 'fixtures', 'i18n-pending.json');
 const ROADMAP = path.join(ROOT, '.planning', 'ROADMAP.md');
 const CONTEXT = path.join(ROOT, '.planning', 'phases', '06-english-extraction-locale-aware-formats', '06-CONTEXT.md');
@@ -251,4 +253,46 @@ test('the allow-list lost exactly the literal this plan removed, and stays sorte
   assert.ok(!pending.some(e => e.file === 'src/pages/settings.js' && e.text === 'Oct 1'), 'the stale entry is gone');
   const keys = pending.map(e => `${e.file}::${e.text}`);
   assert.deepEqual(keys, [...keys].sort(), 'the allow-list stays sorted by file then text');
+});
+
+/* ---------- the write path ---------- */
+
+test('the preference value is written verbatim: the sentinel survives a save', () => {
+  /* The sentinel is the string 'auto' — never a number, never a mapped value. */
+  assert.equal(prefValue('dateFmt', 'auto'), 'auto');
+  assert.equal(typeof prefValue('dateFmt', 'auto'), 'string');
+  assert.equal(prefValue('timeFmt', 'auto'), 'auto');
+  assert.equal(typeof prefValue('timeFmt', 'auto'), 'string');
+  /* The only coerced key is the numeric week start. */
+  assert.equal(prefValue('weekStart', '1'), 1);
+  assert.equal(typeof prefValue('weekStart', '1'), 'number');
+  /* A stored value is never mapped. */
+  assert.equal(prefValue('lang', 'English (US)'), 'English (US)');
+  assert.equal(prefValue('tz', '(GMT-07:00) Pacific Time'), '(GMT-07:00) Pacific Time');
+  /* The stored default carries through untouched too. */
+  assert.equal(prefValue('dateFmt', 'MMM d'), 'MMM d');
+});
+
+test('both preference writers go through the shared helper', () => {
+  const source = fs.readFileSync(ACTIONS_SOURCE, 'utf8');
+  assert.match(source, /export \{ prefValue \}/, 'the action module exports the helper');
+  const setPref = /A\.setPref = el => \{([\s\S]*?)\n\};/.exec(source);
+  assert.ok(setPref, 'A.setPref is still an arrow function');
+  assert.match(setPref[1], /S\.prefs\[el\.dataset\.k\] = prefValue\(el\.dataset\.k, el\.dataset\.v\)/);
+  const prefSel = /IN\.prefSel = el => \{([\s\S]*?)\n\};/.exec(source);
+  assert.ok(prefSel, 'IN.prefSel is still an arrow function');
+  assert.match(prefSel[1], /S\.prefs\[k\] = prefValue\(k, el\.value\)/);
+});
+
+test('no preference value is compared against auto, and only weekStart is coerced', () => {
+  const source = fs.readFileSync(ACTIONS_SOURCE, 'utf8');
+  assert.ok(!/===\s*'auto'/.test(source), 'a writer compares a preference value against auto');
+  assert.ok(!/!==\s*'auto'/.test(source), 'a writer compares a preference value against auto');
+  const writers = [/A\.setPref = el => \{([\s\S]*?)\n\};/.exec(source), /IN\.prefSel = el => \{([\s\S]*?)\n\};/.exec(source)];
+  for (const writer of writers) {
+    assert.ok(writer, 'the writer is still an arrow function');
+    assert.ok(!/parseInt\s*\(/.test(writer[1]), 'a writer parses a preference value');
+    assert.ok(!/Number\s*\(/.test(writer[1]), 'a writer converts a preference value');
+    assert.ok(!/\+el\./.test(writer[1]), 'a writer coerces a preference value');
+  }
 });

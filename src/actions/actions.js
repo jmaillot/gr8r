@@ -33,6 +33,14 @@ import { viewOf } from '../shell/view-engine.js';
 import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
+import { prefValue } from '../core/prefs.js';
+
+/* The preference value is written the way the user chose it: the 'auto'
+   sentinel must reach the bag as the string 'auto', so it is still read as
+   the sentinel on the next render. The helper lives in core/prefs.js —
+   a leaf module — because this one reaches a Vite virtual module through
+   the store and cannot be imported by the node suite. */
+export { prefValue };
 
 export const A = {},
   IN = {},
@@ -266,7 +274,7 @@ A.toggleDark = () => {
   toast(effectiveDark() ? 'Dark mode on' : 'Light mode on', { kind: 'info', ms: 1800 });
 };
 A.setPref = el => {
-  S.prefs[el.dataset.k] = el.dataset.v;
+  S.prefs[el.dataset.k] = prefValue(el.dataset.k, el.dataset.v);
   save();
   render();
 };
@@ -2139,7 +2147,7 @@ IN.npToggle = el => {
 };
 IN.prefSel = el => {
   const k = el.dataset.k;
-  S.prefs[k] = k === 'weekStart' ? +el.value : el.value;
+  S.prefs[k] = prefValue(k, el.value);
   save();
   render();
   toast('Preference saved', { ms: 1500 });
