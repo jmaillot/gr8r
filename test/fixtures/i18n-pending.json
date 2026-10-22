@@ -124,58 +124,6 @@
     "text": "Workspace overview"
   },
   {
-    "file": "src/pages/search.js",
-    "text": "All"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Clear search"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Comments"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Files"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "No results found"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Nothing matches “"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "People"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Projects"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Recent:"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Search"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Search tasks, projects, people, files, and comments"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "Tasks"
-  },
-  {
-    "file": "src/pages/search.js",
-    "text": "”. Check the spelling or try a broader term."
-  },
-  {
     "file": "src/pages/tasks.js",
     "text": "Board"
   },

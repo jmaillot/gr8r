@@ -2,6 +2,7 @@
 import { ago, esc, foldForSearch } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, canSee, mem, pColor, proj, task, visibleProjects } from '../core/store.js';
+import { t } from '../core/i18n.js';
 import { FT, av, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
 
 export function searchAll(q) {
@@ -25,12 +26,12 @@ export function pageSearch() {
   const r = searchAll(q);
   const cat = S.ui.searchCat;
   const cats = [
-    ['all', 'All'],
-    ['tasks', 'Tasks'],
-    ['projects', 'Projects'],
-    ['people', 'People'],
-    ['files', 'Files'],
-    ['comments', 'Comments'],
+    ['all', t('page.activity.filterAll')],
+    ['tasks', t('nav.route.tasks')],
+    ['projects', t('nav.route.projects')],
+    ['people', t('palette.scope.people')],
+    ['files', t('page.project.tab.files')],
+    ['comments', t('page.activity.filterComments')],
   ];
   const total = Object.values(r).reduce((a, b) => a + b.length, 0);
   const sec = (k, title, html) =>
@@ -38,17 +39,17 @@ export function pageSearch() {
       ? `<section style="margin-bottom:22px"><div class="eyebrow" style="margin-bottom:6px">${title} · ${r[k].length}</div><div class="panel" style="overflow:hidden">${html}</div></section>`
       : '';
   return `<div class="page" style="max-width:860px">
-    <div class="inwrap" style="margin-bottom:14px">${ic('search', 16)}<input class="input input-lg" id="search-page-q" data-in="searchQ" placeholder="Search tasks, projects, people, files, and comments" value="${esc(q)}" style="padding-left:34px;font-size:15px" aria-label="Search"></div>
+    <div class="inwrap" style="margin-bottom:14px">${ic('search', 16)}<input class="input input-lg" id="search-page-q" data-in="searchQ" placeholder="${t('a11y.searchAll')}" value="${esc(q)}" style="padding-left:34px;font-size:15px" aria-label="${t('nav.route.search')}"></div>
     <div class="tabs" style="margin-bottom:18px">${cats.map(([k, n]) => `<button class="tab ${cat === k ? 'on' : ''}" data-a="set" data-k="searchCat" data-v="${k}">${n}<span class="cnt">${k === 'all' ? total : r[k].length}</span></button>`).join('')}</div>
     ${
       !q
-        ? `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="faint" style="font-size:12.5px">Recent:</span>${(D().recentSearches || [])
+        ? `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="faint" style="font-size:12.5px">${t('page.search.recent')}</span>${(D().recentSearches || [])
             .map(s => `<button class="badge" data-a="setSearch" data-q="${esc(s)}">${ic('history', 11)}${esc(s)}</button>`)
             .join('')}</div>`
         : total
           ? sec(
               'tasks',
-              'Tasks',
+              t('nav.route.tasks'),
               r.tasks
                 .map(
                   t =>
@@ -58,7 +59,7 @@ export function pageSearch() {
             ) +
             sec(
               'projects',
-              'Projects',
+              t('nav.route.projects'),
               r.projects
                 .map(
                   p =>
@@ -68,7 +69,7 @@ export function pageSearch() {
             ) +
             sec(
               'people',
-              'People',
+              t('palette.scope.people'),
               r.people
                 .map(
                   m =>
@@ -78,7 +79,7 @@ export function pageSearch() {
             ) +
             sec(
               'files',
-              'Files',
+              t('page.project.tab.files'),
               r.files
                 .map(
                   f =>
@@ -88,15 +89,15 @@ export function pageSearch() {
             ) +
             sec(
               'comments',
-              'Comments',
+              t('page.activity.filterComments'),
               r.comments
                 .map(
                   c =>
-                    `<div class="mini" style="align-items:flex-start;padding-top:10px;padding-bottom:10px" data-a="openTask" data-id="${c.task}">${av(c.by, 'sm')}<div class="grow" style="min-width:0"><div style="font-size:12px" class="muted"><b style="color:var(--text);font-weight:500">${esc(mem(c.by).name)}</b> on ${esc(task(c.task).title)} · ${ago(c.at)}</div><div style="font-size:13px">${hl(c.text, q)}</div></div></div>`,
+                    `<div class="mini" style="align-items:flex-start;padding-top:10px;padding-bottom:10px" data-a="openTask" data-id="${c.task}">${av(c.by, 'sm')}<div class="grow" style="min-width:0"><div style="font-size:12px" class="muted"><b style="color:var(--text);font-weight:500">${esc(mem(c.by).name)}</b> ${t('page.search.on')} ${esc(task(c.task).title)} · ${ago(c.at)}</div><div style="font-size:13px">${hl(c.text, q)}</div></div></div>`,
                 )
                 .join(''),
             )
-          : `<div class="panel">${empty('search-x', 'No results found', `Nothing matches “${q}”. Check the spelling or try a broader term.`, `<button class="btn btn-secondary btn-sm" data-a="setSearch" data-q="">Clear search</button>`)}</div>`
+          : `<div class="panel">${empty('search-x', t('palette.noResults'), t('page.search.noMatch', { q: q }), `<button class="btn btn-secondary btn-sm" data-a="setSearch" data-q="">${t('page.states.clearSearch')}</button>`)}</div>`
     }
   </div>`;
 }
