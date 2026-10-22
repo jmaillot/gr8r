@@ -1,6 +1,6 @@
 /* ---------- drag & drop ---------- */
 import { $, $$, addD, diffD, fmtDate, iso, parse } from '../core/utils.js';
-import { t } from '../core/i18n.js';
+import { t, t as tMsg } from '../core/i18n.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, proj, save, task } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -152,7 +152,7 @@ document.addEventListener('drop', e => {
       t.order = order;
       if (moved) applyPatch(t, { status: d.col });
     });
-    if (moved) toast(`Moved “${t.title}” to ${ST[d.col].name}`, { ms: 2200 });
+    if (moved) toast(tMsg('toast.taskMovedTo', { title: t.title, status: ST[d.col].name }), { ms: 2200 });
   } else if (d.type === 'row' && d.target) {
     const t = task(d.id),
       tg = task(d.target);
@@ -181,14 +181,14 @@ document.addEventListener('drop', e => {
         switched = true;
       }
     });
-    if (switched) toast('Sorted manually to keep your order', { kind: 'info', ms: 2200 });
+    if (switched) toast(tMsg('toast.sortedManually'), { kind: 'info', ms: 2200 });
   } else if (d.type === 'cal' && d.day) {
     const t = task(d.id);
     if (t.due === d.day) return;
     const len = t.start && t.due ? diffD(parse(t.due), parse(t.start)) : null;
     fxSet({ moved: t.id });
     updateTask(t.id, { due: d.day, ...(len != null ? { start: iso(addD(parse(d.day), -len)) } : {}) });
-    toast(`Rescheduled “${t.title}” to ${fmtDate(d.day)}`, { ms: 2200 });
+    toast(tMsg('toast.taskRescheduled', { title: t.title, date: fmtDate(d.day) }), { ms: 2200 });
   } else if (d.type === 'proj' && d.before && d.before !== d.id) {
     const o = D().projOrder.filter(x => x !== d.id);
     o.splice(o.indexOf(d.before), 0, d.id);
