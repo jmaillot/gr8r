@@ -285,6 +285,19 @@ test('the English byte units are catalogue values, not inline JavaScript', () =>
   assert.equal(en['unit.megabyte'], 'MB');
 });
 
+test('fsize() delegates to the locale file-size formatter and keeps its arity', () => {
+  /* The helper cannot be imported by bare Node (core/store.js reaches a Vite virtual module),
+     so the delegation is asserted on the source: the name, the single argument and the call
+     to formatFileSize() are what the two call sites in actions.js depend on. */
+  const source = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'helpers.js'), 'utf8');
+  const body = /export function fsize\(b\) \{([\s\S]*?)\n\}/.exec(source);
+  assert.ok(body, 'fsize() is still exported with its single argument');
+  assert.match(body[1], /formatFileSize\(/, 'fsize() delegates to formatFileSize()');
+  for (const unit of ['B', 'KB', 'MB']) {
+    assert.ok(!body[1].includes(`' ${unit}'`), `the inline unit '${unit}' is gone from fsize()`);
+  }
+});
+
 test('the module keeps its leaf contract: it imports the catalogues and nothing else', () => {
   const source = fs.readFileSync(I18N_SOURCE, 'utf8');
   const specifiers = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1]);

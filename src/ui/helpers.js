@@ -1,5 +1,6 @@
 /* ---------- small render helpers ---------- */
 import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
+import { formatFileSize } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { LB, PR, PSTAT, ST } from '../core/constants.js';
 import { D, mem, pColor } from '../core/store.js';
@@ -93,9 +94,10 @@ export function fileType(name) {
   return 'other';
 }
 export function fsize(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1048576) return Math.round(b / 1024) + ' KB';
-  return (b / 1048576).toFixed(1) + ' MB';
+  /* The size is formatted for the active locale: the number is the locale's number format and
+     the unit is the locale's unit. The English output is byte-identical to the hand-rolled
+     one: '512 B', '2 KB', '1.0 MB'. */
+  return formatFileSize(b);
 }
 export function filePrev(f) {
   const t = FT[f.type] || FT.other;
