@@ -593,12 +593,9 @@
   "popover.noMatches": "No matches",
   "a11y.prevMonth": "Previous month",
   "a11y.nextMonth": "Next month",
-  "popover.create": "Create",
   "common.youSuffix": " (you)",
   "a11y.assignSubtask": "Assign subtask to…",
-  "a11y.assignTo": "Assign to…",
   "a11y.filterLabels": "Filter labels…",
-  "a11y.moveToProject": "Move to project…",
   "popover.recurNone": "Does not repeat",
   "popover.recurDaily": "Daily",
   "popover.recurWeekly": "Weekly",
@@ -626,7 +623,6 @@
   "sort.ascending": "Ascending",
   "sort.descending": "Descending",
   "sort.groupBy": "Group by",
-  "sort.project": "Project",
   "sort.none": "No grouping",
   "popover.visibleColumns": "Visible columns",
   "popover.resetWidths": "Reset widths",
@@ -771,5 +767,6 @@
   "common.perm.view": "Can view",
   "common.perm.comment": "Can comment",
   "common.perm.edit": "Can edit",
-  "common.perm.access": "Full access"
+  "common.perm.access": "Full access",
+  "common.plusEnter": "+Enter"
 }

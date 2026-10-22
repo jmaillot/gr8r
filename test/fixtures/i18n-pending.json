@@ -32,14 +32,6 @@
     "text": "Your session expired. Sign in again."
   },
   {
-    "file": "src/overlays/drawer.js",
-    "text": "+Enter"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Shift"
-  },
-  {
     "file": "src/pages/activity.js",
     "text": "Activity"
   },

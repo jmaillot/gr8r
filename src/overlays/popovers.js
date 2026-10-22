@@ -127,7 +127,7 @@ export function popHtml(p) {
   const t = ['status', 'priority', 'assignee', 'labels', 'date', 'project', 'deps', 'recur', 'estimate'].includes(p.type) ? tgt(p) : null;
   switch (p.type) {
     case 'create':
-      inner = `<div class="mh">${tMsg('popover.create')}</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}${tMsg('page.columns.task')}<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}${tMsg('page.field.project')}<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}${tMsg('nav.route.team')}</button>${isMemberAdmin() ? `<div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}${tMsg('palette.inviteMember')}</button>` : ''}`;
+      inner = `<div class="mh">${tMsg('modal.sc.create')}</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}${tMsg('page.columns.task')}<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}${tMsg('page.field.project')}<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}${tMsg('nav.route.team')}</button>${isMemberAdmin() ? `<div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}${tMsg('palette.inviteMember')}</button>` : ''}`;
       style = 'width:220px';
       break;
     case 'subassignee': {
@@ -159,7 +159,7 @@ export function popHtml(p) {
             .members.filter(m => m.status !== 'deactivated')
             .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? tMsg('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: t?.assignee === m.id })),
         ],
-        { search: tMsg('a11y.assignTo') },
+        { search: tMsg('act.assignTo') },
       );
       break;
     case 'labels':
@@ -179,7 +179,7 @@ export function popHtml(p) {
         visibleProjects()
           .filter(q => canSee(q) && q.status !== 'complete')
           .map(q => ({ id: q.id, name: q.name, html: `<span class="pdot" style="--c:${pColor(q)}"></span>`, on: t?.project === q.id })),
-        { search: tMsg('a11y.moveToProject') },
+        { search: tMsg('act.moveToProject') },
       );
       break;
     case 'recur':
@@ -319,7 +319,7 @@ export function popHtml(p) {
           ['status', tMsg('sort.status'), 'circle-dot'],
           ['priority', tMsg('sort.priority'), 'signal-high'],
           ['assignee', tMsg('sort.assignee'), 'user'],
-          ['project', tMsg('sort.project'), 'folder'],
+          ['project', tMsg('page.field.project'), 'folder'],
           ['due', tMsg('sort.dueDate'), 'calendar'],
           ['none', tMsg('sort.none'), 'minus'],
         ]
