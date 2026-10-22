@@ -77,6 +77,32 @@ function interpolate(str, vars) {
   return str.replace(PLACEHOLDER, (m, name) => (Object.hasOwn(vars, name) ? String(vars[name]) : m));
 }
 
+/* One rule instance per locale, cached: an Intl.PluralRules construction is expensive and the
+   app re-renders often. The category always comes from the locale's CLDR data, never from a
+   hand-written rule — French resolves 0 to one and 1000000 to many. */
+const pluralRules = new Map();
+
+function rulesFor(code) {
+  let rules = pluralRules.get(code);
+  if (!rules) {
+    rules = new Intl.PluralRules(code);
+    pluralRules.set(code, rules);
+  }
+  return rules;
+}
+
+/* A plural value is an object keyed by CLDR category. The selected member falls back to other;
+   when other is missing too the value is unresolvable and t() returns the key. A missing count
+   resolves to one when there is one, else to other, and never throws. */
+function resolvePlural(value, vars) {
+  const raw = vars ? vars.n : undefined;
+  const count = raw === undefined || raw === null ? NaN : Number(raw);
+  const category = Number.isFinite(count) ? rulesFor(locale).select(count) : 'one';
+  const chosen = Object.hasOwn(value, category) ? value[category] : value.other;
+  if (typeof chosen !== 'string') return undefined;
+  return interpolate(chosen, vars);
+}
+
 export function t(key, vars) {
   const active = catalogues.get(locale);
   let value = active && Object.hasOwn(active, key) ? active[key] : undefined;
@@ -85,5 +111,6 @@ export function t(key, vars) {
     value = base && Object.hasOwn(base, key) ? base[key] : undefined;
   }
   if (typeof value === 'string') return interpolate(value, vars);
+  if (value && typeof value === 'object') return resolvePlural(value, vars) ?? key;
   return key;
 }
