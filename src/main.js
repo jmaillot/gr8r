@@ -60,6 +60,7 @@ import { api } from './core/api.js';
 import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
+import { t as tk } from './core/i18n.js';
 
 addEventListener('gr8r:save-error', e => {
   const { status, error } = e.detail || {};
@@ -67,22 +68,22 @@ addEventListener('gr8r:save-error', e => {
     S.ui.auth = 'login';
     S.ui.errors = {};
     render();
-    toast('Your session expired. Sign in again.', { kind: 'err' });
+    toast(tk('err.sessionExpired'), { kind: 'err' });
     return;
   }
-  if (status === 403) return toast(error || 'Your account has read-only access.', { kind: 'err', ms: 6000 });
+  if (status === 403) return toast(error || tk('err.readOnlyAccess'), { kind: 'err', ms: 6000 });
   if (status === 409) {
-    return toast('This workspace changed in another session. Reload to see the latest version.', {
+    return toast(tk('err.workspaceChanged'), {
       kind: 'err',
       ms: 9000,
-      action: 'Reload',
+      action: tk('act.reload'),
       onAction: () => location.reload(),
     });
   }
-  toast("Couldn't save to the server — changes are still in this browser.", {
+  toast(tk('err.saveNotSynced'), {
     kind: 'err',
     ms: 8000,
-    action: 'Retry',
+    action: tk('act.retry'),
     onAction: () => {
       S.ui.conflict = false;
       save();
@@ -142,7 +143,7 @@ function applyDeepLink(rest) {
       history.replaceState(null, '', '/');
     } else {
       const inv = await api.invite(joinToken);
-      S.ui.join = { token: joinToken, ...(inv.ok ? inv.data : { error: inv.error || 'This invite link is not valid.' }) };
+      S.ui.join = { token: joinToken, ...(inv.ok ? inv.data : { error: inv.error || tk('err.inviteInvalid') }) };
       S.ui.auth = 'join';
       render();
       return;
@@ -176,7 +177,7 @@ function applyDeepLink(rest) {
       render();
       return;
     }
-    if (!ws.ok) toast('Could not load this workspace. Check the server logs.', { kind: 'err', ms: 8000 });
+    if (!ws.ok) toast(tk('err.wsLoadFailed'), { kind: 'err', ms: 8000 });
     deepLink = restFromPath;
   }
 
