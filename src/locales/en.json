@@ -1417,5 +1417,21 @@
   "a11y.searchAll": "Search tasks, projects, people, files, and comments",
   "page.search.recent": "Recent:",
   "page.search.on": "on",
-  "page.search.noMatch": "Nothing matches “{q}”. Check the spelling or try a broader term."
+  "page.search.noMatch": "Nothing matches “{q}”. Check the spelling or try a broader term.",
+  "page.overview.title": "Workspace overview",
+  "page.overview.subtitle": "Health of every project in {ws}.",
+  "page.overview.timeline": "Timeline",
+  "page.overview.stat.completed": "{n} completed",
+  "page.overview.stat.openCount": "{n} open",
+  "page.overview.stat.completion": "Completion rate",
+  "page.overview.stat.across": "across all projects",
+  "page.overview.stat.pendingInvite": "{n} pending invite",
+  "page.overview.portfolio": "Portfolio",
+  "page.overview.col.open": "Open",
+  "page.overview.byStatus": "Tasks by status",
+  "page.overview.statusCount": "{name}: {n}",
+  "page.overview.workload": "Workload",
+  "page.overview.workloadHint": "Open tasks per person",
+  "page.overview.milestones": "Upcoming milestones",
+  "page.overview.noMilestones": "No upcoming milestones"
 }
