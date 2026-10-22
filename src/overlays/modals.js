@@ -1,5 +1,5 @@
 /* ---------------- MODALS ---------------- */
-import { $$, MOD, ago, esc, fmtDate } from '../core/utils.js';
+import { $$, MOD, ago, esc, fmtDate, foldForSearch } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
 import { D, S, canManageProject, mem, pColor, proj, task, teamsList } from '../core/store.js';
@@ -175,6 +175,7 @@ export function projectModal(m, H) {
 }
 export const PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
 export function shareModal(m, H) {
+  const shareNeedle = foldForSearch(S.ui.shareQ || '').text;
   const p = proj(m.id);
   if (!p) return H('Project not found');
   const canManage = canManageProject(p);
@@ -198,7 +199,7 @@ export function shareModal(m, H) {
         ? `<div class="panel" style="padding:4px">${
             D()
               .members.filter(
-                x => !members.includes(x.id) && (x.name.toLowerCase().includes(S.ui.shareQ.toLowerCase()) || x.email.includes(S.ui.shareQ.toLowerCase())),
+                x => !members.includes(x.id) && (foldForSearch(x.name).text.includes(shareNeedle) || foldForSearch(x.email).text.includes(shareNeedle)),
               )
               .map(
                 x =>

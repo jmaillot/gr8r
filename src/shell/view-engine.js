@@ -1,5 +1,5 @@
 /* ---------- filter engine ---------- */
-import { DAY, TODAY, diffD, esc, parse } from '../core/utils.js';
+import { DAY, TODAY, diffD, esc, foldForSearch, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { LABELS, PR, PRIOS, STATUSES } from '../core/constants.js';
 import { D, S, canSee, isOver, mem, pColor, proj, visibleProjects } from '../core/store.js';
@@ -89,8 +89,8 @@ export function matchF(t, f) {
 export function applyView(ts, v) {
   let out = ts.filter(t => v.filters.every(f => matchF(t, f)));
   if (v.q) {
-    const q = v.q.toLowerCase();
-    out = out.filter(t => t.title.toLowerCase().includes(q) || t.key.toLowerCase().includes(q));
+    const q = foldForSearch(v.q).text;
+    out = out.filter(t => foldForSearch(t.title).text.includes(q) || foldForSearch(t.key).text.includes(q));
   }
   return sortTasks(out, v.sort);
 }

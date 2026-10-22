@@ -1,5 +1,5 @@
 /* ---------- MEMBERS / PROFILE / TEAMS ---------- */
-import { ago, esc, minsAgo } from '../core/utils.js';
+import { ago, esc, foldForSearch, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ROLES } from '../core/constants.js';
 import { D, S, TM, allTasks, canSee, isMemberAdmin, isOver, me, mem, progressOf, team, teamsList, visibleProjects } from '../core/store.js';
@@ -11,9 +11,11 @@ import { page404 } from './errors.js';
 
 export function pageMembers() {
   const u = S.ui;
-  const q = (u.memQ || '').toLowerCase();
+  const q = foldForSearch(u.memQ || '').text;
   const role = u.memRole || 'all';
-  const ms = D().members.filter(m => (role === 'all' || m.role === role) && (!q || m.name.toLowerCase().includes(q) || m.email.includes(q)));
+  const ms = D().members.filter(
+    m => (role === 'all' || m.role === role) && (!q || foldForSearch(m.name).text.includes(q) || foldForSearch(m.email).text.includes(q)),
+  );
   const isAdmin = isMemberAdmin();
   const isOwner = me().role === 'Owner';
   const canManage = m => isAdmin && m.id !== D().me && (isOwner || (m.role !== 'Owner' && m.role !== 'Admin'));

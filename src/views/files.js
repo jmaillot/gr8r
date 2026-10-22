@@ -1,15 +1,15 @@
 /* ---------- FILES ---------- */
-import { ago, esc } from '../core/utils.js';
+import { ago, esc, foldForSearch } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, mem, task } from '../core/store.js';
 import { FT, av, empty, filePrev, fileType } from '../ui/helpers.js';
 
 export function filesHtml(pid) {
   const u = S.ui;
-  const q = (u.fileQ || '').toLowerCase();
+  const q = foldForSearch(u.fileQ || '').text;
   const ft = u.fileType || 'all';
   const sort = u.fileSort || 'date';
-  let fs = D().files.filter(f => f.project === pid && (!q || f.name.toLowerCase().includes(q)) && (ft === 'all' || f.type === ft));
+  let fs = D().files.filter(f => f.project === pid && (!q || foldForSearch(f.name).text.includes(q)) && (ft === 'all' || f.type === ft));
   fs.sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name) : sort === 'type' ? a.type.localeCompare(b.type) : b.at - a.at));
   const ups = (u.uploads || []).filter(x => x.project === pid);
   const view = u.fileView;

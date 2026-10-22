@@ -1,5 +1,5 @@
 /* ---------- PROJECTS ---------- */
-import { ago, esc, fmtDate, minsAgo } from '../core/utils.js';
+import { ago, esc, fmtDate, foldForSearch, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
 import { S, TM, canSee, mem, progressOf, tasksOf, visibleProjects } from '../core/store.js';
@@ -20,10 +20,12 @@ export function projectCard(p) {
 }
 export function pageProjects() {
   const u = S.ui;
-  const q = (u.projQ || '').toLowerCase();
+  const q = foldForSearch(u.projQ || '').text;
   const st = u.projStatus || 'all';
   const sort = u.projSort || 'recent';
-  let ps = visibleProjects().filter(p => (st === 'all' || p.status === st) && (!q || p.name.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q)));
+  let ps = visibleProjects().filter(
+    p => (st === 'all' || p.status === st) && (!q || foldForSearch(p.name).text.includes(q) || foldForSearch(p.desc).text.includes(q)),
+  );
   const sorter = { recent: p => p.last, name: p => p.name, due: p => p.due, progress: p => -progressOf(p.id) }[sort];
   ps.sort((a, b) => (sorter(a) > sorter(b) ? 1 : -1));
   const view = u.projView;

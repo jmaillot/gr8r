@@ -1,5 +1,5 @@
 /* ---------------- POPOVERS ---------------- */
-import { $, MOD, TODAY, addD, dOff, diffD, esc, fmtDate, iso, parse } from '../core/utils.js';
+import { $, MOD, TODAY, addD, dOff, diffD, esc, fmtDate, foldForSearch, iso, parse } from '../core/utils.js';
 import { monthName, weekdayName } from '../core/i18n.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
@@ -84,8 +84,8 @@ export function tgt(p) {
   return p.id === '__form' ? S.ui.form : task(p.id);
 }
 export function popList(items, opt = {}) {
-  const q = (S.ui.pop.q || '').toLowerCase();
-  const list = items.filter(it => !q || it.name.toLowerCase().includes(q));
+  const q = foldForSearch(S.ui.pop.q || '').text;
+  const list = items.filter(it => !q || foldForSearch(it.name).text.includes(q));
   return `${opt.search ? `<div class="pin"><input data-pop-q data-in="popQ" id="pop-q" placeholder="${opt.search}" value="${esc(S.ui.pop.q || '')}" aria-label="${opt.search}"></div>` : ''}
     ${list.map(it => `<button class="mi" data-a="${it.act || 'popPick'}" data-v="${esc(it.id)}" role="menuitemradio" aria-checked="${!!it.on}">${it.html || ''}<span class="trunc">${esc(it.name)}</span>${it.kbd ? `<span class="r"><kbd>${it.kbd}</kbd></span>` : ''}${it.on ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`).join('') || `<div class="mi faint" style="cursor:default">No matches</div>`}`;
 }

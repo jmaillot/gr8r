@@ -1,5 +1,5 @@
 /* ---------------- COMMAND PALETTE ---------------- */
-import { MOD, clamp, esc } from '../core/utils.js';
+import { MOD, clamp, esc, foldForSearch } from '../core/utils.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
 import { D, S, allTasks, pColor, proj, roleLabel, save, task, workspaceList as wsList } from '../core/store.js';
@@ -60,7 +60,7 @@ export function commands() {
 export function paletteItems() {
   const pl = S.ui.palette;
   const q = pl.q.trim();
-  const ql = q.toLowerCase();
+  const ql = foldForSearch(q).text;
   const groups = [];
   if (pl.mode === 'ws') {
     /* The local demo has one workspace, so there is nothing to switch to. */
@@ -68,7 +68,7 @@ export function paletteItems() {
     groups.push({
       name: 'Switch workspace',
       items: wsList()
-        .filter(w => !q || w.name.toLowerCase().includes(ql))
+        .filter(w => !q || foldForSearch(w.name).text.includes(ql))
         .map(w => ({
           html: `${wsLogo({ name: w.name, c: w.color }, 20)}`,
           name: w.name,
@@ -79,7 +79,7 @@ export function paletteItems() {
     return groups;
   }
   if (pl.mode === 'cmd') {
-    const cmds = commands().filter(c => !q || c.name.toLowerCase().includes(ql));
+    const cmds = commands().filter(c => !q || foldForSearch(c.name).text.includes(ql));
     if (!q) {
       groups.push({ name: 'Suggestions', items: cmds.slice(0, 3).concat(cmds.filter(c => c.id === 'c-dark' || c.id === 'c-ws')) });
       const recent = sortTasks(
