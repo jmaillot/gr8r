@@ -70,7 +70,11 @@ const TABLES = [
     ['page.auth.haveAccount', undefined, 'Already have an account?'],
     // no workspace / sign up
     ['page.auth.noWorkspaceTitle', undefined, "You're not in a workspace yet"],
-    ['page.auth.noWorkspaceBody', undefined, 'Ask an administrator of an existing workspace for an invitation. Once you accept it, the workspace will show up here.'],
+    [
+      'page.auth.noWorkspaceBody',
+      undefined,
+      'Ask an administrator of an existing workspace for an invitation. Once you accept it, the workspace will show up here.',
+    ],
     ['page.auth.signedInAs', undefined, 'Signed in as'],
     ['page.auth.you', undefined, 'you'],
     ['page.auth.createYourAccount', undefined, 'Create your account'],
@@ -368,7 +372,11 @@ const TABLES = [
     ['settings.ws.leaveTitle', undefined, 'Leave workspace'],
     ['settings.ws.leaveBody', undefined, 'You lose access to this workspace until someone invites you back.'],
     ['settings.ws.deleteTitle', undefined, 'Delete workspace'],
-    ['settings.ws.deleteBodyApi', undefined, 'Permanently delete this workspace, its projects, tasks and files for every member. You will be asked to type the workspace URL.'],
+    [
+      'settings.ws.deleteBodyApi',
+      undefined,
+      'Permanently delete this workspace, its projects, tasks and files for every member. You will be asked to type the workspace URL.',
+    ],
     ['settings.ws.deleteBodyLocal', undefined, 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.'],
     // appearance
     ['settings.appearance.lead', undefined, 'Customize how Gr8r looks on this device.'],
@@ -581,7 +589,25 @@ test('the auth page data-a and data-v sites are byte-identical', () => {
   const src = read('src/pages/auth.js');
   const a = [...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]);
   assert.equal(a.length, 36, a.join(','));
-  for (const key of ['toggleDark', 'socialAuth', 'auth', 'toggleShowPw', 'doLogin', 'doJoin', 'doSignup', 'doForgot', 'resend', 'verified', 'onbBack', 'onbNext', 'onbSet', 'copyInviteLink', 'onbFinish', 'onbExit', 'signOut']) {
+  for (const key of [
+    'toggleDark',
+    'socialAuth',
+    'auth',
+    'toggleShowPw',
+    'doLogin',
+    'doJoin',
+    'doSignup',
+    'doForgot',
+    'resend',
+    'verified',
+    'onbBack',
+    'onbNext',
+    'onbSet',
+    'copyInviteLink',
+    'onbFinish',
+    'onbExit',
+    'signOut',
+  ]) {
     assert.ok(a.includes(key), `data-a=${key} lost`);
   }
   const v = [...src.matchAll(/data-v="([^"]*)"/g)].map(m => m[1]);
@@ -592,7 +618,7 @@ test('the auth page data-a and data-v sites are byte-identical', () => {
 
 test('the onboarding step keys are untouched', () => {
   const src = read('src/pages/auth.js');
-  for (const key of ["o.ws", "o.url", "o.tmpl", "o.team", "o.size", "o.invites", "o.proj", "'use'", "'team'", "'size'", "'tmpl'"]) {
+  for (const key of ['o.ws', 'o.url', 'o.tmpl', 'o.team', 'o.size', 'o.invites', 'o.proj', "'use'", "'team'", "'tmpl'", 'data-k="size"']) {
     assert.ok(src.includes(key), `${key} lost`);
   }
   // the stored team-size values stay the values the wizard stores
@@ -601,7 +627,22 @@ test('the onboarding step keys are untouched', () => {
 
 test('the design-system token names, state keys, theme keys and demo values are untouched', () => {
   const src = read('src/pages/design-system.js');
-  for (const v of ['--bg', '--bg-side', '--surface', '--surface-2', '--surface-3', '--border', '--border-strong', '--text', '--text-2', '--text-3', '--accent', '--green', '--amber', '--red']) {
+  for (const v of [
+    '--bg',
+    '--bg-side',
+    '--surface',
+    '--surface-2',
+    '--surface-3',
+    '--border',
+    '--border-strong',
+    '--text',
+    '--text-2',
+    '--text-3',
+    '--accent',
+    '--green',
+    '--amber',
+    '--red',
+  ]) {
     assert.ok(src.includes(`'${v}'`), `token ${v} lost`);
   }
   for (const s of ["''", "'state-hover'", "'state-active'", "'state-focus'", "'dis'", "'is-loading'"]) {
@@ -616,17 +657,42 @@ test('the design-system token names, state keys, theme keys and demo values are 
 
 test('the settings stored preference values are byte-identical', () => {
   const src = read('src/pages/settings.js');
-  assert.ok(src.includes("['(GMT-08:00) Pacific Time', '(GMT-05:00) Eastern Time', '(GMT+00:00) London', '(GMT+01:00) Berlin', '(GMT+08:00) Singapore']"), 'the stored time-zone labels moved');
+  assert.ok(
+    src.includes("['(GMT-08:00) Pacific Time', '(GMT-05:00) Eastern Time', '(GMT+00:00) London', '(GMT+01:00) Berlin', '(GMT+08:00) Singapore']"),
+    'the stored time-zone labels moved',
+  );
   assert.ok(src.includes("['English (US)', 'English (UK)', 'Deutsch', 'Español', 'Français', '日本語']"), 'the stored language names moved');
-  for (const id of ['workspace', 'appearance', 'language', 'datetime', 'members', 'teams', 'projects', 'permissions', 'notif-email', 'notif-push', 'notif-mentions', 'notif-assign', 'profile', 'preferences', 'shortcuts', 'password', 'sessions', '2fa', 'plan', 'payment', 'invoices']) {
+  for (const id of [
+    'workspace',
+    'appearance',
+    'language',
+    'datetime',
+    'members',
+    'teams',
+    'projects',
+    'permissions',
+    'notif-email',
+    'notif-push',
+    'notif-mentions',
+    'notif-assign',
+    'profile',
+    'preferences',
+    'shortcuts',
+    'password',
+    'sessions',
+    '2fa',
+    'plan',
+    'payment',
+    'invoices',
+  ]) {
     assert.ok(src.includes(`'${id}'`), `section id ${id} lost`);
   }
 });
 
 test('the date-format and time-format rows keep their computed previews', () => {
   const src = read('src/pages/settings.js');
-  assert.ok(src.includes('formatDate(SAMPLE_DATE'), "the date preview must come from the formatter, not the catalogue");
-  assert.ok(src.includes('formatTime(SAMPLE_TIME'), "the time preview must come from the formatter, not the catalogue");
+  assert.ok(src.includes('formatDate(SAMPLE_DATE'), 'the date preview must come from the formatter, not the catalogue');
+  assert.ok(src.includes('formatTime(SAMPLE_TIME'), 'the time preview must come from the formatter, not the catalogue');
   assert.ok(!src.includes("'Oct 1'"), 'a hard-coded English date preview came back');
 });
 

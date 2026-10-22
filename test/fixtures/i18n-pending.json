@@ -72,510 +72,6 @@
     "text": "Status changes"
   },
   {
-    "file": "src/pages/auth.js",
-    "text": ". Click it to activate your account."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": ". It expires in 30 minutes."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "A workspace is where your team's projects live."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Accounts are created by your workspace admin."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Already have an account?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Ask an administrator of an existing workspace for an invitation. Once you accept it, the workspace will show up here."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "At least 10 characters with a number or symbol."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Back"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Back to sign in"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Board"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Boards"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "By creating an account you agree to the Terms and Privacy Policy."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Campaigns & content"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Change it"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Check your email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Checklists and priorities"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Choose a new password"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Confirm password"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Continue"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Continue with Apple"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Continue with Google"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Continue with Microsoft"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Copy invite link instead"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Create account"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Create account & join"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Create your account"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Create your account to get access to this workspace."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Create your first project"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Create your workspace"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Design"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Didn't get it?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Don't have an account?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Engineering"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Enter your account email and we'll send you a reset link."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Exit setup"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Forgot password?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Free for up to 3 members. No credit card required."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Full name"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Go to sign in"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Goals & side projects"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Gr8r works best with your teammates."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Here's what we set up for you."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Hide"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "How does your team work?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "I've verified my email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "In this prototype, the button above stands in for the link in your email."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Invite people any time from the sidebar"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Invite unavailable"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Invite your team"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Invited with the wrong address? Ask an administrator of"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Join"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Just me"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "List"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Lists"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Log in"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Marketing"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Move cards through stages"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "My Workspace"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "New password"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "No invites yet"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Open reset link"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Open workspace"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Other"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Password"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Password updated"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Personal"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Plan with dates & dependencies"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Product"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Project name"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Remember me for 30 days"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Resend email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Resend email in"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Reset password"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Reset your password"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Reviews & handoff"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Roadmaps & launches"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Send invites"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Send reset link"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Show"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Sign in"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Sign in and join"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Sign in to"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Sign out"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Sign up"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Signed in as"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Skip for now"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Something else"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Spreadsheet-style tracking"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Sprints & releases"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Start from a template or a blank project."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Step"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Table"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Tables"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Tanjim Islam"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Team size"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Teammate email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "They'll appear in Members once they join"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "They'll get an email invite."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "This address"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "This invite is for this address."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Timeline"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Timelines"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Toggle theme"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Verify your email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Waiting for verification…"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "We sent a reset link to"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "We sent a verification link to"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "We'll set your default project view."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "We'll tailor templates and views to fit. You can change this later."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Welcome back"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "What are you working on?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Work email"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Workspace URL"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Workspace name"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Wrong email?"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "You can create or join a workspace next."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "You can now sign in with your new password."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "You'll get a link to share."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "You're not in a workspace yet"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Your name"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Your workspace is ready"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "Your workspace will live at"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "already has a Gr8r account. Sign in with it to join this workspace."
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "e.g. Gr8r Studio"
-  },
-  {
-    "file": "src/pages/auth.js",
-    "text": "© 2026 Gr8r Studio · Terms · Privacy"
-  },
-  {
     "file": "src/pages/design-system.js",
     "text": "Accent"
   },
@@ -1177,19 +673,19 @@
   },
   {
     "file": "src/pages/design-system.js",
-    "text": "WEB-109 · Due tomorrow"
-  },
-  {
-    "file": "src/pages/design-system.js",
-    "text": "WORKSPACE"
-  },
-  {
-    "file": "src/pages/design-system.js",
     "text": "Warning"
   },
   {
     "file": "src/pages/design-system.js",
+    "text": "WEB-109 · Due tomorrow"
+  },
+  {
+    "file": "src/pages/design-system.js",
     "text": "Website Redesign"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "WORKSPACE"
   },
   {
     "file": "src/pages/design-system.js",
@@ -1294,6 +790,10 @@
   {
     "file": "src/pages/favorites.js",
     "text": "Tasks"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "· Here's what's happening across your workspace."
   },
   {
     "file": "src/pages/home.js",
@@ -1422,10 +922,6 @@
   {
     "file": "src/pages/home.js",
     "text": "View all"
-  },
-  {
-    "file": "src/pages/home.js",
-    "text": "· Here's what's happening across your workspace."
   },
   {
     "file": "src/pages/inbox.js",
@@ -2165,6 +1661,10 @@
   },
   {
     "file": "src/pages/search.js",
+    "text": "”. Check the spelling or try a broader term."
+  },
+  {
+    "file": "src/pages/search.js",
     "text": "All"
   },
   {
@@ -2212,8 +1712,16 @@
     "text": "Tasks"
   },
   {
-    "file": "src/pages/search.js",
-    "text": "”. Check the spelling or try a broader term."
+    "file": "src/pages/settings.js",
+    "text": "@mentions in comments and descriptions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "@team mentions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "@workspace mentions"
   },
   {
     "file": "src/pages/settings.js",
@@ -2226,18 +1734,6 @@
   {
     "file": "src/pages/settings.js",
     "text": "2150 Mission St, San Francisco, CA 94110"
-  },
-  {
-    "file": "src/pages/settings.js",
-    "text": "@mentions in comments and descriptions"
-  },
-  {
-    "file": "src/pages/settings.js",
-    "text": "@team mentions"
-  },
-  {
-    "file": "src/pages/settings.js",
-    "text": "@workspace mentions"
   },
   {
     "file": "src/pages/settings.js",
@@ -2929,10 +2425,6 @@
   },
   {
     "file": "src/pages/settings.js",
-    "text": "US EIN ••-•••4410"
-  },
-  {
-    "file": "src/pages/settings.js",
     "text": "Unlimited members"
   },
   {
@@ -2962,6 +2454,10 @@
   {
     "file": "src/pages/settings.js",
     "text": "Upgrade"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "US EIN ••-•••4410"
   },
   {
     "file": "src/pages/settings.js",
@@ -2997,11 +2493,11 @@
   },
   {
     "file": "src/pages/settings.js",
-    "text": "When I'm assigned a task"
+    "text": "When a task is assigned to you."
   },
   {
     "file": "src/pages/settings.js",
-    "text": "When a task is assigned to you."
+    "text": "When I'm assigned a task"
   },
   {
     "file": "src/pages/settings.js",
@@ -3025,15 +2521,15 @@
   },
   {
     "file": "src/pages/settings.js",
-    "text": "Workspace URL"
-  },
-  {
-    "file": "src/pages/settings.js",
     "text": "Workspace icon"
   },
   {
     "file": "src/pages/settings.js",
     "text": "Workspace name"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Workspace URL"
   },
   {
     "file": "src/pages/settings.js",
@@ -3193,6 +2689,10 @@
   },
   {
     "file": "src/views/files.js",
+    "text": "— up to 250 MB each"
+  },
+  {
+    "file": "src/views/files.js",
     "text": "All types"
   },
   {
@@ -3262,10 +2762,6 @@
   {
     "file": "src/views/files.js",
     "text": "Uploaded by"
-  },
-  {
-    "file": "src/views/files.js",
-    "text": "— up to 250 MB each"
   },
   {
     "file": "src/views/project-overview.js",

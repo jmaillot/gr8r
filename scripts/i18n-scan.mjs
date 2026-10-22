@@ -704,12 +704,16 @@ function ruleTextNode(text, offset, file, findings, lineAt) {
   emit(findings, file, lineAt, offset, 'ruleTextNode', decodeEntities(trimmed));
 }
 
-/* A display attribute value. */
+/* A display attribute value. A stored or demo value is data wherever it
+   appears — the VALUE_EXCLUSIONS sets exclude their values in every
+   position, attributes included ('Tanjim Islam' in a signup placeholder is
+   the stored default member name, not interface text). */
 function ruleAttribute(name, value, offset, file, findings, lineAt) {
   if (!DISPLAY_ATTRIBUTES.has(name)) return;
   const trimmed = value.trim();
   if (!hasLetters(trimmed)) return;
   if (!hasCapitalWord(trimmed)) return;
+  if (VALUE_EXCLUSIONS.has(trimmed)) return;
   emit(findings, file, lineAt, offset, 'ruleAttribute', decodeEntities(trimmed));
 }
 
