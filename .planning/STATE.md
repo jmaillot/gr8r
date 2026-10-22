@@ -2,15 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Localization
-status: executing
+status: phase_complete
 last_updated: "2026-10-22T12:38:00.000Z"
 last_activity: 2026-10-22
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 17
-  completed_plans: 4
-  percent: 24
+  completed_plans: 14
+  percent: 29
 ---
 
 # STATE
@@ -19,9 +19,9 @@ Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — phase 5 complete, phase 6 in progress (plan 1 of 14 done), 5 phases to go
+- Milestone: **v1.2 — Localization** — phases 5 and 6 complete, 5 phases to go
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-execute-phase 6`** → plan `06-02` (the `Intl` formatters)
+- Next: **`/gsd-plan-phase 7`** (French catalogue & French typography) — or `/gsd-discuss-phase 7` first
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
@@ -71,7 +71,7 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 | Phase | Name | Requirements |
 |-------|------|--------------|
 | 5 ✅ | i18n foundation & catalogue contract | I18N-06, I18N-08 — complete |
-| 6 | English extraction & locale-aware formats | I18N-01, I18N-03, I18N-04, SEARCH-01 |
+| 6 ✅ | English extraction & locale-aware formats | I18N-01, I18N-03, I18N-04, SEARCH-01 — complete |
 | 7 | French catalogue & French typography | I18N-02, I18N-05, I18N-07 |
 | 8 | Per-user locale & the honest selector | LOC-01 … LOC-06 |
 | 9 | Server messages & activity history | ERR-01, ERR-02, ACT-01, ACT-02 |
@@ -79,7 +79,16 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 | 11 | French sweep, build gate & ship hardening | UAT-10 |
 
 **Coverage:** 29/29 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
-phase without a requirement. 2/29 complete (phase 5).
+phase without a requirement. 6/29 complete (phases 5 and 6).
+
+**Phase 6 shipped:** the whole interface reads the English catalogue — 1 446 keys, the i18n
+allow-list driven to zero (`[]`), the scan green at `0 literals, 0 violations`. The hand-rolled
+date machinery (`MON`/`MONL`/`WD`/`WDL`, `fmtDate`, `relDate`, `ago`, `dayBucket`, `fsize`) is
+replaced by Intl-backed per-locale cached formatters; the 15 plural sites are catalogue objects
+keyed by CLDR category; `dateFmt`/`timeFmt` carry the `'auto'` sentinel; and the search comparison
+folds accents on both sides ("elodie" finds "Élodie"). 335 `node:test` cases and 6 Chromium tests
+green; the English interface renders byte-identically apart from the two declared deltas
+(06-CONTEXT.md § Declared English deltas).
 
 **Ordering notes (deviations from the research sketch, both deliberate):**
 
@@ -265,24 +274,19 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-22T12:38:00.000Z
-**Stopped at:** Completed 06-01-PLAN.md — the extraction meter, the allow-list and the tracer
+**Last session:** 2026-10-22
+**Stopped at:** Phase 6 complete — all 14 plans executed, verification passed 5/5, traceability updated
 **Resume file:** None
 
 ## Current Position
 
-Phase: 6 — English extraction & locale-aware formats (1 of 14 plans done)
-Plan: 01 — the static source scan, the allow-list and the tracer — complete
-Status: Executing
-Last activity: 2026-10-22 — plan 06-01 complete: the scan, the 1700-entry allow-list, the build
-gate and the first extracted literal (`a11y.dismiss`)
+Phase: 6 — English extraction & locale-aware formats ✅ complete (14/14 plans)
+Status: Awaiting phase 7
+Last activity: 2026-10-22 — phase 6 verified (I18N-01, I18N-03, I18N-04, SEARCH-01 → Complete)
 
 ## Operator Next Steps
 
-- `/gsd-execute-phase 6` — continue with plan `06-02` (the `Intl`-backed, per-locale cached
-  formatters); the sweep waves `06-08` … `06-12` consume the allow-list this plan opened
-- The phase-6 success criterion 1 ("the static scan finds none") is measured by the EMPTY
-  allow-list, which plan `06-10` proves with the raw sweep; `I18N-01` therefore stays **Pending**
-  in the traceability table until the phase closes
+- `/gsd-plan-phase 7` — the French catalogue & French typography (I18N-02, I18N-05, I18N-07);
+  phase 7 translates the 1 446 English keys, so phase 6's call-site work is done
 - Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
   per-user locale with a migration, and Chromium coverage for the 8 untested UI flows

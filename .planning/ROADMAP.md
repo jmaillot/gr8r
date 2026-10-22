@@ -123,7 +123,7 @@ tests before any string moves. — met, see
 `phases/05-i18n-foundation-catalogue-contract/05-VERIFICATION.md` (5/5 success criteria, 20/20
 must-haves) and the three plan summaries.
 
-## Phase 6: English extraction & locale-aware formats
+## Phase 6: English extraction & locale-aware formats ✅ complete
 
 ~1 800 string occurrences across 37 files move into the catalogue as a **pure, behaviour-preserving
 refactor**: no string changes its meaning, and the existing Chromium tests stay green. Alongside
@@ -324,7 +324,7 @@ image.
 
 - [x] **Phase 5: i18n foundation & catalogue contract** — `t()`, JSON catalogues, the escaping,
   plural and build contracts, pinned by tests
-- [ ] **Phase 6: English extraction & locale-aware formats** — every user-visible string in the
+- [x] **Phase 6: English extraction & locale-aware formats** — every user-visible string in the
   catalogue, every date and number formatted for the locale, English behaviour unchanged, search
   finds an accented name from an unaccented query
 - [ ] **Phase 7: French catalogue & French typography** — a complete, correctly punctuated French
@@ -342,10 +342,10 @@ image.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| I18N-01 | Phase 6 | Pending |
+| I18N-01 | Phase 6 | Complete |
 | I18N-02 | Phase 7 | Pending |
-| I18N-03 | Phase 6 | Pending |
-| I18N-04 | Phase 6 | Pending |
+| I18N-03 | Phase 6 | Complete |
+| I18N-04 | Phase 6 | Complete |
 | I18N-05 | Phase 7 | Pending |
 | I18N-06 | Phase 5 | Pending |
 | I18N-07 | Phase 7 | Pending |
@@ -356,7 +356,7 @@ image.
 | LOC-04 | Phase 8 | Pending |
 | LOC-05 | Phase 8 | Pending |
 | LOC-06 | Phase 8 | Pending |
-| SEARCH-01 | Phase 6 | Pending |
+| SEARCH-01 | Phase 6 | Complete |
 | ERR-01 | Phase 9 | Pending |
 | ERR-02 | Phase 9 | Pending |
 | ACT-01 | Phase 9 | Pending |

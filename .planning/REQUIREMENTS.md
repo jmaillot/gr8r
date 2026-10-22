@@ -10,16 +10,16 @@ the server is the only boundary that counts.
 
 ### Internationalisation
 
-- [ ] **I18N-01**: Every user-visible string in the interface comes from a catalogue lookup; the
+- [x] **I18N-01**: Every user-visible string in the interface comes from a catalogue lookup; the
       English catalogue is the base and no user-visible literal is left inline in the source.
 - [ ] **I18N-02**: The French catalogue covers every key of the English one, and the whole
       interface renders in French — navigation, pages, modals, popovers, toasts, empty states,
       validation messages, the command palette, the settings, the authentication pages and the
       404 page.
-- [ ] **I18N-03**: Dates, times, durations and numbers are formatted for the active locale: a
+- [x] **I18N-03**: Dates, times, durations and numbers are formatted for the active locale: a
       24-hour clock and `JJ/MM/AAAA` in French, a decimal comma, a narrow no-break thousands
       separator, and relative times ("il y a 2 jours").
-- [ ] **I18N-04**: Plural forms follow the locale's CLDR categories, so French says "0 fichier"
+- [x] **I18N-04**: Plural forms follow the locale's CLDR categories, so French says "0 fichier"
       where English says "0 files" and a million takes its own category.
 - [ ] **I18N-05**: French typography is respected: a narrow no-break space before `: ; ! ?` and
       inside guillemets, and the curly apostrophe.
@@ -49,7 +49,7 @@ the server is the only boundary that counts.
 
 ### Search
 
-- [ ] **SEARCH-01**: Search matches an accented name from an unaccented query — "elodie" finds
+- [x] **SEARCH-01**: Search matches an accented name from an unaccented query — "elodie" finds
       "Élodie" — by normalising both sides before the comparison. The sort order does not change
       in this milestone.
 
@@ -130,10 +130,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| I18N-01 | Phase 6 | Pending |
+| I18N-01 | Phase 6 | Complete |
 | I18N-02 | Phase 7 | Pending |
-| I18N-03 | Phase 6 | Pending |
-| I18N-04 | Phase 6 | Pending |
+| I18N-03 | Phase 6 | Complete |
+| I18N-04 | Phase 6 | Complete |
 | I18N-05 | Phase 7 | Pending |
 | I18N-06 | Phase 5 | Complete |
 | I18N-07 | Phase 7 | Pending |
@@ -144,7 +144,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOC-04 | Phase 8 | Pending |
 | LOC-05 | Phase 8 | Pending |
 | LOC-06 | Phase 8 | Pending |
-| SEARCH-01 | Phase 6 | Pending |
+| SEARCH-01 | Phase 6 | Complete |
 | ERR-01 | Phase 9 | Pending |
 | ERR-02 | Phase 9 | Pending |
 | ACT-01 | Phase 9 | Pending |
