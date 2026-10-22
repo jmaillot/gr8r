@@ -113,3 +113,69 @@ test("the week column's weekday is the locale's short weekday name", () => {
   const cal = source('src/views/calendar.js');
   assert.match(cal, /weekdayName\(d, 'short'\)/);
 });
+
+/* ---------- the mini-calendar, the greeting line and the timeline ---------- */
+
+test("the English mini-calendar header is the two-letter truncation of the locale's short weekday names: 'Su Mo Tu We Th Fr Sa'", () => {
+  assert.deepEqual(
+    weekOf(SUNDAY).map(d => weekdayName(d, 'short').slice(0, 2)),
+    ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+  );
+});
+
+test("the French mini-calendar header is the locale's own two-letter header: 'di lu ma me je ve sa'", async () => {
+  await inFrench(async () => {
+    assert.deepEqual(
+      weekOf(SUNDAY).map(d => weekdayName(d, 'short').slice(0, 2)),
+      ['di', 'lu', 'ma', 'me', 'je', 've', 'sa'],
+    );
+  });
+});
+
+test("the English greeting line reads 'Thursday, July 24' for a Thursday in July — byte-identical to the WDL/MONL line", () => {
+  assert.equal(`${weekdayName(JULY_24, 'long')}, ${monthName(JULY_24, 'long')} ${JULY_24.getDate()}`, 'Thursday, July 24');
+});
+
+test("the French greeting line is the locale's own: 'vendredi, juillet 24'", async () => {
+  await inFrench(async () => {
+    assert.equal(`${weekdayName(JULY_24, 'long')}, ${monthName(JULY_24, 'long')} ${JULY_24.getDate()}`, 'vendredi, juillet 24');
+  });
+});
+
+test("the English timeline day label is the locale's short month name: 'Jul 24' — byte-identical to the MON label", () => {
+  assert.equal(`${monthName(JULY_24, 'short')} ${JULY_24.getDate()}`, 'Jul 24');
+});
+
+test("the English timeline month label is 'July 2026' — byte-identical to the MONL label", () => {
+  assert.equal(`${monthName(JULY_24, 'long')} ${JULY_24.getFullYear()}`, 'July 2026');
+});
+
+test("the French timeline labels are the locale's own: '24 juil.' shape is the formatter's, the header reads 'juillet 2026'", async () => {
+  await inFrench(async () => {
+    assert.equal(monthName(JULY_24, 'short'), 'juil.');
+    assert.equal(`${monthName(JULY_24, 'long')} ${JULY_24.getFullYear()}`, 'juillet 2026');
+  });
+});
+
+test('the mini-calendar, the greeting line and the timeline read their names from the locale, not from the arrays', () => {
+  const pop = source('src/overlays/popovers.js');
+  assert.match(pop, /import \{ monthName, weekdayName \} from '\.\.\/core\/i18n\.js'/);
+  assert.doesNotMatch(pop, /\b(MON|MONL|WD|WDL)\b/);
+  /* The header keeps today's two-character truncation, applied to the locale's short
+     weekday name over the mini-calendar's own first cell (startOfWeek(first)). */
+  assert.match(pop, /weekdayName\(addD\(start, i\), 'short'\)\.slice\(0, 2\)/);
+  assert.match(pop, /monthName\(m, 'long'\)/);
+  /* The mini-calendar keeps importing startOfWeek(), so the first column is the same day it is today. */
+  assert.match(pop, /import \{ startOfWeek \} from '\.\.\/views\/calendar\.js';/);
+
+  const home = source('src/pages/home.js');
+  assert.match(home, /import \{ monthName, weekdayName \} from '\.\.\/core\/i18n\.js'/);
+  assert.doesNotMatch(home, /\b(MON|MONL|WD|WDL)\b/);
+  assert.match(home, /\$\{weekdayName\(TODAY, 'long'\)\}, \$\{monthName\(TODAY, 'long'\)\} \$\{TODAY\.getDate\(\)\}/);
+
+  const tl = source('src/views/timeline.js');
+  assert.match(tl, /import \{ monthName \} from '\.\.\/core\/i18n\.js'/);
+  assert.doesNotMatch(tl, /\b(MON|MONL|WD|WDL)\b/);
+  assert.match(tl, /\$\{monthName\(d, 'short'\)\} \$\{d\.getDate\(\)\}/);
+  assert.match(tl, /\$\{monthName\(m\.d, 'long'\)\} \$\{m\.d\.getFullYear\(\)\}/);
+});
