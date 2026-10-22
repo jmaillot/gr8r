@@ -1,13 +1,13 @@
 /* ---------- small render helpers ---------- */
 import { TODAY, diffD, esc, foldForSearch, parse, relDate } from '../core/utils.js';
-import { formatFileSize } from '../core/i18n.js';
+import { t, formatFileSize } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { LB, PR, PSTAT, ST } from '../core/constants.js';
 import { D, mem, pColor } from '../core/store.js';
 
 export function av(id, cls = '', tip = true) {
   const m = mem(id);
-  if (!m) return `<span class="av empty ${cls}" ${tip ? 'data-tip="Unassigned"' : ''}>${ic('user', 11)}</span>`;
+  if (!m) return `<span class="av empty ${cls}" ${tip ? `data-tip="${t('common.unassigned')}"` : ''}>${ic('user', 11)}</span>`;
   const ini = m.name
     .split(' ')
     .map(x => x[0])
@@ -81,16 +81,20 @@ export function fmtComment(txt) {
   });
   return h;
 }
+/* The file-type table: the stored ids are the machine identifiers the document holds (D-08,
+   I18N-07's groundwork) and only the DISPLAY follows the locale — fileTypeName() builds the
+   catalogue key from the id, so a type the table does not know falls back to `other`. */
 export const FT = {
-  fig: { c: '#8662C9', i: 'pen-tool', n: 'Figma' },
-  pdf: { c: '#C4473A', i: 'file-text', n: 'PDF' },
-  zip: { c: '#6B7280', i: 'folder-archive', n: 'Archive' },
-  img: { c: '#23918A', i: 'image', n: 'Image' },
-  sheet: { c: '#3D8E5F', i: 'file-spreadsheet', n: 'Spreadsheet' },
-  doc: { c: '#3B82C4', i: 'file-text', n: 'Document' },
-  code: { c: '#C48A1E', i: 'file-code', n: 'Code' },
-  other: { c: '#6B7280', i: 'file', n: 'File' },
+  fig: { c: '#8662C9', i: 'pen-tool' },
+  pdf: { c: '#C4473A', i: 'file-text' },
+  zip: { c: '#6B7280', i: 'folder-archive' },
+  img: { c: '#23918A', i: 'image' },
+  sheet: { c: '#3D8E5F', i: 'file-spreadsheet' },
+  doc: { c: '#3B82C4', i: 'file-text' },
+  code: { c: '#C48A1E', i: 'file-code' },
+  other: { c: '#6B7280', i: 'file' },
 };
+export const fileTypeName = type => t('file.type.' + (Object.hasOwn(FT, type) ? type : 'other'));
 export function fileType(name) {
   const e = (name.split('.').pop() || '').toLowerCase();
   if (e === 'fig') return 'fig';
@@ -109,15 +113,15 @@ export function fsize(b) {
   return formatFileSize(b);
 }
 export function filePrev(f) {
-  const t = FT[f.type] || FT.other;
+  const ft = FT[f.type] || FT.other;
   let art;
   if (f.type === 'img')
-    art = `<div class="art" style="padding:0;overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,${t.c} 35%,var(--surface)),color-mix(in srgb,${t.c} 10%,var(--surface)))"><svg viewBox="0 0 100 60" preserveAspectRatio="none" style="width:100%;height:100%"><path d="M0 60 L30 28 L52 46 L70 32 L100 58 L100 60Z" fill="color-mix(in srgb,${t.c} 45%,var(--surface))"/><circle cx="76" cy="16" r="7" fill="color-mix(in srgb,${t.c} 30%,var(--surface))"/></svg></div>`;
+    art = `<div class="art" style="padding:0;overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,${ft.c} 35%,var(--surface)),color-mix(in srgb,${ft.c} 10%,var(--surface)))"><svg viewBox="0 0 100 60" preserveAspectRatio="none" style="width:100%;height:100%"><path d="M0 60 L30 28 L52 46 L70 32 L100 58 L100 60Z" fill="color-mix(in srgb,${ft.c} 45%,var(--surface))"/><circle cx="76" cy="16" r="7" fill="color-mix(in srgb,${ft.c} 30%,var(--surface))"/></svg></div>`;
   else if (f.type === 'sheet') art = `<div class="art" style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px">${'<i></i>'.repeat(20)}</div>`;
   else if (f.type === 'fig')
-    art = `<div class="art" style="flex-direction:row;gap:6px"><div style="flex:1;display:flex;flex-direction:column;gap:5px"><i class="h"></i><i></i><i style="width:70%"></i><i style="height:18px;background:color-mix(in srgb,${t.c} 20%,var(--surface))"></i></div><div style="width:34%;border-radius:3px;background:color-mix(in srgb,${t.c} 14%,var(--surface))"></div></div>`;
-  else if (f.type === 'zip') art = `<div style="color:${t.c}">${ic('folder-archive', 30)}</div>`;
+    art = `<div class="art" style="flex-direction:row;gap:6px"><div style="flex:1;display:flex;flex-direction:column;gap:5px"><i class="h"></i><i></i><i style="width:70%"></i><i style="height:18px;background:color-mix(in srgb,${ft.c} 20%,var(--surface))"></i></div><div style="width:34%;border-radius:3px;background:color-mix(in srgb,${ft.c} 14%,var(--surface))"></div></div>`;
+  else if (f.type === 'zip') art = `<div style="color:${ft.c}">${ic('folder-archive', 30)}</div>`;
   else art = `<div class="art"><i class="h"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i></div>`;
   const ext = (f.name.split('.').pop() || '').slice(0, 4);
-  return `<div class="fprev">${art}<span class="ext" style="--c:${t.c}">${esc(ext)}</span></div>`;
+  return `<div class="fprev">${art}<span class="ext" style="--c:${ft.c}">${esc(ext)}</span></div>`;
 }

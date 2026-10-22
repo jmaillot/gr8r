@@ -6,6 +6,7 @@
    ===================================================================== */
 import { esc } from '../core/utils.js';
 import { ic } from '../core/icons.js';
+import { t } from '../core/i18n.js';
 
 export function enhanceSelects(root = document) {
   for (const sel of root.querySelectorAll('select.select:not([data-enhanced])')) {
@@ -18,7 +19,7 @@ export function enhanceSelects(root = document) {
     btn.setAttribute('aria-expanded', 'false');
     btn.setAttribute(
       'aria-label',
-      sel.getAttribute('aria-label') || (sel.id && document.querySelector(`label[for="${CSS.escape(sel.id)}"]`)?.textContent) || 'Choose',
+      sel.getAttribute('aria-label') || (sel.id && document.querySelector(`label[for="${CSS.escape(sel.id)}"]`)?.textContent) || t('a11y.choose'),
     );
     if (sel.id) btn.dataset.for = sel.id;
     const sync = () => {

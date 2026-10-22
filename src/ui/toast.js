@@ -29,7 +29,7 @@ export function toast(msg, opt = {}) {
 /* guarded mutation: simulates offline failures for the "Failed to save" state */
 export function mutate(fn, label) {
   if (S.ui.offline) {
-    toast("Your changes couldn't be saved. You're offline.", { kind: 'err', action: 'Try again', onAction: () => mutate(fn, label) });
+    toast(t('toast.offlineChanges'), { kind: 'err', action: t('toast.tryAgain'), onAction: () => mutate(fn, label) });
     return false;
   }
   fn();
