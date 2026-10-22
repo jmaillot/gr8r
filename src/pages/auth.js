@@ -1,5 +1,6 @@
 /* ---------------- AUTH ---------------- */
 import { esc } from '../core/utils.js';
+import { t } from '../core/i18n.js';
 import { LOGO, ic } from '../core/icons.js';
 import { D, S } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -168,7 +169,7 @@ export function renderOnboarding() {
       ],
       [
         'user-plus',
-        n ? `${n} invite${n > 1 ? 's' : ''} sent` : 'No invites yet',
+        n ? t('page.auth.invitesSent', { n: n }) : 'No invites yet',
         n ? "They'll appear in Members once they join" : 'Invite people any time from the sidebar',
       ],
     ]

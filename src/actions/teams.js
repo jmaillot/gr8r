@@ -2,6 +2,7 @@
    ACTIONS · TEAMS: create, edit, delete
    ===================================================================== */
 import { $, uid } from '../core/utils.js';
+import { t } from '../core/i18n.js';
 import { PCOLORS } from '../core/constants.js';
 import { D, S, mem, team, teamsList } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -93,13 +94,13 @@ A.submitTeam = () => {
   }
 };
 A.delTeam = el => {
-  const t = team(el.dataset.id);
-  const n = D().members.filter(x => x.team === t.id).length;
-  const np = D().projects.filter(p => p.team === t.id).length;
+  const tm = team(el.dataset.id);
+  const n = D().members.filter(x => x.team === tm.id).length;
+  const np = D().projects.filter(p => p.team === tm.id).length;
   S.ui.modals.pop();
   confirmDlg({
-    title: `Delete ${t.name}?`,
-    body: `${n ? `<b>${n} member${n > 1 ? 's' : ''}</b> will have no team` : 'The team has no members'}${np ? ` and <b>${np} project${np > 1 ? 's' : ''}</b> will need a new team` : ''}. People and projects are not deleted.`,
+    title: `Delete ${tm.name}?`,
+    body: `${n ? `<b>${t('act.teams.membersWithoutTeam', { n: n })}</b> will have no team` : 'The team has no members'}${np ? ` and <b>${t('act.teams.projectsWithoutTeam', { n: np })}</b> will need a new team` : ''}. People and projects are not deleted.`,
     ok: 'Delete team',
     danger: true,
     icon: 'users',
@@ -107,17 +108,17 @@ A.delTeam = el => {
       const snap = snapshot();
       if (
         mutate(() => {
-          D().teams = teamsList().filter(x => x !== t);
+          D().teams = teamsList().filter(x => x !== tm);
           D().members.forEach(x => {
-            if (x.team === t.id) x.team = '';
+            if (x.team === tm.id) x.team = '';
           });
           D().projects.forEach(p => {
-            if (p.team === t.id) p.team = '';
+            if (p.team === tm.id) p.team = '';
           });
         })
       ) {
         if (S.ui.route === 'team') go('teams');
-        toast(`Deleted ${t.name}`, { action: 'Undo', onAction: () => restore(snap) });
+        toast(`Deleted ${tm.name}`, { action: 'Undo', onAction: () => restore(snap) });
       }
     },
   });

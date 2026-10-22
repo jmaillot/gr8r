@@ -1,5 +1,6 @@
 /* ---------- drag & drop ---------- */
 import { $, $$, addD, diffD, fmtDate, iso, parse } from '../core/utils.js';
+import { t } from '../core/i18n.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, proj, save, task } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -256,13 +257,13 @@ document.addEventListener('pointerdown', e => {
       S.ui.suppressClick = false;
     }, 60);
     const days = Math.round((ev.clientX - x0) / dw);
-    const t = task(b.dataset.bar);
+    const tk = task(b.dataset.bar);
     if (!days) {
       render();
       return;
     }
-    updateTask(t.id, { due: iso(addD(parse(t.due), days)), start: t.start ? iso(addD(parse(t.start), days)) : null });
-    toast(`Moved “${t.title}” ${Math.abs(days)} day${Math.abs(days) > 1 ? 's' : ''} ${days > 0 ? 'later' : 'earlier'}`, { ms: 2200 });
+    updateTask(tk.id, { due: iso(addD(parse(tk.due), days)), start: tk.start ? iso(addD(parse(tk.start), days)) : null });
+    toast(t('act.movedByDays', { title: tk.title, n: Math.abs(days), direction: t(days > 0 ? 'common.later' : 'common.earlier') }), { ms: 2200 });
   };
   addEventListener('pointermove', mv);
   addEventListener('pointerup', up);

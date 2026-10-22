@@ -1609,10 +1609,6 @@
   },
   {
     "file": "src/overlays/drawer.js",
-    "text": "Overdue by"
-  },
-  {
-    "file": "src/overlays/drawer.js",
     "text": "Priority"
   },
   {
