@@ -198,7 +198,8 @@ const IDIOM = "? 's' : ''";
 const CONVERTED_FILES = ['src/overlays/drawer.js', 'src/overlays/modals.js', 'src/pages/auth.js', 'src/actions/drag-drop.js', 'src/actions/teams.js'];
 
 function readSrc(rel) {
-  return fs.readFileSync(path.join(SRC, rel.slice('src/'.length)), 'utf8');
+  const p = rel.startsWith('src/') ? rel.slice('src/'.length) : rel;
+  return fs.readFileSync(path.join(SRC, p), 'utf8');
 }
 
 test('no hand-written plural rule survives in the five converted files', () => {

@@ -325,10 +325,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Invite"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Invite for"
   },
   {
@@ -617,10 +613,6 @@
   },
   {
     "file": "src/actions/actions.js",
-    "text": "Updated"
-  },
-  {
-    "file": "src/actions/actions.js",
     "text": "Upgrade"
   },
   {
@@ -698,14 +690,6 @@
   {
     "file": "src/actions/actions.js",
     "text": "Your changes couldn't be saved."
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "couldn't be emailed. Copy the missing link"
-  },
-  {
-    "file": "src/actions/actions.js",
-    "text": "created, but email couldn't be sent. Copy the link"
   },
   {
     "file": "src/actions/archive.js",

@@ -231,7 +231,9 @@ test('the catalogue gained the three time labels and renamed no key', () => {
     'contract.englishOnly',
   ];
   for (const key of before) assert.ok(Object.hasOwn(en, key), `the key ${key} is still in the catalogue`);
-  assert.equal(Object.keys(en).length, before.length + 3);
+  /* Later plans keep growing the catalogue (06-06 adds the plural objects), so the
+     total is a floor, not an equality: the rename proof is the hasOwn loop above. */
+  assert.ok(Object.keys(en).length >= before.length + 3);
 });
 
 /* ---------- the declared English delta ---------- */

@@ -2,6 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
+import { t } from '../core/i18n.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
@@ -1015,14 +1016,14 @@ A.bulkSet = el => {
   let v = el.dataset.v || null;
   const ids = [...S.ui.sel];
   S.ui.pop = null;
-  if (mutate(() => ids.forEach(id => applyPatch(task(id), { [f]: v })))) toast(`Updated ${ids.length} task${ids.length > 1 ? 's' : ''}`);
+  if (mutate(() => ids.forEach(id => applyPatch(task(id), { [f]: v })))) toast(t('act.tasksUpdated', { n: ids.length }));
 };
 A.bulkDelete = () => {
   const ids = [...S.ui.sel];
   confirmDlg({
-    title: `Delete ${ids.length} task${ids.length > 1 ? 's' : ''}?`,
+    title: t('act.deleteTasksTitle', { n: ids.length }),
     body: 'The selected tasks, their subtasks, and comments will be permanently deleted.',
-    ok: `Delete ${ids.length} task${ids.length > 1 ? 's' : ''}`,
+    ok: t('act.deleteTasksConfirm', { n: ids.length }),
     danger: true,
     run: () => {
       const snap = snapshot();
@@ -1639,7 +1640,7 @@ A.submitInvite = () => {
       S.ui.modals.pop();
       S.ui.errors = {};
       render();
-      toast(`${list.length} invitation${list.length > 1 ? 's' : ''} sent`);
+      toast(t('act.invitationsSent', { n: list.length }));
     });
     return;
   }
@@ -1665,15 +1666,18 @@ A.submitInvite = () => {
     const sent = invites.filter(invite => invite.sent).length;
     const failed = invites.filter(invite => invite.email && !invite.sent).length;
     if (!api.mailEnabled) {
-      toast(`${count} invite link${count > 1 ? 's' : ''} created`);
+      toast(t('act.inviteLinksCreated', { n: count }));
     } else if (sent && !failed) {
-      toast(`${sent} invitation${sent > 1 ? 's' : ''} sent`);
+      toast(t('act.invitationsSent', { n: sent }));
     } else if (sent) {
-      toast(`${sent} sent, ${failed} couldn't be emailed. Copy the missing link${failed > 1 ? 's' : ''}.`, { kind: 'err' });
+      /* The count selects the plural member without being rendered, so the
+         vars travel as a hoisted object: the catalogue members of these two
+         messages carry no placeholder to interpolate. */
+      const nv = { n: failed };
+      toast(`${t('act.bulkInvite.summary', { sent: sent, failed: failed })} ${t('act.bulkInvite.copyLinks', nv)}`, { kind: 'err' });
     } else {
-      toast(`Invite${count > 1 ? 's' : ''} created, but email couldn't be sent. Copy the link${count > 1 ? 's' : ''}.`, {
-        kind: 'err',
-      });
+      const nv = { n: count };
+      toast(`${t('act.bulkInvite.created', nv)} ${t('act.bulkInvite.copyLink', nv)}`, { kind: 'err' });
     }
   });
 };
@@ -1803,7 +1807,7 @@ A.removeMember = el => {
   const n = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
   confirmDlg({
     title: `Remove ${m.name}?`,
-    body: `${esc(m.name)} will lose access to ${esc(D().ws.name)} immediately.${n ? ` Their <b>${n} open task${n > 1 ? 's' : ''}</b> will become unassigned.` : ''}`,
+    body: `${esc(m.name)} will lose access to ${esc(D().ws.name)} immediately.${n ? ` Their <b>${t('act.removeAccess.openTasks', { n: n })}</b> will become unassigned.` : ''}`,
     ok: 'Remove member',
     danger: true,
     icon: 'user-minus',
