@@ -39,10 +39,9 @@ export const addD = (d, n) => {
 };
 export const dOff = n => iso(addD(TODAY, n));
 export const diffD = (a, b) => Math.round((sod(a) - sod(b)) / DAY);
-export const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const MONL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-export const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-export const WDL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/* The four English month and weekday name arrays lived here; every call site now reads the
+   locale's own names through monthName() and weekdayName() (core/i18n.js), so no English month
+   or weekday name survives in the sources. */
 /* Set from preferences on every render (core/theme.js), so utils never depends on the store. */
 export let dateFormat = 'MMM d';
 export function setDateFormat(f) {
