@@ -1,6 +1,6 @@
 /* ---------- CALENDAR ---------- */
 import { TODAY, addD, diffD, esc, fmtDate, iso, parse, sod } from '../core/utils.js';
-import { monthName, weekdayName } from '../core/i18n.js';
+import { monthName, t as tk, weekdayName } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, pColor, proj } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
@@ -47,7 +47,7 @@ export function calendarHtml(ts, opt = {}) {
           const today = diffD(d, TODAY) === 0;
           return `<div class="cday ${d.getMonth() !== cur.getMonth() ? 'out' : ''} ${today ? 'today' : ''}" data-drop-day="${ds}">
           <span class="dn" ${today ? 'aria-current="date"' : ''}>${d.getDate()}</span>
-          <button class="ibtn ibtn-xs add" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="Add task on ${fmtDate(ds)}">${ic('plus', 13)}</button>
+          <button class="ibtn ibtn-xs add" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="${tk('a11y.addTaskOn', { date: fmtDate(ds) })}">${ic('plus', 13)}</button>
           ${items.slice(0, 3).map(chip).join('')}
           ${items.length > 3 ? `<button class="cmore" data-a="pop" data-pop="daylist" data-date="${ds}" data-key="${opt.key || ''}">+${items.length - 3} more</button>` : ''}
         </div>`;
@@ -62,7 +62,7 @@ export function calendarHtml(ts, opt = {}) {
         const ds = iso(d);
         const items = itemsOn(ds).sort((a, b) => (a.ev ? 0 : 1) - (b.ev ? 0 : 1));
         const today = diffD(d, TODAY) === 0;
-        return `<div class="wcol"><div class="wcol-h ${today ? 'today' : ''}"><span class="n">${d.getDate()}</span><span class="muted" style="font-size:12px">${weekdayName(d, 'short')}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="Add task">${ic('plus', 13)}</button></div>
+        return `<div class="wcol"><div class="wcol-h ${today ? 'today' : ''}"><span class="n">${d.getDate()}</span><span class="muted" style="font-size:12px">${weekdayName(d, 'short')}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newTask" data-due="${ds}" ${opt.project ? `data-project="${opt.project}"` : ''} aria-label="${tk('act.addTask')}">${ic('plus', 13)}</button></div>
         <div class="wcol-b" data-drop-day="${ds}">${
           items
             .map(it => {
@@ -74,7 +74,7 @@ export function calendarHtml(ts, opt = {}) {
               const p = proj(t.project);
               return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p.name)}</span>${av(t.assignee, 'sm', false)}</span></button>`;
             })
-            .join('') || '<span class="faint" style="font-size:12px;padding:4px">No tasks</span>'
+            .join('') || `<span class="faint" style="font-size:12px;padding:4px">${tk('page.states.noTasks')}</span>`
         }</div></div>`;
       })
       .join('')}</div>`;
@@ -82,8 +82,8 @@ export function calendarHtml(ts, opt = {}) {
   const projs = [...new Set(ts.map(t => t.project))].map(proj).filter(Boolean);
   return `<div class="cal" style="min-height:640px">
     <div class="toolbar" style="gap:8px">
-      <button class="btn btn-secondary btn-sm" data-a="calNav" data-d="0">Today</button>
-      <div class="row" style="gap:0"><button class="ibtn ibtn-sm" data-a="calNav" data-d="-1" aria-label="Previous">${ic('chevron-left', 16)}</button><button class="ibtn ibtn-sm" data-a="calNav" data-d="1" aria-label="Next">${ic('chevron-right', 16)}</button></div>
+      <button class="btn btn-secondary btn-sm" data-a="calNav" data-d="0">${tk('common.today')}</button>
+      <div class="row" style="gap:0"><button class="ibtn ibtn-sm" data-a="calNav" data-d="-1" aria-label="${tk('common.previous')}">${ic('chevron-left', 16)}</button><button class="ibtn ibtn-sm" data-a="calNav" data-d="1" aria-label="${tk('common.next')}">${ic('chevron-right', 16)}</button></div>
       <h2 style="font-size:15px;font-weight:600;margin:0 4px;letter-spacing:-.01em" aria-live="polite">${label}</h2>
       <span class="sp"></span>
       ${
@@ -95,8 +95,8 @@ export function calendarHtml(ts, opt = {}) {
           : ''
       }
       <div class="seg">${[
-        ['month', 'Month'],
-        ['week', 'Week'],
+        ['month', tk('page.calendar.month')],
+        ['week', tk('page.calendar.week')],
       ]
         .map(([k, n]) => `<button class="${mode === k ? 'on' : ''}" data-a="set" data-k="calMode" data-v="${k}">${n}</button>`)
         .join('')}</div>
@@ -107,6 +107,6 @@ export function calendarHtml(ts, opt = {}) {
 export function pageWsCalendar() {
   const key = 'cal';
   const v = viewOf(key);
-  return `<div class="page flush"><div class="ph"><div><h1>Calendar</h1><p>Deadlines and events across every project.</p></div><div class="acts"><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}New task</button></div></div>
+  return `<div class="page flush"><div class="ph"><div><h1>${tk('page.calendar.title')}</h1><p>${tk('page.calendar.subtitle')}</p></div><div class="acts"><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}${tk('act.newTask')}</button></div></div>
   ${viewToolbar(key, { group: false })}${calendarHtml(applyView(allTasks(), v), { key, events: true })}</div>`;
 }

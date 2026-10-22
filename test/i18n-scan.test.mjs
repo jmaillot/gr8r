@@ -276,7 +276,7 @@ test('the six view modules carry no user-visible literal and no allow-list entry
   );
 });
 
-test('the six view modules keep the earlier waves\' formatter and search wiring', () => {
+test("the six view modules keep the earlier waves' formatter and search wiring", () => {
   const cal = fs.readFileSync(path.join(REPO_ROOT, 'src/views/calendar.js'), 'utf8');
   assert.ok(cal.includes('weekdayName(') && cal.includes('monthName('), 'calendar.js lost its locale-driven names');
   const tl = fs.readFileSync(path.join(REPO_ROOT, 'src/views/timeline.js'), 'utf8');
