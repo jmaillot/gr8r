@@ -31,5 +31,68 @@
     "one": "{n} file",
     "other": "{n} files"
   },
+  "common.later": "later",
+  "common.earlier": "earlier",
+  "act.overdueBy": {
+    "one": "Overdue by {n} day.",
+    "other": "Overdue by {n} days."
+  },
+  "act.tasksUpdated": {
+    "one": "Updated {n} task",
+    "other": "Updated {n} tasks"
+  },
+  "act.deleteTasksTitle": {
+    "one": "Delete {n} task?",
+    "other": "Delete {n} tasks?"
+  },
+  "act.deleteTasksConfirm": {
+    "one": "Delete {n} task",
+    "other": "Delete {n} tasks"
+  },
+  "act.invitationsSent": {
+    "one": "{n} invitation sent",
+    "other": "{n} invitations sent"
+  },
+  "act.inviteLinksCreated": {
+    "one": "{n} invite link created",
+    "other": "{n} invite links created"
+  },
+  "act.removeAccess.openTasks": {
+    "one": "{n} open task",
+    "other": "{n} open tasks"
+  },
+  "act.teams.membersWithoutTeam": {
+    "one": "{n} member",
+    "other": "{n} members"
+  },
+  "act.teams.projectsWithoutTeam": {
+    "one": "{n} project",
+    "other": "{n} projects"
+  },
+  "modal.saveView.filters": {
+    "one": "{n} filter will be saved with this view.",
+    "other": "{n} filters will be saved with this view."
+  },
+  "page.auth.invitesSent": {
+    "one": "{n} invite sent",
+    "other": "{n} invites sent"
+  },
+  "act.movedByDays": {
+    "one": "Moved “{title}” {n} day {direction}",
+    "other": "Moved “{title}” {n} days {direction}"
+  },
+  "act.bulkInvite.created": {
+    "one": "Invite created, but email couldn't be sent.",
+    "other": "Invites created, but email couldn't be sent."
+  },
+  "act.bulkInvite.copyLink": {
+    "one": "Copy the link.",
+    "other": "Copy the links."
+  },
+  "act.bulkInvite.copyLinks": {
+    "one": "Copy the missing link.",
+    "other": "Copy the missing links."
+  },
+  "act.bulkInvite.summary": "{sent} sent, {failed} couldn't be emailed.",
   "contract.englishOnly": "English only"
 }

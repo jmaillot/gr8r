@@ -83,10 +83,18 @@ test('every plural value in the English catalogue is CLDR-shaped', () => {
 
 test('the French catalogue is still a strict subset of the English one', () => {
   /* D-02: fr.json is not touched in this phase — the French plural members
-     arrive in phase 7. Nothing here may drift off the English base. */
-  const extra = Object.keys(fr).filter(k => !Object.hasOwn(en, k));
+     arrive in phase 7. Nothing here may drift off the English base. The
+     contract.* namespace is the documented exception (the lint exempts it). */
+  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !Object.hasOwn(en, k));
   assert.deepEqual(extra, [], `every French key exists in English (${extra.join(', ')})`);
 });
+
+/* Three of the fifteen messages select their plural member from the count
+   WITHOUT rendering it — "Invite created" vs "Invites created" carries no
+   number in the text. The count still travels to t() as { n } and still
+   decides the category through Intl.PluralRules; the member text simply has
+   no placeholder to interpolate, so both members carry the empty set. */
+const SELECTION_ONLY = ['act.bulkInvite.created', 'act.bulkInvite.copyLink', 'act.bulkInvite.copyLinks'];
 
 test('the converted sites are catalogue plural objects carrying {n}', () => {
   const problems = [];
@@ -97,9 +105,16 @@ test('the converted sites are catalogue plural objects carrying {n}', () => {
       continue;
     }
     for (const member of ['one', 'other']) {
-      if (typeof value[member] !== 'string') problems.push(`${key}: no ${member} member`);
-      else if (!/\{n\}/.test(value[member])) problems.push(`${key}: the ${member} member carries no {n}`);
-      else if (/\{count\}/.test(value[member])) problems.push(`${key}: the ${member} member spells {count}`);
+      if (typeof value[member] !== 'string') {
+        problems.push(`${key}: no ${member} member`);
+        continue;
+      }
+      if (/\{count\}/.test(value[member])) problems.push(`${key}: the ${member} member spells {count}`);
+      if (SELECTION_ONLY.includes(key)) {
+        if (/\{\w+\}/.test(value[member])) problems.push(`${key}: the ${member} member carries a placeholder, but the count is never rendered`);
+      } else if (!/\{n\}/.test(value[member])) {
+        problems.push(`${key}: the ${member} member carries no {n}`);
+      }
     }
   }
   assert.deepEqual(problems, [], `every converted value is a {one, other} object with {n} (${problems.join('; ')})`);
@@ -145,7 +160,12 @@ test('t() renders the English oracle for every converted message, zero included'
   for (const [key, one, other] of ORACLE) {
     if (t(key, { n: 1 }) !== one) problems.push(`${key} at 1: ${JSON.stringify(t(key, { n: 1 }))} !== ${JSON.stringify(one)}`);
     if (t(key, { n: 2 }) !== other) problems.push(`${key} at 2: ${JSON.stringify(t(key, { n: 2 }))} !== ${JSON.stringify(other)}`);
-    if (t(key, { n: 0 }) !== other) problems.push(`${key} at 0: ${JSON.stringify(t(key, { n: 0 }))} !== ${JSON.stringify(other)} (English other covers zero)`);
+    /* English other covers zero: "0 tasks", never "0 task" — the rendering is
+       the other member with the count interpolated, never the one member. */
+    const zeroExpected = en[key].other.replace('{n}', '0');
+    if (t(key, { n: 0 }) !== zeroExpected) {
+      problems.push(`${key} at 0: ${JSON.stringify(t(key, { n: 0 }))} !== ${JSON.stringify(zeroExpected)} (English other covers zero)`);
+    }
   }
   assert.deepEqual(problems, [], `the English oracle holds (${problems.join('; ')})`);
 });
