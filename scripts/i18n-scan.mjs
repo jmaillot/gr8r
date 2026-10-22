@@ -536,6 +536,13 @@ function analyse(tokens) {
         const key = keyTokens.length ? keyTokens[keyTokens.length - 1] : null;
         const propName = key && key.type === 'ident' ? key.value : null;
         const propIsKey = !!key && key.type === 'str';
+        /* The KEY tokens carry the object context too: a quoted key is a
+           machine identifier ('Every 2 weeks' in RECUR_DAYS) and must not be
+           read as display text. Its propName is null — only propIsKey is
+           meaningful on the key side. */
+        for (let k = gs; k < sep; k++) {
+          if (ctx[k].frame === frame) ctx[k].object = { propName: null, propIsKey };
+        }
         for (let k = sep + 1; k < ge; k++) {
           if (ctx[k].frame === frame) ctx[k].object = { propName, propIsKey };
         }
