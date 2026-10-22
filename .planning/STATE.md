@@ -1,10 +1,12 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.1
-status: complete
+status: Awaiting next milestone
 stopped_at: Phase 04 complete — all phases complete
-last_updated: "2026-10-21T21:00:06.458Z"
-state_head: 29447a63a0eb4e63d031362f66713d7ad4b29f61
+last_updated: "2026-10-22T08:18:10.965Z"
+last_activity: 2026-10-22
+last_activity_desc: Milestone v1.1 completed and archived
+state_head: cf8e1a0e053b53694aa6a489e2f0325058bd5564
 progress:
   total_phases: 4
   completed_phases: 4
@@ -15,13 +17,16 @@ progress:
 
 # STATE
 
-Last updated: 2026-10-21
+Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **Multitenant (v1.1)** — complete
-- Phase: **4 — Hardening and ship: complete** (plan 4 of 4 complete)
-- Next: **`/gsd-ship`** — open the PR for milestone v1.1
+- Milestone: **Multitenant (v1.1)** — shipped and archived
+- Phase: **4 — Hardening and ship: complete** (4/4 phases, 7/7 plans, 10 tasks)
+- Next: **`/gsd-new-milestone`** — start the next milestone
+- Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
+  `v1.1-phases/`
+- Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
 
 ## Where things stand
 
@@ -96,6 +101,34 @@ Known limitations carried forward:
 - Plans remain display-only labels; nothing is billed or limited.
 - Invite email delivery still requires `SMTP_HOST`; links are copied by hand otherwise.
 - File contents are metadata only; no binary upload backend.
+- The browser URL is write-only: `go()` never updates the address bar and nothing handles
+  `popstate`, so back/forward and a reload lose the current page.
+- The recent-search redaction is substring-based, and a free-text mention of a hidden project's
+  name on a visible row is still served to a non-member.
+
+## Milestone audit (2026-10-22)
+
+The audit of milestone v1.1 (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) rated the milestone
+**tech_debt**: 8/8 requirements satisfied, 4/4 phases verified, no blockers left. It found three
+defects in one family — the workspace revision moved without the client being able to follow it —
+and all three are fixed and released in 1.1.1:
+
+1. **B-1** — a role change, a member removal and a plan change edited the document and moved the
+   revision without reporting it. The endpoints now report it and the client adopts it.
+2. **W-01** — accepting an invite wrote the document from another account's session, so the
+   inviter's open session was left with a stale revision. A join now writes only the membership
+   row, and the roster is repaired when the document is read.
+3. **Restart variant** — the boot-time repair of the document moved the revision once. It is
+   server-owned state and no longer moves the revision.
+
+Each fix has a regression guard that fails without it: `test/membership.test.mjs`,
+`test/revision.test.mjs`, `test/invite-revision.test.mjs` and two Chromium tests. The suite is now
+50 `node:test` cases and 6 Chromium tests; CI run 39746021129 is green on the fix commit.
+
+The remaining audit findings (dead routes, orphaned exports, the missing `sameOrigin` on invite
+accept, the guest-profile spoof, the admin link-only invite, the `firstWorkspace()` fallback and
+the UI flows that are still unproven by a test) are tracked in the audit's tech-debt section and
+in `PROJECT.md` under **Requirements → Active**.
 
 ## Decisions
 
@@ -141,6 +174,17 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-21T19:42:00.000Z
-**Stopped at:** Phase 04 complete — all phases complete
+**Last session:** 2026-10-22T08:30:00.000Z
+**Stopped at:** Milestone v1.1 shipped, audited and archived
 **Resume file:** None
+
+## Current Position
+
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-22 — Milestone v1.1 completed and archived
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

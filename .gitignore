@@ -15,3 +15,4 @@ blob-report/
 # GSD runtime state (dispatch sentinel, milestone lock) is machine-local
 .gsd/
 .planning/milestone.lock
+.planning/state.json

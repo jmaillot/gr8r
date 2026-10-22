@@ -1,63 +1,24 @@
-# Roadmap — Multitenant (v1.1)
+# Roadmap — Gr8r Studio
 
-Goal: turn the single-workspace install into a real multi-tenant app where a workspace is the
-tenant boundary, an account can belong to several workspaces, and isolation is enforced by the
-server.
+## Milestones
 
-Requirements:
+- ✅ **v1.1 Multitenant** — Phases 1-4 (shipped 2026-10-22) — [archive](milestones/v1.1-ROADMAP.md) ·
+  [requirements](milestones/v1.1-REQUIREMENTS.md) · [audit](milestones/v1.1-MILESTONE-AUDIT.md)
 
-- **R1** — A workspace is a row in `workspaces` with a unique slug and its own document.
-- **R2** — An account can hold several memberships with a role per workspace.
-- **R3** — `/w/:slug` addresses a workspace; all share/invite links are workspace-scoped.
-- **R4** — Every API call is authorised against the caller's membership of that workspace.
-- **R5** — Private projects are never sent to non-members and cannot be modified by them.
-- **R6** — Existing installs migrate in place, without data loss, with a pre-migration backup.
-- **R7** — Creation is flag-driven (`ALLOW_SIGNUP`), invitations are workspace-scoped, and an
-  existing account can accept an invite.
-- **R8** — Lint, format, build and the new server tests pass in CI.
+## Phases
 
-## Phase 1: Tenancy foundation ✅ complete
+<details>
+<summary>✅ v1.1 Multitenant (Phases 1-4) — SHIPPED 2026-10-22</summary>
 
-Schema migration, workspace-scoped document API, `/w/:slug` routing, real workspace switcher,
-minimal workspace creation. No private-project redaction yet.
+- [x] Phase 1: Tenancy foundation (1/1 plans) — completed 2026-10-21
+- [x] Phase 2: Membership lifecycle (1/1 plans) — completed 2026-10-21
+- [x] Phase 3: Private project isolation (1/1 plans) — completed 2026-10-21
+- [x] Phase 4: Hardening and ship (4/4 plans) — completed 2026-10-22
 
-Deliverable: two accounts in two workspaces never receive each other's document. — met, see
-`phases/01-tenancy-foundation/SUMMARY.md` for the record and deviations.
+</details>
 
-## Phase 2: Membership lifecycle ✅ complete
+## Next
 
-Workspace-scoped invites (including for existing accounts), role changes, member removal and
-self-leave, workspace rename/slug/colour, delete/leave, owner-only plan change. UI for all of it.
-
-Deliverable: the membership table is the single source of truth for access; the members page
-works through dedicated endpoints instead of rewriting the document. — met, see
-`phases/02-membership-lifecycle/SUMMARY.md` for the record and deviations.
-
-## Phase 3: Private project isolation ✅ complete
-
-Server-side redaction on read and merge on write, protection of `private`/`members` changes,
-saved views and activity filtered consistently.
-
-Deliverable: a member who is not on a private project receives no trace of it, and cannot
-write to it (directly or by clobbering the document). — met, see
-`phases/03-private-project-isolation/SUMMARY.md` for the record and deviations.
-
-## Phase 4: Hardening and ship ✅ complete
-
-`node:test` suite, CI wiring, migration dry-run on a copy, Playwright two-tenant UAT, docs
-(`README`, `DEPLOY`, `.env.example`), removal of the demo workspace switch, release notes.
-
-Deliverable: mergeable, documented, tested, deployable. — met, see
-`phases/04-hardening-and-ship/04-04-SUMMARY.md` for the release record.
-
-**Plans:** 4/4 plans complete — 4 complete
-
-- [x] `04-01-PLAN.md` — shared `node:test` server harness, tenancy/membership/privacy suites,
-  `npm test` (R1, R2, R4, R5, R7, R8) — done, see
-  `phases/04-hardening-and-ship/04-01-SUMMARY.md`
-- [x] `04-02-PLAN.md` — pre-tenancy SQLite fixture, migration backup and idempotency test
-  (R6, R8) — done, see `phases/04-hardening-and-ship/04-02-SUMMARY.md`
-- [x] `04-03-PLAN.md` — Playwright Chromium two-tenant and private-project UAT, CI wiring
-  (R3, R4, R5, R8) — done, see `phases/04-hardening-and-ship/04-03-SUMMARY.md`
-- [x] `04-04-PLAN.md` — demo single-workspace cleanup, release docs, 1.1.0, Node 24 (R7, R8) —
-  done, see `phases/04-hardening-and-ship/04-04-SUMMARY.md`
+No milestone is open. `/gsd-new-milestone` starts the next one; the candidate goals are listed
+in [PROJECT.md](PROJECT.md) under **Requirements → Active** — the membership-surface hardening,
+the browser URL, the recent-search leak and the UI flows that are still unproven by a test.
