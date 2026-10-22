@@ -114,3 +114,43 @@ test('a plural value with no count is a string, never an object', () => {
   assert.equal(t('task.count'), '{n} task');
   assert.equal(typeof t('task.count'), 'string');
 });
+
+/* ---------- the locale switch ---------- */
+
+test('the locale is the base locale before any switch', () => {
+  assert.equal(getLocale(), 'en');
+});
+
+test('the locale switch announces itself with a gr8r:locale event', async t => {
+  const events = [];
+  globalThis.document = { dispatchEvent: e => events.push(e) };
+  t.after(() => {
+    delete globalThis.document;
+  });
+  registerCatalogue('fr', fr);
+  try {
+    await setLocale('fr');
+    assert.equal(events.length, 1, 'the switch announces itself exactly once');
+    assert.equal(events[0].type, 'gr8r:locale');
+    assert.equal(events[0].detail.code, 'fr');
+    assert.equal(getLocale(), 'fr', 'the singleton answers the new code immediately');
+    assert.equal(t('nav.projects'), 'Projets', 'the active catalogue is consulted');
+    assert.equal(t('contract.frenchOnly'), 'Français seulement', 'the key that exists only in French resolves');
+    assert.equal(t('contract.englishOnly'), 'English only', 'a key absent from the active catalogue falls back to English');
+  } finally {
+    await setLocale('en');
+  }
+});
+
+test('an unknown locale code resolves to the base locale and still announces the change', async t => {
+  const events = [];
+  globalThis.document = { dispatchEvent: e => events.push(e) };
+  t.after(() => {
+    delete globalThis.document;
+  });
+  await setLocale('zz');
+  assert.equal(getLocale(), 'en', 'an unknown code resolves to the base locale');
+  assert.equal(events.length, 1, 'the change is announced');
+  assert.equal(events[0].type, 'gr8r:locale');
+  assert.equal(events[0].detail.code, 'en');
+});
