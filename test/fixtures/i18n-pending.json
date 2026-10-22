@@ -1,0 +1,6806 @@
+[
+  {
+    "file": "src/actions/actions.js",
+    "text": "(copy)"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": ", files, and comments for everyone. This can't be undone."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": ", prorated from today and billed to Visa ending 4242."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Access requested. We'll notify you when"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Account created, but the workspace could not be loaded."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Added"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Added to favorites"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "All projects, tasks, and settings in this browser go back to the original sample workspace."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Archive"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Archive Marketing Website?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Archive project"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Archived"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Archived “"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Ask a workspace administrator to create one for you"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Back online"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Change URL"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Change the workspace URL?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Changes saved"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Comment deleted"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Completed “"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Copied to clipboard"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Copy isn't available here —"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not change that role"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not change the plan"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not create a new invite"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not create an invite link"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not create the account"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not create the invites"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not create the workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not delete this workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not join the workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not leave this workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not remove that member"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not revoke that invite"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not save the workspace color"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not save workspace settings"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not send the invites"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not sign in"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Could not switch workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Created"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Created during setup from the"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Dark mode on"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete file"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete file?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete project"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete task"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete task?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Delete workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Deleted"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Deleted view “"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Deleted “"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Deleting a workspace is not available yet."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Demo data can only be reset in local demo mode."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Demo data restored"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Downgrade"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Duplicated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Email copied"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Email failed — new invite link copied"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter a valid email address"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter a valid email address, like name@company.com"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter a valid email, like name@company.com"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter a valid work email"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter at least one email address"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter the 6-digit code from your app"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter the email you use to sign in"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter your current password"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter your email address"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter your name"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Enter your password"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Every 2 weeks"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Every member moves to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Every project, task, file, and comment in this workspace will be permanently deleted for all members."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Everyone at"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "File duplicated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "File name"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Give the project a name"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Give the task a name"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Give your project a name"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Guest"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Invitation sent to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Invite"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Invite for"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Invite link copied"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Invite resent to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Invite them to the workspace first, then add them to this project"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Leave"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Leave workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Light mode on"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Link copied"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Loaded"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Loaded successfully"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Marked"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Member"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Moved"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Moved “Create homepage wireframes” to Review"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Name your workspace to continue"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "New invite link copied"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "No description yet."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "No workspace to open"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Notification preferences saved"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Offline mode on — edits will fail to save"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Only people invited can open this project"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Only the project lead, an admin or the owner can change access"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Open"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "PRJ"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Password updated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Passwords don't match"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Preference saved"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Profile updated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Project updated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Promote someone else before removing the last member"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Reconnected. All changes are synced."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Remove"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Remove member"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Removed"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Removed from favorites"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Rename file"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Rename view"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Reply posted"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Reset data"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Reset demo data?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Reset link sent to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Restored"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Retrying…"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Saved"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Saved view “"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Session signed out"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Shared with"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Sign out of all other sessions?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Sign out others"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Sign-ups are disabled. Ask a workspace admin for an account."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Signed in, but the invite could not be accepted."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Signed in, but the workspace could not be loaded."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Signed out of other sessions"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Social sign-in is not configured on this server."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Switched to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Task duplicated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "The local demo has a single workspace."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "The project will be hidden from the sidebar and project lists. Tasks, files, and comments are kept, and you can restore it from Settings → Projects."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "The project will be hidden from the sidebar. You can restore it any time."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "The selected tasks, their subtasks, and comments will be permanently deleted."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Their"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "This permanently deletes the project and its"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "This was a preview — nothing was archived"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Try again"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Turn off"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Turn off two-factor authentication?"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Two-factor authentication enabled"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Two-factor authentication turned off"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Undo"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Undone"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Untitled"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Untitled view"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Updated"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Upgrade"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Upgrade to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Upload failed — you're offline."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Uploaded"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Use at least 10 characters, including a number or symbol"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Verification email sent to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "View name"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Welcome to"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Workspace"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Workspace created, but it could not be loaded"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Workspace deleted. Demo data was restored for this prototype."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Workspace name can't be empty"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Workspace settings saved"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "You don't have access to that task"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "You left"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "You'll stay signed in on this device. Other devices will need to sign in again."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "You're all caught up."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "You're now on the"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Your account will be protected by your password only."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "Your changes couldn't be saved."
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "couldn't be emailed. Copy the missing link"
+  },
+  {
+    "file": "src/actions/actions.js",
+    "text": "created, but email couldn't be sent. Copy the link"
+  },
+  {
+    "file": "src/actions/archive.js",
+    "text": ", its subtasks, comments, and attachments will be deleted for everyone. This can't be undone."
+  },
+  {
+    "file": "src/actions/archive.js",
+    "text": "Delete permanently"
+  },
+  {
+    "file": "src/actions/archive.js",
+    "text": "Delete task permanently?"
+  },
+  {
+    "file": "src/actions/archive.js",
+    "text": "Deleted “"
+  },
+  {
+    "file": "src/actions/archive.js",
+    "text": "Open"
+  },
+  {
+    "file": "src/actions/archive.js",
+    "text": "Restored “"
+  },
+  {
+    "file": "src/actions/drag-drop.js",
+    "text": "Moved “"
+  },
+  {
+    "file": "src/actions/drag-drop.js",
+    "text": "Rescheduled “"
+  },
+  {
+    "file": "src/actions/drag-drop.js",
+    "text": "Sorted manually to keep your order"
+  },
+  {
+    "file": "src/actions/subtasks.js",
+    "text": "Converted to"
+  },
+  {
+    "file": "src/actions/subtasks.js",
+    "text": "Open"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Created"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Delete team"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Deleted"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Give the team a name"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "No description yet."
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Saved"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "The team has no members"
+  },
+  {
+    "file": "src/actions/teams.js",
+    "text": "Undo"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Add"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Add a task to get things moving."
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Add task"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Add task to"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Bulk actions"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Clear selection"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Complete"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Complete subtask"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Hide"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Labels"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Mark"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "More actions"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "New task name"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "No tasks here"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Priority"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Repeats"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Select"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Select all"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Set date"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Show"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Someone"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Status:"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Task"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Task name — press Enter to add, Esc to cancel"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Task title"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Toggle group"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "Unassigned"
+  },
+  {
+    "file": "src/components/task-list.js",
+    "text": "You"
+  },
+  {
+    "file": "src/core/api.js",
+    "text": "Could not reach the server"
+  },
+  {
+    "file": "src/core/api.js",
+    "text": "No workspace loaded"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "At Risk"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Backend"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Backlog"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Bug"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Campaigns, content, and growth"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Completed"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Content"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Design"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Done"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Engineering"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Frontend"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Growth"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "High"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "In Progress"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Low"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Marketing"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Medium"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "No priority"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "On Hold"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Planning"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Product"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Product design, brand, and research"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "QA"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Research"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Review"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Roadmap, planning, and QA"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "To Do"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Urgent"
+  },
+  {
+    "file": "src/core/constants.js",
+    "text": "Web, mobile, and platform engineering"
+  },
+  {
+    "file": "src/core/icons.js",
+    "text": "Gr8r"
+  },
+  {
+    "file": "src/core/store.js",
+    "text": "Admin"
+  },
+  {
+    "file": "src/core/store.js",
+    "text": "Guest"
+  },
+  {
+    "file": "src/core/store.js",
+    "text": "Member"
+  },
+  {
+    "file": "src/core/store.js",
+    "text": "No team"
+  },
+  {
+    "file": "src/core/store.js",
+    "text": "Owner"
+  },
+  {
+    "file": "src/core/store.js",
+    "text": "Workspace"
+  },
+  {
+    "file": "src/core/utils.js",
+    "text": "Ctrl"
+  },
+  {
+    "file": "src/core/utils.js",
+    "text": "Earlier"
+  },
+  {
+    "file": "src/core/utils.js",
+    "text": "This week"
+  },
+  {
+    "file": "src/core/utils.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/core/utils.js",
+    "text": "Tomorrow"
+  },
+  {
+    "file": "src/core/utils.js",
+    "text": "Yesterday"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Archive"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Archive finished or abandoned tasks to keep boards focused. They wait here until you restore them."
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Archived"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Archived projects disappear from the sidebar and project lists but keep every task, file, and comment."
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Archived work is hidden everywhere else. Restore it any time, or delete it for good."
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Delete permanently"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "No archived projects"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "No archived tasks"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Restore"
+  },
+  {
+    "file": "src/features/archive.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Add details, links, or acceptance criteria…"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Convert to task"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Done"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Mark subtask done"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Mark subtask not done"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Next"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Next subtask"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Notes"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Open"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Parent"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Previous"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Previous subtask"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Set date"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Subtask"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Subtask title"
+  },
+  {
+    "file": "src/features/subtasks.js",
+    "text": "Unassigned"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Cancel"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Color"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Create team"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Delete team"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Edit team"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Everyone belongs to one primary team. Adding someone here moves them from their current team."
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Icon"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "New team"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Save changes"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Team name"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "Teams group the people who work on projects together."
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "What does this team own?"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "e.g. Acquisition experiments and lifecycle email"
+  },
+  {
+    "file": "src/features/teams.js",
+    "text": "e.g. Growth"
+  },
+  {
+    "file": "src/main.js",
+    "text": "Could not load this workspace. Check the server logs."
+  },
+  {
+    "file": "src/main.js",
+    "text": "Couldn't save to the server — changes are still in this browser."
+  },
+  {
+    "file": "src/main.js",
+    "text": "Reload"
+  },
+  {
+    "file": "src/main.js",
+    "text": "Retry"
+  },
+  {
+    "file": "src/main.js",
+    "text": "This invite link is not valid."
+  },
+  {
+    "file": "src/main.js",
+    "text": "This workspace changed in another session. Reload to see the latest version."
+  },
+  {
+    "file": "src/main.js",
+    "text": "Your account has read-only access."
+  },
+  {
+    "file": "src/main.js",
+    "text": "Your session expired. Sign in again."
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Add task"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Add to favorites"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Archive"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Archive completed"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Archive project"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Assign a task"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Assign to…"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Change role…"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Collapse column"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Copy email"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Copy link"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Del"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Delete project"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Delete view"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Duplicate"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Edit"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Mark all as done"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Mark complete"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Move down in sidebar"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Move to project…"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Move up in sidebar"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Open"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Preview"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Priority…"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Remove from favorites"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Remove from workspace"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Rename"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Rename & edit"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Rename view"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Reopen"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Resend invite"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Share"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Sort by priority"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "Status…"
+  },
+  {
+    "file": "src/overlays/context-menu.js",
+    "text": "View profile"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "+Enter"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Activity"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Add estimate"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Add labels"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Add reaction"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Add subtask"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Attach file"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Attachments"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Blocked by"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Bold"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Bulleted list"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Close"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Close  Esc"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Comment"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Complete"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Completed"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Copy link"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Delete comment"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Description"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Does not repeat"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Drop files or click to attach"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Estimate"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Favorite"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "File"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Formatting"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Full page"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Heading"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Italic"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Labels"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Leave a comment… type @ to mention"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Link"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Mark complete"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Mention"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Mention someone"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "More"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "No comments yet. Start the conversation."
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "None"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Numbered list"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Open subtask details"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Overdue by"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Priority"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Remove attachment"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Reopen"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Reopen task"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Repeat"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Reschedule"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Set date"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Side panel"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Start date"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Subtasks"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Task created"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Task title"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Toggle full page"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Unfavorite"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "Upload"
+  },
+  {
+    "file": "src/overlays/drawer.js",
+    "text": "You"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Add a description… (optional)"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Add a subtask and press Enter"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Add people by name or email"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Anyone in the workspace can view and comment."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Attach files"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Attached to"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Attachments"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Audience research"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Beta launch"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Blank project"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Brain dump ideas"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Brief, assets, channels"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Build MVP"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Build page templates"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Campaign brief"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Cancel"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Channel plan"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Close"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Close panel or dialog"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Code review"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Color"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Command menu"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Concept directions"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Content migration"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Copy"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Copy invite link"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Copy link"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Create"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Create a link for each person, then send it yourself. Links expire automatically."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Create links"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Create more"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Create project"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Create task"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Creative assets"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Define problem statement"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Deploy to staging"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Description"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Design Project"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Design exploration"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Developer handoff"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Discovery to handoff"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Discovery to launch"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Discovery workshop"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Done"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Due"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Each address has its own single-use link."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Edit task"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Email addresses"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Emails sent. Copy a link as a backup if you need it."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Esc"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Everyone at"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "General"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "General access"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Go to Calendar"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Go to Home"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Go to Inbox"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Go to My Tasks"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Go to Projects"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Go to Settings"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Guests"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "IA, design, build, launch"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Icon"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Implement core API"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Invite"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Invite by email"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Invite link"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Invite links"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Invite to"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Invited people get an email with a link to join."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Keyboard shortcuts"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Labels"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Launch campaign"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Layout"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Lead"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "List"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Marketing Campaign"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Moodboard"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Move selection"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Navigate"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "New project"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "No filters are active — the view will show all tasks. You can add filters after saving."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "No matching members — enter an email to invite someone new"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Not sent"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Only people invited"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Only people listed above can open this project."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Only the project lead, an admin or the owner can change this."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Only the project lead, an admin or the owner can change who has access."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "People with access"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Performance report"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Permission"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Permission for"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Personal Project"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Pick top 3 priorities"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Plan your own goals"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Press Invite to send an invitation to"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Priority"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Product Development"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Project name"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Project not found"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Project settings"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Projects hold tasks, files, and conversations for one body of work."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "QA & launch"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Refinement"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Remove"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Remove access"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Repeat"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Role"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Run command"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Save"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Save changes"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Save the current filters as a tab on this project."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Save view"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Schedule focus time"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Search"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Search mode"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Send comment"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Send invites"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Sent"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Separate multiple addresses with commas."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Set up repo & CI"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Share “"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Shift"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Sitemap & information architecture"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Software Development"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Some emails could not be sent. Copy those links and send them yourself."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Spec, build, ship"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Start date"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Start from scratch"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Starts"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Submit form"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Subtasks"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Tab"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Target date"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Task name"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Technical spec"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Template"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "This link works until it expires."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Toggle dark mode"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Toggle sidebar"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Type"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "User research plan"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "View name"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Visual design"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "We'll email each person a private, single-use link. Links expire automatically."
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Website"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Weekly review"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "What is this project about?"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Wireframes"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Write PRD"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "Write tests"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "e.g. Design review queue"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "e.g. Website Redesign"
+  },
+  {
+    "file": "src/overlays/modals.js",
+    "text": "· Uploaded by"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "All"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Appearance settings"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Command menu"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Commands"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Comments"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Create project"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Create task"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Esc"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Files"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Files in"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Find a workspace…"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "G C"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "G H"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "G I"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "G P"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "G S"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "G T"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to Calendar"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to Home"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to Inbox"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to Members"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to My Tasks"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to Projects"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Go to Timeline"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "High priority in"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Invite member"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Keyboard shortcuts"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Navigation"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Open settings"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Overdue tasks"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "People"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Recent searches"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Recent tasks"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Search"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Search tasks, projects, people, files, comments…"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Search workspace"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Sign out"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Suggested"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Suggestions"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Switch to dark mode"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Switch to light mode"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Switch workspace"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Switch workspace…"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Tab"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Tasks assigned to me"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Toggle sidebar"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Try a different keyword, or press Tab to search everything."
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Type a command or search…"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "View all results for “"
+  },
+  {
+    "file": "src/overlays/palette.js",
+    "text": "Workspace"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Account settings"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Add filter:"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Ascending"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Assign subtask to…"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Assign to…"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Blocked by…"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Clear"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Clear all"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Clear estimate"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Command menu"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Create"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Create projects and work on tasks"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Create workspace"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Created"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Daily"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Dark"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Descending"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Design system"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Does not repeat"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Every 2 weeks"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Field"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Filter by"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Filter labels…"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Full control, including the plan and deleting the workspace"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Go back online"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Group by"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Help & resources"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "In 2 weeks"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Invite member"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Invite members"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Keyboard shortcuts"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Last updated"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Light"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Manage members, settings, and all projects"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Manual"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Monthly"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Move to project…"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Next month"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Next week"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "No filters applied. Combine filters to narrow the task list, e.g. Status is In Progress and Assignee is Sarah."
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "No grouping"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "No matches"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Only sees projects they are invited to"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Open a broken link"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Open project"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Operator"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Previous month"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Priority"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Prototype"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "React"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Remove filter"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Replay onboarding"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Reset demo data"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Reset widths"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Role for"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Select…"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Sign out"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Simulate offline"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Sort by"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Start date"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "System"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "System states"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Task"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Theme"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Title"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Tomorrow"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Unassigned"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "View profile"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Visible columns"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Weekly"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Where"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Workspace settings"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Workspaces"
+  },
+  {
+    "file": "src/overlays/popovers.js",
+    "text": "Your local demo workspace"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Activity"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "All"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Changes to tasks and projects will appear here."
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Comments"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Everyone"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Everything that's changed across the workspace."
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Filter by person"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "No activity yet"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/activity.js",
+    "text": "Status changes"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": ". Click it to activate your account."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": ". It expires in 30 minutes."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "A workspace is where your team's projects live."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Accounts are created by your workspace admin."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Already have an account?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Ask an administrator of an existing workspace for an invitation. Once you accept it, the workspace will show up here."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "At least 10 characters with a number or symbol."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Back"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Back to sign in"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Boards"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "By creating an account you agree to the Terms and Privacy Policy."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Campaigns & content"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Change it"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Check your email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Checklists and priorities"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Choose a new password"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Confirm password"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Continue"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Continue with Apple"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Continue with Google"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Continue with Microsoft"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Copy invite link instead"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Create account"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Create account & join"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Create your account"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Create your account to get access to this workspace."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Create your first project"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Create your workspace"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Design"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Didn't get it?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Don't have an account?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Engineering"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Enter your account email and we'll send you a reset link."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Exit setup"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Forgot password?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Free for up to 3 members. No credit card required."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Full name"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Go to sign in"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Goals & side projects"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Gr8r works best with your teammates."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Here's what we set up for you."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Hide"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "How does your team work?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "I've verified my email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "In this prototype, the button above stands in for the link in your email."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Invite people any time from the sidebar"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Invite unavailable"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Invite your team"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Invited with the wrong address? Ask an administrator of"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Join"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Just me"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Lists"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Log in"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Marketing"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Move cards through stages"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "My Workspace"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "New password"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "No invites yet"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Open reset link"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Open workspace"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Other"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Password"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Password updated"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Personal"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Plan with dates & dependencies"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Product"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Project name"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Remember me for 30 days"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Resend email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Resend email in"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Reset password"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Reset your password"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Reviews & handoff"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Roadmaps & launches"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Send invites"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Send reset link"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Show"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Sign in"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Sign in and join"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Sign in to"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Sign out"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Sign up"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Signed in as"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Skip for now"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Something else"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Spreadsheet-style tracking"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Sprints & releases"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Start from a template or a blank project."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Step"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Tables"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Tanjim Islam"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Team size"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Teammate email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "They'll appear in Members once they join"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "They'll get an email invite."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "This address"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "This invite is for this address."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Timelines"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Toggle theme"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Verify your email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Waiting for verification…"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "We sent a reset link to"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "We sent a verification link to"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "We'll set your default project view."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "We'll tailor templates and views to fit. You can change this later."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Welcome back"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "What are you working on?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Work email"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Workspace URL"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Workspace name"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Wrong email?"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "You can create or join a workspace next."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "You can now sign in with your new password."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "You'll get a link to share."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "You're not in a workspace yet"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Your name"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Your workspace is ready"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "Your workspace will live at"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "already has a Gr8r account. Sign in with it to join this workspace."
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "e.g. Gr8r Studio"
+  },
+  {
+    "file": "src/pages/auth.js",
+    "text": "© 2026 Gr8r Studio · Terms · Privacy"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Accent"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Active"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Add a description…"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Add a task to get things moving."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Add task"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Add…"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Always paired with text or a tooltip"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Archive project"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Avatar"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Background"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Badge"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Board column"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Body"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Bold"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Border"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Border strong"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Buttons"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Buttons & page"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Cards"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Check your connection. We'll sync your changes when you're back."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Checkbox · Radio · Toggle"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Clear search"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Click to load"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Color"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Command menu"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Confirmation"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Confirmation dialogs"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Create project"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Create task"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Create your first project to start organizing your work."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Customer Portal is private. Request access from Marcus Lee."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Data display"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Date"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Default"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Delete project"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Delete task"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Design system"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Disabled"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Drawer"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Email"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Empty states"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Empty, loading, error, and confirmation states used throughout Gr8r."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Enter a valid email address"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Enter a valid email, like name@company.com"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Error"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Error states"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Error toast"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Failed to load"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Failed to save"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Feedback"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Filter"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Focus"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Form validation"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Geist · Geist Mono"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Go back online"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Gr8r Studio"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Grid"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Heads up."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Home"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Hover"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Iconography"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "In Progress"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Inbox (active)"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Inputs"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Invited"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Label"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Large"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "List / table rows"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Loading"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Loading project…"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Loading states"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Low-fidelity wireframes for the new homepage."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Lucide · 1.8px stroke · 12–18px"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Medium"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Metadata"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Modal"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "My Tasks (hover)"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Navigation"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Network error"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "New mentions and assignments will show up here."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No notifications"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No projects"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No projects yet"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No search results"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No tasks"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "No tasks here"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Nothing matches “brand guidlines”. Check the spelling or try a broader term."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Open example"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Overview"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Page not found"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Page title"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Permission denied"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Primary · Secondary · Ghost · Destructive · Icon"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Progress"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Project archived."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Remove member"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Replay page skeleton"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Review"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Rich text"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Saving"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Search"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Search tasks"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Secondary"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Section title"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Select"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Semantic tokens, redefined per theme"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Share"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Show as toast"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Sidebar"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Simulate offline"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Sizes:"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Small"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Something went wrong."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Spacing, radius, elevation"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Status & priority"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Subsection"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Subtasks"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Success"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Surface"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Surface 2"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Surface 3"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "System states"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Task name"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Text"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Text 2"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Text 3"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Textarea"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "The page was moved, deleted, or never existed."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "The server didn't respond in time."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "These open the real dialogs. Confirming performs the action on demo data; use Help → Reset demo data to restore."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "This view failed to load. Your data is safe."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Time"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Timeline dependencies are shown as dashed when out of order."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Toast"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Tokens and components that make up Gr8r. Switch themes to see both palettes."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Tooltip"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Tooltips pair with icon buttons"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Triggers"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Try again"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Typography"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Undo"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Upcoming deadlines"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Updated 38 minutes ago"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "WEB-109 · Due tomorrow"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "WORKSPACE"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Warning"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Website Redesign"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "You don't have access"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "You're all caught up."
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "You're offline"
+  },
+  {
+    "file": "src/pages/design-system.js",
+    "text": "Your changes couldn't be saved."
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Ask"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Back to projects"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "ERROR 403"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "ERROR 404"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Go back"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Go to Home"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Page not found"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Request access"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Something went wrong."
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "The page you're looking for was moved, deleted, or never existed. Check the link or head back home."
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "This page failed to load. Your data is safe — try again in a moment."
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "Try again"
+  },
+  {
+    "file": "src/pages/errors.js",
+    "text": "You don't have access"
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Browse projects"
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Favorites"
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "No favorite projects."
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "No favorites yet"
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Open a task and click the star to add it here."
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Projects and tasks you've starred for quick access."
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Star a project or task to pin it here."
+  },
+  {
+    "file": "src/pages/favorites.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Active projects"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Add a task to get things moving."
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "All projects"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Completed"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Due"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Every task assigned to you is on schedule."
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Good afternoon"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Good evening"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Good morning"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Invite member"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "My tasks"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "New project"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "No tasks here"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Nothing due"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Nothing overdue"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Open My Tasks"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Open tasks"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Overdue"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Progress"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Project progress"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Recent activity"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "This week"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Tomorrow"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Upcoming"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "Upcoming deadlines"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "View all"
+  },
+  {
+    "file": "src/pages/home.js",
+    "text": "· Here's what's happening across your workspace."
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "+Enter to send"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "All"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Assignments"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Back"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Comments"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Conversation"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Mark as read"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Mark as unread"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Mentions"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "New mentions, assignments, and comments will show up here."
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "No unread notifications in this category."
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Open project"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Open task"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Read the conversation and reply without leaving your inbox."
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Reply"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Reply… use @ to mention"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Select a notification"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Unread"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "Updates"
+  },
+  {
+    "file": "src/pages/inbox.js",
+    "text": "You're all caught up."
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Active"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Active projects"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "All"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Allowed"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Anyone with the link"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Assign task"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Assigned tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Billing"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Comment on tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Completed tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Copy email"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Create a team to group people and give projects an owner."
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Create and edit tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Create projects"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Deactivated"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Delete workspace"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Edit team"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Groups of people who work on projects together."
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Invite member"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Invite members"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Invite pending"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Invite to workspace"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Invited"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Invited as"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Last active"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Lead"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Manage roles"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Member"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Member options"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "More"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Never signed in"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "New team"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No active projects"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No members match that search."
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No projects"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No recent activity"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No tasks here"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "No teams yet"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Not allowed"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Nothing to show in this list."
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Online"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Online now"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Open tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Overdue"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Pending invites"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Permission"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Recent activity"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Resend"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Revoke"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Role"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Roles & permissions"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Search by name or email"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Search members"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Teams"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "View projects & tasks"
+  },
+  {
+    "file": "src/pages/members.js",
+    "text": "Workspace settings"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "Completed"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "My Tasks"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "Overdue"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "Upcoming"
+  },
+  {
+    "file": "src/pages/my-tasks.js",
+    "text": "View"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "All"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Mark all as read"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Mark as read"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Mark as unread"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "No unread notifications. We'll let you know when something needs you."
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Notification preferences"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Notifications"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Show all"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Toggle read"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Unread"
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "Updates on tasks and projects you follow."
+  },
+  {
+    "file": "src/pages/notifications.js",
+    "text": "You're all caught up."
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Completion rate"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Due"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Health of every project in"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Lead"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "New project"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "No upcoming milestones"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Open"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Open tasks per person"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Overdue"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Portfolio"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Progress"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Tasks by status"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Upcoming milestones"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Workload"
+  },
+  {
+    "file": "src/pages/overview.js",
+    "text": "Workspace overview"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Activity"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Add a task to get things moving."
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Add member"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Add task"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Add to favorites"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Clear filters"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Favorite"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Files"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "More"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "No tasks here"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "No tasks match these filters."
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Overview"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Project settings"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Project status"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Project views"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Remove from favorites"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Save current filters as a view"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Save view"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Share"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/pages/project.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "All statuses"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Clear filters"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Create project"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Create your first project to start organizing your work."
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Due"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Filter by status"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Grid"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Last activity"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Layout"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Lead"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Name"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "New project"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "No projects match your search or filters. Try a different term."
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "No projects yet"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Options"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Private project"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Progress"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Project options"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Recently active"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Restricted — request access to see tasks"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Search projects"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Sort"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Sort:"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Start"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/pages/projects.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "All"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Clear search"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Comments"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Files"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Nothing matches “"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "People"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Recent:"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Search"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Search tasks, projects, people, files, and comments"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/pages/search.js",
+    "text": "”. Check the spelling or try a broader term."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "1. Scan the QR code"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "2. Enter the 6-digit code"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "2150 Mission St, San Francisco, CA 94110"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "@mentions in comments and descriptions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "@team mentions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "@workspace mentions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "A summary of what changed, every weekday at 8:00."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Accent"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Accent color"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Add a second step when signing in."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Advanced permissions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Affects calendars and the timeline."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Allow public share links"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Amount"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Announcements to everyone."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Any 6 digits work in this prototype."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Anyone with the link can view a project."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Appearance"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Archived projects"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Assignments"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "At least 10 characters with a number or symbol."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Avatar color"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Billing"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Billing address"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Billing email"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Business"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Cancel"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Changing the URL will break existing links."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Check spelling in descriptions and comments."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Choose which emails you receive."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Color"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Comments"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Compact fits more projects on screen."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Confirm before deleting tasks"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Confirm new password"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Contact a workspace owner to change your sign-in email."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Contact the owner"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Control what each role can do."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Current"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Current password"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Current plan"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Customize how Gr8r looks on this device."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Daily digest"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Danger zone"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Dark"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Date"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Date & time"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Date format"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Decide which mentions reach you."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Default project view"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Defaults for new projects and archived work."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Delete"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Delete workspace"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Density"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Devices currently signed in to your account."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Downgrade"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Due date reminders"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Edit"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Email"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Expires 08/2028 · Default"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Fair"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Follow system"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Free"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Full name"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Full page"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "General"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Good"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Guest access"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Guests only see projects they are added to."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Home"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "How dates and times appear across the workspace."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "How you appear to others in the workspace."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Inbox"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Invite member"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Invited"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Invoice"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Invoices"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Invoices and receipts are sent here."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Keyboard shortcuts"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Language"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Language and regional formats."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Leave workspace"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Light"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Members can create projects"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Members can invite guests"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Mentions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Monday"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Motion"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Move faster with the keyboard."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "My Tasks"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "New password"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "No archived projects. Archived projects are hidden from the sidebar but keep all their tasks."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "No renewal · Free forever"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Notifications"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Notifications on desktop and mobile."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Oct 1"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "On tasks you created or are assigned."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "One day before a task is due."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Only the workspace owner can change the plan"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Only workspace admins can change these settings."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Open archive"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Open member directory"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Open on launch"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Open tasks in"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Options"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Overview"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Password"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Password updated. Other sessions stay signed in."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Past invoices for this workspace."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Payment"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Payment method and billing details."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Permanently delete this workspace, its projects, tasks and files for every member. You will be asked to type the workspace URL."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Permanently delete this workspace, its projects, tasks, and files. This cannot be undone."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Permissions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Personal"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Personal defaults for how you work."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Plan"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Preferences"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Preview:"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Profile"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Protect your account with a code from an authenticator app in addition to your password."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Push"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "QR code"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Recovery codes"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Reduce animations for drawers, modals, and transitions."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Reduce motion"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Renews"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Restore"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Role permissions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Row height in lists and card padding on boards."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "SAML SSO"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Saturday"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Save changes"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Save profile"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Security"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Sessions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Set up two-factor authentication"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Settings"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Show completed tasks on boards"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Shown on invoices"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Side panel"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Side panel keeps your place in the list."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Sidebar density"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Sign out"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Sign out of all other sessions"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Spellcheck"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Start week on"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Storage"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Store these somewhere safe. Each code works once."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Strong"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Sunday"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "System"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Task assignments"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Task display"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Tax ID"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Teams"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Teams group people and projects."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "The language used throughout the interface."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "The page you see when Gr8r opens."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "The tab that opens when you open a project."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Theme"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "This device"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Time format"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Time zone"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Timelines & custom views"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Title"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Too short"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Turn off two-factor authentication"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Two-factor authentication"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Two-factor authentication is off"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Two-factor authentication is on."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "US EIN ••-•••4410"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Unlimited members"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Unlimited tasks"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Up to 3 members"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Up to 50 members"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Update"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Update password"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Updates about tasks assigned to you."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Upgrade"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Use 1Password, Authy, or Google Authenticator."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Use a long password you don't use anywhere else."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Used for due dates and reminders."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Used for primary buttons, focus rings, and selection."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Verify"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "View invoices"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Visa ending in 4242"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Weak"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "When I'm assigned a task"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "When a task is assigned to you."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "When my task changes status"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "When my task is overdue"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "When someone @mentions you."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "When your team is mentioned, e.g. @Product."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Workspace"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Workspace URL"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Workspace icon"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Workspace name"
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "You lose access to this workspace until someone invites you back."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "You'll enter a code from your authenticator app when signing in on a new device."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Your subscription and usage."
+  },
+  {
+    "file": "src/pages/settings.js",
+    "text": "Your workspace name, address, and identity."
+  },
+  {
+    "file": "src/pages/tasks.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/pages/tasks.js",
+    "text": "Every task across"
+  },
+  {
+    "file": "src/pages/tasks.js",
+    "text": "List"
+  },
+  {
+    "file": "src/pages/tasks.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/pages/tasks.js",
+    "text": "Table"
+  },
+  {
+    "file": "src/pages/tasks.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Activity"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Archive"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Board"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Changes won't be saved until your connection is back."
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Collapse sidebar"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Collapse sidebar  ["
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Expand"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Expand sidebar"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Favorites"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Files"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Help & resources"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Home"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Inbox"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "List"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Main"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Member"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "More"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "My Tasks"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "New project"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "New project  P"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "New team"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Not found"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Notifications"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Open navigation"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Overview"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Primary"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Project options"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Settings"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Skip to content"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Switch workspace"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Teams"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Toggle sub-pages"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Try again"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "Workspace"
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "You're offline."
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "data-tip=\"Help\" data-tip-pos=\"right\""
+  },
+  {
+    "file": "src/shell/layout.js",
+    "text": "data-tip=\"Profile\" data-tip-pos=\"right\""
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Activity"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Archive"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Design system"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Favorites"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Gr8r Studio"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Home"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Inbox"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Member"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "My Tasks"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Not found"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Notifications"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Overview"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Projects"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Saved view"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Search"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Settings"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "System states"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Tasks"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Teams"
+  },
+  {
+    "file": "src/shell/render.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/shell/skeletons.js",
+    "text": "Loading"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Add"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "All tasks"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Clear all"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Columns"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Created"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Created date"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Estimate"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Filter"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Group:"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Labels"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Last 24 hours"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Last 30 days"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Last 7 days"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Later"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Manual"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Next 7 days"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "No due date"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "None"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Overdue"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Priority"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Remove filter"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Search tasks"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Sort:"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Start date"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Title"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Unassigned"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Updated"
+  },
+  {
+    "file": "src/shell/view-engine.js",
+    "text": "Updated date"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "Archive"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "Code"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "Document"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "Figma"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "File"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "Image"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "PDF"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "Spreadsheet"
+  },
+  {
+    "file": "src/ui/helpers.js",
+    "text": "data-tip=\"Unassigned\""
+  },
+  {
+    "file": "src/ui/select.js",
+    "text": "Choose"
+  },
+  {
+    "file": "src/ui/toast.js",
+    "text": "Dismiss"
+  },
+  {
+    "file": "src/ui/toast.js",
+    "text": "Try again"
+  },
+  {
+    "file": "src/ui/toast.js",
+    "text": "Your changes couldn't be saved. You're offline."
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Add"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Add task"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Add task to"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Cancel"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Column options"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Done"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Enter to add · Esc to cancel"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Expand"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Mark complete"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "More"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "New task name"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Priority:"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Quick edit"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Reopen"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Repeats"
+  },
+  {
+    "file": "src/views/board.js",
+    "text": "Task name"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Add task"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Add task on"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Calendar"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Deadlines and events across every project."
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Month"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Next"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "No tasks"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Previous"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/views/calendar.js",
+    "text": "Week"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "All types"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Date"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Drop files here or"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "File options"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Filter by type"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Name"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Newest"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "No files match your search."
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "No files yet"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Search files"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Size"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Sort"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Sort:"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Type"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Upload"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Upload designs, documents, and assets to share them with the project."
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "Uploaded by"
+  },
+  {
+    "file": "src/views/files.js",
+    "text": "— up to 250 MB each"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "About"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Changes to this project will appear here."
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Coming up"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Details"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Due"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Edit"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Ended"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Lead"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Members"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Milestones"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "No activity yet"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "No milestones yet"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Nothing scheduled"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Progress"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Recent activity"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Start"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Tasks with due dates will show up here."
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "Team"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "View all"
+  },
+  {
+    "file": "src/views/project-overview.js",
+    "text": "View list"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Assignee"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Clear filters"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Click to edit"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Created"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Dependencies"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Double-click to rename"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Due date"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Estimate"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Labels"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "No results found"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "No tasks match these filters."
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Priority"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Project"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Start date"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Status"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Task"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Tasks table"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Title"
+  },
+  {
+    "file": "src/views/table.js",
+    "text": "Unassigned"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Give tasks a start and due date to see them here."
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Group by"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Group: Assignee"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Group: Project"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Group: Status"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Milestone:"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Milestones"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Months"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "New task"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "No grouping"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Nothing on the timeline"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Schedules, dependencies, and milestones across projects."
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Task"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Timeline"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Today"
+  },
+  {
+    "file": "src/views/timeline.js",
+    "text": "Weeks"
+  }
+]
