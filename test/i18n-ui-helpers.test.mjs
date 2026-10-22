@@ -28,8 +28,8 @@ const ROOT = path.join(HERE, '..');
 const HELPER_FILES = ['src/ui/helpers.js', 'src/ui/select.js', 'src/ui/toast.js', 'src/shell/view-engine.js'];
 
 /* The stored file-type ids — the document holds them and they never
-   change (D-08, I18N-07's groundwork). */
-const FILE_TYPES = ['fig', 'pdf', 'zip', 'img', 'sheet', 'doc', 'code', 'other'];
+   change (D-08, I18N-07's groundwork). They are listed with their
+   display names in FILE_TYPE_ORACLE below. */
 
 /* [file-type id, the display name the old FT table carried] */
 const FILE_TYPE_ORACLE = [

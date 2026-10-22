@@ -19,7 +19,7 @@ export function filesHtml(pid) {
         FT,
       )
         .filter(([k]) => k !== 'other')
-        .map(([k, v]) => `<option value="${k}" ${ft === k ? 'selected' : ''}>${fileTypeName(k)}</option>`)
+        .map(([k]) => `<option value="${k}" ${ft === k ? 'selected' : ''}>${fileTypeName(k)}</option>`)
         .join('')}</select>
       <select class="select" style="height:26px;width:auto;font-size:12px" data-in="fileSort" aria-label="Sort">${[
         ['date', 'Newest'],
