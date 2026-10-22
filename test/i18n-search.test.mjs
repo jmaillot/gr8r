@@ -223,7 +223,7 @@ test('a query that matched nothing before still matches nothing', () => {
 
 test('the query is folded ONCE before the filter runs, and the search never sorts', () => {
   const s = source('src/pages/search.js');
-  assert.ok(s.includes('const needle = foldForSearch(q).text;'), 'the query must be folded once, before the filter');
+  assert.ok(s.includes("const needle = foldForSearch((q || '').trim()).text;"), 'the query must be folded once, before the filter — the trim() stays');
   assert.ok(s.includes('const has = s => foldForSearch(s).text.includes(needle);'), 'every candidate must be folded as it is tested');
   assert.ok(!/\.sort\(|localeCompare|Collator/.test(s), 'the search must not sort — the order is untouched (D-06)');
 });

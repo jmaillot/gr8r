@@ -1,13 +1,15 @@
 /* ---------- SEARCH RESULTS ---------- */
-import { ago, esc } from '../core/utils.js';
+import { ago, esc, foldForSearch } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, canSee, mem, pColor, proj, task, visibleProjects } from '../core/store.js';
 import { FT, av, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
 
 export function searchAll(q) {
-  q = (q || '').trim().toLowerCase();
-  if (!q) return { tasks: [], projects: [], people: [], files: [], comments: [] };
-  const has = s => (s || '').toLowerCase().includes(q);
+  /* The query is folded ONCE, before the filter runs, and every candidate is folded as it
+     is tested — so "elodie" finds "Élodie" (D-06). The empty-query guard is unchanged. */
+  const needle = foldForSearch((q || '').trim()).text;
+  if (!needle) return { tasks: [], projects: [], people: [], files: [], comments: [] };
+  const has = s => foldForSearch(s).text.includes(needle);
   return {
     tasks: allTasks()
       .filter(t => has(t.title) || has(t.key) || has(t.desc.replace(/<[^>]+>/g, '')))
