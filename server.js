@@ -902,7 +902,10 @@ function backfillMemberships() {
     delete doc.data.workspaces;
     doc.data.me = null;
     if (JSON.stringify(doc) !== before) {
-      db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
+      /* The backfill only repairs server-owned state — the legacy profile
+         links and the demo switcher — so it must not move the revision: a
+         session that is open across the restart would lose its next write. */
+      db.prepare('update workspaces set doc = ?, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
     }
   }
 }

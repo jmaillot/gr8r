@@ -8,18 +8,26 @@
    five accepts per IP per hour and the membership suite already spends them. */
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { ADMIN, inviteToken, login, signup, startServer } from './helpers/server.mjs';
 
 let server;
 let owner;
+let dataDir;
 
 before(async () => {
-  server = await startServer();
+  /* The directory is ours, so it survives the restart: the harness only
+     deletes the directories it created itself. */
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-invite-'));
+  server = await startServer({ dataDir });
   owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
 });
 
 after(async () => {
   await server?.stop();
+  if (dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
 test('accepting an invite does not move the revision and keeps the roster complete', async () => {
@@ -70,4 +78,28 @@ test('accepting an invite does not move the revision and keeps the roster comple
     'the joiner is on their own roster',
   );
   assert.equal(mine.memberId, profile.id, 'the joiner resolves to the same member id');
+});
+
+test('a restart does not move the revision', async () => {
+  /* A restart repairs the mirrored profile in the document. That is
+     server-owned state, so it must not move the revision: a session that is
+     open across the restart would otherwise lose its next write. */
+  const before = (await owner.get('/api/workspaces/acme')).data;
+
+  await server.stop();
+  server = await startServer({ dataDir });
+  owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+
+  const after = (await owner.get('/api/workspaces/acme')).data;
+  assert.equal(after.revision, before.revision, 'a restart must not move the revision');
+
+  const saved = await owner.put('/api/workspaces/acme', { revision: before.revision, doc: structuredClone(before.doc) });
+  assert.equal(saved.status, 200, 'a write that crosses the restart is accepted');
+
+  /* The roster is still complete after the restart. */
+  const roster = await owner.get('/api/workspaces/acme/members');
+  assert.ok(
+    roster.data.members.some(m => m.email === 'bob-two@test.local'),
+    'the member is still on the roster',
+  );
 });
