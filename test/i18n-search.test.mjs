@@ -227,3 +227,105 @@ test('the query is folded ONCE before the filter runs, and the search never sort
   assert.ok(s.includes('const has = s => foldForSearch(s).text.includes(needle);'), 'every candidate must be folded as it is tested');
   assert.ok(!/\.sort\(|localeCompare|Collator/.test(s), 'the search must not sort — the order is untouched (D-06)');
 });
+
+/* ---------- the eight other filters fold both sides ---------- */
+
+const { S } = store;
+const { pageMembers } = await import('../src/pages/members.js');
+const { pageProjects } = await import('../src/pages/projects.js');
+const { filesHtml } = await import('../src/views/files.js');
+const { applyView } = await import('../src/shell/view-engine.js');
+const { popList } = await import('../src/overlays/popovers.js');
+const { paletteItems } = await import('../src/overlays/palette.js');
+const { shareModal } = await import('../src/overlays/modals.js');
+
+test('the member filter folds both sides: "elodie" finds "Élodie" through her name alone', () => {
+  S.ui.memQ = 'elodie';
+  assert.ok(pageMembers().includes('Élodie'), 'the accented member must be found from the unaccented query');
+  S.ui.memQ = 'sarah';
+  assert.ok(pageMembers().includes('Sarah Chen'), 'an unaccented query still finds its member');
+  S.ui.memQ = '';
+});
+
+test('the project filter folds both sides: "elan" finds "Élan"', () => {
+  S.ui.projQ = 'elan';
+  assert.ok(pageProjects().includes('Élan'), 'the accented project must be found from the unaccented query');
+  S.ui.projQ = 'website';
+  assert.ok(pageProjects().includes('Website Redesign'), 'an unaccented query still finds its project');
+  S.ui.projQ = '';
+});
+
+test('the project list still sorts with the same plain comparison it uses today', () => {
+  assert.ok(
+    source('src/pages/projects.js').includes('ps.sort((a, b) => (sorter(a) > sorter(b) ? 1 : -1));'),
+    'the plain > comparator must not be replaced (D-06)',
+  );
+});
+
+test('the file filter folds both sides: "elodie" finds "élodie-notes.md"', () => {
+  S.ui.fileQ = 'elodie';
+  assert.ok(filesHtml('p-elo').includes('élodie-notes.md'), 'the accented file must be found from the unaccented query');
+  S.ui.fileQ = 'wireframes';
+  assert.ok(filesHtml('p1').includes('homepage-wireframes-v3.fig'), 'an unaccented query still finds its file');
+  S.ui.fileQ = '';
+});
+
+test('the file list still sorts by name with the same localeCompare, and no Intl.Collator exists anywhere under src/', () => {
+  const walk = dir =>
+    fs
+      .readdirSync(dir, { withFileTypes: true })
+      .flatMap(e => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : []));
+  for (const file of walk(path.join(ROOT, 'src')))
+    assert.ok(!source(path.relative(ROOT, file).split(path.sep).join('/')).includes('Intl.Collator'), `${file} must not use Intl.Collator (D-06)`);
+  const s = source('src/views/files.js');
+  assert.ok(s.includes('a.name.localeCompare(b.name)'), 'the name sort keeps its localeCompare');
+  assert.ok(s.includes('a.type.localeCompare(b.type)'), 'the type sort keeps its localeCompare');
+});
+
+test('the saved-view filter folds both sides: the view query "elodie" keeps the task titled "Élodie onboarding"', () => {
+  const elo = { id: 't-elo', title: 'Élodie onboarding', key: 'ELN-1', order: 99 };
+  const out = applyView([elo], { q: 'elodie', filters: [], sort: { f: 'manual', dir: 1 } });
+  assert.deepEqual(
+    out.map(t => t.title),
+    ['Élodie onboarding'],
+  );
+  const plain = applyView([{ id: 't-x', title: 'Onboarding plain', key: 'WEB-9', order: 1 }, elo], {
+    q: 'onboarding',
+    filters: [],
+    sort: { f: 'manual', dir: 1 },
+  });
+  assert.equal(plain.length, 2, 'an unaccented query still keeps every task it kept before');
+});
+
+test('the popover filter folds both sides: "elodie" keeps the item named "Élodie"', () => {
+  S.ui.pop = { q: 'elodie' };
+  const html = popList([{ id: 'x', name: 'Élodie', act: 'popPick' }]);
+  assert.ok(html.includes('Élodie'), 'the accented item must survive the filter');
+  assert.ok(!html.includes('No matches'), 'the filter must not report no matches');
+  S.ui.pop = { q: 'sarah' };
+  assert.ok(popList([{ id: 'y', name: 'Sarah Chen' }]).includes('Sarah Chen'), 'an unaccented query still keeps its item');
+  S.ui.pop = null;
+});
+
+test('the palette folds both sides: searching "elodie" surfaces the task "Élodie onboarding"', () => {
+  S.ui.palette = { mode: 'search', q: 'elodie', scope: 'all' };
+  assert.ok(JSON.stringify(paletteItems()).includes('Élodie onboarding'), 'the palette search must find the accented task');
+  S.ui.palette = null;
+});
+
+test("the palette's own command and workspace filters fold both sides", () => {
+  const s = source('src/overlays/palette.js');
+  assert.ok(s.includes('foldForSearch'), 'palette.js must fold through the shared helper');
+  assert.ok(!s.includes('w.name.toLowerCase().includes(ql)'), 'the workspace filter must not compare raw lower-cased strings');
+  assert.ok(!s.includes('c.name.toLowerCase().includes(ql)'), 'the command filter must not compare raw lower-cased strings');
+});
+
+test('the share-modal member filter folds both sides: "elodie" finds "Élodie"', () => {
+  S.ui.shareQ = 'elodie';
+  const html = shareModal({ id: 'p1' }, t => `<h2>${t}</h2>`);
+  assert.ok(html.includes('Élodie'), 'the accented member must be offered for sharing');
+  assert.ok(!html.includes('No matching members'), 'the modal must not report no matching members');
+  S.ui.shareQ = 'zzzquux';
+  assert.ok(shareModal({ id: 'p1' }, t => t).includes('No matching members'), 'a query that matched nothing before still matches nothing');
+  S.ui.shareQ = '';
+});
