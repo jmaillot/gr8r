@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-22 after the v1.1 Multitenant milestone*
+*Last updated: 2026-10-22 after starting milestone v1.2*
 
 ## What it is
 
@@ -14,6 +14,24 @@ board / list / table / calendar / timeline / files views, members, teams, activi
   `SEED_DATA=false`.
 - **Multi-tenant since v1.1**: a workspace is a real tenant with its own URL, document and
   membership list. An account can belong to several workspaces with a role in each.
+
+## Current Milestone: v1.2 Localization
+
+**Goal:** the interface stops lying about languages — the selector becomes real, the app speaks
+French, every user has their own locale — and the full app journey is covered by a browser test.
+
+**Target features:**
+- A dependency-free i18n layer: `t()` + JSON catalogues per locale, plurals, locale-aware dates
+  and numbers, English as the base language.
+- The whole interface translated into French (~600–900 keys). The language selector only offers
+  what actually exists (EN, FR).
+- The locale becomes a per-user preference (new column + migration) instead of a workspace
+  preference.
+- The 8 untested UI flows covered by Chromium: the onboarding wizard, the invite modal, the
+  `/join` page, the share modal, member removal, the workspace switcher, the plan change and
+  project creation.
+- A regression test that proves the interface is in French when the locale is `fr`, and that no
+  English string leaks.
 
 ## Current state (v1.1 shipped)
 
@@ -37,6 +55,10 @@ board / list / table / calendar / timeline / files views, members, teams, activi
 - **Migration is in place and lossless.** `migrateTenancy()` writes a `vacuum into` backup
   before the first write, derives the slug from the old document, links members and invites,
   drops the demo array and retires `data.me`. A second boot is a byte-identical no-op.
+- **The interface is English-only in practice.** `Settings → Language` offers six languages
+  (`src/pages/settings.js:176`) but `prefs.lang` is only a stored value: no string is
+  translated, and the preference lives in the *shared* workspace document, so it would change
+  the language for every member.
 
 ## Decisions for the multitenant milestone (validated by the owner)
 
@@ -51,6 +73,18 @@ board / list / table / calendar / timeline / files views, members, teams, activi
    are redacted server-side — not merely hidden in the UI. — shipped
 5. **Migrate in place.** The existing database became the first workspace: name, colour and
    slug derived from `data.ws`; accounts, roles and memberships preserved. — shipped
+
+## Decisions for milestone v1.2 (validated by the owner)
+
+1. **The i18n layer is hand-made.** No runtime dependency: `t()` plus JSON catalogues, the
+   English source strings as the base catalogue. The app has no framework and no runtime
+   dependency, and adding one for translations would break that.
+2. **French is the second language, and it is complete.** The selector only lists what really
+   exists — English and French. The four other languages (Deutsch, Español, Français, 日本語
+   are currently listed) disappear from the selector until they are genuinely translated.
+3. **The locale is per user.** A French speaker in an English workspace keeps their own
+   language. That needs a per-account column and a migration; the migration machinery exists
+   and is proven by `test/migration.test.mjs`.
 
 ## Requirements
 
@@ -68,8 +102,15 @@ board / list / table / calendar / timeline / files views, members, teams, activi
 
 ### Active
 
-Carried forward from the v1.1 audit (`.planning/milestones/v1.1-ROADMAP.md`):
+From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this milestone's scope:
 
+- [ ] The language selector changes the interface: a real `t()` layer, JSON catalogues, French
+      translated end to end, EN and FR the only offered languages.
+- [ ] The locale is a per-user preference, stored on the account and returned by the server,
+      with a migration for existing installs.
+- [ ] The remaining UI flows are covered by Chromium: the onboarding wizard, the invite modal,
+      the `/join` page, the share modal, member removal, the workspace switcher and the plan
+      change.
 - [ ] Harden the membership surface: `sameOrigin` on invite accept, no admin link-only
       invites, no `firstWorkspace()` fallback, no guest-profile spoof.
 - [ ] Write the browser URL on navigation and handle `popstate`; delete the orphaned client
@@ -77,8 +118,6 @@ Carried forward from the v1.1 audit (`.planning/milestones/v1.1-ROADMAP.md`):
       wire or remove the two routes that have no caller.
 - [ ] Close the substring-based recent-search leak and state the free-text limitation in the
       product docs.
-- [ ] Cover the remaining UI flows in Chromium: the onboarding wizard, the invite modal, the
-      `/join` page, the share modal, member removal, the workspace switcher and the plan change.
 - [ ] Per-user settings isolation inside a workspace (`notifPrefs`, `tfa`, `sessions`,
       `invoices` are still shared fields in the document).
 
@@ -88,16 +127,40 @@ Carried forward from the v1.1 audit (`.planning/milestones/v1.1-ROADMAP.md`):
   display value, but only an owner may change it.
 - Subdomain tenancy, SSO/SAML, SCIM.
 - File storage: files are metadata only today; no binary upload backend.
+- Translating the four remaining languages (Deutsch, Español, 日本語, English UK). The selector
+  will not offer a language that is not translated.
+- A translation-management UI or machine-translation pipeline: the catalogues are files in the
+  repository, edited like code.
 
 ## Context
 
-- Shipped v1.1 with 4 phases, 7 plans, 10 tasks and 52 commits, on Node 24.
+- Shipped v1.1 with 4 phases, 7 plans, 10 tasks and 54 commits, on Node 24.
 - 18.8k lines of JavaScript, CSS and ESM across `src/`, `server.js`, `test/` and `e2e/`; one
   runtime dependency-free server, one dev dependency (`@playwright/test`).
-- 48 `node:test` cases and 5 Chromium e2e tests, all against real `server.js` processes and
+- 50 `node:test` cases and 6 Chromium e2e tests, all against real `server.js` processes and
   real SQLite databases — no mocked HTTP, no mocked database.
-- The milestone audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) closed one blocker:
-  the phase-1 revision handshake was broken by the phase-2 document-mutating endpoints, so a
-  role change locked the workspace out of writing. It is fixed and covered by server, client
-  and browser tests.
+- The milestone audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) closed three defects in
+  one family — the workspace revision moved without the client being able to follow it — so a
+  role change, an invite accepted elsewhere and a restart each locked the workspace out of
+  writing. All three are fixed, released in 1.1.1 and covered by server, client and browser
+  tests.
+- The interface is built from hand-written HTML template strings, so translating it is a
+  mechanical extraction of ~1 800 string occurrences across 37 files rather than a JSX sweep.
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state

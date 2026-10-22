@@ -1,18 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.1
-status: Awaiting next milestone
-stopped_at: Phase 04 complete — all phases complete
-last_updated: "2026-10-22T08:18:10.965Z"
+milestone: v1.2
+milestone_name: Localization
+status: planning
+last_updated: "2026-10-22T09:17:18.998Z"
 last_activity: 2026-10-22
-last_activity_desc: Milestone v1.1 completed and archived
-state_head: cf8e1a0e053b53694aa6a489e2f0325058bd5564
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE
@@ -21,9 +19,9 @@ Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **Multitenant (v1.1)** — shipped and archived
-- Phase: **4 — Hardening and ship: complete** (4/4 phases, 7/7 plans, 10 tasks)
-- Next: **`/gsd-new-milestone`** — start the next milestone
+- Milestone: **v1.2 — Localization** — defining requirements
+- Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
+- Next: **`/gsd-new-milestone`** continues with research → requirements → roadmap
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
@@ -180,11 +178,13 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-22 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-10-22 — Milestone v1.2 started
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Define the milestone requirements and roadmap (`/gsd-new-milestone` continues here)
+- Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
+  per-user locale with a migration, and Chromium coverage for the 8 untested UI flows
