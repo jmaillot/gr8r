@@ -41,7 +41,7 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 | 10 | Browser coverage in both locales | UAT-01 … UAT-09 |
 | 11 | French sweep, build gate & ship hardening | UAT-10 |
 
-**Coverage:** 28/28 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
+**Coverage:** 29/29 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
 phase without a requirement.
 
 **Ordering notes (deviations from the research sketch, both deliberate):**
