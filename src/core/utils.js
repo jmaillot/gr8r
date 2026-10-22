@@ -1,7 +1,7 @@
 /* =====================================================================
    QUIRE — core: utils, icons, seed data, store, render loop, events
    ===================================================================== */
-import { dayBucketId, formatDate, formatRelativeDay, formatRelativeTime } from './i18n.js';
+import { dayBucketId, formatDate, formatRelativeDay, formatRelativeTime, t } from './i18n.js';
 
 // Web fonts load without blocking first paint (the link starts as media=print).
 document.querySelectorAll('link[data-font]').forEach(l => {
@@ -32,7 +32,10 @@ export function foldForSearch(s) {
 export const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 8);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-export const MOD = isMac ? '⌘' : 'Ctrl';
+/* The keyboard hint's modifier label: the Ctrl half is interface text and reads the
+   catalogue; the ⌘ symbol is a SYMBOL, not text, and stays a literal. Resolved at module
+   load — phase 8's live locale switch re-evaluates the hint on re-render. */
+export const MOD = isMac ? '⌘' : t('common.ctrl');
 
 /* ---------- dates ---------- */
 export const DAY = 864e5;

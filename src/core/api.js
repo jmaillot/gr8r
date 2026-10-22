@@ -6,6 +6,8 @@
    Multi-workspace: every workspace call is scoped to a slug, and the
    server decides what the signed-in account may read or write there.
    ===================================================================== */
+import { t } from './i18n.js';
+
 const state = {
   enabled: false,
   signup: false,
@@ -44,7 +46,7 @@ async function call(method, path, body, { keepalive = false } = {}) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    return { ok: false, status: 0, error: 'Could not reach the server' };
+    return { ok: false, status: 0, error: t('err.serverUnreachable') };
   }
   let data = null;
   const text = await res.text();
@@ -175,7 +177,7 @@ export const api = {
   },
   async patchWorkspace(patch) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('PATCH', `/api/workspaces/${encodeURIComponent(slug)}`, patch);
     if (r.ok) {
       const next = r.data.workspace;
@@ -186,39 +188,39 @@ export const api = {
   },
   async putWorkspace(doc, opts) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('PUT', `/api/workspaces/${encodeURIComponent(slug)}`, { revision: this.revision, doc }, opts);
     if (r.ok) this.revision = r.data.revision;
     return r;
   },
   async createInvites(emails, role, team) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/invites`, { emails, role, team });
   },
   /* Members and their roles. The server owns both; the document only mirrors them. */
   async members() {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/members`);
   },
   async setMember(userId, patch) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('PATCH', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`, patch);
     if (r.ok) adoptRevision(r.data);
     return r;
   },
   async removeMember(userId) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('DELETE', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}`);
     if (r.ok) adoptRevision(r.data);
     return r;
   },
   async leave() {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('POST', `/api/workspaces/${encodeURIComponent(slug)}/leave`);
     if (r.ok) {
       state.workspaces = state.workspaces.filter(w => w.slug !== slug);
@@ -230,14 +232,14 @@ export const api = {
   },
   async setPlan(plan) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('POST', `/api/workspaces/${encodeURIComponent(slug)}/plan`, { plan });
     if (r.ok) adoptRevision(r.data);
     return r;
   },
   async deleteWorkspace() {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     const r = await call('DELETE', `/api/workspaces/${encodeURIComponent(slug)}`);
     if (r.ok) {
       state.workspaces = state.workspaces.filter(w => w.slug !== slug);
@@ -249,12 +251,12 @@ export const api = {
   },
   async invites() {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/invites`);
   },
   async revokeInvite(id) {
     const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: 'No workspace loaded' };
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('DELETE', `/api/workspaces/${encodeURIComponent(slug)}/invites/${encodeURIComponent(id)}`);
   },
   async invite(token) {

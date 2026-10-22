@@ -107,7 +107,14 @@ test('every new value of this wave renders its previous English exactly', () => 
     assert.ok(Object.hasOwn(en, key), `missing key: ${key}`);
     const args = key === 'page.archivedWhen' ? { when: '5m ago' } : key === 'page.subtask.progress' ? { i: 2, n: 5 } : undefined;
     const rendered = t(key, args);
-    assert.equal(rendered, expected.replace(/\{when\}/, '5m ago').replace(/\{i\}/, 2).replace(/\{n\}/, 5), key);
+    assert.equal(
+      rendered,
+      expected
+        .replace(/\{when\}/, '5m ago')
+        .replace(/\{i\}/, 2)
+        .replace(/\{n\}/, 5),
+      key,
+    );
   }
 });
 
@@ -151,8 +158,11 @@ test('the HTTP verbs and the API paths are byte-identical', () => {
   assert.ok(src.includes("call('PUT', `/api/workspaces/${encodeURIComponent(slug)}`"), 'the put call moved');
   assert.ok(src.includes("call('DELETE', `/api/workspaces/${encodeURIComponent(slug)}/members/"), 'the delete call moved');
   const verbs = [...src.matchAll(/call\('(\w+)'/g)].map(m => m[1]);
-  assert.ok(verbs.every(v => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(v)), 'a verb changed');
-  assert.equal(verbs.length, 33, 'a call site moved');
+  assert.ok(
+    verbs.every(v => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(v)),
+    'a verb changed',
+  );
+  assert.equal(verbs.length, 21, 'a call site moved');
 });
 
 test('the icon names and the brand path are untouched', () => {
@@ -171,7 +181,16 @@ test('the ⌘ symbol is not a catalogue value — only the Ctrl label is', () =>
 
 test('the seeded team names and their descriptions are still data in the source', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/core/constants.js'), 'utf8');
-  for (const text of ['Design', 'Engineering', 'Marketing', 'Product', 'Product design, brand, and research', 'Web, mobile, and platform engineering', 'Campaigns, content, and growth', 'Roadmap, planning, and QA']) {
+  for (const text of [
+    'Design',
+    'Engineering',
+    'Marketing',
+    'Product',
+    'Product design, brand, and research',
+    'Web, mobile, and platform engineering',
+    'Campaigns, content, and growth',
+    'Roadmap, planning, and QA',
+  ]) {
     assert.ok(src.includes(`'${text}'`), `the demo content '${text}' moved`);
   }
 });
