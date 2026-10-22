@@ -2,6 +2,7 @@
    SHELL: render loop, router, sidebar, topbar, skeletons, filter engine
    ===================================================================== */
 import { $, $$ } from '../core/utils.js';
+import { t } from '../core/i18n.js';
 import { D, S, canSee, mem, proj, team } from '../core/store.js';
 import { applyPrefs } from '../core/theme.js';
 import { enhanceSelects, selectMenu } from '../ui/select.js';
@@ -12,28 +13,33 @@ import { renderLayer } from '../overlays/drawer.js';
 import { placePop } from '../overlays/popovers.js';
 import { renderAuth } from '../pages/auth.js';
 
-export const ROUTE_NAMES = {
-  home: 'Home',
-  inbox: 'Inbox',
-  mytasks: 'My Tasks',
-  favorites: 'Favorites',
-  notifications: 'Notifications',
-  search: 'Search',
-  overview: 'Overview',
-  projects: 'Projects',
-  tasks: 'Tasks',
-  calendar: 'Calendar',
-  timeline: 'Timeline',
-  members: 'Members',
-  member: 'Member',
-  teams: 'Teams',
-  team: 'Team',
-  activity: 'Activity',
-  settings: 'Settings',
-  system: 'Design system',
-  states: 'System states',
-  archive: 'Archive',
-};
+/* The route ids are the machine identifiers the router, the data-r attributes and the URL
+   deep-links match on (D-08) — they are never translated. The display name of a route is the
+   catalogue's own, keyed by the id, so the sidebar, the breadcrumb and the document title
+   follow the locale. The ids list is what the coverage check reads. */
+export const ROUTE_IDS = [
+  'home',
+  'inbox',
+  'mytasks',
+  'favorites',
+  'notifications',
+  'search',
+  'overview',
+  'projects',
+  'tasks',
+  'calendar',
+  'timeline',
+  'members',
+  'member',
+  'teams',
+  'team',
+  'activity',
+  'settings',
+  'system',
+  'states',
+  'archive',
+];
+export const routeName = id => t('nav.route.' + id);
 export const ROUTE_ICONS = {
   home: 'house',
   inbox: 'inbox',
@@ -107,13 +113,13 @@ export function tryFocus(key) {
 }
 export function pageTitle() {
   const u = S.ui;
-  if (u.auth) return 'Gr8r Studio';
-  let t = ROUTE_NAMES[u.route] || 'Not found';
+  if (u.auth) return t('app.name');
+  let name = ROUTE_IDS.includes(u.route) ? routeName(u.route) : t('nav.notFound');
   if (u.route === 'project' && proj(u.params.id) && canSee(proj(u.params.id)))
-    t = `${(PTABS.find(x => x[0] === u.params.tab) || [0, 'Saved view'])[1]} · ${proj(u.params.id).name}`;
-  if (u.route === 'member' && mem(u.params.id)) t = mem(u.params.id).name;
-  if (u.route === 'team' && team(u.params.id)) t = team(u.params.id).name;
-  return `${t} · ${D().ws.name}`;
+    name = `${(PTABS.find(x => x[0] === u.params.tab) || [0, t('page.savedView')])[1]} · ${proj(u.params.id).name}`;
+  if (u.route === 'member' && mem(u.params.id)) name = mem(u.params.id).name;
+  if (u.route === 'team' && team(u.params.id)) name = team(u.params.id).name;
+  return `${name} · ${D().ws.name}`;
 }
 /* Anything clickable is keyboard-reachable: non-native [data-a] controls get a role and a tab stop. */
 export function makeFocusable() {

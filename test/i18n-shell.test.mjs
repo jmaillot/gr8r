@@ -247,7 +247,7 @@ test('the values the chrome reuses still render their English', () => {
 test('no two keys of this wave carry the same value', () => {
   const seen = new Map();
   for (const [id] of ROUTE_ORACLE) seen.set(en['nav.route.' + id], 'nav.route.' + id);
-  for (const [key, ] of CHROME_ORACLE) {
+  for (const [key] of CHROME_ORACLE) {
     const flat = typeof en[key] === 'string' ? en[key] : JSON.stringify(en[key]);
     assert.ok(!seen.has(flat), `${key} duplicates ${seen.get(flat)}`);
     seen.set(flat, key);

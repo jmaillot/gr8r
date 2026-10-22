@@ -59,7 +59,7 @@ import { S, D, hydrateFromServer, save } from './core/store.js';
 import { api } from './core/api.js';
 import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
-import { ROUTE_NAMES, render, go } from './shell/render.js';
+import { ROUTE_IDS, render, go } from './shell/render.js';
 
 addEventListener('gr8r:save-error', e => {
   const { status, error } = e.detail || {};
@@ -109,7 +109,7 @@ function applyDeepLink(rest) {
     if (seg === 'file' && (data.files || []).some(f => f.id === key)) return go('file', { id: key });
     if (seg === 'member' && (data.members || []).some(m => m.id === key)) return go('member', { id: key });
   }
-  if (ROUTE_NAMES[seg]) return go(seg, {});
+  if (ROUTE_IDS.includes(seg)) return go(seg, {});
 }
 
 (async function init() {
@@ -181,7 +181,7 @@ function applyDeepLink(rest) {
   }
 
   if (!withServer && authRoutes.includes(h)) S.ui.auth = h;
-  else if (h && ROUTE_NAMES[h]) S.ui.route = h;
+  else if (h && ROUTE_IDS.includes(h)) S.ui.route = h;
   else S.ui.route = S.prefs.home || 'home';
   if (deepLink) applyDeepLink(deepLink);
   render();

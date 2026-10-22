@@ -1,5 +1,6 @@
 /* ---------- skeletons (loading states) ---------- */
 import { S } from '../core/store.js';
+import { t } from '../core/i18n.js';
 
 export const sk = (w, h = 10, extra = '') => `<span class="sk" style="width:${w};height:${h}px;${extra}"></span>`;
 export function skRows(n = 8) {
@@ -28,5 +29,5 @@ export function skeleton() {
   else if (r === 'home' || r === 'overview')
     body = `<div class="stats" style="margin-bottom:16px">${Array.from({ length: 4 }, () => `<div class="stat">${sk('80px', 10)}${sk('44px', 20)}</div>`).join('')}</div><div class="grid2"><div class="panel" style="padding:14px">${skRows(6)}</div><div class="panel" style="padding:14px">${skRows(6)}</div></div>`;
   else body = skRows(10);
-  return `<div class="page" aria-busy="true" aria-label="Loading">${head}${body}</div>`;
+  return `<div class="page" aria-busy="true" aria-label="${t('a11y.loading')}">${head}${body}</div>`;
 }
