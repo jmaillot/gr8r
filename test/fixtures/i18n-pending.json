@@ -301,47 +301,11 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Audience research"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Beta launch"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Blank project"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Board"
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Brain dump ideas"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Brief, assets, channels"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Build MVP"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Build page templates"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Campaign brief"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Cancel"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Channel plan"
   },
   {
     "file": "src/overlays/modals.js",
@@ -353,23 +317,11 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Code review"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Color"
   },
   {
     "file": "src/overlays/modals.js",
     "text": "Command menu"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Concept directions"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Content migration"
   },
   {
     "file": "src/overlays/modals.js",
@@ -409,43 +361,7 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Creative assets"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Define problem statement"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Deploy to staging"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Description"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Design Project"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Design exploration"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Developer handoff"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Discovery to handoff"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Discovery to launch"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Discovery workshop"
   },
   {
     "file": "src/overlays/modals.js",
@@ -517,15 +433,7 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "IA, design, build, launch"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Icon"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Implement core API"
   },
   {
     "file": "src/overlays/modals.js",
@@ -561,10 +469,6 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Launch campaign"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Layout"
   },
   {
@@ -574,14 +478,6 @@
   {
     "file": "src/overlays/modals.js",
     "text": "List"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Marketing Campaign"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Moodboard"
   },
   {
     "file": "src/overlays/modals.js",
@@ -633,10 +529,6 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Performance report"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Permission"
   },
   {
@@ -645,27 +537,11 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Personal Project"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Pick top 3 priorities"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Plan your own goals"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Press Invite to send an invitation to"
   },
   {
     "file": "src/overlays/modals.js",
     "text": "Priority"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Product Development"
   },
   {
     "file": "src/overlays/modals.js",
@@ -686,14 +562,6 @@
   {
     "file": "src/overlays/modals.js",
     "text": "Projects hold tasks, files, and conversations for one body of work."
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "QA & launch"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Refinement"
   },
   {
     "file": "src/overlays/modals.js",
@@ -733,10 +601,6 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Schedule focus time"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Search"
   },
   {
@@ -761,10 +625,6 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Set up repo & CI"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Share “"
   },
   {
@@ -773,27 +633,11 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Sitemap & information architecture"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Software Development"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Some emails could not be sent. Copy those links and send them yourself."
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Spec, build, ship"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Start date"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Start from scratch"
   },
   {
     "file": "src/overlays/modals.js",
@@ -829,10 +673,6 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Technical spec"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "Template"
   },
   {
@@ -853,15 +693,7 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "User research plan"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "View name"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Visual design"
   },
   {
     "file": "src/overlays/modals.js",
@@ -869,35 +701,11 @@
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Website"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Weekly review"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "What is this project about?"
   },
   {
     "file": "src/overlays/modals.js",
-    "text": "Wireframes"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Write PRD"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "Write tests"
-  },
-  {
-    "file": "src/overlays/modals.js",
     "text": "e.g. Design review queue"
-  },
-  {
-    "file": "src/overlays/modals.js",
-    "text": "e.g. Website Redesign"
   },
   {
     "file": "src/overlays/modals.js",

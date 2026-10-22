@@ -519,5 +519,6 @@
   "act.preview": "Preview",
   "act.rename": "Rename",
   "act.deleteView": "Delete view",
+  "modal.projectNamePlaceholder": "e.g. Website Redesign",
   "contract.englishOnly": "English only"
 }

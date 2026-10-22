@@ -134,7 +134,7 @@ const MACHINE_CONSTS = new Set(['ROLES']);
    demo-content rule), so they are data the interface shows, never literals
    to extract. Position-based, like every machine rule here: the same word
    outside such a const is still display text. */
-const DEMO_CONSTS = new Set(['TEAMS_SEED']);
+const DEMO_CONSTS = new Set(['TEAMS_SEED', 'TEMPLATES']);
 
 /* The permission names the document stores and the interface compares against
    (src/overlays/modals.js): the DISPLAY of a stored value is a catalogue
