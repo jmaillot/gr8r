@@ -35,6 +35,8 @@ const WAVE_FILES = [
   'src/features/teams.js',
 ];
 
+const VOCAB_FILES_WAVE_ONE = ['src/core/constants.js', 'src/core/store.js'];
+
 /* The values this wave introduced: [key, previous English]. */
 const WAVE_ORACLE = [
   // the keyboard hint (utils.js)
@@ -198,4 +200,30 @@ test('the seeded team names and their descriptions are still data in the source'
 test('the stored role comparison in the members page is untouched', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/pages/settings.js'), 'utf8');
   assert.ok(src.includes("'Owner'"), 'the stored role id left the settings page');
+});
+
+/* ---------- 4. the wave's proof (task 3, green-first pins) ---------- */
+
+test('the allow-list carries no entry of the nine files of the wave and stays sorted', () => {
+  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  const keys = list.map(e => `${e.file}::${e.text}`);
+  assert.deepEqual(keys, [...keys].sort(), 'the allow-list is not sorted');
+  const waveFiles = [...VOCAB_FILES_WAVE_ONE, ...WAVE_FILES];
+  const left = list.filter(e => waveFiles.includes(e.file));
+  assert.deepEqual(left, [], 'the wave files still have allow-list entries');
+});
+
+test('the catalogue grew to the wave boundary — 415 keys, none under the reserved namespace', () => {
+  const keys = Object.keys(en);
+  assert.equal(keys.length, 415, 'the catalogue size moved');
+  assert.ok(
+    keys.every(k => !k.startsWith('contract.') || k === 'contract.englishOnly'),
+    'a phase key sits under contract.*',
+  );
+});
+
+test('the icon baseline holds at 174 names', () => {
+  const baseline = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/icons-baseline.json'), 'utf8'));
+  const names = Array.isArray(baseline) ? baseline : baseline.icons || Object.keys(baseline);
+  assert.equal(names.length, 174, 'the icon baseline moved');
 });
