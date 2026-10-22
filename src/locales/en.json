@@ -1,0 +1,17 @@
+{
+  "app.name": "Gr8r Studio",
+  "common.cancel": "Cancel",
+  "common.save": "Save",
+  "nav.projects": "Projects",
+  "greeting.hello": "Hello, {name}!",
+  "settings.language.title": "Language",
+  "task.count": {
+    "one": "{n} task",
+    "other": "{n} tasks"
+  },
+  "file.count": {
+    "one": "{n} file",
+    "other": "{n} files"
+  },
+  "contract.englishOnly": "English only"
+}

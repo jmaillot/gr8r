@@ -4,6 +4,7 @@
    ===================================================================== */
 import './styles/index.css';
 import './core/utils.js';
+import './core/i18n.js';
 import './core/icons.js';
 import './core/constants.js';
 import './data/seed.js';

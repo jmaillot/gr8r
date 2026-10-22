@@ -1,0 +1,15 @@
+{
+  "nav.projects": "Projets",
+  "greeting.hello": "Bonjour, {name} !",
+  "settings.language.title": "Langue",
+  "task.count": {
+    "one": "{n} tâche",
+    "other": "{n} tâches",
+    "many": "{n} de tâches"
+  },
+  "file.count": {
+    "one": "{n} fichier",
+    "other": "{n} fichiers"
+  },
+  "contract.frenchOnly": "Français seulement"
+}

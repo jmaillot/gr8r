@@ -1,0 +1,70 @@
+/* =====================================================================
+   core: i18n — the leaf layer over the JSON catalogues.
+   It imports the catalogues and nothing else from the app, so the dependency graph
+   stays acyclic: the renderer never enters this module.
+   ===================================================================== */
+import en from '../locales/en.json' with { type: 'json' };
+
+export const BASE_LOCALE = 'en';
+export const LOCALES = Object.freeze([
+  { code: 'en', name: 'English' },
+  { code: 'fr', name: 'Français' },
+]);
+
+/* The locale is a module-level mutable singleton, read at call time and never threaded
+   through a signature — the house pattern of dateFormat in core/utils.js. */
+let locale = BASE_LOCALE;
+
+const catalogues = new Map();
+
+/* Vite rewrites this into one chunk per locale; plain Node has no import.meta.glob, so the
+   call throws and the catch leaves the loader map empty. */
+let loaders = {};
+try {
+  loaders = import.meta.glob(['../locales/*.json', '!../locales/en.json']);
+} catch {
+  loaders = {};
+}
+
+export function registerCatalogue(code, data) {
+  catalogues.set(code, data || {});
+  return code;
+}
+
+/* A top-level call, so the static JSON import survives tree-shaking and the base catalogue
+   is inlined in the entry chunk. */
+registerCatalogue(BASE_LOCALE, en);
+
+export function getLocale() {
+  return locale;
+}
+
+/* The registry entries that have a catalogue behind them: the base locale, every registered
+   code, and every locale the build ships a catalogue file for. */
+export function availableLocales() {
+  return LOCALES.filter(l => catalogues.has(l.code) || Object.hasOwn(loaders, `../locales/${l.code}.json`));
+}
+
+/* The module's own one-line escaper, the same table as esc() in core/utils.js. t() never
+   calls it: the caller escapes at the point of interpolation. */
+export function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+const PLACEHOLDER = /\{(\w+)\}/g;
+
+function interpolate(str, vars) {
+  if (!vars) return str;
+  return str.replace(PLACEHOLDER, (m, name) => (Object.hasOwn(vars, name) ? String(vars[name]) : m));
+}
+
+export function t(key, vars) {
+  const active = catalogues.get(locale);
+  let value = active && Object.hasOwn(active, key) ? active[key] : undefined;
+  if (value === undefined) {
+    const base = catalogues.get(BASE_LOCALE);
+    value = base && Object.hasOwn(base, key) ? base[key] : undefined;
+  }
+  if (typeof value === 'string') return interpolate(value, vars);
+  return key;
+}
