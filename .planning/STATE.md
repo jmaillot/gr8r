@@ -2,15 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 milestone_name: Localization
-status: planning
-last_updated: "2026-10-22T11:45:00.000Z"
+status: executing
+last_updated: "2026-10-22T12:38:00.000Z"
 last_activity: 2026-10-22
 progress:
   total_phases: 7
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 17
+  completed_plans: 4
+  percent: 24
 ---
 
 # STATE
@@ -19,14 +19,38 @@ Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — phase 5 complete, 6 phases to go
+- Milestone: **v1.2 — Localization** — phase 5 complete, phase 6 in progress (plan 1 of 14 done), 5 phases to go
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-discuss-phase 6`** → `/gsd-plan-phase 6` → `/gsd-execute-phase 6`
+- Next: **`/gsd-execute-phase 6`** → plan `06-02` (the `Intl` formatters)
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
 
 ## Where things stand
+
+Phase 6 plan 1 built the **measuring device** the rest of the phase trusts, and proved it on one
+literal. `scripts/i18n-scan.mjs` is a static scan of the interface sources: it reports every
+user-visible literal in seven rule families (HTML text node, display attribute, toast message,
+display-helper argument, display name, prose, single-word capitalised display label) and it
+decides by POSITION, never by a lexical blacklist — `'Member'` is the `roleLabel()` fallback in
+one place and a stored role id in another. The scan reports 1965 occurrences over the 49 files
+that carry one, and it never reports a `data-*` value, a CSS class, an icon name, a comparison
+operand, an object key, a CSS custom property, a stored preference value or a dotted catalogue
+key. A second check family resolves every literal `t('…')` key against the English catalogue and
+compares the value's placeholders with the vars of the call site, because `t()` returns the key
+itself when it cannot resolve and nothing else would ever notice. The calibration is proved, not
+asserted: a raw sweep of the capitalised single-word shape accounts for all **587** measured
+occurrences — 449 reported, 138 in a named machine category, **0 unexplained**.
+
+`test/fixtures/i18n-pending.json` is the progress meter: 1700 `{ file, text }` entries, sorted,
+deterministic, one per literal not extracted yet. Every extracted literal leaves it, and an empty
+list is the proof the sweep is finished. `npm run build` and `npm run build:en` run the scan
+before the bundler, so a literal that nobody catalogued fails the build (demonstrated: adding one
+to `src/ui/helpers.js` makes `npm run build` exit 1 with the file, the line and the literal). The
+tracer proves the whole path on one literal: `src/ui/toast.js` now renders
+`aria-label="${t('a11y.dismiss')}"`, the catalogue carries `"a11y.dismiss": "Dismiss"`, the
+allow-list lost exactly one entry, and the rendered attribute is byte-identical. 113 `node:test`
+cases and 6 Chromium tests are green; the icon baseline of 174 names did not move.
 
 Phase 5 built the i18n layer and pinned its contract before a single string moves. `src/core/i18n.js`
 is a leaf module over two JSON catalogues: `t()` never escapes (the catalogue values are plain
@@ -181,6 +205,22 @@ in `PROJECT.md` under **Requirements → Active**.
 
 ## Decisions
 
+- The i18n scan decides by POSITION, never by a lexical blacklist: the same word is display text
+  in one place and a machine identifier in another, so every machine set is scoped to the position
+  it names (`ROLE_IDS` excludes an element of the `ROLES` const, a `role` property, a role-id list
+  and a comparison operand — and reports the `ROLE_LABELS` display name and the `roleLabel()`
+  fallback).
+- A display-label position carries a capitalised shape: a lowercase fragment (`'task/'`,
+  `'is not'`) is machine or grammar, not a label. This is what keeps the allow-list extractable to
+  zero.
+- A template message is reported as its literal segments, so the allow-list lists what the sweep
+  will actually extract.
+- `'Workspace'` is not a demo value: it is a display label in the settings navigation and a
+  default name in two fallbacks, so it is reported rather than excluded by value.
+- The scanner lives outside `src/` (like `scripts/icons.mjs`), so the `lucideSubset()` walk can
+  never read its pattern strings and the 174-name icon baseline cannot move.
+- The scan runs in front of the bundler (`prebuild`, `prebuild:en`): an untranslated literal must
+  fail the build, not a review comment.
 - Each test file owns one server and one temporary database; the harness deletes only directories
   it created, so a migration test can reboot on a supplied `dataDir`.
 - The privacy matrix keeps its exact phase 3 fixture and checks rather than being rewritten around
@@ -210,6 +250,8 @@ npm test                # tenancy, membership, privacy and migration suites (rea
 npm run test:privacy    # phase 3 privacy matrix alias
 npm run build && npm run e2e   # Chromium UAT against a throwaway server
 npm run lint && npm run format:check && npm run build
+node scripts/i18n-scan.mjs     # the phase-6 extraction scan; --report prints every finding
+node --test test/i18n-scan.test.mjs   # the scanner contract
 node server.js          # with DATA_DIR pointing at a copy of a real database
 ```
 
@@ -223,21 +265,24 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-22T08:30:00.000Z
-**Stopped at:** Milestone v1.1 shipped, audited and archived
+**Last session:** 2026-10-22T12:38:00.000Z
+**Stopped at:** Completed 06-01-PLAN.md — the extraction meter, the allow-list and the tracer
 **Resume file:** None
 
 ## Current Position
 
-Phase: 5 — i18n foundation & catalogue contract (not started)
-Plan: —
-Status: Roadmap created, awaiting discussion
-Last activity: 2026-10-22 — Roadmap for v1.2 created (7 phases, 5–11)
+Phase: 6 — English extraction & locale-aware formats (1 of 14 plans done)
+Plan: 01 — the static source scan, the allow-list and the tracer — complete
+Status: Executing
+Last activity: 2026-10-22 — plan 06-01 complete: the scan, the 1700-entry allow-list, the build
+gate and the first extracted literal (`a11y.dismiss`)
 
 ## Operator Next Steps
 
-- `/gsd-discuss-phase 5` — the i18n foundation: the `t()` contract, the escaping rule, the plural
-  subset, the catalogue location and the build layout
-- Then `/gsd-plan-phase 5`; phases 6–11 are already ordered and scoped in `.planning/ROADMAP.md`
+- `/gsd-execute-phase 6` — continue with plan `06-02` (the `Intl`-backed, per-locale cached
+  formatters); the sweep waves `06-08` … `06-12` consume the allow-list this plan opened
+- The phase-6 success criterion 1 ("the static scan finds none") is measured by the EMPTY
+  allow-list, which plan `06-10` proves with the raw sweep; `I18N-01` therefore stays **Pending**
+  in the traceability table until the phase closes
 - Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
   per-user locale with a migration, and Chromium coverage for the 8 untested UI flows

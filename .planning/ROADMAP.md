@@ -136,6 +136,13 @@ name is found from an unaccented query.
 
 Requirements: **I18N-01**, **I18N-03**, **I18N-04**, **SEARCH-01**
 
+Progress: 1 of 14 plans done. Plan `06-01` built the measuring device the phase trusts —
+`scripts/i18n-scan.mjs` (the static source scan, its position-scoped machine exclusions and the
+catalogue-key family), `test/fixtures/i18n-pending.json` (the allow-list: 1700 entries over the
+49 files that carry a user-visible literal) and the `prebuild` / `prebuild:en` build gate — and
+proved it on one literal (`a11y.dismiss`). The phase's success criterion 1 is measured by the EMPTY
+allow-list, which plan `06-10` proves; `I18N-01` stays pending until then.
+
 Success criteria (what must be TRUE):
 
 1. No user-visible literal is left inline in the interface sources: the static scan finds none, and
