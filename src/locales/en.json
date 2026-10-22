@@ -1390,5 +1390,19 @@
   "page.projects.col.start": "Start",
   "page.projects.col.lastActivity": "Last activity",
   "page.projects.sortRecent": "Recently active",
-  "page.projects.sortName": "Name"
+  "page.projects.sortName": "Name",
+  "page.inbox.cat.updates": "Updates",
+  "page.inbox.unread": "Unread",
+  "page.inbox.markAllRead": "Mark all as read",
+  "page.inbox.emptyUnread": "No unread notifications in this category.",
+  "page.inbox.emptyBody": "New mentions, assignments, and comments will show up here.",
+  "page.inbox.selectTitle": "Select a notification",
+  "page.inbox.selectBody": "Read the conversation and reply without leaving your inbox.",
+  "page.inbox.markUnread": "Mark as unread",
+  "page.inbox.markRead": "Mark as read",
+  "page.inbox.openTask": "Open task",
+  "page.inbox.conversation": "Conversation",
+  "page.inbox.replyPlaceholder": "Reply… use @ to mention",
+  "page.inbox.reply": "Reply",
+  "page.inbox.sendHint": "{mod}+Enter to send"
 }
