@@ -39,6 +39,25 @@ export function getLocale() {
   return locale;
 }
 
+/* The locale switch: it resolves the requested code against the registry — an unknown code
+   resolves to the base locale rather than throwing, so a stale preference cannot brick the
+   interface — sets the singleton synchronously, then makes sure the catalogue is available.
+   Outside a bundler the loader map is empty, so the catalogue stays absent and the English
+   fallback applies: that is the documented behaviour, not an error. */
+export async function setLocale(code) {
+  const known = LOCALES.some(l => l.code === code);
+  const target = known ? code : BASE_LOCALE;
+  locale = target;
+  if (!catalogues.has(target)) {
+    const loader = loaders[`../locales/${target}.json`];
+    if (loader) {
+      const mod = await loader();
+      registerCatalogue(target, (mod && mod.default) || mod);
+    }
+  }
+  return target;
+}
+
 /* The registry entries that have a catalogue behind them: the base locale, every registered
    code, and every locale the build ships a catalogue file for. */
 export function availableLocales() {
