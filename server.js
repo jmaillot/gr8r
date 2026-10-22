@@ -576,6 +576,12 @@ function docFromClient(incoming, stored, ws, role, membership) {
         return prev ? { ...m, id: prev.id, userId: prev.userId, email: prev.email, role: prev.role, status: prev.status } : null;
       })
       .filter(Boolean);
+    // A member the client's copy does not know about — they joined in another
+    // session — keeps the stored profile, so a stale document cannot drop them.
+    const kept = new Set(next.data.members.map(m => m?.userId).filter(Boolean));
+    for (const m of storedMembers) {
+      if (m?.userId && !kept.has(m.userId)) next.data.members.push(m);
+    }
   }
   // The plan is a label with its own owner-only endpoint; the document never sets it.
   next.data.plan = stored?.data?.plan;
@@ -643,10 +649,19 @@ function ownerCount(workspaceId, excludeUserId = null) {
   return db.prepare("select count(*) as n from memberships where workspace_id = ? and role = 'owner' and user_id is not ?").get(workspaceId, excludeUserId).n;
 }
 
-/* Overlay the authority fields of every profile that belongs to an account. */
+/* Overlay the authority fields of every profile that belongs to an account,
+   and add the profile of a member that has none yet. The membership table is
+   the source of truth: a member who joined in another session is repaired
+   here, so joining never has to invalidate that session's revision. */
 function syncProfiles(doc, workspaceId) {
   if (!doc?.data || !Array.isArray(doc.data.members)) return;
-  const rows = db.prepare('select user_id, role, member_id from memberships where workspace_id = ?').all(workspaceId);
+  const rows = db
+    .prepare(
+      `select m.user_id, m.role, m.member_id, u.name, u.email
+         from memberships m join users u on u.id = m.user_id
+        where m.workspace_id = ?`,
+    )
+    .all(workspaceId);
   const byUser = new Map(rows.map(r => [r.user_id, r]));
   for (const profile of doc.data.members) {
     if (!profile?.userId) continue;
@@ -657,6 +672,13 @@ function syncProfiles(doc, workspaceId) {
     if (profile.status === 'invited') profile.status = 'active';
     // The document stores minutes since last activity; older rows stored a timestamp.
     if (typeof profile.last === 'number' && profile.last > 1e11) profile.last = Math.max(0, Math.round((now() - profile.last) / 60000));
+  }
+  /* A member without a profile in the document: the membership row says they
+     belong here, so the roster is completed instead of being left to a write. */
+  const known = new Set(doc.data.members.map(m => m?.userId).filter(Boolean));
+  for (const row of rows) {
+    if (known.has(row.user_id)) continue;
+    doc.data.members.push(memberProfile(row, doc.data.members.length));
   }
 }
 
@@ -872,7 +894,7 @@ function backfillMemberships() {
     if (!doc?.data) continue;
     const before = JSON.stringify(doc);
     for (const m of db.prepare('select m.*, u.email, u.name from memberships m join users u on u.id = m.user_id where m.workspace_id = ?').all(ws.id)) {
-      const memberId = ensureMember(doc, { id: m.user_id, email: m.email, name: m.name }, m.role);
+      const memberId = ensureMember(doc, { id: m.user_id, email: m.email, name: m.name }, m.role, ws.id);
       if (memberId && memberId !== m.member_id) {
         db.prepare('update memberships set member_id = ? where workspace_id = ? and user_id = ?').run(memberId, ws.id, m.user_id);
       }
@@ -885,7 +907,34 @@ function backfillMemberships() {
   }
 }
 
-function ensureMember(doc, user, role = 'member') {
+/* The document profile of an account-backed member. */
+function memberProfile(row, index = 0) {
+  return {
+    id: row.member_id || `m_${row.user_id.slice(0, 8)}`,
+    userId: row.user_id,
+    name: row.name,
+    email: row.email,
+    role: ROLE_LABEL[row.role] || 'Member',
+    team: null,
+    title: '',
+    c: ['#5A67D8', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 6],
+    status: 'active',
+    last: 0,
+    tz: '',
+  };
+}
+
+/* The document id of an account-backed member. The membership table holds the
+   ids that are already taken, so a new member never collides with one. */
+function memberIdFor(workspaceId, user) {
+  const row = db.prepare('select member_id from memberships where workspace_id = ? and user_id = ?').get(workspaceId, user.id);
+  if (row?.member_id) return row.member_id;
+  const base = `m_${user.id.slice(0, 8)}`;
+  const taken = db.prepare('select 1 from memberships where workspace_id = ? and member_id = ?').get(workspaceId, base);
+  return taken ? `m_${user.id}` : base;
+}
+
+function ensureMember(doc, user, role = 'member', workspaceId = null) {
   const members = doc?.data?.members;
   if (!Array.isArray(members)) return null;
   const email = (user.email || '').toLowerCase();
@@ -898,35 +947,23 @@ function ensureMember(doc, user, role = 'member') {
     match.role = ROLE_LABEL[role] || match.role;
     return match.id;
   }
-  let id = `m_${user.id.slice(0, 8)}`;
-  if (members.some(m => m.id === id)) id = `m_${user.id}`;
-  members.push({
-    id,
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    role: ROLE_LABEL[role] || 'Member',
-    team: null,
-    title: '',
-    c: ['#5A67D8', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][members.length % 6],
-    status: 'active',
-    last: 0,
-    tz: '',
-  });
+  const id = workspaceId ? memberIdFor(workspaceId, user) : `m_${user.id.slice(0, 8)}`;
+  members.push(memberProfile({ user_id: user.id, member_id: id, role, name: user.name, email: user.email }, members.length));
   return id;
 }
 
 function addMembership(ws, user, role) {
   if (!ws) throw httpError(500, 'No workspace available');
-  const doc = JSON.parse(ws.doc);
-  const memberId = ensureMember(doc, user, role);
+  /* The membership row is the source of truth. The document profile is a
+     mirror that the read path repairs, so joining a workspace never moves the
+     document's revision and never invalidates another session's write. */
+  const memberId = memberIdFor(ws.id, user);
   db.exec('begin immediate');
   try {
     db.prepare(
       `insert into memberships (workspace_id, user_id, role, member_id) values (?,?,?,?)
        on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
     ).run(ws.id, user.id, role, memberId);
-    db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
     db.exec('commit');
   } catch (err) {
     db.exec('rollback');
