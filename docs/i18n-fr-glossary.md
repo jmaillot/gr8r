@@ -146,3 +146,41 @@ Certaines valeurs sont identiques en anglais et en français — elles doivent
 **figurer dans `fr.json`**, jamais être omises pour satisfaire une heuristique de
 diff : **Gr8r Studio**, **Ctrl**, les noms de produits, les sigles **QA**, et toute
 valeur dont la forme coïncide (« Frontend », « Backend », « Bug », « Design »).
+
+## Terminologie — lot A (`page.*`, plan 07-04)
+
+Ajoutées par le lot page ; les lots suivants les réutilisent telles quelles.
+
+| Anglais         | Français             |
+| --------------- | -------------------- |
+| design system   | système de design    |
+| token           | token                |
+| saved view      | vue enregistrée      |
+| due date        | échéance             |
+| overdue         | en retard            |
+| milestone       | jalon                |
+| inbox           | boîte de réception   |
+| sidebar         | barre latérale       |
+| side panel      | panneau latéral      |
+| breadcrumb      | fil d’Ariane         |
+| subtask         | sous-tâche           |
+| team            | équipe               |
+| workspace admin | admin de l’espace de travail |
+| demo data       | données de démo      |
+| wireframe       | wireframe            |
+| handoff         | passation            |
+| grid            | grille               |
+| e-mail          | e-mail               |
+
+## Terminologie — lot A (`a11y.*`, plan 07-04)
+
+Chaînes d’accessibilité : noms accessibles et libellés aria, volontairement
+courts et nominal-first (« Close » → « Fermer »), sans ponctuation finale
+ajoutée.
+
+| Anglais             | Français               |
+| ------------------- | ---------------------- |
+| accessible name     | nom accessible         |
+| screen reader label | libellé de lecteur d’écran |
+| Esc (key)           | Échap                  |
+| Enter (key)         | Entrée                 |
