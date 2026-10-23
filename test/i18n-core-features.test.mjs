@@ -164,7 +164,7 @@ test('the HTTP verbs and the API paths are byte-identical', () => {
     verbs.every(v => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(v)),
     'a verb changed',
   );
-  assert.equal(verbs.length, 21, 'a call site moved');
+  assert.equal(verbs.length, 20, 'a call site moved');
 });
 
 test('the icon names and the brand path are untouched', () => {
@@ -213,9 +213,9 @@ test('the allow-list carries no entry of the nine files of the wave and stays so
   assert.deepEqual(left, [], 'the wave files still have allow-list entries');
 });
 
-test('the catalogue grew to the wave boundary — 1446 keys, none under the reserved namespace', () => {
+test('the catalogue holds after the billing removal — 1392 keys, none under the reserved namespace', () => {
   const keys = Object.keys(en);
-  assert.equal(keys.length, 1446, 'the catalogue size moved');
+  assert.equal(keys.length, 1392, 'the catalogue size moved');
   assert.ok(
     keys.every(k => !k.startsWith('contract.') || k === 'contract.englishOnly'),
     'a phase key sits under contract.*',

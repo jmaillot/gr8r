@@ -74,14 +74,6 @@ export const SET_NAV = [
       ['2fa', 'settings.nav.twoFactor', 'shield-check'],
     ],
   ],
-  [
-    'settings.group.billing',
-    [
-      ['plan', 'settings.nav.plan', 'gem'],
-      ['payment', 'settings.nav.payment', 'credit-card'],
-      ['invoices', 'settings.nav.invoices', 'receipt'],
-    ],
-  ],
 ];
 export function srow(t, d, ctl) {
   return `<div class="srow"><div><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div><div class="row">${ctl}</div></div>`;
@@ -418,64 +410,6 @@ export function settingsBody(sec, title) {
               ).join('')}</div>
         <div class="grow col" style="gap:10px;min-width:220px"><div><b>${t('settings.tfa.scan')}</b><div class="muted" style="font-size:13px">${t('settings.tfa.appHint')}</div></div><div><b>${t('settings.tfa.enterCode')}</b></div><form data-submit="verify2fa" class="row"><input class="input mono ${S.ui.errors.tfa ? 'is-error' : ''}" id="tfa-code" inputmode="numeric" maxlength="6" placeholder="000000" style="width:130px;letter-spacing:.2em;font-size:15px" autofocus><button class="btn btn-primary" data-a="verify2fa">${t('settings.tfa.verify')}</button><button type="button" class="btn btn-ghost" data-a="cancel2fa">${t('common.cancel')}</button></form>${S.ui.errors.tfa ? `<span class="err">${ic('circle-alert', 12)}${S.ui.errors.tfa}</span>` : `<span class="hint">${t('settings.tfa.anyDigits')}</span>`}</div></div>`
             : `<div class="panel" style="padding:18px" ><div class="row" style="gap:14px;align-items:flex-start"><span class="ftype" style="--c:var(--amber);width:36px;height:36px">${ic('shield-alert', 18)}</span><div class="grow"><b>${t('settings.tfa.off')}</b><p class="muted" style="margin:4px 0 12px;font-size:13px">${t('settings.tfa.offDesc')}</p><button class="btn btn-primary" data-a="setup2fa">${t('settings.tfa.setup')}</button></div></div></div>`)
-      );
-    case 'plan': {
-      const planAdmin = !api.enabled || api.workspace?.role === 'owner';
-      const planName = d.plan || 'Team';
-      const planPrice = { Free: '$0', Team: '$12', Business: '$24' }[planName] || '$12';
-      return (
-        H(t('settings.plan.lead')) +
-        `<div class="panel" style="padding:18px;margin-bottom:18px"><div class="row" style="flex-wrap:wrap"><div><div class="eyebrow">${t('settings.plan.current')}</div><div style="font-size:20px;font-weight:600;letter-spacing:-.015em;margin-top:4px">${esc(planName)} <span class="muted" style="font-size:14px;font-weight:400">· ${planPrice} ${t('settings.plan.perMember')}</span></div><div class="muted" style="font-size:13px">${planName === 'Free' ? t('settings.plan.noRenewal') : t('settings.plan.renews', { date: fmtDate(dOff(7), true) })}</div></div><span class="sp"></span><button class="btn btn-secondary" data-a="go" data-r="settings" data-sec="invoices">${t('settings.plan.viewInvoices')}</button></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:18px">${[
-        ['nav.route.members', d.members.length, 10, ''],
-        ['settings.plan.storage', 12.4, 100, ' GB'],
-        ['nav.route.projects', d.projects.length, 50, ''],
-      ]
-        .map(
-          ([n, v, m, u]) =>
-            `<div><div class="row" style="font-size:12.5px;margin-bottom:6px"><span class="muted">${t(n)}</span><span class="sp"></span><span class="num">${t('settings.plan.of', { v: v, u: u, m: m })}</span></div><div class="meter"><i style="width:${(v / m) * 100}%;${v / m > 0.75 ? 'background:var(--amber)' : ''}"></i></div></div>`,
-        )
-        .join('')}</div></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">${[
-        ['Free', '$0', ['settings.plan.feature.members3', 'settings.plan.feature.tasksUnlimited', 'settings.plan.feature.storage5']],
-        [
-          'Team',
-          '$12',
-          ['settings.plan.feature.members50', 'settings.plan.feature.timelines', 'settings.plan.feature.storage100', 'settings.plan.feature.guests'],
-        ],
-        [
-          'Business',
-          '$24',
-          ['settings.plan.feature.membersUnlimited', 'settings.plan.feature.advancedPerms', 'settings.plan.feature.saml', 'settings.plan.feature.storage1tb'],
-        ],
-      ]
-        .map(([n, pr, fs]) => {
-          const cur = (d.plan || 'Team') === n;
-          return `<div class="plan ${cur ? 'cur' : ''}"><div class="row"><b>${n}</b>${cur ? `<span class="badge accent">${t('settings.plan.currentBadge')}</span>` : ''}</div><div class="pr">${pr}<span class="muted" style="font-size:12.5px;font-weight:400"> /member/mo</span></div><ul>${fs.map(f => `<li>${ic('check', 13)}${t(f)}</li>`).join('')}</ul><div style="margin-top:8px">${cur ? `<button class="btn btn-secondary btn-block" disabled>${t('settings.plan.current')}</button>` : planAdmin ? `<button class="btn ${n === 'Business' ? 'btn-primary' : 'btn-secondary'} btn-block" data-a="changePlan" data-v="${n}">${n === 'Free' ? t('settings.plan.downgrade') : t('settings.plan.upgrade')}</button>` : `<button class="btn btn-secondary btn-block" disabled title="${t('a11y.settings.ownerOnly')}">${t('settings.plan.contactOwner')}</button>`}</div></div>`;
-        })
-        .join('')}</div>`
-      );
-    }
-    case 'payment':
-      return (
-        H(t('settings.pay.lead')) +
-        srow(
-          `<span class="row" style="gap:10px"><span class="ftype" style="--c:var(--blue)">${ic('credit-card', 15)}</span>${t('settings.pay.card')}</span>`,
-          t('settings.pay.expiry'),
-          `<button class="btn btn-secondary btn-sm" data-a="toastInfo" data-msg="${t('settings.pay.cardUpdateMsg')}">${t('settings.pay.update')}</button>`,
-        ) +
-        srow(t('settings.pay.emailTitle'), t('settings.pay.emailDesc'), `<span class="muted" style="user-select:all">hello@gr8rstudio.com</span>`) +
-        srow(
-          t('settings.pay.addrTitle'),
-          t('settings.pay.address'),
-          `<button class="btn btn-secondary btn-sm" data-a="toastInfo" data-msg="${t('settings.pay.addressUpdateMsg')}">${t('act.edit')}</button>`,
-        ) +
-        srow(t('settings.pay.taxTitle'), t('settings.pay.taxDesc'), `<span class="muted">${t('settings.pay.taxId')}</span>`)
-      );
-    case 'invoices':
-      return (
-        H(t('settings.inv.lead')) +
-        `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:480px"><thead><tr><th style="padding-left:14px">${t('settings.inv.invoice')}</th><th style="text-align:left">${t('settings.inv.date')}</th><th style="text-align:left">${t('settings.inv.amount')}</th><th style="text-align:left">${t('page.field.status')}</th></tr></thead><tbody>${d.invoices.map(i => `<tr><td style="padding-left:14px" class="mono">${i.id}</td><td style="text-align:left" class="num">${fmtDate(i.date, true)}</td><td style="text-align:left" class="num">${i.amt}</td><td style="text-align:left"><span class="badge green">${ic('check', 11)}${i.st}</span></td></tr>`).join('')}</tbody></table></div>`
       );
   }
   return page404();

@@ -67,7 +67,7 @@ function applyUser(data) {
 }
 
 /* Adopt the revision reported by a server-side document change. Endpoints that
-   edit the document (member role, member removal, plan) bump the revision, so
+   edit the document (member role, member removal) bump the revision, so
    the client has to follow it — a stale revision makes the next write fail
    with 409 and the edit is lost. */
 function adoptRevision(data) {
@@ -228,13 +228,6 @@ export const api = {
       state.memberId = null;
       this.revision = 0;
     }
-    return r;
-  },
-  async setPlan(plan) {
-    const slug = state.workspace?.slug;
-    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
-    const r = await call('POST', `/api/workspaces/${encodeURIComponent(slug)}/plan`, { plan });
-    if (r.ok) adoptRevision(r.data);
     return r;
   },
   async deleteWorkspace() {

@@ -126,8 +126,6 @@ const ORACLE = [
   ['toast.signedOutOthers', undefined, 'Signed out of other sessions'],
   ['toast.twoFaEnabled', undefined, 'Two-factor authentication enabled'],
   ['toast.twoFaDisabled', undefined, 'Two-factor authentication turned off'],
-  ['err.changePlan', undefined, 'Could not change the plan'],
-  ['toast.planChanged', { plan: 'Team' }, "You're now on the Team plan"],
   ['toast.socialNotConfigured', undefined, 'Social sign-in is not configured on this server.'],
   ['toast.verificationSent', { email: 'a@b.co' }, 'Verification email sent to a@b.co'],
   ['toast.resetSent', { email: 'a@b.co' }, 'Reset link sent to a@b.co'],
@@ -239,8 +237,6 @@ const GONE = [
   'Signed out of other sessions',
   'Two-factor authentication enabled',
   'Two-factor authentication turned off',
-  'Could not change the plan',
-  "You're now on the",
   'Social sign-in is not configured on this server.',
   'Verification email sent to',
   'Reset link sent to',
@@ -292,7 +288,7 @@ test('the toast surface of src/actions/actions.js reports nothing at all', () =>
 });
 
 test('the machine identifiers survived the wave — tree-wide data-a / data-r / data-v counts', () => {
-  // 438 / 58 / 76, measured before the wave (D-08): a translated identifier
+  // 434 / 57 / 75, measured after the billing removal (07-02): a translated identifier
   // resolves A[el.dataset.a] to undefined and no test would show it.
   let a = 0,
     r = 0,
@@ -308,9 +304,9 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 438, 'data-a sites');
-  assert.equal(r, 58, 'data-r sites');
-  assert.equal(v, 76, 'data-v sites');
+  assert.equal(a, 434, 'data-a sites');
+  assert.equal(r, 57, 'data-r sites');
+  assert.equal(v, 75, 'data-v sites');
 });
 
 test("the action module's own data-a sites are byte-identical to what they were", () => {

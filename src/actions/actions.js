@@ -2371,33 +2371,6 @@ A.disable2fa = () =>
       toast(t('toast.twoFaDisabled'));
     },
   });
-A.changePlan = el => {
-  const v = el.dataset.v;
-  const price = { Free: 0, Team: 12, Business: 24 }[v];
-  confirmDlg({
-    title: v === 'Free' ? t('act.downgradeToTitle', { plan: v }) : t('act.upgradeToTitle', { plan: v }),
-    body: api.enabled
-      ? t('act.planCloudBody', { plan: v })
-      : `${t('act.planLocalHead', { n: D().members.length, price: price })}<b>$${D().members.length * price}/month</b>${t('act.planLocalTail')}`,
-    ok: v === 'Free' ? t('act.downgrade') : t('act.upgradeTo', { plan: v }),
-    icon: 'gem',
-    run: async () => {
-      if (api.enabled) {
-        const res = await api.setPlan(v);
-        if (!res.ok) return toast(res.error || t('err.changePlan'), { kind: 'err' });
-        S.data.plan = v;
-        render();
-        toast(t('toast.planChanged', { plan: v }));
-        return;
-      }
-      mutate(() => {
-        D().plan = v;
-      });
-      toast(t('toast.planChanged', { plan: v }));
-    },
-  });
-};
-
 /* auth */
 A.auth = el => {
   S.ui.auth = el.dataset.v;

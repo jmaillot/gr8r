@@ -80,7 +80,6 @@ export function permsTable() {
     [t('perm.inviteMembers'), 1, 1, 0, 0],
     [t('perm.manageRoles'), 1, 1, 0, 0],
     [t('perm.workspaceSettings'), 1, 1, 0, 0],
-    [t('perm.billing'), 1, 0, 0, 0],
     [t('perm.deleteWorkspace'), 1, 0, 0, 0],
   ];
   return `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:560px"><thead><tr><th style="padding-left:14px">${t('page.members.col.permission')}</th>${ROLES.map(r => `<th>${roleLabel(r)}</th>`).join('')}</tr></thead><tbody>${rows

@@ -102,14 +102,6 @@ const ORACLE = [
   ['act.disable2faTitle', undefined, 'Turn off two-factor authentication?'],
   ['act.disable2faBody', undefined, 'Your account will be protected by your password only.'],
   ['act.turnOff', undefined, 'Turn off'],
-  // the plan modal
-  ['act.downgradeToTitle', { plan: 'Free' }, 'Downgrade to Free?'],
-  ['act.upgradeToTitle', { plan: 'Team' }, 'Upgrade to Team?'],
-  ['act.planCloudBody', { plan: 'Team' }, 'Every member moves to Team today. Plans are a label for now — nothing is charged.'],
-  ['act.planLocalHead', { n: 5, price: 12 }, '5 members × $12/month = '],
-  ['act.planLocalTail', undefined, ', prorated from today and billed to Visa ending 4242.'],
-  ['act.downgrade', undefined, 'Downgrade'],
-  ['act.upgradeTo', { plan: 'Team' }, 'Upgrade to Team'],
   // the auth flows
   ['err.noWorkspace', undefined, 'No workspace to open'],
   ['err.enterEmail', undefined, 'Enter your email address'],

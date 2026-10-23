@@ -412,7 +412,7 @@ const TASK3_ORACLE = [
   ['popover.in2Weeks', undefined, 'In 2 weeks'],
   ['common.clear', undefined, 'Clear'],
   ['popover.roleFor', { name: 'Carol' }, 'Role for Carol'],
-  ['popover.roleDescOwner', undefined, 'Full control, including the plan and deleting the workspace'],
+  ['popover.roleDescOwner', undefined, 'Full control, including deleting the workspace'],
   ['popover.roleDescAdmin', undefined, 'Manage members, settings, and all projects'],
   ['popover.roleDescMember', undefined, 'Create projects and work on tasks'],
   ['popover.roleDescGuest', undefined, 'Only sees projects they are invited to'],
