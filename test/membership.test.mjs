@@ -226,9 +226,7 @@ test('a server-side change reports the new revision so the next write is accepte
   assert.ok(back.data.revision > changed.data.revision, 'the next change moves the revision again');
 
   const plan = await owner.post('/api/workspaces/acme/plan', { plan: 'Team' });
-  assert.equal(plan.status, 200);
-  assert.ok(plan.data.revision > back.data.revision, 'a plan change reports the new revision');
-  assert.equal((await owner.post('/api/workspaces/acme/plan', { plan: 'Free' })).status, 200);
+  assert.equal(plan.status, 404, 'the plan endpoint is gone');
 });
 
 test('the last owner cannot leave', async () => {
@@ -237,14 +235,13 @@ test('the last owner cannot leave', async () => {
   assert.match(res.data.error, /owner/);
 });
 
-test('only an owner changes the plan', async () => {
-  assert.equal((await bob.post('/api/workspaces/acme/plan', { plan: 'Business' })).status, 403, 'an admin cannot change the plan');
-  assert.equal((await cara.post('/api/workspaces/acme/plan', { plan: 'Business' })).status, 403, 'a member cannot change the plan');
-  assert.equal((await owner.post('/api/workspaces/acme/plan', { plan: 'Nope' })).status, 400);
-  assert.equal((await owner.post('/api/workspaces/acme/plan', { plan: 'Free' })).status, 200);
+test('the plan endpoint is gone for every role', async () => {
+  assert.equal((await bob.post('/api/workspaces/acme/plan', { plan: 'Business' })).status, 404, 'an admin gets 404');
+  assert.equal((await cara.post('/api/workspaces/acme/plan', { plan: 'Business' })).status, 404, 'a member gets 404');
+  assert.equal((await owner.post('/api/workspaces/acme/plan', { plan: 'Free' })).status, 404, 'even an owner gets 404');
 
   const served = (await owner.get('/api/workspaces/acme')).data;
-  assert.equal(served.doc.data.plan, 'Free', 'the plan change is visible in the served document');
+  assert.equal(served.doc.data.plan, undefined, 'the plan change is not stored');
 });
 
 test('removing a member cleans up their assignments and access', async () => {

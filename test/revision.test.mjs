@@ -1,5 +1,5 @@
 /* The revision handshake between the server and the client.
-   A server-side document change (member role, member removal, plan) moves the
+   A server-side document change (member role, member removal) moves the
    workspace revision. If the client keeps the old revision, its next write is
    rejected with 409, the session flips into conflict mode and every later edit
    is dropped — the workspace silently stops accepting writes. So every such
@@ -32,7 +32,6 @@ function stubFetch(routes) {
 const ROUTES = {
   '/api/workspaces/acme': { data: { id: 'w1', name: 'Acme', slug: 'acme', color: '#1D1C1A', role: 'owner', revision: 7 } },
   '/api/workspaces/acme/members/u2': { data: { revision: 8, member: { userId: 'u2', role: 'admin' } } },
-  '/api/workspaces/acme/plan': { data: { plan: 'Team', revision: 10 } },
 };
 
 test('a role change moves the client onto the revision the server reported', async () => {
@@ -43,14 +42,6 @@ test('a role change moves the client onto the revision the server reported', asy
   const res = await api.setMember('u2', { role: 'admin' });
   assert.equal(res.ok, true);
   assert.equal(api.revision, 8, 'the client must follow the revision the server reported');
-});
-
-test('a plan change moves the client onto the revision the server reported', async () => {
-  stubFetch(ROUTES);
-  await api.loadWorkspace('acme');
-  const res = await api.setPlan('Team');
-  assert.equal(res.ok, true);
-  assert.equal(api.revision, 10, 'the client must follow the revision the server reported');
 });
 
 test('a failed change leaves the client revision untouched', async () => {

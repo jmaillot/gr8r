@@ -144,6 +144,24 @@ test('the migrated owner signs in and reads the preserved workspace', async () =
   );
 });
 
+test('a legacy document carrying plan and invoices hydrates and saves without them', async () => {
+  /* The fixture's pre-tenancy document still carries `plan` and `invoices`.
+     The served document tolerates them; a client write must drop them. */
+  const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
+
+  const read = await signedIn.client.get(`/api/workspaces/${SLUG}`);
+  assert.equal(read.status, 200, 'a legacy document with plan/invoices hydrates');
+
+  const doc = structuredClone(read.data.doc);
+  const saved = await signedIn.client.put(`/api/workspaces/${SLUG}`, { revision: read.data.revision, doc });
+  assert.equal(saved.status, 200, 'the legacy document saves');
+
+  const after = await signedIn.client.get(`/api/workspaces/${SLUG}`);
+  assert.equal(after.data.doc.data.plan, undefined, 'the plan field is gone after a write');
+  assert.equal(after.data.doc.data.invoices, undefined, 'the invoices field is gone after a write');
+  assert.equal(after.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project', 'the rows survive');
+});
+
 /* Everything the migration owns, compared byte-for-byte across a reboot. */
 function snapshot() {
   const row = workspaceRow();

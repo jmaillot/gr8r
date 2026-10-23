@@ -137,7 +137,7 @@ test('a viewer reads but cannot write', async () => {
   assert.equal((await cara.post('/api/workspaces/acme/invites', { emails: ['viewer-test@test.local'] })).status, 403);
 });
 
-test('a member cannot rename the workspace, edit the roster or change the plan', async () => {
+test('a member cannot rename the workspace or edit the roster', async () => {
   await join(owner, 'acme', dan, 'dan@test.local', 'member');
 
   assert.equal((await dan.patch('/api/workspaces/acme', { name: 'Dan Co' })).status, 403, 'PATCH is admin-only');
@@ -146,14 +146,14 @@ test('a member cannot rename the workspace, edit the roster or change the plan',
   assert.equal(live.role, 'member');
   const doc = structuredClone(live.doc);
   doc.data.members = [];
-  doc.data.plan = 'Business';
+  doc.data.plan = 'Business'; // a stale client still sends it — the server must drop it
   doc.data.ws = { name: 'Dan Co', url: 'dan-co', c: '#FFFFFF' };
   doc.data.me = { id: 'm_dan', name: 'Dan' };
   project(doc, 'p_acme').name = 'Renamed by a member';
   assert.equal((await dan.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200, 'a member keeps write access to the document');
 
   const served = (await owner.get('/api/workspaces/acme')).data;
-  assert.equal(served.doc.data.plan, 'Team', 'the plan is not set through the document');
+  assert.equal(served.doc.data.plan, undefined, 'the plan is not set through the document');
   assert.equal(served.doc.data.ws.name, 'Acme', 'data.ws is not set through the document');
   assert.equal(served.doc.data.ws.url, 'acme');
   assert.equal(served.doc.data.me, null);

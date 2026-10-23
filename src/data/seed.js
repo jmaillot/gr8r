@@ -516,12 +516,6 @@ export function seed() {
       { id: 'se2', dev: 'iPhone 15 · Gr8r app', loc: 'San Francisco, US', at: '2 hours ago' },
       { id: 'se3', dev: 'Windows · Edge', loc: 'Oakland, US', at: 'Sep 12' },
     ],
-    invoices: [
-      { id: 'INV-2026-009', date: dOff(-23), amt: '$96.00', st: 'Paid' },
-      { id: 'INV-2026-008', date: dOff(-53), amt: '$96.00', st: 'Paid' },
-      { id: 'INV-2026-007', date: dOff(-84), amt: '$80.00', st: 'Paid' },
-      { id: 'INV-2026-006', date: dOff(-114), amt: '$80.00', st: 'Paid' },
-    ],
     tfa: false,
     notifPrefs: {
       email_mention: true,

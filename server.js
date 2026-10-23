@@ -560,7 +560,7 @@ function docFromClient(incoming, stored, ws, role, membership) {
   delete next.data.workspaces;
   next.data.me = null;
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
-  // Membership and plan edits stay with the roles that are allowed to make them.
+  // Membership edits stay with the roles that are allowed to make them.
   const storedMembers = stored?.data?.members || [];
   if (ROLE_RANK[role] < ROLE_RANK.admin) {
     next.data.members = storedMembers;
@@ -583,8 +583,9 @@ function docFromClient(incoming, stored, ws, role, membership) {
       if (m?.userId && !kept.has(m.userId)) next.data.members.push(m);
     }
   }
-  // The plan is a label with its own owner-only endpoint; the document never sets it.
-  next.data.plan = stored?.data?.plan;
+  // The plan and invoices fields are gone; a stale client's copy must never resurrect them.
+  delete next.data.plan;
+  delete next.data.invoices;
   normalizeProjects(next);
   return next;
 }
@@ -749,7 +750,6 @@ function emptyDoc(meta) {
   return normalizeDoc(
     {
       data: {
-        plan: 'Team',
         members: [],
         projects: [],
         tasks: [],
@@ -762,7 +762,6 @@ function emptyDoc(meta) {
         savedViews: [],
         recentSearches: [],
         sessions: [],
-        invoices: [],
         tfa: false,
         notifPrefs: {
           email_mention: true,
@@ -1467,18 +1466,6 @@ async function handleApi(req, res, url) {
         ctx.user.id,
       ),
     });
-  }
-
-  const wsPlanMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/plan$/);
-  if (wsPlanMatch && method === 'POST') {
-    const ctx = requireWorkspace(req, res, wsPlanMatch[1], 'owner');
-    if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
-    const body = await readJson(req);
-    const plan = String(body?.plan || '');
-    if (!['Free', 'Team', 'Business'].includes(plan)) return json(res, 400, { error: 'Unknown plan' });
-    transaction(() => updateDoc(ctx.ws.id, doc => (doc.data.plan = plan)));
-    return json(res, 200, { plan, revision: wsRevision(ctx.ws.id) });
   }
 
   /* ------------------------------- invites ------------------------------- */
