@@ -280,14 +280,14 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-23
-**Stopped at:** Phase 7, plan 07-02 complete (billing removed end-to-end)
-**Resume file:** .planning/phases/07-french-catalogue-french-typography/07-03-PLAN.md
+**Stopped at:** Phase 7, plan 07-03 complete (templates, notifications and estimates through the catalogue)
+**Resume file:** .planning/phases/07-french-catalogue-french-typography/07-04-PLAN.md
 
 ## Current Position
 
 Phase: 7 (French catalogue & French typography) — EXECUTING
-Status: Plan 07-02 complete (billing removed end-to-end, 54 catalogue keys deleted)
-Last activity: 2026-10-23 — Plan 07-02 complete
+Status: Plan 07-03 complete (D-10/D-11/D-12 done; catalogue at 1 449 keys)
+Last activity: 2026-10-23 — Plan 07-03 complete
 
 ## Operator Next Steps
 
