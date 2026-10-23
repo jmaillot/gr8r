@@ -184,3 +184,25 @@ ajoutée.
 | screen reader label | libellé de lecteur d’écran |
 | Esc (key)           | Échap                  |
 | Enter (key)         | Entrée                 |
+
+## Terminologie — lot B (`settings.*`, plan 07-05)
+
+Ajoutées par le lot settings ; réutilisées telles quelles par les lots suivants.
+
+| Anglais                       | Français                          |
+| ----------------------------- | --------------------------------- |
+| Settings                      | Paramètres                        |
+| accent color                  | couleur d’accent                  |
+| spellcheck                    | vérification orthographique       |
+| two-factor authentication     | authentification à deux facteurs  |
+| recovery codes                | codes de récupération             |
+| invite link                   | lien d’invitation                 |
+| push notification             | notification push                 |
+| daily digest                  | résumé quotidien                  |
+| danger zone                   | zone de danger                    |
+| member directory              | annuaire des membres              |
+| role permissions              | permissions par rôle              |
+| target date                   | date cible                        |
+| lead (of a project)           | responsable (du projet)           |
+| upload                        | téléverser                        |
+| starter task                  | tâche prédéfinie                  |
