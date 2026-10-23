@@ -71,6 +71,8 @@ Dependencies point downward:
   design-system menu and keeps the native element as the source of truth.
 - **Icons:** call `ic('name')` with any [Lucide](https://lucide.dev) icon name. The
   `virtual:icons` plugin bundles only the icons the source uses.
+- **Project templates:** how to add or edit the new-project templates —
+  see [docs/project-templates.md](docs/project-templates.md).
 
 ## Continuous integration
 
