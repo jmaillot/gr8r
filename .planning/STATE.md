@@ -280,18 +280,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-23
-**Stopped at:** Phase 7, plan 07-03 complete (templates, notifications and estimates through the catalogue)
-**Resume file:** .planning/phases/07-french-catalogue-french-typography/07-04-PLAN.md
+**Stopped at:** Phase 7, plan 07-04 complete (batch A: page + a11y namespaces translated)
+**Resume file:** .planning/phases/07-french-catalogue-french-typography/07-05-PLAN.md
 
 ## Current Position
 
 Phase: 7 (French catalogue & French typography) — EXECUTING
-Status: Plan 07-03 complete (D-10/D-11/D-12 done; catalogue at 1 449 keys)
-Last activity: 2026-10-23 — Plan 07-03 complete
+Status: Plan 07-04 complete (batch A done — 644 keys; fr.json at 707 keys)
+Last activity: 2026-10-23 — Plan 07-04 complete
 
 ## Operator Next Steps
 
-- `/gsd-execute-phase 7` — the remaining plans (07-03…07-07) translate the 1 392 English keys
-  in batches against `scripts/fr-parity.mjs`, the glossary and the two phase gates
+- `/gsd-execute-phase 7` — the remaining plans (07-05…07-07) translate the remaining 742 English
+  keys in batches against `scripts/fr-parity.mjs`, the glossary and the two phase gates
 - Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
   per-user locale with a migration, and Chromium coverage for the 8 untested UI flows
