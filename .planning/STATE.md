@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 08
 current_phase_name: Per-user locale & the honest selector
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-10-23T15:07:30.383Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-10-23T15:17:19.688Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 08 execution started
-state_head: aa2a34d960469d32bf8ad0d042822d8620cd6468
+state_head: fcabcfedd71093c0eda7717b8f6837def5ec0167
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 27
-  completed_plans: 25
+  completed_plans: 26
   percent: 25
 milestone_name: Localization
 ---
@@ -263,6 +263,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 7]: gr8r:locale now bubbles (Rule 1): the window listener in main.js never received the non-bubbling document event — the switch updated <html lang> while strings stayed in the old language
 - [Phase 7]: The French e2e spec owns a throwaway workspace via the exported apiClient helper — the language switch must not leak into the English-pinned tenancy suite (shared server, concurrent workers)
 - [Phase 08]: users.locale stores registry code, NULL until chosen; PATCH /api/auth/me is the only writer; legacy prefs.lang stripped at both merge points
+- [Phase 08]: 08-02: primeLocale (silent) vs setLocale (announcing) share activateLocale; boot/lifecycle use the silent variant only
 
 ## Verification commands used
 
@@ -295,13 +296,13 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-23T15:07:30.278Z
-**Stopped at:** Completed 08-01-PLAN.md
+**Last session:** 2026-10-23T15:17:19.588Z
+**Stopped at:** Completed 08-02-PLAN.md
 **Resume file:** None
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 3
 
 Phase: 08 (Per-user locale & the honest selector) — EXECUTING
@@ -323,3 +324,4 @@ Last activity: 2026-10-23 — Phase 08 execution started
 | Phase 07 P06 | ~35 min | 3 tasks | 3 files |
 | Phase 7 P07 | 15 min | 2 tasks | 5 files |
 | Phase 08 P01 | ~20min | 2 tasks | 7 files |
+| Phase 08 P02 | 15min | 2 tasks | 7 files |

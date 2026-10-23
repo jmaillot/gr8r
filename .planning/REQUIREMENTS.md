@@ -46,7 +46,7 @@ the server is the only boundary that counts.
 - [x] **LOC-05**: An existing installation gains the per-user language without data loss, without
       writing a migration backup, and without touching the workspace row: a second boot stays a
       byte-identical no-op.
-- [ ] **LOC-06**: The account's language is applied before the first render, so the interface
+- [x] **LOC-06**: The account's language is applied before the first render, so the interface
       never flashes English.
 
 ### Search
@@ -145,7 +145,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOC-03 | Phase 8 | Complete |
 | LOC-04 | Phase 8 | Complete |
 | LOC-05 | Phase 8 | Complete |
-| LOC-06 | Phase 8 | Pending |
+| LOC-06 | Phase 8 | Complete |
 | SEARCH-01 | Phase 6 | Complete |
 | ERR-01 | Phase 9 | Pending |
 | ERR-02 | Phase 9 | Pending |
