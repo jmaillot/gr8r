@@ -21,8 +21,10 @@ the server is the only boundary that counts.
       separator, and relative times ("il y a 2 jours").
 - [x] **I18N-04**: Plural forms follow the locale's CLDR categories, so French says "0 fichier"
       where English says "0 files" and a million takes its own category.
-- [ ] **I18N-05**: French typography is respected: a narrow no-break space before `: ; ! ?` and
-      inside guillemets, and the curly apostrophe.
+- [ ] **I18N-05**: French typography is respected: a no-break space (U+00A0) before `:`, a
+      narrow no-break space (U+202F) before `; ! ?`, a no-break space (U+00A0) inside guillemets
+      on both sides (« »), the curly apostrophe (U+2019), the ellipsis (U+2026) rather than
+      `...`, and accents normalised to NFC everywhere.
 - [ ] **I18N-06**: A catalogue value can never inject markup — catalogue values are plain text,
       and a test rejects any value containing `<`, `>` or a double quote.
 - [ ] **I18N-07**: The vocabulary the app stores as data — statuses, priorities, roles,

@@ -58,5 +58,10 @@
 
 ## Deviations
 
-None. The plan's done criteria are met exactly; the only deliberate RED is the one the plan
-itself prescribes (the completeness test until 07-06 finishes the batches).
+None in substance. One execution note: the executor's Task 3 commit landed without the two
+Task 3 files (the glossary and the REQUIREMENTS.md correction) — the orchestrator closed the
+gap inline before advancing: `docs/i18n-fr-glossary.md` was written (prettier-formatted) and
+`.planning/REQUIREMENTS.md` I18N-05 was corrected to the authoritative D-04 wording, in the
+`fix(07-01)` commit that follows this summary. The plan's done criteria are met exactly; the
+only deliberate RED is the one the plan itself prescribes (the completeness test until 07-06
+finishes the batches).

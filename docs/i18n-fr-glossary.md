@@ -1,0 +1,148 @@
+# Glossaire français — Gr8r Studio
+
+Source de vérité terminologique pour la traduction du catalogue (`src/locales/fr.json`).
+Chaque lot de traduction (batches `page`, `settings`, `act`, `a11y`, `toast`, `modal`,
+`err`, etc.) lit ce document AVANT d'écrire une seule valeur. Un terme ici fixé n'est
+jamais changé rétroactivement — un lot ne peut qu'ajouter des lignes, jamais modifier
+un terme existant.
+
+## Registre (register)
+
+- **Vouvoiement** : la forme « vous » partout (aucun tutoiement dans l'interface).
+- **Casse** : sentence case — seule la première lettre d'un titre est capitale
+  (« Nouvelle tâche », et non « Nouvelle Tâche »). Les noms propres et les sigles
+  gardent leur casse (Gr8r Studio, QA).
+- **Pas de point médian** : aucune forme du type « membre·e ». Les formulations
+  épicènes ou le masculin générique sont utilisés (« les membres », « chaque membre »).
+- **Conventions France** : mois et jours en minuscules (« janvier », « lundi »),
+  ordinaux `1er` / `1re` / `2e`, virgule décimale, regroupement des milliers par une
+  espace fine insécable (U+202F) — le regroupement est fait par `Intl`, jamais
+  codé en dur dans une valeur de catalogue.
+- **La voix passive / impersonnelle est préférée** aux tournures lourdes ;
+  les boutons restent courts et à l'infinitif (« Créer », « Supprimer »).
+
+## Typographie (règles D-04 — obligatoires dans chaque valeur)
+
+| Règle                                                  | Caractère obligatoire | Interdit                 |
+| ------------------------------------------------------ | --------------------- | ------------------------ |
+| Espace insécable avant `:`                             | U+00A0                | U+0020, U+202F           |
+| Espace fine insécable avant `;` `!` `?`                | U+202F                | U+0020, U+00A0           |
+| Espace insécable à l'intérieur de « » (des deux côtés) | U+00A0                | U+0020                   |
+| Apostrophe                                             | U+2019 (`’`)          | U+0027 (`'`)             |
+| Ellipse                                                | U+2026 (`…`)          | `...`                    |
+| Normalisation Unicode                                  | NFC                   | NFD (accents décomposés) |
+
+## Terminologie — vocabulaire stocké (oracles `test/i18n-vocab.test.mjs`)
+
+### Statuts de tâche (`task.status.*`)
+
+| id stocké  | Anglais     | Français  |
+| ---------- | ----------- | --------- |
+| `backlog`  | Backlog     | Backlog   |
+| `todo`     | To Do       | À faire   |
+| `progress` | In Progress | En cours  |
+| `review`   | Review      | À valider |
+| `done`     | Done        | Terminé   |
+
+### Priorités (`task.priority.*`)
+
+| id stocké | Anglais     | Français        |
+| --------- | ----------- | --------------- |
+| `urgent`  | Urgent      | Urgente         |
+| `high`    | High        | Haute           |
+| `medium`  | Medium      | Moyenne         |
+| `low`     | Low         | Basse           |
+| `none`    | No priority | Aucune priorité |
+
+### Étiquettes (`task.label.*`)
+
+| id stocké  | Anglais  | Français    |
+| ---------- | -------- | ----------- |
+| `design`   | Design   | Design      |
+| `frontend` | Frontend | Frontend    |
+| `backend`  | Backend  | Backend     |
+| `research` | Research | Recherche   |
+| `content`  | Content  | Contenu     |
+| `bug`      | Bug      | Bug         |
+| `qa`       | QA       | QA          |
+| `growth`   | Growth   | Acquisition |
+
+### Statuts de projet (`project.status.*`)
+
+| id stocké  | Anglais     | Français      |
+| ---------- | ----------- | ------------- |
+| `planning` | Planning    | Planification |
+| `active`   | In Progress | En cours      |
+| `risk`     | At Risk     | À risque      |
+| `hold`     | On Hold     | En pause      |
+| `complete` | Completed   | Terminé       |
+
+### Rôles (`common.role.*`)
+
+| id stocké | Anglais       | Français       |
+| --------- | ------------- | -------------- |
+| `owner`   | Owner         | Propriétaire   |
+| `admin`   | Admin         | Admin          |
+| `member`  | Member        | Membre         |
+| `guest`   | Guest         | Invité         |
+| `viewer`  | Guest (rendu) | Invité (rendu) |
+
+### Permissions (`common.perm.*`)
+
+| Anglais     | Français       |
+| ----------- | -------------- |
+| Can view    | Peut voir      |
+| Can comment | Peut commenter |
+| Can edit    | Peut modifier  |
+| Full access | Accès complet  |
+
+### Récurrence (`popover.recur*`)
+
+| Anglais         | Français              |
+| --------------- | --------------------- |
+| Does not repeat | Ne se répète pas      |
+| Daily           | Chaque jour           |
+| Weekly          | Chaque semaine        |
+| Every 2 weeks   | Toutes les 2 semaines |
+| Monthly         | Chaque mois           |
+
+## Terminologie — noms communs du produit
+
+| Anglais      | Français          |
+| ------------ | ----------------- |
+| workspace    | espace de travail |
+| project      | projet            |
+| task         | tâche             |
+| member       | membre            |
+| file         | fichier           |
+| comment      | commentaire       |
+| activity     | activité          |
+| notification | notification      |
+| timeline     | chronologie       |
+| table        | table             |
+| board        | tableau           |
+| drawer       | tiroir            |
+| modal        | fenêtre modale    |
+
+## Terminologie — verbes
+
+| Anglais | Français    |
+| ------- | ----------- |
+| create  | créer       |
+| edit    | modifier    |
+| delete  | supprimer   |
+| share   | partager    |
+| invite  | inviter     |
+| assign  | assigner    |
+| filter  | filtrer     |
+| sort    | trier       |
+| save    | enregistrer |
+| comment | commenter   |
+| mention | mentionner  |
+
+## Valeurs identiques dans les deux langues
+
+Certaines valeurs sont identiques en anglais et en français — elles doivent
+**figurer dans `fr.json`**, jamais être omises pour satisfaire une heuristique de
+diff : **Gr8r Studio**, **Ctrl**, les noms de produits, les sigles **QA**, et toute
+valeur dont la forme coïncide (« Frontend », « Backend », « Bug », « Design »).
