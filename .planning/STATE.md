@@ -283,6 +283,15 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 - Rollback: restore `DATA_DIR/gr8r-premultitenant-*.db` over `gr8r.db` and redeploy the previous
   image.
 
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 12 added: Real file uploads and previews — replaces the metadata-only file
+  behaviour (simulated upload progress, no stored content, `copyLink` pointing at a
+  non-existent `file/:id` route). Motivated by the documented known limitation
+  "File contents are metadata only; no binary upload backend".
+
 ## Session
 
 **Last session:** 2026-10-23T12:23:50.010Z

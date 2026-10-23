@@ -378,3 +378,18 @@ image.
 - Unmapped: 0 ✓
 - Phases: 7 (5–11) — every phase carries at least one requirement, every requirement appears in
   exactly one phase
+
+### Phase 12: Real file uploads and previews
+
+**Goal:** Replace the metadata-only file behaviour with real uploads: a server
+endpoint that stores dropped files under `DATA_DIR`, real upload progress in
+`handleFiles` (no simulated timer), real previews for PDFs and images, and a
+working destination for « Copier le lien » (a served `file/:id` route or a link
+to the parent task). Closes the known limitation "File contents are metadata
+only; no binary upload backend".
+**Requirements**: TBD
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 12 to break down)
