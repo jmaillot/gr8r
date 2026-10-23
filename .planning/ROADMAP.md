@@ -343,12 +343,12 @@ image.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | I18N-01 | Phase 6 | Complete |
-| I18N-02 | Phase 7 | Pending |
+| I18N-02 | Phase 7 | Complete |
 | I18N-03 | Phase 6 | Complete |
 | I18N-04 | Phase 6 | Complete |
-| I18N-05 | Phase 7 | Pending |
+| I18N-05 | Phase 7 | Complete |
 | I18N-06 | Phase 5 | Pending |
-| I18N-07 | Phase 7 | Pending |
+| I18N-07 | Phase 7 | Complete |
 | I18N-08 | Phase 5 | Pending |
 | LOC-01 | Phase 8 | Pending |
 | LOC-02 | Phase 8 | Pending |

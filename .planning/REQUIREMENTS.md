@@ -27,7 +27,7 @@ the server is the only boundary that counts.
       `...`, and accents normalised to NFC everywhere.
 - [ ] **I18N-06**: A catalogue value can never inject markup — catalogue values are plain text,
       and a test rejects any value containing `<`, `>` or a double quote.
-- [ ] **I18N-07**: The vocabulary the app stores as data — statuses, priorities, roles,
+- [x] **I18N-07**: The vocabulary the app stores as data — statuses, priorities, roles,
       permissions, project templates — is translated where it is displayed, without changing the
       stored values.
 - [ ] **I18N-08**: The French catalogue is built as its own chunk, so an English-only build
@@ -138,7 +138,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | I18N-04 | Phase 6 | Complete |
 | I18N-05 | Phase 7 | Complete |
 | I18N-06 | Phase 5 | Complete |
-| I18N-07 | Phase 7 | Pending |
+| I18N-07 | Phase 7 | Complete |
 | I18N-08 | Phase 5 | Complete |
 | LOC-01 | Phase 8 | Pending |
 | LOC-02 | Phase 8 | Pending |

@@ -3,17 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 7
 current_phase_name: French catalogue & French typography
+current_plan: 7
 status: executing
-stopped_at: Completed 07-06-PLAN.md (batch C — the catalogue is 100% French)
-last_updated: "2026-10-23T12:10:00.000Z"
+stopped_at: Completed 07-07-PLAN.md — phase 7 executed, awaiting the D-16 French read-through
+last_updated: "2026-10-23T12:23:50.096Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 7 execution started
-state_head: ef2fb70ba5b80cec4eac07c097217ce3c04cb6a3
+state_head: 0d8caea162409047b07925739285c7d8a7eab49e
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 23
+  completed_plans: 24
   percent: 29
 milestone_name: Localization
 ---
@@ -258,6 +259,9 @@ in `PROJECT.md` under **Requirements → Active**.
   manifest and lockfile version bump.
 - [Phase 07]: Batch B (settings/act/toast/modal/err, 513 keys) translated; toast.roleChanged article made locale-aware in actions.js; four raw-English splices deferred to deferred-items.md (need new en keys, forbidden while en.json is the oracle)
 - [Phase 07]: Batch C (229 shared-namespace keys + app.name) translated — the D-07 completeness gate is GREEN (100% en→fr parity, 1,449 keys); file.count deliberately keeps no many member (pinned by i18n.test.mjs); build-marker heuristic tightened to reject substrings of the other catalogue's text
+- [Phase 7]: The overflow spec enumerates the 16 user-facing ROUTE_IDS routes; member/team (param-dependent) and system/states (design-system showcases) are excluded — phase 10 widens coverage
+- [Phase 7]: gr8r:locale now bubbles (Rule 1): the window listener in main.js never received the non-bubbling document event — the switch updated <html lang> while strings stayed in the old language
+- [Phase 7]: The French e2e spec owns a throwaway workspace via the exported apiClient helper — the language switch must not leak into the English-pinned tenancy suite (shared server, concurrent workers)
 
 ## Verification commands used
 
@@ -281,11 +285,14 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-23T12:10:00.000Z
-**Stopped at:** Completed 07-06-PLAN.md (batch C — the catalogue is 100% French)
+**Last session:** 2026-10-23T12:23:50.010Z
+**Stopped at:** Completed 07-07-PLAN.md — phase 7 executed, awaiting the D-16 French read-through
 **Resume file:** None
 
 ## Current Position
+
+Current Plan: 7
+Total Plans in Phase: 7
 
 Phase: 7 (French catalogue & French typography) — EXECUTING
 Status: Plan 07-06 complete (batch C done — 230 keys; fr.json at 1,449 keys, 100% parity)
@@ -304,3 +311,4 @@ Last activity: 2026-10-23 — Plan 07-06 complete
 |------|----------|-------|-------|
 | Phase 07 P05 | ~50 min | 3 tasks | 4 files |
 | Phase 07 P06 | ~35 min | 3 tasks | 3 files |
+| Phase 7 P07 | 15 min | 2 tasks | 5 files |
