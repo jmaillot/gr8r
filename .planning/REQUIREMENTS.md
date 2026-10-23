@@ -39,11 +39,11 @@ the server is the only boundary that counts.
       reload.
 - [ ] **LOC-02**: The selector offers only the languages that are actually translated: English
       and French. The four other languages it listed until now are gone until they exist.
-- [ ] **LOC-03**: The language is a per-user preference, stored on the account, and it survives
+- [x] **LOC-03**: The language is a per-user preference, stored on the account, and it survives
       signing out, signing in again and opening the app from another browser.
-- [ ] **LOC-04**: The language is no longer part of the shared workspace document — the account
+- [x] **LOC-04**: The language is no longer part of the shared workspace document — the account
       is the only source of truth for it.
-- [ ] **LOC-05**: An existing installation gains the per-user language without data loss, without
+- [x] **LOC-05**: An existing installation gains the per-user language without data loss, without
       writing a migration backup, and without touching the workspace row: a second boot stays a
       byte-identical no-op.
 - [ ] **LOC-06**: The account's language is applied before the first render, so the interface
@@ -142,9 +142,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | I18N-08 | Phase 5 | Complete |
 | LOC-01 | Phase 8 | Pending |
 | LOC-02 | Phase 8 | Pending |
-| LOC-03 | Phase 8 | Pending |
-| LOC-04 | Phase 8 | Pending |
-| LOC-05 | Phase 8 | Pending |
+| LOC-03 | Phase 8 | Complete |
+| LOC-04 | Phase 8 | Complete |
+| LOC-05 | Phase 8 | Complete |
 | LOC-06 | Phase 8 | Pending |
 | SEARCH-01 | Phase 6 | Complete |
 | ERR-01 | Phase 9 | Pending |

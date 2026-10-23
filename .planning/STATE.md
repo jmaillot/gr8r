@@ -1,21 +1,21 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 8
+current_phase: 08
 current_phase_name: Per-user locale & the honest selector
-current_plan: Not started
+current_plan: 2
 status: executing
-stopped_at: Phase 8 context gathered
-last_updated: "2026-10-23T14:43:46.699Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-10-23T15:07:30.383Z"
 last_activity: 2026-10-23
-last_activity_desc: Phase 7 complete, transitioned to Phase 8
-state_head: f462b6a13a2c1d2ee442cdabc00fc676c407f5fe
+last_activity_desc: Phase 08 execution started
+state_head: aa2a34d960469d32bf8ad0d042822d8620cd6468
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 27
-  completed_plans: 24
-  percent: 13
+  completed_plans: 25
+  percent: 25
 milestone_name: Localization
 ---
 
@@ -262,6 +262,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 7]: The overflow spec enumerates the 16 user-facing ROUTE_IDS routes; member/team (param-dependent) and system/states (design-system showcases) are excluded — phase 10 widens coverage
 - [Phase 7]: gr8r:locale now bubbles (Rule 1): the window listener in main.js never received the non-bubbling document event — the switch updated <html lang> while strings stayed in the old language
 - [Phase 7]: The French e2e spec owns a throwaway workspace via the exported apiClient helper — the language switch must not leak into the English-pinned tenancy suite (shared server, concurrent workers)
+- [Phase 08]: users.locale stores registry code, NULL until chosen; PATCH /api/auth/me is the only writer; legacy prefs.lang stripped at both merge points
 
 ## Verification commands used
 
@@ -294,18 +295,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-23T14:10:08.844Z
-**Stopped at:** Phase 8 context gathered
-**Resume file:** .planning/phases/08-per-user-locale-the-honest-selector/08-CONTEXT.md
+**Last session:** 2026-10-23T15:07:30.278Z
+**Stopped at:** Completed 08-01-PLAN.md
+**Resume file:** None
 
 ## Current Position
 
-Current Plan: Not started
+Current Plan: 2
 Total Plans in Phase: 3
 
-Phase: 8 (Per-user locale & the honest selector) — READY TO EXECUTE
+Phase: 08 (Per-user locale & the honest selector) — EXECUTING
 Status: Ready to execute
-Last activity: 2026-10-23 — Phase 7 complete, transitioned to Phase 8
+Last activity: 2026-10-23 — Phase 08 execution started
 
 ## Operator Next Steps
 
@@ -321,3 +322,4 @@ Last activity: 2026-10-23 — Phase 7 complete, transitioned to Phase 8
 | Phase 07 P05 | ~50 min | 3 tasks | 4 files |
 | Phase 07 P06 | ~35 min | 3 tasks | 3 files |
 | Phase 7 P07 | 15 min | 2 tasks | 5 files |
+| Phase 08 P01 | ~20min | 2 tasks | 7 files |
