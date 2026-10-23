@@ -62,10 +62,14 @@ export async function setLocale(code) {
      of one. */
   if (typeof document !== 'undefined' && document && typeof document.dispatchEvent === 'function') {
     /* D-02: the document's language attribute follows the active locale — the boot
-       path never hardcodes an initial language, and a screen reader or the browser's
-       language-dependent features see the switched language, not a stale one. */
+       path never hardcodes an initial language, and a screen reader or the
+       browser's language-dependent features see the switched language, not a stale
+       one. The event bubbles: the boot listener lives on window (main.js), and a
+       non-bubbling event dispatched on the document never reaches it — the switch
+       would set the language attribute while the interface stays in the old
+       language (proven by the French overflow spec). */
     if (document.documentElement) document.documentElement.lang = target;
-    document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target } }));
+    document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target }, bubbles: true }));
   }
   return target;
 }

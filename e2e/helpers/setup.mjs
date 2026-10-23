@@ -38,8 +38,11 @@ export function newRunId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/* Cookie-bearing API client; the server sets `gr8r_session` on sign-in and signup. */
-function apiClient(base, { name, ip }) {
+/* Cookie-bearing API client; the server sets `gr8r_session` on sign-in and signup.
+   Exported so a spec that needs its own isolated workspace (french-overflow:
+   the language switch must not leak into the English-pinned suite) reuses the
+   same boot path instead of reimplementing the cookie handling. */
+export function apiClient(base, { name, ip }) {
   let cookie = '';
 
   async function request(method, pathname, body) {
