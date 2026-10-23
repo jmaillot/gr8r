@@ -695,29 +695,27 @@ A.signOut = async () => {
 | A4 | Playwright's `newContext({ locale })` reliably controls `navigator.languages` for the negotiation e2e | Validation Architecture | LOW — standard Playwright feature; fallback is launching Chromium with a language flag |
 | A5 | The seed can rely on the *server* doc carrying `prefs.lang` (not just localStorage) — i.e. hydration happens before the seed decision in every relevant flow | Pattern 5 / D-04 | MEDIUM — a member who never hydrated (e.g. 401 path) simply doesn't seed that boot and retries later; behaviour stays correct, only the timing of the seed shifts |
 
-## Open Questions
+## Open Questions — (RESOLVED)
 
-1. **Should the PATCH response drive the client's account cache, or is the request enough?**
+1. **Should the PATCH response drive the client's account cache, or is the request enough?** (RESOLVED)
    - What we know: the PATCH returns `userPayload(user)`; `api.applyUser()` is the existing
      cache-writer [api.js:63-67].
-   - What's unclear: whether `api.patchMe()` should call `applyUser(r.data)` (keeping
-     `state.user.locale` fresh for later boots-in-session, e.g. re-render paths) — recommended,
-     but it's an implementation detail within the agent's discretion.
-   - Recommendation: yes, adopt the payload — it keeps the NULL→chosen transition consistent
-     without another `api.me()` round-trip.
-
-2. **Does the demo-mode localStorage key need a store.js export or a local constant?**
+   - **Resolved: adopt the payload.** `api.patchMe()` calls `applyUser(r.data)` on success —
+     `state.user.locale` stays fresh without another `api.me()` round-trip. Adopted in
+     08-02 Task 1 (step 4).
+2. **Does the demo-mode localStorage key need a store.js export or a local constant?** (RESOLVED)
    - What we know: D-15 wants localStorage persistence; `STORE_KEY` ('gr8r.v2') is the existing
      blob key and the locale must NOT ride inside it (it would re-enter the prefs/doc pipeline).
-   - Recommendation: a separate key (e.g. `gr8r.locale`) owned by the i18n/locale module —
-     keeps the doc snapshot clean by construction. Naming is discretionary.
-
+   - **Resolved: a dedicated `gr8r.locale` key owned by the i18n module**, deliberately outside
+     the gr8r.v2 blob — keeps the doc snapshot clean by construction. Implemented in
+     08-02 Task 1 (step 3).
 3. **First-boot ordering edge: `join` early-return happens before `api.me()` in today's code**
-   ([main.js:138-155] calls `api.me()` only when signed in).
+   ([main.js:138-155] calls `api.me()` only when signed in). (RESOLVED)
    - What we know: D-07 covers the unauthenticated early-return via negotiation; the join flow
      for a *signed-in* visitor does call `api.me()`.
-   - Recommendation: no special handling needed — negotiation already applied; account adoption
-     follows the same rules wherever `api.me()` runs.
+   - **Resolved: no special handling needed.** Negotiation already applies at the top of init()
+     (08-02 Task 2 step 2); account adoption follows the same rules wherever `api.me()` runs,
+     per the boot order reflected in 08-02's must_haves.
 
 ## Environment Availability
 
