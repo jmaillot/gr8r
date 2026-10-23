@@ -74,6 +74,7 @@ export function apiClient(base, { name, ip }) {
     get: pathname => request('GET', pathname),
     post: (pathname, body) => request('POST', pathname, body),
     put: (pathname, body) => request('PUT', pathname, body),
+    patch: (pathname, body) => request('PATCH', pathname, body),
   };
 }
 

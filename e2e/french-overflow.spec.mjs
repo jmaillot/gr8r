@@ -13,10 +13,13 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL, PASSWORD, apiClient, clientIp, newRunId } from './helpers/setup.mjs';
 
-/* A dedicated account and workspace for the French proof: the language
-   preference lives in the workspace document, so switching Français here
-   must never touch the workspaces the English-pinned suite (tenancy.spec)
-   reads — the files share one server per run and may run concurrently. */
+/* A dedicated account and workspace for the French proof. The language is
+   an account property (phase 8: users.locale, written through PATCH
+   /api/auth/me), so switching Français here changes only this throwaway
+   account — it can never reach the accounts or workspaces the English-pinned
+   suite (tenancy.spec) reads; the files share one server per run and may run
+   concurrently. The workspace is still dedicated so the English fixtures this
+   file creates stay out of the shared suite's data. */
 let fr;
 
 test.beforeAll(async () => {
@@ -83,7 +86,7 @@ async function signIn(browser, account, viewport) {
 }
 
 /* The app has booted in French: the shell is rendered and the D-01 wiring
-   (stored prefs.lang label → applyPrefs mapping → setLocale) has applied. */
+   (account locale from /api/auth/me → primeLocale before the first render) has applied. */
 async function frenchShell(page) {
   await expect(page.locator('.content')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
@@ -143,7 +146,12 @@ test('switching the selector to Français re-renders without a reload and settle
     await page.evaluate(() => {
       window.__survived = 'no-reload';
     });
-    await page.getByRole('button', { name: 'lang', exact: true }).click();
+    /* The honest selector: two options, labelled in their own names. The
+       change persists through the account PATCH, awaited below. */
+    const language = page.getByRole('button', { name: 'Language', exact: true, expanded: false });
+    await language.click();
+    await expect(page.getByRole('option')).toHaveText(['English', 'Français']);
+    const saved = page.waitForResponse(r => r.url().endsWith('/api/auth/me') && r.request().method() === 'PATCH');
     await page.getByRole('option', { name: 'Français' }).click();
 
     /* The document language follows (D-02), the shell re-rendered in
@@ -171,10 +179,9 @@ test('switching the selector to Français re-renders without a reload and settle
     await page.waitForTimeout(1000);
     expect(await page.evaluate(() => window.__mutations), 'the interface keeps re-rendering after the switch (render loop)').toBe(0);
 
-    /* Persistence: after the debounced push has flushed, a fresh boot comes
-       up French through the stored label — the same path every later test
-       relies on. */
-    await page.waitForTimeout(1200);
+    /* Persistence: the account PATCH answered 200, so a fresh boot comes up
+       French from users.locale — the same path every later test relies on. */
+    expect((await saved).status(), 'the account locale write failed').toBe(200);
     await page.reload();
     await frenchShell(page);
   } finally {
@@ -284,7 +291,7 @@ test('a stored status id renders its French label while the data attribute keeps
    import-time locale into the labels. The fix reads the catalogue at render
    time (ptabs()); this test pins the regression — every project tab renders
    its French label and no unambiguous English label survives. */
-test('the project tab bar reads its labels from the locale at render time, not at import', async ({ browser }) => {
+test('the project tab bar reads its labels from the catalogue at render time, not at import', async ({ browser }) => {
   const { context, page } = await signIn(browser, fr.account);
   try {
     await page.goto(`/w/${fr.account.slug}/projects`);
