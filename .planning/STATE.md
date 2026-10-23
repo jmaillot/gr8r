@@ -5,17 +5,17 @@ current_phase: 8
 current_phase_name: Per-user locale & the honest selector
 current_plan: Not started
 status: planning
-stopped_at: Phase 7 complete, ready to plan Phase 8
-last_updated: "2026-10-23T12:55:57.099Z"
+stopped_at: Phase 8 context gathered
+last_updated: "2026-10-23T14:10:08.934Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 7 complete, transitioned to Phase 8
-state_head: cbc1ec5800ff8d2842238799fa6da71e64662e80
+state_head: c1dd9346794a0f77a27032ea28d0258363811472
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 2
   total_plans: 24
   completed_plans: 24
-  percent: 29
+  percent: 25
 milestone_name: Localization
 ---
 
@@ -294,9 +294,9 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-23T12:23:50.010Z
-**Stopped at:** Phase 7 complete, ready to plan Phase 8
-**Resume file:** None
+**Last session:** 2026-10-23T14:10:08.844Z
+**Stopped at:** Phase 8 context gathered
+**Resume file:** .planning/phases/08-per-user-locale-the-honest-selector/08-CONTEXT.md
 
 ## Current Position
 
