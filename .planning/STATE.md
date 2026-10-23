@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 08
-current_phase_name: Per-user locale & the honest selector
 current_plan: 3
-status: verifying
+status: executing
 stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-10-23T15:27:30.657Z"
+last_updated: "2026-10-23T17:12:01.220Z"
 last_activity: 2026-10-23
-last_activity_desc: Phase 08 execution started
-state_head: f1af97b2ea30e05bcd91d546e777e05f2dc2c1ed
+last_activity_desc: Phase 08 marked complete
+state_head: 1b183b0006ed8d7ca0240b3bf3fc0c590c9cb55f
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 27
-  completed_plans: 27
+  total_plans: 28
+  completed_plans: 28
   percent: 25
 milestone_name: Localization
+current_phase_name: Per-user locale & the honest selector
 ---
 
 # STATE
@@ -306,9 +306,9 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 Current Plan: 3
 Total Plans in Phase: 3
 
-Phase: 08 (Per-user locale & the honest selector) — EXECUTING
-Status: Phase complete — ready for verification
-Last activity: 2026-10-23 — Phase 08 execution started
+Phase: 08 — COMPLETE
+Status: Phase 08 complete
+Last activity: 2026-10-23 — Phase 08 marked complete
 
 ## Operator Next Steps
 
