@@ -186,6 +186,13 @@ export const api = {
     }
     return r;
   },
+  /* Update the signed-in account's own fields (today: locale). The returned payload is
+     adopted so state.user stays fresh without another me() round-trip. */
+  async patchMe(patch) {
+    const r = await call('PATCH', '/api/auth/me', patch);
+    if (r.ok) applyUser(r.data);
+    return r;
+  },
   async putWorkspace(doc, opts) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };

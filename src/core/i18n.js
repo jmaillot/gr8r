@@ -39,12 +39,13 @@ export function getLocale() {
   return locale;
 }
 
-/* The locale switch: it resolves the requested code against the registry — an unknown code
-   resolves to the base locale rather than throwing, so a stale preference cannot brick the
-   interface — sets the singleton synchronously, then makes sure the catalogue is available.
-   Outside a bundler the loader map is empty, so the catalogue stays absent and the English
-   fallback applies: that is the documented behaviour, not an error. */
-export async function setLocale(code) {
+/* The shared core of every locale change: it resolves the requested code against the
+   registry — an unknown code resolves to the base locale rather than throwing, so a stale
+   preference cannot brick the interface — sets the singleton synchronously, makes sure the
+   catalogue is available, then points the document's language attribute at it. Outside a
+   bundler the loader map is empty, so the catalogue stays absent and the English fallback
+   applies: that is the documented behaviour, not an error. */
+async function activateLocale(code) {
   const known = LOCALES.some(l => l.code === code);
   const target = known ? code : BASE_LOCALE;
   locale = target;
@@ -55,23 +56,72 @@ export async function setLocale(code) {
       registerCatalogue(target, (mod && mod.default) || mod);
     }
   }
-  /* The change is announced on the global document, never on an imported renderer: the
-     dependency graph stays acyclic. The document is read at call time, and a process without
-     one — plain Node — simply has no listener to notify. The dispatch comes after the
-     catalogue is ready, so a listener that re-renders sees the new language, not a promise
-     of one. */
+  /* D-02: the document's language attribute follows the active locale — the boot
+     path never hardcodes an initial language, and a screen reader or the
+     browser's language-dependent features see the switched language, not a stale
+     one. A process without a document — plain Node — simply skips it. */
+  if (typeof document !== 'undefined' && document && document.documentElement) document.documentElement.lang = target;
+  return target;
+}
+
+/* The locale switch: activate, then announce. The change is announced on the global
+   document, never on an imported renderer: the dependency graph stays acyclic. The dispatch
+   comes after the catalogue is ready, so a listener that re-renders sees the new language,
+   not a promise of one. The event bubbles: the boot listener lives on window (main.js), and
+   a non-bubbling event dispatched on the document never reaches it — the switch would set
+   the language attribute while the interface stays in the old language (proven by the
+   French overflow spec). */
+export async function setLocale(code) {
+  const target = await activateLocale(code);
   if (typeof document !== 'undefined' && document && typeof document.dispatchEvent === 'function') {
-    /* D-02: the document's language attribute follows the active locale — the boot
-       path never hardcodes an initial language, and a screen reader or the
-       browser's language-dependent features see the switched language, not a stale
-       one. The event bubbles: the boot listener lives on window (main.js), and a
-       non-bubbling event dispatched on the document never reaches it — the switch
-       would set the language attribute while the interface stays in the old
-       language (proven by the French overflow spec). */
-    if (document.documentElement) document.documentElement.lang = target;
     document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target }, bubbles: true }));
   }
   return target;
+}
+
+/* The boot variant of setLocale: the same resolution, catalogue load and document language,
+   but no announcement. Before the first render the re-render listener would paint an
+   uninitialised shell (the demo shell, flashing English), so every pre-render application
+   — negotiation, account locale, the migration seed — goes through this and the one render
+   that follows picks the language up. */
+export async function primeLocale(code) {
+  return activateLocale(code);
+}
+
+/* D-09: browser negotiation by language-subtag prefix, clamped to the registry. The first
+   supported entry of the preference list wins; anything else resolves to the base locale.
+   Pure and DOM-free: the list is the only input, and nothing is ever transmitted. */
+export function negotiate(codes) {
+  let list = codes;
+  if (list === undefined && typeof navigator !== 'undefined' && navigator) {
+    list = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+  }
+  for (const c of Array.isArray(list) ? list : Array.from(list || [])) {
+    const sub = String(c || '').toLowerCase().split('-')[0];
+    if (LOCALES.some(l => l.code === sub)) return sub;
+  }
+  return BASE_LOCALE;
+}
+
+/* D-15: demo mode's persistence backend. A dedicated key, deliberately outside the
+   gr8r.v2 blob, so the language can never re-enter the prefs/document pipeline. */
+export const LOCALE_STORAGE_KEY = 'gr8r.locale';
+
+export function storeLocale(code) {
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, code);
+  } catch {
+    /* storage blocked or absent */
+  }
+}
+
+export function readStoredLocale() {
+  try {
+    const v = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return LOCALES.some(l => l.code === v) ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 /* The registry entries that have a catalogue behind them: the base locale, every registered
