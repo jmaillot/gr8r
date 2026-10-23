@@ -388,3 +388,57 @@ test('the seed catalogues pass every rule', () => {
   assert.deepEqual(violations, [], `the seed catalogues are clean (${violations.map(describeViolation).join(' | ')})`);
   assert.ok(files.length >= 2, `every locale file is linted (${files.join(', ')})`);
 });
+
+/* ---------- the en→fr completeness (D-07) ---------- */
+
+/* The French catalogue must cover every key of the English one, and the
+   contract namespace is the documented exception: contract.englishOnly exists
+   only in English and contract.frenchOnly only in French, precisely to prove
+   the two lookup directions.
+
+   This test is RED BY DESIGN until plan 07-06 finishes the translation
+   batches: the French catalogue carries only the six seed values today. The
+   assertion is never weakened — the batch plans 07-02…07-05 fill the gaps and
+   this test goes green only when the phase's translation is complete. The
+   batch plans gate themselves on scripts/fr-parity.mjs, the namespace-scoped
+   form of this same contract. */
+test('the French catalogue covers every English key outside the contract namespace', () => {
+  const missing = [];
+  const invalid = [];
+  for (const [key, enValue] of Object.entries(en)) {
+    if (key.startsWith(CONTRACT_NAMESPACE)) continue;
+    const frValue = fr[key];
+    if (frValue === undefined) {
+      missing.push(key);
+      continue;
+    }
+    if (typeof frValue === 'string') {
+      if (frValue === '') invalid.push(`${key}: the French value is an empty string`);
+    } else if (frValue && typeof frValue === 'object' && !Array.isArray(frValue)) {
+      for (const category of ['one', 'other']) {
+        if (!Object.hasOwn(frValue, category) || frValue[category] === '') {
+          invalid.push(`${key}: the plural object lacks a non-empty ${category} member`);
+        }
+      }
+    } else {
+      invalid.push(`${key}: the French value is ${describeType(frValue)}, not a string or a plural object`);
+    }
+    void enValue;
+  }
+  assert.deepEqual(missing, [], `missing French values for ${missing.length} English keys:\n${missing.map(key => `missing French value: ${key}`).join('\n')}`);
+  assert.deepEqual(invalid, [], `invalid French values:\n${invalid.join('\n')}`);
+});
+
+test('the French catalogue carries no fr-only key outside the contract namespace', () => {
+  const stray = Object.keys(fr).filter(key => !key.startsWith(CONTRACT_NAMESPACE) && !Object.hasOwn(en, key));
+  assert.deepEqual(stray, [], `fr-only keys outside contract.* are a bug (${stray.map(key => `fr-only key: ${key}`).join(', ')})`);
+});
+
+test('the French key order mirrors the English key order', () => {
+  /* Translation never reorders the catalogue: the sequence of fr keys that
+     also exist in en must equal the sequence of en keys filtered the same
+     way, so a translation pass diffs positionally. */
+  const enShared = Object.keys(en).filter(key => Object.hasOwn(fr, key));
+  const frShared = Object.keys(fr).filter(key => Object.hasOwn(en, key));
+  assert.deepEqual(frShared, enShared, `the shared keys drifted out of order (fr: [${frShared.join(', ')}] against en: [${enShared.join(', ')}])`);
+});
