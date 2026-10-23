@@ -1,8 +1,7 @@
 /* =====================================================================
    test: i18n-locale — the selector path end to end (D-01, D-02, D-03).
 
-   The wiring under test: the stored prefs.lang display label maps to a
-   locale code in applyPrefs() (theme.js), setLocale() resolves the French
+   The wiring under test: setLocale() resolves the French
    catalogue and sets the document's language attribute (i18n.js), and the
    gr8r:locale event re-renders the app (main.js). The behaviour tests run
    on the leaf layer, which bare Node can import; the wiring tests read the
@@ -90,13 +89,12 @@ test('setLocale assigns the document language attribute to the resolved code', a
 
 /* ---------- the wiring, read from the source (D-01, D-02) ---------- */
 
-test('applyPrefs maps the stored Français label to the fr code behind the loop guard', () => {
+test('applyPrefs no longer touches the locale; the label→code map is gone (D-01, LOC-04)', () => {
   const src = fs.readFileSync(THEME_SOURCE, 'utf8');
-  assert.match(src, /LANG_TO_LOCALE/, 'the throwaway label→code map exists (phase 8 deletes it)');
-  assert.match(src, /Français/, "the map carries the stored 'Français' label");
-  assert.match(src, /getLocale\(\)\s*!==\s*target/, 'setLocale is guarded: no render → applyPrefs → setLocale → event → render loop');
-  assert.match(src, /setLocale\(\s*target\s*\)/, 'applyPrefs delegates the switch to setLocale');
-  assert.match(src, /\|\|\s*'en'/, 'any other stored label falls back to en (D-03)');
+  assert.doesNotMatch(src, /LANG_TO_LOCALE/, 'the throwaway label→code map is deleted');
+  assert.doesNotMatch(src, /Français/, 'the stored label format is gone');
+  assert.doesNotMatch(src, /\bp\.lang\b|prefs\.lang/, 'applyPrefs does not read the legacy prefs key');
+  assert.doesNotMatch(src, /setLocale|getLocale/, 'locale application moved out of applyPrefs');
 });
 
 test('setLocale sets documentElement.lang inside the document guard (D-02)', () => {

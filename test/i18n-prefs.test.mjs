@@ -269,7 +269,6 @@ test('the preference value is written verbatim: the sentinel survives a save', (
   assert.equal(prefValue('weekStart', '1'), 1);
   assert.equal(typeof prefValue('weekStart', '1'), 'number');
   /* A stored value is never mapped. */
-  assert.equal(prefValue('lang', 'English (US)'), 'English (US)');
   assert.equal(prefValue('tz', '(GMT-07:00) Pacific Time'), '(GMT-07:00) Pacific Time');
   /* The stored default carries through untouched too. */
   assert.equal(prefValue('dateFmt', 'MMM d'), 'MMM d');

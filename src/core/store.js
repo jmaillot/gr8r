@@ -13,7 +13,6 @@ export const DEFAULT_PREFS = {
   density: 'comfortable',
   weekStart: 1,
   dateFmt: 'MMM d',
-  lang: 'English (US)',
   tz: '(GMT-07:00) Pacific Time',
   motion: 'system',
   home: 'home',
@@ -21,6 +20,13 @@ export const DEFAULT_PREFS = {
   name: 'Tanjim Islam',
   title: 'Head of Product',
 };
+/* The language lives on the account (users.locale), never in the shared document:
+   an old localStorage blob or an old server doc must not resurrect prefs.lang into
+   S.prefs, or docSnapshot() would write it back into workspaces.doc on every save. */
+function stripLegacyLang(prefs) {
+  delete prefs.lang;
+  return prefs;
+}
 export function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -36,7 +42,7 @@ export function load() {
 export const saved = load();
 export const S = {
   data: saved?.data || seed(),
-  prefs: Object.assign({}, DEFAULT_PREFS, saved?.prefs || {}),
+  prefs: stripLegacyLang(Object.assign({}, DEFAULT_PREFS, saved?.prefs || {})),
   views: saved?.views || {},
   ui: {
     fx: {},
@@ -171,7 +177,7 @@ export function applyDoc(doc, revision) {
   if (doc.data) S.data = doc.data;
   S.data.recentSearches = Array.isArray(S.data.recentSearches) ? S.data.recentSearches : [];
   S.data.savedViews = Array.isArray(S.data.savedViews) ? S.data.savedViews : [];
-  S.prefs = Object.assign({}, DEFAULT_PREFS, doc.prefs || {});
+  S.prefs = stripLegacyLang(Object.assign({}, DEFAULT_PREFS, doc.prefs || {}));
   S.views = doc.views || {};
   S.ui.collapsed = !!doc.collapsed;
   S.ui.conflict = false;
