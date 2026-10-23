@@ -62,6 +62,11 @@ import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
 import { t as tk } from './core/i18n.js';
 
+/* The locale change re-renders the app: one listener, one re-render, never
+   batched or debounced (D-01). The loop guard in applyPrefs() keeps this from
+   cycling: setLocale only fires when the target locale actually differs. */
+addEventListener('gr8r:locale', () => render());
+
 addEventListener('gr8r:save-error', e => {
   const { status, error } = e.detail || {};
   if (status === 401) {
@@ -114,7 +119,6 @@ function applyDeepLink(rest) {
 }
 
 (async function init() {
-  document.documentElement.lang = 'en';
   if (!document.getElementById('sr-live')) {
     const l = document.createElement('div');
     l.id = 'sr-live';

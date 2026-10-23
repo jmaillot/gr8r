@@ -72,7 +72,7 @@ const FRENCH_COUNTS = [
   { n: 0, expected: '0 tâche' },
   { n: 1, expected: '1 tâche' },
   { n: 2, expected: '2 tâches' },
-  { n: 1000000, expected: '1000000 de tâches' },
+  { n: 1000000, expected: 'de 1000000 tâches' },
 ];
 
 test('the plural engine selects the English CLDR categories', () => {

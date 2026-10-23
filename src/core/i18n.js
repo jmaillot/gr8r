@@ -61,6 +61,10 @@ export async function setLocale(code) {
      catalogue is ready, so a listener that re-renders sees the new language, not a promise
      of one. */
   if (typeof document !== 'undefined' && document && typeof document.dispatchEvent === 'function') {
+    /* D-02: the document's language attribute follows the active locale — the boot
+       path never hardcodes an initial language, and a screen reader or the browser's
+       language-dependent features see the switched language, not a stale one. */
+    if (document.documentElement) document.documentElement.lang = target;
     document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target } }));
   }
   return target;
