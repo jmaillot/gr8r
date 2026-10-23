@@ -206,3 +206,5 @@ Ajoutées par le lot settings ; réutilisées telles quelles par les lots suivan
 | lead (of a project)           | responsable (du projet)           |
 | upload                        | téléverser                        |
 | starter task                  | tâche prédéfinie                  |
+| later (date shift)            | plus tard                         |
+| earlier (date shift)          | plus tôt                          |
