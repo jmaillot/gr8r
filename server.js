@@ -73,6 +73,8 @@ const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: '
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
 const RESERVED_SLUGS = new Set(['api', 'w', 'join', 'assets', 'static', 'health', 'login', 'signup', 'onboarding', 'settings', 'admin']);
 const MAILER = createMailer();
+/* Registry codes the interface actually renders (src/core/i18n.js LOCALES). */
+const LOCALE_CODES = ['en', 'fr'];
 
 /* ------------------------------- database ------------------------------ */
 const SCHEMA = `
@@ -83,7 +85,8 @@ const SCHEMA = `
     password_hash text not null,
     member_id     text,
     created_at    integer not null,
-    last_login_at integer
+    last_login_at integer,
+    locale        text
   );
   create table if not exists sessions (
     token_hash text primary key,
@@ -142,6 +145,7 @@ function openDb() {
   ensureColumn(db, 'workspaces', 'color', 'text');
   ensureColumn(db, 'memberships', 'member_id', 'text');
   ensureColumn(db, 'invites', 'workspace_id', 'text');
+  ensureColumn(db, 'users', 'locale', 'text');
   db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
   return db;
 }
@@ -246,6 +250,7 @@ function userPayload(user) {
     id: user.id,
     email: user.email,
     name: user.name,
+    locale: user.locale ?? null,
     workspaces: membershipsOf(user.id).map(row => workspacePayload(row, row)),
   };
 }
@@ -1228,6 +1233,19 @@ async function handleApi(req, res, url) {
     const user = currentUser(req);
     if (!user) return json(res, 200, { user: null });
     return json(res, 200, { user: userPayload(user) });
+  }
+
+  if (pathname === '/api/auth/me' && method === 'PATCH') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    const body = await readJson(req);
+    // Only body.locale is read; every other field is ignored (mass-assignment guard).
+    const locale = String(body?.locale || '');
+    if (!LOCALE_CODES.includes(locale)) return json(res, 400, { error: 'Unknown locale' });
+    db.prepare('update users set locale = ? where id = ?').run(locale, user.id);
+    const fresh = db.prepare('select * from users where id = ?').get(user.id);
+    return json(res, 200, { user: userPayload(fresh) });
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {

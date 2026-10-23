@@ -176,6 +176,7 @@ function snapshot() {
     updatedAt: row.updated_at,
     memberIds: membershipRows().map(r => [r.user_id, r.member_id]),
     inviteWorkspaceId: invite.workspace_id,
+    users: withDb(server.dbPath, db => db.prepare('select id, email, locale from users order by id').all().map(r => ({ ...r }))),
   };
 }
 
