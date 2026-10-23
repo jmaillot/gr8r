@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { t, t as tMsg, getLocale } from '../core/i18n.js';
+import { t, t as tMsg, getLocale, negotiate, primeLocale, readStoredLocale } from '../core/i18n.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
@@ -2043,6 +2043,12 @@ A.newWorkspace = () => {
   S.ui.onbData.url = '';
   render();
 };
+/* D-10/D-11 lifecycle moments. Every sign-in path ends in a render, so the locale is applied
+   silently just before it — a non-NULL account locale wins, a NULL one keeps the negotiated
+   value. Never the dispatching switch: the render that follows is the only one. */
+async function adoptAccountLocale() {
+  await primeLocale(api.user?.locale || negotiate());
+}
 A.signOut = async () => {
   if (api.enabled) {
     await flushPending();
@@ -2051,6 +2057,9 @@ A.signOut = async () => {
     clearLocalCache();
     history.replaceState(null, '', '/');
   }
+  /* D-10: the account is gone, so its locale is gone with it — back to the negotiated value
+     (demo mode has no account: its own stored choice stands). */
+  await primeLocale((!api.enabled && readStoredLocale()) || negotiate());
   S.ui.conflict = false;
   S.ui.pop = null;
   S.ui.palette = null;
@@ -2453,6 +2462,7 @@ A.doLogin = () => {
       render();
       return;
     }
+    await adoptAccountLocale();
     // Signing in from an invite link accepts it, so the person lands in the workspace.
     const queued = S.ui.join;
     if (queued?.token) {
@@ -2535,6 +2545,7 @@ A.doJoin = () => {
       render();
       return;
     }
+    await adoptAccountLocale();
     const slug = res.data?.workspace?.slug || api.workspaces[0]?.slug;
     if (!slug) {
       done();
@@ -2596,6 +2607,7 @@ A.doSignup = () => {
       render();
       return;
     }
+    await adoptAccountLocale();
     const slug = api.workspaces[0]?.slug;
     if (!slug) {
       done();

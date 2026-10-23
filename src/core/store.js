@@ -192,10 +192,23 @@ export function applyDoc(doc, revision) {
   return true;
 }
 
+/* The legacy workspace-shared language label, captured from the raw server document before
+   applyDoc() strips it. The one-time migration seed (D-04) reads it; one read per hydration. */
+let legacyLangLabel = null;
+export function consumeLegacyLang() {
+  const v = legacyLangLabel;
+  legacyLangLabel = null;
+  return v;
+}
+
 export async function hydrateFromServer(slug) {
   if (!api.enabled) return { ok: false, status: 0 };
   const res = await api.loadWorkspace(slug);
-  if (res.ok) applyDoc(res.data.doc, res.data.revision);
+  if (res.ok) {
+    const lang = res.data?.doc?.prefs?.lang;
+    legacyLangLabel = typeof lang === 'string' ? lang : null;
+    applyDoc(res.data.doc, res.data.revision);
+  }
   return res;
 }
 

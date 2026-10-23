@@ -113,3 +113,84 @@ test('api.patchMe PATCHes /api/auth/me and adopts the returned user', () => {
   assert.ok(m.includes("call('PATCH', '/api/auth/me', patch)"));
   assert.ok(m.includes('applyUser(r.data)'));
 });
+
+/* ---- boot order and lifecycle (source assertions: init() and the actions need the DOM) ---- */
+
+const at = (src, needle, from = 0) => {
+  const i = src.indexOf(needle, from);
+  assert.notEqual(i, -1, `${needle} not found`);
+  return i;
+};
+
+test('init() primes the negotiated locale before the first server await (D-07)', () => {
+  const init = MAIN.slice(at(MAIN, '(async function init()'));
+  const prime = at(init, 'await primeLocale(negotiated)');
+  assert.ok(init.includes('const negotiated = negotiate()'));
+  assert.ok(prime < at(init, 'await api.init()'), 'negotiated prime precedes api.init()');
+  assert.ok(prime < at(init, 'render()'), 'and every render');
+});
+
+test('demo mode primes its stored locale, else the negotiated one (D-15)', () => {
+  assert.ok(MAIN.includes('if (!withServer) await primeLocale(readStoredLocale() || negotiated)'));
+});
+
+test('the account locale is applied after api.me() and before the first render (D-11)', () => {
+  const init = MAIN.slice(at(MAIN, '(async function init()'));
+  const me = at(init, 'const user = await api.me()');
+  const adopt = at(init, 'await primeLocale(user.locale)', me);
+  assert.ok(adopt > me && adopt < at(init, 'render()', me));
+  assert.ok(init.slice(me, adopt).includes('user?.locale'), 'only a non-NULL account locale replaces the negotiated one');
+});
+
+test('the migration seed is guarded, account-only, and applies in the same boot (D-04/D-05/D-06)', () => {
+  const seed = bodyOf(MAIN, 'async function seedLegacyLocale');
+  assert.ok(seed.includes('consumeLegacyLang()'));
+  assert.ok(seed.includes('api.user?.locale != null'), 'NULL-only guard');
+  assert.ok(seed.includes('legacy !== french'), 'exact legacy French label only');
+  assert.ok(seed.includes("api.patchMe({ locale: 'fr' })"));
+  assert.ok(!seed.includes('putWorkspace') && !seed.includes('patchWorkspace'), 'never touches the workspace row');
+  assert.ok(seed.includes("await primeLocale('fr')"), 'silent, same-boot application');
+  assert.ok(!seed.includes('setLocale'), 'never the dispatching switch');
+  const init = MAIN.slice(at(MAIN, '(async function init()'));
+  const hydrate = at(init, 'await hydrateFromServer(slug)');
+  const call = at(init, 'await seedLegacyLocale()');
+  assert.ok(call > hydrate && call < at(init, 'render();\n  if (withServer'), 'seed runs after hydration, before the first render');
+});
+
+test('the legacy label is captured from the raw doc before applyDoc strips it', () => {
+  const h = bodyOf(STORE, 'export async function hydrateFromServer');
+  assert.ok(h.indexOf('prefs?.lang') < h.indexOf('applyDoc('), 'capture precedes the strip');
+  assert.ok(STORE.includes('export function consumeLegacyLang'));
+  const c = bodyOf(STORE, 'export function consumeLegacyLang');
+  assert.ok(c.includes('legacyLangLabel = null'), 'consume-style: one read per boot');
+});
+
+test('no pre-render locale application in the boot path dispatches the re-render event (Pitfall 2)', () => {
+  const init = MAIN.slice(at(MAIN, 'async function seedLegacyLocale'));
+  assert.ok(!/\bsetLocale\b/.test(init), 'the boot path uses primeLocale only');
+  assert.ok(!MAIN.includes("import { t as tk, setLocale"), 'main.js does not even import setLocale');
+});
+
+test('sign-out falls back to the negotiated locale before its render (D-10)', () => {
+  const out = bodyOf(ACTIONS, 'A.signOut = async () =>');
+  assert.ok(out.includes('primeLocale('));
+  assert.ok(out.includes('negotiate()'));
+  assert.ok(out.indexOf('primeLocale(') < out.lastIndexOf('render()'));
+  assert.ok(out.indexOf('clearLocalCache()') < out.indexOf('primeLocale('));
+  assert.ok(!out.includes('setLocale'));
+});
+
+test('login, signup and invite-accept adopt the account locale before their renders (D-11)', () => {
+  const adopt = bodyOf(ACTIONS, 'async function adoptAccountLocale');
+  assert.ok(adopt.includes('api.user?.locale || negotiate()'));
+  for (const [header, call] of [
+    ['A.doLogin = () =>', 'api.login('],
+    ['A.doJoin = () =>', 'api.acceptInvite(j.token'],
+    ['A.doSignup = () =>', 'api.signup('],
+  ]) {
+    const fn = bodyOf(ACTIONS, header);
+    const ok = fn.indexOf('await adoptAccountLocale()');
+    assert.ok(ok > fn.indexOf(call), `${header}: adoption after the auth call`);
+    assert.ok(ok < fn.indexOf('hydrateFromServer('), `${header}: adoption before hydration and the render that follows`);
+  }
+});

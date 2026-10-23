@@ -164,7 +164,7 @@ test('the HTTP verbs and the API paths are byte-identical', () => {
     verbs.every(v => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(v)),
     'a verb changed',
   );
-  assert.equal(verbs.length, 20, 'a call site moved');
+  assert.equal(verbs.length, 21, 'a call site moved'); // 21: patchMe (08-02)
 });
 
 test('the icon names and the brand path are untouched', () => {

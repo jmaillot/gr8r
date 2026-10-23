@@ -55,12 +55,12 @@ import './features/archive.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
-import { S, D, hydrateFromServer, save } from './core/store.js';
+import { S, D, hydrateFromServer, save, consumeLegacyLang } from './core/store.js';
 import { api } from './core/api.js';
 import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
-import { t as tk } from './core/i18n.js';
+import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale } from './core/i18n.js';
 
 /* The locale change re-renders the app: one listener, one re-render, never
    batched or debounced (D-01). The loop guard in applyPrefs() keeps this from
@@ -118,6 +118,20 @@ function applyDeepLink(rest) {
   if (ROUTE_IDS.includes(seg)) return go(seg, {});
 }
 
+/* D-04/D-05/D-06: the one-time migration seed. The old language lived in the shared workspace
+   document; every member of a formerly-French workspace seeds their own account on their first
+   post-upgrade boot. Guard: NULL account locale AND the exact legacy French label — it never
+   overwrites an explicit choice, never touches the workspace row (only the account PATCH is
+   called), and is a no-op on fresh installs. A failed PATCH is ignored: the guard retries on
+   the next boot and NULL stays negotiated. The result applies in the same boot, silently. */
+async function seedLegacyLocale() {
+  const legacy = consumeLegacyLang();
+  const french = LOCALES.find(l => l.code === 'fr')?.name;
+  if (api.user?.locale != null || !french || legacy !== french) return;
+  const r = await api.patchMe({ locale: 'fr' });
+  if (r.ok) await primeLocale('fr');
+}
+
 (async function init() {
   if (!document.getElementById('sr-live')) {
     const l = document.createElement('div');
@@ -127,9 +141,17 @@ function applyDeepLink(rest) {
     document.body.appendChild(l);
   }
 
+  /* D-07/D-08: the negotiated browser language is applied synchronously at the top, before
+     any network call and before any possible render, so every surface — login, signup,
+     verify, /join — comes up in it. primeLocale is the silent variant: the re-render event
+     would paint an uninitialised shell. Demo mode honours its own localStorage choice. */
+  const negotiated = negotiate();
+  await primeLocale(negotiated);
+
   const h = (location.hash || '').slice(1);
   const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding'];
   const withServer = await api.init();
+  if (!withServer) await primeLocale(readStoredLocale() || negotiated);
   const joinToken = (location.pathname.match(/^\/join\/([A-Za-z0-9_-]{16,128})\/?$/) || [])[1];
   const slugFromPath = (location.pathname.match(/^\/w\/([a-z0-9-]{2,40})(?:\/|$)/) || [])[1];
   const restFromPath = (location.pathname.match(/^\/w\/[a-z0-9-]{2,40}\/(.+?)\/?$/) || [])[1] || '';
@@ -156,6 +178,9 @@ function applyDeepLink(rest) {
 
   if (withServer) {
     const user = await api.me();
+    /* D-11: a non-NULL account locale replaces the negotiated value, still pre-render; a NULL
+       one keeps the negotiated value. */
+    if (user?.locale && user.locale !== getLocale()) await primeLocale(user.locale);
     if (!user) {
       // The server is authoritative: no session means the app is not usable yet.
       S.ui.wantedSlug = slugFromPath || null;
@@ -182,6 +207,7 @@ function applyDeepLink(rest) {
       return;
     }
     if (!ws.ok) toast(tk('err.wsLoadFailed'), { kind: 'err', ms: 8000 });
+    else await seedLegacyLocale();
     deepLink = restFromPath;
   }
 
