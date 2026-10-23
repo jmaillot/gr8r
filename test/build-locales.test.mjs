@@ -84,13 +84,15 @@ function appSources() {
     .join('\n');
 }
 
-/* The markers of one catalogue: its strings the other catalogue does not carry, at least six
-   characters long, and absent from the application's own sources. An empty set is a broken
-   test, not a passing one, so the suites assert it is NOT empty. */
+/* The markers of one catalogue: its strings the other catalogue does not carry — not as a
+   whole value and not as a substring of one of its strings (a marker embedded in an English
+   sentence rides the bundle whatever the catalogue does) — at least six characters long, and
+   absent from the application's own sources. An empty set is a broken test, not a passing
+   one, so the suites assert it is NOT empty. */
 function markersOf(catalogue, other) {
-  const others = new Set(flatten(other));
+  const otherText = flatten(other).join('\n');
   const sources = appSources();
-  return flatten(catalogue).filter(value => !others.has(value) && value.length >= 6 && !sources.includes(value));
+  return flatten(catalogue).filter(value => !otherText.includes(value) && value.length >= 6 && !sources.includes(value));
 }
 
 /* A built asset may have escaped a non-ASCII character, so a marker is searched in its raw
