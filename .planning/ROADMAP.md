@@ -246,6 +246,12 @@ Success criteria (what must be TRUE):
 Deliverable: two members of one workspace see the interface in their own language, and the shared
 workspace document no longer carries a language.
 
+Plans: 3 plans
+
+- [ ] 08-01-PLAN.md — the account owns the language: `users.locale` column, `PATCH /api/auth/me`, legacy `prefs.lang` stripped from the document pipeline (LOC-03, LOC-04, LOC-05)
+- [ ] 08-02-PLAN.md — boot negotiation, silent prime, lifecycle application and the guarded migration seed (LOC-06, LOC-03)
+- [ ] 08-03-PLAN.md — the honest two-option selector, instant no-reload switch, browser proof (LOC-01, LOC-02)
+
 ## Phase 9: Server messages & activity history
 
 The two remaining sources of English. Server errors gain a **stable machine code** beside their
