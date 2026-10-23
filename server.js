@@ -818,7 +818,7 @@ function ensureWorkspace() {
 
 function ensureAdmin({ quiet = false } = {}) {
   if (db.prepare('select count(*) as n from users').get().n > 0) return;
-  const email = (process.env.ADMIN_EMAIL || 'admin@localhost').trim();
+  const email = (process.env.ADMIN_EMAIL || 'admin@example.com').trim();
   const name = process.env.ADMIN_NAME || 'Admin';
   let password = process.env.ADMIN_PASSWORD;
   let generated = false;
