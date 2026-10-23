@@ -278,3 +278,30 @@ test('a stored status id renders its French label while the data attribute keeps
     await context.close();
   }
 });
+
+/* The D-16 read-through found the project tab bar still English after the
+   switch: PTABS was a module-level const whose t() calls froze the
+   import-time locale into the labels. The fix reads the catalogue at render
+   time (ptabs()); this test pins the regression — every project tab renders
+   its French label and no unambiguous English label survives. */
+test('the project tab bar reads its labels from the locale at render time, not at import', async ({ browser }) => {
+  const { context, page } = await signIn(browser, fr.account);
+  try {
+    await page.goto(`/w/${fr.account.slug}/projects`);
+    await frenchShell(page);
+    await page.getByRole('link', { name: 'Probe', exact: true }).click();
+    await frenchShell(page);
+
+    for (const label of ['Vue d’ensemble', 'Tableau', 'Liste', 'Table', 'Calendrier', 'Chronologie', 'Fichiers', 'Activité']) {
+      await expect(page.getByRole('button', { name: label }).first()).toBeVisible();
+    }
+    /* 'Table' is deliberately absent from the negation: the French value is
+       identical to the English one, so an exact-match English probe would
+       false-positive on the legitimate French label. */
+    for (const label of ['Overview', 'Board', 'Calendar', 'Timeline', 'Files', 'Activity']) {
+      await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0);
+    }
+  } finally {
+    await context.close();
+  }
+});

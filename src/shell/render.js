@@ -7,7 +7,7 @@ import { D, S, canSee, mem, proj, team } from '../core/store.js';
 import { applyPrefs } from '../core/theme.js';
 import { enhanceSelects, selectMenu } from '../ui/select.js';
 import { renderShell } from './layout.js';
-import { PTABS } from '../pages/project.js';
+import { ptabs } from '../pages/project.js';
 import { tlAfter } from '../views/timeline.js';
 import { renderLayer } from '../overlays/drawer.js';
 import { placePop } from '../overlays/popovers.js';
@@ -116,7 +116,7 @@ export function pageTitle() {
   if (u.auth) return t('app.name');
   let name = ROUTE_IDS.includes(u.route) ? routeName(u.route) : t('nav.notFound');
   if (u.route === 'project' && proj(u.params.id) && canSee(proj(u.params.id)))
-    name = `${(PTABS.find(x => x[0] === u.params.tab) || [0, t('page.savedView')])[1]} · ${proj(u.params.id).name}`;
+    name = `${(ptabs().find(x => x[0] === u.params.tab) || [0, t('page.savedView')])[1]} · ${proj(u.params.id).name}`;
   if (u.route === 'member' && mem(u.params.id)) name = mem(u.params.id).name;
   if (u.route === 'team' && team(u.params.id)) name = team(u.params.id).name;
   return `${name} · ${D().ws.name}`;

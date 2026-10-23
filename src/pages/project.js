@@ -18,7 +18,11 @@ import { calendarHtml } from '../views/calendar.js';
 import { timelineHtml, tlControls } from '../views/timeline.js';
 import { filesHtml } from '../views/files.js';
 
-export const PTABS = [
+/* The project tab list. The labels read the catalogue at CALL time: a module-level
+   array would freeze the import-time locale into its strings, so switching to
+   Français would leave this menu in English (the D-16 read-through found exactly
+   that). The id and the icon stay machine values; only the label is a lookup. */
+export const ptabs = () => [
   ['overview', t('page.project.tab.overview'), 'layout-dashboard'],
   ['board', t('page.project.tab.board'), 'square-kanban'],
   ['list', t('page.project.tab.list'), 'list'],
@@ -71,7 +75,12 @@ export function pageProject() {
         </div>
       </div>
       <nav class="tabs" aria-label="${t('a11y.projectViews')}">
-        ${PTABS.map(([k, n, i]) => `<button ${tab === k ? 'aria-current="page"' : ''} class="tab ${tab === k ? 'on' : ''}" data-a="go" data-r="project" data-id="${p.id}" data-tab="${k}">${ic(i, 14)}${n}</button>`).join('')}
+        ${ptabs()
+          .map(
+            ([k, n, i]) =>
+              `<button ${tab === k ? 'aria-current="page"' : ''} class="tab ${tab === k ? 'on' : ''}" data-a="go" data-r="project" data-id="${p.id}" data-tab="${k}">${ic(i, 14)}${n}</button>`,
+          )
+          .join('')}
         ${views.map(v => `<button ${tab === 'v:' + v.id ? 'aria-current="page"' : ''} class="tab ${tab === 'v:' + v.id ? 'on' : ''}" data-a="go" data-r="project" data-id="${p.id}" data-tab="v:${v.id}" data-ctx="savedview" data-vid="${v.id}">${ic('list-filter', 14)}${esc(v.name)}</button>`).join('')}
         <button class="tab" data-a="saveView" data-id="${p.id}" data-tip="${t('a11y.saveCurrentFilters')}" aria-label="${t('a11y.saveView')}">${ic('plus', 14)}</button>
       </nav>
