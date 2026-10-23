@@ -47,9 +47,14 @@ export async function startServer({ dataDir = null, env = {} } = {}) {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   let output = '';
+  const finalEnv = { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env, DB_PATH: path.join(dir, 'gr8r.db') };
+  // A test passes `undefined` for a variable it wants ABSENT (e.g. ADMIN_EMAIL to
+  // exercise the cold-start fallback); strip those keys instead of spawning with
+  // the string "undefined" or leaving BASE_ENV's value in place.
+  for (const key of Object.keys(finalEnv)) if (finalEnv[key] === undefined) delete finalEnv[key];
   const child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
-    env: { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env, DB_PATH: path.join(dir, 'gr8r.db') },
+    env: finalEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', chunk => (output += chunk));
