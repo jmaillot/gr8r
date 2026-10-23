@@ -407,6 +407,19 @@ export function formatFileSize(bytes) {
   return `${formatNumber(Number((b / 1048576).toFixed(1)), ONE_DECIMAL)} ${byteUnit(fmts, 2)}`;
 }
 
+/* The task estimate. Stored ASCII form ('30m', '2h', '2d') stays the document's
+   value; this is a display-only formatter. English keeps the raw ASCII form,
+   French renders a space + localized unit (min / h / j). Unknown or empty
+   input returns it unchanged. */
+const ESTIMATE_UNITS = { m: 'estimate.minutes', h: 'estimate.hours', d: 'estimate.days' };
+export function fmtEstimate(est) {
+  if (!est || typeof est !== 'string') return est || '';
+  const m = est.match(/^(\d+)([mhd])$/);
+  if (!m) return est;
+  if (locale === BASE_LOCALE) return est;
+  return `${m[1]} ${t(ESTIMATE_UNITS[m[2]])}`;
+}
+
 /* The clock. 'auto' follows the locale: a 12-hour clock in English, a
    24-hour clock in French. */
 export function formatTime(value, options = {}) {

@@ -1,6 +1,6 @@
 /* ---------- TABLE ---------- */
 import { esc, fmtDate, iso } from '../core/utils.js';
-import { t as tk } from '../core/i18n.js';
+import { t as tk, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { S, isOver, mem, pColor, proj, task } from '../core/store.js';
 import { av, dueHtml, empty, lbl, prPill, stIcon, stPill } from '../ui/helpers.js';
@@ -46,7 +46,7 @@ export function tcell(t, c) {
     case 'estimate':
       return ed
         ? `<td class="editing"><input id="edit-cell" data-blur="commitCell" data-key-enter="commitCell" data-id="${t.id}" data-f="estimate" value="${esc(t.estimate || '')}" placeholder="e.g. 2d" aria-label="${tk('sort.estimate')}"></td>`
-        : `<td class="cellbtn num" data-dbl="editCell" data-id="${t.id}" data-f="estimate" data-a="editCell" title="${tk('a11y.clickToEdit')}">${t.estimate ? esc(t.estimate) : '<span class="faint">—</span>'}</td>`;
+        : `<td class="cellbtn num" data-dbl="editCell" data-id="${t.id}" data-f="estimate" data-a="editCell" title="${tk('a11y.clickToEdit')}">${t.estimate ? esc(fmtEstimate(t.estimate)) : '<span class="faint">—</span>'}</td>`;
     case 'created':
       return `<td class="num muted">${fmtDate(iso(new Date(t.created)))}</td>`;
     case 'project':
@@ -81,5 +81,5 @@ export function tableHtml(ts, key, p) {
       .join('')}
       <tr><td class="sticky cellbtn" data-a="newTask" ${p ? `data-project="${p.id}"` : ''} colspan="${cols.length}" style="color:var(--text-3)"><span class="row" style="gap:6px">${ic('plus', 14)}${tk('act.newTask')}</span></td></tr>
     </tbody></table></div>
-    <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${av(t.assignee, 'sm', false)}<span class="muted">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(t.estimate)}</span>` : ''}</div></div>`).join('')}</div>`;
+    <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${av(t.assignee, 'sm', false)}<span class="muted">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(fmtEstimate(t.estimate))}</span>` : ''}</div></div>`).join('')}</div>`;
 }

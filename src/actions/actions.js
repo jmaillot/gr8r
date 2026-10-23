@@ -1302,8 +1302,8 @@ IN.pform = el => {
 A.pformSet = el => {
   S.ui.pform[el.dataset.f] = el.dataset.v;
   if (el.dataset.f === 'tmpl') {
-    const t = TEMPLATES.find(x => x.id === el.dataset.v);
-    if (t && S.ui.pform.icon === 'folder') S.ui.pform.icon = t.icon === 'file' ? 'folder' : t.icon;
+    const tp = TEMPLATES.find(x => x.id === el.dataset.v);
+    if (tp && S.ui.pform.icon === 'folder') S.ui.pform.icon = tp.icon === 'file' ? 'folder' : tp.icon;
   }
   render();
 };
@@ -1345,18 +1345,17 @@ export function createProject(f, tmplId) {
   D().projects.push(p);
   D().projOrder.unshift(p.id);
   D().activity.unshift({ id: uid('a'), by: D().me, verb: 'created project', task: null, project: p.id, at: Date.now(), extra: '' });
-  const tm = TEMPLATES.find(t => t.id === tmplId);
-  (tm?.tasks || []).forEach((title, i) =>
+  const tm = TEMPLATES.find(x => x.id === tmplId);
+  for (let i = 0; i < (tm?.tasks || 0); i++)
     createTask({
       project: p.id,
-      title,
+      title: t(`project.template.${tmplId}.task.${i + 1}`),
       status: i === 0 ? 'todo' : 'backlog',
       assignee: i === 0 ? D().me : null,
       priority: i === 0 ? 'high' : 'medium',
       due: dOff(5 + i * 5),
       start: dOff(i * 5),
-    }),
-  );
+    });
   return p;
 }
 A.submitProject = () => {
@@ -2677,8 +2676,8 @@ A.doReset = () => {
 A.onbSet = el => {
   S.ui.onbData[el.dataset.k] = el.dataset.v;
   if (el.dataset.k === 'tmpl') {
-    const t = TEMPLATES.find(x => x.id === el.dataset.v);
-    if (t && !S.ui.onbData.projTouched) S.ui.onbData.proj = t.name === 'Website' ? 'Website Launch' : t.name;
+    const tp = TEMPLATES.find(x => x.id === el.dataset.v);
+    if (tp && !S.ui.onbData.projTouched) S.ui.onbData.proj = tp.id === 'web' ? 'Website Launch' : t(`project.template.${tp.id}.name`);
   }
   render();
 };
@@ -2768,15 +2767,15 @@ A.onbFinish = async () => {
       D().ws.url = o.url || D().ws.url;
     }
     S.prefs.defaultTab = { kanban: 'board', list: 'list', timeline: 'timeline', table: 'table' }[o.team] || 'board';
-    const tm = TEMPLATES.find(t => t.id === o.tmpl) || TEMPLATES[2];
+    const tm = TEMPLATES.find(x => x.id === o.tmpl) || TEMPLATES[2];
     p = createProject(
       {
-        name: o.proj.trim() || tm.name,
+        name: o.proj.trim() || t(`project.template.${tm.id}.name`),
         icon: tm.icon === 'file' ? 'folder' : tm.icon,
         color: 'indigo',
         team: me().team,
         lead: D().me,
-        desc: t('act.createdFromTemplate', { name: tm.name }),
+        desc: t('act.createdFromTemplate', { name: t(`project.template.${tm.id}.name`) }),
       },
       tm.id,
     );

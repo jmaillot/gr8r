@@ -20,6 +20,7 @@ import fr from '../src/locales/fr.json' with { type: 'json' };
 import {
   bucketLabel,
   dayBucketId,
+  fmtEstimate,
   formatDate,
   formatFileSize,
   formatNumber,
@@ -322,4 +323,31 @@ test('the module keeps its leaf contract: it imports the catalogues and nothing 
     assert.ok(specifier.startsWith('../locales/'), `${specifier} points at the locales directory`);
     assert.ok(specifier.endsWith('.json'), `${specifier} points at a JSON catalogue`);
   }
+});
+
+/* ---------- the estimate formatter (D-11) ---------- */
+
+test('the English estimate is the stored ASCII form, byte-identical to the stored value', () => {
+  /* English is the base locale: the formatter returns the raw ASCII string whatever the unit. */
+  assert.equal(fmtEstimate('30m'), '30m');
+  assert.equal(fmtEstimate('2d'), '2d');
+  assert.equal(fmtEstimate('1h'), '1h');
+  assert.equal(fmtEstimate('3h'), '3h');
+});
+
+test('the French estimate is the localized display form: 30 min, 2 j, 1 h', async () => {
+  await inFrench(() => {
+    assert.equal(fmtEstimate('30m'), '30 min');
+    assert.equal(fmtEstimate('2d'), '2 j');
+    assert.equal(fmtEstimate('1h'), '1 h');
+    assert.equal(fmtEstimate('3h'), '3 h');
+  });
+});
+
+test('an empty or unparseable estimate returns the input unchanged', () => {
+  assert.equal(fmtEstimate(''), '');
+  assert.equal(fmtEstimate('2w'), '2w');
+  assert.equal(fmtEstimate('abc'), 'abc');
+  assert.equal(fmtEstimate(null), '');
+  assert.equal(fmtEstimate(undefined), '');
 });

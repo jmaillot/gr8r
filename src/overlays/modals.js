@@ -96,50 +96,18 @@ export function taskModal(m, H) {
     <span class="faint hide-m" style="font-size:11.5px"><kbd>${MOD}</kbd> <kbd>↵</kbd></span>
     <button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitTask" id="f-submit">${m.edit ? t('act.saveChanges') : t('palette.createTask')}</button></div>`;
 }
+/* The project templates. The id is the stable stored value; the name, the
+   description and the starter task titles are catalogue data keyed on the id
+   (project.template.<id>.*), rendered through t() wherever they display. A
+   task created from a template stores the locale-rendered title at creation. */
 export const TEMPLATES = [
-  { id: 'blank', name: 'Blank project', icon: 'file', desc: 'Start from scratch', tasks: [] },
-  {
-    id: 'product',
-    name: 'Product Development',
-    icon: 'target',
-    desc: 'Discovery to launch',
-    tasks: ['Define problem statement', 'User research plan', 'Write PRD', 'Design exploration', 'Build MVP', 'Beta launch'],
-  },
-  {
-    id: 'web',
-    name: 'Website',
-    icon: 'globe',
-    desc: 'IA, design, build, launch',
-    tasks: ['Sitemap & information architecture', 'Wireframes', 'Visual design', 'Build page templates', 'Content migration', 'QA & launch'],
-  },
-  {
-    id: 'mkt',
-    name: 'Marketing Campaign',
-    icon: 'megaphone',
-    desc: 'Brief, assets, channels',
-    tasks: ['Campaign brief', 'Audience research', 'Creative assets', 'Channel plan', 'Launch campaign', 'Performance report'],
-  },
-  {
-    id: 'design',
-    name: 'Design Project',
-    icon: 'palette',
-    desc: 'Discovery to handoff',
-    tasks: ['Discovery workshop', 'Moodboard', 'Concept directions', 'Refinement', 'Developer handoff'],
-  },
-  {
-    id: 'software',
-    name: 'Software Development',
-    icon: 'code',
-    desc: 'Spec, build, ship',
-    tasks: ['Technical spec', 'Set up repo & CI', 'Implement core API', 'Write tests', 'Code review', 'Deploy to staging'],
-  },
-  {
-    id: 'personal',
-    name: 'Personal Project',
-    icon: 'heart',
-    desc: 'Plan your own goals',
-    tasks: ['Brain dump ideas', 'Pick top 3 priorities', 'Schedule focus time', 'Weekly review'],
-  },
+  { id: 'blank', icon: 'file', tasks: 0 },
+  { id: 'product', icon: 'target', tasks: 6 },
+  { id: 'web', icon: 'globe', tasks: 6 },
+  { id: 'mkt', icon: 'megaphone', tasks: 6 },
+  { id: 'design', icon: 'palette', tasks: 5 },
+  { id: 'software', icon: 'code', tasks: 6 },
+  { id: 'personal', icon: 'heart', tasks: 4 },
 ];
 export function projectModal(m, H) {
   const f = S.ui.pform;
@@ -165,7 +133,7 @@ export function projectModal(m, H) {
     </div>
     <div class="row" style="gap:12px;flex-wrap:wrap">
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-team">${t('nav.route.team')}</label><select class="select" id="p-team" data-in="pform" data-f="team">${teamsList()
-        .map(t => `<option value="${t.id}" ${f.team === t.id ? 'selected' : ''}>${t.name}</option>`)
+        .map(tm => `<option value="${tm.id}" ${f.team === tm.id ? 'selected' : ''}>${esc(tm.name)}</option>`)
         .join('')}</select></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-lead">${t('modal.lead')}</label><select class="select" id="p-lead" data-in="pform" data-f="lead" ${leadLocked ? 'disabled' : ''}>${D()
         .members.filter(x => x.status === 'active')
@@ -173,7 +141,7 @@ export function projectModal(m, H) {
         .join('')}</select>${leadLocked ? `<span class="hint">${t('modal.leadLockHint')}</span>` : ''}</div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">${t('modal.targetDate')}</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${f.due || ''}"></div>
     </div>
-    ${m.edit ? '' : `<div class="field"><span class="label">${t('modal.template')}</span><div class="tmpls" role="radiogroup">${TEMPLATES.map(t => `<button type="button" role="radio" aria-checked="${f.tmpl === t.id}" class="opt ${f.tmpl === t.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${t.id}" style="padding:10px">${ic(t.icon, 16)}<b style="font-size:12.5px">${t.name}</b><span>${t.tasks.length ? t.tasks.length + ' starter tasks' : t.desc}</span></button>`).join('')}</div></div>`}
+    ${m.edit ? '' : `<div class="field"><span class="label">${t('modal.template')}</span><div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${f.tmpl === tp.id}" class="opt ${f.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>`}
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? t('act.saveChanges') : t('palette.createProject')}</button></div>`;
 }
@@ -246,7 +214,7 @@ export function inviteModal(m, H) {
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
     <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role">${['Member', 'Admin', 'Guest'].map(r => `<option>${r}</option>`).join('')}</select></div>
     <div class="field grow"><label class="label" for="inv-team">${t('nav.route.team')}</label><select class="select" id="inv-team">${teamsList()
-      .map(t => `<option value="${t.id}">${t.name}</option>`)
+      .map(tm => `<option value="${tm.id}">${esc(tm.name)}</option>`)
       .join('')}</select></div></div>
     <div class="alert info">${ic('info', 14)}<span><b>${t('modal.guests')}</b> ${t('modal.guestsHint')}</span></div>
     ${

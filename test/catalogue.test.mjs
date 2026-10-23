@@ -23,10 +23,11 @@ const FORBIDDEN = [
 ];
 
 /* D-05: a key is flat, dotted and namespaced — at least two segments, each starting with a
-   lowercase letter. A bare word is rejected: the lucideSubset() scan matches quoted lowercase
-   kebab-case tokens against the Lucide names, so a bare word could be mistaken for an icon.
-   The dotted key format is the second layer of defence behind the JSON file format. */
-const KEY_SHAPE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
+   lowercase letter (a segment may also be purely numeric for ordered lists, e.g. task.1).
+   A bare word is rejected: the lucideSubset() scan matches quoted lowercase kebab-case tokens
+   against the Lucide names, so a bare word could be mistaken for an icon. The dotted key format
+   is the second layer of defence behind the JSON file format. */
+const KEY_SHAPE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9]*|\.[0-9]+)+$/;
 
 /* D-06: the CLDR plural categories. */
 const CLDR_CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'];
@@ -223,7 +224,7 @@ test('the lint rejects a key that is not flat, dotted and namespaced', () => {
 });
 
 test('the lint accepts a flat, dotted and namespaced key', () => {
-  for (const key of ['nav.projects', 'settings.language.title', 'contract.englishOnly']) {
+  for (const key of ['nav.projects', 'settings.language.title', 'contract.englishOnly', 'project.template.product.task.1']) {
     const breaches = lintSynthetic({ [key]: 'a value' }, 'en.json').filter(v => v.rule === 'key-shape');
     assert.deepEqual(breaches, [], `${key} is a legitimate key (${breaches.map(describeViolation).join(' | ')})`);
   }

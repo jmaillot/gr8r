@@ -40,12 +40,20 @@ export function pageInbox() {
   </div>`;
 }
 export function notifText(n) {
-  const t = n.task ? task(n.task) : null;
-  const p = n.project ? proj(n.project) : t ? proj(t.project) : null;
+  const tgt = n.task ? task(n.task) : null;
+  const p = n.project ? proj(n.project) : tgt ? proj(tgt.project) : null;
   const who = n.by ? `<b style="font-weight:600">${esc(mem(n.by)?.name)}</b>` : '';
-  if (!n.by && p && !t) return `<b style="font-weight:600">${esc(n.text)}</b>`;
-  if (!n.by && t) return `<b style="font-weight:600">${esc(t.title)}</b> <span class="muted">${esc(n.text)}</span>`;
-  return `${who} <span class="muted">${esc(n.text)}</span> ${t ? `<b style="font-weight:500">${esc(t.title)}</b>` : ''}`;
+  /* Legacy rows still carry a stored English text fragment — render it verbatim (D-12, no migration). */
+  if (n.text) {
+    if (!n.by && p && !tgt) return `<b style="font-weight:600">${esc(n.text)}</b>`;
+    if (!n.by && tgt) return `<b style="font-weight:600">${esc(tgt.title)}</b> <span class="muted">${esc(n.text)}</span>`;
+    return `${who} <span class="muted">${esc(n.text)}</span> ${tgt ? `<b style="font-weight:500">${esc(tgt.title)}</b>` : ''}`;
+  }
+  /* Structured rows compose the sentence through the notif.* catalogue keys in the active locale. */
+  if (!n.by && p && !tgt) return `<b style="font-weight:600">${esc(p.name)}</b> <span class="muted">${t('notif.projectAtRisk')}</span>`;
+  if (!n.by && tgt) return `<b style="font-weight:600">${esc(tgt.title)}</b> <span class="muted">${t('notif.taskDueToday')}</span>`;
+  const fragment = n.type === 'update' && n.status ? t('notif.update', { status: t(`task.status.${n.status}`) }) : t(`notif.${n.type}`);
+  return `${who} <span class="muted">${fragment}</span> ${tgt ? `<b style="font-weight:500">${esc(tgt.title)}</b>` : ''}`;
 }
 export function notifIcon(n) {
   if (n.by) return av(n.by, 'md', false);

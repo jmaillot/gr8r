@@ -3,7 +3,7 @@
    ===================================================================== */
 import { MOD, TODAY, ago, diffD, esc, fmtDate, parse, relDate } from '../core/utils.js';
 /* drawerHtml's task parameter is named t, so the catalogue lookup is imported under an alias. */
-import { t as tMsg } from '../core/i18n.js';
+import { t as tMsg, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
 import { FT, av, filePrev, fileType, fileTypeName, fmtComment, lbl, progBar } from '../ui/helpers.js';
@@ -76,7 +76,7 @@ export function drawerHtml(t) {
         ${prop('folder', tMsg('page.field.project'), cellProject(t))}
         ${prop('tag', tMsg('page.field.labels'), `<button class="pillbtn ${t.labels.length ? '' : 'empty'}" data-a="pop" data-pop="labels" data-id="${t.id}" style="flex-wrap:wrap;height:auto;min-height:26px;padding:3px 7px">${t.labels.length ? t.labels.map(lbl).join('') : ic('tag', 13) + tMsg('act.addLabels')}</button>`)}
         ${prop('repeat', tMsg('page.field.repeat'), `<button class="pillbtn ${t.recur ? '' : 'empty'}" data-a="pop" data-pop="recur" data-id="${t.id}">${ic('repeat', 13)}${t.recur ? tMsg(RECUR_KEY[t.recur] || 'popover.recurNone') : tMsg('popover.recurNone')}</button>`)}
-        ${prop('timer', tMsg('page.sort.estimate'), `<button class="pillbtn ${t.estimate ? '' : 'empty'}" data-a="pop" data-pop="estimate" data-id="${t.id}">${ic('timer', 13)}${t.estimate ? esc(t.estimate) : tMsg('act.addEstimate')}</button>`)}
+        ${prop('timer', tMsg('page.sort.estimate'), `<button class="pillbtn ${t.estimate ? '' : 'empty'}" data-a="pop" data-pop="estimate" data-id="${t.id}">${ic('timer', 13)}${t.estimate ? esc(fmtEstimate(t.estimate)) : tMsg('act.addEstimate')}</button>`)}
         ${prop('git-branch', tMsg('page.field.blockedBy'), `<button class="pillbtn ${t.deps.length ? '' : 'empty'}" data-a="pop" data-pop="deps" data-id="${t.id}" style="height:auto;min-height:26px;flex-wrap:wrap">${t.deps.length ? t.deps.map(d => (task(d) ? `<span class="depchip mono" style="font-size:11px;padding:1px 5px;border-radius:4px;background:var(--surface-3)">${task(d).key}</span><span class="trunc" style="max-width:160px">${esc(task(d).title)}</span>` : '')).join('') : ic('git-branch', 13) + tMsg('common.none')}</button>`)}
       </dl>
 

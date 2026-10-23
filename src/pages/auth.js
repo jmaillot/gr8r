@@ -168,7 +168,15 @@ export function renderOnboarding() {
     body = `<h1>${t('page.auth.onb4Title')}</h1><p class="sub">${t('page.auth.onb4Sub')}</p><div class="field"><label class="label" for="o-proj">${t('page.auth.projectName')}</label><input class="input input-lg" id="o-proj" data-in="onbProj" value="${esc(o.proj)}" autofocus></div><div class="tmpls" role="radiogroup">${TEMPLATES.filter(
       tp => tp.id !== 'blank',
     )
-      .map(tp => opt('tmpl', tp.id, tp.icon, tp.name, tp.tasks.length + ' starter tasks'))
+      .map(tp =>
+        opt(
+          'tmpl',
+          tp.id,
+          tp.icon,
+          t(`project.template.${tp.id}.name`),
+          tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`),
+        ),
+      )
       .join('')}</div>${nav()}`;
   if (st === 4)
     body = `<h1>${t('page.auth.onb5Title')}</h1><p class="sub">${t('page.auth.onb5Sub')}${api.mailEnabled ? ` ${t('page.auth.onb5MailHint')}` : api.enabled ? ` ${t('page.auth.onb5LinkHint')}` : ''}</p><div class="col" style="gap:8px">${[0, 1, 2].map(i => `<input class="input input-lg" id="o-inv-${i}" placeholder="teammate@company.com" type="email" value="${esc((o.invites || '').split(',')[i] || '')}" data-in="onbInv" data-i="${i}" aria-label="${t('a11y.auth.inviteEmail')} ${i + 1}">`).join('')}</div>${api.enabled ? '' : `<button class="btn btn-ghost btn-sm" style="align-self:flex-start" data-a="copyInviteLink">${ic('link', 13)}${t('page.auth.copyInviteLink')}</button>`}${nav(t('page.auth.sendInvites'), true)}`;
@@ -180,7 +188,7 @@ export function renderOnboarding() {
       [
         TEMPLATES.find(tp => tp.id === o.tmpl)?.icon || 'folder',
         t('page.auth.readyProject', { name: esc(o.proj) }),
-        t('page.auth.readyStarter', { n: TEMPLATES.find(tp => tp.id === o.tmpl)?.tasks.length || 0, view: t(VIEWS[o.team]) }),
+        t('page.auth.readyStarter', { n: TEMPLATES.find(tp => tp.id === o.tmpl)?.tasks || 0, view: t(VIEWS[o.team]) }),
       ],
       ['user-plus', n ? t('page.auth.invitesSent', { n: n }) : t('page.auth.noInvites'), n ? t('page.auth.invitesAppear') : t('page.auth.inviteAnytime')],
     ]

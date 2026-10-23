@@ -1,7 +1,7 @@
 /* ---------------- POPOVERS ---------------- */
 import { $, MOD, TODAY, addD, dOff, diffD, esc, fmtDate, foldForSearch, iso, parse } from '../core/utils.js';
 /* popHtml's task variable is named t, so the catalogue lookup is imported under an alias. */
-import { t as tMsg, monthName, weekdayName } from '../core/i18n.js';
+import { t as tMsg, monthName, weekdayName, fmtEstimate } from '../core/i18n.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { LABELS, PRIOS, PSTAT, STATUSES } from '../core/constants.js';
 import {
@@ -195,7 +195,7 @@ export function popHtml(p) {
     case 'estimate':
       inner = popList(
         ['30m', '1h', '2h', '4h', '1d', '2d', '3d', '5d', '8d']
-          .map(x => ({ id: x, name: x, html: ic('timer', 14), on: t?.estimate === x }))
+          .map(x => ({ id: x, name: fmtEstimate(x), html: ic('timer', 14), on: t?.estimate === x }))
           .concat([{ id: '', name: tMsg('popover.clearEstimate'), html: ic('x', 14) }]),
       );
       break;

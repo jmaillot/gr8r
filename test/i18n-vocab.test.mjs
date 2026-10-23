@@ -18,11 +18,35 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { register } from 'node:module';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import en from '../src/locales/en.json' with { type: 'json' };
+import fr from '../src/locales/fr.json' with { type: 'json' };
 import { t } from '../src/core/i18n.js';
 import { scanSource } from '../scripts/i18n-scan.mjs';
+
+/* The modules that depend on the Vite-generated virtual:icons module are loaded
+   dynamically after the stub loader is registered — under plain Node, the
+   default ESM loader cannot resolve 'virtual:icons'. The DOM-touching core
+   modules (utils.js) run their font/link setup at import time, so the document
+   is stubbed before the dynamic imports load. */
+globalThis.document = {
+  querySelectorAll: () => [],
+  documentElement: { lang: 'en' },
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  body: { appendChild: () => {}, classList: { add: () => {}, remove: () => {} } },
+  createElement: () => ({ style: {}, classList: { add: () => {}, remove: () => {} }, appendChild: () => {} }),
+};
+globalThis.window = { addEventListener: () => {}, removeEventListener: () => {}, matchMedia: () => ({ addEventListener: () => {} }) };
+globalThis.addEventListener = () => {};
+globalThis.removeEventListener = () => {};
+globalThis.matchMedia = () => ({ addEventListener: () => {} });
+register('./virtual-icons-loader.mjs', import.meta.url);
+const { TEMPLATES } = await import('../src/overlays/modals.js');
+const { notifText } = await import('../src/pages/inbox.js');
+const { S } = await import('../src/core/store.js');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -218,4 +242,99 @@ test('the old display tables are gone — no literal display name survives in th
   assert.ok(!constantsSrc.includes("name: 'Design', c"), 'the literal Design label display name survives');
   assert.ok(!constantsSrc.includes("name: 'Planning'"), 'the literal Planning display name survives');
   assert.ok(!storeSrc.includes("ROLE_LABELS = { owner: 'Owner'"), 'ROLE_LABELS still carries literal display names');
+});
+
+/* ---------- 5. the template family (D-10) ---------- */
+
+/* [id, name, desc, tasks] — the old English template names, descriptions and starter titles. */
+const TEMPLATE_ORACLE = [
+  ['blank', 'Blank project', 'Start from scratch', []],
+  [
+    'product',
+    'Product Development',
+    'Discovery to launch',
+    ['Define problem statement', 'User research plan', 'Write PRD', 'Design exploration', 'Build MVP', 'Beta launch'],
+  ],
+  [
+    'web',
+    'Website',
+    'IA, design, build, launch',
+    ['Sitemap & information architecture', 'Wireframes', 'Visual design', 'Build page templates', 'Content migration', 'QA & launch'],
+  ],
+  [
+    'mkt',
+    'Marketing Campaign',
+    'Brief, assets, channels',
+    ['Campaign brief', 'Audience research', 'Creative assets', 'Channel plan', 'Launch campaign', 'Performance report'],
+  ],
+  ['design', 'Design Project', 'Discovery to handoff', ['Discovery workshop', 'Moodboard', 'Concept directions', 'Refinement', 'Developer handoff']],
+  [
+    'software',
+    'Software Development',
+    'Spec, build, ship',
+    ['Technical spec', 'Set up repo & CI', 'Implement core API', 'Write tests', 'Code review', 'Deploy to staging'],
+  ],
+  ['personal', 'Personal Project', 'Plan your own goals', ['Brain dump ideas', 'Pick top 3 priorities', 'Schedule focus time', 'Weekly review']],
+];
+
+test('every template id, name, description and starter title is pinned against the en value', () => {
+  for (const [id, name, desc, tasks] of TEMPLATE_ORACLE) {
+    const key = `project.template.${id}`;
+    assert.equal(en[`${key}.name`], name, `the template ${id} name moved`);
+    assert.equal(en[`${key}.desc`], desc, `the template ${id} description moved`);
+    for (const [i, title] of tasks.entries()) {
+      assert.equal(en[`${key}.task.${i + 1}`], title, `the template ${id} task ${i + 1} title moved`);
+    }
+    /* The TEMPLATES array carries the id and the task count, no English text. */
+    const live = TEMPLATES.find(x => x.id === id);
+    assert.ok(live, `the template ${id} is missing from TEMPLATES`);
+    assert.equal(live.tasks, tasks.length, `the template ${id} task count moved`);
+    assert.ok(!('name' in live) && !('desc' in live), `the template ${id} still carries English text`);
+  }
+});
+
+test('every template key carries a French value with typographic characters', () => {
+  for (const [id, , , tasks] of TEMPLATE_ORACLE) {
+    const key = `project.template.${id}`;
+    assert.ok(fr[`${key}.name`], `the template ${id} has no French name`);
+    assert.ok(fr[`${key}.desc`], `the template ${id} has no French description`);
+    assert.doesNotMatch(fr[`${key}.desc`], /'/, `the template ${id} description carries a straight quote`);
+    for (let i = 1; i <= tasks.length; i++) {
+      const frTitle = fr[`${key}.task.${i}`];
+      assert.ok(frTitle, `the template ${id} task ${i} has no French value`);
+      assert.doesNotMatch(frTitle, /'/, `the template ${id} task ${i} French value carries a straight quote`);
+    }
+  }
+});
+
+/* ---------- 6. the notification family (D-12) ---------- */
+
+test('a structured notification row composes through the notif.* keys, the legacy text renders verbatim', () => {
+  /* The store fixtures the renderer needs. */
+  S.data.tasks.push({ id: 't-vocab', title: 'Wireframes', project: 'p-vocab' });
+  S.data.projects.push({ id: 'p-vocab', name: 'Product Launch' });
+  S.data.members.push({ id: 'm-vocab', name: 'Tanjim Islam' });
+
+  /* 1. A structured mention row renders the actor, the fragment and the title — no stored English text. */
+  const mention = notifText({ type: 'mention', by: 'm-vocab', task: 't-vocab' });
+  assert.ok(mention.includes('<b'), 'the actor name is not bold');
+  assert.ok(mention.includes('Tanjim Islam'), 'the actor name is missing');
+  assert.ok(mention.includes(en['notif.mention']), `the notif.mention fragment is missing (wanted ${en['notif.mention']})`);
+  assert.ok(mention.includes('Wireframes'), 'the task title is missing');
+
+  /* 2. The four kinds render their catalogue fragments. */
+  assert.ok(notifText({ type: 'assign', by: 'm-vocab', task: 't-vocab' }).includes(en['notif.assign']), 'the assign fragment is missing');
+  assert.ok(notifText({ type: 'comment', by: 'm-vocab', task: 't-vocab' }).includes(en['notif.comment']), 'the comment fragment is missing');
+  assert.ok(notifText({ type: 'update', by: 'm-vocab', task: 't-vocab', status: 'review' }).includes('Review'), 'the update fragment is missing');
+
+  /* 3. Actor-less rows render through their own keys with the title bold. */
+  assert.ok(notifText({ type: 'update', project: 'p-vocab' }).includes('Product Launch'), 'the actor-less project row lost the bold title');
+  assert.ok(notifText({ type: 'update', project: 'p-vocab' }).includes(en['notif.projectAtRisk']), 'the project-at-risk fragment is missing');
+  assert.ok(notifText({ type: 'update', task: 't-vocab' }).includes(en['notif.taskDueToday']), 'the task-due-today fragment is missing');
+
+  /* 4. A legacy row renders its stored text verbatim. */
+  assert.ok(
+    notifText({ type: 'mention', by: 'm-vocab', task: 't-vocab', text: 'mentioned you in' }).includes('mentioned you in'),
+    'the legacy text is not verbatim',
+  );
 });
