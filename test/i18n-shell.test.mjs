@@ -325,7 +325,7 @@ test('the allow-list carries no entry of the seven files of this wave', () => {
 });
 
 test('the machine identifiers survived the wave — tree-wide data-a / data-r / data-v counts', () => {
-  // 438 / 58 / 76, measured before the wave (D-08): a translated identifier
+  // 434 / 57 / 75, measured after the billing removal (07-02): a translated identifier
   // resolves A[el.dataset.a] to undefined and no test would show it.
   let a = 0,
     r = 0,
@@ -341,9 +341,9 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 438, 'data-a sites');
-  assert.equal(r, 58, 'data-r sites');
-  assert.equal(v, 76, 'data-v sites');
+  assert.equal(a, 434, 'data-a sites');
+  assert.equal(r, 57, 'data-r sites');
+  assert.equal(v, 75, 'data-v sites');
 });
 
 test('every t() call in the swept files resolves to the import binding — the scope walk', async () => {

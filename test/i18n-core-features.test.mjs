@@ -222,8 +222,8 @@ test('the catalogue holds after the billing removal — 1392 keys, none under th
   );
 });
 
-test('the icon baseline holds at 174 names', () => {
+test('the icon baseline holds at 171 names', () => {
   const baseline = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/icons-baseline.json'), 'utf8'));
   const names = Array.isArray(baseline) ? baseline : baseline.icons || Object.keys(baseline);
-  assert.equal(names.length, 174, 'the icon baseline moved');
+  assert.equal(names.length, 171, 'the icon baseline moved');
 });
