@@ -305,3 +305,33 @@ test('the project tab bar reads its labels from the locale at render time, not a
     await context.close();
   }
 });
+
+/* The D-16 read-through found the Settings → Équipes tab dead: teamsGrid()'s
+   map parameter shadowed the catalogue t, so t('page.teams.nMembers') called
+   the team object as a function and the page never rendered. The fix renames
+   the parameter; this test pins the tab — the grid renders with its member
+   and project counts, in French, and the teams page itself still loads. */
+test('the settings teams tab renders its grid — the shadowed t no longer crashes it', async ({ browser }) => {
+  const { context, page } = await signIn(browser, fr.account);
+  try {
+    await page.goto(`/w/${fr.account.slug}/settings`);
+    await frenchShell(page);
+    await page.getByRole('button', { name: 'Équipes', exact: true }).click();
+    await expect(page.getByText('Les équipes regroupent des personnes et des projets.')).toBeVisible();
+
+    /* The demo workspace seeds teams, so the grid renders real cards with
+       the count fragments the crashed lookup used to build. */
+    const grid = page.locator('.pgrid');
+    await expect(grid).toBeVisible();
+    await expect(grid.getByText(/membres/).first()).toBeVisible();
+    await expect(grid.getByText(/projets/).first()).toBeVisible();
+
+    /* The standalone teams page renders too — its title uses the same
+       namespace and its body the same teamsList source. */
+    await page.goto(`/w/${fr.account.slug}/teams`);
+    await frenchShell(page);
+    await expect(page.getByRole('heading', { name: 'Équipes', level: 1 })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});

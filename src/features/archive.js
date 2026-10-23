@@ -18,16 +18,16 @@ export function pageArchive() {
     tab === 'tasks'
       ? ts.length
         ? `<div class="panel" style="overflow:hidden">${ts
-            .map(t => {
-              const p = proj(t.project);
+            .map(tk => {
+              const p = proj(tk.project);
               return row(
-                stIcon(t.status, 15),
-                esc(t.title),
-                `<span class="mono">${t.key}</span> · ${esc(p.name)}`,
-                t.archivedAt ? t('page.archivedWhen', { when: ago(t.archivedAt) }) : t('page.archived'),
+                stIcon(tk.status, 15),
+                esc(tk.title),
+                `<span class="mono">${tk.key}</span> · ${esc(p.name)}`,
+                tk.archivedAt ? t('page.archivedWhen', { when: ago(tk.archivedAt) }) : t('page.archived'),
                 'restoreTask',
                 'purgeTask',
-                t.id,
+                tk.id,
               );
             })
             .join('')}</div>`

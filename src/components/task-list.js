@@ -126,6 +126,63 @@ export function bulkBar(ids) {
 }
 
 /* ---------- activity rendering ---------- */
+
+/* The stored verb is an English fragment (document data, D-06); the display is a
+   catalogue lookup keyed on the stored string. An unknown or legacy verb renders
+   verbatim — the same rule the notifications follow. The map is explicit, so the
+   vocab test can pin every call-site verb against both catalogues. */
+export const VERB_KEYS = {
+  created: 'act.verb.created',
+  'created project': 'act.verb.createdProject',
+  completed: 'act.verb.completed',
+  moved: 'act.verb.moved',
+  assigned: 'act.verb.assigned',
+  'changed priority of': 'act.verb.changedPriorityOf',
+  'changed due date of': 'act.verb.changedDueDateOf',
+  'changed start date of': 'act.verb.changedStartDateOf',
+  'updated labels on': 'act.verb.updatedLabelsOn',
+  renamed: 'act.verb.renamed',
+  'set repeat on': 'act.verb.setRepeatOn',
+  estimated: 'act.verb.estimated',
+  'updated dependencies of': 'act.verb.updatedDependenciesOf',
+  archived: 'act.verb.archived',
+  restored: 'act.verb.restored',
+  'commented on': 'act.verb.commentedOn',
+  'added a file to': 'act.verb.addedAFileTo',
+  'removed a file from': 'act.verb.removedAFileFrom',
+  'added subtask to': 'act.verb.addedSubtaskTo',
+  'converted a subtask of': 'act.verb.convertedASubtaskOf',
+  'assigned a subtask on': 'act.verb.assignedASubtaskOn',
+  'set a subtask due date on': 'act.verb.setASubtaskDueDateOn',
+  'completed subtask on': 'act.verb.completedSubtaskOn',
+  'reopened subtask on': 'act.verb.reopenedSubtaskOn',
+};
+export const verbLabel = v => (VERB_KEYS[v] ? tMsg(VERB_KEYS[v]) : v);
+
+/* The stored repeat ids and their catalogue keys — the same shapes the new-task
+   modal's RECUR_KEY maps, kept local because modals.js already imports this file. */
+const RECUR_EXTRA = {
+  'does not repeat': 'popover.recurNone',
+  daily: 'popover.recurDaily',
+  weekly: 'popover.recurWeekly',
+  'every 2 weeks': 'popover.recurBiweekly',
+  monthly: 'popover.recurMonthly',
+};
+
+/* A new row's extra is structured ({ kind, ...vars }) and composes through the
+   act.extra.* catalogue keys; a legacy row's extra is a stored English string and
+   renders verbatim (D-12's rule, no migration). */
+export function actExtraHtml(e) {
+  if (e && typeof e === 'object') {
+    if (e.kind === 'recur') {
+      const k = RECUR_EXTRA[e.id];
+      return `<span class="muted">${esc(k ? tMsg(k) : e.id)}</span>`;
+    }
+    return `<span class="muted">${esc(tMsg(`act.extra.${e.kind}`, e))}</span>`;
+  }
+  return `<span class="muted">${esc(e)}</span>`;
+}
+
 export function actHtml(a, opt = {}) {
   const m = mem(a.by);
   const t = a.task ? task(a.task) : null;
@@ -135,7 +192,7 @@ export function actHtml(a, opt = {}) {
     : p
       ? `<span class="obj" data-a="go" data-r="project" data-id="${p.id}">${esc(p.name)}</span>`
       : '';
-  return `<div class="fitem">${av(a.by, 'sm')}<div class="grow"><b>${esc(m?.id === D().me ? tMsg('common.you') : m?.name || tMsg('common.someone'))}</b> <span class="muted">${esc(a.verb)}</span> ${obj} ${a.extra ? `<span class="muted">${esc(a.extra)}</span>` : ''}${opt.proj && p && t ? ` <span class="faint">in ${esc(p.name)}</span>` : ''}</div><time>${ago(a.at)}</time></div>`;
+  return `<div class="fitem">${av(a.by, 'sm')}<div class="grow"><b>${esc(m?.id === D().me ? tMsg('common.you') : m?.name || tMsg('common.someone'))}</b> <span class="muted">${esc(verbLabel(a.verb))}</span> ${obj} ${a.extra ? actExtraHtml(a.extra) : ''}${opt.proj && p && t ? ` <span class="faint">${tMsg('act.extra.inProject')} ${esc(p.name)}</span>` : ''}</div><time>${ago(a.at)}</time></div>`;
 }
 export function miniRow(t, opt = {}) {
   const p = proj(t.project);

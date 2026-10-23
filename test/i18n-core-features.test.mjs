@@ -213,9 +213,9 @@ test('the allow-list carries no entry of the nine files of the wave and stays so
   assert.deepEqual(left, [], 'the wave files still have allow-list entries');
 });
 
-test('the catalogue holds after the billing removal and the D-10/D-12 additions — 1449 keys, none under the reserved namespace', () => {
+test('the catalogue holds after the billing removal and the D-10/D-12/D-16 additions — 1481 keys, none under the reserved namespace', () => {
   const keys = Object.keys(en);
-  assert.equal(keys.length, 1449, 'the catalogue size moved');
+  assert.equal(keys.length, 1481, 'the catalogue size moved');
   assert.ok(
     keys.every(k => !k.startsWith('contract.') || k === 'contract.englishOnly'),
     'a phase key sits under contract.*',
