@@ -616,7 +616,7 @@ test('the settings stored preference values are byte-identical', () => {
     src.includes("['(GMT-08:00) Pacific Time', '(GMT-05:00) Eastern Time', '(GMT+00:00) London', '(GMT+01:00) Berlin', '(GMT+08:00) Singapore']"),
     'the stored time-zone labels moved',
   );
-  assert.ok(src.includes("['English (US)', 'English (UK)', 'Deutsch', 'Español', 'Français', '日本語']"), 'the stored language names moved');
+  assert.ok(!src.includes("'English (US)'"), 'the six-label language array is gone');
   for (const id of [
     'workspace',
     'appearance',
@@ -655,4 +655,54 @@ test('every static t() key of the three files resolves in the catalogue', () => 
       assert.ok(Object.hasOwn(en, m[1]), `${file}: t('${m[1]}') does not resolve`);
     }
   }
+});
+
+/* LOC-02 / D-13 / T-8-07: the selector is honest by construction. Its options come from the
+   registry, the registry agrees with the catalogue files the build ships, and no removed
+   language label survives anywhere in src/ outside the catalogues. */
+test('the language selector derives its two options from the registry (LOC-02)', async () => {
+  const { LOCALES } = await import('../src/core/i18n.js');
+  const src = read('src/pages/settings.js');
+  assert.ok(/availableLocales\(\)\s*\.map\(l => `<option value="\$\{l\.code\}"/.test(src), 'options derive from availableLocales()');
+  assert.ok(src.includes('data-in="langSel"'), 'the language row carries its dedicated input key');
+  const row = src.slice(src.indexOf("case 'language':"), src.indexOf("case 'datetime':"));
+  assert.ok(!/sel\('lang'/.test(row) && !row.includes('prefSel') && !row.includes('setPref'), 'no preference-flow wiring on the language row');
+  assert.deepEqual(LOCALES.map(l => l.name), ['English', 'Français'], 'each language is labelled in its own name');
+});
+
+test('registry codes, locale catalogue files and the selector agree one-to-one (LOC-02)', async () => {
+  const { LOCALES } = await import('../src/core/i18n.js');
+  const files = fs
+    .readdirSync(path.join(ROOT, 'src/locales'))
+    .filter(f => f.endsWith('.json'))
+    .map(f => f.replace(/\.json$/, ''))
+    .sort();
+  assert.deepEqual(LOCALES.map(l => l.code).sort(), files, 'registry codes match the catalogue files');
+});
+
+test('the language handler writes only the account locale (T-8-07)', () => {
+  const src = read('src/actions/actions.js');
+  const start = src.indexOf('IN.langSel');
+  const body = src.slice(start, src.indexOf('A.wsColor', start));
+  assert.ok(body.includes('setLocale(code)') && body.includes('api.patchMe({ locale: code })') && body.includes('storeLocale(code)'));
+  assert.ok(!/S\.prefs|save\(|prefValue|setPref/.test(body), 'no document write path is reachable from the language handler');
+});
+
+test('no removed language label survives anywhere in src/ outside the catalogues (LOC-02)', () => {
+  const banned = ['English (US)', 'English (UK)', 'Deutsch', 'Español', '日本語'];
+  const hits = [];
+  const walk = dir => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (full === path.join(ROOT, 'src/locales')) continue;
+        walk(full);
+      } else {
+        const text = fs.readFileSync(full, 'utf8');
+        for (const b of banned) if (text.includes(b)) hits.push(`${path.relative(ROOT, full)}: ${b}`);
+      }
+    }
+  };
+  walk(path.join(ROOT, 'src'));
+  assert.deepEqual(hits, [], 'phantom language labels found');
 });

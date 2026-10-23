@@ -215,6 +215,7 @@
   "toast.demoPreview": "C’était un aperçu — rien n’a été archivé",
   "toast.loaded": "Chargé",
   "toast.notifPrefsSaved": "Préférences de notification enregistrées",
+  "toast.localeSaveFailed": "Langue non enregistrée : elle ne s’applique qu’à cette session",
   "toast.prefSaved": "Préférence enregistrée",
   "toast.wsSettingsSaved": "Paramètres de l’espace de travail enregistrés",
   "toast.deleteWsUnavailable": "La suppression d’un espace de travail n’est pas encore disponible.",

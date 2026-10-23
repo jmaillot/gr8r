@@ -1,7 +1,7 @@
 /* =====================================================================
    SETTINGS · AUTH · ONBOARDING · DESIGN SYSTEM · SYSTEM STATES
    ===================================================================== */
-import { formatDate, formatTime, isAutoDateFmt, t } from '../core/i18n.js';
+import { availableLocales, formatDate, formatTime, getLocale, isAutoDateFmt, t } from '../core/i18n.js';
 import { dOff, esc, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { D, S, isMemberAdmin, me } from '../core/store.js';
@@ -86,6 +86,13 @@ export const sel = (k, opts, v) =>
       const [val, n] = Array.isArray(o) ? o : [o, o];
       return `<option value="${val}" ${String(v) === String(val) ? 'selected' : ''}>${n}</option>`;
     })
+    .join('')}</select>`;
+/* The language row's own select (Pitfall 3): a dedicated data-in key, never the shared
+   preference-document key, so a language change can never reach S.prefs or save(). The
+   options come straight from the registry — the honest selector offers only what exists. */
+export const langSel = v =>
+  `<select class="select" style="width:auto;min-width:180px" data-in="langSel" aria-label="${t('settings.language.title')}">${availableLocales()
+    .map(l => `<option value="${l.code}" ${v === l.code ? 'selected' : ''}>${l.name}</option>`)
     .join('')}</select>`;
 export function pageSettings() {
   const sec = S.ui.params.sec || S.ui.settings || 'appearance';
@@ -185,7 +192,9 @@ export function settingsBody(sec, title) {
         srow(
           t('settings.language.title'),
           t('settings.language.rowDesc'),
-          sel('lang', ['English (US)', 'English (UK)', 'Deutsch', 'Español', 'Français', '日本語'], P.lang),
+          /* D-14: the row shows what the user is actually seeing — the account locale, or the
+             negotiated language while it is still NULL; getLocale() is exactly that value. */
+          langSel(getLocale()),
         ) +
         srow(t('settings.language.spellcheck'), t('settings.language.spellcheckDesc'), tog('spell', P.spell !== false))
       );

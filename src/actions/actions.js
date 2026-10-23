@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { t, t as tMsg, getLocale, negotiate, primeLocale, readStoredLocale } from '../core/i18n.js';
+import { t, t as tMsg, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
@@ -2192,6 +2192,22 @@ IN.prefSel = el => {
   save();
   render();
   toast(t('toast.prefSaved'), { ms: 1500 });
+};
+/* D-12: the language is applied instantly and persisted separately. setLocale announces
+   gr8r:locale, whose listener re-renders; the account write follows in the background and
+   never touches S.prefs, save() or the document revision (LOC-04). D-16: a failed write keeps
+   the language for the session with a warning; a 401 rides the session-expired path. */
+IN.langSel = async el => {
+  const code = el.value;
+  await setLocale(code);
+  if (!api.enabled) return storeLocale(code);
+  const r = await api.patchMe({ locale: code });
+  if (r.ok) return;
+  if (r.status === 401) {
+    window.dispatchEvent(new CustomEvent('gr8r:save-error', { detail: { status: 401, error: r.error } }));
+    return;
+  }
+  toast(t('toast.localeSaveFailed'), { kind: 'err', ms: 6000 });
 };
 A.wsColor = el => {
   const c = el.dataset.v;

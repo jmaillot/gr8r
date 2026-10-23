@@ -214,6 +214,7 @@
   "toast.demoPreview": "This was a preview — nothing was archived",
   "toast.loaded": "Loaded",
   "toast.notifPrefsSaved": "Notification preferences saved",
+  "toast.localeSaveFailed": "Language not saved — it applies to this session only",
   "toast.prefSaved": "Preference saved",
   "toast.wsSettingsSaved": "Workspace settings saved",
   "toast.deleteWsUnavailable": "Deleting a workspace is not available yet.",
