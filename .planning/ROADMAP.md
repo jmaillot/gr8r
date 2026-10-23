@@ -247,9 +247,13 @@ Deliverable: two members of one workspace see the interface in their own languag
 workspace document no longer carries a language.
 
 Plans: 3 plans
-
+**Wave 1**
 - [ ] 08-01-PLAN.md — the account owns the language: `users.locale` column, `PATCH /api/auth/me`, legacy `prefs.lang` stripped from the document pipeline (LOC-03, LOC-04, LOC-05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 08-02-PLAN.md — boot negotiation, silent prime, lifecycle application and the guarded migration seed (LOC-06, LOC-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 08-03-PLAN.md — the honest two-option selector, instant no-reload switch, browser proof (LOC-01, LOC-02)
 
 ## Phase 9: Server messages & activity history
