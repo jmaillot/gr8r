@@ -327,7 +327,7 @@ image.
 - [x] **Phase 6: English extraction & locale-aware formats** — every user-visible string in the
   catalogue, every date and number formatted for the locale, English behaviour unchanged, search
   finds an accented name from an unaccented query
-- [ ] **Phase 7: French catalogue & French typography** — a complete, correctly punctuated French
+- [x] **Phase 7: French catalogue & French typography** — a complete, correctly punctuated French (completed 2026-10-23)
   interface, stored vocabulary translated at render
 - [ ] **Phase 8: Per-user locale & the honest selector** — the language on the account, applied
   before the first render, out of the shared document

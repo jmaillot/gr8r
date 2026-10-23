@@ -1,15 +1,15 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 7
-current_phase_name: French catalogue & French typography
-current_plan: 7
-status: executing
-stopped_at: Completed 07-07-PLAN.md — phase 7 executed, awaiting the D-16 French read-through
-last_updated: "2026-10-23T12:23:50.096Z"
+current_phase: 8
+current_phase_name: Per-user locale & the honest selector
+current_plan: Not started
+status: planning
+stopped_at: Phase 7 complete, ready to plan Phase 8
+last_updated: "2026-10-23T12:55:57.099Z"
 last_activity: 2026-10-23
-last_activity_desc: Phase 7 execution started
-state_head: 0d8caea162409047b07925739285c7d8a7eab49e
+last_activity_desc: Phase 7 complete, transitioned to Phase 8
+state_head: cbc1ec5800ff8d2842238799fa6da71e64662e80
 progress:
   total_phases: 7
   completed_phases: 2
@@ -286,17 +286,17 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-23T12:23:50.010Z
-**Stopped at:** Completed 07-07-PLAN.md — phase 7 executed, awaiting the D-16 French read-through
+**Stopped at:** Phase 7 complete, ready to plan Phase 8
 **Resume file:** None
 
 ## Current Position
 
-Current Plan: 7
+Current Plan: Not started
 Total Plans in Phase: 7
 
-Phase: 7 (French catalogue & French typography) — EXECUTING
-Status: Plan 07-06 complete (batch C done — 230 keys; fr.json at 1,449 keys, 100% parity)
-Last activity: 2026-10-23 — Plan 07-06 complete
+Phase: 8 — Per-user locale & the honest selector
+Status: Ready to plan
+Last activity: 2026-10-23 — Phase 7 complete, transitioned to Phase 8
 
 ## Operator Next Steps
 
