@@ -215,3 +215,31 @@ Ajoutées par le lot settings ; réutilisées telles quelles par les lots suivan
 | light mode                    | mode clair                        |
 | layout                        | disposition                       |
 | preview                       | aperçu                            |
+
+## Terminologie — lot C (batch C, plan 07-06)
+
+Ajoutées par le lot C (palettes, navigation, vocabulaire stocké, permission) ;
+réutilisées telles quelles.
+
+| Anglais                       | Français                          |
+| ----------------------------- | --------------------------------- |
+| command menu                  | menu de commandes                 |
+| keyboard shortcuts            | raccourcis clavier                |
+| sign out                      | se déconnecter                    |
+| toggle sidebar                | basculer la barre latérale        |
+| switch workspace              | changer d’espace de travail       |
+| onboarding                    | onboarding                        |
+| assignee                      | Assigné à                         |
+| status                        | statut                            |
+| estimate                      | estimation                        |
+| ascending / descending        | croissant / décroissant           |
+| group by                      | grouper par                       |
+| untitled                      | Sans titre                        |
+| unassigned                    | non assigné                       |
+| broken link                   | lien cassé                        |
+| spreadsheet                   | feuille de calcul                 |
+| byte / kilobyte / megabyte    | o / Ko / Mo                       |
+| theme (light / dark / system) | thème (clair / sombre / système)  |
+| visible columns               | colonnes visibles                 |
+| filter connectors (and/is/is not) | et / est / n’est pas          |
+| role descriptions             | à la troisième personne (« Gère… », « Ne voit que… ») |
