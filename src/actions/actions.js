@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { t, t as tMsg } from '../core/i18n.js';
+import { t, t as tMsg, getLocale } from '../core/i18n.js';
 import { PR, PSTAT, ST } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
@@ -20,6 +20,7 @@ import {
   me,
   mem,
   proj,
+  roleLabel,
   save,
   task,
   tasksOf,
@@ -366,7 +367,7 @@ A.popPick = el => {
           toast(res.error || t('err.changeRole'), { kind: 'err' });
           return;
         }
-        toast(t('toast.roleChanged', { name: m.name, article: v === 'Admin' || v === 'Owner' ? 'an' : 'a', role: v }));
+        toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : (v === 'Admin' || v === 'Owner' ? 'an' : 'a'), role: roleLabel(v) }));
         refreshMembers();
       });
       return;
@@ -375,7 +376,7 @@ A.popPick = el => {
       m.role = v;
     });
     render();
-    toast(t('toast.roleChanged', { name: m.name, article: v === 'Admin' ? 'an' : 'a', role: v }));
+    toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : (v === 'Admin' ? 'an' : 'a'), role: roleLabel(v) }));
     return;
   }
   const field = { status: 'status', priority: 'priority', assignee: 'assignee', project: 'project', recur: 'recur', estimate: 'estimate', date: p.field }[

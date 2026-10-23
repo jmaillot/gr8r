@@ -208,3 +208,10 @@ Ajoutées par le lot settings ; réutilisées telles quelles par les lots suivan
 | starter task                  | tâche prédéfinie                  |
 | later (date shift)            | plus tard                         |
 | earlier (date shift)          | plus tôt                          |
+| attachment                    | pièce jointe                      |
+| single-use link               | lien à usage unique               |
+| offline                       | hors ligne                        |
+| dark mode                     | mode sombre                       |
+| light mode                    | mode clair                        |
+| layout                        | disposition                       |
+| preview                       | aperçu                            |
