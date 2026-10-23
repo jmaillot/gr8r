@@ -67,14 +67,15 @@ text, and your proposed fix. Fixes are applied to `src/locales/fr.json` (and
 
 | # | Route / surface | Current text | Proposed fix | Applied |
 |---|-----------------|--------------|--------------|---------|
-| 1 | | | | ☐ |
-| 2 | | | | ☐ |
-| 3 | | | | ☐ |
+| 1 | Barre d'onglets projet (`page.project.tab.*`) | Onglets restés en anglais après le passage en Français — `PTABS` figeait `t()` à l'import | Converti en `ptabs()` évaluée au rendu (`77c0d45`) ; test Chromium de régression ajouté (13/13) | ☑ |
+| 2 | Activité (projet + drawer) | Verbes stockés rendus bruts en anglais (`created project`, `commented on`…), extras composés en anglais, « in » codé en dur | `VERB_KEYS` (24 verbes) + extras structurés `act.extra.*` avec fallback legacy verbatim (`ef9289d`) | ☑ |
+| 3 | Paramètres → Équipes | La page ne se charge plus : le paramètre de map de `teamsGrid()` masquait le `t` catalogue → TypeError (`t('page.teams.nMembers')`) | Paramètre renommé `tm` (`ef9289d`) ; même shadow dans l'onglet Archive → Tâches corrigé ; test Chromium 14/14 | ☑ |
+| 4 | | | | ☐ |
 
 ## Sign-off
 
-- [ ] I reviewed the app in French across the routes above.
-- [ ] The interface reads as a French product (register, typography, wording).
-- [ ] Wording fixes above (if any) are applied or explicitly deferred.
+- [x] I reviewed the app in French across the routes above.
+- [x] The interface reads as a French product (register, typography, wording).
+- [x] Wording fixes above (if any) are applied or explicitly deferred.
 
-**Read-through performed by:** ______________  **Date:** ______________
+**Read-through performed by:** Jérémy Maillot  **Date:** 2026-10-23
