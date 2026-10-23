@@ -4,17 +4,17 @@ milestone: v1.2
 current_phase: 08
 current_phase_name: Per-user locale & the honest selector
 current_plan: 3
-status: executing
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-10-23T15:17:19.688Z"
+status: verifying
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-10-23T15:27:30.657Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 08 execution started
-state_head: fcabcfedd71093c0eda7717b8f6837def5ec0167
+state_head: f1af97b2ea30e05bcd91d546e777e05f2dc2c1ed
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
   percent: 25
 milestone_name: Localization
 ---
@@ -264,6 +264,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 7]: The French e2e spec owns a throwaway workspace via the exported apiClient helper — the language switch must not leak into the English-pinned tenancy suite (shared server, concurrent workers)
 - [Phase 08]: users.locale stores registry code, NULL until chosen; PATCH /api/auth/me is the only writer; legacy prefs.lang stripped at both merge points
 - [Phase 08]: 08-02: primeLocale (silent) vs setLocale (announcing) share activateLocale; boot/lifecycle use the silent variant only
+- [Phase 08]: Language selector: instant setLocale then background account PATCH (demo: localStorage); options derived from the registry; row shows getLocale()
 
 ## Verification commands used
 
@@ -296,8 +297,8 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-23T15:17:19.588Z
-**Stopped at:** Completed 08-02-PLAN.md
+**Last session:** 2026-10-23T15:27:30.290Z
+**Stopped at:** Completed 08-03-PLAN.md
 **Resume file:** None
 
 ## Current Position
@@ -306,7 +307,7 @@ Current Plan: 3
 Total Plans in Phase: 3
 
 Phase: 08 (Per-user locale & the honest selector) — EXECUTING
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-23 — Phase 08 execution started
 
 ## Operator Next Steps
@@ -325,3 +326,4 @@ Last activity: 2026-10-23 — Phase 08 execution started
 | Phase 7 P07 | 15 min | 2 tasks | 5 files |
 | Phase 08 P01 | ~20min | 2 tasks | 7 files |
 | Phase 08 P02 | 15min | 2 tasks | 7 files |
+| Phase 08 P03 | 25min | 2 tasks | 9 files |

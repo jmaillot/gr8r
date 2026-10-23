@@ -35,9 +35,9 @@ the server is the only boundary that counts.
 
 ### Language preference
 
-- [ ] **LOC-01**: The language selector switches the interface language immediately, without a
+- [x] **LOC-01**: The language selector switches the interface language immediately, without a
       reload.
-- [ ] **LOC-02**: The selector offers only the languages that are actually translated: English
+- [x] **LOC-02**: The selector offers only the languages that are actually translated: English
       and French. The four other languages it listed until now are gone until they exist.
 - [x] **LOC-03**: The language is a per-user preference, stored on the account, and it survives
       signing out, signing in again and opening the app from another browser.
@@ -140,8 +140,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | I18N-06 | Phase 5 | Complete |
 | I18N-07 | Phase 7 | Complete |
 | I18N-08 | Phase 5 | Complete |
-| LOC-01 | Phase 8 | Pending |
-| LOC-02 | Phase 8 | Pending |
+| LOC-01 | Phase 8 | Complete |
+| LOC-02 | Phase 8 | Complete |
 | LOC-03 | Phase 8 | Complete |
 | LOC-04 | Phase 8 | Complete |
 | LOC-05 | Phase 8 | Complete |
