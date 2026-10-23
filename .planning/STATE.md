@@ -4,16 +4,16 @@ milestone: v1.2
 current_phase: 7
 current_phase_name: French catalogue & French typography
 status: executing
-stopped_at: Phase 7 context gathered
-last_updated: "2026-10-23T08:59:31.269Z"
+stopped_at: Completed 07-05-PLAN.md (batch B)
+last_updated: "2026-10-23T12:04:52.176Z"
 last_activity: 2026-10-23
 last_activity_desc: Phase 7 execution started
-state_head: 2d71dc0e9678dce37f7eb5747b60765e2b238c14
+state_head: 249aa56d0e3e64ae5eca99ab8a5edd215d375e0d
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 17
+  completed_plans: 22
   percent: 29
 milestone_name: Localization
 ---
@@ -256,6 +256,7 @@ in `PROJECT.md` under **Requirements → Active**.
   array cannot resurrect a second workspace.
 - Release order is feature/docs commits first, then one `chore(release): X.Y.Z` commit carrying the
   manifest and lockfile version bump.
+- [Phase 07]: Batch B (settings/act/toast/modal/err, 513 keys) translated; toast.roleChanged article made locale-aware in actions.js; four raw-English splices deferred to deferred-items.md (need new en keys, forbidden while en.json is the oracle)
 
 ## Verification commands used
 
@@ -279,9 +280,9 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-23
-**Stopped at:** Phase 7, plan 07-04 complete (batch A: page + a11y namespaces translated)
-**Resume file:** .planning/phases/07-french-catalogue-french-typography/07-05-PLAN.md
+**Last session:** 2026-10-23T12:04:51.964Z
+**Stopped at:** Completed 07-05-PLAN.md (batch B)
+**Resume file:** None
 
 ## Current Position
 
@@ -295,3 +296,9 @@ Last activity: 2026-10-23 — Plan 07-04 complete
   keys in batches against `scripts/fr-parity.mjs`, the glossary and the two phase gates
 - Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
   per-user locale with a migration, and Chromium coverage for the 8 untested UI flows
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 07 P05 | ~50 min | 3 tasks | 4 files |

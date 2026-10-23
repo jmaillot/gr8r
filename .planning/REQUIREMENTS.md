@@ -12,7 +12,7 @@ the server is the only boundary that counts.
 
 - [x] **I18N-01**: Every user-visible string in the interface comes from a catalogue lookup; the
       English catalogue is the base and no user-visible literal is left inline in the source.
-- [ ] **I18N-02**: The French catalogue covers every key of the English one, and the whole
+- [x] **I18N-02**: The French catalogue covers every key of the English one, and the whole
       interface renders in French — navigation, pages, modals, popovers, toasts, empty states,
       validation messages, the command palette, the settings, the authentication pages and the
       404 page.
@@ -21,7 +21,7 @@ the server is the only boundary that counts.
       separator, and relative times ("il y a 2 jours").
 - [x] **I18N-04**: Plural forms follow the locale's CLDR categories, so French says "0 fichier"
       where English says "0 files" and a million takes its own category.
-- [ ] **I18N-05**: French typography is respected: a no-break space (U+00A0) before `:`, a
+- [x] **I18N-05**: French typography is respected: a no-break space (U+00A0) before `:`, a
       narrow no-break space (U+202F) before `; ! ?`, a no-break space (U+00A0) inside guillemets
       on both sides (« »), the curly apostrophe (U+2019), the ellipsis (U+2026) rather than
       `...`, and accents normalised to NFC everywhere.
@@ -133,10 +133,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | I18N-01 | Phase 6 | Complete |
-| I18N-02 | Phase 7 | Pending |
+| I18N-02 | Phase 7 | Complete |
 | I18N-03 | Phase 6 | Complete |
 | I18N-04 | Phase 6 | Complete |
-| I18N-05 | Phase 7 | Pending |
+| I18N-05 | Phase 7 | Complete |
 | I18N-06 | Phase 5 | Complete |
 | I18N-07 | Phase 7 | Pending |
 | I18N-08 | Phase 5 | Complete |
