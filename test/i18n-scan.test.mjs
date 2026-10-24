@@ -395,6 +395,25 @@ test('no data-a, data-r or data-v site of the live tree is ever reported', () =>
   assert.ok(sites > 500, `the measured data-* sites are missing (${sites})`);
 });
 
+/* ---------- the phase-11 pins (D-07, D-09) ----------
+   The empty allow-list is contractual: the scanner is NOT a hard gate, the
+   prebuild hook is, and the prebuild hook only builds on an empty pending
+   list. The moment an entry lands in the fixture, the sweep is regressing. */
+
+test('the allow-list fixture is exactly [] — the empty allow-list is contractual (D-07, D-09)', () => {
+  const raw = fs.readFileSync(path.join(REPO_ROOT, 'test/fixtures/i18n-pending.json'), 'utf8');
+  const list = JSON.parse(raw);
+  assert.deepEqual(list, [], 'the allow-list must stay EMPTY — a new user-visible literal goes in the catalogue, never in the pending list (D-07, D-09)');
+});
+
+test('the scanner exits 0 on the live tree today (D-07)', () => {
+  // In-process: the same main() the prebuild hook runs, with an absolute root
+  // so the verdict is cwd-independent. A non-zero return here means the live
+  // tree regressed and the CI build job (`npm run build` → prebuild) fails.
+  const code = main([], { root: path.join(REPO_ROOT, 'src') });
+  assert.equal(code, 0, 'the i18n scan no longer exits 0 on the live tree — the build gate would fail CI');
+});
+
 test('src/data/seed.js is never scanned', () => {
   assert.ok(EXCLUDED_FILES.has('src/data/seed.js'));
   const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue: {} });
