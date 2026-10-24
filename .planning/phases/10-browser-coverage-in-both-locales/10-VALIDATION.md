@@ -40,8 +40,13 @@ created: "2026-10-24"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 10-01-01 | 01 | 0 | UAT-01..09 | — | N/A | e2e infra | `npm run e2e -- --list` | ❌ W0 | ⬜ pending |
-| (planner fills remaining rows from PLAN.md tasks) | | | | | | | | | |
+| 10-01-01 | 01 | 1 | UAT-09 | T-10-01 | N/A | e2e infra + tracer | `npm run build && npm run e2e -- e2e/locale.spec.mjs` | ❌ W0 | ⬜ pending |
+| 10-01-02 | 01 | 1 | UAT-06 (criterion-4) | T-10-02 | N/A | e2e | `npm run build && npm run e2e` | ❌ W0 | ⬜ pending |
+| 10-02-01 | 02 | 2 | UAT-01 | T-10-04 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "onboarding"` | ❌ | ⬜ pending |
+| 10-02-02 | 02 | 2 | UAT-02, UAT-03 | T-10-03 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "invite"` | ❌ | ⬜ pending |
+| 10-02-03 | 02 | 2 | UAT-04 | T-10-04 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "share"` | ❌ | ⬜ pending |
+| 10-03-01 | 03 | 3 | UAT-05, UAT-06 | T-10-06 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "switcher\|removal"` | ❌ | ⬜ pending |
+| 10-03-02 | 03 | 3 | UAT-07, UAT-08 | T-10-05 | billing-free invariant pinned | e2e | `npm run build && npm run e2e` | ❌ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,9 +54,9 @@ created: "2026-10-24"
 
 ## Wave 0 Requirements
 
-- [ ] `e2e/helpers.mjs` — promoted `createAccount` fixture helper (D-06 in RESEARCH.md)
-- [ ] Export `inviteToken()` from `e2e/setup.mjs` for the `/join` fixture
-- [ ] `use: { locale: 'en-US' }` pin in `e2e/playwright.config.mjs` (UAT-09) — lands in Wave 0 so all existing specs stay English-pinned from the first commit
+- [x] `e2e/helpers/setup.mjs` — promoted `createAccount` fixture helper (D-06 in RESEARCH.md) — plan 10-01 task 1
+- [x] Export `inviteToken()` from `e2e/helpers/setup.mjs` for the `/join` fixture — plan 10-01 task 1
+- [x] `use: { locale: 'en-US' }` pin in `e2e/playwright.config.mjs` (UAT-09) — lands in Wave 1 (plan 10-01 task 1) so all existing specs stay English-pinned from the first commit
 
 *Existing infrastructure covers the runner itself: `@playwright/test` + `npm run e2e` are installed and green.*
 
@@ -61,7 +66,7 @@ created: "2026-10-24"
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| (planner fills from PLAN.md human verify steps, if any) | | | |
+| (none — all phase behaviors have automated verification) | | | |
 
 *If none: "All phase behaviors have automated verification."*
 
