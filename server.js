@@ -23,6 +23,7 @@
      SECURE_COOKIE=auto     auto | true | false
      TRUST_PROXY=false      opt-in: read X-Forwarded-* (set true behind Traefik)
      MAX_BODY_BYTES=8388608
+     MAX_UPLOAD_MB=25       per-file upload cap in megabytes (raw-body uploads)
      SMTP_HOST              optional; enables automatic invite emails
      SMTP_PORT              587 (STARTTLS) or 465 (implicit TLS)
      SMTP_SECURE            true | false; inferred from the port when unset
@@ -50,6 +51,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
 const SEED_FILE = path.join(HERE, 'seed.json');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
+const FILES_DIR = path.join(DATA_DIR, 'files');
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'gr8r.db'));
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -66,6 +68,8 @@ const APP_URL = String(process.env.APP_URL || '')
   .replace(/\/+$/, '');
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
+const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
+const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
 const DEFAULT_WS_ID = 'ws_default';
 const COOKIE = 'gr8r_session';
 const ROLE_RANK = { viewer: 1, member: 2, admin: 3, owner: 4 };
@@ -134,6 +138,7 @@ function ensureColumn(conn, table, name, def) {
 
 function openDb() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  fs.mkdirSync(FILES_DIR, { recursive: true });
   const db = new DatabaseSync(DB_PATH);
   db.exec('pragma journal_mode = wal');
   db.exec('pragma foreign_keys = on');
@@ -1828,6 +1833,55 @@ function serveStatic(req, res, url) {
   return notFound(res);
 }
 
+/* ---------------------------- file uploads ----------------------------- */
+
+/* Raw-body upload: stream the request body straight to disk (never buffered),
+   size-capped mid-stream. On overflow we keep draining the socket (WR-05) so
+   the client actually receives the 413, then destroy the write stream and
+   unlink the partial file. */
+function uploadBinary(req, dest) {
+  return new Promise((resolve, reject) => {
+    const out = fs.createWriteStream(dest);
+    /* A write in flight when we destroy the stream surfaces as an 'error' on
+       the WriteStream after the fs callback fires — swallow it, the httpError
+       rejection is the real outcome. */
+    out.on('error', () => {});
+    let size = 0;
+    let overflow = null;
+    req.on('data', chunk => {
+      if (overflow) return; // keep draining
+      size += chunk.length;
+      if (size > MAX_UPLOAD) {
+        overflow = httpError(413, 'Upload too large', 'uploadTooLarge');
+        out.destroy();
+        fs.unlink(dest, () => {});
+        return;
+      }
+      out.write(chunk);
+    });
+    req.on('end', () => {
+      if (overflow) return reject(overflow);
+      out.end(() => resolve(size));
+    });
+    req.on('error', err => {
+      out.destroy();
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+}
+
+async function handleUpload(req, res, slug) {
+  /* Guard order per the login-handler contract: cross-origin rejected before
+     the body read, then the workspace/role gate, then the stream. */
+  if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+  const ctx = requireWorkspace(req, res, slug, 'member');
+  if (!ctx) return; // response already sent (404 workspaceNotFound / 403 readOnlyAccess)
+  const id = uid();
+  await uploadBinary(req, path.join(FILES_DIR, id));
+  json(res, 200, { id }); // metadata record flows through the existing doc channel
+}
+
 /* ------------------------------- server -------------------------------- */
 const server = http.createServer(async (req, res) => {
   const started = now();
@@ -1839,7 +1893,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    if (url.pathname.startsWith('/api/')) {
+    /* Upload POST must be intercepted before serveStatic (which 405s non-GET). */
+    const uploadMatch = url.pathname.match(/^\/w\/([a-z0-9-]{2,40})\/files$/);
+    if (uploadMatch && req.method === 'POST') {
+      await handleUpload(req, res, uploadMatch[1]);
+    } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {
         if (url.pathname !== '/api/health') console.log(`${req.method} ${url.pathname} ${res.statusCode} ${now() - started}ms`);

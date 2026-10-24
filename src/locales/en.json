@@ -1480,6 +1480,7 @@
   "err.lastPrivateMember": "Promote someone before removing the last member of a private project",
   "err.noWorkspaceReady": "No workspace available",
   "err.bodyTooLarge": "Request body too large",
+  "err.uploadTooLarge": "File too large",
   "err.invalidJson": "Invalid JSON body",
   "err.passwordTooShort": "Use at least 10 characters",
   "err.accountExists": "An account with that email already exists",
