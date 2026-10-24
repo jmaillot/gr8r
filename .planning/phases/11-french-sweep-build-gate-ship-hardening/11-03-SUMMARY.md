@@ -82,3 +82,8 @@ None — both tasks ship complete, no placeholder code.
 - `demoBootedIn()` asserts boot health via `.content` visibility, `document.documentElement.lang`, and the catalogue-driven document title (`nav.route.<route>`); the title poll covers the post-switch in-place re-render (`demoBootedIn(page, 'en', 'settings')`).
 - The `[vite] http proxy error: /api/config` lines in the demo run's output are EXPECTED — they are the 404s that trigger the demo fallback; the test asserting on their absence would be wrong.
 - Untracked `.planning/` files present in the worktree (10-PATTERNS.md, v1.2-INTEGRATION-CHECK.md, v1.2-MILESTONE-AUDIT.md) predate this plan and belong to other workflows — not touched.
+
+## Self-Check: PASSED
+
+- Files exist: e2e/demo-locale.spec.mjs, e2e/demo.playwright.config.mjs, 11-03-SUMMARY.md.
+- Commits exist: b80ad55 (Task 1, prior session), 11f6a57 (Task 2), ff3de60 (docs).
