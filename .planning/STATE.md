@@ -1,15 +1,15 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 8
-current_phase_name: Per-user locale & the honest selector
+current_phase: 10
+current_phase_name: Browser coverage in both locales
 current_plan: Not started
 status: planning
-stopped_at: Phase 09 complete, ready to plan Phase 8
-last_updated: "2026-10-24T13:32:43.236Z"
+stopped_at: Phase 8 complete, ready to plan Phase 10
+last_updated: "2026-10-24T14:07:20.062Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 09 complete, transitioned to Phase 8
-state_head: 8accad0935613c901be1691f0fc4e60b378765dc
+last_activity_desc: Phase 8 complete, transitioned to Phase 10
+state_head: 055002caaeea3e8bc311f9ca4be40d66d1bccc29
 progress:
   total_phases: 8
   completed_phases: 2
@@ -25,9 +25,9 @@ Last updated: 2026-10-22
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — phases 5 and 6 complete, 5 phases to go
+- Milestone: **v1.2 — Localization** — phases 5–9 complete, 2 phases to go (10, 11)
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-execute-phase 8`** — phase 8 has all 4 plans summarized but no VERIFICATION.md; execute resumes at the verification gates (#2868)
+- Next: **`/gsd-plan-phase 10`** — Browser coverage in both locales (the eight untested flows proven in Chromium, EN and FR)
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
@@ -258,6 +258,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - Release order is feature/docs commits first, then one `chore(release): X.Y.Z` commit carrying the
   manifest and lockfile version bump.
 - [Phase 07]: Batch B (settings/act/toast/modal/err, 513 keys) translated; toast.roleChanged article made locale-aware in actions.js; four raw-English splices deferred to deferred-items.md (need new en keys, forbidden while en.json is the oracle)
+- [Phase 08]: Locale left the shared document for the account (nullable users.locale, gated PATCH /api/auth/me); boot negotiates browser language pre-paint, account locale after api.me(); guarded one-time seed moves formerly-French members to 'fr'; selector derives from the LOCALES registry only; server keeps a whitelist and never writes locale at boot
 - [Phase 07]: Batch C (229 shared-namespace keys + app.name) translated — the D-07 completeness gate is GREEN (100% en→fr parity, 1,449 keys); file.count deliberately keeps no many member (pinned by i18n.test.mjs); build-marker heuristic tightened to reject substrings of the other catalogue's text
 - [Phase 7]: The overflow spec enumerates the 16 user-facing ROUTE_IDS routes; member/team (param-dependent) and system/states (design-system showcases) are excluded — phase 10 widens coverage
 - [Phase 7]: gr8r:locale now bubbles (Rule 1): the window listener in main.js never received the non-bubbling document event — the switch updated <html lang> while strings stayed in the old language
@@ -305,7 +306,7 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-24T13:22:46.149Z
-**Stopped at:** Phase 09 complete, ready to plan Phase 8
+**Stopped at:** Phase 8 complete, ready to plan Phase 10
 **Resume file:** None
 
 ## Current Position
@@ -313,13 +314,14 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 Current Plan: Not started
 Total Plans in Phase: 7
 
-Phase: 8 — Per-user locale & the honest selector
+Phase: 10 — Browser coverage in both locales
 Status: Ready to plan
-Last activity: 2026-10-24 — Phase 09 complete, transitioned to Phase 8
+Last activity: 2026-10-24 — Phase 8 complete, transitioned to Phase 10
 
 ## Operator Next Steps
 
-- `/gsd-execute-phase 8` — all plans summarized; resumes at the verification gates
+- `/gsd-plan-phase 10` — Browser coverage in both locales (next phase; phase 8 fully closed: UAT 11/11, verification passed, security threats_open 0)
+- Open warnings from 08-REVIEW.md (0 critical / 4 warning / 3 info): WR-01 double-fire on language select (duplicate PATCH), WR-02 locale set before catalogue load, WR-03 server LOCALE_CODES hand-duplicates the client registry, WR-04 dead catalogue keys for cleared repeat/estimate qualifiers — see 08-REVIEW-DISPOSITION.md; `/gsd-code-review 8 --fix` to auto-fix
 - Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
 - Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
 

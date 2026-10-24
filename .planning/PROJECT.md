@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-24 after completing Phase 9 (server messages & activity history, gap closure)*
+*Last updated: 2026-10-24 after completing Phase 8 (per-user locale & the honest selector)*
 
 ## What it is
 
@@ -141,15 +141,15 @@ French, every user has their own locale — and the full app journey is covered 
 - ✓ ACT-01 — The activity log renders in the interface language; filters classify the stored
   machine verb, not English prose — Phase 9
 - ✓ ACT-02 — Activity entries written before this milestone still display and filter — Phase 9
+- ✓ The language selector changes the interface: a real `t()` layer, JSON catalogues, French
+  translated end to end, EN and FR the only offered languages — Phases 5–8
+- ✓ The locale is a per-user preference, stored on the account and returned by the server,
+  with a migration for existing installs — Phase 8 (LOC-01…LOC-06 verified; UAT 11/11)
 
 ### Active
 
 From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this milestone's scope:
 
-- [ ] The language selector changes the interface: a real `t()` layer, JSON catalogues, French
-      translated end to end, EN and FR the only offered languages.
-- [ ] The locale is a per-user preference, stored on the account and returned by the server,
-      with a migration for existing installs.
 - [ ] The remaining UI flows are covered by Chromium: the onboarding wizard, the invite modal,
       the `/join` page, the share modal, member removal, the workspace switcher and the plan
       change.
