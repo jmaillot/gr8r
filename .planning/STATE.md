@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 10
 current_phase_name: Browser coverage in both locales
-current_plan: Not started
-status: planning
-stopped_at: Phase 10 context gathered
-last_updated: "2026-10-24T14:29:30.412Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-10-24T14:51:03.284Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 8 complete, transitioned to Phase 10
-state_head: 0e9693f35d3b93348af8820042cbfe2bde91e089
+last_activity_desc: Phase 10 execution started
+state_head: e84af77728ff5e3aae5a5c15b4badcd3d94169f3
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 35
-  completed_plans: 35
+  total_plans: 38
+  completed_plans: 36
   percent: 25
 milestone_name: Localization
 ---
@@ -273,6 +273,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 09]: TRUST_PROXY flips to an allow-list opt-in (=== 'true'): by default no X-Forwarded-* header is read and the login throttle keys on the socket address; compose keeps TRUST_PROXY=true for Traefik
 - [Phase 09]: SMTP_HOST without APP_URL exits 1 at boot (WR-04 boot gate in main(), before listen) — invite links are built only from APP_URL, never from the request Host header
 - [Phase 09]: Login and signup carry the standard sameOrigin 403 crossOriginRejected guard, placed before the body read AND before the throttle so a cross-origin POST cannot consume the victim IP's budget (WR-07)
+- [Phase 10]: TRUST_PROXY=true in e2e/server.mjs so run-unique X-Forwarded-For dodges the per-IP signup throttle (Rule 3, plan 10-01)
 
 ## Verification commands used
 
@@ -305,18 +306,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T14:29:30.299Z
-**Stopped at:** Phase 10 context gathered
-**Resume file:** .planning/phases/10-browser-coverage-in-both-locales/10-CONTEXT.md
+**Last session:** 2026-10-24T14:51:03.170Z
+**Stopped at:** Completed 10-01-PLAN.md
+**Resume file:** None
 
 ## Current Position
 
-Current Plan: Not started
-Total Plans in Phase: 7
+Current Plan: 2
+Total Plans in Phase: 3
 
-Phase: 10 — Browser coverage in both locales
-Status: Ready to plan
-Last activity: 2026-10-24 — Phase 8 complete, transitioned to Phase 10
+Phase: 10 (Browser coverage in both locales) — EXECUTING
+Status: Ready to execute
+Last activity: 2026-10-24 — Phase 10 execution started
 
 ## Operator Next Steps
 
@@ -340,3 +341,4 @@ Last activity: 2026-10-24 — Phase 8 complete, transitioned to Phase 10
 | Phase 09 P05 | ~15 min | 2 tasks | 4 files |
 | Phase 09 P07 | 8min | 2 tasks | 13 files |
 | Phase 09 P06 | 4 min | 3 tasks | 5 files |
+| Phase 10 P01 | ~12 min | 2 tasks | 3 files |

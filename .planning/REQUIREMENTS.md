@@ -76,10 +76,10 @@ the server is the only boundary that counts.
 - [ ] **UAT-03**: The `/join` page that accepts an invitation is covered by a browser test.
 - [ ] **UAT-04**: The project share modal is covered by a browser test.
 - [ ] **UAT-05**: Removing a member from the members page is covered by a browser test.
-- [ ] **UAT-06**: Switching between two workspaces is covered by a browser test.
+- [x] **UAT-06**: Switching between two workspaces is covered by a browser test.
 - [ ] **UAT-07**: Changing the workspace plan is covered by a browser test.
 - [ ] **UAT-08**: Creating a project from the interface is covered by a browser test.
-- [ ] **UAT-09**: The existing Chromium tests are pinned to English, so they keep asserting what
+- [x] **UAT-09**: The existing Chromium tests are pinned to English, so they keep asserting what
       they assert today.
 - [ ] **UAT-10**: A French sweep over the 21 routes proves no untranslated English string is
       served, and a static scan of the sources fails the build on a new user-visible literal that
@@ -156,10 +156,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UAT-03 | Phase 10 | Pending |
 | UAT-04 | Phase 10 | Pending |
 | UAT-05 | Phase 10 | Pending |
-| UAT-06 | Phase 10 | Pending |
+| UAT-06 | Phase 10 | Complete |
 | UAT-07 | Phase 10 | Pending |
 | UAT-08 | Phase 10 | Pending |
-| UAT-09 | Phase 10 | Pending |
+| UAT-09 | Phase 10 | Complete |
 | UAT-10 | Phase 11 | Pending |
 
 **Coverage:**
