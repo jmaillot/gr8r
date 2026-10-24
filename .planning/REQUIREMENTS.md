@@ -64,9 +64,9 @@ the server is the only boundary that counts.
 
 ### Activity
 
-- [ ] **ACT-01**: The activity log is displayed in the interface language, and its filters —
+- [x] **ACT-01**: The activity log is displayed in the interface language, and its filters —
       comments, status changes, project changes — keep selecting the right entries.
-- [ ] **ACT-02**: Activity entries written before this milestone are still displayed and still
+- [x] **ACT-02**: Activity entries written before this milestone are still displayed and still
       filterable.
 
 ### Browser coverage
@@ -149,8 +149,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEARCH-01 | Phase 6 | Complete |
 | ERR-01 | Phase 9 | Pending |
 | ERR-02 | Phase 9 | Pending |
-| ACT-01 | Phase 9 | Pending |
-| ACT-02 | Phase 9 | Pending |
+| ACT-01 | Phase 9 | Complete |
+| ACT-02 | Phase 9 | Complete |
 | UAT-01 | Phase 10 | Pending |
 | UAT-02 | Phase 10 | Pending |
 | UAT-03 | Phase 10 | Pending |
