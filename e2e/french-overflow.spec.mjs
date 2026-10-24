@@ -11,7 +11,9 @@
    visibility claim rests on them.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, PASSWORD, apiClient, clientIp, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, inviteToken, newRunId } from './helpers/setup.mjs';
+import en from '../src/locales/en.json' with { type: 'json' };
+import frCatalogue from '../src/locales/fr.json' with { type: 'json' };
 
 /* A dedicated account and workspace for the French proof. The language is
    an account property (phase 8: users.locale, written through PATCH
@@ -338,6 +340,327 @@ test('the settings teams tab renders its grid — the shadowed t no longer crash
     await page.goto(`/w/${fr.account.slug}/teams`);
     await frenchShell(page);
     await expect(page.getByRole('heading', { name: 'Équipes', level: 1 })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+/* =====================================================================
+   PHASE 11 FRENCH LEAK SWEEP (UAT-10 criterion 1, D-01..D-06): the 16-route
+   overflow proof above is widened into a 21-route sweep. Every product
+   route, visited as a locale-'fr' API-created account (D-06), must FIRST
+   prove a known French marker (D-03 — a blank or error page cannot pass),
+   THEN prove that no text node, aria-label, data-tip or document.title
+   equals an English-catalogue value from src/locales/en.json minus a small
+   commented stop-list (D-02). The scan walks the WHOLE DOM tree with no
+   visibility filter (D-05) — the deliberate opposite of chromeBoxes()
+   above. The route list is pinned data of exactly 21 entries (D-03/D-04);
+   adding route 22 without updating it fails loudly on the length assert.
+   ===================================================================== */
+
+/* The comparison contract is encoding-safe on both sides (UAT-10 edges):
+   the English side comes from JSON.parse-decoded catalogue values (the
+   import-with-type form decodes \uXXXX escapes), the DOM side is read as
+   the browser's already-decoded text (TreeWalker nodeValue and getAttribute
+   are entity-decoded), and both are NFC-normalized, trimmed, with inner
+   whitespace collapsed before the Set membership test. */
+const norm = s => String(s).normalize('NFC').trim().replace(/\s+/g, ' ');
+
+/* Flatten the catalogue to its leaf string values — the leak heuristic's
+   only word source (D-02): never a hand-maintained word list. */
+function catalogueLeaves(node, out = []) {
+  for (const v of Object.values(node)) {
+    if (typeof v === 'string') out.push(v);
+    else if (v && typeof v === 'object') catalogueLeaves(v, out);
+  }
+  return out;
+}
+const EN_VALUES = catalogueLeaves(en).map(norm);
+
+/* Interpolate a catalogue value with the same {name}/{n} subset t() uses
+   (the flows.spec pattern): asserted strings are read from the catalogue,
+   never transcribed (10-REVIEW WR-01). */
+function fmt(key, vars, lang = 'fr') {
+  let s = { en, fr: frCatalogue }[lang][key];
+  if (s === undefined) throw new Error(`catalogue key missing in ${lang}: ${key}`);
+  if (typeof s === 'object') s = s[new Intl.PluralRules(lang).select(vars?.n ?? 1)] ?? s.other;
+  for (const [k, v] of Object.entries(vars || {})) s = s.replaceAll(`{${k}}`, v);
+  return s;
+}
+
+/* The sweep's fixture account, filled in beforeAll (D-06): created through
+   the real API with locale 'fr', a dedicated workspace, one seeded project
+   and one seeded task (API only, never browser-created), plus a real invite
+   token for the /join surface. */
+let sweep;
+
+/* The pinned route list (D-03/D-04): the 16 overflow routes plus the 5
+   phase-10 additions — the param-dependent detail routes 'member' and
+   'team', the project detail route, the /join page and the auth page.
+   Prototype pages ('system', 'states') stay excluded per PROJECT.md D-15. */
+const SWEEP_ROUTES = [
+  'home',
+  'inbox',
+  'mytasks',
+  'favorites',
+  'notifications',
+  'search',
+  'overview',
+  'projects',
+  'tasks',
+  'calendar',
+  'timeline',
+  'members',
+  'teams',
+  'activity',
+  'settings',
+  'archive',
+  'member',
+  'team',
+  'project',
+  'join',
+  'auth',
+];
+test('the sweep pins exactly 21 routes — adding route 22 without updating the list fails loudly', () => {
+  expect(SWEEP_ROUTES).toHaveLength(21);
+  expect(new Set(SWEEP_ROUTES).size).toBe(21);
+});
+
+test.beforeAll(async () => {
+  const run = newRunId();
+  const made = await createAccount(BASE_URL, run, 'sweep', 'Sweep Reader', {
+    locale: 'fr',
+    workspace: `sweep-${run}`,
+  });
+  const { account, client } = made;
+
+  /* Seed one project + one task through the document API so list and detail
+     surfaces render real rows (fixtures never go through the browser UI). */
+  const docRes = await client.get(`/api/workspaces/${account.slug}`);
+  if (docRes.status !== 200) throw new Error(`sweep doc failed with HTTP ${docRes.status}`);
+  const doc = docRes.data.doc;
+  const memberId = docRes.data.memberId;
+  const projectId = 'p_sweep_probe';
+  doc.data.projects = [
+    ...(doc.data.projects || []),
+    {
+      id: projectId,
+      key: 'SWP',
+      name: `Sweep Probe ${run}`,
+      icon: 'map',
+      color: 'indigo',
+      status: 'active',
+      team: null,
+      lead: memberId,
+      due: null,
+      start: null,
+      fav: false,
+      members: [memberId],
+      desc: '',
+      milestones: [],
+      last: 0,
+      private: false,
+      perms: {},
+    },
+  ];
+  doc.data.projOrder = [...(doc.data.projOrder || []), projectId];
+  doc.data.tasks = [
+    ...(doc.data.tasks || []),
+    {
+      id: 'p_sweep_task',
+      key: 'SWP-101',
+      project: projectId,
+      title: `Sweep overflow probe ${run}`,
+      status: 'todo',
+      assignee: memberId,
+      priority: 'medium',
+      due: null,
+      start: null,
+      labels: [],
+      subtasks: [],
+      attachments: [],
+      deps: [],
+      desc: '',
+      estimate: null,
+      created: 0,
+      updated: 0,
+      order: 1,
+      fav: false,
+      recur: null,
+    },
+  ];
+  const put = await client.put(`/api/workspaces/${account.slug}`, { revision: docRes.data.revision, doc });
+  if (put.status !== 200) throw new Error(`sweep fixtures failed with HTTP ${put.status}: ${put.data?.error || ''}`);
+
+  /* A real invite token so /join renders a live invite preview. */
+  const invite = await client.post(`/api/workspaces/${account.slug}/invites`, {
+    emails: [`sweep-guest-${run}@e2e.local`],
+    role: 'member',
+  });
+  if (invite.status !== 201) throw new Error(`sweep invite failed with HTTP ${invite.status}`);
+  sweep = { run, account, client, memberId, projectId, projectKey: 'SWP', joinToken: inviteToken(invite.data.invites[0].url) };
+});
+
+/* The D-03 French-marker precondition, generalized: the document language is
+   fr, and the route's own catalogue-driven marker is present. For workspace
+   routes the marker is the document title — the render loop builds it from
+   the catalogue (routeName / the active project tab), so a blank or error
+   page cannot carry it. Markers come from the fr catalogue via fmt() —
+   never a hardcoded transcription. */
+async function frenchMarker(page, route, extra) {
+  /* The shell's content root exists on workspace routes only — the
+     anonymous auth surfaces render their own layout. */
+  if (route !== 'join' && route !== 'auth') await expect(page.locator('.content')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
+  if (route === 'auth') {
+    await expect(page.getByRole('heading', { name: fmt('page.auth.welcomeBack') })).toBeVisible();
+  } else if (route === 'join') {
+    await expect(page.getByRole('heading', { name: fmt('page.auth.joinTitle', { name: `Locale sweep ${sweep.run}` }) })).toBeVisible();
+  } else if (route === 'project') {
+    await expect.poll(() => page.evaluate(() => document.title)).toContain(fmt('page.project.tab.board'));
+  } else if (route === 'member') {
+    await expect.poll(() => page.evaluate(() => document.title)).toContain(extra);
+  } else if (route === 'team') {
+    await expect.poll(() => page.evaluate(() => document.title)).toContain(extra);
+  } else {
+    await expect.poll(() => page.evaluate(() => document.title)).toContain(fmt('nav.route.' + route));
+  }
+}
+
+/* The D-02/D-05 leak scan: one evaluate walking the WHOLE document.body
+   tree — text nodes, aria-label, data-tip and document.title, hidden nodes
+   included (no visibility filter) — flagging every scanned value that
+   equals an English-catalogue value under the normalization contract,
+   minus the commented stop-list. */
+const STOP_LIST = [
+  // 'Gr8r Studio' — the app name is the brand: identical in every locale, so
+  // its catalogue presence on the auth/join document.title is not a leak.
+  'Gr8r Studio',
+  // 'Gr8r' — the logo wordmark's aria-label: the brand, identical in every
+  // locale.
+  'Gr8r',
+  // 'Notifications' — the French catalogue value is identical to the English
+  // one (the 'Table' precedent from the project tab bar): a locale-'fr'
+  // render legitimately shows this exact string.
+  'Notifications',
+  // 'Mentions' — identical French and English catalogue values (same
+  // rationale as 'Notifications').
+  'Mentions',
+  // 'Backlog' — identical French and English catalogue values (same
+  // rationale as 'Notifications').
+  'Backlog',
+  // 'Table' — identical French and English catalogue values (the case the
+  // project-tab-bar test above already documents).
+  'Table',
+  // 'Admin' — the role label's French catalogue value is identical to the
+  // English one (common.role.admin).
+  'Admin',
+  // The strings below all have identical French and English catalogue values
+  // (settings vocabulary and the colour palette names — cognates that French
+  // UI convention keeps as-is), so a locale-'fr' render legitimately shows
+  // them. Each was verified against src/locales/fr.json.
+  'Permissions',
+  'Sessions',
+  'Accent',
+  'Compact',
+  'Indigo',
+  'Violet',
+  'Rose',
+  'Graphite',
+  // Team names below — TEAMS_SEED stored workspace data (client-side first-
+  // use seed), which stays English per PROJECT.md D-15: seed content is
+  // data, not interface.
+  'Design',
+  'Engineering',
+  'Marketing',
+  'Product',
+];
+async function leakScan(page, route) {
+  const leaks = await page.evaluate(
+    ({ values, stop }) => {
+      const en = new Set(values);
+      const allowed = new Set(stop);
+      const norm = s => String(s).normalize('NFC').trim().replace(/\s+/g, ' ');
+      const hits = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = walker.nextNode())) {
+        const text = norm(n.nodeValue);
+        if (text && en.has(text) && !allowed.has(text)) hits.push({ surface: 'text', value: text });
+      }
+      for (const el of document.querySelectorAll('[aria-label], [data-tip]')) {
+        for (const attr of ['aria-label', 'data-tip']) {
+          const v = norm(el.getAttribute(attr));
+          if (v && en.has(v) && !allowed.has(v)) hits.push({ surface: attr, value: v });
+        }
+      }
+      const title = norm(document.title);
+      if (title && en.has(title) && !allowed.has(title)) hits.push({ surface: 'title', value: title });
+      return hits;
+    },
+    { values: EN_VALUES, stop: STOP_LIST },
+  );
+  expect(leaks, `route ${route}: untranslated English served`).toEqual([]);
+}
+
+test('the 21-route French sweep: every route proves a French marker, then zero English-catalogue leaks', async ({ browser }) => {
+  expect(SWEEP_ROUTES).toHaveLength(21);
+  const { context, page } = await signIn(browser, sweep.account);
+  try {
+    for (const route of SWEEP_ROUTES) {
+      /* join/auth are anonymous surfaces swept below; member/team/project
+         are param-dependent detail routes swept below with real ids. */
+      if (route === 'join' || route === 'auth' || route === 'member' || route === 'team' || route === 'project') continue;
+      await page.goto(`/w/${sweep.account.slug}/${route}`);
+      await frenchMarker(page, route);
+      await leakScan(page, route);
+    }
+
+    /* The project detail route (deep link by project key, board tab). */
+    await page.goto(`/w/${sweep.account.slug}/project/${sweep.projectKey}`);
+    await frenchMarker(page, 'project');
+    await leakScan(page, 'project');
+
+    /* The member detail route: reached the way the members table reaches
+       it — click the member row (the boot deep-link resolves member ids,
+       but the row click is the UI's own path and carries the id directly). */
+    await page.goto(`/w/${sweep.account.slug}/members`);
+    await frenchMarker(page, 'members');
+    await leakScan(page, 'members');
+    const memberRow = page.locator(`[data-a="go"][data-r="member"][data-id="${sweep.memberId}"]`);
+    await expect(memberRow).toBeVisible();
+    await memberRow.click();
+    await frenchMarker(page, 'member', sweep.account.name);
+    await leakScan(page, 'member');
+
+    /* The team detail route: the boot deep-link carries no team id, so the
+       route is reached the way the sidebar reaches it — click a team item. */
+    await page.goto(`/w/${sweep.account.slug}/teams`);
+    await frenchMarker(page, 'teams');
+    await leakScan(page, 'teams');
+    const teamItem = page.locator('[data-a="go"][data-r="team"]').first();
+    await expect(teamItem).toBeVisible();
+    const teamName = (await teamItem.innerText()).trim();
+    await teamItem.click();
+    await frenchMarker(page, 'team', teamName);
+    await leakScan(page, 'team');
+
+    /* The two anonymous surfaces negotiate from the browser (the 10-02
+       exception): a fr-FR context, so the login and /join pages render
+       French without an account. */
+    const anon = await browser.newContext({ baseURL: BASE_URL, locale: 'fr-FR' });
+    const anonPage = await anon.newPage();
+    try {
+      await anonPage.goto(`/join/${sweep.joinToken}`);
+      await frenchMarker(anonPage, 'join');
+      await leakScan(anonPage, 'join');
+
+      await anonPage.goto('/');
+      await frenchMarker(anonPage, 'auth');
+      await leakScan(anonPage, 'auth');
+    } finally {
+      await anon.close();
+    }
   } finally {
     await context.close();
   }
