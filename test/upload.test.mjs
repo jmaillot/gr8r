@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { ADMIN, login, startServer } from './helpers/server.mjs';
+import { ADMIN, client, inviteToken, login, signup, startServer } from './helpers/server.mjs';
 
 /* The harness client only sends JSON; uploads are raw bodies, so POST them
    with plain fetch carrying the captured gr8r_session cookie. */
@@ -41,6 +41,33 @@ test('uploadTooLarge 413: oversize upload rejected mid-stream with its stable co
        the server still answers on the same port. */
     const alive = await fetch(`${server.base}/api/health`);
     assert.ok(alive.ok);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('uploads are gated: unauthenticated callers get 401 and viewers get 403 readOnlyAccess', async () => {
+  const server = await startServer({ env: { MAX_UPLOAD_MB: '25' } });
+  try {
+    /* an unauthenticated POST is rejected before anything is stored */
+    const anon = await uploadFetch(server, '', Buffer.from('no cookies'));
+    assert.equal(anon.status, 401);
+    assert.equal((await anon.json()).code, 'signInRequired');
+
+    /* a read-only member cannot upload either (D-05 / no-oracle rule intact) */
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    const invite = await admin.client.post('/api/workspaces/acme/invites', { emails: ['viewer@test.local'], role: 'Viewer' });
+    assert.equal(invite.status, 201);
+    const accepted = await client(server.base, 'viewer').post(
+      `/api/invites/${encodeURIComponent(inviteToken(invite.data.invites[0].url))}/accept`,
+      { name: 'Viewer', email: 'viewer@test.local', password: 'password-1234' },
+    );
+    assert.equal(accepted.status, 201);
+    const viewer = await login(server.base, 'viewer@test.local', 'password-1234');
+    const res = await uploadFetch(server, viewer.client.cookie(), Buffer.from('viewer bytes'));
+    assert.equal(res.status, 403);
+    assert.equal((await res.json()).code, 'readOnlyAccess');
+    assert.deepEqual(fs.readdirSync(path.join(server.dataDir, 'files')), []);
   } finally {
     await server.stop();
   }
