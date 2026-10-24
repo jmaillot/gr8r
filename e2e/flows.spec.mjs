@@ -25,10 +25,16 @@ import fr from '../src/locales/fr.json' with { type: 'json' };
 
 const CATALOGUE = { en, fr };
 
-/* Interpolate a catalogue value with the same {name}/{n} subset t() uses. */
+/* Interpolate a catalogue value with the same {name}/{n} subset t() uses.
+   Plural members are objects keyed by CLDR category (the phase-5 contract),
+   selected with Intl.PluralRules like i18n.js does. */
 function fmt(key, vars, lang) {
   let s = CATALOGUE[lang][key];
   if (s === undefined) throw new Error(`catalogue key missing in ${lang}: ${key}`);
+  if (typeof s === 'object') {
+    const category = new Intl.PluralRules(lang === 'fr' ? 'fr' : 'en').select(vars?.n ?? 1);
+    s = s[category] ?? s.other;
+  }
   for (const [k, v] of Object.entries(vars || {})) s = s.replaceAll(`{${k}}`, v);
   return s;
 }
@@ -64,9 +70,12 @@ async function newContext(browser, { ip, lang = 'en-US' } = {}) {
 }
 
 /* The sign-in path shared by every flow: goto / → labelled fields →
-   submit → land on the account's workspace. */
-async function signIn(page, account, lang) {
-  const form = loginDict(lang);
+   submit → land on the account's workspace. The LOGIN form itself is
+   negotiated (the visitor has no account yet; the suite is pinned to
+   en-US, UAT-09), so its labels always come from the English catalogue —
+   the account's language takes over right after the sign-in. */
+async function signIn(page, account) {
+  const form = loginDict('en');
   await page.goto('/');
   await page.getByLabel(form.email, { exact: true }).fill(account.email);
   await page.getByLabel(form.password, { exact: true }).fill(account.password);
@@ -128,6 +137,7 @@ test.beforeAll(async () => {
 
     FLOW[lang] = {
       inviteOwner: inv.account,
+      inviteClient: inv.client,
       inviteWsName: `Locale inv-${lang} ${run}`,
       shareOwner: shr.account,
       shareWsName: `Locale shr-${lang} ${run}`,
@@ -218,6 +228,105 @@ test.describe('onboarding wizard', () => {
           await page.reload();
         }
         await walkWizard(page, lang, { wsName, slug, projName });
+      } finally {
+        await context.close();
+      }
+    });
+  }
+});
+
+/* =====================================================================
+   INVITE MODAL (UAT-02)
+   ===================================================================== */
+
+test.describe('invite modal', () => {
+  for (const lang of ['en', 'fr']) {
+    test(`the invite modal asserts its header, input and submit, creates a link and copies it (${lang})`, async ({ browser }) => {
+      const owner = FLOW[lang].inviteOwner;
+      const wsName = FLOW[lang].inviteWsName;
+      const inviteeEmail = `invitee-${lang}-${run}@e2e.local`;
+      const context = await newContext(browser, { ip: owner.ip });
+      const page = await context.newPage();
+      try {
+        await signIn(page, owner);
+
+        /* The invite entry lives in the workspace popover (admin-gated; the
+           fixture owner qualifies). */
+        await page.locator('button.ws').click();
+        await page.getByRole('button', { name: fmt('popover.inviteMembers', {}, lang) }).click();
+
+        /* Modal header, link-hint branch (SMTP off on the e2e server) and
+           the labelled email textarea. */
+        await expect(page.getByRole('heading', { name: fmt('modal.inviteTo', { name: wsName }, lang), level: 2 })).toBeVisible();
+        await expect(page.getByText(fmt('modal.inviteLinkHint', {}, lang))).toBeVisible();
+        await page.getByLabel(fmt('modal.emailAddresses', {}, lang), { exact: true }).fill(inviteeEmail);
+        await expect(page.locator('#inv-submit')).toContainText(fmt('act.createLinks', {}, lang));
+        await page.locator('#inv-submit').click();
+
+        /* The created-links toast, asserted immediately (4.2 s lifetime). */
+        await expect(page.getByText(fmt('act.inviteLinksCreated', { n: 1 }, lang))).toBeVisible();
+        /* The pending link row carries the catalogue aria-label and a join URL. */
+        const row = page.locator(`input[aria-label="${fmt('modal.inviteLinkFor', { email: inviteeEmail }, lang)}"]`);
+        await expect(row).toBeVisible();
+        await expect(row).toHaveValue(/\/join\//);
+
+        /* The footer copy button copies the fresh link (toast.inviteLinkCopied). */
+        await page.getByRole('button', { name: fmt('act.copyInviteLink', {}, lang) }).click();
+        await expect(page.getByText(fmt('toast.inviteLinkCopied', {}, lang))).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+  }
+});
+
+/* =====================================================================
+   /JOIN PAGE (UAT-03)
+   ===================================================================== */
+
+test.describe('/join page', () => {
+  for (const lang of ['en', 'fr']) {
+    test(`a fresh visitor accepts a workspace invite from the /join page (${lang})`, async ({ browser }) => {
+      const owner = FLOW[lang].inviteOwner;
+      const wsName = FLOW[lang].inviteWsName;
+      const joinerEmail = `joiner-${lang}-${run}@e2e.local`;
+      const invite = await must('join invite', await FLOW[lang].inviteClient.post(`/api/workspaces/${owner.slug}/invites`, { emails: [joinerEmail], role: 'member' }), [201]);
+      const token = inviteToken(invite.invites[0].url);
+
+      /* A fresh browser context is the new visitor: its own run-unique IP
+         (the invite-accept throttle is 5/hour/IP) and no session state.
+         The /join page is ANONYMOUS, so its language is negotiated from the
+         browser, not from an account (D-02 governs signed-in surfaces) —
+         the fr variant therefore negotiates with a fr-FR context, the one
+         locale lever an account-less page has. The freshly joined account
+         adopts that negotiated language (adoptAccountLocale). */
+      const context = await newContext(browser, { ip: clientIp(run, `joiner-${lang}`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const page = await context.newPage();
+      try {
+        await page.goto(`/join/${token}`);
+        await expect(page.getByRole('heading', { name: fmt('page.auth.joinTitle', { name: wsName }, lang) })).toBeVisible();
+        /* The invite carries the address: the email field is readonly. */
+        await expect(page.locator('#j-email')).toHaveValue(joinerEmail);
+        await expect(page.locator('#j-email')).toHaveAttribute('readonly', '');
+        await page.getByLabel(fmt('common.fullName', {}, lang), { exact: true }).fill(`Joiner ${lang}`);
+        await page.getByLabel(fmt('common.password', {}, lang), { exact: true }).fill(PASSWORD);
+        await expect(page.locator(`button[data-a='doJoin']`)).toContainText(fmt('page.auth.createJoin', {}, lang));
+        await page.locator(`button[data-a='doJoin']`).click();
+
+        await expect(page).toHaveURL(new RegExp(`/w/${owner.slug}$`));
+        await expect(page.getByRole('button', { name: fmt('nav.route.projects', {}, lang) }).first()).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+
+    test(`an invalid invite token renders the unavailable state (${lang})`, async ({ browser }) => {
+      const context = await newContext(browser, { ip: clientIp(run, `bogus-${lang}`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const page = await context.newPage();
+      try {
+        await page.goto(`/join/${'x'.repeat(20)}`);
+        await expect(page.getByRole('heading', { name: fmt('page.auth.inviteUnavailable', {}, lang) })).toBeVisible();
+        await expect(page.getByRole('button', { name: fmt('page.auth.goToSignIn', {}, lang) })).toBeVisible();
       } finally {
         await context.close();
       }
