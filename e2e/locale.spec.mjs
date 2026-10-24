@@ -18,6 +18,8 @@ let run;
 let alice; // workspace owner, account locale 'fr'
 let bob; // member of alice's workspace, account locale 'en'
 let carol; // her own workspace, account locale NULL until she chooses
+let secondSlug; // alice's second workspace, for the criterion-4 switch
+let secondName;
 
 test.beforeAll(async () => {
   run = newRunId();
@@ -33,6 +35,20 @@ test.beforeAll(async () => {
   if (![200, 201].includes(accepted.status)) throw new Error(`bob accept failed with HTTP ${accepted.status}`);
   const c = await createAccount(BASE_URL, run, 'carol', 'Carol Locale', { workspace: `carol-${run}` });
   carol = c.account;
+
+  /* Criterion-4 fixture (D-04): a second workspace for alice, created via the
+     API — the switcher test proves the switch, not the creation. Bob joins it
+     through a real invite so both accounts can switch into it. */
+  secondSlug = `switch-${run}`;
+  secondName = `Locale Switch ${run}`;
+  const ws2 = await a.client.post('/api/workspaces', { name: secondName, slug: secondSlug });
+  if (ws2.status !== 201) throw new Error(`second workspace failed with HTTP ${ws2.status}: ${ws2.data?.error || ''}`);
+  const invite2 = await a.client.post(`/api/workspaces/${secondSlug}/invites`, { emails: [bob.email], role: 'member' });
+  if (invite2.status !== 201) throw new Error(`bob second invite failed with HTTP ${invite2.status}: ${invite2.data?.error || ''}`);
+  const url2 = String(invite2.data.invites[0].url);
+  const token2 = url2.slice(url2.lastIndexOf('/join/') + '/join/'.length);
+  const accepted2 = await b.client.post(`/api/invites/${token2}/accept`, {});
+  if (![200, 201].includes(accepted2.status)) throw new Error(`bob second accept failed with HTTP ${accepted2.status}`);
 });
 
 /* The login form in either language; the context's locale decides which one renders. */
@@ -186,5 +202,63 @@ test('two members of one workspace each see the interface in their own language 
   } finally {
     await aliceCtx.close();
     await bobCtx.close();
+  }
+});
+
+/* Per-account language durability (criterion 4, D-04): the catalogue-backed
+   workspace nav button is the visible label, the lang attribute the contract. */
+async function assertLanguage(page, lang, navLabel) {
+  await expect(page.getByRole('button', { name: navLabel }).first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe(lang);
+}
+
+test('criterion 4: two members of one workspace each keep their own language across a reload, a workspace switch and a second browser context (D-04, UAT-06)', async ({ browser }) => {
+  const SWITCH = { fr: /Changer d’espace de travail/, en: 'Switch workspace' };
+  const switchedToast = { fr: `Passé à ${secondName}`, en: `Switched to ${secondName}` };
+  const aliceCtx = await newContext(browser, alice, 'fr-FR');
+  const bobCtx = await newContext(browser, bob, 'en-US');
+  const alicePage = await aliceCtx.newPage();
+  const bobPage = await bobCtx.newPage();
+  let freshCtxs = [];
+  try {
+    await signInPage(alicePage, alice, LOGIN.fr);
+    await signInPage(bobPage, bob, LOGIN.en);
+    await assertLanguage(alicePage, 'fr', 'Projets');
+    await assertLanguage(bobPage, 'en', 'Projects');
+
+    /* (a) A page reload: each page still renders its own language. */
+    await alicePage.reload();
+    await bobPage.reload();
+    await assertLanguage(alicePage, 'fr', 'Projets');
+    await assertLanguage(bobPage, 'en', 'Projects');
+
+    /* (b) A workspace switch driven through the switcher UI: each account
+       lands on the new workspace and still sees its own language. */
+    for (const [page, form, lang, nav] of [
+      [alicePage, LOGIN.fr, 'fr', 'Projets'],
+      [bobPage, LOGIN.en, 'en', 'Projects'],
+    ]) {
+      await page.getByRole('button', { name: SWITCH[lang] }).click();
+      await page.locator(`button[data-a='switchWs'][data-v='${secondSlug}']`).click();
+      await expect(page).toHaveURL(new RegExp(`/w/${secondSlug}$`));
+      await expect(page.getByText(switchedToast[lang])).toBeVisible();
+      await assertLanguage(page, lang, nav);
+    }
+
+    /* (c) A fresh context opened after the switch boots in the account's
+       language with no in-session state — the locale is an account property. */
+    const aliceFreshCtx = await newContext(browser, alice, 'fr-FR');
+    const bobFreshCtx = await newContext(browser, bob, 'en-US');
+    freshCtxs = [aliceFreshCtx, bobFreshCtx];
+    const aliceFresh = await aliceFreshCtx.newPage();
+    const bobFresh = await bobFreshCtx.newPage();
+    await signInPage(aliceFresh, alice, LOGIN.fr);
+    await signInPage(bobFresh, bob, LOGIN.en);
+    await assertLanguage(aliceFresh, 'fr', 'Projets');
+    await assertLanguage(bobFresh, 'en', 'Projects');
+  } finally {
+    await aliceCtx.close();
+    await bobCtx.close();
+    for (const ctx of freshCtxs) await ctx.close();
   }
 });

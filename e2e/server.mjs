@@ -32,6 +32,12 @@ const env = {
   DB_PATH: path.join(dataDir, 'gr8r.db'),
   SEED_DATA: 'false',
   ALLOW_SIGNUP: 'true',
+  /* The fixture scheme in helpers/setup.mjs is per-IP throttles dodged by a
+     run-unique X-Forwarded-For per account; the server only reads that header
+     when TRUST_PROXY is on (production runs behind Traefik). Without it every
+     request shares 127.0.0.1 and the 5/hour/IP signup throttle fails the
+     full suite. */
+  TRUST_PROXY: 'true',
   ADMIN_EMAIL: 'e2e-owner@e2e.local',
   ADMIN_PASSWORD: 'e2e-owner-password',
   ADMIN_NAME: 'E2E Owner',
