@@ -40,13 +40,18 @@ created: "2026-10-24"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 11-01-01 | 01 | 1 | UAT-10 | — | N/A | e2e | `npm run build && npm run e2e` | ✅ | ⬜ pending |
-| 11-01-02 | 01 | 1 | UAT-10 | — | N/A | unit | `node --test test/i18n-scan.test.mjs` | ✅ | ⬜ pending |
-| 11-01-03 | 01 | 1 | UAT-10 | — | N/A | build gate | `npm run build` | ✅ | ⬜ pending |
+| 11-01-01 | 01 | 1 | UAT-10 | — | N/A | e2e | `npm run build && npm run e2e -- e2e/french-overflow.spec.mjs` | ✅ | ⬜ pending |
+| 11-01-02 | 01 | 1 | UAT-10 | — | N/A | e2e + parity | `npm run build && npm run e2e -- e2e/french-overflow.spec.mjs && node scripts/fr-parity.mjs` | ✅ | ⬜ pending |
+| 11-02-01 | 02 | 1 | UAT-10 | — | N/A | unit | `node --test test/i18n-scan.test.mjs` | ✅ | ⬜ pending |
+| 11-02-02 | 02 | 1 | UAT-10 | — | N/A | unit | `node --test test/dependencies.test.mjs` | ✅ | ⬜ pending |
+| 11-03-01 | 03 | 1 | UAT-10 | — | N/A | CI job shape | `node -e "…ci.yml token check…"` (see 11-03 Task 1) | ✅ | ⬜ pending |
+| 11-03-02 | 03 | 1 | UAT-10 | — | N/A | e2e (demo) | `npm run build && npx playwright test --config e2e/demo.playwright.config.mjs` | ❌ W0 | ⬜ pending |
+| 11-04-01 | 04 | 2 | UAT-10 | — | N/A | source assert | `grep -c "Internationalization" README.md && grep -c "design-system" README.md` | ✅ | ⬜ pending |
+| 11-04-02 | 04 | 2 | UAT-10 | — | N/A | source assert | `grep -c "docker-build" DEPLOY.md` + package.json/lock diff-empty check | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
-*(Map to be finalized by the planner — task IDs above are provisional and must be reconciled with the actual PLAN.md task breakdown.)*
+*(Reconciled against the final PLAN.md task breakdown, 2026-10-24.)*
 
 ---
 
