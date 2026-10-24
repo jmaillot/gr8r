@@ -183,6 +183,121 @@ test('inviteForOtherEmail carries its email in the payload on the join flow', as
   }
 });
 
+/* ---------- IN-01: reverse parity, reserved placeholders, pinned payload shape ---------- */
+
+/* Reverse parity allowlist: err.* catalogue codes that are composed CLIENT-side only, never
+   emitted by server.js. Derived by diffing the en.json err.* namespace against the server
+   source; a catalogued code absent from server.js AND absent here fails the suite. */
+const CLIENT_ONLY_ERR_CODES = [
+  'changeRole', // toast composed in actions.js after a successful PATCH
+  'taskAccess', // toast composed in actions.js after a successful task write
+  'uploadOffline', // demo/offline branch in actions.js — no server call made
+  'cannotChangeAccess', // permission toast composed in actions.js before the call
+  'inviteFirst', // guard toast in actions.js — nothing to revoke yet
+  'lastMember', // guard toast in actions.js — leave blocked before the call
+  'inviteLink', // toast composed in actions.js from the created invite row
+  'newInvite', // toast composed in actions.js from the created invite row
+  'revokeInvite', // toast composed in api.js after a successful DELETE of an invite
+  'removeMember', // toast composed in api.js after a successful member DELETE
+  'deleteWorkspace', // toast composed in api.js after a successful workspace DELETE
+  'leaveWorkspace', // toast composed in actions.js after a successful leave
+  'noAccountYet', // guard toast in actions.js — onboarding state, not a server error
+  'noAccountToRemove', // guard toast in actions.js before the DELETE
+  'switchWorkspace', // toast composed in actions.js after a successful switch
+  'offlineMode', // demo/offline branch in actions.js — no server call made
+  'changesNotSaved', // demo/offline branch in actions.js — no server call made
+  'wsColor', // validation toast composed in actions.js before PATCH
+  'wsNameEmpty', // validation toast composed in actions.js before PATCH
+  'wsSettings', // toast composed in actions.js after a successful PATCH
+  'projectName', // toast composed in actions.js after a project rename
+  'notValidEmail', // validation toast composed in actions.js before the invite call
+  'wsCreatedNotLoaded', // toast composed in actions.js when create succeeded but load failed
+  'sendInvites', // toast composed in actions.js after a successful invite batch
+  'taskNameRequired', // validation toast composed in actions.js before the write
+  'projectNameRequired', // validation toast composed in actions.js before the write
+  'enterEmails', // validation toast composed in actions.js before the invite call
+  'invitesCreateFailed', // toast composed in actions.js when the batch call fails
+  'wsNameRequired', // validation toast composed in actions.js before the call
+  'enterEmail', // form validation toast composed in actions.js
+  'emailInvalidExample', // form validation toast composed in actions.js
+  'emailInvalid', // form validation toast composed in actions.js
+  'workEmailInvalid', // form validation toast composed in actions.js
+  'forgotEmailInvalid', // form validation toast composed in actions.js
+  'enterPassword', // form validation toast composed in actions.js
+  'enterCurrentPassword', // form validation toast composed in actions.js
+  'passwordWeak', // form validation toast composed in actions.js
+  'passwordMismatch', // form validation toast composed in actions.js
+  'enterName', // form validation toast composed in actions.js
+  'signinFailed', // toast composed in actions.js when login fails
+  'inviteAcceptFailed', // toast composed in actions.js when accept fails
+  'workspaceLoadFailed', // toast composed in actions.js when load fails
+  'joinFailed', // toast composed in actions.js when join fails
+  'accountCreatedLoadFailed', // toast composed in actions.js when post-signup load fails
+  'accountCreateFailed', // toast composed in actions.js when create fails
+  'tfaCode', // form validation toast composed in actions.js
+  'teamNameRequired', // validation toast composed in actions/teams.js
+  'serverUnreachable', // built by the offline branch of api.js call() (fetch threw)
+  'noWorkspaceLoaded', // built by api.js guards when no workspace slug is selected
+  'projectNotFound', // toast composed in overlays/modals.js for a missing project
+  'sessionExpired', // built by main.js when a 401 lands mid-session
+  'saveNotSynced', // built by main.js from the sync-state signal, not a server payload
+  'wsLoadFailed', // toast composed in main.js when the document load fails
+  'code404', // static error-page copy in pages/errors.js
+  'code403', // static error-page copy in pages/errors.js
+];
+
+test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {
+  const catalogueCodes = Object.keys(en).filter(k => k.startsWith('err.')).map(k => k.slice(4));
+  assert.ok(catalogueCodes.length > 40, 'the err.* namespace looks empty — the extraction moved');
+  for (const code of catalogueCodes) {
+    if (serverSource.includes(code)) continue;
+    assert.ok(
+      CLIENT_ONLY_ERR_CODES.includes(code),
+      `err.${code} is catalogued but emitted nowhere: not in server.js and not in the client-side allowlist`,
+    );
+  }
+});
+
+test('reserved placeholder guard: no err.* value interpolates a control field of the payload', () => {
+  /* Control fields that call()/the server put flat on the error payload — a catalogue
+     placeholder with one of these names would interpolate the control value itself. */
+  const reserved = ['error', 'code', 'status', 'ok', 'data', 'needsSignIn', 'suggestion', 'revision'];
+  for (const [locale, catalogue] of [['en', en], ['fr', fr]]) {
+    for (const [key, value] of Object.entries(catalogue)) {
+      if (!key.startsWith('err.') || typeof value !== 'string') continue;
+      for (const name of reserved) {
+        assert.ok(
+          !value.includes(`{${name}}`),
+          `${locale} err value ${key} interpolates the reserved control field {${name}}`,
+        );
+      }
+    }
+  }
+});
+
+test('payload shape: the alreadyMember error payload is flat error/code/email/name with no params field', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    assert.equal((await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password })).status, 200);
+    const inv = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
+    await client(server.base, 'member').post(`/api/invites/${encodeURIComponent(inviteToken(inv.data.invites[0].url))}/accept`, {
+      name: 'Member',
+      email: 'member@test.local',
+      password: 'password-1234',
+    });
+    const res = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
+    assert.equal(res.status, 409);
+    assert.deepEqual(Object.keys(res.data).sort(), ['code', 'email', 'error', 'name']);
+    assert.equal(res.data.code, 'alreadyMember');
+    /* the whole-payload transport never grew a params field — its presence would signal a
+       silent regression back to the params-bag option without the client following */
+    assert.equal('params' in res.data, false);
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ---------- CR-01 / WR-05 / WR-06: every thrown site carries its catalogued code ---------- */
 
 test('lastPrivateMember returns 409 with its code when the removal would strand a private project', async () => {
