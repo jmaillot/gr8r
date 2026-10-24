@@ -1013,9 +1013,10 @@ function createWorkspace(name, slugBase, user) {
   return wsBySlug(slug);
 }
 
-function httpError(status, message) {
+function httpError(status, message, code) {
   const err = new Error(message);
   err.status = status;
+  err.code = code;
   return err;
 }
 
@@ -1027,6 +1028,14 @@ function json(res, status, body) {
     'Content-Length': Buffer.byteLength(payload),
   });
   res.end(payload);
+}
+
+/* The single error constructor beside json(): every HTTP error payload leaves
+   here, so no route builds an error object by hand. `code` is the machine
+   identifier the client translates; `message` stays the English string the
+   client falls back to when it does not know the code. */
+function fail(res, status, code, message, extra) {
+  return json(res, status, { error: message, code, ...extra });
 }
 
 function proto(req) {
@@ -1110,7 +1119,7 @@ function currentUser(req) {
 function requireUser(req, res) {
   const user = currentUser(req);
   if (!user) {
-    json(res, 401, { error: 'Sign in to continue' });
+    fail(res, 401, 'signInRequired', 'Sign in to continue');
     return null;
   }
   return user;
@@ -1199,12 +1208,12 @@ async function handleApi(req, res, url) {
       .trim()
       .toLowerCase();
     const password = String(body?.password || '');
-    if (!emailOk(email) || !password) return json(res, 400, { error: 'Email and password are required' });
-    if (tooMany(`${clientIp(req)}|${email}`)) return json(res, 429, { error: 'Too many attempts. Try again in 15 minutes.' });
+    if (!emailOk(email) || !password) return fail(res, 400, 'emailAndPasswordRequired', 'Email and password are required');
+    if (tooMany(`${clientIp(req)}|${email}`)) return fail(res, 429, 'tooManyLoginAttempts', 'Too many attempts. Try again in 15 minutes.');
 
     const row = db.prepare('select * from users where email = ?').get(email);
     const valid = verifyPassword(password, row?.password_hash || DUMMY_HASH) && !!row;
-    if (!valid) return json(res, 401, { error: 'Email or password is incorrect' });
+    if (!valid) return fail(res, 401, 'invalidCredentials', 'Email or password is incorrect');
 
     attempts.delete(`${clientIp(req)}|${email}`);
     const token = crypto.randomBytes(32).toString('base64url');
@@ -1238,34 +1247,34 @@ async function handleApi(req, res, url) {
   if (pathname === '/api/auth/me' && method === 'PATCH') {
     const user = requireUser(req, res);
     if (!user) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
     // Only body.locale is read; every other field is ignored (mass-assignment guard).
     const locale = String(body?.locale || '');
-    if (!LOCALE_CODES.includes(locale)) return json(res, 400, { error: 'Unknown locale' });
+    if (!LOCALE_CODES.includes(locale)) return fail(res, 400, 'unknownLocale', 'Unknown locale');
     db.prepare('update users set locale = ? where id = ?').run(locale, user.id);
     const fresh = db.prepare('select * from users where id = ?').get(user.id);
     return json(res, 200, { user: userPayload(fresh) });
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
-    if (!ALLOW_SIGNUP) return json(res, 403, { error: 'Sign-ups are disabled. Ask an admin for an account.' });
-    if (tooMany(`signup|${clientIp(req)}`, 5, 60 * 60 * 1000)) return json(res, 429, { error: 'Too many attempts. Try again later.' });
+    if (!ALLOW_SIGNUP) return fail(res, 403, 'signupDisabled', 'Sign-ups are disabled. Ask an admin for an account.');
+    if (tooMany(`signup|${clientIp(req)}`, 5, 60 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     const body = await readJson(req);
     const email = String(body?.email || '')
       .trim()
       .toLowerCase();
     const name = String(body?.name || '').trim();
     const password = String(body?.password || '');
-    if (!name) return json(res, 400, { error: 'Enter your name' });
+    if (!name) return fail(res, 400, 'nameRequired', 'Enter your name');
     if (password.length < 10 || !/[0-9\W]/.test(password)) {
-      return json(res, 400, { error: 'Use at least 10 characters, including a number or symbol' });
+      return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
     }
     let user;
     try {
       user = createUser(email, name, password);
     } catch (err) {
-      return json(res, err.status || 500, { error: err.message });
+      return json(res, err.status || 500, { error: err.message, code: err.code });
     }
     const token = crypto.randomBytes(32).toString('base64url');
     const t = now();
@@ -1645,7 +1654,7 @@ async function handleApi(req, res, url) {
       try {
         user = createUser(email, name, password);
       } catch (err) {
-        return json(res, err.status || 500, { error: err.message });
+        return json(res, err.status || 500, { error: err.message, code: err.code });
       }
     }
 
@@ -1818,7 +1827,7 @@ const server = http.createServer(async (req, res) => {
   } catch (err) {
     const status = err.status || 500;
     if (status >= 500) console.error(err);
-    if (!res.headersSent) json(res, status, { error: status >= 500 ? 'Internal server error' : err.message });
+    if (!res.headersSent) json(res, status, { error: status >= 500 ? 'Internal server error' : err.message, code: err.code });
     else res.end();
   }
 });
