@@ -340,7 +340,7 @@ Success criteria (what must be TRUE):
 Deliverable: no route serves an untranslated English string, and the guarantee holds in the shipped
 image.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -349,7 +349,7 @@ Plans:
 - [x] 11-03-PLAN.md — docker-build CI job asserting the served fr chunk + demo-mode Chromium test (D-10/D-11) (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 11-04-PLAN.md — README § Internationalization, CHANGELOG 1.2.0 draft, DEPLOY docker-build mention (D-13/D-14/D-15) (wave 2)
+- [x] 11-04-PLAN.md — README § Internationalization, CHANGELOG 1.2.0 draft, DEPLOY docker-build mention (D-13/D-14/D-15) (wave 2)
 
 ## Phase list
 
