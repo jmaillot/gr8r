@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
 import { t, t as tMsg, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
-import { PR, PSTAT, ST } from '../core/constants.js';
+import { PR, PSTAT } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
   D,
@@ -89,7 +89,7 @@ export function createTask(f) {
   tk.key = f.key || nextKey(p);
   D().tasks.push(tk);
   fxSet({ added: tk.id });
-  logAct('created', tk);
+  logAct('created', tk, {});
   return tk;
 }
 export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
@@ -104,9 +104,9 @@ export function applyPatch(t, patch) {
       if (nv === 'done') {
         t.completedAt = Date.now();
         t.prevStatus = old;
-        logAct('completed', t);
+        logAct('completed', t, {});
         fxSet({ done: t.id });
-      } else logAct('moved', t, `from ${ST[old].name} to ${ST[nv].name}`);
+      } else logAct('moved', t, { kind: 'statusMoved', from: old, to: nv });
       if (nv === 'done' && t.recur && t.due) {
         const nd = iso(addD(parse(t.due), RECUR_DAYS[t.recur] || 7));
         const n = createTask({
@@ -123,19 +123,19 @@ export function applyPatch(t, patch) {
         delete n.prevStatus;
         msgs.push(tMsg('toast.recurringNext', { title: t.title, date: fmtDate(nd) }));
       }
-    } else if (k === 'assignee') logAct('assigned', t, nv ? `to ${mem(nv)?.name}` : '(unassigned)');
+    } else if (k === 'assignee') logAct('assigned', t, nv ? { kind: 'assignedTo', value: mem(nv)?.name } : { kind: 'unassigned' });
     else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
-    else if (k === 'due') logAct('changed due date of', t, nv ? `to ${fmtDate(nv)}` : '(cleared)');
-    else if (k === 'start') logAct('changed start date of', t, nv ? `to ${fmtDate(nv)}` : '(cleared)');
+    else if (k === 'due') logAct('changedDueDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
+    else if (k === 'start') logAct('changedStartDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
     else if (k === 'project') {
       const p = proj(nv);
       t.key = nextKey(p);
-      logAct('moved', t, `to ${p.name}`);
-    } else if (k === 'labels') logAct('updated labels on', t);
-    else if (k === 'title') logAct('renamed', t, `to “${nv}”`);
-    else if (k === 'recur') logAct('set repeat on', t, nv ? nv.toLowerCase() : 'off');
-    else if (k === 'estimate') logAct('estimated', t, nv || 'none');
-    else if (k === 'deps') logAct('updated dependencies of', t);
+      logAct('moved', t, { kind: 'movedToProject', value: p.id });
+    } else if (k === 'labels') logAct('updatedLabelsOn', t, {});
+    else if (k === 'title') logAct('renamed', t, { kind: 'renamedTo', value: nv });
+    else if (k === 'recur') logAct('setRepeatOn', t, nv ? { kind: 'repeatSet', id: nv.toLowerCase() } : {});
+    else if (k === 'estimate') logAct('estimated', t, nv ? { kind: 'estimateSet', value: nv } : {});
+    else if (k === 'deps') logAct('updatedDependenciesOf', t, {});
     t.updated = Date.now();
   }
   return msgs;
@@ -318,9 +318,15 @@ A.popPick = el => {
     mutate(() => {
       sb[k] = v;
       logAct(
-        k === 'assignee' ? 'assigned a subtask on' : 'set a subtask due date on',
+        k === 'assignee' ? 'assignedASubtaskOn' : 'setASubtaskDueDateOn',
         t,
-        k === 'assignee' ? (v ? `to ${mem(v).name}` : '(unassigned)') : v ? fmtDate(v) : '(cleared)',
+        k === 'assignee'
+          ? v
+            ? { kind: 'assignedTo', value: mem(v).name }
+            : { kind: 'unassigned' }
+          : v
+            ? { kind: 'dateSet', value: v }
+            : { kind: 'dateCleared' },
       );
     });
     return;
@@ -332,11 +338,11 @@ A.popPick = el => {
       D().activity.unshift({
         id: uid('a'),
         by: D().me,
-        verb: 'changed status of project',
+        verb: 'projectStatusChanged',
         task: null,
         project: pr.id,
         at: Date.now(),
-        extra: 'to ' + PSTAT[v].name,
+        extra: { kind: 'projStatusSet', value: v },
       });
     });
     S.ui.pop = null;
@@ -555,7 +561,7 @@ A.archiveTask = el => {
   mutate(() => {
     tk.archived = true;
     tk.archivedAt = Date.now();
-    logAct('archived', tk);
+    logAct('archived', tk, {});
   });
   toast(t('toast.archivedTask', { title: tk.title }), { action: t('toast.undo'), onAction: () => restore(snap) });
 };
@@ -821,7 +827,7 @@ A.toggleSub = el => {
   if (!s.done) fxSet({ done: s.id });
   mutate(() => {
     s.done = !s.done;
-    logAct(s.done ? 'completed subtask on' : 'reopened subtask on', t, `“${s.title}”`);
+    logAct(s.done ? 'completedSubtaskOn' : 'reopenedSubtaskOn', t, { kind: 'quoted', value: s.title });
   });
 };
 A.rmSub = el => {
@@ -838,7 +844,7 @@ KEY.addSub = el => {
   fxSet({ added: nid });
   mutate(() => {
     t.subtasks.push({ id: nid, title: v, done: false });
-    logAct('added subtask to', t, `“${v}”`);
+    logAct('addedSubtaskTo', t, { kind: 'subtaskAdded', value: v });
   });
   setTimeout(() => $('#d-sub')?.focus(), 0);
 };
@@ -853,7 +859,7 @@ A.rmAttach = el => {
   const f = tk.attachments.find(a => a.id === el.dataset.aid);
   mutate(() => {
     tk.attachments = tk.attachments.filter(a => a.id !== el.dataset.aid);
-    logAct('removed a file from', tk);
+    logAct('removedAFileFrom', tk, { kind: 'fileRemoved', value: f.name });
   });
   toast(t('toast.removed', { name: f.name }));
 };
@@ -891,7 +897,7 @@ export function handleFiles(files, ctx) {
         if (up.task) {
           const tk = task(up.task);
           tk.attachments.push(rec);
-          logAct('added a file to', tk, up.name);
+          logAct('addedAFileTo', tk, { kind: 'fileAdded', value: up.name });
         }
         save();
         render();
@@ -953,7 +959,7 @@ A.postComment = el => {
   if (
     mutate(() => {
       D().comments.push({ id: uid('c'), task: id, by: D().me, at: Date.now(), text: txt, re: {} });
-      logAct('commented on', tk);
+      logAct('commentedOn', tk, {});
       S.ui.drafts[id] = '';
       S.ui.mention = null;
       S.ui.drawerTab = 'comments';
@@ -1345,7 +1351,7 @@ export function createProject(f, tmplId) {
   };
   D().projects.push(p);
   D().projOrder.unshift(p.id);
-  D().activity.unshift({ id: uid('a'), by: D().me, verb: 'created project', task: null, project: p.id, at: Date.now(), extra: '' });
+  D().activity.unshift({ id: uid('a'), by: D().me, verb: 'createdProject', task: null, project: p.id, at: Date.now(), extra: {} });
   const tm = TEMPLATES.find(x => x.id === tmplId);
   for (let i = 0; i < (tm?.tasks || 0); i++)
     createTask({

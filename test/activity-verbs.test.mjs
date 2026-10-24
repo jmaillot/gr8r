@@ -89,11 +89,11 @@ function firstArg(src, start) {
   return arg;
 }
 
-/* Every verb the writers store, extracted from the logAct( call sites in src/.
-   The unshift bypass sites are canalized in a later task; the scan of their
-   verb: literals joins the parity check then. */
+/* Every verb the writers store, extracted from the logAct( call sites in src/
+   and the canalized activity.unshift bypass sites in src/actions. */
 function writtenVerbs() {
   const verbs = new Set();
+  const actionsDir = path.join(ROOT, 'src', 'actions');
   for (const file of walkJs(path.join(ROOT, 'src'))) {
     const src = fs.readFileSync(file, 'utf8');
     for (const m of src.matchAll(/\blogAct\s*\(/g)) {
@@ -103,6 +103,9 @@ function writtenVerbs() {
         if (/(===|!==|==|!=)\s*$/.test(before)) continue;
         verbs.add(lit[1].replace(/\\'/g, "'"));
       }
+    }
+    if (file.startsWith(actionsDir)) {
+      for (const m of src.matchAll(/verb:\s*'((?:[^'\\]|\\.)*)'/g)) verbs.add(m[1].replace(/\\'/g, "'"));
     }
   }
   return verbs;

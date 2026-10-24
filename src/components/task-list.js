@@ -3,7 +3,7 @@
    ===================================================================== */
 import { ago, esc, relDate } from '../core/utils.js';
 /* The row and cell functions take a task parameter named t, so the catalogue lookup is imported under an alias. */
-import { t as tMsg } from '../core/i18n.js';
+import { t as tMsg, formatDate, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
@@ -174,6 +174,8 @@ export const VERB_KEYS = {
   completedSubtaskOn: 'act.verb.completedSubtaskOn',
   'reopened subtask on': 'act.verb.reopenedSubtaskOn',
   reopenedSubtaskOn: 'act.verb.reopenedSubtaskOn',
+  'changed status of project': 'act.verb.projectStatusChanged',
+  projectStatusChanged: 'act.verb.projectStatusChanged',
 };
 export const verbLabel = v => (VERB_KEYS[v] ? tMsg(VERB_KEYS[v]) : v);
 
@@ -222,12 +224,28 @@ const RECUR_EXTRA = {
 };
 
 /* A new row's extra is structured ({ kind, ...vars }) and composes through the
-   act.extra.* catalogue keys via this table: the kind selects the key and a
-   resolver turns the stored ids (machine values, never frozen prose) into
-   display values in the reader's locale. A kind missing from the table renders
-   nothing — a foreign kind is never echoed or interpolated (T-09-04's gate). */
+   act.extra.* catalogue keys via this table: the kind selects the key (or a key
+   resolver) and a resolver turns the stored ids (machine values, never frozen
+   prose) into display values in the reader's locale. A kind missing from the
+   table renders nothing — a foreign kind is never echoed or interpolated
+   (T-09-04's gate). */
 const EXTRA_VARS = {
+  statusMoved: { key: 'act.extra.statusMoved', vars: e => ({ from: tMsg('task.status.' + e.from), to: tMsg('task.status.' + e.to) }) },
+  assignedTo: { key: 'act.extra.to', vars: e => ({ value: e.value }) },
+  unassigned: { key: 'act.extra.unassigned', vars: () => ({}) },
   prioritySet: { key: 'act.extra.to', vars: e => ({ value: tMsg('task.priority.' + e.value) }) },
+  dateSet: { key: 'act.extra.to', vars: e => ({ value: formatDate(e.value) }) },
+  dateCleared: { key: 'act.extra.cleared', vars: () => ({}) },
+  renamedTo: { key: 'act.extra.renamedTo', vars: e => ({ value: e.value }) },
+  repeatSet: { key: e => RECUR_EXTRA[e.id] || 'act.extra.off', vars: () => ({}) },
+  estimateSet: { key: e => (e.value ? 'act.extra.to' : 'act.extra.none'), vars: e => ({ value: fmtEstimate(e.value) }) },
+  fileAdded: { key: 'act.extra.value', vars: e => ({ value: e.value }) },
+  fileRemoved: { key: 'act.extra.value', vars: e => ({ value: e.value }) },
+  subtaskAdded: { key: 'act.extra.quoted', vars: e => ({ value: e.value }) },
+  subtaskConverted: { key: 'act.extra.into', vars: e => ({ value: e.value }) },
+  quoted: { key: 'act.extra.quoted', vars: e => ({ value: e.value }) },
+  movedToProject: { key: 'act.extra.to', vars: e => ({ value: proj(e.value)?.name || e.value }) },
+  projStatusSet: { key: 'act.extra.to', vars: e => ({ value: tMsg('project.status.' + e.value) }) },
 };
 
 /* A new row's extra is structured ({ kind, ...vars }) and composes through the
@@ -241,7 +259,8 @@ export function actExtraHtml(e) {
     }
     const spec = EXTRA_VARS[e.kind];
     if (!spec) return '';
-    return `<span class="muted">${esc(tMsg(spec.key, spec.vars(e)))}</span>`;
+    const key = typeof spec.key === 'function' ? spec.key(e) : spec.key;
+    return `<span class="muted">${esc(tMsg(key, spec.vars(e)))}</span>`;
   }
   return `<span class="muted">${esc(e)}</span>`;
 }

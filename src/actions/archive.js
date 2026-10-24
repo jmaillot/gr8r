@@ -13,7 +13,7 @@ A.restoreTask = el => {
     mutate(() => {
       t.archived = false;
       t.archivedAt = null;
-      logAct('restored', t);
+      logAct('restored', t, {});
     })
   )
     toast(tMsg('toast.taskRestored', { title: t.title }), { action: tMsg('toast.open'), onAction: () => A.openTask({ dataset: { id: t.id } }) });
