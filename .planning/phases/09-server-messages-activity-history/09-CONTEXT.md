@@ -42,6 +42,15 @@ Requirements: **ERR-01**, **ERR-02**, **ACT-01**, **ACT-02**.
 - **D-04:** Un **test de parité** vérifie que chaque code émis par le serveur a une entrée
   dans en.json ET fr.json — les oublis sont détectés au test, pas à l'exécution.
 
+### Décisions issues de la recherche (post-RESEARCH.md, arbitrées par l'utilisateur)
+
+- **D-05:** Les codes machine sont en **camelCase** (`err.emailTaken`) — D-01 reste verbatim,
+  mais l'exemple SCREAMING_SNAKE du D-01 est réinterprété : le lint `KEY_SHAPE` du catalogue
+  (segments minuscules) s'applique sans exception, cohérent avec les 63 clés `err.*` existantes.
+- **D-06:** Le filtre statut **préserve exactement** la sélection actuelle, y compris les
+  déplacements de projet (`moved`) qu'il sélectionne aujourd'hui — le classifieur reproduit
+  le comportement visible existant, aucun changement de sémantique.
+
 ### Agent's Discretion (zones non discutées — recherche/planning décident)
 
 Les zones suivantes n'ont pas été sélectionnées pour discussion ; la recherche et le planning
