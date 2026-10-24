@@ -419,11 +419,11 @@ single-word legacy verbs (`created`, `completed`, `moved`, `assigned`, `renamed`
 `restored`, `estimated`) are byte-identical to their machine forms, so one lookup path serves
 both; multi-word legacy fragments (`'changed priority of'`, …) keep their `VERB_KEYS` entries.
 
-Full machine set (26): `created, createdProject, completed, moved, assigned, changedPriorityOf,
+Full machine set (25): `created, createdProject, completed, moved, assigned, changedPriorityOf,
 changedDueDateOf, changedStartDateOf, updatedLabelsOn, renamed, setRepeatOn, estimated,
 updatedDependenciesOf, archived, restored, commentedOn, addedAFileTo, removedAFileFrom,
 addedSubtaskTo, convertedASubtaskOf, assignedASubtaskOn, setASubtaskDueDateOn,
-completedSubtaskOn, reopenedSubtaskOn, projectStatusChanged` — 25 map to existing keys, only
+completedSubtaskOn, reopenedSubtaskOn, projectStatusChanged` — 24 map to existing keys, only
 `projectStatusChanged` is new (en + fr). Note: `moved` deliberately stays ONE verb for both
 status moves and project moves (matching legacy) — see Open Question 1.
 
@@ -671,25 +671,27 @@ assert.ok(!/json\(res,\s*\d+,\s*\{\s*error:/.test(serverSource), 'an inline erro
 | A4 | "Stripe-style code field" as industry pattern | State of the Art | None — informational only |
 | A5 | No other consumer of `res.error` needs the raw English string once translated | F5 | Low — all found consumers render it to users; server tests assert English via direct HTTP, not via api.js |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Filter semantics: preserve or fix the `moved` quirk?**
-   - What we know: a task moved *between projects* logs verb `moved` and is selected by the
-     STATUS filter today; the PROJECTS filter only matches the two project verbs.
-   - What's unclear: whether "keep selecting the right entries" freezes today's selection or
-     licenses moving project-moves into the projects filter.
-   - Recommendation: preserve today's selection (single machine verb `moved`, classified as
-     status) — behavior-preserving is this project's standing discipline; note the quirk in the
-     plan.
-2. **Code casing: option A (camelCase) vs option B (SCREAMING_SNAKE + lint exception).**
-   - Recommendation: A; requires consciously reinterpreting D-01's example casing.
+All four questions were resolved during `/gsd-discuss-phase` and planning. Recorded here so no
+open thread remains in the artifact.
+
+1. **Filter semantics: preserve or fix the `moved` quirk?** — **RESOLVED: preserve** the
+   quirk. Single machine verb `moved` for both status and project moves, classified as
+   `status`; behavior-preserving selection. Source: user decision **D-06** (CONTEXT.md);
+   implemented by `ACT_CATEGORIES` in plan 09-03 Task 1 (step 4).
+2. **Code casing: option A (camelCase) vs option B (SCREAMING_SNAKE + lint exception).** —
+   **RESOLVED: option A (camelCase)**. D-01's `EMAIL_TAKEN` example is consciously
+   reinterpreted; D-01's verbatim rule (key = code) is intact. Source: user decision
+   **D-05** (CONTEXT.md); implemented throughout plan 09-01.
 3. **Should `err.signupDisabled` / `err.workspaceChanged` reuse existing client keys whose
-   wording nearly matches the server's?** Recommendation: reuse when the English matches the
-   server message (or adjust the catalogue value to match the server verbatim — the English
-   catalogue may be edited; the *server* message may not).
-4. **The drawer's divergent verb fallback** (`a.verb.replace(/ of$/, '')`): unify with
-   `verbLabel` or keep? Recommendation: unify; the strip hack exists only for unmapped legacy
-   verbs.
+   wording nearly matches the server's?** — **RESOLVED: reuse** when an existing `err.*` key
+   carries the same English as the server message; never two keys for one message; never edit
+   the server message to fit a key. Source: reuse rule codified in plan **09-01 Task 2,
+   step 6** ("Règle de réutilisation").
+4. **The drawer's divergent verb fallback** (`a.verb.replace(/ of$/, '')`) — **RESOLVED:
+   unify** through `verbLabel` alone (its verbatim fallback covers unknowns). Source: plan
+   **09-03 Task 2, step 8** (drawer.js:128 edit).
 
 ## Environment Availability
 
