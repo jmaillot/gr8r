@@ -249,8 +249,9 @@ const EXTRA_VARS = {
 };
 
 /* A new row's extra is structured ({ kind, ...vars }) and composes through the
-   act.extra.* catalogue keys; a legacy row's extra is a stored English string and
-   renders verbatim (D-12's rule, no migration). */
+   act.extra.* catalogue keys; a legacy row's extra is a stored English string
+   and is DROPPED at render — never divulged (the roadmap's "dropped rather
+   than leaked" policy, no document migration). */
 export function actExtraHtml(e) {
   if (e && typeof e === 'object') {
     if (e.kind === 'recur') {
@@ -262,7 +263,7 @@ export function actExtraHtml(e) {
     const key = typeof spec.key === 'function' ? spec.key(e) : spec.key;
     return `<span class="muted">${esc(tMsg(key, spec.vars(e)))}</span>`;
   }
-  return `<span class="muted">${esc(e)}</span>`;
+  return '';
 }
 
 export function actHtml(a, opt = {}) {

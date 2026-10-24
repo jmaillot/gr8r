@@ -402,15 +402,15 @@ export function seed() {
   ];
   const A = (by, verb, task, project, m, extra = '') => ({ id: uid('a'), by, verb, task, project, at: minsAgo(m), extra });
   const activity = [
-    A('m2', 'moved', 't3', 'p1', 38, 'to Review'),
+    A('m2', 'moved', 't3', 'p1', 38, { kind: 'statusMoved', from: 'todo', to: 'review' }),
     A('m3', 'completed', 't18', 'p1', 90),
     A('m4', 'commented on', 't19', 'p2', 140),
-    A('m1', 'changed priority of', 't9', 'p1', 180, 'to Urgent'),
+    A('m1', 'changed priority of', 't9', 'p1', 180, { kind: 'prioritySet', value: 'urgent' }),
     A('m6', 'added a file to', 't14', 'p1', 260),
     A('m5', 'created', 't30', 'p3', 330),
-    A('m2', 'assigned', 't8', 'p1', 420, 'to Sarah Chen'),
+    A('m2', 'assigned', 't8', 'p1', 420, { kind: 'assignedTo', value: 'Emma Wilson' }),
     A('m7', 'completed', 't23', 'p2', 1300),
-    A('m3', 'moved', 't24', 'p2', 1500, 'to Review'),
+    A('m3', 'moved', 't24', 'p2', 1500, { kind: 'statusMoved', from: 'todo', to: 'review' }),
     A('m1', 'created project', null, 'p4', 30000),
     A('m2', 'created project', null, 'p1', 43000),
     A('m4', 'completed', 't41', 'p5', 5600),

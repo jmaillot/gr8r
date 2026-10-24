@@ -232,7 +232,15 @@ test('the recur extra keeps its resolver', () => {
   assert.equal(actExtraHtml({ kind: 'recur', id: 'daily' }), `<span class="muted">${t('popover.recurDaily')}</span>`);
 });
 
-test('a legacy string extra renders nothing — suppressed, never divulged', { skip: 'the legacy suppression lands with the full parity gate' }, () => {
+test('a legacy string extra renders nothing — suppressed, never divulged', () => {
   assert.equal(actExtraHtml('to Review'), '');
   assert.equal(actExtraHtml('30m'), '');
+});
+
+test('the structured extras the converted seed stores render translated', () => {
+  assert.equal(
+    actExtraHtml({ kind: 'statusMoved', from: 'todo', to: 'review' }),
+    `<span class="muted">${esc(t('act.extra.statusMoved', { from: t('task.status.todo'), to: t('task.status.review') }))}</span>`,
+    'the converted seed extras must render through the catalogue, not just be suppressed',
+  );
 });
