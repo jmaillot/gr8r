@@ -182,3 +182,116 @@ test('inviteForOtherEmail carries its email in the payload on the join flow', as
     await server.stop();
   }
 });
+
+/* ---------- CR-01 / WR-05 / WR-06: every thrown site carries its catalogued code ---------- */
+
+test('lastPrivateMember returns 409 with its code when the removal would strand a private project', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    assert.equal((await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password })).status, 200);
+
+    /* the second member joins through an invite, then lands in the document roster */
+    const inv = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
+    assert.equal(inv.status, 201);
+    const joined = await client(server.base, 'member').post(
+      `/api/invites/${encodeURIComponent(inviteToken(inv.data.invites[0].url))}/accept`,
+      { name: 'Member', email: 'member@test.local', password: 'password-1234' },
+    );
+    assert.equal(joined.status, 201);
+
+    /* craft a private project whose ONLY member is the target */
+    const ws = await admin.get('/api/workspaces/acme');
+    const members = await admin.get('/api/workspaces/acme/members');
+    const target = members.data.members.find(m => m.email === 'member@test.local');
+    assert.ok(target, 'the second member is missing from the roster');
+    const put = await admin.put('/api/workspaces/acme', {
+      revision: ws.data.revision,
+      doc: { data: { projects: [{ id: 'p_priv', name: 'Secret', private: true, members: [target.memberId] }] } },
+    });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+
+    const res = await admin.del(`/api/workspaces/acme/members/${encodeURIComponent(target.userId)}`);
+    assert.equal(res.status, 409);
+    assert.equal(res.data.code, 'lastPrivateMember');
+    assert.equal(res.data.error, 'Promote someone before removing the last member of a private project');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('bodyTooLarge reaches the client as a full 413 response, the socket never resets', async () => {
+  const server = await startServer({ env: { MAX_BODY_BYTES: '64' } });
+  try {
+    /* a 4 kB JSON body against a 64-byte limit */
+    const big = JSON.stringify({ email: 'x'.repeat(4096) + '@test.local', password: 'password-1234' });
+    assert.ok(Buffer.byteLength(big) > 4096);
+    const res = await fetch(`${server.base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: big,
+    });
+    assert.equal(res.status, 413);
+    const data = await res.json();
+    assert.equal(data.code, 'bodyTooLarge');
+    assert.equal(data.error, 'Request body too large');
+    /* the server is still alive and answering on the same port */
+    const alive = await fetch(`${server.base}/api/health`);
+    assert.ok(alive.ok);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('invalidJson returns 400 with its code', async () => {
+  const server = await startServer();
+  try {
+    const res = await fetch(`${server.base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'this is { not json',
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.code, 'invalidJson');
+    assert.equal(data.error, 'Invalid JSON body');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('workspaceNotFound is returned for a document save to a nonexistent workspace slug', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    assert.equal((await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password })).status, 200);
+    const res = await admin.put('/api/workspaces/does-not-exist', { revision: 1, doc: { data: {} } });
+    assert.equal(res.status, 404);
+    assert.equal(res.data.code, 'workspaceNotFound');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('accountExists stays on the duplicate signup after the pre-check', async () => {
+  const server = await startServer();
+  try {
+    const first = await signup(server.base, { name: 'First', email: 'dupe@test.local' });
+    assert.equal(first.status, 201);
+    const second = await signup(server.base, { name: 'Second', email: 'dupe@test.local' });
+    assert.equal(second.status, 409);
+    assert.equal(second.data.code, 'accountExists');
+    assert.equal(second.data.error, 'An account with that email already exists');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* WR-06 static half: the insert inside createUser maps the UNIQUE violation to the same
+   message and code as the pre-check (the pre-check itself is the other occurrence). */
+test('accountExists maps the signup race: createUser wraps its insert in the TOCTOU guard', () => {
+  const matches = serverSource.match(/httpError\(409, 'An account with that email already exists', 'accountExists'\)/g) || [];
+  assert.equal(matches.length, 2, 'createUser must keep both the pre-check and the insert catch mapped to accountExists');
+  const body = serverSource.slice(serverSource.indexOf('function createUser'), serverSource.indexOf('function createWorkspace'));
+  assert.match(body, /try \{[\s\S]*insert into users[\s\S]*\} catch \(err\) \{[\s\S]*accountExists/);
+});

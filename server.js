@@ -712,7 +712,7 @@ function stripMember(doc, memberId, userId = null) {
     let lead = hit(p.lead) ? null : p.lead;
     if (projectIsPrivate(p)) {
       if (!Array.isArray(members) || !members.length) {
-        throw httpError(409, 'Promote someone before removing the last member of a private project');
+        throw httpError(409, 'Promote someone before removing the last member of a private project', 'lastPrivateMember');
       }
       if (!lead || !members.includes(lead)) lead = members[0];
     }
@@ -724,7 +724,7 @@ function stripMember(doc, memberId, userId = null) {
 /* Read-modify-write the workspace document inside the caller's transaction. */
 function updateDoc(workspaceId, edit) {
   const row = db.prepare('select doc from workspaces where id = ?').get(workspaceId);
-  if (!row) throw httpError(404, 'Workspace not found');
+  if (!row) throw httpError(404, 'Workspace not found', 'workspaceNotFound');
   const doc = JSON.parse(row.doc);
   edit(doc);
   db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), workspaceId);
@@ -960,7 +960,7 @@ function ensureMember(doc, user, role = 'member', workspaceId = null) {
 }
 
 function addMembership(ws, user, role) {
-  if (!ws) throw httpError(500, 'No workspace available');
+  if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
      document's revision and never invalidates another session's write. */
@@ -981,13 +981,24 @@ function addMembership(ws, user, role) {
 
 function createUser(email, name, password) {
   const clean = email.trim().toLowerCase();
-  if (!emailOk(clean)) throw httpError(400, 'Enter a valid email address');
-  if (String(password).length < 10) throw httpError(400, 'Use at least 10 characters');
-  if (db.prepare('select 1 from users where email = ?').get(clean)) throw httpError(409, 'An account with that email already exists');
+  if (!emailOk(clean)) throw httpError(400, 'Enter a valid email address', 'enterValidEmail');
+  if (String(password).length < 10) throw httpError(400, 'Use at least 10 characters', 'passwordTooShort');
+  if (db.prepare('select 1 from users where email = ?').get(clean))
+    throw httpError(409, 'An account with that email already exists', 'accountExists');
 
   const id = uid();
   const cleanName = (name || '').trim() || clean.split('@')[0];
-  db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(id, clean, cleanName, hashPassword(password), now());
+  try {
+    db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(id, clean, cleanName, hashPassword(password), now());
+  } catch (err) {
+    /* WR-06: a signup race can pass the pre-check and hit the UNIQUE constraint.
+       Map it to the same 409 accountExists as the pre-check; any other SQL error
+       rethrows to the catch-all 500 (D-03 — no code). */
+    if (/UNIQUE|users\.email/i.test(String(err?.message || ''))) {
+      throw httpError(409, 'An account with that email already exists', 'accountExists');
+    }
+    throw err;
+  }
   return { id, email: clean, name: cleanName };
 }
 
@@ -1160,22 +1171,27 @@ function tooMany(key, max = 10, windowMs = 15 * 60 * 1000) {
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let overflow = null;
     const chunks = [];
     req.on('data', chunk => {
+      /* WR-05: on overflow, keep draining the request instead of destroying the
+         socket — the response is only written once the body is fully consumed,
+         so the client actually receives the 413 with its code. */
+      if (overflow) return;
       size += chunk.length;
       if (size > MAX_BODY) {
-        reject(httpError(413, 'Request body too large'));
-        req.destroy();
+        overflow = httpError(413, 'Request body too large', 'bodyTooLarge');
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
+      if (overflow) return reject(overflow);
       if (!chunks.length) return resolve(null);
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
       } catch {
-        reject(httpError(400, 'Invalid JSON body'));
+        reject(httpError(400, 'Invalid JSON body', 'invalidJson'));
       }
     });
     req.on('error', reject);
