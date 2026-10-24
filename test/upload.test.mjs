@@ -149,6 +149,36 @@ test('D-13 deep link: navigating with Accept: text/html bootstraps the SPA inste
   }
 });
 
+test('doc-PUT removing a file record unlinks its binary in the same mutation, idempotently (UPLOAD-05)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    await plantFile(server, admin, 'f_keep', 'kept.png', Buffer.from('keep-me'));
+    await plantFile(server, admin, 'f_drop', 'dropped.png', Buffer.from('drop-me'));
+    /* a binary on disk with NO record must never be swept (strict same-PUT diff) */
+    fs.writeFileSync(path.join(server.dataDir, 'files', 'f_orphan'), Buffer.from('no record'));
+    const filesDir = path.join(server.dataDir, 'files');
+
+    const res = await putDoc(admin, doc => {
+      doc.data.files = doc.data.files.filter(f => f.id !== 'f_drop');
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    const after = fs.readdirSync(filesDir).sort();
+    assert.ok(after.includes('f_keep') && after.includes('f_orphan'), `after: ${after}`);
+    assert.ok(!after.includes('f_drop'), 'the removed record binary must be unlinked');
+
+    /* idempotent: a repeat doc-PUT with the same doc does not throw or touch the rest */
+    const again = await putDoc(admin, doc => {
+      doc.data.files = doc.data.files.filter(f => f.id !== 'f_drop');
+    });
+    assert.equal(again.status, 200, JSON.stringify(again.data));
+    const still = fs.readdirSync(filesDir).sort();
+    assert.deepEqual(still, after);
+  } finally {
+    await server.stop();
+  }
+});
+
 test('uploads are gated: unauthenticated callers get 401 and viewers get 403 readOnlyAccess', async () => {
   const server = await startServer({ env: { MAX_UPLOAD_MB: '25' } });
   try {

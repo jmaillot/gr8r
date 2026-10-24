@@ -1378,10 +1378,24 @@ async function handleApi(req, res, url) {
         db.exec('rollback');
         return fail(res, 409, 'workspaceChanged', 'Workspace changed elsewhere', { revision: row.revision });
       }
-      const next = docFromClient(doc, JSON.parse(row.doc), row, ctx.membership.role, ctx.membership);
+      const storedDoc = JSON.parse(row.doc);
+      const next = docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership);
+      /* D-04: the same server mutation that drops a file record unlinks its
+         binary. Strict same-PUT diff only — no broader orphan sweep. */
+      const storedFileIds = new Set((Array.isArray(storedDoc?.data?.files) ? storedDoc.data.files : []).map(f => f?.id).filter(Boolean));
+      const keptFileIds = new Set((Array.isArray(next?.data?.files) ? next.data.files : []).map(f => f?.id).filter(Boolean));
       const t = now();
       db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
       db.exec('commit');
+      /* After the commit succeeds: missing file at unlink time is success
+         (idempotent); unlink errors are logged and swallowed — the doc write
+         is already committed and must not be failed by a filesystem hiccup. */
+      for (const fileId of storedFileIds) {
+        if (keptFileIds.has(fileId) || !/^[A-Za-z0-9_-]+$/.test(fileId)) continue;
+        fs.unlink(path.join(FILES_DIR, fileId), err => {
+          if (err && err.code !== 'ENOENT') console.warn(`file unlink ${fileId}: ${err.message}`);
+        });
+      }
       return json(res, 200, { revision: revision + 1, updatedAt: t });
     } catch (err) {
       db.exec('rollback');
