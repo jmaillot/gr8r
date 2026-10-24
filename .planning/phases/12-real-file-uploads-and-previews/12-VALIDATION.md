@@ -46,10 +46,10 @@ created: "2026-10-24"
 | 12-02-01 | 02 | 2 | UPLOAD-03 | T-12-* | File route 404s outsiders (no existence oracle) | integration | `node --test test/upload.test.mjs -x` | ❌ W0 | ⬜ pending |
 | 12-02-02 | 02 | 2 | UPLOAD-04 | T-12-* | Safe fixed Content-Type; svg never inline | integration | `node --test test/upload.test.mjs -x` | ❌ W0 | ⬜ pending |
 | 12-02-03 | 02 | 2 | UPLOAD-05 | T-12-* | Doc-PUT diff unlinks removed binaries (D-04) | integration | `node --test test/upload.test.mjs -x` | ❌ W0 | ⬜ pending |
-| 12-03-01 | 03 | 2 | PREVIEW-01 | — | XHR onprogress, no `setInterval` in upload path | static | `npm test` (static assertion) | ❌ W0 | ⬜ pending |
-| 12-03-02 | 03 | 2 | PREVIEW-02 | — | Failed upload → no record, toast shown (D-11) | unit | node:test harness | ❌ W0 | ⬜ pending |
-| 12-03-03 | 03 | 2 | PREVIEW-03, LINK-01 | — | Real img/pdf preview; copied link opens preview | e2e | `npm run e2e` | ❌ W0 | ⬜ pending |
-| 12-04-01 | 04 | 3 | I18N-01 | — | New literals + error codes in en/fr catalogues | static | `npm run build` + `npm test` | ✅ existing | ⬜ pending |
+| 12-03-01 | 03 | 3 | PREVIEW-01 | — | XHR onprogress, no `setInterval` in upload path | static | `npm test` (static assertion) | ❌ W0 | ⬜ pending |
+| 12-03-02 | 03 | 3 | PREVIEW-02 | — | Failed upload → no record, toast shown (D-11) | unit | node:test harness | ❌ W0 | ⬜ pending |
+| 12-03-03 | 03 | 3 | PREVIEW-03, LINK-01 | — | Real img/pdf preview; copied link opens preview | e2e | `npm run e2e` | ❌ W0 | ⬜ pending |
+| 12-04-01 | 04 | 4 | I18N-01 | — | New literals + error codes in en/fr catalogues | static | `npm run build` + `npm test` | ✅ existing | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

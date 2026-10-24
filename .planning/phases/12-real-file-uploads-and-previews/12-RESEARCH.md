@@ -438,9 +438,11 @@ planner's discretion, still attachment).
 | A5 | Default `MAX_UPLOAD_MB = 25` is a sane default | D-02 discretion | Low — pure policy choice |
 | A6 | DupFile staying metadata-only (404 for the duplicate's preview) is acceptable | Pitfall 5 | Medium — UX-visible; flag at plan review or a checkpoint |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **SPA-side destination URL for copied file links** — D-13 says "the SPA gains a `file/:id` hash
+All three questions were resolved during planning; each is implemented in the plan cited.
+
+1. **SPA-side destination URL for copied file links** (RESOLVED — implemented by 12-03 Task 2: pathname route `/w/:slug/file/:id` + Accept negotiation) — D-13 says "the SPA gains a `file/:id` hash
    route", but the app's existing deep links are **pathname**-based (`/w/:slug/task/<key>`,
    `applyDeepLink`), not hash-based, and `copyLink` already copies the pathname form. Recommendation:
    keep the pathname form (`/w/:slug/file/:id`) for consistency with task/project links and implement
@@ -451,8 +453,8 @@ planner's discretion, still attachment).
    - What we know: `copyLink` already copies the pathname; `applyDeepLink` has a file branch; ROUTE_IDS lacks `file`.
    - What's unclear: whether "hash route" in D-13 was literal or shorthand for "the deep link works".
    - Recommendation: pathname route + Accept negotiation; ask user only if A4 concerns materialize.
-2. **dupFile semantics** — see Pitfall 5 / A6. Recommendation: metadata-only duplicate, 404 preview, or alternatively exclude dupFile from the copy-link contract. Small checkpoint candidate.
-3. **Orphan self-healing** — whether the doc-PUT diff should also unlink binaries not referenced by
+2. **dupFile semantics** (RESOLVED — implemented by 12-03 Task 2, contract exclusion: metadata-only duplicate, 404 preview) — see Pitfall 5 / A6. Recommendation: metadata-only duplicate, 404 preview, or alternatively exclude dupFile from the copy-link contract. Small checkpoint candidate.
+3. **Orphan self-healing** (RESOLVED — implemented by 12-02 Task on the doc-PUT diff: strict same-PUT unlink per D-04) — whether the doc-PUT diff should also unlink binaries not referenced by
    any workspace doc (heals Pitfall 6 across sessions) or strictly unlink only ids the same PUT
    removed. Recommendation: strict same-PUT diff (D-04 wording); note self-healing as a cheap follow-up.
 
