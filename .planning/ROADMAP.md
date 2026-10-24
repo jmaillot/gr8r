@@ -340,6 +340,14 @@ Success criteria (what must be TRUE):
 Deliverable: no route serves an untranslated English string, and the guarantee holds in the shipped
 image.
 
+**Plans:** 4 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — the 21-route French leak sweep in e2e/french-overflow.spec.mjs (D-01..D-06, UAT-10 c1) (wave 1)
+- [ ] 11-02-PLAN.md — the empty-allow-list / exit-0 pin and the zero-runtime-dependency pin (D-07/D-08/D-09/D-12) (wave 1)
+- [ ] 11-03-PLAN.md — docker-build CI job asserting the served fr chunk + demo-mode Chromium test (D-10/D-11) (wave 1)
+- [ ] 11-04-PLAN.md — README § Internationalization, CHANGELOG 1.2.0 draft, DEPLOY docker-build mention (D-13/D-14/D-15) (wave 2)
+
 ## Phase list
 
 - [x] **Phase 5: i18n foundation & catalogue contract** — `t()`, JSON catalogues, the escaping,
