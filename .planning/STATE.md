@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 09
 current_phase_name: Server messages & activity history
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-10-24T14:20:00.000Z"
+stopped_at: Completed 09-07-PLAN.md
+last_updated: "2026-10-24T13:16:57.892Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 09 execution started
-state_head: c11749cf771773d8cf4b1e0354679ebaf3657f42
+state_head: 2ea5438fd9503edeeaf643ff04c5419056e2011d
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 35
-  completed_plans: 32
+  completed_plans: 34
   percent: 25
 milestone_name: Localization
 ---
@@ -268,6 +268,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 09]: all activity writers store machine verbs + structured extras (priority tracer slice first)
 - [Phase 09]: actCategory classifier replaces English-parsing filters; D-06 quirks frozen (moved → status; case-sensitive includes(project) so createdProject escapes the projects filter)
 - [Phase 09]: 09-05 closes CR-03/WR-09/WR-01/WR-02 — legacy string extras dropped at render (never divulged), seed converted to structured extras (real assignee Emma Wilson, deviation from plan literal), createdProject restored into ACT_CATEGORIES.projects with a documented equivalence exception, assignedTo falls back to '' at both render and write
+- [Phase 09]: modKey() lazy getter replaces the MOD module-load constant; SHORTCUTS carries a render-time MOD sentinel — All six consumer sites call modKey() at render; the plan context note missed popovers/modals/layout - migrated as a Rule 3 deviation
 
 ## Verification commands used
 
@@ -300,13 +301,13 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T14:20:00.000Z
-**Stopped at:** Completed 09-05-PLAN.md
+**Last session:** 2026-10-24T13:16:52.136Z
+**Stopped at:** Completed 09-07-PLAN.md
 **Resume file:** None
 
 ## Current Position
 
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 7
 
 Phase: 09 (Server messages & activity history) — EXECUTING
@@ -331,3 +332,4 @@ Last activity: 2026-10-24 — Phase 09 execution started
 | Phase 09 P03 | ~42 min | 3 tasks | 10 files |
 | Phase 09 P04 | ~20 min | 3 tasks | 4 files |
 | Phase 09 P05 | ~15 min | 2 tasks | 4 files |
+| Phase 09 P07 | 8min | 2 tasks | 13 files |
