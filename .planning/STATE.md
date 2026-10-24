@@ -5,11 +5,11 @@ current_phase: 11
 current_phase_name: French sweep, build gate & ship hardening
 current_plan: Not started
 status: planning
-stopped_at: Phase 10 complete, ready to plan Phase 11
-last_updated: "2026-10-24T15:13:06.185Z"
+stopped_at: Phase 11 context gathered
+last_updated: "2026-10-24T15:43:36.347Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 10 complete, transitioned to Phase 11
-state_head: b9b6d1ca9d6fcd10d9da82861a6af59f767cbb45
+state_head: 41909fb3eb4853acc660b5a34ee37dd90c743a0b
 progress:
   total_phases: 8
   completed_phases: 2
@@ -306,9 +306,9 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T15:06:35.172Z
-**Stopped at:** Phase 10 complete, ready to plan Phase 11
-**Resume file:** None
+**Last session:** 2026-10-24T15:43:36.226Z
+**Stopped at:** Phase 11 context gathered
+**Resume file:** .planning/phases/11-french-sweep-build-gate-ship-hardening/11-CONTEXT.md
 
 ## Current Position
 
