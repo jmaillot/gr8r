@@ -1,6 +1,6 @@
 ---
 phase: 09-server-messages-activity-history
-verified: 2026-10-24T15:40:00Z
+verified: 2026-10-24T16:35:00Z
 status: passed
 score: 10/10 must-haves verified
 covered_files:
@@ -50,7 +50,7 @@ covered_files:
   - "DEPLOY.md"
   - ".env.example"
   - "docker-compose.yml"
-covered_digest: "v2:sha256:399b68f1bcdf9e36badc385a965f25f124dcde253908d07e960431d4cde5a096"
+covered_digest: "v2:sha256:0438665e76ed6e7b3537d2303cd9b4b7f8d54c0c1eae996efd23b0d7d3aa700c"
 behavior_unverified: 0
 overrides_applied: 0
 advisory:
@@ -72,9 +72,9 @@ advisory:
 
 **Phase Goal:** The two remaining sources of English. Server errors gain a stable machine code beside their unchanged English message — payload shape unchanged, client translates the code and falls back to the English string when unknown. Activity log restructured to machine verbs with structured extra: filters stop parsing English and classify the stored verb, existing documents keep filtering correctly with no migration, legacy English prose detail is suppressed at render rather than leaked.
 
-**Verified:** 2026-10-24T15:40:00Z
+**Verified:** 2026-10-24T16:35:00Z
 **Status:** passed
-**Re-verification:** No — initial verification (the phase has no prior VERIFICATION.md; gap closure 09-04..09-07 was driven by 09-REVIEW.md and is folded into this pass)
+**Re-verification:** Yes — digest refresh only. The prior report (commit 0b5f7f8) was flagged stale because its covered_digest was computed against a pre-docs working state and no longer matched disk state after the review-disposition documentation commits (15401dc, b98ad3f). No source files changed since the passing verification — `git log 0b5f7f8..HEAD` is empty (0b5f7f8 is HEAD), and only `.planning/**.md` docs were touched by those commits. Spot-checks re-run at refresh time: `npm test` 431/431 green, `fail()` at server.js:1048 + `sameOrigin()` at :1084 with 4 guard call-sites intact, `tErr(data.code, data, data?.error)` on the whole payload at src/core/api.js:62. Findings and structure unchanged; only `verified:` and `covered_digest:` recomputed via gsd-tools verification.fingerprint.
 
 ## Automated Checks Results
 
@@ -200,5 +200,5 @@ None. All 10 merged must-have truths verified against source, all key links wire
 
 ---
 
-_Verified: 2026-10-24T15:40:00Z_
+_Verified: 2026-10-24T16:35:00Z (digest refresh)_
 _Verifier: the agent (gsd-verifier)_
