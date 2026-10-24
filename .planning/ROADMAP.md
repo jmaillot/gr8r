@@ -340,7 +340,7 @@ Success criteria (what must be TRUE):
 Deliverable: no route serves an untranslated English string, and the guarantee holds in the shipped
 image.
 
-**Plans:** 4/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -366,7 +366,7 @@ Plans:
   both rendered in the interface language
 - [x] **Phase 10: Browser coverage in both locales** — the eight untested flows proven in Chromium, (completed 2026-10-24)
   in English and in French
-- [ ] **Phase 11: French sweep, build gate & ship hardening** — the no-English-leak proof over the
+- [x] **Phase 11: French sweep, build gate & ship hardening** — the no-English-leak proof over the (completed 2026-10-24)
   21 routes, the build gate, and the shipped artifact
 
 ## Traceability
@@ -420,7 +420,10 @@ to the parent task). Closes the known limitation "File contents are metadata
 only; no binary upload backend".
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 12 to break down)
+- [ ] 12-01-PLAN.md — Tracer: streamed upload endpoint `POST /w/:slug/files` (D-01/D-02) + integration suite
+- [ ] 12-02-PLAN.md — File route `GET /w/:slug/file/:id` with Accept negotiation, safe headers (D-05–D-07) + doc-PUT binary delete (D-04)
+- [ ] 12-03-PLAN.md — Client: XHR progress in `handleFiles` (D-08/D-11/D-12/D-14), real-bytes preview modal (D-03/D-09/D-10), deep-link copy-link destination (D-13), e2e
+- [ ] 12-04-PLAN.md — i18n/error-code completeness + operator docs (MAX_UPLOAD_MB, limitation retraction) + phase gate
