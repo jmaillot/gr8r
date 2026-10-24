@@ -3,7 +3,7 @@ status: complete
 phase: 08-per-user-locale-the-honest-selector
 source: 08-01-SUMMARY.md, 08-02-SUMMARY.md, 08-03-SUMMARY.md
 started: 2026-10-23T17:40:00Z
-updated: 2026-10-23T18:10:00Z
+updated: 2026-10-24T10:00:00Z
 ---
 
 ## Current Test
@@ -14,9 +14,10 @@ updated: 2026-10-23T18:10:00Z
 
 ### 1. Cold Start Smoke Test
 expected: Kill any running server. Start the app from scratch (`npm start`). Server boots without errors and the homepage loads — no locale-related boot errors or crash.
-result: issue
+result: issue — RESOLVED by 08-04 gap closure
 reported: "it isn't reachable" — agent reproduced: `node server.js` crashes at boot with `Error: Enter a valid email address` (exit code 1) before the HTTP listener opens.
 severity: blocker
+resolution: "08-04 (commits d8763d3 fix, 72df55e test): fallback email changed to 'admin@example.com'; `node server.js` now boots clean from cold start (observed live 2026-10-24) and `test/server-boot.test.mjs` passes 2/2 (cold start + negative control)."
 
 ### 2. Language Selector Offers Exactly Two Options
 expected: Settings page → Language row shows exactly two options: English and Français (no other languages), with the currently-active language selected.
@@ -56,8 +57,8 @@ reason: "Deferred to e2e coverage: e2e/locale.spec.mjs already proves the toast 
 ## Summary
 
 total: 9
-passed: 5
-issues: 1
+passed: 6
+issues: 0
 pending: 0
 skipped: 2
 blocked: 0
@@ -66,7 +67,7 @@ blocked: 0
 
 - gap_id: G-08-1
   truth: "Server boots without errors from a cold start using default settings (no ADMIN_EMAIL env var)"
-  status: failed
+  status: fixed
   reason: "User reported: it isn't reachable. Agent reproduced: `node server.js` exits 1 at boot with `Error: Enter a valid email address` thrown by ensureAdmin → createUser."
   severity: blocker
   test: 1
