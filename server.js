@@ -1132,13 +1132,12 @@ function requireWorkspace(req, res, slug, minRole = 'viewer') {
   const ws = wsBySlug(slug);
   const membership = ws ? membershipOf(ws.id, user.id) : null;
   if (!ws || !membership) {
-    json(res, 404, { error: 'Workspace not found' });
+    fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     return null;
   }
   if (ROLE_RANK[membership.role] < ROLE_RANK[minRole]) {
-    json(res, 403, {
-      error: minRole === 'admin' ? 'Only workspace admins can do that' : 'Your account has read-only access',
-    });
+    if (minRole === 'admin') fail(res, 403, 'adminOnly', 'Only workspace admins can do that');
+    else fail(res, 403, 'readOnlyAccess', 'Your account has read-only access');
     return null;
   }
   return { user, ws, membership };
@@ -1298,20 +1297,20 @@ async function handleApi(req, res, url) {
   if (pathname === '/api/workspaces' && method === 'POST') {
     const user = requireUser(req, res);
     if (!user) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     if (!ALLOW_SIGNUP && !hasAdminRole(user.id)) {
-      return json(res, 403, { error: 'Ask a workspace administrator to create one for you' });
+      return fail(res, 403, 'askAdminForWorkspace', 'Ask a workspace administrator to create one for you');
     }
     const body = await readJson(req);
     const name = String(body?.name || '')
       .trim()
       .slice(0, 60);
-    if (!name) return json(res, 400, { error: 'Enter a workspace name' });
+    if (!name) return fail(res, 400, 'workspaceNameRequired', 'Enter a workspace name');
     let slug = null;
     if (body?.slug) {
       slug = sanitizeSlug(body.slug);
-      if (!slug) return json(res, 400, { error: 'Use 2–40 lowercase letters, numbers, or hyphens' });
-      if (wsBySlug(slug)) return json(res, 409, { error: 'That URL is already taken', suggestion: uniqueSlug(slug) });
+      if (!slug) return fail(res, 400, 'invalidSlug', 'Use 2–40 lowercase letters, numbers, or hyphens');
+      if (wsBySlug(slug)) return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: uniqueSlug(slug) });
     }
     const ws = createWorkspace(name, slug, user);
     return json(res, 201, { workspace: workspacePayload(ws, membershipOf(ws.id, user.id)) });
@@ -1332,25 +1331,25 @@ async function handleApi(req, res, url) {
   if (wsMatch && method === 'PUT') {
     const ctx = requireWorkspace(req, res, wsMatch[1], 'member');
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
 
     const body = await readJson(req);
     const revision = Number(body?.revision);
     const doc = body?.doc;
-    if (!Number.isInteger(revision) || revision < 1) return json(res, 400, { error: 'Missing revision' });
-    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return json(res, 400, { error: 'Missing workspace document' });
-    if (JSON.stringify(doc).length > MAX_BODY) return json(res, 413, { error: 'Workspace document is too large' });
+    if (!Number.isInteger(revision) || revision < 1) return fail(res, 400, 'missingRevision', 'Missing revision');
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return fail(res, 400, 'missingDocument', 'Missing workspace document');
+    if (JSON.stringify(doc).length > MAX_BODY) return fail(res, 413, 'documentTooLarge', 'Workspace document is too large');
 
     db.exec('begin immediate');
     try {
       const row = db.prepare('select * from workspaces where id = ?').get(ctx.ws.id);
       if (!row) {
         db.exec('rollback');
-        return json(res, 404, { error: 'Workspace not found' });
+        return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
       }
       if (row.revision !== revision) {
         db.exec('rollback');
-        return json(res, 409, { error: 'Workspace changed elsewhere', revision: row.revision });
+        return fail(res, 409, 'workspaceChanged', 'Workspace changed elsewhere', { revision: row.revision });
       }
       const next = docFromClient(doc, JSON.parse(row.doc), row, ctx.membership.role, ctx.membership);
       const t = now();
@@ -1366,23 +1365,23 @@ async function handleApi(req, res, url) {
   if (wsMatch && method === 'PATCH') {
     const ctx = requireWorkspace(req, res, wsMatch[1], 'admin');
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
     let name = ctx.ws.name;
     let slug = ctx.ws.slug;
     let color = ctx.ws.color || '#1D1C1A';
     if (body?.name !== undefined) {
       name = String(body.name).trim().slice(0, 60);
-      if (!name) return json(res, 400, { error: 'Enter a workspace name' });
+      if (!name) return fail(res, 400, 'workspaceNameRequired', 'Enter a workspace name');
     }
     if (body?.slug !== undefined && body.slug !== slug) {
       const next = sanitizeSlug(body.slug);
-      if (!next) return json(res, 400, { error: 'Use 2–40 lowercase letters, numbers, or hyphens' });
-      if (wsBySlug(next)) return json(res, 409, { error: 'That URL is already taken' });
+      if (!next) return fail(res, 400, 'invalidSlug', 'Use 2–40 lowercase letters, numbers, or hyphens');
+      if (wsBySlug(next)) return fail(res, 409, 'slugTaken', 'That URL is already taken');
       slug = next;
     }
     if (body?.color !== undefined) {
-      if (!/^#[0-9a-f]{6}$/i.test(String(body.color))) return json(res, 400, { error: 'Use a hex color like #1D1C1A' });
+      if (!/^#[0-9a-f]{6}$/i.test(String(body.color))) return fail(res, 400, 'invalidColor', 'Use a hex color like #1D1C1A');
       color = String(body.color);
     }
     db.prepare('update workspaces set name = ?, slug = ?, color = ?, updated_at = ? where id = ?').run(name, slug, color, now(), ctx.ws.id);
@@ -1393,7 +1392,7 @@ async function handleApi(req, res, url) {
   if (wsMatch && method === 'DELETE') {
     const ctx = requireWorkspace(req, res, wsMatch[1], 'owner');
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     transaction(() => {
       db.prepare('delete from memberships where workspace_id = ?').run(ctx.ws.id);
       db.prepare('delete from invites where workspace_id = ?').run(ctx.ws.id);
@@ -1418,9 +1417,9 @@ async function handleApi(req, res, url) {
   if (wsLeaveMatch && method === 'POST') {
     const ctx = requireWorkspace(req, res, wsLeaveMatch[1]);
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     if (ctx.membership.role === 'owner' && ownerCount(ctx.ws.id, ctx.user.id) === 0) {
-      return json(res, 409, { error: 'Promote someone else to owner before you leave' });
+      return fail(res, 409, 'lastOwnerLeaves', 'Promote someone else to owner before you leave');
     }
     transaction(() => {
       db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
@@ -1433,18 +1432,18 @@ async function handleApi(req, res, url) {
   if (wsMemberMatch && (method === 'PATCH' || method === 'DELETE')) {
     const ctx = requireWorkspace(req, res, wsMemberMatch[1], 'admin');
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const target = db.prepare('select * from users where id = ?').get(wsMemberMatch[2]);
     const row = target ? membershipOf(ctx.ws.id, target.id) : null;
-    if (!target || !row) return json(res, 404, { error: 'That person is not a member of this workspace' });
-    if (target.id === ctx.user.id) return json(res, 409, { error: 'Use “Leave workspace” to remove yourself' });
+    if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    if (target.id === ctx.user.id) return fail(res, 409, 'removeSelfViaLeave', 'Use “Leave workspace” to remove yourself');
     const actorRank = roleRank(ctx.membership.role);
     if (actorRank < ROLE_RANK.owner && roleRank(row.role) >= ROLE_RANK.admin) {
-      return json(res, 403, { error: 'Only an owner can manage admins and owners' });
+      return fail(res, 403, 'ownerManagedRoles', 'Only an owner can manage admins and owners');
     }
 
     if (method === 'DELETE') {
-      if (row.role === 'owner' && ownerCount(ctx.ws.id, target.id) === 0) return json(res, 409, { error: 'Every workspace needs an owner' });
+      if (row.role === 'owner' && ownerCount(ctx.ws.id, target.id) === 0) return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
       transaction(() => {
         db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
         updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
@@ -1454,12 +1453,12 @@ async function handleApi(req, res, url) {
 
     const body = await readJson(req);
     const nextRole = body?.role === undefined ? row.role : String(body.role).toLowerCase();
-    if (!(nextRole in ROLE_RANK)) return json(res, 400, { error: 'Unknown role' });
+    if (!(nextRole in ROLE_RANK)) return fail(res, 400, 'unknownRole', 'Unknown role');
     if (nextRole !== row.role && nextRole === 'owner' && actorRank < ROLE_RANK.owner) {
-      return json(res, 403, { error: 'Only an owner can transfer ownership' });
+      return fail(res, 403, 'ownerTransferOnly', 'Only an owner can transfer ownership');
     }
     if (row.role === 'owner' && nextRole !== 'owner' && ownerCount(ctx.ws.id, target.id) === 0) {
-      return json(res, 409, { error: 'Every workspace needs an owner' });
+      return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
     }
     const team = body?.team === undefined ? undefined : body.team ? String(body.team).slice(0, 40) : null;
     const title = body?.title === undefined ? undefined : String(body.title).slice(0, 60);
@@ -1500,7 +1499,7 @@ async function handleApi(req, res, url) {
   if (wsInviteMatch && method === 'POST') {
     const ctx = requireWorkspace(req, res, wsInviteMatch[1], 'admin');
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
 
     const body = await readJson(req);
     const role = inviteRole(body?.role);
@@ -1517,8 +1516,8 @@ async function handleApi(req, res, url) {
           .filter(Boolean),
       ),
     ];
-    if (emails.length > 20) return json(res, 400, { error: 'Create at most 20 invites at a time' });
-    for (const email of emails) if (!emailOk(email)) return json(res, 400, { error: `Invalid email: ${email}` });
+    if (emails.length > 20) return fail(res, 400, 'inviteBatchLimit', 'Create at most 20 invites at a time');
+    for (const email of emails) if (!emailOk(email)) return fail(res, 400, 'invalidEmail', `Invalid email: ${email}`, { email });
 
     const t = now();
     const expiresAt = t + INVITE_DAYS * 86400 * 1000;
@@ -1531,7 +1530,7 @@ async function handleApi(req, res, url) {
           const account = db.prepare('select * from users where email = ?').get(email);
           if (account && membershipOf(ctx.ws.id, account.id)) {
             db.exec('rollback');
-            return json(res, 409, { error: `${email} is already a member of ${ctx.ws.name}` });
+            return fail(res, 409, 'alreadyMember', `${email} is already a member of ${ctx.ws.name}`, { email, name: ctx.ws.name });
           }
           // One live invite per address: a fresh link replaces the previous one.
           db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(t, ctx.ws.id, email);
@@ -1579,6 +1578,7 @@ async function handleApi(req, res, url) {
             console.error(`invite email to ${row.email} failed: ${err.message}`);
             row.sent = false;
             row.error = 'Email could not be sent. Copy the link instead.';
+            row.code = 'emailSendFailed';
           }
         }
       };
@@ -1597,9 +1597,9 @@ async function handleApi(req, res, url) {
   if (wsInviteIdMatch && method === 'DELETE') {
     const ctx = requireWorkspace(req, res, wsInviteIdMatch[1], 'admin');
     if (!ctx) return;
-    if (!sameOrigin(req)) return json(res, 403, { error: 'Cross-origin request rejected' });
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const row = db.prepare('select token_hash from invites where token_hash = ? and workspace_id = ?').get(wsInviteIdMatch[2], ctx.ws.id);
-    if (!row) return json(res, 404, { error: 'That invite is no longer pending' });
+    if (!row) return fail(res, 404, 'inviteNotPending', 'That invite is no longer pending');
     db.prepare('delete from invites where token_hash = ?').run(row.token_hash);
     return json(res, 200, { revoked: true });
   }
@@ -1607,9 +1607,9 @@ async function handleApi(req, res, url) {
   const inviteMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})$/);
   if (inviteMatch && method === 'GET') {
     const row = db.prepare('select * from invites where token_hash = ?').get(sha256(inviteMatch[1]));
-    if (!row) return json(res, 404, { error: 'This invite link is not valid' });
-    if (row.used_at) return json(res, 410, { error: 'This invite has already been used' });
-    if (row.expires_at <= now()) return json(res, 410, { error: 'This invite has expired' });
+    if (!row) return fail(res, 404, 'inviteInvalid', 'This invite link is not valid');
+    if (row.used_at) return fail(res, 410, 'inviteAlreadyUsed', 'This invite has already been used');
+    if (row.expires_at <= now()) return fail(res, 410, 'inviteExpired', 'This invite has expired');
     const ws = row.workspace_id ? db.prepare('select name, slug from workspaces where id = ?').get(row.workspace_id) : null;
     return json(res, 200, {
       workspace: ws ? { name: ws.name, slug: ws.slug } : null,
@@ -1623,20 +1623,20 @@ async function handleApi(req, res, url) {
   const acceptMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})\/accept$/);
   if (acceptMatch && method === 'POST') {
     if (tooMany(`invite|${clientIp(req)}`, 5, 60 * 60 * 1000)) {
-      return json(res, 429, { error: 'Too many attempts. Try again later.' });
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     }
     const tokenHash = sha256(acceptMatch[1]);
     const invite = db.prepare('select * from invites where token_hash = ?').get(tokenHash);
-    if (!invite) return json(res, 404, { error: 'This invite link is not valid' });
-    if (invite.used_at) return json(res, 410, { error: 'This invite has already been used' });
-    if (invite.expires_at <= now()) return json(res, 410, { error: 'This invite has expired' });
+    if (!invite) return fail(res, 404, 'inviteInvalid', 'This invite link is not valid');
+    if (invite.used_at) return fail(res, 410, 'inviteAlreadyUsed', 'This invite has already been used');
+    if (invite.expires_at <= now()) return fail(res, 410, 'inviteExpired', 'This invite has expired');
 
     const body = await readJson(req);
     const session = currentUser(req);
     const account = invite.email ? db.prepare('select * from users where email = ?').get(invite.email) : null;
     let user = session && (!invite.email || session.email === invite.email) ? session : null;
     if (!user && account) {
-      return json(res, 409, { error: 'An account with this email already exists. Sign in to accept the invite.', needsSignIn: true });
+      return fail(res, 409, 'accountExistsSignIn', 'An account with this email already exists. Sign in to accept the invite.', { needsSignIn: true });
     }
 
     if (!user) {
@@ -1645,11 +1645,11 @@ async function handleApi(req, res, url) {
         .trim()
         .toLowerCase();
       const password = String(body?.password || '');
-      if (!name) return json(res, 400, { error: 'Enter your name' });
-      if (!emailOk(email)) return json(res, 400, { error: 'Enter a valid email address' });
-      if (invite.email && invite.email !== email) return json(res, 400, { error: `This invite is for ${invite.email}` });
+      if (!name) return fail(res, 400, 'nameRequired', 'Enter your name');
+      if (!emailOk(email)) return fail(res, 400, 'enterValidEmail', 'Enter a valid email address');
+      if (invite.email && invite.email !== email) return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`);
       if (password.length < 10 || !/[0-9\W]/.test(password)) {
-        return json(res, 400, { error: 'Use at least 10 characters, including a number or symbol' });
+        return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
       }
       try {
         user = createUser(email, name, password);
@@ -1659,7 +1659,7 @@ async function handleApi(req, res, url) {
     }
 
     const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
-    if (!ws) return json(res, 410, { error: 'This workspace no longer exists' });
+    if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
     if (!membershipOf(ws.id, user.id)) addMembership(ws, user, invite.role);
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {
@@ -1685,7 +1685,7 @@ async function handleApi(req, res, url) {
     });
   }
 
-  return json(res, 404, { error: 'Not found' });
+  return fail(res, 404, 'notFound', 'Not found');
 }
 
 /* ------------------------------- static -------------------------------- */
