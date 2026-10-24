@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 09
-current_phase_name: server-messages-activity-history
-current_plan: 3
-status: review-blocked
-stopped_at: Phase 09 code review gate blocked by 3 critical findings (CR-01..CR-03); 12 open findings total — see 09-REVIEW.md
-last_updated: "2026-10-24T12:25:07.003Z"
+current_phase_name: Server messages & activity history
+current_plan: 2
+status: executing
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-10-24T13:07:29.312Z"
 last_activity: 2026-10-24
-last_activity_desc: Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
-state_head: f9866a1dd8c48d37784e425d0a9ae76bb2f5e7af
+last_activity_desc: Phase 09 execution started
+state_head: c11749cf771773d8cf4b1e0354679ebaf3657f42
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 35
-  completed_plans: 29
-  percent: 0
+  completed_plans: 32
+  percent: 25
 milestone_name: Localization
 ---
 
@@ -299,18 +299,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T11:15:00.000Z
-**Stopped at:** Phase 09 code review gate blocked by 3 critical findings (CR-01..CR-03); 12 open findings total — see 09-REVIEW.md
-**Resume file:** .planning/phases/09-server-messages-activity-history/09-03-SUMMARY.md
+**Last session:** 2026-10-24T13:07:29.068Z
+**Stopped at:** Completed 09-04-PLAN.md
+**Resume file:** None
 
 ## Current Position
 
-Current Plan: 3
+Current Plan: 2
 Total Plans in Phase: 7
 
-Phase: 09 (server-messages-activity-history) — READY TO EXECUTE
-Status: review-blocked
-Last activity: 2026-10-24 — Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
+Phase: 09 (Server messages & activity history) — EXECUTING
+Status: Ready to execute
+Last activity: 2026-10-24 — Phase 09 execution started
 
 ## Operator Next Steps
 
@@ -328,3 +328,4 @@ Last activity: 2026-10-24 — Plan 09-03 executed (machine verbs + structured ex
 | Phase 08 P02 | 15min | 2 tasks | 7 files |
 | Phase 08 P03 | 25min | 2 tasks | 9 files |
 | Phase 09 P03 | ~42 min | 3 tasks | 10 files |
+| Phase 09 P04 | ~20 min | 3 tasks | 4 files |
