@@ -42,3 +42,53 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        run: docker build -t gr8r:ci .
+      - name: Run the container (throwaway, inline non-secret env)
+        run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' gr8r:ci
+      - name: Wait for /api/health, then assert the served French catalogue chunk
+        run: |
+          set -eu
+          ok=''
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ok" ]; then
+            docker logs "$(docker ps -q --filter ancestor=gr8r:ci)" || true
+            exit 1
+          fi
+          node --input-type=module - <<'EOF'
+          const base = 'http://127.0.0.1:8080';
+          const marker = 'Projets'; // fr-only catalogue value (src/locales/fr.json: nav.projects)
+          const page = await (await fetch(base + '/')).text();
+          /* Resolve the fr chunk DYNAMICALLY from what the image serves: collect every
+             JS asset referenced by the served HTML, then one hop into the fetched
+             scripts (the entry bundle's dynamic import map names the locale chunks with
+             relative URLs like ./fr-<hash>.js). The content-hash name is read from the
+             artifact, never hardcoded here. */
+          const jsName = /[A-Za-z0-9_.-]+?\.js/g;
+          const toUrl = (ref, fromDir) => (ref.startsWith('/assets/') ? ref : `${fromDir}${ref.replace(/^\.?\//, '')}`);
+          const resolveAll = (text, dir) =>
+            (text.match(jsName) || []).map(m => toUrl(m, dir));
+          const urls = new Set(resolveAll(page, '/assets/'));
+          for (const u of [...urls]) {
+            const js = await (await fetch(base + u)).text();
+            for (const ref of resolveAll(js, '/assets/')) urls.add(ref);
+          }
+          const frChunk = [...urls].find(u => /\/assets\/fr-[A-Za-z0-9_-]+\.js$/.test(u));
+          if (!frChunk) throw new Error('no fr locale chunk found among served assets: ' + [...urls].join(', '));
+          const chunk = await (await fetch(base + frChunk)).text();
+          /* Served content is data only: fixed-string search, never interpolated. */
+          if (!chunk.includes(marker)) throw new Error(`the served ${frChunk} chunk does not contain the French marker`);
+          console.log('ok: served', frChunk, 'contains the French catalogue marker');
+          EOF
+      - name: Stop the container
+        if: always()
+        run: docker stop "$(docker ps -q --filter ancestor=gr8r:ci)"
