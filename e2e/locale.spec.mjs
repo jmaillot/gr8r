@@ -12,34 +12,18 @@
    tenancy suite.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, PASSWORD, apiClient, clientIp, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, newRunId } from './helpers/setup.mjs';
 
 let run;
 let alice; // workspace owner, account locale 'fr'
 let bob; // member of alice's workspace, account locale 'en'
 let carol; // her own workspace, account locale NULL until she chooses
 
-async function createAccount(tag, name, { locale, workspace } = {}) {
-  const account = { email: `${tag}-${run}@e2e.local`, password: PASSWORD, name, ip: clientIp(run, tag), slug: workspace };
-  const client = apiClient(BASE_URL, { name: tag, ip: account.ip });
-  const signup = await client.post('/api/auth/signup', { name, email: account.email, password: account.password });
-  if (signup.status !== 201) throw new Error(`${tag} signup failed with HTTP ${signup.status}: ${signup.data?.error || ''}`);
-  if (workspace) {
-    const ws = await client.post('/api/workspaces', { name: `Locale ${tag} ${run}`, slug: workspace });
-    if (ws.status !== 201) throw new Error(`${tag} workspace failed with HTTP ${ws.status}: ${ws.data?.error || ''}`);
-  }
-  if (locale) {
-    const patched = await client.patch('/api/auth/me', { locale });
-    if (patched.status !== 200) throw new Error(`${tag} locale failed with HTTP ${patched.status}: ${patched.data?.error || ''}`);
-  }
-  return { account, client };
-}
-
 test.beforeAll(async () => {
   run = newRunId();
-  const a = await createAccount('alice', 'Alice Locale', { locale: 'fr', workspace: `loc-${run}` });
+  const a = await createAccount(BASE_URL, run, 'alice', 'Alice Locale', { locale: 'fr', workspace: `loc-${run}` });
   alice = a.account;
-  const b = await createAccount('bob', 'Bob Locale', { locale: 'en' });
+  const b = await createAccount(BASE_URL, run, 'bob', 'Bob Locale', { locale: 'en' });
   bob = { ...b.account, slug: alice.slug };
   const invite = await a.client.post(`/api/workspaces/${alice.slug}/invites`, { emails: [bob.email], role: 'member' });
   if (invite.status !== 201) throw new Error(`bob invite failed with HTTP ${invite.status}: ${invite.data?.error || ''}`);
@@ -47,7 +31,7 @@ test.beforeAll(async () => {
   const token = url.slice(url.lastIndexOf('/join/') + '/join/'.length);
   const accepted = await b.client.post(`/api/invites/${token}/accept`, {});
   if (![200, 201].includes(accepted.status)) throw new Error(`bob accept failed with HTTP ${accepted.status}`);
-  const c = await createAccount('carol', 'Carol Locale', { workspace: `carol-${run}` });
+  const c = await createAccount(BASE_URL, run, 'carol', 'Carol Locale', { workspace: `carol-${run}` });
   carol = c.account;
 });
 

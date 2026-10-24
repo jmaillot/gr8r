@@ -15,6 +15,12 @@ export default defineConfig({
   reporter: [['list'], ['html', { outputFolder: path.join(ROOT, 'playwright-report'), open: 'never' }]],
   use: {
     baseURL: BASE_URL,
+    /* UAT-09: the suite is pinned to English. This only fixes the browser's
+       negotiated default for accounts whose locale is null (e.g. the tenancy
+       fixtures) — accounts patched to a locale via PATCH /api/auth/me still
+       boot in their own language, because the account locale wins over the
+       negotiated one (LOC-03). */
+    locale: 'en-US',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',

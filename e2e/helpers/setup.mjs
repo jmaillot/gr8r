@@ -84,7 +84,7 @@ function expectStatus(step, res, allowed) {
   throw new Error(`${step} failed with HTTP ${res.status}${detail}`);
 }
 
-function inviteToken(url) {
+export function inviteToken(url) {
   const marker = '/join/';
   const at = String(url || '').lastIndexOf(marker);
   if (at === -1) throw new Error(`invite response has no join link: ${url}`);
@@ -112,6 +112,27 @@ function project({ id, key, name, members, lead, isPrivate }) {
     private: !!isPrivate,
     perms: {},
   };
+}
+
+/*
+ * Locale-aware account creation, promoted from locale.spec.mjs (D-06): signup
+ * through the real API, an optional workspace, and an optional account locale
+ * written via PATCH /api/auth/me — all with explicit status checks — so the
+ * locale is an account property before any browser opens (D-02). Fixtures
+ * only through the real API; each account presents its own run-unique
+ * clientIp(run, tag) so the per-IP throttles never cross accounts or runs.
+ */
+export async function createAccount(base, run, tag, name, { locale, workspace } = {}) {
+  const account = { email: `${tag}-${run}@e2e.local`, password: PASSWORD, name, ip: clientIp(run, tag), slug: workspace };
+  const client = apiClient(base, { name: tag, ip: account.ip });
+  expectStatus(`${tag} signup`, await client.post('/api/auth/signup', { name, email: account.email, password: account.password }), [201]);
+  if (workspace) {
+    expectStatus(`${tag} workspace`, await client.post('/api/workspaces', { name: `Locale ${tag} ${run}`, slug: workspace }), [201]);
+  }
+  if (locale) {
+    expectStatus(`${tag} locale`, await client.patch('/api/auth/me', { locale }), [200]);
+  }
+  return { account, client };
 }
 
 /*
