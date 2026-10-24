@@ -1,6 +1,6 @@
 /* ---------------- MODALS ---------------- */
 import { $$, MOD, ago, esc, fmtDate, foldForSearch } from '../core/utils.js';
-import { t } from '../core/i18n.js';
+import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
 import { D, S, canManageProject, mem, pColor, proj, task, teamsList } from '../core/store.js';
@@ -222,7 +222,7 @@ export function inviteModal(m, H) {
         ? `<div class="field"><span class="label">${t('modal.inviteLinks')}</span>${links
             .map(l => {
               const status = l.sent ? t('modal.sent') : l.error ? t('modal.notSent') : '';
-              return `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="${l.email ? t('modal.inviteLinkFor', { email: esc(l.email) }) : t('modal.inviteLink')}" style="font-size:12px"><span class="faint" style="font-size:11px;white-space:nowrap" title="${esc(l.error || '')}">${status}</span><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">${t('act.copy')}</button></div>`;
+              return `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="${l.email ? t('modal.inviteLinkFor', { email: esc(l.email) }) : t('modal.inviteLink')}" style="font-size:12px"><span class="faint" style="font-size:11px;white-space:nowrap" title="${esc(tErr(l.code, l.params, l.error || ''))}">${status}</span><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">${t('act.copy')}</button></div>`;
             })
             .join(
               '',

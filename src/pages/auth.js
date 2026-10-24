@@ -41,7 +41,7 @@ export function renderAuth() {
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate>
     <div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>${t('page.auth.welcomeBack')}</h1><p class="sub">${t('page.auth.signInTo')} ${esc(D().ws.name)}</p>
-    ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${e.login}</span></div>` : ''}
+    ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.login)}</span></div>` : ''}
     <div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
     <div class="field"><div class="row"><label class="label" for="l-pw">${t('common.password')}</label><span class="sp"></span>${api.enabled ? '' : `<button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">${t('page.auth.forgotPassword')}</button>`}</div>
       <div class="inwrap"><input class="input input-lg ${icls('pw')}" id="l-pw" type="${S.ui.showPw ? 'text' : 'password'}" autocomplete="current-password" style="padding-right:38px" aria-invalid="${!!e.pw}"><button type="button" class="ibtn ibtn-sm" style="position:absolute;right:5px" data-a="toggleShowPw" aria-label="${S.ui.showPw ? t('page.auth.hidePw') : t('page.auth.showPw')}">${ic(S.ui.showPw ? 'eye-off' : 'eye', 15)}</button></div>${ferr('pw')}</div>
