@@ -1882,6 +1882,82 @@ async function handleUpload(req, res, slug) {
   json(res, 200, { id }); // metadata record flows through the existing doc channel
 }
 
+/* ----------------------------- file serving ----------------------------- */
+
+/* D-06: the fixed inline/attachment policy. Only the known-safe renderable
+   types serve inline with their real mime; everything else — scriptable
+   (svg/html), unknown, or binary — serves as `application/octet-stream` (or
+   plain text for txt/md/csv) with `Content-Disposition: attachment`, never
+   the upload's claimed mime. */
+const FILE_INLINE_MIME = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+};
+const FILE_ATTACHMENT_MIME = {
+  txt: 'text/plain; charset=utf-8',
+  md: 'text/plain; charset=utf-8',
+  csv: 'text/plain; charset=utf-8',
+};
+
+/* T-12-08 RFC 6266 sanitizer: strip CR/LF, quotes and control characters from
+   the record's name so the header cannot be split or injected, then emit both
+   the ASCII fallback and the RFC 5987 UTF-8 form. */
+function fileDisposition(name, inline) {
+  const safe = String(name || 'file').replace(/[\r\n"\u0000-\u001f\u007f]/g, '');
+  const ascii = safe.replace(/[^\x20-\x7e]/g, '_') || 'file';
+  return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+}
+
+/* GET/HEAD /w/:slug/file/:id — serve the stored bytes (D-07 published URL).
+   Own header set, NOT securityHeaders() (Pitfall 2): inline types need
+   frame-ancestors 'self' for previews instead of X-Frame-Options DENY. */
+async function serveFileBinary(req, res, slug, id) {
+  /* D-05: viewer minimum; unknown workspace/unauthorized already get 404/403
+     with no oracle. The id must also match a record in the stored doc —
+     auth and existence in one check. */
+  const ctx = requireWorkspace(req, res, slug, 'viewer');
+  if (!ctx) return;
+  let record = null;
+  try {
+    const files = JSON.parse(ctx.ws.doc)?.data?.files;
+    record = Array.isArray(files) ? files.find(f => f?.id === id) : null;
+  } catch {
+    /* fall through to the 404 */
+  }
+  /* T-12-02: the id never builds a path outside FILES_DIR. */
+  const file = path.join(FILES_DIR, id);
+  if (!record || path.dirname(file) !== FILES_DIR) return fail(res, 404, 'fileNotFound', 'File not found');
+  let stat = null;
+  try {
+    stat = fs.statSync(file);
+  } catch {
+    /* missing binary = same 404 as the unknown id */
+  }
+  if (!stat?.isFile()) return fail(res, 404, 'fileNotFound', 'File not found');
+
+  const ext = path.extname(String(record.name || '')).toLowerCase().replace(/^\./, '');
+  const mime = FILE_INLINE_MIME[ext] || FILE_ATTACHMENT_MIME[ext] || 'application/octet-stream';
+  const inline = Boolean(FILE_INLINE_MIME[ext]);
+  const headers = {
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Type': mime,
+    'Content-Length': stat.size,
+    'Content-Disposition': fileDisposition(record.name, inline),
+    'Cache-Control': 'private, max-age=3600',
+  };
+  if (inline) headers['Content-Security-Policy'] = "frame-ancestors 'self'";
+
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') return res.end();
+  const stream = fs.createReadStream(file);
+  stream.on('error', () => res.destroy());
+  stream.pipe(res);
+}
+
 /* ------------------------------- server -------------------------------- */
 const server = http.createServer(async (req, res) => {
   const started = now();
@@ -1897,6 +1973,18 @@ const server = http.createServer(async (req, res) => {
     const uploadMatch = url.pathname.match(/^\/w\/([a-z0-9-]{2,40})\/files$/);
     if (uploadMatch && req.method === 'POST') {
       await handleUpload(req, res, uploadMatch[1]);
+    } else if (/^\/w\/([a-z0-9-]{2,40})\/file\/([A-Za-z0-9_-]+)$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
+      /* The file GET must be intercepted before serveStatic (Pitfall 1): the
+         extensionless /w/:slug/file/:id path would fall into the SPA fallback.
+         D-13: a navigation request (Accept: text/html) bootstraps the SPA so
+         applyDeepLink can open the preview modal; only byte requests reach
+         serveFileBinary. */
+      const fileMatch = url.pathname.match(/^\/w\/([a-z0-9-]{2,40})\/file\/([A-Za-z0-9_-]+)$/);
+      if (/text\/html/.test(req.headers.accept || '')) {
+        serveStatic(req, res, url);
+      } else {
+        await serveFileBinary(req, res, fileMatch[1], fileMatch[2]);
+      }
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {

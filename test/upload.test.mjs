@@ -46,6 +46,109 @@ test('uploadTooLarge 413: oversize upload rejected mid-stream with its stable co
   }
 });
 
+/* Plant a file record through the doc-PUT channel (the same way the client
+   persists upload metadata) and its binary flat under DATA_DIR/files. */
+async function putDoc(admin, mutate) {
+  const cur = await admin.client.get('/api/workspaces/acme');
+  assert.equal(cur.status, 200);
+  const doc = cur.data.doc;
+  mutate(doc);
+  return admin.client.put('/api/workspaces/acme', { revision: cur.data.revision, doc });
+}
+
+async function plantFile(server, admin, id, name, bytes) {
+  fs.writeFileSync(path.join(server.dataDir, 'files', id), bytes);
+  const res = await putDoc(admin, doc => {
+    doc.data = doc.data || {};
+    doc.data.files = Array.isArray(doc.data.files) ? doc.data.files : [];
+    doc.data.files.push({ id, name, size: bytes.length, type: 'img' });
+  });
+  assert.equal(res.status, 200, `doc-PUT planting ${name}: ${JSON.stringify(res.data)}`);
+}
+
+/* Plain fetch carrying a captured cookie — the harness client is JSON-only. */
+function fileFetch(server, cookie, pathname, { accept = '*/*' } = {}) {
+  return fetch(`${server.base}${pathname}`, { headers: { cookie, accept } });
+}
+
+test('file GET serves exact bytes to members; outsiders, unknown ids and unknown workspaces all 404 (UPLOAD-03)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    await plantFile(server, admin, 'f_png1', 'shot.png', bytes);
+
+    /* byte-identical content for an authorized member */
+    const res = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_png1');
+    assert.equal(res.status, 200);
+    assert.deepEqual(Buffer.from(await res.arrayBuffer()), bytes);
+
+    /* an outsider (valid account, no membership) gets 404 with no oracle */
+    const outsider = await signup(server.base, { name: 'Outsider', email: 'outsider@test.local' });
+    assert.equal(outsider.status, 201);
+    const noMembership = await fileFetch(server, outsider.client.cookie(), '/w/acme/file/f_png1');
+    assert.equal(noMembership.status, 404);
+
+    /* unknown id on a real workspace → 404 fileNotFound */
+    const unknownId = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_missing');
+    assert.equal(unknownId.status, 404);
+    assert.equal((await unknownId.json()).code, 'fileNotFound');
+
+    /* unknown workspace slug → 404 (code workspaceNotFound, no record probe) */
+    const unknownWs = await fileFetch(server, admin.client.cookie(), '/w/nope-ws/file/f_png1');
+    assert.equal(unknownWs.status, 404);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-06 header policy: svg serves attachment/octet-stream, png serves inline/image/png (UPLOAD-04)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    await plantFile(server, admin, 'f_svg1', 'drawing.svg', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
+    await plantFile(server, admin, 'f_png2', 'pic.png', Buffer.from('png-bytes'));
+
+    const svg = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_svg1');
+    assert.equal(svg.status, 200);
+    assert.equal(svg.headers.get('content-type'), 'application/octet-stream');
+    assert.ok(svg.headers.get('content-disposition').startsWith('attachment'), 'svg must download, never render');
+    assert.equal(svg.headers.get('x-content-type-options'), 'nosniff');
+
+    const png = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_png2');
+    assert.equal(png.status, 200);
+    assert.equal(png.headers.get('content-type'), 'image/png');
+    assert.ok(png.headers.get('content-disposition').startsWith('inline'));
+    assert.equal(png.headers.get('x-frame-options'), null, 'inline previews must not carry X-Frame-Options: DENY');
+
+    /* T-12-08: a hostile record name cannot split or inject the header */
+    await plantFile(server, admin, 'f_evil', 'bad"\r\ninjected: 1.png', Buffer.from('x'));
+    const evil = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_evil');
+    assert.equal(evil.status, 200);
+    /* T-12-08 strips CR/LF/quotes/control chars from the value (spaces and
+       colons are legal inside the quoted filename) — the header stays one
+       line with the delimiting quotes only, and no injected header exists. */
+    assert.equal(evil.headers.get('content-disposition'), `inline; filename="badinjected: 1.png"; filename*=UTF-8''badinjected%3A%201.png`);
+    assert.equal(evil.headers.get('injected'), null);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-13 deep link: navigating with Accept: text/html bootstraps the SPA instead of the bytes', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    await plantFile(server, admin, 'f_png3', 'nav.png', Buffer.from('nav-bytes'));
+    const res = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_png3', { accept: 'text/html' });
+    assert.equal(res.status, 200);
+    assert.ok((res.headers.get('content-type') || '').includes('text/html'));
+    assert.notEqual(await res.text(), 'nav-bytes');
+  } finally {
+    await server.stop();
+  }
+});
+
 test('uploads are gated: unauthenticated callers get 401 and viewers get 403 readOnlyAccess', async () => {
   const server = await startServer({ env: { MAX_UPLOAD_MB: '25' } });
   try {
