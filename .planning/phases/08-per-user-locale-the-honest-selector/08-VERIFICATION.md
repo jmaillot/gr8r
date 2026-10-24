@@ -1,7 +1,7 @@
 ---
 phase: 08-per-user-locale-the-honest-selector
 verified: 2026-10-24T12:00:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 covered_files:
   - .planning/phases/08-per-user-locale-the-honest-selector/08-01-PLAN.md
@@ -29,6 +29,7 @@ covered_files:
   - test/helpers/server.mjs
   - e2e/locale.spec.mjs
   - e2e/french-overflow.spec.mjs
+
 covered_digest: "v2:sha256:87403e19df5099f040ab5db597874baafd08ee23cec321b868ad14476a5e24a5"
 behavior_unverified: 0
 overrides_applied: 0

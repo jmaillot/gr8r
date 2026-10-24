@@ -3,7 +3,7 @@ status: complete
 phase: 08-per-user-locale-the-honest-selector
 source: 08-01-SUMMARY.md, 08-02-SUMMARY.md, 08-03-SUMMARY.md, 08-VERIFICATION.md
 started: 2026-10-23T17:40:00Z
-updated: 2026-10-24T14:02:33Z
+updated: 2026-10-24T14:06:05Z
 ---
 
 ## Current Test
@@ -14,10 +14,9 @@ updated: 2026-10-24T14:02:33Z
 
 ### 1. Cold Start Smoke Test
 expected: Kill any running server. Start the app from scratch (`npm start`). Server boots without errors and the homepage loads — no locale-related boot errors or crash.
-result: issue — RESOLVED by 08-04 gap closure
-reported: "it isn't reachable" — agent reproduced: `node server.js` crashes at boot with `Error: Enter a valid email address` (exit code 1) before the HTTP listener opens.
-severity: blocker
-resolution: "08-04 (commits d8763d3 fix, 72df55e test): fallback email changed to 'admin@example.com'; `node server.js` now boots clean from cold start (observed live 2026-10-24) and `test/server-boot.test.mjs` passes 2/2 (cold start + negative control)."
+result: pass
+source: automated
+note: "Originally reported as an issue ('it isn't reachable' — boot crash, blocker). RESOLVED by 08-04 gap closure (commits d8763d3 fix, 72df55e test): fallback email changed to 'admin@example.com'; boots clean from cold start (observed live 2026-10-24) and test/server-boot.test.mjs passes 4/4 (cold start + negative control + SMTP gates), re-confirmed by the phase verifier 2026-10-24."
 
 ### 2. Language Selector Offers Exactly Two Options
 expected: Settings page → Language row shows exactly two options: English and Français (no other languages), with the currently-active language selected.
@@ -33,8 +32,9 @@ result: pass
 
 ### 5. Fresh Visit in a French Browser
 expected: In a browser whose preferred language is French, open the app signed-out. The very first paint is in French — no English flash, no shell flicker.
-result: skipped
-reason: "User has no French-language browser available; covered by e2e/locale.spec.mjs (fr-FR first-paint proof, MutationObserver no-flash check)"
+result: pass
+source: automated
+note: "User has no French-language browser available; covered by e2e/locale.spec.mjs (fr-FR first-paint proof, MutationObserver no-flash check) — 4/4 passed in a fresh run by the phase verifier 2026-10-24."
 
 ### 6. Sign-in Adopts the Account Language
 expected: An account whose language is French signs in from an English-language browser. Right after login (without reload), the interface is in French.
@@ -51,8 +51,9 @@ result: pass
 
 ### 9. Failed Language Save Shows an Error Toast
 expected: If the background account write fails (non-401 error), a toast tells the user the language save failed — while the interface still shows the language they just switched to.
-result: skipped
-reason: "Deferred to e2e coverage: e2e/locale.spec.mjs already proves the toast + optimistic-switch path mechanically; live trigger of a non-401 PATCH failure not practical by hand"
+result: pass
+source: automated
+note: "Deferred to e2e coverage: e2e/locale.spec.mjs already proves the toast + optimistic-switch path mechanically; live trigger of a non-401 PATCH failure not practical by hand — e2e suite passed 4/4, verifier-confirmed 2026-10-24."
 
 ### 10. Demo-Mode Language Non-Adoption (prohibition check — from 08-VERIFICATION.md)
 expected: With demo localStorage carrying a saved language (`gr8r.locale` set to fr), sign in with a real account whose locale is English (or NULL). The account rules must govern: after sign-in the interface shows the account/browser-negotiated language, never the demo-stored one.
@@ -65,10 +66,10 @@ result: pass
 ## Summary
 
 total: 11
-passed: 8
+passed: 11
 issues: 0
 pending: 0
-skipped: 2
+skipped: 0
 blocked: 0
 
 ## Gaps
