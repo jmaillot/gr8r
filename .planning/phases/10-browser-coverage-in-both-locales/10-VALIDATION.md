@@ -3,9 +3,9 @@ phase: "10"
 slug: "browser-coverage-in-both-locales"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-24"
 ---
 
@@ -40,13 +40,13 @@ created: "2026-10-24"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 10-01-01 | 01 | 1 | UAT-09 | T-10-01 | N/A | e2e infra + tracer | `npm run build && npm run e2e -- e2e/locale.spec.mjs` | ❌ W0 | ⬜ pending |
-| 10-01-02 | 01 | 1 | UAT-06 (criterion-4) | T-10-02 | N/A | e2e | `npm run build && npm run e2e` | ❌ W0 | ⬜ pending |
-| 10-02-01 | 02 | 2 | UAT-01 | T-10-04 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "onboarding"` | ❌ | ⬜ pending |
-| 10-02-02 | 02 | 2 | UAT-02, UAT-03 | T-10-03 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "invite"` | ❌ | ⬜ pending |
-| 10-02-03 | 02 | 2 | UAT-04 | T-10-04 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "share"` | ❌ | ⬜ pending |
-| 10-03-01 | 03 | 3 | UAT-05, UAT-06 | T-10-06 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "switcher\|removal"` | ❌ | ⬜ pending |
-| 10-03-02 | 03 | 3 | UAT-07, UAT-08 | T-10-05 | billing-free invariant pinned | e2e | `npm run build && npm run e2e` | ❌ | ⬜ pending |
+| 10-01-01 | 01 | 1 | UAT-09 | T-10-01 | N/A | e2e infra + tracer | `npm run build && npm run e2e -- e2e/locale.spec.mjs` | ✅ | ✅ green |
+| 10-01-02 | 01 | 1 | UAT-06 (criterion-4) | T-10-02 | N/A | e2e | `npm run build && npm run e2e` | ✅ | ✅ green |
+| 10-02-01 | 02 | 2 | UAT-01 | T-10-04 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "onboarding"` | ✅ | ✅ green |
+| 10-02-02 | 02 | 2 | UAT-02, UAT-03 | T-10-03 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "invite"` | ✅ | ✅ green |
+| 10-02-03 | 02 | 2 | UAT-04 | T-10-04 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "share"` | ✅ | ✅ green |
+| 10-03-01 | 03 | 3 | UAT-05, UAT-06 | T-10-06 | N/A | e2e | `npm run build && npm run e2e -- e2e/flows.spec.mjs --grep "switcher\|removal"` | ✅ | ✅ green |
+| 10-03-02 | 03 | 3 | UAT-07, UAT-08 | T-10-05 | billing-free invariant pinned | e2e | `npm run build && npm run e2e` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -72,13 +72,25 @@ created: "2026-10-24"
 
 ---
 
+## Validation Audit 2026-10-24
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+Cross-reference evidence: all test files exist (`e2e/locale.spec.mjs`, `e2e/flows.spec.mjs`, `e2e/french-overflow.spec.mjs`, `e2e/tenancy.spec.mjs`, `e2e/helpers/setup.mjs`, `e2e/playwright.config.mjs`). The en-US pin is at `e2e/playwright.config.mjs:23`; `createAccount`/`inviteToken` are exported from `e2e/helpers/setup.mjs` and imported by `locale.spec.mjs`; `flows.spec.mjs` carries 8 describes × en/fr including the UAT-07 billing-free pin. Full suite green: **37 passed, 0 failed, 0 skipped** (10-03-SUMMARY).
+
+---
+
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 120s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 120s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-10-24
