@@ -152,7 +152,7 @@ ALLOW_SIGNUP=false
 SEED_DATA=true
 SESSION_DAYS=30
 SECURE_COOKIE=auto
-TRUST_PROXY=true
+TRUST_PROXY=false
 MAX_BODY_BYTES=8388608
 ```
 
@@ -160,10 +160,13 @@ MAX_BODY_BYTES=8388608
 The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
 restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
 
-`TRUST_PROXY=true` (the default) makes the app read `X-Forwarded-For`, `X-Forwarded-Host` and
-`X-Forwarded-Proto` from the proxy in front of it. The container publishes no port, so keep it
-behind Traefik; direct exposure would let a client spoof its address and escape the per-IP
-throttles. Set it to `false` only when nothing proxies the app and clients connect directly.
+The code default is `TRUST_PROXY=false`: by default the app reads NO `X-Forwarded-*` header,
+so a directly exposed client cannot spoof its address and escape the per-IP throttles. Set
+`TRUST_PROXY=true` only when a proxy that overwrites these headers (e.g. Traefik) sits in
+front of the app. Behind a proxy without the opt-in, the login throttle keys on the proxy's
+address (a shared budget) and the `Secure` cookie flag is no longer detected from the
+request headers. The bundled docker-compose passes `TRUST_PROXY=true` explicitly for the
+Traefik deployment.
 
 `MAX_BODY_BYTES=8388608` (8 MiB, the default) caps the size of a JSON request body — one whole
 workspace document is saved at a time. Raise it only if a workspace legitimately grows past
@@ -681,8 +684,10 @@ traces when it fails (`.github/workflows/ci.yml`).
 - **The entrypoint** starts as root only long enough to make `/data` writable, then drops to
   `PUID:PGID` with `su-exec`. Because the image has no default `USER`, `docker compose exec`
   runs as root; use it for the documented CLI commands, nothing else.
-- **`TRUST_PROXY=true`** trusts `X-Forwarded-*`. Keep the container behind Traefik; it
-  publishes no port. Direct exposure would let clients spoof their IP for throttling.
+- **`TRUST_PROXY`** defaults to `false` in the code and must be opted into explicitly:
+  `true` makes the app trust `X-Forwarded-*`. Keep the container behind Traefik with
+  `TRUST_PROXY=true` (the bundled compose file sets it); direct exposure would let clients
+  spoof their IP for throttling — with the default off, header rotation cannot.
 - **Rate limiting** is in memory and resets when the container restarts.
 - **Uploads are still simulated.** Attachment names and sizes live in the workspace
   document; file contents are not stored. Do not treat them as backed-up files.

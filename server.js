@@ -21,7 +21,7 @@
      SESSION_DAYS=30
      INVITE_DAYS=7          invite link lifetime
      SECURE_COOKIE=auto     auto | true | false
-     TRUST_PROXY=true       read X-Forwarded-* (behind Traefik)
+     TRUST_PROXY=false      opt-in: read X-Forwarded-* (set true behind Traefik)
      MAX_BODY_BYTES=8388608
      SMTP_HOST              optional; enables automatic invite emails
      SMTP_PORT              587 (STARTTLS) or 465 (implicit TLS)
@@ -64,7 +64,7 @@ const SECURE_COOKIE = process.env.SECURE_COOKIE || 'auto';
 const APP_URL = String(process.env.APP_URL || '')
   .trim()
   .replace(/\/+$/, '');
-const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const DEFAULT_WS_ID = 'ws_default';
 const COOKIE = 'gr8r_session';

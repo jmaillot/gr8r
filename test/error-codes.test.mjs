@@ -410,3 +410,54 @@ test('accountExists maps the signup race: createUser wraps its insert in the TOC
   const body = serverSource.slice(serverSource.indexOf('function createUser'), serverSource.indexOf('function createWorkspace'));
   assert.match(body, /try \{[\s\S]*insert into users[\s\S]*\} catch \(err\) \{[\s\S]*accountExists/);
 });
+
+/* ---------- WR-03: the TRUST_PROXY opt-in — header rotation cannot escape the throttle ---------- */
+
+/* The login throttle keys on clientIp(); without the opt-in that is the socket address,
+   so rotating X-Forwarded-For per request changes nothing — the 11th attempt is 429.
+   With the opt-in (the documented behind-proxy posture), each rotated header is a
+   different key and the throttle never trips in 11 attempts. */
+test('without the TRUST_PROXY opt-in, rotating X-Forwarded-For no longer escapes the login throttle (WR-03)', async () => {
+  const server = await startServer({ env: { TRUST_PROXY: 'false' } });
+  try {
+    let last;
+    for (let attempt = 1; attempt <= 11; attempt++) {
+      last = await fetch(`${server.base}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': `10.0.${Math.floor(attempt / 256)}.${attempt % 256}`,
+        },
+        body: JSON.stringify({ email: ADMIN.email, password: 'not-the-password' }),
+      });
+    }
+    assert.equal(last.status, 429);
+    const data = await last.json();
+    assert.equal(data.code, 'tooManyLoginAttempts');
+    assert.equal(data.error, 'Too many attempts. Try again in 15 minutes.');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('with TRUST_PROXY=true the documented behind-proxy behaviour is preserved: rotated X-Forwarded-For does not trip the throttle', async () => {
+  const server = await startServer({ env: { TRUST_PROXY: 'true' } });
+  try {
+    let last;
+    for (let attempt = 1; attempt <= 11; attempt++) {
+      last = await fetch(`${server.base}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': `10.1.${Math.floor(attempt / 256)}.${attempt % 256}`,
+        },
+        body: JSON.stringify({ email: ADMIN.email, password: 'not-the-password' }),
+      });
+      assert.equal(last.status, 401, `attempt ${attempt} must be a plain bad-credential 401, not throttled`);
+    }
+    const data = await last.json();
+    assert.equal(data.code, 'invalidCredentials');
+  } finally {
+    await server.stop();
+  }
+});
