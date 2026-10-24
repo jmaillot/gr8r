@@ -1,9 +1,9 @@
 ---
-status: testing
+status: complete
 phase: 08-per-user-locale-the-honest-selector
 source: 08-01-SUMMARY.md, 08-02-SUMMARY.md, 08-03-SUMMARY.md, 08-VERIFICATION.md
 started: 2026-10-23T17:40:00Z
-updated: 2026-10-24T12:00:00Z
+updated: 2026-10-24T14:02:33Z
 ---
 
 ## Current Test
@@ -56,18 +56,18 @@ reason: "Deferred to e2e coverage: e2e/locale.spec.mjs already proves the toast 
 
 ### 10. Demo-Mode Language Non-Adoption (prohibition check — from 08-VERIFICATION.md)
 expected: With demo localStorage carrying a saved language (`gr8r.locale` set to fr), sign in with a real account whose locale is English (or NULL). The account rules must govern: after sign-in the interface shows the account/browser-negotiated language, never the demo-stored one.
-result: pending
+result: pass
 
 ### 11. No Phantom or Untranslated Language Anywhere (prohibition check — from 08-VERIFICATION.md)
 expected: A visual sweep of all rendered surfaces (settings selector, shell, drawers, modals, palette) shows no disabled language rows, no "coming soon" entries, and no untranslated language names anywhere in the interface.
-result: pending
+result: pass
 
 ## Summary
 
 total: 11
-passed: 6
+passed: 8
 issues: 0
-pending: 2
+pending: 0
 skipped: 2
 blocked: 0
 
