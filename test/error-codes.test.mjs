@@ -28,6 +28,17 @@ test('every error code the server emits has a non-empty err.<code> entry in both
   }
 });
 
+/* ---------- anti-regression: the conversion is complete and pinned ---------- */
+
+test('no inline error payload survived the fail() conversion', () => {
+  assert.ok(!/json\(res,\s*\d+,\s*\{\s*error:/.test(serverSource), 'an inline error payload survived the fail() conversion');
+});
+
+test('the three catch sites transfer err.code and the emailSendFailed row carries its code', () => {
+  assert.equal((serverSource.match(/code: err\.code/g) || []).length, 3, 'the three catch sites must transfer err.code');
+  assert.equal((serverSource.match(/row\.code = 'emailSendFailed'/g) || []).length, 1, 'the emailSendFailed row must carry its code');
+});
+
 /* ---------- the payload shape, proved on a real server ---------- */
 
 test('a failed login keeps the English message byte-for-byte and carries the machine code', async () => {
