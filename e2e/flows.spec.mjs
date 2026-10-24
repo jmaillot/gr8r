@@ -559,7 +559,7 @@ test.describe('billing-free state (UAT-07 reinterpretation)', () => {
         /* The settings page really renders in the account's language
            (the workspace section's catalogue nav is visible), so the
            absence below is not an English-render artifact. */
-        await expect(page.getByRole('button', { name: fmt('settings.nav.workspace', {}, lang) })).toBeVisible();
+        await expect(page.getByRole('button', { name: fmt('settings.nav.workspace', {}, lang), exact: true })).toBeVisible();
 
         /* No element on the settings surface matches the removed
            billing vocabulary. */
@@ -613,19 +613,21 @@ test.describe('project creation', () => {
         await page.locator(`[data-a='go'][data-r='projects']`).first().click();
 
         /* Open the modal from the projects header button. */
-        await page.getByRole('button', { name: d.newButton }).click();
+        await page.locator(`button[data-a='newProject']`, { hasText: d.newButton }).click();
 
         /* Modal header and hint, then the labelled name field. */
         await expect(page.getByRole('heading', { name: d.header, level: 2 })).toBeVisible();
         await expect(page.getByText(d.hint)).toBeVisible();
         await page.getByLabel(d.nameLabel, { exact: true }).fill(projectName);
-        await page.getByRole('button', { name: d.submit }).click();
+        await expect(page.locator(`[data-a='submitProject']`)).toContainText(d.submit);
+        await page.locator(`[data-a='submitProject']`).click();
 
         /* The visible result: the created toast and the project rendered
            in the sidebar's project list (the key derivation ran on the
            mixed-case accented name by construction). */
         await expect(page.getByText(d.toast)).toBeVisible();
-        await expect(page.locator(`[data-a='go'][data-r='project']`, { hasText: projectName })).toBeVisible();
+        /* The sidebar's project entry renders the created name. */
+        await expect(page.getByRole('link', { name: projectName, exact: true })).toBeVisible();
       } finally {
         await context.close();
       }
