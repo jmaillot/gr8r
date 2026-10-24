@@ -1,15 +1,15 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 09
-current_phase_name: Server messages & activity history
-current_plan: 7
-status: verifying
-stopped_at: Completed 09-06-PLAN.md
-last_updated: "2026-10-24T13:22:46.248Z"
+current_phase: 8
+current_phase_name: Per-user locale & the honest selector
+current_plan: Not started
+status: planning
+stopped_at: Phase 09 complete, ready to plan Phase 8
+last_updated: "2026-10-24T13:32:43.236Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 09 execution started
-state_head: 06f98d7437c240fd70500f4f287cf3b46301a215
+last_activity_desc: Phase 09 complete, transitioned to Phase 8
+state_head: 8accad0935613c901be1691f0fc4e60b378765dc
 progress:
   total_phases: 8
   completed_phases: 2
@@ -305,17 +305,17 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-24T13:22:46.149Z
-**Stopped at:** Completed 09-06-PLAN.md
+**Stopped at:** Phase 09 complete, ready to plan Phase 8
 **Resume file:** None
 
 ## Current Position
 
-Current Plan: 7
+Current Plan: Not started
 Total Plans in Phase: 7
 
-Phase: 09 (Server messages & activity history) — EXECUTING
-Status: Phase complete — ready for verification
-Last activity: 2026-10-24 — Phase 09 execution started
+Phase: 8 — Per-user locale & the honest selector
+Status: Ready to plan
+Last activity: 2026-10-24 — Phase 09 complete, transitioned to Phase 8
 
 ## Operator Next Steps
 
