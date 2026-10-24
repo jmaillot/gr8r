@@ -8,6 +8,21 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { ADMIN, client, inviteToken, login, signup, startServer } from './helpers/server.mjs';
 
+/* PREVIEW-01 static guard: the client's upload transport is real XHR —
+   the simulated setInterval timer never returns to the upload path. */
+test('handleFiles uploads real bytes via XMLHttpRequest with upload.onprogress, no simulated timer (PREVIEW-01)', () => {
+  const src = fs.readFileSync(new URL('../src/actions/actions.js', import.meta.url), 'utf8');
+  const at = src.indexOf('export function handleFiles');
+  assert.ok(at > -1, 'handleFiles exists in actions.js');
+  const region = src.slice(at, src.indexOf('IN.uploadFiles', at));
+  assert.ok(region.includes('XMLHttpRequest'), 'the upload transport must be XMLHttpRequest (fetch has no upload progress)');
+  assert.ok(region.includes('upload.onprogress'), 'the XHR upload progress event drives the bar contract');
+  assert.ok(!region.includes('setInterval'), 'the simulated setInterval timer is gone from the upload path');
+  assert.ok(region.includes("getElementById('upbar-'"), 'the upbar-<id> progress contract is preserved');
+  assert.ok(region.includes("getElementById('upct-'"), 'the upct-<id> percentage contract is preserved');
+  assert.ok(region.includes('if (S.ui.offline)'), 'the demo-mode metadata-only early return is preserved (D-12)');
+});
+
 /* The harness client only sends JSON; uploads are raw bodies, so POST them
    with plain fetch carrying the captured gr8r_session cookie. */
 function uploadFetch(server, cookie, body, { slug = 'acme', name = 'hello.txt' } = {}) {

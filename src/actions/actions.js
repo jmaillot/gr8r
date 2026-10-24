@@ -2,7 +2,7 @@
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
-import { t, t as tMsg, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
+import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { PR, PSTAT } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import {
@@ -883,27 +883,40 @@ export function handleFiles(files, ctx) {
   [...files].forEach(file => {
     const up = { id: uid('u'), name: file.name, size: fsize(file.size), project: ctx.project, task: ctx.task, pct: 0 };
     S.ui.uploads.push(up);
-    const iv = setInterval(() => {
-      up.pct = Math.min(100, up.pct + 9 + Math.round(Math.random() * 22));
+    /* D-08: one XHR per file — fetch has no upload progress. Real bytes POST raw to the
+       upload endpoint; the progress contract (--p CSS var + pct text) is preserved. */
+    const failRow = code => {
+      S.ui.uploads = S.ui.uploads.filter(x => x !== up);
+      render();
+      toast(tErr(code, null, t('err.serverUnreachable')), { kind: 'err' });
+    };
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/w/${D().ws.url}/files?name=${encodeURIComponent(file.name)}&project=${ctx.project || ''}&task=${ctx.task || ''}`);
+    xhr.responseType = 'json';
+    xhr.upload.onprogress = e => {
+      if (!e.lengthComputable) return;
+      up.pct = Math.round((e.loaded / e.total) * 100);
       const bar = document.getElementById('upbar-' + up.id),
         pc = document.getElementById('upct-' + up.id);
       if (bar) bar.style.setProperty('--p', up.pct / 100);
       if (pc) pc.textContent = up.pct + '%';
-      if (up.pct >= 100) {
-        clearInterval(iv);
-        S.ui.uploads = S.ui.uploads.filter(x => x !== up);
-        const rec = { id: uid('f'), name: up.name, type: fileType(up.name), size: up.size, by: D().me, at: Date.now() };
-        D().files.unshift({ ...rec, project: up.project, task: up.task || null });
-        if (up.task) {
-          const tk = task(up.task);
-          tk.attachments.push(rec);
-          logAct('addedAFileTo', tk, { kind: 'fileAdded', value: up.name });
-        }
-        save();
-        render();
-        toast(t('toast.uploaded', { name: up.name }));
+    };
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) return failRow(xhr.response?.code || 'serverUnreachable');
+      S.ui.uploads = S.ui.uploads.filter(x => x !== up);
+      const rec = { id: xhr.response.id, name: up.name, type: fileType(up.name), size: up.size, by: D().me, at: Date.now() };
+      D().files.unshift({ ...rec, project: up.project, task: up.task || null });
+      if (up.task) {
+        const tk = task(up.task);
+        tk.attachments.push(rec);
+        logAct('addedAFileTo', tk, { kind: 'fileAdded', value: up.name });
       }
-    }, 220);
+      save();
+      render();
+      toast(t('toast.uploaded', { name: up.name }));
+    };
+    xhr.onerror = () => failRow('serverUnreachable');
+    xhr.send(file);
   });
   render();
 }
