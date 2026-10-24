@@ -1,41 +1,45 @@
 ---
 phase: 09-server-messages-activity-history
 review: 09-REVIEW.md
-status: issues_found
+status: passed
 recorded: 2026-10-24
+recheck: 2026-10-24
 counts:
-  critical: 3
-  warning: 9
-  info: 4
-  total: 16
-open: 16
-resolved: 0
+  critical: 0
+  warning: 0
+  info: 2
+  total: 18
+open: 2
+resolved: 16
+recheck_commit: 15401dc
 ---
 
 # Review Disposition — Phase 09
 
-One row per finding from `09-REVIEW.md` (standard depth, 61 files). Every row defaults to
-`open` — nothing was auto-fixed or dismissed during the phase execution run.
+Updated after the gap-closure wave (09-04..09-07) and the re-review (`15401dc`).
+All 16 findings from the initial review verified resolved in source; 2 new info-level
+findings were introduced by the fix wave and remain open (advisory — non-blocking).
 
 | Finding | Severity | Disposition | Note |
 |---------|----------|-------------|------|
-| CR-01 | critical | open | Thrown `httpError` calls never carry a code; six `err.*` keys dead; French users see raw English on 409/413/signup conflicts |
-| CR-02 | critical | open | Interpolation params never transported; `tErr('alreadyMember', undefined, …)` renders literal `{email}`/`{name}` |
-| CR-03 | critical | open | Legacy English activity prose divulged verbatim instead of suppressed; suppression pin test is `skip`ped |
-| WR-01 | warning | open | `createdProject` verb escapes the Projects filter (legacy rows show, new ones don't) |
-| WR-02 | warning | open | `assignedTo` extra renders literal `{value}` when the member is removed |
-| WR-03 | warning | open | `TRUST_PROXY` defaults true — login throttle/Secure-cookie spoofable on direct exposure |
-| WR-04 | warning | open | Invite URLs host-header poisoned when `APP_URL` unset |
-| WR-05 | warning | open | `readJson` destroys the socket before the 413 response is delivered |
-| WR-06 | warning | open | `createUser` TOCTOU — signup race yields a code-less 500 |
-| WR-07 | warning | open | Login/signup skip `sameOrigin` — login CSRF |
-| WR-08 | warning | open | `MOD` keyboard hint resolved at import time — stale labels after live locale switch |
-| WR-09 | warning | open | Only legacy-suppression pin is a skipped test |
-| IN-01 | info | open | Parity test is one-directional and shape-blind |
-| IN-02 | info | open | `esc` duplicated across modules |
-| IN-03 | info | open | `err.emailSendFailed` rides a bespoke transport |
-| IN-04 | info | open | Client-side `uid()` collision risk |
+| CR-01 | critical | resolved | `13804a9` — codes on all 8 thrown httpError sites |
+| CR-02 | critical | resolved | `4058b34` — whole-payload vars at api.js:62; e2e French no-braces test |
+| CR-03 | critical | resolved | `235523c` — legacy prose suppressed at render; pin un-skipped |
+| WR-01 | warning | resolved | `ff3ae40` — createdProject in projects filter |
+| WR-02 | warning | resolved | `ff3ae40` — `e.value ?? ''` fallback for missing member |
+| WR-03 | warning | resolved | `3278ff5` — TRUST_PROXY strictly opt-in |
+| WR-04 | warning | resolved | `c748af4` — boot gate: SMTP_HOST without APP_URL exits 1 |
+| WR-05 | warning | resolved | `13804a9` — readJson drains then 413 (integration-pinned) |
+| WR-06 | warning | resolved | `13804a9` — UNIQUE → 409 accountExists |
+| WR-07 | warning | resolved | `ec0c945` — sameOrigin on login/signup before body read |
+| WR-08 | warning | resolved | `c88b115` — MOD → lazy modKey() getter, 6 call sites |
+| WR-09 | warning | resolved | `235523c` — suppression pin enabled and green |
+| IN-01 | info | resolved | `695e8c4` — bidirectional parity + payload-shape pins |
+| IN-02 | info | resolved | `2ea5438` — esc re-exports escHtml (one table) |
+| IN-03 | info | resolved | `4058b34` — invite row on whole-payload contract |
+| IN-04 | info | resolved | `2ea5438` — uid() uses crypto.getRandomValues |
+| IN-05 | info | open | New: readJson drains unbounded — cap + destroy after drain |
+| IN-06 | info | open | New: malformed known-kind extra renders literal key — guard with has() |
 
-Suggested fix sequencing (from reviewer): CR-02 changes payload shape — land it together
-with CR-01's throw-site codes, then extend the parity test with reverse extraction and an
-end-to-end params assertion.
+Re-review verdict: **PASS** — 435/435 tests green. IN-05/IN-06 are advisory;
+candidates for a future gap-closure pass or backlog items.
