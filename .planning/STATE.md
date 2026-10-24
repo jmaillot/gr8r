@@ -3,13 +3,13 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 09
 current_phase_name: Server messages & activity history
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Plan 09-02 complete — tErr/has + boundary translation in call()
-last_updated: "2026-10-24T09:12:00.000Z"
+stopped_at: Plan 09-03 complete — machine verbs + structured extras end to end
+last_updated: "2026-10-24T11:15:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: Plan 09-01 executed (fail() helper, err.* catalogue, parity test)
-state_head: 1dfab9bd08e2850bb56275fc2fa6478f33529bdc
+last_activity_desc: Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
+state_head: 79feaca1c48c8156017861d67cc756d3e76205d7
 progress:
   total_phases: 8
   completed_phases: 2
@@ -265,6 +265,8 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 08]: users.locale stores registry code, NULL until chosen; PATCH /api/auth/me is the only writer; legacy prefs.lang stripped at both merge points
 - [Phase 08]: 08-02: primeLocale (silent) vs setLocale (announcing) share activateLocale; boot/lifecycle use the silent variant only
 - [Phase 08]: Language selector: instant setLocale then background account PATCH (demo: localStorage); options derived from the registry; row shows getLocale()
+- [Phase 09]: all activity writers store machine verbs + structured extras (priority tracer slice first)
+- [Phase 09]: actCategory classifier replaces English-parsing filters; D-06 quirks frozen (moved → status; case-sensitive includes(project) so createdProject escapes the projects filter)
 
 ## Verification commands used
 
@@ -297,25 +299,23 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T09:12:00.000Z
-**Stopped at:** Plan 09-02 complete — tErr/has + boundary translation in call()
-**Resume file:** .planning/phases/09-server-messages-activity-history/09-02-SUMMARY.md
+**Last session:** 2026-10-24T11:15:00.000Z
+**Stopped at:** Plan 09-03 complete — machine verbs + structured extras end to end
+**Resume file:** .planning/phases/09-server-messages-activity-history/09-03-SUMMARY.md
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 3
 
 Phase: 09 (Server messages & activity history) — EXECUTING
 Status: Executing Phase 09
-Last activity: 2026-10-24 — Plan 09-02 executed (tErr/has + boundary translation in call())
+Last activity: 2026-10-24 — Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
 
 ## Operator Next Steps
 
-- `/gsd-execute-phase 7` — the remaining plans (07-05…07-07) translate the remaining 742 English
-  keys in batches against `scripts/fr-parity.mjs`, the glossary and the two phase gates
-- Scope agreed for v1.2: a dependency-free i18n layer with a complete French translation, a
-  per-user locale with a migration, and Chromium coverage for the 8 untested UI flows
+- `/gsd-execute-phase 9` — remaining plan progress
+- Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
 
 ## Performance Metrics
 
@@ -327,3 +327,4 @@ Last activity: 2026-10-24 — Plan 09-02 executed (tErr/has + boundary translati
 | Phase 08 P01 | ~20min | 2 tasks | 7 files |
 | Phase 08 P02 | 15min | 2 tasks | 7 files |
 | Phase 08 P03 | 25min | 2 tasks | 9 files |
+| Phase 09 P03 | ~42 min | 3 tasks | 10 files |

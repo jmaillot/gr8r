@@ -344,7 +344,7 @@ image.
   interface, stored vocabulary translated at render
 - [ ] **Phase 8: Per-user locale & the honest selector** — the language on the account, applied
   before the first render, out of the shared document
-- [ ] **Phase 9: Server messages & activity history** — stable error codes, machine activity verbs,
+- [x] **Phase 9: Server messages & activity history** — stable error codes, machine activity verbs,
   both rendered in the interface language
 - [ ] **Phase 10: Browser coverage in both locales** — the eight untested flows proven in Chromium,
   in English and in French
@@ -370,10 +370,10 @@ image.
 | LOC-05 | Phase 8 | Pending |
 | LOC-06 | Phase 8 | Pending |
 | SEARCH-01 | Phase 6 | Complete |
-| ERR-01 | Phase 9 | Pending |
-| ERR-02 | Phase 9 | Pending |
-| ACT-01 | Phase 9 | Pending |
-| ACT-02 | Phase 9 | Pending |
+| ERR-01 | Phase 9 | Complete |
+| ERR-02 | Phase 9 | Complete |
+| ACT-01 | Phase 9 | Complete |
+| ACT-02 | Phase 9 | Complete |
 | UAT-01 | Phase 10 | Pending |
 | UAT-02 | Phase 10 | Pending |
 | UAT-03 | Phase 10 | Pending |
