@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 09
 current_phase_name: Server messages & activity history
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Plan 09-01 complete — server error codes instrumented
-last_updated: "2026-10-24T08:49:20.308Z"
+stopped_at: Plan 09-02 complete — tErr/has + boundary translation in call()
+last_updated: "2026-10-24T09:12:00.000Z"
 last_activity: 2026-10-24
 last_activity_desc: Plan 09-01 executed (fail() helper, err.* catalogue, parity test)
 state_head: 1dfab9bd08e2850bb56275fc2fa6478f33529bdc
@@ -297,18 +297,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T06:57:40.247Z
-**Stopped at:** Phase 9 context gathered
-**Resume file:** .planning/phases/09-server-messages-activity-history/09-CONTEXT.md
+**Last session:** 2026-10-24T09:12:00.000Z
+**Stopped at:** Plan 09-02 complete — tErr/has + boundary translation in call()
+**Resume file:** .planning/phases/09-server-messages-activity-history/09-02-SUMMARY.md
 
 ## Current Position
 
-Current Plan: 1
+Current Plan: 2
 Total Plans in Phase: 3
 
 Phase: 09 (Server messages & activity history) — EXECUTING
 Status: Executing Phase 09
-Last activity: 2026-10-24 — Phase 09 execution started
+Last activity: 2026-10-24 — Plan 09-02 executed (tErr/has + boundary translation in call())
 
 ## Operator Next Steps
 
