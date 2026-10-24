@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-24 after completing Phase 8 (per-user locale & the honest selector)*
+*Last updated: 2026-10-24 after completing Phase 11 (French sweep, build gate & ship hardening)*
 
 ## What it is
 
@@ -145,14 +145,17 @@ French, every user has their own locale — and the full app journey is covered 
   translated end to end, EN and FR the only offered languages — Phases 5–8
 - ✓ The locale is a per-user preference, stored on the account and returned by the server,
   with a migration for existing installs — Phase 8 (LOC-01…LOC-06 verified; UAT 11/11)
+- ✓ The remaining UI flows are covered by Chromium in both locales (onboarding, invite modal,
+  `/join`, share modal, member removal, workspace switcher, plan change) — Phase 10
+  (UAT-01…UAT-09; UAT 11/11)
+- ✓ No route serves an untranslated English string; the build gate blocks new uncatalogued
+  literals and the shipped Docker image proves the French catalogue — Phase 11
+  (UAT-10; UAT 3/3)
 
 ### Active
 
 From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this milestone's scope:
 
-- [ ] The remaining UI flows are covered by Chromium: the onboarding wizard, the invite modal,
-      the `/join` page, the share modal, member removal, the workspace switcher and the plan
-      change.
 - [ ] Harden the membership surface: `sameOrigin` on invite accept, no admin link-only
       invites, no `firstWorkspace()` fallback, no guest-profile spoof.
 - [ ] Write the browser URL on navigation and handle `popstate`; delete the orphaned client

@@ -1,33 +1,33 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 11
-current_phase_name: French sweep, build gate & ship hardening
-current_plan: 1
-status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-10-24T16:00:27.417Z"
+current_phase: 12
+current_phase_name: Real file uploads and previews
+current_plan: Not started
+status: planning
+stopped_at: Phase 11 complete, ready to plan Phase 12
+last_updated: "2026-10-24T16:47:29.825Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 11 execution started
-state_head: e6485ed6dba8ec112e7e5ddeeebbd5efa935b60e
+last_activity_desc: Phase 11 complete, transitioned to Phase 12
+state_head: c28d700eccf601bdfe5d44a78f42eb6c0cc67d46
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 42
-  completed_plans: 38
+  completed_plans: 42
   percent: 25
 milestone_name: Localization
 ---
 
 # STATE
 
-Last updated: 2026-10-22
+Last updated: 2026-10-24
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — phases 5–9 complete, 2 phases to go (10, 11)
+- Milestone: **v1.2 — Localization** — phases 5–11 complete, Phase 12 is the only phase left
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-plan-phase 10`** — Browser coverage in both locales (the eight untested flows proven in Chromium, EN and FR)
+- Next: **`/gsd-plan-phase 12`** — Real file uploads and previews (real uploads under `DATA_DIR`, real progress, PDF/image previews, a working copy-link destination)
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
@@ -78,11 +78,11 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 |-------|------|--------------|
 | 5 ✅ | i18n foundation & catalogue contract | I18N-06, I18N-08 — complete |
 | 6 ✅ | English extraction & locale-aware formats | I18N-01, I18N-03, I18N-04, SEARCH-01 — complete |
-| 7 | French catalogue & French typography | I18N-02, I18N-05, I18N-07 |
-| 8 | Per-user locale & the honest selector | LOC-01 … LOC-06 |
-| 9 | Server messages & activity history | ERR-01, ERR-02, ACT-01, ACT-02 |
-| 10 | Browser coverage in both locales | UAT-01 … UAT-09 |
-| 11 | French sweep, build gate & ship hardening | UAT-10 |
+| 7 ✅ | French catalogue & French typography | I18N-02, I18N-05, I18N-07 — complete |
+| 8 ✅ | Per-user locale & the honest selector | LOC-01 … LOC-06 — complete |
+| 9 ✅ | Server messages & activity history | ERR-01, ERR-02, ACT-01, ACT-02 — complete |
+| 10 ✅ | Browser coverage in both locales | UAT-01 … UAT-09 — complete |
+| 11 ✅ | French sweep, build gate & ship hardening | UAT-10 — complete |
 
 **Coverage:** 29/29 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
 phase without a requirement. 6/29 complete (phases 5 and 6).
@@ -274,6 +274,7 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 09]: SMTP_HOST without APP_URL exits 1 at boot (WR-04 boot gate in main(), before listen) — invite links are built only from APP_URL, never from the request Host header
 - [Phase 09]: Login and signup carry the standard sameOrigin 403 crossOriginRejected guard, placed before the body read AND before the throttle so a cross-origin POST cannot consume the victim IP's budget (WR-07)
 - [Phase 10]: TRUST_PROXY=true in e2e/server.mjs so run-unique X-Forwarded-For dodges the per-IP signup throttle (Rule 3, plan 10-01)
+- [Phase 11]: the 21-route sweep pairs a coverage assertion beside the leak scan — an empty page cannot pass; the allow-list stays `[]` and the scanner exits 0 pinned by test; docker-build CI asserts the served fr-*.js chunk contains 'Projets'
 
 ## Verification commands used
 
@@ -306,22 +307,22 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T15:43:36.226Z
-**Stopped at:** Phase 11 context gathered
-**Resume file:** .planning/phases/11-french-sweep-build-gate-ship-hardening/11-CONTEXT.md
+**Last session:** 2026-10-24T19:30:00Z
+**Stopped at:** Phase 11 complete (UAT 3/3, verification passed), ready to plan Phase 12
+**Resume file:** None
 
 ## Current Position
 
-Current Plan: 1
+Current Plan: Not started
 Total Plans in Phase: 4
 
-Phase: 11 (French sweep, build gate & ship hardening) — EXECUTING
-Status: Executing Phase 11
-Last activity: 2026-10-24 — Phase 11 execution started
+Phase: 12 — Real file uploads and previews
+Status: Ready to plan
+Last activity: 2026-10-24 — Phase 11 complete, transitioned to Phase 12
 
 ## Operator Next Steps
 
-- `/gsd-plan-phase 10` — Browser coverage in both locales (next phase; phase 8 fully closed: UAT 11/11, verification passed, security threats_open 0)
+- `/gsd-plan-phase 12` — Real file uploads and previews (next phase; phase 11 fully closed: UAT 3/3, verification passed 8/8)
 - Open warnings from 08-REVIEW.md (0 critical / 4 warning / 3 info): WR-01 double-fire on language select (duplicate PATCH), WR-02 locale set before catalogue load, WR-03 server LOCALE_CODES hand-duplicates the client registry, WR-04 dead catalogue keys for cleared repeat/estimate qualifiers — see 08-REVIEW-DISPOSITION.md; `/gsd-code-review 8 --fix` to auto-fix
 - Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
 - Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
