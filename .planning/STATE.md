@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 09
-current_phase_name: Server messages & activity history
+current_phase_name: server-messages-activity-history
 current_plan: 3
 status: review-blocked
 stopped_at: Phase 09 code review gate blocked by 3 critical findings (CR-01..CR-03); 12 open findings total — see 09-REVIEW.md
-last_updated: "2026-10-24T10:06:14.355Z"
+last_updated: "2026-10-24T12:25:07.003Z"
 last_activity: 2026-10-24
 last_activity_desc: Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
-state_head: 584f2f0a1092c70187a794a3958c75f5e523d211
+state_head: f9866a1dd8c48d37784e425d0a9ae76bb2f5e7af
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 31
+  total_plans: 35
   completed_plans: 29
-  percent: 25
+  percent: 0
 milestone_name: Localization
 ---
 
@@ -306,9 +306,9 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Current Position
 
 Current Plan: 3
-Total Plans in Phase: 3
+Total Plans in Phase: 7
 
-Phase: 09 (Server messages & activity history) — EXECUTING
+Phase: 09 (server-messages-activity-history) — READY TO EXECUTE
 Status: review-blocked
 Last activity: 2026-10-24 — Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
 
