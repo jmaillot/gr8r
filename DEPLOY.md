@@ -178,6 +178,12 @@ requests the same hostname users should see: the app then uses the request host 
 `X-Forwarded-Host`/`X-Forwarded-Proto`). Set it explicitly when a proxy, tunnel or alternate
 domain makes the request host differ from the public address.
 
+`APP_URL` becomes **mandatory** as soon as `SMTP_HOST` is configured: invitation emails
+contain absolute `/join/<token>` links, and without `APP_URL` those links would be built
+from the request's Host header — a hostile Host header would email invites pointing at the
+attacker's domain. The server refuses to start in that configuration (exit 1, a message
+naming both variables); set `APP_URL` or unset `SMTP_HOST`.
+
 `SEED_DATA=false` creates a workspace with no sample projects, tasks, comments or activity —
 just your admin account (the default team categories are created on first use). It only
 applies when the database is first created; on an existing install:

@@ -1916,6 +1916,15 @@ function main() {
   db.prepare('delete from sessions where expires_at <= ?').run(now());
   setInterval(() => db.prepare('delete from sessions where expires_at <= ?').run(now()), 3600_000).unref();
 
+  /* Invite links are absolute URLs built from APP_URL; without it appBase() falls back
+     to the request's Host header, so a hostile Host would email invitation links pointing
+     at the attacker's domain. Fail loudly at boot instead of at the first invite. */
+  if (MAILER.enabled && !APP_URL) {
+    console.error('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
+    console.error('Invitation links are built from APP_URL; without it a request host header could point invite emails at an attacker\'s domain. Set APP_URL (e.g. https://gr8r.example.com) or unset SMTP_HOST to disable email invitations.');
+    process.exit(1);
+  }
+
   server.listen(PORT, HOST, () => {
     console.log(`gr8r studio listening on http://${HOST}:${PORT}`);
     console.log(`database: ${DB_PATH}`);
