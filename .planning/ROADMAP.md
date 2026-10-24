@@ -308,7 +308,7 @@ Success criteria (what must be TRUE):
 
 Deliverable: the eight unproven flows are proven by a real browser, in English and in French.
 
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 10-01-PLAN.md — English pin (UAT-09), helper promotion (D-06), criterion-4 extension (UAT-06 exercised)
@@ -353,7 +353,7 @@ image.
   before the first render, out of the shared document
 - [x] **Phase 9: Server messages & activity history** — stable error codes, machine activity verbs,
   both rendered in the interface language
-- [ ] **Phase 10: Browser coverage in both locales** — the eight untested flows proven in Chromium,
+- [x] **Phase 10: Browser coverage in both locales** — the eight untested flows proven in Chromium, (completed 2026-10-24)
   in English and in French
 - [ ] **Phase 11: French sweep, build gate & ship hardening** — the no-English-leak proof over the
   21 routes, the build gate, and the shipped artifact
