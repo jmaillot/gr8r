@@ -1,21 +1,21 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 9
+current_phase: 09
 current_phase_name: Server messages & activity history
-current_plan: 3
+current_plan: 1
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-10-24T07:25:45.704Z"
-last_activity: 2026-10-23
-last_activity_desc: Phase 08 marked complete
-state_head: 4f3bf554171872efdc72109757322ecb88debf20
+stopped_at: Plan 09-01 complete — server error codes instrumented
+last_updated: "2026-10-24T08:49:20.308Z"
+last_activity: 2026-10-24
+last_activity_desc: Plan 09-01 executed (fail() helper, err.* catalogue, parity test)
+state_head: 1dfab9bd08e2850bb56275fc2fa6478f33529bdc
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 31
-  completed_plans: 28
-  percent: 0
+  completed_plans: 29
+  percent: 25
 milestone_name: Localization
 ---
 
@@ -303,12 +303,12 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Current Position
 
-Current Plan: 3
+Current Plan: 1
 Total Plans in Phase: 3
 
-Phase: 9 (Server messages & activity history) — READY TO EXECUTE
-Status: Ready to execute
-Last activity: 2026-10-23 — Phase 08 marked complete
+Phase: 09 (Server messages & activity history) — EXECUTING
+Status: Executing Phase 09
+Last activity: 2026-10-24 — Phase 09 execution started
 
 ## Operator Next Steps
 
