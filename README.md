@@ -139,6 +139,12 @@ and saved views out of every response, and refuses writes that try to touch a pr
 caller cannot see. Owners and admins can always manage a project; its lead manages the access
 list and the private switch.
 
+**File uploads are real.** On a self-hosted instance, files attached to tasks are stored as
+real binaries under `DATA_DIR/files/` (each capped by the `MAX_UPLOAD_MB` knob, 25 MB by
+default), with image and PDF previews in the browser and workspace-scoped `/w/:slug/file/:id`
+links. The browser-only demo stores file records without their binary content — no server
+means nothing to upload to.
+
 The browser-only demo (Vite dev without the server, and the static Vercel build) has exactly
 one local workspace backed by `localStorage`: there is no workspace switcher and no workspace
 creation, so nothing implies server-backed multi-tenancy. It applies the same private-project

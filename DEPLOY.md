@@ -154,6 +154,7 @@ SESSION_DAYS=30
 SECURE_COOKIE=auto
 TRUST_PROXY=false
 MAX_BODY_BYTES=8388608
+MAX_UPLOAD_MB=25
 ```
 
 `PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
@@ -171,6 +172,12 @@ Traefik deployment.
 `MAX_BODY_BYTES=8388608` (8 MiB, the default) caps the size of a JSON request body — one whole
 workspace document is saved at a time. Raise it only if a workspace legitimately grows past
 that; a lower value is a cheap guard against oversized writes.
+
+`MAX_UPLOAD_MB=25` caps each uploaded file in **megabytes** — it applies to the raw-body
+`POST /w/:slug/files` uploads only and is **independent of `MAX_BODY_BYTES`** (which sizes
+JSON writes, not uploads). Raise it if users legitimately attach larger files; a lower
+value is a cheap guard against oversized binaries. Uploaded file contents live under
+`DATA_DIR/files/` (see § Backups).
 
 `APP_URL` is the absolute URL the app prints in share and invite links and shows in the
 workspace URL fields, e.g. `https://gr8r.example.com`. Leave it empty when the browser
@@ -482,6 +489,11 @@ docker compose exec -e USER_PASSWORD='the new password' \
 
 A Docker volume is **not** a backup. `docker compose down -v`, a disk failure or a bad
 release takes it with it.
+
+The `--backup` command covers the SQLite **database only**. Uploaded file binaries live
+under `DATA_DIR/files/` — include that directory in your backup set too (it is inside the
+same `/data` volume, so a full-volume copy covers both; the `docker cp`-based script above
+does **not**).
 
 Create `/opt/gr8r/backup.sh`:
 
