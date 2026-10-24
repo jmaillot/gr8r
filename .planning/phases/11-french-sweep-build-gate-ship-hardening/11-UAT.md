@@ -22,7 +22,7 @@ result: pass
 
 ### 3. docker-build CI job green
 expected: On the next push, open the GitHub Actions run: docker build → throwaway run → /api/health wait → served fr-*.js chunk contains 'Projets' → docker stop. Job green, no push, no registry credentials.
-result: [pending]
+result: pass
 
 ## Summary
 
