@@ -377,7 +377,7 @@ test('task 2: the SHORTCUTS table holds catalogue keys and its kbd arrays are by
   const src = read('src/overlays/modals.js');
   assert.ok(src.includes("'modal.sc.general'"), 'the General group key moved');
   assert.ok(src.includes("['nav.goHome', ['G', 'H']]"), 'the Go-to-Home kbd array moved');
-  assert.ok(src.includes("[MOD, 'Shift', 'L']"), 'the dark-mode kbd array moved');
+  assert.ok(src.includes("['MOD', 'Shift', 'L']"), 'the dark-mode kbd array moved');
   assert.ok(src.includes("['modal.sc.searchMode', ['Tab']]"), 'the search-mode kbd array moved');
   // the settings renderer reads the catalogue
   assert.ok(read('src/pages/settings.js').includes('${t(g)}') && read('src/pages/settings.js').includes('${t(n)}'), 'the settings shortcuts render moved');

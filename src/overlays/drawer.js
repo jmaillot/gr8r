@@ -1,7 +1,7 @@
 /* =====================================================================
    OVERLAYS: drawer, modals, popovers, context menus, command palette
    ===================================================================== */
-import { MOD, TODAY, ago, diffD, esc, fmtDate, parse, relDate } from '../core/utils.js';
+import { TODAY, ago, diffD, esc, fmtDate, modKey, parse, relDate } from '../core/utils.js';
 /* drawerHtml's task parameter is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
@@ -121,7 +121,7 @@ export function drawerHtml(t) {
           ${cs.length ? cs.map(commentHtml).join('') : `<p class="faint" style="font-size:13px;margin:10px 0">${tMsg('page.drawer.noComments')}</p>`}
           <div class="row" style="align-items:flex-start;gap:10px;margin-top:8px">${av(D().me, 'md', false)}<div class="grow" style="position:relative">
             <div class="cbox"><textarea id="d-cmt" data-in="draft" data-id="${t.id}" data-key-mod-enter="postComment" placeholder="${tMsg('a11y.commentPlaceholder')}" aria-label="${tMsg('act.comment')}" rows="2" data-autosize>${esc(u.drafts[t.id] || '')}</textarea>
-            <div class="row"><button class="ibtn ibtn-xs" data-a="insertAt" data-id="${t.id}" data-tip="${tMsg('a11y.mentionSomeone')}" aria-label="${tMsg('a11y.mention')}">${ic('at-sign', 14)}</button><label class="ibtn ibtn-xs" data-tip="${tMsg('a11y.attachFile')}" style="cursor:pointer">${ic('paperclip', 14)}<input type="file" multiple hidden data-in="uploadFiles" data-task="${t.id}" data-project="${t.project}"></label><span class="sp"></span><span class="faint hide-m" style="font-size:11px">${MOD}${tMsg('common.plusEnter')}</span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${t.id}">${tMsg('act.comment')}</button></div></div>
+            <div class="row"><button class="ibtn ibtn-xs" data-a="insertAt" data-id="${t.id}" data-tip="${tMsg('a11y.mentionSomeone')}" aria-label="${tMsg('a11y.mention')}">${ic('at-sign', 14)}</button><label class="ibtn ibtn-xs" data-tip="${tMsg('a11y.attachFile')}" style="cursor:pointer">${ic('paperclip', 14)}<input type="file" multiple hidden data-in="uploadFiles" data-task="${t.id}" data-project="${t.project}"></label><span class="sp"></span><span class="faint hide-m" style="font-size:11px">${modKey()}${tMsg('common.plusEnter')}</span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${t.id}">${tMsg('act.comment')}</button></div></div>
             ${ment.length ? `<div class="pop" style="position:absolute;top:auto;bottom:calc(100% + 4px);left:0">${ment.map(m => `<button class="mi" data-a="pickMention" data-id="${t.id}" data-name="${esc(m.name)}">${av(m.id, 'sm', false)}${esc(m.name)}<span class="r">${esc(m.title)}</span></button>`).join('')}</div>` : ''}
           </div></div>`
             : `

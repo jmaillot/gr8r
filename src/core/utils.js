@@ -32,10 +32,11 @@ export function foldForSearch(s) {
 export const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 8);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-/* The keyboard hint's modifier label: the Ctrl half is interface text and reads the
-   catalogue; the ⌘ symbol is a SYMBOL, not text, and stays a literal. Resolved at module
-   load — phase 8's live locale switch re-evaluates the hint on re-render. */
-export const MOD = isMac ? '⌘' : t('common.ctrl');
+/* The keyboard hint's modifier label, a lazy getter: the Ctrl half is interface text and
+   reads the catalogue AT CALL TIME, so phase 8's live locale switch re-evaluates the hint on
+   every render; the ⌘ symbol is a SYMBOL, not text, and stays a literal. (The old export was
+   a module-load constant whose comment falsely claimed it re-evaluated on re-render.) */
+export const modKey = () => (isMac ? '⌘' : t('common.ctrl'));
 
 /* ---------- dates ---------- */
 export const DAY = 864e5;

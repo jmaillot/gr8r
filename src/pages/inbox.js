@@ -1,5 +1,5 @@
 /* ---------- INBOX ---------- */
-import { MOD, ago, esc } from '../core/utils.js';
+import { ago, esc, modKey } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, commentsOf, mem, pColor, proj, task } from '../core/store.js';
 import { t } from '../core/i18n.js';
@@ -91,6 +91,6 @@ export function inboxPreview(n) {
       <div class="eyebrow" style="margin-bottom:4px">${t('page.inbox.conversation')}</div>
       ${cs.length ? cs.map(commentHtml).join('') : `<p class="muted">${esc(n.snippet)}</p>`}
       <div class="cbox" style="margin-top:10px"><textarea id="inbox-reply" data-in="draft" data-id="${tk.id}" data-key-mod-enter="postComment" placeholder="${t('page.inbox.replyPlaceholder')}" aria-label="${t('page.inbox.reply')}">${esc(S.ui.drafts[tk.id] || '')}</textarea>
-      <div class="row"><span class="faint" style="font-size:11.5px">${t('page.inbox.sendHint', { mod: MOD })}</span><span class="sp"></span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${tk.id}">${t('page.inbox.reply')}</button></div></div>
+      <div class="row"><span class="faint" style="font-size:11.5px">${t('page.inbox.sendHint', { mod: modKey() })}</span><span class="sp"></span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${tk.id}">${t('page.inbox.reply')}</button></div></div>
     </div>`;
 }

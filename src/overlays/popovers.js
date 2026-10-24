@@ -1,5 +1,5 @@
 /* ---------------- POPOVERS ---------------- */
-import { $, MOD, TODAY, addD, dOff, diffD, esc, fmtDate, foldForSearch, iso, parse } from '../core/utils.js';
+import { $, TODAY, addD, dOff, diffD, esc, fmtDate, foldForSearch, iso, modKey, parse } from '../core/utils.js';
 /* popHtml's task variable is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg, monthName, weekdayName, fmtEstimate } from '../core/i18n.js';
 import { ic, wsLogo } from '../core/icons.js';
@@ -283,7 +283,7 @@ export function popHtml(p) {
       style = 'width:260px';
       break;
     case 'help':
-      inner = `<div class="mh">${tMsg('popover.helpAndResources')}</div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}${tMsg('palette.keyboardShortcuts')}<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="openPalette">${ic('command', 15)}${tMsg('palette.commandMenu')}<span class="r"><kbd>${MOD}K</kbd></span></button><button class="mi" data-a="go" data-r="system">${ic('component', 15)}${tMsg('popover.designSystem')}</button><button class="mi" data-a="go" data-r="states">${ic('layers', 15)}${tMsg('popover.systemStates')}</button>
+      inner = `<div class="mh">${tMsg('popover.helpAndResources')}</div><button class="mi" data-a="shortcuts">${ic('keyboard', 15)}${tMsg('palette.keyboardShortcuts')}<span class="r"><kbd>?</kbd></span></button><button class="mi" data-a="openPalette">${ic('command', 15)}${tMsg('palette.commandMenu')}<span class="r"><kbd>${modKey()}K</kbd></span></button><button class="mi" data-a="go" data-r="system">${ic('component', 15)}${tMsg('popover.designSystem')}</button><button class="mi" data-a="go" data-r="states">${ic('layers', 15)}${tMsg('popover.systemStates')}</button>
       ${api.enabled ? '' : `<div class="msep"></div><div class="mh">${tMsg('popover.prototype')}</div><button class="mi" data-a="startOnboarding">${ic('sparkles', 15)}${tMsg('popover.replayOnboarding')}</button><button class="mi" data-a="toggleOffline">${ic(S.ui.offline ? 'wifi' : 'wifi-off', 15)}${S.ui.offline ? tMsg('popover.goBackOnline') : tMsg('popover.simulateOffline')}</button><button class="mi" data-a="go" data-r="nowhere">${ic('file-question', 15)}${tMsg('popover.openBrokenLink')}</button><button class="mi" data-a="resetDemo">${ic('rotate-ccw', 15)}${tMsg('popover.resetDemoData')}</button>`}`;
       style = 'width:260px';
       break;

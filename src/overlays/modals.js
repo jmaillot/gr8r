@@ -1,5 +1,5 @@
 /* ---------------- MODALS ---------------- */
-import { $$, MOD, ago, esc, fmtDate, foldForSearch } from '../core/utils.js';
+import { $$, ago, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
 import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
@@ -93,7 +93,7 @@ export function taskModal(m, H) {
       <label class="dropzone" style="padding:10px">${ic('paperclip', 14)}<span>${t('modal.attachFiles')}</span><input type="file" multiple hidden data-in="formFiles"></label></div>
   </form>
   <div class="modal-f">${m.edit ? '' : `<label class="row" style="gap:8px;font-size:12.5px;color:var(--text-2);cursor:pointer"><input type="checkbox" class="toggle" id="f-more" data-in="formMore" ${f.more ? 'checked' : ''}>${t('act.createMore')}</label>`}<span class="sp"></span>
-    <span class="faint hide-m" style="font-size:11.5px"><kbd>${MOD}</kbd> <kbd>↵</kbd></span>
+    <span class="faint hide-m" style="font-size:11.5px"><kbd>${modKey()}</kbd> <kbd>↵</kbd></span>
     <button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitTask" id="f-submit">${m.edit ? t('act.saveChanges') : t('palette.createTask')}</button></div>`;
 }
 /* The project templates. The id is the stable stored value; the name, the
@@ -243,16 +243,18 @@ export function confirmModal(m) {
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal" ${needs ? '' : 'autofocus'}>${t('common.cancel')}</button><button class="btn ${m.danger ? 'btn-danger' : 'btn-primary'}" data-a="confirmOk" ${ok ? '' : 'disabled'}>${esc(m.ok)}</button></div>`;
 }
 /* The shortcut names and their group headings are catalogue keys; the kbd
-   arrays are machine key sequences and stay exactly as they are. */
+   arrays are machine key sequences and stay exactly as they are. The 'MOD'
+   entries are the modifier sentinel: the renderer substitutes modKey() at
+   render time, so the table itself stays a static module-level constant. */
 export const SHORTCUTS = [
   [
     'modal.sc.general',
     [
-      ['palette.commandMenu', [MOD, 'K']],
+      ['palette.commandMenu', ['MOD', 'K']],
       ['palette.scope.search', ['/']],
       ['palette.keyboardShortcuts', ['?']],
       ['palette.toggleSidebar', ['[']],
-      ['act.toggleDarkMode', [MOD, 'Shift', 'L']],
+      ['act.toggleDarkMode', ['MOD', 'Shift', 'L']],
       ['modal.sc.closePanel', ['Esc']],
     ],
   ],
@@ -261,8 +263,8 @@ export const SHORTCUTS = [
     [
       ['act.newTask', ['N']],
       ['act.newProject', ['P']],
-      ['modal.sc.submitForm', [MOD, '↵']],
-      ['modal.sc.sendComment', [MOD, '↵']],
+      ['modal.sc.submitForm', ['MOD', '↵']],
+      ['modal.sc.sendComment', ['MOD', '↵']],
     ],
   ],
   [
@@ -286,7 +288,7 @@ export const SHORTCUTS = [
   ],
 ];
 export function shortcutsModal(H) {
-  return `${H(t('palette.keyboardShortcuts'))}<div class="modal-b" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">${SHORTCUTS.map(([g, list]) => `<div><div class="eyebrow" style="margin-bottom:6px">${t(g)}</div>${list.map(([n, k]) => `<div class="row" style="height:30px;font-size:13px;border-bottom:1px solid var(--divider)"><span class="grow">${t(n)}</span>${k.map((x, i) => `${i && k[0] === 'G' ? '<span class="faint" style="font-size:11px">then</span>' : ''}<kbd>${x}</kbd>`).join('')}</div>`).join('')}</div>`).join('')}</div>`;
+  return `${H(t('palette.keyboardShortcuts'))}<div class="modal-b" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">${SHORTCUTS.map(([g, list]) => `<div><div class="eyebrow" style="margin-bottom:6px">${t(g)}</div>${list.map(([n, k]) => `<div class="row" style="height:30px;font-size:13px;border-bottom:1px solid var(--divider)"><span class="grow">${t(n)}</span>${k.map((x, i) => `${i && k[0] === 'G' ? '<span class="faint" style="font-size:11px">then</span>' : ''}<kbd>${x === 'MOD' ? modKey() : x}</kbd>`).join('')}</div>`).join('')}</div>`).join('')}</div>`;
 }
 export function filePreviewModal(m, H) {
   const f = m.file;

@@ -18,6 +18,15 @@ const ROOT = path.join(import.meta.dirname, '..');
 const THEME_SOURCE = path.join(ROOT, 'src', 'core', 'theme.js');
 const I18N_SOURCE = path.join(ROOT, 'src', 'core', 'i18n.js');
 const MAIN_SOURCE = path.join(ROOT, 'src', 'main.js');
+const UTILS_SOURCE = path.join(ROOT, 'src', 'core', 'utils.js');
+const CONSUMERS = [
+  'src/overlays/drawer.js',
+  'src/overlays/palette.js',
+  'src/pages/inbox.js',
+  'src/overlays/popovers.js',
+  'src/overlays/modals.js',
+  'src/shell/layout.js',
+];
 
 /* The French assertions run inside the French locale and leave the module in
    the base one — the same discipline as test/i18n-prefs.test.mjs. */
@@ -113,4 +122,42 @@ test('main.js re-renders the app on gr8r:locale, one listener and one re-render'
   assert.match(src, /addEventListener\(\s*['"]gr8r:locale['"]/, 'the boot registers a gr8r:locale listener');
   assert.match(src, /gr8r:locale['"],\s*\(\)\s*=>\s*render\(\)/, 'the listener delegates to the boot render entry point');
   assert.equal((src.match(/gr8r:locale/g) || []).length, 1, 'exactly one listener, no other call site');
+});
+
+/* ---------- the keyboard-hint modifier is a lazy getter (WR-08, LOC-01) ---------- */
+
+test('utils.js exports modKey as a function and the module-load constant is gone (WR-08)', () => {
+  const src = fs.readFileSync(UTILS_SOURCE, 'utf8');
+  assert.doesNotMatch(src, /export const MOD\b/, 'the old module-load constant no longer exists');
+  assert.match(src, /export const modKey\s*=\s*\(\)\s*=>/, 'modKey is an arrow function, evaluated at call time');
+  /* Every consumer imports the getter and calls it — the stale import of the old
+     symbol would fail the build on a missing export. */
+  for (const file of CONSUMERS) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(src, /\bmodKey\(\)/, `${file} calls modKey() at render`);
+    assert.doesNotMatch(src, /\bimport\s*\{[^}]*\bMOD\b[^}]*\}\s*from/, `${file} no longer imports the old constant`);
+  }
+});
+
+test('modKey() follows the active locale — it reads the catalogue at call time (LOC-01)', async ctx => {
+  /* utils.js runs document.querySelectorAll at import; a stub keeps bare Node happy. */
+  globalThis.document = { querySelectorAll: () => [] };
+  const { modKey } = await import('../src/core/utils.js');
+  ctx.after(() => {
+    delete globalThis.document;
+  });
+  /* In the base locale the getter answers the same value t() does, right now. */
+  assert.equal(modKey(), t('common.ctrl'), 'the getter and the catalogue agree at call time');
+  /* A doctored French catalogue makes the mechanism visible: the EN/FR values of
+     common.ctrl coincide today, so the proof of EVALUATION-AT-CALL needs a value
+     that differs. registerCatalogue replaces the module's map entry, so no source
+     file is touched. */
+  registerCatalogue('fr', { ...fr, 'common.ctrl': '⌃' });
+  try {
+    await setLocale('fr');
+    assert.equal(modKey(), '⌃', 'the same getter answers the new locale after a live switch');
+  } finally {
+    await setLocale('en');
+  }
+  assert.equal(modKey(), t('common.ctrl'), 'switching back restores the base answer');
 });

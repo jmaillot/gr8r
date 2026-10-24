@@ -246,7 +246,7 @@ test('the four English arrays no longer exist in src/core/utils.js', () => {
     'uid',
     'clamp',
     'isMac',
-    'MOD',
+    'modKey',
     'DAY',
     'sod',
     'TODAY',

@@ -1,5 +1,5 @@
 /* ---------- shell ---------- */
-import { MOD, TODAY, diffD, esc, parse } from '../core/utils.js';
+import { TODAY, diffD, esc, modKey, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
 import { D, S, allTasks, mem, pColor, proj, team, teamsList, visibleProjects } from '../core/store.js';
@@ -194,7 +194,7 @@ export function renderTopbar() {
     <style>@media(max-width:900px){#mnav-btn{display:inline-flex!important}}</style>
     <nav class="crumbs trunc" aria-label="${t('a11y.breadcrumb')}">${crumbs()}</nav>
     <span class="sp"></span>
-    <button class="topsearch" data-a="openPalette" aria-label="${t('a11y.searchAndCommands')}">${ic('search', 14)}<span class="lbltxt">${t('nav.searchOrJumpTo')}</span><span class="kbd">${MOD}K</span></button>
+    <button class="topsearch" data-a="openPalette" aria-label="${t('a11y.searchAndCommands')}">${ic('search', 14)}<span class="lbltxt">${t('nav.searchOrJumpTo')}</span><span class="kbd">${modKey()}K</span></button>
     <button class="ibtn" data-a="go" data-r="notifications" data-tip="${routeName('notifications')}" aria-label="${routeName('notifications')}">${ic('bell', 16)}${D().notifs.some(n => !n.read) ? '<span style="position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--surface)"></span>' : ''}</button>
     <button class="btn btn-secondary btn-sm" data-a="pop" data-pop="create" aria-haspopup="menu" aria-label="${t('a11y.createNew')}">${ic('plus', 14)}<span class="hide-m">${t('act.new')}</span>${ic('chevron-down', 12, 'hide-m')}</button>
     <button class="ibtn hide-m" data-a="pop" data-pop="user" aria-label="${t('a11y.accountMenu')}" style="width:auto;padding:0 2px">${av(D().me, 'md', false)}</button>

@@ -1,5 +1,5 @@
 /* ---------------- COMMAND PALETTE ---------------- */
-import { MOD, clamp, esc, foldForSearch } from '../core/utils.js';
+import { clamp, esc, foldForSearch, modKey } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
@@ -49,7 +49,7 @@ export function commands() {
       id: 'c-dark',
       name: effectiveDark() ? t('palette.switchToLight') : t('palette.switchToDark'),
       icon: effectiveDark() ? 'sun' : 'moon',
-      kbd: MOD + ' ⇧ L',
+      kbd: modKey() + ' ⇧ L',
       run: () => A.toggleDark(),
     },
     { id: 'c-inv', name: t('palette.inviteMember'), icon: 'user-plus', run: () => A.invite() },

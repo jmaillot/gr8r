@@ -78,7 +78,7 @@ const DISPLAY_ATTRIBUTES = new Set(['aria-label', 'placeholder', 'title', 'alt',
 const HTTP_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 /* The key names the keyboard map matches on. */
-const KEYBOARD_KEYS = new Set(['Enter', 'Escape', 'Esc', 'Tab', 'Backspace', 'Del', 'ArrowUp', 'ArrowDown', 'Shift']);
+const KEYBOARD_KEYS = new Set(['Enter', 'Escape', 'Esc', 'Tab', 'Backspace', 'Del', 'ArrowUp', 'ArrowDown', 'Shift', 'Ctrl', 'Cmd', 'Mod', 'MOD']);
 
 /* The role values the DOCUMENT stores (src/core/constants.js). The display of
    a role is a catalogue lookup, the id never changes. */
