@@ -31,6 +31,9 @@ const env = {
   /* DB_PATH wins over DATA_DIR in server.js; force it so an exported DB_PATH cannot leak in. */
   DB_PATH: path.join(dataDir, 'gr8r.db'),
   SEED_DATA: 'false',
+  /* PREVIEW-02 drives the oversize path in the browser: a 1 MB cap keeps the
+     fixture upload (a 1×1 PNG) far under it and the rejected 2 MB drop fast. */
+  MAX_UPLOAD_MB: '1',
   ALLOW_SIGNUP: 'true',
   /* The fixture scheme in helpers/setup.mjs is per-IP throttles dodged by a
      run-unique X-Forwarded-For per account; the server only reads that header

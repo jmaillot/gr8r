@@ -158,6 +158,41 @@ test.beforeAll(async () => {
     const remInvite = await must('removal member invite', await rem.client.post(`/api/workspaces/${rem.account.slug}/invites`, { emails: [remm.account.email], role: 'member' }), [201]);
     await must('removal member accept', await remm.client.post(`/api/invites/${inviteToken(remInvite.invites[0].url)}/accept`, {}), [200, 201]);
 
+    /* Phase 12 upload/preview fixture: an owner with its own workspace and
+       one project (doc-PUT, like the share fixtures) so the files tab — and
+       its real, unchanged upload inputs (D-14) — have a home. */
+    const upl = await createAccount(BASE_URL, run, `upl-${lang}`, `Upload Owner ${lang}`, {
+      locale: lang,
+      workspace: `upl-${lang}-${run}`,
+    });
+    const uplDocRes = await must('upload workspace doc', await upl.client.get(`/api/workspaces/${upl.account.slug}`), [200]);
+    const uplDoc = uplDocRes.doc;
+    const uploadProjectId = `p_upl_${lang}`;
+    uplDoc.data.projects = [
+      ...(uplDoc.data.projects || []),
+      {
+        id: uploadProjectId,
+        key: `flows-upload-${lang}`,
+        name: `Upload Bench ${lang} ${run}`,
+        icon: 'map',
+        color: 'teal',
+        status: 'active',
+        team: null,
+        lead: uplDocRes.memberId,
+        due: null,
+        start: null,
+        fav: false,
+        members: [uplDocRes.memberId],
+        desc: '',
+        milestones: [],
+        last: 0,
+        private: false,
+        perms: {},
+      },
+    ];
+    uplDoc.data.projOrder = [...(uplDoc.data.projOrder || []), uploadProjectId];
+    await must('upload project fixture', await upl.client.put(`/api/workspaces/${upl.account.slug}`, { revision: uplDocRes.revision, doc: uplDoc }), [200]);
+
     FLOW[lang] = {
       inviteOwner: inv.account,
       inviteClient: inv.client,
@@ -173,6 +208,9 @@ test.beforeAll(async () => {
       remOwner: rem.account,
       remOwnerClient: rem.client,
       removedMember: remm.account,
+      uploadOwner: upl.account,
+      uploadClient: upl.client,
+      uploadProjectId,
     };
   }
 });
@@ -628,6 +666,151 @@ test.describe('project creation', () => {
         await expect(page.getByText(d.toast)).toBeVisible();
         /* The sidebar's project entry renders the created name. */
         await expect(page.getByRole('link', { name: projectName, exact: true })).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+  }
+});
+
+/* =====================================================================
+   FILE UPLOADS AND PREVIEWS (Phase 12, PREVIEW-02/03, LINK-01, D-08/D-11/
+   D-13/D-14): the user-visible half of real uploads, proven in Chromium on
+   the real server — a real PNG through the app's unchanged upload input,
+   the progress row's disappearance, the preview modal rendering real bytes,
+   and the copied /w/:slug/file/:id link working in both worlds (D-13: SPA
+   navigation opens the preview modal; a non-HTML Accept serves the bytes).
+   The upload server boots with MAX_UPLOAD_MB=1 so the oversize drop is fast.
+   ===================================================================== */
+
+/* A real 1×1 PNG — the browser must actually decode it for naturalWidth. */
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+function uploadDict(lang, name) {
+  return {
+    uploaded: fmt('toast.uploaded', { name }, lang),
+    tooLarge: fmt('err.uploadTooLarge', {}, lang),
+    linkCopied: fmt('toast.linkCopied', {}, lang),
+  };
+}
+
+/* Project → expand in the sidebar → its files tab. */
+async function openFilesTab(page, pid) {
+  await page.locator(`[data-a='go'][data-r='project'][data-id='${pid}']`).first().click();
+  await page.locator(`[data-a='toggleExpand'][data-id='${pid}']`).first().click();
+  await page.locator(`.sproj button[data-a='go'][data-r='project'][data-id='${pid}'][data-tab='files']`).click();
+}
+
+/* How many file records the workspace doc holds right now (fixture API only). */
+async function fileRecordCount(client, slug) {
+  const res = await must('workspace doc read', await client.get(`/api/workspaces/${slug}`), [200]);
+  return (res.doc.data.files || []).length;
+}
+
+/* Whether a given file id has reached the server-side doc yet — the client
+   pushes its record through the async doc channel, so the serving route only
+   answers 200 once that PUT lands. */
+async function docHasFile(client, slug, fid) {
+  const res = await must('workspace doc read', await client.get(`/api/workspaces/${slug}`), [200]);
+  return (res.doc.data.files || []).some(f => f.id === fid);
+}
+
+test.describe('file uploads and previews (Phase 12)', () => {
+  for (const lang of ['en', 'fr']) {
+    test(`a real PNG upload previews real bytes in the modal and its copied link works in both worlds (PREVIEW-03, LINK-01) (${lang})`, async ({ browser }) => {
+      const owner = FLOW[lang].uploadOwner;
+      const client = FLOW[lang].uploadClient;
+      const pid = FLOW[lang].uploadProjectId;
+      const d = uploadDict(lang, 'pixel.png');
+      const context = await newContext(browser, { ip: owner.ip });
+      const page = await context.newPage();
+      try {
+        await signIn(page, owner);
+        await openFilesTab(page, pid);
+
+        /* The real drop through the unchanged entry point (D-14): XHR transport,
+           real bytes, the success toast only after the record lands (D-11). */
+        await page.locator('input[data-in="uploadFiles"]').first().setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: PNG_1X1 });
+        await expect(page.getByText(d.uploaded)).toBeVisible();
+        const card = page.locator(`.fcard[data-a='previewFile']`, { hasText: 'pixel.png' });
+        await expect(card).toBeVisible();
+        const fid = await card.getAttribute('data-id');
+
+        /* The record rides the async doc channel: wait for the server-side
+           doc to hold it before opening the modal, or the img would 404. */
+        await expect.poll(() => docHasFile(client, owner.slug, fid), { timeout: 10_000 }).toBe(true);
+
+        /* The preview modal renders the REAL bytes: an img served by the
+           12-02 route that Chromium actually decoded. */
+        await card.click();
+        const img = page.locator(`.modal-wrap img[src$="/file/${fid}"]`);
+        await expect(img).toBeVisible();
+        await expect(img).toHaveAttribute('alt', 'pixel.png');
+        await expect.poll(() => img.evaluate(el => el.naturalWidth)).toBeGreaterThan(0);
+
+        /* Copy link: the clipboard holds the published URL form (D-07/D-13). */
+        await page.locator(`.modal-wrap [data-a='copyLink']`).click();
+        await expect(page.getByText(d.linkCopied)).toBeVisible();
+        const link = await page.evaluate(() => navigator.clipboard.readText());
+        expect(link).toBe(`${BASE_URL}/w/${owner.slug}/file/${fid}`);
+
+        /* The copied link opened as a page navigation boots the SPA and the
+           deep link opens the same preview modal (D-13's one destination).
+           Chromium's automated navigations send a star-slash Accept (any
+           type), so the SPA half of the negotiation is forced explicitly
+           with a header rewrite; a manual navigation would send text/html
+           on its own. */
+        await page.locator(`.modal-wrap [data-a='closeModal']`).last().click();
+        await context.route(`**/file/${fid}`, route => route.continue({ headers: { ...route.request().headers(), accept: 'text/html' } }));
+        await page.goto(link);
+        await context.unroute(`**/file/${fid}`);
+        await expect(page.locator(`.modal-wrap img[src$="/file/${fid}"]`)).toBeVisible();
+
+        /* Outside the SPA: a non-HTML Accept fetches the bytes themselves
+           (image mime), while text/html gets the SPA bootstrap (negotiation).
+           Both fetches cache-bust — the HTTP cache keys without Accept, so a
+           cached image payload would mask the negotiated response. */
+        const bytes = await page.evaluate(async url => {
+          const r = await fetch(`${url}?cb=${Date.now()}`, { headers: { accept: 'image/png' }, cache: 'no-store' });
+          return { ct: r.headers.get('content-type'), body: await r.text() };
+        }, link);
+        expect(bytes.ct).toBe('image/png');
+        expect(bytes.body.length).toBeGreaterThan(0);
+        const spa = await page.evaluate(async url => {
+          const r = await fetch(`${url}?cb=${Date.now()}x`, { headers: { accept: 'text/html' }, cache: 'no-store' });
+          return { ct: r.headers.get('content-type'), body: await r.text() };
+        }, link);
+        expect(spa.ct).toContain('text/html');
+        expect(spa.body.toLowerCase()).toContain('<!doctype html');
+      } finally {
+        await context.close();
+      }
+    });
+
+    test(`an oversize upload toasts the stable error, leaves no record and the app keeps working (PREVIEW-02, D-11) (${lang})`, async ({ browser }) => {
+      const owner = FLOW[lang].uploadOwner;
+      const client = FLOW[lang].uploadClient;
+      const pid = FLOW[lang].uploadProjectId;
+      const d = uploadDict(lang, 'pixel.png');
+      const context = await newContext(browser, { ip: owner.ip });
+      const page = await context.newPage();
+      try {
+        await signIn(page, owner);
+        await openFilesTab(page, pid);
+        const before = await fileRecordCount(client, owner.slug);
+
+        /* 2 MB against the e2e server's 1 MB cap: the stable error code is
+           translated in the DOM, the progress row is removed and — D-11 —
+           data.files gains nothing. */
+        await page.locator('input[data-in="uploadFiles"]').first().setInputFiles({ name: 'big.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(2 * 1024 * 1024, 7) });
+        await expect(page.getByText(d.tooLarge)).toBeVisible();
+        await expect(page.locator('.upl')).toHaveCount(0);
+        expect(await fileRecordCount(client, owner.slug)).toBe(before);
+
+        /* The app remains usable: a subsequent real upload succeeds. */
+        await page.locator('input[data-in="uploadFiles"]').first().setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: PNG_1X1 });
+        await expect(page.getByText(d.uploaded)).toBeVisible();
+        await expect.poll(() => fileRecordCount(client, owner.slug), { timeout: 10_000 }).toBe(before + 1);
       } finally {
         await context.close();
       }

@@ -1062,6 +1062,9 @@ function scanStringLiterals(tokens, file, findings, lineAt, info, catalogue) {
     if (isComparisonOperand(tokens, i)) continue;
     if (slot.call && slot.call.callee === 'includes') continue;
     if (slot.call && slot.call.callee === 'call' && slot.call.argIndex === 0) continue;
+    /* An HTTP verb as the method argument of a transport open (xhr.open('POST', …)):
+       a machine method name, never interface text. */
+    if (slot.call && slot.call.callee === 'open' && slot.call.argIndex === 0) continue;
     if (slot.object && slot.object.propName === 'role') continue;
     /* A keyboard-shortcut sequence ('G H', 'G I'…): the value of a kbd
        property is a machine identifier, never interface prose. */
@@ -1368,6 +1371,7 @@ function machineCategory(occ) {
   }
   if (slot.call) {
     if (slot.call.callee === 'call' && slot.call.argIndex === 0) return 'HTTP_VERBS';
+    if (slot.call.callee === 'open' && slot.call.argIndex === 0) return 'HTTP_VERBS';
     if (slot.call.callee === 'includes') return 'MEMBERSHIP_TEST';
   }
   if (VALUE_EXCLUSIONS.has(occ.text)) return 'STORED_VALUE';
