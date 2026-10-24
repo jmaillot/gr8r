@@ -294,7 +294,16 @@ export function filePreviewModal(m, H) {
   const f = m.file;
   const ft = FT[f.type] || FT.other;
   return `${H(esc(f.name), `${ft.n} · ${f.size} ${t('modal.uploadedBy', { name: esc(mem(f.by)?.name || 'you') })} ${ago(f.at)}`)}
-  <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${filePrev(f).replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"')}</div>
+  <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${
+    /* D-03/D-09: images and PDFs render the real bytes from the serving route;
+       every other type keeps the icon-art download tile. Lists/grids are
+       untouched (D-10). User-controlled values escape with esc() (T-12-09). */
+    f.type === 'img'
+      ? `<img src="/w/${D().ws.url}/file/${f.id}" alt="${esc(f.name)}" style="display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:var(--bg)">`
+      : f.type === 'pdf'
+        ? `<iframe src="/w/${D().ws.url}/file/${f.id}" title="${esc(f.name)}" style="display:block;width:100%;aspect-ratio:16/9;border:0"></iframe>`
+        : filePrev(f).replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"')
+  }</div>
   ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}${t('modal.attachedTo')} <button class="link" data-a="openTask" data-id="${m.tid}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>
   <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-fid="${f.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('a11y.close')}</button></div>`;
 }
