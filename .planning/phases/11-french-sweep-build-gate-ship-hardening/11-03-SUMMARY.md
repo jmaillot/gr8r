@@ -22,9 +22,9 @@ metrics:
   duration: ~50 min (continuation session; Task 1 completed in a prior session)
   completed: 2026-10-24
   tasks: 2
-  commits: 1
+  commits: 2
   plan_head_before: b80ad554a90f3e43db5a28a9bda83b050dd81b6a
-  plan_head_after: 11f6a57dd129ac63b831e72906da8ec468732075
+  plan_head_after: 28e049b
 status: complete
 actuals:
   tokens: 20000
@@ -67,11 +67,17 @@ Third sibling job in `.github/workflows/ci.yml`: `docker build -t gr8r:ci .` →
 - **Files modified:** e2e/demo-locale.spec.mjs
 - **Commit:** 11f6a57
 
-**2. [Rule 3 - Blocking] Stray playwright/vite processes from prior crashed executor sessions corrupted test runs**
-- **Found during:** Task 2 verification
+**2. [Rule 3 - Blocking] Stray playwright/vite processes from prior crashed executor sessions corrupted test runs**- **Found during:** Task 2 verification
 - **Issue:** Two previous executor sessions ended abnormally with long-running commands in flight. Leftover concurrent playwright runs raced on `test-results/` (ENOENT trace-artifact failures mid-run) and leftover webServers held ports 4317/4318 (`is already used` errors).
 - **Fix:** Killed the stray playwright/vite/chrome processes, freed ports, cleaned `test-results/`, and re-ran all verification in the foreground. Final runs: demo suite 2 passed (×2 consecutive), main suite 24 passed.
 - **Files modified:** none (environment cleanup only; removed two leftover debug scripts `e2e/.dump-select.mjs`, `e2e/.dbg.mjs` from the crashed sessions)
+
+**3. [Rule 2 - Missing critical functionality] The main suite would have picked up the demo spec with an API behind it**
+- **Found during:** Task 2 post-commit hardening (concurrent orchestrator-session edits, verified and committed as 28e049b)
+- **Issue:** `e2e/playwright.config.mjs` matched `**/*.spec.mjs`, so the demo spec could run under the API-backed main server — the exact condition the demo proof exists to exclude. Additionally, the demo spec had no self-guard if another config picked it up.
+- **Fix:** Main config's `testMatch` now excludes `demo-locale.spec.mjs`; the demo spec gained a `beforeEach` guard probing `/api/config` (skips when a live API answers < 500). Demo suite re-verified green (2 passed) after the change.
+- **Files modified:** e2e/playwright.config.mjs, e2e/demo-locale.spec.mjs
+- **Commit:** 28e049b
 
 ## Known Stubs
 
@@ -86,4 +92,4 @@ None — both tasks ship complete, no placeholder code.
 ## Self-Check: PASSED
 
 - Files exist: e2e/demo-locale.spec.mjs, e2e/demo.playwright.config.mjs, 11-03-SUMMARY.md.
-- Commits exist: b80ad55 (Task 1, prior session), 11f6a57 (Task 2), ff3de60 (docs).
+- Commits exist: b80ad55 (Task 1, prior session), 11f6a57 (Task 2), 28e049b (demo-spec isolation), ff3de60 + 2ee37d3 (docs).
