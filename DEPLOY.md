@@ -676,7 +676,9 @@ npm run e2e
 ```
 
 CI runs `npm test` in the build job and `npm run e2e` in a separate job that uploads Playwright
-traces when it fails (`.github/workflows/ci.yml`).
+traces when it fails (`.github/workflows/ci.yml`). A third job, `docker-build`, builds the
+image, boots a throwaway container from it, and asserts the French catalogue chunk is served
+with French content — so the shipped image is verified to carry the French catalogue.
 
 ## 13. Operational limits
 

@@ -5,6 +5,26 @@ All notable changes to Gr8r Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — 1.2.0 milestone notes (draft)
+
+The 1.2.0 tag is cut at milestone close; these are the release notes text.
+
+### Added
+
+- **A full French interface.** Every user-visible interface string is translated: the interface,
+  error messages, activity entries, dates, numbers and plurals render per locale, and each
+  account's language choice persists across sessions.
+- **Browser coverage in both locales.** The Chromium suite runs in English and French.
+- **The French sweep.** A 21-route browser sweep visits every product route in French and proves
+  no untranslated English string is served, with a coverage assertion so a blank page cannot
+  pass, and a build-time static scan fails the build on a new user-visible literal that never
+  reached a catalogue.
+- **The French catalogue ships in the image.** CI builds the Docker image, boots it, and asserts
+  the French catalogue chunk is served with French content.
+- **A French server-less demo.** Demo mode without a server renders in French and can switch
+  language.
+- **Zero runtime dependencies, still.** The app continues to ship with none.
+
 ## [1.1.1] - 2026-10-22
 
 A patch release found by the v1.1 milestone audit.
