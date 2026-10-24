@@ -3,22 +3,15 @@ import { dayBucket, esc } from '../core/utils.js';
 import { bucketLabel, t } from '../core/i18n.js';
 import { D, S, canSee, proj } from '../core/store.js';
 import { empty } from '../ui/helpers.js';
-import { actHtml } from '../components/task-list.js';
+import { actCategory, actHtml } from '../components/task-list.js';
 
 export function pageActivity() {
   const f = S.ui.actFilter || 'all';
   const who = S.ui.actWho || 'all';
   let as = D().activity.filter(a => !a.project || canSee(proj(a.project)));
-  if (f !== 'all')
-    as = as.filter(a =>
-      f === 'comments'
-        ? a.verb.includes('comment')
-        : f === 'status'
-          ? /moved|completed|reopened/.test(a.verb)
-          : f === 'projects'
-            ? a.verb.includes('project')
-            : true,
-    );
+  /* The filter ids match the stored machine verbs through the classifier — no
+     English parsing: the classifier table owns the selection (D-06). */
+  if (f !== 'all') as = as.filter(a => actCategory(a.verb) === f);
   if (who !== 'all') as = as.filter(a => a.by === who);
   const b = {};
   as.forEach(a => (b[dayBucket(a.at)] ||= []).push(a));

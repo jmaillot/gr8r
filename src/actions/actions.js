@@ -124,7 +124,7 @@ export function applyPatch(t, patch) {
         msgs.push(tMsg('toast.recurringNext', { title: t.title, date: fmtDate(nd) }));
       }
     } else if (k === 'assignee') logAct('assigned', t, nv ? `to ${mem(nv)?.name}` : '(unassigned)');
-    else if (k === 'priority') logAct('changed priority of', t, `to ${PR[nv].name}`);
+    else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
     else if (k === 'due') logAct('changed due date of', t, nv ? `to ${fmtDate(nv)}` : '(cleared)');
     else if (k === 'start') logAct('changed start date of', t, nv ? `to ${fmtDate(nv)}` : '(cleared)');
     else if (k === 'project') {
@@ -367,7 +367,7 @@ A.popPick = el => {
           toast(res.error || t('err.changeRole'), { kind: 'err' });
           return;
         }
-        toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : (v === 'Admin' || v === 'Owner' ? 'an' : 'a'), role: roleLabel(v) }));
+        toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : v === 'Admin' || v === 'Owner' ? 'an' : 'a', role: roleLabel(v) }));
         refreshMembers();
       });
       return;
@@ -376,7 +376,7 @@ A.popPick = el => {
       m.role = v;
     });
     render();
-    toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : (v === 'Admin' ? 'an' : 'a'), role: roleLabel(v) }));
+    toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : v === 'Admin' ? 'an' : 'a', role: roleLabel(v) }));
     return;
   }
   const field = { status: 'status', priority: 'priority', assignee: 'assignee', project: 'project', recur: 'recur', estimate: 'estimate', date: p.field }[

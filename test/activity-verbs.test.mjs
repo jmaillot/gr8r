@@ -38,7 +38,7 @@ globalThis.addEventListener = () => {};
 globalThis.removeEventListener = () => {};
 globalThis.matchMedia = () => ({ addEventListener: () => {} });
 register('./virtual-icons-loader.mjs', import.meta.url);
-const { ACT_CATEGORIES, VERB_KEYS, actCategory, actExtraHtml } = await import('../src/components/task-list.js');
+const { VERB_KEYS, actCategory, actExtraHtml } = await import('../src/components/task-list.js');
 const { esc } = await import('../src/core/utils.js');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -187,7 +187,8 @@ test('the D-06 quirk pins the exact selections the filters make today', () => {
   assert.equal(actCategory('commented on'), 'comments');
   assert.equal(actCategory('changed status of project'), 'projects', 'the unmapped legacy verb must classify');
   assert.equal(actCategory('changedPriorityOf'), null, 'priority changes sit outside the three filters');
-  assert.equal(actCategory('createdProject'), 'projects');
+  assert.equal(actCategory('createdProject'), null, 'the old includes(project) is case-sensitive — the machine verb escapes it (quirk frozen)');
+  assert.equal(actCategory('projectStatusChanged'), 'projects');
   assert.equal(actCategory('created'), null);
 });
 
@@ -197,10 +198,7 @@ test('the writers store machine verbs — the priority path is converted first',
   const verbs = writtenVerbs();
   assert.ok(verbs.has('changedPriorityOf'), 'the machine priority verb is not written yet');
   for (const verb of verbs) {
-    assert.ok(
-      LEGACY_VERBS.includes(verb) || MACHINE_VERBS.includes(verb),
-      `the writers store a verb outside the known vocabulary: ${JSON.stringify(verb)}`,
-    );
+    assert.ok(LEGACY_VERBS.includes(verb) || MACHINE_VERBS.includes(verb), `the writers store a verb outside the known vocabulary: ${JSON.stringify(verb)}`);
     const key = VERB_KEYS[verb];
     assert.ok(key, `a written verb has no act.verb.* mapping: ${JSON.stringify(verb)}`);
     assert.ok(en[key], `the mapping key has no en entry: ${key}`);

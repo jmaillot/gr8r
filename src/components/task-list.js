@@ -127,37 +127,89 @@ export function bulkBar(ids) {
 
 /* ---------- activity rendering ---------- */
 
-/* The stored verb is an English fragment (document data, D-06); the display is a
-   catalogue lookup keyed on the stored string. An unknown or legacy verb renders
-   verbatim — the same rule the notifications follow. The map is explicit, so the
-   vocab test can pin every call-site verb against both catalogues. */
+/* The stored verb is document data in two vocabularies: the legacy English
+   fragment (every document written before this plan) and the machine verb —
+   the camelCase suffix of its act.verb.* key — what the writers store from
+   now on. The display is a catalogue lookup keyed on the stored string,
+   through this explicit map in both vocabularies: never a dynamic key echo.
+   An unknown verb renders verbatim — the same rule the notifications follow. */
 export const VERB_KEYS = {
   created: 'act.verb.created',
   'created project': 'act.verb.createdProject',
+  createdProject: 'act.verb.createdProject',
   completed: 'act.verb.completed',
   moved: 'act.verb.moved',
   assigned: 'act.verb.assigned',
   'changed priority of': 'act.verb.changedPriorityOf',
+  changedPriorityOf: 'act.verb.changedPriorityOf',
   'changed due date of': 'act.verb.changedDueDateOf',
+  changedDueDateOf: 'act.verb.changedDueDateOf',
   'changed start date of': 'act.verb.changedStartDateOf',
+  changedStartDateOf: 'act.verb.changedStartDateOf',
   'updated labels on': 'act.verb.updatedLabelsOn',
+  updatedLabelsOn: 'act.verb.updatedLabelsOn',
   renamed: 'act.verb.renamed',
   'set repeat on': 'act.verb.setRepeatOn',
+  setRepeatOn: 'act.verb.setRepeatOn',
   estimated: 'act.verb.estimated',
   'updated dependencies of': 'act.verb.updatedDependenciesOf',
+  updatedDependenciesOf: 'act.verb.updatedDependenciesOf',
   archived: 'act.verb.archived',
   restored: 'act.verb.restored',
   'commented on': 'act.verb.commentedOn',
+  commentedOn: 'act.verb.commentedOn',
   'added a file to': 'act.verb.addedAFileTo',
+  addedAFileTo: 'act.verb.addedAFileTo',
   'removed a file from': 'act.verb.removedAFileFrom',
+  removedAFileFrom: 'act.verb.removedAFileFrom',
   'added subtask to': 'act.verb.addedSubtaskTo',
+  addedSubtaskTo: 'act.verb.addedSubtaskTo',
   'converted a subtask of': 'act.verb.convertedASubtaskOf',
+  convertedASubtaskOf: 'act.verb.convertedASubtaskOf',
   'assigned a subtask on': 'act.verb.assignedASubtaskOn',
+  assignedASubtaskOn: 'act.verb.assignedASubtaskOn',
   'set a subtask due date on': 'act.verb.setASubtaskDueDateOn',
+  setASubtaskDueDateOn: 'act.verb.setASubtaskDueDateOn',
   'completed subtask on': 'act.verb.completedSubtaskOn',
+  completedSubtaskOn: 'act.verb.completedSubtaskOn',
   'reopened subtask on': 'act.verb.reopenedSubtaskOn',
+  reopenedSubtaskOn: 'act.verb.reopenedSubtaskOn',
 };
 export const verbLabel = v => (VERB_KEYS[v] ? tMsg(VERB_KEYS[v]) : v);
+
+/* The three activity filters classify the STORED verb, never English parsing:
+   the table carries BOTH vocabularies, so a legacy document and a machine-verb
+   one filter identically. D-06 freezes today's exact selection — including the
+   quirk that a project move logs `moved` and the STATUS filter selects it. */
+/* The three filters classify the STORED verb through one table — both
+   vocabularies (the machine verbs the writers store now and the legacy English
+   fragments old documents carry), so a legacy row and its machine twin land in
+   the same filter. The sets freeze today's exact selection (D-06), quirks
+   included: a project move (`moved`) is a STATUS entry, and the old
+   /moved|completed|reopened/ regex caught "removed a file from" as well —
+   the equivalence test pins all of it. */
+/* The three activity filters classify the STORED verb, never English parsing:
+   the table carries BOTH vocabularies, so a legacy document and a machine-verb
+   one filter identically. D-06 freezes today's exact selection — quirks
+   included: a project move (`moved`) is a STATUS entry, the old
+   /moved|completed|reopened/ regex caught "removed a file from" too, and the
+   old includes('project') is case-sensitive, so 'createdProject' escapes the
+   PROJECTS filter (only 'projectStatusChanged' and the legacy fragments match). */
+export const ACT_CATEGORIES = {
+  comments: new Set(['commentedOn', 'commented on']),
+  status: new Set([
+    'moved',
+    'completed',
+    'completedSubtaskOn',
+    'reopenedSubtaskOn',
+    'completed subtask on',
+    'reopened subtask on',
+    'removed a file from',
+    'removedAFileFrom',
+  ]),
+  projects: new Set(['projectStatusChanged', 'created project', 'changed status of project']),
+};
+export const actCategory = verb => Object.keys(ACT_CATEGORIES).find(k => ACT_CATEGORIES[k].has(verb)) || null;
 
 /* The stored repeat ids and their catalogue keys — the same shapes the new-task
    modal's RECUR_KEY maps, kept local because modals.js already imports this file. */
@@ -170,6 +222,15 @@ const RECUR_EXTRA = {
 };
 
 /* A new row's extra is structured ({ kind, ...vars }) and composes through the
+   act.extra.* catalogue keys via this table: the kind selects the key and a
+   resolver turns the stored ids (machine values, never frozen prose) into
+   display values in the reader's locale. A kind missing from the table renders
+   nothing — a foreign kind is never echoed or interpolated (T-09-04's gate). */
+const EXTRA_VARS = {
+  prioritySet: { key: 'act.extra.to', vars: e => ({ value: tMsg('task.priority.' + e.value) }) },
+};
+
+/* A new row's extra is structured ({ kind, ...vars }) and composes through the
    act.extra.* catalogue keys; a legacy row's extra is a stored English string and
    renders verbatim (D-12's rule, no migration). */
 export function actExtraHtml(e) {
@@ -178,7 +239,9 @@ export function actExtraHtml(e) {
       const k = RECUR_EXTRA[e.id];
       return `<span class="muted">${esc(k ? tMsg(k) : e.id)}</span>`;
     }
-    return `<span class="muted">${esc(tMsg(`act.extra.${e.kind}`, e))}</span>`;
+    const spec = EXTRA_VARS[e.kind];
+    if (!spec) return '';
+    return `<span class="muted">${esc(tMsg(spec.key, spec.vars(e)))}</span>`;
   }
   return `<span class="muted">${esc(e)}</span>`;
 }
