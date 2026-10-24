@@ -4,12 +4,12 @@ milestone: v1.2
 current_phase: 09
 current_phase_name: Server messages & activity history
 current_plan: 3
-status: executing
-stopped_at: Plan 09-03 complete — machine verbs + structured extras end to end
-last_updated: "2026-10-24T11:15:00.000Z"
+status: review-blocked
+stopped_at: Phase 09 code review gate blocked by 3 critical findings (CR-01..CR-03); 12 open findings total — see 09-REVIEW.md
+last_updated: "2026-10-24T10:06:14.355Z"
 last_activity: 2026-10-24
 last_activity_desc: Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
-state_head: 79feaca1c48c8156017861d67cc756d3e76205d7
+state_head: 584f2f0a1092c70187a794a3958c75f5e523d211
 progress:
   total_phases: 8
   completed_phases: 2
@@ -300,7 +300,7 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 ## Session
 
 **Last session:** 2026-10-24T11:15:00.000Z
-**Stopped at:** Plan 09-03 complete — machine verbs + structured extras end to end
+**Stopped at:** Phase 09 code review gate blocked by 3 critical findings (CR-01..CR-03); 12 open findings total — see 09-REVIEW.md
 **Resume file:** .planning/phases/09-server-messages-activity-history/09-03-SUMMARY.md
 
 ## Current Position
@@ -309,7 +309,7 @@ Current Plan: 3
 Total Plans in Phase: 3
 
 Phase: 09 (Server messages & activity history) — EXECUTING
-Status: Executing Phase 09
+Status: review-blocked
 Last activity: 2026-10-24 — Plan 09-03 executed (machine verbs + structured extras + actCategory classifier)
 
 ## Operator Next Steps
