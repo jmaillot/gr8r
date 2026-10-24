@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 12
-current_phase_name: Real file uploads and previews
+current_phase_name: real-file-uploads-and-previews
 current_plan: Not started
-status: planning
+status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-10-24T16:55:43.596Z"
+last_updated: "2026-10-24T17:05:09.074Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 11 complete, transitioned to Phase 12
-state_head: 67c23e20123022744335b4b4d12f45c3d6aee36c
+state_head: c25e589ea9625ff8bd2fb5155f102d2f76efd293
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 42
+  total_plans: 46
   completed_plans: 42
-  percent: 25
+  percent: 13
 milestone_name: Localization
 ---
 
@@ -316,8 +316,8 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 Current Plan: Not started
 Total Plans in Phase: 4
 
-Phase: 12 — Real file uploads and previews
-Status: Ready to plan
+Phase: 12 (real-file-uploads-and-previews) — READY TO EXECUTE
+Status: Ready to execute
 Last activity: 2026-10-24 — Phase 11 complete, transitioned to Phase 12
 
 ## Operator Next Steps

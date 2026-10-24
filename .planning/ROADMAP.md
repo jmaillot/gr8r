@@ -423,7 +423,14 @@ only; no binary upload backend".
 **Plans:** 4 plans
 
 Plans:
+**Wave 1**
 - [ ] 12-01-PLAN.md — Tracer: streamed upload endpoint `POST /w/:slug/files` (D-01/D-02) + integration suite
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 12-02-PLAN.md — File route `GET /w/:slug/file/:id` with Accept negotiation, safe headers (D-05–D-07) + doc-PUT binary delete (D-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 12-03-PLAN.md — Client: XHR progress in `handleFiles` (D-08/D-11/D-12/D-14), real-bytes preview modal (D-03/D-09/D-10), deep-link copy-link destination (D-13), e2e
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 12-04-PLAN.md — i18n/error-code completeness + operator docs (MAX_UPLOAD_MB, limitation retraction) + phase gate
