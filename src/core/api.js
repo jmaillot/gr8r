@@ -6,7 +6,7 @@
    Multi-workspace: every workspace call is scoped to a slug, and the
    server decides what the signed-in account may read or write there.
    ===================================================================== */
-import { t } from './i18n.js';
+import { t, tErr } from './i18n.js';
 
 const state = {
   enabled: false,
@@ -57,7 +57,7 @@ async function call(method, path, body, { keepalive = false } = {}) {
       /* non-JSON response */
     }
   }
-  return { ok: res.ok, status: res.status, data, error: data?.error };
+  return { ok: res.ok, status: res.status, data, error: data?.code ? tErr(data.code, data?.params, data?.error) : data?.error };
 }
 
 function applyUser(data) {

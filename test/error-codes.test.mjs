@@ -67,3 +67,46 @@ test('a weak signup password returns the passwordTooWeak code beside the unchang
     await server.stop();
   }
 });
+
+/* ---------- ERR-02: the client half — has()/tErr() at the api.js boundary ---------- */
+
+/* D-01: the catalogue key is the server code verbatim. D-03: an unknown code falls back to the
+   raw server message — never a toast, never the literal err.<code> key (t() returns the key
+   itself on a miss, so tErr must gate through has()). i18n.js is a leaf module over the JSON
+   catalogues, importable by plain Node. The French catalogue is registered explicitly: the
+   bundler glob is absent in plain Node, so the loader map is empty by design. */
+import { has, tErr, primeLocale, registerCatalogue, BASE_LOCALE } from '../src/core/i18n.js';
+
+registerCatalogue('fr', fr);
+
+test('tErr resolves a known code with interpolated params in the active locale', async () => {
+  await primeLocale('en');
+  assert.equal(tErr('alreadyMember', { email: 'a@b.test', name: 'Studio' }, 'raw'), 'a@b.test is already a member of Studio');
+  await primeLocale('fr');
+  assert.equal(tErr('alreadyMember', { email: 'a@b.test', name: 'Studio' }, 'raw'), 'a@b.test est déjà membre de Studio');
+  await primeLocale(BASE_LOCALE);
+});
+
+test('an unknown code falls back to the raw server message (D-03), or to undefined when raw is absent', () => {
+  const raw = 'Something unexpected broke';
+  assert.equal(tErr('noSuchCodeAnywhere', undefined, raw), raw);
+  /* the consumers' existing `|| t('err.fallback')` default takes the relay when raw is missing */
+  assert.equal(tErr('noSuchCodeAnywhere', undefined, undefined), undefined);
+  assert.equal(tErr('noSuchCodeAnywhere'), undefined);
+});
+
+test('tErr never echoes the literal err.<code> key (Pitfall 2)', () => {
+  for (const code of ['alreadyMember', 'invalidCredentials', 'neverHeardOfThisOne']) {
+    const out = tErr(code, { email: 'x@y.test', name: 'N' }, 'raw server message');
+    assert.ok(!/^err\.[a-z]/.test(out), `tErr echoed the literal key for ${code}: ${out}`);
+  }
+});
+
+test('has() gates on the exact key against the active then base locale, no folding or normalisation', async () => {
+  await primeLocale('en');
+  assert.equal(has('err.alreadyMember'), true);
+  assert.equal(has('err.alreadymember'), false);
+  assert.equal(has('err.alreadyMember '), false);
+  assert.equal(has('not.an.err.key'), false);
+  await primeLocale(BASE_LOCALE);
+});

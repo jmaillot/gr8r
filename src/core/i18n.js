@@ -181,6 +181,22 @@ export function t(key, vars) {
   return key;
 }
 
+/* The key gate: true only when the catalogue actually resolves the key, so a caller can
+   tell a real translation from t()'s return-the-key fallback (D-03). Leaf-module: plain-Node
+   testable. */
+export function has(key) {
+  const active = catalogues.get(locale);
+  if (active && Object.hasOwn(active, key)) return true;
+  const base = catalogues.get(BASE_LOCALE);
+  return !!(base && Object.hasOwn(base, key));
+}
+
+/* Translate a server error code; unknown code → the raw server message (D-03). */
+export function tErr(code, params, raw) {
+  const key = `err.${code}`;
+  return has(key) ? t(key, params) : raw;
+}
+
 /* =====================================================================
    The formatters: the Intl primitives, the per-locale format table and
    the date, time and number surface.
