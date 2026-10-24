@@ -152,6 +152,10 @@ None - no external service configuration required. Operators who expose the app 
 - All three review warnings assigned to this plan are closed; threats T-09-09 (high) and T-09-10 (high) are mitigated, nothing high remains open for phase 9.
 - Phase 9 has no remaining PLAN without SUMMARY — phase complete, ready for `/gsd-verify-work 9` and then phase 10 planning.
 
+## Self-Check: PASSED
+
+All five modified files exist on disk; all four commits (3278ff5, c748af4, ec0c945, 06f98d7) are reachable from HEAD; test suites re-run green after the summary (error-codes 24/24, server-boot 4/4, npm test 431/0 fail).
+
 ---
 *Phase: 09-server-messages-activity-history*
 *Completed: 2026-10-24*

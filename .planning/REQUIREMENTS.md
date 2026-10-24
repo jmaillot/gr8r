@@ -57,9 +57,9 @@ the server is the only boundary that counts.
 
 ### Server messages
 
-- [ ] **ERR-01**: A server error carries a stable machine code next to its English message, and
+- [x] **ERR-01**: A server error carries a stable machine code next to its English message, and
       the interface shows the translated message.
-- [ ] **ERR-02**: An error whose code is unknown to the client still shows the server's message,
+- [x] **ERR-02**: An error whose code is unknown to the client still shows the server's message,
       so no toast is ever empty.
 
 ### Activity
@@ -147,8 +147,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOC-05 | Phase 8 | Complete |
 | LOC-06 | Phase 8 | Complete |
 | SEARCH-01 | Phase 6 | Complete |
-| ERR-01 | Phase 9 | Pending |
-| ERR-02 | Phase 9 | Pending |
+| ERR-01 | Phase 9 | Complete |
+| ERR-02 | Phase 9 | Complete |
 | ACT-01 | Phase 9 | Complete |
 | ACT-02 | Phase 9 | Complete |
 | UAT-01 | Phase 10 | Pending |

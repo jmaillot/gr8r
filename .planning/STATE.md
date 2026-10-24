@@ -4,17 +4,17 @@ milestone: v1.2
 current_phase: 09
 current_phase_name: Server messages & activity history
 current_plan: 7
-status: executing
-stopped_at: Completed 09-07-PLAN.md
-last_updated: "2026-10-24T13:16:57.892Z"
+status: verifying
+stopped_at: Completed 09-06-PLAN.md
+last_updated: "2026-10-24T13:22:46.248Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 09 execution started
-state_head: 2ea5438fd9503edeeaf643ff04c5419056e2011d
+state_head: 06f98d7437c240fd70500f4f287cf3b46301a215
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 35
-  completed_plans: 34
+  completed_plans: 35
   percent: 25
 milestone_name: Localization
 ---
@@ -269,6 +269,9 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 09]: actCategory classifier replaces English-parsing filters; D-06 quirks frozen (moved → status; case-sensitive includes(project) so createdProject escapes the projects filter)
 - [Phase 09]: 09-05 closes CR-03/WR-09/WR-01/WR-02 — legacy string extras dropped at render (never divulged), seed converted to structured extras (real assignee Emma Wilson, deviation from plan literal), createdProject restored into ACT_CATEGORIES.projects with a documented equivalence exception, assignedTo falls back to '' at both render and write
 - [Phase 09]: modKey() lazy getter replaces the MOD module-load constant; SHORTCUTS carries a render-time MOD sentinel — All six consumer sites call modKey() at render; the plan context note missed popovers/modals/layout - migrated as a Rule 3 deviation
+- [Phase 09]: TRUST_PROXY flips to an allow-list opt-in (=== 'true'): by default no X-Forwarded-* header is read and the login throttle keys on the socket address; compose keeps TRUST_PROXY=true for Traefik
+- [Phase 09]: SMTP_HOST without APP_URL exits 1 at boot (WR-04 boot gate in main(), before listen) — invite links are built only from APP_URL, never from the request Host header
+- [Phase 09]: Login and signup carry the standard sameOrigin 403 crossOriginRejected guard, placed before the body read AND before the throttle so a cross-origin POST cannot consume the victim IP's budget (WR-07)
 
 ## Verification commands used
 
@@ -301,8 +304,8 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T13:16:52.136Z
-**Stopped at:** Completed 09-07-PLAN.md
+**Last session:** 2026-10-24T13:22:46.149Z
+**Stopped at:** Completed 09-06-PLAN.md
 **Resume file:** None
 
 ## Current Position
@@ -311,7 +314,7 @@ Current Plan: 7
 Total Plans in Phase: 7
 
 Phase: 09 (Server messages & activity history) — EXECUTING
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-24 — Phase 09 execution started
 
 ## Operator Next Steps
@@ -333,3 +336,4 @@ Last activity: 2026-10-24 — Phase 09 execution started
 | Phase 09 P04 | ~20 min | 3 tasks | 4 files |
 | Phase 09 P05 | ~15 min | 2 tasks | 4 files |
 | Phase 09 P07 | 8min | 2 tasks | 13 files |
+| Phase 09 P06 | 4 min | 3 tasks | 5 files |
