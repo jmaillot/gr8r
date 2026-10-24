@@ -1218,6 +1218,9 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
+    /* Same origin guard as every other mutation — before the body read AND before the
+       throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
     const email = String(body?.email || '')
       .trim()
@@ -1273,6 +1276,9 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
+    /* Same origin guard as every other mutation — before the body read AND before the
+       throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     if (!ALLOW_SIGNUP) return fail(res, 403, 'signupDisabled', 'Sign-ups are disabled. Ask an admin for an account.');
     if (tooMany(`signup|${clientIp(req)}`, 5, 60 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     const body = await readJson(req);

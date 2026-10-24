@@ -461,3 +461,40 @@ test('with TRUST_PROXY=true the documented behind-proxy behaviour is preserved: 
     await server.stop();
   }
 });
+
+/* ---------- WR-07: the two session-establishing endpoints carry the sameOrigin guard ---------- */
+
+/* A hostile Origin on /api/auth/login or /api/auth/signup is the login-CSRF hole the
+   other mutations already close; the guard runs before the body read and before the
+   throttle, so the cross-origin POST cannot consume the victim IP's attempt budget. */
+test('a hostile Origin is rejected on login and signup with the standard crossOriginRejected 403 (WR-07)', async () => {
+  const server = await startServer();
+  try {
+    for (const pathname of ['/api/auth/login', '/api/auth/signup']) {
+      const res = await fetch(`${server.base}${pathname}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+        body: JSON.stringify({ email: ADMIN.email, password: ADMIN.password, name: 'Evil' }),
+      });
+      assert.equal(res.status, 403, `${pathname} must reject a hostile Origin`);
+      const data = await res.json();
+      assert.equal(data.code, 'crossOriginRejected');
+      assert.equal(data.error, 'Cross-origin request rejected', 'the message is byte-identical to the other guard sites');
+      assert.deepEqual(Object.keys(data).sort(), ['code', 'error']);
+    }
+  } finally {
+    await server.stop();
+  }
+});
+
+test('positive control: the harness login without an Origin header still succeeds (WR-07 guard is browser-scoped)', async () => {
+  const server = await startServer();
+  try {
+    const res = await login(server.base, ADMIN.email, ADMIN.password);
+    assert.equal(res.status, 200);
+    const res2 = await signup(server.base, { name: 'Curl', email: 'curl@test.local' });
+    assert.equal(res2.status, 201);
+  } finally {
+    await server.stop();
+  }
+});
