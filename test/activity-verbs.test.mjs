@@ -181,8 +181,17 @@ const MACHINE_VERBS = [
 
 test('actCategory exists and reproduces the old English parsing for every verb of both vocabularies', () => {
   assert.equal(typeof actCategory, 'function', 'the classifier is not exported');
-  for (const verb of [...LEGACY_VERBS, ...MACHINE_VERBS])
+  // Deliberate divergences from oldClassify, each with its rationale:
+  // - 'createdProject': the old includes('project') was case-sensitive, so it
+  //   caught the legacy fragment but escaped the machine verb — WR-01 restores
+  //   the legacy selection for the new vocabulary (losing the NEW documents'
+  //   rows was a regression, not preservation).
+  // The D-06 quirk verbs (moved, removedAFileFrom, …) stay IDENTICAL to the old
+  // selection and are NOT exceptions — they are covered by the strict check.
+  for (const verb of [...LEGACY_VERBS, ...MACHINE_VERBS]) {
+    if (verb === 'createdProject') continue; // documented exception — see the pinned test below
     assert.equal(actCategory(verb), oldClassify(verb), `actCategory(${JSON.stringify(verb)}) moved from the old selection`);
+  }
 });
 
 test('the D-06 quirk pins the exact selections the filters make today', () => {
@@ -190,7 +199,7 @@ test('the D-06 quirk pins the exact selections the filters make today', () => {
   assert.equal(actCategory('commented on'), 'comments');
   assert.equal(actCategory('changed status of project'), 'projects', 'the unmapped legacy verb must classify');
   assert.equal(actCategory('changedPriorityOf'), null, 'priority changes sit outside the three filters');
-  assert.equal(actCategory('createdProject'), null, 'the old includes(project) is case-sensitive — the machine verb escapes it (quirk frozen)');
+  assert.equal(actCategory('createdProject'), 'projects', 'WR-01 restore: the legacy case-sensitive includes(project) was an accident — losing the machine-vocabulary rows was a regression');
   assert.equal(actCategory('projectStatusChanged'), 'projects');
   assert.equal(actCategory('created'), null);
 });
@@ -235,6 +244,13 @@ test('the recur extra keeps its resolver', () => {
 test('a legacy string extra renders nothing — suppressed, never divulged', () => {
   assert.equal(actExtraHtml('to Review'), '');
   assert.equal(actExtraHtml('30m'), '');
+});
+
+test('an assignedTo extra without a value renders an empty value — never the {value} placeholder', () => {
+  const html = actExtraHtml({ kind: 'assignedTo' });
+  assert.ok(html.includes('class="muted"'), 'the span still renders');
+  assert.doesNotMatch(html, /\{value\}/, 'the literal placeholder leaked into the rendered output');
+  assert.equal(html, `<span class="muted">${esc(t('act.extra.to', { value: '' }))}</span>`);
 });
 
 test('the structured extras the converted seed stores render translated', () => {

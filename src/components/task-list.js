@@ -193,10 +193,12 @@ export const verbLabel = v => (VERB_KEYS[v] ? tMsg(VERB_KEYS[v]) : v);
 /* The three activity filters classify the STORED verb, never English parsing:
    the table carries BOTH vocabularies, so a legacy document and a machine-verb
    one filter identically. D-06 freezes today's exact selection — quirks
-   included: a project move (`moved`) is a STATUS entry, the old
-   /moved|completed|reopened/ regex caught "removed a file from" too, and the
-   old includes('project') is case-sensitive, so 'createdProject' escapes the
-   PROJECTS filter (only 'projectStatusChanged' and the legacy fragments match). */
+   included: a project move (`moved`) is a STATUS entry, and the old
+   /moved|completed|reopened/ regex caught "removed a file from" too. The
+   PROJECTS filter deliberately RESTORES the old selection for both
+   vocabularies: the old includes('project') was case-sensitive, so it caught
+   the legacy fragment but not the machine verb 'createdProject' — losing the
+   new documents' rows was a regression, not preservation. */
 export const ACT_CATEGORIES = {
   comments: new Set(['commentedOn', 'commented on']),
   status: new Set([
@@ -209,7 +211,7 @@ export const ACT_CATEGORIES = {
     'removed a file from',
     'removedAFileFrom',
   ]),
-  projects: new Set(['projectStatusChanged', 'created project', 'changed status of project']),
+  projects: new Set(['projectStatusChanged', 'createdProject', 'created project', 'changed status of project']),
 };
 export const actCategory = verb => Object.keys(ACT_CATEGORIES).find(k => ACT_CATEGORIES[k].has(verb)) || null;
 
@@ -231,7 +233,7 @@ const RECUR_EXTRA = {
    (T-09-04's gate). */
 const EXTRA_VARS = {
   statusMoved: { key: 'act.extra.statusMoved', vars: e => ({ from: tMsg('task.status.' + e.from), to: tMsg('task.status.' + e.to) }) },
-  assignedTo: { key: 'act.extra.to', vars: e => ({ value: e.value }) },
+  assignedTo: { key: 'act.extra.to', vars: e => ({ value: e.value ?? '' }) },
   unassigned: { key: 'act.extra.unassigned', vars: () => ({}) },
   prioritySet: { key: 'act.extra.to', vars: e => ({ value: tMsg('task.priority.' + e.value) }) },
   dateSet: { key: 'act.extra.to', vars: e => ({ value: formatDate(e.value) }) },

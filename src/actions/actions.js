@@ -322,7 +322,7 @@ A.popPick = el => {
         t,
         k === 'assignee'
           ? v
-            ? { kind: 'assignedTo', value: mem(v).name }
+            ? { kind: 'assignedTo', value: mem(v)?.name ?? '' }
             : { kind: 'unassigned' }
           : v
             ? { kind: 'dateSet', value: v }
