@@ -444,7 +444,13 @@ const context = await browser.newContext({ locale: 'fr-FR' }); // anonymous surf
 
 ## Open Questions
 
-1. **The canonical 21-route list.**
+*(Both questions resolved at planning time — no unresolved open questions remain.)*
+
+1. **The canonical 21-route list.** **(RESOLVED — see 11-01 Task 1)**
+   The planner pinned the list explicitly in 11-01 Task 1 (action item 2): the 16 existing
+   overflow routes plus `member`, `team` (real entity ids from API fixtures), project detail
+   (seeded project id), `/join` (real invite token), and the auth page — matching assumption A1.
+   `routes.length === 21` is asserted in the spec, so any miscount fails loudly on first run.
    - What we know: 16 pinned in `french-overflow.spec.mjs`; `ROUTE_IDS` has 20 entries minus
      system/states minus param-dependence; D-04 says "reuse phase 10's enumeration" but no
      explicit 21-entry list exists in the phase-10 artifacts.
@@ -452,7 +458,10 @@ const context = await browser.newContext({ locale: 'fr-FR' }); // anonymous surf
    - Recommendation: planner fixes the list explicitly in the plan and the spec pins it as data;
      the coverage assertion makes any miscount fail loudly on first run.
 
-2. **How much fixture data the sweep needs.**
+2. **How much fixture data the sweep needs.** **(RESOLVED — see 11-01 Task 1, action item 1)**
+   Decided at planning: seed exactly one project + one task through the API (per D-06 and the
+   phase-7 precedent), and let the first run surface any data-dependent leak (11-01 Task 2 then
+   disposes of hits via catalogue fixes, not extra fixtures).
    - What we know: empty lists render empty states (translated), detail pages need ids.
    - What's unclear: whether leak-prone content appears only with data (e.g. activity, archive).
    - Recommendation: seed one project + one task (the phase-7 spec already does this) and let the
