@@ -57,7 +57,9 @@ async function call(method, path, body, { keepalive = false } = {}) {
       /* non-JSON response */
     }
   }
-  return { ok: res.ok, status: res.status, data, error: data?.code ? tErr(data.code, data?.params, data?.error) : data?.error };
+    /* The whole payload is the vars bag: interpolate only replaces the names the
+       message actually uses, so passing control fields along is safe (CR-02). */
+  return { ok: res.ok, status: res.status, data, error: data?.code ? tErr(data.code, data, data?.error) : data?.error };
 }
 
 function applyUser(data) {

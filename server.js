@@ -1647,7 +1647,8 @@ async function handleApi(req, res, url) {
       const password = String(body?.password || '');
       if (!name) return fail(res, 400, 'nameRequired', 'Enter your name');
       if (!emailOk(email)) return fail(res, 400, 'enterValidEmail', 'Enter a valid email address');
-      if (invite.email && invite.email !== email) return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`);
+      if (invite.email && invite.email !== email)
+        return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`, { email: invite.email });
       if (password.length < 10 || !/[0-9\W]/.test(password)) {
         return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
       }

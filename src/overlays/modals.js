@@ -222,7 +222,7 @@ export function inviteModal(m, H) {
         ? `<div class="field"><span class="label">${t('modal.inviteLinks')}</span>${links
             .map(l => {
               const status = l.sent ? t('modal.sent') : l.error ? t('modal.notSent') : '';
-              return `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="${l.email ? t('modal.inviteLinkFor', { email: esc(l.email) }) : t('modal.inviteLink')}" style="font-size:12px"><span class="faint" style="font-size:11px;white-space:nowrap" title="${esc(tErr(l.code, l.params, l.error || ''))}">${status}</span><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">${t('act.copy')}</button></div>`;
+              return `<div class="row" style="gap:8px;margin-bottom:6px"><input class="input" readonly value="${esc(l.url)}" aria-label="${l.email ? t('modal.inviteLinkFor', { email: esc(l.email) }) : t('modal.inviteLink')}" style="font-size:12px"><span class="faint" style="font-size:11px;white-space:nowrap" title="${esc(tErr(l.code, l, l.error || ''))}">${status}</span><button type="button" class="btn btn-secondary btn-sm" data-a="copyText" data-text="${esc(l.url)}">${t('act.copy')}</button></div>`;
             })
             .join(
               '',

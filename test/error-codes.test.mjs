@@ -8,7 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
-import { ADMIN, ROOT, login, signup, startServer } from './helpers/server.mjs';
+import { ADMIN, ROOT, login, signup, startServer, client, inviteToken } from './helpers/server.mjs';
 
 const serverSource = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 
@@ -109,4 +109,76 @@ test('has() gates on the exact key against the active then base locale, no foldi
   assert.equal(has('err.alreadyMember '), false);
   assert.equal(has('not.an.err.key'), false);
   await primeLocale(BASE_LOCALE);
+});
+
+/* ---------- CR-02 / IN-03: the whole-payload transport, proved on a real server ---------- */
+
+test('alreadyMember ships its flat payload and renders in French without braces', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    const auth = await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password });
+    assert.equal(auth.status, 200);
+
+    /* the second account becomes a member through a first invite, so the second
+       invite for the same address hits the alreadyMember branch */
+    const first = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
+    assert.equal(first.status, 201);
+    const accepted = await client(server.base, 'member').post(
+      `/api/invites/${encodeURIComponent(inviteToken(first.data.invites[0].url))}/accept`,
+      { name: 'Member', email: 'member@test.local', password: 'password-1234' },
+    );
+    assert.equal(accepted.status, 201);
+
+    /* the admin re-invites the existing member's address → 409 alreadyMember */
+    const res = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
+    assert.equal(res.status, 409);
+    assert.equal(res.data.code, 'alreadyMember');
+    assert.equal(res.data.error, 'member@test.local is already a member of Acme');
+    /* the interpolation params arrive flat in the payload — never behind a params field */
+    assert.equal(res.data.email, 'member@test.local');
+    assert.equal(res.data.name, 'Acme');
+
+    /* the whole payload passed as vars renders the fr phrase with no literal { or } */
+    await primeLocale('fr');
+    const rendered = tErr(res.data.code, res.data, res.data.error);
+    assert.ok(!rendered.includes('{') && !rendered.includes('}'), `the fr render leaked a placeholder: ${rendered}`);
+    assert.ok(rendered.includes('member@test.local'), `the fr render lost the email: ${rendered}`);
+    assert.ok(rendered.includes('Acme'), `the fr render lost the workspace name: ${rendered}`);
+
+    /* IN-03: an invite row consumed the same flat transport (modals.js path) */
+    const row = { code: 'emailSendFailed', error: 'raw', email: 'x@y.test' };
+    assert.equal(tErr('emailSendFailed', row, row.error), fr['err.emailSendFailed']);
+    await primeLocale(BASE_LOCALE);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('inviteForOtherEmail carries its email in the payload on the join flow', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    const auth = await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password });
+    assert.equal(auth.status, 200);
+
+    /* invite a fresh address, then accept the link with a DIFFERENT one */
+    const created = await admin.post('/api/workspaces/acme/invites', { emails: ['newbie@test.local'], role: 'Member' });
+    assert.equal(created.status, 201);
+    const url = created.data.invites?.find(i => i.email === 'newbie@test.local')?.url;
+    const token = inviteToken(url);
+    assert.ok(token, 'the invite response did not carry a join url');
+
+    const res = await client(server.base, 'other').post(`/api/invites/${encodeURIComponent(token)}/accept`, {
+      name: 'Other',
+      email: 'other@test.local',
+      password: 'password-1234',
+    });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'inviteForOtherEmail');
+    assert.equal(res.data.email, 'newbie@test.local');
+    assert.equal(res.data.error, 'This invite is for newbie@test.local');
+  } finally {
+    await server.stop();
+  }
 });
