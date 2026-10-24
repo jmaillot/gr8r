@@ -308,11 +308,11 @@ Success criteria (what must be TRUE):
 
 Deliverable: the eight unproven flows are proven by a real browser, in English and in French.
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 10-01-PLAN.md — English pin (UAT-09), helper promotion (D-06), criterion-4 extension (UAT-06 exercised)
-- [ ] 10-02-PLAN.md — flows spec: onboarding, invite modal, /join, share modal (UAT-01..04, en+fr)
+- [x] 10-02-PLAN.md — flows spec: onboarding, invite modal, /join, share modal (UAT-01..04, en+fr)
 - [ ] 10-03-PLAN.md — flows spec: switcher, member removal, project creation, billing-free proof (UAT-05..08, en+fr)
 
 ## Phase 11: French sweep, build gate & ship hardening

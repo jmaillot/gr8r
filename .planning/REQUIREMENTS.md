@@ -71,10 +71,10 @@ the server is the only boundary that counts.
 
 ### Browser coverage
 
-- [ ] **UAT-01**: The onboarding wizard that creates a workspace is covered by a browser test.
-- [ ] **UAT-02**: The invite modal is covered by a browser test.
-- [ ] **UAT-03**: The `/join` page that accepts an invitation is covered by a browser test.
-- [ ] **UAT-04**: The project share modal is covered by a browser test.
+- [x] **UAT-01**: The onboarding wizard that creates a workspace is covered by a browser test.
+- [x] **UAT-02**: The invite modal is covered by a browser test.
+- [x] **UAT-03**: The `/join` page that accepts an invitation is covered by a browser test.
+- [x] **UAT-04**: The project share modal is covered by a browser test.
 - [ ] **UAT-05**: Removing a member from the members page is covered by a browser test.
 - [x] **UAT-06**: Switching between two workspaces is covered by a browser test.
 - [ ] **UAT-07**: Changing the workspace plan is covered by a browser test.
@@ -151,10 +151,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ERR-02 | Phase 9 | Complete |
 | ACT-01 | Phase 9 | Complete |
 | ACT-02 | Phase 9 | Complete |
-| UAT-01 | Phase 10 | Pending |
-| UAT-02 | Phase 10 | Pending |
-| UAT-03 | Phase 10 | Pending |
-| UAT-04 | Phase 10 | Pending |
+| UAT-01 | Phase 10 | Complete |
+| UAT-02 | Phase 10 | Complete |
+| UAT-03 | Phase 10 | Complete |
+| UAT-04 | Phase 10 | Complete |
 | UAT-05 | Phase 10 | Pending |
 | UAT-06 | Phase 10 | Complete |
 | UAT-07 | Phase 10 | Pending |
