@@ -108,6 +108,21 @@ contract in Chromium.
 For a self-hosted instance — one Node container, accounts and server-side SQLite storage —
 see [DEPLOY.md](DEPLOY.md).
 
+## Internationalization
+
+- **The interface is translated into English and French.** Every user-visible interface string
+  comes from a locale catalogue (`src/locales/en.json` / `fr.json`); dates, numbers, plurals and
+  the stored vocabulary render per locale, and each account's language choice persists.
+- **The demo seed's sample content is English.** The sample projects, tasks and notes shipped
+  with demo mode are not translated (PROJECT.md D-15).
+- **The two prototype pages are English.** The `design-system` and `states` prototype pages are
+  excluded from the catalogues.
+- **Four other languages are absent until they exist** — the selector once listed them, but only
+  English and French are real (LANG-01 future work).
+- **The guarantee is guarded.** A 21-route browser sweep proves no untranslated English string
+  is served in French, and a build-time static scan fails the build on a new user-visible literal
+  that never reached a catalogue.
+
 ## Workspaces
 
 The self-hosted server keeps **several workspaces in one SQLite file**. Each has its own URL
