@@ -161,3 +161,36 @@ test('modKey() follows the active locale — it reads the catalogue at call time
   }
   assert.equal(modKey(), t('common.ctrl'), 'switching back restores the base answer');
 });
+
+/* ---------- one escaping table; crypto ids (IN-02, IN-04) ---------- */
+
+test('uid() draws from crypto.getRandomValues: prefixed, distinct over 200 calls, no Math.random', async () => {
+  globalThis.document = { querySelectorAll: () => [] };
+  const { uid } = await import('../src/core/utils.js');
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) {
+    const id = uid('t');
+    assert.ok(id.startsWith('t'), 'the prefix survives');
+    seen.add(id);
+  }
+  assert.equal(seen.size, 200, '200 calls produce 200 distinct values — the property a collision would corrupt');
+  assert.notEqual(uid('t'), uid('t'), 'two consecutive calls differ');
+  const utils = fs.readFileSync(UTILS_SOURCE, 'utf8');
+  assert.doesNotMatch(utils, /Math\.random/, 'Math.random is gone from the id path');
+  assert.match(utils, /getRandomValues/, 'the entropy comes from the crypto global');
+});
+
+test('esc in core/utils.js is the escHtml re-export — one escaping table (IN-02)', async () => {
+  globalThis.document = { querySelectorAll: () => [] };
+  const { esc, escHtml } = await Promise.all([import('../src/core/utils.js'), import('../src/core/i18n.js')]).then(([u, i]) => ({ esc: u.esc, escHtml: i.escHtml }));
+  const hostile = '<script>&"\'</script> text & more< >"';
+  assert.equal(esc(hostile), escHtml(hostile), 'identical output on a hostile input');
+  assert.equal(esc(undefined), '', 'nullish input inerts to an empty string');
+  const utils = fs.readFileSync(UTILS_SOURCE, 'utf8');
+  assert.match(utils, /export \{ escHtml as esc \} from '\.\/i18n\.js'/, 'the definition is a named re-export, not a second table');
+  assert.doesNotMatch(utils, /&amp;/, 'no escaping map is defined in utils.js anymore');
+  /* i18n.js is a leaf module (it imports nothing from the app), so the re-export
+     cannot create a cycle. */
+  const i18n = fs.readFileSync(I18N_SOURCE, 'utf8');
+  assert.doesNotMatch(i18n, /from '\.\/utils\.js'|from '\.\.\/core\/utils\.js'/, 'i18n.js stays a leaf module');
+});

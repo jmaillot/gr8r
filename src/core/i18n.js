@@ -130,8 +130,9 @@ export function availableLocales() {
   return LOCALES.filter(l => catalogues.has(l.code) || Object.hasOwn(loaders, `../locales/${l.code}.json`));
 }
 
-/* The module's own one-line escaper, the same table as esc() in core/utils.js. t() never
-   calls it: the caller escapes at the point of interpolation. */
+/* The one escaping table of the whole client: core/utils.js re-exports it as esc,
+   so there is no second definition to diverge (IN-02). t() never calls it: the
+   caller escapes at the point of interpolation. */
 export function escHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }

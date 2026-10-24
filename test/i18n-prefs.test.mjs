@@ -113,8 +113,10 @@ test('resolving the preference never writes: neither setDateFormat() nor fmtDate
   /* fmtDate() only READS the pattern: it never rewrites it. */
   assert.ok(!/dateFormat\s*=/.test(functionBody(source, 'fmtDate')), 'fmtDate() rewrites the pattern');
   /* The date API of utils.js reaches the leaf layer and nothing else: it cannot
-     write the shared document, because it never imports the store. */
-  const specifiers = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1]);
+     write the shared document, because it never imports the store. The esc
+     re-export (plan 09-07, IN-02) adds a second specifier of the SAME leaf
+     module, so the unique set is what pins the boundary. */
+  const specifiers = [...new Set([...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1]))];
   assert.deepEqual(specifiers, ['./i18n.js']);
 });
 

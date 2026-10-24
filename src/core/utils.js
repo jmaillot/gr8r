@@ -9,7 +9,10 @@ document.querySelectorAll('link[data-font]').forEach(l => {
 });
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+/* One escaping table in the whole client: esc is the named re-export of i18n.js's
+   escHtml (IN-02). Every importer keeps importing from core/utils.js — the path
+   never changed, only the definition stopped being duplicated. */
+export { escHtml as esc } from './i18n.js';
 
 /* ---------- search ---------- */
 /* The search folds both sides: NFD, then the combining marks are dropped, so "elodie"
@@ -29,7 +32,12 @@ export function foldForSearch(s) {
   }
   return { text, map };
 }
-export const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 8);
+/* The random half draws 6 cryptographic bytes; each becomes two base36 digits
+   (a byte is always < 36², so the length is deterministic), giving 12 characters
+   of crypto.getRandomValues entropy over the ids the document references across
+   tasks, members and the activity journal (IN-04, T-09-12). The old PRNG path is gone. */
+export const uid = (p = 'x') =>
+  p + [...crypto.getRandomValues(new Uint8Array(6))].map(b => b.toString(36).padStart(2, '0')).join('');
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 /* The keyboard hint's modifier label, a lazy getter: the Ctrl half is interface text and
