@@ -7,7 +7,10 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: import.meta.dirname,
-  testMatch: '**/*.spec.mjs',
+  /* demo-locale.spec.mjs runs only under e2e/demo.playwright.config.mjs: it proves
+     the server-less demo (`vite preview`, no /api), which the main suite's
+     API-backed server would contradict (D-11, UAT-10 criterion 3). */
+  testIgnore: '**/demo-locale.spec.mjs',
   outputDir: path.join(ROOT, 'test-results'),
   fullyParallel: false,
   workers: process.env.CI ? 1 : undefined,

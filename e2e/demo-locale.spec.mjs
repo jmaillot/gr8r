@@ -43,6 +43,23 @@ async function demoBootedIn(page, lang, route = 'home') {
   await expect.poll(() => page.title()).toContain(fmt(`nav.route.${route}`, undefined, lang));
 }
 
+/* These tests are only meaningful when NO API sits behind the origin: the
+   demo fallback fires on /api/config failure. The main suite's config
+   (e2e/playwright.config.mjs) serves the app WITH its API, so when this spec
+   is picked up by a config that has an API behind it, skip — don't fail.
+   Probe status-based: the real API answers /api/config < 500; a dead proxy
+   target answers 5xx or refuses the connection (request throws). */
+test.beforeEach(async ({ request }) => {
+  let apiPresent = false;
+  try {
+    const res = await request.get('/api/config');
+    apiPresent = res.status() < 500;
+  } catch {
+    apiPresent = false;
+  }
+  test.skip(apiPresent, 'an API is reachable behind this origin — demo mode cannot fire; run e2e/demo.playwright.config.mjs instead');
+});
+
 test('demo mode renders French for a fr-preferring browser with no API server', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'fr-FR' });
   try {
