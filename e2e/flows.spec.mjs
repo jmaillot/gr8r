@@ -333,3 +333,54 @@ test.describe('/join page', () => {
     });
   }
 });
+
+/* =====================================================================
+   PROJECT SHARE MODAL (UAT-04)
+   ===================================================================== */
+
+test.describe('project share modal', () => {
+  for (const lang of ['en', 'fr']) {
+    test(`the share modal adds a member by email with a catalogue-labelled permission select (${lang})`, async ({ browser }) => {
+      const owner = FLOW[lang].shareOwner;
+      const target = FLOW[lang].target;
+      const wsName = FLOW[lang].shareWsName;
+      const projectName = FLOW[lang].projectName;
+      const context = await newContext(browser, { ip: owner.ip });
+      const page = await context.newPage();
+      try {
+        await signIn(page, owner);
+
+        /* Open the project from the projects grid, then its share modal. */
+        await page.getByRole('button', { name: fmt('nav.route.projects', {}, lang) }).first().click();
+        await page.locator(`[data-a='go'][data-r='project'][aria-label="${projectName}"]`).click();
+        await page.getByRole('button', { name: fmt('act.share', {}, lang), exact: true }).click();
+
+        /* Header and the two access sections. */
+        await expect(page.getByRole('heading', { name: fmt('modal.shareTitle', { name: projectName }, lang), level: 2 })).toBeVisible();
+        await expect(page.getByText(fmt('modal.peopleWithAccess', {}, lang))).toBeVisible();
+        await expect(page.getByText(fmt('modal.generalAccess', {}, lang))).toBeVisible();
+
+        /* The general-access select renders both catalogue options without
+           needing to change it. */
+        const accessOptions = await page.locator(`select[data-in='shareAccess'] option`).allTextContents();
+        expect(accessOptions).toEqual([fmt('modal.onlyInvited', {}, lang), fmt('modal.everyoneAt', { name: wsName }, lang)]);
+
+        /* Add the existing workspace member by email; the permission select
+           is driven by its RENDERED catalogue label (I18N-07: selecting by
+           option value text would fail in French). */
+        await page.getByLabel(fmt('a11y.inviteByEmail', {}, lang), { exact: true }).fill(target.email);
+        await page.locator('#share-perm').selectOption({ label: fmt('common.perm.view', {}, lang) });
+        await page.getByRole('button', { name: fmt('act.invite', {}, lang), exact: true }).click();
+
+        /* The outcome: the shared toast and the member row's own permission
+           select, holding the machine value behind the chosen label. */
+        await expect(page.getByText(fmt('toast.sharedWith', { name: target.name }, lang))).toBeVisible();
+        const permSelect = page.locator(`select[data-in='sharePerm'][aria-label="${fmt('modal.permissionFor', { name: target.name }, lang)}"]`);
+        await expect(permSelect).toBeVisible();
+        await expect(permSelect).toHaveValue('Can view');
+      } finally {
+        await context.close();
+      }
+    });
+  }
+});
