@@ -27,7 +27,7 @@ Last updated: 2026-10-22
 
 - Milestone: **v1.2 — Localization** — phases 5 and 6 complete, 5 phases to go
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-plan-phase 7`** (French catalogue & French typography) — or `/gsd-discuss-phase 7` first
+- Next: **`/gsd-execute-phase 8`** — phase 8 has all 4 plans summarized but no VERIFICATION.md; execute resumes at the verification gates (#2868)
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
@@ -319,7 +319,8 @@ Last activity: 2026-10-24 — Phase 09 complete, transitioned to Phase 8
 
 ## Operator Next Steps
 
-- `/gsd-execute-phase 9` — remaining plan progress
+- `/gsd-execute-phase 8` — all plans summarized; resumes at the verification gates
+- Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
 - Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
 
 ## Performance Metrics

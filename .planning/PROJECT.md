@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-22 after starting milestone v1.2*
+*Last updated: 2026-10-24 after completing Phase 9 (server messages & activity history, gap closure)*
 
 ## What it is
 
@@ -135,6 +135,12 @@ French, every user has their own locale — and the full app journey is covered 
 - ✓ R7 — Creation is flag-driven (`ALLOW_SIGNUP`), invitations are workspace-scoped, and an
   existing account can accept an invite — v1.1
 - ✓ R8 — Lint, format, build and the new server tests pass in CI — v1.1
+- ✓ ERR-01 — A server error carries a stable machine code next to its English message; the
+  client translates the code — Phase 9
+- ✓ ERR-02 — An error whose code is unknown to the client still shows the server's message — Phase 9
+- ✓ ACT-01 — The activity log renders in the interface language; filters classify the stored
+  machine verb, not English prose — Phase 9
+- ✓ ACT-02 — Activity entries written before this milestone still display and filter — Phase 9
 
 ### Active
 
