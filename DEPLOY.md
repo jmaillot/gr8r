@@ -709,8 +709,10 @@ with French content — so the shipped image is verified to carry the French cat
   `TRUST_PROXY=true` (the bundled compose file sets it); direct exposure would let clients
   spoof their IP for throttling — with the default off, header rotation cannot.
 - **Rate limiting** is in memory and resets when the container restarts.
-- **Uploads are still simulated.** Attachment names and sizes live in the workspace
-  document; file contents are not stored. Do not treat them as backed-up files.
+- **File uploads are real.** Uploaded binaries are stored on disk under `DATA_DIR/files/`,
+  capped by `MAX_UPLOAD_MB`; deleting a file record removes the binary in the same
+  mutation. They are regular files on disk, not rows in the workspace document — include
+  `DATA_DIR/files/` in your backup strategy alongside the SQLite database.
 - **Plans are display-only.** `Free`/`Team`/`Business` are labels; nothing is billed, limited
   or enforced.
 - **Email is optional.** Without `SMTP_HOST` the server still creates invite links for you to

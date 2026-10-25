@@ -171,7 +171,9 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
 - Real billing and plan enforcement (quotas, seats, storage, invoices). The plan stays a
   display value, but only an owner may change it.
 - Subdomain tenancy, SSO/SAML, SCIM.
-- File storage: files are metadata only today; no binary upload backend.
+- File storage hardening beyond Phase 12: upload quotas per workspace/user, antivirus
+  scanning, and external object storage (real binary uploads under `DATA_DIR/files/`
+  shipped in Phase 12).
 - Translating the four remaining languages (Deutsch, Español, 日本語, English UK). The selector
   will not offer a language that is not translated.
 - The invitation email in the user's language — the server image ships no catalogue, so it would
