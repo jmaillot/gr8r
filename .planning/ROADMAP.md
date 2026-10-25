@@ -441,3 +441,29 @@ Plans:
 
 **Gap closure, round 2** *(from the UAT re-run — 12-UAT.md ## Gaps)*
 - [x] 12-07-PLAN.md — G-12-4/G-12-5: Firefox PDF preview (Range/206 serving in serveFileBinary + tall scrollable PDF iframe) and anonymous document navigations redirect to login with a path-preserving return URL (T-12-13 reopened)
+
+## Backlog
+
+### Phase 999.1: Follow-up — Phase 12 deferred UAT follow-up: Test 0 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 12 verification
+**Source phase:** 12
+**Deferred at:** 2026-10-25 during /gsd-verify-work 12 session completion
+**Follow-ups:**
+- [ ] Test 0: Hors périmètre phase 12 (Sessions) : la section Sessions affiche 2 sessions actives (Chrome + Firefox) mais le bouton « déconnecter les autres sessions » ne s'active pas (deferred 2026-10-25)
+
+### Phase 999.2: Follow-up — Phase 12 deferred UAT follow-up: Test 0 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 12 verification
+**Source phase:** 12
+**Deferred at:** 2026-10-25 during /gsd-verify-work 12 session completion
+**Follow-ups:**
+- [ ] Test 0: Hors périmètre phase 12 (Auth) : le changement de mot de passe répond « Mot de passe mis à jour » mais (1) le nouveau mot de passe ne fonctionne pas à la connexion, (2) les autres sessions restent connectées — l'utilisateur veut une révocation automatique des autres sessions après changement de mot de passe (deferred 2026-10-25)
+
+### Phase 999.3: Follow-up — Phase 12 deferred UAT follow-up: Test 0 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 12 verification
+**Source phase:** 12
+**Deferred at:** 2026-10-25 during /gsd-verify-work 12 session completion
+**Follow-ups:**
+- [ ] Test 0: Hors périmètre phase 12 (Auth/2FA) : l'authentification à deux facteurs génère un faux QR code illisible — chercher comment implémenter un vrai check 2FA (TOTP standard : secret, URI otpauth://, QR scannable, vérification à 6 chiffres). À corréler avec les bugs Sessions et changement de mot de passe (même zone auth possiblement stubée) (deferred 2026-10-25)
