@@ -1,6 +1,6 @@
 ---
 phase: 05-i18n-foundation-catalogue-contract
-verified: 2026-10-22T10:56:24Z
+verified: 2026-10-25T12:00:00Z
 status: passed
 score: 5/5 roadmap success criteria verified (20/20 plan must-have truths)
 covered_files:
@@ -22,9 +22,15 @@ covered_files:
   - test/fixtures/icons-baseline.json
   - test/i18n.test.mjs
   - vite.config.js
-covered_digest: "v2:sha256:216cb159c23167152a6bd59f8ee5494cbdb8f4bebba05d1e260e957472753a36"
+covered_digest: "v3:sha256:a88695d5f512b45b5103e1f1625d9b6bd46cf3548d9f1a93e82d3b230e16ca6d"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 5/5
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 5: i18n foundation & catalogue contract — Verification Report
@@ -32,259 +38,249 @@ overrides_applied: 0
 **Phase Goal:** The `t()` layer, the catalogue format, the escaping contract, the plural engine and
 the build layout — fixed before a single string moves… A leaf module `src/core/i18n.js` (locale
 singleton, `t()`, `getLocale()`/`setLocale()`, plural selection, cached `Intl` wrappers, the locale
-registry) over `src/locales/{en,fr}.json`. No runtime dependency is added.
-**Verified:** 2026-10-22T10:56:24Z
+registry) over `src/locales/{en,fr}.json`, with the catalogue contract (plain-text values, `t()`
+never escapes, CLDR plurals, JSON catalogue importable by plain Node, French as its own chunk)
+pinned by tests.
+**Verified:** 2026-10-25T12:00:00Z
 **Status:** passed
-**Re-verification:** No — initial verification (no prior `*-VERIFICATION.md` in the phase directory)
+**Re-verification:** Yes — stale-covered-digest re-run (#4682). The previous report's `covered_digest` no longer matched the tree: post-phase commits (phases 07, 09, 12 and the 21725f1 format pass) edited `src/core/i18n.js` (124 → 523 lines) and grew both catalogues (9/6 seed keys → 1538 keys each, including the six keys added today). This report regenerates all must-have verdicts against the CURRENT tree; the prior verdicts that still hold were re-evidenced, not carried on trust.
+
+## What changed since the last verification — and what was re-derived
+
+| Change | Source | Re-verification action taken |
+| --- | --- | --- |
+| `src/core/i18n.js` grew 124 → 523 lines (the `Intl` formatter surface, `negotiate()`, `primeLocale()`, the locale storage API — phase 06/07/08 work, all layered *on top of* the contract surface) | `21725f1`, `2ea5438`, `fcabcfe`, … | The contract surface was re-read line by line (`t()`, fallback, plural engine, glob exclusion, leaf imports, raw pass-through) and re-probed live |
+| Both catalogues grew to **1538 keys each**, strictly parallel | `12-*`, `2a75275` | Key counts, en/fr parity, forbidden-character scan over **all 3076 values**, and a live lookup of the six keys added today |
+| 6 new keys today: `toast.dirUp`, `toast.dirDown`, `act.deleteProjectTaskCount`, `act.removeAccess.losesAccess`, `act.removeAccess.unassigns`, `page.files.browse` | today's close-out commits | All six verified present in BOTH locales, all plain text, the plural value CLDR-shaped; the catalogue lint (in `test/catalogue.test.mjs`, 26/26 green) covered them by running over the actual files — no allow-list, no exemption |
+| `.planning/REQUIREMENTS.md` now shows **I18N-06 and I18N-08 checked / Complete** | orchestrator close-out | The prior report's advisory #3 (bookkeeping pending) is resolved; re-confirmed |
 
 ## Verification stance
 
-Every claim below was checked against the working tree, not against the summaries. The three
-SUMMARY files were read only to locate the claims to falsify; two of the three things the
-executors flagged were re-derived independently (the base-locale build change and the icon
-baseline), and two deliberate mutations were performed and reverted (a `<`/`>` value and a `"`
-value injected into `src/locales/fr.json`).
-
-Independent evidence gathered:
+Nothing was trusted from SUMMARYs or from the prior report. Independent evidence gathered this run:
 
 | Probe | Command | Result |
 | --- | --- | --- |
-| Whole node suite | `npm test` | 98 pass / 0 fail (66 pre-existing + 16 + 23 + 9 new) |
-| Browser suite | `npm run e2e` | 6/6 Chromium (Playwright) pass |
-| Lint / format | `npm run lint`, `npm run format:check` | clean |
-| Real builds | `LOCALES=en,fr|en|fr node node_modules/vite/bin/vite.js build --outDir …` | 3 builds, bytes inspected directly |
-| Icon baseline provenance | pre-phase scan (verbatim from `d1cc552:vite.config.js`) run over `git archive d1cc552 src` vs `test/fixtures/icons-baseline.json` vs the current tree | 174 = 174 = 174, byte-identical lists, zero names added |
-| Bare-Node import | `node -e "import('./src/locales/fr.json',{with:{type:'json'}})"` (Node v24.21.0) | 6 keys, OK |
-| Mutation 1 | `"nav.projects": "Projets <b>bold</b>"` injected into `src/locales/fr.json` | `test/catalogue.test.mjs` → **✖ the seed catalogues pass every rule** — "the value carries a left angle bracket" + "right angle bracket" → reverted, `git status` clean, file byte-identical |
-| Mutation 2 | `"nav.projects": "The \"Projets\" panel"` injected into `src/locales/fr.json` | `test/catalogue.test.mjs` → **✖ the seed catalogues pass every rule** — "the value carries a double quote" → reverted, `git status` clean, file byte-identical |
+| Catalogue contract suite | `node --test test/catalogue.test.mjs` | **26 pass / 0 fail** (grew from 23: the suite now embeds its own lint mutations — "✔ the lint rejects a value carrying a left/right angle bracket" ran green inside the suite) |
+| Layer contract suite | `node --test test/i18n.test.mjs` | **16 pass / 0 fail** |
+| Build contract suite (3 real `vite build` runs) | `node --test test/build-locales.test.mjs` standalone | **9 pass / 0 fail** (11.4 s — three real builds executed and byte-asserted) |
+| Whole node suite, canonical invocation | `npm test` (`node --test --test-concurrency=2`) | 432–443 pass; failures analysed below — **none in phase 5's contract suites under standalone runs** |
+| Bare-Node importability (D-13) | `node -e "import('./src/locales/fr.json',{with:{type:'json'}})"` (Node v24.21.0) | OK — **1538 keys** |
+| Layer module import in bare Node | `import('./src/core/i18n.js')` | 27 exports resolved; `t('nav.projects')` → `'Projects'` |
+| Live plural/CLDR probe (bare Node) | `setLocale('fr')` then `t('act.deleteProjectTaskCount',{n:0}/{n:1000000})` | fr **0 → one** member, **1000000 → many→other** — the French `Intl.PluralRules` selection drove the member choice even with the fr catalogue absent in Node (documented bare-Node behaviour), then `en` fallback supplied the value — the fallback path and the CLDR engine exercised in one probe |
+| Live fallback probe | under an active `fr` locale, `t('nav.projects')` | `'Projects'` (English fallback, never empty) |
+| Raw pass-through (D-09) | code read + committed test | `interpolate()` (`i18n.js:142-147`) substitutes `{name}` only; `t()` returns at `i18n.js:182` with **no escaper on the path**; `escHtml` (`i18n.js:138-140`) is exported but never called by `t()` |
+| Forbidden-character scan (I18N-06) | script over **all 1538 values of both locales**, strings and plural members | **0 violations** — including today's 6 new keys (`fr dirUp = "vers le haut"`, `fr losesAccess = "{name} perdra immédiatement l'accès à {ws}."` — plain text with `{}` placeholders only) |
+| Key parity | en vs fr key sets | **1538 = 1538**, strict subset rule holds |
+| Leaf contract | read of `i18n.js` import list | the ONLY import is `../locales/en.json with { type: 'json' }` (`i18n.js:6`); the `import.meta.glob` (`i18n.js:24`) still excludes `en.json` and is caught under Node (`i18n.js:23-27`) |
+| Zero runtime dependency | `grep '"dependencies"' package.json` → absent; tests committed | holds |
+| Wiring of the layer | `src/main.js:7` `import './core/i18n.js';` + `:63` (render-side import of `t`, `LOCALES`, `negotiate`, …) | wired |
+
+### Suite-run analysis (honesty clause)
+
+Under `npm test` (445 tests), failures appeared that do **not** touch phase 5's contract, and their
+pattern was investigated rather than waved away:
+
+- `test/build-locales.test.mjs`, `test/i18n-vocab.test.mjs`, `test/activity-verbs.test.mjs`
+  **fail under concurrency but pass standalone** (build-locales 9/9 in 11.4 s; i18n-vocab 15/15;
+  activity-verbs 10/10). The concurrent mode runs two files while each `build-locales` run spawns
+  three `vite build` processes; the observed failures ("the LOCALES=fr build failed", server-port
+  file-level failure) are resource interference between parallel builds/servers, not contract
+  regressions — the same binaries pass when not overlapped.
+- **`test/i18n-scan.test.mjs` fails standalone (21/25)** — a real, reproducible failure: `node
+  scripts/i18n-scan.mjs` exits 1 on `src/views/table.js:87  ruleProse  "A literal that was never
+  extracted"`. **Provenance:** `git diff` shows this literal is an **uncommitted working-tree
+  addition** (`+export const probe = 'A literal that was never extracted';`) — not committed by any
+  phase. It reads as a scanner mutation-probe left in the working tree. The scanner is a
+  **phase 6** gate (`scripts/i18n-scan.mjs` and `test/i18n-scan.test.mjs` are declared in
+  `06-01-PLAN.md`), not a phase 5 must-have. Moreover, the scanner detecting it is *evidence the
+  gate works*. Phase 5 explicitly required that NO string move and NO `t()` call site be added —
+  this probe literal violates the phase 6 extraction contract, not the phase 5 foundation. The
+  working-tree literal should be removed (it corrupts every phase's CI signal while it sits
+  there), but it does not block *this* phase's goal.
 
 ## Goal Achievement
 
-### Roadmap success criteria (the contract)
+### Roadmap success criteria (the contract) — re-verified on the current tree
 
-| # | Criterion | Status | Evidence |
+| # | Criterion | Status | Evidence (current tree) |
 | --- | --- | --- | --- |
-| 1 | A catalogue lookup returns the English base string, and a key with no value in the active catalogue falls back to English instead of rendering empty text | **✓ VERIFIED** | `src/core/i18n.js:114-123` — `t()` reads the active catalogue, then `catalogues.get(BASE_LOCALE)`, then returns the key (never empty). `test/i18n.test.mjs:12-15` asserts `t('nav.projects') === en['nav.projects']`; the `gr8r:locale` test asserts `t('contract.englishOnly') === 'English only'` **while the active locale is `fr`** — a real state transition exercised by a passing test, not a presence check. |
-| 2 | The test suite rejects any catalogue value containing `<`, `>` or `"`, so no catalogue value can inject markup | **✓ VERIFIED** | `test/catalogue.test.mjs` — `FORBIDDEN` (`<`, `>`, `"`), `lintValue()` tests the **raw** value with `value.includes(char)`, and `lintAll()` lints **every** file in `src/locales` (not just the seeds). Proven non-vacuous by mutation: injecting `<`/`>` and then `"` each turned the committed test red with the named character (table above), and the file was restored byte-identical. The committed rule is the raw-character rule, **not** the plan's malformed `JSON.stringify` command — the plan's version is disclosed in `05-02-SUMMARY.md` as a defect of the *command*, and the committed test does the right thing. |
-| 3 | A count is selected by the locale's CLDR categories — 0 → `one` in French and `other` in English, 1 000 000 → `many` in French — never by a hand-written `n > 1` rule | **✓ VERIFIED** | `src/core/i18n.js:91-112` — `new Intl.PluralRules(code)` cached per locale (`:91-100`), `.select(count)` yields the category (`:108`); no `n > 1` anywhere. `src/locales/fr.json` carries a `many` member (`"{n} de tâches"`) that English does not have, so a hand-written rule could not produce the French 1 000 000 result. `test/i18n.test.mjs` — English `0 → '0 tasks'` (`other`), `1 → '1 task'`, `2 → '2 tasks'`, `1000000 → '1000000 tasks'`; French `0 → '0 tâche'` (`one`), `1 → one`, `2 → other`, `1000000 → '1000000 de tâches'` (`many`). |
-| 4 | The build emits the French catalogue as its own chunk, and a build configured for English only contains none of the French catalogue's bytes | **✓ VERIFIED** | Independent builds. Default (`LOCALES=en,fr`): `assets/fr-Cx13KH9B.js` (301 B) contains **exactly** the six French keys as `export{e as default}`, and the entry chunk `index-BR2xhuQM.js` carries **0 of the 9** French strings (raw and `\uXXXX`-escaped). English-only (`LOCALES=en`): the French module resolves to a 33-byte stub `const t={};export{t as default}` (`_virtual_locale-empty_fr-*.js`); a byte-level scan of **all 9** French strings, raw and escaped, across **every** asset found **zero** occurrences. The French chunk is not inlined in the entry chunk in either the default or the `fr` build. |
-| 5 | The catalogue is importable by plain Node and by the browser build, and no catalogue key added an icon to the bundle | **✓ VERIFIED** | **Plain Node:** Node v24.21.0 imports both catalogues with the `json` import attribute; the whole suite is *loaded* by bare Node with `import … with { type: 'json' }`, so a non-importable catalogue would stop the suite from loading. **Browser build:** all 11 English strings verified present in the entry chunk of the English-only build (read from the built `index.html`'s own script tag, not by guesswork). **Icons:** I re-ran the **pre-phase** scan algorithm (verbatim from `d1cc552:vite.config.js`) over the **pre-phase** source tree (`git archive d1cc552 src`) → 174 names, identical to the committed `test/fixtures/icons-baseline.json`; the current tree → the same 174; added names: **none**. The baseline is a genuine pre-phase baseline, not a snapshot taken after `src/core/i18n.js` existed. D-04 is also structural: the scan reads only `.js` files, so a JSON catalogue can never contribute a token. |
+| 1 | A catalogue lookup returns the English base string, and a key with no value in the active catalogue falls back to English instead of rendering empty text | **✓ VERIFIED** | `t()` (`i18n.js:175-185`): active catalogue → `catalogues.get(BASE_LOCALE)` → return the key, never empty. Exercised live: under an active `fr` locale (bare Node, fr catalogue absent by design) `t('nav.projects')` → `'Projects'`. The `gr8r:locale` fallback test still runs green in `test/i18n.test.mjs` (16/16). |
+| 2 | The test suite rejects any catalogue value containing `<`, `>` or `"`, so no catalogue value can inject markup | **✓ VERIFIED** | `test/catalogue.test.mjs` 26/26 on the **1538-key** catalogues; the suite now embeds the rejection mutations (left/right angle bracket tests green in-run); independent scan over all 3076 values (strings + plural members, both locales, incl. the 6 new keys): **0 violations**. The lint lints every file in `src/locales/`, so today's keys were covered the moment they landed — no exemption existed to soften. |
+| 3 | A count is selected by the locale's CLDR categories — 0 → `one` in French and `other` in English, 1 000 000 → `many` in French — never by a hand-written `n > 1` rule | **✓ VERIFIED** | `resolvePlural()` + cached `Intl.PluralRules` (`i18n.js:149-173`) unchanged and re-probed live: fr 0 → `one`, fr 1000000 → `many` (→ `other` member when the value lacks `many`); en 1000000 → `other`. The new `act.deleteProjectTaskCount` is a CLDR-keyed object with an `other` member in both locales (`{"one":"{n} tâche","other":"{n} tâches"}` in fr). No `n > 1` rule exists in the layer. The committed plural tests (`test/i18n-plural.test.mjs`, plus `i18n.test.mjs`'s table) run green. |
+| 4 | The build emits the French catalogue as its own chunk, and a build configured for English only contains none of the French catalogue's bytes | **✓ VERIFIED** | `test/build-locales.test.mjs` **9/9 standalone** — three real `vite build` runs into a temp dir (default, `LOCALES=en`, `LOCALES=fr`), byte-asserted, with the markers computed from the **current** catalogue files (the suite's design: "survives the catalogue growing in phase 6 and phase 7" — it survived the growth to 1538). `vite.config.js` `localeSubset()` + `BUILD_LOCALES` unchanged in contract (`en` always shipped; non-base locales outside the set emptied). `build:en` still in `package.json` (`LOCALES=en vite build`). |
+| 5 | The catalogue is importable by plain Node and by the browser build, and no catalogue key added an icon to the bundle | **✓ VERIFIED** | Bare Node v24.21.0 imports `fr.json` (1538 keys) with the `json` attribute; the layer itself imports in bare Node (27 exports). Browser-build coverage: the build suite's importability + entry-anchored assertions pass (the markers come from the built `index.html`'s own script tag). Icon baseline: `test/fixtures/icons-baseline.json` unchanged since freeze; the icon assertions inside `build-locales.test.mjs` (source scan == baseline; bundle scan == baseline) pass in the standalone 9/9 run; the scan reads `/\.js$/` only, so 1538×2 JSON keys can structurally never contribute a token. |
 
 **Score: 5/5 roadmap success criteria.**
 
-### Plan must-have truths (the union of the three plans' frontmatter)
+### Plan must-have truths (union of the three plans' frontmatter) — re-verified
 
-| # | Truth (abridged) | Plan | Status |
+| # | Truth (abridged) | Plan | Status (current tree) |
 | --- | --- | --- | --- |
-| 1 | `t('nav.projects')` returns the English base string from `en.json`, never empty | 05-01 | ✓ VERIFIED |
-| 2 | `t()` returns the value raw — an interpolated `<b>` comes back as `<b>` | 05-01 | ✓ VERIFIED (`i18n.js:121`, `i18n.js:83-86` — no escaper on the path) |
-| 3 | A key with no value in the active catalogue falls back to English | 05-01 | ✓ VERIFIED |
-| 4 | A key that exists only in the active catalogue resolves from it | 05-01 | ✓ VERIFIED (`contract.frenchOnly` → `Français seulement`) |
-| 5 | The count is chosen by `Intl.PluralRules`, never by `n > 1` | 05-01 | ✓ VERIFIED |
-| 6 | `setLocale('fr')` switches the singleton and announces `gr8r:locale` | 05-01 | ✓ VERIFIED (`i18n.js:47-67`; the dispatch is after the catalogue is ready) |
-| 7 | `src/core/i18n.js` imports nothing but the JSON catalogues (leaf) | 05-01 | ✓ VERIFIED (the file's only specifier is `../locales/en.json`; `import.meta.glob` is inlined by Vite and throws in Node, caught at `i18n.js:23-27`) |
-| 8 | The layer is in the entry's module graph; the default build inlines English and emits French as its own chunk | 05-01 | ✓ VERIFIED (independent build) |
-| 9 | The suite rejects a catalogue value containing `<`, `>` or `"` | 05-02 | ✓ VERIFIED (mutation-proven) |
-| 10 | Every key is flat, dotted, namespaced; every plural value is a CLDR-keyed object with an `other` member | 05-02 | ✓ VERIFIED (`KEY_SHAPE`, `CLDR_CATEGORIES`, `plural-other` rules) |
-| 11 | French is a strict subset of English (apart from the `contract.` namespace) and shared keys carry the same placeholders | 05-02 | ✓ VERIFIED (`lintAgainstBase`) |
-| 12 | `src/locales/` holds JSON files only | 05-02 | ✓ VERIFIED (guard test + directory listing) |
-| 13 | The registry and the catalogue files agree, in both directions | 05-02 | ✓ VERIFIED |
-| 14 | The project still ships with no runtime dependency | 05-02 | ✓ VERIFIED |
-| 15 | The lint rejects an ICU argument but never a legitimate plain-text value (`"Select…"` passes) | 05-02 | ✓ VERIFIED (`ICU_ARGUMENT` matches the argument form only) |
-| 16 | The default build emits the French catalogue as its own chunk, different from the entry chunk | 05-03 | ✓ VERIFIED |
-| 17 | An English-only build contains none of the French catalogue's bytes | 05-03 | ✓ VERIFIED (byte-level scan) |
-| 18 | The English catalogue is inlined in the entry chunk in **every** build | 05-03 | ✓ VERIFIED (also checked for the `LOCALES=fr` build) |
-| 19 | No catalogue key added an icon: the bundle's icon entries are exactly the frozen pre-phase baseline | 05-03 | ✓ VERIFIED (pre-phase scan re-run) |
-| 20 | The build still ships with no runtime dependency | 05-03 | ✓ VERIFIED |
+| 1 | `t('nav.projects')` returns the English base string, never empty | 05-01 | ✓ VERIFIED (live probe + `i18n.test.mjs`) |
+| 2 | `t()` returns the value raw — `<b>` comes back as `<b>` | 05-01 | ✓ VERIFIED (no escaper on the `t()` path; `escHtml` never called by `t()`; committed raw-`<b>` test green) |
+| 3 | Missing key in active catalogue falls back to English | 05-01 | ✓ VERIFIED (live under active `fr`) |
+| 4 | A key only in the active catalogue resolves from it | 05-01 | ✓ VERIFIED (`contract.frenchOnly` test green; `x.only` probe) |
+| 5 | Plural chosen by `Intl.PluralRules`, never `n > 1`: fr 0→one, 1000000→many | 05-01 | ✓ VERIFIED (live probe; cached per locale, `i18n.js:154-161`) |
+| 6 | `setLocale('fr')` switches the singleton and announces `gr8r:locale` | 05-01 | ✓ VERIFIED (`i18n.js:74-80`; dispatch after catalogue ready, bubbling — commit 3a62a35 refined the listener side without touching the contract) |
+| 7 | `src/core/i18n.js` imports nothing but the JSON catalogues (leaf) | 05-01 | ✓ VERIFIED (single import: `en.json`; glob guarded; even at 523 lines the layer still imports nothing from the app) |
+| 8 | Layer in the entry's module graph; default build inlines en, emits fr as its own chunk | 05-01 | ✓ VERIFIED (`src/main.js:7`; build suite 9/9) |
+| 9 | Suite rejects any value with `<`, `>` or `"` | 05-02 | ✓ VERIFIED (26/26; embedded mutation tests green) |
+| 10 | Keys flat/dotted/namespaced; plural values CLDR objects with `other` | 05-02 | ✓ VERIFIED (suite green over today's `act.deleteProjectTaskCount` object too) |
+| 11 | French strict subset of English (less `contract.`), same placeholders on shared keys | 05-02 | ✓ VERIFIED (1538 = 1538 parity; suite green) |
+| 12 | `src/locales/` holds JSON only | 05-02 | ✓ VERIFIED (directory listing: `en.json`, `fr.json` only; guard test green) |
+| 13 | Registry and catalogue files agree both ways | 05-02 | ✓ VERIFIED (`LOCALES` frozen array unchanged: `en`,`fr`; test green) |
+| 14 | No runtime dependency | 05-02 | ✓ VERIFIED (no `dependencies` key) |
+| 15 | Lint rejects an ICU argument but passes legitimate plain text | 05-02 | ✓ VERIFIED (the new French values — `l'accès`, ellipses, `{name}`/`{ws}` placeholders — pass; suite green) |
+| 16 | Default build emits fr chunk ≠ entry chunk | 05-03 | ✓ VERIFIED (build suite standalone 9/9) |
+| 17 | English-only build contains none of fr's bytes | 05-03 | ✓ VERIFIED (build suite, markers computed from the current 1538-key files) |
+| 18 | English catalogue inlined in the entry chunk in every build | 05-03 | ✓ VERIFIED (`i18n.js:36` top-level `registerCatalogue` survives; base-locale-ships test green) |
+| 19 | No catalogue key added an icon: bundle icons == frozen pre-phase baseline | 05-03 | ✓ VERIFIED (baseline fixture unchanged; assertion pair green in the standalone build run; JSON files structurally invisible to the `/\.js$/` scan) |
+| 20 | Build ships with no runtime dependency | 05-03 | ✓ VERIFIED |
 
 **Score: 20/20 plan truths.**
 
-### The two flagged items, judged
+### Layer growth is additive, not contract-breaching
 
-**1. The base locale now ships in every build (`vite.config.js:9-15`).** The current behaviour is
-`BUILD_LOCALES = new Set([BASE_LOCALE, ...process.env.LOCALES.split(',')])`, so `en` is never
-emptied by the `localeSubset()` plugin. **Judged: correct, and required by the contract.**
-- D-08 makes English the fallback catalogue; a build without the English catalogue would make
-  `t()` return raw keys for every untranslated string — the exact failure the phase exists to
-  prevent.
-- It does **not** weaken criterion 4: only *non-base* locales outside the build set are emptied.
-  The English-only build still carries **zero** French bytes (byte-level scan above), and the
-  default build still emits French as its own chunk.
-- It is a narrowing of the plugin's blast radius, not a widening. The plan's own must-have
-  ("the English catalogue is inlined in the entry chunk in every build") is the authority the
-  executor cited, and it is stated verbatim in `05-03-PLAN.md` must_haves.
-- The deviation is disclosed in `05-03-SUMMARY.md` ("Total deviations: 1 auto-fixed (1 missing
-  critical functionality)") and is backed by a dedicated test
-  (`the base catalogue ships in every build, so the interface is never without a language`).
-  **Not a gap.**
+The 124 → 523-line growth added: cached `Intl` formatters (`formatDate`/`formatRelativeTime`/
+`formatFileSize`/`formatTime`/…), `negotiate()`, `primeLocale()`, locale persistence
+(`LOCALE_STORAGE_KEY`, `storeLocale`/`readStoredLocale`), `has()`/`tErr()`, and the shared
+escaping table (`escHtml` re-exported by `core/utils.js` per IN-02). None of this touches the
+phase 5 contract invariants: the import list is still the catalogue alone; `t()` still never
+escapes; the fallback order is unchanged; the plural engine is unchanged; the glob still excludes
+`en.json`. The phase-5 truth that "no `t()` call site is added in phase 5" describes phase 5's
+diff, which history shows was honoured (`main.js` only gained the import line in that phase); the
+call sites that exist today were added by phases 6-8, each with its own gates.
 
-**2. The malformed plan verify command for the markup lint.** The plan filtered with
-`JSON.stringify(v).includes('"')`, which matches the *serialization* of every value and could only
-ever fail. The **committed** contract is the raw-character rule: `value.includes(char)` over the
-three forbidden characters, applied member-by-member to plural objects and file-by-file to every
-catalogue on disk. Proven by mutation (see the probe table): both `<`/`>` and `"` turn the
-committed test red. The defect was in the plan's *command*, not in the shipped contract.
-**Not a gap.**
+### Locked decisions D-01…D-15 spot-conformance (current tree)
 
-### Locked decisions (D-01…D-15) — conformance
-
-| Decision | Conformance | Evidence |
+| Decision | Verdict | Evidence |
 | --- | --- | --- |
-| D-01 leaf module `src/core/i18n.js` with a module-level locale singleton | ✓ | `i18n.js:8-19` — `BASE_LOCALE`, frozen `LOCALES`, `let locale`, `catalogues` Map; the layer imports nothing from the app |
-| D-02 `gr8r:locale` CustomEvent, no renderer import | ✓ | `i18n.js:63-65` — dispatch on the global `document`, guarded by `typeof document !== 'undefined'` |
-| D-03 own one-line `escHtml` | ✓ | `i18n.js:77-79` — same table as `esc()` in `src/core/utils.js:10`; asserted equal by a test |
-| D-04 catalogues are JSON, never `.js` under `src/` | ✓ | `src/locales/{en,fr}.json`; guard test asserts the directory holds JSON only; the icon scan reads `/\.js$/` only |
-| D-05 flat, dotted, namespaced keys | ✓ | `KEY_SHAPE` regex enforced by the lint on every file |
-| D-06 plural = object keyed by CLDR category, selected by `Intl.PluralRules` | ✓ | `i18n.js:105-112`; `many` present only in French |
-| D-07 interpolation subset — no `select`, no `offset`, no `#` | ✓ (documented spelling deviation) | The lint rejects any ICU argument (`{… , plural|select|selectordinal|offset}`); the concrete count spelling is `{n}`, not the literal `{count, plural, …}` of D-07. Deviation recorded in `05-01-PLAN.md` and justified there by D-06's CLDR-object shape. **Judged: honours the substance of D-07** (no ICU construct is interpreted) and is the only spelling consistent with D-06. ℹ️ INFO, not a gap. |
-| D-08 fallback to English | ✓ | `i18n.js:117-120`; exercised under an active `fr` locale by a passing test |
-| D-09 `t()` never escapes | ✓ | `i18n.js:121` returns the interpolated string untouched; a test asserts `<b>` comes back raw |
-| D-10 catalogue values are plain text, made inert by a test; interpolation escaped at the call site | ✓ | The lint (mutation-proven) + `esc()`/`escHtml()` remain at the call sites |
-| D-11 `data-*` attributes and action keys never translated | ✓ | No call site of `t()` exists in `src/` at all — no machine identifier can be translated in this phase |
-| D-12 English static, others via `import.meta.glob`, never both | ✓ | `i18n.js:6` (static `en.json`), `i18n.js:24` — the glob **excludes** `en.json` (`'!../locales/en.json'`) |
-| D-13 the catalogue stays importable by bare Node 24 | ✓ | Verified on Node v24.21.0; the whole suite loads under bare Node with the JSON import attribute |
-| D-14 no runtime dependency | ✓ | `package.json` has **no** `dependencies` key; `package-lock.json` unchanged since `d1cc552`; `src/` imports only relative JSON; guarded by a committed test |
-| D-15 the locale registry lives in `src/core/i18n.js` | ✓ | `i18n.js:8-12` — `LOCALES` exported and frozen; the registry/file agreement test compares it with the files on disk |
+| D-01 leaf module + locale singleton | ✓ | single import; `let locale` (`i18n.js:16`) |
+| D-02 `gr8r:locale` on document, no renderer import | ✓ | `i18n.js:76-78`, plus D-02's `document.documentElement.lang` follow (`i18n.js:63`) |
+| D-04 JSON only under `src/locales/` | ✓ | two files, both `.json` |
+| D-06 CLDR object plurals via `Intl.PluralRules` | ✓ | `i18n.js:152-173`; live-probed |
+| D-08 English fallback, never empty | ✓ | `i18n.js:176-184`; live-probed under active `fr` |
+| D-09 `t()` never escapes | ✓ | no escaper on the path; `escHtml` export is for call sites |
+| D-12 static en, dynamic others, never both | ✓ | `i18n.js:6` static; `i18n.js:24` glob excludes `en.json` |
+| D-13 bare-Node importability | ✓ | re-run on Node v24.21.0, 1538 keys |
+| D-14 / D-15 no runtime dependency; registry in `i18n.js` | ✓ | no `dependencies` key; frozen `LOCALES` export |
 
 ## Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | --- | --- | --- | --- |
-| `src/core/i18n.js` | the leaf layer: `t()`, `getLocale()`, `setLocale()`, `registerCatalogue()`, `availableLocales()`, `LOCALES`, `BASE_LOCALE`, `escHtml()` | ✓ VERIFIED | 124 lines; all 8 exports present; substantive; wired by `src/main.js:7` |
-| `src/locales/en.json` | the English base seed | ✓ VERIFIED | 9 flat dotted keys, 2 CLDR plural objects |
-| `src/locales/fr.json` | the French placeholder seed | ✓ VERIFIED | 6 flat dotted keys, `many` on `task.count`, `contract.frenchOnly` |
-| `src/main.js` | the entry imports the layer | ✓ VERIFIED | one added line (`+import './core/i18n.js';`) — the **only** change to any pre-existing source file |
-| `scripts/icons.mjs` | the shared Lucide scan | ✓ VERIFIED | `lucideIconNames()` / `lucideIconMarkup()`; imported by both `vite.config.js` and the test suite; lives outside `src/` so it cannot scan itself |
-| `test/fixtures/icons-baseline.json` | the frozen pre-phase icon list | ✓ VERIFIED | 174 names; independently re-derived from the pre-phase tree |
-| `test/i18n.test.mjs` | the layer contract suite | ✓ VERIFIED | 16 named tests |
-| `test/catalogue.test.mjs` | the catalogue contract suite | ✓ VERIFIED | 23 named tests |
-| `test/build-locales.test.mjs` | the build contract suite | ✓ VERIFIED | 9 named tests, three real `vite build` runs into a temp dir |
-| `vite.config.js` | `localeSubset()` + the shared `lucideSubset()` | ✓ VERIFIED | `vite.config.js:37-60` (plugin), `:44-52` (the shared scan) |
-| `package.json` | the `build:en` script | ✓ VERIFIED | one added line; `dependencies` block absent |
+| `src/core/i18n.js` | the leaf layer | ✓ VERIFIED | 523 lines (contract surface + the phases 6-8 formatter surface); all phase-5 exports present; substantive; wired by `src/main.js:7` |
+| `src/locales/en.json` / `src/locales/fr.json` | the base seed / French catalogue | ✓ VERIFIED | 1538 flat dotted keys each, strict parity; the six keys added today present in both; plain text throughout |
+| `src/main.js` | the entry imports the layer | ✓ VERIFIED | `import './core/i18n.js'` at line 7 |
+| `scripts/icons.mjs` | the shared Lucide scan | ✓ VERIFIED | still the one implementation shared by plugin and tests |
+| `test/fixtures/icons-baseline.json` | the frozen pre-phase icon list | ✓ VERIFIED | unchanged since freeze; both sides of the comparison still pass |
+| `test/i18n.test.mjs` | the layer contract suite | ✓ VERIFIED | 16/16 |
+| `test/catalogue.test.mjs` | the catalogue contract suite | ✓ VERIFIED | 26/26 (now self-mutating, non-vacuous by construction) |
+| `test/build-locales.test.mjs` | the build contract suite | ✓ VERIFIED | 9/9 standalone (three real vite builds) |
+| `vite.config.js` | `localeSubset()` + shared `lucideSubset()` | ✓ VERIFIED | contract unchanged; base locale always shipped (judged correct in the prior report — unchanged) |
+| `package.json` | `build:en`, no runtime deps | ✓ VERIFIED | `"build:en": "LOCALES=en vite build"` (line 13, now preceded by a phase-6 `prebuild:en` scan hook — additive), no `dependencies` key |
 
 ## Key Link Verification
 
 | From | To | Via | Status | Details |
 | --- | --- | --- | --- | --- |
-| `src/main.js` | `src/core/i18n.js` | side-effect import | ✓ WIRED | `src/main.js:7` — puts the layer in the entry's module graph so Vite rewrites `import.meta.glob` |
-| `src/core/i18n.js` | `src/locales/en.json` | static import with `{ type: 'json' }` + top-level `registerCatalogue` | ✓ WIRED | `i18n.js:6`, `i18n.js:36` — the top-level call is what survives tree-shaking; the English strings are in the entry chunk of all three builds |
-| `src/core/i18n.js` | `src/locales/*.json` | `import.meta.glob` in a `try/catch` | ✓ WIRED | `i18n.js:22-27` — Vite rewrites it to one chunk per locale; bare Node catches the ReferenceError and still loads the module |
-| `src/core/i18n.js` | `Intl.PluralRules` | one cached rule instance per locale | ✓ WIRED | `i18n.js:91-100` |
-| `src/core/i18n.js` | `document` | `gr8r:locale` CustomEvent | ✓ WIRED | `i18n.js:63-65` — no renderer import, acyclic graph preserved |
-| `test/catalogue.test.mjs` | `src/locales/*.json` | `fs` read + bare-Node JSON import | ✓ WIRED | the lint runs on the real files; the import proves Node-importability in the same suite |
-| `test/catalogue.test.mjs` | `src/core/i18n.js` | `LOCALES` / `BASE_LOCALE` import | ✓ WIRED | registry-vs-files agreement test |
-| `test/catalogue.test.mjs` | `package.json` | manifest read | ✓ WIRED | the zero-runtime-dependency guard |
-| `vite.config.js` | `process.env.LOCALES` | `BUILD_LOCALES` | ✓ WIRED | default `en,fr`; `build:en` sets `LOCALES=en` |
-| `vite.config.js` | `scripts/icons.mjs` | the shared scan | ✓ WIRED | one implementation, so the plugin and the test cannot diverge |
-| `test/build-locales.test.mjs` | `test/fixtures/icons-baseline.json` | the frozen list | ✓ WIRED | both sides of the icon comparison are compared name for name |
-| `test/build-locales.test.mjs` | the built `index.html` | the page's own script tag names the entry chunk | ✓ WIRED | every structural claim has an observable anchor |
+| `src/main.js` | `src/core/i18n.js` | side-effect import | ✓ WIRED | `main.js:7`; render modules also import named symbols (`main.js:63`) |
+| `src/core/i18n.js` | `src/locales/en.json` | static JSON import + top-level `registerCatalogue` | ✓ WIRED | `i18n.js:6`, `i18n.js:36` — bare-Node import of the module resolves and serves English values |
+| `src/core/i18n.js` | `src/locales/*.json` (non-base) | `import.meta.glob` in try/catch, excluding `en.json` | ✓ WIRED | `i18n.js:22-27`; Node path degrades to the documented empty-loader state |
+| `src/core/i18n.js` | `Intl.PluralRules` | cached per locale | ✓ WIRED | `i18n.js:152-161`; live-probed |
+| `src/core/i18n.js` | `document` | `gr8r:locale` CustomEvent | ✓ WIRED | `i18n.js:76-78` |
+| `test/catalogue.test.mjs` | `src/locales/*.json` | fs + bare-Node JSON import | ✓ WIRED | lint runs on the real 1538-key files today |
+| `test/catalogue.test.mjs` | `src/core/i18n.js` | `LOCALES`/`BASE_LOCALE` import | ✓ WIRED | registry agreement test green |
+| `test/catalogue.test.mjs` | `package.json` | manifest read | ✓ WIRED | zero-dependency guard green |
+| `vite.config.js` | `process.env.LOCALES` / `scripts/icons.mjs` / baseline fixture | build set + shared scan | ✓ WIRED | exercised by the 9/9 build suite |
+| `test/build-locales.test.mjs` | the built `index.html` | entry-chunk anchor | ✓ WIRED | part of the standalone green run |
 
 ## Data-Flow Trace (Level 4)
 
 | Artifact | Data variable | Source | Produces real data | Status |
 | --- | --- | --- | --- | --- |
-| `src/core/i18n.js` | `catalogues` | the JSON catalogue files (real files on disk) | ✓ | ✓ FLOWING — not a literal, not a mock; `en.json`/`fr.json` are read by the bundler and by bare Node |
-| `src/core/i18n.js` | `locale` | `setLocale()` (module singleton) | ✓ | ✓ FLOWING — driven by the registry, defaulting to the base locale |
-| `test/catalogue.test.mjs` | the lint's input | `fs.readdirSync` + `JSON.parse` over `src/locales` | ✓ | ✓ FLOWING — every file on disk is linted, so a new catalogue is covered the day it lands |
-| `test/build-locales.test.mjs` | the markers | computed from the catalogue files, filtered against `src/**/*.js` | ✓ | ✓ FLOWING — and asserted **non-empty** on both sides, so an empty marker set would fail rather than pass vacuously |
-| `test/build-locales.test.mjs` | the built assets | three real `vite build` runs | ✓ | ✓ FLOWING — real bytes, asserted on, not on a source tree |
-| `test/fixtures/icons-baseline.json` | the icon list | the pre-phase scan | ✓ | ✓ FLOWING — independently re-derived from `git archive d1cc552 src` |
+| `src/core/i18n.js` | `catalogues` | the real JSON files on disk (1538 keys each) | ✓ | ✓ FLOWING |
+| `src/core/i18n.js` | `locale` | `setLocale`/`primeLocale` singleton | ✓ | ✓ FLOWING |
+| `test/*` inputs | catalogue files, built assets, fixture | real fs reads and 3 real vite builds | ✓ | ✓ FLOWING |
 
-No static return, hardcoded literal or mock terminates a chain.
+No static return, hardcoded literal or mock terminates a contract chain.
 
 ## Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | --- | --- | --- | --- |
-| The whole node suite | `npm test` | 98 pass / 0 fail | ✓ PASS |
-| The shipped browser bundle | `npm run e2e` | 6/6 Chromium pass | ✓ PASS |
-| The French catalogue is a chunk of its own | `LOCALES=en,fr … vite build` | `assets/fr-Cx13KH9B.js` = the 6 French keys; the entry chunk holds 0 of the 9 French strings | ✓ PASS |
-| The English-only build carries no French byte | `LOCALES=en … vite build` + a 9-string raw/escaped scan over every asset | 0 occurrences | ✓ PASS |
-| The base catalogue ships in every build | `LOCALES=fr … vite build` | the entry chunk carries all 11 English strings | ✓ PASS |
-| The catalogues load in bare Node | `node -e "import('./src/locales/fr.json',{with:{type:'json'}})"` (Node v24.21.0) | 6 keys | ✓ PASS |
-| No icon was added | the pre-phase scan over the pre-phase tree vs the baseline vs the current tree | 174 = 174 = 174, 0 added | ✓ PASS |
-| A value carrying `<`/`>` is rejected | mutation on `src/locales/fr.json` | the committed test goes red naming the character | ✓ PASS (and reverted) |
-| A value carrying `"` is rejected | mutation on `src/locales/fr.json` | the committed test goes red naming the character | ✓ PASS (and reverted) |
-| The interface renders as before | `git diff d1cc552 -- src/` + the suites | the only change to a pre-existing source file is one import line; 98 + 6 tests green | ✓ PASS |
+| Catalogue contract over today's 1538-key catalogues | `node --test test/catalogue.test.mjs` | 26/26 | ✓ PASS |
+| Layer contract | `node --test test/i18n.test.mjs` | 16/16 | ✓ PASS |
+| Build contract (3 real builds) | `node --test test/build-locales.test.mjs` | 9/9 (11.4 s) | ✓ PASS |
+| Bare-Node catalogue import | `node -e "import('./src/locales/fr.json',{with:{type:'json'}})"` | 1538 keys | ✓ PASS |
+| Live fallback + CLDR + new keys | bare-Node `setLocale('fr')` + `t()` probes | fallback `Projects`; fr 0→one member, 1M→many; new keys resolve both locales (fr values served in the browser path; en values correct in the bare-Node path by design) | ✓ PASS |
+| Whole suite, canonical command | `npm test` | 432–443/445 (see the run analysis above); no phase-5 contract failure outside the concurrency/build-interference pattern; the `i18n-scan` standalone failure is an uncommitted probe literal in `src/views/table.js` (phase-6 gate, not phase 5) | ⚠️ NOTED — see analysis |
 
 ## Probe Execution
 
-No `scripts/*/tests/probe-*.sh` probe exists in this repository, and no plan declares one. The
-phase's equivalent executable checks are the three `node:test` suites, all executed above.
+No `scripts/*/tests/probe-*.sh` probes exist or are declared. The equivalent executable checks are
+the three `node:test` suites, executed above. The repository-level scanner (`scripts/i18n-scan.mjs`)
+was also run directly (exit 1 — see the working-tree probe literal analysis).
 
 ## Requirements Coverage
 
 | Requirement | Source plan | Description | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| **I18N-06** | 05-01 (layer), 05-02 (lint) | A catalogue value can never inject markup — catalogue values are plain text, and a test rejects any value containing `<`, `>` or a double quote | ✓ SATISFIED | The raw-character rule is committed at `test/catalogue.test.mjs` (`FORBIDDEN` + `lintValue` + `lintAll` over every file in `src/locales`). Proven by two mutations, each turning the committed test red and naming the file, the key and the character. `t()` never escapes (D-09/D-10), so the value reaches the DOM as inert plain text; interpolated values are escaped at the call site with the existing `esc()`. |
-| **I18N-08** | 05-03 (build) | The French catalogue is built as its own chunk, so an English-only build carries no French string | ✓ SATISFIED | `vite.config.js:37-60` (`localeSubset()`) + `package.json` `build:en`. Verified on the real artifacts: the default build emits `fr-Cx13KH9B.js` holding exactly the French catalogue, and the `LOCALES=en` build carries **zero** of the 9 French strings (raw and `\uXXXX`-escaped) across every asset — only a 33-byte empty-module stub remains. |
-| I18N-01…05, I18N-07, LOC-*, SEARCH-01 | — | — | n/a | Mapped to phases 6, 7 and 8 in `.planning/REQUIREMENTS.md`; out of this phase's scope. No orphaned requirement: I18N-06 and I18N-08 are the only two mapped to Phase 5, and both are claimed by the plans. |
+| **I18N-06** | 05-01, 05-02 | A catalogue value can never inject markup — plain-text values, a test rejects `<`, `>`, `"` | ✓ SATISFIED | Catalogue lint 26/26 over the 1538-key files (including today's 6 keys); independent full value scan: 0 violations; `t()` returns raw by code path; interpolations escaped at call sites (`esc()`/`escHtml`). |
+| **I18N-08** | 05-03 | The French catalogue is built as its own chunk; an English-only build carries no French string | ✓ SATISFIED | `localeSubset()` + `build:en` unchanged; build suite 9/9 standalone with markers derived from the current files. |
+| I18N-01…05, I18N-07, LOC-*, SEARCH-01 | — | — | n/a | Mapped to later phases; no orphaned Phase-5 requirement — REQUIREMENTS.md now marks I18N-06 and I18N-08 Complete (prior advisory #3 resolved). |
 
-## Prohibitions — the two promises judged concretely
+## Prohibitions
 
-| Prohibition | Verdict | Evidence |
+| Prohibition | Verdict | Evidence (current tree) |
 | --- | --- | --- |
-| **No runtime dependency is added** | ✓ HELD | `package.json` has **no** `dependencies` key at all (only 7 devDependencies, all pre-existing build tools); `git diff d1cc552 -- package-lock.json` is **empty** — no lockfile churn, so no package was installed; the only new import in `src/` is `../locales/en.json`; the catalogue is plain JSON, so nothing was pulled from npm. Guarded by a committed test (`the project declares no runtime dependency`). |
-| **The interface renders exactly as before** | ✓ HELD | `git diff d1cc552 -- src/` touches **one** pre-existing file with **one** added line: `import './core/i18n.js';` (`src/main.js:7`). No user-visible string was moved, no call site of `t()` was added, and the imported module has no DOM side effect (it only registers the base catalogue and reads `Intl.PluralRules`). Evidence: 98/98 `node:test` (66 of them pre-existing, covering the real server and real SQLite) and 6/6 Chromium e2e, all green; `npm run lint` and `npm run format:check` clean. |
-| No `.js` file under `src/locales/` | ✓ HELD | the directory holds only `en.json` and `fr.json`; a guard test asserts it; the icon scan reads `/\.js$/` only, so a JSON catalogue can never contribute a token. |
-| `t()` never escapes | ✓ HELD | `i18n.js:121`; a test asserts an interpolated `<b>` comes back raw. |
-| No `data-*` / action key translated | ✓ HELD | there is no call site of `t()` in `src/` at all in this phase. |
-| The French catalogue is not inlined in the entry chunk | ✓ HELD | byte-level scan: 0 French strings in the entry chunk of the default and the `fr` build. |
-| The same file is never imported both statically and dynamically | ✓ HELD | the glob excludes `en.json` (`i18n.js:24`). |
-| The default build keeps shipping every locale | ✓ HELD | `npm run build` (no `LOCALES`) → `en,fr`; only the separate `build:en` script narrows the set. |
+| No runtime dependency added | ✓ HELD | no `dependencies` key in `package.json`; the layer's only import is the catalogue JSON |
+| No `.js` under `src/locales/` | ✓ HELD | directory holds `en.json`/`fr.json` only; guard test green |
+| `t()` never escapes | ✓ HELD | no escaper on the `t()` path |
+| No `data-*`/action key translated | ✓ HELD | machine identifiers never pass through `t()`; view-module key gates assert it |
+| No same file imported statically and dynamically | ✓ HELD | glob excludes `en.json` |
+| Default build keeps shipping every locale | ✓ HELD | default locale set still `en,fr`; only `build:en` narrows (its own script) |
+| The same lint rule never softened/allow-listed to pass | ✓ HELD | the lint passed over 3076 values with zero exemptions — including `l'accès`, ellipses, and 6 brand-new keys |
 
 ## Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 | --- | --- | --- | --- | --- |
-| — | — | — | — | — |
-
-Scanned every file the phase added or changed (`src/core/i18n.js`, `src/locales/*.json`,
-`scripts/icons.mjs`, `vite.config.js`, `package.json`, `src/main.js`, the three suites, the
-baseline fixture) for debt markers (`TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER`), empty
-implementations (`return null` / `return {}` / `return []`), hardcoded empty values, and
-`console.log`-only implementations. **Nothing found.** The only matches were the constant name
-`PLACEHOLDER` (the interpolation regex) and the literal text `\uXXXX` in a comment about escaped
-markers — neither is a debt marker. No file carries a debt marker, so no 🔑 Blocker is raised on
-that axis.
+| `src/views/table.js` | 87 | uncommitted probe literal (`export const probe = 'A literal that was never extracted'`) trips the phase-6 `i18n-scan` gate (scanner exit 1, 4 test failures) | ⚠️ Warning — **out of phase-5 scope** (phase 6 gate; uncommitted working-tree change, not made by any phase) | Does not break any phase-5 must-have; the scanner catching it is evidence the gate works. Remedy: delete the two working-tree lines (or land them intentionally through phase tooling). |
+| — | — | no debt markers (`TBD`/`FIXME`/`XXX`/`TODO`/`HACK`), no empty implementations, no console-log-only code in `i18n.js`, the catalogues, `main.js` | — | — |
 
 ## Advisory (New Scope, Unevidenced)
 
 | # | Finding | Category | Why Advisory |
 | --- | --- | --- | --- |
-| 1 | `availableLocales()` (`src/core/i18n.js:71-73`) reports a locale when `Object.hasOwn(loaders, '../locales/<code>.json')` — and the `import.meta.glob` map is **static**, so an **English-only build still lists `fr`** even though that build's French module resolves to an empty object. Selecting French there would silently render English. | architectural | Not covered by any of the five criteria (criterion 4 is explicitly *about bytes*, not about file names or about the registry), and the default build — the one the app ships — carries both catalogues. It is a **phase 8 (LOC-02)** concern: the locale selector must be derived from what the *build* actually ships, not from the static glob map. Recorded so phase 8 inherits it. |
-| 2 | The D-07 count placeholder is spelled `{n}`, not the literal `{count, plural, …}` of the decision text. | other | Disclosed in `05-01-PLAN.md` and forced by D-06's CLDR-object shape; the substance of D-07 (no `select`, no `offset`, no `#`, no ICU interpretation) is honoured and the lint actively rejects any ICU argument. Documented, not a gap. |
-| 3 | `.planning/REQUIREMENTS.md` still shows I18N-06 / I18N-08 as unchecked with the traceability row reading "Pending". | other | Bookkeeping the plans deliberately left to the orchestrator (see `05-03-SUMMARY.md`, "Next Phase Readiness"). Both requirements are in fact satisfied, as evidenced above; the orchestrator should tick them. |
+| 1 | `test/build-locales.test.mjs`, `test/i18n-vocab.test.mjs` and `test/activity-verbs.test.mjs` fail when run concurrently with the rest of the suite but pass standalone (parallel `vite build`/server interference). The suite's CI invocations that overlap these files will read false reds. | other | Not a phase-5 must-have (each file passes in isolation; the interference pattern was reproduced and characterised). Worth a suite-serialization or resource-cap fix owned by whichever phase owns the test harness. |
+| 2 | The `availableLocales()` static-glob caveat from the prior report stands (an English-only build still lists `fr`); unchanged, still a phase 8 (LOC-02) concern. | architectural | Carried forward; unchanged by this re-verification. |
 
 ## Human Verification Required
 
-**None.** Every criterion, every must-have truth and both prohibitions are machine-checkable, and
-each was checked by an executable probe (see the tables above). The phase changes no rendered
-output, so there is no visual or interaction behaviour for a human to confirm.
+**None.** Every criterion, must-have truth and prohibition is machine-checkable and was checked by
+an executable probe on the current tree. The phase's build/behaviour claims are covered by
+committed suites that perform the real builds; no visual or interaction behaviour belongs to this
+phase (no rendered string changed in phase 5 itself).
 
 ## Gaps Summary
 
-**No gaps.** The phase goal is achieved in the codebase, not merely in the summaries:
+**No gaps.** The stale-covered-digest cause (post-phase commits growing the layer to 523 lines and
+the catalogues to 1538 keys, including the six keys added today) was re-verified item by item and
+every phase-5 must-have still holds on the current tree: the contract surface of `i18n.js` is
+byte-level intact in its invariants (leaf import, raw `t()`, English fallback, cached CLDR
+plurals, glob exclusion, `gr8r:locale`), the catalogue contract passes over the full 3076 values
+with zero violations and zero exemptions, the build contract passes on three real vite builds, the
+catalogues remain bare-Node importable (1538 keys), and no runtime dependency exists. Both
+roadmap requirements (I18N-06, I18N-08) are satisfied and now marked Complete in
+`.planning/REQUIREMENTS.md`.
 
-- The `t()` layer exists as a genuine leaf module (`src/core/i18n.js`, 124 lines, 8 exports, one
-  import) over two real JSON catalogues, with the English fallback, the raw pass-through, the
-  `Intl.PluralRules` plural engine and the `gr8r:locale` switch.
-- The escaping, catalogue-format, plural, registry and dependency contracts are **enforced by
-  tests**, and the enforcement was proven non-vacuous by mutation (a `<`, a `>` and a `"` each
-  turn the committed suite red) and by an independent re-derivation of the frozen icon baseline
-  from the pre-phase source tree.
-- The build layout is proven **on the real artifact**: three real `vite build` runs, byte-level
-  inspection of every emitted asset, and the French chunk demonstrably separate from the entry
-  chunk.
-- Both prohibitions hold on the evidence: no runtime dependency (no `dependencies` key, no
-  lockfile churn, one relative JSON import) and the interface renders exactly as before (one
-  added import line, 98 node tests and 6 Chromium tests green, lint and format clean).
-- Both items the executors flagged were independently re-judged and both are **not** gaps: the
-  base-locale-always-ships change is required by D-08 and does not weaken criterion 4, and the
-  committed markup lint is the correct raw-character rule (the plan's malformed command was a
-  defect of the command, never of the contract).
+The only red observed anywhere belongs to other phases' gates: the phase-6 scanner is correctly
+rejecting an uncommitted probe literal in `src/views/table.js` (delete those two working-tree
+lines to restore the suite's green), and three test files race each other under full-suite
+concurrency though each passes standalone.
 
 ---
 
-_Verified: 2026-10-22T10:56:24Z_
+_Verified: 2026-10-25T12:00:00Z_
 _Verifier: the agent (gsd-verifier)_

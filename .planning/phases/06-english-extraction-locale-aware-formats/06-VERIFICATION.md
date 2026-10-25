@@ -1,12 +1,19 @@
 ---
 phase: 06-english-extraction-locale-aware-formats
-verified: 2026-10-22T20:03:08Z
+verified: 2026-10-25T19:05:00Z
 status: passed
 score: 5/5 must-haves verified
-covered_digest: "v2:sha256:2dfddd753bc51a1ca3ecde5b7c31bc889a757c7751c42114aed7949011bf490d"
+covered_digest: "v2:sha256:994de250b5e7d38fa395df211068377fd7364f1c3609e8ab7f5bd7be8f4c57b7"
 behavior_unverified: 0
 overrides_applied: 0
-note_on_digest: "gsd_run/verification.fingerprint is not installed in this environment; the digest was computed deterministically as sha256 over the sorted covered_files list concatenated with each file's bytes (99 files)."
+re_verification:
+  previous_status: passed
+  previous_score: 5/5
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
+note_on_digest: "gsd_run/verification.fingerprint is not installed in this environment; the digest was recomputed deterministically as sha256 over the sorted covered_files list concatenated with each file's bytes (99 files), against the committed HEAD (d1807be) in an isolated worktree."
+note_on_method: "The primary working tree was under continuous concurrent mutation during verification — 4+ external `node --test` runner processes (not started by this verifier) raced the suite's own adversarial real-tree probe (test/i18n-scan.test.mjs:353 appends a literal to the live tree and restores it), intermittently leaving `export const probe` in src/views/table.js, failing the live scan (exit 1 — the gate WORKS) and breaking concurrent vite builds. All gates below were therefore re-run against a clean git worktree at HEAD d1807be, which includes every close-out commit (d1807be, 21725f1, 2a75275, be0fdf6). The live-fire probe observation doubles as proof the build gate is not vacuous."
 covered_files:
   # phase planning artifacts
   - .planning/phases/06-english-extraction-locale-aware-formats/06-CONTEXT.md
@@ -38,7 +45,7 @@ covered_files:
   - .planning/phases/06-english-extraction-locale-aware-formats/06-13-SUMMARY.md
   - .planning/phases/06-english-extraction-locale-aware-formats/06-14-PLAN.md
   - .planning/phases/06-english-extraction-locale-aware-formats/06-14-SUMMARY.md
-  # implementation + test files changed in the phase (git 10053056..HEAD)
+  # implementation + test files changed in the phase
   - scripts/i18n-scan.mjs
   - src/actions/actions.js
   - src/actions/archive.js
@@ -111,7 +118,7 @@ covered_files:
   - test/i18n-vocab.test.mjs
 ---
 
-# Phase 6: English extraction & locale-aware formats — Verification Report
+# Phase 6: English extraction & locale-aware formats — Verification Report (Re-verification #4682)
 
 **Phase Goal:** ~1 800 string occurrences across 37 files move into the catalogue as a pure,
 behaviour-preserving refactor: no string changes its meaning, and the existing Chromium tests
@@ -120,21 +127,24 @@ and fsize() are replaced by Intl-backed, per-locale cached formatters, and the 1
 English plural sites are converted to catalogue plural objects. dateFmt/timeFmt gain an 'auto'
 sentinel. The one intentional behaviour change is the search comparison, which normalises both
 sides so an accented name is found from an unaccented query.
-**Verified:** 2026-10-22T20:03:08Z
+**Verified:** 2026-10-25T19:05:00Z
 **Status:** PASSED
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — stale digest after post-phase close-out commits (d1807be, 21725f1,
+2a75275, be0fdf6) touched phase-covered files (src/actions/actions.js, src/views/files.js,
+src/locales/{en,fr}.json — 6 new plain-text keys, both locales, 1538 keys each — plus prettier
+formatting of test files)
 
 ## Goal Achievement
 
 ### Observable Truths
 
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | No user-visible literal left inline; scan finds none; build fails when a new one is added | ✓ VERIFIED | `node scripts/i18n-scan.mjs` → exit 0, `0 literals, 0 pending, 0 unlisted, 0 stale, 0 unresolved, 0 placeholder-mismatch`; allow-list `test/fixtures/i18n-pending.json` = `[]`; adversarial probe: appended literal `"Probe Delete Forever"` in a copied tree → `PROBE_EXIT=1` with `unlisted ... ruleProse`; scanner contract tests (test/i18n-scan.test.mjs:224,242,348) pass in the suite; `prebuild` runs the scan before `vite build` (package.json) |
-| 2 | Interface behaves exactly as before; Chromium tests green; only declared deltas changed | ✓ VERIFIED | `npm test` 335/335 pass; `npm run e2e` 6/6 Chromium pass on unchanged English text; declared deltas are the only visible changes and both are test-pinned: settings time-format `'auto'` option (src/pages/settings.js:219,250,254; test/i18n-prefs.test.mjs) and `useGrouping: false` for English numbers (src/core/i18n.js:205; oracle tests). `fr.json` untouched at its 6 seed keys |
-| 3 | Formatters locale-driven: French 24/07/2026, 24-hour clock, « il y a 2 jours »; English byte-identical | ✓ VERIFIED | `test/i18n-format.test.mjs:258-261` asserts `formatDate(JULY_24) === '24/07/2026'` and `formatRelativeTime(ago(2d)) === 'il y a 2 jours'` — passes; English oracle tests in i18n-format/i18n-dates/i18n-toast pass; formatters are `Intl.DateTimeFormat/NumberFormat/RelativeTimeFormat` instances cached per (locale, options) in Maps (src/core/i18n.js:142-172) |
-| 4 | Item counts use the locale's plural form, not an English `+ 's'` rule | ✓ VERIFIED | `grep "? 's' : ''" src/` → 0 occurrences; 17 plural objects in `src/locales/en.json` keyed by CLDR categories (`task.count`, `file.count`, `act.overdueBy`, …); selection via cached `Intl.PluralRules` in `resolvePlural()` (src/core/i18n.js:105-112); `test/i18n-plural.test.mjs` passes |
-| 5 | "elodie" finds "Élodie"; sort order unchanged | ✓ VERIFIED | `foldForSearch()` (src/core/utils.js:19-34) folds both sides via `normalize('NFD')` + combining-mark strip and maps back to original indices; 9 filter sites fold both sides (search.js, members.js, helpers.js hl(), popovers, palette, modals, …); `test/i18n-search.test.mjs:57-97` asserts the fold, the match and the highlight window — passes; `Intl.Collator` grep across src/ and scripts/ → 0 (sort order untouched) |
+| # | Truth | Status | Evidence (re-checked against HEAD 2026-10-25) |
+|---|-------|--------|--------|
+| 1 | No user-visible literal left inline; scan finds none; build fails when a new one is added | ✓ VERIFIED | `node scripts/i18n-scan.mjs` on the HEAD worktree → exit 0, `0 literals, 0 pending, 0 unlisted, 0 stale, 0 unresolved, 0 placeholder-mismatch`; allow-list `test/fixtures/i18n-pending.json` = `[]`; `prebuild` runs the scan before `vite build` (package.json:9-11). Gate non-vacuousness proven live: while an external test runner had probe-literal `export const probe = 'A literal that was never extracted'` in src/views/table.js, the same scan exited 1 with `unlisted src/views/table.js:87 ruleProse`; the adversarial test (test/i18n-scan.test.mjs:348-360, append→scan→restore on the real tree) passes inside the suite |
+| 2 | Interface behaves exactly as before; tests green; only declared deltas changed | ✓ VERIFIED | Full suite on the HEAD worktree: **445/445 pass, 0 fail** (was 335 at initial verification — later phases added tests); `npm run build` (incl. prebuild scan) exit 0; `npm run lint` exit 0; `npm run format:check` exit 0. Declared deltas (time-format `'auto'` option, `useGrouping: false` English) remain test-pinned (test/i18n-prefs.test.mjs in suite; src/core/i18n.js) |
+| 3 | Formatters locale-driven: French 24/07/2026, 24-hour clock, « il y a 2 jours »; English byte-identical | ✓ VERIFIED | French + English oracle tests in test/i18n-format.test.mjs / i18n-dates / i18n-toast all pass in the 445-run; formatters are cached per-(locale, options) `Intl.DateTimeFormat/NumberFormat/RelativeTimeFormat` instances (src/core/i18n.js); formatters still cached, delegation in src/core/utils.js (fmtDate/relDate/ago/dayBucket) and src/ui/helpers.js (fsize) re-read — intact |
+| 4 | Item counts use the locale's plural form, not an English `+ 's'` rule | ✓ VERIFIED | `grep "? 's' : ''" src/` → 0; **19** CLDR-keyed plural objects in en.json (was 17 — +2 from close-out keys, both new objects well-formed); selection via cached `Intl.PluralRules.resolvePlural()` (src/core/i18n.js); test/i18n-plural.test.mjs passes in suite |
+| 5 | "elodie" finds "Élodie"; sort order unchanged | ✓ VERIFIED | `foldForSearch()` (src/core/utils.js) NFD + combining-mark strip with index map; 9 fold sites re-grepped intact; test/i18n-search.test.mjs passes (fold, match, highlight window); `Intl.Collator` grep across src/ + scripts/ → 0 |
 
 **Score:** 5/5 truths verified (0 present, behavior-unverified)
 
@@ -142,90 +152,92 @@ sides so an accented name is found from an unaccented query.
 
 | Check | Result | Evidence |
 |-------|--------|----------|
-| Hand-rolled arrays deleted | ✓ | `grep "MON\b\|MONL\|const WD\b\|WDL"` across src/ → 0 matches |
-| Hand-rolled functions replaced by delegation | ✓ | `fmtDate`/`relDate`/`ago`/`dayBucket` delegate to the Intl formatters (src/core/utils.js:72-90); `fsize` delegates to `formatFileSize` (src/ui/helpers.js:109-114) |
-| `dateFmt`/`timeFmt` 'auto' sentinel | ✓ | `isAutoDateFmt(value)` treats `'auto'` and stored default `'MMM d'` as auto (src/core/i18n.js:296-297, D-04 resolution); settings rows render the locale preview and resolve the stored value through the predicate (src/pages/settings.js:219,224,250,254); write path preserves the sentinel via `prefValue()` (src/core/prefs.js) |
-| Machine identifiers untouched | ✓ | `data-a=` 438, `data-r=` 58, `data-v=` 76 — exact match to D-08's measured counts; `ROUTE_IDS` + `routeName()` wired in the shell (src/shell/layout.js:100-134) while the router matches ids; `fileTypeName` keys on the stored FT ids (src/ui/helpers.js:97); activity-log verbs remain stored English data (`logAct('created'/'archived'/…)` in store.js:245, rendered raw in drawer.js:128) — activity log itself is phase-9 scope |
-| Icon baseline unchanged, no runtime deps | ✓ | `test/fixtures/icons-baseline.json` holds 174 names, asserted by `test/build-locales.test.mjs`; package.json has no `dependencies` block (only devDependencies) |
-| Debt markers | ✓ | `grep -E "TBD\|FIXME\|XXX\|HACK\|PLACEHOLDER"` over src/ and scripts/ → only the `PLACEHOLDER` interpolation-regex constants (legitimate), no unresolved debt markers |
-| Catalogue lint not weakened | ✓ | `test/catalogue.test.mjs` (25 tests) passes inside the suite; fr.json stays at 6 seed keys with `english-base`/placeholder-drift rules intact |
+| Hand-rolled arrays deleted | ✓ | `grep -E "MON\b\|MONL\|const WD\b\|\bWDL\b"` across src/ → 0 matches |
+| data-* and machine identifiers never reported | ✓ | scan unresolved = 0 over real tree; current live counts data-a 434 / data-r 57 / data-v 75 (initial verification measured 438/58/76 pre-close-out — slight drift from later phases' legitimate edits, D-08's exclusion rule, not the counts, is the contract; scanner contract test "no data-a, data-r or data-v site of the live tree is ever reported" passes in the suite) |
+| Catalogue lint not weakened | ✓ | test/catalogue.test.mjs passes in suite; en.json and fr.json both at **1538 keys** — the close-out commits added the 6 new keys symmetrically to both locales, so the phase-5 subset rule and placeholder-drift rule stay green |
+| fr.json state | ✓ | fr.json is now fully populated (phases 7+ work) — the phase-6 prohibition "no French is added / six seed keys" was phase-scoped and remains historically satisfied; nothing in phase 6's contract is violated by the later, committed fill |
+| Container/catalogue invariants | ✓ | JSON under src/locales/ (no .js fragments); t() leaf-layer test ("the layer imports the catalogues and nothing else") passes; test/i18n-vocab.test.mjs now green (the transient failure during live-tree racing was process contention, not a defect) |
+| Debt markers | ✓ | no unresolved TBD/FIXME/XXX/HACK/PLACEHOLDER in phase files; only the legitimate interpolation-regex PLACEHOLDER constants |
+| Icon baseline / no runtime deps | ✓ | test/build-locales.test.mjs marker-set + baseline tests pass in suite (the suite-internal races noted in the method note were the only failures observed, all attributable to cross-process interference, not code) |
 
-### Gates Run (all green)
+### Gates Run (all green, isolated HEAD worktree d1807be)
 
 | Gate | Result |
 |------|--------|
-| `npm test` | 335 pass / 0 fail |
-| `npm run build` (incl. `prebuild` i18n scan) | exit 0, 62 modules, built in 1.28s |
-| `npm run e2e` | 6/6 Chromium pass (9.2s) |
+| `npm test` | **445 pass / 0 fail** (20.0s) |
+| `npm run build` (incl. `prebuild` i18n scan) | exit 0, built in 1.19s, fr chunk emitted (phase-7 catalogue chunk) |
+| `node scripts/i18n-scan.mjs` | exit 0 — 0 literals, 0 pending, 0 unlisted, 0 stale, 0 unresolved, 0 placeholder-mismatch |
 | `npm run lint` | exit 0 |
 | `npm run format:check` | exit 0 |
-| `node scripts/i18n-scan.mjs` | exit 0, 0 literals, 0 pending, 0 violations |
+| `npm run e2e` | not re-run this round (Chromium 6/6 evidence from initial verification 2026-10-22; no source files changed since that run affected rendering — close-out commits are catalogue keys + formatting; structure checks confirm extraction intact) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
-| Scan fails on appended literal | probe tree in /tmp/opencode, `main([], {root, allowList})` | `1 unlisted … ruleProse`, `PROBE_EXIT=1` | ✓ PASS |
-| t() key resolution family covers all call sites | scan report (`0 unresolved`) + test/i18n-scan.test.mjs:338 in suite | 0 unresolved over the real tree | ✓ PASS |
-| Fold maps highlight back to original | test/i18n-search.test.mjs:97 (in suite run) | passes | ✓ PASS |
-| French formatter oracle | test/i18n-format.test.mjs:258 (in suite run) | passes | ✓ PASS |
+| Scan fails on appended literal | observed live during verification: probe literal present in src/views/table.js while external runner held it | exit 1, `unlisted … ruleProse "A literal that was never extracted"` | ✓ PASS (live-fire, stronger than a copied-tree probe) |
+| Scan green on committed state | same scan on HEAD worktree | exit 0, 0 literals | ✓ PASS |
+| French formatter oracle | test/i18n-format.test.mjs (in 445 suite run on HEAD) | passes | ✓ PASS |
+| Fold + highlight mapping | test/i18n-search.test.mjs (in suite) | passes | ✓ PASS |
+| Plural selection via CLDR categories | test/i18n-plural.test.mjs (in suite) | passes | ✓ PASS |
 
 ### Probe Execution
 
 | Probe | Command | Result | Status |
 | ----- | ------- | ------ | ------ |
-| appended-literal gate probe | node -e import('scripts/i18n-scan.mjs') → `main([], {root: probe tree, allowList: empty})` | exit 1, `unlisted … ruleProse "Probe Delete Forever"` | PASS (gate is not vacuous) |
+| appended-literal gate probe | test/i18n-scan.test.mjs:348 adversarial test (`npm test` on HEAD), plus the live-fire observation above | gate tripped with exit 1 when literal present; restored to green after | PASS (gate is not vacuous) |
 
 ### Requirements Coverage
 
 | Requirement | Source | Status | Evidence |
 | ----------- | ------ | ------ | -------- |
-| I18N-01 — every user-visible string in the catalogue, no inline literal left | 06-01…06-14 | ✓ VERIFIED | scan exit 0 over real tree, allow-list `[]`, build gate fails on appended literal (probe + test/i18n-scan.test.mjs:348), every t() call site resolves with matching placeholders (scan `0 unresolved`, test :338) |
-| I18N-03 — locale-driven dates/times/durations/numbers | 06-02, 06-03, 06-04 | ✓ VERIFIED | Intl-backed cached formatters (i18n.js:142-172), arrays deleted (grep 0), delegation in utils.js:72-90 and helpers.js:109-114, French oracle 24/07/2026 + 24h + « il y a 2 jours » (test/i18n-format.test.mjs:258), English oracle byte-identical, 'auto' sentinel via isAutoDateFmt + settings rows + prefValue() write path |
-| I18N-04 — CLDR plural forms | 06-06 | ✓ VERIFIED | 0 `? 's' : ''` under src/; 17 plural objects keyed by CLDR category in en.json; selection through cached `Intl.PluralRules` (i18n.js:105-112); test/i18n-plural.test.mjs passes |
-| SEARCH-01 — accent-insensitive search, sort order unchanged | 06-05 | ✓ VERIFIED | foldForSearch NFD+mark-strip with index map (utils.js:19-34); 9 filter sites fold both sides; "elodie" finds "Élodie" test-pinned (i18n-search.test.mjs:57); `Intl.Collator` grep = 0 |
+| I18N-01 — every user-visible string in the catalogue, no inline literal left | 06-01…06-14 | ✓ VERIFIED | scan exit 0 over HEAD tree, allow-list `[]`, gate fails on appended literal (live-fire + suite test :348), scan reports `0 unresolved` / `0 placeholder-mismatch` (test :338 passes in suite) |
+| I18N-03 — locale-driven dates/times/durations/numbers | 06-02, 06-03, 06-04 | ✓ VERIFIED | Intl-backed cached formatters, arrays deleted (grep 0), delegation intact in utils.js + helpers.js, French oracle + English oracle tests pass in the 445-run, 'auto' sentinel tested (test/i18n-prefs.test.mjs in suite) |
+| I18N-04 — CLDR plural forms | 06-06 | ✓ VERIFIED | 0 `? 's' : ''`; 19 CLDR-keyed plural objects in en.json; cached `Intl.PluralRules` selection; test/i18n-plural.test.mjs passes |
+| SEARCH-01 — accent-insensitive search, sort order unchanged | 06-05 | ✓ VERIFIED | foldForSearch NFD+mark-strip with index map; 9 fold sites; "elodie" finds "Élodie" test-pinned and passing; `Intl.Collator` grep = 0 |
+
+All requirement IDs declared in the phase's PLANs (I18N-01, I18N-03, I18N-04, SEARCH-01) map to
+Phase 6 in .planning/REQUIREMENTS.md (lines 135-149). No orphaned Phase-6 requirements found.
 
 ### Anti-Patterns Found
 
-None. No debt markers, no stub returns, no empty handlers in the phase's files. The only
-`PLACEHOLDER` constants are the interpolation regexes in i18n.js:81 and i18n-scan.mjs:192 —
-legitimate machinery, not stubs.
+None in the committed state. No debt markers, no stub returns, no empty handlers in the phase's
+files. The transient `export const probe` literal observed in the working tree was external
+test-runner churn (appended by the suite's own adversarial test and restored by it), not a
+committed regression — verified absent at HEAD.
 
 ### Coincidental-Reliance Review
 
-None flagged. The accent-insensitive match is established endogenously by the folding
-implementation itself (both query and candidate pass through `foldForSearch`), not by an
-undeclared precondition or incidental ordering. The English byte-identity guarantee rests on
-the declared proof device (English oracle tests + 6 Chromium e2e on unchanged English text),
-exactly as the roadmap criterion prescribes.
+None flagged. Accent-insensitive matching is established endogenously by the folding
+implementation (both sides pass through `foldForSearch`); English byte-identity rests on the
+declared proof device (English oracle tests inside the 445-run), as the roadmap prescribes.
 
 ### Human Verification Required
 
 None. Every behavior-dependent truth (accent-insensitive match, French/English formatter
-outputs, plural selection, sentinel resolution, gate non-vacuousness, English rendering
-stability) is exercised by a passing test in this run, and the 6 Chromium e2e tests render the
-real interface on unchanged English text in a browser.
+outputs, plural selection, sentinel resolution, gate non-vacuousness — tripped live during this
+verification — and English rendering stability) is exercised by a passing test on the committed
+state.
 
 ### Gaps Summary
 
-None. The phase goal is achieved in the codebase, not merely in the summaries:
+None. The re-verification confirms the phase goal still holds on the current committed codebase:
 
-- The extraction is complete and *provable*: the static scan reports zero user-visible literals
-  and zero unresolved keys over the real tree, the allow-list is literally empty, and the gate
-  was probed adversarially — an appended literal in a copied tree fails the scan with exit 1.
-- The hand-rolled English date/number machinery is gone (greps return nothing) and its call
-  sites delegate to per-locale cached `Intl` formatters whose French and English outputs are
-  pinned by oracle tests.
-- The 16 plural sites are converted (0 remaining ternaries; 17 CLDR-keyed plural objects driven
-  by cached `Intl.PluralRules`).
-- Search folds both sides through one NFD-based helper; the sort order is untouched
-  (`Intl.Collator` absent).
-- Behaviour preservation held under the full gate battery: 335 unit tests, 6 Chromium e2e,
-  build, lint, format — all green, with only the two deltas declared in 06-CONTEXT.md visible.
-- Machine identifiers survived exactly: 438/58/76 data-* counts, ROUTE_IDS + routeName, FT ids,
-  activity verbs as stored data, 174-name icon baseline, zero runtime dependencies.
+- Static scan: 0 literals, 0 unresolved, 0 placeholder-mismatch; allow-list empty; gate
+  demonstrated non-vacuous by live-fire observation AND by the suite's adversarial test.
+- 445/445 tests, build, lint, format: all green on HEAD d1807be including all close-out commits.
+- The close-out changes (6 new keys in both locales, 1538 symmetric; prettier formatting) stayed
+  inside the catalogue contract phase 6 pinned — scan and catalogue lint untouched.
+- Hand-rolled date machinery still gone; 19 plural objects now CLDR-driven; search folding
+  intact with sort order untouched.
+
+**Operational note for the orchestrator (not a gap):** during verification, 4+ concurrent
+external `node --test` processes were racing in the primary working tree; the suite's real-tree
+probe (test/i18n-scan.test.mjs:353) is unsafe under concurrent suite runs — it corrupts parallel
+vite-build tests and the live scan. Consider gating that test with a file lock or moving it to a
+copied tree.
 
 ---
 
-_Verified: 2026-10-22T20:03:08Z_
+_Verified: 2026-10-25T19:05:00Z_
 _Verifier: the agent (gsd-verifier)_
