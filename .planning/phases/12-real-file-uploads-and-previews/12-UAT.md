@@ -3,14 +3,14 @@ status: testing
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T17:16:08Z
+updated: 2026-10-25T17:40:34Z
 ---
 
 ## Current Test
 
-number: 4
-name: Re-run test 1 in real Firefox AND Chrome (G-12-1 + G-12-4 + G-12-6 closure re-check)
-expected: Drop a file >5 MB onto a dropzone, watch the progress row, then open a multi-page PDF's preview modal in BOTH Firefox and Chrome. Progress advances with real transfer pace and the row disappears on completion. The PDF renders inside the wide (~866px) tall (~75vh) scrollable iframe; Firefox's full viewer toolbar is visible with the direct download/print buttons NOT collapsed into «»; the modal-footer Download button (Download/Télécharger) saves the file under its original name in both browsers; large PDFs paint without the old whole-file stall («refused to connect» / «ne peut pas ouvrir cette page» must stay gone).
+number: 5
+name: Triage WR-01 at ~700-800px window width
+expected: With the app open, resize the browser window to ~700-800px CSS width and open a PDF preview. Decide the intended behavior below the ~816px threshold: today the pdf.js toolbar collapses again (iframe <750px) but the footer Download button still saves the file. Either accept that as the documented narrow-viewport fallback or request a fix, and record the decision in 12-REVIEW-DISPOSITION.md.
 status: awaiting
 
 ## Tests
@@ -60,7 +60,8 @@ the direct download/print buttons NOT collapsed into «»; the modal-footer Down
 button (Download/Télécharger) saves the file under its original name in both browsers;
 large PDFs paint without the old whole-file stall («refused to connect» / «ne peut pas
 ouvrir cette page» must stay gone).
-result: pending
+result: pass
+source: manual
 
 ### 5. Triage WR-01 at ~700-800px window width
 expected: With the app open, resize the browser window to ~700-800px CSS width and
@@ -73,9 +74,9 @@ result: pending
 ## Summary
 
 total: 5
-passed: 2
+passed: 3
 issues: 1
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
@@ -193,9 +194,9 @@ fix or accept) and WR-01 (test 5 above) — see 12-REVIEW-DISPOSITION.md.
 
 - gap_id: G-12-6
   truth: "The PDF preview iframe in Firefox is wide enough that the full viewer toolbar, including the download button, is visible"
-  status: pending-retest
-  code_closed_by: 12-08-PLAN
-  code_closed_at: 2026-10-25
+  status: resolved
+  resolved_by: 12-08-PLAN
+  resolved_at: 2026-10-25
   retest: test 4
   reason: "User reported: the embedded view in firefox does not show download, its too small, the other things are working"
   severity: major
