@@ -3,7 +3,7 @@ status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T07:23:55Z
+updated: 2026-10-25T07:26:19Z
 ---
 
 ## Current Test
@@ -71,3 +71,9 @@ blocked: 0
   test: 3
   artifacts: []
   missing: []
+
+## Deferred Follow-Ups
+
+- test: 0
+  idea: "Hors périmètre phase 12 (Sessions) : la section Sessions affiche 2 sessions actives (Chrome + Firefox) mais le bouton « déconnecter les autres sessions » ne s'active pas"
+  deferred_at: 2026-10-25
