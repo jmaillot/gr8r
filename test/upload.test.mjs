@@ -81,9 +81,10 @@ async function plantFile(server, admin, id, name, bytes) {
   assert.equal(res.status, 200, `doc-PUT planting ${name}: ${JSON.stringify(res.data)}`);
 }
 
-/* Plain fetch carrying a captured cookie — the harness client is JSON-only. */
-function fileFetch(server, cookie, pathname, { accept = '*/*' } = {}) {
-  return fetch(`${server.base}${pathname}`, { headers: { cookie, accept } });
+/* Plain fetch carrying a captured cookie — the harness client is JSON-only.
+   Any extra headers (Sec-Fetch-Dest, …) ride through as-is. */
+function fileFetch(server, cookie, pathname, { accept = '*/*', ...extra } = {}) {
+  return fetch(`${server.base}${pathname}`, { headers: { cookie, accept, ...extra } });
 }
 
 test('file GET serves exact bytes to members; outsiders, unknown ids and unknown workspaces all 404 (UPLOAD-03)', async () => {
@@ -150,15 +151,46 @@ test('D-06 header policy: svg serves attachment/octet-stream, png serves inline/
   }
 });
 
-test('D-13 deep link: navigating with Accept: text/html bootstraps the SPA instead of the bytes', async () => {
+/* D-13 (revised, plan 12-05): /w/:slug/file/:id is a byte-only route — text/html
+   navigations (the old SPA-branch trigger, and what iframe navigations send)
+   receive the D-06-governed bytes, never the SPA shell with its X-Frame-Options
+   DENY. That holds for inline types under both navigation markers, and for
+   attachment types (Always octet-stream + Content-Disposition: attachment). */
+test('byte-only file route: Accept: text/html and Sec-Fetch-Dest: document receive the bytes, never the SPA (G-12-1)', async () => {
   const server = await startServer({});
   try {
     const admin = await login(server.base, ADMIN.email, ADMIN.password);
-    await plantFile(server, admin, 'f_png3', 'nav.png', Buffer.from('nav-bytes'));
-    const res = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_png3', { accept: 'text/html' });
-    assert.equal(res.status, 200);
-    assert.ok((res.headers.get('content-type') || '').includes('text/html'));
-    assert.notEqual(await res.text(), 'nav-bytes');
+    const bytes = Buffer.from('negotiation-png-bytes');
+    await plantFile(server, admin, 'f_png4', 'nav.png', bytes);
+    await plantFile(server, admin, 'f_bin1', 'archive.bin', Buffer.from('archive-bytes'));
+
+    /* Accept: text/html — exactly what Chromium sends on the preview modal's
+       iframe navigation and on a top-level paste: the inline PNG bytes, the
+       inline disposition, and NO X-Frame-Options of any value. */
+    const html = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_png4', { accept: 'text/html' });
+    assert.equal(html.status, 200);
+    assert.equal(html.headers.get('content-type'), 'image/png');
+    assert.ok(html.headers.get('content-disposition').startsWith('inline'));
+    assert.deepEqual(Buffer.from(await html.arrayBuffer()), bytes);
+    assert.equal(html.headers.get('x-frame-options'), null, 'inline responses must never carry X-Frame-Options');
+
+    /* Sec-Fetch-Dest: document — a real top-level navigation marker — gets the
+       same byte answer (the route does not read fetch-metadata). */
+    const doc = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_png4', {
+      accept: 'text/html',
+      'sec-fetch-dest': 'document',
+    });
+    assert.equal(doc.status, 200);
+    assert.equal(doc.headers.get('content-type'), 'image/png');
+    assert.deepEqual(Buffer.from(await doc.arrayBuffer()), bytes);
+    assert.equal(doc.headers.get('x-frame-options'), null);
+
+    /* Attachment type under the same navigation Accept: attachment +
+       octet-stream per D-06, so a pasted attachment URL downloads. */
+    const bin = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_bin1', { accept: 'text/html' });
+    assert.equal(bin.status, 200);
+    assert.ok(bin.headers.get('content-disposition').startsWith('attachment'));
+    assert.equal(bin.headers.get('content-type'), 'application/octet-stream');
   } finally {
     await server.stop();
   }

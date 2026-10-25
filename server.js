@@ -1990,15 +1990,19 @@ const server = http.createServer(async (req, res) => {
     } else if (/^\/w\/([a-z0-9-]{2,40})\/file\/([A-Za-z0-9_-]+)$/.test(url.pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
       /* The file GET must be intercepted before serveStatic (Pitfall 1): the
          extensionless /w/:slug/file/:id path would fall into the SPA fallback.
-         D-13: a navigation request (Accept: text/html) bootstraps the SPA so
-         applyDeepLink can open the preview modal; only byte requests reach
-         serveFileBinary. */
+         D-13 (revised, plan 12-05): this route is BYTE-ONLY. Every consumer —
+         the preview modal's iframe, a pasted top-level navigation, a fetch —
+         receives the workspace-scoped bytes; the old Accept: text/html SPA
+         branch is gone because iframe navigations send the same Accept as
+         top-level navigations and could never be discriminated that way.
+         serveFileBinary's D-06 fixed inline/attachment header map is the sole
+         header authority on this route, and requireWorkspace inside it keeps
+         the 404 no-oracle gate (D-05) for unknown/unauthorized callers —
+         document navigations included: an unauthenticated paste of a file URL
+         answers 404. That is the locked isolation decision (T-12-13), not a
+         regression to fix. */
       const fileMatch = url.pathname.match(/^\/w\/([a-z0-9-]{2,40})\/file\/([A-Za-z0-9_-]+)$/);
-      if (/text\/html/.test(req.headers.accept || '')) {
-        serveStatic(req, res, url);
-      } else {
-        await serveFileBinary(req, res, fileMatch[1], fileMatch[2]);
-      }
+      await serveFileBinary(req, res, fileMatch[1], fileMatch[2]);
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {
