@@ -1,20 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T08:19:13Z
+updated: 2026-10-25T09:05:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Drag-and-drop feel and PDF embed rendering
-expected: |
-  Drop a large file (>5 MB) onto a dropzone; progress row climbs with the real
-  transfer pace (no uniform timer), disappears on completion; a multi-page PDF renders
-  inside the iframe embed in the preview modal.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -22,33 +16,27 @@ awaiting: user response
 expected: Drop a large file (>5 MB) onto a dropzone; progress row climbs with the real
 transfer pace (no uniform timer), disappears on completion; a multi-page PDF renders
 inside the iframe embed in the preview modal.
-result: pending
-reported: "rendering doesnt work either in chrome or firefox (firefox says Firefox ne peut pas ouvrir cette page / chrome says refused to connect.)"
+result: issue
+reported: "yes but the embed is a little too slow, i dont see all the menu so i can't download it — only on firefox, in chrome i have a download button"
 severity: major
-fix_note: "Closed by 12-05 — /w/:slug/file/:id is byte-only (G-12-1); re-run in real Chrome AND Firefox."
 
 ### 2. « Copier le lien » outside the SPA
 expected: Copy a file link via the context menu, paste it into a fresh browser profile
 (logged in, no SPA state), and load it. Bytes render in the browser tab (inline types)
 or download (attachment types); the URL keeps working.
-result: pending
-reported: "copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
-severity: major
-fix_note: "Closed by 12-05 — one copied file URL from both entry points, no SPA deep-link divergence (G-12-2); re-run in a fresh profile."
+result: pass
+fix_note: "User also flagged: non-logged browser gets raw error {\"error\":\"Sign in to continue\",\"code\":\"signInRequired\"} instead of a redirect to the login page (new gap G-12-5)."
 
 ### 3. Dropzone cap label ignores MAX_UPLOAD_MB
 expected: The dropzone hint text reflects the configured MAX_UPLOAD_MB value
-result: pending
-reported: "\"Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun\" ne tient pas compte de la valeur MAX_UPLOAD_MB"
-severity: minor
-fix_note: "Closed by 12-06 — maxUploadMb exposed via /api/config, label interpolates the live knob (G-12-3); re-run with a distinctive MAX_UPLOAD_MB."
+result: pass
 
 ## Summary
 
 total: 3
-passed: 0
-issues: 0
-pending: 3
+passed: 2
+issues: 1
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -111,6 +99,24 @@ All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` 
     - "Expose maxUploadMb in /api/config and carry it through api.init() into client state"
     - "Convert page.files.dropLimit to a placeholder form fitting the i18n-scan contract ({n} interpolation) and pass the value at files.js:42; add an e2e assertion on the rendered hint"
   debug_session: ".planning/debug/dropzone-cap-label.md"
+
+- gap_id: G-12-4
+  truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
+  status: failed
+  reason: "User reported: yes but the embed is a little too slow, i dont see all the menu so i can't download it — only on firefox, in chrome i have a download button"
+  severity: major
+  test: 1
+  artifacts: []  # Filled by diagnosis
+  missing: []    # Filled by diagnosis
+
+- gap_id: G-12-5
+  truth: "A non-authenticated browser loading a file URL is redirected to the login page (not shown a raw JSON error)"
+  status: failed
+  reason: "User reported: it work as described, i just tested another behaviour on non logged browser, i have error \"Sign in to continue\" / code \"signInRequired\", can we simply redirect to the login page ?"
+  severity: minor
+  test: 2
+  artifacts: []  # Filled by diagnosis
+  missing: []    # Filled by diagnosis
 
 ## Deferred Follow-Ups
 
