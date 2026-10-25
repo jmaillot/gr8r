@@ -420,17 +420,21 @@ to the parent task). Closes the known limitation "File contents are metadata
 only; no binary upload backend".
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 4 plans
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 12-01-PLAN.md — Tracer: streamed upload endpoint `POST /w/:slug/files` (D-01/D-02) + integration suite
+- [x] 12-01-PLAN.md — Tracer: streamed upload endpoint `POST /w/:slug/files` (D-01/D-02) + integration suite
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 12-02-PLAN.md — File route `GET /w/:slug/file/:id` with Accept negotiation, safe headers (D-05–D-07) + doc-PUT binary delete (D-04)
+- [x] 12-02-PLAN.md — File route `GET /w/:slug/file/:id` with Accept negotiation, safe headers (D-05–D-07) + doc-PUT binary delete (D-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 12-03-PLAN.md — Client: XHR progress in `handleFiles` (D-08/D-11/D-12/D-14), real-bytes preview modal (D-03/D-09/D-10), deep-link copy-link destination (D-13), e2e
+- [x] 12-03-PLAN.md — Client: XHR progress in `handleFiles` (D-08/D-11/D-12/D-14), real-bytes preview modal (D-03/D-09/D-10), deep-link copy-link destination (D-13), e2e
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 12-04-PLAN.md — i18n/error-code completeness + operator docs (MAX_UPLOAD_MB, limitation retraction) + phase gate
+- [x] 12-04-PLAN.md — i18n/error-code completeness + operator docs (MAX_UPLOAD_MB, limitation retraction) + phase gate
+
+**Gap closure** *(from the UAT gap scan)*
+- [x] 12-05-PLAN.md — G-12-1/G-12-2: byte-only `/w/:slug/file/:id` route, one copy-link URL (both entry points), PDF-iframe e2e proofs
+- [ ] 12-06-PLAN.md — G-12-3: MAX_UPLOAD_MB crosses into the client dropzone cap hint

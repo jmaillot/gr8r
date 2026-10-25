@@ -179,3 +179,9 @@ None - no external service configuration required.
 ---
 *Phase: 12-real-file-uploads-and-previews*
 *Completed: 2026-10-25*
+
+## Self-Check: PASSED
+
+- All 5 modified key files exist on disk; SUMMARY.md exists.
+- Commits verified in history: `2147c91` (Task 1), `de467cb` (Task 2), `2aad0e0` (docs).
+- npm test: 442/442 pass; npm run build: success; npm run e2e: 43/43 pass (both locales, incl. rewritten phase-12 file test).

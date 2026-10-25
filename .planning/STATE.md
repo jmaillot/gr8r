@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 12
 current_phase_name: Real file uploads and previews
-current_plan: 4
-status: uat-pending
-stopped_at: Phase 12 automated verification passed — UAT pending (2 items)
-last_updated: "2026-10-24T17:50:00.000Z"
-last_activity: 2026-10-24
-last_activity_desc: Phase 12 executed, reviewed, verified 12/12 — human verification pending
-state_head: 8ee1f1db2631a3ff352a1a6d52fccea815e359b1
+current_plan: 6
+status: executing
+stopped_at: Completed 12-05-PLAN.md (gap closure G-12-1, G-12-2) — 12-06 remains
+last_updated: "2026-10-25T07:52:04Z"
+last_activity: 2026-10-25
+last_activity_desc: Plan 12-05 executed — byte-only file route and one copy-link URL
+state_head: 8b93d880d11e112eb8213cb348106a33eb39af1a
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 46
-  completed_plans: 42
-  percent: 25
+  total_plans: 48
+  completed_plans: 47
+  percent: 97
 milestone_name: Localization
 ---
 
@@ -275,6 +275,9 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 09]: Login and signup carry the standard sameOrigin 403 crossOriginRejected guard, placed before the body read AND before the throttle so a cross-origin POST cannot consume the victim IP's budget (WR-07)
 - [Phase 10]: TRUST_PROXY=true in e2e/server.mjs so run-unique X-Forwarded-For dodges the per-IP signup throttle (Rule 3, plan 10-01)
 - [Phase 11]: the 21-route sweep pairs a coverage assertion beside the leak scan — an empty page cannot pass; the allow-list stays `[]` and the scanner exits 0 pinned by test; docker-build CI asserts the served fr-*.js chunk contains 'Projets'
+- [Phase 12]: 12-05 — /w/:slug/file/:id is BYTE-ONLY: no Accept/Sec-Fetch-Dest negotiation survives; a pasted file URL serves bytes top-level (inline renders, attachment downloads) and an unauthenticated paste gets the D-05 404 no-oracle for document navigations too (T-12-13 accept)
+- [Phase 12]: 12-05 — the file context menu's data-id-only copyLink resolves its file inside A.copyLink (file branch after fid, id-spaces disjoint); the SPA applyDeepLink 'file' branch is deleted — the pathname serves bytes, in-app previews go through A.previewFile
+- [Phase 12]: pre-existing repo-wide lint (8 errors) and format (19 files) drift predate plan 12-05 — logged to phases/12-*/deferred-items.md, needs a dedicated cleanup task
 
 ## Verification commands used
 
@@ -307,18 +310,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T17:50:00.000Z
-**Stopped at:** Phase 12 automated verification passed — UAT pending (2 items)
-**Resume file:** .planning/phases/12-real-file-uploads-and-previews/12-UAT.md
+**Last session:** 2026-10-25T07:52:04Z
+**Stopped at:** Completed 12-05-PLAN.md (feat 2147c91, feat de467cb) — 12-06 remains
+**Resume file:** None
 
 ## Current Position
 
-Current Plan: 4
-Total Plans in Phase: 4
+Current Plan: 6
+Total Plans in Phase: 6
 
-Phase: 12 (Real file uploads and previews) — AUTOMATED VERIFICATION PASSED, UAT PENDING
-Status: 12/12 must-haves verified (44e3a4c closed the doc gap); 2 human verification items in 12-UAT.md
-Last activity: 2026-10-24 — Phase 12 verification passed; UAT file created
+Phase: 12 (Real file uploads and previews) — EXECUTING
+Status: Executing Phase 12 — plans 12-01..12-05 complete, 12-06 (G-12-3) remains
+Last activity: 2026-10-25 — Plan 12-05 executed — byte-only file route and one copy-link URL
 
 ## Operator Next Steps
 
@@ -345,3 +348,4 @@ Last activity: 2026-10-24 — Phase 12 verification passed; UAT file created
 | Phase 10 P01 | ~12 min | 2 tasks | 3 files |
 | Phase 10 P02 | ~50 min | 3 tasks | 1 files |
 | Phase 10 P03 | ~25 min | 2 tasks | 1 files |
+| Phase 12 P05 | 8 min | 2 tasks | 5 files |
