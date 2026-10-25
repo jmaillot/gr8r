@@ -1,23 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T10:42:00Z
+updated: 2026-10-25T10:52:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Re-run test 2 (G-12-2 + G-12-5 closure re-check)
-expected: |
-  Copy a file link from BOTH « ... » context menu and the modal footer; paste
-  each into a fresh signed-in browser profile; then paste one into a LOGGED-OUT profile.
-  Both entry points copy the identical /w/:slug/file/:id URL; a signed-in paste renders
-  the bytes (inline types) or downloads (attachment types); a logged-out paste now lands
-  on the LOGIN PAGE (not raw signInRequired JSON), and after signing in the browser
-  returns to the same file URL and the bytes render.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -44,20 +35,20 @@ Both entry points copy the identical /w/:slug/file/:id URL; a signed-in paste re
 the bytes (inline types) or downloads (attachment types); a logged-out paste now lands
 on the LOGIN PAGE (not raw signInRequired JSON), and after signing in the browser
 returns to the same file URL and the bytes render.
-result: [pending]
+result: pass
 
 ### 3. Re-run test 3 (G-12-3 closure re-check)
 expected: Set MAX_UPLOAD_MB to a distinctive value (e.g. 7), restart the server, open
 the files tab. The dropzone hint reads the configured value («— jusqu'à 7 Mo chacun» /
 «— up to 7 MB each»), not the old hardcoded 250.
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 3
-passed: 0
+passed: 2
 issues: 1
-pending: 2
+pending: 0
 skipped: 0
 blocked: 0
 
