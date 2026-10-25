@@ -97,7 +97,9 @@ export function negotiate(codes) {
     list = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
   }
   for (const c of Array.isArray(list) ? list : Array.from(list || [])) {
-    const sub = String(c || '').toLowerCase().split('-')[0];
+    const sub = String(c || '')
+      .toLowerCase()
+      .split('-')[0];
     if (LOCALES.some(l => l.code === sub)) return sub;
   }
   return BASE_LOCALE;

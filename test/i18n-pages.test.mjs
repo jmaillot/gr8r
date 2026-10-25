@@ -667,7 +667,11 @@ test('the language selector derives its two options from the registry (LOC-02)',
   assert.ok(src.includes('data-in="langSel"'), 'the language row carries its dedicated input key');
   const row = src.slice(src.indexOf("case 'language':"), src.indexOf("case 'datetime':"));
   assert.ok(!/sel\('lang'/.test(row) && !row.includes('prefSel') && !row.includes('setPref'), 'no preference-flow wiring on the language row');
-  assert.deepEqual(LOCALES.map(l => l.name), ['English', 'Français'], 'each language is labelled in its own name');
+  assert.deepEqual(
+    LOCALES.map(l => l.name),
+    ['English', 'Français'],
+    'each language is labelled in its own name',
+  );
 });
 
 test('registry codes, locale catalogue files and the selector agree one-to-one (LOC-02)', async () => {

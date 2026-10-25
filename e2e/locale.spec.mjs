@@ -119,7 +119,9 @@ test('a signed-in account boots in its own language from the first paint, whatev
   }
 });
 
-test('the selector switches the interface instantly without a reload and the choice survives reload, sign-out and sign-in (LOC-01, LOC-03)', async ({ browser }) => {
+test('the selector switches the interface instantly without a reload and the choice survives reload, sign-out and sign-in (LOC-01, LOC-03)', async ({
+  browser,
+}) => {
   const context = await newContext(browser, carol, 'en-US');
   const page = await context.newPage();
   try {
@@ -212,7 +214,9 @@ async function assertLanguage(page, lang, navLabel) {
   expect(await page.evaluate(() => document.documentElement.lang)).toBe(lang);
 }
 
-test('criterion 4: two members of one workspace each keep their own language across a reload, a workspace switch and a second browser context (D-04, UAT-06)', async ({ browser }) => {
+test('criterion 4: two members of one workspace each keep their own language across a reload, a workspace switch and a second browser context (D-04, UAT-06)', async ({
+  browser,
+}) => {
   const SWITCH = { fr: /Changer d’espace de travail/, en: 'Switch workspace' };
   const switchedToast = { fr: `Passé à ${secondName}`, en: `Switched to ${secondName}` };
   const aliceCtx = await newContext(browser, alice, 'fr-FR');

@@ -17,18 +17,18 @@ test('cold start with no ADMIN_EMAIL/ADMIN_PASSWORD boots with the admin@example
   try {
     /* startServer resolving means /api/config responded — the listener is open,
        so bootstrap (ensureAdmin included) did not abort the process. */
-    const users = new DatabaseSync(server.dbPath)
-      .prepare('select email, name from users order by email')
-      .all();
+    const users = new DatabaseSync(server.dbPath).prepare('select email, name from users order by email').all();
     /* BASE_ENV still carries ADMIN_NAME ('Owner'); only the two undefined vars
        are stripped, so assert the email — the emailOk gate under test. */
-    assert.deepEqual(users.map(user => user.email), ['admin@example.com'],
-      'the bootstrap admin row carries the emailOk-valid fallback email');
+    assert.deepEqual(
+      users.map(user => user.email),
+      ['admin@example.com'],
+      'the bootstrap admin row carries the emailOk-valid fallback email',
+    );
 
     /* ADMIN_PASSWORD was falsy, so ensureAdmin took the generated-password
        branch; assert only the line's presence, never the secret value. */
-    assert.match(server.output(), / {2}generated password: /,
-      'the boot log announces a generated admin password');
+    assert.match(server.output(), / {2}generated password: /, 'the boot log announces a generated admin password');
   } finally {
     await server.stop();
   }
@@ -37,9 +37,11 @@ test('cold start with no ADMIN_EMAIL/ADMIN_PASSWORD boots with the admin@example
 test('negative control: an explicitly invalid ADMIN_EMAIL still fails fast at boot', async () => {
   /* The fix changed only the default, not the validation: admin@localhost has no
      dot in the domain, so emailOk rejects it and bootstrap exits before listen. */
-  await assert.rejects(startServer({ env: { ADMIN_EMAIL: 'admin@localhost' } }),
+  await assert.rejects(
+    startServer({ env: { ADMIN_EMAIL: 'admin@localhost' } }),
     /Enter a valid email address|did not start/,
-    'an invalid explicit ADMIN_EMAIL must abort the boot');
+    'an invalid explicit ADMIN_EMAIL must abort the boot',
+  );
 });
 
 /* WR-04: invite links are built from APP_URL; with the mail enabled and APP_URL
@@ -47,9 +49,11 @@ test('negative control: an explicitly invalid ADMIN_EMAIL still fails fast at bo
    emails invitation links pointing at the attacker's domain. The boot gate makes
    APP_URL mandatory whenever SMTP_HOST is configured; one site, before listen. */
 test('boot gate: SMTP_HOST without APP_URL refuses to start and names both variables', async () => {
-  await assert.rejects(startServer({ env: { SMTP_HOST: 'smtp.example.net', MAIL_FROM: 'invites@test.local', APP_URL: undefined } }),
+  await assert.rejects(
+    startServer({ env: { SMTP_HOST: 'smtp.example.net', MAIL_FROM: 'invites@test.local', APP_URL: undefined } }),
     /did not start|APP_URL/,
-    'a mail-enabled boot without APP_URL must abort before listening');
+    'a mail-enabled boot without APP_URL must abort before listening',
+  );
   /* The harness only reports the summary error message; spawn the real boot once to
      capture the operator's stderr and the exit code directly. */
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'gr8r-gate-'));

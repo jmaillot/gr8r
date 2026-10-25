@@ -405,10 +405,11 @@ test('uploads are gated: unauthenticated callers get 401 and viewers get 403 rea
     const admin = await login(server.base, ADMIN.email, ADMIN.password);
     const invite = await admin.client.post('/api/workspaces/acme/invites', { emails: ['viewer@test.local'], role: 'Viewer' });
     assert.equal(invite.status, 201);
-    const accepted = await client(server.base, 'viewer').post(
-      `/api/invites/${encodeURIComponent(inviteToken(invite.data.invites[0].url))}/accept`,
-      { name: 'Viewer', email: 'viewer@test.local', password: 'password-1234' },
-    );
+    const accepted = await client(server.base, 'viewer').post(`/api/invites/${encodeURIComponent(inviteToken(invite.data.invites[0].url))}/accept`, {
+      name: 'Viewer',
+      email: 'viewer@test.local',
+      password: 'password-1234',
+    });
     assert.equal(accepted.status, 201);
     const viewer = await login(server.base, 'viewer@test.local', 'password-1234');
     const res = await uploadFetch(server, viewer.client.cookie(), Buffer.from('viewer bytes'));

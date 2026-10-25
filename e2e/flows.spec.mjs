@@ -105,7 +105,11 @@ test.beforeAll(async () => {
       workspace: `shr-${lang}-${run}`,
     });
     const tgt = await createAccount(BASE_URL, run, `tgt-${lang}`, `Share Target ${lang}`);
-    const invite = await must('share target invite', await shr.client.post(`/api/workspaces/${shr.account.slug}/invites`, { emails: [tgt.account.email], role: 'member' }), [201]);
+    const invite = await must(
+      'share target invite',
+      await shr.client.post(`/api/workspaces/${shr.account.slug}/invites`, { emails: [tgt.account.email], role: 'member' }),
+      [201],
+    );
     await must('share target accept', await tgt.client.post(`/api/invites/${inviteToken(invite.invites[0].url)}/accept`, {}), [200, 201]);
 
     /* One public project on the share workspace, created through the
@@ -145,7 +149,11 @@ test.beforeAll(async () => {
       locale: lang,
       workspace: `swi-${lang}-${run}`,
     });
-    const second = await must('switcher second workspace', await swi.client.post('/api/workspaces', { name: `Locale swi2-${lang} ${run}`, slug: `swi2-${lang}-${run}` }), [201]);
+    const second = await must(
+      'switcher second workspace',
+      await swi.client.post('/api/workspaces', { name: `Locale swi2-${lang} ${run}`, slug: `swi2-${lang}-${run}` }),
+      [201],
+    );
 
     /* UAT-05 member-removal fixture: an owner plus a real member that
        joined through the API invite/accept chain (so removeMember finds a
@@ -155,7 +163,11 @@ test.beforeAll(async () => {
       workspace: `rem-${lang}-${run}`,
     });
     const remm = await createAccount(BASE_URL, run, `remm-${lang}`, `Removed Member ${lang}`);
-    const remInvite = await must('removal member invite', await rem.client.post(`/api/workspaces/${rem.account.slug}/invites`, { emails: [remm.account.email], role: 'member' }), [201]);
+    const remInvite = await must(
+      'removal member invite',
+      await rem.client.post(`/api/workspaces/${rem.account.slug}/invites`, { emails: [remm.account.email], role: 'member' }),
+      [201],
+    );
     await must('removal member accept', await remm.client.post(`/api/invites/${inviteToken(remInvite.invites[0].url)}/accept`, {}), [200, 201]);
 
     /* Phase 12 upload/preview fixture: an owner with its own workspace and
@@ -358,7 +370,11 @@ test.describe('/join page', () => {
       const owner = FLOW[lang].inviteOwner;
       const wsName = FLOW[lang].inviteWsName;
       const joinerEmail = `joiner-${lang}-${run}@e2e.local`;
-      const invite = await must('join invite', await FLOW[lang].inviteClient.post(`/api/workspaces/${owner.slug}/invites`, { emails: [joinerEmail], role: 'member' }), [201]);
+      const invite = await must(
+        'join invite',
+        await FLOW[lang].inviteClient.post(`/api/workspaces/${owner.slug}/invites`, { emails: [joinerEmail], role: 'member' }),
+        [201],
+      );
       const token = inviteToken(invite.invites[0].url);
 
       /* A fresh browser context is the new visitor: its own run-unique IP
@@ -419,7 +435,10 @@ test.describe('project share modal', () => {
         await signIn(page, owner);
 
         /* Open the project from the projects grid, then its share modal. */
-        await page.getByRole('button', { name: fmt('nav.route.projects', {}, lang) }).first().click();
+        await page
+          .getByRole('button', { name: fmt('nav.route.projects', {}, lang) })
+          .first()
+          .click();
         await page.locator(`[data-a='go'][data-r='project'][aria-label="${projectName}"]`).click();
         await page.getByRole('button', { name: fmt('act.share', {}, lang), exact: true }).click();
 
@@ -823,20 +842,20 @@ test.describe('file uploads and previews (Phase 12)', () => {
         /* G-12-6: the in-iframe viewport crosses pdf.js's 750px toolbar
            breakpoint (≥866px at the 900px modal) so Firefox's embedded viewer
            keeps its full default toolbar — download/print buttons visible. */
-        await expect
-          .poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().width))
-          .toBeGreaterThan(800);
+        await expect.poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(800);
         /* G-12-4 (a): the PDF iframe is a tall scrollable viewport (~75vh, i.e.
            540px at the default 720px e2e viewport) — Firefox renders its PDF
            toolbar inside the iframe and the old 16/9 pane (~287px) clipped it. */
-        await expect
-          .poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().height))
-          .toBeGreaterThan(400);
+        await expect.poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(400);
         const pdfRes = await page.request.get(`${BASE_URL}/w/${owner.slug}/file/${pdfId}`);
         expect(pdfRes.status()).toBe(200);
         expect(pdfRes.headers()['content-type']).toBe('application/pdf');
         expect(pdfRes.headers()['x-frame-options']).toBeUndefined();
-        expect(Buffer.from(await pdfRes.body()).subarray(0, 5).toString()).toBe('%PDF-');
+        expect(
+          Buffer.from(await pdfRes.body())
+            .subarray(0, 5)
+            .toString(),
+        ).toBe('%PDF-');
 
         /* G-12-6 hardening: the modal footer carries a PDF-only Download
            anchor — viewer-independent save affordance. Its href is the exact
@@ -958,7 +977,10 @@ test.describe('file uploads and previews (Phase 12)', () => {
         /* 2 MB against the e2e server's 1 MB cap: the stable error code is
            translated in the DOM, the progress row is removed and — D-11 —
            data.files gains nothing. */
-        await page.locator('input[data-in="uploadFiles"]').first().setInputFiles({ name: 'big.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(2 * 1024 * 1024, 7) });
+        await page
+          .locator('input[data-in="uploadFiles"]')
+          .first()
+          .setInputFiles({ name: 'big.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(2 * 1024 * 1024, 7) });
         await expect(page.getByText(d.tooLarge)).toBeVisible();
         await expect(page.locator('.upl')).toHaveCount(0);
         expect(await fileRecordCount(client, owner.slug)).toBe(before);

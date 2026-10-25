@@ -14,8 +14,7 @@ let bob;
 let bobId;
 
 const localeOf = email => withDb(server.dbPath, db => db.prepare('select locale from users where email = ?').get(email).locale);
-const workspaceRow = () =>
-  withDb(server.dbPath, db => db.prepare('select doc, revision, updated_at from workspaces order by created_at limit 1').get());
+const workspaceRow = () => withDb(server.dbPath, db => db.prepare('select doc, revision, updated_at from workspaces order by created_at limit 1').get());
 
 before(async () => {
   server = await startServer();
@@ -31,7 +30,10 @@ before(async () => {
   assert.equal(accepted.status, 200, 'bob accepts');
   bobId = joined.data.user.id;
   const roster = await owner.get('/api/workspaces/acme/members');
-  assert.ok(roster.data.members.some(m => m.email === 'bob@test.local'), 'bob shares the workspace');
+  assert.ok(
+    roster.data.members.some(m => m.email === 'bob@test.local'),
+    'bob shares the workspace',
+  );
 });
 
 after(async () => {

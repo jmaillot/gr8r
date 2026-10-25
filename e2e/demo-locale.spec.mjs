@@ -93,9 +93,7 @@ test('the demo language switch persists across a reload through localStorage', a
        whose label the registry gives to code 'en' (label read from the DOM,
        never transcribed). */
     await page.locator('.set-body .select-btn').click();
-    const enLabel = await page.evaluate(
-      () => [...document.querySelectorAll('select[data-in="langSel"] option')].find(o => o.value === 'en')?.text,
-    );
+    const enLabel = await page.evaluate(() => [...document.querySelectorAll('select[data-in="langSel"] option')].find(o => o.value === 'en')?.text);
     if (!enLabel) throw new Error('no en option in the language select');
     await page.getByRole('option', { name: enLabel }).click();
     await demoBootedIn(page, 'en', 'settings');

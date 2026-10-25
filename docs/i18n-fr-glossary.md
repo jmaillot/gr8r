@@ -151,26 +151,26 @@ valeur dont la forme coïncide (« Frontend », « Backend », « Bug », « Des
 
 Ajoutées par le lot page ; les lots suivants les réutilisent telles quelles.
 
-| Anglais         | Français             |
-| --------------- | -------------------- |
-| design system   | système de design    |
-| token           | token                |
-| saved view      | vue enregistrée      |
-| due date        | échéance             |
-| overdue         | en retard            |
-| milestone       | jalon                |
-| inbox           | boîte de réception   |
-| sidebar         | barre latérale       |
-| side panel      | panneau latéral      |
-| breadcrumb      | fil d’Ariane         |
-| subtask         | sous-tâche           |
-| team            | équipe               |
+| Anglais         | Français                     |
+| --------------- | ---------------------------- |
+| design system   | système de design            |
+| token           | token                        |
+| saved view      | vue enregistrée              |
+| due date        | échéance                     |
+| overdue         | en retard                    |
+| milestone       | jalon                        |
+| inbox           | boîte de réception           |
+| sidebar         | barre latérale               |
+| side panel      | panneau latéral              |
+| breadcrumb      | fil d’Ariane                 |
+| subtask         | sous-tâche                   |
+| team            | équipe                       |
 | workspace admin | admin de l’espace de travail |
-| demo data       | données de démo      |
-| wireframe       | wireframe            |
-| handoff         | passation            |
-| grid            | grille               |
-| e-mail          | e-mail               |
+| demo data       | données de démo              |
+| wireframe       | wireframe                    |
+| handoff         | passation                    |
+| grid            | grille                       |
+| e-mail          | e-mail                       |
 
 ## Terminologie — lot A (`a11y.*`, plan 07-04)
 
@@ -178,68 +178,68 @@ Chaînes d’accessibilité : noms accessibles et libellés aria, volontairement
 courts et nominal-first (« Close » → « Fermer »), sans ponctuation finale
 ajoutée.
 
-| Anglais             | Français               |
-| ------------------- | ---------------------- |
-| accessible name     | nom accessible         |
+| Anglais             | Français                   |
+| ------------------- | -------------------------- |
+| accessible name     | nom accessible             |
 | screen reader label | libellé de lecteur d’écran |
-| Esc (key)           | Échap                  |
-| Enter (key)         | Entrée                 |
+| Esc (key)           | Échap                      |
+| Enter (key)         | Entrée                     |
 
 ## Terminologie — lot B (`settings.*`, plan 07-05)
 
 Ajoutées par le lot settings ; réutilisées telles quelles par les lots suivants.
 
-| Anglais                       | Français                          |
-| ----------------------------- | --------------------------------- |
-| Settings                      | Paramètres                        |
-| accent color                  | couleur d’accent                  |
-| spellcheck                    | vérification orthographique       |
-| two-factor authentication     | authentification à deux facteurs  |
-| recovery codes                | codes de récupération             |
-| invite link                   | lien d’invitation                 |
-| push notification             | notification push                 |
-| daily digest                  | résumé quotidien                  |
-| danger zone                   | zone de danger                    |
-| member directory              | annuaire des membres              |
-| role permissions              | permissions par rôle              |
-| target date                   | date cible                        |
-| lead (of a project)           | responsable (du projet)           |
-| upload                        | téléverser                        |
-| starter task                  | tâche prédéfinie                  |
-| later (date shift)            | plus tard                         |
-| earlier (date shift)          | plus tôt                          |
-| attachment                    | pièce jointe                      |
-| single-use link               | lien à usage unique               |
-| offline                       | hors ligne                        |
-| dark mode                     | mode sombre                       |
-| light mode                    | mode clair                        |
-| layout                        | disposition                       |
-| preview                       | aperçu                            |
+| Anglais                   | Français                         |
+| ------------------------- | -------------------------------- |
+| Settings                  | Paramètres                       |
+| accent color              | couleur d’accent                 |
+| spellcheck                | vérification orthographique      |
+| two-factor authentication | authentification à deux facteurs |
+| recovery codes            | codes de récupération            |
+| invite link               | lien d’invitation                |
+| push notification         | notification push                |
+| daily digest              | résumé quotidien                 |
+| danger zone               | zone de danger                   |
+| member directory          | annuaire des membres             |
+| role permissions          | permissions par rôle             |
+| target date               | date cible                       |
+| lead (of a project)       | responsable (du projet)          |
+| upload                    | téléverser                       |
+| starter task              | tâche prédéfinie                 |
+| later (date shift)        | plus tard                        |
+| earlier (date shift)      | plus tôt                         |
+| attachment                | pièce jointe                     |
+| single-use link           | lien à usage unique              |
+| offline                   | hors ligne                       |
+| dark mode                 | mode sombre                      |
+| light mode                | mode clair                       |
+| layout                    | disposition                      |
+| preview                   | aperçu                           |
 
 ## Terminologie — lot C (batch C, plan 07-06)
 
 Ajoutées par le lot C (palettes, navigation, vocabulaire stocké, permission) ;
 réutilisées telles quelles.
 
-| Anglais                       | Français                          |
-| ----------------------------- | --------------------------------- |
-| command menu                  | menu de commandes                 |
-| keyboard shortcuts            | raccourcis clavier                |
-| sign out                      | se déconnecter                    |
-| toggle sidebar                | basculer la barre latérale        |
-| switch workspace              | changer d’espace de travail       |
-| onboarding                    | onboarding                        |
-| assignee                      | Assigné à                         |
-| status                        | statut                            |
-| estimate                      | estimation                        |
-| ascending / descending        | croissant / décroissant           |
-| group by                      | grouper par                       |
-| untitled                      | Sans titre                        |
-| unassigned                    | non assigné                       |
-| broken link                   | lien cassé                        |
-| spreadsheet                   | feuille de calcul                 |
-| byte / kilobyte / megabyte    | o / Ko / Mo                       |
-| theme (light / dark / system) | thème (clair / sombre / système)  |
-| visible columns               | colonnes visibles                 |
-| filter connectors (and/is/is not) | et / est / n’est pas          |
-| role descriptions             | à la troisième personne (« Gère… », « Ne voit que… ») |
+| Anglais                           | Français                                              |
+| --------------------------------- | ----------------------------------------------------- |
+| command menu                      | menu de commandes                                     |
+| keyboard shortcuts                | raccourcis clavier                                    |
+| sign out                          | se déconnecter                                        |
+| toggle sidebar                    | basculer la barre latérale                            |
+| switch workspace                  | changer d’espace de travail                           |
+| onboarding                        | onboarding                                            |
+| assignee                          | Assigné à                                             |
+| status                            | statut                                                |
+| estimate                          | estimation                                            |
+| ascending / descending            | croissant / décroissant                               |
+| group by                          | grouper par                                           |
+| untitled                          | Sans titre                                            |
+| unassigned                        | non assigné                                           |
+| broken link                       | lien cassé                                            |
+| spreadsheet                       | feuille de calcul                                     |
+| byte / kilobyte / megabyte        | o / Ko / Mo                                           |
+| theme (light / dark / system)     | thème (clair / sombre / système)                      |
+| visible columns                   | colonnes visibles                                     |
+| filter connectors (and/is/is not) | et / est / n’est pas                                  |
+| role descriptions                 | à la troisième personne (« Gère… », « Ne voit que… ») |

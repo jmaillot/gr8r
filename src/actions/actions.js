@@ -1863,9 +1863,7 @@ A.removeMember = el => {
   confirmDlg({
     title: t('act.removeTitle', { name: m.name }),
     body: `${t('act.removeAccess.losesAccess', { name: esc(m.name), ws: esc(D().ws.name) })}${
-      n
-        ? ` ${t('act.removeAccess.unassigns', { tasks: `${t('act.removeAccess.their')} <b>${t('act.removeAccess.openTasks', { n: n })}</b>` })}`
-        : ''
+      n ? ` ${t('act.removeAccess.unassigns', { tasks: `${t('act.removeAccess.their')} <b>${t('act.removeAccess.openTasks', { n: n })}</b>` })}` : ''
     }`,
     ok: t('act.removeMember'),
     danger: true,

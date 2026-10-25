@@ -9,13 +9,13 @@ centralisés. Trois endroits suffisent pour en ajouter ou en modifier un.
 
    ```js
    export const TEMPLATES = [
-     { id: 'blank',    icon: 'file',      tasks: 0 },
-     { id: 'product',  icon: 'target',    tasks: 6 },
-     { id: 'web',      icon: 'globe',     tasks: 6 },
-     { id: 'mkt',      icon: 'megaphone', tasks: 6 },
-     { id: 'design',   icon: 'palette',   tasks: 5 },
-     { id: 'software', icon: 'code',      tasks: 6 },
-     { id: 'personal', icon: 'heart',     tasks: 4 },
+     { id: 'blank', icon: 'file', tasks: 0 },
+     { id: 'product', icon: 'target', tasks: 6 },
+     { id: 'web', icon: 'globe', tasks: 6 },
+     { id: 'mkt', icon: 'megaphone', tasks: 6 },
+     { id: 'design', icon: 'palette', tasks: 5 },
+     { id: 'software', icon: 'code', tasks: 6 },
+     { id: 'personal', icon: 'heart', tasks: 4 },
    ];
    ```
 

@@ -168,7 +168,7 @@ test('the legacy label is captured from the raw doc before applyDoc strips it', 
 test('no pre-render locale application in the boot path dispatches the re-render event (Pitfall 2)', () => {
   const init = MAIN.slice(at(MAIN, 'async function seedLegacyLocale'));
   assert.ok(!/\bsetLocale\b/.test(init), 'the boot path uses primeLocale only');
-  assert.ok(!MAIN.includes("import { t as tk, setLocale"), 'main.js does not even import setLocale');
+  assert.ok(!MAIN.includes('import { t as tk, setLocale'), 'main.js does not even import setLocale');
 });
 
 test('sign-out falls back to the negotiated locale before its render (D-10)', () => {

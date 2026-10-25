@@ -36,8 +36,7 @@ export function foldForSearch(s) {
    (a byte is always < 36², so the length is deterministic), giving 12 characters
    of crypto.getRandomValues entropy over the ids the document references across
    tasks, members and the activity journal (IN-04, T-09-12). The old PRNG path is gone. */
-export const uid = (p = 'x') =>
-  p + [...crypto.getRandomValues(new Uint8Array(6))].map(b => b.toString(36).padStart(2, '0')).join('');
+export const uid = (p = 'x') => p + [...crypto.getRandomValues(new Uint8Array(6))].map(b => b.toString(36).padStart(2, '0')).join('');
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 /* The keyboard hint's modifier label, a lazy getter: the Ctrl half is interface text and

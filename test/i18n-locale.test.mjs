@@ -182,7 +182,10 @@ test('uid() draws from crypto.getRandomValues: prefixed, distinct over 200 calls
 
 test('esc in core/utils.js is the escHtml re-export — one escaping table (IN-02)', async () => {
   globalThis.document = { querySelectorAll: () => [] };
-  const { esc, escHtml } = await Promise.all([import('../src/core/utils.js'), import('../src/core/i18n.js')]).then(([u, i]) => ({ esc: u.esc, escHtml: i.escHtml }));
+  const { esc, escHtml } = await Promise.all([import('../src/core/utils.js'), import('../src/core/i18n.js')]).then(([u, i]) => ({
+    esc: u.esc,
+    escHtml: i.escHtml,
+  }));
   const hostile = '<script>&"\'</script> text & more< >"';
   assert.equal(esc(hostile), escHtml(hostile), 'identical output on a hostile input');
   assert.equal(esc(undefined), '', 'nullish input inerts to an empty string');

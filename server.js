@@ -988,8 +988,7 @@ function createUser(email, name, password) {
   const clean = email.trim().toLowerCase();
   if (!emailOk(clean)) throw httpError(400, 'Enter a valid email address', 'enterValidEmail');
   if (String(password).length < 10) throw httpError(400, 'Use at least 10 characters', 'passwordTooShort');
-  if (db.prepare('select 1 from users where email = ?').get(clean))
-    throw httpError(409, 'An account with that email already exists', 'accountExists');
+  if (db.prepare('select 1 from users where email = ?').get(clean)) throw httpError(409, 'An account with that email already exists', 'accountExists');
 
   const id = uid();
   const cleanName = (name || '').trim() || clean.split('@')[0];
@@ -1689,8 +1688,7 @@ async function handleApi(req, res, url) {
       const password = String(body?.password || '');
       if (!name) return fail(res, 400, 'nameRequired', 'Enter your name');
       if (!emailOk(email)) return fail(res, 400, 'enterValidEmail', 'Enter a valid email address');
-      if (invite.email && invite.email !== email)
-        return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`, { email: invite.email });
+      if (invite.email && invite.email !== email) return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`, { email: invite.email });
       if (password.length < 10 || !/[0-9\W]/.test(password)) {
         return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
       }
@@ -1995,7 +1993,10 @@ async function serveFileBinary(req, res, slug, id) {
     }
   }
 
-  const ext = path.extname(String(record.name || '')).toLowerCase().replace(/^\./, '');
+  const ext = path
+    .extname(String(record.name || ''))
+    .toLowerCase()
+    .replace(/^\./, '');
   const mime = FILE_INLINE_MIME[ext] || FILE_ATTACHMENT_MIME[ext] || 'application/octet-stream';
   const inline = Boolean(FILE_INLINE_MIME[ext]);
 
@@ -2171,7 +2172,9 @@ function main() {
      at the attacker's domain. Fail loudly at boot instead of at the first invite. */
   if (MAILER.enabled && !APP_URL) {
     console.error('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
-    console.error('Invitation links are built from APP_URL; without it a request host header could point invite emails at an attacker\'s domain. Set APP_URL (e.g. https://gr8r.example.com) or unset SMTP_HOST to disable email invitations.');
+    console.error(
+      "Invitation links are built from APP_URL; without it a request host header could point invite emails at an attacker's domain. Set APP_URL (e.g. https://gr8r.example.com) or unset SMTP_HOST to disable email invitations.",
+    );
     process.exit(1);
   }
 

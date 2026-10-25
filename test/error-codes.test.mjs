@@ -124,10 +124,11 @@ test('alreadyMember ships its flat payload and renders in French without braces'
        invite for the same address hits the alreadyMember branch */
     const first = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
     assert.equal(first.status, 201);
-    const accepted = await client(server.base, 'member').post(
-      `/api/invites/${encodeURIComponent(inviteToken(first.data.invites[0].url))}/accept`,
-      { name: 'Member', email: 'member@test.local', password: 'password-1234' },
-    );
+    const accepted = await client(server.base, 'member').post(`/api/invites/${encodeURIComponent(inviteToken(first.data.invites[0].url))}/accept`, {
+      name: 'Member',
+      email: 'member@test.local',
+      password: 'password-1234',
+    });
     assert.equal(accepted.status, 201);
 
     /* the admin re-invites the existing member's address → 409 alreadyMember */
@@ -247,14 +248,13 @@ const CLIENT_ONLY_ERR_CODES = [
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {
-  const catalogueCodes = Object.keys(en).filter(k => k.startsWith('err.')).map(k => k.slice(4));
+  const catalogueCodes = Object.keys(en)
+    .filter(k => k.startsWith('err.'))
+    .map(k => k.slice(4));
   assert.ok(catalogueCodes.length > 40, 'the err.* namespace looks empty — the extraction moved');
   for (const code of catalogueCodes) {
     if (serverSource.includes(code)) continue;
-    assert.ok(
-      CLIENT_ONLY_ERR_CODES.includes(code),
-      `err.${code} is catalogued but emitted nowhere: not in server.js and not in the client-side allowlist`,
-    );
+    assert.ok(CLIENT_ONLY_ERR_CODES.includes(code), `err.${code} is catalogued but emitted nowhere: not in server.js and not in the client-side allowlist`);
   }
 });
 
@@ -262,14 +262,14 @@ test('reserved placeholder guard: no err.* value interpolates a control field of
   /* Control fields that call()/the server put flat on the error payload — a catalogue
      placeholder with one of these names would interpolate the control value itself. */
   const reserved = ['error', 'code', 'status', 'ok', 'data', 'needsSignIn', 'suggestion', 'revision'];
-  for (const [locale, catalogue] of [['en', en], ['fr', fr]]) {
+  for (const [locale, catalogue] of [
+    ['en', en],
+    ['fr', fr],
+  ]) {
     for (const [key, value] of Object.entries(catalogue)) {
       if (!key.startsWith('err.') || typeof value !== 'string') continue;
       for (const name of reserved) {
-        assert.ok(
-          !value.includes(`{${name}}`),
-          `${locale} err value ${key} interpolates the reserved control field {${name}}`,
-        );
+        assert.ok(!value.includes(`{${name}}`), `${locale} err value ${key} interpolates the reserved control field {${name}}`);
       }
     }
   }
@@ -309,10 +309,11 @@ test('lastPrivateMember returns 409 with its code when the removal would strand 
     /* the second member joins through an invite, then lands in the document roster */
     const inv = await admin.post('/api/workspaces/acme/invites', { emails: ['member@test.local'], role: 'Member' });
     assert.equal(inv.status, 201);
-    const joined = await client(server.base, 'member').post(
-      `/api/invites/${encodeURIComponent(inviteToken(inv.data.invites[0].url))}/accept`,
-      { name: 'Member', email: 'member@test.local', password: 'password-1234' },
-    );
+    const joined = await client(server.base, 'member').post(`/api/invites/${encodeURIComponent(inviteToken(inv.data.invites[0].url))}/accept`, {
+      name: 'Member',
+      email: 'member@test.local',
+      password: 'password-1234',
+    });
     assert.equal(joined.status, 201);
 
     /* craft a private project whose ONLY member is the target */

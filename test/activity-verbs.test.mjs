@@ -199,7 +199,11 @@ test('the D-06 quirk pins the exact selections the filters make today', () => {
   assert.equal(actCategory('commented on'), 'comments');
   assert.equal(actCategory('changed status of project'), 'projects', 'the unmapped legacy verb must classify');
   assert.equal(actCategory('changedPriorityOf'), null, 'priority changes sit outside the three filters');
-  assert.equal(actCategory('createdProject'), 'projects', 'WR-01 restore: the legacy case-sensitive includes(project) was an accident — losing the machine-vocabulary rows was a regression');
+  assert.equal(
+    actCategory('createdProject'),
+    'projects',
+    'WR-01 restore: the legacy case-sensitive includes(project) was an accident — losing the machine-vocabulary rows was a regression',
+  );
   assert.equal(actCategory('projectStatusChanged'), 'projects');
   assert.equal(actCategory('created'), null);
 });
