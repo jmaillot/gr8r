@@ -3,7 +3,7 @@ status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T07:26:19Z
+updated: 2026-10-25T07:28:51Z
 ---
 
 ## Current Test
@@ -76,4 +76,7 @@ blocked: 0
 
 - test: 0
   idea: "Hors périmètre phase 12 (Sessions) : la section Sessions affiche 2 sessions actives (Chrome + Firefox) mais le bouton « déconnecter les autres sessions » ne s'active pas"
+  deferred_at: 2026-10-25
+- test: 0
+  idea: "Hors périmètre phase 12 (Auth) : le changement de mot de passe répond « Mot de passe mis à jour » mais (1) le nouveau mot de passe ne fonctionne pas à la connexion, (2) les autres sessions restent connectées — l'utilisateur veut une révocation automatique des autres sessions après changement de mot de passe"
   deferred_at: 2026-10-25
