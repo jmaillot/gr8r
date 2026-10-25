@@ -34,6 +34,7 @@ services:
       SECURE_COOKIE: ${SECURE_COOKIE:-auto}
       TRUST_PROXY: ${TRUST_PROXY:-true}
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-8388608}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       DATA_DIR: /data
     volumes:
       - gr8r-data:/data
