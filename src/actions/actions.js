@@ -481,7 +481,7 @@ A._projMove = (el, d) => {
   S.ui.pop = null;
   save();
   render();
-  toast(t('toast.moved', { name: proj(el.dataset.id).name, direction: d < 0 ? 'up' : 'down' }), { ms: 1600 });
+  toast(t('toast.moved', { name: proj(el.dataset.id).name, direction: t(d < 0 ? 'toast.dirUp' : 'toast.dirDown') }), { ms: 1600 });
 };
 A.toggleDrawerFull = () => {
   S.ui.drawerFull = !S.ui.drawerFull;
@@ -1476,7 +1476,7 @@ A.delProject = el => {
   const n = tasksOf(p.id).length;
   confirmDlg({
     title: t('act.deleteTitle', { name: p.name }),
-    body: `${t('act.deleteProjectBodyHead')} <b>${n} task${n === 1 ? '' : 's'}</b>${t('act.deleteProjectBodyTail')}`,
+    body: `${t('act.deleteProjectBodyHead')} <b>${t('act.deleteProjectTaskCount', { n: n })}</b>${t('act.deleteProjectBodyTail')}`,
     ok: t('act.deleteProject'),
     danger: true,
     typeName: p.name,
@@ -1862,7 +1862,11 @@ A.removeMember = el => {
   const n = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
   confirmDlg({
     title: t('act.removeTitle', { name: m.name }),
-    body: `${esc(m.name)} will lose access to ${esc(D().ws.name)} immediately.${n ? ` ${t('act.removeAccess.their')} <b>${t('act.removeAccess.openTasks', { n: n })}</b> will become unassigned.` : ''}`,
+    body: `${t('act.removeAccess.losesAccess', { name: esc(m.name), ws: esc(D().ws.name) })}${
+      n
+        ? ` ${t('act.removeAccess.unassigns', { tasks: `${t('act.removeAccess.their')} <b>${t('act.removeAccess.openTasks', { n: n })}</b>` })}`
+        : ''
+    }`,
     ok: t('act.removeMember'),
     danger: true,
     icon: 'user-minus',

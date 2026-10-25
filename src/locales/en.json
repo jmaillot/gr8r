@@ -66,6 +66,8 @@
     "one": "{n} open task",
     "other": "{n} open tasks"
   },
+  "act.removeAccess.losesAccess": "{name} will lose access to {ws} immediately.",
+  "act.removeAccess.unassigns": "This will also unassign {tasks}.",
   "act.teams.membersWithoutTeam": {
     "one": "{n} member",
     "other": "{n} members"
@@ -113,6 +115,10 @@
   "act.deleteTitle": "Delete {name}?",
   "act.deleteProjectBodyHead": "This permanently deletes the project and its",
   "act.deleteProjectBodyTail": ", files, and comments for everyone. This can't be undone.",
+  "act.deleteProjectTaskCount": {
+    "one": "{n} task",
+    "other": "{n} tasks"
+  },
   "act.deleteProject": "Delete project",
   "act.leaveTitle": "Leave {name}?",
   "act.leaveWorkspaceBody": "You'll lose access to its projects, tasks and files. Someone will have to invite you back.",
@@ -160,6 +166,8 @@
   "toast.projectMarked": "{name} marked {status}",
   "toast.roleChanged": "{name} is now {article} {role}",
   "toast.moved": "Moved {name} {direction}",
+  "toast.dirUp": "up",
+  "toast.dirDown": "down",
   "toast.completed": "Completed “{title}”",
   "toast.addedToFavorites": "Added to favorites",
   "toast.removedFromFavorites": "Removed from favorites",
@@ -1407,6 +1415,7 @@
   "page.files.sortName": "Name",
   "page.files.sortType": "Type",
   "page.files.dropHere": "Drop files here or",
+  "page.files.browse": "browse",
   "page.files.dropLimit": "— up to {n} MB each",
   "page.files.emptyTitle": "No files yet",
   "page.files.emptySearchBody": "No files match your search.",

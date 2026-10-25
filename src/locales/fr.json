@@ -67,6 +67,8 @@
     "one": "{n} tâche ouverte",
     "other": "{n} tâches ouvertes"
   },
+  "act.removeAccess.losesAccess": "{name} perdra immédiatement l’accès à {ws}.",
+  "act.removeAccess.unassigns": "Cette action désassignera également {tasks}.",
   "act.teams.membersWithoutTeam": {
     "one": "{n} membre",
     "other": "{n} membres"
@@ -114,6 +116,10 @@
   "act.deleteTitle": "Supprimer {name} ?",
   "act.deleteProjectBodyHead": "Cette action supprime définitivement le projet et ses",
   "act.deleteProjectBodyTail": ", ainsi que ses fichiers et ses commentaires, pour tous les membres. Cette action est irréversible.",
+  "act.deleteProjectTaskCount": {
+    "one": "{n} tâche",
+    "other": "{n} tâches"
+  },
   "act.deleteProject": "Supprimer le projet",
   "act.leaveTitle": "Quitter {name} ?",
   "act.leaveWorkspaceBody": "Vous perdrez l’accès à ses projets, tâches et fichiers. Quelqu’un devra vous inviter à nouveau.",
@@ -161,6 +167,8 @@
   "toast.projectMarked": "{name} est maintenant {status}",
   "toast.roleChanged": "{name} est maintenant {article} {role}",
   "toast.moved": "{name} déplacé ({direction})",
+  "toast.dirUp": "vers le haut",
+  "toast.dirDown": "vers le bas",
   "toast.completed": "Terminé : « {title} »",
   "toast.addedToFavorites": "Ajouté aux favoris",
   "toast.removedFromFavorites": "Retiré des favoris",
@@ -759,7 +767,7 @@
   "modal.emailAddresses": "Adresses e-mail",
   "modal.emailHint": "Séparez les adresses multiples par des virgules.",
   "modal.role": "Rôle",
-  "modal.guests": "Invités",
+  "modal.guests": "Les invités",
   "modal.guestsHint": "ne voient que les projets auxquels ils sont ajoutés et ne peuvent pas créer de projets.",
   "modal.inviteLinks": "Liens d’invitation",
   "modal.sent": "Envoyées",
@@ -1407,6 +1415,7 @@
   "page.files.sortName": "Nom",
   "page.files.sortType": "Type",
   "page.files.dropHere": "Déposez des fichiers ici ou",
+  "page.files.browse": "parcourir",
   "page.files.dropLimit": "— jusqu’à {n} Mo chacun",
   "page.files.emptyTitle": "Aucun fichier pour l’instant",
   "page.files.emptySearchBody": "Aucun fichier ne correspond à votre recherche.",
