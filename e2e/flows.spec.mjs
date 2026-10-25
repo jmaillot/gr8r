@@ -813,6 +813,12 @@ test.describe('file uploads and previews (Phase 12)', () => {
         await pdfCard.click();
         const pdfFrame = page.locator(`.modal-wrap iframe[src$="/file/${pdfId}"]`);
         await expect(pdfFrame).toBeVisible();
+        /* G-12-4 (a): the PDF iframe is a tall scrollable viewport (~70vh, i.e.
+           504px at the default 720px e2e viewport) — Firefox renders its PDF
+           toolbar inside the iframe and the old 16/9 pane (~287px) clipped it. */
+        await expect
+          .poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().height))
+          .toBeGreaterThan(400);
         const pdfRes = await page.request.get(`${BASE_URL}/w/${owner.slug}/file/${pdfId}`);
         expect(pdfRes.status()).toBe(200);
         expect(pdfRes.headers()['content-type']).toBe('application/pdf');
