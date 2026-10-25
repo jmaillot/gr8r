@@ -211,6 +211,75 @@ test('byte-only file route: Accept: text/html and Sec-Fetch-Dest: document recei
   }
 });
 
+/* G-12-4: /w/:slug/file/:id advertises Accept-Ranges: bytes and answers a
+   valid single range with 206 + exact Content-Range math + a sliced stream;
+   unsatisfiable ranges get 416 with the bytes-star-slash-size form;
+   multi-range, wrong-unit and malformed headers are ignored and keep the
+   unchanged 200 full body; HEAD extends the contract (same status/headers,
+   body never written). */
+test('single-range serving: 206 slices with exact math, 416 unsatisfiable, ignored ranges keep 200 (G-12-4)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    const bytes = Buffer.alloc(100);
+    for (let i = 0; i < 100; i++) bytes[i] = i;
+    await plantFile(server, admin, 'f_rng1', 'range.png', bytes);
+    const url = '/w/acme/file/f_rng1';
+
+    /* No Range header: unchanged 200 full body, plus the advertisement. */
+    const full = await fileFetch(server, admin.client.cookie(), url);
+    assert.equal(full.status, 200);
+    assert.equal(full.headers.get('accept-ranges'), 'bytes');
+    assert.equal(full.headers.get('content-length'), '100');
+    assert.deepEqual(Buffer.from(await full.arrayBuffer()), bytes);
+
+    /* Satisfied single range: 206 with exact Content-Range/Content-Length. */
+    const first = await fileFetch(server, admin.client.cookie(), url, { range: 'bytes=0-9' });
+    assert.equal(first.status, 206);
+    assert.equal(first.headers.get('content-range'), 'bytes 0-9/100');
+    assert.equal(first.headers.get('content-length'), '10');
+    assert.equal(first.headers.get('accept-ranges'), 'bytes');
+    assert.deepEqual(Buffer.from(await first.arrayBuffer()), bytes.subarray(0, 10));
+
+    /* Open-end and suffix forms both give the LAST 10 bytes. */
+    for (const spec of ['bytes=90-', 'bytes=-10']) {
+      const r = await fileFetch(server, admin.client.cookie(), url, { range: spec });
+      assert.equal(r.status, 206, spec);
+      assert.equal(r.headers.get('content-range'), 'bytes 90-99/100', spec);
+      assert.equal(r.headers.get('content-length'), '10', spec);
+      assert.deepEqual(Buffer.from(await r.arrayBuffer()), bytes.subarray(90), spec);
+    }
+
+    /* Unsatisfiable: 416 with the bytes-star-slash-100 form, empty body. */
+    for (const spec of ['bytes=100-', 'bytes=5-2', 'bytes=-0']) {
+      const r = await fileFetch(server, admin.client.cookie(), url, { range: spec });
+      assert.equal(r.status, 416, spec);
+      assert.equal(r.headers.get('content-range'), 'bytes */100', spec);
+      assert.equal((await r.arrayBuffer()).byteLength, 0, spec);
+    }
+
+    /* Ignored forms (multi-range, malformed, wrong unit): unchanged 200. */
+    for (const spec of ['bytes=0-0,10-20', 'bytes=abc', 'items=0-9']) {
+      const r = await fileFetch(server, admin.client.cookie(), url, { range: spec });
+      assert.equal(r.status, 200, spec);
+      assert.equal(r.headers.get('content-length'), '100', spec);
+      assert.deepEqual(Buffer.from(await r.arrayBuffer()), bytes, spec);
+    }
+
+    /* Ranged HEAD: same status and headers as the GET would produce, body
+       never written. */
+    const h = await fetch(`${server.base}${url}`, {
+      method: 'HEAD',
+      headers: { cookie: admin.client.cookie(), range: 'bytes=0-9' },
+    });
+    assert.equal(h.status, 206);
+    assert.equal(h.headers.get('content-range'), 'bytes 0-9/100');
+    assert.equal(h.headers.get('content-length'), '10');
+  } finally {
+    await server.stop();
+  }
+});
+
 test('doc-PUT removing a file record unlinks its binary in the same mutation, idempotently (UPLOAD-05)', async () => {
   const server = await startServer({});
   try {

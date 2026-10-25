@@ -1954,21 +1954,76 @@ async function serveFileBinary(req, res, slug, id) {
   }
   if (!stat?.isFile()) return fail(res, 404, 'fileNotFound', 'File not found');
 
+  /* Single-range support (G-12-4): the 401/404 paths above are processed
+     exactly as before and never see range logic; D-06's fixed mime/
+     disposition map stays the header authority and only the three range
+     fields (Accept-Ranges, Content-Range, the overridable Content-Length)
+     vary.
+
+     Parsing rules: an absent Range header, a multi-range header (any comma —
+     multipart/byteranges is deliberately NOT implemented), a unit other than
+     `bytes`, or any malformed shape is IGNORED — RFC 7233 allows a server to
+     ignore Range, so those answer 200 with the full body. A valid single
+     range is `bytes=a-b` (0 <= a <= b, end clamped to size-1), `bytes=a-`
+     (end = size-1) or `bytes=-n` (n > 0; start = size-n clamped to 0, i.e.
+     the last n bytes — a suffix larger than the file yields the whole file).
+     An UNSATISFIABLE range (start >= size, an explicit a > b, or a suffix of
+     0) answers 416 with the `Content-Range: bytes * / size` form (integer
+     size) and an empty body — no stream is created. If-Range is deliberately
+     not honored: responses are `Cache-Control: private, max-age=3600`, so a
+     stale 206 is a bounded, self-healing risk, and pdf.js does not require
+     the validator. */
+  let range = null;
+  let unsatisfiable = false;
+  const rawRange = typeof req.headers.range === 'string' ? req.headers.range.trim() : '';
+  if (rawRange && !rawRange.includes(',')) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(rawRange);
+    if (m && (m[1] !== '' || m[2] !== '')) {
+      if (m[1] === '') {
+        const n = Number(m[2]);
+        if (n === 0) unsatisfiable = true;
+        else range = { start: Math.max(0, stat.size - n), end: stat.size - 1 };
+      } else {
+        const a = Number(m[1]);
+        const b = m[2] === '' ? stat.size - 1 : Math.min(Number(m[2]), stat.size - 1);
+        if (a >= stat.size || (m[2] !== '' && Number(m[2]) < a)) unsatisfiable = true;
+        else range = { start: a, end: b };
+      }
+    }
+  }
+
   const ext = path.extname(String(record.name || '')).toLowerCase().replace(/^\./, '');
   const mime = FILE_INLINE_MIME[ext] || FILE_ATTACHMENT_MIME[ext] || 'application/octet-stream';
   const inline = Boolean(FILE_INLINE_MIME[ext]);
+
+  /* T-12-16/DoS T-12-17: the 416 is header-only — no workspace/record body,
+     no stream — so hostile range syntax cannot amplify anything. */
+  if (unsatisfiable) {
+    res.writeHead(416, {
+      'X-Content-Type-Options': 'nosniff',
+      'Accept-Ranges': 'bytes',
+      'Content-Range': `bytes */${stat.size}`,
+    });
+    return res.end();
+  }
+
   const headers = {
     'X-Content-Type-Options': 'nosniff',
     'Content-Type': mime,
     'Content-Length': stat.size,
     'Content-Disposition': fileDisposition(record.name, inline),
     'Cache-Control': 'private, max-age=3600',
+    'Accept-Ranges': 'bytes',
   };
   if (inline) headers['Content-Security-Policy'] = "frame-ancestors 'self'";
+  if (range) {
+    headers['Content-Range'] = `bytes ${range.start}-${range.end}/${stat.size}`;
+    headers['Content-Length'] = range.end - range.start + 1;
+  }
 
-  res.writeHead(200, headers);
+  res.writeHead(range ? 206 : 200, headers);
   if (req.method === 'HEAD') return res.end();
-  const stream = fs.createReadStream(file);
+  const stream = fs.createReadStream(file, range ? { start: range.start, end: range.end } : undefined);
   stream.on('error', () => res.destroy());
   stream.pipe(res);
 }
