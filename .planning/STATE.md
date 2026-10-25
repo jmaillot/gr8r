@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 12
-current_phase_name: real-file-uploads-and-previews
-current_plan: Not started
-status: executing
-stopped_at: Phase 12 context gathered
-last_updated: "2026-10-24T17:05:09.074Z"
+current_phase_name: Real file uploads and previews
+current_plan: 4
+status: uat-pending
+stopped_at: Phase 12 automated verification passed — UAT pending (2 items)
+last_updated: "2026-10-24T17:50:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 11 complete, transitioned to Phase 12
-state_head: c25e589ea9625ff8bd2fb5155f102d2f76efd293
+last_activity_desc: Phase 12 executed, reviewed, verified 12/12 — human verification pending
+state_head: 8ee1f1db2631a3ff352a1a6d52fccea815e359b1
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 46
   completed_plans: 42
-  percent: 13
+  percent: 25
 milestone_name: Localization
 ---
 
@@ -307,18 +307,18 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-24T16:55:43.472Z
-**Stopped at:** Phase 12 context gathered
-**Resume file:** .planning/phases/12-real-file-uploads-and-previews/12-CONTEXT.md
+**Last session:** 2026-10-24T17:50:00.000Z
+**Stopped at:** Phase 12 automated verification passed — UAT pending (2 items)
+**Resume file:** .planning/phases/12-real-file-uploads-and-previews/12-UAT.md
 
 ## Current Position
 
-Current Plan: Not started
+Current Plan: 4
 Total Plans in Phase: 4
 
-Phase: 12 (real-file-uploads-and-previews) — READY TO EXECUTE
-Status: Ready to execute
-Last activity: 2026-10-24 — Phase 11 complete, transitioned to Phase 12
+Phase: 12 (Real file uploads and previews) — AUTOMATED VERIFICATION PASSED, UAT PENDING
+Status: 12/12 must-haves verified (44e3a4c closed the doc gap); 2 human verification items in 12-UAT.md
+Last activity: 2026-10-24 — Phase 12 verification passed; UAT file created
 
 ## Operator Next Steps
 

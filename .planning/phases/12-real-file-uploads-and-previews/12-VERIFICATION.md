@@ -2,7 +2,7 @@
 phase: 12-real-file-uploads-and-previews
 verified: 2026-10-24T17:37:45Z
 status: passed
-score: 11/12 must-haves verified
+score: 12/12 must-haves verified
 covered_files: [".planning/phases/12-real-file-uploads-and-previews/12-01-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-01-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-SUMMARY.md", "server.js", "src/actions/actions.js", "src/overlays/modals.js", "src/main.js", "src/locales/en.json", "src/locales/fr.json", "test/upload.test.mjs", "e2e/flows.spec.mjs", ".env.example", "DEPLOY.md", "README.md"]
 covered_digest: "v2:sha256:acc306c059d3af58f573018f465ef6cd"
 behavior_unverified: 0
@@ -16,15 +16,9 @@ re_verification:
 gaps:
   - truth: "MAX_UPLOAD_MB is documented for operators alongside MAX_BODY_BYTES, and the 'File contents are metadata only' known limitation is retracted"
     status: passed
-    reason: "README.md and .env.example are correct, but DEPLOY.md:712 still tells operators 'Uploads are still simulated. Attachment names and sizes live in the workspace document; file contents are not stored.' — directly contradicting the shipped behavior. This is open review finding WR-04. .planning/PROJECT.md:174 also still carries the 'files are metadata only today' limitation text (planning doc; usually retracted at milestone close)."
-    artifacts:
-      - path: "DEPLOY.md"
-        issue: "Stale 'Uploads are still simulated' claim in the operator notes section contradicts the live upload endpoint"
-      - path: ".planning/PROJECT.md"
-        issue: "Known-limitation line 'File storage: files are metadata only today; no binary upload backend' not yet retracted"
-    missing:
-      - "Rewrite DEPLOY.md:712 to describe real binary storage under DATA_DIR/files/ capped by MAX_UPLOAD_MB (and the backup caveat should now say binaries are on disk, not in the doc)"
-      - "Retract the metadata-only limitation line in .planning/PROJECT.md"
+    reason: "RESOLVED post-verification (inline doc fix, commit 44e3a4c): DEPLOY.md operator notes now describe real binary storage under DATA_DIR/files/ capped by MAX_UPLOAD_MB with the on-disk backup caveat; the metadata-only limitation line in .planning/PROJECT.md is retracted."
+    artifacts: []
+    missing: []
 ---
 
 # Phase 12: Real file uploads and previews — Verification Report
@@ -158,7 +152,13 @@ No debt markers (TBD/FIXME/XXX) and no stub implementations in any phase-modifie
 
 ### Gaps Summary
 
-All 11 code-level must-haves are verified with behavioral evidence — the phase's substantive goal (real uploads, real progress, real previews, working link destination) is achieved in the codebase, proven by the 7-test integration suite run in this verifier's process plus the green full gate. The single gap is documentation honesty: DEPLOY.md still tells operators uploads are simulated (WR-04), contradicting the shipped behaviour, and PROJECT.md's known-limitation line is not yet retracted. Both are one-edit fixes; they do not change the goal verdict's substance but must be closed before ship.
+All 12 must-haves are verified with behavioral evidence — the phase's substantive goal
+(real uploads, real progress, real previews, working link destination) is achieved in the
+codebase, proven by the 7-test integration suite run in this verifier's process plus the
+green full gate. The one documentation gap found at verification time (DEPLOY.md stale
+"uploads are simulated" claim, WR-04; PROJECT.md metadata-only limitation line) was
+resolved by an inline doc fix (commit 44e3a4c) and retracted; no gaps remain. Two
+behaviours remain for human verification (see 12-UAT.md).
 
 ---
 
