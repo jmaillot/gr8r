@@ -69,6 +69,7 @@ advisory:
     category: other
     reason: "Non-blocking per the phase's re-review disposition (PASS, 2 info open); backlog candidates, unchanged from the prior report"
     evidence_status: "09-REVIEW-DISPOSITION.md (carried forward from prior verification)"
+---
 
 # Phase 09: Server Messages & Activity History — Verification Report
 
