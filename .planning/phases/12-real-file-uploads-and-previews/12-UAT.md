@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
@@ -106,8 +106,19 @@ All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` 
   reason: "User reported: yes but the embed is a little too slow, i dont see all the menu so i can't download it — only on firefox, in chrome i have a download button"
   severity: major
   test: 1
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  root_cause: "Two compounding causes: (1) modals.js:297-304 — the PDF iframe is hard-coded aspect-ratio:16/9 inside an overflow:hidden wrapper at .modal max-width 560px (overlays.css:25), making the viewport ~296px tall; Firefox renders its PDF toolbar INSIDE the iframe viewport and it gets clipped (Chrome's hover-overlay toolbar fits, hence Chrome-only symptom). (2) server.js:1933-1974 serveFileBinary has no Accept-Ranges/Range handling (contrast server.js:1787 'Accept-Ranges: none') so Firefox pdf.js must download the whole file before layout — the 'too slow' feel."
+  artifacts:
+    - path: "src/overlays/modals.js"
+      issue: "PDF preview wrapper overflow:hidden + iframe aspect-ratio:16/9 clip Firefox's in-viewer toolbar (lines 297, 304)"
+    - path: "src/styles/overlays.css"
+      issue: ".modal max-width 560px; preview modal doesn't use a wider variant (line 25)"
+    - path: "server.js"
+      issue: "serveFileBinary lacks Accept-Ranges/Range/206 support — whole-file download before Firefox renders (lines 1933-1974)"
+  missing:
+    - "Add Range request support to serveFileBinary: Accept-Ranges: bytes, 206 with Content-Range + createReadStream({start,end}), 416 on invalid ranges"
+    - "Give PDF iframes a dedicated taller scrollable container (e.g. height:min(70vh,...)) instead of aspect-ratio:16/9; keep 16/9 for images only; avoid overflow:hidden clipping (round iframe corners instead)"
+    - "Optionally widen the preview modal (use .modal.lg / xl variant)"
+  debug_session: ".planning/debug/firefox-pdf-toolbar.md"
 
 - gap_id: G-12-5
   truth: "A non-authenticated browser loading a file URL is redirected to the login page (not shown a raw JSON error)"
@@ -115,8 +126,15 @@ All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` 
   reason: "User reported: it work as described, i just tested another behaviour on non logged browser, i have error \"Sign in to continue\" / code \"signInRequired\", can we simply redirect to the login page ?"
   severity: minor
   test: 2
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  root_cause: "server.js:1998-2007 file route dispatches every GET/HEAD to serveFileBinary whose requireWorkspace→requireUser (server.js:1136-1140) answers JSON 401 signInRequired for ALL unauthenticated callers with no Sec-Fetch-Dest discrimination; the file route intercepts before the SPA fallback so main.js:193-201's existing no-session→login bootstrap (with wantedSlug preservation) never runs. No 302-to-login exists anywhere server-side. Note: the route comment (server.js:2000-2005) documents this as locked decision T-12-13 — reopening it is a product-level UAT override, not a code slip."
+  artifacts:
+    - path: "server.js"
+      issue: "requireUser always JSON-401s with no caller context; file route intercepts anonymous document navigations before SPA fallback (lines 1136-1140, 1937, 1998-2007)"
+  missing:
+    - "In the file route auth path, when no session AND Sec-Fetch-Dest is document (or absent), 302 to login preserving a same-origin path-only return URL (reject absolute/protocol-relative URLs — no open redirect)"
+    - "Keep JSON/404 behaviour for iframe/embed/fetch destinations and for authenticated-but-unauthorized callers (404 no-oracle preserved; redirect only on 'no session', never on 'not a member')"
+    - "Update the T-12-13 route comment to record the reopened decision"
+  debug_session: ".planning/debug/signin-required-redirect.md"
 
 ## Deferred Follow-Ups
 
