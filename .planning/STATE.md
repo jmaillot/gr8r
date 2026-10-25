@@ -1,14 +1,12 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.2
-current_phase: 12
-current_plan: Not started
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 12 complete — all phases complete
-last_updated: "2026-10-25T18:14:56.164Z"
+last_updated: "2026-10-25T19:49:56.865Z"
 last_activity: 2026-10-25
-last_activity_desc: Phase 12 complete
-state_head: 0c09e709874eaba1f28bd81756769f9751a6e40e
+last_activity_desc: Milestone v1.2 completed and archived
+state_head: d4f951c9812c53da92a97e0cdbe99d26598fb111
 progress:
   total_phases: 8
   completed_phases: 8
@@ -16,6 +14,7 @@ progress:
   completed_plans: 50
   percent: 100
 milestone_name: Localization
+current_phase: 12
 ---
 
 # STATE
@@ -321,21 +320,14 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Current Position
 
-Current Plan: Not started
-Total Plans in Phase: 8 (all executed and verified)
-
-Phase: 12 — complete (last phase of v1.2)
-Status: Milestone v1.2 ready to close
-Last activity: 2026-10-25 — Phase 12 verified and transitioned
+Phase: Milestone v1.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-25 — Milestone v1.2 completed and archived
 
 ## Operator Next Steps
 
-- **Milestone close** — Phase 12 verified (21/22 + human UAT 4/4), SECURITY.md shipped, all 50/50 plans complete: `/gsd-complete-milestone v1.2`
-- Backlog phases 999.1–999.3 (deferred UAT follow-ups, out of v1.2 scope): sessions logout-other-sessions, password change not revoking sessions, fake 2FA QR
-- Open warnings from 08-REVIEW.md (0 critical / 4 warning / 3 info): WR-01 double-fire on language select (duplicate PATCH), WR-02 locale set before catalogue load, WR-03 server LOCALE_CODES hand-duplicates the client registry, WR-04 dead catalogue keys for cleared repeat/estimate qualifiers — see 08-REVIEW-DISPOSITION.md; `/gsd-code-review 8 --fix` to auto-fix
-- Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
-- Phase 12 advisory: IN-02 (e2e width assertion looser than the documented ≥866px floor) — see 12-REVIEW-DISPOSITION.md; CR-01 zero-byte Range is accepted as AR-12-1 in 12-SECURITY.md
-- Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
+- Start the next milestone with /gsd-new-milestone
 
 ## Performance Metrics
 
