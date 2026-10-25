@@ -314,5 +314,15 @@ export function filePreviewModal(m, H) {
         : filePrev(f).replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"')
   }</div>
   ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}${t('modal.attachedTo')} <button class="link" data-a="openTask" data-id="${m.tid}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>
-  <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-fid="${f.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('a11y.close')}</button></div>`;
+  <div class="modal-f">${
+    /* G-12-6 hardening: a PDF-only footer Download anchor — a viewer-independent
+       save affordance, so the download never depends on the embedded viewer's
+       toolbar width behaviour. Native same-origin navigation (no data-a): the
+       download attribute overrides the route's inline Content-Disposition
+       client-side, and the filename is esc()-escaped (T-12-18) since it is
+       user-controlled and lands in a double-quoted attribute. */
+    f.type === 'pdf'
+      ? `<a class="btn btn-secondary" href="/w/${D().ws.url}/file/${f.id}" download="${esc(f.name)}">${ic('download', 14)}${t('act.download')}</a>`
+      : ''
+  }<button class="btn btn-secondary" data-a="copyLink" data-fid="${f.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('a11y.close')}</button></div>`;
 }

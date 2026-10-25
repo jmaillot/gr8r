@@ -717,6 +717,8 @@ function uploadDict(lang, name) {
        knob, which the e2e server boots at 1 (e2e/server.mjs) — the rendered
        text must say 1, never the old hardcoded 250. */
     dropLimit: fmt('page.files.dropLimit', { n: 1 }, lang),
+    /* G-12-6: the PDF-only footer download anchor's catalogue label. */
+    download: fmt('act.download', {}, lang),
   };
 }
 
@@ -835,6 +837,20 @@ test.describe('file uploads and previews (Phase 12)', () => {
         expect(pdfRes.headers()['content-type']).toBe('application/pdf');
         expect(pdfRes.headers()['x-frame-options']).toBeUndefined();
         expect(Buffer.from(await pdfRes.body()).subarray(0, 5).toString()).toBe('%PDF-');
+
+        /* G-12-6 hardening: the modal footer carries a PDF-only Download
+           anchor — viewer-independent save affordance. Its href is the exact
+           published file URL, and clicking it fires a real browser download
+           event whose suggested filename is the uploaded name: the download
+           attribute overrides the route's inline Content-Disposition
+           (same-origin). The img modal has no download anchor. */
+        const dlBtn = pdfModal.locator('.modal-f a[download]');
+        await expect(dlBtn).toBeVisible();
+        await expect(dlBtn).toContainText(d.download);
+        await expect(dlBtn).toHaveAttribute('href', `/w/${owner.slug}/file/${pdfId}`);
+        const [dl] = await Promise.all([page.waitForEvent('download'), dlBtn.click()]);
+        expect(dl.suggestedFilename()).toBe('paper.pdf');
+
         await page.locator(`.modal-wrap [data-a='closeModal']`).last().click();
 
         /* D-13 byte-only route (G-12-2 defect 2): a top-level paste of the
