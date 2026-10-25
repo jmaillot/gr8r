@@ -410,7 +410,7 @@ Plans:
 - Phases: 7 (5–11) — every phase carries at least one requirement, every requirement appears in
   exactly one phase
 
-### Phase 12: Real file uploads and previews
+### Phase 12: Real file uploads and previews ✅ (2026-10-25 — 12-07 gap closure done, G-12-4/G-12-5 closed)
 
 **Goal:** Replace the metadata-only file behaviour with real uploads: a server
 endpoint that stores dropped files under `DATA_DIR`, real upload progress in
@@ -420,7 +420,7 @@ to the parent task). Closes the known limitation "File contents are metadata
 only; no binary upload backend".
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 7 (12-01..12-06 executed; 12-07 gap closure pending)
+**Plans:** 7 (12-01..12-07 all executed)
 
 Plans:
 **Wave 1**
@@ -440,4 +440,4 @@ Plans:
 - [x] 12-06-PLAN.md — G-12-3: MAX_UPLOAD_MB crosses into the client dropzone cap hint (via /api/config → api.init() → {n} interpolation, both locales)
 
 **Gap closure, round 2** *(from the UAT re-run — 12-UAT.md ## Gaps)*
-- [ ] 12-07-PLAN.md — G-12-4/G-12-5: Firefox PDF preview (Range/206 serving in serveFileBinary + tall scrollable PDF iframe) and anonymous document navigations redirect to login with a path-preserving return URL (T-12-13 reopened)
+- [x] 12-07-PLAN.md — G-12-4/G-12-5: Firefox PDF preview (Range/206 serving in serveFileBinary + tall scrollable PDF iframe) and anonymous document navigations redirect to login with a path-preserving return URL (T-12-13 reopened)

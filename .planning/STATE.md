@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 12
 current_phase_name: Real file uploads and previews
-current_plan: 6
+current_plan: 2
 status: executing
-stopped_at: Completed 12-06-PLAN.md (gap closure G-12-3) — all 6 phase-12 plans done
-last_updated: "2026-10-25T08:14:00Z"
+stopped_at: Completed 12-07-PLAN.md (gap closure G-12-4, G-12-5) — all 7 phase-12 plans done
+last_updated: "2026-10-25T09:33:32.692Z"
 last_activity: 2026-10-25
-last_activity_desc: Plan 12-06 executed — MAX_UPLOAD_MB crosses into the client dropzone cap hint
-state_head: 8b93d880d11e112eb8213cb348106a33eb39af1a
+last_activity_desc: Phase 12 execution started
+state_head: 6c99fcf63c24991dc7d726430c2ccf67db059732
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 48
+  total_plans: 49
   completed_plans: 48
-  percent: 100
+  percent: 25
 milestone_name: Localization
 ---
 
@@ -275,7 +275,8 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 09]: Login and signup carry the standard sameOrigin 403 crossOriginRejected guard, placed before the body read AND before the throttle so a cross-origin POST cannot consume the victim IP's budget (WR-07)
 - [Phase 10]: TRUST_PROXY=true in e2e/server.mjs so run-unique X-Forwarded-For dodges the per-IP signup throttle (Rule 3, plan 10-01)
 - [Phase 11]: the 21-route sweep pairs a coverage assertion beside the leak scan — an empty page cannot pass; the allow-list stays `[]` and the scanner exits 0 pinned by test; docker-build CI asserts the served fr-*.js chunk contains 'Projets'
-- [Phase 12]: 12-05 — /w/:slug/file/:id is BYTE-ONLY: no Accept/Sec-Fetch-Dest negotiation survives; a pasted file URL serves bytes top-level (inline renders, attachment downloads) and an unauthenticated paste gets the D-05 404 no-oracle for document navigations too (T-12-13 accept)
+- [Phase 12]: 12-05 — /w/:slug/file/:id is BYTE-ONLY: no Accept/Sec-Fetch-Dest negotiation survives; a pasted file URL serves bytes top-level (inline renders, attachment downloads). 12-07 reopens T-12-13 for ONE case only: an anonymous document navigation now 302s to /login?next=<path> (T-12-13 reopened on user instruction, G-12-5); iframe/frame/empty dests keep the 401 JSON and the outsider keeps the D-05 404
+- [Phase 12]: 12-07 — serveFileBinary answers single byte ranges (206 + Content-Range + sliced stream, Accept-Ranges: bytes advertised, 416 bytes */size, multi/malformed ignored as 200); If-Range deliberately not honored (private max-age=3600 cache bounds staleness); the preview modal's PDF iframe is height:min(70vh,560px) (Firefox renders its toolbar inside the iframe — the 16/9 pane clipped it); A.doLogin consumes a strictly validated same-origin path-only ?next= before the queued-invite block
 - [Phase 12]: 12-05 — the file context menu's data-id-only copyLink resolves its file inside A.copyLink (file branch after fid, id-spaces disjoint); the SPA applyDeepLink 'file' branch is deleted — the pathname serves bytes, in-app previews go through A.previewFile
 - [Phase 12]: 12-05 — pre-existing repo-wide lint (8 errors) and format (19 files) drift predate plan 12-05 — logged to phases/12-*/deferred-items.md, needs a dedicated cleanup task
 - [Phase 12]: 12-06 — MAX_UPLOAD_MB crosses the server→client boundary in five hops (env → /api/config → api.init() state → t() call-site vars → catalogue {n} placeholder); the i18n-scan placeholder gate is the regression guard (no separate scan test)
@@ -312,22 +313,22 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-25T08:14:00Z
-**Stopped at:** Completed 12-06-PLAN.md (feat e0a40e5, feat 73cb414) — all 6 phase-12 plans done
+**Last session:** 2026-10-25T09:33:32.569Z
+**Stopped at:** Completed 12-07-PLAN.md (gap closure G-12-4, G-12-5) — all 7 phase-12 plans done
 **Resume file:** None
 
 ## Current Position
 
-Current Plan: 6
-Total Plans in Phase: 6
+Current Plan: 8
+Total Plans in Phase: 7
 
-Phase: 12 (Real file uploads and previews) — ALL PLANS EXECUTED, ready for verification/UAT re-run
-Status: Phase 12 plans 12-01..12-06 complete (gap closures G-12-1, G-12-2, G-12-3 all closed)
-Last activity: 2026-10-25 — Plan 12-06 executed — dropzone cap hint interpolates the live MAX_UPLOAD_MB knob
+Phase: 12 (Real file uploads and previews) — COMPLETE (all 7 plans executed)
+Status: Executing Phase 12
+Last activity: 2026-10-25 — Phase 12 execution started
 
 ## Operator Next Steps
 
-- **Phase verification for 12** — all 6 plans executed: `/gsd-verify-work` and the 12-UAT.md re-run (tests 1–3); UAT test 3 re-checks the dropzone hint against a distinctive MAX_UPLOAD_MB value
+- **Phase verification for 12** — all 7 plans executed (12-07 closed G-12-4/G-12-5): `/gsd-verify-work` and the manual Firefox re-run of 12-UAT.md tests 1 and 2 (PDF toolbar fully visible, no whole-file stall; logged-out paste → login → bytes); UAT test 3 re-checks the dropzone hint against a distinctive MAX_UPLOAD_MB value
 - Open warnings from 08-REVIEW.md (0 critical / 4 warning / 3 info): WR-01 double-fire on language select (duplicate PATCH), WR-02 locale set before catalogue load, WR-03 server LOCALE_CODES hand-duplicates the client registry, WR-04 dead catalogue keys for cleared repeat/estimate qualifiers — see 08-REVIEW-DISPOSITION.md; `/gsd-code-review 8 --fix` to auto-fix
 - Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
 - Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
@@ -352,3 +353,5 @@ Last activity: 2026-10-25 — Plan 12-06 executed — dropzone cap hint interpol
 | Phase 10 P03 | ~25 min | 2 tasks | 1 files |
 | Phase 12 P05 | 8 min | 2 tasks | 5 files |
 | Phase 12 P06 | 18 min | 2 tasks | 7 files |
+| Phase 12 P07 | 20 min | 3 tasks | 5 files |
+| Phase 12 P07 | 20 min | 3 tasks | 5 files |
