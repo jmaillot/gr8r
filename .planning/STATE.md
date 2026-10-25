@@ -2,32 +2,31 @@
 gsd_state_version: "1.0"
 milestone: v1.2
 current_phase: 12
-current_phase_name: Real file uploads and previews
-current_plan: 2
-status: executing
-stopped_at: Completed 12-07-PLAN.md (gap closure G-12-4, G-12-5) — all 7 phase-12 plans done
-last_updated: "2026-10-25T16:01:20.158Z"
+current_plan: Not started
+status: completed
+stopped_at: Phase 12 complete — all phases complete
+last_updated: "2026-10-25T18:14:56.164Z"
 last_activity: 2026-10-25
-last_activity_desc: Phase 12 execution resumed (wave continue)
-state_head: ece1ff351334ae1a354e9fb61a8051d5f3847e4c
+last_activity_desc: Phase 12 complete
+state_head: 0c09e709874eaba1f28bd81756769f9751a6e40e
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 8
   total_plans: 50
-  completed_plans: 49
-  percent: 25
+  completed_plans: 50
+  percent: 100
 milestone_name: Localization
 ---
 
 # STATE
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — phases 5–11 complete, Phase 12 is the only phase left
+- Milestone: **v1.2 — Localization** — ALL phases complete (5–12); ready to close via `/gsd-complete-milestone`
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **`/gsd-plan-phase 12`** — Real file uploads and previews (real uploads under `DATA_DIR`, real progress, PDF/image previews, a working copy-link destination)
+- Next: **Milestone close** — `/gsd-complete-milestone v1.2` (audit → archive → next milestone); backlog phases 999.1–999.3 hold the deferred out-of-scope UAT follow-ups (sessions, password change, 2FA QR)
 - Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
   `v1.1-phases/`
 - Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
@@ -83,6 +82,7 @@ The phase numbering continues v1.1 (which used 1–4). The roadmap is in
 | 9 ✅ | Server messages & activity history | ERR-01, ERR-02, ACT-01, ACT-02 — complete |
 | 10 ✅ | Browser coverage in both locales | UAT-01 … UAT-09 — complete |
 | 11 ✅ | French sweep, build gate & ship hardening | UAT-10 — complete |
+| 12 ✅ | Real file uploads and previews | UPLOAD-01…05, PREVIEW-01…03, LINK-01 — complete (v1.2 phase 8, outside the 29-requirement localization table) |
 
 **Coverage:** 29/29 v1.2 requirements mapped, each to exactly one phase; no orphan requirement, no
 phase without a requirement. 6/29 complete (phases 5 and 6).
@@ -188,7 +188,9 @@ Known limitations carried forward:
 
 - Plans remain display-only labels; nothing is billed or limited.
 - Invite email delivery still requires `SMTP_HOST`; links are copied by hand otherwise.
-- File contents are metadata only; no binary upload backend.
+- File storage hardening beyond Phase 12 (quotas, antivirus, object storage) is out of scope;
+  CR-01 (suffix Range on a zero-byte file → malformed 206) is an accepted residual risk
+  (AR-12-1 in 12-SECURITY.md) pending a fix.
 - The browser URL is write-only: `go()` never updates the address bar and nothing handles
   `popstate`, so back/forward and a reload lose the current page.
 - The recent-search redaction is substring-based, and a free-text mention of a hidden project's
@@ -313,24 +315,26 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-25T09:33:32.569Z
-**Stopped at:** Completed 12-07-PLAN.md (gap closure G-12-4, G-12-5) — all 7 phase-12 plans done
+**Last session:** 2026-10-25
+**Stopped at:** Phase 12 complete — UAT round 3 passed 4/4, verification passed, all gates green; milestone v1.2 ready to close
 **Resume file:** None
 
 ## Current Position
 
-Current Plan: 8
-Total Plans in Phase: 7
+Current Plan: Not started
+Total Plans in Phase: 8 (all executed and verified)
 
-Phase: 12 (Real file uploads and previews) — COMPLETE (all 7 plans executed)
-Status: Executing Phase 12
-Last activity: 2026-10-25 — Phase 12 execution resumed (wave continue)
+Phase: 12 — complete (last phase of v1.2)
+Status: Milestone v1.2 ready to close
+Last activity: 2026-10-25 — Phase 12 verified and transitioned
 
 ## Operator Next Steps
 
-- **Phase verification for 12** — all 7 plans executed (12-07 closed G-12-4/G-12-5): `/gsd-verify-work` and the manual Firefox re-run of 12-UAT.md tests 1 and 2 (PDF toolbar fully visible, no whole-file stall; logged-out paste → login → bytes); UAT test 3 re-checks the dropzone hint against a distinctive MAX_UPLOAD_MB value
+- **Milestone close** — Phase 12 verified (21/22 + human UAT 4/4), SECURITY.md shipped, all 50/50 plans complete: `/gsd-complete-milestone v1.2`
+- Backlog phases 999.1–999.3 (deferred UAT follow-ups, out of v1.2 scope): sessions logout-other-sessions, password change not revoking sessions, fake 2FA QR
 - Open warnings from 08-REVIEW.md (0 critical / 4 warning / 3 info): WR-01 double-fire on language select (duplicate PATCH), WR-02 locale set before catalogue load, WR-03 server LOCALE_CODES hand-duplicates the client registry, WR-04 dead catalogue keys for cleared repeat/estimate qualifiers — see 08-REVIEW-DISPOSITION.md; `/gsd-code-review 8 --fix` to auto-fix
 - Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
+- Phase 12 advisory: IN-02 (e2e width assertion looser than the documented ≥866px floor) — see 12-REVIEW-DISPOSITION.md; CR-01 zero-byte Range is accepted as AR-12-1 in 12-SECURITY.md
 - Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
 
 ## Performance Metrics
