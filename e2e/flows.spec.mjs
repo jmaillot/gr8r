@@ -678,13 +678,35 @@ test.describe('project creation', () => {
    D-13/D-14): the user-visible half of real uploads, proven in Chromium on
    the real server — a real PNG through the app's unchanged upload input,
    the progress row's disappearance, the preview modal rendering real bytes,
-   and the copied /w/:slug/file/:id link working in both worlds (D-13: SPA
-   navigation opens the preview modal; a non-HTML Accept serves the bytes).
+   and the copied /w/:slug/file/:id link being honest (D-13 byte-only
+   route): a top-level paste renders the bytes directly, both « Copier le
+   lien » entry points (modal + « ... » context menu) copy the identical
+   URL, and the modal's PDF iframe loads the PDF bytes with no framing
+   denial (G-12-1, G-12-2).
    The upload server boots with MAX_UPLOAD_MB=1 so the oversize drop is fast.
    ===================================================================== */
 
 /* A real 1×1 PNG — the browser must actually decode it for naturalWidth. */
 const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+/* A minimal valid two-page PDF (G-12-1 regression): byte offsets computed so
+   the xref table is exact — Chromium's viewer must parse it, not tolerate it. */
+const PDF_2PAGES = (() => {
+  const page = n => `${n} 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n`;
+  let body = '%PDF-1.4\n';
+  const offsets = [0];
+  const push = s => {
+    offsets.push(Buffer.byteLength(body));
+    body += s;
+  };
+  push('1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n');
+  push('2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj\n');
+  push(page(3));
+  push(page(4));
+  const xref = offsets.map(off => `${String(off).padStart(10, '0')} 00000 n \n`).join('');
+  body += `xref\n0 5\n0000000000 65535 f \n${xref}trailer<</Size 5/Root 1 0 R>>\nstartxref\n${Buffer.byteLength(body)}\n%%EOF\n`;
+  return Buffer.from(body);
+})();
 
 function uploadDict(lang, name) {
   return {
@@ -754,34 +776,71 @@ test.describe('file uploads and previews (Phase 12)', () => {
         const link = await page.evaluate(() => navigator.clipboard.readText());
         expect(link).toBe(`${BASE_URL}/w/${owner.slug}/file/${fid}`);
 
-        /* The copied link opened as a page navigation boots the SPA and the
-           deep link opens the same preview modal (D-13's one destination).
-           Chromium's automated navigations send a star-slash Accept (any
-           type), so the SPA half of the negotiation is forced explicitly
-           with a header rewrite; a manual navigation would send text/html
-           on its own. */
+        /* The « ... » file context menu's copyLink (G-12-2 defect 1): its
+           data-id-only button must resolve the same published URL as the
+           modal button. This path previously copied the bare workspace root
+           because A.copyLink resolved file links only from data-fid. */
         await page.locator(`.modal-wrap [data-a='closeModal']`).last().click();
-        await context.route(`**/file/${fid}`, route => route.continue({ headers: { ...route.request().headers(), accept: 'text/html' } }));
-        await page.goto(link);
-        await context.unroute(`**/file/${fid}`);
-        await expect(page.locator(`.modal-wrap img[src$="/file/${fid}"]`)).toBeVisible();
+        await page.locator(`.fcard button[data-a='ctxBtn'][data-ctx='file'][data-id='${fid}']`).click();
+        const ctxMenuRoot = page.locator(`.pop[role='menu']`);
+        await expect(ctxMenuRoot).toBeVisible();
+        await ctxMenuRoot.locator(`button.mi[data-a='copyLink'][data-id='${fid}']`).click();
+        await expect(page.getByText(d.linkCopied).first()).toBeVisible();
+        const ctxLink = await page.evaluate(() => navigator.clipboard.readText());
+        expect(ctxLink).toBe(`${BASE_URL}/w/${owner.slug}/file/${fid}`);
 
-        /* Outside the SPA: a non-HTML Accept fetches the bytes themselves
-           (image mime), while text/html gets the SPA bootstrap (negotiation).
-           Both fetches cache-bust — the HTTP cache keys without Accept, so a
-           cached image payload would mask the negotiated response. */
-        const bytes = await page.evaluate(async url => {
+        /* G-12-1 PDF regression: the preview modal's iframe must load the PDF
+           bytes through the byte-only route — the element is visible with the
+           expected src, and its URL answers application/pdf with no
+           framing-denial headers (network-level proof: upload.test.mjs). */
+        const pdfDict = uploadDict(lang, 'paper.pdf');
+        await page.locator('input[data-in="uploadFiles"]').first().setInputFiles({ name: 'paper.pdf', mimeType: 'application/pdf', buffer: PDF_2PAGES });
+        await expect(page.getByText(pdfDict.uploaded)).toBeVisible();
+        const pdfCard = page.locator(`.fcard[data-a='previewFile']`, { hasText: 'paper.pdf' });
+        await expect(pdfCard).toBeVisible();
+        const pdfId = await pdfCard.getAttribute('data-id');
+        await expect.poll(() => docHasFile(client, owner.slug, pdfId), { timeout: 10_000 }).toBe(true);
+        await pdfCard.click();
+        const pdfFrame = page.locator(`.modal-wrap iframe[src$="/file/${pdfId}"]`);
+        await expect(pdfFrame).toBeVisible();
+        const pdfRes = await page.request.get(`${BASE_URL}/w/${owner.slug}/file/${pdfId}`);
+        expect(pdfRes.status()).toBe(200);
+        expect(pdfRes.headers()['content-type']).toBe('application/pdf');
+        expect(pdfRes.headers()['x-frame-options']).toBeUndefined();
+        expect(Buffer.from(await pdfRes.body()).subarray(0, 5).toString()).toBe('%PDF-');
+        await page.locator(`.modal-wrap [data-a='closeModal']`).last().click();
+
+        /* D-13 byte-only route (G-12-2 defect 2): a top-level paste of the
+           copied link is a real navigation to the bytes — no SPA bootstrap,
+           no forced header rewrite (Chromium sends Accept: text/html on its
+           own). The image document Chromium renders decodes the bytes. */
+        await page.goto(link);
+        await expect.poll(() => page.evaluate(() => document.querySelector('img')?.naturalWidth || 0)).toBeGreaterThan(0);
+
+        /* The same URL fetched with any Accept carries the inline image mime
+           and the EXACT byte payload — there is no SPA branch left to hit
+           (expect.poll cache-busts: the HTTP cache keys without Accept).
+           The image/png fetch asserts the same bytes; the text/html fetch is
+           the old SPA-negotiation regression proof. */
+        const bytePayload = await page.evaluate(async url => {
           const r = await fetch(`${url}?cb=${Date.now()}`, { headers: { accept: 'image/png' }, cache: 'no-store' });
-          return { ct: r.headers.get('content-type'), body: await r.text() };
+          const buf = new Uint8Array(await r.arrayBuffer());
+          let bin = '';
+          for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+          return { ct: r.headers.get('content-type'), b64: btoa(bin) };
         }, link);
-        expect(bytes.ct).toBe('image/png');
-        expect(bytes.body.length).toBeGreaterThan(0);
-        const spa = await page.evaluate(async url => {
+        expect(bytePayload.ct).toBe('image/png');
+        expect(Buffer.from(bytePayload.b64, 'base64').equals(PNG_1X1)).toBe(true);
+        const nav = await page.evaluate(async url => {
           const r = await fetch(`${url}?cb=${Date.now()}x`, { headers: { accept: 'text/html' }, cache: 'no-store' });
-          return { ct: r.headers.get('content-type'), body: await r.text() };
+          const buf = new Uint8Array(await r.arrayBuffer());
+          let bin = '';
+          for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+          return { ct: r.headers.get('content-type'), xfo: r.headers.get('x-frame-options'), b64: btoa(bin) };
         }, link);
-        expect(spa.ct).toContain('text/html');
-        expect(spa.body.toLowerCase()).toContain('<!doctype html');
+        expect(nav.ct).toBe('image/png');
+        expect(nav.xfo).toBeNull();
+        expect(Buffer.from(nav.b64, 'base64').equals(PNG_1X1)).toBe(true);
       } finally {
         await context.close();
       }

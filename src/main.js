@@ -39,7 +39,6 @@ import './views/timeline.js';
 import './views/files.js';
 import './overlays/drawer.js';
 import './overlays/modals.js';
-import { openModal } from './overlays/modals.js';
 import './overlays/popovers.js';
 import './overlays/context-menu.js';
 import './overlays/palette.js';
@@ -113,17 +112,12 @@ function applyDeepLink(rest) {
       const t = find(data.tasks || [], 'key');
       if (t) return go('task', { id: t.id });
     }
-    /* D-13: the copied pathname link /w/:slug/file/:id is the one destination in both
-       worlds — inside the SPA it opens the preview modal on the landed route (the same
-       call A.previewFile makes; there is no 'file' route page); outside the SPA the
-       server's Accept negotiation serves the raw bytes (12-02 route). */
-    if (seg === 'file') {
-      const f = (data.files || []).find(x => x.id === key);
-      if (f) {
-        openModal({ type: 'filePreview', file: f, tid: f.task });
-        return;
-      }
-    }
+    /* D-13 (revised, plan 12-05): the copied pathname /w/:slug/file/:id serves
+        the raw bytes directly — server-side, in every world, through the
+        byte-only route. In-app previews open through the preview modal via
+        A.previewFile. One URL, one authoritative byte source; no SPA branch
+        claims /file/:id. The project/task/member deep-link branches below
+        still bootstrap via the generic route SPA fallback. */
     if (seg === 'member' && (data.members || []).some(m => m.id === key)) return go('member', { id: key });
   }
   if (ROUTE_IDS.includes(seg)) return go(seg, {});

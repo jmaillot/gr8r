@@ -518,6 +518,12 @@ A.copyLink = el => {
   S.ui.pop = null;
   render();
   const d = el.dataset;
+  /* G-12-2: the « ... » file context menu stamps only data-id; the file menu's
+     copyLink item must resolve the file link from that id. Branch order is
+     safe: task, pid and fid lookups are all keyed on id-spaces disjoint from
+     file ids, so a file-id data-id deterministically misses them first
+     (debug-session branch simulation). */
+  const file = d.id ? (D().files || []).find(f => f.id === d.id) : null;
   const path =
     d.id && task(d.id)
       ? `task/${task(d.id).key}`
@@ -525,9 +531,11 @@ A.copyLink = el => {
         ? `project/${proj(d.pid).key.toLowerCase()}`
         : d.fid
           ? `file/${d.fid}`
-          : d.id && proj(d.id)
-            ? `project/${proj(d.id).key.toLowerCase()}`
-            : '';
+          : file
+            ? `file/${file.id}`
+            : d.id && proj(d.id)
+              ? `project/${proj(d.id).key.toLowerCase()}`
+              : '';
   copy(`${api.url}/w/${D().ws.url}${path ? `/${path}` : ''}`);
 };
 A.copyText = el => copy(el.dataset.text, t('toast.copiedToClipboard'));
