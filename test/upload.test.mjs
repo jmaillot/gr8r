@@ -283,6 +283,29 @@ test('single-range serving: 206 slices with exact math, 416 unsatisfiable, ignor
   }
 });
 
+/* CR-01 (plan 12-08 review disposition): a suffix range on a ZERO-byte file
+   used to derive end = -1 and emit a malformed `Content-Range: bytes 0--1/0`
+   plus a synchronous ERR_OUT_OF_RANGE after the headers were sent. An empty
+   representation now ignores the Range header entirely (RFC 9110 range
+   handling is optional) and answers 200 with its empty full body. */
+test('zero-byte file: any Range header is ignored, clean 200 with empty body (CR-01)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    await plantFile(server, admin, 'f_rng0', 'empty.png', Buffer.alloc(0));
+    const url = '/w/acme/file/f_rng0';
+    for (const spec of ['bytes=-5', 'bytes=0-', 'bytes=0-9']) {
+      const r = await fileFetch(server, admin.client.cookie(), url, { range: spec });
+      assert.equal(r.status, 200, spec);
+      assert.equal(r.headers.get('content-range'), null, spec);
+      assert.equal(r.headers.get('content-length'), '0', spec);
+      assert.equal((await r.arrayBuffer()).byteLength, 0, spec);
+    }
+  } finally {
+    await server.stop();
+  }
+});
+
 /* G-12-5 (T-12-13 reopened, plan 12-07): an anonymous top-level navigation
    to a file URL (Sec-Fetch-Dest: document, or no Fetch Metadata at all) is
    302-redirected to /login?next=<path> BEFORE any workspace/record lookup —

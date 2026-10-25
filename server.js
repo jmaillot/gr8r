@@ -1976,7 +1976,13 @@ async function serveFileBinary(req, res, slug, id) {
      the validator. */
   let range = null;
   let unsatisfiable = false;
-  const rawRange = typeof req.headers.range === 'string' ? req.headers.range.trim() : '';
+  /* CR-01: an empty representation has no bytes to range over — a suffix
+     range (`bytes=-N`) would otherwise derive end = -1 and emit a malformed
+     `Content-Range: bytes 0--1/0` (and a synchronous ERR_OUT_OF_RANGE from
+     createReadStream after the headers are sent). Ranges are optional to
+     honor (RFC 9110 §14.2), so a zero-byte file simply ignores the header
+     and answers 200 with its (empty) full representation. */
+  const rawRange = typeof req.headers.range === 'string' && stat.size > 0 ? req.headers.range.trim() : '';
   if (rawRange && !rawRange.includes(',')) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(rawRange);
     if (m && (m[1] !== '' || m[2] !== '')) {
