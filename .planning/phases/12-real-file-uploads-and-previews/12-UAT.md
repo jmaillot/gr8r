@@ -26,10 +26,10 @@ disappears on completion; the PDF renders inside the tall scrollable iframe, the
 viewer toolbar (with download button) is visible in Firefox, and large PDFs paint
 without the old whole-file stall ("refused to connect" / "ne peut pas ouvrir cette
 page" must stay gone).
-result: issue
+result: pass
 reported: "the embedded view in firefox does not show download, its too small, the other things are working"
 severity: major
-note: superseded by round-3 re-test (test 4) after plan 12-08
+note: round-2 issue — became gap G-12-6, fixed by plan 12-08, human-re-verified as test 4 (pass); row reflects current behavior, original report preserved above
 
 ### 2. Re-run test 2 (G-12-2 + G-12-5 closure re-check)
 expected: Copy a file link from BOTH « ... » context menu and the modal footer; paste

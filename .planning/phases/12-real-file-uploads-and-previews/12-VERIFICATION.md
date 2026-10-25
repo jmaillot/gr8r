@@ -1,7 +1,7 @@
 ---
 phase: 12-real-file-uploads-and-previews
 verified: 2026-10-25T17:06:30Z
-status: human_needed
+status: passed
 score: 21/22 must-haves verified
 covered_files: [".planning/phases/12-real-file-uploads-and-previews/12-01-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-01-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-05-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-05-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-06-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-06-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-07-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-07-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-08-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-08-SUMMARY.md", "server.js", "src/actions/actions.js", "src/main.js", "src/overlays/modals.js", "src/overlays/context-menu.js", "src/views/files.js", "src/core/api.js", "src/styles/overlays.css", "src/locales/en.json", "src/locales/fr.json", "test/upload.test.mjs", "test/i18n-core-features.test.mjs", "test/fixtures/icons-baseline.json", "e2e/flows.spec.mjs", "e2e/server.mjs", ".env.example", "DEPLOY.md", "README.md"]
 covered_digest: "v2:sha256:e5213475a47c4e1939abba788ceeac7a847fc3c36f4bd821c3cc1a0030925779"
