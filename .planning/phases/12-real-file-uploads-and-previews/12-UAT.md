@@ -3,7 +3,7 @@ status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T07:22:11Z
+updated: 2026-10-25T07:23:55Z
 ---
 
 ## Current Test
@@ -28,11 +28,17 @@ result: issue
 reported: "copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
 severity: major
 
+### 3. Dropzone cap label ignores MAX_UPLOAD_MB
+expected: The dropzone hint text reflects the configured MAX_UPLOAD_MB value
+result: issue
+reported: "\"Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun\" ne tient pas compte de la valeur MAX_UPLOAD_MB"
+severity: minor
+
 ## Summary
 
-total: 2
+total: 3
 passed: 0
-issues: 2
+issues: 3
 pending: 0
 skipped: 0
 blocked: 0
@@ -54,5 +60,14 @@ blocked: 0
   reason: "User reported: copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
   severity: major
   test: 2
+  artifacts: []
+  missing: []
+
+- gap_id: G-12-3
+  truth: "Dropzone hint text reflects the configured MAX_UPLOAD_MB value"
+  status: failed
+  reason: "User reported: \"Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun\" ne tient pas compte de la valeur MAX_UPLOAD_MB"
+  severity: minor
+  test: 3
   artifacts: []
   missing: []
