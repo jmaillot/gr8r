@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
 created: 2026-10-25T07:30:00Z
 updated: 2026-10-25T07:45:00Z
@@ -87,3 +87,17 @@ fix: (for planning) (a) make the context-menu copy-link resolve the file link �
 verification: diagnose-only — code trace + executable branch simulation; no fix applied.
 files_changed: []
 oracle_type: specified
+
+## Close-out (2026-10-25)
+
+FIXED — both AND-gate defects shipped:
+(a) URL construction — A.copyLink (src/actions/actions.js) now resolves a file from the
+context-menu's data-id (a d.id file lookup keyed on the disjoint file id-space, per the
+debug-session branch simulation) before falling through to the project branch.
+(b) Top-level rendering — the /w/:slug/file/:id route is byte-only since the 12-05 revision
+(plan 12-05, extended by plan 12-07 / T-12-13): unauthenticated Sec-Fetch-Dest: document
+navigations 302 to /login?next=<path> (path-only, open-redirect-safe); authenticated callers
+get serveFileBinary's inline/attachment headers — so a pasted file URL renders bytes
+top-level instead of the blocked-iframe modal. See also pdf-embed-rendering and
+firefox-pdf-toolbar-round2 close-outs. Verified in src/actions/actions.js (A.copyLink) and
+server.js request routing (2026-10-25, milestone close-out).

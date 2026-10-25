@@ -18,6 +18,11 @@ plan 12-05 (verified: all present at pre-plan commit 8b93d88):
 
 Plan 12-05's own changed files are otherwise eslint-clean.
 
+- **Status:** resolved
+  Fixed at the v1.2 milestone close-out (commit be0fdf6): unused imports/variable removed,
+  `globalThis.document` referenced explicitly, the double space replaced with `{2}`, and the
+  intentional T-12-08 control-regex carries an inline eslint-disable. `npm run lint` is clean.
+
 ## Pre-existing repo-wide format drift (`npm run format:check` exits 1)
 
 Prettier reports 19 unformatted files, all failing at pre-plan commit 8b93d88
@@ -33,3 +38,8 @@ A small dedicated cleanup (bot or fast task): fix the 8 lint errors (one
 eslint-disable comment for server.js:1924) and run `prettier --write` over the
 19 drifted files in one chore commit. Then the phase verification line
 `npm run lint && npm run format:check` becomes honest again.
+
+- **Status:** resolved
+  Both halves done at the v1.2 milestone close-out: lint fixes in commit be0fdf6, `prettier
+  --write` over the drifted files (19 code files + 2 docs) in commit 21725f1.
+  `npm run lint && npm run format:check` is green.

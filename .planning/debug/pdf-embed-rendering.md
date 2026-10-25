@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "rendering doesnt work either in chrome or firefox (firefox says Firefox ne peut pas ouvrir cette page / chrome says refused to connect.)"
 created: 2026-10-25T00:00:00Z
 updated: 2026-10-25T00:00:00Z
@@ -48,6 +48,13 @@ started: discovered during UAT of Phase 12
 
 root_cause: The /w/:slug/file/:id route distinguishes "deep-link navigation" from "byte request" solely by whether the Accept header contains text/html. Iframe navigations also send Accept: text/html, so the preview modal's iframe request is served the SPA index.html (with X-Frame-Options: DENY and CSP frame-ancestors 'none') instead of the PDF bytes. Both browsers therefore refuse to frame the response — Chrome "refused to connect", Firefox « ne peut pas ouvrir cette page ». The PDF bytes are never sent to the iframe.
 fix: (for planning) discriminate navigation vs byte request without relying on Accept alone — e.g. Sec-Fetch-Dest: iframe/frame ⇒ serve bytes; Sec-Fetch-Dest: document ⇒ SPA bootstrap; fallback for old browsers via a query param (e.g. ?raw=1) appended to the iframe src. The iframe src itself needs no change if Sec-Fetch-Dest routing is used.
-verification: diagnose-only — code-trace confirmation; no fix applied.
+verification: diagnosed — not yet fixed (find_root_cause_only)
 files_changed: []
 oracle_type: specified
+
+## Close-out (2026-10-25)
+
+FIXED — the route is byte-only since the 12-05 revision (plan 12-05, T-12-13 extension in
+plan 12-07): `/w/:slug/file/:id` calls serveFileBinary unconditionally; the unauthenticated
+Sec-Fetch-Dest: document / no-metadata case 302-redirects to `/login?next=<path>` instead of
+serving the SPA. Verified in server.js request routing (2026-10-25, milestone close-out).

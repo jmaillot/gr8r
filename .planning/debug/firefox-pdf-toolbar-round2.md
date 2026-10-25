@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "the embedded view in firefox does not show download, its too small, the other things are working"
 created: 2026-10-25T00:00:00Z
 updated: 2026-10-25T00:00:00Z
@@ -86,3 +86,13 @@ root_cause: The app's PDF preview iframe is ~686px wide (`.modal.lg` 720px − `
 fix: (1) Add `.modal.xl { max-width: 900px; }` to src/styles/overlays.css and render the filePreview modal with it for PDFs (modals.js:58, e.g. `wrap(m.file?.type === 'pdf' ? 'xl' : 'lg', ...)`) → iframe ≈866px ≥ 751px, full toolbar with visible download. (2) Fallback/hardening: add a `Download` button to the modal footer for PDFs — `<a class="btn btn-secondary" href="/w/${D().ws.url}/file/${f.id}" download="${esc(f.name)}">` — same-origin so the download attribute is honored over the inline Content-Disposition; requires new i18n keys `act.download` ("Download" / "Télécharger") in src/locales/en.json + fr.json.
 verification: diagnosed — not yet fixed (find_root_cause_only)
 files_changed: []
+
+## Close-out (2026-10-25)
+
+FIXED — both recommendations shipped in plan 12-08 (G-12-6): `.modal.xl { max-width: 900px }`
+added to src/styles/overlays.css and the filePreview modal renders PDFs with it
+(modals.js: `wrap(m.file?.type === 'pdf' ? 'xl' : 'lg', ...)`), making the iframe ≈866px ≥
+pdf.js's 750px breakpoint; a PDF-only footer Download anchor (`act.download` = Download /
+Télécharger in both catalogues) is the viewer-independent fallback. Verified in
+src/styles/overlays.css, src/overlays/modals.js, src/locales/{en,fr}.json (2026-10-25,
+milestone close-out).

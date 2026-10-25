@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "UAT test 3 (Phase 12): dropzone hint 'Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun' ignores MAX_UPLOAD_MB"
 created: 2026-10-25T00:00:00Z
 updated: 2026-10-25T00:00:00Z
@@ -57,3 +57,14 @@ root_cause: "The cap number is dead-ended on every leg of the path: (1) src/view
 fix: "None applied — diagnose-only run."
 verification: "Direct code reading: the only dropzone-cap render site is files.js:42; grep for 250/Mo chacun across src shows exactly the two locale lines; /api/config payload read verbatim — no maxUploadMb; api.init() consumption read verbatim; no inline config in the SPA shell (serveStatic serves a static index; no window.__/data-config markers)."
 files_changed: []
+
+## Close-out (2026-10-25)
+
+FIXED — all three legs of the AND-gate lifted (plan 12-08 / G-12-3 close-out): /api/config now
+returns `maxUploadMb: MAX_UPLOAD_MB` (server.js), api.init() consumes it into
+`state.maxUploadMb` (src/core/api.js, getter `api.maxUploadMb`), and both catalogues replaced
+the hardcoded '250' with the `{n}` placeholder — src/views/files.js renders
+`t('page.files.dropLimit', { n: api.maxUploadMb })`. The raw `browse` literal in the same
+hint was also moved to the new `page.files.browse` key ('parcourir' in French) during the
+deferred-07 i18n close-out. Verified in server.js, src/core/api.js, src/views/files.js,
+src/locales/{en,fr}.json (2026-10-25).
