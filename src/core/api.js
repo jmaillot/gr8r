@@ -18,6 +18,7 @@ const state = {
   workspaces: [],
   workspace: null,
   memberId: null,
+  maxUploadMb: 25, // /api/config discloses the server's MAX_UPLOAD_MB knob (G-12-3); 25 is the server default
 };
 
 /* Base URL for links the user can share. Set by the server (APP_URL or the
@@ -88,6 +89,12 @@ export const api = {
   get mailEnabled() {
     return state.mail;
   },
+  /* The server's per-file upload cap in MB (G-12-3) — the dropzone hint
+     interpolates this so an operator's MAX_UPLOAD_MB never reads as the old
+     hardcoded 250. Stays at the 25 server default for demo/no-server paths. */
+  get maxUploadMb() {
+    return state.maxUploadMb;
+  },
   get user() {
     return state.user;
   },
@@ -122,6 +129,7 @@ export const api = {
     state.mail = !!r.data?.mail;
     state.creation = r.data?.workspaceCreation === 'open' ? 'open' : 'admins';
     state.url = typeof r.data?.url === 'string' ? r.data.url.replace(/\/+$/, '') : '';
+    state.maxUploadMb = Number(r.data?.maxUploadMb) || 25;
     return state.enabled;
   },
   async me() {

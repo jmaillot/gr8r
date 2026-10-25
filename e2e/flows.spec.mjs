@@ -713,6 +713,10 @@ function uploadDict(lang, name) {
     uploaded: fmt('toast.uploaded', { name }, lang),
     tooLarge: fmt('err.uploadTooLarge', {}, lang),
     linkCopied: fmt('toast.linkCopied', {}, lang),
+    /* G-12-3: the dropzone cap hint interpolates the server's MAX_UPLOAD_MB
+       knob, which the e2e server boots at 1 (e2e/server.mjs) — the rendered
+       text must say 1, never the old hardcoded 250. */
+    dropLimit: fmt('page.files.dropLimit', { n: 1 }, lang),
   };
 }
 
@@ -749,6 +753,12 @@ test.describe('file uploads and previews (Phase 12)', () => {
       try {
         await signIn(page, owner);
         await openFilesTab(page, pid);
+
+        /* G-12-3: the dropzone hint carries the server's live cap knob — the
+           e2e server boots MAX_UPLOAD_MB=1, so the rendered span reads 1 in
+           both locales (locale-independent selector on the hint element). */
+        await expect(page.locator('label.dropzone span').first()).toContainText(d.dropLimit);
+        expect(await page.locator('label.dropzone span').first().textContent()).not.toContain('250');
 
         /* The real drop through the unchanged entry point (D-14): XHR transport,
            real bytes, the success toast only after the record lands (D-11). */

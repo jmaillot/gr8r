@@ -3,6 +3,7 @@ import { ago, esc, foldForSearch } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, mem, task } from '../core/store.js';
+import { api } from '../core/api.js';
 import { FT, av, empty, filePrev, fileTypeName, fileType } from '../ui/helpers.js';
 
 export function filesHtml(pid) {
@@ -39,7 +40,7 @@ export function filesHtml(pid) {
       <label class="btn btn-primary btn-sm" style="cursor:pointer">${ic('upload', 13)}${t('act.upload')}<input type="file" multiple hidden data-in="uploadFiles" data-project="${pid}"></label>
     </div>
     <div class="page wide" style="padding-top:16px">
-      <label class="dropzone" data-dropzone="${pid}" style="margin-bottom:16px">${ic('upload-cloud', 18)}<span>${t('page.files.dropHere')} <span class="link">browse</span> ${t('page.files.dropLimit')}</span><input type="file" multiple hidden data-in="uploadFiles" data-project="${pid}"></label>
+      <label class="dropzone" data-dropzone="${pid}" style="margin-bottom:16px">${ic('upload-cloud', 18)}<span>${t('page.files.dropHere')} <span class="link">browse</span> ${t('page.files.dropLimit', { n: api.maxUploadMb })}</span><input type="file" multiple hidden data-in="uploadFiles" data-project="${pid}"></label>
       ${ups.length ? `<div class="col" style="gap:6px;margin-bottom:16px">${ups.map(x => `<div class="upl"><span class="ftype" style="--c:${FT[fileType(x.name)].c}">${ic(FT[fileType(x.name)].i, 14)}</span><div class="grow"><div class="row"><span class="trunc" style="font-weight:500">${esc(x.name)}</span><span class="sp"></span><span class="faint num" style="font-size:11.5px" id="upct-${x.id}">${x.pct}%</span></div><div class="prog" style="margin-top:6px"><i id="upbar-${x.id}" style="--p:${x.pct / 100}"></i></div></div></div>`).join('')}</div>` : ''}
       ${
         !fs.length

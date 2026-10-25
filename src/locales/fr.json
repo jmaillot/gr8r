@@ -1406,7 +1406,7 @@
   "page.files.sortName": "Nom",
   "page.files.sortType": "Type",
   "page.files.dropHere": "Déposez des fichiers ici ou",
-  "page.files.dropLimit": "— jusqu’à 250 Mo chacun",
+  "page.files.dropLimit": "— jusqu’à {n} Mo chacun",
   "page.files.emptyTitle": "Aucun fichier pour l’instant",
   "page.files.emptySearchBody": "Aucun fichier ne correspond à votre recherche.",
   "page.files.emptyBody": "Chargez des designs, des documents et des ressources pour les partager avec le projet.",

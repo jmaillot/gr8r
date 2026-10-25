@@ -1406,7 +1406,7 @@
   "page.files.sortName": "Name",
   "page.files.sortType": "Type",
   "page.files.dropHere": "Drop files here or",
-  "page.files.dropLimit": "— up to 250 MB each",
+  "page.files.dropLimit": "— up to {n} MB each",
   "page.files.emptyTitle": "No files yet",
   "page.files.emptySearchBody": "No files match your search.",
   "page.files.emptyBody": "Upload designs, documents, and assets to share them with the project.",
