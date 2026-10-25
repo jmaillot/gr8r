@@ -2506,6 +2506,18 @@ A.doLogin = () => {
       return;
     }
     await adoptAccountLocale();
+    // G-12-5 (T-12-13 reopened, plan 12-07): the server redirected the
+    // logged-out document navigation here with the file path in ?next= (it
+    // only ever echoes its OWN url.pathname, but validate before following:
+    // same-origin, path-only — single leading /, no //, no backslash, no
+    // ://). Full navigation on purpose: the server re-evaluates the now-
+    // authenticated document navigation and the file URL delivers its bytes.
+    // Invalid or missing next falls through to the wantedSlug flow.
+    const next = new URLSearchParams(location.search).get('next');
+    if (next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !next.includes('://')) {
+      location.assign(next);
+      return;
+    }
     // Signing in from an invite link accepts it, so the person lands in the workspace.
     const queued = S.ui.join;
     if (queued?.token) {

@@ -862,6 +862,60 @@ test.describe('file uploads and previews (Phase 12)', () => {
       }
     });
 
+    /* G-12-5 (T-12-13 reopened): a logged-out paste of a file URL lands on
+       the LOGIN page (never raw signInRequired JSON), and signing in from
+       that page returns the browser to the same file URL — the server
+       re-evaluates the now-authenticated document navigation and the bytes
+       render as a top-level image document. */
+    test(`a logged-out paste of a file URL shows the login page and returns to the bytes after sign-in (G-12-5) (${lang})`, async ({ browser }) => {
+      const owner = FLOW[lang].uploadOwner;
+      const client = FLOW[lang].uploadClient;
+      const pid = FLOW[lang].uploadProjectId;
+      /* A run/language-unique name: the shared upload project already holds
+         pixel.png from the PREVIEW-03 test above. */
+      const name = `paste-${lang}.png`;
+      const d = uploadDict(lang, name);
+      const form = loginDict(lang);
+      const context = await newContext(browser, { ip: owner.ip });
+      const page = await context.newPage();
+      try {
+        /* Seed the published URL: a real PNG upload through the app. */
+        await signIn(page, owner);
+        await openFilesTab(page, pid);
+        await page.locator('input[data-in="uploadFiles"]').first().setInputFiles({ name, mimeType: 'image/png', buffer: PNG_1X1 });
+        await expect(page.getByText(d.uploaded)).toBeVisible();
+        const card = page.locator(`.fcard[data-a='previewFile']`, { hasText: name });
+        await expect(card).toBeVisible();
+        const fid = await card.getAttribute('data-id');
+        await expect.poll(() => docHasFile(client, owner.slug, fid), { timeout: 10_000 }).toBe(true);
+        const fileUrl = `${BASE_URL}/w/${owner.slug}/file/${fid}`;
+
+        /* A FRESH logged-out context pastes the URL: the server 302s the
+           document navigation to /login?next=<path> — the auth view renders,
+           not the raw JSON error. The context's language matches the run
+           (the /join test's convention) so the login labels are locale-aware. */
+        const anon = await newContext(browser, { ip: clientIp(run, `anon-${lang}`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+        const anonPage = await anon.newPage();
+        try {
+          await anonPage.goto(fileUrl);
+          await expect(anonPage.getByLabel(form.email, { exact: true })).toBeVisible();
+          await expect(anonPage.locator('body')).not.toContainText('signInRequired');
+
+          /* Signing in honours ?next=: a full navigation back to the file
+             URL, whose bytes now render as an image document. */
+          await anonPage.getByLabel(form.email, { exact: true }).fill(owner.email);
+          await anonPage.getByLabel(form.password, { exact: true }).fill(owner.password);
+          await anonPage.getByRole('button', { name: form.submit }).click();
+          await expect(anonPage).toHaveURL(fileUrl);
+          await expect.poll(() => anonPage.evaluate(() => document.querySelector('img')?.naturalWidth || 0)).toBeGreaterThan(0);
+        } finally {
+          await anon.close();
+        }
+      } finally {
+        await context.close();
+      }
+    });
+
     test(`an oversize upload toasts the stable error, leaves no record and the app keeps working (PREVIEW-02, D-11) (${lang})`, async ({ browser }) => {
       const owner = FLOW[lang].uploadOwner;
       const client = FLOW[lang].uploadClient;

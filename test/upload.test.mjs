@@ -98,8 +98,11 @@ async function plantFile(server, admin, id, name, bytes) {
 
 /* Plain fetch carrying a captured cookie — the harness client is JSON-only.
    Any extra headers (Sec-Fetch-Dest, …) ride through as-is. */
-function fileFetch(server, cookie, pathname, { accept = '*/*', ...extra } = {}) {
-  return fetch(`${server.base}${pathname}`, { headers: { cookie, accept, ...extra } });
+function fileFetch(server, cookie, pathname, { accept = '*/*', redirect, ...extra } = {}) {
+  return fetch(`${server.base}${pathname}`, {
+    headers: { cookie, accept, ...extra },
+    redirect,
+  });
 }
 
 test('file GET serves exact bytes to members; outsiders, unknown ids and unknown workspaces all 404 (UPLOAD-03)', async () => {
@@ -275,6 +278,86 @@ test('single-range serving: 206 slices with exact math, 416 unsatisfiable, ignor
     assert.equal(h.status, 206);
     assert.equal(h.headers.get('content-range'), 'bytes 0-9/100');
     assert.equal(h.headers.get('content-length'), '10');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* G-12-5 (T-12-13 reopened, plan 12-07): an anonymous top-level navigation
+   to a file URL (Sec-Fetch-Dest: document, or no Fetch Metadata at all) is
+   302-redirected to /login?next=<path> BEFORE any workspace/record lookup —
+   identical for real, unknown and foreign slugs (no existence oracle). Every
+   embed/fetch destination keeps the JSON 401 signInRequired, the outsider
+   keeps the D-05 404, and an authenticated member keeps receiving bytes. */
+test('anonymous document navigation to a file URL redirects to login with the path preserved; iframe/empty keep 401 (G-12-5)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    await plantFile(server, admin, 'f_red1', 'roundtrip.png', Buffer.from('redirect-png-bytes'));
+
+    /* Anonymous document navigation → 302, path-only relative Location. */
+    const doc = await fileFetch(server, '', '/w/acme/file/f_red1', {
+      accept: 'text/html',
+      'sec-fetch-dest': 'document',
+      redirect: 'manual',
+    });
+    assert.equal(doc.status, 302);
+    assert.equal(doc.headers.get('location'), `/login?next=${encodeURIComponent('/w/acme/file/f_red1')}`);
+
+    /* Metadata-less navigation (old browser) → the same 302. */
+    const noMeta = await fileFetch(server, '', '/w/acme/file/f_red1', {
+      accept: 'text/html',
+      redirect: 'manual',
+    });
+    assert.equal(noMeta.status, 302);
+    assert.equal(noMeta.headers.get('location'), `/login?next=${encodeURIComponent('/w/acme/file/f_red1')}`);
+
+    /* HEAD follows the same dispatch: 302, no body. */
+    const head = await fetch(`${server.base}/w/acme/file/f_red1`, {
+      method: 'HEAD',
+      headers: { 'sec-fetch-dest': 'document' },
+      redirect: 'manual',
+    });
+    assert.equal(head.status, 302);
+
+    /* The modal's iframe and fetch consumers keep today's contract. */
+    for (const dest of ['iframe', 'empty']) {
+      const r = await fileFetch(server, '', '/w/acme/file/f_red1', {
+        accept: '*/*',
+        'sec-fetch-dest': dest,
+      });
+      assert.equal(r.status, 401, dest);
+      const body = await r.json();
+      assert.equal(body.code, 'signInRequired', dest);
+      assert.equal(body.error, 'Sign in to continue', dest);
+    }
+
+    /* No existence oracle: an unknown slug gets the byte-identical 302. */
+    const unknown = await fileFetch(server, '', '/w/nope-ws/file/f_missing', {
+      accept: 'text/html',
+      'sec-fetch-dest': 'document',
+      redirect: 'manual',
+    });
+    assert.equal(unknown.status, 302);
+    assert.equal(unknown.headers.get('location'), `/login?next=${encodeURIComponent('/w/nope-ws/file/f_missing')}`);
+
+    /* The redirect never fires for an authenticated caller: the outsider
+       (valid account, no membership) keeps the D-05 404 no-oracle, and a
+       member receives the bytes on a document navigation (byte-only route). */
+    const outsider = await signup(server.base, { name: 'Outsider 2', email: 'outsider2@test.local' });
+    assert.equal(outsider.status, 201);
+    const out = await fileFetch(server, outsider.client.cookie(), '/w/acme/file/f_red1', {
+      accept: 'text/html',
+      'sec-fetch-dest': 'document',
+    });
+    assert.equal(out.status, 404);
+
+    const member = await fileFetch(server, admin.client.cookie(), '/w/acme/file/f_red1', {
+      accept: 'text/html',
+      'sec-fetch-dest': 'document',
+    });
+    assert.equal(member.status, 200);
+    assert.deepEqual(Buffer.from(await member.arrayBuffer()), Buffer.from('redirect-png-bytes'));
   } finally {
     await server.stop();
   }

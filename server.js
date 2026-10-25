@@ -2047,17 +2047,38 @@ const server = http.createServer(async (req, res) => {
       /* The file GET must be intercepted before serveStatic (Pitfall 1): the
          extensionless /w/:slug/file/:id path would fall into the SPA fallback.
          D-13 (revised, plan 12-05): this route is BYTE-ONLY. Every consumer —
-         the preview modal's iframe, a pasted top-level navigation, a fetch —
-         receives the workspace-scoped bytes; the old Accept: text/html SPA
-         branch is gone because iframe navigations send the same Accept as
-         top-level navigations and could never be discriminated that way.
-         serveFileBinary's D-06 fixed inline/attachment header map is the sole
-         header authority on this route, and requireWorkspace inside it keeps
-         the 404 no-oracle gate (D-05) for unknown/unauthorized callers —
-         document navigations included: an unauthenticated paste of a file URL
-         answers 404. That is the locked isolation decision (T-12-13), not a
-         regression to fix. */
+         the preview modal's iframe, a fetch — receives the workspace-scoped
+         bytes; serveFileBinary's D-06 fixed inline/attachment header map is
+         the sole header authority on this route.
+
+         T-12-13 — REOPENED on user instruction in UAT test 2 (G-12-5, plan
+         12-07): an UNAUTHENTICATED top-level navigation — Sec-Fetch-Dest:
+         document, or a navigation with no Fetch Metadata at all — now 302-
+         redirects to /login?next=<path> instead of answering 404/401 JSON,
+         so a pasted file URL greets a logged-out browser with the login page
+         and returns it to the bytes after sign-in. The `next` value is built
+         ONLY from url.pathname (never the query string, never a client
+         parameter), so the target is same-origin and path-only by
+         construction and an open redirect is structurally impossible; the
+         leading-slash assertion is defense in depth (T-12-15).
+         The D-05 404 no-oracle (T-12-16) is preserved: the discrimination
+         happens here BEFORE any workspace or record lookup, so the 302 is
+         byte-identical for real, unknown and foreign slugs — it answers "no
+         session" only, never "not a member". The modal's iframe and every
+         fetch-style destination (iframe/frame/empty) keep the JSON 401
+         signInRequired, and an authenticated-but-unauthorized caller still
+         404s through serveFileBinary regardless of destination. Do not touch
+         requireUser/requireWorkspace themselves (every other route keeps its
+         JSON 401), securityHeaders, the SPA fallback, or any other route. */
       const fileMatch = url.pathname.match(/^\/w\/([a-z0-9-]{2,40})\/file\/([A-Za-z0-9_-]+)$/);
+      const dest = String(req.headers['sec-fetch-dest'] || '').toLowerCase();
+      if (!currentUser(req) && (dest === 'document' || dest === '')) {
+        const next = `/login?next=${encodeURIComponent(url.pathname)}`;
+        if (next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !next.includes('://')) {
+          res.writeHead(302, { Location: next });
+          return res.end();
+        }
+      }
       await serveFileBinary(req, res, fileMatch[1], fileMatch[2]);
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
