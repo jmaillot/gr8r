@@ -85,6 +85,14 @@ PDFs preview, and the copied link serves the bytes to an authorized member.
   **SPA gains a `file/:id` hash route** that opens the preview modal, and the
   served `GET /w/:slug/file/:id` route serves real bytes when opened outside
   the SPA. One destination, both worlds.
+  **Superseded (2026-10-25, during phase 12):** the SPA `file/:id` deep-link
+  half is retired — see 12-05-PLAN.md. The UAT truth (bytes must render on a
+  fresh top-level paste) resolved G-12-2's missing behavior decision to
+  byte-serving only: `/w/:slug/file/:id` answers every navigation destination
+  with the file bytes, the SPA deep-link branch is deleted, and in-app
+  previews open through the preview modal via `A.previewFile`, not a route
+  bootstrap. The second clause of D-13 (bytes when opened outside the SPA)
+  stands unchanged and is the surviving contract.
 - **D-14:** Upload entry points **do not change** — the existing dropzones and
   `data-in="uploadFiles"` inputs stay; only `handleFiles` internals swap the
   fake timer for XHR.
