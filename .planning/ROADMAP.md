@@ -441,7 +441,7 @@ Plans:
 
 **Gap closure, round 2** *(from the UAT re-run — 12-UAT.md ## Gaps)*
 - [x] 12-07-PLAN.md — G-12-4/G-12-5: Firefox PDF preview (Range/206 serving in serveFileBinary + tall scrollable PDF iframe) and anonymous document navigations redirect to login with a path-preserving return URL (T-12-13 reopened)
-- [ ] 12-08-PLAN.md — G-12-6: PDF previews in .modal.xl (crosses pdf.js's 750px toolbar breakpoint) + footer Download button with act.download i18n (both locales)
+- [x] 12-08-PLAN.md — G-12-6: PDF previews in .modal.xl (crosses pdf.js's 750px toolbar breakpoint) + footer Download button with act.download i18n (both locales)
 
 ## Backlog
 
