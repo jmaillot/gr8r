@@ -420,7 +420,7 @@ to the parent task). Closes the known limitation "File contents are metadata
 only; no binary upload backend".
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 6/6 plans executed
+**Plans:** 7 (12-01..12-06 executed; 12-07 gap closure pending)
 
 Plans:
 **Wave 1**
@@ -438,3 +438,6 @@ Plans:
 **Gap closure** *(from the UAT gap scan)*
 - [x] 12-05-PLAN.md — G-12-1/G-12-2: byte-only `/w/:slug/file/:id` route, one copy-link URL (both entry points), PDF-iframe e2e proofs
 - [x] 12-06-PLAN.md — G-12-3: MAX_UPLOAD_MB crosses into the client dropzone cap hint (via /api/config → api.init() → {n} interpolation, both locales)
+
+**Gap closure, round 2** *(from the UAT re-run — 12-UAT.md ## Gaps)*
+- [ ] 12-07-PLAN.md — G-12-4/G-12-5: Firefox PDF preview (Range/206 serving in serveFileBinary + tall scrollable PDF iframe) and anonymous document navigations redirect to login with a path-preserving return URL (T-12-13 reopened)
