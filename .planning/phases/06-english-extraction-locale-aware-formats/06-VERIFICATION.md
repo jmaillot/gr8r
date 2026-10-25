@@ -3,7 +3,7 @@ phase: 06-english-extraction-locale-aware-formats
 verified: 2026-10-25T19:05:00Z
 status: passed
 score: 5/5 must-haves verified
-covered_digest: "v2:sha256:994de250b5e7d38fa395df211068377fd7364f1c3609e8ab7f5bd7be8f4c57b7"
+covered_digest: "v2:sha256:53d2537fcd54b922682b281ba54a95c400f26cebcd30098b5d08945585a17f8b"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

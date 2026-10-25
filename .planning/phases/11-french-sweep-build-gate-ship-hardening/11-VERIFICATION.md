@@ -30,7 +30,7 @@ covered_files:
   - .planning/phases/11-french-sweep-build-gate-ship-hardening/11-04-PLAN.md
   - .planning/phases/11-french-sweep-build-gate-ship-hardening/11-04-SUMMARY.md
   - .planning/phases/11-french-sweep-build-gate-ship-hardening/11-UAT.md
-covered_digest: "v2:sha256:a9945f9aee455f3042fc816984e4d0027a200bf4f054a85586ab549c7c734810"
+covered_digest: "v2:sha256:547f088904c1cef860085725be4c96946c4e32a21e0980abf6a059f411d2343d"
 # note: gsd_run verification.fingerprint unavailable in this session (no such tool in
 # the tool catalog); digest computed deterministically as sha256 over (path + bytes)
 # in the listed order — same method as the prior verification. The list now also

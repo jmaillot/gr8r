@@ -22,7 +22,7 @@ covered_files:
   - test/fixtures/icons-baseline.json
   - test/i18n.test.mjs
   - vite.config.js
-covered_digest: "v3:sha256:a88695d5f512b45b5103e1f1625d9b6bd46cf3548d9f1a93e82d3b230e16ca6d"
+covered_digest: "v2:sha256:dc09b97f749b3b40df1d970c61d128e5d8ae84b904fb7a0c030ed83b3b7f2e16"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
