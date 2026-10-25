@@ -85,6 +85,76 @@
 
 ---
 
+## Milestone: v1.2 — Localization
+
+**Shipped:** 2026-10-25
+**Phases:** 8 | **Plans:** 50 | **Tasks:** 68 | **Commits:** ~197 | **Working days:** 2 (2026-10-24 → 2026-10-25)
+
+### What Was Built
+
+- The interface stopped lying about languages: a dependency-free `t()` layer over 1 538-key
+  JSON catalogues (EN/FR), locale-aware dates, numbers and CLDR plurals, accent-insensitive
+  search ("elodie" finds "Élodie"), and every stored-vocabulary display routed through the
+  catalogue while documents keep their English wire values.
+- The locale became a per-user preference (new column + lossless migration) with an honest
+  selector — the language switches without a reload and no English flash survives.
+- The whole journey is browser-proven in both locales: the 8 previously untested flows now
+  have Chromium coverage, plus a 21-route French sweep and a demo-mode spec against the built
+  artifact with the API dead.
+- The guarantee is enforced: `scripts/i18n-scan.mjs` fails the build on any new uncatalogued
+  literal, the French catalogue ships as its own chunk (an English build carries none of its
+  bytes), and a `docker-build` CI job proves the shipped image speaks French.
+- Files became real: raw-body streaming uploads under `DATA_DIR/files/` with a size cap and a
+  stable 413 code, byte-only `/w/:slug/file/:id` serving with ranges and a fixed
+  inline/attachment mime policy, PDF/image previews in a wide modal, and anonymous file
+  navigations landing on a path-preserving login redirect.
+
+### What Worked
+
+- **Contract-first i18n.** The catalogue contract (escaping, key shapes, placeholder parity,
+  CLDR plurals) was pinned by tests *before* a single string moved, so 3 000+ extraction
+  edits across 50 plans never had to argue about shape — and the per-change ledger test
+  (1 532 → 1 538) made catalogue growth deliberate.
+- **Behaviour-preserving waves with byte-identical acceptance.** English extraction was
+  structured so every wave proved its output byte-identical to the original, which is why a
+  ~600-edit refactor produced no visual regressions to chase.
+- **The scanner as a build gate from day one.** Because `i18n-scan` gated every prebuild, the
+  four raw-English splice sites the milestone deferred were found immediately at close and
+  closed in one commit (2a75275) — the gate made the debt visible and bounded.
+- **Re-verification with fresh evidence.** When the close-out commits staled all 8 covered
+  digests, re-dispatching the verifier per phase regenerated every report against the current
+  tree — and surfaced two real findings (CR-01, the probe-race test-isolation defect) in the
+  process. The digests that could be repaired were repaired with the official
+  `verification.fingerprint` CLI verb; the ones over genuinely drifted files were re-earned.
+
+### What Was Inefficient
+
+- **Digest staleness whack-a-mole at close time.** Post-phase close-out commits (lint, i18n
+  splice fixes, prettier) staled every covered digest, forcing a full re-verification round
+  during the milestone close. Two of those rounds happened only because verifier sessions
+  hand-rolled `covered_digest` instead of copying the CLI verb's output — one even invented a
+  `v3:` version the parser refuses. Next milestone: the digest line is copy-paste, not
+  computation.
+- **A test-isolation defect cost three sessions time.** `test/i18n-scan.test.mjs:353` mutates
+  the real `src/views/table.js` in place with no lock; two concurrent `npm test` runs
+  double-appended the probe and crashed unrelated suites. Only one verifier may run at a time
+  until that test writes to a temp copy (backlog candidate).
+- **The auth zone was stubbed deeper than the milestone could see.** UAT outside phase 12's
+  perimeter found "disconnect other sessions" inert, password change not actually taking
+  effect, and a fake 2FA QR code. Honest carry-over: backlog phases 999.1–999.3, one
+  investigation phase for the whole zone.
+
+### Advice for the Next Milestone
+
+1. Never hand-write `covered_digest` — run `gsd_run query verification.fingerprint` and copy
+   the output. A wrong digest reads as drift and costs a full verifier round.
+2. Do not run two `npm test` suites concurrently against this repo until the probe test is
+   de-raced; verify phases serially.
+3. The auth zone (sessions, password change, 2FA) smells stubbed end-to-end — make it the
+   first candidate when scoping v1.3.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -92,12 +162,14 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.1 Multitenant | 2 days | 4 | Phase verification was produced for phase 4 only; the audit backfilled phases 1–3. Next milestone: verify every phase before it closes. |
+| v1.2 Localization | 2 days | 8 | Every phase verified before close (50/50 plans); the close still re-verified all 8 after close-out commits staled the digests. Next milestone: finish close-out edits BEFORE running verifiers, and never hand-write a covered digest. |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
 | v1.1 Multitenant | 48 node:test + 5 Chromium | server contract, migration, privacy matrix, browser tenancy | 1 (dev only: `@playwright/test`) |
+| v1.2 Localization | 446 node:test + 45 Chromium e2e | catalogue contract (23 pins), locale selector, 21-route fr sweep + build gate, uploads/previews byte-serving | 0 (runtime) / 1 (dev only: `@playwright/test`) |
 
 ### Top Lessons (Verified Across Milestones)
 

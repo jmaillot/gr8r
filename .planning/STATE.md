@@ -23,12 +23,11 @@ Last updated: 2026-10-25
 
 ## Position
 
-- Milestone: **v1.2 — Localization** — ALL phases complete (5–12); ready to close via `/gsd-complete-milestone`
+- Milestone: **v1.2 — Localization** — SHIPPED 2026-10-25 (8 phases, 50 plans, 68 tasks; audit all-clear, all 8 phases re-verified)
 - Previous: **Multitenant (v1.1)** — shipped, audited and archived (4 phases, 7 plans, 10 tasks)
-- Next: **Milestone close** — `/gsd-complete-milestone v1.2` (audit → archive → next milestone); backlog phases 999.1–999.3 hold the deferred out-of-scope UAT follow-ups (sessions, password change, 2FA QR)
-- Archive: `.planning/milestones/v1.1-ROADMAP.md`, `v1.1-REQUIREMENTS.md`, `v1.1-MILESTONE-AUDIT.md`,
-  `v1.1-phases/`
-- Release: 1.1.0 tagged, then **1.1.1** (patch) tagged with the three revision fixes
+- Next: **No milestone planned** — scope v1.3 with `/gsd-new-milestone`; backlog phases 999.1–999.3 hold the deferred out-of-scope UAT follow-ups (sessions, password change, 2FA QR — one auth-zone investigation)
+- Archive: `.planning/milestones/v1.1-*`, `v1.2-ROADMAP.md`, `v1.2-REQUIREMENTS.md`, `v1.2-MILESTONE-AUDIT.md`, `v1.2-phases/`
+- Release: 1.1.0 tagged, then **1.1.1** (patch); 1.2.0 tag deliberately deferred to milestone close per decision 19
 
 ## Where things stand
 

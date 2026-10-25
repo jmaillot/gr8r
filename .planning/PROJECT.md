@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-25 after completing Phase 12 (real file uploads and previews — final phase of v1.2)*
+*Last updated: 2026-10-25 at the v1.2 milestone close (Localization shipped, audited, archived)*
 
 ## What it is
 
@@ -15,10 +15,15 @@ board / list / table / calendar / timeline / files views, members, teams, activi
 - **Multi-tenant since v1.1**: a workspace is a real tenant with its own URL, document and
   membership list. An account can belong to several workspaces with a role in each.
 
-## Current Milestone: v1.2 Localization
+## Milestone v1.2 Localization — SHIPPED (2026-10-25)
 
 **Goal:** the interface stops lying about languages — the selector becomes real, the app speaks
 French, every user has their own locale — and the full app journey is covered by a browser test.
+
+**Status:** shipped 2026-10-25 (8 phases, 50 plans, 68 tasks; audit all-clear, all 8 phases
+re-verified with fresh digests). Full record: `milestones/v1.2-ROADMAP.md`,
+`milestones/v1.2-REQUIREMENTS.md`, `milestones/v1.2-MILESTONE-AUDIT.md`, `milestones/v1.2-phases/`.
+No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 **Target features:**
 - A dependency-free i18n layer: `t()` + JSON catalogues per locale, plurals, locale-aware dates
@@ -55,10 +60,14 @@ French, every user has their own locale — and the full app journey is covered 
 - **Migration is in place and lossless.** `migrateTenancy()` writes a `vacuum into` backup
   before the first write, derives the slug from the old document, links members and invites,
   drops the demo array and retires `data.me`. A second boot is a byte-identical no-op.
-- **The interface is English-only in practice.** `Settings → Language` offers six languages
-  (`src/pages/settings.js:176`) but `prefs.lang` is only a stored value: no string is
-  translated, and the preference lives in the *shared* workspace document, so it would change
-  the language for every member.
+- **The interface speaks English and French.** The language selector is real: a leaf `t()`
+  layer over 1 538-key JSON catalogues per locale, locale-aware dates/numbers/plurals, a
+  per-user locale preference (new `locale` column + migration) instead of the shared
+  workspace preference, a 21-route French sweep, and a build-gate scan
+  (`scripts/i18n-scan.mjs`) that fails the build on any new uncatalogued literal. Files are
+  real too: raw-body uploads to `DATA_DIR/files/`, byte-only `/w/:slug/file/:id` serving with
+  ranges (206/416) and the D-06 fixed inline/attachment mime policy, PDF/image previews in a
+  wide modal, login-redirect for anonymous file navigations.
 
 ## Decisions for the multitenant milestone (validated by the owner)
 
@@ -137,8 +146,9 @@ French, every user has their own locale — and the full app journey is covered 
    collapses again, but the PDF-only footer Download button keeps the save path — accepted by
    the owner in UAT round 3 (WR-01 triage).
 5. **Deferred hardening is explicit.** Quotas per workspace/user, antivirus scanning and
-   external object storage stay out of scope; CR-01 (suffix Range on a zero-byte file →
-   malformed 206) is an accepted residual risk (AR-12-1 in 12-SECURITY.md) pending a fix.
+   external object storage stay out of scope. CR-01 (suffix Range on a zero-byte file →
+   malformed 206) was **fixed post-review** in commit `54cead4` (zero-byte files ignore the
+   Range header per RFC 9110, clean 200; regression test added) — no residual risk.
 
 ## Requirements
 
