@@ -1,21 +1,26 @@
 ---
-status: complete
+status: testing
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T10:52:00Z
+updated: 2026-10-25T17:16:08Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 4
+name: Re-run test 1 in real Firefox AND Chrome (G-12-1 + G-12-4 + G-12-6 closure re-check)
+expected: Drop a file >5 MB onto a dropzone, watch the progress row, then open a multi-page PDF's preview modal in BOTH Firefox and Chrome. Progress advances with real transfer pace and the row disappears on completion. The PDF renders inside the wide (~866px) tall (~75vh) scrollable iframe; Firefox's full viewer toolbar is visible with the direct download/print buttons NOT collapsed into «»; the modal-footer Download button (Download/Télécharger) saves the file under its original name in both browsers; large PDFs paint without the old whole-file stall («refused to connect» / «ne peut pas ouvrir cette page» must stay gone).
+status: awaiting
 
 ## Tests
 
-<!-- Round 2 — re-run after gap-closure plans 12-05, 12-06, 12-07. Round-1 outcomes
-     (issue on test 1, pass on tests 2–3) are preserved in the Gaps section below
-     (G-12-1..G-12-5). Automated verification round 3: 18/19 must-haves verified,
-     12-VERIFICATION.md rewritten 2026-10-25T10:09:01Z. -->
+<!-- Round 3 — re-run after gap-closure plan 12-08 (G-12-6: .modal.xl width fix
+     crossing pdf.js's 750px Firefox toolbar breakpoint + PDF-only footer Download
+     button). Verification round 4: 21/22 must-haves verified, 12-VERIFICATION.md
+     rewritten 2026-10-25T17:06:30Z. Round-2 outcomes are preserved below (tests 1-3);
+     the round-2 issue on test 1 is re-raised as test 4. Tests 2 and 3 passed in
+     round 2 and are untouched by 12-08 — no re-run required. -->
 
 ### 1. Re-run test 1 in real Chrome AND Firefox (G-12-1 + G-12-4 closure re-check)
 expected: Drop a file >5 MB onto a dropzone, watch the progress row, then open a
@@ -27,6 +32,7 @@ page" must stay gone).
 result: issue
 reported: "the embedded view in firefox does not show download, its too small, the other things are working"
 severity: major
+note: superseded by round-3 re-test (test 4) after plan 12-08
 
 ### 2. Re-run test 2 (G-12-2 + G-12-5 closure re-check)
 expected: Copy a file link from BOTH « ... » context menu and the modal footer; paste
@@ -36,29 +42,52 @@ the bytes (inline types) or downloads (attachment types); a logged-out paste now
 on the LOGIN PAGE (not raw signInRequired JSON), and after signing in the browser
 returns to the same file URL and the bytes render.
 result: pass
+note: untouched by 12-08 (modal width class / iframe height / footer only); e2e re-proves the flow green in verification round 4
 
 ### 3. Re-run test 3 (G-12-3 closure re-check)
 expected: Set MAX_UPLOAD_MB to a distinctive value (e.g. 7), restart the server, open
 the files tab. The dropzone hint reads the configured value («— jusqu'à 7 Mo chacun» /
 «— up to 7 MB each»), not the old hardcoded 250.
 result: pass
+note: untouched by 12-08; knob chain re-grepped green in verification round 4
+
+### 4. Re-run test 1 in real Firefox AND Chrome (G-12-1 + G-12-4 + G-12-6 closure re-check)
+expected: Drop a file >5 MB onto a dropzone, watch the progress row, then open a
+multi-page PDF's preview modal in BOTH Firefox and Chrome. Progress advances with real
+transfer pace and the row disappears on completion. The PDF renders inside the wide
+(~866px) tall (~75vh) scrollable iframe; Firefox's full viewer toolbar is visible with
+the direct download/print buttons NOT collapsed into «»; the modal-footer Download
+button (Download/Télécharger) saves the file under its original name in both browsers;
+large PDFs paint without the old whole-file stall («refused to connect» / «ne peut pas
+ouvrir cette page» must stay gone).
+result: pending
+
+### 5. Triage WR-01 at ~700-800px window width
+expected: With the app open, resize the browser window to ~700-800px CSS width and
+open a PDF preview. Decide the intended behavior below the ~816px threshold: today the
+pdf.js toolbar collapses again (iframe <750px) but the footer Download button still
+saves the file. Either accept that as the documented narrow-viewport fallback or
+request a fix, and record the decision in 12-REVIEW-DISPOSITION.md.
+result: pending
 
 ## Summary
 
-total: 3
+total: 5
 passed: 2
 issues: 1
-pending: 0
+pending: 2
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-All five gaps are code-closed (verification round 3: 18/19 must-haves verified,
-`12-VERIFICATION.md` rewritten 2026-10-25T10:09:01Z) — re-test required in a real
-browser. Note: open code-review advisory CR-01 (suffix Range on a zero-byte file →
-malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
-(fix or accept) before ship — see 12-REVIEW-DISPOSITION.md.
+G-12-1..G-12-5 are code-closed and re-verified (verification round 4: 21/22
+must-haves, `12-VERIFICATION.md` rewritten 2026-10-25T17:06:30Z). G-12-6 is
+code-closed by 12-08 and behaviorally pinned by e2e, but its Firefox-native half
+(toolbar un-collapsed at the new width) needs the human re-run (test 4). Two open
+code-review advisories await triage before ship: CR-01 (critical, carried: suffix
+Range on a zero-byte file → malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985 —
+fix or accept) and WR-01 (test 5 above) — see 12-REVIEW-DISPOSITION.md.
 
 - gap_id: G-12-1
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
@@ -164,7 +193,10 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
 
 - gap_id: G-12-6
   truth: "The PDF preview iframe in Firefox is wide enough that the full viewer toolbar, including the download button, is visible"
-  status: failed
+  status: pending-retest
+  code_closed_by: 12-08-PLAN
+  code_closed_at: 2026-10-25
+  retest: test 4
   reason: "User reported: the embedded view in firefox does not show download, its too small, the other things are working"
   severity: major
   test: 1
