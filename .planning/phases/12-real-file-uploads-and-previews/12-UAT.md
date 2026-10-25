@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: testing
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T07:31:52Z
+updated: 2026-10-25T08:19:13Z
 ---
 
 ## Current Test
@@ -16,38 +16,43 @@ updated: 2026-10-25T07:31:52Z
 expected: Drop a large file (>5 MB) onto a dropzone; progress row climbs with the real
 transfer pace (no uniform timer), disappears on completion; a multi-page PDF renders
 inside the iframe embed in the preview modal.
-result: issue
+result: pending
 reported: "rendering doesnt work either in chrome or firefox (firefox says Firefox ne peut pas ouvrir cette page / chrome says refused to connect.)"
 severity: major
+fix_note: "Closed by 12-05 — /w/:slug/file/:id is byte-only (G-12-1); re-run in real Chrome AND Firefox."
 
 ### 2. « Copier le lien » outside the SPA
 expected: Copy a file link via the context menu, paste it into a fresh browser profile
 (logged in, no SPA state), and load it. Bytes render in the browser tab (inline types)
 or download (attachment types); the URL keeps working.
-result: issue
+result: pending
 reported: "copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
 severity: major
+fix_note: "Closed by 12-05 — one copied file URL from both entry points, no SPA deep-link divergence (G-12-2); re-run in a fresh profile."
 
 ### 3. Dropzone cap label ignores MAX_UPLOAD_MB
 expected: The dropzone hint text reflects the configured MAX_UPLOAD_MB value
-result: issue
+result: pending
 reported: "\"Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun\" ne tient pas compte de la valeur MAX_UPLOAD_MB"
 severity: minor
+fix_note: "Closed by 12-06 — maxUploadMb exposed via /api/config, label interpolates the live knob (G-12-3); re-run with a distinctive MAX_UPLOAD_MB."
 
 ## Summary
 
 total: 3
 passed: 0
-issues: 3
-pending: 0
+issues: 0
+pending: 3
 skipped: 0
 blocked: 0
 
 ## Gaps
 
+All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` rewritten 2026-10-25) — re-test required in a real browser.
+
 - gap_id: G-12-1
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
-  status: failed
+  status: resolved_by: [12-05]
   reason: "User reported: rendering doesnt work either in chrome or firefox (firefox says Firefox ne peut pas ouvrir cette page / chrome says refused to connect.)"
   severity: major
   test: 1
@@ -61,7 +66,7 @@ blocked: 0
 
 - gap_id: G-12-2
   truth: "Copied file URLs behave consistently and render bytes in a fresh browser session"
-  status: failed
+  status: resolved_by: [12-05]
   reason: "User reported: copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
   severity: major
   test: 2
@@ -82,7 +87,7 @@ blocked: 0
 
 - gap_id: G-12-3
   truth: "Dropzone hint text reflects the configured MAX_UPLOAD_MB value"
-  status: failed
+  status: resolved_by: [12-06]
   reason: "User reported: \"Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun\" ne tient pas compte de la valeur MAX_UPLOAD_MB"
   severity: minor
   test: 3

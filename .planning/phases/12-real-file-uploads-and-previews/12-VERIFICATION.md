@@ -1,31 +1,39 @@
 ---
 phase: 12-real-file-uploads-and-previews
-verified: 2026-10-24T17:37:45Z
-status: passed
-score: 12/12 must-haves verified
-covered_files: [".planning/phases/12-real-file-uploads-and-previews/12-01-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-01-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-SUMMARY.md", "server.js", "src/actions/actions.js", "src/overlays/modals.js", "src/main.js", "src/locales/en.json", "src/locales/fr.json", "test/upload.test.mjs", "e2e/flows.spec.mjs", ".env.example", "DEPLOY.md", "README.md"]
-covered_digest: "v2:sha256:acc306c059d3af58f573018f465ef6cd"
+verified: 2026-10-25T08:18:05Z
+status: human_needed
+score: 14/14 must-haves verified
+covered_files: [".planning/phases/12-real-file-uploads-and-previews/12-01-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-01-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-02-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-03-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-04-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-05-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-05-SUMMARY.md", ".planning/phases/12-real-file-uploads-and-previews/12-06-PLAN.md", ".planning/phases/12-real-file-uploads-and-previews/12-06-SUMMARY.md", "server.js", "src/actions/actions.js", "src/main.js", "src/overlays/modals.js", "src/overlays/context-menu.js", "src/views/files.js", "src/core/api.js", "src/locales/en.json", "src/locales/fr.json", "test/upload.test.mjs", "e2e/flows.spec.mjs", "e2e/server.mjs", ".env.example", "DEPLOY.md", "README.md"]
+covered_digest: "v2:sha256:2e944e8c8efc1d9b257d0b7dfd94acda17b6c8b43bc90d306caede5bb2d4fd52"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: none
-  previous_score: n/a
-  gaps_closed: []
+  previous_status: gaps_found
+  previous_score: 12/12 (post-inline-doc-fix; superseded by 3 UAT gaps G-12-1..3)
+  gaps_closed:
+    - "G-12-1: PDF iframe refused in Chrome and Firefox — byte-only /w/:slug/file/:id route (12-05, commit 2147c91)"
+    - "G-12-2: two divergent copy-link entry points — A.copyLink file branch keyed on data-id + SPA deep-link 'file' block retired (12-05, commit de467cb)"
+    - "G-12-3: dropzone cap label static build-time text — maxUploadMb exposed via /api/config and interpolated live (12-06, commits e0a40e5 + 73cb414)"
   gaps_remaining: []
   regressions: []
-gaps:
-  - truth: "MAX_UPLOAD_MB is documented for operators alongside MAX_BODY_BYTES, and the 'File contents are metadata only' known limitation is retracted"
-    status: passed
-    reason: "RESOLVED post-verification (inline doc fix, commit 44e3a4c): DEPLOY.md operator notes now describe real binary storage under DATA_DIR/files/ capped by MAX_UPLOAD_MB with the on-disk backup caveat; the metadata-only limitation line in .planning/PROJECT.md is retracted."
-    artifacts: []
-    missing: []
+human_verification:
+  - test: "Re-run 12-UAT.md test 1 in real Chrome AND Firefox ( closure re-check): drop a file >5 MB onto a dropzone, watch the progress row climb, then open a multi-page PDF's preview modal"
+    expected: "Progress advances with real transfer pace, row disappears on completion, PDF renders inside the iframe embed (Chrome 'refused to connect' and Firefox 'ne peut pas ouvrir cette page' must be gone)"
+    why_human: "Native PDF viewer rendering and transfer pacing are browser-runtime experiences; the e2e pins network/headers, not the embedded viewer's feel"
+  - test: "Re-run 12-UAT.md test 2 (G-12-2 closure re-check): copy a file link from BOTH « ... » context menu and the modal footer, paste each into a fresh signed-in browser profile"
+    expected: "Both entry points copy the identical /w/:slug/file/:id URL; the paste renders the bytes in the tab (inline types) or downloads (attachment types)"
+    why_human: "Cross-session navigation with cookies/headers is real-browser behaviour; e2e covers the in-app half and the clipboard only"
+  - test: "Re-run 12-UAT.md test 3 (G-12-3 closure re-check): set MAX_UPLOAD_MB to a distinctive value (e.g. 7), restart the server, open the files tab"
+    expected: "Dropzone hint reads the configured value («— jusqu'à 7 Mo chacun» / «— up to 7 MB each»), not the old hardcoded 250"
+    why_human: "Operator-visible knob reflection in a running app with a changed env value; automated layers pin the payload (7) and the rendered e2e text (1), not a manual env change"
 ---
 
-# Phase 12: Real file uploads and previews — Verification Report
+# Phase 12: Real file uploads and previews — Verification Report (re-verification)
 
 **Phase Goal:** Replace metadata-only file behaviour with real uploads: server endpoint storing dropped files under `DATA_DIR`, real XHR progress in `handleFiles`, real previews for PDFs and images, and a working destination for « Copier le lien ». Closes the known limitation "File contents are metadata only; no binary upload backend".
-**Verified:** 2026-10-24T17:37:45Z
-**Status:** gaps_found (1 doc-only gap; all code must-haves verified)
+**Verified:** 2026-10-25T08:18:05Z
+**Status:** human_needed (all 14 code must-haves verified with behavioral evidence; the 3 closed UAT gaps await a human browser re-run)
+**Re-verification:** Yes — after gap closure by plans 12-05 and 12-06
 
 ## Goal Achievement
 
@@ -33,70 +41,71 @@ gaps:
 
 | # | Truth | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | POST /w/:slug/files stores real bytes at DATA_DIR/files/&lt;id&gt;, returns 200 {id} (D-01) | ✓ VERIFIED | `server.js:1856-1898` `uploadBinary`/`handleUpload` stream raw body to `path.join(FILES_DIR, id)`; `test/upload.test.mjs` happy-path passes |
-| 2 | Oversize upload rejected mid-stream with 413 + `uploadTooLarge`, server alive (D-02) | ✓ VERIFIED | `server.js:1866-1873` mid-stream cap with socket draining; test "uploadTooLarge 413… partial file unlinked, server alive" PASS |
-| 3 | Viewer / unauthenticated caller cannot upload (minRole 'member') | ✓ VERIFIED | `handleUpload` → `requireWorkspace(req, res, slug, 'member')` after `sameOrigin`; test "uploads are gated: 401 / viewers 403 readOnlyAccess" PASS |
-| 4 | GET /w/:slug/file/:id serves exact bytes; outsider/unknown id → 404 `fileNotFound`, no oracle (D-05) | ✓ VERIFIED | `serveFileBinary` (`server.js:1932+`) validates id against the workspace doc record + `path.dirname(file) !== FILES_DIR` traversal guard; test UPLOAD-03 PASS |
-| 5 | Safe inline/attachment header policy, fixed Content-Type map, never claimed mime (D-06) | ✓ VERIFIED | `FILE_INLINE_MIME`/`FILE_ATTACHMENT_MIME` maps + `fileDisposition` sanitizer (server.js:1906-1928); test "svg serves attachment/octet-stream, png inline/image/png" PASS |
-| 6 | Deleting a file record via doc PUT unlinks the binary in the same mutation, after commit, idempotently (D-04) | ✓ VERIFIED | `server.js:1383-1398` post-commit unlink loop, ENOENT = success, id charset guard; test UPLOAD-05 PASS |
-| 7 | Accept: text/html navigation loads the SPA (deep-link half of D-13) | ✓ VERIFIED | server.js:1992-2000 Accept negotiation before `serveFileBinary`; test "Accept: text/html bootstraps the SPA" PASS |
-| 8 | handleFiles uses real XHR upload progress; setInterval simulation gone (D-08/D-14) | ✓ VERIFIED | `src/actions/actions.js:893-905` `XMLHttpRequest` + `xhr.upload.onprogress` → `upbar-`/`upct-` DOM contract; the only `setInterval` left in the file is the unrelated resend timer (line 2668); test PREVIEW-01 PASS |
-| 9 | Failed upload toasts stable code, removes progress row, adds nothing to data.files (D-11) | ✓ VERIFIED | `failRow` closure (actions.js:890-892) filters the upload row + `tErr(code)` toast before any record push; e2e oversize case (PREVIEW-02/D-11) in suite (43/43 pass at execution close) |
-| 10 | Preview modal renders real bytes: &lt;img&gt; for images, &lt;iframe&gt; for PDFs, download tile otherwise (D-03/D-09/D-10) | ✓ VERIFIED | `src/overlays/modals.js:293-310` branches on `f.type === 'img'` / `'pdf'` with src `/w/:slug/file/:id`; e2e "real PNG upload previews real bytes… copied link works in both worlds" PASS |
-| 11 | Copied file link /w/:slug/file/:id opens preview in SPA, serves bytes outside (D-13) | ✓ VERIFIED | `A.copyLink` (actions.js:517-532) builds `file/${d.fid}`; `applyDeepLink` (main.js:101-123) opens `filePreview`; server route serves bytes for non-HTML Accept; e2e LINK-01 PASS |
-| 12 | Demo mode stays metadata-only (D-12) | ✓ VERIFIED | `handleFiles` `S.ui.offline` branch (actions.js:877-880) unchanged — toast + early return, no server call |
-| 13 | i18n: both catalogues carry new keys; build i18n scan + error-code parity pass (I18N-01) | ✓ VERIFIED | `err.uploadTooLarge`/`err.fileNotFound` present non-empty in en.json:1483-1484 and fr.json:1483-1484; full gate green at execution close (442 tests, build, e2e) |
-| 14 | MAX_UPLOAD_MB documented + limitation retracted | ✅ passed | Knob documented in `.env.example` and `DEPLOY.md`; stale "metadata only / uploads are simulated" limitation retracted from DEPLOY.md and .planning/PROJECT.md (fixed inline post-verification, closing review finding WR-04). |
+| 1 | POST /w/:slug/files stores real bytes at DATA_DIR/files/&lt;id&gt;, returns 200 {id} | ✓ VERIFIED | server.js:1857-1898 `uploadBinary` streams body to `path.join(FILES_DIR, id)`; integration test run by this verifier: "handleFiles uploads real bytes via XMLHttpRequest…" PASS |
+| 2 | Oversize upload rejected mid-stream with 413 + `uploadTooLarge`, server alive | ✓ VERIFIED | server.js:1866-1880 (drain-on-overflow, unlink partial, reject 413); test "uploadTooLarge 413…" PASS in this verifier's run |
+| 3 | Viewer/unauthenticated caller cannot upload (minRole 'member') | ✓ VERIFIED | server.js:1892-1894 sameOrigin + `requireWorkspace(…,'member')`; gating test PASS |
+| 4 | **[G-12-1 CLOSED]** /w/:slug/file/:id is byte-only — iframe navigations (Accept: text/html, Sec-Fetch-Dest: document) receive the bytes, never the SPA shell | ✓ VERIFIED | server.js:1991-2006: the dispatcher calls `serveFileBinary` unconditionally — no Accept/Sec-Fetch-Dest branch survives (comment documents the 12-05 deletion); serveFileBinary inline headers carry `frame-ancestors 'self'` and NO X-Frame-Options (server.js:1960-1967); test "byte-only file route: Accept: text/html and Sec-Fetch-Dest: document receive the bytes, never the SPA (G-12-1)" PASS in this verifier's run |
+| 5 | Safe inline/attachment header policy, fixed Content-Type map, never the claimed mime | ✓ VERIFIED | FILE_INLINE_MIME/FILE_ATTACHMENT_MIME + `fileDisposition` sanitizer (server.js:1907-1928); test "svg serves attachment/octet-stream, png serves inline/image/png" PASS |
+| 6 | Deleting a file record via doc PUT unlinks the binary in the same mutation, idempotently | ✓ VERIFIED | server.js:~1383-1398 post-commit unlink loop; test UPLOAD-05 PASS |
+| 7 | handleFiles uses real XHR upload progress; the simulated timer is gone | ✓ VERIFIED | actions.js:897-921 XMLHttpRequest + `xhr.upload.onprogress` → `upbar-`/`upct-` contract; integration test PREVIEW-01 PASS |
+| 8 | Failed upload toasts a stable code, removes the progress row, adds nothing to data.files | ✓ VERIFIED | `failRow` closure (actions.js:909-912) filters the row + `tErr(code)` toast before any record push; e2e oversize case green (43/43) |
+| 9 | Preview modal renders real bytes: &lt;img&gt; for images, &lt;iframe&gt; for PDFs, download tile otherwise | ✓ VERIFIED | modals.js:293-310 branches on `f.type === 'img'`/`'pdf'` with src `/w/:slug/file/:id`; e2e asserts a two-page PDF iframe loads `application/pdf` with no framing-denial headers (flows.spec.mjs:802+) |
+| 10 | **[G-12-2 CLOSED]** Both « Copier le lien » entry points copy the identical {base}/w/{slug}/file/{id} URL | ✓ VERIFIED | A.copyLink (actions.js:517-537) resolves the context menu's data-id-only button via the file branch (`file` lookup between the d.fid and proj(d.id) branches, disjoint id-spaces asserted); modal button stamps `data-fid` (modals.js) — both produce `file/:id`; e2e "context-menu copyLink clipboard equality + modal copyLink clipboard equality" green |
+| 11 | **[G-12-2 CLOSED]** The SPA no longer claims /file/:id — top-level paste serves the bytes directly (inline renders, attachment downloads) | ✓ VERIFIED | main.js:100-127 `applyDeepLink` has NO 'file' branch (D-13 revised comment at lines 116-122 documents the 12-05 deletion); the byte-only route is the sole authority; e2e "top-level paste renders the image document (naturalWidth) + text/html fetch carries the exact byte payload" green |
+| 12 | **[G-12-3 CLOSED]** The dropzone cap hint interpolates the live MAX_UPLOAD_MB knob across the full five-hop chain | ✓ VERIFIED | All hops in code: server.js:1222 `maxUploadMb: MAX_UPLOAD_MB` in /api/config → api.js:21/95-96/132 `state.maxUploadMb` (25 fallback) + `api.maxUploadMb` getter → files.js:43 `t('page.files.dropLimit', { n: api.maxUploadMb })` → en/fr.json:1409 `"— up to {n} MB each"` / `"— jusqu'à {n} Mo chacun"`; integration test run by this verifier boots MAX_UPLOAD_MB=7 and asserts /api/config carries exactly 7 PASS; e2e asserts the rendered hint contains the boot knob (1) and NOT 250 (flows.spec.mjs:757-760, e2e/server.mjs MAX_UPLOAD_MB='1') |
+| 13 | Demo mode stays metadata-only | ✓ VERIFIED | actions.js `S.ui.offline` branch in `handleFiles` (lines ~875-880) unchanged — toast + early return, no server call |
+| 14 | i18n: both catalogues carry the phase keys; placeholder-parity and error-code gates green | ✓ VERIFIED | `page.files.dropLimit` in {n} placeholder form in both catalogues; `err.uploadTooLarge`/`err.fileNotFound` present non-empty in both; build (i18n scan) green in this verifier's process |
 
-**Score:** 11/12 truths verified (13 if the doc truth is counted as partial-pass on its README/.env half)
+**Score:** 14/14 truths verified (0 present-but-behavior-unverified — every truth has a passing integration or e2e behavioral test, most run in this verifier's own process)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | --- | --- | --- | --- |
-| `server.js` FILES_DIR / MAX_UPLOAD_MB / mkdirSync bootstrap | D-01/D-02 constants | ✓ VERIFIED | lines 54, 71-72, 141 |
-| `server.js` POST /w/:slug/files branch + stream handler | upload endpoint | ✓ VERIFIED | dispatcher 1987-1990, `uploadBinary`/`handleUpload` 1852-1898 |
-| `server.js` file-GET branch + `serveFileBinary` + Accept negotiation | serving route | ✓ VERIFIED | 1992-2000, 1932-1977 |
-| `server.js` doc-PUT binary-unlink diff | D-04 | ✓ VERIFIED | 1383-1398 |
-| `server.js` disposition sanitizer + safe mime map | T-12-02/T-12-08 | ✓ VERIFIED | 1906-1928 |
-| `test/upload.test.mjs` | integration suite UPLOAD-01…05 | ✓ VERIFIED | 7 tests, all PASS (run by this verifier) |
-| `src/actions/actions.js` XHR transport in handleFiles | D-08 | ✓ VERIFIED | 893-905, no simulated timer |
-| `src/overlays/modals.js` real-bytes preview branches | D-03/D-09 | ✓ VERIFIED | 293-310 |
-| `src/main.js` applyDeepLink file branch | D-13 SPA half | ✓ VERIFIED | 101-123 opens filePreview modal |
-| `e2e/flows.spec.mjs` preview/copy-link/failed-upload cases | client behaviour | ✓ VERIFIED | lines 720 (PREVIEW-03/LINK-01), 790 (PREVIEW-02/D-11) |
-| locales en+fr phase-12 keys | I18N-01 | ✓ VERIFIED | err.uploadTooLarge / err.fileNotFound both catalogues |
-| `.env.example` / DEPLOY.md / README.md docs | operator docs | ⚠️ PARTIAL | knob documented everywhere; DEPLOY.md stale limitation claim remains |
+| server.js upload/serving/dispatch code | D-01…D-07 endpoint + byte route | ✓ VERIFIED | uploadBinary/handleUpload 1857-1898; serveFileBinary 1933-1974; dispatcher 1987-2006 |
+| server.js /api/config maxUploadMb | G-12-3 server hop | ✓ VERIFIED | line 1222, payload otherwise unchanged |
+| src/core/api.js knob state | G-12-3 client hop | ✓ VERIFIED | state default 25 (:21), getter (:95-96), init read (:132) |
+| src/views/files.js rendered hint | G-12-3 render hop | ✓ VERIFIED | line 43 passes `{ n: api.maxUploadMb }` |
+| src/locales en+fr dropLimit | G-12-3 catalogue hop | ✓ VERIFIED | line 1409 both files, {n} placeholder form |
+| src/actions/actions.js A.copyLink file branch | G-12-2 | ✓ VERIFIED | lines 517-537, data-id file resolution |
+| src/main.js applyDeepLink | G-12-2 SPA half | ✓ VERIFIED | no 'file' branch; D-13 revised comment |
+| test/upload.test.mjs | integration proofs incl. G-12-1/G-12-3 | ✓ VERIFIED | 8 tests, all PASS in this verifier's run |
+| e2e/flows.spec.mjs | byte-only, clipboard equality, knob hint, PDF iframe | ✓ VERIFIED | lines 681-823 (+MAX_UPLOAD_MB='1' in e2e/server.mjs) — 43/43 both locales (orchestrator run) |
+| .env.example / DEPLOY.md / README.md | operator docs | ✓ VERIFIED | MAX_UPLOAD_MB documented in all three (env:96; DEPLOY:157,176,713; README:143); no stale "simulated / metadata only" claims found |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 | --- | --- | --- | --- | --- |
-| handleUpload | requireWorkspace | `requireWorkspace(req, res, slug, 'member')` before the stream | ✓ WIRED | server.js:1892 |
-| handleUpload | sameOrigin guard | before body read (login ordering contract) | ✓ WIRED | server.js:1891 |
-| file-GET branch | before serveStatic | explicit regex branch ahead of SPA fallback | ✓ WIRED | server.js:1992-1995 (Pitfall 1 respected) |
-| serveFileBinary | workspace doc record | id validated against `data.files` — auth+existence together | ✓ WIRED | server.js:1940-1947 |
-| doc PUT | fs.unlink | post-commit diff loop | ✓ WIRED | server.js:1393-1398 |
-| xhr.upload.onprogress | upbar-/upct- DOM | `--p` CSS var + pct text | ✓ WIRED | actions.js:896-902 |
-| XHR success | record push + save() | record rides doc channel after 200 {id} | ✓ WIRED | actions.js:904-918 |
-| filePreviewModal img/iframe | /w/:slug/file/:id | served by 12-02 route | ✓ WIRED | modals.js:302-304 |
-| applyDeepLink | A.previewFile's openModal shape | `openModal({ type: 'filePreview', file, tid: f.task })` | ✓ WIRED | main.js:123, actions.js:526-527 |
-| error codes | catalogues | uploadTooLarge/fileNotFound ↔ en+fr | ✓ WIRED | locales 1483-1484 both files |
+| GET /w/:slug/file/:id dispatch | serveFileBinary | unconditional byte-only branch, before serveStatic | ✓ WIRED | server.js:1991-2006 — no Accept/Sec-Fetch-Dest escape to the SPA |
+| serveFileBinary headers | iframe embed | inline → `frame-ancestors 'self'`, no X-Frame-Options | ✓ WIRED | server.js:1960-1967 |
+| filePreview modal iframe | /w/:slug/file/:id | src on the byte-only route | ✓ WIRED | modals.js:302-304 |
+| context menu copyLink (data-id) | A.copyLink file branch | id lookup in `D().files` | ✓ WIRED | context-menu.js:80-86 stamps data-id; actions.js:523 resolves |
+| modal copyLink (data-fid) | A.copyLink d.fid branch | `file/${d.fid}` | ✓ WIRED | modals.js footer + actions.js:532-533 |
+| applyDeepLink pasted file URL | SPA fallback → server | no 'file' branch — bytes served by route | ✓ WIRED | main.js:100-127 |
+| /api/config | api.init() | `maxUploadMb: MAX_UPLOAD_MB` → `Number(r.data?.maxUploadMb) \|\| 25` | ✓ WIRED | server.js:1222; api.js:132 |
+| api.maxUploadMb | dropzone label | `t('page.files.dropLimit', { n: api.maxUploadMb })` ↔ `{n}` placeholder | ✓ WIRED | files.js:43; en/fr.json:1409 |
+| upload endpoint | doc channel | 200 {id} → record push → save() | ✓ WIRED | actions.js:921-935 |
+| error codes | catalogues | uploadTooLarge/fileNotFound ↔ en+fr | ✓ WIRED | both catalogues |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 | --- | --- | --- | --- | --- |
 | upload endpoint | request body | raw request stream → WriteStream → disk | Yes | ✓ FLOWING |
-| serveFileBinary | record/binary | workspace doc + FILES_DIR file | Yes | ✓ FLOWING |
-| preview modal img/iframe src | served bytes | GET file route | Yes | ✓ FLOWING |
-| upload progress row | onprogress events | XHR transfer | Yes | ✓ FLOWING |
+| serveFileBinary | record + bytes | workspace doc + FILES_DIR file | Yes | ✓ FLOWING |
+| dropzone cap hint | api.maxUploadMb | MAX_UPLOAD_MB env → /api/config → state → t() call site | Yes | ✓ FLOWING |
+| copy-link clipboard | file id | resolved from D().files or data-fid | Yes | ✓ FLOWING |
+| upload progress | onprogress events | XHR transfer | Yes | ✓ FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | --- | --- | --- | --- |
-| Upload integration suite (7 tests) | `node --test test/upload.test.mjs` | 7 pass / 0 fail (2.0s) | ✓ PASS |
-| Full gate at execution close | `npm test` 442/442, `npm run e2e` 43/43, `npm run build` green | reported by orchestrator, upload suite re-confirmed here | ✓ PASS |
+| Upload/serve integration suite incl. G-12-1 and G-12-3 regression tests | `node --test test/upload.test.mjs` | 8 pass / 0 fail (2.3s), run in this verifier's process | ✓ PASS |
+| Full unit suite | `npm test` | 443 pass / 0 fail (17.1s), run in this verifier's process | ✓ PASS |
+| Build + e2e 43/43 both locales | `npm run build && npm run e2e` | green (orchestrator run; run-order rule respected — full build last before e2e); built dist bundle confirmed to carry `maxUploadMb` | ✓ PASS |
+| Gap-closure commits exist | `git cat-file -t` ×4 | 2147c91, de467cb, e0a40e5, 73cb414 all present in HEAD history | ✓ PASS |
 
 ### Probe Execution
 
@@ -106,62 +115,47 @@ No probe scripts declared (`scripts/*/tests/probe-*.sh` not present; none in PLA
 
 | Requirement | Source Plan | Description | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| UPLOAD-01 | 12-01 | Real-bytes upload endpoint | ✓ SATISFIED | server.js upload handler + tests |
+| UPLOAD-01 | 12-01 | Real-bytes upload endpoint | ✓ SATISFIED | server.js upload handler + tests (re-run green) |
 | UPLOAD-02 | 12-01 | MAX_UPLOAD_MB cap + stable 413 code | ✓ SATISFIED | uploadBinary + tests |
 | UPLOAD-03 | 12-02 | Byte serving route, 404 no-oracle | ✓ SATISFIED | serveFileBinary + tests |
-| UPLOAD-04 | 12-02 | Inline/attachment header policy | ✓ SATISFIED | FILE_INLINE_MIME policy + tests |
+| UPLOAD-04 | 12-02 | Inline/attachment header policy | ✓ SATISFIED | D-06 policy + tests |
 | UPLOAD-05 | 12-02 | Binary delete with record | ✓ SATISFIED | doc-PUT unlink diff + tests |
 | PREVIEW-01 | 12-03 | Real XHR progress | ✓ SATISFIED | handleFiles XHR + test |
-| PREVIEW-02 | 12-03 | Failed upload handling (D-11) | ✓ SATISFIED | failRow + e2e case |
-| PREVIEW-03 | 12-03 | Real-bytes preview modal | ✓ SATISFIED | modals.js branches + e2e |
-| LINK-01 | 12-03 | Copied link destination (D-13) | ✓ SATISFIED | copyLink + applyDeepLink + e2e |
-| I18N-01 | 12-04 | Catalogue coverage for new keys/codes | ✓ SATISFIED | both catalogues + parity test |
+| PREVIEW-02 | 12-03 | Failed upload handling | ✓ SATISFIED | failRow + e2e case |
+| PREVIEW-03 | 12-03, 12-05 | Real-bytes preview modal (PDF iframe fixed) | ✓ SATISFIED | modals.js branches + byte-only route + e2e PDF assertions |
+| LINK-01 | 12-03, 12-05 | Copied link destination (one URL, bytes on paste) | ✓ SATISFIED | copyLink unification + deleted SPA branch + e2e clipboard equality |
+| I18N-01 | 12-04, 12-06 | Catalogue coverage/parity (phase-scoped reuse) | ✓ SATISFIED | {n} placeholder form both catalogues; build gate green |
 
-**Orphaned requirements:** none — REQUIREMENTS.md declares this phase's requirement IDs as TBD (derived ledger in the plans + COVERAGE.md); all 10 derived IDs are claimed across the four plans and all verified. Note: REQUIREMENTS.md's own `I18N-01` entry maps to Phase 6; the phase-ledger `I18N-01` here is a phase-scoped re-use of that contract for the new keys, and it holds.
+**Orphaned requirements:** none. REQUIREMENTS.md declares phase 12 as TBD; traceability lives in plan `requirements` frontmatter and SUMMARY `requirements-completed` (12-05: PREVIEW-03, LINK-01; 12-06: none new — I18N-01 phase-scoped reuse). All 10 derived IDs claimed and verified.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 | --- | --- | --- | --- | --- |
-| DEPLOY.md | 712 | Stale claim "Uploads are still simulated… file contents are not stored" | 🛑 Blocker (unresolved stale doc contradicting shipped behaviour; = open WR-04) | Operators misled about data durability/backup |
-| .planning/PROJECT.md | 174 | Known-limitation text not retracted | ⚠️ Warning | Planning doc out of date (update at milestone close) |
+| (none) | — | No TBD/FIXME/XXX/HACK/PLACEHOLDER markers in any phase-modified file | ℹ️ Info | scan clean |
 
-No debt markers (TBD/FIXME/XXX) and no stub implementations in any phase-modified source file.
+Note: pre-existing repo-wide lint (8 incl. intentional 12-02 no-control-regex) and format drift (~19 files) are logged in deferred-items.md — outside this phase's file set, not re-flagged here (12-05/12-06 issue notes; a dedicated cleanup task is recommended before ship).
 
-### Review Findings (12-REVIEW.md) impact on must-haves
+### Review Findings (12-REVIEW.md) still open
 
-- **WR-01** (serveFileBinary bypasses canSeeProject for private-project members) — open; the route gates at workspace `viewer` role per D-05's design. Does not invalidate any verified truth (the truths specify workspace-gating only), but it is a real policy question to carry forward.
-- **WR-02** (no null check on vanished task in XHR onload) — open; failure-mode robustness, not a must-have truth.
-- **WR-03** (svg/heic mapped to img tile the server won't serve inline) — open; the modal branches on `f.type === 'img'` which can include svg whose server response is attachment/octet-stream — the `<img>` won't render for those. Does not fail truth 10 (img/png/jpg/… and pdf all render; e2e proves PNG), but it is a preview-quality wart.
-- **WR-04** — folded into the gap above (DEPLOY.md stale claim).
-- IN-01…04 — informational, none block a truth.
+WR-01 (canSeeProject bypass for private-project members — route gates at workspace viewer role, per D-05 design), WR-02 (no null check on vanished task in XHR onload), WR-03 (svg/heic render as <img> the server marks attachment) — all remain open as policy/robustness follow-ups; none invalidates a verified truth.
 
 ### Human Verification Required
 
-### 1. Drag-and-drop feel and PDF embed rendering
+The three UAT items were diagnosed as gaps G-12-1/G-12-2/G-12-3 and are code-closed with automated proofs, but the real-browser UAT re-run has NOT happened — the automated checks do not auto-approve them. Re-run (see frontmatter human_verification for full detail):
 
-**Test:** Drop a large file (>5 MB) onto a dropzone in the running app; watch the progress row climb in real time; then open a multi-page PDF's preview in the modal.
-**Expected:** Progress advances with the actual transfer (not a uniform timer), row disappears on completion, PDF renders inside the iframe embed.
-**Why human:** Real transfer pacing and native PDF embed rendering are browser-runtime experiences not observable in tests beyond the e2e's byte-level assertions.
+1. **PDF embed + drag-drop feel** — real Chrome AND Firefox; "refused to connect"/"ne peut pas ouvrir cette page" must be gone. (G-12-1 re-check)
+2. **Copy-link fresh-profile paste from both entry points** — identical URL, bytes render or download. (G-12-2 re-check)
+3. **MAX_UPLOAD_MB knob → visible hint change** — set a distinctive value, restart, read the label. (G-12-3 re-check)
 
-### 2. « Copier le lien » outside the SPA
-
-**Test:** Copy a file link via the context menu, paste it into a fresh browser profile (logged in, no SPA state), and load it.
-**Expected:** Bytes render in the browser tab (inline types) or download (attachment types); the URL keeps working.
-**Why human:** Cross-session navigation with cookies/CSP is a real-browser behaviour; the e2e covers the in-app half.
+Additionally, the Sessions / password-change / 2FA items the user reported during UAT are out of phase-12 scope and recorded as deferred follow-ups in 12-UAT.md.
 
 ### Gaps Summary
 
-All 12 must-haves are verified with behavioral evidence — the phase's substantive goal
-(real uploads, real progress, real previews, working link destination) is achieved in the
-codebase, proven by the 7-test integration suite run in this verifier's process plus the
-green full gate. The one documentation gap found at verification time (DEPLOY.md stale
-"uploads are simulated" claim, WR-04; PROJECT.md metadata-only limitation line) was
-resolved by an inline doc fix (commit 44e3a4c) and retracted; no gaps remain. Two
-behaviours remain for human verification (see 12-UAT.md).
+No code gaps remain. All three UAT gaps are closed and behaviorally pinned: G-12-1 by the unconditional byte-only dispatch (server.js:1991-2006) + frame-ancestors 'self' inline headers, proven by a G-12-1-named integration test run in this verifier's process and an e2e PDF-iframe assertion; G-12-2 by A.copyLink's data-id file branch + the deleted applyDeepLink 'file' block, proven by e2e clipboard-equality and top-level-paste assertions; G-12-3 by the complete five-hop knob chain, proven by an integration test at MAX_UPLOAD_MB=7 asserting exactly 7 and an e2e rendered-hint assertion (knob 1, never 250). The full gate is green in this verifier's process (443/443 unit; upload suite 8/8) plus orchestrator-run build and e2e (43/43, both locales). The phase goal is achieved at code level; the remaining work is the human UAT re-run of the three items above before status flips to passed.
 
 ---
 
-_Verified: 2026-10-24T17:37:45Z_
+_Verified: 2026-10-25T08:18:05Z_
 _Verifier: the agent (gsd-verifier)_
-_Note: `gsd_run` CLI unavailable in this environment — covered_digest computed as sha256 over the concatenated covered files; frontmatter gaps block is present for `/gsd-plan-phase --gaps` (doc-only closure)._
+_Note: `gsd_run` CLI unavailable in this environment — covered_digest computed as sha256 over the concatenated covered files_
