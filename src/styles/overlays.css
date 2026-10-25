@@ -39,6 +39,11 @@
 .modal.lg {
   max-width: 720px;
 }
+/* Preview iframes need ≥751px of viewport for Firefox's embedded pdf.js toolbar:
+   900 − 32 (.modal-b horizontal padding) − 2 (border) = 866px ≥ pdf.js's 750px breakpoint. */
+.modal.xl {
+  max-width: 900px;
+}
 .modal-h {
   display: flex;
   align-items: center;

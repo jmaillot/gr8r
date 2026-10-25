@@ -55,7 +55,7 @@ export function modalHtml(m) {
     case 'team':
       return wrap('', teamModal(m, H));
     case 'filePreview':
-      return wrap('lg', filePreviewModal(m, H));
+      return wrap(m.file?.type === 'pdf' ? 'xl' : 'lg', filePreviewModal(m, H));
     case 'saveView':
       return wrap(
         'sm',
@@ -299,16 +299,18 @@ export function filePreviewModal(m, H) {
        every other type keeps the icon-art download tile. Lists/grids are
        untouched (D-10). User-controlled values escape with esc() (T-12-09).
        G-12-4 (a): the PDF iframe swaps the old 16/9 clip for an explicit tall
-       in-iframe viewport (~70vh) — Firefox renders its built-in PDF toolbar
+       in-iframe viewport — Firefox renders its built-in PDF toolbar
        INSIDE the iframe and it was clipped by the ~296px 16/9 pane; the
        surrounding overflow:hidden wrapper clips nothing because it grows with
-       the iframe. Deliberate: the .modal width is NOT widened (the depressed
-       viewport, not the width, was the clipping cause) and the image branch
-       keeps aspect-ratio:16/9. */
+       the iframe. G-12-6: PDFs render in .modal.xl (900px) so the in-iframe
+       viewport is ≈866px — at or above pdf.js's 750px WIDTH breakpoint, below
+       which its @media rule hides the direct download/print buttons into the
+       '»' secondary menu; images and other types stay at 'lg', and the image
+       branch keeps aspect-ratio:16/9. */
     f.type === 'img'
       ? `<img src="/w/${D().ws.url}/file/${f.id}" alt="${esc(f.name)}" style="display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:var(--bg)">`
       : f.type === 'pdf'
-        ? `<iframe src="/w/${D().ws.url}/file/${f.id}" title="${esc(f.name)}" style="display:block;width:100%;height:min(70vh,560px);border:0"></iframe>`
+        ? `<iframe src="/w/${D().ws.url}/file/${f.id}" title="${esc(f.name)}" style="display:block;width:100%;height:min(75vh,640px);border:0"></iframe>`
         : filePrev(f).replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"')
   }</div>
   ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}${t('modal.attachedTo')} <button class="link" data-a="openTask" data-id="${m.tid}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>

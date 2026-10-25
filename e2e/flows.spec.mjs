@@ -813,8 +813,19 @@ test.describe('file uploads and previews (Phase 12)', () => {
         await pdfCard.click();
         const pdfFrame = page.locator(`.modal-wrap iframe[src$="/file/${pdfId}"]`);
         await expect(pdfFrame).toBeVisible();
-        /* G-12-4 (a): the PDF iframe is a tall scrollable viewport (~70vh, i.e.
-           504px at the default 720px e2e viewport) — Firefox renders its PDF
+        /* G-12-6: PDFs render in the wide .modal.xl (900px) — the image modal
+           stays 'lg', so the xl class and the >800px rendered iframe width are
+           both PDF-specific proofs (old 'lg' iframe measured ~686px). */
+        const pdfModal = page.locator('.modal-wrap', { has: page.locator(`iframe[src$="/file/${pdfId}"]`) });
+        await expect(pdfModal.locator('.modal.xl')).toBeVisible();
+        /* G-12-6: the in-iframe viewport crosses pdf.js's 750px toolbar
+           breakpoint (≥866px at the 900px modal) so Firefox's embedded viewer
+           keeps its full default toolbar — download/print buttons visible. */
+        await expect
+          .poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().width))
+          .toBeGreaterThan(800);
+        /* G-12-4 (a): the PDF iframe is a tall scrollable viewport (~75vh, i.e.
+           540px at the default 720px e2e viewport) — Firefox renders its PDF
            toolbar inside the iframe and the old 16/9 pane (~287px) clipped it. */
         await expect
           .poll(() => pdfFrame.evaluate(el => el.getBoundingClientRect().height))
