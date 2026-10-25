@@ -17,8 +17,9 @@ findings:
     title: "Width assertion (`toBeGreaterThan(800)`) is looser than the documented ≥866px invariant"
   - id: CR-01
     severity: critical
-    disposition: open
-open: 2
+    disposition: fixed
+    title: "Suffix range on a zero-byte stored file produces a malformed 206 (`bytes 0--1/0`) and a synchronous `ERR_OUT_OF_RANGE` throw after headers are sent"
+open: 1
 total: 4
 recorded: 2026-10-25T17:55:26Z
 ---
@@ -30,7 +31,7 @@ recorded: 2026-10-25T17:55:26Z
 | WR-01 | warning | skipped | UAT round 3 test 5: user accepted the narrow-viewport fallback — below ~816px the toolbar collapses but the footer Download button still saves the file; tested by the user at ~700-800px |
 | IN-01 | info | skipped | UAT round 3 test 4: pass in real Firefox AND Chrome — the human re-run replaces the Chromium-only proxy concern |
 | IN-02 | info | open | - |
-| CR-01 | critical | open | Suffix range on a zero-byte stored file produces a malformed 206 (`bytes 0--1/0`) and a synchronous `ERR_OUT_OF_RANGE` throw after headers are sent (server.js:1982-1985) (not in the current review) |
+| CR-01 | critical | fixed | Zero-byte suffix range now ignores the Range header (RFC 9110 allows it) → clean 200 with empty body; guard + test in commit 54cead4, suite 446/446 |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.
