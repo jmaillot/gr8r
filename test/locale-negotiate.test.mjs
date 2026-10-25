@@ -73,10 +73,10 @@ test('primeLocale is silent: no event dispatch, while setLocale still announces 
   try {
     await primeLocale('fr');
     assert.deepEqual(events, []);
-    assert.equal(document.documentElement.lang, 'fr');
+    assert.equal(globalThis.document.documentElement.lang, 'fr');
     await setLocale('en');
     assert.deepEqual(events, ['gr8r:locale']);
-    assert.equal(document.documentElement.lang, 'en');
+    assert.equal(globalThis.document.documentElement.lang, 'en');
   } finally {
     if (prev === undefined) delete globalThis.document;
     else globalThis.document = prev;

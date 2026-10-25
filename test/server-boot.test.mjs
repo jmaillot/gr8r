@@ -27,7 +27,7 @@ test('cold start with no ADMIN_EMAIL/ADMIN_PASSWORD boots with the admin@example
 
     /* ADMIN_PASSWORD was falsy, so ensureAdmin took the generated-password
        branch; assert only the line's presence, never the secret value. */
-    assert.match(server.output(), /  generated password: /,
+    assert.match(server.output(), / {2}generated password: /,
       'the boot log announces a generated admin password');
   } finally {
     await server.stop();

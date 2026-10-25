@@ -1922,6 +1922,9 @@ const FILE_ATTACHMENT_MIME = {
    the record's name so the header cannot be split or injected, then emit both
    the ASCII fallback and the RFC 5987 UTF-8 form. */
 function fileDisposition(name, inline) {
+  // The control-character class is intentional: the regex MUST match control
+  // characters to strip them from the header value (T-12-08 sanitizer).
+  // eslint-disable-next-line no-control-regex
   const safe = String(name || 'file').replace(/[\r\n"\u0000-\u001f\u007f]/g, '');
   const ascii = safe.replace(/[^\x20-\x7e]/g, '_') || 'file';
   return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;

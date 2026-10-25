@@ -12,7 +12,7 @@
    tenancy suite.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, createAccount, newRunId } from './helpers/setup.mjs';
 
 let run;
 let alice; // workspace owner, account locale 'fr'
@@ -234,9 +234,9 @@ test('criterion 4: two members of one workspace each keep their own language acr
 
     /* (b) A workspace switch driven through the switcher UI: each account
        lands on the new workspace and still sees its own language. */
-    for (const [page, form, lang, nav] of [
-      [alicePage, LOGIN.fr, 'fr', 'Projets'],
-      [bobPage, LOGIN.en, 'en', 'Projects'],
+    for (const [page, lang, nav] of [
+      [alicePage, 'fr', 'Projets'],
+      [bobPage, 'en', 'Projects'],
     ]) {
       await page.getByRole('button', { name: SWITCH[lang] }).click();
       await page.locator(`button[data-a='switchWs'][data-v='${secondSlug}']`).click();
