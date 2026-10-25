@@ -1,48 +1,71 @@
 ---
-status: diagnosed
+status: testing
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T09:05:00Z
+updated: 2026-10-25T10:13:45Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 1
+name: Re-run test 1 in real Chrome AND Firefox (G-12-1 + G-12-4 closure re-check)
+expected: |
+  Drop a file >5 MB onto a dropzone, watch the progress row, then open a multi-page
+  PDF's preview modal. Progress advances with real transfer pace and the row disappears
+  on completion; the PDF renders inside the tall scrollable iframe, the full viewer
+  toolbar (with download button) is visible in Firefox, and large PDFs paint without
+  the old whole-file stall ("refused to connect" / "ne peut pas ouvrir cette page"
+  must stay gone).
+awaiting: user response
 
 ## Tests
 
-### 1. Drag-and-drop feel and PDF embed rendering
-expected: Drop a large file (>5 MB) onto a dropzone; progress row climbs with the real
-transfer pace (no uniform timer), disappears on completion; a multi-page PDF renders
-inside the iframe embed in the preview modal.
-result: issue
-reported: "yes but the embed is a little too slow, i dont see all the menu so i can't download it — only on firefox, in chrome i have a download button"
-severity: major
+<!-- Round 2 — re-run after gap-closure plans 12-05, 12-06, 12-07. Round-1 outcomes
+     (issue on test 1, pass on tests 2–3) are preserved in the Gaps section below
+     (G-12-1..G-12-5). Automated verification round 3: 18/19 must-haves verified,
+     12-VERIFICATION.md rewritten 2026-10-25T10:09:01Z. -->
 
-### 2. « Copier le lien » outside the SPA
-expected: Copy a file link via the context menu, paste it into a fresh browser profile
-(logged in, no SPA state), and load it. Bytes render in the browser tab (inline types)
-or download (attachment types); the URL keeps working.
-result: pass
-fix_note: "User also flagged: non-logged browser gets raw error {\"error\":\"Sign in to continue\",\"code\":\"signInRequired\"} instead of a redirect to the login page (new gap G-12-5)."
+### 1. Re-run test 1 in real Chrome AND Firefox (G-12-1 + G-12-4 closure re-check)
+expected: Drop a file >5 MB onto a dropzone, watch the progress row, then open a
+multi-page PDF's preview modal. Progress advances with real transfer pace and the row
+disappears on completion; the PDF renders inside the tall scrollable iframe, the full
+viewer toolbar (with download button) is visible in Firefox, and large PDFs paint
+without the old whole-file stall ("refused to connect" / "ne peut pas ouvrir cette
+page" must stay gone).
+result: [pending]
 
-### 3. Dropzone cap label ignores MAX_UPLOAD_MB
-expected: The dropzone hint text reflects the configured MAX_UPLOAD_MB value
-result: pass
+### 2. Re-run test 2 (G-12-2 + G-12-5 closure re-check)
+expected: Copy a file link from BOTH « ... » context menu and the modal footer; paste
+each into a fresh signed-in browser profile; then paste one into a LOGGED-OUT profile.
+Both entry points copy the identical /w/:slug/file/:id URL; a signed-in paste renders
+the bytes (inline types) or downloads (attachment types); a logged-out paste now lands
+on the LOGIN PAGE (not raw signInRequired JSON), and after signing in the browser
+returns to the same file URL and the bytes render.
+result: [pending]
+
+### 3. Re-run test 3 (G-12-3 closure re-check)
+expected: Set MAX_UPLOAD_MB to a distinctive value (e.g. 7), restart the server, open
+the files tab. The dropzone hint reads the configured value («— jusqu'à 7 Mo chacun» /
+«— up to 7 MB each»), not the old hardcoded 250.
+result: [pending]
 
 ## Summary
 
 total: 3
-passed: 2
-issues: 1
-pending: 0
+passed: 0
+issues: 0
+pending: 3
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` rewritten 2026-10-25) — re-test required in a real browser.
+All five gaps are code-closed (verification round 3: 18/19 must-haves verified,
+`12-VERIFICATION.md` rewritten 2026-10-25T10:09:01Z) — re-test required in a real
+browser. Note: open code-review advisory CR-01 (suffix Range on a zero-byte file →
+malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
+(fix or accept) before ship — see 12-REVIEW-DISPOSITION.md.
 
 - gap_id: G-12-1
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
@@ -102,7 +125,7 @@ All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` 
 
 - gap_id: G-12-4
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
-  status: failed
+  status: resolved_by: [12-07]
   reason: "User reported: yes but the embed is a little too slow, i dont see all the menu so i can't download it — only on firefox, in chrome i have a download button"
   severity: major
   test: 1
@@ -122,7 +145,7 @@ All three gaps are code-closed (verified 14/14 must-haves, `12-VERIFICATION.md` 
 
 - gap_id: G-12-5
   truth: "A non-authenticated browser loading a file URL is redirected to the login page (not shown a raw JSON error)"
-  status: failed
+  status: resolved_by: [12-07]
   reason: "User reported: it work as described, i just tested another behaviour on non logged browser, i have error \"Sign in to continue\" / code \"signInRequired\", can we simply redirect to the login page ?"
   severity: minor
   test: 2
