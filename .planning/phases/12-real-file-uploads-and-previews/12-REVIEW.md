@@ -1,115 +1,140 @@
 ---
 phase: 12-real-file-uploads-and-previews
-reviewed: 2026-10-24T00:00:00Z
-depth: standard
-files_reviewed: 14
+reviewed: 2026-10-25T00:00:00Z
+depth: deep
+supersedes: 12-REVIEW.md (pre-gap-closure review of 2026-10-24) — this review reflects the CURRENT source state after plans 12-05 and 12-06
+files_reviewed: 13
 files_reviewed_list:
   - server.js
-  - src/actions/actions.js
-  - src/overlays/modals.js
   - src/main.js
+  - src/actions/actions.js
+  - src/core/api.js
+  - src/views/files.js
   - src/locales/en.json
   - src/locales/fr.json
-  - scripts/i18n-scan.mjs
   - test/upload.test.mjs
-  - test/i18n-core-features.test.mjs
   - e2e/flows.spec.mjs
-  - e2e/server.mjs
-  - .env.example
-  - DEPLOY.md
-  - README.md
+  - src/overlays/modals.js          # cross-referenced (filePreviewModal renders the byte route)
+  - src/overlays/context-menu.js    # cross-referenced (file menu stamps data-id)
+  - src/ui/helpers.js               # cross-referenced (fileType / filePrev type maps)
+  - .planning/phases/12-real-file-uploads-and-previews/deferred-items.md  # context (not re-reported)
 findings:
   critical: 0
-  warning: 4
-  info: 4
-  total: 8
+  high: 2
+  medium: 3
+  low: 5
+  total: 10
 status: issues_found
 ---
 
-# Phase 12: Code Review Report
+# Phase 12: Code Review Report (fresh, post-gap-closure)
 
-**Reviewed:** 2026-10-24
-**Depth:** standard
-**Files Reviewed:** 14
+**Reviewed:** 2026-10-25
+**Depth:** deep (call chains traced across server dispatch → serveFileBinary → client copyLink/preview → modals → byte route)
+**Files Reviewed:** 13
 **Status:** issues_found
 
 ## Summary
 
-Phase 12's upload/serving core is solid: the raw-body stream is size-capped mid-stream with partial-file cleanup (server.js:1856-1886), the serving route enforces workspace membership at the viewer floor and a strict extension→mime/inline/attachment policy with `nosniff` (server.js:1906-1973), the disposition header is sanitized against CR/LF/quote injection (server.js:1923-1927, tested at test/upload.test.mjs:140-147), ids are server-generated UUIDs so no client value ever builds a path, and the doc-PUT binary-delete diff only sweeps ids matching `[A-Za-z0-9_-]+` (server.js:1394). Tests (unit + e2e) cover the overflow/413 path, the header policy, deep-link Accept negotiation, and gating.
+Re-review of the current source after plans 12-05 (byte-only `/w/:slug/file/:id` route, one copy-link URL) and 12-06 (`maxUploadMb` across the five-hop server→UI chain). The core serving path is sound: the URL id regex `[A-Za-z0-9_-]+` plus the `path.dirname(file) !== FILES_DIR` belt-and-braces check blocks traversal in two independent layers (server.js:1991,2005,1947-1948); the D-06 extension→mime map never honours the upload's claimed type and forces scriptable types to attachment/octet-stream; ids are server UUIDs; the doc-PUT unlink diff only sweeps regex-validated ids; upload/auth gating (sameOrigin → member role → stream) is correct and tested (413 drain+unlink, viewer 403, outsider 404, hostile disposition header). The 12-05/12-06 changes themselves are correct: the dispatcher is genuinely byte-only, both copy-link entry points resolve the identical URL, and `maxUploadMb` flows env → `/api/config` → `api.init()` → t()-call-site → catalogue `{n}` with the 25 fallback on demo paths.
 
-The findings below are authorization gaps and edge cases around the edges of that core — none invalidate the design.
+The defects found are **cross-module interactions** the gap-closure plans did not re-examine: the doc-record id is now the authority for bytes, but two pre-existing client actions (duplicate, delete-with-undo) assume metadata-only records and now produce broken/lost files; the modal's client-side type map disagrees with the server's D-06 inline map for svg/heic; the disclosed cap is purely informational (never enforced pre-upload); and a non-numeric `MAX_UPLOAD_MB` disables the cap entirely.
 
-## Warnings
+Pre-existing repo-wide lint/format failures are already logged in `deferred-items.md` and are deliberately NOT re-reported here.
 
-### WR-01: Byte-serving route bypasses private-project access lists
+## High
 
-**File:** `server.js:1936-1947`
-**Issue:** `serveFileBinary` gates on workspace membership (viewer floor) and record existence in the **full stored doc** (`JSON.parse(ctx.ws.doc)`), but never applies `canSeeProject`. A member who cannot see a private project still gets the bytes at `/w/:slug/file/:id` if they learn the id. Every other read path (doc GET, redaction at `redactDoc` server.js:411-435, deep-link modal which reads the redacted `data.files`) removes hidden-project files; the byte route is the one path that does not. `A.copyLink` (`src/actions/actions.js:527`) happily hands out `file/<fid>` links, so ids do travel between members.
-**Fix:** Resolve the record's project/task from the doc and apply the same redaction predicate used elsewhere:
+### H-1: `A.dupFile` creates a file record whose binary does not exist — duplicate previews and copied links 404 forever
 
-```js
-const doc = JSON.parse(ctx.ws.doc);
-const file = (doc?.data?.files || []).find(f => f?.id === id);
-const memberId = ctx.membership.member_id;
-const project = doc?.data?.projects?.find(p => p.id === file?.project);
-if (file?.project && !canSeeProject(project, memberId)) return fail(res, 404, 'fileNotFound', 'File not found');
-```
+**File:** `src/actions/actions.js:1934-1942` (interacts with `server.js:1896` upload path and `server.js:1948` serveFileBinary lookup)
 
-### WR-02: `handleFiles` crashes on success when the target task disappeared during upload
+**Issue:** Duplication inserts a new record `{ ...f, id: uid('f'), ... }` with a **fresh id** but no new bytes. In phase 12 the record id became the disk key (`DATA_DIR/files/<id>`) and the byte-source key (`/w/:slug/file/:id`). The duplicate's id has no matching binary, so `fs.statSync` fails and the serving route answers 404 — the duplicate's preview modal shows a broken image/iframe and its « Copier le lien » URL is dead. The record persists through doc sync (unlike the strict same-PUT unlink, which only removes ids the doc drops — the broken record is never swept). Every duplicate is a permanent corrupted artifact.
 
-**File:** `src/actions/actions.js:909-912`
-**Issue:** On XHR success, `const tk = task(up.task); tk.attachments.push(rec);` dereferences without a null check. If the task was deleted (locally or synced away in another session) while the upload was in flight, this throws a TypeError inside `xhr.onload`: the upload row is never removed from `S.ui.uploads`, no toast fires, the doc record is half-built, and the error is unhandled.
+**Fix:** Either (a) duplicate **shares** the source id (duplicate record keeps `f.id` — both records then serve the same bytes; delete diff must then treat id-reuse carefully), or (b) request a byte copy from the server (small `POST /w/:slug/files/:id/duplicate` that copies the file server-side and returns the new id), or (c) remove the duplicate action from the file context menu until (b) exists. Option (c) is the smallest honest fix.
+
+### H-2: Undo of a file delete re-adds the record but the binary was already unlinked — "Undo" silently loses the file
+
+**File:** `src/actions/actions.js:1943-1962` (interacts with `server.js:1384-1399` D-04 unlink-on-PUT diff)
+
+**Issue:** `A.delFile` drops the record and offers `restore(snap)` (undo → `S.data = JSON.parse(snap)` → `save()` → doc PUT). Server-side, the doc-PUT that dropped the record **unlinked** `DATA_DIR/files/<id>` in the same mutation. The undo PUT re-inserts a record pointing at a deleted binary → permanent 404. The user-visible "undo" affordance promises restoration the system cannot deliver: the bytes are irrecoverably gone. This is a data-loss path opened by making doc records authoritative over disk bytes.
+
+**Fix:** Don't offer undo for file records (the `toast` `action` should be dropped for `A.delFile`), or change the server semantics to a grace period (e.g. move to `FILES_DIR/.trash/<id>` with sweep, restoring on re-insert). Given the strict same-PUT diff design, removing the undo affordance is the consistent fix.
+
+## Medium
+
+### M-1: Preview modal renders a broken `<img>` for svg/heic — client type map disagrees with the D-06 inline map
+
+**File:** `src/overlays/modals.js:301-302` (type map at `src/ui/helpers.js:98-108`; server policy at `server.js:1907-1914`)
+
+**Issue:** `fileType('.svg')` → `'img'` and `'heic'` → `'img'`, so `filePreviewModal` renders `<img src="/w/:slug/file/:id">`. But D-06 lists only png/jpg/jpeg/gif/webp/pdf as inline — svg and heic serve `application/octet-stream` + `Content-Disposition: attachment` (deliberately, for XSS safety). The browser refuses to render that in an `<img>`, so the modal shows a broken image for every svg/heic upload. The grid card is safe (`filePrev` is icon art only), but the modal's branch condition must match the server's inline whitelist.
+
+**Fix:** Gate the `<img>`/`<iframe>` branches on the **server inline map**, not the client type: e.g. `const INLINE_IMG = ['png','jpg','jpeg','gif','webp']` checked against `f.name`'s extension, falling back to `filePrev(f)` otherwise.
+
+### M-2: The disclosed cap is never enforced client-side — oversize files are fully uploaded before failing
+
+**File:** `src/actions/actions.js:891-928` (12-06 made the knob visible at `src/views/files.js:43` and `src/core/api.js:95-97,132`)
+
+**Issue:** 12-06's five-hop chain ends at a **hint string**; `handleFiles` never compares `file.size` against `api.maxUploadMb` before opening the XHR. A user who picks a 500 MB file with `MAX_UPLOAD_MB=25` watches the progress bar climb to 100 % and then gets the 413 toast after the full transfer. The knob is display-only; the "up to {n} MB each" message overstates what the UI does.
+
+**Fix:** Pre-flight the size in the `forEach` at actions.js:892: `if (file.size > api.maxUploadMb * 1024 * 1024) { failRow('uploadTooLarge'); return; }` (keep the server check — defence in depth — this just avoids the doomed transfer).
+
+### M-3: A non-numeric `MAX_UPLOAD_MB` disables the upload cap entirely while the UI reports 25
+
+**File:** `server.js:71-72`
+
+**Issue:** `Number(process.env.MAX_UPLOAD_MB || 25)` with e.g. `MAX_UPLOAD_MB=abc` yields `NaN`; `MAX_UPLOAD = NaN`; in `uploadBinary` (`server.js:1869`) `size > NaN` is always false, so **no upload is ever rejected** — disk fills without bound. Compounding it, `/api/config` reports `maxUploadMb: NaN` → serialized as `null` → `Number(null) || 25` on the client → the dropzone hint confidently says "up to 25 MB each" while the server enforces nothing.
+
 **Fix:**
 ```js
-if (up.task) {
-  const tk = task(up.task);
-  if (tk) {
-    tk.attachments.push(rec);
-    logAct('addedAFileTo', tk, { kind: 'fileAdded', value: up.name });
-  }
-}
+const parsedUploadMb = Number(process.env.MAX_UPLOAD_MB || 25);
+const MAX_UPLOAD_MB = Number.isFinite(parsedUploadMb) && parsedUploadMb > 0 ? parsedUploadMb : 25;
 ```
 
-### WR-03: Preview modal renders `<img>` for types the server will not serve inline (svg, heic)
+## Low
 
-**File:** `src/overlays/modals.js:301-302` vs `server.js:1906-1913` and `src/ui/helpers.js:103`
-**Issue:** `fileType()` maps `svg` and `heic` to `'img'`, and `filePreviewModal` renders `<img src="/w/:slug/file/:id">` for any `type === 'img'`. But the server's inline allow-list (`FILE_INLINE_MIME`) covers only png/jpg/jpeg/gif/webp — svg and heic come back as `application/octet-stream` + `Content-Disposition: attachment` + `nosniff`. The `<img>` element cannot decode that response, so the preview modal shows a permanently broken image for these legitimate file types. The server's choice is correct for svg (scriptable content must never render); the client side of the contract was not aligned with it.
-**Fix:** Gate the `<img>` branch on the same extension set the server serves inline, e.g. `const INLINE_IMG = ['png','jpg','jpeg','gif','webp']; const ext = f.name.split('.').pop().toLowerCase();` and render `<img>` only when `INLINE_IMG.includes(ext)`; fall back to the icon tile otherwise.
+### L-1: `fileDisposition` leaves backslashes in the quoted filename — malformed Content-Disposition for strict parsers
 
-### WR-04: DEPLOY.md hardening section still claims uploads are simulated
+**File:** `server.js:1924-1927`
 
-**File:** `DEPLOY.md:712-713`
-**Issue:** "Uploads are still simulated. Attachment names and sizes live in the workspace document; file contents are not stored. Do not treat them as backed-up files." — directly contradicted by the phase (README.md:142-144 and DEPLOY.md:176-180, 493-495 document real binaries under `DATA_DIR/files/`). An operator reading the hardening list will skip `DATA_DIR/files/` from their backup set.
-**Fix:** Replace the bullet with a pointer to the backup requirement: "**Uploads** are real binaries under `DATA_DIR/files/`; include that directory in your backup set (see § Backups)."
+**Issue:** The T-12-08 sanitizer strips CR/LF, quotes and control chars but not `\`. A record name ending in a backslash produces `filename="foo\"; filename*=...` — the `\"` escapes the closing quote, so the quoted-string is unterminated/extended for strict RFC 6266 parsers. CRLF injection is already blocked (tested at test/upload.test.mjs:156-163), so impact is limited to header mangling, not injection.
 
-## Info
+**Fix:** Extend the strip regex with `\\` (e.g. `/[\r\n"\\\u0000-\u001f\u007f]/g`) — note this keeps the intentional `no-control-regex` eslint finding already logged in deferred-items.md.
 
-### IN-01: Uploaded binaries are never garbage-collected when their record is never persisted
+### L-2: File bytes stay in browser caches up to an hour after membership revocation
 
-**File:** `server.js:1888-1897` and `server.js:1383-1398`
-**Issue:** The upload endpoint stores bytes immediately; the metadata record only exists after the client's next doc-PUT. If the client crashes, the doc-PUT is rejected (409 revision conflict the client never retries), or the tab closes before save, the binary is orphaned forever — the strict same-PUT diff deliberately has no orphan sweep. Acceptable as a documented trade-off, but a bounded periodic sweep (or an explicit note in DEPLOY.md's backup section) would keep `DATA_DIR/files/` from silently growing.
-**Fix:** Document the leak, or add a boot-time sweep of `FILES_DIR` against the union of all workspace `data.files` ids (safe because ids are validated `[A-Za-z0-9_-]+`).
+**File:** `server.js:1965`
 
-### IN-02: Zero-byte uploads succeed and store an empty binary
+**Issue:** `Cache-Control: private, max-age=3600` with no validators. A member whose access is revoked keeps the cached bytes re-renderable from disk cache (back button, reload) for up to an hour. Tolerable for most deployments, but it is a retention window the isolation decision (D-05/T-12-13) does not mention.
 
-**File:** `server.js:1876-1879`
-**Issue:** `uploadBinary` resolves with `size = 0` on an empty body and `handleUpload` returns 200 with a stored empty file. No client path sends an empty File, but a raw-body caller (curl) can litter `FILES_DIR` with empty files whose records never exist.
-**Fix:** `if (!size) { fs.unlink(dest, () => {}); return reject(httpError(400, 'Empty upload', 'emptyUpload')); }`
+**Fix:** Consider `private, max-age=0` (or `no-store`) if revocation latency matters more than bandwidth; otherwise document the 1 h window next to T-12-13.
 
-### IN-03: `handleFiles` persists records with `project: undefined` for task-drawer uploads
+### L-3: Upload request carries dead query params the server never reads
 
-**File:** `src/actions/actions.js:894, 908`
-**Issue:** The XHR URL passes `project=${ctx.project || ''}` and the client record uses `project: up.project` — when the upload input carries only `data-task` (task drawer), `ctx.project` is `undefined`, so the doc record omits `project` after JSON serialization. Any view that filters/lists files by project will not find it, and the server's `fileHidden` predicate can only see it through its task.
-**Fix:** Resolve the missing project from the task: `project: up.project || task(up.task)?.project`.
+**File:** `src/actions/actions.js:902` (server side: `server.js:1889-1897`)
 
-### IN-04: Inline PDFs served with a CSP that permits script execution inside the frame
+**Issue:** `POST /w/${slug}/files?name=...&project=...&task=...` — `handleUpload` reads only the slug; metadata rides the doc channel. The `?name=` param (attacker-controllable in a forged URL, though the server ignores it) is dead surface that suggests server-side metadata handling that does not exist, and the integration test (`test/upload.test.mjs:29`) keeps it alive misleadingly.
 
-**File:** `server.js:1966`
-**Issue:** Inline responses get `Content-Security-Policy: frame-ancestors 'self'` only. For a PDF (the one scriptable format allowed inline), `frame-ancestors` protects against framing elsewhere but the PDF viewer's JS runs unsandboxed-by-CSP. Low risk (pdf.js-style viewers run in a sandboxed origin; the file is already authenticated workspace content), but `sandbox` on the CSP or `referrerPolicy` would tighten it cheaply.
-**Fix:** `headers['Content-Security-Policy'] = "frame-ancestors 'self'; sandbox"` — note this breaks the browser's download-from-viewer button for PDFs; verify against the D-06 contract before shipping.
+**Fix:** Drop the query string from the XHR and from `uploadFetch`, or add a code comment on `handleUpload` stating the params are ignored by design.
+
+### L-4: `A.rmAttach` leaves the Files-tab record (and bytes) — inconsistent with `A.delFile`
+
+**File:** `src/actions/actions.js:865-873` vs `1951-1959`
+
+**Issue:** `handleFiles` pushes the record into **both** `D().files` and `tk.attachments` when a task is set. `A.delFile` removes from both; `A.rmAttach` removes only from `tk.attachments`, so the file remains listed in the Files tab (with a link to the task) and its bytes persist. If "remove attachment" is meant to keep the workspace file, that's a defensible design — but it contradicts the delete path and will surprise users whose file "comes back" in the Files tab.
+
+**Fix:** Either make `A.rmAttach` also remove the `D().files` record (and rely on the same-PUT unlink for the bytes), or rename the affordance so the "file is kept in Files" outcome is explicit.
+
+### L-5: `handleFiles` mutates the doc outside `mutate()` and crashes if the attached task disappears mid-upload
+
+**File:** `src/actions/actions.js:912-924` (specifically 916-920)
+
+**Issue:** On XHR success the record is applied with direct `D().files.unshift(...)` + `save()` — bypassing the `mutate()` wrapper every other doc mutation uses (no snapshot/undo compatibility, pattern inconsistency). And `const tk = task(up.task); tk.attachments.push(rec)` throws a TypeError if the task was deleted (e.g. by another member syncing in) during the upload seconds — an unhandled error inside the XHR onload that also leaves the file record half-applied.
+
+**Fix:** Wrap onload's doc changes in `mutate()` and guard the task: `if (up.task && task(up.task)) { task(up.task).attachments.push(rec); logAct(...); }`.
 
 ---
 
-_Reviewed: 2026-10-24_
+_Reviewed: 2026-10-25_
 _Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: deep — supersedes the 2026-10-24 pre-gap-closure review_
+_Advisory only: no source files were modified; nothing here blocks._
