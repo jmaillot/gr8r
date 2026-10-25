@@ -1219,6 +1219,7 @@ async function handleApi(req, res, url) {
       mail: MAILER.enabled,
       url: appBase(req),
       workspaceCreation: ALLOW_SIGNUP ? 'open' : 'admins',
+      maxUploadMb: MAX_UPLOAD_MB,
     });
   }
 

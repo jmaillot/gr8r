@@ -61,6 +61,21 @@ test('uploadTooLarge 413: oversize upload rejected mid-stream with its stable co
   }
 });
 
+/* G-12-3: /api/config discloses the live MAX_UPLOAD_MB knob so the client can
+   render the dropzone cap. A non-default harness value proves the field is a
+   pass-through of the env knob, not a hardcoded default leaking through. */
+test('/api/config carries maxUploadMb from the MAX_UPLOAD_MB env knob (G-12-3)', async () => {
+  const server = await startServer({ env: { MAX_UPLOAD_MB: '7' } });
+  try {
+    const res = await fetch(`${server.base}/api/config`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.maxUploadMb, 7);
+  } finally {
+    await server.stop();
+  }
+});
+
 /* Plant a file record through the doc-PUT channel (the same way the client
    persists upload metadata) and its binary flat under DATA_DIR/files. */
 async function putDoc(admin, mutate) {
