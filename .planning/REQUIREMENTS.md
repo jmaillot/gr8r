@@ -25,12 +25,12 @@ the server is the only boundary that counts.
       narrow no-break space (U+202F) before `; ! ?`, a no-break space (U+00A0) inside guillemets
       on both sides (« »), the curly apostrophe (U+2019), the ellipsis (U+2026) rather than
       `...`, and accents normalised to NFC everywhere.
-- [ ] **I18N-06**: A catalogue value can never inject markup — catalogue values are plain text,
+- [x] **I18N-06**: A catalogue value can never inject markup — catalogue values are plain text,
       and a test rejects any value containing `<`, `>` or a double quote.
 - [x] **I18N-07**: The vocabulary the app stores as data — statuses, priorities, roles,
       permissions, project templates — is translated where it is displayed, without changing the
       stored values.
-- [ ] **I18N-08**: The French catalogue is built as its own chunk, so an English-only build
+- [x] **I18N-08**: The French catalogue is built as its own chunk, so an English-only build
       carries no French string.
 
 ### Language preference

@@ -8,7 +8,13 @@ updated: 2026-10-25T08:19:13Z
 
 ## Current Test
 
-[testing complete]
+number: 1
+name: Drag-and-drop feel and PDF embed rendering
+expected: |
+  Drop a large file (>5 MB) onto a dropzone; progress row climbs with the real
+  transfer pace (no uniform timer), disappears on completion; a multi-page PDF renders
+  inside the iframe embed in the preview modal.
+awaiting: user response
 
 ## Tests
 
