@@ -3,7 +3,7 @@ status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T07:28:51Z
+updated: 2026-10-25T07:30:34Z
 ---
 
 ## Current Test
@@ -79,4 +79,7 @@ blocked: 0
   deferred_at: 2026-10-25
 - test: 0
   idea: "Hors périmètre phase 12 (Auth) : le changement de mot de passe répond « Mot de passe mis à jour » mais (1) le nouveau mot de passe ne fonctionne pas à la connexion, (2) les autres sessions restent connectées — l'utilisateur veut une révocation automatique des autres sessions après changement de mot de passe"
+  deferred_at: 2026-10-25
+- test: 0
+  idea: "Hors périmètre phase 12 (Auth/2FA) : l'authentification à deux facteurs génère un faux QR code illisible — chercher comment implémenter un vrai check 2FA (TOTP standard : secret, URI otpauth://, QR scannable, vérification à 6 chiffres). À corréler avec les bugs Sessions et changement de mot de passe (même zone auth possiblement stubée)"
   deferred_at: 2026-10-25
