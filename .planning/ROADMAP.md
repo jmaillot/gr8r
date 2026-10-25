@@ -420,7 +420,7 @@ to the parent task). Closes the known limitation "File contents are metadata
 only; no binary upload backend".
 **Requirements**: TBD
 **Depends on:** Phase 11
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -437,4 +437,4 @@ Plans:
 
 **Gap closure** *(from the UAT gap scan)*
 - [x] 12-05-PLAN.md — G-12-1/G-12-2: byte-only `/w/:slug/file/:id` route, one copy-link URL (both entry points), PDF-iframe e2e proofs
-- [ ] 12-06-PLAN.md — G-12-3: MAX_UPLOAD_MB crosses into the client dropzone cap hint
+- [x] 12-06-PLAN.md — G-12-3: MAX_UPLOAD_MB crosses into the client dropzone cap hint (via /api/config → api.init() → {n} interpolation, both locales)

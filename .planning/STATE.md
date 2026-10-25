@@ -5,17 +5,17 @@ current_phase: 12
 current_phase_name: Real file uploads and previews
 current_plan: 6
 status: executing
-stopped_at: Completed 12-05-PLAN.md (gap closure G-12-1, G-12-2) — 12-06 remains
-last_updated: "2026-10-25T07:52:04Z"
+stopped_at: Completed 12-06-PLAN.md (gap closure G-12-3) — all 6 phase-12 plans done
+last_updated: "2026-10-25T08:14:00Z"
 last_activity: 2026-10-25
-last_activity_desc: Plan 12-05 executed — byte-only file route and one copy-link URL
+last_activity_desc: Plan 12-06 executed — MAX_UPLOAD_MB crosses into the client dropzone cap hint
 state_head: 8b93d880d11e112eb8213cb348106a33eb39af1a
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 48
-  completed_plans: 47
-  percent: 97
+  completed_plans: 48
+  percent: 100
 milestone_name: Localization
 ---
 
@@ -277,7 +277,9 @@ in `PROJECT.md` under **Requirements → Active**.
 - [Phase 11]: the 21-route sweep pairs a coverage assertion beside the leak scan — an empty page cannot pass; the allow-list stays `[]` and the scanner exits 0 pinned by test; docker-build CI asserts the served fr-*.js chunk contains 'Projets'
 - [Phase 12]: 12-05 — /w/:slug/file/:id is BYTE-ONLY: no Accept/Sec-Fetch-Dest negotiation survives; a pasted file URL serves bytes top-level (inline renders, attachment downloads) and an unauthenticated paste gets the D-05 404 no-oracle for document navigations too (T-12-13 accept)
 - [Phase 12]: 12-05 — the file context menu's data-id-only copyLink resolves its file inside A.copyLink (file branch after fid, id-spaces disjoint); the SPA applyDeepLink 'file' branch is deleted — the pathname serves bytes, in-app previews go through A.previewFile
-- [Phase 12]: pre-existing repo-wide lint (8 errors) and format (19 files) drift predate plan 12-05 — logged to phases/12-*/deferred-items.md, needs a dedicated cleanup task
+- [Phase 12]: 12-05 — pre-existing repo-wide lint (8 errors) and format (19 files) drift predate plan 12-05 — logged to phases/12-*/deferred-items.md, needs a dedicated cleanup task
+- [Phase 12]: 12-06 — MAX_UPLOAD_MB crosses the server→client boundary in five hops (env → /api/config → api.init() state → t() call-site vars → catalogue {n} placeholder); the i18n-scan placeholder gate is the regression guard (no separate scan test)
+- [Phase 12]: 12-06 — operational run-order rule: e2e must follow the FULL build; `npm run build:en` leaves an empty French stub chunk in dist/ and fails all 25 French-surface e2e tests if it is the last build
 
 ## Verification commands used
 
@@ -310,8 +312,8 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Session
 
-**Last session:** 2026-10-25T07:52:04Z
-**Stopped at:** Completed 12-05-PLAN.md (feat 2147c91, feat de467cb) — 12-06 remains
+**Last session:** 2026-10-25T08:14:00Z
+**Stopped at:** Completed 12-06-PLAN.md (feat e0a40e5, feat 73cb414) — all 6 phase-12 plans done
 **Resume file:** None
 
 ## Current Position
@@ -319,13 +321,13 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 Current Plan: 6
 Total Plans in Phase: 6
 
-Phase: 12 (Real file uploads and previews) — EXECUTING
-Status: Executing Phase 12 — plans 12-01..12-05 complete, 12-06 (G-12-3) remains
-Last activity: 2026-10-25 — Plan 12-05 executed — byte-only file route and one copy-link URL
+Phase: 12 (Real file uploads and previews) — ALL PLANS EXECUTED, ready for verification/UAT re-run
+Status: Phase 12 plans 12-01..12-06 complete (gap closures G-12-1, G-12-2, G-12-3 all closed)
+Last activity: 2026-10-25 — Plan 12-06 executed — dropzone cap hint interpolates the live MAX_UPLOAD_MB knob
 
 ## Operator Next Steps
 
-- `/gsd-plan-phase 12` — Real file uploads and previews (next phase; phase 11 fully closed: UAT 3/3, verification passed 8/8)
+- **Phase verification for 12** — all 6 plans executed: `/gsd-verify-work` and the 12-UAT.md re-run (tests 1–3); UAT test 3 re-checks the dropzone hint against a distinctive MAX_UPLOAD_MB value
 - Open warnings from 08-REVIEW.md (0 critical / 4 warning / 3 info): WR-01 double-fire on language select (duplicate PATCH), WR-02 locale set before catalogue load, WR-03 server LOCALE_CODES hand-duplicates the client registry, WR-04 dead catalogue keys for cleared repeat/estimate qualifiers — see 08-REVIEW-DISPOSITION.md; `/gsd-code-review 8 --fix` to auto-fix
 - Open info-level review items for phase 9: IN-05 (readJson unbounded drain), IN-06 (malformed-kind extra echoes literal key) — see 09-REVIEW-DISPOSITION.md
 - Scope agreed for v1.2: machine verbs + structured extras + actCategory classifier
@@ -349,3 +351,4 @@ Last activity: 2026-10-25 — Plan 12-05 executed — byte-only file route and o
 | Phase 10 P02 | ~50 min | 3 tasks | 1 files |
 | Phase 10 P03 | ~25 min | 2 tasks | 1 files |
 | Phase 12 P05 | 8 min | 2 tasks | 5 files |
+| Phase 12 P06 | 18 min | 2 tasks | 7 files |
