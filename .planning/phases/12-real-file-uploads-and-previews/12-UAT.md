@@ -163,14 +163,21 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
   debug_session: ".planning/debug/signin-required-redirect.md"
 
 - gap_id: G-12-6
-  truth: "The PDF preview iframe in Firefox is tall enough that the full viewer toolbar, including the download button, is visible"
+  truth: "The PDF preview iframe in Firefox is wide enough that the full viewer toolbar, including the download button, is visible"
   status: failed
   reason: "User reported: the embedded view in firefox does not show download, its too small, the other things are working"
   severity: major
   test: 1
-  root_cause: ""     # Regression of G-12-4 — filled by diagnosis
-  artifacts: []
-  missing: []
+  root_cause: "The PDF preview iframe is only ~686px wide (.modal.lg max-width:720px in overlays.css:39-41 minus .modal-b padding 32px minus 2px border), below Firefox's embedded pdf.js viewer WIDTH breakpoint of 750px — its @media all and (max-width:750px) .hiddenMediumView rule hides the direct download/print buttons into the '»' secondary menu. The 12-07 fix raised the iframe HEIGHT (modals.js:311 height:min(70vh,560px), verified present) but the toolbar collapse is width-driven; Chrome's PDFium hover-overlay toolbar is width-independent, matching the Firefox-only symptom."
+  artifacts:
+    - path: "src/styles/overlays.css"
+      issue: ".modal.lg { max-width: 720px } (lines 39-41) leaves the iframe 136px under pdf.js's 750px embedded-viewer breakpoint"
+    - path: "src/overlays/modals.js"
+      issue: "filePreview case (line 58) renders every preview in the 'lg' modal class; PDFs need a wider variant"
+  missing:
+    - "Add .modal.xl { max-width: 900px } to overlays.css and render PDF previews with it (modals.js:58: wrap(m.file?.type === 'pdf' ? 'xl' : 'lg', ...)) so the iframe reaches ~866px >= 751px and Firefox's default toolbar keeps download/print visible; consider raising iframe height to min(75vh, 640px)"
+    - "Hardening fallback: add a footer Download button for PDFs (modals.js:315: <a class=btn href=/w/:slug/file/:id download=...>) honoring the download attribute same-origin, with new i18n keys act.download ('Download'/'Télécharger') in en.json/fr.json"
+  debug_session: ".planning/debug/firefox-pdf-toolbar-round2.md"
 
 ## Deferred Follow-Ups
 
