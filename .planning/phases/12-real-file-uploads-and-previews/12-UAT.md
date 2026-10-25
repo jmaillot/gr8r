@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
@@ -8,10 +8,7 @@ updated: 2026-10-25T17:40:34Z
 
 ## Current Test
 
-number: 5
-name: Triage WR-01 at ~700-800px window width
-expected: With the app open, resize the browser window to ~700-800px CSS width and open a PDF preview. Decide the intended behavior below the ~816px threshold: today the pdf.js toolbar collapses again (iframe <750px) but the footer Download button still saves the file. Either accept that as the documented narrow-viewport fallback or request a fix, and record the decision in 12-REVIEW-DISPOSITION.md.
-status: awaiting
+[none — session complete]
 
 ## Tests
 
@@ -69,14 +66,16 @@ open a PDF preview. Decide the intended behavior below the ~816px threshold: tod
 pdf.js toolbar collapses again (iframe <750px) but the footer Download button still
 saves the file. Either accept that as the documented narrow-viewport fallback or
 request a fix, and record the decision in 12-REVIEW-DISPOSITION.md.
-result: pending
+result: pass
+source: manual
+note: user accepted the narrow-viewport fallback — decision recorded in 12-REVIEW-DISPOSITION.md
 
 ## Summary
 
 total: 5
-passed: 3
+passed: 4
 issues: 1
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -84,11 +83,13 @@ blocked: 0
 
 G-12-1..G-12-5 are code-closed and re-verified (verification round 4: 21/22
 must-haves, `12-VERIFICATION.md` rewritten 2026-10-25T17:06:30Z). G-12-6 is
-code-closed by 12-08 and behaviorally pinned by e2e, but its Firefox-native half
-(toolbar un-collapsed at the new width) needs the human re-run (test 4). Two open
-code-review advisories await triage before ship: CR-01 (critical, carried: suffix
-Range on a zero-byte file → malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985 —
-fix or accept) and WR-01 (test 5 above) — see 12-REVIEW-DISPOSITION.md.
+code-closed by 12-08, behaviorally pinned by e2e, AND human-confirmed in UAT
+round 3 (test 4 pass: Firefox toolbar un-collapsed at the xl width, footer
+Download saves in both browsers). One open code-review advisory awaits triage
+before ship: CR-01 (critical, carried: suffix Range on a zero-byte file →
+malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985 — fix or accept). WR-01
+was triaged in UAT round 3 test 5 — the user accepted the narrow-viewport
+fallback — decision recorded in 12-REVIEW-DISPOSITION.md.
 
 - gap_id: G-12-1
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
