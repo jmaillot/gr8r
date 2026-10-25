@@ -3,20 +3,20 @@ status: testing
 phase: 12-real-file-uploads-and-previews
 source: [12-VERIFICATION.md]
 started: 2026-10-24T17:50:00Z
-updated: 2026-10-25T10:13:45Z
+updated: 2026-10-25T10:42:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Re-run test 1 in real Chrome AND Firefox (G-12-1 + G-12-4 closure re-check)
+number: 2
+name: Re-run test 2 (G-12-2 + G-12-5 closure re-check)
 expected: |
-  Drop a file >5 MB onto a dropzone, watch the progress row, then open a multi-page
-  PDF's preview modal. Progress advances with real transfer pace and the row disappears
-  on completion; the PDF renders inside the tall scrollable iframe, the full viewer
-  toolbar (with download button) is visible in Firefox, and large PDFs paint without
-  the old whole-file stall ("refused to connect" / "ne peut pas ouvrir cette page"
-  must stay gone).
+  Copy a file link from BOTH « ... » context menu and the modal footer; paste
+  each into a fresh signed-in browser profile; then paste one into a LOGGED-OUT profile.
+  Both entry points copy the identical /w/:slug/file/:id URL; a signed-in paste renders
+  the bytes (inline types) or downloads (attachment types); a logged-out paste now lands
+  on the LOGIN PAGE (not raw signInRequired JSON), and after signing in the browser
+  returns to the same file URL and the bytes render.
 awaiting: user response
 
 ## Tests
@@ -33,7 +33,9 @@ disappears on completion; the PDF renders inside the tall scrollable iframe, the
 viewer toolbar (with download button) is visible in Firefox, and large PDFs paint
 without the old whole-file stall ("refused to connect" / "ne peut pas ouvrir cette
 page" must stay gone).
-result: [pending]
+result: issue
+reported: "the embedded view in firefox does not show download, its too small, the other things are working"
+severity: major
 
 ### 2. Re-run test 2 (G-12-2 + G-12-5 closure re-check)
 expected: Copy a file link from BOTH « ... » context menu and the modal footer; paste
@@ -54,8 +56,8 @@ result: [pending]
 
 total: 3
 passed: 0
-issues: 0
-pending: 3
+issues: 1
+pending: 2
 skipped: 0
 blocked: 0
 
@@ -69,7 +71,9 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
 
 - gap_id: G-12-1
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
-  status: resolved_by: [12-05]
+  status: resolved
+  resolved_by: 12-05-PLAN
+  resolved_at: 2026-10-25
   reason: "User reported: rendering doesnt work either in chrome or firefox (firefox says Firefox ne peut pas ouvrir cette page / chrome says refused to connect.)"
   severity: major
   test: 1
@@ -83,7 +87,9 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
 
 - gap_id: G-12-2
   truth: "Copied file URLs behave consistently and render bytes in a fresh browser session"
-  status: resolved_by: [12-05]
+  status: resolved
+  resolved_by: 12-05-PLAN
+  resolved_at: 2026-10-25
   reason: "User reported: copy a file link does not have same behaviour between the ... copy link and copy link in the embedding, url works in embedding copy link but no rendering"
   severity: major
   test: 2
@@ -104,7 +110,9 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
 
 - gap_id: G-12-3
   truth: "Dropzone hint text reflects the configured MAX_UPLOAD_MB value"
-  status: resolved_by: [12-06]
+  status: resolved
+  resolved_by: 12-06-PLAN
+  resolved_at: 2026-10-25
   reason: "User reported: \"Déposez des fichiers ici ou browse — jusqu'à 250 Mo chacun\" ne tient pas compte de la valeur MAX_UPLOAD_MB"
   severity: minor
   test: 3
@@ -125,7 +133,9 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
 
 - gap_id: G-12-4
   truth: "A multi-page PDF renders inside the iframe embed in the preview modal"
-  status: resolved_by: [12-07]
+  status: resolved
+  resolved_by: 12-07-PLAN
+  resolved_at: 2026-10-25
   reason: "User reported: yes but the embed is a little too slow, i dont see all the menu so i can't download it — only on firefox, in chrome i have a download button"
   severity: major
   test: 1
@@ -145,7 +155,9 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
 
 - gap_id: G-12-5
   truth: "A non-authenticated browser loading a file URL is redirected to the login page (not shown a raw JSON error)"
-  status: resolved_by: [12-07]
+  status: resolved
+  resolved_by: 12-07-PLAN
+  resolved_at: 2026-10-25
   reason: "User reported: it work as described, i just tested another behaviour on non logged browser, i have error \"Sign in to continue\" / code \"signInRequired\", can we simply redirect to the login page ?"
   severity: minor
   test: 2
@@ -158,6 +170,16 @@ malformed 206 + ERR_OUT_OF_RANGE, server.js:1982-1985) awaits a triage decision
     - "Keep JSON/404 behaviour for iframe/embed/fetch destinations and for authenticated-but-unauthorized callers (404 no-oracle preserved; redirect only on 'no session', never on 'not a member')"
     - "Update the T-12-13 route comment to record the reopened decision"
   debug_session: ".planning/debug/signin-required-redirect.md"
+
+- gap_id: G-12-6
+  truth: "The PDF preview iframe in Firefox is tall enough that the full viewer toolbar, including the download button, is visible"
+  status: failed
+  reason: "User reported: the embedded view in firefox does not show download, its too small, the other things are working"
+  severity: major
+  test: 1
+  root_cause: ""     # Regression of G-12-4 — filled by diagnosis
+  artifacts: []
+  missing: []
 
 ## Deferred Follow-Ups
 
