@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-24 after completing Phase 11 (French sweep, build gate & ship hardening)*
+*Last updated: 2026-10-25 after completing Phase 12 (real file uploads and previews — final phase of v1.2)*
 
 ## What it is
 
@@ -122,6 +122,24 @@ French, every user has their own locale — and the full app journey is covered 
     expectation as soon as the interface is French. The `Intl.Collator` sort order is
     deferred, because it changes an order the existing tests assume.
 
+## Decisions from Phase 12 (validated by the owner through UAT)
+
+1. **Zero-runtime-dependency held.** Uploads, previews and range streaming use only Node
+   built-ins (`node:http` raw body, `fs.createReadStream`) and the browser's native XHR/iframe —
+   no new package.
+2. **Fixed Content-Type map (D-06).** An allow-list decides inline vs attachment: png/jpg/jpeg/
+   gif/webp/pdf inline (PDF gets `frame-ancestors 'self'` for the embed), everything else —
+   including svg — `application/octet-stream` + attachment. No sniffing, no user-supplied mime.
+3. **Byte-only file route (T-12-13, reopened then refined).** `/w/:slug/file/:id` serves bytes;
+   an anonymous top-level navigation 302-redirects to the login page with a path-only `next`
+   (no open redirect); iframe/embed/fetch destinations get the bytes or JSON errors, never the SPA.
+4. **Narrow-viewport fallback accepted.** Below ~816px window width the Firefox pdf.js toolbar
+   collapses again, but the PDF-only footer Download button keeps the save path — accepted by
+   the owner in UAT round 3 (WR-01 triage).
+5. **Deferred hardening is explicit.** Quotas per workspace/user, antivirus scanning and
+   external object storage stay out of scope; CR-01 (suffix Range on a zero-byte file →
+   malformed 206) is an accepted residual risk (AR-12-1 in 12-SECURITY.md) pending a fix.
+
 ## Requirements
 
 ### Validated
@@ -151,6 +169,15 @@ French, every user has their own locale — and the full app journey is covered 
 - ✓ No route serves an untranslated English string; the build gate blocks new uncatalogued
   literals and the shipped Docker image proves the French catalogue — Phase 11
   (UAT-10; UAT 3/3)
+- ✓ Real file uploads: raw-body streaming endpoint under `DATA_DIR/files/`, real XHR
+  progress, oversize 413 `uploadTooLarge`, per-member auth gates — Phase 12
+  (UPLOAD-01…05; verification 21/22, UAT round 3 4/4)
+- ✓ Real previews for PDF and images: byte-only `/w/:slug/file/:id` route (D-06 header
+  policy, byte-range 206 support), tall scrollable PDF iframe wide enough for Firefox's
+  full viewer toolbar, PDF-only footer Download — Phase 12 (PREVIEW-01…03, LINK-01;
+  G-12-1…G-12-6 all closed and human-confirmed)
+- ✓ A logged-out browser pasting a file URL lands on the login page (not raw JSON) and
+  returns to the file after sign-in — Phase 12 (T-12-13 reopened decision)
 
 ### Active
 
