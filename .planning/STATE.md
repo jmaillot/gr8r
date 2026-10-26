@@ -4,16 +4,16 @@ milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 14
 current_phase_name: Schema & Session Ground Truth
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 14-04-PLAN.md (client sessions wiring + 2FA surface deletion)
-last_updated: "2026-10-26T22:19:16.379Z"
-state_head: 6006ba37f0a0721ba28935b0e868c869f509cc9f
+stopped_at: Completed 14-05-PLAN.md (D-28 client teardown wiring — phase 14 gap closed)
+last_updated: "2026-10-26T23:05:50.072Z"
+state_head: 10bf492dc73b66dd9f24a4ca7d14c42330e734ae
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 last_activity: 2026-10-26
 ---
 
@@ -34,9 +34,9 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 14 (Schema & Session Ground Truth) — READY TO EXECUTE
+Phase: 14 (Schema & Session Ground Truth) — EXECUTING
 
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 5
 
 Plans ready: 4 (14-01, 14-02, 14-03, 14-04) — 2 execution waves
@@ -96,6 +96,7 @@ touch this milestone):
 - [Phase 14 / 14-02]: client foundation landed — 10 dev.* device-label keys + err.signedOutElsewhere in both locales (D-28), signedOutElsewhere in CLIENT_ONLY_ERR_CODES (P-D), api.sessions/revokeSession/revokeAllSessions as auth-scoped no-slug-guard methods, deviceLabel(ua) renders only t('dev.*') tokens; i18n count pin 1549 and api call-site pin 24 updated in-commit
 - [Phase 14]: 14-03 revocation primitive landed: opaque 12-char hash-prefix ids (D-27), keep-current disconnect-all SQL (P-H), user-scoped idempotent-204 per-row DELETE (OQ4 — no sessionNotFound code), metadata capture at all 3 insert sites, touchLastSeen 60s throttle with lastSeenNext map (T-14-07 map-lost-on-restart proven by test)
 - [Phase 14]: 14-04 client wiring landed: sessions tab reads S.ui.sessions (server ground truth) with deviceLabel()/ago()/no location (D-19), revokes call the 14-03 DELETE endpoints with D-29 refresh, signOutRevoked() = A.signOut + err.signedOutElsewhere (D-28); 2FA stubs + tab deleted (D-33), settings.tfa.* keys kept for Phase 16 reuse; guard pins moved in-commit (icon baseline 172-3=169, data-a 434-430, section-id 2fa removed)
+- [Phase 14]: D-28 gap closure: central mid-session 401 intercept in api.js call() routes every signInRequired 401 through the registered signOutRevoked teardown (once-per-revocation latch, boot guard, re-arm); per-site revoke-action branches retired; err.sessionExpired fully retired from catalogues and allowlist
 
 ## Verification commands used
 
@@ -123,8 +124,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26T18:48:57.079Z
-**Stopped at:** Completed 14-04-PLAN.md (client sessions wiring + 2FA surface deletion)
+**Last session:** 2026-10-26T23:05:50.030Z
+**Stopped at:** Completed 14-05-PLAN.md (D-28 client teardown wiring — phase 14 gap closed)
 **Resume file:** None
 
 ## Operator Next Steps
@@ -144,3 +145,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 14 P03 | 4min | 3 tasks | 2 files |
 | Phase 14 P03 | 4min | 3 tasks | 2 files |
 | Phase 14 P04 | 13min | 2 tasks | 7 files |
+| Phase 14 P05 | ~13 min | 3 tasks | 9 files |
