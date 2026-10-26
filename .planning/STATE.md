@@ -2,15 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
-status: roadmap_created
-stopped_at: Phase 13 context gathered
-last_updated: "2026-10-26T09:55:33.891Z"
-state_head: 44820167941efcac700f8be4874d9062b004360b
+status: plan_13_01_complete
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-10-26T10:54:55.906Z"
+state_head: 65d92a679d37cf363ee54cb25a9d393e70e08b03
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 1
-  completed_plans: 0
+  completed_plans: 1
 last_activity: 2026-10-26
 current_phase_name: Investigation & Invariant Pinning
 ---
@@ -32,10 +32,10 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-- Phase: **13** (Investigation & Invariant Pinning) — next up
-- Plan: none yet
-- Status: **Roadmap created, pending owner approval → `/gsd-discuss-phase 13` or `/gsd-plan-phase 13`**
-- Progress: `[░░░░░░░░░░░░░░░░░░░░] 0%` — Phases 13–18 of v1.3
+- Phase: **13** (Investigation & Invariant Pinning) — phase's only plan complete
+- Plan: 01 of 01 complete (13-01-SUMMARY.md written)
+- Status: **Plan 13-01 complete — awaiting `/gsd-verify-work` / next phase**
+- Progress: `[█░░░░░░░░░░░░░░░░░░░] ~17%` — 1 of 6 v1.3 phases started; Phase 13's single plan delivered
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -84,6 +84,7 @@ touch this milestone):
   the bundler, so an uncatalogued literal fails the build.
 - Login/signup carry sameOrigin 403 before the throttle; TRUST_PROXY is allow-list opt-in.
 - Operational run-order rule: e2e must follow the FULL build (`build:en` last fails French e2e).
+- [Phase 13]: Phase 13 pinned all 17 auth contracts as 13-DECISIONS.md (D-01…D-17) — the canonical citation target for Phases 14–18: login_challenges table with sessions-table purity, structural pending=anonymous, AES-256-GCM under MASTER_KEY with v1: envelope and fail-closed 503, hash-only recovery codes, rotation-requires-re-enrollment, per-endpoint throttle budgets with IP+email keys and generic lockout copy, vendored qrcode-generator@2.0.4, doc-field removal scoped to Phase 14
 
 ## Verification commands used
 
@@ -111,9 +112,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26T08:38:17.519Z
-**Stopped at:** Phase 13 context gathered
-**Resume file:** .planning/phases/13-investigation-invariant-pinning/13-CONTEXT.md
+**Last session:** 2026-10-26T10:54:55.876Z
+**Stopped at:** Completed 13-01-PLAN.md
+**Resume file:** None
 
 ## Operator Next Steps
 
@@ -125,3 +126,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | — | | | |
+| Phase 13 P01 | 5min | 3 tasks | 1 files |
