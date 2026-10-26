@@ -207,6 +207,7 @@ A.go = el => {
   const tabOnly = r === 'project' && S.ui.route === 'project' && S.ui.params.id === p.id;
   go(r, p, { tab: tabOnly });
   if (r === 'members' && api.enabled) refreshMembers();
+  if (r === 'settings' && p.sec === 'sessions' && api.enabled) refreshSessions();
 };
 A.back = () => {
   const h = S.ui.history.pop();
@@ -1792,6 +1793,20 @@ export async function refreshMembers() {
   return res.data;
 }
 
+/* The sessions tab reads the server's session table (SESS-01) — never the
+   document, which stopped carrying a sessions field in 14-01. Refreshed on
+   mount (the A.go hook above) and after every successful revocation (D-29);
+   no polling, no sockets (D-29). */
+export async function refreshSessions() {
+  if (!api.enabled) return null;
+  const res = await api.sessions();
+  if (!res.ok) return null;
+  S.ui.sessions = res.data.sessions || [];
+  S.ui.sessionsLoaded = true;
+  render();
+  return res.data;
+}
+
 A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
   if (!row?.email) return;
@@ -2099,6 +2114,13 @@ A.signOut = async () => {
   S.ui.errors = {};
   render();
 };
+/* D-28: a revoked browser's 401 teardown — the same sign-out path as A.signOut,
+   but with the honest "signed out elsewhere" copy instead of the generic
+   session-expired toast (err.signedOutElsewhere landed in 14-02). */
+async function signOutRevoked() {
+  await A.signOut();
+  toast(t('err.signedOutElsewhere'), { kind: 'err' });
+}
 A.shortcuts = () => {
   S.ui.pop = null;
   S.ui.palette = null;
@@ -2368,10 +2390,14 @@ A.savePassword = () => {
     toast(t('toast.passwordUpdated'));
   });
 };
-A.revokeSession = el => {
-  mutate(() => {
-    D().sessions = D().sessions.filter(s => s.id !== el.dataset.id);
-  });
+A.revokeSession = async el => {
+  const id = el.dataset.id;
+  const res = await api.revokeSession(id);
+  if (!res.ok) {
+    if (res.status === 401) return signOutRevoked(); // D-28
+    return toast(res.error || t('err.sessionExpired'), { kind: 'err' });
+  }
+  await refreshSessions(); // D-29
   toast(t('toast.sessionSignedOut'));
 };
 A.revokeAll = () =>
@@ -2381,48 +2407,14 @@ A.revokeAll = () =>
     ok: t('act.signOutOthers'),
     danger: true,
     icon: 'log-out',
-    run: () => {
-      mutate(() => {
-        D().sessions = D().sessions.filter(s => s.cur);
-      });
+    run: async () => {
+      const res = await api.revokeAllSessions();
+      if (!res.ok) {
+        if (res.status === 401) return signOutRevoked(); // D-28
+        return toast(res.error || t('err.sessionExpired'), { kind: 'err' });
+      }
+      await refreshSessions(); // D-29
       toast(t('toast.signedOutOthers'));
-    },
-  });
-A.setup2fa = () => {
-  S.ui.tfaSetup = true;
-  S.ui.errors = {};
-  render();
-};
-A.cancel2fa = () => {
-  S.ui.tfaSetup = false;
-  render();
-};
-A.verify2fa = () => {
-  const v = $('#tfa-code').value.trim();
-  if (!/^\d{6}$/.test(v)) {
-    S.ui.errors.tfa = t('err.tfaCode');
-    render();
-    return;
-  }
-  S.ui.errors = {};
-  mutate(() => {
-    D().tfa = true;
-    S.ui.tfaSetup = false;
-  });
-  toast(t('toast.twoFaEnabled'));
-};
-A.disable2fa = () =>
-  confirmDlg({
-    title: t('act.disable2faTitle'),
-    body: t('act.disable2faBody'),
-    ok: t('act.turnOff'),
-    danger: true,
-    icon: 'shield-off',
-    run: () => {
-      mutate(() => {
-        D().tfa = false;
-      });
-      toast(t('toast.twoFaDisabled'));
     },
   });
 /* auth */
