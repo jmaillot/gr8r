@@ -36,7 +36,7 @@ PASS-01–03, TFA-01–05 and AUTH-02)
   4. The TOTP secret encryption-at-rest question is answered once (with DEPLOY.md consequences noted) and throttle constants are fixed per endpoint, with no budget reset between password and 2FA steps
   5. The doc-field removal plan for `sessions`/`tfa` is scoped to its landing phase (Phase 14) with the guarantees it must keep (byte-identical second boot)
 
-**Plans**: 1 plan executed; +1 gap-closure plan (13-02, from verification gaps_found)
+**Plans**: 2/2 plans complete executed; +1 gap-closure plan (13-02, from verification gaps_found)
 
 Plans:
 **Wave 1**
@@ -118,7 +118,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 13. Investigation & Invariant Pinning | 1/1 | In Progress|  |
+| 13. Investigation & Invariant Pinning | 2/2 | Complete    | 2026-10-26 |
 | 14. Schema & Session Ground Truth | 0/N | Not started | - |
 | 15. Password Change End-to-End | 0/N | Not started | - |
 | 16. TOTP Core & Enrollment | 0/N | Not started | - |

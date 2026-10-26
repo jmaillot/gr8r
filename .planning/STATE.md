@@ -3,16 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
 status: plan_13_02_complete
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-10-26T13:07:00Z"
-state_head: f0a8e2bce1eb6e8cfd2a20a1359706788023e992
+stopped_at: Phase 13 complete, ready to plan Phase 14
+last_updated: "2026-10-26T13:31:01.855Z"
+state_head: a8a2001fbfa0259628da60b139cfceac49178529
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
+  percent: 17
 last_activity: 2026-10-26
-current_phase_name: investigation-invariant-pinning
+current_phase: 14
+current_phase_name: Schema & Session Ground Truth
 ---
 
 # STATE
@@ -114,7 +116,7 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 ## Session
 
 **Last session:** 2026-10-26T13:07:00Z
-**Stopped at:** Completed 13-02-PLAN.md
+**Stopped at:** Phase 13 complete, ready to plan Phase 14
 **Resume file:** None
 
 ## Operator Next Steps
