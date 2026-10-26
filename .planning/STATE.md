@@ -5,15 +5,15 @@ milestone_name: Auth Hardening
 current_phase: 14
 current_phase_name: Schema & Session Ground Truth
 current_plan: 4
-status: executing
-stopped_at: Completed 14-03-PLAN.md (server sessions endpoints + throttle + suite)
-last_updated: "2026-10-26T18:34:54.779Z"
-state_head: 5adf3864f02e169f2b557f96c77d3cf102b4e129
+status: verifying
+stopped_at: Completed 14-04-PLAN.md (client sessions wiring + 2FA surface deletion)
+last_updated: "2026-10-26T18:48:57.119Z"
+state_head: ad2557b79d87a4d235d82f207221df19ba72aa1a
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 last_activity: 2026-10-26
 ---
 
@@ -40,7 +40,7 @@ Current Plan: 4
 Total Plans in Phase: 4
 
 Plans ready: 4 (14-01, 14-02, 14-03, 14-04) — 2 execution waves
-Status: Executing Phase 14
+Status: Phase complete — ready for verification
 Progress: `[██░░░░░░░░░░░░░░░░░░] ~22%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed)
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
@@ -95,6 +95,7 @@ touch this milestone):
 - [Phase 14]: AUTH-02 additive migration landed in 14-01: sessions gains label/ip/last_seen_at/user_agent, users gains dormant two_fa_* (not null default 0), login_challenges table + expiry index per D-01/D-04/D-31; ensureColumn defs byte-identical to SCHEMA (P-B); normalizeDoc + docFromClient independently strip sessions/tfa (P-A) and emptyDoc/seed.js literals deleted (D-33); no backfill
 - [Phase 14 / 14-02]: client foundation landed — 10 dev.* device-label keys + err.signedOutElsewhere in both locales (D-28), signedOutElsewhere in CLIENT_ONLY_ERR_CODES (P-D), api.sessions/revokeSession/revokeAllSessions as auth-scoped no-slug-guard methods, deviceLabel(ua) renders only t('dev.*') tokens; i18n count pin 1549 and api call-site pin 24 updated in-commit
 - [Phase 14]: 14-03 revocation primitive landed: opaque 12-char hash-prefix ids (D-27), keep-current disconnect-all SQL (P-H), user-scoped idempotent-204 per-row DELETE (OQ4 — no sessionNotFound code), metadata capture at all 3 insert sites, touchLastSeen 60s throttle with lastSeenNext map (T-14-07 map-lost-on-restart proven by test)
+- [Phase 14]: 14-04 client wiring landed: sessions tab reads S.ui.sessions (server ground truth) with deviceLabel()/ago()/no location (D-19), revokes call the 14-03 DELETE endpoints with D-29 refresh, signOutRevoked() = A.signOut + err.signedOutElsewhere (D-28); 2FA stubs + tab deleted (D-33), settings.tfa.* keys kept for Phase 16 reuse; guard pins moved in-commit (icon baseline 172-3=169, data-a 434-430, section-id 2fa removed)
 
 ## Verification commands used
 
@@ -122,8 +123,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26T18:34:54.737Z
-**Stopped at:** Completed 14-03-PLAN.md (server sessions endpoints + throttle + suite)
+**Last session:** 2026-10-26T18:48:57.079Z
+**Stopped at:** Completed 14-04-PLAN.md (client sessions wiring + 2FA surface deletion)
 **Resume file:** None
 
 ## Operator Next Steps
@@ -142,3 +143,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 14 P02 | 3min | 2 tasks | 6 files |
 | Phase 14 P03 | 4min | 3 tasks | 2 files |
 | Phase 14 P03 | 4min | 3 tasks | 2 files |
+| Phase 14 P04 | 13min | 2 tasks | 7 files |
