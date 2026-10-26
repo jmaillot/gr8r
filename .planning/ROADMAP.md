@@ -36,10 +36,11 @@ PASS-01–03, TFA-01–05 and AUTH-02)
   4. The TOTP secret encryption-at-rest question is answered once (with DEPLOY.md consequences noted) and throttle constants are fixed per endpoint, with no budget reset between password and 2FA steps
   5. The doc-field removal plan for `sessions`/`tfa` is scoped to its landing phase (Phase 14) with the guarantees it must keep (byte-identical second boot)
 
-**Plans**: 1/1 plans executed
+**Plans**: 1 plan executed; +1 gap-closure plan (13-02, from verification gaps_found)
 
 Plans:
 - [x] 13-01-PLAN.md — Produce 13-DECISIONS.md: verified stub diagnosis + pinned contracts D-01…D-17 (pending-2FA, encryption-at-rest, throttle, QR) + Phase 14 removal scope
+- [ ] 13-02-PLAN.md — Gap closure: reconcile D-04 landing phase (Phase 14 owns the replay-guard column, Phase 16 the guard behavior) + resolve D-13 override scope (server.js:1235 copy replaced in Phase 17) in 13-DECISIONS.md; refresh stale [VERIFIED] count in 13-01-SUMMARY.md
 
 ### Phase 14: Schema & Session Ground Truth
 
