@@ -151,8 +151,11 @@ test('a second boot is a no-op and both accounts keep access', async () => {
 - **D-04:** TOTP replay guard (last-used time-step counter) is a column on `users`, in the
   same migration as the other 2FA columns — it protects both the login verify path and the
   settings-page verify path (a challenge-scoped counter would not).
-  **Consumed by:** Phase 16 (migration adds the column with the other 2FA columns; the replay
-  guard serves both verify paths).
+  **Consumed by:** Phase 14 adds the replay-guard column in the AUTH-02 additive migration,
+  in the same migration as the other 2FA columns, together with its
+  byte-identical second-boot test coverage; Phase 16 implements the guard behavior
+  itself — reading and updating the column in the login verify path and the settings-page
+  verify path.
 
 ## Area 2: TOTP secret encryption-at-rest
 
@@ -298,7 +301,7 @@ Binding anti-patterns; each cites its owning decision ID:
 
 | Decision area / scope | Decisions | Consuming phase(s) |
 |-----------------------|-----------|--------------------|
-| Pending-2FA login mechanism | D-01…D-04 | Phase 14 (AUTH-02 migration: `login_challenges` DDL, replay-guard column), Phase 17 (login flow, challenge lifecycle, 401-matrix e2e) |
+| Pending-2FA login mechanism | D-01…D-04 | Phase 14 (AUTH-02 migration: `login_challenges` DDL, replay-guard column with byte-identical second-boot test coverage), Phase 16 (replay-guard behavior in the login and settings-page verify paths), Phase 17 (login flow, challenge lifecycle, 401-matrix e2e) |
 | TOTP secret encryption-at-rest | D-05…D-10 | Phase 16 (crypto helpers, fail-closed guards, DEPLOY.md env + rotation docs), Phase 18 (e2e 503 assertions, fixed dev key) |
 | Throttle & lockout constants | D-11…D-14 | Phase 15 (password-change endpoint), Phases 16/17 (code endpoints, budget carry-over, generic lockout copy) |
 | QR provisioning | D-15…D-17 | Phase 16 (vendor pin + re-verification task, `src/lib/qr.js`, fixture test), Phase 18 (real-device UAT) |
