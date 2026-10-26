@@ -16,3 +16,30 @@
   is 14/14, lint and prettier are clean on all three touched files.
 - **Suggested fix for a later plan (not 14-01):** re-point the test at the v1.2 milestone archive
   (`.planning/milestones/v1.2-ROADMAP.md`) or gate the check on milestone detection.
+
+## 2026-10-27 — 14-05 revision (checker INFO dispositions)
+
+### Expiry vs. revocation toast-copy semantics (for Phase 15 planning context)
+
+- **Fact:** a natural mid-session expiry (server sweeper kills the row, D-28 teardown path
+  fires on the next request's 401) is indistinguishable server-side from an explicit
+  revocation — `requireUser()` emits the same 401 `signInRequired` code either way. Both
+  therefore render the same honest-copy toast: `err.signedOutElsewhere` ("signed out from
+  another device"), even when the cause was expiry rather than another device.
+- **Status:** the copy was agent discretion under 14-CONTEXT (honest-copy rule) and is
+  locked by executed 14-02 (EN+FR catalogue); no revision required. 14-05's Task 3 makes
+  this explicit by retiring the old generic session-expired key — the teardown's copy is
+  the only mid-session 401 copy from here on.
+- **Phase 15 note:** when the password-change flow (PASS-02/03) reuses the teardown
+  primitive, the same copy semantics apply — a password change that kills other sessions
+  renders "signed out from another device" on the affected browsers. If a distinct
+  "signed out because your password changed" copy is ever wanted, it needs a new server
+  401 code + catalogue keys, not a teardown change.
+
+### RESEARCH.md Open Questions marker (phase-ship artifact note)
+
+- All five open questions in `14-RESEARCH.md` `## Open Questions` were resolved in
+  practice by executed plans 14-01…14-04 (verified against 14-VERIFICATION.md truths).
+  The section header lacks the `(RESOLVED)` suffix — stale artifact, not a defect.
+- **Disposition at phase ship:** mark the section `(RESOLVED)` when archiving phase 14;
+  do not edit RESEARCH.md mid-revision.
