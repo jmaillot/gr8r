@@ -74,4 +74,26 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 ## Traceability
 
-Filled by the roadmap after phase mapping.
+Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1–4, v1.2=5–12).
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SESS-01 | Phase 14 — Schema & Session Ground Truth | Pending |
+| SESS-02 | Phase 14 — Schema & Session Ground Truth | Pending |
+| SESS-03 | Phase 14 — Schema & Session Ground Truth | Pending |
+| AUTH-02 | Phase 14 — Schema & Session Ground Truth | Pending |
+| PASS-01 | Phase 15 — Password Change End-to-End | Pending |
+| PASS-02 | Phase 15 — Password Change End-to-End | Pending |
+| PASS-03 | Phase 15 — Password Change End-to-End | Pending |
+| TFA-01 | Phase 16 — TOTP Core & Enrollment | Pending |
+| TFA-02 | Phase 16 — TOTP Core & Enrollment | Pending |
+| TFA-03 | Phase 16 — TOTP Core & Enrollment | Pending |
+| TFA-04 | Phase 16 — TOTP Core & Enrollment | Pending |
+| TFA-05 | Phase 17 — Login Second-Factor Flow | Pending |
+| AUTH-01 | Phase 18 — Closing Verification | Pending |
+| AUTH-03 | Phase 18 — Closing Verification | Pending |
+
+Coverage: 14/14 ✓ — no orphan, no duplicate. (AUTH-01 and AUTH-02 thread through the phases they
+touch but map to exactly one: AUTH-02's migration + doc-field removal lands in Phase 14; AUTH-01
+is enforced per-phase and gated as a whole-surface check in Phase 18. Phase 13 is decision
+groundwork with no dedicated requirement.)
