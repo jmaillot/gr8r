@@ -11,12 +11,12 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 ### Session Management
 
-- [x] **SESS-01**: User can see their active sessions — device label, IP, last-seen, "this
+- [ ] **SESS-01**: User can see their active sessions — device label, IP, last-seen, "this
   session" marker — served by a real `GET /api/auth/sessions` endpoint backed by the
   `sessions` table (with new `label` / `last_seen_at` columns).
-- [x] **SESS-02**: User can disconnect all other sessions with a working button; the current
+- [ ] **SESS-02**: User can disconnect all other sessions with a working button; the current
   session stays signed in (revoke-others excludes the current `token_hash`).
-- [x] **SESS-03**: User can disconnect one individual session per row (per-session revoke).
+- [ ] **SESS-03**: User can disconnect one individual session per row (per-session revoke).
 
 ### Password Change
 
@@ -47,7 +47,7 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 - [ ] **AUTH-01**: All new user-facing strings and error codes are catalogued in English and
   French; the `i18n-scan.mjs` build gate stays green (hard dependency, not polish).
-- [x] **AUTH-02**: Migration is additive columns/tables only with the byte-identical second-boot
+- [ ] **AUTH-02**: Migration is additive columns/tables only with the byte-identical second-boot
   no-op guaranteed (`test/migration.test.mjs` extended); the fake `sessions` / `tfa` fields are
   removed from the workspace document (`emptyDoc()`, `seed.js`) — the v1.1 audit Active item.
 - [ ] **AUTH-03**: All three flows are covered end-to-end in both locales (Chromium e2e); the QR
@@ -78,10 +78,10 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SESS-01 | Phase 14 — Schema & Session Ground Truth | Complete |
-| SESS-02 | Phase 14 — Schema & Session Ground Truth | Complete |
-| SESS-03 | Phase 14 — Schema & Session Ground Truth | Complete |
-| AUTH-02 | Phase 14 — Schema & Session Ground Truth | Complete |
+| SESS-01 | Phase 14 — Schema & Session Ground Truth | Gaps Found |
+| SESS-02 | Phase 14 — Schema & Session Ground Truth | Gaps Found |
+| SESS-03 | Phase 14 — Schema & Session Ground Truth | Gaps Found |
+| AUTH-02 | Phase 14 — Schema & Session Ground Truth | Gaps Found |
 | PASS-01 | Phase 15 — Password Change End-to-End | Pending |
 | PASS-02 | Phase 15 — Password Change End-to-End | Pending |
 | PASS-03 | Phase 15 — Password Change End-to-End | Pending |
