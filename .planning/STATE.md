@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.2
-status: Awaiting next milestone
-stopped_at: Phase 12 complete — all phases complete
-last_updated: "2026-10-25T19:49:56.865Z"
-last_activity: 2026-10-25
-last_activity_desc: Milestone v1.2 completed and archived
-state_head: d4f951c9812c53da92a97e0cdbe99d26598fb111
+milestone: v1.3
+milestone_name: Auth Hardening
+status: planning
+last_updated: "2026-10-26T07:08:22.927Z"
+last_activity: 2026-10-26
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 50
-  completed_plans: 50
-  percent: 100
-milestone_name: Localization
-current_phase: 12
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE
@@ -319,10 +315,10 @@ node server.js          # with DATA_DIR pointing at a copy of a real database
 
 ## Current Position
 
-Phase: Milestone v1.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-25 — Milestone v1.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-10-26 — Milestone v1.3 started
 
 ## Operator Next Steps
 

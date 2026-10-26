@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-25 at the v1.2 milestone close (Localization shipped, audited, archived)*
+*Last updated: 2026-10-26 at the v1.3 milestone start (Auth Hardening scope confirmed)*
 
 ## What it is
 
@@ -14,6 +14,19 @@ board / list / table / calendar / timeline / files views, members, teams, activi
   `SEED_DATA=false`.
 - **Multi-tenant since v1.1**: a workspace is a real tenant with its own URL, document and
   membership list. An account can belong to several workspaces with a role in each.
+
+## Current Milestone: v1.3 Auth Hardening
+
+**Goal:** The auth surface becomes real — sessions, password change and 2FA stop being (possibly)
+stubs and work end to end.
+
+**Target features:**
+- Sessions page: "disconnect other sessions" actually revokes other sessions (button currently
+  never activates despite listing 2 active sessions)
+- Password change: new password works at login AND automatically revokes all other sessions
+- 2FA: real TOTP — secret, `otpauth://` URI, scannable QR code, 6-digit code verification
+  (current QR is fake/illegible)
+- One investigation phase first: diagnose whether all three share a stubbed auth-zone root cause
 
 ## Milestone v1.2 Localization — SHIPPED (2026-10-25)
 
