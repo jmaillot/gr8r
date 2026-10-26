@@ -56,11 +56,11 @@ Plans:
   3. Each row's individual revoke kills exactly that session (SESS-03)
   4. The workspace document contains no `sessions` or `tfa` fields on a fresh install, and an existing database migrates to the new schema with a second boot certified byte-identical (AUTH-02, extended `test/migration.test.mjs`)
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 14-01-PLAN.md — Additive AUTH-02 migration: schema columns + login_challenges table + doc-field strip + extended migration test (tracer)
+- [x] 14-01-PLAN.md — Additive AUTH-02 migration: schema columns + login_challenges table + doc-field strip + extended migration test (tracer)
 - [ ] 14-02-PLAN.md — Client foundation: locale keys (dev.*, err.signedOutElsewhere), API methods, deviceLabel() utility
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -129,7 +129,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 13. Investigation & Invariant Pinning | 2/2 | Complete    | 2026-10-26 |
-| 14. Schema & Session Ground Truth | 0/N | Not started | - |
+| 14. Schema & Session Ground Truth | 1/4 | In Progress|  |
 | 15. Password Change End-to-End | 0/N | Not started | - |
 | 16. TOTP Core & Enrollment | 0/N | Not started | - |
 | 17. Login Second-Factor Flow | 0/N | Not started | - |

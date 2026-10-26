@@ -4,15 +4,15 @@ milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 14
 current_phase_name: Schema & Session Ground Truth
-status: plan_13_02_complete
-stopped_at: Phase 14 context gathered
-last_updated: "2026-10-26T17:25:36.109Z"
-state_head: e27e900253d4f66ab61af5105df8eb01cebfe7ee
+status: executing
+stopped_at: Completed 14-01-PLAN.md (schema migration + doc strip)
+last_updated: "2026-10-26T18:21:51.239Z"
+state_head: 8cf8b51d84416784c60634dc1dcfef4727c2bfef
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 6
-  completed_plans: 2
+  completed_plans: 3
 last_activity: 2026-10-26
 ---
 
@@ -33,9 +33,9 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 14 (Schema & Session Ground Truth) — READY TO EXECUTE
+Phase: 14 (Schema & Session Ground Truth) — EXECUTING
 Plans ready: 4 (14-01, 14-02, 14-03, 14-04) — 2 execution waves
-Status: Phase 14 planned — awaiting `/gsd-execute-phase 14`
+Status: Executing Phase 14
 Progress: `[██░░░░░░░░░░░░░░░░░░] ~22%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed)
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
@@ -87,6 +87,7 @@ touch this milestone):
 - Operational run-order rule: e2e must follow the FULL build (`build:en` last fails French e2e).
 - [Phase 13]: Phase 13 pinned all 17 auth contracts as 13-DECISIONS.md (D-01…D-17) — the canonical citation target for Phases 14–18: login_challenges table with sessions-table purity, structural pending=anonymous, AES-256-GCM under MASTER_KEY with v1: envelope and fail-closed 503, hash-only recovery codes, rotation-requires-re-enrollment, per-endpoint throttle budgets with IP+email keys and generic lockout copy, vendored qrcode-generator@2.0.4, doc-field removal scoped to Phase 14
 - [Phase 13 / 13-02 gap closure]: D-04's landing phase resolved to one answer — Phase 14 owns the replay-guard column in the AUTH-02 additive migration (with byte-identical second-boot test coverage), Phase 16 owns the guard behavior; D-13's override scope resolved — the existing server.js:1235 429 copy is also replaced with the pinned generic copy when Phase 17 reworks the login flow (one logical login = one budget, D-03/D-11)
+- [Phase 14]: AUTH-02 additive migration landed in 14-01: sessions gains label/ip/last_seen_at/user_agent, users gains dormant two_fa_* (not null default 0), login_challenges table + expiry index per D-01/D-04/D-31; ensureColumn defs byte-identical to SCHEMA (P-B); normalizeDoc + docFromClient independently strip sessions/tfa (P-A) and emptyDoc/seed.js literals deleted (D-33); no backfill
 
 ## Verification commands used
 
@@ -114,9 +115,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26T15:00:32.826Z
-**Stopped at:** Phase 14 context gathered
-**Resume file:** .planning/phases/14-schema-session-ground-truth/14-CONTEXT.md
+**Last session:** 2026-10-26T18:21:51.199Z
+**Stopped at:** Completed 14-01-PLAN.md (schema migration + doc strip)
+**Resume file:** None
 
 ## Operator Next Steps
 
@@ -130,3 +131,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | — | | | |
 | Phase 13 P01 | 5min | 3 tasks | 1 files |
 | Phase 13 P02 | 6min | 3 tasks | 2 files |
+| Phase 14 P01 | 5min | 3 tasks | 3 files |

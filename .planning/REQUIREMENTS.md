@@ -47,7 +47,7 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 - [ ] **AUTH-01**: All new user-facing strings and error codes are catalogued in English and
   French; the `i18n-scan.mjs` build gate stays green (hard dependency, not polish).
-- [ ] **AUTH-02**: Migration is additive columns/tables only with the byte-identical second-boot
+- [x] **AUTH-02**: Migration is additive columns/tables only with the byte-identical second-boot
   no-op guaranteed (`test/migration.test.mjs` extended); the fake `sessions` / `tfa` fields are
   removed from the workspace document (`emptyDoc()`, `seed.js`) — the v1.1 audit Active item.
 - [ ] **AUTH-03**: All three flows are covered end-to-end in both locales (Chromium e2e); the QR
@@ -81,7 +81,7 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 | SESS-01 | Phase 14 — Schema & Session Ground Truth | Pending |
 | SESS-02 | Phase 14 — Schema & Session Ground Truth | Pending |
 | SESS-03 | Phase 14 — Schema & Session Ground Truth | Pending |
-| AUTH-02 | Phase 14 — Schema & Session Ground Truth | Pending |
+| AUTH-02 | Phase 14 — Schema & Session Ground Truth | Complete |
 | PASS-01 | Phase 15 — Password Change End-to-End | Pending |
 | PASS-02 | Phase 15 — Password Change End-to-End | Pending |
 | PASS-03 | Phase 15 — Password Change End-to-End | Pending |
