@@ -1337,6 +1337,53 @@ async function handleApi(req, res, url) {
     return json(res, 200, { user: userPayload(fresh) });
   }
 
+  /* ----------------------- session revocation (D-26/D-27) ----------------------- */
+
+  if (pathname === '/api/auth/sessions' && method === 'GET') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    const rows = db
+      .prepare(
+        `select token_hash, created_at, last_seen_at, ip, user_agent
+           from sessions where user_id = ? and expires_at > ? order by created_at desc`,
+      )
+      .all(user.id, now());
+    return json(res, 200, {
+      sessions: rows.map(r => ({
+        id: r.token_hash.slice(0, 12), // D-27: opaque 12-char prefix — the full hash never leaves the server
+        userAgent: r.user_agent,
+        ip: r.ip,
+        createdAt: r.created_at,
+        lastSeenAt: r.last_seen_at, // may be NULL for pre-upgrade rows; the client falls back to createdAt (D-25)
+        current: r.token_hash === tokenHash,
+      })),
+    });
+  }
+
+  if (pathname === '/api/auth/sessions/others' && method === 'DELETE') {
+    /* Exact-string match BEFORE the :id regex below — 'others' is not hex, but the
+       ordering is the auth family convention and defensive against regex loosening. */
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    // Keep-current (P-H): the caller's own session is excluded by the != clause.
+    const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
+    const left = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(user.id, now());
+    return json(res, 200, { revoked: del.changes, remaining: left.n }); // live post-delete counts (Pitfall 10)
+  }
+
+  const sessionMatch = pathname.match(/^\/api\/auth\/sessions\/([0-9a-f]{12})$/);
+  if (sessionMatch && method === 'DELETE') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.
+    db.prepare('delete from sessions where user_id = ? and token_hash like ?').run(user.id, `${sessionMatch[1]}%`);
+    return json(res, 204); // idempotent: an already-dead or foreign id is not an error (OQ4)
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
