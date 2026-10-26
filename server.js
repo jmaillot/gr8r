@@ -90,15 +90,29 @@ const SCHEMA = `
     member_id     text,
     created_at    integer not null,
     last_login_at integer,
-    locale        text
+    locale        text,
+    two_fa_enabled   integer not null default 0,
+    two_fa_secret    text,
+    two_fa_last_step integer not null default 0
   );
   create table if not exists sessions (
     token_hash text primary key,
     user_id    text not null references users(id) on delete cascade,
     created_at integer not null,
-    expires_at integer not null
+    expires_at integer not null,
+    label      text,
+    ip         text,
+    last_seen_at integer,
+    user_agent text
   );
   create index if not exists sessions_expiry on sessions(expires_at);
+  create table if not exists login_challenges (
+    challenge_token_hash text primary key,
+    user_id              text not null references users(id) on delete cascade,
+    expires_at           integer not null,
+    attempts             integer not null default 0
+  );
+  create index if not exists login_challenges_expiry on login_challenges(expires_at);
   create table if not exists workspaces (
     id         text primary key,
     slug       text,
@@ -151,6 +165,15 @@ function openDb() {
   ensureColumn(db, 'memberships', 'member_id', 'text');
   ensureColumn(db, 'invites', 'workspace_id', 'text');
   ensureColumn(db, 'users', 'locale', 'text');
+  // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
+  // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
+  ensureColumn(db, 'sessions', 'label', 'text');
+  ensureColumn(db, 'sessions', 'ip', 'text');
+  ensureColumn(db, 'sessions', 'last_seen_at', 'integer');
+  ensureColumn(db, 'sessions', 'user_agent', 'text');
+  ensureColumn(db, 'users', 'two_fa_enabled', 'integer not null default 0');
+  ensureColumn(db, 'users', 'two_fa_secret', 'text');
+  ensureColumn(db, 'users', 'two_fa_last_step', 'integer not null default 0');
   db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
   return db;
 }
