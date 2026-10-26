@@ -1293,9 +1293,7 @@ async function handleApi(req, res, url) {
     const t = now();
     const ua = String(req.headers['user-agent'] || '');
     const ip = clientIp(req);
-    db.prepare(
-      'insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)',
-    ).run(
+    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
       sha256(token),
       row.id,
       t,
@@ -1410,9 +1408,7 @@ async function handleApi(req, res, url) {
     const t = now();
     const ua = String(req.headers['user-agent'] || '');
     const ip = clientIp(req);
-    db.prepare(
-      'insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)',
-    ).run(
+    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
       sha256(token),
       user.id,
       t,
@@ -1824,9 +1820,7 @@ async function handleApi(req, res, url) {
       const token = crypto.randomBytes(32).toString('base64url');
       const ua = String(req.headers['user-agent'] || '');
       const ip = clientIp(req);
-      db.prepare(
-        'insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)',
-      ).run(
+      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
         sha256(token),
         user.id,
         t,
