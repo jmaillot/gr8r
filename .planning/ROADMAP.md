@@ -34,7 +34,10 @@ PASS-01–03, TFA-01–05 and AUTH-02)
   3. The QR strategy is pinned: a specific vendored MIT encoder file (license header, ESM compatibility with the Vite build) — never hand-written
   4. The TOTP secret encryption-at-rest question is answered once (with DEPLOY.md consequences noted) and throttle constants are fixed per endpoint, with no budget reset between password and 2FA steps
   5. The doc-field removal plan for `sessions`/`tfa` is scoped to its landing phase (Phase 14) with the guarantees it must keep (byte-identical second boot)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 13-01-PLAN.md — Produce 13-DECISIONS.md: verified stub diagnosis + pinned contracts D-01…D-17 (pending-2FA, encryption-at-rest, throttle, QR) + Phase 14 removal scope
 
 ### Phase 14: Schema & Session Ground Truth
 **Goal**: Auth state stops being decorative JSON: sessions and 2FA fields live in per-user rows, the workspace document no longer carries auth fields, and the sessions page drives a real revocation primitive (revoke-others and per-row revoke) that later phases reuse.
