@@ -300,6 +300,10 @@ function normalizeDoc(doc, meta) {
   out.data.ws = { name: meta.name, url: meta.slug, c: meta.color, brand: true };
   out.data.me = null;
   delete out.data.workspaces;
+  // Auth state lives in the sessions table and user columns, never in the
+  // document (D-30): drop legacy sessions/tfa keys on every read.
+  delete out.data.sessions;
+  delete out.data.tfa;
   return out;
 }
 
@@ -616,9 +620,14 @@ function docFromClient(incoming, stored, ws, role, membership) {
       if (m?.userId && !kept.has(m.userId)) next.data.members.push(m);
     }
   }
-  // The plan and invoices fields are gone; a stale client's copy must never resurrect them.
+  // The plan, invoices, sessions and tfa fields are gone; a stale client's copy
+  // must never resurrect them. Both the read path (normalizeDoc) and this write
+  // path strip independently (D-30, P-A), so a stored document is cleaned on the
+  // first load and stays clean after every save.
   delete next.data.plan;
   delete next.data.invoices;
+  delete next.data.sessions;
+  delete next.data.tfa;
   normalizeProjects(next);
   return next;
 }
@@ -794,8 +803,6 @@ function emptyDoc(meta) {
         projOrder: [],
         savedViews: [],
         recentSearches: [],
-        sessions: [],
-        tfa: false,
         notifPrefs: {
           email_mention: true,
           email_assign: true,
