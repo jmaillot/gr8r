@@ -1152,13 +1152,16 @@ function clearSessionCookie(req, res) {
 function currentUser(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE];
   if (!token) return null;
+  const tokenHash = sha256(token);
   const row = db
     .prepare(
-      `select u.* from sessions s join users u on u.id = s.user_id
+      `select u.*, s.last_seen_at as last_seen_at from sessions s join users u on u.id = s.user_id
        where s.token_hash = ? and s.expires_at > ?`,
     )
-    .get(sha256(token), now());
-  return row || null;
+    .get(tokenHash, now());
+  if (!row) return null;
+  touchLastSeen(tokenHash, row.last_seen_at, now());
+  return row;
 }
 
 function requireUser(req, res) {
@@ -1200,6 +1203,23 @@ function tooMany(key, max = 10, windowMs = 15 * 60 * 1000) {
   }
   row.n += 1;
   return row.n > max;
+}
+
+/* Throttled last_seen_at heartbeat (D-22/D-23/D-24): one write per session per
+   LAST_SEEN_BAND. The in-memory map is keyed by token_hash and holds the next
+   eligible epoch; it is lost on restart (T-14-07: one harmless extra write). */
+const lastSeenNext = new Map();
+const LAST_SEEN_BAND = 60 * 1000; // D-22: one write per minute per session
+function touchLastSeen(tokenHash, storedLastSeen, nowTs) {
+  const next = lastSeenNext.get(tokenHash);
+  if (next && nowTs < next) return;
+  if (storedLastSeen && nowTs - storedLastSeen < LAST_SEEN_BAND) {
+    lastSeenNext.set(tokenHash, storedLastSeen + LAST_SEEN_BAND);
+    return;
+  }
+  db.prepare('update sessions set last_seen_at = ? where token_hash = ?').run(nowTs, tokenHash);
+  lastSeenNext.set(tokenHash, nowTs + LAST_SEEN_BAND);
+  if (lastSeenNext.size > 5000) for (const [k, v] of lastSeenNext) if (nowTs > v) lastSeenNext.delete(k);
 }
 
 function readJson(req) {
@@ -1271,11 +1291,18 @@ async function handleApi(req, res, url) {
     attempts.delete(`${clientIp(req)}|${email}`);
     const token = crypto.randomBytes(32).toString('base64url');
     const t = now();
-    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at) values (?,?,?,?)').run(
+    const ua = String(req.headers['user-agent'] || '');
+    const ip = clientIp(req);
+    db.prepare(
+      'insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)',
+    ).run(
       sha256(token),
       row.id,
       t,
       t + SESSION_DAYS * 86400 * 1000,
+      ip,
+      ua,
+      t, // a just-created session was seen at creation (D-25 need not apply to new rows)
     );
     db.prepare('update users set last_login_at = ? where id = ?').run(t, row.id);
     setSessionCookie(req, res, token);
@@ -1334,11 +1361,18 @@ async function handleApi(req, res, url) {
     }
     const token = crypto.randomBytes(32).toString('base64url');
     const t = now();
-    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at) values (?,?,?,?)').run(
+    const ua = String(req.headers['user-agent'] || '');
+    const ip = clientIp(req);
+    db.prepare(
+      'insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)',
+    ).run(
       sha256(token),
       user.id,
       t,
       t + SESSION_DAYS * 86400 * 1000,
+      ip,
+      ua,
+      t, // a just-created session was seen at creation
     );
     setSessionCookie(req, res, token);
     return json(res, 201, { user: userPayload(user) });
@@ -1741,11 +1775,18 @@ async function handleApi(req, res, url) {
     const t = now();
     if (!session) {
       const token = crypto.randomBytes(32).toString('base64url');
-      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at) values (?,?,?,?)').run(
+      const ua = String(req.headers['user-agent'] || '');
+      const ip = clientIp(req);
+      db.prepare(
+        'insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)',
+      ).run(
         sha256(token),
         user.id,
         t,
         t + SESSION_DAYS * 86400 * 1000,
+        ip,
+        ua,
+        t, // a just-created session was seen at creation
       );
       setSessionCookie(req, res, token);
     }
