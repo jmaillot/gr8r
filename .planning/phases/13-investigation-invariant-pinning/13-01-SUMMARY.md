@@ -62,7 +62,7 @@ coverage:
         ref: "grep -c 'Reversibility' 13-DECISIONS.md => 3"
         status: pass
       - kind: other
-        ref: "grep -c '\\[VERIFIED: ' 13-DECISIONS.md => 11 (>= 10)"
+        ref: "grep -c '\\[VERIFIED: ' 13-DECISIONS.md => 16 (>= 10)"
         status: pass
       - kind: other
         ref: "grep -cE 'TODO|TBD|\\bFIXME\\b' 13-DECISIONS.md => 0 (grep exit 1)"
@@ -174,7 +174,7 @@ no commit; that is the audit passing, not a skipped step.
 | Check | Command | Result |
 |-------|---------|--------|
 | Area 1 entry count | `grep -cE '^[[:space:]]*-[[:space:]]*\*\*D-0[1-4]:' 13-DECISIONS.md` | 4 (expected 4) |
-| Evidence citations | `grep -c '\[VERIFIED: ' 13-DECISIONS.md` | 11 (expected ≥ 10) |
+| Evidence citations | `grep -c '\[VERIFIED: ' 13-DECISIONS.md` | 16 (expected ≥ 10) |
 | Areas 2–3 entry count | `grep -cE '^[[:space:]]*-[[:space:]]*\*\*D-(0[5-9]|1[0-4]):' 13-DECISIONS.md` | 10 (expected 10) |
 | Pinned lockout copy | `grep -c 'too many attempts' 13-DECISIONS.md` | 3 (expected ≥ 1) |
 | Pitfall 18 call site | `grep -c 'server.js:1241' 13-DECISIONS.md` | 2 (expected ≥ 1) |
@@ -184,6 +184,11 @@ no commit; that is the audit passing, not a skipped step.
 | Lint | `npm run lint` | pass |
 | Format | `npm run format:check` | pass — "All matched files use Prettier code style!" |
 | Regression | `npm test` | 1 pre-existing v1.2 failure (documented above); no test/source touched |
+
+> **Erratum (13-02):** the original run under-counted the evidence citations — 11 recorded,
+> 16 actual (grep -c line-count semantics; grep -o counts 17 occurrences because one line
+> carries two tags). Under-claiming only; no gate outcome changed. Corrected by plan 13-02
+> (gap closure); the commands above are unchanged, only the recorded results were stale.
 
 ## Known Stubs
 
