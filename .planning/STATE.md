@@ -3,14 +3,15 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
 status: roadmap_created
-last_updated: "2026-10-26T07:30:00.000Z"
-last_activity: 2026-10-26
+stopped_at: Phase 13 context gathered
+last_updated: "2026-10-26T08:38:17.546Z"
+state_head: 515a7baaa17b7262fc4f3f681ddc0a638437b06b
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
+last_activity: 2026-10-26
 ---
 
 # STATE
@@ -109,9 +110,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26
-**Stopped at:** Roadmap for v1.3 written (phases 13–18); awaiting owner approval and discussion.
-**Resume file:** None
+**Last session:** 2026-10-26T08:38:17.519Z
+**Stopped at:** Phase 13 context gathered
+**Resume file:** .planning/phases/13-investigation-invariant-pinning/13-CONTEXT.md
 
 ## Operator Next Steps
 
