@@ -36,6 +36,22 @@ export function wsPath(slug, rest = '') {
   return rest ? `${base}/${String(rest).replace(/^\/+/, '')}` : base;
 }
 
+/* D-28: the once-per-revocation latch and the registered teardown callback.
+   The teardown fires exactly once per revocation: it absorbs the teardown's own
+   logout 401, a concurrent second 401, or a 401 landing inside a revoke action.
+   applyUser() re-arms the latch on a successful re-auth (one honest teardown per
+   revocation, however many happen in the same tab). */
+let revokedHandled = false;
+let revokedHandler = null;
+
+/* Register the single mid-session revocation teardown. actions.js registers
+   signOutRevoked at module load; call() invokes it — a plain function call,
+   never a DOM event, so api.js stays node-safe — when a mid-session 401
+   carries the server's requireUser code (D-28). */
+export function registerAuthRevokedHandler(fn) {
+  revokedHandler = fn;
+}
+
 async function call(method, path, body, { keepalive = false } = {}) {
   let res;
   try {
@@ -60,12 +76,24 @@ async function call(method, path, body, { keepalive = false } = {}) {
   }
   /* The whole payload is the vars bag: interpolate only replaces the names the
        message actually uses, so passing control fields along is safe (CR-02). */
-  return { ok: res.ok, status: res.status, data, error: data?.code ? tErr(data.code, data, data?.error) : data?.error };
+  const result = { ok: res.ok, status: res.status, data, error: data?.code ? tErr(data.code, data, data?.error) : data?.error };
+  /* D-28: a mid-session revocation 401 funnels through the one registered teardown —
+     honest "signed out elsewhere" copy, full sign-out, login screen. Fires only when
+     ALL hold: status 401, the requireUser code (server.js:1170; the only other 401
+     code is invalidCredentials, which cannot occur mid-session), a signed-in account
+     (the boot-time /api/auth/me 401 with no user is normal, not a revocation), and a
+     clear latch. One honest teardown per revocation, owned by the registered callback. */
+  if (res.status === 401 && data?.code === 'signInRequired' && state.user && !revokedHandled) {
+    revokedHandled = true;
+    revokedHandler?.();
+  }
+  return result;
 }
 
 function applyUser(data) {
   state.user = data?.user || null;
   state.workspaces = Array.isArray(state.user?.workspaces) ? state.user.workspaces : [];
+  if (state.user) revokedHandled = false; // re-arm after a successful re-auth (D-28)
   return state.user;
 }
 

@@ -26,7 +26,7 @@ import {
   tasksOf,
   visibleProjects,
 } from '../core/store.js';
-import { api } from '../core/api.js';
+import { api, registerAuthRevokedHandler } from '../core/api.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -2116,11 +2116,15 @@ A.signOut = async () => {
 };
 /* D-28: a revoked browser's 401 teardown — the same sign-out path as A.signOut,
    but with the honest "signed out elsewhere" copy instead of the generic
-   session-expired toast (err.signedOutElsewhere landed in 14-02). */
+   session-expired toast (err.signedOutElsewhere landed in 14-02). Registered
+   once at module load as the central teardown: api.js call() invokes it on any
+   mid-session 401 carrying the server's signInRequired code — save path, boot
+   hydration, sessions refresh and revoke actions all inherit it. */
 async function signOutRevoked() {
   await A.signOut();
   toast(t('err.signedOutElsewhere'), { kind: 'err' });
 }
+registerAuthRevokedHandler(signOutRevoked);
 A.shortcuts = () => {
   S.ui.pop = null;
   S.ui.palette = null;
