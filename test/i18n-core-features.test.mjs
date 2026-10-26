@@ -222,8 +222,8 @@ test('the catalogue holds after the billing removal, the D-10/D-12/D-16 addition
   );
 });
 
-test('the icon baseline holds at 171 names', () => {
+test('the icon baseline holds at 169 names', () => {
   const baseline = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/icons-baseline.json'), 'utf8'));
   const names = Array.isArray(baseline) ? baseline : baseline.icons || Object.keys(baseline);
-  assert.equal(names.length, 171, 'the icon baseline moved'); // − shield-off, dropped with the 2FA stub deletion (14-04)
+  assert.equal(names.length, 169, 'the icon baseline moved'); // − shield-off/shield-alert/shield-check, dropped with the 2FA tab deletion (14-04)
 });

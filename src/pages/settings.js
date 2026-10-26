@@ -2,7 +2,7 @@
    SETTINGS · AUTH · ONBOARDING · DESIGN SYSTEM · SYSTEM STATES
    ===================================================================== */
 import { availableLocales, formatDate, formatTime, getLocale, isAutoDateFmt, t } from '../core/i18n.js';
-import { dOff, esc, fmtDate } from '../core/utils.js';
+import { ago, dOff, deviceLabel, esc, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { D, S, isMemberAdmin, me } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -71,7 +71,6 @@ export const SET_NAV = [
     [
       ['password', 'settings.nav.password', 'key-round'],
       ['sessions', 'settings.nav.sessions', 'monitor-smartphone'],
-      ['2fa', 'settings.nav.twoFactor', 'shield-check'],
     ],
   ],
 ];
@@ -387,39 +386,27 @@ export function settingsBody(sec, title) {
       <div><button class="btn btn-primary" data-a="savePassword" id="pw-save">${t('settings.pw.update')}</button></div></form>`
       );
     }
-    case 'sessions':
+    case 'sessions': {
+      /* Server ground truth (SESS-01): S.ui.sessions is populated by
+         refreshSessions() — the mount hook in A.go and after every revoke.
+         The document no longer carries a sessions field (14-01). No location
+         column anywhere (D-19); pre-upgrade rows with a NULL last_seen_at
+         fall back to createdAt for display (D-25). */
+      const rows = S.ui.sessions || [];
       return (
         H(t('settings.sessions.lead')) +
-        d.sessions
+        rows
           .map(s =>
             srow(
-              `<span class="row" style="gap:8px">${ic(s.dev.includes('iPhone') ? 'smartphone' : 'monitor', 15)}${esc(s.dev)}${s.cur ? `<span class="badge green">${t('settings.sessions.thisDevice')}</span>` : ''}</span>`,
-              `${esc(s.loc)} · ${esc(s.at)}`,
-              s.cur ? '' : `<button class="btn btn-secondary btn-sm" data-a="revokeSession" data-id="${s.id}">${t('palette.signOut')}</button>`,
+              `<span class="row" style="gap:8px">${ic(/iPhone|iPad|Android|Mobile/i.test(s.userAgent) ? 'smartphone' : 'monitor', 15)}${esc(deviceLabel(s.userAgent))}${s.current ? `<span class="badge green">${t('settings.sessions.thisDevice')}</span>` : ''}</span>`,
+              `${esc(s.ip || '—')} · ${esc(s.lastSeenAt || s.createdAt ? ago(s.lastSeenAt || s.createdAt) : '—')}`,
+              s.current ? '' : `<button class="btn btn-secondary btn-sm" data-a="revokeSession" data-id="${esc(s.id)}">${t('palette.signOut')}</button>`,
             ),
           )
           .join('') +
-        `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${d.sessions.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
+        `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${rows.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
       );
-    case '2fa':
-      return (
-        H(t('settings.tfa.lead')) +
-        (d.tfa
-          ? `<div class="alert ok">${ic('shield-check', 16)}<div><b>${t('settings.tfa.on')}</b><div class="muted">${t('settings.tfa.onDesc')}</div></div></div><div class="sblock"><h2>${t('settings.tfa.recovery')}</h2><p class="muted" style="font-size:13px">${t('settings.tfa.recoveryDesc')}</p><div style="display:grid;grid-template-columns:repeat(2,max-content);gap:6px 28px;font-family:var(--mono);font-size:13px;padding:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--sunken);user-select:all">${['7KQ2-M8PX', 'D4TN-9WRE', 'HV3C-QZ6L', 'P2YB-J7SK', 'R9FG-4NUD', 'X6MA-T3HE'].map(c => `<span>${c}</span>`).join('')}</div><div style="margin-top:14px"><button class="btn btn-danger-ghost" data-a="disable2fa">${t('settings.tfa.turnOff')}</button></div></div>`
-          : S.ui.tfaSetup
-            ? `<div class="panel" style="padding:18px;display:flex;gap:20px;flex-wrap:wrap"><div style="width:132px;height:132px;display:grid;grid-template-columns:repeat(11,1fr);gap:1px;padding:8px;background:#fff;border-radius:8px;border:1px solid var(--border)" aria-label="${t('a11y.settings.qr')}">${Array.from(
-                { length: 121 },
-                (_, i) => {
-                  const r = Math.floor(i / 11),
-                    c = i % 11;
-                  const f = (r < 3 && c < 3) || (r < 3 && c > 7) || (r > 7 && c < 3);
-                  const on = f ? !((r === 1 && c === 1) || (r === 1 && c === 9) || (r === 9 && c === 1)) : (i * 7919) % 13 < 6;
-                  return `<i style="background:${on ? '#1D1C1A' : '#fff'}"></i>`;
-                },
-              ).join('')}</div>
-        <div class="grow col" style="gap:10px;min-width:220px"><div><b>${t('settings.tfa.scan')}</b><div class="muted" style="font-size:13px">${t('settings.tfa.appHint')}</div></div><div><b>${t('settings.tfa.enterCode')}</b></div><form data-submit="verify2fa" class="row"><input class="input mono ${S.ui.errors.tfa ? 'is-error' : ''}" id="tfa-code" inputmode="numeric" maxlength="6" placeholder="000000" style="width:130px;letter-spacing:.2em;font-size:15px" autofocus><button class="btn btn-primary" data-a="verify2fa">${t('settings.tfa.verify')}</button><button type="button" class="btn btn-ghost" data-a="cancel2fa">${t('common.cancel')}</button></form>${S.ui.errors.tfa ? `<span class="err">${ic('circle-alert', 12)}${S.ui.errors.tfa}</span>` : `<span class="hint">${t('settings.tfa.anyDigits')}</span>`}</div></div>`
-            : `<div class="panel" style="padding:18px" ><div class="row" style="gap:14px;align-items:flex-start"><span class="ftype" style="--c:var(--amber);width:36px;height:36px">${ic('shield-alert', 18)}</span><div class="grow"><b>${t('settings.tfa.off')}</b><p class="muted" style="margin:4px 0 12px;font-size:13px">${t('settings.tfa.offDesc')}</p><button class="btn btn-primary" data-a="setup2fa">${t('settings.tfa.setup')}</button></div></div></div>`)
-      );
+    }
   }
   return page404();
 }

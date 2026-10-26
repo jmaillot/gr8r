@@ -635,10 +635,10 @@ test('the settings stored preference values are byte-identical', () => {
     'shortcuts',
     'password',
     'sessions',
-    '2fa',
   ]) {
     assert.ok(src.includes(`'${id}'`), `section id ${id} lost`);
   }
+  assert.ok(!src.includes(`'2fa'`), 'the dormant 2FA settings section came back (Phase 16 restores it)');
 });
 
 test('the date-format and time-format rows keep their computed previews', () => {

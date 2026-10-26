@@ -288,7 +288,7 @@ test('the toast surface of src/actions/actions.js reports nothing at all', () =>
 });
 
 test('the machine identifiers survived the wave — tree-wide data-a / data-r / data-v counts', () => {
-  // 434 / 57 / 75, measured after the billing removal (07-02): a translated identifier
+  // 430 / 57 / 75, measured after the 2FA tab deletion (14-04): a translated identifier
   // resolves A[el.dataset.a] to undefined and no test would show it.
   let a = 0,
     r = 0,
@@ -304,7 +304,7 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 434, 'data-a sites');
+  assert.equal(a, 430, 'data-a sites'); // −4 with the 2FA tab deletion (setup/cancel/verify/disable, 14-04)
   assert.equal(r, 57, 'data-r sites');
   assert.equal(v, 75, 'data-v sites');
 });
