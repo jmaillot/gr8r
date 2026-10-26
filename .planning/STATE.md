@@ -2,9 +2,9 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
-status: plan_13_01_complete
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-10-26T12:03:57.554Z"
+status: plan_13_02_complete
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-10-26T13:07:00Z"
 state_head: f0a8e2bce1eb6e8cfd2a20a1359706788023e992
 progress:
   total_phases: 6
@@ -32,10 +32,10 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-- Phase: **13** (Investigation & Invariant Pinning) — phase's only plan complete
-- Plan: 01 of 01 complete (13-01-SUMMARY.md written)
-- Status: **Plan 13-01 complete — awaiting `/gsd-verify-work` / next phase**
-- Progress: `[█░░░░░░░░░░░░░░░░░░░] ~17%` — 1 of 6 v1.3 phases started; Phase 13's single plan delivered
+- Phase: **13** (Investigation & Invariant Pinning) — complete (13-01 + 13-02 gap closure)
+- Plan: 02 of 02 complete (13-01-SUMMARY.md, 13-02-SUMMARY.md written)
+- Status: **Plan 13-02 complete — awaiting `/gsd-verify-work` re-verification / Phase 14**
+- Progress: `[█░░░░░░░░░░░░░░░░░░░] ~17%` — 1 of 6 v1.3 phases complete; Phase 13 delivered (verification gaps 1–2 closed)
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -85,6 +85,7 @@ touch this milestone):
 - Login/signup carry sameOrigin 403 before the throttle; TRUST_PROXY is allow-list opt-in.
 - Operational run-order rule: e2e must follow the FULL build (`build:en` last fails French e2e).
 - [Phase 13]: Phase 13 pinned all 17 auth contracts as 13-DECISIONS.md (D-01…D-17) — the canonical citation target for Phases 14–18: login_challenges table with sessions-table purity, structural pending=anonymous, AES-256-GCM under MASTER_KEY with v1: envelope and fail-closed 503, hash-only recovery codes, rotation-requires-re-enrollment, per-endpoint throttle budgets with IP+email keys and generic lockout copy, vendored qrcode-generator@2.0.4, doc-field removal scoped to Phase 14
+- [Phase 13 / 13-02 gap closure]: D-04's landing phase resolved to one answer — Phase 14 owns the replay-guard column in the AUTH-02 additive migration (with byte-identical second-boot test coverage), Phase 16 owns the guard behavior; D-13's override scope resolved — the existing server.js:1235 429 copy is also replaced with the pinned generic copy when Phase 17 reworks the login flow (one logical login = one budget, D-03/D-11)
 
 ## Verification commands used
 
@@ -112,8 +113,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26T10:54:55.876Z
-**Stopped at:** Completed 13-01-PLAN.md
+**Last session:** 2026-10-26T13:07:00Z
+**Stopped at:** Completed 13-02-PLAN.md
 **Resume file:** None
 
 ## Operator Next Steps
@@ -127,3 +128,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 |------|----------|-------|-------|
 | — | | | |
 | Phase 13 P01 | 5min | 3 tasks | 1 files |
+| Phase 13 P02 | 6min | 3 tasks | 2 files |

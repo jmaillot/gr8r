@@ -14,7 +14,7 @@ gate. Research: `.planning/research/SUMMARY.md` (HIGH confidence).
 
 ## Phases
 
-- [ ] **Phase 13: Investigation & Invariant Pinning** - Diagnose the shared stub-auth root cause in the live code and pin the design contracts (pending-2FA session pattern, QR vendoring, throttle constants, encryption-at-rest decision, doc-field removal plan) before any build work
+- [x] **Phase 13: Investigation & Invariant Pinning** - Diagnose the shared stub-auth root cause in the live code and pin the design contracts (pending-2FA session pattern, QR vendoring, throttle constants, encryption-at-rest decision, doc-field removal plan) before any build work *(complete: 13-01 + 13-02 gap closure; verification re-verification pending)*
 - [ ] **Phase 14: Schema & Session Ground Truth** - Migrate auth state into real per-user tables, remove the fake `sessions`/`tfa` document fields, and make the sessions page + revocation primitive real (the primitive every later phase reuses)
 - [ ] **Phase 15: Password Change End-to-End** - Password change verified against the current password, works at next login, and atomically revokes all other sessions in the same transaction that rehashes
 - [ ] **Phase 16: TOTP Core & Enrollment** - Real TOTP secret generation, live code verification with replay guard, a genuinely scannable QR from a vendored encoder, and hashed single-use recovery codes shipped together at enrollment
@@ -43,7 +43,7 @@ Plans:
 - [x] 13-01-PLAN.md — Produce 13-DECISIONS.md: verified stub diagnosis + pinned contracts D-01…D-17 (pending-2FA, encryption-at-rest, throttle, QR) + Phase 14 removal scope
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 13-02-PLAN.md — Gap closure: reconcile D-04 landing phase (Phase 14 owns the replay-guard column, Phase 16 the guard behavior) + resolve D-13 override scope (server.js:1235 copy replaced in Phase 17) in 13-DECISIONS.md; refresh stale [VERIFIED] count in 13-01-SUMMARY.md
+- [x] 13-02-PLAN.md — Gap closure: reconcile D-04 landing phase (Phase 14 owns the replay-guard column, Phase 16 the guard behavior) + resolve D-13 override scope (server.js:1235 copy replaced in Phase 17) in 13-DECISIONS.md; refresh stale [VERIFIED] count in 13-01-SUMMARY.md
 
 ### Phase 14: Schema & Session Ground Truth
 
