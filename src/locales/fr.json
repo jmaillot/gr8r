@@ -1453,7 +1453,6 @@
   "dev.chrome": "Chrome",
   "dev.firefox": "Firefox",
   "dev.safari": "Safari",
-  "err.sessionExpired": "Votre session a expiré. Reconnectez-vous.",
   "err.signedOutElsewhere": "Vous avez été déconnecté depuis un autre appareil. Connectez-vous à nouveau pour continuer.",
   "err.readOnlyAccess": "Votre compte dispose d’un accès en lecture seule.",
   "err.workspaceChanged": "Cet espace de travail a été modifié dans une autre session. Rechargez la page pour voir la dernière version.",

@@ -166,7 +166,11 @@ test('D-28: a revoked browser gets the 401 teardown with the sign-in-required co
 
   const probe = await b.client.get('/api/workspaces/acme');
   assert.equal(probe.status, 401);
-  assert.equal(probe.data.code, 'signInRequired', 'the 401 handler code the client maps to err.signedOutElsewhere');
+  assert.equal(
+    probe.data.code,
+    'signInRequired',
+    'the code the client teardown consumes (mid-session 401 → registered teardown), proven by test/auth-revoked.test.mjs (fire-once, latch, boot guard)'
+  );
 
   const me = await a.client.get('/api/auth/me');
   assert.equal(me.status, 200, 'the revoking caller stays alive');

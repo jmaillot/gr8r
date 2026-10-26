@@ -240,12 +240,11 @@ const CLIENT_ONLY_ERR_CODES = [
   'serverUnreachable', // built by the offline branch of api.js call() (fetch threw)
   'noWorkspaceLoaded', // built by api.js guards when no workspace slug is selected
   'projectNotFound', // toast composed in overlays/modals.js for a missing project
-  'sessionExpired', // built by main.js when a 401 lands mid-session
+  'signedOutElsewhere', // built by the central mid-session 401 teardown registered in actions.js (D-28)
   'saveNotSynced', // built by main.js from the sync-state signal, not a server payload
   'wsLoadFailed', // toast composed in main.js when the document load fails
   'code404', // static error-page copy in pages/errors.js
   'code403', // static error-page copy in pages/errors.js
-  'signedOutElsewhere', // built by a 401 from the session-revocation endpoints (D-28)
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {

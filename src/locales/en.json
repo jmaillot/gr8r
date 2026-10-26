@@ -1453,7 +1453,6 @@
   "dev.chrome": "Chrome",
   "dev.firefox": "Firefox",
   "dev.safari": "Safari",
-  "err.sessionExpired": "Your session expired. Sign in again.",
   "err.signedOutElsewhere": "You have been signed out from another device. Sign in again to continue.",
   "err.readOnlyAccess": "Your account has read-only access.",
   "err.workspaceChanged": "This workspace changed in another session. Reload to see the latest version.",
