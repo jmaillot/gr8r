@@ -2398,8 +2398,10 @@ A.revokeSession = async el => {
   const id = el.dataset.id;
   const res = await api.revokeSession(id);
   if (!res.ok) {
-    if (res.status === 401) return signOutRevoked(); // D-28
-    return toast(res.error || t('err.sessionExpired'), { kind: 'err' });
+    /* D-28: the central intercept in api.js owns every mid-session revocation
+       401 — the teardown is already in flight by the time this code runs. */
+    if (res.status === 401) return;
+    return toast(res.error || t('err.serverUnreachable'), { kind: 'err' });
   }
   await refreshSessions(); // D-29
   toast(t('toast.sessionSignedOut'));
@@ -2414,8 +2416,10 @@ A.revokeAll = () =>
     run: async () => {
       const res = await api.revokeAllSessions();
       if (!res.ok) {
-        if (res.status === 401) return signOutRevoked(); // D-28
-        return toast(res.error || t('err.sessionExpired'), { kind: 'err' });
+        /* D-28: the central intercept in api.js owns every mid-session
+           revocation 401 — no per-site teardown, no stacked second toast. */
+        if (res.status === 401) return;
+        return toast(res.error || t('err.serverUnreachable'), { kind: 'err' });
       }
       await refreshSessions(); // D-29
       toast(t('toast.signedOutOthers'));

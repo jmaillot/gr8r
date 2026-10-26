@@ -73,7 +73,10 @@ addEventListener('gr8r:save-error', e => {
     S.ui.auth = 'login';
     S.ui.errors = {};
     render();
-    toast(tk('err.sessionExpired'), { kind: 'err' });
+    /* D-28: a mid-session save 401 always carries the revocation code (push only
+       runs for a signed-in account), and the central teardown registered in
+       actions.js already fired inside call() before push() dispatched this event —
+       it owns the honest signedOutElsewhere copy. No generic toast here. */
     return;
   }
   if (status === 403) return toast(error || tk('err.readOnlyAccess'), { kind: 'err', ms: 6000 });
@@ -207,6 +210,9 @@ async function seedLegacyLocale() {
     if (slug !== slugFromPath) history.replaceState(null, '', `/w/${slug}`);
     const ws = await hydrateFromServer(slug);
     if (ws.status === 401) {
+      /* D-28: the honest signedOutElsewhere toast arrives from the central
+         teardown registered in actions.js — this branch keeps only the instant
+         redirect, so it is no longer the silent one the verification flagged. */
       S.ui.auth = 'login';
       render();
       return;
