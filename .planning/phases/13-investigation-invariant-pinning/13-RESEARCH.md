@@ -561,22 +561,17 @@ underneath the project; only the vendored file is pinned, and D-17's fixture tes
 
 All other claims carry `[VERIFIED]` or `[CITED]` tags with sources.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Where does the pinned-decisions document live?**
-   - What we know: The deliverable is the D-01…D-17 contracts + verified diagnosis. CONTEXT.md
-     already holds them; RESEARCH.md now holds the verified evidence.
-   - What's unclear: Whether the planner emits a separate `13-DECISIONS.md` or treats
-     CONTEXT.md + RESEARCH.md as the deliverable of record.
-   - Recommendation: Treat CONTEXT.md `<decisions>` + this RESEARCH.md's verified-evidence
-     inventory as the deliverable; no separate doc unless the planner wants one canonical
-     citation target for later phases. Low-stakes either way.
-
-2. **Exact integers within D-11's 5–8 band.**
-   - What we know: The agent's discretion covers the exact values, fixed at implementation.
-   - What's unclear: Which of 5/6/7/8 per endpoint.
-   - Recommendation: Default to 5 for recovery burn (highest entropy value per guess), 8 for
-     TOTP verify (legitimate ±1-window retry headroom), decided in Phase 16/17 plans.
+1. **Where does the pinned-decisions document live?** — **RESOLVED** by the planner
+   (13-01-PLAN.md, 2026-10-26): a separate `13-DECISIONS.md` is emitted as the canonical
+   D-NN citation target for Phases 14–18 (plan §objective and `files_modified`). CONTEXT.md
+   `<decisions>` remains the locked ground truth; the doc cites those IDs verbatim.
+2. **Exact integers within D-11's 5–8 band.** — **RESOLVED** by 13-CONTEXT.md
+   `<decisions>` → Agent's Discretion: exact throttle integers are fixed at implementation
+   within the documented band (D-11's own text), decided in the Phase 16/17 plans.
+   Research recommendation (5 for recovery burn, 8 for TOTP verify) is recorded there for
+   the implementing phases, not pinned here.
 
 ## Environment Availability
 
