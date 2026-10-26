@@ -203,6 +203,17 @@ export const api = {
     if (r.ok) applyUser(r.data);
     return r;
   },
+  /* Auth-scoped session management (SESS-01/02): /api/auth/* endpoints take no
+     workspace slug, so these follow the login/logout pattern above — no slug guard. */
+  async sessions() {
+    return call('GET', '/api/auth/sessions');
+  },
+  async revokeSession(id) {
+    return call('DELETE', `/api/auth/sessions/${encodeURIComponent(id)}`);
+  },
+  async revokeAllSessions() {
+    return call('DELETE', '/api/auth/sessions/others');
+  },
   async putWorkspace(doc, opts) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };

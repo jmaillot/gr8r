@@ -45,6 +45,36 @@ export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.user
    a module-load constant whose comment falsely claimed it re-evaluated on re-render.) */
 export const modKey = () => (isMac ? '⌘' : t('common.ctrl'));
 
+/* Friendly label for a raw User-Agent string (D-18): "iOS · Safari", "Windows · Chrome",
+   or an em-dash when nothing is recognizable. Every visible token is a t() catalogue key
+   (dev.* namespace) so the i18n scan stays clean — no hardcoded device names. */
+export const deviceLabel = ua => {
+  const u = String(ua || '');
+  const os = /iPhone|iPad/.test(u)
+    ? t('dev.ios')
+    : /Android/.test(u)
+      ? t('dev.android')
+      : /Mac|Darwin/.test(u)
+        ? t('dev.mac')
+        : /Windows/.test(u)
+          ? t('dev.windows')
+          : /Linux/.test(u)
+            ? t('dev.linux')
+            : '';
+  const br = /Edg\//.test(u)
+    ? t('dev.edge')
+    : /OPR\//.test(u)
+      ? t('dev.opera')
+      : /Chrome\//.test(u)
+        ? t('dev.chrome')
+        : /Firefox\//.test(u)
+          ? t('dev.firefox')
+          : /Safari\//.test(u)
+            ? t('dev.safari')
+            : '';
+  return [os, br].filter(Boolean).join(' · ') || '—';
+};
+
 /* ---------- dates ---------- */
 export const DAY = 864e5;
 export const sod = d => {
