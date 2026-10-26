@@ -59,8 +59,11 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
+**Wave 1**
 - [ ] 14-01-PLAN.md — Additive AUTH-02 migration: schema columns + login_challenges table + doc-field strip + extended migration test (tracer)
 - [ ] 14-02-PLAN.md — Client foundation: locale keys (dev.*, err.signedOutElsewhere), API methods, deviceLabel() utility
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 14-03-PLAN.md — Server revocation: metadata capture, throttled last_seen_at, three /api/auth/sessions endpoints, test/sessions.test.mjs
 - [ ] 14-04-PLAN.md — Client UI: settings sessions tab rewire, revoke actions, signOutRevoked(), 2FA stub deletion
 
