@@ -28,7 +28,7 @@ before(async () => {
   createLegacyDb(dataDir);
   legacyColumns = withDb(path.join(dataDir, 'gr8r.db'), db =>
     Object.fromEntries(
-      ['workspaces', 'memberships', 'invites'].map(table => [
+      ['workspaces', 'memberships', 'invites', 'users', 'sessions'].map(table => [
         table,
         db
           .prepare(`pragma table_info(${table})`)
@@ -54,6 +54,8 @@ test('first boot writes exactly one pre-migration backup and logs its path', () 
   assert.equal(legacyColumns.workspaces.includes('color'), false, 'fixture has no workspaces.color');
   assert.equal(legacyColumns.memberships.includes('member_id'), false, 'fixture has no memberships.member_id');
   assert.equal(legacyColumns.invites.includes('workspace_id'), false, 'fixture has no invites.workspace_id');
+  assert.equal(legacyColumns.sessions.includes('ip'), false, 'fixture has no sessions.ip');
+  assert.equal(legacyColumns.users.includes('two_fa_enabled'), false, 'fixture has no users.two_fa_enabled');
 
   assert.equal(backups().length, 1, 'exactly one gr8r-premultitenant-*.db');
   assert.match(output, /pre-migration backup: /);
@@ -162,6 +164,119 @@ test('a legacy document carrying plan and invoices hydrates and saves without th
   assert.equal(after.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project', 'the rows survive');
 });
 
+/* The AUTH-02 Phase 14 migration: session metadata, dormant 2FA columns and the
+   login_challenges table — present, and byte-identical between migration surfaces. */
+const col = (table, name) =>
+  withDb(server.dbPath, db =>
+    db
+      .prepare(`pragma table_info(${table})`)
+      .all()
+      .find(c => c.name === name),
+  );
+
+test('the first boot lands the full session metadata column set on a legacy database', () => {
+  assert.deepEqual(
+    withDb(server.dbPath, db =>
+      db
+        .prepare('pragma table_info(sessions)')
+        .all()
+        .map(c => c.name),
+    ),
+    ['token_hash', 'user_id', 'created_at', 'expires_at', 'label', 'ip', 'last_seen_at', 'user_agent'],
+  );
+});
+
+test('the 2FA columns and the login_challenges table land dormant', () => {
+  const userCols = withDb(server.dbPath, db =>
+    db
+      .prepare('pragma table_info(users)')
+      .all()
+      .map(c => c.name),
+  );
+  for (const name of ['two_fa_enabled', 'two_fa_secret', 'two_fa_last_step']) {
+    assert.ok(userCols.includes(name), `users.${name} exists after boot`);
+  }
+  // Dormant means untouched: no per-user backfill (Pitfall 21).
+  assert.deepEqual(
+    withDb(server.dbPath, db =>
+      db
+        .prepare('select distinct two_fa_enabled, two_fa_last_step from users order by 1, 2')
+        .all()
+        .map(r => [r.two_fa_enabled, r.two_fa_last_step]),
+    ),
+    [[0, 0]],
+    'every user row reads integer-not-null-default 0 by absence',
+  );
+  assert.equal(
+    withDb(server.dbPath, db => db.prepare(`select count(*) as n from sqlite_master where type = 'table' and name = 'login_challenges'`).get()).n,
+    1,
+    'the login_challenges table exists',
+  );
+  assert.equal(
+    withDb(server.dbPath, db => db.prepare(`select count(*) as n from sqlite_master where type = 'index' and name = 'login_challenges_expiry'`).get()).n,
+    1,
+    'the login_challenges expiry index exists',
+  );
+  assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from login_challenges').get()).n, 0, 'login_challenges starts empty');
+});
+
+test('the seven new columns agree between SCHEMA DDL and ensureColumn on a legacy database', () => {
+  /* A name-only check would let an ensureColumn def silently diverge from the SCHEMA
+     declaration (a default-less, nullable two_fa_enabled on legacy DBs would pass);
+     type, notnull and dflt_value are exactly where the P-B drift surfaces. */
+  const expected = {
+    'sessions.label': { type: 'TEXT', notnull: 0, dflt_value: null },
+    'sessions.ip': { type: 'TEXT', notnull: 0, dflt_value: null },
+    'sessions.last_seen_at': { type: 'INTEGER', notnull: 0, dflt_value: null },
+    'sessions.user_agent': { type: 'TEXT', notnull: 0, dflt_value: null },
+    'users.two_fa_enabled': { type: 'INTEGER', notnull: 1, dflt_value: '0' },
+    'users.two_fa_secret': { type: 'TEXT', notnull: 0, dflt_value: null },
+    'users.two_fa_last_step': { type: 'INTEGER', notnull: 1, dflt_value: '0' },
+  };
+  for (const [key, want] of Object.entries(expected)) {
+    const [table, name] = key.split('.');
+    const got = col(table, name);
+    assert.ok(got, `${key} exists`);
+    assert.deepEqual({ type: got.type, notnull: got.notnull, dflt_value: got.dflt_value }, want, `${key} definition matches the SCHEMA declaration`);
+  }
+});
+
+test('the served document from a legacy database carries no sessions or tfa fields', async () => {
+  /* The fixture document still carries the retired sessions/tfa literals; the
+     served copy must be sanitized on every read (D-30). Mirrors the workspaces
+     absence check above and the plan/invoices precedent. */
+  const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
+  const read = await signedIn.client.get(`/api/workspaces/${SLUG}`);
+  assert.equal(read.status, 200);
+  assert.equal('sessions' in read.data.doc.data, false, 'data.sessions is absent from the served document');
+  assert.equal('tfa' in read.data.doc.data, false, 'data.tfa is absent from the served document');
+});
+
+test('a client write persists a legacy document without sessions or tfa', async () => {
+  /* The served document strips the retired fields (normalizeDoc); the write path
+     (docFromClient) must strip independently, so the STORED row comes out clean.
+     Follows the plan/invoices write-then-stored-clean precedent. */
+  const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
+  const read = await signedIn.client.get(`/api/workspaces/${SLUG}`);
+  assert.equal(read.status, 200, 'the legacy document hydrates');
+  assert.equal('tfa' in read.data.doc.data, false, 'the served document is already stripped');
+
+  const doc = structuredClone(read.data.doc);
+  doc.data.sessions = [{ id: 'se1', dev: 'Stale Client · Chrome', cur: true }]; // a stale client tries to resurrect
+  doc.data.tfa = { enabled: true };
+  const saved = await signedIn.client.put(`/api/workspaces/${SLUG}`, { revision: read.data.revision, doc });
+  assert.equal(saved.status, 200, 'the document saves');
+
+  const stringified = withDb(server.dbPath, () => JSON.stringify(workspaceRow().doc));
+  assert.equal(/"tfa"/.test(stringified), false, 'the stored doc JSON contains no tfa key');
+  assert.equal(/"sessions"/.test(stringified), false, 'the stored doc JSON contains no sessions key');
+
+  const rows = JSON.parse(workspaceRow().doc);
+  assert.equal('sessions' in rows.data, false, 'the stored document has no sessions data key');
+  assert.equal('tfa' in rows.data, false, 'the stored document has no tfa data key');
+  assert.equal(rows.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project', 'the rows survive the write');
+});
+
 /* Everything the migration owns, compared byte-for-byte across a reboot. */
 function snapshot() {
   const row = workspaceRow();
@@ -178,7 +293,7 @@ function snapshot() {
     inviteWorkspaceId: invite.workspace_id,
     users: withDb(server.dbPath, db =>
       db
-        .prepare('select id, email, locale from users order by id')
+        .prepare('select id, email, locale, two_fa_enabled, two_fa_secret, two_fa_last_step from users order by id')
         .all()
         .map(r => ({ ...r })),
     ),
