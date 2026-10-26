@@ -56,7 +56,14 @@ Plans:
   3. Each row's individual revoke kills exactly that session (SESS-03)
   4. The workspace document contains no `sessions` or `tfa` fields on a fresh install, and an existing database migrates to the new schema with a second boot certified byte-identical (AUTH-02, extended `test/migration.test.mjs`)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Additive AUTH-02 migration: schema columns + login_challenges table + doc-field strip + extended migration test (tracer)
+- [ ] 14-02-PLAN.md — Client foundation: locale keys (dev.*, err.signedOutElsewhere), API methods, deviceLabel() utility
+- [ ] 14-03-PLAN.md — Server revocation: metadata capture, throttled last_seen_at, three /api/auth/sessions endpoints, test/sessions.test.mjs
+- [ ] 14-04-PLAN.md — Client UI: settings sessions tab rewire, revoke actions, signOutRevoked(), 2FA stub deletion
+
 **UI hint**: yes
 
 ### Phase 15: Password Change End-to-End
