@@ -3,15 +3,14 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
 status: plan_13_02_complete
-stopped_at: Phase 13 complete, ready to plan Phase 14
-last_updated: "2026-10-26T13:31:01.855Z"
-state_head: a8a2001fbfa0259628da60b139cfceac49178529
+stopped_at: Phase 14 context gathered
+last_updated: "2026-10-26T15:00:32.878Z"
+state_head: b08f9b5fe125b507cb728ec5427a425f68476856
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 2
   completed_plans: 2
-  percent: 17
 last_activity: 2026-10-26
 current_phase: 14
 current_phase_name: Schema & Session Ground Truth
@@ -115,9 +114,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-26T13:07:00Z
-**Stopped at:** Phase 13 complete, ready to plan Phase 14
-**Resume file:** None
+**Last session:** 2026-10-26T15:00:32.826Z
+**Stopped at:** Phase 14 context gathered
+**Resume file:** .planning/phases/14-schema-session-ground-truth/14-CONTEXT.md
 
 ## Operator Next Steps
 
