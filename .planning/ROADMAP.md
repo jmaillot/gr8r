@@ -39,7 +39,10 @@ PASS-01–03, TFA-01–05 and AUTH-02)
 **Plans**: 1 plan executed; +1 gap-closure plan (13-02, from verification gaps_found)
 
 Plans:
+**Wave 1**
 - [x] 13-01-PLAN.md — Produce 13-DECISIONS.md: verified stub diagnosis + pinned contracts D-01…D-17 (pending-2FA, encryption-at-rest, throttle, QR) + Phase 14 removal scope
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 13-02-PLAN.md — Gap closure: reconcile D-04 landing phase (Phase 14 owns the replay-guard column, Phase 16 the guard behavior) + resolve D-13 override scope (server.js:1235 copy replaced in Phase 17) in 13-DECISIONS.md; refresh stale [VERIFIED] count in 13-01-SUMMARY.md
 
 ### Phase 14: Schema & Session Ground Truth
