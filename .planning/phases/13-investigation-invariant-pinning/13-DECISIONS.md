@@ -235,7 +235,14 @@ test('a second boot is a no-op and both accounts keep access', async () => {
   ("Try again in 15 minutes.") — Phase 16/17 must NOT copy that string to new endpoints; the
   pinned replacement copy is generic "too many attempts" with no countdown, no window, no
   header.
-  **Consumed by:** Phases 15–17 (every throttle response's failure copy).
+  **Scope resolution:** the override applies to the existing string itself, not only to new
+  endpoints — when Phase 17 touches the login flow, the existing `server.js:1235` 429 copy
+  ("Try again in 15 minutes.") is also replaced with the pinned generic copy; the password
+  and 2FA steps share one budget (per D-03/D-11: one logical login = one budget) — they
+  must disclose identically — or not at all.
+  **Consumed by:** Phases 15–17 (every throttle response's failure copy — including the
+  replacement of the pre-existing `server.js:1235` 429 copy on the login password step,
+  landing when Phase 17 reworks the login flow).
 - **D-14:** Throttle state stays **in-memory** (per-process `attempts` map). A restart
   clearing counters is an accepted trade-off for a single-process self-hosted deployment; no
   write-per-attempt SQLite table on the hottest security path.
