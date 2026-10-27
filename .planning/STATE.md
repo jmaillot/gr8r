@@ -5,15 +5,15 @@ milestone_name: Auth Hardening
 current_phase: 16
 current_phase_name: TOTP Core & Enrollment
 current_plan: 3
-status: executing
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-10-27T13:33:15.820Z"
-state_head: b3dda55762dc03305bd2efcf60fb8e74491d5ffd
+status: verifying
+stopped_at: Completed 16-03-PLAN.md
+last_updated: "2026-10-27T13:45:16.988Z"
+state_head: 03e02279e3b4bc6829c175652b5e825f7de1bcc8
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
 last_activity: 2026-10-26
 ---
 
@@ -40,7 +40,7 @@ Current Plan: 3
 Total Plans in Phase: 3
 
 Plans ready: none — Phase 15 verified (6/6 after Gap 1 closure), ready for /gsd-next
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███░░░░░░░] 33%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed); Phase 15 complete
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
@@ -103,6 +103,7 @@ touch this milestone):
 - [Phase 16]: 16-01: vendored src/lib/vendor/qrcode.js excluded from i18n user-visible-literal scan (third-party source, not interface copy)
 - [Phase 16]: Recovery plaintexts generated pre-transaction, hashed inside it, returned once (16-02)
 - [Phase 16]: Disable resets two_fa_last_step to 0 (NOT NULL sentinel); verify+teardown in one transaction (16-02)
+- [Phase 16]: 16-03: 2FA card is a dedicated settings tab; on-state reads api.user.twoFa (userPayload now discloses it); 503/unknown errors render generic err.* only; recovery codes live in transient S.ui.recoveryCodes, cleared on modal dismiss
 
 ## Verification commands used
 
@@ -130,8 +131,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T13:33:15.758Z
-**Stopped at:** Completed 16-02-PLAN.md
+**Last session:** 2026-10-27T13:45:16.929Z
+**Stopped at:** Completed 16-03-PLAN.md
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
@@ -156,3 +157,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 14 P05 | ~13 min | 3 tasks | 9 files |
 | Phase 16 P01 | 6m | 3 tasks | 7 files |
 | Phase 16 P02 | 45min | 3 tasks | 6 files |
+| Phase 16 P03 | ~50 min | 3 tasks | 12 files |

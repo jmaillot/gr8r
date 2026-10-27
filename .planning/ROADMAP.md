@@ -108,7 +108,7 @@ Plans:
   3. 2FA flips on only after a live 6-digit code verifies against the pending secret; an abandoned enrollment leaves the user in exactly their pre-enrollment state (TFA-03)
   4. Enrollment issues 8–10 single-use recovery codes, shown exactly once in plaintext and hashed at rest; a printed code logs the user in exactly one time (TFA-04)
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -118,7 +118,7 @@ Plans:
 - [x] 16-02-PLAN.md — Server enrollment lifecycle: recovery_codes guarded-create migration, pendingTfa Map with TTL, POST /api/auth/tfa/enroll|enable|disable (password step-up, verify-before-enable, D-05 'v1:' encryption, 10 sha256-hashed recovery codes, complete teardown), integration + extended migration tests (TFA-03, TFA-04)
 
 **Wave 3** *(blocked on Waves 1–2)*
-- [ ] 16-03-PLAN.md — Settings 2FA inline card end to end: api.tfa* methods, QR + copyable-secret fallback via renderQrSvg, one-time recovery modal, password+dual-shape-code disable, EN+FR keys, lint/format/build gates (TFA-02, TFA-03, TFA-04 UI)
+- [x] 16-03-PLAN.md — Settings 2FA inline card end to end: api.tfa* methods, QR + copyable-secret fallback via renderQrSvg, one-time recovery modal, password+dual-shape-code disable, EN+FR keys, lint/format/build gates (TFA-02, TFA-03, TFA-04 UI)
 
 **UI hint**: yes
 
@@ -156,7 +156,7 @@ Plans:
 | 13. Investigation & Invariant Pinning | 2/2 | Complete    | 2026-10-26 |
 | 14. Schema & Session Ground Truth | 5/5 | Complete    | 2026-10-27 |
 | 15. Password Change End-to-End | 1/2 | Executing | - |
-| 16. TOTP Core & Enrollment | 2/3 | In Progress|  |
+| 16. TOTP Core & Enrollment | 3/3 | In Progress|  |
 | 17. Login Second-Factor Flow | 0/N | Not started | - |
 | 18. Closing Verification | 0/N | Not started | - |
 
