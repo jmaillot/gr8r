@@ -320,3 +320,55 @@ test('a second boot is a no-op and both accounts keep access', async () => {
   assert.equal(read.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project');
   assert.equal((await bob.client.get('/api/workspaces/unknown-tenant')).status, 404);
 });
+
+/* Phase 16 plan 02: the recovery_codes additive migration (D-52). The guarded
+   create must land the table + index on a pre-16 database and be a byte-identical
+   no-op on every boot after that (P-B). */
+const sqliteHas = (type, name) =>
+  withDb(server.dbPath, db => db.prepare(`select count(*) as n from sqlite_master where type = ? and name = ?`).get(type, name)).n;
+
+test('the first boot lands recovery_codes and its index on the legacy database', () => {
+  assert.equal(sqliteHas('table', 'recovery_codes'), 1, 'the recovery_codes table exists');
+  assert.equal(sqliteHas('index', 'recovery_codes_user'), 1, 'the recovery_codes_user index exists');
+  assert.deepEqual(
+    withDb(server.dbPath, db =>
+      db
+        .prepare('pragma table_info(recovery_codes)')
+        .all()
+        .map(c => [c.name, c.type, c.notnull, c.pk]),
+    ),
+    [
+      // SQLite reports notnull=0 for a bare `text primary key` (rowid-table quirk)
+      ['id', 'TEXT', 0, 1],
+      ['user_id', 'TEXT', 1, 0],
+      ['code_hash', 'TEXT', 1, 0],
+      ['used_at', 'INTEGER', 0, 0],
+      ['created_at', 'INTEGER', 1, 0],
+    ],
+    'the guarded-create definition matches the SCHEMA declaration (P-B)',
+  );
+  assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from recovery_codes').get()).n, 0, 'no boot backfill (Pitfall 21)');
+});
+
+test('a second boot leaves the recovery_codes schema byte-identical (P-B)', async () => {
+  const schemaSnapshot = () =>
+    withDb(server.dbPath, db => ({
+      table: db
+        .prepare('select sql from sqlite_master where type = ? and name = ?')
+        .get('table', 'recovery_codes')?.sql,
+      index: db
+        .prepare('select sql from sqlite_master where type = ? and name = ?')
+        .get('index', 'recovery_codes_user')?.sql,
+      columns: db
+        .prepare('pragma table_info(recovery_codes)')
+        .all()
+        .map(c => ({ ...c })),
+    }));
+
+  const firstBoot = schemaSnapshot();
+  await server.stop();
+  server = await startServer({ dataDir });
+  const secondBoot = schemaSnapshot();
+  assert.deepEqual(secondBoot, firstBoot, 'the recovery_codes DDL is byte-identical across boots');
+  assert.equal(sqliteHas('table', 'recovery_codes'), 1, 'the table survives the reboot');
+});
