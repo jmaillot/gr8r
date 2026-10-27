@@ -178,7 +178,7 @@ Plans:
 | 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
 | 17. Login Second-Factor Flow | 2/2 | Complete    | 2026-10-27 |
-| 18. Closing Verification | 1/4 | In Progress|  |
+| 18. Closing Verification | 2/4 | In Progress|  |
 
 ## Traceability
 

@@ -36,7 +36,7 @@ Last updated: 2026-10-26
 
 Phase: 18 (Closing Verification — i18n, Migration Proof & Real-Device UAT) — EXECUTING
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 4
 
 Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
@@ -136,11 +136,13 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T19:02:40.337Z
-**Stopped at:** Completed 18-01-PLAN.md
+**Last session:** 2026-10-27T20:55:00Z
+**Stopped at:** Completed 18-02-PLAN.md
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
+
+**Decisions (18-02):** Inherited stranded diff from the failed executor was verified against ground truth (locale keys, server routes/selectors) and continued, not rewritten; Rule 1 fix scoped shell.css's global `.sub{display:none}` to `.sitem .sub` (it hid every auth-card subtitle incl. the 2FA masked-email copy); two-device tests give device A the loop's negotiated locale so catalogue login labels match its context; e2e/server.mjs sets a throwaway random MASTER_KEY (real enable path, fail-closed 503 otherwise — no backdoor).
 
 ## Operator Next Steps
 
