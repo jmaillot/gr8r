@@ -447,7 +447,7 @@ export function settingsBody(sec, title) {
           </form>`
         );
       }
-      return H(t('settings.tfa.lead')) + srow(t('settings.tfa.off'), t('settings.tfa.offDesc'), `<button class="btn btn-primary" data-a="tfaStart">${t('settings.tfa.start')}</button>`);
+      return H(t('settings.tfa.lead')) + `${e.tfaMsg ? `<div class="err" style="margin-bottom:12px">${ic('circle-alert', 12)}${e.tfaMsg}</div>` : ''}` + srow(t('settings.tfa.off'), t('settings.tfa.offDesc'), `<button class="btn btn-primary" data-a="tfaStart">${t('settings.tfa.start')}</button>`);
     }
     case 'sessions': {
       /* Server ground truth (SESS-01): S.ui.sessions is populated by
