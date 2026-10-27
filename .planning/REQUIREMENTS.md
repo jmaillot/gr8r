@@ -35,9 +35,9 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 - [x] **TFA-02**: Enrollment shows a real scannable QR — `otpauth://totp/…?secret=…&issuer=Gr8r`
   (SHA1, 6 digits, 30 s period all explicit) rendered from a vendored MIT QR encoder, with a
   copyable secret fallback.
-- [ ] **TFA-03**: 2FA activates only after a live 6-digit code verifies against a pending secret
+- [x] **TFA-03**: 2FA activates only after a live 6-digit code verifies against a pending secret
   (verify-before-enable; no unverified-secret lockout).
-- [ ] **TFA-04**: 8–10 single-use recovery codes, hashed at rest, shown exactly once, usable at
+- [x] **TFA-04**: 8–10 single-use recovery codes, hashed at rest, shown exactly once, usable at
   login (mandatory companion to enrollment — no-recovery enrollment is a lockout factory).
 - [ ] **TFA-05**: For enrolled users, login requires a second step (6-digit code or recovery
   code); no session identity exists before the code is verified (pending-session pattern must
@@ -87,8 +87,8 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 | PASS-03 | Phase 15 — Password Change End-to-End | Complete |
 | TFA-01 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-02 | Phase 16 — TOTP Core & Enrollment | Complete |
-| TFA-03 | Phase 16 — TOTP Core & Enrollment | Pending |
-| TFA-04 | Phase 16 — TOTP Core & Enrollment | Pending |
+| TFA-03 | Phase 16 — TOTP Core & Enrollment | Complete |
+| TFA-04 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-05 | Phase 17 — Login Second-Factor Flow | Pending |
 | AUTH-01 | Phase 18 — Closing Verification | Pending |
 | AUTH-03 | Phase 18 — Closing Verification | Pending |

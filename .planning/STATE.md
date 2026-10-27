@@ -4,16 +4,16 @@ milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 16
 current_phase_name: TOTP Core & Enrollment
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-10-27T13:19:37.182Z"
-state_head: 540392ea1c68948397092cda3d77e0d036bfff15
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-10-27T13:33:15.820Z"
+state_head: b3dda55762dc03305bd2efcf60fb8e74491d5ffd
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
 last_activity: 2026-10-26
 ---
 
@@ -36,7 +36,7 @@ Last updated: 2026-10-26
 
 Phase: 16 (TOTP Core & Enrollment) — EXECUTING
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 3
 
 Plans ready: none — Phase 15 verified (6/6 after Gap 1 closure), ready for /gsd-next
@@ -101,6 +101,8 @@ touch this milestone):
 - [Phase 16]: 16-01: TOTP helpers in top-level totp.js (sibling of server.js, outside src/ so Vite never bundles server crypto); Phase 17 imports verifyTotpCode + normalizeRecoveryCode verbatim
 - [Phase 16]: 16-01: otpauth label = Gr8r:<encodeURIComponent(email)> — only the email is encoded, prefix literal (D-54 exact format)
 - [Phase 16]: 16-01: vendored src/lib/vendor/qrcode.js excluded from i18n user-visible-literal scan (third-party source, not interface copy)
+- [Phase 16]: Recovery plaintexts generated pre-transaction, hashed inside it, returned once (16-02)
+- [Phase 16]: Disable resets two_fa_last_step to 0 (NOT NULL sentinel); verify+teardown in one transaction (16-02)
 
 ## Verification commands used
 
@@ -128,8 +130,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T13:19:37.125Z
-**Stopped at:** Completed 16-01-PLAN.md
+**Last session:** 2026-10-27T13:33:15.758Z
+**Stopped at:** Completed 16-02-PLAN.md
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
@@ -153,3 +155,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 14 P04 | 13min | 2 tasks | 7 files |
 | Phase 14 P05 | ~13 min | 3 tasks | 9 files |
 | Phase 16 P01 | 6m | 3 tasks | 7 files |
+| Phase 16 P02 | 45min | 3 tasks | 6 files |
