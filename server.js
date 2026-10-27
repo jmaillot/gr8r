@@ -46,6 +46,14 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createMailer } from './mailer.js';
+import {
+  buildOtpauthUri,
+  generateRecoveryCode,
+  generateTotpSecret,
+  normalizeRecoveryCode,
+  recoveryHash,
+  verifyTotpCode,
+} from './totp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
@@ -67,6 +75,9 @@ const APP_URL = String(process.env.APP_URL || '')
   .trim()
   .replace(/\/+$/, '');
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+/* D-05: the AES-256 master key material comes from the environment. Missing or
+   unusable on the enable path → fail-closed 503 naming MASTER_KEY (D-06/D-58). */
+const MASTER_KEY = String(process.env.MASTER_KEY || '');
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
@@ -143,6 +154,14 @@ const SCHEMA = `
     used_by      text
   );
   create index if not exists invites_expiry on invites(expires_at);
+  create table if not exists recovery_codes (
+    id         text primary key,
+    user_id    text not null references users(id) on delete cascade,
+    code_hash  text not null,
+    used_at    integer,
+    created_at integer not null
+  );
+  create index if not exists recovery_codes_user on recovery_codes(user_id);
 `;
 
 function ensureColumn(conn, table, name, def) {
@@ -211,6 +230,37 @@ function verifyPassword(password, stored) {
 
 // Always spend the same work on unknown accounts, so login timing doesn't leak emails.
 const DUMMY_HASH = hashPassword(crypto.randomBytes(16).toString('hex'));
+
+/* D-05: AES-256-GCM envelope for the TOTP secret at rest — `v1:<iv>:<tag>:<ct>`,
+   key derived from MASTER_KEY via sha256. Returns null when MASTER_KEY is
+   missing/undecryptable; the caller must fail closed 503 (D-06) BEFORE any
+   state mutation. Recovery codes are never encrypted (D-09/D-51). */
+function encryptTotpSecret(secretB32) {
+  if (!MASTER_KEY) return null;
+  try {
+    const key = crypto.createHash('sha256').update(MASTER_KEY).digest();
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const ct = Buffer.concat([cipher.update(String(secretB32), 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `v1:${iv.toString('base64')}:${tag.toString('base64')}:${ct.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
+/* D-46: pending (not-yet-verified) TOTP secrets live ONLY here — in memory,
+   keyed by user_id, with a 10-minute TTL. Nothing touches users.two_fa_secret
+   until enable succeeds; a server restart mid-enrollment just means re-scanning
+   the QR. Re-enroll overwrites the single pending entry. */
+const PENDING_TFA_TTL = 10 * 60 * 1000;
+const pendingTfa = new Map();
+function stashPendingTfa(userId, secret, otpauth) {
+  const t = now();
+  pendingTfa.set(userId, { secret, otpauth, expiresAt: t + PENDING_TFA_TTL });
+  // Lazy sweep, same shape as the attempts Map — bounded memory (T-16-08).
+  if (pendingTfa.size > 5000) for (const [k, v] of pendingTfa) if (t > v.expiresAt) pendingTfa.delete(k);
+}
 
 /* --------------------------- tenancy helpers --------------------------- */
 function slugify(value) {
@@ -1366,6 +1416,71 @@ async function handleApi(req, res, url) {
     });
     if (!ok) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
     return json(res, 200, { ok: true }); // D-37: minimal payload, no revokedCount
+  }
+
+  /* ----------------------- TFA enrollment (D-46/D-47) ----------------------- */
+
+  if (pathname === '/api/auth/tfa/enroll' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // D-49: password step-up before any secret generation. Every attempt —
+    // including a wrong current password — consumes one try (D-41 precedent).
+    if (tooMany(`tfa-enroll|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const cur = String(body?.currentPassword || '');
+    if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
+    // T-16-03: a wrong password never generates a secret.
+    if (!verifyPassword(cur, user.password_hash)) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    const secret = generateTotpSecret();
+    const otpauth = buildOtpauthUri(user.email, secret);
+    stashPendingTfa(user.id, secret, otpauth); // memory-only (D-46), 10-min TTL
+    return json(res, 200, { secret, otpauth }); // D-48: the server owns the URI format
+  }
+
+  if (pathname === '/api/auth/tfa/enable' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // D-11: this exact budget shape is what Phase 17's login second step reuses.
+    if (tooMany(`2fa-verify|${clientIp(req)}|${user.email}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const code = String(body?.code || '');
+    // TFA-03 verify-before-enable: no pending entry → no enable, no state change.
+    const pending = pendingTfa.get(user.id);
+    if (!pending || now() > pending.expiresAt) {
+      pendingTfa.delete(user.id);
+      return fail(res, 409, 'noPendingEnrollment', 'Start the enrollment again — no pending setup');
+    }
+    // ±1 window + D-04 replay guard vs the stored two_fa_last_step (16-01 contract).
+    const row = db.prepare('select two_fa_last_step from users where id = ?').get(user.id);
+    const verified = verifyTotpCode(pending.secret, code, row?.two_fa_last_step ?? null, Math.floor(now() / 1000));
+    if (!verified.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
+    // D-06/T-16-09: MASTER_KEY missing/undecryptable → fail closed BEFORE any
+    // state mutation. The body names MASTER_KEY — admin-facing, never user copy.
+    const envelope = encryptTotpSecret(pending.secret);
+    if (!envelope) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
+    // D-50: generate the 10 plaintext codes first — they are returned exactly
+    // once in this response (D-53) and only their hashes hit the database.
+    const codes = [];
+    for (let i = 0; i < 10; i++) codes.push(generateRecoveryCode());
+    // One atomic unit: flip on, write the D-05 envelope + D-04 baseline,
+    // rotate recovery codes (D-53), clear the pending entry.
+    transaction(() => {
+      db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = ? where id = ?').run(
+        envelope,
+        verified.matchedStep,
+        user.id,
+      );
+      db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+      const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
+      for (const code0 of codes) {
+        // D-09/D-51: hash of the ONE normalization (Pitfall 6) — plaintext never stored.
+        insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
+      }
+      pendingTfa.delete(user.id);
+    });
+    return json(res, 200, { ok: true, recoveryCodes: codes });
   }
 
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */
