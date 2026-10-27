@@ -6,14 +6,14 @@ current_phase: 15
 current_phase_name: Password Change End-to-End
 current_plan: 1
 status: executing
-stopped_at: Phase 15 context gathered
-last_updated: "2026-10-27T09:52:11.637Z"
-state_head: f6d5113f963fe5c7709bd005e040623c107dc8bb
+stopped_at: Phase 16 context gathered
+last_updated: "2026-10-27T11:38:27.542Z"
+state_head: eec7954adb8e2629c23b2f23e42d0aa7d7387406
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 10
 last_activity: 2026-10-26
 ---
 
@@ -125,9 +125,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T10:46:00.000Z
-**Stopped at:** Completed 15-03-PLAN.md (honest settings.pw.done banner EN/FR + honesty guard — Gap 1 closed)
-**Resume file:** .planning/phases/15-password-change-end-to-end/15-03-SUMMARY.md
+**Last session:** 2026-10-27T11:38:27.368Z
+**Stopped at:** Phase 16 context gathered
+**Resume file:** .planning/phases/16-totp-core-enrollment/16-CONTEXT.md
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
 
