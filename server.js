@@ -1335,6 +1335,40 @@ async function handleApi(req, res, url) {
     return json(res, 200, { user: userPayload(fresh) });
   }
 
+  /* ----------------------- password change (PASS-01/02) ----------------------- */
+
+  if (pathname === '/api/auth/password' && method === 'PATCH') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // D-40/D-41: the caller is cookie-authenticated, so the budget is keyed by
+    // user_id — and every attempt below (including a wrong current password)
+    // has already consumed one try before it is processed.
+    if (tooMany(`pwchange|${user.id}`, 10, 15 * 60 * 1000))
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const cur = String(body?.currentPassword || '');
+    const nw = String(body?.newPassword || '');
+    if (!cur || !nw) return fail(res, 400, 'passwordRequired', 'Enter your current and new password');
+    if (nw.length < 10 || !/[0-9\W]/.test(nw)) {
+      return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
+    }
+    // Pitfall 9: hash the caller's own cookie — never a body or param value.
+    const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    // PASS-02: verify, rehash and revoke-others are one atomic unit.
+    const ok = transaction(() => {
+      // Pitfall 4: re-select the hash fresh inside the transaction.
+      const row = db.prepare('select password_hash from users where id = ?').get(user.id);
+      if (!row || !verifyPassword(cur, row.password_hash)) return false;
+      db.prepare('update users set password_hash = ? where id = ?').run(hashPassword(nw), user.id);
+      // Keep-current (P-H): the caller's own session is excluded by the != clause.
+      db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
+      return true;
+    });
+    if (!ok) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    return json(res, 200, { ok: true }); // D-37: minimal payload, no revokedCount
+  }
+
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */
 
   if (pathname === '/api/auth/sessions' && method === 'GET') {
