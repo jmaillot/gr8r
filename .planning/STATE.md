@@ -6,9 +6,9 @@ current_phase: 17
 current_phase_name: Login Second-Factor Flow
 current_plan: Not started
 status: planning
-stopped_at: Phase 16 complete (UAT 3/3), ready to plan Phase 17
-last_updated: "2026-10-27T15:13:18.840Z"
-state_head: b95d1538e86c79d1b1937d07122cbfec9707c9fa
+stopped_at: Phase 17 context gathered
+last_updated: "2026-10-27T16:10:58.350Z"
+state_head: 26963a36de96cd4147ac9af9d3cd1684e02fe4b8
 progress:
   total_phases: 6
   completed_phases: 3
@@ -131,9 +131,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T15:13:18.756Z
-**Stopped at:** Phase 16 complete (UAT 3/3), ready to plan Phase 17
-**Resume file:** None
+**Last session:** 2026-10-27T16:10:58.271Z
+**Stopped at:** Phase 17 context gathered
+**Resume file:** .planning/phases/17-login-second-factor-flow/17-CONTEXT.md
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
 
