@@ -6,15 +6,14 @@ current_phase: 18
 current_phase_name: Closing Verification — i18n, Migration Proof & Real-Device UAT
 current_plan: Not started
 status: planning
-stopped_at: Phase 17 complete, ready to plan Phase 18
-last_updated: "2026-10-27T17:28:56.900Z"
-state_head: 67569139ebfa1eee568855ba58bef9e7d0b9cead
+stopped_at: Phase 18 context gathered
+last_updated: "2026-10-27T17:48:35.219Z"
+state_head: f5caffd0e2e8b7ddff5d936387e3ddd8b3e025f1
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 15
   completed_plans: 15
-  percent: 67
 last_activity: 2026-10-26
 ---
 
@@ -136,9 +135,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T17:15:55.020Z
-**Stopped at:** Phase 17 complete, ready to plan Phase 18
-**Resume file:** None
+**Last session:** 2026-10-27T17:48:35.144Z
+**Stopped at:** Phase 18 context gathered
+**Resume file:** .planning/phases/18-closing-verification-i18n-migration-proof-real-device-uat/18-CONTEXT.md
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
 
