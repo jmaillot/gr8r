@@ -87,7 +87,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 15-01-PLAN.md — Server: PATCH /api/auth/password route, atomic rehash + keep-current revoke, throttle, PASS-01/02 integration tests (wave 1)
+- [x] 15-01-PLAN.md — Server: PATCH /api/auth/password route, atomic rehash + keep-current revoke, throttle, PASS-01/02 integration tests (wave 1) ✅ 2026-10-27
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 15-02-PLAN.md — Client: real A.savePassword, api.changePassword, honest copy EN+FR, D-39/D-44 wiring + tests (wave 2)
@@ -141,7 +141,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 13. Investigation & Invariant Pinning | 2/2 | Complete    | 2026-10-26 |
 | 14. Schema & Session Ground Truth | 5/5 | Complete    | 2026-10-27 |
-| 15. Password Change End-to-End | 0/N | Not started | - |
+| 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 0/N | Not started | - |
 | 17. Login Second-Factor Flow | 0/N | Not started | - |
 | 18. Closing Verification | 0/N | Not started | - |

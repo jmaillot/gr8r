@@ -105,3 +105,9 @@ None.
 ## Known Stubs
 
 None. Every `<verify>` ran and passed.
+
+## Self-Check: PASSED
+
+- Files on disk: `server.js` (modified), `test/password-change.test.mjs` (created, 5/5), locales + catalogue pin (modified).
+- Commits verified in git log: `c6526b2`, `d1281c9`, `ddea836`.
+- `git rev-list --count f6d5113..d1281c9` = 2 (matches `commits: 2`).
