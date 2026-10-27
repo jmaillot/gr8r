@@ -480,7 +480,7 @@ const TABLES = [
     ['settings.shortcuts.lead', undefined, 'Move faster with the keyboard.'],
     // password
     ['settings.pw.lead', undefined, "Use a long password you don't use anywhere else."],
-    ['settings.pw.done', undefined, 'Password updated. Other sessions stay signed in.'],
+    ['settings.pw.done', undefined, 'Password updated. Your other sessions were signed out.'],
     ['settings.pw.current', undefined, 'Current password'],
     ['settings.pw.new', undefined, 'New password'],
     ['settings.pw.confirm', undefined, 'Confirm new password'],
