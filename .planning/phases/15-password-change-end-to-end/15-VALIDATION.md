@@ -40,11 +40,12 @@ created: "2026-10-27"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 15-01-01 | 01 | 1 | PASS-01 | T-15-01 (filled by planner) | Wrong current password rejected, no change | integration | `node --test test/password-change.test.mjs` | ❌ W0 | ⬜ pending |
-| 15-01-02 | 01 | 1 | PASS-01 | — | New password works at next login, old does not | integration | `node --test test/password-change.test.mjs` | ❌ W0 | ⬜ pending |
-| 15-0X-XX | 0X | X | PASS-02 | — | Other sessions revoked atomically in one transaction(); changing session stays signed in | integration | `node --test test/password-change.test.mjs` | ❌ W0 | ⬜ pending |
-| 15-0X-XX | 0X | X | PASS-02 | — | Revoked second browser routes through Phase 14 mid-session 401 intercept (D-44) | integration | `node --test test/auth-revoked.test.mjs` | ✅ | ⬜ pending |
-| 15-0X-XX | 0X | X | PASS-03 | — | Honest success toast copy; i18n keys present in both locales | static/integration | `node scripts/i18n-scan.mjs && node --test test/error-codes.test.mjs` | ✅ | ⬜ pending |
+| 15-01-T1 | 01 | 1 | PASS-01, PASS-02 | T-15-01, T-15-03 | Wrong current password rejected, no change; new password logs in, old does not; two-cookie revocation in one transaction() | integration (tracer) | `node --test test/password-change.test.mjs` | ❌ W0 | ⬜ pending |
+| 15-01-T2 | 01 | 1 | PASS-02 | T-15-01, T-15-02, T-15-04 | passwordRequired/passwordTooWeak; 429 generic lockout, no Retry-After, user_id key; cross-origin 403 | integration | `node --test test/password-change.test.mjs` | created in T1 | ⬜ pending |
+| 15-01-T3 | 01 | 1 | PASS-01, PASS-02 | — | Full suite regression gate incl. error-codes emit heuristic | suite | `npm test 2>&1 \| tail -5` | ✅ | ⬜ pending |
+| 15-02-T1 | 02 | 2 | PASS-03 | T-15-07, T-15-09 | Real A.savePassword → api.changePassword; honest count-free toast; D-39 field-clearing; keys EN+FR | static/i18n | `node scripts/i18n-scan.mjs && node --test test/error-codes.test.mjs` | ✅ | ⬜ pending |
+| 15-02-T2 | 02 | 2 | PASS-02 | T-15-08 | Revoked second browser routes through 14-05 central 401 intercept → signOutRevoked (D-44) | client (fetch-stubbed) | `node --test test/auth-revoked.test.mjs` | ✅ extend | ⬜ pending |
+| 15-02-T3 | 02 | 2 | PASS-03 | — | Phase gate: lint, format, build (i18n gate), full suite | suite | `npm run lint && npm run format:check && npm run build` + `npm test` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

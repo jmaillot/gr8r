@@ -83,7 +83,11 @@ Plans:
   3. With two browsers signed in, a password change in one leaves the other's next request 401 while the changing session stays signed in — enforced inside one `transaction()` (PASS-02)
   4. The success toast states exactly what happened (password updated, other sessions disconnected) — the honest-copy rule (PASS-03)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — Server: PATCH /api/auth/password route, atomic rehash + keep-current revoke, throttle, PASS-01/02 integration tests (wave 1)
+- [ ] 15-02-PLAN.md — Client: real A.savePassword, api.changePassword, honest copy EN+FR, D-39/D-44 wiring + tests (wave 2)
 **UI hint**: yes
 
 ### Phase 16: TOTP Core & Enrollment
