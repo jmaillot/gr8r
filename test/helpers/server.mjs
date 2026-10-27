@@ -93,13 +93,15 @@ export async function startServer({ dataDir = null, env = {} } = {}) {
   };
 }
 
-/* Cookie-bearing HTTP client. `gr8r_session` is captured like a browser would. */
+/* Cookie-bearing HTTP client. Both auth cookies (session + 2FA challenge) are
+   captured like a browser would — a jar, so a pending login followed by
+   POST /api/auth/tfa/login completes the session transparently. */
 export function client(base, name = 'client') {
-  let cookie = '';
+  const jar = new Map();
 
   async function request(method, pathname, body) {
     const headers = {};
-    if (cookie) headers.cookie = cookie;
+    if (jar.size) headers.cookie = [...jar.values()].join('; ');
     if (body !== undefined) headers['content-type'] = 'application/json';
     const res = await fetch(base + pathname, {
       method,
@@ -108,7 +110,9 @@ export function client(base, name = 'client') {
     });
     for (const line of res.headers.getSetCookie?.() || []) {
       const pair = line.split(';')[0];
-      if (pair.startsWith('gr8r_session=')) cookie = pair;
+      const eq = pair.indexOf('=');
+      const cookieName = pair.slice(0, eq);
+      if (cookieName === 'gr8r_session' || cookieName === 'gr8r_tfa_challenge') jar.set(cookieName, pair);
     }
     let data = null;
     try {
@@ -121,7 +125,7 @@ export function client(base, name = 'client') {
 
   return {
     name,
-    cookie: () => cookie,
+    cookie: () => [...jar.values()].join('; '),
     get: pathname => request('GET', pathname),
     post: (pathname, body) => request('POST', pathname, body),
     put: (pathname, body) => request('PUT', pathname, body),
@@ -133,6 +137,19 @@ export function client(base, name = 'client') {
 export async function login(base, email, password) {
   const account = client(base, email);
   const res = await account.post('/api/auth/login', { email, password });
+  return { client: account, status: res.status, data: res.data };
+}
+
+/* Login for a 2FA-enabled account (TFA-05): the password step answers
+   pending2fa; the caller supplies a live/recovery code to complete the
+   sign-in on /api/auth/tfa/login. The jar carries challenge → session. */
+export async function loginTfa(base, email, password, code) {
+  const account = client(base, email);
+  const res = await account.post('/api/auth/login', { email, password });
+  if (res.status === 200 && res.data?.pending2fa) {
+    const verify = await account.post('/api/auth/tfa/login', { code });
+    return { client: account, status: verify.status, data: verify.data, pending: res };
+  }
   return { client: account, status: res.status, data: res.data };
 }
 

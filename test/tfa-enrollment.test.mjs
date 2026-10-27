@@ -8,13 +8,29 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { totpAt, recoveryHash } from '../totp.js';
-import { login, signup, startServer, withDb } from './helpers/server.mjs';
+import { login, loginTfa, signup, startServer, withDb } from './helpers/server.mjs';
 
 let server;
 let tempDir;
 /* Plaintext recovery codes from the enable response (D-53: shown exactly once) —
    the disable tests reuse the captured set. */
 let enablemeCodes = [];
+
+/* TFA-05: 2FA-enabled accounts no longer get a session from the password alone.
+   Track each user's stored secret at enable time so tests can complete the
+   second step via loginTfa. */
+const enabledSecrets = new Map();
+
+/* Deterministic 2FA sign-in: reset the D-04 baseline (test-side DB access) so
+   a current-window code verifies, then complete the login challenge. */
+async function signIn2fa(email) {
+  withDb(server.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email));
+  const secret = enabledSecrets.get(email);
+  assert.ok(secret, `a tracked 2FA secret for ${email}`);
+  const a = await loginTfa(server.base, email, GOOD, totpAt(secret, Date.now() / 1000));
+  assert.equal(a.status, 200, `2FA sign-in of ${email} completed`);
+  return a;
+}
 
 before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-'));
@@ -84,6 +100,7 @@ test('TFA-03/TFA-04: enable with a live code flips 2FA on and issues 10 hashed r
   assert.equal(res.status, 200);
   assert.equal(res.data.ok, true);
   enablemeCodes = res.data.recoveryCodes;
+  enabledSecrets.set('enableme@test.local', secret);
   assert.equal(enablemeCodes.length, 10, 'D-50: exactly 10 codes');
   for (const code of res.data.recoveryCodes) {
     assert.match(code, /^[0-9a-f]{4}-[0-9a-f]{4}$/, 'D-51: lowercase hex xxxx-xxxx');
@@ -116,6 +133,7 @@ test('D-53 rotation: re-enroll + enable deletes the old 10 rows and issues a fre
   // so the fresh enrollment verifies against the following step.
   const res = await enable(a, { code: totpAt(second.secret, Date.now() / 1000 + 30) });
   assert.equal(res.status, 200);
+  enabledSecrets.set('rotator@test.local', second.secret);
   const fresh = recoveryRows('rotator@test.local');
   assert.equal(fresh.length, 10, 'fresh set, not 20');
   const oldIds = new Set(oldRows.map(r => r.id));
@@ -161,8 +179,7 @@ test('D-11/TFA-03: wrong codes are rejected (state untouched) and the 6th attemp
 const disable = (c, body) => c.post('/api/auth/tfa/disable', body);
 
 test('D-57: disable with the wrong current password → 403, 2FA stays on', async () => {
-  const a = await login(server.base, 'rotator@test.local', GOOD);
-  assert.equal(a.status, 200, 'rotator re-authenticated (still enabled)');
+  const a = await signIn2fa('rotator@test.local');
 
   const res = await disable(a.client, { currentPassword: 'not-it-123456', code: '123456' });
   assert.equal(res.status, 403);
@@ -171,7 +188,7 @@ test('D-57: disable with the wrong current password → 403, 2FA stays on', asyn
 });
 
 test('D-57: valid password but no valid code → codeRejected, 2FA stays on', async () => {
-  const a = await login(server.base, 'rotator@test.local', GOOD);
+  const a = await signIn2fa('rotator@test.local');
   const badLive = await disable(a.client, { currentPassword: GOOD, code: '000000' });
   assert.equal(badLive.status, 400);
   assert.equal(badLive.data.code, 'codeRejected');
@@ -182,7 +199,7 @@ test('D-57: valid password but no valid code → codeRejected, 2FA stays on', as
 });
 
 test('D-59: disable with a live code tears everything down in one transaction', async () => {
-  const a = await login(server.base, 'rotator@test.local', GOOD);
+  const a = await signIn2fa('rotator@test.local');
   // The rotation test verified a future-window code, so the D-04 baseline sits
   // one step ahead; reset it (as a later real-world window would) so this
   // test's fresh enrollment can verify on the current step.
@@ -210,7 +227,7 @@ test('D-59: disable with a live code tears everything down in one transaction', 
 });
 
 test('D-57: a printed recovery code disables 2FA in any normalization', async () => {
-  const a = await login(server.base, 'enableme@test.local', GOOD);
+  const a = await signIn2fa('enableme@test.local');
   const printed = enablemeCodes[0];
   assert.ok(printed, 'the enable response codes were captured');
 
@@ -224,12 +241,15 @@ test('D-57: a printed recovery code disables 2FA in any normalization', async ()
 });
 
 test('D-57/T-16-14: an already-burned recovery code is rejected', async () => {
+  // nopending still has 2FA OFF here — a plain password login mints the session.
   const a = await login(server.base, 'nopending@test.local', GOOD);
+  assert.equal(a.status, 200);
   // Enable first (fresh 2fa-verify budget), then simulate a burn the way the
   // Phase 17 login path will: used_at set on the matched hash.
   const { secret } = (await enroll(a.client, { currentPassword: GOOD })).data;
   const enabled = await enable(a.client, { code: totpAt(secret, Date.now() / 1000 + 30) });
   assert.equal(enabled.status, 200);
+  enabledSecrets.set('nopending@test.local', secret);
 
   const KNOWN = 'a3f19b02';
   withDb(server.dbPath, db =>
@@ -245,7 +265,7 @@ test('D-57/T-16-14: an already-burned recovery code is rejected', async () => {
 });
 
 test('T-16-14: the disable throttle is a distinct budget — the 6th attempt locks out', async () => {
-  const a = await login(server.base, 'nopending@test.local', GOOD);
+  const a = await signIn2fa('nopending@test.local');
   // Four more wrong-password attempts stay inside the 5-attempt band…
   for (let i = 0; i < 4; i++) {
     const res = await disable(a.client, { currentPassword: `wrong-${i}-x`, code: '123456' });

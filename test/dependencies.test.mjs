@@ -25,7 +25,7 @@ test('package.json carries no runtime dependencies (D-12)', () => {
   );
 });
 
-test('the Dockerfile runtime stage stays bare node + su-exec with exactly the four COPY targets (D-12)', () => {
+test('the Dockerfile runtime stage stays bare node + su-exec with exactly the five COPY targets (D-12)', () => {
   const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
 
   // Scope every assertion to the runtime stage, never the build stage
@@ -48,9 +48,10 @@ test('the Dockerfile runtime stage stays bare node + su-exec with exactly the fo
     // the entrypoint script is infrastructure, not app payload — D-12 constrains
     // the app surface: one Node process served by server.js/mailer.js/seed.json/dist
     .filter(t => t !== '/usr/local/bin/docker-entrypoint.sh');
+  // 7668ece: server.js imports totp.js at runtime, so the image ships it too.
   assert.deepEqual(
     copyTargets.sort(),
-    ['dist', 'mailer.js', 'seed.json', 'server.js'],
-    `the runtime stage must copy exactly server.js, mailer.js, seed.json and dist — found: ${copyTargets.join(' | ')} (D-12)`,
+    ['dist', 'mailer.js', 'seed.json', 'server.js', 'totp.js'],
+    `the runtime stage must copy exactly server.js, totp.js, mailer.js, seed.json and dist — found: ${copyTargets.join(' | ')} (D-12)`,
   );
 });
