@@ -242,6 +242,14 @@ export const api = {
   async revokeAllSessions() {
     return call('DELETE', '/api/auth/sessions/others');
   },
+  /* Change the signed-in account's own password (PASS-02). api.changePassword is
+     the only client entry point to PATCH /api/auth/password. Auth-scoped, no slug
+     guard — same family as the sessions methods above (D-34). On success the
+     server revokes every OTHER session inside the same transaction; this call's
+     own cookie survives. */
+  async changePassword(currentPassword, newPassword) {
+    return call('PATCH', '/api/auth/password', { currentPassword, newPassword });
+  },
   async putWorkspace(doc, opts) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };

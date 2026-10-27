@@ -230,6 +230,7 @@
   "toast.wsDeletedDemo": "Espace de travail supprimé. Les données de démo ont été restaurées pour ce prototype.",
   "toast.profileUpdated": "Profil mis à jour",
   "toast.passwordUpdated": "Mot de passe mis à jour",
+  "toast.passwordUpdatedAll": "Mot de passe mis à jour · autres sessions déconnectées",
   "toast.sessionSignedOut": "Session déconnectée",
   "toast.signedOutOthers": "Déconnecté des autres sessions",
   "toast.twoFaEnabled": "Authentification à deux facteurs activée",

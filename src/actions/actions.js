@@ -2387,11 +2387,42 @@ A.savePassword = () => {
     render();
     return;
   }
-  loadingBtn('pw-save', 800, () => {
+  loadingBtn('pw-save', 0, async () => {
+    const btn = document.getElementById('pw-save');
+    const done = () => {
+      btn?.classList.remove('is-loading');
+      btn?.removeAttribute('aria-busy');
+    };
+    const res = await api.changePassword(cur, nw);
+    done();
+    if (!res.ok) {
+      /* D-28/D-44: the central 401 intercept in api.js owns every mid-session
+         revocation — no local 401 branch here. Map the server's stable codes
+         to the field they belong to (T-15-07): wrongCurrentPassword and
+         passwordRequired live under the CURRENT field; only #pw-cur is
+         cleared — the new-password value round-trips through S.ui.pwNew so
+         the input survives the re-render (D-39). Unknown codes fall through
+         to the generic translation call() already attached to res.error. */
+      const code = res.data?.code;
+      if (code === 'wrongCurrentPassword' || code === 'passwordRequired') {
+        e.pwCur = t('err.' + code);
+      } else if (code === 'passwordTooWeak') {
+        e.pwNew = t('err.passwordTooWeak');
+      } else {
+        e.pwCur = res.error || t('err.serverUnreachable');
+      }
+      render();
+      return;
+    }
+    /* D-43: honest success — the banner and the toast both state exactly what
+       happened, with no invented count (D-37). All fields clear (pw-cur and
+       pw-conf carry no value binding; pw-new's S.ui.pwNew resets), the user
+       stays signed in, and the sessions tab ground-truths itself (D-29). */
     S.ui.pwDone = true;
     S.ui.pwNew = '';
     render();
-    toast(t('toast.passwordUpdated'));
+    await refreshSessions(); // D-29
+    toast(t('toast.passwordUpdatedAll'));
   });
 };
 A.revokeSession = async el => {

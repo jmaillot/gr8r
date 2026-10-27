@@ -229,6 +229,7 @@
   "toast.wsDeletedDemo": "Workspace deleted. Demo data was restored for this prototype.",
   "toast.profileUpdated": "Profile updated",
   "toast.passwordUpdated": "Password updated",
+  "toast.passwordUpdatedAll": "Password updated · other sessions disconnected",
   "toast.sessionSignedOut": "Session signed out",
   "toast.signedOutOthers": "Signed out of other sessions",
   "toast.twoFaEnabled": "Two-factor authentication enabled",
