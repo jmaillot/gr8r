@@ -7,11 +7,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { totpAt } from '../totp.js';
+import { totpAt, recoveryHash, normalizeRecoveryCode } from '../totp.js';
 import { login, signup, startServer, withDb } from './helpers/server.mjs';
 
 let server;
 let tempDir;
+/* Plaintext recovery codes from the enable response (D-53: shown exactly once) —
+   the disable tests reuse the captured set. */
+let enablemeCodes = [];
 
 before(async () => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-'));
@@ -84,7 +87,8 @@ test('TFA-03/TFA-04: enable with a live code flips 2FA on and issues 10 hashed r
   const res = await enable(a, { code: liveCode(secret) });
   assert.equal(res.status, 200);
   assert.equal(res.data.ok, true);
-  assert.equal(res.data.recoveryCodes.length, 10, 'D-50: exactly 10 codes');
+  enablemeCodes = res.data.recoveryCodes;
+  assert.equal(enablemeCodes.length, 10, 'D-50: exactly 10 codes');
   for (const code of res.data.recoveryCodes) {
     assert.match(code, /^[0-9a-f]{4}-[0-9a-f]{4}$/, 'D-51: lowercase hex xxxx-xxxx');
   }
@@ -154,4 +158,139 @@ test('D-11/TFA-03: wrong codes are rejected (state untouched) and the 6th attemp
   assert.equal(locked.status, 429);
   const body = await locked.json();
   assert.equal(body.code, 'tooManyAttempts');
+});
+
+/* ---------------------------- D-57/D-59 disable ---------------------------- */
+
+const disable = (c, body) => c.post('/api/auth/tfa/disable', body);
+
+test('D-57: disable with the wrong current password → 403, 2FA stays on', async () => {
+  const a = await login(server.base, 'rotator@test.local', GOOD);
+  assert.equal(a.status, 200, 'rotator re-authenticated (still enabled)');
+
+  const res = await disable(a.client, { currentPassword: 'not-it-123456', code: '123456' });
+  assert.equal(res.status, 403);
+  assert.equal(res.data.code, 'wrongCurrentPassword');
+  assert.equal(userRow('rotator@test.local').two_fa_enabled, 1, 'no state change');
+});
+
+test('D-57: valid password but no valid code → codeRejected, 2FA stays on', async () => {
+  const a = await login(server.base, 'rotator@test.local', GOOD);
+  const badLive = await disable(a.client, { currentPassword: GOOD, code: '000000' });
+  assert.equal(badLive.status, 400);
+  assert.equal(badLive.data.code, 'codeRejected');
+  const badRecovery = await disable(a.client, { currentPassword: GOOD, code: 'deadbeef' });
+  assert.equal(badRecovery.status, 400);
+  assert.equal(badRecovery.data.code, 'codeRejected');
+  assert.equal(userRow('rotator@test.local').two_fa_enabled, 1);
+});
+
+test('D-59: disable with a live code tears everything down in one transaction', async () => {
+  const a = await login(server.base, 'rotator@test.local', GOOD);
+  // The rotation test verified a future-window code, so the D-04 baseline sits
+  // one step ahead; reset it (as a later real-world window would) so this
+  // test's fresh enrollment can verify on the current step.
+  withDb(server.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run('rotator@test.local'));
+  // Re-enroll: the test needs the pending secret to derive live codes. Enable
+  // consumes the current step; the disable code comes from the NEXT window,
+  // which the D-04 guard correctly permits (> matchedStep) and ±1 covers.
+  const { secret } = (await enroll(a.client, { currentPassword: GOOD })).data;
+  const enabled = await enable(a.client, { code: liveCode(secret) });
+  assert.equal(enabled.status, 200);
+  assert.equal(recoveryRows('rotator@test.local').length, 10);
+
+  const ok = await disable(a.client, { currentPassword: GOOD, code: totpAt(secret, Date.now() / 1000 + 30) });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.data, { ok: true });
+  const row = userRow('rotator@test.local');
+  assert.equal(row.two_fa_enabled, 0);
+  assert.equal(row.two_fa_secret, '', 'the ciphertext is cleared');
+  assert.equal(row.two_fa_last_step, 0, 'the D-04 baseline resets to the no-baseline sentinel');
+  assert.equal(recoveryRows('rotator@test.local').length, 0, 'zero recovery rows after teardown');
+
+  // A fresh enroll afterwards is indistinguishable from a first one.
+  const again = (await enroll(a.client, { currentPassword: GOOD })).data;
+  assert.match(again.secret, /^[A-Z2-7]{32}$/);
+});
+
+test('D-57: a printed recovery code disables 2FA in any normalization', async () => {
+  const a = await login(server.base, 'enableme@test.local', GOOD);
+  const printed = enablemeCodes[0];
+  assert.ok(printed, 'the enable response codes were captured');
+
+  // The same printed code in UPPERCASE verifies via the ONE normalization
+  // (Pitfall 6) — case and dash/spell variants normalize identically.
+  const ok = await disable(a.client, { currentPassword: GOOD, code: printed.toUpperCase() });
+  assert.equal(ok.status, 200);
+  const row = userRow('enableme@test.local');
+  assert.equal(row.two_fa_enabled, 0);
+  assert.equal(recoveryRows('enableme@test.local').length, 0, 'all rows deleted by teardown');
+});
+
+test('D-57/T-16-14: an already-burned recovery code is rejected', async () => {
+  const a = await login(server.base, 'nopending@test.local', GOOD);
+  // Enable first (fresh 2fa-verify budget), then simulate a burn the way the
+  // Phase 17 login path will: used_at set on the matched hash.
+  const { secret } = (await enroll(a.client, { currentPassword: GOOD })).data;
+  const enabled = await enable(a.client, { code: totpAt(secret, Date.now() / 1000 + 30) });
+  assert.equal(enabled.status, 200);
+
+  const KNOWN = 'a3f19b02';
+  withDb(server.dbPath, db =>
+    db
+      .prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?, (select id from users where email = ?), ?, ?, ?)')
+      .run('rc-burned-fixture', 'nopending@test.local', recoveryHash(KNOWN), Date.now(), Date.now()),
+  );
+
+  const res = await disable(a.client, { currentPassword: GOOD, code: 'A3F1-9B02' });
+  assert.equal(res.status, 400, 'a burned row matches the hash but is not eligible');
+  assert.equal(res.data.code, 'codeRejected');
+  assert.equal(userRow('nopending@test.local').two_fa_enabled, 1, '2FA still on');
+});
+
+test('T-16-14: the disable throttle is a distinct budget — the 6th attempt locks out', async () => {
+  const a = await login(server.base, 'nopending@test.local', GOOD);
+  // Four more wrong-password attempts stay inside the 5-attempt band…
+  for (let i = 0; i < 4; i++) {
+    const res = await disable(a.client, { currentPassword: `wrong-${i}-x`, code: '123456' });
+    assert.equal(res.status, 403, `attempt ${i + 1} is verified (not locked out yet)`);
+  }
+  // …the 6th tfa-disable attempt hits the generic lockout.
+  const locked = await fetch(`${server.base}/api/auth/tfa/disable`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: a.client.cookie() },
+    body: JSON.stringify({ currentPassword: GOOD, code: '123456' }),
+  });
+  assert.equal(locked.status, 429);
+  assert.equal((await locked.json()).code, 'tooManyAttempts');
+});
+
+/* T-16-09/D-06: the enable path fails closed when MASTER_KEY is absent — a
+   dedicated server without the key exercises the identical production path. */
+test('D-06: enable without MASTER_KEY → fail-closed 503 naming MASTER_KEY, no state change', async () => {
+  const noKeyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-nokey-'));
+  const noKeyServer = await startServer({ dataDir: noKeyDir }); // no MASTER_KEY env
+  try {
+    const s = await signup(noKeyServer.base, { name: 'nokey', email: 'nokey@test.local', password: GOOD });
+    assert.equal(s.status, 201);
+    const enrolled = await s.client.post('/api/auth/tfa/enroll', { currentPassword: GOOD });
+    assert.equal(enrolled.status, 200, 'enroll itself does not need the key (memory-only secret)');
+
+    const res = await s.client.post('/api/auth/tfa/enable', { code: liveCode(enrolled.data.secret) });
+    assert.equal(res.status, 503);
+    assert.equal(res.data.code, 'masterKeyMissing');
+    assert.ok(/MASTER_KEY/.test(res.data.error || ''), 'the admin-facing body names MASTER_KEY');
+
+    const db = new (await import('node:sqlite')).DatabaseSync(noKeyServer.dbPath);
+    try {
+      const row = db.prepare('select two_fa_enabled, two_fa_secret from users where email = ?').get('nokey@test.local');
+      assert.equal(row.two_fa_enabled, 0, 'no state mutation happened');
+      assert.ok(!row.two_fa_secret);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await noKeyServer.stop();
+    fs.rmSync(noKeyDir, { recursive: true, force: true });
+  }
 });

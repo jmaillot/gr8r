@@ -249,6 +249,23 @@ function encryptTotpSecret(secretB32) {
   }
 }
 
+// Mirror of encryptTotpSecret — returns the plaintext secret or null when the
+// envelope is undecryptable (wrong/missing MASTER_KEY, tampered tag). Callers
+// fail closed 503 (D-06) rather than proceeding.
+function decryptTotpSecret(envelope) {
+  if (!MASTER_KEY) return null;
+  try {
+    const [v, ivB64, tagB64, ctB64] = String(envelope).split(':');
+    if (v !== 'v1' || !ivB64 || !tagB64 || !ctB64) return null;
+    const key = crypto.createHash('sha256').update(MASTER_KEY).digest();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
 /* D-46: pending (not-yet-verified) TOTP secrets live ONLY here — in memory,
    keyed by user_id, with a 10-minute TTL. Nothing touches users.two_fa_secret
    until enable succeeds; a server restart mid-enrollment just means re-scanning
@@ -1481,6 +1498,53 @@ async function handleApi(req, res, url) {
       pendingTfa.delete(user.id);
     });
     return json(res, 200, { ok: true, recoveryCodes: codes });
+  }
+
+  if (pathname === '/api/auth/tfa/disable' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // T-16-14: a distinct budget from the other tfa routes (D-11 band).
+    if (tooMany(`tfa-disable|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const cur = String(body?.currentPassword || '');
+    const code = String(body?.code || '').trim();
+    if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
+    if (!code) return fail(res, 400, 'codeRejected', 'Enter a verification code');
+    // One atomic unit (Pitfall 4): re-select fresh INSIDE the transaction, run
+    // the dual-shape verify, and tear down on success. No writes happen on any
+    // miss, so a failed verify commits nothing (D-57/D-59).
+    const outcome = transaction(() => {
+      const fresh = db.prepare('select password_hash, two_fa_secret, two_fa_last_step from users where id = ?').get(user.id);
+      if (!fresh || !verifyPassword(cur, fresh.password_hash)) return 'password';
+      if (/^\d{6}$/.test(code)) {
+        // Live-code shape. D-06: an undecryptable secret (missing MASTER_KEY,
+        // tampered envelope) fails closed 503 before any mutation.
+        const secret = decryptTotpSecret(fresh.two_fa_secret);
+        if (!secret) return 'masterKey';
+        if (!verifyTotpCode(secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000)).ok) return 'code';
+      } else {
+        // Recovery-code shape (D-57 dual input): ONE normalization + hash
+        // lookup, identical to the generation-hash site (Pitfall 6).
+        const hash = recoveryHash(normalizeRecoveryCode(code));
+        const burned = db
+          .prepare('select id from recovery_codes where user_id = ? and code_hash = ? and used_at is null')
+          .get(user.id, hash);
+        if (!burned) return 'code';
+        // The burn (D-57): mark used_at, then the teardown below deletes the row.
+        db.prepare('update recovery_codes set used_at = ? where id = ?').run(now(), burned.id);
+      }
+      // D-59: complete teardown — a fresh enroll afterwards is indistinguishable
+      // from a first one. two_fa_last_step resets to its NOT NULL default 0
+      // (the no-baseline sentinel from Phase 14).
+      db.prepare('update users set two_fa_enabled = 0, two_fa_secret = \'\', two_fa_last_step = 0 where id = ?').run(user.id);
+      db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+      return 'ok';
+    });
+    if (outcome === 'password') return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured or the stored secret is undecryptable');
+    if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
+    return json(res, 200, { ok: true });
   }
 
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */
