@@ -133,7 +133,11 @@ Plans:
   3. A pending (password-correct, code-absent) sign-in is rejected as anonymous across every endpoint family — API routes, `/w/:slug/file/:id`, invite accept — with no cookie usable as identity (tested 401 matrix) (TFA-05)
   4. The password→2FA throttle shares one budget with no reset between steps; the challenge is short-lived (TFA-05)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 17-01-PLAN.md — Server: login 2FA branch, /api/auth/tfa/login verify route (dual-shape, atomic burn+mint), challenge lifecycle + sweeper, budget carry-over, D-13 copy swap, 401-matrix test
+- [ ] 17-02-PLAN.md — Client: s === '2fa' screen (masked email, dual-shape input), doLogin pending branch, tfaLogin API method, back link, recovery banners EN+FR
 
 ### Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT
 
