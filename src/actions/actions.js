@@ -2688,6 +2688,8 @@ function reportRecoveryBurn() {
 
 A.doLogin = () => {
   const e = (S.ui.errors = {});
+  /* WR-02: a stale recovery count must never survive into a later login. */
+  S.ui.tfaRecoveryRemaining = null;
   const em = $('#l-email').value.trim(),
     pw = $('#l-pw').value;
   S.ui.af.email = em;
@@ -2737,6 +2739,8 @@ A.doLogin = () => {
    client branching on code shape (D-64) — the server decides TOTP vs recovery. */
 A.doTfaLogin = () => {
   S.ui.errors = {};
+  /* WR-02: a stale recovery count must never survive into a later login. */
+  S.ui.tfaRecoveryRemaining = null;
   const code = $('#tfa-login-code')?.value?.trim() || '';
   if (!api.enabled) return;
   loadingBtn('tfa-login-btn', 0, async () => {
@@ -2766,9 +2770,15 @@ A.doTfaLogin = () => {
       return;
     }
     applyUser(res.data);
-    /* D-73/D-74: keep the recovery count for the post-landing honest report. */
-    if (typeof res.data.recoveryRemaining === 'number') S.ui.tfaRecoveryRemaining = res.data.recoveryRemaining;
     S.ui.maskedEmail = null;
+    /* WR-01: any finishLogin failure render must land on the login card,
+       never a stale '2fa' card with an empty masked email (17-REVIEW). */
+    S.ui.auth = 'login';
+    /* D-73/D-74: keep the recovery count for the post-landing honest report.
+       WR-02: a TOTP login (no burn) clears any stale count instead — the
+       success-path value must survive until reportRecoveryBurn() reads it. */
+    if (typeof res.data.recoveryRemaining === 'number') S.ui.tfaRecoveryRemaining = res.data.recoveryRemaining;
+    else S.ui.tfaRecoveryRemaining = null;
     await finishLogin(api.user?.name || api.user?.email || '', done);
   });
 };
