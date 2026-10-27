@@ -1170,5 +1170,85 @@ test.describe('phase 18 auth flows', () => {
       }
     });
 
+    test(`revoking other sessions kills the second device's session and keeps the current one signed in (${lang})`, async ({ browser }) => {
+      const tag = `rev-${lang}`;
+      const acct = await createAccount(BASE_URL, run, tag, `Revoke ${lang}`, { locale: lang, workspace: `rev-${lang}-${run}` });
+
+      /* Device A — the revoking device. Its context negotiates the same
+         loop language as B, so the anonymous login form's labels match
+         fillLogin (the fr variant runs the whole surface in French). */
+      const ctxA = await newContext(browser, { ip: clientIp(run, `${tag}-a`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      /* Device B — the victim device, signed in before the revocation. */
+      const ctxB = await newContext(browser, { ip: clientIp(run, `${tag}-b`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const a = await ctxA.newPage();
+      const b = await ctxB.newPage();
+      try {
+        await fillLogin(b, acct.account, lang);
+        await expect(b).toHaveURL(new RegExp(`/w/${acct.account.slug}$`));
+        await fillLogin(a, acct.account, lang);
+        await expect(a).toHaveURL(new RegExp(`/w/${acct.account.slug}$`));
+
+        /* A revokes the way the UI does: settings → sessions → the app's
+           own confirm dialog. */
+        await openSettingsSec(a, 'sessions');
+        await expect(a.getByText(fmt('settings.sessions.thisDevice', {}, lang))).toBeVisible();
+        await a.locator(`button[data-a='revokeAll']`).click();
+        await expect(a.locator('.modal-wrap .modal').last()).toBeVisible();
+        await a.locator(`[data-a='confirmOk']`).click();
+        await expect(a.getByText(fmt('toast.signedOutOthers', {}, lang))).toBeVisible();
+
+        /* A's current session survives and can still act. */
+        await expect(a.getByText(fmt('settings.sessions.thisDevice', {}, lang))).toBeVisible();
+
+        /* B's next requireUser surface (the sessions tab's server ground
+           truth) 401s into the central teardown: signed out, honest copy. */
+        await openSettingsSec(b, 'sessions');
+        await expect(b.getByText(fmt('err.signedOutElsewhere', {}, lang))).toBeVisible();
+        await expect(b.getByLabel(fmt('common.email', {}, lang), { exact: true })).toBeVisible();
+      } finally {
+        await ctxA.close();
+        await ctxB.close();
+      }
+    });
+
+    test(`a password change revokes the other session, keeps the current one and renders the honest copy (${lang})`, async ({ browser }) => {
+      const tag = `pwch-${lang}`;
+      const acct = await createAccount(BASE_URL, run, tag, `PwChange ${lang}`, { locale: lang, workspace: `pwch-${lang}-${run}` });
+      const newPassword = 'e2e-password-2';
+
+      const ctxA = await newContext(browser, { ip: clientIp(run, `${tag}-a`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const ctxB = await newContext(browser, { ip: clientIp(run, `${tag}-b`), lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const a = await ctxA.newPage();
+      const b = await ctxB.newPage();
+      try {
+        await fillLogin(b, acct.account, lang);
+        await expect(b).toHaveURL(new RegExp(`/w/${acct.account.slug}$`));
+        await fillLogin(a, acct.account, lang);
+        await expect(a).toHaveURL(new RegExp(`/w/${acct.account.slug}$`));
+
+        /* A changes the password through the real settings surface. */
+        await openSettingsSec(a, 'password');
+        await a.getByLabel(fmt('settings.pw.current', {}, lang), { exact: true }).fill(PASSWORD);
+        await a.getByLabel(fmt('settings.pw.new', {}, lang), { exact: true }).fill(newPassword);
+        await a.getByLabel(fmt('settings.pw.confirm', {}, lang), { exact: true }).fill(newPassword);
+        await a.locator('#pw-save').click();
+
+        /* PASS-03 honest success copy: updated + other sessions gone. */
+        await expect(a.getByText(fmt('toast.passwordUpdatedAll', {}, lang))).toBeVisible();
+
+        /* A's keep-current session survives: the sessions tab still loads
+           its server ground truth with this device present. */
+        await openSettingsSec(a, 'sessions');
+        await expect(a.getByText(fmt('settings.sessions.thisDevice', {}, lang))).toBeVisible();
+
+        /* B dies on its next requireUser surface, with the honest copy. */
+        await openSettingsSec(b, 'sessions');
+        await expect(b.getByText(fmt('err.signedOutElsewhere', {}, lang))).toBeVisible();
+        await expect(b.getByLabel(fmt('common.email', {}, lang), { exact: true })).toBeVisible();
+      } finally {
+        await ctxA.close();
+        await ctxB.close();
+      }
+    });
   }
 });
