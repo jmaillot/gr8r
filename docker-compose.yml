@@ -36,6 +36,7 @@ services:
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-8388608}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       DATA_DIR: /data
+      MASTER_KEY: ${MASTER_KEY:?set MASTER_KEY in .env (32+ random chars; encrypts TOTP secrets — losing it locks out 2FA)}
     volumes:
       - gr8r-data:/data
     # No published port: Traefik reaches the container over the shared network.
