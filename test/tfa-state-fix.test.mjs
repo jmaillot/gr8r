@@ -32,10 +32,7 @@ function bodyOf(src, header) {
 test('WR-01: doTfaLogin resets S.ui.auth to the login card before delegating to finishLogin', () => {
   const fn = bodyOf(ACTIONS, 'A.doTfaLogin = () =>');
   assert.ok(fn.indexOf("S.ui.auth = 'login'") !== -1, 'the reset exists');
-  assert.ok(
-    fn.indexOf("S.ui.auth = 'login'") < fn.indexOf('await finishLogin('),
-    'the reset precedes the finishLogin delegation',
-  );
+  assert.ok(fn.indexOf("S.ui.auth = 'login'") < fn.indexOf('await finishLogin('), 'the reset precedes the finishLogin delegation');
 });
 
 test('WR-02: the doTfaLogin success path clears a stale recovery count after maskedEmail', () => {
