@@ -302,10 +302,29 @@ test('a client write persists a legacy document without sessions or tfa', async 
   assert.equal(rows.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project', 'the rows survive the write');
 });
 
+/* D-79 final re-proof of AUTH-02's doc-field removal: a direct-DB walk of EVERY
+   workspace document (no row filter), asserting zero auth-bearing keys. The
+   enumerated set mirrors the strip list in server.js normalizeDoc/docFromClient
+   (D-30): `sessions` and `tfa` — no other auth-bearing keys exist in the doc. */
+const AUTH_BEARING_DOC_KEYS = ['sessions', 'tfa'];
+
+test('every workspace document in the database carries zero auth-bearing keys', () => {
+  const rows = withDb(server.dbPath, db => db.prepare('select id, doc from workspaces').all());
+  assert.ok(rows.length > 0, 'the fixture database has workspace rows to walk');
+  for (const row of rows) {
+    const parsed = JSON.parse(row.doc);
+    for (const key of AUTH_BEARING_DOC_KEYS) {
+      assert.equal(key in parsed.data, false, `workspace ${row.id}: data.${key} must be absent from the stored document`);
+      assert.equal(key in parsed, false, `workspace ${row.id}: top-level ${key} must be absent from the stored document`);
+    }
+  }
+});
+
 /* Everything the migration owns, compared byte-for-byte across a reboot. */
 function snapshot() {
   const row = workspaceRow();
   const invite = withDb(server.dbPath, db => db.prepare('select workspace_id from invites').get());
+  const ddl = name => withDb(server.dbPath, db => db.prepare('select sql from sqlite_master where type = ? and name = ?').get(name.type, name.name)?.sql);
   return {
     backups: backups(),
     slug: row.slug,
@@ -322,6 +341,24 @@ function snapshot() {
         .all()
         .map(r => ({ ...r })),
     ),
+    /* Pitfall C: the byte-identity proof must cover the post-17 auth state too. */
+    sessions: withDb(server.dbPath, db =>
+      db
+        .prepare('select token_hash, user_id, created_at, expires_at, label, ip, last_seen_at, user_agent from sessions order by token_hash')
+        .all()
+        .map(r => ({ ...r })),
+    ),
+    loginChallenges: {
+      count: withDb(server.dbPath, db => db.prepare('select count(*) as n from login_challenges').get()).n,
+      columns: withDb(server.dbPath, db =>
+        db
+          .prepare('pragma table_info(login_challenges)')
+          .all()
+          .map(c => ({ ...c })),
+      ),
+      tableDdl: ddl({ type: 'table', name: 'login_challenges' }),
+      indexDdl: ddl({ type: 'index', name: 'login_challenges_expiry' }),
+    },
   };
 }
 
