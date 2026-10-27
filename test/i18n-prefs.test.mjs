@@ -29,8 +29,11 @@ const UTILS_SOURCE = path.join(ROOT, 'src', 'core', 'utils.js');
 const SETTINGS_SOURCE = path.join(ROOT, 'src', 'pages', 'settings.js');
 const ACTIONS_SOURCE = path.join(ROOT, 'src', 'actions', 'actions.js');
 const PENDING_FIXTURE = path.join(ROOT, 'test', 'fixtures', 'i18n-pending.json');
-const ROADMAP = path.join(ROOT, '.planning', 'ROADMAP.md');
-const CONTEXT = path.join(ROOT, '.planning', 'phases', '06-english-extraction-locale-aware-formats', '06-CONTEXT.md');
+/* v1.2 archived the Phase 6 section into the milestone ROADMAP when the v1.3
+   rewrite replaced the root roadmap (14-VERIFICATION.md advisory, deferred-items.md) —
+   the delta record lives there now. */
+const ROADMAP = path.join(ROOT, '.planning', 'milestones', 'v1.2-ROADMAP.md');
+const CONTEXT = path.join(ROOT, '.planning', 'milestones', 'v1.2-phases', '06-english-extraction-locale-aware-formats', '06-CONTEXT.md');
 
 /* The 24th of July 2026, in the local zone: the fixture every date assertion uses. */
 const JULY_24 = new Date(2026, 6, 24);
