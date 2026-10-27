@@ -4,9 +4,9 @@ milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 18
 current_phase_name: Closing Verification — i18n, Migration Proof & Real-Device UAT
-current_plan: 2
+current_plan: 4
 status: executing
-stopped_at: Completed 18-01-PLAN.md
+stopped_at: Completed 18-03-PLAN.md
 last_updated: "2026-10-27T19:02:50.528Z"
 state_head: 676cd3e1dffd80298f47a5be8de8827bbc865898
 progress:
@@ -36,7 +36,7 @@ Last updated: 2026-10-26
 
 Phase: 18 (Closing Verification — i18n, Migration Proof & Real-Device UAT) — EXECUTING
 
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 4
 
 Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
@@ -109,6 +109,7 @@ touch this milestone):
 - [Phase 17]: Challenge abandon is a real logout (server clears the HttpOnly gr8r_tfa_challenge cookie); the throttle budget is server-owned and survives the abandon (D-61/D-03)
 - [Phase 17]: Recovery burn at login is reported post-landing via toast, copy-escalated when it was the last code — no behavior difference (D-73/D-74/D-75)
 - [Phase 18]: Client 2FA state lifecycle fix (WR-01/WR-02) applied via if/else clear to preserve genuine recovery burn count — The plan literal fix would erase the burn count; if/else preserves it while holding all ordering criteria
+- [Phase 18 / 18-03]: A2 ground truth — no `sessions.pending_tfa` column exists; the post-17 pending-2FA surface is the login_challenges table (challenge_token_hash, user_id, expires_at, attempts + expiry index); D-79 enumerated auth-key set is [sessions, tfa] mirrored from server.js normalizeDoc/docFromClient; second-boot snapshot now covers sessions rows + login_challenges count/pragma/DDL (Pitfall C closed)
 
 ## Verification commands used
 
@@ -136,8 +137,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T20:55:00Z
-**Stopped at:** Completed 18-02-PLAN.md
+**Last session:** 2026-10-27T21:40:00Z
+**Stopped at:** Completed 18-03-PLAN.md
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
@@ -168,3 +169,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 17 P01 | 115min | 3 tasks | 9 files |
 | Phase 17 P02 | 50m | 2 tasks | 13 files |
 | Phase 18 P01 | 10 min | 2 tasks | 2 files |
+| Phase 18 P03 | 8min | 2 tasks | 1 files |

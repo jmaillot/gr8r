@@ -154,7 +154,7 @@ Plans:
   4. A human verifies the QR with Google Authenticator plus one other authenticator app on a real device (AUTH-03 — UAT, not automatable)
   5. The "looks-done-but-isn't" pitfalls checklist runs as explicit verification and each item is checked or gaps filed (AUTH-03)
 
-**Plans**: 1/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -178,7 +178,7 @@ Plans:
 | 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
 | 17. Login Second-Factor Flow | 2/2 | Complete    | 2026-10-27 |
-| 18. Closing Verification | 2/4 | In Progress|  |
+| 18. Closing Verification | 3/4 | In Progress|  |
 
 ## Traceability
 
