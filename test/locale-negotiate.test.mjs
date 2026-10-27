@@ -183,6 +183,13 @@ test('sign-out falls back to the negotiated locale before its render (D-10)', ()
 test('login, signup and invite-accept adopt the account locale before their renders (D-11)', () => {
   const adopt = bodyOf(ACTIONS, 'async function adoptAccountLocale');
   assert.ok(adopt.includes('api.user?.locale || negotiate()'));
+  /* 17-02: doLogin delegates its post-success tail to finishLogin, whose first
+     statement is the adoption — same invariant, one indirection further. */
+  const finish = bodyOf(ACTIONS, 'async function finishLogin');
+  assert.ok(
+    finish.indexOf('await adoptAccountLocale()') < finish.indexOf('hydrateFromServer('),
+    'finishLogin: adoption before hydration and the render that follows',
+  );
   for (const [header, call] of [
     ['A.doLogin = () =>', 'api.login('],
     ['A.doJoin = () =>', 'api.acceptInvite(j.token'],
@@ -190,6 +197,11 @@ test('login, signup and invite-accept adopt the account locale before their rend
   ]) {
     const fn = bodyOf(ACTIONS, header);
     const ok = fn.indexOf('await adoptAccountLocale()');
+    if (header === 'A.doLogin = () =>') {
+      const delegated = fn.indexOf('await finishLogin(');
+      assert.ok(delegated > fn.indexOf(call), `${header}: the finishLogin delegation is after the auth call`);
+      continue;
+    }
     assert.ok(ok > fn.indexOf(call), `${header}: adoption after the auth call`);
     assert.ok(ok < fn.indexOf('hydrateFromServer('), `${header}: adoption before hydration and the render that follows`);
   }

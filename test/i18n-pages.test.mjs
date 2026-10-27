@@ -543,13 +543,15 @@ test('the allow-list lost every entry of the three page files and stays sorted',
 test('the auth page data-a and data-v sites are byte-identical', () => {
   const src = read('src/pages/auth.js');
   const a = [...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]);
-  assert.equal(a.length, 36, a.join(','));
+  assert.equal(a.length, 38, a.join(',')); // +2 for the 2FA login card (17-02): doTfaLogin / tfaBackToSignIn
   for (const key of [
     'toggleDark',
     'socialAuth',
     'auth',
     'toggleShowPw',
     'doLogin',
+    'doTfaLogin',
+    'tfaBackToSignIn',
     'doJoin',
     'doSignup',
     'doForgot',

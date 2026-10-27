@@ -1602,9 +1602,7 @@ async function handleApi(req, res, url) {
     const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
     const challenge = challengeToken
       ? db
-          .prepare(
-            'select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?',
-          )
+          .prepare('select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?')
           .get(sha256(challengeToken))
       : null;
     if (!challenge) return fail(res, 401, 'challengeExpired', 'Your sign-in challenge has expired — start again');

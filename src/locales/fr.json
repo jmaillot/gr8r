@@ -858,6 +858,8 @@
   "page.auth.sendResetLink": "Envoyer le lien de réinitialisation",
   "page.auth.tfaCodeLabel": "Code à 6 chiffres ou code de récupération",
   "page.auth.tfaVerify": "Vérifier",
+  "auth.recoveryUsed": "Code de récupération utilisé — il vous en reste {count}",
+  "auth.recoveryUsedLast": "C’était votre dernier code de récupération — générez-en de nouveaux dans les paramètres",
   "page.auth.backToSignIn": "Retour à la connexion",
   "page.auth.tfaTitle": "Vérification en deux étapes",
   "page.auth.tfaSubtitle": "Saisissez le code de votre application d’authentification (ou un code de récupération) pour {email}.",

@@ -304,7 +304,7 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 440, 'data-a sites'); // +10 for the 2FA card (16-03): start/cancel/beginEnroll/verify×2/askDisable/disableConfirm/copy + recovery modal copy/dismiss
+  assert.equal(a, 442, 'data-a sites'); // +12: the 2FA card (16-03) + doTfaLogin/tfaBackToSignIn (17-02)
   assert.equal(r, 57, 'data-r sites');
   assert.equal(v, 75, 'data-v sites');
 });

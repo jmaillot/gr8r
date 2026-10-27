@@ -108,9 +108,7 @@ test('D-68: correct password on an enrolled account returns an inert pending cha
   assert.equal(cookieLine.includes('HttpOnly'), true, 'challenge cookie is HttpOnly');
   assert.equal(hasSessionCookie(res.cookies), false, 'no session cookie on the pending response');
 
-  const row = withDb(A.dbPath, db =>
-    db.prepare('select lc.* from login_challenges lc join users u on u.id = lc.user_id where u.email = ?').get(EMAIL),
-  );
+  const row = withDb(A.dbPath, db => db.prepare('select lc.* from login_challenges lc join users u on u.id = lc.user_id where u.email = ?').get(EMAIL));
   assert.ok(row, 'a login_challenges row exists');
   assert.equal(row.attempts, 0);
   const ttl = row.expires_at - Date.now();
@@ -168,17 +166,13 @@ test('D-65: a wrong code and an empty code both return invalidTfaCode; empty con
   assert.equal(wrong.data.code, 'invalidTfaCode');
 
   const id = userId(A, EMAIL);
-  const beforeEmpty = withDb(A.dbPath, db =>
-    db.prepare('select * from login_challenges where user_id = ?').get(id),
-  );
+  const beforeEmpty = withDb(A.dbPath, db => db.prepare('select * from login_challenges where user_id = ?').get(id));
   assert.ok(beforeEmpty, 'challenge still alive after a wrong code');
 
   const empty = await raw(A.base, 'POST', '/api/auth/tfa/login', { code: '   ' }, challenge);
   assert.equal(empty.status, 400);
   assert.equal(empty.data.code, 'invalidTfaCode');
-  const afterEmpty = withDb(A.dbPath, db =>
-    db.prepare('select * from login_challenges where user_id = ?').get(id),
-  );
+  const afterEmpty = withDb(A.dbPath, db => db.prepare('select * from login_challenges where user_id = ?').get(id));
   assert.ok(afterEmpty, 'the challenge survives an empty submission');
   assert.equal(afterEmpty.attempts, beforeEmpty.attempts, 'an empty code consumes no attempt');
 });
@@ -198,14 +192,16 @@ test('D-72: a recovery code authenticates exactly once and reports the remaining
   assert.ok(hasSessionCookie(res.cookies), 'a session was minted');
 
   const burn = withDb(A.dbPath, db =>
-    db.prepare('select used_at from recovery_codes rc join users u on u.id = rc.user_id where u.email = ? and rc.code_hash = (select code_hash from recovery_codes where used_at is not null and user_id = ? limit 1)').get(EMAIL, id),
+    db
+      .prepare(
+        'select used_at from recovery_codes rc join users u on u.id = rc.user_id where u.email = ? and rc.code_hash = (select code_hash from recovery_codes where used_at is not null and user_id = ? limit 1)',
+      )
+      .get(EMAIL, id),
   );
   assert.ok(burn && burn.used_at, 'the used code row has used_at set');
 
   const sessionsAfterBurn = withDb(A.dbPath, db => db.prepare('select count(*) as c from sessions where user_id = ?').get(id).c);
-  const reuse = await pending(A.base, EMAIL).then(c =>
-    raw(A.base, 'POST', '/api/auth/tfa/login', { code: recoveryCodes[0] }, c),
-  );
+  const reuse = await pending(A.base, EMAIL).then(c => raw(A.base, 'POST', '/api/auth/tfa/login', { code: recoveryCodes[0] }, c));
   assert.equal(reuse.status, 400, 'D-64: the same code never verifies twice');
   assert.equal(reuse.data.code, 'invalidTfaCode');
   assert.equal(
@@ -230,7 +226,11 @@ test('D-66: three wrong codes kill the challenge; the next attempt must restart 
   const dead = await raw(A.base, 'POST', '/api/auth/tfa/login', { code: liveCode(secret) }, challenge);
   assert.equal(dead.status, 401);
   assert.equal(dead.data.code, 'challengeExpired');
-  assert.equal(withDb(A.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c), 0, 'the dead row is gone');
+  assert.equal(
+    withDb(A.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c),
+    0,
+    'the dead row is gone',
+  );
   assert.ok(!hasSessionCookie(dead.cookies), 'a dead challenge never mints a session');
 
   // Restart from the password step: a fresh full login works.
@@ -250,7 +250,11 @@ test('D-66: an expired challenge returns 401 challengeExpired and is deleted on 
   const res = await raw(B.base, 'POST', '/api/auth/tfa/login', { code: liveCode(secret) }, challenge);
   assert.equal(res.status, 401);
   assert.equal(res.data.code, 'challengeExpired');
-  assert.equal(withDb(B.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c), 0, 'the expired row was deleted by the verify attempt');
+  assert.equal(
+    withDb(B.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c),
+    0,
+    'the expired row was deleted by the verify attempt',
+  );
 });
 
 /* ---------------- TFA-05-6: budget carry-over (D-03/Pitfall 18) ---------------- */
@@ -289,7 +293,15 @@ test('D-71: with only a challenge cookie held, every identity endpoint treats th
   withDb(A.dbPath, db =>
     db
       .prepare('insert into invites (token_hash, email, workspace_id, role, expires_at, used_at, created_at, created_by) values (?,?,?,?,?,null,?,?)')
-      .run(crypto.createHash('sha256').update(token).digest('hex'), EMAIL, db.prepare('select id from workspaces limit 1').get().id, 'member', Date.now() + 86_400_000, Date.now(), id),
+      .run(
+        crypto.createHash('sha256').update(token).digest('hex'),
+        EMAIL,
+        db.prepare('select id from workspaces limit 1').get().id,
+        'member',
+        Date.now() + 86_400_000,
+        Date.now(),
+        id,
+      ),
   );
 
   const challenge = await pending(A.base, EMAIL);
@@ -320,5 +332,9 @@ test('D-71: with only a challenge cookie held, every identity endpoint treats th
   assert.equal(out.status, 204);
   const cleared = out.cookies.find(c => c.startsWith('gr8r_tfa_challenge='));
   assert.ok(cleared && /Max-Age=0/.test(cleared), 'the challenge cookie is expired');
-  assert.equal(withDb(A.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c), 0, 'the challenge row is deleted');
+  assert.equal(
+    withDb(A.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c),
+    0,
+    'the challenge row is deleted',
+  );
 });

@@ -26,7 +26,7 @@ import {
   tasksOf,
   visibleProjects,
 } from '../core/store.js';
-import { api, registerAuthRevokedHandler } from '../core/api.js';
+import { api, applyUser, registerAuthRevokedHandler } from '../core/api.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -2649,6 +2649,7 @@ async function finishLogin(em, done) {
       if (joined.ok) {
         history.replaceState(null, '', `/w/${joinSlug}`);
         enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
+        reportRecoveryBurn();
         return;
       }
     }
@@ -2670,6 +2671,19 @@ async function finishLogin(em, done) {
   history.replaceState(null, '', `/w/${slug}`);
   S.ui.wantedSlug = null;
   enterApp(t('toast.signedInAs', { name: api.user?.name || em }));
+  reportRecoveryBurn();
+}
+
+/* D-73/D-74 (TFA-05): a recovery-code burn at login is reported honestly AFTER
+   the app is entered — the remaining count in a non-blocking toast with a
+   settings shortcut, escalating to the last-code copy when N = 0. Copy-only
+   escalation: identical behavior on both paths, no special routing (D-75). */
+function reportRecoveryBurn() {
+  const remaining = S.ui.tfaRecoveryRemaining;
+  S.ui.tfaRecoveryRemaining = null;
+  if (typeof remaining !== 'number') return;
+  if (remaining === 0) toast(t('auth.recoveryUsedLast'), { ms: 8000 });
+  else toast(t('auth.recoveryUsed', { count: remaining }), { action: t('nav.route.settings'), onAction: () => go('settings') });
 }
 
 A.doLogin = () => {
@@ -2755,8 +2769,26 @@ A.doTfaLogin = () => {
     /* D-73/D-74: keep the recovery count for the post-landing honest report. */
     if (typeof res.data.recoveryRemaining === 'number') S.ui.tfaRecoveryRemaining = res.data.recoveryRemaining;
     S.ui.maskedEmail = null;
-    await finishLogin(em, done);
+    await finishLogin(api.user?.name || api.user?.email || '', done);
   });
+};
+
+/* D-61 (TFA-05): abandoning the challenge is a real sign-out — the HttpOnly
+   gr8r_tfa_challenge cookie can only be cleared by the server, and plan-01's
+   logout deletes the pending challenge row with it. The throttle budget is
+   server-owned and intentionally survives the abandon — never touched here. */
+A.tfaBackToSignIn = async () => {
+  if (api.enabled) {
+    await flushPending();
+    await api.logout();
+    api.revision = 0;
+    clearLocalCache();
+    history.replaceState(null, '', '/');
+  }
+  S.ui.auth = 'login';
+  S.ui.maskedEmail = null;
+  S.ui.errors = {};
+  render();
 };
 A.socialAuth = el => {
   if (api.enabled) return toast(t('toast.socialNotConfigured'), { kind: 'info' });

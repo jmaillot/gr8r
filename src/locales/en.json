@@ -858,6 +858,8 @@
   "page.auth.sendResetLink": "Send reset link",
   "page.auth.tfaCodeLabel": "6-digit code or recovery code",
   "page.auth.tfaVerify": "Verify",
+  "auth.recoveryUsed": "Recovery code used — you have {count} left",
+  "auth.recoveryUsedLast": "This was your last recovery code — generate new ones in Settings",
   "page.auth.backToSignIn": "Back to sign in",
   "page.auth.tfaTitle": "Two-factor verification",
   "page.auth.tfaSubtitle": "Enter the code from your authenticator app (or a recovery code) for {email}.",

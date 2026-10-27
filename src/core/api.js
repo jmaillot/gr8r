@@ -90,7 +90,9 @@ async function call(method, path, body, { keepalive = false } = {}) {
   return result;
 }
 
-function applyUser(data) {
+/* Account adoption — exported for doTfaLogin (17-02): the verify response is
+   the only other payload that may mint a signed-in client state. */
+export function applyUser(data) {
   state.user = data?.user || null;
   state.workspaces = Array.isArray(state.user?.workspaces) ? state.user.workspaces : [];
   if (state.user) revokedHandled = false; // re-arm after a successful re-auth (D-28)
