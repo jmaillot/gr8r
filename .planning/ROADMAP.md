@@ -18,7 +18,7 @@ gate. Research: `.planning/research/SUMMARY.md` (HIGH confidence).
 - [x] **Phase 14: Schema & Session Ground Truth** - Migrate auth state into real per-user tables, remove the fake `sessions`/`tfa` document fields, and make the sessions page + revocation primitive real (the primitive every later phase reuses) (completed 2026-10-27)
 - [x] **Phase 15: Password Change End-to-End** - Password change verified against the current password, works at next login, and atomically revokes all other sessions in the same transaction that rehashes
 - [x] **Phase 16: TOTP Core & Enrollment** - Real TOTP secret generation, live code verification with replay guard, a genuinely scannable QR from a vendored encoder, and hashed single-use recovery codes shipped together at enrollment (completed 2026-10-27)
-- [ ] **Phase 17: Login Second-Factor Flow** - Enrolled users must pass a 6-digit or recovery-code step after login; a pending sign-in is anonymous across every endpoint family until the code verifies
+- [x] **Phase 17: Login Second-Factor Flow** - Enrolled users must pass a 6-digit or recovery-code step after login; a pending sign-in is anonymous across every endpoint family until the code verifies (completed 2026-10-27)
 - [ ] **Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT** - Whole-surface gates: EN+FR catalogue green, byte-identical second-boot migration proven, Chromium e2e for all three flows in both locales, QR UAT with a real device
 
 ## Phase Details
@@ -133,7 +133,7 @@ Plans:
   3. A pending (password-correct, code-absent) sign-in is rejected as anonymous across every endpoint family — API routes, `/w/:slug/file/:id`, invite accept — with no cookie usable as identity (tested 401 matrix) (TFA-05)
   4. The password→2FA throttle shares one budget with no reset between steps; the challenge is short-lived (TFA-05)
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -164,7 +164,7 @@ Plans:
 | 14. Schema & Session Ground Truth | 5/5 | Complete    | 2026-10-27 |
 | 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
-| 17. Login Second-Factor Flow | 2/2 | In Progress|  |
+| 17. Login Second-Factor Flow | 2/2 | Complete    | 2026-10-27 |
 | 18. Closing Verification | 0/N | Not started | - |
 
 ## Traceability

@@ -2,18 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
-current_phase: 17
-current_phase_name: Login Second-Factor Flow
-current_plan: 2
-status: verifying
-stopped_at: Completed 17-02-PLAN.md
-last_updated: "2026-10-27T17:15:55.083Z"
-state_head: fb5d404244f9d44302aedfd04a686913c10fd08e
+current_phase: 18
+current_phase_name: Closing Verification — i18n, Migration Proof & Real-Device UAT
+current_plan: Not started
+status: planning
+stopped_at: Phase 17 complete, ready to plan Phase 18
+last_updated: "2026-10-27T17:28:56.900Z"
+state_head: 67569139ebfa1eee568855ba58bef9e7d0b9cead
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 15
   completed_plans: 15
+  percent: 67
 last_activity: 2026-10-26
 ---
 
@@ -34,14 +35,14 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 17 (Login Second-Factor Flow) — EXECUTING
+Phase: 18 — Closing Verification — i18n, Migration Proof & Real-Device UAT
 
-Current Plan: 2
+Current Plan: Not started
 Total Plans in Phase: 2
 
 Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
-Status: Phase complete — ready for verification
-Progress: `[██░░░░░░░░░░░░░░░░░░] ~[██████░░░░] 58%` — 3 of 6 v1.3 phases complete (13, 15, 16); next: Phase 17 — Login Second-Factor Flow
+Status: Ready to plan
+Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███████░░░] 67%` — 3 of 6 v1.3 phases complete (13, 15, 16); next: Phase 17 — Login Second-Factor Flow
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -136,7 +137,7 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 ## Session
 
 **Last session:** 2026-10-27T17:15:55.020Z
-**Stopped at:** Completed 17-02-PLAN.md
+**Stopped at:** Phase 17 complete, ready to plan Phase 18
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
