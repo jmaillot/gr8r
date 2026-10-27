@@ -353,12 +353,8 @@ test('the first boot lands recovery_codes and its index on the legacy database',
 test('a second boot leaves the recovery_codes schema byte-identical (P-B)', async () => {
   const schemaSnapshot = () =>
     withDb(server.dbPath, db => ({
-      table: db
-        .prepare('select sql from sqlite_master where type = ? and name = ?')
-        .get('table', 'recovery_codes')?.sql,
-      index: db
-        .prepare('select sql from sqlite_master where type = ? and name = ?')
-        .get('index', 'recovery_codes_user')?.sql,
+      table: db.prepare('select sql from sqlite_master where type = ? and name = ?').get('table', 'recovery_codes')?.sql,
+      index: db.prepare('select sql from sqlite_master where type = ? and name = ?').get('index', 'recovery_codes_user')?.sql,
       columns: db
         .prepare('pragma table_info(recovery_codes)')
         .all()

@@ -22,14 +22,18 @@ const sha256hex = s => crypto.createHash('sha256').update(s).digest('hex');
 // Case-insensitive, padding-tolerant Base32 decode (Pitfall 4): skips '='
 // and any non-alphabet character.
 export function base32Decode(s) {
-  let bits = 0, val = 0;
+  let bits = 0,
+    val = 0;
   const out = [];
   for (const c of String(s).toUpperCase()) {
     const i = A32.indexOf(c);
     if (i < 0) continue;
     val = (val << 5) | i;
     bits += 5;
-    if (bits >= 8) { out.push((val >>> (bits - 8)) & 0xff); bits -= 8; }
+    if (bits >= 8) {
+      out.push((val >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
   }
   return Buffer.from(out);
 }
@@ -46,8 +50,7 @@ export function hotp(keyBuf, counter, digits = 6) {
   return code.toString().padStart(digits, '0');
 }
 
-export const totpAt = (secretB32, timeSec, period = 30) =>
-  hotp(base32Decode(secretB32), Math.floor(timeSec / period), 6);
+export const totpAt = (secretB32, timeSec, period = 30) => hotp(base32Decode(secretB32), Math.floor(timeSec / period), 6);
 
 // TOTP verify with ±1 step window and the D-04 matched-step replay guard.
 // The /^\d{6}$/ format gate runs BEFORE timingSafeEqual, which THROWS
@@ -102,12 +105,16 @@ export function generateTotpSecret() {
 }
 
 function base32Encode(buf) {
-  let bits = 0, val = 0;
+  let bits = 0,
+    val = 0;
   let out = '';
   for (const b of buf) {
     val = (val << 8) | b;
     bits += 8;
-    while (bits >= 5) { out += A32[(val >>> (bits - 5)) & 31]; bits -= 5; }
+    while (bits >= 5) {
+      out += A32[(val >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
   }
   return out;
 }

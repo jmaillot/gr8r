@@ -46,14 +46,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createMailer } from './mailer.js';
-import {
-  buildOtpauthUri,
-  generateRecoveryCode,
-  generateTotpSecret,
-  normalizeRecoveryCode,
-  recoveryHash,
-  verifyTotpCode,
-} from './totp.js';
+import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
@@ -1461,7 +1454,8 @@ async function handleApi(req, res, url) {
     const user = requireUser(req, res);
     if (!user) return;
     // D-11: this exact budget shape is what Phase 17's login second step reuses.
-    if (tooMany(`2fa-verify|${clientIp(req)}|${user.email}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (tooMany(`2fa-verify|${clientIp(req)}|${user.email}`, 5, 15 * 60 * 1000))
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     const body = await readJson(req);
     const code = String(body?.code || '');
     // TFA-03 verify-before-enable: no pending entry → no enable, no state change.
@@ -1485,11 +1479,7 @@ async function handleApi(req, res, url) {
     // One atomic unit: flip on, write the D-05 envelope + D-04 baseline,
     // rotate recovery codes (D-53), clear the pending entry.
     transaction(() => {
-      db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = ? where id = ?').run(
-        envelope,
-        verified.matchedStep,
-        user.id,
-      );
+      db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = ? where id = ?').run(envelope, verified.matchedStep, user.id);
       db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
       const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
       for (const code0 of codes) {
@@ -1528,9 +1518,7 @@ async function handleApi(req, res, url) {
         // Recovery-code shape (D-57 dual input): ONE normalization + hash
         // lookup, identical to the generation-hash site (Pitfall 6).
         const hash = recoveryHash(normalizeRecoveryCode(code));
-        const burned = db
-          .prepare('select id from recovery_codes where user_id = ? and code_hash = ? and used_at is null')
-          .get(user.id, hash);
+        const burned = db.prepare('select id from recovery_codes where user_id = ? and code_hash = ? and used_at is null').get(user.id, hash);
         if (!burned) return 'code';
         // The burn (D-57): mark used_at, then the teardown below deletes the row.
         db.prepare('update recovery_codes set used_at = ? where id = ?').run(now(), burned.id);
@@ -1538,7 +1526,7 @@ async function handleApi(req, res, url) {
       // D-59: complete teardown — a fresh enroll afterwards is indistinguishable
       // from a first one. two_fa_last_step resets to its NOT NULL default 0
       // (the no-baseline sentinel from Phase 14).
-      db.prepare('update users set two_fa_enabled = 0, two_fa_secret = \'\', two_fa_last_step = 0 where id = ?').run(user.id);
+      db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?").run(user.id);
       db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
       return 'ok';
     });

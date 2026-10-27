@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { totpAt, recoveryHash, normalizeRecoveryCode } from '../totp.js';
+import { totpAt, recoveryHash } from '../totp.js';
 import { login, signup, startServer, withDb } from './helpers/server.mjs';
 
 let server;
@@ -50,11 +50,7 @@ function userRow(email) {
 }
 
 const recoveryRows = email =>
-  withDb(server.dbPath, db =>
-    db
-      .prepare('select rc.* from recovery_codes rc join users u on u.id = rc.user_id where u.email = ?')
-      .all(email),
-  );
+  withDb(server.dbPath, db => db.prepare('select rc.* from recovery_codes rc join users u on u.id = rc.user_id where u.email = ?').all(email));
 
 /* Live 6-digit code derived from the pending secret via the totp.js helpers. */
 const liveCode = secret => totpAt(secret, Date.now() / 1000);

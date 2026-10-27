@@ -128,7 +128,7 @@ test('base32Decode is case-insensitive and padding-tolerant (Pitfall 4)', () => 
 test('buildOtpauthUri: D-54 format with encoded email label', () => {
   assert.equal(
     buildOtpauthUri('user@example.com', 'SECRETABC'),
-    'otpauth://totp/Gr8r:user%40example.com?secret=SECRETABC&issuer=Gr8r&algorithm=SHA1&digits=6&period=30'
+    'otpauth://totp/Gr8r:user%40example.com?secret=SECRETABC&issuer=Gr8r&algorithm=SHA1&digits=6&period=30',
   );
 });
 
