@@ -133,14 +133,14 @@ Plans:
   3. A pending (password-correct, code-absent) sign-in is rejected as anonymous across every endpoint family — API routes, `/w/:slug/file/:id`, invite accept — with no cookie usable as identity (tested 401 matrix) (TFA-05)
   4. The password→2FA throttle shares one budget with no reset between steps; the challenge is short-lived (TFA-05)
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 17-01-PLAN.md — Server: login 2FA branch, /api/auth/tfa/login verify route (dual-shape, atomic burn+mint), challenge lifecycle + sweeper, budget carry-over, D-13 copy swap, 401-matrix test
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 17-02-PLAN.md — Client: s === '2fa' screen (masked email, dual-shape input), doLogin pending branch, tfaLogin API method, back link, recovery banners EN+FR
+- [x] 17-02-PLAN.md — Client: s === '2fa' screen (masked email, dual-shape input), doLogin pending branch, tfaLogin API method, back link, recovery banners EN+FR
 
 ### Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT
 
@@ -164,7 +164,7 @@ Plans:
 | 14. Schema & Session Ground Truth | 5/5 | Complete    | 2026-10-27 |
 | 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
-| 17. Login Second-Factor Flow | 1/2 | In Progress|  |
+| 17. Login Second-Factor Flow | 2/2 | In Progress|  |
 | 18. Closing Verification | 0/N | Not started | - |
 
 ## Traceability

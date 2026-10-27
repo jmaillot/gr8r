@@ -5,15 +5,15 @@ milestone_name: Auth Hardening
 current_phase: 17
 current_phase_name: Login Second-Factor Flow
 current_plan: 2
-status: executing
-stopped_at: Completed 17-01-PLAN.md
-last_updated: "2026-10-27T17:01:50.646Z"
-state_head: ef1cfe2f6c644dc8ce965c7115c356213c00f69c
+status: verifying
+stopped_at: Completed 17-02-PLAN.md
+last_updated: "2026-10-27T17:15:55.083Z"
+state_head: fb5d404244f9d44302aedfd04a686913c10fd08e
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
 last_activity: 2026-10-26
 ---
 
@@ -40,7 +40,7 @@ Current Plan: 2
 Total Plans in Phase: 2
 
 Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Progress: `[██░░░░░░░░░░░░░░░░░░] ~[██████░░░░] 58%` — 3 of 6 v1.3 phases complete (13, 15, 16); next: Phase 17 — Login Second-Factor Flow
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
@@ -105,6 +105,9 @@ touch this milestone):
 - [Phase 16]: Disable resets two_fa_last_step to 0 (NOT NULL sentinel); verify+teardown in one transaction (16-02)
 - [Phase 16]: 16-03: 2FA card is a dedicated settings tab; on-state reads api.user.twoFa (userPayload now discloses it); 503/unknown errors render generic err.* only; recovery codes live in transient S.ui.recoveryCodes, cleared on modal dismiss
 - [Phase 17]: Login 2FA: challenge cookie gr8r_tfa_challenge + dedicated POST /api/auth/tfa/login; one invalidTfaCode error shape; budget carries password→code steps; D-13 generic 429 copy
+- [Phase 17]: Client pending 2FA state lives only in in-memory S.ui; api.login skips applyUser on pending2fa — the challenge is never readable as signed-in (D-70)
+- [Phase 17]: Challenge abandon is a real logout (server clears the HttpOnly gr8r_tfa_challenge cookie); the throttle budget is server-owned and survives the abandon (D-61/D-03)
+- [Phase 17]: Recovery burn at login is reported post-landing via toast, copy-escalated when it was the last code — no behavior difference (D-73/D-74/D-75)
 
 ## Verification commands used
 
@@ -132,8 +135,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T17:01:50.577Z
-**Stopped at:** Completed 17-01-PLAN.md
+**Last session:** 2026-10-27T17:15:55.020Z
+**Stopped at:** Completed 17-02-PLAN.md
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
@@ -160,3 +163,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 16 P02 | 45min | 3 tasks | 6 files |
 | Phase 16 P03 | ~50 min | 3 tasks | 12 files |
 | Phase 17 P01 | 115min | 3 tasks | 9 files |
+| Phase 17 P02 | 50m | 2 tasks | 13 files |
