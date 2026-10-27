@@ -46,6 +46,11 @@ const env = {
   ADMIN_NAME: 'E2E Owner',
   WORKSPACE_NAME: 'Acme',
   WORKSPACE_SLUG: 'acme',
+  /* A throwaway random MASTER_KEY per run: the TOTP secret envelope (AES-256-GCM)
+     is part of the real enable path (D-06), so 2FA e2e must run against a
+     genuinely configured server — the fail-closed 503 is the unconfigured-
+     production behavior, not the suite's target. Never a test-only backdoor. */
+  MASTER_KEY: (await import('node:crypto')).randomBytes(32).toString('hex'),
 };
 
 const child = spawn(process.execPath, ['server.js'], { cwd: ROOT, env, stdio: 'inherit' });

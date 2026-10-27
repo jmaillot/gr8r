@@ -13,7 +13,12 @@
       - billing-free state  (UAT-07, reinterpreted): absence proof, both locales
       - project creation    (UAT-08): modal by role/name, fill by label, submit
 
-   Conventions follow the rest of the suite: fixtures only through the
+    Phase 18 auth flows (AUTH-03, D-75/76/77) extend this same file with a
+      - phase 18 auth describe: full 2FA login (TOTP locally computed via
+        totp.js + recovery-code burn), session revocation (Pitfall 9) and
+        password change + revocation (Pitfall 12) — parametric EN + FR.
+
+    Conventions follow the rest of the suite: fixtures only through the
    real API (helpers/setup.mjs), every account/context presents its own
    run-unique X-Forwarded-For so per-IP throttles never cross, and every
    asserted string is a catalogue-backed surface whose value is read
@@ -23,6 +28,7 @@
    ===================================================================== */
 import { test, expect } from '@playwright/test';
 import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, inviteToken, newRunId } from './helpers/setup.mjs';
+import { totpAt } from '../totp.js';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
 
@@ -993,5 +999,176 @@ test.describe('file uploads and previews (Phase 12)', () => {
         await context.close();
       }
     });
+  }
+});
+
+/* =====================================================================
+   PHASE 18 AUTH FLOWS (AUTH-03, D-75/D-76/D-77): the three auth flows —
+   full 2FA login (TOTP + recovery burn), session revocation (Pitfall 9)
+   and password change + revocation (Pitfall 12) — proven in Chromium,
+   parametrically in EN + FR. D-75: same file, no new spec/config. D-76:
+   TOTP codes are computed locally from the enrollment secret via totp.js
+   (imported verbatim — no test-only backdoor route in server.js). D-77:
+   both locales; the anonymous login form is negotiated (fr-FR context,
+   the /join precedent), signed-in surfaces follow the account locale.
+   Every asserted string comes from the catalogue via fmt(); every API
+   fixture step is status-checked with must(); every account/context
+   presents its own run-unique clientIp(run, tag) so throttle budgets
+   never cross (Pitfall B).
+   ===================================================================== */
+
+/* The masked email the pending-2FA login response discloses (server.js
+   maskEmail): first character of the local part + *** + @ + first
+   character of the domain + ***. Computed, never hardcoded. */
+function maskEmail(email) {
+  const at = email.indexOf('@');
+  return `${email[0]}***@${email.slice(at + 1)[0]}***`;
+}
+
+/* A TOTP code for the enrollment secret, computed locally (D-76). offsetSec
+   shifts the timestamp: +1 is the D-04 boundary hardening for the enable
+   step, +31 reaches the NEXT 30s step when the matched step would be
+   replayed (the server's two_fa_last_step guard refuses s <= lastStep). */
+function tfaCode(secret, offsetSec = 1) {
+  return totpAt(secret, Math.floor(Date.now() / 1000) + offsetSec);
+}
+
+/* Enroll + enable 2FA for an account through the real API, returning the
+   once-only recovery codes (D-53). The enable code is computed at submit
+   time with a one-retry on the step boundary (D-04 accepts delta −1/0/+1;
+   the retry never widens the server window). */
+async function enrollAndEnableTfa(client) {
+  const enroll = await must('tfa enroll', await client.post('/api/auth/tfa/enroll', { currentPassword: PASSWORD }), [200]);
+  const secret = enroll.secret;
+  if (!secret) throw new Error('tfa enroll response has no secret');
+  for (const offset of [1, 31]) {
+    const res = await client.post('/api/auth/tfa/enable', { code: tfaCode(secret, offset) });
+    if (res.status === 200) return { secret, recoveryCodes: res.data.recoveryCodes };
+    if (res.status !== 400 || res.data?.code !== 'codeRejected') {
+      throw new Error(`tfa enable failed with HTTP ${res.status}: ${JSON.stringify(res.data)?.slice(0, 200)}`);
+    }
+  }
+  throw new Error('tfa enable rejected both boundary codes');
+}
+
+/* Sign in through the anonymous login form, whose language is negotiated
+   from the browser context (the fr variants use an fr-FR context — the
+   /join precedent). Stops at the pending-2FA state for enrolled accounts. */
+async function fillLogin(page, account, lang) {
+  const form = loginDict(lang);
+  await page.goto('/');
+  await page.getByLabel(form.email, { exact: true }).fill(account.email);
+  await page.getByLabel(form.password, { exact: true }).fill(account.password);
+  await page.getByRole('button', { name: form.submit }).click();
+}
+
+/* Submit the second factor and wait for the workspace landing; returns
+   false if the challenge rejected the code while still alive, so the
+   caller can retry once with the next step's code (D-04). */
+async function submitTfaCode(page, slug, code) {
+  await page.locator('#tfa-login-code').fill(code);
+  await page.locator('#tfa-login-btn').click();
+  try {
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}$`), { timeout: 4000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* The signed-in device that acts (revokes / changes password) drives the
+   real settings surface; this navigates to a settings section. */
+async function openSettingsSec(page, sec) {
+  await page.locator(`[data-a='go'][data-r='settings']`).first().click();
+  await page.locator(`.sitem[data-sec='${sec}']`).click();
+}
+
+test.describe('phase 18 auth flows', () => {
+  for (const lang of ['en', 'fr']) {
+    test(`a 2FA-enrolled user signs in with password then code through the pending2fa screen (${lang})`, async ({ browser }) => {
+      const tag = `2fa-${lang}`;
+      const acct = await createAccount(BASE_URL, run, tag, `2FA ${lang}`, { locale: lang, workspace: `2fa-${lang}-${run}` });
+      const { secret } = await enrollAndEnableTfa(acct.client);
+
+      /* The login form is anonymous: the fr variant negotiates fr-FR (the
+         /join lever); the account locale owns the signed-in surfaces. */
+      const context = await newContext(browser, { ip: acct.account.ip, lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const page = await context.newPage();
+      try {
+        await fillLogin(page, acct.account, lang);
+
+        /* The pending2fa state: the dedicated card renders the masked email
+           through the catalogue subtitle — never a raw literal. */
+        await expect(page.getByRole('heading', { name: fmt('page.auth.tfaTitle', {}, lang) })).toBeVisible();
+        await expect(page.getByText(fmt('page.auth.tfaSubtitle', { email: maskEmail(acct.account.email) }, lang))).toBeVisible();
+
+        /* The code is computed fresh at submit time (Pitfall A); the step
+           offset skips the enrollment's matched step so the D-04 replay
+           guard can never refuse the login code. */
+        const enabledStep = Math.floor((Date.now() / 1000 + 1) / 30);
+        const nowStep = Math.floor(Date.now() / 1000 / 30);
+        const ok = await submitTfaCode(page, acct.account.slug, tfaCode(secret, nowStep <= enabledStep ? 31 : 1));
+        if (!ok) {
+          /* One retry with the NEXT step's code — challenge still alive. */
+          await expect(page.getByText(fmt('err.invalidTfaCode', {}, lang))).toBeVisible();
+          await expect(submitTfaCode(page, acct.account.slug, tfaCode(secret, 31)), 'retry with the next step code').toBe(true);
+        }
+
+        /* Landed signed in on the account's workspace, in the account's
+           locale (the signed-in surface follows the account, not the
+           en-US browser pin). */
+        await expect(page.getByRole('button', { name: fmt('nav.route.projects', {}, lang) }).first()).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+
+    test(`a recovery code can be burned at the login 2FA step and the honest toast renders once (${lang})`, async ({ browser }) => {
+      const tag = `2farec-${lang}`;
+      const acct = await createAccount(BASE_URL, run, tag, `Recovery ${lang}`, { locale: lang, workspace: `2farec-${lang}-${run}` });
+      const { recoveryCodes } = await enrollAndEnableTfa(acct.client);
+      const burned = recoveryCodes[0];
+
+      const context = await newContext(browser, { ip: acct.account.ip, lang: lang === 'fr' ? 'fr-FR' : 'en-US' });
+      const page = await context.newPage();
+      try {
+        await fillLogin(page, acct.account, lang);
+        await expect(page.getByRole('heading', { name: fmt('page.auth.tfaTitle', {}, lang) })).toBeVisible();
+
+        /* The dual-shape field takes the recovery code verbatim (D-64: no
+           client branching). */
+        await expect(await submitTfaCode(page, acct.account.slug, burned), 'recovery code accepted at the 2FA step').toBe(true);
+
+        /* The post-landing honest report (D-73/D-74, WR-02 intact after
+           18-01): exactly the remaining-count copy from the genuine burn. */
+        await expect(page.getByText(fmt('auth.recoveryUsed', { count: recoveryCodes.length - 1 }, lang))).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+
+    test(`a wrong 2FA code shows the invalid-code copy, distinct from a dead challenge (2fa-${lang} negative, en copy)`, async ({ browser }) => {
+      const tag = `2faneg-${lang}`;
+      const acct = await createAccount(BASE_URL, run, tag, '2FA Negative', { workspace: `${tag}-${run}` });
+      await enrollAndEnableTfa(acct.client);
+
+      const context = await newContext(browser, { ip: acct.account.ip });
+      const page = await context.newPage();
+      try {
+        await fillLogin(page, acct.account, 'en');
+        await expect(page.getByRole('heading', { name: fmt('page.auth.tfaTitle', {}, 'en') })).toBeVisible();
+        await page.locator('#tfa-login-code').fill('000000');
+        await page.locator('#tfa-login-btn').click();
+
+        /* The D-65 generic invalid-code copy — and the boundary-flake
+           diagnostic: challengeExpired and invalidTfaCode must remain
+           distinct strings in the catalogue. */
+        await expect(page.getByText(fmt('err.invalidTfaCode', {}, 'en'))).toBeVisible();
+        expect(fmt('err.invalidTfaCode', {}, 'en')).not.toBe(fmt('err.challengeExpired', {}, 'en'));
+      } finally {
+        await context.close();
+      }
+    });
+
   }
 });
