@@ -79,6 +79,16 @@ test('re-arm: a successful re-auth clears the latch', async () => {
   assert.equal(fired, 2, 'the second revocation in the same tab is torn down honestly too');
 });
 
+test('D-44: the revoked second browser reaches the intercept via api.changePassword too', async () => {
+  stubFetch(200, { user: { id: 'u1' } });
+  await api.me(); // re-arm the latch with a fresh signed-in account
+  stubFetch(401, REVOKED);
+  const res = await api.changePassword('cur-pw', 'new-pw-1a');
+  assert.equal(fired, 3, 'the teardown fired through the central intercept, not a local branch');
+  assert.equal(res.ok, false, 'the change itself failed honestly');
+  assert.equal(res.status, 401, 'the caller still sees the 401');
+});
+
 test('source pins: the wiring is where the contract says it lives', () => {
   const actions = fs.readFileSync(path.join(ROOT, 'src/actions/actions.js'), 'utf8');
   const apiSrc = fs.readFileSync(path.join(ROOT, 'src/core/api.js'), 'utf8');
@@ -98,4 +108,11 @@ test('source pins: the wiring is where the contract says it lives', () => {
     /revokedHandled\s*=\s*false/,
     'api.js re-arms the latch inside applyUser when a user payload is applied'
   );
+
+  /* D-44: A.savePassword adds NO local 401 branch — its whole block is free of
+     a status-401 special case, so the second browser's teardown is entirely the
+     central intercept (T-15-08, single teardown, no double toast). */
+  const savePw = actions.slice(actions.indexOf('A.savePassword'), actions.indexOf('A.revokeSession'));
+  assert.ok(savePw.includes('api.changePassword'), 'savePassword calls the real api.changePassword');
+  assert.doesNotMatch(savePw, /status\s*===?\s*401/, 'no local 401 branch inside savePassword');
 });
