@@ -169,7 +169,7 @@ test('D-28: a revoked browser gets the 401 teardown with the sign-in-required co
   assert.equal(
     probe.data.code,
     'signInRequired',
-    'the code the client teardown consumes (mid-session 401 → registered teardown), proven by test/auth-revoked.test.mjs (fire-once, latch, boot guard)'
+    'the code the client teardown consumes (mid-session 401 → registered teardown), proven by test/auth-revoked.test.mjs (fire-once, latch, boot guard)',
   );
 
   const me = await a.client.get('/api/auth/me');

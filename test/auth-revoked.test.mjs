@@ -93,21 +93,9 @@ test('source pins: the wiring is where the contract says it lives', () => {
   const actions = fs.readFileSync(path.join(ROOT, 'src/actions/actions.js'), 'utf8');
   const apiSrc = fs.readFileSync(path.join(ROOT, 'src/core/api.js'), 'utf8');
 
-  assert.match(
-    actions,
-    /registerAuthRevokedHandler\(signOutRevoked\)/,
-    'actions.js registers signOutRevoked as the central teardown at module scope'
-  );
-  assert.match(
-    apiSrc,
-    /code\s*===\s*'signInRequired'/,
-    'api.js gates the intercept on the mid-session signInRequired discriminator'
-  );
-  assert.match(
-    apiSrc,
-    /revokedHandled\s*=\s*false/,
-    'api.js re-arms the latch inside applyUser when a user payload is applied'
-  );
+  assert.match(actions, /registerAuthRevokedHandler\(signOutRevoked\)/, 'actions.js registers signOutRevoked as the central teardown at module scope');
+  assert.match(apiSrc, /code\s*===\s*'signInRequired'/, 'api.js gates the intercept on the mid-session signInRequired discriminator');
+  assert.match(apiSrc, /revokedHandled\s*=\s*false/, 'api.js re-arms the latch inside applyUser when a user payload is applied');
 
   /* D-44: A.savePassword adds NO local 401 branch — its whole block is free of
      a status-401 special case, so the second browser's teardown is entirely the
