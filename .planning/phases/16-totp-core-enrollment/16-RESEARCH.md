@@ -355,15 +355,16 @@ tfaDisable: (currentPassword, code) => post('/api/auth/tfa/disable', { currentPa
 
 All other claims are verified (local probes, unpkg, codebase reads) or are pinned D-NN contracts quoted from CONTEXT.md.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Where do TOTP helpers live — inline in `server.js` or a new module?**
+1. **Where do TOTP helpers live — inline in `server.js` or a new module?** — (RESOLVED: 16-01 Task 3)
    - What we know: `server.js` is monolithic today; project has no `src/server/` split; `src/lib/` is client-facing (bundled by Vite).
    - What's unclear: whether a server-side helper module (e.g. `server-lib/` or top-level) fits conventions.
+   - Resolution: top-level `totp.js` server module, created by 16-01 Task 3; tests import helpers directly for the vector test.
    - Recommendation: planner decides; tests should import helpers directly for the vector test either way.
 
-2. **Disable endpoint name** — D-47 pins only `enroll`/`enable`; D-57/D-59 imply a disable route.
-   - Recommendation: `POST /api/auth/tfa/disable` (flat noun-resource, matches D-26).
+2. **Disable endpoint name** — D-47 pins only `enroll`/`enable`; D-57/D-59 imply a disable route. — (RESOLVED: 16-02 Task 2)
+   - Resolution: `POST /api/auth/tfa/disable` (flat noun-resource, matches D-26), implemented by 16-02 Task 2 and listed in its must_haves.artifacts.
 
 ## Environment Availability
 
