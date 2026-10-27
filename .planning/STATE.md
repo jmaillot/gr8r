@@ -4,16 +4,16 @@ milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 18
 current_phase_name: Closing Verification — i18n, Migration Proof & Real-Device UAT
-current_plan: Not started
+current_plan: 2
 status: executing
-stopped_at: Phase 18 context gathered
-last_updated: "2026-10-27T18:02:07.509Z"
-state_head: 290b7ddd9e3c6c999f2bfcc9b5e4e488e1e1c6b9
+stopped_at: Completed 18-01-PLAN.md
+last_updated: "2026-10-27T19:02:50.528Z"
+state_head: 676cd3e1dffd80298f47a5be8de8827bbc865898
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 19
-  completed_plans: 15
+  completed_plans: 16
 last_activity: 2026-10-26
 ---
 
@@ -34,9 +34,9 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 18 (Closing Verification — i18n, Migration Proof & Real-Device UAT) — READY TO EXECUTE
+Phase: 18 (Closing Verification — i18n, Migration Proof & Real-Device UAT) — EXECUTING
 
-Current Plan: Not started
+Current Plan: 2
 Total Plans in Phase: 4
 
 Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
@@ -108,6 +108,7 @@ touch this milestone):
 - [Phase 17]: Client pending 2FA state lives only in in-memory S.ui; api.login skips applyUser on pending2fa — the challenge is never readable as signed-in (D-70)
 - [Phase 17]: Challenge abandon is a real logout (server clears the HttpOnly gr8r_tfa_challenge cookie); the throttle budget is server-owned and survives the abandon (D-61/D-03)
 - [Phase 17]: Recovery burn at login is reported post-landing via toast, copy-escalated when it was the last code — no behavior difference (D-73/D-74/D-75)
+- [Phase 18]: Client 2FA state lifecycle fix (WR-01/WR-02) applied via if/else clear to preserve genuine recovery burn count — The plan literal fix would erase the burn count; if/else preserves it while holding all ordering criteria
 
 ## Verification commands used
 
@@ -135,9 +136,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T17:48:35.144Z
-**Stopped at:** Phase 18 context gathered
-**Resume file:** .planning/phases/18-closing-verification-i18n-migration-proof-real-device-uat/18-CONTEXT.md
+**Last session:** 2026-10-27T19:02:40.337Z
+**Stopped at:** Completed 18-01-PLAN.md
+**Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
 
@@ -164,3 +165,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 16 P03 | ~50 min | 3 tasks | 12 files |
 | Phase 17 P01 | 115min | 3 tasks | 9 files |
 | Phase 17 P02 | 50m | 2 tasks | 13 files |
+| Phase 18 P01 | 10 min | 2 tasks | 2 files |

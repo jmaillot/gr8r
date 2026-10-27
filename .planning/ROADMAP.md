@@ -154,11 +154,11 @@ Plans:
   4. A human verifies the QR with Google Authenticator plus one other authenticator app on a real device (AUTH-03 — UAT, not automatable)
   5. The "looks-done-but-isn't" pitfalls checklist runs as explicit verification and each item is checked or gaps filed (AUTH-03)
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 18-01-PLAN.md — WR-01/WR-02 client state fix in actions.js + source-structure regression test (D-84)
+- [x] 18-01-PLAN.md — WR-01/WR-02 client state fix in actions.js + source-structure regression test (D-84)
 
 **Wave 2** *(blocked on 18-01)*
 - [ ] 18-02-PLAN.md — Auth e2e suite in flows.spec.mjs: 2FA login (incl. recovery burn), revocation, password-change revocation — EN+FR (D-75/76/77, AUTH-03)
@@ -178,7 +178,7 @@ Plans:
 | 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
 | 17. Login Second-Factor Flow | 2/2 | Complete    | 2026-10-27 |
-| 18. Closing Verification | 0/N | Not started | - |
+| 18. Closing Verification | 1/4 | In Progress|  |
 
 ## Traceability
 
