@@ -1378,7 +1378,7 @@ async function handleApi(req, res, url) {
       .toLowerCase();
     const password = String(body?.password || '');
     if (!emailOk(email) || !password) return fail(res, 400, 'emailAndPasswordRequired', 'Email and password are required');
-    if (tooMany(`${clientIp(req)}|${email}`)) return fail(res, 429, 'tooManyLoginAttempts', 'Too many attempts. Try again in 15 minutes.');
+    if (tooMany(`${clientIp(req)}|${email}`)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
 
     const row = db.prepare('select * from users where email = ?').get(email);
     const valid = verifyPassword(password, row?.password_hash || DUMMY_HASH) && !!row;
@@ -1684,6 +1684,10 @@ async function handleApi(req, res, url) {
     }
     setSessionCookie(req, res, outcome.token);
     clearChallengeCookie(req, res);
+    // D-03/Pitfall 18: the one logical login is complete — clear the shared
+    // password budget and this challenge's code budget. The pending branch
+    // never reaches here, so the budget carries across the two steps.
+    for (const key of [`${clientIp(req)}|${challenge.email}`, `2fa-login|${clientIp(req)}|${challenge.email}`]) attempts.delete(key);
     const payload = { user: userPayload(outcome.user) };
     if (outcome.recoveryRemaining !== undefined) payload.recoveryRemaining = outcome.recoveryRemaining;
     return json(res, 200, payload);

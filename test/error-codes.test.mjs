@@ -435,8 +435,9 @@ test('without the TRUST_PROXY opt-in, rotating X-Forwarded-For no longer escapes
     }
     assert.equal(last.status, 429);
     const data = await last.json();
-    assert.equal(data.code, 'tooManyLoginAttempts');
-    assert.equal(data.error, 'Too many attempts. Try again in 15 minutes.');
+    // D-13 (phase 17): the generic catalogued code and copy — no window disclosure.
+    assert.equal(data.code, 'tooManyAttempts');
+    assert.equal(data.error, 'Too many attempts. Try again later.');
   } finally {
     await server.stop();
   }
