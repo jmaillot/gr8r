@@ -2614,6 +2614,64 @@ export function enterApp(msg) {
   go(S.prefs.home || 'home');
   toast(msg);
 }
+
+/* D-75 (TFA-05): verify success lands through the exact same post-success
+   handling as a password login — ?next= / queued invite / workspace hydrate /
+   the normal home overview. No special 2FA routing anywhere. */
+async function finishLogin(em, done) {
+  await adoptAccountLocale();
+  // G-12-5 (T-12-13 reopened, plan 12-07): the server redirected the
+  // logged-out document navigation here with the file path in ?next= (it
+  // only ever echoes its OWN url.pathname, but validate before following:
+  // same-origin, path-only — single leading /, no //, no backslash, no
+  // ://). Full navigation on purpose: the server re-evaluates the now-
+  // authenticated document navigation and the file URL delivers its bytes.
+  // Invalid or missing next falls through to the wantedSlug flow.
+  const next = new URLSearchParams(location.search).get('next');
+  if (next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !next.includes('://')) {
+    location.assign(next);
+    return;
+  }
+  // Signing in from an invite link accepts it, so the person lands in the workspace.
+  const queued = S.ui.join;
+  if (queued?.token) {
+    const inv = await api.acceptInvite(queued.token);
+    S.ui.join = null;
+    if (!inv.ok) {
+      done();
+      S.ui.errors = { login: inv.error || t('err.inviteAcceptFailed') };
+      render();
+      return;
+    }
+    const joinSlug = inv.data?.workspace?.slug || api.workspaces[0]?.slug;
+    if (joinSlug) {
+      const joined = await hydrateFromServer(joinSlug);
+      if (joined.ok) {
+        history.replaceState(null, '', `/w/${joinSlug}`);
+        enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
+        return;
+      }
+    }
+  }
+  const slug = (S.ui.wantedSlug && api.rolesIn(S.ui.wantedSlug) ? S.ui.wantedSlug : null) || api.workspaces[0]?.slug;
+  if (!slug) {
+    done();
+    S.ui.wantedSlug = null;
+    enterNoWorkspace();
+    return;
+  }
+  const ws = await hydrateFromServer(slug);
+  if (!ws.ok) {
+    done();
+    S.ui.errors = { login: t('err.workspaceLoadFailed') };
+    render();
+    return;
+  }
+  history.replaceState(null, '', `/w/${slug}`);
+  S.ui.wantedSlug = null;
+  enterApp(t('toast.signedInAs', { name: api.user?.name || em }));
+}
+
 A.doLogin = () => {
   const e = (S.ui.errors = {});
   const em = $('#l-email').value.trim(),
@@ -2645,57 +2703,59 @@ A.doLogin = () => {
       render();
       return;
     }
-    await adoptAccountLocale();
-    // G-12-5 (T-12-13 reopened, plan 12-07): the server redirected the
-    // logged-out document navigation here with the file path in ?next= (it
-    // only ever echoes its OWN url.pathname, but validate before following:
-    // same-origin, path-only — single leading /, no //, no backslash, no
-    // ://). Full navigation on purpose: the server re-evaluates the now-
-    // authenticated document navigation and the file URL delivers its bytes.
-    // Invalid or missing next falls through to the wantedSlug flow.
-    const next = new URLSearchParams(location.search).get('next');
-    if (next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !next.includes('://')) {
-      location.assign(next);
-      return;
-    }
-    // Signing in from an invite link accepts it, so the person lands in the workspace.
-    const queued = S.ui.join;
-    if (queued?.token) {
-      const inv = await api.acceptInvite(queued.token);
-      S.ui.join = null;
-      if (!inv.ok) {
-        done();
-        S.ui.errors = { login: inv.error || t('err.inviteAcceptFailed') };
-        render();
-        return;
-      }
-      const joinSlug = inv.data?.workspace?.slug || api.workspaces[0]?.slug;
-      if (joinSlug) {
-        const joined = await hydrateFromServer(joinSlug);
-        if (joined.ok) {
-          history.replaceState(null, '', `/w/${joinSlug}`);
-          enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
-          return;
-        }
-      }
-    }
-    const slug = (S.ui.wantedSlug && api.rolesIn(S.ui.wantedSlug) ? S.ui.wantedSlug : null) || api.workspaces[0]?.slug;
-    if (!slug) {
+    /* TFA-05 (D-60/D-70): the server stopped the sign-in at the second factor.
+       Park the client in the dedicated full-screen code state — in-memory only:
+       S.ui carries the masked email, nothing touches localStorage/sessionStorage,
+       and a reload mid-challenge lands back on the login form by construction. */
+    if (res.data?.pending2fa) {
       done();
-      S.ui.wantedSlug = null;
-      enterNoWorkspace();
-      return;
-    }
-    const ws = await hydrateFromServer(slug);
-    if (!ws.ok) {
-      done();
-      S.ui.errors = { login: t('err.workspaceLoadFailed') };
+      S.ui.auth = '2fa';
+      S.ui.maskedEmail = res.data.maskedEmail || '';
+      S.ui.errors = {};
       render();
       return;
     }
-    history.replaceState(null, '', `/w/${slug}`);
-    S.ui.wantedSlug = null;
-    enterApp(t('toast.signedInAs', { name: api.user?.name || em }));
+    await finishLogin(em, done);
+  });
+};
+
+/* TFA-05: verify the pending second-factor challenge. One dual-shape field, no
+   client branching on code shape (D-64) — the server decides TOTP vs recovery. */
+A.doTfaLogin = () => {
+  S.ui.errors = {};
+  const code = $('#tfa-login-code')?.value?.trim() || '';
+  if (!api.enabled) return;
+  loadingBtn('tfa-login-btn', 0, async () => {
+    const btn = document.getElementById('tfa-login-btn');
+    const done = () => {
+      btn?.classList.remove('is-loading');
+      btn?.removeAttribute('aria-busy');
+    };
+    const res = await api.tfaLogin(code);
+    if (!res.ok) {
+      done();
+      const c = res.data?.code;
+      if (c === 'challengeExpired') {
+        /* D-66 client side: a dead challenge restarts at the password step. */
+        S.ui.auth = 'login';
+        S.ui.maskedEmail = null;
+        S.ui.errors = { login: t('err.challengeExpired') };
+      } else if (c === 'tooManyAttempts') S.ui.errors = { login: t('err.tooManyAttempts') };
+      else S.ui.errors = { login: c === 'invalidTfaCode' ? t('err.invalidTfaCode') : res.error || t('err.signinFailed') };
+      render();
+      return;
+    }
+    if (!res.data?.user) {
+      done();
+      S.ui.errors = { login: t('err.signinFailed') };
+      render();
+      return;
+    }
+    applyUser(res.data);
+    /* D-73/D-74: keep the recovery count for the post-landing honest report. */
+    if (typeof res.data.recoveryRemaining === 'number') S.ui.tfaRecoveryRemaining = res.data.recoveryRemaining;
+    S.ui.maskedEmail = null;
+    await finishLogin(em, done);
   });
 };
 A.socialAuth = el => {

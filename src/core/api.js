@@ -168,7 +168,10 @@ export const api = {
   },
   async login(email, password) {
     const r = await call('POST', '/api/auth/login', { email, password });
-    if (r.ok) applyUser(r.data);
+    /* T-17-07 (D-70, Pitfall 6): a pending2fa response is NOT a sign-in — the
+       challenge payload must never populate api.user; only doTfaLogin's
+       explicit tfaLogin response adopts the account. */
+    if (r.ok && !r.data?.pending2fa) applyUser(r.data);
     return r;
   },
   async signup(name, email, password) {
@@ -262,6 +265,11 @@ export const api = {
   },
   async tfaDisable(currentPassword, code) {
     return call('POST', '/api/auth/tfa/disable', { currentPassword, code });
+  },
+  /* TFA-05: verify the pending login challenge. Deliberately NO applyUser here —
+     the caller (doTfaLogin) adopts the user through the shared post-success flow. */
+  async tfaLogin(code) {
+    return call('POST', '/api/auth/tfa/login', { code });
   },
   async putWorkspace(doc, opts) {
     const slug = state.workspace?.slug;

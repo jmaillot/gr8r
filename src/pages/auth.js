@@ -97,6 +97,13 @@ export function renderAuth() {
     <p class="auth-foot">${t('page.auth.haveAccount')} <button type="button" class="link" data-a="auth" data-v="login">${t('page.auth.signIn')}</button></p></form>`,
       `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="login">${t('page.auth.logIn')}</button>`,
     );
+  if (s === '2fa')
+    return authShell(`<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doTfaLogin" novalidate>
+    <div style="display:flex;justify-content:center"><span class="ftype" style="--c:var(--accent);width:44px;height:44px;border-radius:11px">${ic('shield-check', 20)}</span></div><h1>${t('page.auth.tfaTitle')}</h1><p class="sub">${t('page.auth.tfaSubtitle', { email: esc(S.ui.maskedEmail || '') })}</p>
+    ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.login)}</span></div>` : ''}
+    <div class="field"><label class="label" for="tfa-login-code">${t('page.auth.tfaCodeLabel')}</label><input class="input input-lg" id="tfa-login-code" autocomplete="one-time-code" inputmode="numeric" autofocus></div>
+    <button class="btn btn-primary btn-lg btn-block" data-a="doTfaLogin" id="tfa-login-btn">${t('page.auth.tfaVerify')}</button>
+    <p class="auth-foot"><button type="button" class="link row" style="display:inline-flex;gap:6px" data-a="tfaBackToSignIn">${ic('arrow-left', 14)}${t('page.auth.backToSignIn')}</button></p></form>`);
   if (s === 'forgot')
     return authShell(`<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doForgot" novalidate>
     <div style="display:flex;justify-content:center"><span class="ftype" style="--c:var(--accent);width:44px;height:44px;border-radius:11px">${ic('key-round', 20)}</span></div><h1>${t('page.auth.resetTitle')}</h1><p class="sub">${t('page.auth.resetSubtitle')}</p>
