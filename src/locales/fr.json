@@ -291,6 +291,8 @@
   "err.forgotEmailInvalid": "Saisissez l’e-mail que vous utilisez pour vous connecter",
   "err.enterPassword": "Saisissez votre mot de passe",
   "err.enterCurrentPassword": "Saisissez votre mot de passe actuel",
+  "err.wrongCurrentPassword": "Le mot de passe actuel est incorrect",
+  "err.passwordRequired": "Saisissez votre mot de passe actuel et le nouveau",
   "err.passwordWeak": "Utilisez au moins 10 caractères, dont un chiffre ou un symbole",
   "err.passwordMismatch": "Les mots de passe ne correspondent pas",
   "err.enterName": "Saisissez votre nom",

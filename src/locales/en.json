@@ -290,6 +290,8 @@
   "err.forgotEmailInvalid": "Enter the email you use to sign in",
   "err.enterPassword": "Enter your password",
   "err.enterCurrentPassword": "Enter your current password",
+  "err.wrongCurrentPassword": "Current password is incorrect",
+  "err.passwordRequired": "Enter your current and new password",
   "err.passwordWeak": "Use at least 10 characters, including a number or symbol",
   "err.passwordMismatch": "Passwords don't match",
   "err.enterName": "Enter your name",

@@ -1344,8 +1344,7 @@ async function handleApi(req, res, url) {
     // D-40/D-41: the caller is cookie-authenticated, so the budget is keyed by
     // user_id — and every attempt below (including a wrong current password)
     // has already consumed one try before it is processed.
-    if (tooMany(`pwchange|${user.id}`, 10, 15 * 60 * 1000))
-      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (tooMany(`pwchange|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     const body = await readJson(req);
     const cur = String(body?.currentPassword || '');
     const nw = String(body?.newPassword || '');
