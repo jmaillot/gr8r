@@ -136,7 +136,10 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 17-01-PLAN.md — Server: login 2FA branch, /api/auth/tfa/login verify route (dual-shape, atomic burn+mint), challenge lifecycle + sweeper, budget carry-over, D-13 copy swap, 401-matrix test
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 17-02-PLAN.md — Client: s === '2fa' screen (masked email, dual-shape input), doLogin pending branch, tfaLogin API method, back link, recovery banners EN+FR
 
 ### Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT
