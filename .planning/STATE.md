@@ -2,16 +2,16 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
-current_phase: 16
-current_phase_name: TOTP Core & Enrollment
-current_plan: 3
-status: verifying
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-10-27T13:45:16.988Z"
-state_head: 03e02279e3b4bc6829c175652b5e825f7de1bcc8
+current_phase: 17
+current_phase_name: Login Second-Factor Flow
+current_plan: Not started
+status: planning
+stopped_at: Phase 16 complete (UAT 3/3), ready to plan Phase 17
+last_updated: "2026-10-27T15:13:18.840Z"
+state_head: b95d1538e86c79d1b1937d07122cbfec9707c9fa
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
   completed_plans: 13
 last_activity: 2026-10-26
@@ -34,14 +34,14 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 16 (TOTP Core & Enrollment) — EXECUTING
+Phase: 17 — Login Second-Factor Flow
 
-Current Plan: 3
+Current Plan: Not started
 Total Plans in Phase: 3
 
-Plans ready: none — Phase 15 verified (6/6 after Gap 1 closure), ready for /gsd-next
-Status: Phase complete — ready for verification
-Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███░░░░░░░] 33%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed); Phase 15 complete
+Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
+Status: Ready to plan
+Progress: `[██░░░░░░░░░░░░░░░░░░] ~[██████░░░░] 58%` — 3 of 6 v1.3 phases complete (13, 15, 16); next: Phase 17 — Login Second-Factor Flow
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -131,8 +131,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T13:45:16.929Z
-**Stopped at:** Completed 16-03-PLAN.md
+**Last session:** 2026-10-27T15:13:18.756Z
+**Stopped at:** Phase 16 complete (UAT 3/3), ready to plan Phase 17
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.

@@ -17,7 +17,7 @@ gate. Research: `.planning/research/SUMMARY.md` (HIGH confidence).
 - [x] **Phase 13: Investigation & Invariant Pinning** - Diagnose the shared stub-auth root cause in the live code and pin the design contracts (pending-2FA session pattern, QR vendoring, throttle constants, encryption-at-rest decision, doc-field removal plan) before any build work *(complete: 13-01 + 13-02 gap closure; verification re-verification pending)*
 - [x] **Phase 14: Schema & Session Ground Truth** - Migrate auth state into real per-user tables, remove the fake `sessions`/`tfa` document fields, and make the sessions page + revocation primitive real (the primitive every later phase reuses) (completed 2026-10-27)
 - [x] **Phase 15: Password Change End-to-End** - Password change verified against the current password, works at next login, and atomically revokes all other sessions in the same transaction that rehashes
-- [ ] **Phase 16: TOTP Core & Enrollment** - Real TOTP secret generation, live code verification with replay guard, a genuinely scannable QR from a vendored encoder, and hashed single-use recovery codes shipped together at enrollment
+- [x] **Phase 16: TOTP Core & Enrollment** - Real TOTP secret generation, live code verification with replay guard, a genuinely scannable QR from a vendored encoder, and hashed single-use recovery codes shipped together at enrollment (completed 2026-10-27)
 - [ ] **Phase 17: Login Second-Factor Flow** - Enrolled users must pass a 6-digit or recovery-code step after login; a pending sign-in is anonymous across every endpoint family until the code verifies
 - [ ] **Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT** - Whole-surface gates: EN+FR catalogue green, byte-identical second-boot migration proven, Chromium e2e for all three flows in both locales, QR UAT with a real device
 
@@ -108,7 +108,7 @@ Plans:
   3. 2FA flips on only after a live 6-digit code verifies against the pending secret; an abandoned enrollment leaves the user in exactly their pre-enrollment state (TFA-03)
   4. Enrollment issues 8–10 single-use recovery codes, shown exactly once in plaintext and hashed at rest; a printed code logs the user in exactly one time (TFA-04)
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -156,7 +156,7 @@ Plans:
 | 13. Investigation & Invariant Pinning | 2/2 | Complete    | 2026-10-26 |
 | 14. Schema & Session Ground Truth | 5/5 | Complete    | 2026-10-27 |
 | 15. Password Change End-to-End | 1/2 | Executing | - |
-| 16. TOTP Core & Enrollment | 3/3 | In Progress|  |
+| 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
 | 17. Login Second-Factor Flow | 0/N | Not started | - |
 | 18. Closing Verification | 0/N | Not started | - |
 

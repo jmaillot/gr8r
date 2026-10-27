@@ -1,7 +1,7 @@
 ---
 phase: 16-totp-core-enrollment
 verified: 2026-10-27T00:00:00Z
-status: human_needed
+status: passed
 score: 14/17 must-haves verified
 covered_files: [".planning/phases/16-totp-core-enrollment/16-01-PLAN.md", ".planning/phases/16-totp-core-enrollment/16-01-SUMMARY.md", ".planning/phases/16-totp-core-enrollment/16-02-PLAN.md", ".planning/phases/16-totp-core-enrollment/16-02-SUMMARY.md", ".planning/phases/16-totp-core-enrollment/16-03-PLAN.md", ".planning/phases/16-totp-core-enrollment/16-03-SUMMARY.md", "server.js", "src/actions/actions.js", "src/core/api.js", "src/lib/qr.js", "src/lib/vendor/qrcode.js", "src/locales/en.json", "src/locales/fr.json", "src/overlays/modals.js", "src/pages/settings.js", "test/migration.test.mjs", "test/qr.fixture.test.mjs", "test/tfa-enrollment.test.mjs", "test/totp.fixture.test.mjs", "totp.js"]
 covered_digest: "v2:sha256:bd6c1bb45036da30a5315c7d1d62473cb5b1368086be96909dbd740028a149fd"
@@ -107,16 +107,19 @@ No orphaned requirements — REQUIREMENTS.md maps exactly TFA-01…04 to Phase 1
 ### Human Verification Required
 
 ### 1. Real-device QR scan (Phase 18 UAT — already planned)
+
 **Test:** Enroll on a real phone with Google Authenticator (or equivalent): scan the QR from the settings 2FA card.
 **Expected:** The account appears in the authenticator and its 6-digit code verifies at enable.
 **Why human:** Scannability by a real camera app cannot be proven by tests; the D-17 fixture test only proves a well-formed matrix. Recorded as manual-only in 16-VALIDATION.md.
 
 ### 2. Enrollment card visual states
+
 **Test:** Walk the card through off → password step-up → QR + secret + code input → on → disable in the browser.
 **Expected:** All states render in place (no wizard), field errors appear in the card's error slots, disable returns to the off state.
 **Why human:** No client render-test harness exists in-repo; visual layout and state transitions are human-verifiable only.
 
 ### 3. One-time recovery modal behavior
+
 **Test:** Enable 2FA, observe the modal, use copy-all, dismiss, then reload/navigate.
 **Expected:** Codes shown exactly once with copy-all working; after dismissal nothing re-displays them (and nothing is persisted).
 **Why human:** The dismiss-clears-state invariant is implemented but unexercised by a test; visual one-time-only behavior needs a human.

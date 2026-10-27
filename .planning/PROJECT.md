@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-26 at the v1.3 milestone start (Auth Hardening scope confirmed)*
+*Last updated: 2026-10-27 after Phase 16*
 
 ## What it is
 
@@ -201,6 +201,9 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   G-12-1…G-12-6 all closed and human-confirmed)
 - ✓ A logged-out browser pasting a file URL lands on the login page (not raw JSON) and
   returns to the file after sign-in — Phase 12 (T-12-13 reopened decision)
+- ✓ TOTP enrollment core: RFC-verified TOTP with replay guard, real QR from a vendored
+  encoder, enroll/enable/disable routes with password step-up and one-time hashed
+  recovery codes — Phase 16 (TFA-01…04; verification 14/17 automated + UAT 3/3)
 
 ### Active
 
