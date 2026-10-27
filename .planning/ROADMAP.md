@@ -16,7 +16,7 @@ gate. Research: `.planning/research/SUMMARY.md` (HIGH confidence).
 
 - [x] **Phase 13: Investigation & Invariant Pinning** - Diagnose the shared stub-auth root cause in the live code and pin the design contracts (pending-2FA session pattern, QR vendoring, throttle constants, encryption-at-rest decision, doc-field removal plan) before any build work *(complete: 13-01 + 13-02 gap closure; verification re-verification pending)*
 - [x] **Phase 14: Schema & Session Ground Truth** - Migrate auth state into real per-user tables, remove the fake `sessions`/`tfa` document fields, and make the sessions page + revocation primitive real (the primitive every later phase reuses) (completed 2026-10-27)
-- [ ] **Phase 15: Password Change End-to-End** - Password change verified against the current password, works at next login, and atomically revokes all other sessions in the same transaction that rehashes
+- [x] **Phase 15: Password Change End-to-End** - Password change verified against the current password, works at next login, and atomically revokes all other sessions in the same transaction that rehashes
 - [ ] **Phase 16: TOTP Core & Enrollment** - Real TOTP secret generation, live code verification with replay guard, a genuinely scannable QR from a vendored encoder, and hashed single-use recovery codes shipped together at enrollment
 - [ ] **Phase 17: Login Second-Factor Flow** - Enrolled users must pass a 6-digit or recovery-code step after login; a pending sign-in is anonymous across every endpoint family until the code verifies
 - [ ] **Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT** - Whole-surface gates: EN+FR catalogue green, byte-identical second-boot migration proven, Chromium e2e for all three flows in both locales, QR UAT with a real device
@@ -83,7 +83,7 @@ Plans:
   3. With two browsers signed in, a password change in one leaves the other's next request 401 while the changing session stays signed in — enforced inside one `transaction()` (PASS-02)
   4. The success toast states exactly what happened (password updated, other sessions disconnected) — the honest-copy rule (PASS-03)
 
-**Plans**: 2 plans
+**Plans**: 3 plans (verification passed 6/6 on re-verification after 15-03 gap closure — 15-VERIFICATION.md)
 
 Plans:
 **Wave 1**

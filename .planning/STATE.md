@@ -39,8 +39,8 @@ Phase: 15 (Password Change End-to-End) — EXECUTING
 Current Plan: 3 (all plans of Phase 15 complete — gap-closure plan 15-03 landed)
 Total Plans in Phase: 3 (15-01, 15-02, 15-03 gap closure)
 
-Plans ready: none — Phase 15 complete (Gap 1 closed), ready for /gsd-verify-work
-Status: Phase 15 executed (3/3 plans landed)
+Plans ready: none — Phase 15 verified (6/6 after Gap 1 closure), ready for /gsd-next
+Status: Phase 15 verified — passed (re-verification 2026-10-27)
 Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███░░░░░░░] 33%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed); Phase 15 complete
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
