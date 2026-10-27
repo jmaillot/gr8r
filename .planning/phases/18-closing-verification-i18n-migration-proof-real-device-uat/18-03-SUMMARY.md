@@ -92,3 +92,8 @@ None - no external service configuration required.
 ---
 *Phase: 18-closing-verification-i18n-migration-proof-real-device-uat*
 *Completed: 2026-10-27*
+
+## Self-Check: PASSED
+
+- test/migration.test.mjs exists; 18-03-SUMMARY.md exists on disk
+- Task commits verified in history: e5f3b0f (Task 1), bd23efb (Task 2), 76346ab (SUMMARY), 667defc (state/roadmap)
