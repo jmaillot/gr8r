@@ -1,5 +1,6 @@
 ---
 phase: 17-login-second-factor-flow
+status: passed
 verified: 2026-10-27T12:00:00Z
 verification.status: passed
 score: 11/11 must-haves verified
