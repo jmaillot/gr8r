@@ -33,8 +33,10 @@ import url from 'node:url';
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
 /* The files that are never scanned. src/data/seed.js is demo CONTENT, not
-   interface: its strings are data the interface shows, not interface text. */
-export const EXCLUDED_FILES = new Set(['src/data/seed.js']);
+   interface: its strings are data the interface shows, not interface text.
+   src/lib/vendor/qrcode.js is a verbatim copy of qrcode-generator@2.0.4
+   (D-15) — third-party library source, never interface copy. */
+export const EXCLUDED_FILES = new Set(['src/data/seed.js', 'src/lib/vendor/qrcode.js']);
 
 /* ---------- the documented display helpers ----------
    A helper added to the interface must be added to this list: the argument

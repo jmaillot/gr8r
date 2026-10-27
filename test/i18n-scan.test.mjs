@@ -106,7 +106,7 @@ test('the scanner exports its contract and imports nothing but node:fs, node:pat
   assert.equal(typeof scanSource, 'function');
   assert.equal(typeof main, 'function');
   assert.ok(EXCLUDED_FILES instanceof Set);
-  assert.deepEqual([...EXCLUDED_FILES], ['src/data/seed.js']);
+  assert.deepEqual([...EXCLUDED_FILES].sort(), ['src/data/seed.js', 'src/lib/vendor/qrcode.js']);
   const source = fs.readFileSync(path.join(REPO_ROOT, 'scripts/i18n-scan.mjs'), 'utf8');
   const imports = [...source.matchAll(/^import\s+(?:.*?from\s+)?'([^']+)'/gm)].map(m => m[1]);
   assert.deepEqual([...new Set(imports)].sort(), ['node:fs', 'node:path', 'node:url']);
