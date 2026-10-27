@@ -108,11 +108,11 @@ Plans:
   3. 2FA flips on only after a live 6-digit code verifies against the pending secret; an abandoned enrollment leaves the user in exactly their pre-enrollment state (TFA-03)
   4. Enrollment issues 8–10 single-use recovery codes, shown exactly once in plaintext and hashed at rest; a printed code logs the user in exactly one time (TFA-04)
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 16-01-PLAN.md — RFC-verified TOTP core (totp.js: Base32/HOTP/verifyTotpCode + D-04 replay guard, recovery-code helpers) + vendored qrcode-generator@2.0.4 behind src/lib/qr.js + RFC 4226/6238 and D-17 fixture tests (TFA-01, TFA-02 core)
+- [x] 16-01-PLAN.md — RFC-verified TOTP core (totp.js: Base32/HOTP/verifyTotpCode + D-04 replay guard, recovery-code helpers) + vendored qrcode-generator@2.0.4 behind src/lib/qr.js + RFC 4226/6238 and D-17 fixture tests (TFA-01, TFA-02 core)
 
 **Wave 2** *(blocked on Wave 1)*
 - [ ] 16-02-PLAN.md — Server enrollment lifecycle: recovery_codes guarded-create migration, pendingTfa Map with TTL, POST /api/auth/tfa/enroll|enable|disable (password step-up, verify-before-enable, D-05 'v1:' encryption, 10 sha256-hashed recovery codes, complete teardown), integration + extended migration tests (TFA-03, TFA-04)
@@ -156,7 +156,7 @@ Plans:
 | 13. Investigation & Invariant Pinning | 2/2 | Complete    | 2026-10-26 |
 | 14. Schema & Session Ground Truth | 5/5 | Complete    | 2026-10-27 |
 | 15. Password Change End-to-End | 1/2 | Executing | - |
-| 16. TOTP Core & Enrollment | 0/N | Not started | - |
+| 16. TOTP Core & Enrollment | 1/3 | In Progress|  |
 | 17. Login Second-Factor Flow | 0/N | Not started | - |
 | 18. Closing Verification | 0/N | Not started | - |
 

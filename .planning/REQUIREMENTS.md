@@ -29,10 +29,10 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 ### TOTP 2FA
 
-- [ ] **TFA-01**: User can enroll a TOTP authenticator — secret generated with `node:crypto`
+- [x] **TFA-01**: User can enroll a TOTP authenticator — secret generated with `node:crypto`
   (`randomBytes`), verification with a ±1 time-step window, a replay guard (matched counter
   stored per user), and `timingSafeEqual` comparison.
-- [ ] **TFA-02**: Enrollment shows a real scannable QR — `otpauth://totp/…?secret=…&issuer=Gr8r`
+- [x] **TFA-02**: Enrollment shows a real scannable QR — `otpauth://totp/…?secret=…&issuer=Gr8r`
   (SHA1, 6 digits, 30 s period all explicit) rendered from a vendored MIT QR encoder, with a
   copyable secret fallback.
 - [ ] **TFA-03**: 2FA activates only after a live 6-digit code verifies against a pending secret
@@ -85,8 +85,8 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 | PASS-01 | Phase 15 — Password Change End-to-End | Complete |
 | PASS-02 | Phase 15 — Password Change End-to-End | Complete |
 | PASS-03 | Phase 15 — Password Change End-to-End | Complete |
-| TFA-01 | Phase 16 — TOTP Core & Enrollment | Pending |
-| TFA-02 | Phase 16 — TOTP Core & Enrollment | Pending |
+| TFA-01 | Phase 16 — TOTP Core & Enrollment | Complete |
+| TFA-02 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-03 | Phase 16 — TOTP Core & Enrollment | Pending |
 | TFA-04 | Phase 16 — TOTP Core & Enrollment | Pending |
 | TFA-05 | Phase 17 — Login Second-Factor Flow | Pending |

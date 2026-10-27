@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 16
-current_phase_name: totp-core-enrollment
-current_plan: 1
+current_phase_name: TOTP Core & Enrollment
+current_plan: 2
 status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-10-27T13:10:58.874Z"
-state_head: a9935db2e2e48f3d4de62e8b71e362f0dfbc9624
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-10-27T13:19:37.182Z"
+state_head: 540392ea1c68948397092cda3d77e0d036bfff15
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
 last_activity: 2026-10-26
 ---
 
@@ -34,13 +34,13 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 16 (totp-core-enrollment) — READY TO EXECUTE
+Phase: 16 (TOTP Core & Enrollment) — EXECUTING
 
-Current Plan: 3 (all plans of Phase 15 complete — gap-closure plan 15-03 landed)
+Current Plan: 2
 Total Plans in Phase: 3
 
 Plans ready: none — Phase 15 verified (6/6 after Gap 1 closure), ready for /gsd-next
-Status: Phase 15 verified — passed (re-verification 2026-10-27)
+Status: Ready to execute
 Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███░░░░░░░] 33%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed); Phase 15 complete
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
@@ -98,6 +98,9 @@ touch this milestone):
 - [Phase 14]: 14-03 revocation primitive landed: opaque 12-char hash-prefix ids (D-27), keep-current disconnect-all SQL (P-H), user-scoped idempotent-204 per-row DELETE (OQ4 — no sessionNotFound code), metadata capture at all 3 insert sites, touchLastSeen 60s throttle with lastSeenNext map (T-14-07 map-lost-on-restart proven by test)
 - [Phase 14]: 14-04 client wiring landed: sessions tab reads S.ui.sessions (server ground truth) with deviceLabel()/ago()/no location (D-19), revokes call the 14-03 DELETE endpoints with D-29 refresh, signOutRevoked() = A.signOut + err.signedOutElsewhere (D-28); 2FA stubs + tab deleted (D-33), settings.tfa.* keys kept for Phase 16 reuse; guard pins moved in-commit (icon baseline 172-3=169, data-a 434-430, section-id 2fa removed)
 - [Phase 14]: D-28 gap closure: central mid-session 401 intercept in api.js call() routes every signInRequired 401 through the registered signOutRevoked teardown (once-per-revocation latch, boot guard, re-arm); per-site revoke-action branches retired; err.sessionExpired fully retired from catalogues and allowlist
+- [Phase 16]: 16-01: TOTP helpers in top-level totp.js (sibling of server.js, outside src/ so Vite never bundles server crypto); Phase 17 imports verifyTotpCode + normalizeRecoveryCode verbatim
+- [Phase 16]: 16-01: otpauth label = Gr8r:<encodeURIComponent(email)> — only the email is encoded, prefix literal (D-54 exact format)
+- [Phase 16]: 16-01: vendored src/lib/vendor/qrcode.js excluded from i18n user-visible-literal scan (third-party source, not interface copy)
 
 ## Verification commands used
 
@@ -125,9 +128,9 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T11:38:27.368Z
-**Stopped at:** Phase 16 context gathered
-**Resume file:** .planning/phases/16-totp-core-enrollment/16-CONTEXT.md
+**Last session:** 2026-10-27T13:19:37.125Z
+**Stopped at:** Completed 16-01-PLAN.md
+**Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
 
@@ -149,3 +152,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 14 P03 | 4min | 3 tasks | 2 files |
 | Phase 14 P04 | 13min | 2 tasks | 7 files |
 | Phase 14 P05 | ~13 min | 3 tasks | 9 files |
+| Phase 16 P01 | 6m | 3 tasks | 7 files |
