@@ -92,6 +92,9 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 15-02-PLAN.md — Client: real A.savePassword, api.changePassword, honest copy EN+FR, D-39/D-44 wiring + tests (wave 2)
 
+**Wave 3** *(gap closure after verification — Gap 1: dishonest banner)*
+- [x] 15-03-PLAN.md — Honest settings.pw.done banner EN/FR + honesty regression guard (wave 3) ✅ 2026-10-27
+
 **UI hint**: yes
 
 ### Phase 16: TOTP Core & Enrollment
