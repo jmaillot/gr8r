@@ -76,6 +76,10 @@ const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
 const DEFAULT_WS_ID = 'ws_default';
 const COOKIE = 'gr8r_session';
+/* D-68: the pending second-factor challenge rides its OWN cookie — never the
+   session cookie — so requireUser()/currentUser() structurally never see it. */
+const CHALLENGE_COOKIE = 'gr8r_tfa_challenge';
+const CHALLENGE_TTL_MS = 5 * 60 * 1000; // D-66: 5-minute challenge lifetime
 const ROLE_RANK = { viewer: 1, member: 2, admin: 3, owner: 4 };
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
@@ -1210,6 +1214,37 @@ function clearSessionCookie(req, res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`);
 }
 
+/* D-68: the challenge cookie mirrors setSessionCookie's attributes EXCEPT the
+   lifetime — a hard ~5-minute Max-Age, never SESSION_DAYS (Pitfall 15). */
+function challengeCookieAttrs(req) {
+  const secure = SECURE_COOKIE === 'true' || (SECURE_COOKIE === 'auto' && proto(req) === 'https');
+  return `Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
+}
+
+function setChallengeCookie(req, res, token) {
+  res.setHeader('Set-Cookie', `${CHALLENGE_COOKIE}=${token}; ${challengeCookieAttrs(req)}; Max-Age=${CHALLENGE_TTL_MS / 1000}`);
+}
+
+/* Several auth responses carry TWO cookies (session + challenge). setHeader
+   overwrites, so appends go through this helper. */
+function appendCookie(res, line) {
+  const cur = res.getHeader('Set-Cookie');
+  if (!cur) res.setHeader('Set-Cookie', line);
+  else res.setHeader('Set-Cookie', Array.isArray(cur) ? [...cur, line] : [cur, line]);
+}
+
+function clearChallengeCookie(req, res) {
+  appendCookie(res, `${CHALLENGE_COOKIE}=; ${challengeCookieAttrs(req)}; Max-Age=0`);
+}
+
+/* D-62/D-63: server-side, per-request masking (first char + *** on each side of
+   the @). Nothing length- or TLD-preserving (Pitfall 7); nothing persisted. */
+function maskEmail(email) {
+  const at = String(email).indexOf('@');
+  if (at <= 0) return '***';
+  return `${String(email).slice(0, at)[0]}***@${String(email).slice(at + 1)[0] || ''}***`;
+}
+
 function currentUser(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE];
   if (!token) return null;
@@ -1349,6 +1384,21 @@ async function handleApi(req, res, url) {
     const valid = verifyPassword(password, row?.password_hash || DUMMY_HASH) && !!row;
     if (!valid) return fail(res, 401, 'invalidCredentials', 'Email or password is incorrect');
 
+    /* D-68: a 2FA-enabled account gets NO identity from the password alone.
+       Issue the short-lived challenge (row + its own cookie) and stop. This
+       branch MUST NOT touch the throttle attempts map — the password→code
+       steps share ONE budget (D-03/Pitfall 18: no success-clear between steps). */
+    if (row.two_fa_enabled) {
+      const challengeToken = crypto.randomBytes(32).toString('base64url');
+      db.prepare('insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)').run(
+        sha256(challengeToken),
+        row.id,
+        now() + CHALLENGE_TTL_MS,
+      );
+      setChallengeCookie(req, res, challengeToken);
+      return json(res, 200, { pending2fa: true, maskedEmail: maskEmail(row.email) });
+    }
+
     attempts.delete(`${clientIp(req)}|${email}`);
     const token = crypto.randomBytes(32).toString('base64url');
     const t = now();
@@ -1371,7 +1421,11 @@ async function handleApi(req, res, url) {
   if (pathname === '/api/auth/logout' && method === 'POST') {
     const token = parseCookies(req.headers.cookie)[COOKIE];
     if (token) db.prepare('delete from sessions where token_hash = ?').run(sha256(token));
+    // D-61/D-71: logout also works from the pending state — kill any live challenge.
+    const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
+    if (challengeToken) db.prepare('delete from login_challenges where challenge_token_hash = ?').run(sha256(challengeToken));
     clearSessionCookie(req, res);
+    clearChallengeCookie(req, res);
     return json(res, 204);
   }
 
@@ -1537,6 +1591,103 @@ async function handleApi(req, res, url) {
   }
 
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */
+
+  /* ------------------- TFA login second step (D-69, TFA-05) ------------------- */
+
+  if (pathname === '/api/auth/tfa/login' && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    // The challenge cookie (not a body-carried email) selects the budget key —
+    // an attacker cannot aim the throttle at an arbitrary victim address.
+    const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
+    const challenge = challengeToken
+      ? db
+          .prepare(
+            'select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?',
+          )
+          .get(sha256(challengeToken))
+      : null;
+    if (!challenge) return fail(res, 401, 'challengeExpired', 'Your sign-in challenge has expired — start again');
+    // D-11 budget shape, keyed 2fa-login|ip|email (constants match tfa/enable).
+    if (tooMany(`2fa-login|${clientIp(req)}|${challenge.email}`, 5, 15 * 60 * 1000))
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const code = String(body?.code || '');
+    // D-67/Pitfall 22b: an empty code is rejected BEFORE the transaction — it
+    // consumes neither an attempt nor the challenge.
+    if (!code.trim()) return fail(res, 400, 'invalidTfaCode', 'That code is not valid');
+
+    const outcome = transaction(() => {
+      const fresh = db.prepare('select * from login_challenges where challenge_token_hash = ?').get(sha256(challengeToken));
+      if (!fresh || fresh.expires_at <= now()) {
+        db.prepare('delete from login_challenges where challenge_token_hash = ?').run(sha256(challengeToken));
+        return 'dead';
+      }
+      // D-67 anti-race: the attempt is consumed BEFORE any code comparison, so
+      // two concurrent submissions cannot both reach the verify inside budget.
+      db.prepare('update login_challenges set attempts = attempts + 1 where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+      const counted = db.prepare('select attempts from login_challenges where challenge_token_hash = ?').get(fresh.challenge_token_hash);
+      if (!counted || counted.attempts > 3) {
+        // D-66: three wrong codes kill the challenge.
+        db.prepare('delete from login_challenges where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+        return 'dead';
+      }
+      const user = db.prepare('select * from users where id = ?').get(fresh.user_id);
+      if (!user || !user.two_fa_enabled) {
+        db.prepare('delete from login_challenges where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+        return 'dead';
+      }
+      let recoveryRemaining;
+      if (/^\d{6}$/.test(code.trim())) {
+        // D-06: an undecryptable secret fails closed before any mutation.
+        const secret = decryptTotpSecret(user.two_fa_secret);
+        if (!secret) return 'masterKey';
+        // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
+        const verified = verifyTotpCode(secret, code, user.two_fa_last_step || null, Math.floor(now() / 1000));
+        if (!verified.ok) return 'code';
+        db.prepare('update users set two_fa_last_step = ? where id = ?').run(verified.matchedStep, user.id);
+      } else {
+        // D-64/D-72 recovery shape: the race-safe conditional burn — a used
+        // (or unknown) code matches zero eligible rows.
+        const burn = db
+          .prepare('update recovery_codes set used_at = ? where user_id = ? and code_hash = ? and used_at is null')
+          .run(now(), user.id, recoveryHash(normalizeRecoveryCode(code)));
+        if (burn.changes !== 1) return 'code';
+        recoveryRemaining = db.prepare('select count(*) as c from recovery_codes where user_id = ? and used_at is null').get(user.id).c;
+      }
+      // Mint the real session verbatim (login-handler recipe) inside the same
+      // transaction that deletes the challenge and burns the code (Pitfall 4).
+      const token = crypto.randomBytes(32).toString('base64url');
+      const t = now();
+      const ua = String(req.headers['user-agent'] || '');
+      const ip = clientIp(req);
+      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+        sha256(token),
+        user.id,
+        t,
+        t + SESSION_DAYS * 86400 * 1000,
+        ip,
+        ua,
+        t,
+      );
+      db.prepare('update users set last_login_at = ? where id = ?').run(t, user.id);
+      db.prepare('delete from login_challenges where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+      return { token, user, recoveryRemaining };
+    });
+
+    // D-65: ONE generic error code for both failure shapes — no oracle.
+    if (outcome === 'code') return fail(res, 400, 'invalidTfaCode', 'That code is not valid');
+    if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be verified until the admin sets it');
+    if (outcome === 'dead') {
+      clearChallengeCookie(req, res);
+      return fail(res, 401, 'challengeExpired', 'Your sign-in challenge has expired — start again');
+    }
+    setSessionCookie(req, res, outcome.token);
+    clearChallengeCookie(req, res);
+    const payload = { user: userPayload(outcome.user) };
+    if (outcome.recoveryRemaining !== undefined) payload.recoveryRemaining = outcome.recoveryRemaining;
+    return json(res, 200, payload);
+  }
 
   if (pathname === '/api/auth/sessions' && method === 'GET') {
     const user = requireUser(req, res);
@@ -2485,6 +2636,9 @@ function main() {
   bootstrap();
   db.prepare('delete from sessions where expires_at <= ?').run(now());
   setInterval(() => db.prepare('delete from sessions where expires_at <= ?').run(now()), 3600_000).unref();
+  /* D-66 lifecycle: expired login challenges are swept at boot and hourly. */
+  db.prepare('delete from login_challenges where expires_at <= ?').run(now());
+  setInterval(() => db.prepare('delete from login_challenges where expires_at <= ?').run(now()), 3600_000).unref();
 
   /* Invite links are absolute URLs built from APP_URL; without it appBase() falls back
      to the request's Host header, so a hostile Host would email invitation links pointing
