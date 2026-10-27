@@ -154,7 +154,20 @@ Plans:
   4. A human verifies the QR with Google Authenticator plus one other authenticator app on a real device (AUTH-03 — UAT, not automatable)
   5. The "looks-done-but-isn't" pitfalls checklist runs as explicit verification and each item is checked or gaps filed (AUTH-03)
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 18-01-PLAN.md — WR-01/WR-02 client state fix in actions.js + source-structure regression test (D-84)
+
+**Wave 2** *(blocked on 18-01)*
+- [ ] 18-02-PLAN.md — Auth e2e suite in flows.spec.mjs: 2FA login (incl. recovery burn), revocation, password-change revocation — EN+FR (D-75/76/77, AUTH-03)
+
+**Wave 3** *(blocked on 18-02)*
+- [ ] 18-03-PLAN.md — Migration proof extension: post-17 schema parity, login_challenges cleanliness, workspace-JSON auth-key walk, extended snapshot (D-78/79)
+
+**Wave 4** *(blocked on 18-02 + 18-03; human gate)*
+- [ ] 18-04-PLAN.md — 18-PITFALLS-AUDIT.md evidence table (D-80/81/85) + 18-UAT.md real-device UAT (D-82/83) + full closing gate
 
 ## Progress
 
