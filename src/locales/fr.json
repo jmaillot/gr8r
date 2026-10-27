@@ -1239,7 +1239,7 @@
   "settings.prefs.confirmDel": "Confirmer avant de supprimer des tâches",
   "settings.shortcuts.lead": "Allez plus vite au clavier.",
   "settings.pw.lead": "Utilisez un mot de passe long que vous n’utilisez nulle part ailleurs.",
-  "settings.pw.done": "Mot de passe mis à jour. Les autres sessions restent connectées.",
+  "settings.pw.done": "Mot de passe mis à jour. Vos autres sessions ont été déconnectées.",
   "settings.pw.current": "Mot de passe actuel",
   "settings.pw.new": "Nouveau mot de passe",
   "settings.pw.confirm": "Confirmer le nouveau mot de passe",

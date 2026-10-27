@@ -1239,7 +1239,7 @@
   "settings.prefs.confirmDel": "Confirm before deleting tasks",
   "settings.shortcuts.lead": "Move faster with the keyboard.",
   "settings.pw.lead": "Use a long password you don't use anywhere else.",
-  "settings.pw.done": "Password updated. Other sessions stay signed in.",
+  "settings.pw.done": "Password updated. Your other sessions were signed out.",
   "settings.pw.current": "Current password",
   "settings.pw.new": "New password",
   "settings.pw.confirm": "Confirm new password",
