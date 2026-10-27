@@ -45,6 +45,16 @@ export function modalHtml(m) {
       return wrap('', inviteModal(m, H));
     case 'confirm':
       return wrap('sm', confirmModal(m, H));
+    case 'recovery':
+      /* D-53/T-16-10: the one-time recovery-codes modal. The codes live ONLY
+         in the transient S.ui.recoveryCodes render state — cleared by
+         A.recoveryDismiss on dismiss, never written to localStorage/
+         sessionStorage, never re-displayed afterwards. Copy-all is the only
+         duplication path. */
+      return wrap(
+        'sm',
+        `${H(t('settings.tfa.modalTitle'), t('settings.tfa.recoveryDesc'))}<div class="modal-b"><pre style="font-family:var(--mono,monospace);font-size:14px;line-height:1.9;margin:0;user-select:all">${(S.ui.recoveryCodes || []).map(esc).join('\n')}</pre></div><div class="modal-f"><button class="btn btn-secondary" data-a="copyText" data-text="${esc((S.ui.recoveryCodes || []).join('\n'))}">${t('settings.tfa.copyAll')}</button><span class="sp"></span><button class="btn btn-primary" data-a="recoveryDismiss">${t('settings.tfa.dismiss')}</button></div>`,
+      );
     case 'prompt':
       return wrap(
         'sm',

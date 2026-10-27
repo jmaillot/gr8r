@@ -346,6 +346,7 @@ function userPayload(user) {
     email: user.email,
     name: user.name,
     locale: user.locale ?? null,
+    twoFa: !!user.two_fa_enabled, // server ground truth for the settings 2FA card (16-03, T-16-13)
     workspaces: membershipsOf(user.id).map(row => workspacePayload(row, row)),
   };
 }

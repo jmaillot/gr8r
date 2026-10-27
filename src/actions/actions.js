@@ -207,7 +207,10 @@ A.go = el => {
   const tabOnly = r === 'project' && S.ui.route === 'project' && S.ui.params.id === p.id;
   go(r, p, { tab: tabOnly });
   if (r === 'members' && api.enabled) refreshMembers();
-  if (r === 'settings' && p.sec === 'sessions' && api.enabled) refreshSessions();
+  if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa') && api.enabled) {
+    refreshSessions();
+    refreshTfa(); // T-16-13: the card's on/off split re-reads the server
+  }
 };
 A.back = () => {
   const h = S.ui.history.pop();
@@ -1807,6 +1810,17 @@ export async function refreshSessions() {
   return res.data;
 }
 
+/* The settings 2FA card's ground truth (T-16-13): re-reads the signed-in user
+   (api.user.twoFa) from /api/auth/me — the on-state never renders from a
+   client flag. Called on mount of the security tabs and after every tfa state
+   change (enroll enable/disable). */
+export async function refreshTfa() {
+  if (!api.enabled) return null;
+  await api.me();
+  render();
+  return api.user;
+}
+
 A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
   if (!row?.email) return;
@@ -2424,6 +2438,99 @@ A.savePassword = () => {
     await refreshSessions(); // D-29
     toast(t('toast.passwordUpdatedAll'));
   });
+};
+/* ---------- two-factor enrollment (16-03, D-56/D-57/D-58) ---------- */
+A.tfaStart = () => {
+  S.ui.errors = {};
+  S.ui.tfaStage = 'pw';
+  render();
+};
+A.tfaCancel = () => {
+  S.ui.errors = {};
+  S.ui.tfaStage = null;
+  render();
+};
+A.tfaBeginEnroll = () => {
+  const e = (S.ui.errors = {});
+  const pw = $('#tfa-pw')?.value || '';
+  if (!pw) e.tfaPw = t('err.enterCurrentPassword'); // empty submits nothing (TFA-02 empty edge)
+  if (Object.keys(e).length) return render();
+  loadingBtn('tfa-pw-save', 0, async () => {
+    const res = await api.tfaEnroll(pw);
+    if (!res.ok) {
+      const code = res.data?.code;
+      if (code === 'wrongCurrentPassword' || code === 'passwordRequired') e.tfaPw = t('err.' + code);
+      else if (code === 'tooManyAttempts') e.tfaPw = t('err.tooManyAttempts');
+      else e.tfaPw = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58: the 503 body never renders
+      return render();
+    }
+    S.ui.tfaSecret = res.data.secret;
+    S.ui.tfaOtpauth = res.data.otpauth;
+    S.ui.tfaStage = 'verify';
+    render();
+  });
+};
+A.tfaVerify = () => {
+  const e = (S.ui.errors = {});
+  const code = $('#tfa-code')?.value?.trim() || '';
+  if (!code) return render(); // empty submits nothing (TFA-02 empty edge)
+  loadingBtn('tfa-verify-save', 0, async () => {
+    const res = await api.tfaEnable(code);
+    if (!res.ok) {
+      const c = res.data?.code;
+      if (c === 'noPendingEnrollment') {
+        S.ui.tfaStage = null; // the pending setup expired — back to the off state
+        e.tfaMsg = t('err.noPendingEnrollment');
+      } else if (c === 'codeRejected' || c === 'tooManyAttempts') {
+        e.tfaCode = t('err.' + c);
+      } else {
+        e.tfaCode = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58
+      }
+      return render();
+    }
+    /* D-53/T-16-10: the plaintext codes live ONLY in this transient render
+       state — the modal shows them exactly once, A.recoveryDismiss clears
+       them, and nothing is written to localStorage/sessionStorage. */
+    S.ui.recoveryCodes = res.data.recoveryCodes || [];
+    S.ui.tfaStage = null;
+    S.ui.tfaSecret = null;
+    S.ui.tfaOtpauth = null;
+    render();
+    openModal({ type: 'recovery' });
+    await refreshTfa();
+    toast(t('settings.tfa.enabledToast'));
+  });
+};
+A.tfaAskDisable = () => {
+  S.ui.errors = {};
+  S.ui.tfaStage = 'disable';
+  render();
+};
+A.tfaDisableConfirm = () => {
+  const e = (S.ui.errors = {});
+  const pw = $('#tfa-off-pw')?.value || '';
+  const code = $('#tfa-off-code')?.value?.trim() || '';
+  if (!pw) e.tfaOffPw = t('err.enterCurrentPassword');
+  if (!code) e.tfaOffCode = t('err.codeRequired'); // D-57: one input, either shape
+  if (Object.keys(e).length) return render();
+  loadingBtn('tfa-off-save', 0, async () => {
+    const res = await api.tfaDisable(pw, code);
+    if (!res.ok) {
+      const c = res.data?.code;
+      if (c === 'wrongCurrentPassword' || c === 'passwordRequired') e.tfaOffPw = t('err.' + c);
+      else if (c === 'codeRejected' || c === 'tooManyAttempts') e.tfaOffCode = t('err.' + c);
+      else e.tfaOffPw = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58
+      return render();
+    }
+    S.ui.tfaStage = null; // D-59: a fresh enroll afterwards is indistinguishable from a first one
+    render();
+    await refreshTfa();
+    toast(t('settings.tfa.disabledToast'));
+  });
+};
+A.recoveryDismiss = () => {
+  S.ui.recoveryCodes = null; // D-53: gone for good — no re-render can show them
+  closeModal();
 };
 A.revokeSession = async el => {
   const id = el.dataset.id;

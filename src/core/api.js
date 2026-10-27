@@ -250,6 +250,19 @@ export const api = {
   async changePassword(currentPassword, newPassword) {
     return call('PATCH', '/api/auth/password', { currentPassword, newPassword });
   },
+  /* Two-factor enrollment (TFA-02/03/04): auth-scoped like the sessions family
+     above — no workspace slug. The enroll response carries the server-built
+     otpauth URI (D-48) and enable returns the one-time recovery codes (D-53);
+     both are consumed by the settings 2FA card and never persisted client-side. */
+  async tfaEnroll(currentPassword) {
+    return call('POST', '/api/auth/tfa/enroll', { currentPassword });
+  },
+  async tfaEnable(code) {
+    return call('POST', '/api/auth/tfa/enable', { code });
+  },
+  async tfaDisable(currentPassword, code) {
+    return call('POST', '/api/auth/tfa/disable', { currentPassword, code });
+  },
   async putWorkspace(doc, opts) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };

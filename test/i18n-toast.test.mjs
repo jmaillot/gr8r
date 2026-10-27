@@ -304,7 +304,7 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 430, 'data-a sites'); // −4 with the 2FA tab deletion (setup/cancel/verify/disable, 14-04)
+  assert.equal(a, 440, 'data-a sites'); // +10 for the 2FA card (16-03): start/cancel/beginEnroll/verify×2/askDisable/disableConfirm/copy + recovery modal copy/dismiss
   assert.equal(r, 57, 'data-r sites');
   assert.equal(v, 75, 'data-v sites');
 });

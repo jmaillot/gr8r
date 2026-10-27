@@ -6,6 +6,7 @@ import { ago, dOff, deviceLabel, esc, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { D, S, isMemberAdmin, me } from '../core/store.js';
 import { api } from '../core/api.js';
+import { renderQrSvg } from '../lib/qr.js';
 import { av, pIcon } from '../ui/helpers.js';
 import { permsTable, teamsGrid } from './members.js';
 import { page404 } from './errors.js';
@@ -70,6 +71,7 @@ export const SET_NAV = [
     'settings.group.security',
     [
       ['password', 'settings.nav.password', 'key-round'],
+      ['tfa', 'settings.tfa.nav', 'smartphone'],
       ['sessions', 'settings.nav.sessions', 'monitor-smartphone'],
     ],
   ],
@@ -385,6 +387,67 @@ export function settingsBody(sec, title) {
       <div class="field"><label class="label" for="pw-conf">${t('settings.pw.confirm')}</label><input type="password" class="input ${e.pwConf ? 'is-error' : ''}" id="pw-conf" autocomplete="new-password">${e.pwConf ? `<span class="err">${ic('circle-alert', 12)}${e.pwConf}</span>` : ''}</div>
       <div><button class="btn btn-primary" data-a="savePassword" id="pw-save">${t('settings.pw.update')}</button></div></form>`
       );
+    }
+    case 'tfa': {
+      /* TFA-02/03/04 — the D-56 inline card. The on/off split reads ONLY
+         server ground truth (api.user.twoFa, refreshed by refreshTfa() on
+         mount and after every state change, T-16-13) — never a client flag;
+         the deleted 14-04 stub pattern stays deleted. Enrollment states
+         (password step-up → QR + copyable secret + live code) render in
+         place, no wizard, no new routing (D-56). */
+      const e = S.ui.errors;
+      const stage = S.ui.tfaStage;
+      const on = api.enabled && !!api.user?.twoFa;
+      const fld = (id, label, errKey, extra = '') =>
+        `<div class="field"><label class="label" for="${id}">${label}</label><input class="input ${e[errKey] ? 'is-error' : ''}" id="${id}" ${extra}>${e[errKey] ? `<span class="err">${ic('circle-alert', 12)}${e[errKey]}</span>` : ''}</div>`;
+      if (!api.enabled) return H(t('settings.tfa.lead')) + srow(t('settings.tfa.off'), t('settings.tfa.offDesc'), '');
+      if (on) {
+        return (
+          H(t('settings.tfa.lead')) +
+          srow(
+            t('settings.tfa.on'),
+            t('settings.tfa.onDesc'),
+            stage === 'disable' ? '' : `<button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('settings.tfa.turnOff')}</button>`,
+          ) +
+          (stage === 'disable'
+            ? `<form data-submit="tfaDisableConfirm" class="col" style="gap:14px;max-width:400px;margin-top:14px">
+                ${fld('tfa-off-pw', t('settings.tfa.pwLabel'), 'tfaOffPw', 'type="password" autocomplete="current-password"')}
+                ${fld('tfa-off-code', t('settings.tfa.codeLabel'), 'tfaOffCode', 'autocomplete="one-time-code"')}
+                <div class="row"><button class="btn btn-danger" data-a="tfaDisableConfirm" id="tfa-off-save">${t('settings.tfa.turnOff')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
+              </form>`
+            : '')
+        );
+      }
+      if (stage === 'verify') {
+        /* D-48/D-55: the URI comes verbatim from the enroll response — the
+           client never rebuilds it (T-16-12). The QR is rendered only through
+           src/lib/qr.js wrapping the vendored encoder; the secret fallback is
+           monospace, read-only, copyable, with the "can't scan?" hint. */
+        const qr = renderQrSvg(S.ui.tfaOtpauth || '');
+        return (
+          H(t('settings.tfa.lead')) +
+          `<div class="sblock" style="margin-top:0"><div class="col" style="gap:14px;max-width:400px">
+            <div class="field"><span class="label">${t('settings.tfa.scan')}</span><div style="margin-top:8px">${qr}</div><span class="hint">${t('settings.tfa.appHint')}</span></div>
+            <div class="field"><label class="label" for="tfa-secret">${t('settings.tfa.cantScan')}</label><div class="row" style="gap:0"><input class="input" id="tfa-secret" readonly value="${esc(S.ui.tfaSecret || '')}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.tfaSecret || '')}">${t('settings.tfa.copy')}</button></div></div>
+            <form data-submit="tfaVerify" class="col" style="gap:14px">
+              ${fld('tfa-code', t('settings.tfa.enterCode'), 'tfaCode', 'autocomplete="one-time-code" inputmode="numeric"')}
+              <div><button class="btn btn-primary" data-a="tfaVerify" id="tfa-verify-save">${t('settings.tfa.verify')}</button></div>
+            </form>
+          </div></div>`
+        );
+      }
+      if (stage === 'pw') {
+        /* D-49: the password step-up renders in place — no wizard. */
+        return (
+          H(t('settings.tfa.lead')) +
+          `<form data-submit="tfaBeginEnroll" class="col" style="gap:14px;max-width:400px">
+            ${fld('tfa-pw', t('settings.tfa.pwLabel'), 'tfaPw', 'type="password" autocomplete="current-password"')}
+            <span class="hint">${t('settings.tfa.pwStep')}</span>
+            <div class="row"><button class="btn btn-primary" data-a="tfaBeginEnroll" id="tfa-pw-save">${t('common.next')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
+          </form>`
+        );
+      }
+      return H(t('settings.tfa.lead')) + srow(t('settings.tfa.off'), t('settings.tfa.offDesc'), `<button class="btn btn-primary" data-a="tfaStart">${t('settings.tfa.start')}</button>`);
     }
     case 'sessions': {
       /* Server ground truth (SESS-01): S.ui.sessions is populated by

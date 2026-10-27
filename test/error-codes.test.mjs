@@ -190,6 +190,7 @@ test('inviteForOtherEmail carries its email in the payload on the join flow', as
    emitted by server.js. Derived by diffing the en.json err.* namespace against the server
    source; a catalogued code absent from server.js AND absent here fails the suite. */
 const CLIENT_ONLY_ERR_CODES = [
+  'codeRequired', // field guard in the tfa disable form (16-03) — no server code
   'changeRole', // toast composed in actions.js after a successful PATCH
   'taskAccess', // toast composed in actions.js after a successful task write
   'uploadOffline', // demo/offline branch in actions.js — no server call made
