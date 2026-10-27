@@ -39,7 +39,7 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
   (verify-before-enable; no unverified-secret lockout).
 - [x] **TFA-04**: 8–10 single-use recovery codes, hashed at rest, shown exactly once, usable at
   login (mandatory companion to enrollment — no-recovery enrollment is a lockout factory).
-- [ ] **TFA-05**: For enrolled users, login requires a second step (6-digit code or recovery
+- [x] **TFA-05**: For enrolled users, login requires a second step (6-digit code or recovery
   code); no session identity exists before the code is verified (pending-session pattern must
   be tested as anonymous across every endpoint family).
 
@@ -89,7 +89,7 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 | TFA-02 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-03 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-04 | Phase 16 — TOTP Core & Enrollment | Complete |
-| TFA-05 | Phase 17 — Login Second-Factor Flow | Pending |
+| TFA-05 | Phase 17 — Login Second-Factor Flow | Complete |
 | AUTH-01 | Phase 18 — Closing Verification | Pending |
 | AUTH-03 | Phase 18 — Closing Verification | Pending |
 
