@@ -90,7 +90,7 @@ Plans:
 - [x] 15-01-PLAN.md — Server: PATCH /api/auth/password route, atomic rehash + keep-current revoke, throttle, PASS-01/02 integration tests (wave 1) ✅ 2026-10-27
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 15-02-PLAN.md — Client: real A.savePassword, api.changePassword, honest copy EN+FR, D-39/D-44 wiring + tests (wave 2)
+- [x] 15-02-PLAN.md — Client: real A.savePassword, api.changePassword, honest copy EN+FR, D-39/D-44 wiring + tests (wave 2)
 
 **UI hint**: yes
 

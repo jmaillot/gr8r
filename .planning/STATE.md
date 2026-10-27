@@ -36,12 +36,12 @@ Last updated: 2026-10-26
 
 Phase: 15 (Password Change End-to-End) — EXECUTING
 
-Current Plan: 2
+Current Plan: 3 (both plans of Phase 15 complete)
 Total Plans in Phase: 2
 
-Plans ready: 15-02 (client rewiring — depends on 15-01, now landed)
-Status: Executing Phase 15
-Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███░░░░░░░] 33%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed)
+Plans ready: none — Phase 15 complete, ready for /gsd-verify-work
+Status: Phase 15 executed (2/2 plans landed)
+Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███░░░░░░░] 33%` — 2 of 6 v1.3 phases started; Phase 13 complete (verification gaps 1–2 closed); Phase 15 complete
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -125,9 +125,11 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T09:20:00.000Z
-**Stopped at:** Completed 15-01-PLAN.md (server password-change route + tests)
-**Resume file:** .planning/phases/15-password-change-end-to-end/15-01-SUMMARY.md
+**Last session:** 2026-10-27T10:20:00.000Z
+**Stopped at:** Completed 15-02-PLAN.md (client password-change rewiring — phase complete)
+**Resume file:** .planning/phases/15-password-change-end-to-end/15-02-SUMMARY.md
+
+**Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
 
 ## Operator Next Steps
 

@@ -22,9 +22,9 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 - [ ] **PASS-01**: User can change password — current password verified server-side, new
   password works at the next login, atomic scrypt rehash.
-- [ ] **PASS-02**: All other sessions are revoked automatically at password change (same revocation
+- [x] **PASS-02**: All other sessions are revoked automatically at password change (same revocation
   primitive as SESS-02, in one `transaction()`); the current session survives.
-- [ ] **PASS-03**: Success copy states what actually happened (e.g. other sessions logged out) —
+- [x] **PASS-03**: Success copy states what actually happened (e.g. other sessions logged out) —
   the v1.2 honest-toast rule.
 
 ### TOTP 2FA
@@ -83,8 +83,8 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 | SESS-03 | Phase 14 — Schema & Session Ground Truth | Complete |
 | AUTH-02 | Phase 14 — Schema & Session Ground Truth | Complete |
 | PASS-01 | Phase 15 — Password Change End-to-End | Pending |
-| PASS-02 | Phase 15 — Password Change End-to-End | Pending |
-| PASS-03 | Phase 15 — Password Change End-to-End | Pending |
+| PASS-02 | Phase 15 — Password Change End-to-End | Complete |
+| PASS-03 | Phase 15 — Password Change End-to-End | Complete |
 | TFA-01 | Phase 16 — TOTP Core & Enrollment | Pending |
 | TFA-02 | Phase 16 — TOTP Core & Enrollment | Pending |
 | TFA-03 | Phase 16 — TOTP Core & Enrollment | Pending |
