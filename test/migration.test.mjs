@@ -241,6 +241,31 @@ test('the seven new columns agree between SCHEMA DDL and ensureColumn on a legac
   }
 });
 
+/* Phase 17 post-17 auth surface: the pending-2FA state lives in the
+   login_challenges table (challenge cookie + D-66 5-minute TTL), not in a
+   sessions column — asserted against the SCHEMA declaration (A2). */
+test('the login_challenges table lands with its SCHEMA definition and stays empty through legacy logins', () => {
+  const expected = {
+    'login_challenges.challenge_token_hash': { type: 'TEXT', notnull: 0, dflt_value: null },
+    'login_challenges.user_id': { type: 'TEXT', notnull: 1, dflt_value: null },
+    'login_challenges.expires_at': { type: 'INTEGER', notnull: 1, dflt_value: null },
+    'login_challenges.attempts': { type: 'INTEGER', notnull: 1, dflt_value: '0' },
+  };
+  for (const [key, want] of Object.entries(expected)) {
+    const [table, name] = key.split('.');
+    const got = col(table, name);
+    assert.ok(got, `${key} exists`);
+    assert.deepEqual({ type: got.type, notnull: got.notnull, dflt_value: got.dflt_value }, want, `${key} definition matches the SCHEMA declaration`);
+  }
+  /* The owner signed in above; a password login never creates a challenge, so the
+     lifecycle on this fixture is: empty at first boot, still empty after logins. */
+  assert.equal(
+    withDb(server.dbPath, db => db.prepare('select count(*) as n from login_challenges').get()).n,
+    0,
+    'login_challenges stays empty across the legacy logins (no login activity in the fixture)',
+  );
+});
+
 test('the served document from a legacy database carries no sessions or tfa fields', async () => {
   /* The fixture document still carries the retired sessions/tfa literals; the
      served copy must be sanitized on every read (D-30). Mirrors the workspaces
