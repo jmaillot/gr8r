@@ -1,6 +1,6 @@
 ---
 phase: 18-closing-verification-i18n-migration-proof-real-device-uat
-verified: 2026-10-28T12:00:00Z
+verified: 2026-10-28T09:34:39.657Z
 status: passed
 score: 9/9 must-haves verified
 covered_files:
@@ -16,7 +16,7 @@ covered_files:
   - test/tfa-state-fix.test.mjs
   - test/migration.test.mjs
   - e2e/flows.spec.mjs
-covered_digest: "v2:001c87721a42954a588e7f3a4a4b9d0bd6f0ad153be4097ffabe4bb9ea8b3362"
+covered_digest: "v2:sha256:45fac7d6327129a44a7c72e453106f2614b298b58580ac46bf5c26baa7ef0273"
 behavior_unverified: 0
 overrides_applied: 0
 ---
