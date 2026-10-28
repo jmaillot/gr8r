@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-28 after v1.3 milestone*
+*Last updated: 2026-10-28 after Phase 19*
 
 ## What it is
 
@@ -251,6 +251,12 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   i18n-scan build gate green, all three flows covered by Chromium e2e in both locales, and
   the QR verified by human UAT on a real device (Google Authenticator + Microsoft
   Authenticator) — Phase 18 (AUTH-01, AUTH-03; verification 9/9, UAT 3/3)
+- ✓ TOTP secrets at rest in the `v1:` AES-256-GCM envelope: boot-time migration wraps every
+  legacy plaintext `two_fa_secret` (trigger-gated, transactional, backup-guaranteed,
+  byte-identical second boot, loud deferral when MASTER_KEY is absent), and every decrypt
+  call site routes through a single `requireTotpSecret()` boundary that fails closed with
+  503 `masterKeyMissing` — no plaintext fallback, non-2FA login untouched — Phase 19
+  (ENC-01, ENC-02; verification 12/12, UAT 7/7 live + isolated container)
 
 ### Active
 

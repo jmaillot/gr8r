@@ -3,16 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
 status: unknown
-stopped_at: Phase 19 context gathered
-last_updated: "2026-10-28T13:53:50.931Z"
-state_head: e4ec84586baa85ac666d699a2707c578ba64cc00
+stopped_at: Phase 19 complete, ready to plan Phase 20
+last_updated: "2026-10-28T16:09:30.642Z"
+state_head: 73d4979c1061aac8caa0f5dc69664f0524018cda
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 0
-  percent: 0
-current_phase_name: TOTP Encryption Closure
+  completed_plans: 2
+  percent: 25
+current_phase: 20
+current_phase_name: Recovery-Code Regeneration
 ---
 
 # STATE.md
@@ -21,14 +22,14 @@ current_phase_name: TOTP Encryption Closure
 
 - **Project:** Gr8r Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** every auth item deferred out of v1.3 lands — the 2FA lifecycle and session control become complete
-- **Current Focus:** Milestone v1.4 "Auth Completion" — Phase 19 (TOTP Encryption Closure)
+- **Current Focus:** Milestone v1.4 "Auth Completion" — Phase 20 (Recovery-Code Regeneration)
 
 ## Current Position
 
-- **Phase:** 19 — TOTP Encryption Closure
-- **Plan:** 19-01 + 19-02 complete (ENC-01, ENC-02) — Phase 19 fully executed; next: /gsd-verify-work Phase 19
-- **Status:** executing
-- **Progress:** ▓░░░░░░░░░ (0/4 phases — 2/2 plans of Phase 19 done)
+- **Phase:** 20 — Recovery-Code Regeneration
+- **Plan:** Not started
+- **Status:** Ready to plan
+- **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done, UAT 7/7)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -76,11 +77,10 @@ current_phase_name: TOTP Encryption Closure
 
 ## Session Continuity
 
-**Last session:** 2026-10-28T14:21:10Z
-**Stopped at:** Phase 19 plan 19-02 (ENC-02) executed — SUMMARY written, commits 7e79b5c + 65b3dcb
-**Resume file:** .planning/phases/19-totp-encryption-closure/19-02-SUMMARY.md
+**Last session:** 2026-10-28T16:15:00Z
+**Stopped at:** Phase 19 complete + UAT passed (7/7), ready to plan Phase 20
+**Resume file:** None
 
-- **Last action:** executed 19-02 (decrypt boundary closure, ENC-02): `requireTotpSecret()` wrapper as the only `decryptTotpSecret` caller (D-77/D-78c), both call sites branch on ok → 503 masterKeyMissing (D-80/D-81), 12 D-78 proof tests in test/totp-encryption.test.mjs (grep/exclusivity/behavioral + Pitfall-3 negative control); full suite 542/542 green.
-- **Next action:** `/gsd-verify-work` for Phase 19, then Phase 20 discuss/plan.
-- **Deviations (19-02):** line anchors had drifted after wave 1 — call sites located by content at ~1663/~1737 instead of 1568/1641; no other deviations.
-- **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, disable route ~1548, auth routes 1371–1740), `totp.js`, `test/migration.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
+- **Last action:** /gsd-verify-work Phase 19 — 7/7 UAT tests passed on live deployment + isolated local container (Test 4 defer path verified with throwaway Docker instance; no prod config touched). Verification refreshed (stale → passed, fresh digest), phase marked complete, transitioned to Phase 20.
+- **Next action:** `/gsd-discuss-phase 20` (or `/gsd-plan-phase 20`), then Phases 21–22. Remember `/gsd-discuss-phase 22` before planning Phase 22.
+- **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, migrateTotpEncryption ~1000–1072, requireTotpSecret ~271, disable route ~1663, verify ~1737), `totp.js`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
