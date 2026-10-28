@@ -13,7 +13,7 @@ This milestone is therefore gap-closure on the v1.3 auth surface, not greenfield
 
 ### TOTP Encryption Closure (ENC)
 
-- [ ] **ENC-01**: On boot, any legacy plaintext `users.two_fa_secret` value (non-`v1:` format)
+- [x] **ENC-01**: On boot, any legacy plaintext `users.two_fa_secret` value (non-`v1:` format)
   is encrypted into the `v1:` envelope idempotently, inside a transaction, with the existing
   pre-migration backup guarantee, and a second boot is a byte-identical no-op
 - [ ] **ENC-02**: Every `decryptTotpSecret` call site fails closed on a malformed/non-`v1:`
@@ -72,7 +72,7 @@ Out of Scope — update docs when rotation lands).
 
 | REQ | Phase | Status |
 |-----|-------|--------|
-| ENC-01 | Phase 19 | Pending |
+| ENC-01 | Phase 19 | Complete (19-01) |
 | ENC-02 | Phase 19 | Pending |
 | REGEN-01 | Phase 20 | Pending |
 | REGEN-02 | Phase 20 | Pending |

@@ -32,7 +32,7 @@ greenfield construction.
 
 Plans:
 **Wave 1**
-- [ ] 19-01-PLAN.md — Boot-time plaintext→`v1:` envelope migration (`migrateTotpEncryption`, trigger-gated, transactional, backup-guaranteed) + ENC-01 tests
+- [x] 19-01-PLAN.md — Boot-time plaintext→`v1:` envelope migration (`migrateTotpEncryption`, trigger-gated, transactional, backup-guaranteed) + ENC-01 tests ✅ 19-01-SUMMARY.md
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 19-02-PLAN.md — Decrypt boundary closure: `requireTotpSecret` wrapper, two call-site swaps, three D-78 proofs (grep/behavioral/exclusivity)
