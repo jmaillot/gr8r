@@ -1,147 +1,142 @@
 # Project Research Summary
 
-**Project:** Gr8r Studio — v1.3 Auth Hardening (TOTP 2FA, QR provisioning, session revocation)
-**Domain:** Self-hosted PM workspace — hand-rolled auth on Node 24 built-ins (`node:sqlite`, zero runtime deps)
-**Researched:** 2026-10-26
-**Confidence:** HIGH
+**Project:** Gr8r Studio — Milestone v1.4 "Auth Completion"
+**Domain:** Self-hosted workspace/PM app (single-file Node server, node:sqlite, zero runtime dependencies) — auth lifecycle gap-closure
+**Researched:** 2026-10-28
+**Confidence:** HIGH (codebase ground truth verified by direct code inspection; standards claims from OWASP/NIST knowledge, MEDIUM)
 
 ## Executive Summary
 
-The three "stubbed" features (sessions page, password change, 2FA) are not half-implemented — **they have no backend at all.** Architecture research confirmed via direct code reads that all three are decorative fields inside the shared workspace JSON document (`sessions: []`, `tfa: false` in `emptyDoc()`), mutated client-side only: the fake QR is a pseudo-random grid, the "revoke" button filters a local array, and password change shows a fake delay + toast. The root cause is architectural: auth state stored in a tenant-shared doc instead of per-user tables. The fix is not three features — it is one re-grounding of auth state into real per-user schema, then building the three flows on top.
+The single most important finding across all four research files is a **ground-truth correction to the milestone brief**: v1.3 already shipped most of what v1.4 was framed around. Direct inspection of `server.js` confirms `encryptTotpSecret`/`decryptTotpSecret` (AES-256-GCM, `v1:<iv>:<tag>:<ct>` envelope, sha256-derived key, fail-closed 503 `masterKeyMissing`) already exist, the disable-2FA route (16-02) already exists with password step-up, TOTP-or-recovery verification, atomic state reset, and throttle budget, and sessions self-revocation exists. **v1.4 is a gap-closure/audit/migration milestone, not a build-from-scratch milestone.** The genuinely missing pieces are small and well-defined: (1) a boot-time plaintext→envelope migration (likely zero rows, but must exist and be byte-identical on second boot), (2) a first-class recovery-code regeneration route, (3) cross-user admin session revocation, (4) verification/e2e/i18n coverage of the existing disable flow.
 
-The recommended approach honors the project's zero-runtime-dependency invariant: TOTP is ~40–60 lines of `node:crypto` (HMAC-SHA1, dynamic truncation per RFC 4226, `timingSafeEqual`, ±1 step window), Base32 is a ~20-line hand-rolled codec (Node has none built-in), and QR generation is a single **vendored, audited MIT file** (`qrcode-generator` 2.0.4's `qrcode.js`) imported as an ES module into the Vite build — NOT hand-written (QR has ~6 algorithm trapdoors: that's how today's fake QR happened) and NOT an npm runtime dep. Session revocation already has its hard half built: opaque DB-backed session rows mean revocation is literally `DELETE FROM sessions WHERE user_id = ? AND token_hash != sha256(current cookie)`.
+The zero-runtime-dependency constraint holds without exception — every feature reduces to `node:crypto`, `node:sqlite` transactions, and new route handlers reusing existing patterns (step-up helper, throttle budgets, central 401 teardown, `ensureColumn` migrations). No new libraries, no new tables, no new schema except possibly one additive operator-flag column. The stack research verdict: **nothing to install; reuse everything verbatim.**
 
-The dominant risks are the classic TOTP/security mistakes, each with a concrete prevention: time-step drift (±1 window minimum), replay (store `last_used_step` per user, same migration), pending-2FA sessions leaking authentication **before** code verification (Pitfall 15 — the headline security trap; no endpoint may treat a pending session as signed-in), self-revocation via "revoke others" forgetting to exclude the current token, and the byte-identical second-boot migration guarantee (columns-and-tables only, no backfills). Recovery codes are mandatory in the same milestone as TOTP enablement — shipping enrollment without them is a lockout factory.
+The two real risks are (a) **the admin privilege-model decision** — Gr8r is multi-tenant with workspace-scoped roles and no instance-admin concept; gating cross-user revocation on the existing `isAdminUser()` would let any workspace admin log out any user on the instance, breaking v1.1 tenancy isolation. This is a discuss-phase decision (instance-operator vs workspace-admin, options: `ADMIN_EMAIL`-derived gate, env-var style, or an `is_instance_admin` flag column) and **must be settled before planning Phase 4**. (b) **MASTER_KEY becomes load-bearing**: losing it bricks 2FA for all users; DEPLOY.md must document the loss runbook.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Add **zero runtime dependencies.** Everything needed is in `node:crypto`, pre-existing schema, or one vendorable file. Explicitly rejected: `otplib@13` (fresh rewrite, API churn, buys HOTP plumbing Gr8r will never call) and `qrcode@1.5.4` as a runtime dep (breaks PROJECT.md core decisions #1–#3; native canvas fallbacks risk the Docker image).
+No changes. Every feature fits existing Node 24 built-ins and existing v1.3 code patterns (see STACK.md for the verified line-by-line inventory).
 
-**Core technologies:**
-- `node:crypto` — TOTP gen/verify via `createHmac('sha1')` + RFC 4226 truncation; `timingSafeEqual` compare; `randomBytes(20)` secrets; optional AES-256-GCM secret encryption-at-rest under a host-derived key
-- Hand-written Base32 (RFC 4648, ~20 LOC, named constant alphabet, known-vector test) — encodes the 32-char secret and decodes it in `otpauth://`
-- Vendored `qrcode.js` (from `qrcode-generator@2.0.4`, MIT, one file) in `src/lib/vendor/` — rendered as inline SVG from the boolean matrix; NOT hand-written
-- Existing `users` / `sessions` tables + `ensureColumn()` migration pattern — additive columns only, guarded creates, no new tables except possibly `login_challenges` (architect's choice) for pre-2FA login state
+**Core technologies (all already in use):**
+- `node:crypto` AES-256-GCM — TOTP envelope crypto — already implemented and verified against Node 24 docs; do not touch.
+- `node:sqlite` transactions — atomic burn-and-replace / admin revoke — the password-change transactional pattern from v1.3 is the template.
+- Env-var `MASTER_KEY` — key management — no KMS/Vault/HSM (anti-feature for a zero-dep single-image app).
+- `node --test` + Playwright + `scripts/i18n-scan.mjs` — existing test/i18n gates extend to all new routes.
 
-**Schema additions (complete list):** `users` + `two_fa_secret`, `two_fa_enabled`, `recovery_codes` (+ replay counter per Pitfall 2), `sessions` + `label`, `last_seen_at` (throttled, ≥5 min per session).
+**Explicitly rejected:** plaintext-decrypt fallback (`?? secret`), scrypt/HKDF on MASTER_KEY, a `revocations` soft-delete table, encrypted (retrievable) recovery codes, key-rotation machinery this milestone (the `v1:` prefix is the future hook).
 
 ### Expected Features
 
-**Must have (table stakes, P1):**
-- Session revocation primitive: keep-current SQL, usable by both sessions page and password change (build once, first)
-- Sessions list: device label + IP + last-seen + "current session" marker, per-row revoke, "log out other sessions" with confirm
-- Password change end-to-end: requires current password, new password works at next login, revokes other sessions atomically, current session survives, honest success copy
-- TOTP enrollment: `otpauth://totp/Gr8r:<email>?secret=...&issuer=Gr8r&algorithm=SHA1&digits=6&period=30` (all params explicit), real scannable QR, **verify-before-enable** (pending secret until a code verifies)
-- Login second step: 6-digit code or recovery code after password (single field, auto-detect format)
-- Recovery codes: 8–10 single-use, hashed at rest (`sha256` per code), shown exactly once, consumable at login and at disable
-- Disable-2FA requires current password
-- Per-user settings migration: remove `tfa`/`sessions` from the workspace doc (`emptyDoc()`, `seed.js`) — flagged Active item from v1.1 audit
-- i18n coverage EN+FR for all new strings/error codes (the `i18n-scan.mjs` build gate fails otherwise — hard dependency, not polish)
+**Must have (v1.4, per FEATURES.md):**
+- Disable-2FA gap closure — verify 16-02 covers server-side password step-up, atomic wipe of `two_fa_*` + recovery codes + pending `login_challenges`, keep-current/revoke-others session policy, activity verb. Build only what's missing (e2e + i18n most likely).
+- Boot-time plaintext→envelope TOTP migration — `migrateTotpSecrets()` in `openDb()`, skip-and-warn without MASTER_KEY, byte-identical second boot.
+- Recovery-code regeneration — password step-up **plus live TOTP code** (a recovery code must never authorize its own replacement), atomic burn-and-replace, show-once UX reusing enrollment components, own throttle budget.
+- Admin session revocation — list + revoke any user's sessions, own-session exclusion, existing central 401 teardown fires, audit entry, privilege gate per the decision below.
 
-**Should have (P2):** relative "last used X ago" via `Intl.RelativeTimeFormat`; reusable re-auth endpoint primitive; remember-this-device (defer hook, ship later).
+**Should have (cheap differentiators):** disable requires password AND live code; "N unused codes destroyed" honest messaging; in-app notification to revocation targets; key-version prefix discipline (already in place).
 
-**Defer / anti-features:** WebAuthn/passkeys, SMS/email OTP (no mailer in image), geolocation on sessions, live session tracking, org-wide 2FA mandate, password histories/zxcvbn, admin revoking members' sessions, remember-me tiers (deliberately one tier for v1.3 — Pitfall 11).
+**Defer (v2+):** instance-wide revoke-all (needs instance-admin concept), WebAuthn/passkeys, MASTER_KEY rotation tooling.
+
+**Anti-features (refuse):** admin disabling a user's 2FA directly; plaintext secret "for admin recovery"; soft-disable grace periods; revocation by IP/user-agent matching; always-visible recovery-code counts.
 
 ### Architecture Approach
 
-The settings UI (`settings.js:378-421`) and all its strings already exist — the work is **rewiring data sources and actions plus new endpoints.** New route handlers sit beside `/api/auth/*` in `server.js`: `GET /api/auth/sessions`, `POST /api/auth/sessions/revoke-others`, `POST /api/auth/password-change` (verify old → rehash → revoke-others **inside one `transaction()`**), `POST /api/auth/2fa/{setup,verify,disable}` (setup/verify/disable password-gated), and `POST /api/auth/login/2fa` consuming a short-lived pending challenge. Login branches: valid password + `two_fa_enabled=0` → session; enabled → challenge token, **no session cookie until code verified** (Option A pattern: a pending row that no endpoint treats as identity except the verify/logout path — applies to *every* `requireUser`/`requireWorkspace` consumer, incl. the `/w/:slug/file/:id` file route and invite-accept fallback). Client: new `src/lib/totp.js`, `src/lib/qr.js`, `src/lib/ua-labels.js`; modify `api.js`, `actions.js`, `settings.js`, `auth.js`; delete doc fake-fields; extend `test/migration.test.mjs` for byte-identical second boot.
+All four features are thin extensions of the v1.3 auth surface — no new tables, no new crypto, one small helper (`migrateTotpSecrets`), one new small gate helper, two new routes, one route verified/extended (see ARCHITECTURE.md for component table and flow diagrams).
 
-**Invariants to pin in writing at investigation phase:** identity re-derived from DB every request (never memoize `currentUser`); tokens are pure random entropy, never password-derived (Pitfall 13); revoke keeps current via `token_hash !=`; sameOrigin + `tooMany` guard-first on every new mutation endpoint; scrypt runs once per password-change request.
+**Major components:**
+1. `migrateTotpSecrets()` in `openDb()` — one-shot encrypt of non-`v1:` rows; no-op on second boot; warn-and-skip without MASTER_KEY (login already fail-closed).
+2. `POST /api/auth/tfa/recovery` — regeneration route; inherits MASTER_KEY fail-closed 503 for free via `decryptTotpSecret`.
+3. `GET`/`DELETE /api/admin/sessions[/:userId]` — cross-user revocation; reduces to existing `sessions`-table deletes; victims get the existing mid-session 401 teardown.
+4. `POST /api/auth/tfa/disable` — exists; verify against the brief's bar and add e2e/i18n coverage.
 
 ### Critical Pitfalls
 
-1. **Pending 2FA session = auth bypass (Pitfall 15, the dangerous one)** — no cookie/identity before TOTP verification; test every endpoint family returns 401 for a pending session; short challenge lifetime (~5 min), never `SESSION_DAYS`.
-2. **Revocation self-DoS (Pitfall 9)** — the CLI precedent deletes *all* rows including current; the endpoint must exclude the current `token_hash`; test "second cookie dead, caller alive."
-3. **TOTP window + replay** — accept counter−1..+1 (RFC 6238 §5.2); store the matched counter per user and reject ≤ it (same migration, never bolted on later); `timingSafeEqual` with length validation *before* the call (it throws on unequal length).
-4. **Secret/recovery code storage** — TOTP secret AES-256-GCM under `MASTER_KEY`-derived key, fail closed if unset; recovery codes `sha256`-hashed individually, single-use via `used_at` + changes-count (race-safe, auditable), shown exactly once, one undifferentiated error code (`invalidRecoveryCode`).
-5. **Migration no-op + shared-field removal (Pitfall 21)** — columns/tables only; no user-data backfill at boot; extend the migration test. The `tfa`/`sessions` doc-field removal and the per-user migration are the same task, not two.
-
-Also load-bearing: otpauth URI completeness (SHA1/6/30 explicit, correct issuer escaping — silent scan failures are common); throttle reuse with explicit per-endpoint constants and no budget reset between password and 2FA steps; i18n catalogue keys as a per-phase deliverable; QR must be vendored, never hand-rolled.
+1. **Plaintext fallback / lazy migration** (P1) — decryptor must reject anything without the `v1:` marker (fail-closed on format, never fall-open); one-shot transactional boot migration; no `?? secret` anywhere.
+2. **Privilege paradox on admin revocation** (P6) — never gate on `isAdminUser()` alone; cross-tenant/owner-immunity rules required; the instance-operator-vs-workspace-admin decision is a discuss-phase blocker.
+3. **Recovery code authorizing its own regeneration** (Anti-Pattern 3) — step-up must be fresh password + live TOTP only.
+4. **Fail-closed 503 with side effects** (P7) — the 503 path must still consume throttle budget and must not touch the replay guard; decrypt only at a single boundary helper; v1.3 fixture tests pass unchanged.
+5. **Cross-feature ordering** (P8) — encryption migration first, then regeneration, then disable closure, then admin revocation; never delete a failing v1.3 test; close with one cross-feature e2e (enroll→regenerate→login→disable→re-enroll→revoke, EN+FR).
 
 ## Implications for Roadmap
 
-Suggested phase structure (extends the milestone's phased plan; research agrees substantially with ARCHITECTURE.md §4 build order):
+Based on research, suggested phase structure:
 
-### Phase 1: Investigation & Invariant Pinning (Investigation)
-**Rationale:** All three features share one root cause; confirm it and pin the contract before building.
-**Delivers:** Confirmed findings (no endpoints, doc-field stubs), decisions: pending-session pattern (Option A/B), `login_challenges` table vs pending row, QR strategy (vendored `qrcode-generator` file — recommended), TOTP secret encryption-at-rest on/off (fail-closed `MASTER_KEY`), throttle constants table, module placement. Removes fake `sessions`/`tfa` doc fields from `emptyDoc()` and `seed.js`.
-**Avoids:** Pitfalls 15, 19, 21, 22; establishes the Pitfall 10/13 invariants.
+### Phase 1: TOTP Encryption Audit + Plaintext Migration
+**Rationale:** Everything touching `two_fa_secret` must run on a single decrypt surface before any route work; the migration is testable in isolation against `test/migration.test.mjs` and every later phase inherits its fail-closed semantics. Do it first so tests never see plaintext rows.
+**Delivers:** `migrateTotpSecrets()` boot pass, decrypt-call-site audit (every site fails closed before mutation), boot-time MASTER_KEY validation, DEPLOY.md key-lifecycle + loss runbook, migration tests (first boot encrypts, second boot byte-identical, restored-backup boots).
+**Addresses:** Encryption-at-rest gap closure; the brief's "migration" obligation.
+**Avoids:** Pitfalls 1, 2, 3, 7.
 
-### Phase 2: Schema + Session Truth & Revocation
-**Rationale:** The revocation primitive is the shared dependency — password change reuses it; smallest vertical slice; unblocks the sessions page verification surface.
-**Delivers:** `ensureColumn` additions (`users.two_fa_*`, `recovery_codes`; `sessions.label`, `last_seen_at`), `login_challenges` guarded create, `GET /api/auth/sessions`, `POST /revoke-others` (keep-current), wire `actions.js`/`settings.js` to real API, UA label stamping, throttled last-seen, i18n keys.
-**Avoids:** Pitfalls 9, 10, 11; migration-no-op (21).
+### Phase 2: Recovery-Code Regeneration
+**Rationale:** Smallest new route; depends on Phase 1's decrypt path; reuses the enable route's transaction and response shape verbatim; warms up the step-up + throttle + i18n pattern used by later phases.
+**Delivers:** `POST /api/auth/tfa/recovery` (fresh password + live TOTP step-up, atomic delete-all + insert-all in one transaction, pending-challenge invalidation, show-once response, `Cache-Control: no-store`, new throttle budget), UI reuse of enrollment show-once components, tests including concurrent-burn race.
+**Addresses:** Regeneration gap (the genuine missing endpoint).
+**Avoids:** Pitfalls 5, 8; Anti-Pattern 3.
 
-### Phase 3: Password Change (end-to-end)
-**Rationale:** Nearly free once the revocation primitive exists; highest trust-value fix (form currently lies).
-**Delivers:** `POST /api/auth/password-change` — verify old, single shared `validatePasswordStrength`, rehash + revoke-others in one `transaction()`, honest success toast, e2e: new password works at login, other sessions 401, current survives.
-**Avoids:** Pitfalls 12, 13, 14.
+### Phase 3: Disable-2FA Verification & Closure
+**Rationale:** Mostly verification of shipped 16-02 plus closure of whatever the diff reveals (most likely: pending-challenge teardown, e2e, i18n keys); benefits from Phase 2 because disable and regeneration UI are siblings on the settings 2FA card.
+**Delivers:** Verified disable contract (server-side password step-up, atomic `two_fa_*` + recovery + challenge wipe, keep-current/revoke-others policy, activity verb), e2e + EN/FR coverage, re-enroll-immediately-after test.
+**Addresses:** Disable-2FA table stakes; honest-messaging UX.
+**Avoids:** Pitfall 4 (verify recovery codes are NOT accepted for disable — or make that an explicit documented policy decision), ghost-2FA-state bug class.
 
-### Phase 4: TOTP Core + Enrollment
-**Rationale:** Widest slice, but independent of Phase 3's surface; core crypto first so enrollment is thin.
-**Delivers:** `src/lib/totp.js` (±1 window, replay counter, timingSafeEqual, base32 codec + known-vector tests), `src/lib/qr.js` (vendored encoder → inline SVG, copyable secret fallback), `/2fa/setup` + `/verify` (pending→enabled flip) + `/disable` (password-gated), recovery codes (hashed, shown once, single-use), settings-page transformation.
-**Avoids:** Pitfalls 1–8, 16, 17, 19, 20.
-
-### Phase 5: Login Challenge Flow + Hardening
-**Rationale:** The login route should change once, coherently, only after enrollment exists.
-**Delivers:** Login branch for `two_fa_enabled`, pending challenge creation/promotion, `POST /login/2fa` (TOTP or recovery burn), throttle integration (same budget across password→2FA steps), per-endpoint constants, 401-matrix test for pending sessions across all endpoint families.
-**Avoids:** Pitfalls 15, 18, 22.
-
-### Phase 6: Verification, i18n & Migration Proof
-**Rationale:** Cross-cutting gates land last, applied to the whole surface.
-**Delivers:** Extended `test/migration.test.mjs` (fresh + pre-locale DBs; second boot byte-identical; no auth keys in workspace JSON), full e2e in both locales, real-device QR UAT (Google Authenticator + one other), "looks-done-but-isn't" checklist from PITFALLS.md as explicit verification, FR sweep, DEPLOY notes (incl. `MASTER_KEY` note if encryption-at-rest enabled).
-**Avoids:** Pitfall 20, 21 residuals.
+### Phase 4: Admin Session Revocation
+**Rationale:** Independent of crypto but **blocked on the privilege-model decision** (instance-operator vs workspace-admin) which must be resolved in discuss-phase before planning; consumes the gate/throttle/audit patterns established in Phase 2.
+**Delivers:** Admin-gated session list + cross-user revoke routes, own-session exclusion, central 401 teardown fires for victims, audit entry (or documented deferral to server logs), privilege-matrix tests (owner immunity, cross-tenant block, self-revocation).
+**Addresses:** The other genuine gap; operator trust.
+**Avoids:** Pitfall 6 (privilege paradox — the top architectural risk of the milestone).
 
 ### Phase Ordering Rationale
-- **Investigation first** — three symptoms, one root cause; building before confirming risks three special-cased fixes with no shared foundation.
-- **Revocation before password change** — password-change-revokes-others is literally the same SQL; building the primitive once removes both feature's hardest half.
-- **TOTP before login challenge** — verification needs something to verify; keeping the login-route edit in one phase avoids two half-edits of the throttled login path.
-- **Recovery codes ship with enrollment** — no-recovery enrollment is a lockout factory; non-negotiable coupling per FEATURES.md.
-- **Per-user doc-field removal lands with schema work (Phase 2)** — any later is shared-tenant auth state shipping wrong.
+
+- **Dependency order, not feature order:** encryption migration touches `openDb()` and defines the decrypt surface; regeneration and disable both read/write the secret and must be written against the encrypted reality, not retrofitted (Pitfall 8).
+- **Risk ordering:** the migration phase is the highest-certainty, highest-leverage work; the privilege decision is the only unknown, so it sits last where discuss-phase has maximal codebase context.
+- **Integration closure:** a final cross-feature e2e pass (can be part of Phase 4 or a short Phase 5) covering enroll→regenerate→login→disable→re-enroll→revoke in one Chromium flow, EN+FR, with the rule that no v1.3 test may be deleted.
 
 ### Research Flags
 
-Needs dedicated research/decisions at plan time:
-- **Investigation phase (1):** pending-session pattern choice, `MASTER_KEY`/encryption-at-rest decision, QR vendor source pinning, throttle constants — Phase-13-scoped decisions, not repeat research.
-- **Phase 4 (TOTP/QR):** vendor QC of the chosen `qrcode.js` file (license header, ESM wrapping compat with Vite build); otpauth fixture-vector test worth designing carefully.
+Phases likely needing deeper research during planning:
+- **Phase 1:** moderate — audit must enumerate *every* decrypt call site; verify the enrollment/enable path fails closed too (login path already verified at line ~1641).
+- **Phase 4:** the privilege-model decision requires a discuss-phase round with the owner; also settle the audit-log location question (workspace activity log vs server logs for instance-level actions).
 
-Standard patterns (skip further research):
-- **Phases 2, 3, 5:** revocation SQL, scrypt change, throttle reuse — all precedents exist in `server.js`; patterns are fully pinned by this research.
-- **Phase 6:** migration-test extension and i18n gate mechanics are established v1.1/v1.2 machinery.
+Phases with standard patterns (skip research-phase):
+- **Phase 2:** regeneration is the enable route's transaction behind a new route; all patterns exist.
+- **Phase 3:** verification of shipped code + e2e/i18n; well-documented OWASP patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | npm versions verified against registry 2026-10-26; Node crypto behavior verified against nodejs.org docs; existing schema read directly in `server.js` |
-| Features | HIGH | Flows converged across GitHub/GitLab/Nextcloud/Gitea + OWASP cheat sheets; minor caveat: web search was degraded this session (MEDIUM-HIGH on fine details, HIGH on flows) |
-| Architecture | HIGH | Every claim cites a file/line read today; migration machinery proven and test-anchored |
-| Pitfalls | HIGH | Grounded in RFC 6238/4226/4648, otpauth spec, OWASP, and direct reads of the throttle/scrypt/session machinery |
+| Stack | HIGH | Verified against shipped code and Node 24 docs (Context7); zero additions needed. |
+| Features | HIGH | OWASP-backed table stakes; comparable-app behavior consistent; only deployment details MEDIUM. |
+| Architecture | HIGH | Ground truth read directly from `server.js`; external standards claims MEDIUM (web search blocked). |
+| Pitfalls | HIGH | Standard security-engineering failure modes mapped to verified v1.3 ground truth. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Web search was partially unavailable** during feature research (engine rate-limits): reference the OWASP MFA cheat sheet and a real-device QR test during verification even though the flows are standard.
-- **TOTP secret encryption-at-rest is a product decision, not settled research** — Stack and Pitfalls differ in tone (optional-but-recommended vs fail-closed). Investigation phase must decide once, with DEPLOY.md consequences documented.
-- **Pending-session mechanism (Option A pending row vs dedicated `login_challenges` table)** — both viable; Architecture recommends one, Pitfalls the other variant. Investigation decides; either satisfies the invariant if tested as specified.
-- **Recovery-code "regenerate" action** — out of scope for v1.3 (research agrees); document explicitly so it isn't quietly added.
-- **Session-count/hash growth indexing** (`sessions` composite lookups with new filters) — trivial at this scale; monitor, no action needed.
+- **Admin privilege model (BLOCKING for Phase 4):** instance-operator vs workspace-admin. Options documented in ARCHITECTURE.md Pattern 3 — (a) `isAdminUser()` gate (rejected: tenant-boundary privilege inflation), (b) `ADMIN_EMAIL`-derived instance operator, (c) additive `is_instance_admin` flag column. Resolve in discuss-phase with the owner.
+- **Audit-log location for instance-level actions:** activity log lives in workspace documents; instance-level revocation may have no workspace to log into. Decide: log to target user's workspaces, or defer to server logs for v1.4.
+- **Disable via recovery code:** line ~1575 of `server.js` suggests the shipped disable route accepts recovery codes; FEATURES/PITFALLS argue recovery codes must never authorize disable. This is a policy conflict to resolve (tighten vs document) in Phase 3 discussion.
+- **Plaintext-row reality check:** encryption shipped in v1.3 and columns were dormant before, so likely zero plaintext rows exist — but the migration must still be built for safety (restored backups, hypothetical old installs). ARCHITECTURE recommends skip-and-warn without MASTER_KEY; confirm the fail-closed policy with the owner.
+- **Standards clause citations:** OWASP/NIST claims are from established knowledge (search was blocked); verify exact clause numbers if cited externally during planning.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct reads: `server.js` (schema :84-132, migrations :134-156, scrypt :166-190, transaction/emptyDoc :747-789, auth routes :1225-1320, CLI/sweep :2158-2174); `src/actions/actions.js` :2351-2427 (stubs); `src/pages/settings.js` :378-437 (fake QR/codes); `src/data/seed.js` :498-527; `src/core/api.js` :137-202; `test/migration.test.mjs`; `.planning/PROJECT.md`
-- RFC 6238 (TOTP §5.2 window), RFC 4226 (HOTP truncation), RFC 4648 (base32), Google Authenticator KeyUriFormat wiki (otpauth URI)
-- nodejs.org `crypto` docs (Node 24/26): HMAC, `timingSafeEqual`, `createCipheriv`, encodings list (no Base32)
-- npm registry 2026-10-26: `qrcode-generator@2.0.4` (MIT), `qrcode@1.5.4`, `otplib@13.5.0`, `@otplib/preset-default@12.0.1`
+- Codebase inspection — `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, disable route 1548, isAdminUser 356, auth routes 1371–1740), `totp.js` contracts, `package.json`/`Dockerfile`, `test/migration.test.mjs` — ground truth for all four features.
+- Context7 `/websites/nodejs_latest-v24_x_api` (crypto.html) — GCM key/IV/auth-tag semantics, verified to match shipped implementation.
 
-### Secondary (MEDIUM-HIGH confidence)
-- OWASP Authentication + Session Management cheat sheets (fetch confirmed for session; MFA fetch degraded by search outage — pattern is standard)
-- Mainstream-product behavior convergence: GitHub, GitLab, Nextcloud, Gitea, Bitwarden, Devise/Django/Laravel norms
+### Secondary (MEDIUM confidence)
+- OWASP MFA, Authentication, and Session Management Cheat Sheets — disable-as-sensitive-action, reauthentication after risk events (fetched 2026-10-28).
+- NIST SP 800-63B (AAL2), OWASP ASVS 2.5.3/2.8, RFC 6238 — step-up, factor lifecycle (established knowledge; search blocked by anti-bot).
+- Nextcloud server-side encryption + IACR eprint 2020/1439; Microsoft Entra "Revoke sessions" semantics; GitHub/GitLab/Gitea/Vaultwarden comparable behavior.
+
+### Tertiary (LOW confidence — validate during planning)
+- Exact current UI details of comparable apps (MEDIUM, could have drifted).
+- Assumption that zero plaintext `two_fa_secret` rows exist in the wild.
 
 ---
-*Research completed: 2026-10-26*
+*Research completed: 2026-10-28*
 *Ready for roadmap: yes*

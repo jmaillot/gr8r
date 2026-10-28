@@ -1,312 +1,176 @@
-# Architecture Patterns — v1.3 Auth Hardening Integration
+# Architecture Research — v1.4 Auth Completion integration
 
-**Domain:** Self-hosted PM workspace (Node 24 built-ins, `node:sqlite`, zero runtime deps)
-**Researched:** 2026-10-26 (from real code: `server.js` 2 207 lines, `src/`, `test/`, `src/locales/`)
-**Overall confidence:** HIGH — every claim below cites a file/line read today.
+**Domain:** Self-hosted PM app (single-file Node server, node:sqlite, zero runtime deps) — auth-lifecycle completion features
+**Researched:** 2026-10-28
+**Confidence:** HIGH (codebase ground truth read directly from `server.js`; standards claims from OWASP ASVS 2.5/2.8, NIST SP 800-63B, RFC 6238 — web search was blocked by anti-bot, so external claims are from established standards knowledge, MEDIUM confidence)
 
----
+## Critical Ground-Truth Correction (read this first)
 
-## 1. Root Cause of the Three Stubs (the premise the investigation phase must confirm)
+The milestone brief says "two_fa_secret stored plaintext today" and implies disable-2FA is missing. **The code says otherwise.** Direct inspection of `server.js` (v1.3 shipped tree):
 
-The three features are not "half-implemented" — **they have no backend at all.** All three are
-driven by decorative fields inside the workspace *document* JSON, and the settings actions
-mutate that in-memory document only, never calling any server endpoint.
+- `encryptTotpSecret()` / `decryptTotpSecret()` **already exist** (lines ~235–262): AES-256-GCM, `v1:<iv>:<tag>:<ct>` envelope, sha256-derived key from `MASTER_KEY`, fail-closed 503 `masterKeyMissing` (D-05/D-06) on both `/api/auth/tfa/enable` and `/api/auth/tfa/login`.
+- A full disable route **already exists**: `POST /api/auth/tfa/disable` (line 1548) with password step-up, TOTP-or-recovery verification, distinct throttle budget (`tfa-disable|<userId>`, 5/15 min), atomic reset of `two_fa_enabled/secret/last_step` + recovery-code wipe, and MASTER_KEY fail-closed 503.
+- `/api/auth/sessions` GET, per-row revoke and revoke-others exist — but **self-scoped only**. There is no route where one user revokes another's sessions, and no instance-admin concept beyond `ADMIN_EMAIL` first-run seeding and an `isAdminUser()` helper (line 356: user is owner/admin of ≥1 workspace).
 
-| Evidence | Location |
-|----------|----------|
-| `sessions: []` and `tfa: false` are **doc fields** of the workspace JSON | `server.js:774-775` (`emptyDoc`) |
-| Seed ships 3 fake session rows as doc data | `src/data/seed.js:509-513` |
-| `savePassword`: validates locally, then `loadingBtn(... 800, ...)` fake delay → toast. **No `api.*` call** | `src/actions/actions.js:2351-2370` |
-| `revokeSession` / `revokeAll`: only `D().sessions = D().sessions.filter(...)` — client-local doc mutation | `src/actions/actions.js:2371-2376, 2377-2390` |
-| `verify2fa`: sets `D().tfa = true` locally; `disable2fa` symmetric | `src/actions/actions.js:2400-2427` |
-| QR is a fake 11×11 grid: `(i * 7919) % 13 < 6` pseudo-random pixels | `src/pages/settings.js:410-418` |
-| Recovery codes are 6 hardcoded strings (`7KQ2-M8PX`…) | `src/pages/settings.js:408` |
-| `PATCH /api/auth/me` is the **only** auth PATCH; reads only `body.locale` | `server.js:1270-1281` |
-| No `POST /api/auth/password*`, `GET/DELETE /api/auth/sessions*`, `POST /api/auth/2fa*` exists anywhere | grep of `server.js` routes (§3) |
+**Implication:** the milestone scope must be re-derived from what planning verifies against this tree, not from the brief's framing. The genuinely missing pieces are: (1) plaintext-secret migration (for installs that enabled 2FA before the envelope — likely zero rows, but the migration must exist for safety), (2) recovery-code regeneration as a first-class route, (3) admin/operator session revocation across users, (4) e2e/i18n coverage of the existing disable flow. Each is small; the risk is in *integration details*, not new machinery.
 
-This explains the milestone symptom precisely: the "disconnect other sessions" button is
-`disabled` when `d.sessions.length <= 1` (fake seed shows 3 rows so the button is enabled, but
-revoking it just filters a local array and does nothing server-side), and the QR is illegible
-because it is drawn from a hash function, not a real secret.
+## Recommended Architecture
 
-Additional finding the investigation phase must decide on: the fake `sessions`/`tfa` doc fields
-should be **removed from `emptyDoc()` (`server.js:774-775`), `seed.js`, and `fromServer/merge`
-paths**, because `normalizeDoc`/`mergeClientDoc` will otherwise keep re-materializing them.
+### System Overview
 
----
-
-## 2. Current Auth Data Layer (what exists today)
-
-### 2.1 Tables (`server.js:84-132`)
-
-```sql
-create table if not exists users (
-  id text primary key,
-  email text not null unique collate nocase,
-  name text not null,
-  password_hash text not null,     -- scrypt: "scrypt$16384$8$1$<salt b64>$<key b64>" (:166-170)
-  member_id text,
-  created_at integer not null,
-  last_login_at integer,
-  locale text                      -- added by v1.2 additive migration (:153)
-);
-create table if not exists sessions (
-  token_hash text primary key,     -- sha256(cookie token) — the token itself is never stored
-  user_id    text not null references users(id) on delete cascade,
-  created_at integer not null,
-  expires_at integer not null
-);
-create index if not exists sessions_expiry on sessions(expires_at);
+```
+┌────────────────────────── server.js route handlers (existing) ──────────────────────────┐
+│  /api/auth/tfa/enroll · enable · disable (exists) · [NEW] tfa/recovery                  │
+│  /api/auth/sessions (self) · [NEW] /api/admin/sessions (cross-user)                     │
+│  /api/auth/login → login_challenges → /api/auth/tfa/login (unchanged)                   │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│  Helpers (existing → modified)                                                          │
+│  encryptTotpSecret/decryptTotpSecret (exists)   · requireWorkspace / requireAuth         │
+│  tooMany(key,n,ms) throttle budgets             · fail(res,code,status)                 │
+│  [NEW] migrateTotpSecrets() in openDb()         · [NEW] admin-gate helper               │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│  node:sqlite (existing)                                                                 │
+│  users.two_fa_*   sessions   recovery_codes   login_challenges   (no schema change       │
+│  needed — all four features fit existing tables/columns)                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Key facts:
-- Sessions are **real DB rows already** (opaque token → `token_hash = sha256(token)`,
-  `server.js:1122-1132` `currentUser()`). Listing + revocation is therefore a *query shape*
-  problem, not a redesign: the table already supports `where user_id = ?`.
-- Sessions carry **no device/label/last-seen column** today — the fake UI data (`dev`, `loc`,
-  `at`, `cur`) lives only in the doc.
-- Whole-document mutation runs inside `transaction()` (`begin immediate`, rollback on throw —
-  `server.js:747-757`); new multi-statement endpoints (password change) must reuse it.
-- Expired sessions are purged hourly (`server.js:2173-2174`).
-- Login is same-origin-guarded, rate-limited per `ip|email` (429, 15 min window,
-  `server.js:1225-1253`), uses `DUMMY_HASH` to equalize timing on unknown accounts
-  (`server.js:190`). The 2FA challenge must flow through this same throttle.
-- `userPayload()` (`server.js:253-260`) exposes `id, email, name, locale, workspaces` — no
-  auth-zone fields. Whatever we add (2FA enabled flag, etc.) extends here.
+### Component Responsibilities — new vs modified
 
-### 2.2 Migration machinery (elder sibling, proven)
+| Component | Status | Responsibility |
+|-----------|--------|----------------|
+| `encryptTotpSecret`/`decryptTotpSecret` | **exists, unchanged** | Envelope crypto; null on missing/undecryptable MASTER_KEY |
+| `migrateTotpSecrets()` | **NEW** (in `openDb()`, after `ensureColumn` block) | One-time: any `users.two_fa_secret` not starting with `v1:` and non-empty → encrypt. Fail-closed semantics below |
+| `POST /api/auth/tfa/recovery` | **NEW route** | Regenerate recovery codes: password step-up + live TOTP verification, burn-and-replace in one transaction |
+| `POST /api/auth/tfa/disable` | **exists — verify, extend** | Planning checks the v1.3 Phase 16 disable contract (T-16-14) against the brief's expectations; likely gaps: recovery-code verification on disable when TOTP unavailable, e2e + i18n keys |
+| `DELETE /api/admin/sessions` (+ GET list) | **NEW route(s)** | Operator-revoked sessions across users; admin-gated |
+| admin-gate helper | **NEW** (small) | Decision required (see Admin section): `isAdminUser()` (any owner/admin anywhere) vs instance-admin only |
+| `recovery_codes` table | **unchanged** | Regeneration is `delete where user_id` + reinsert inside the existing transaction pattern |
+| `sessions` table | **unchanged** | Cross-user revoke is just `delete from sessions where user_id in (...)` — the mid-session 401 teardown from v1.3 Phase 14 already handles honest sign-out on revoked clients |
+| i18n catalogues (EN+FR) | **modified** | New keys for regenerate + admin-revocation UI; `scripts/i18n-scan.mjs` build gate enforces |
+| throttle budgets | **modified (add key)** | New budget for `tfa-recovery|<userId>`, same D-11 band (5/15 min) |
 
-- **`ensureColumn()` (`server.js:134-137`)** — additive, idempotent column migration used for
-  `workspaces.slug/color`, `memberships.member_id`, `invites.workspace_id`, `users.locale`
-  (`server.js:149-153`). This is the pattern to extend.
-- **`migrateTenancy()` (`server.js:853-866`)** — one-shot, backup-first migration:
-  `vacuum into 'gr8r-premultitenant-<stamp>.db'` before the first write.
-- **`test/migration.test.mjs`** proves: backup exists, data preserved, and **a second boot is a
-  byte-identical no-op** (anchored on `pragma table_info` snapshots captured pre-boot).
-- The no-op guarantee holds because `SCHEMA` is all `create table/index if not exists` and
-  `ensureColumn` checks `pragma table_info` before `alter table`. Any new column added via
-  `ensureColumn` automatically inherits this; any new **table** must use a guarded create.
+## Architectural Patterns
 
----
+### Pattern 1: Envelope migration at boot (decrypt-then-reencrypt, with a fail-closed policy decision)
 
-## 3. Recommended Integration Design
+**What:** a `migrateTotpSecrets()` pass in `openDb()`: `select id, two_fa_secret from users where two_fa_enabled = 1 and two_fa_secret is not null and two_fa_secret not like 'v1:%'`, re-encrypt each. Because `encryptTotpSecret` returns null without `MASTER_KEY`, the migration must define behavior: recommended — **skip silently + log one warning** (leave the plaintext row in place; login/enable already fail-closed 503 per D-06, so the plaintext stays inert until the admin sets MASTER_KEY, at which point the next boot encrypts it). This preserves the project's "boot never mutates semantics unexpectedly" posture (the v1.2 decision that "the server never writes the locale at boot" is the analogous precedent — here a boot write is required, but it must be idempotent and never destructive).
 
-### 3.1 Schema changes (small, additive, no-op-safe)
+**When to use:** always; guard it so second boot is a no-op (the `not like 'v1:%'` predicate delivers the byte-identical-second-boot guarantee the migration tests assert — extend `test/migration.test.mjs`).
+
+**Trade-offs:** boot-time encryption couples DB mutation to MASTER_KEY presence. Alternative (lazy migration on next successful decrypt) spreads plaintext lifetime over time and is harder to test. Boot-time is preferred: testable, one pass, matches `migrateTenancy()` precedent.
 
 ```js
-ensureColumn(db, 'users',   'two_fa_secret',   'text');     // base32 (RFC 6238), null = never set up
-ensureColumn(db, 'users',   'two_fa_enabled',  'integer');  // 0 until the 6-digit code is verified
-ensureColumn(db, 'users',   'recovery_codes',  'text');     // JSON array of sha256 hashes, null = none
-ensureColumn(db, 'sessions','label',           'text');     // device string from User-Agent at login
-ensureColumn(db, 'sessions','last_seen_at',    'integer');
-```
-Precedent: `users.locale` (`server.js:153`). No `migrateTenancy()`-style backup needed for
-`ensureColumn` defaults (v1.2 set that precedent: nullable column + server never writes at boot
-— PROJECT.md Decision 4). **No new tables required** — recovery codes go in a `users` column
-(hashes only), and the 2FA login challenge is handled by a short-TTL pending session (§3.4).
-
-Deliberate decision to encode in the plan: `two_fa_enabled` is separate from a non-null
-`two_fa_secret`, so "secret generated but not yet confirmed" is distinguishable from "on"
-(needed for setup-then-abandon flows) — and the second boot changes nothing for DBs where the
-columns already exist.
-
-### 3.2 Session surface (new endpoints, modified bootstrap)
-
-**New components** — route handlers in `server.js` (place beside the `/api/auth/*` block,
-`server.js:1225-1320`) and client methods in `src/core/api.js` (which today only has
-`me/login/signup/logout/me PATCH`, `src/core/api.js:137-202`):
-
-| Endpoint | Behavior |
-|---|---|
-| `GET /api/auth/sessions` | `select rowid, user_id, created_at, expires_at, label, last_seen_at from sessions where user_id = ? and expires_at > ?`; derive `cur` by comparing `token_hash = sha256(cookie)` server-side. Never expose `token_hash`. |
-| `POST /api/auth/sessions/revoke-others` | `delete from sessions where user_id = ? and token_hash != sha256(cookie)` — single statement, `sameOrigin`-guarded. Returns `{ sessions }` so the client re-renders. |
-| `DELETE /api/auth/sessions/:id` (by rowid) | `delete ... where rowid = ? and user_id = ?` (user_id in WHERE prevents revoking another user's session). Optional; "revoke-others" satisfies the milestone target. |
-
-**Modified:** `label` is stamped at login (parse `User-Agent` into a short string, e.g.
-"MacBook · Chrome" via a tiny server-side `ua` helper); `last_seen_at` updated in
-`currentUser()` (`server.js:1122-1132`) **but throttled** (write at most once per 5 min per
-session) to avoid a synchronous SQLite write every request.
-
-**Modified (cleanup):** delete `sessions`/`tfa` from `emptyDoc()` (`server.js:774-775`) and
-`seed.js:509-514`; the settings page reads its data from `GET /api/auth/sessions` +
-`/api/auth/me` instead of `D().sessions`.
-
-### 3.3 Password change (new endpoint, atomic)
-
-`POST /api/auth/password-change { currentPassword, newPassword }`:
-
-```
-requireUser → sameOrigin guard → throttle reuse (per ip|user, like login :1235)
-currentPassword must verifyPassword(...) against user.password_hash (:172-187)
-  (use DUMMY_HASH for unknown-user uniformity only if email lookup was needed — here the
-   session already pins the user, so straight verify; add a small artificial delay-stable
-   path: verify against password_hash always spends the same work)
-newPassword policy must mirror signup (:1296): >=10 chars AND /[0-9\W]/
-inside transaction() (:747):
-  update users set password_hash = hashPassword(new) where id = ?
-  delete from sessions where user_id = ? and token_hash != sha256(current cookie)
+function migrateTotpSecrets(db) {
+  const rows = db.prepare(
+    "select id, two_fa_secret from users where two_fa_enabled = 1 " +
+    "and two_fa_secret is not null and two_fa_secret != '' " +
+    "and two_fa_secret not like 'v1:%'").all();
+  if (!rows.length) return;
+  if (!MASTER_KEY) { console.warn(`[auth] ${rows.length} plaintext TOTP secret(s); set MASTER_KEY to encrypt`); return; }
+  const upd = db.prepare('update users set two_fa_secret = ? where id = ?');
+  for (const r of rows) { const env = encryptTotpSecret(r.two_fa_secret); if (env) upd.run(env, r.id); }
+}
 ```
 
-The last two statements are exactly what the CLI already does destructively
-(`--set-password`, `server.js:2158-2161`) — minus the "keep the caller's session" condition.
-That condition is the one behavioral nuance to test explicitly.
+### Pattern 2: Burn-and-replace regeneration = one transaction, step-up before it
 
-**Modified:** `A.savePassword` (`actions.js:2351-2370`) → real `api.changePassword(...)` call;
-error rendering via the stable-code path (`err.passwordWeak` etc. — codes already exist in the
-i18n layer per PROJECT.md Decision 7).
+**What:** `POST /api/auth/tfa/recovery`: require `two_fa_enabled`, verify current password (existing scrypt step-up helper from password-change and tfa/disable), then **live TOTP code** (not a recovery code — OWASP ASVS 2.5.3 posture: a code from the set being replaced must never authorize its own replacement). Inside one transaction: `delete from recovery_codes where user_id = ?` + insert N fresh hashed codes (same `generateRecoveryCode`/`recoveryHash` path as enable), return plaintext codes exactly once (the enable route's existing response shape `recoveryCodes: [...]` is the template).
 
-### 3.4 2FA — TOTP with zero runtime dependencies
+**When to use:** after initial enrollment; UI shows codes once. Consider auto-regeneration hint when the client sees `recoveryRemaining: 0` (already returned by `/api/auth/tfa/login`).
 
-TOTP (RFC 6238) is implementable in ~60 lines with `node:crypto`: base32-decode secret,
-`HMAC-SHA1(secret, unixTime / 30)`, dynamic truncation, 6 digits, `±1` window,
-`crypto.timingSafeEqual` for compare. Recommended placement: **new `src/lib/totp.js`**
-(module directory to decide with the owner — server-resident if colocated with `server.js`,
-but `src/lib/` keeps it testable; it must import only `node:crypto`).
+**Trade-offs:** verifying TOTP requires `decryptTotpSecret` → the route inherits the MASTER_KEY fail-closed 503 (`masterKeyMissing`) automatically. That is correct and free — do not special-case it.
 
-Endpoint set:
+### Pattern 3: Cross-user session revocation as a thin extension of the self-revoke machinery
 
-| Endpoint | Notes |
-|---|---|
-| `POST /api/auth/2fa/setup` | generate 20 random bytes → base32; store in `users.two_fa_secret` with `two_fa_enabled = 0`; return `{ otpauth: 'otpauth://totp/Gr8r:<email>?secret=...&issuer=Gr8r', secret }`. Also requires current password (policy: sensitive change). |
-| `POST /api/auth/2fa/verify { code }` | TOTP window ±1; on success `two_fa_enabled = 1`, generate 8 recovery codes (`<8 chars>-<8 chars>`), store **sha256 hashes** in `users.recovery_codes`, return plaintext codes **once**. |
-| `POST /api/auth/2fa/disable { currentPassword }` | password-gated; clears secret/flag/codes. |
-| `POST /api/auth/login/2fa { challenge, code }` | consumes the pending challenge (§ below); accepts a *recovery code* too and burns its hash. Flows through the same per-IP throttle. |
+**What:** no new table, no new crypto. `GET /api/admin/sessions` (paginated list joined to `users`) and `DELETE /api/admin/sessions/:userId` (or `/api/admin/sessions` with a user list). Both reduce to existing `sessions`-table deletes; the v1.3 central mid-session 401 teardown (Phase 14) already makes revoked browsers sign out honestly, so the client side needs nothing new.
 
-**Login-with-2FA challenge flow** (modifies `server.js:1225-1253`) — the only structural change
-to the login path:
+**The one real decision — who is "admin"?** The app has no instance-admin role; `ADMIN_EMAIL` only seeds the first account, and `isAdminUser()` means "owner/admin of ≥1 workspace". Options: (a) `isAdminUser()` gate — revocation is workspace-staff-like power over all users (too broad for a multi-tenant app?); (b) instance admin = the user matching `ADMIN_EMAIL` (needs an env lookup at runtime or a flag column); (c) both, with a new `is_instance_admin` boolean column (additive migration, fits the machinery). **Recommendation:** (b) or (c) — cross-user revocation is an operator power, not a workspace power; scope it to the instance operator. This must be settled in discuss-phase, not decided in a plan.
+
+**Trade-offs:** an audit-trail question follows: revoking other people's sessions deserves an activity entry (machine verb, per the v1.2 activity decision) — `session_revoked_by_admin` in the target user's or a global log. Currently the activity log lives in workspace documents; instance-level revocation may have no workspace to log into. Simplest acceptable: log into the target user's workspaces, or skip the activity log and rely on server logs for v1.4.
+
+## Data Flow
+
+### Flow 1: plaintext → envelope (boot)
 
 ```
-POST /api/auth/login {email,password}          ← unchanged throttling, verification
-  password invalid            → 401 (unchanged)
-  valid AND two_fa_enabled=0  → create session + cookie (unchanged, :1242-1252)
-  valid AND two_fa_enabled=1  → do NOT set the cookie.
-      Create a short-lived pending row: insert into sessions (token_hash=sha256(jwt-无),
-      ...) — cleanest: a dedicated pending table
-          create table if not exists login_challenges (
-            token_hash text primary key, user_id text not null, created_at, expires_at)
-          (guarded create → second-boot no-op holds)
-      → 200 { user: null, twoFaRequired: true, challenge: <token> }
-Client shows the 6-digit input (page component already shaped: settings.js:420 form markup
-serves as the model; login page `src/pages/auth.js` gains a challenge phase).
-POST /api/auth/login/2fa { challenge, code }
-  → verify; success: insert into sessions + cookie + delete pending row.
+boot → openDb() → SCHEMA + ensureColumn (unchanged) → [NEW] migrateTotpSecrets(db)
+   ├─ rows already 'v1:*' → no-op (byte-identical second boot ✓)
+   ├─ no MASTER_KEY → warn, skip (existing fail-closed 503 still protects logins)
+   └─ MASTER_KEY set → per-row encryptTotpSecret → update → next boot no-op
 ```
 
-Why a separate `login_challenges` table: it keeps `sessions` rows meaning "authenticated
-device" (so the sessions list never shows half-authed rows), and the expiry sweep
-(`server.js:2173-2174`) trivially extends to it.
+### Flow 2: regeneration
 
-**QR rendering — the second zero-dependency subsystem:** the current canvas is a fake
-(`settings.js:410-418`). Recommended **new client module `src/lib/qr.js`**: a small QR encoder
-(version 3, byte mode, EC level M is enough for a ~110-char otpauth URI) rendering to the
-existing grid-div pattern. No npm dependency, consistent with the zero-runtime rule
-(project constraint) — but it is the largest genuinely *new* frontend component of the
-milestone and deserves its own task. Renders exactly for the string returned by
-`/api/auth/2fa/setup`.
+```
+client POST /api/auth/tfa/recovery {password, code}
+   → tooMany('tfa-recovery|'+uid, 5, 15min)  → sameOrigin check (Pitfall-22 order: gate first)
+   → verifyPassword (step-up) → decryptTotpSecret (null ⇒ 503 masterKeyMissing)
+   → verifyTotpCode ±1 window + replay guard (two_fa_last_step updated on success)
+   → tx: delete recovery_codes(user) + insert 10 fresh hashed → return plaintext once
+```
 
-**Recovery codes UI change:** the fake array at `settings.js:408` is replaced by the one-time
-reveal from the `verify` response, with a copy button and the existing `settings.tfa.recovery*`
-strings. "Regenerate" can be deferred to a later milestone (not in scope).
+### Flow 3: admin revocation
 
-### 3.5 Settings UI wiring (modified, mostly already-built)
+```
+admin DELETE /api/admin/sessions/:userId
+   → admin gate (Pattern 3 decision) → tx: delete from sessions where user_id = :userId
+   → victim's next authenticated call: no session row → central 401 teardown → honest sign-out UI (exists)
+```
 
-Everything under `settings.js` nav `password`/`sessions`/`2fa` (`src/pages/settings.js:72-74,
-378-421`) already renders, and all strings (`settings.sessions.*`, `settings.tfa.*`) are
-already in `src/locales/en.json` + `fr.json`. So the UI work is **rewiring data sources and
-actions, plus a short i18n sweep**:
-- New catalogue keys required (build gate `scripts/i18n-scan.mjs` fails otherwise): reauth/
-  password prompt for 2FA setup, "secret key" manual-entry box, "copy" for codes and
-  otpauth URI, "this will sign you out everywhere" fine-print, and the login-page challenge
-  strings. Both `en.json` and `fr.json` in the same commit.
-- Sessions list rendering follows its current shape (`s.dev`/`s.cur`) — map API rows onto
-  `{ dev: label, cur, at: relTime(last_seen_at) }` and dedupe labels server-side in English,
-  translated client-side where applicable (active-now is computed client-side; timestamps
-  stay raw — consistent with the i18n date formatting layer).
-- Login page (`src/pages/auth.js`) gains the challenge state; the 6-digit input markup is
-  modelable on `settings.js:420`.
+### Flow 4: disable (exists — verify only)
 
-### 3.6 New vs Modified — explicit ledger
+Existing route already: gate → budget → password step-up → decrypt → verify TOTP **or** burn a recovery code → tx reset of `two_fa_*` + recovery wipe → 503 `masterKeyMissing` before any mutation. Confirm it matches the brief's "proper verification" bar (does it allow recovery-code disable? — line 1575 suggests yes) and add missing e2e/i18n coverage.
 
-| Component | Status | Purpose |
-|-----------|--------|---------|
-| `server.js` SCHEMA + `openDb()` | **modified** | `ensureColumn` users/sessions additions; guarded `login_challenges` table |
-| `server.js` route block `:1225-1320` | **modified** + **new handlers** | password-change, 2FA x3-4, login challenge branch |
-| `server.js` `currentUser()` `:1122-1132` | **modified** | throttled `last_seen_at` update |
-| `server.js` `userPayload()` `:253-260` | **modified** | expose `twoFaEnabled` (display only — setup helpers are their own routes) |
-| `server.js` `setPasswordCli()` `:2158-2161` | reference only, unchanged | existing precedent for password+session revoke |
-| `src/lib/totp.js` | **new** | base32 decode, TOTP verify (node:crypto only) |
-| `src/lib/qr.js` | **new** | zero-dep QR encoder → container grid |
-| `src/lib/ua-labels.js` (or in server) | **new (small)** | User-Agent → "MacBook · Chrome" |
-| `src/core/api.js` `:137-202` | **modified** | `listSessions`, `revokeOthers`, `changePassword`, `2faSetup/verify/disable`, `login2fa` |
-| `src/actions/actions.js` `:2351-2427` | **modified** | 6 stub actions → real calls |
-| `src/pages/settings.js` `:378-421` | **modified** | real QR, recovery reveal, session rows from API |
-| `src/pages/auth.js` | **modified** | 2FA challenge phase |
-| `src/data/seed.js` `:509-514`, `server.js:774-775` | **modified** | remove fake doc fields |
-| `src/locales/en.json` + `fr.json` | **modified** | new keys (build-gated) |
-| `test/migration.test.mjs` (+ helper) | **modified** | assert new columns exist post-boot; byte-identical no-op re-check |
-| `test/` server tests, `e2e/` | **new** | the three flows; reuse real-server/real-db helpers |
+## Integration Points
 
----
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| New routes ↔ throttle | `tooMany(key, 5, 15*60*1000)` | Reuse D-11 band constants; key by `userId` for cookie-auth routes (D-40/D-41 precedent), never by client-supplied identifier |
+| New routes ↔ i18n gate | error `code` + English message | Client translates codes (ERR-01/02 machinery); add every new literal to EN+FR catalogues or `i18n-scan.mjs` fails the build |
+| Migration ↔ test/migration.test.mjs | extend fixture | Prove: first boot encrypts, second boot byte-identical (same contract as AUTH-02) |
+| Regeneration ↔ pendingTfa | none | Do not touch the in-memory pending map; regeneration operates only on enabled accounts |
+| Admin revoke ↔ sessions table | plain delete | No token list response; victims discover revocation via existing 401 teardown |
+| `--set-password` CLI | precedent | Cross-user session revoke already exists in CLI form (line 38); the HTTP route should behave identically server-side |
 
-## 4. Suggested Build Order (investigate-first)
+## Anti-Patterns
 
-**Phase 13 — Investigation (as scoped by the milestone).** Expected findings (from this
-research; confirmation is the phase's job): no endpoints exist; stubs are doc-field only;
-removal of `emptyDoc`/seed fake fields; decision on `login_challenges` table vs pending
-sessions row; decision on TOTP/QR module placement and whether the recovery-code "regenerate"
-stays out of scope. Deliverable: pinned findings + the go/deps choices above.
+### Anti-Pattern 1: GCM without a version prefix or key-versioning plan
+**What people do:** raw AES-256-GCM blob, key derived from a single env var forever.
+**Why it's wrong:** a later key rotation forces a full decrypt/encrypt sweep with no way to tell which rows use which key.
+**Do this instead:** keep the existing `v1:` prefix (already present) and, if rotation ever lands, bump to `v2:` — the migrate function's `not like` predicate generalizes per version. No work needed now beyond preserving the prefix discipline.
 
-**Phase A — Session truth + revocation.** Schema columns (`label`, `last_seen_at`), table
-sweep of fake doc fields, `GET /api/auth/sessions` + `revoke-others`, `api.js` + settings
-wiring, i18n additions, server tests. Smallest vertical slice, and it unblocks a real
-sessions page the next phase can depend on ("revoke others" is reused by password change).
+### Anti-Pattern 2: Migrating secrets lazily inside request handlers
+**What people do:** re-encrypt on decrypt in every read path.
+**Why it's wrong:** plaintext lifetime becomes unbounded (a user who never logs in stays plaintext forever), and writes scattered across handlers break the migration test contract.
+**Do this instead:** one boot pass, one test.
 
-**Phase B — Password change.** Endpoint with atomic rehash + revoke-others-others, action/
-view wiring, e2e proof that (a) login works with the new password, (b) other sessions die and
-the current one survives, (c) old password rejects. Depends on Phase A only for the
-sessions-page-verification surface.
+### Anti-Pattern 3: Letting a recovery code authorize its own regeneration
+**What people do:** accept "any second factor" as the step-up for regeneration.
+**Why it's wrong:** an attacker who phished one recovery code burns it and mints ten fresh ones — the compromise becomes permanent.
+**Do this instead:** password + live TOTP only (Pattern 2).
 
-**Phase C — TOTP enablement.** `users.two_fa_*` columns, `src/lib/totp.js`, QR module,
-setup/verify/disable endpoints, recovery codes, settings page transformation. Independent of
-Phases A/B — can parallelize if two executors exist, but sequenced last because it is the
-widest slice and its login-path change (§3.4) touches the login route.
+### Anti-Pattern 4: Admin revocation without a defined admin
+**What people do:** gate the route on `isAdminUser()` because the helper exists.
+**Why it's wrong:** in a multi-tenant app any workspace admin could log out every user on the instance — privilege inflation across tenant boundaries.
+**Do this instead:** instance-operator gate (env-derived or a migrated flag column).
 
-**Phase D — Login challenge + hardening.** The `login_challenges` table, the login-route
-branch, `POST /login/2fa` incl. recovery-code burn, throttle integration, e2e in both locales.
-Sequencing it after C keeps the login route in one coherent change rather than two.
+## Suggested Build Order (dependency-driven)
 
-**Phase E — Verification + i18n + migration test.** extension of `test/migration.test.mjs`
-(both fresh and pre-locale DBs: columns appear, second boot byte-identical), full e2e pass, FR
-sweep of the new keys, changelog/DEPLOY notes.
+1. **MASTER_KEY migration first** — it touches `openDb()`, is testable in isolation against `migration.test.mjs`, and every later feature (disable verification, regeneration, login) inherits its fail-closed semantics. Do it before any route work so tests never see plaintext rows.
+2. **Recovery-code regeneration second** — depends on (1)'s decrypt path and reuses the enable route's transaction/response shape; it is the smallest new route and warms up the step-up + throttle + i18n pattern.
+3. **Disable-2FA verification/closure third** — mostly verification of what Phase 16-02 shipped plus e2e/i18n; benefits from (2) because the disable UI and regeneration UI are siblings on the settings 2FA card.
+4. **Admin session revocation last** — independent of crypto but blocked on the *admin definition decision* (discuss-phase question); it should also consume the throttle/gate patterns established in (2).
 
-Each phase keeps R6 alive (in-place migration, no data loss) because only `ensureColumn`/guarded
-creates are used — the pre-migration `vacuum into` backup pattern is invoked only if a
-non-additive change emerges during implementation (none is expected from this research).
+## Scaling / Scope Notes
 
----
-
-## 5. Anti-Patterns to Avoid in This Codebase
-
-| Anti-pattern | Why bad here | Instead |
-|---|---|---|
-| Adding npm `otpauth`/`speakeasy`/`qrcode` packages | contradicts the zero-runtime-dep constraint that governed v1.1/v1.2 | ~60-line TOTP + small QR module (`src/lib/`) |
-| Reusing the workspace document for auth state | is exactly the root cause of the three stubs; doc fields are tenant-shared, not per-account | real tables/columns (§3.1); drop doc fields |
-| Storing TOTP secret in plaintext without encryption-at-rest beyond DB | acceptable for a self-hosted single-node tool whose threat model is web-forgeries (sameOrigin guards, throttle) — but **hash recovery codes**, they're password-equivalent | sha256 hashes + password-gated disable |
-| Unthrottled `last_seen_at` write per request | turns every API call into a SQLite sync write | throttle to ≥5 min per session |
-| Cookie-set before 2FA verified ("verify after cookie") | leaks a usable session from the login route | no cookie until the challenge is consumed (§3.4) |
-| `ALTER TABLE ... '` outside `ensureColumn` guard | breaks the second-boot no-op guarantee tested by `test/migration.test.mjs` | `ensureColumn`/guarded create only |
+Not scale-relevant (single Docker image, node:sqlite, hundreds of users max). The only "scale" concern is operational: **MASTER_KEY is now load-bearing for every TOTP login** — losing it bricks 2FA for all users. `DEPLOY.md` must document: set it once, never rotate casually; a lost key means users must disable-2FA via recovery codes or an operator must clear `two_fa_*` (an escape-hatch CLI path worth considering explicitly). This is the single biggest non-code risk of the milestone.
 
 ## Sources
 
-- `server.js` lines 84-132 (schema), 134-156 (migrations), 166-190 (scrypt), 253-260
-  (userPayload), 747-789 (transaction/emptyDoc), 1090-1141 (cookie/currentUser), 1225-1320
-  (auth routes incl. PATCH /me), 2158-2174 (CLI + expiry sweep) — read directly.
-- `src/actions/actions.js` 2351-2427 (stub actions), 505-540 (context around simulated
-  branches) — read directly.
-- `src/pages/settings.js` 72-74, 378-437 (nav, three stub views incl. fake QR + codes) — read
-  directly.
-- `src/data/seed.js` 498-527 (fake session rows) — read directly.
-- `src/core/api.js` 137-202 (existing auth client surface) — grep, read directly.
-- `test/migration.test.mjs` 1-40 (fixture + byte-identical assertions) — read directly.
-- `.planning/PROJECT.md` (project constraints, i18n build gate, zero-dep precedent) — read
-  directly.
+- Codebase ground truth (HIGH): `server.js` lines 72–345 (MASTER_KEY, SCHEMA, ensureColumn migrations, envelope crypto, pendingTfa), 1371–1740 (auth routes, budgets, disable, sessions), 356 (isAdminUser); `totp.js`; `.planning/PROJECT.md` v1.3 record.
+- Standards (MEDIUM — web search blocked by anti-bot; from established knowledge of OWASP ASVS 2.5.3/2.8, NIST SP 800-63B AAL2, RFC 6238): TOTP-at-rest encryption, step-up verification on sensitive operations, single-use hashed recovery codes, session revocation semantics. Verify specific clause numbers during phase planning if citing externally.
+
+---
+*Architecture research for: Gr8r Studio v1.4 Auth Completion*
+*Researched: 2026-10-28*
