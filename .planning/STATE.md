@@ -136,6 +136,12 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 - The v1.2-backlog phases 999.1–999.3 (sessions button, password change, fake QR) are **absorbed
   by v1.3 Phases 13–17** — they were deferred UAT symptoms of the same stub-auth root cause.
+- [Phase 18]: WR-02 fix implemented as if/else clear after `maskedEmail = null` — the plan's
+  literal unconditional clear would have erased the genuine recovery-burn count (D-75 preserved).
+- [Phase 18]: post-17 pending-2FA surface is the `login_challenges` table (no
+  `sessions.pending_tfa` column) — migration assertions target real SCHEMA.
+- [Phase 18]: e2e/server.mjs sets a throwaway random MASTER_KEY (real enable path, fail-closed
+  503 otherwise — no test backdoor); global `.sub{display:none}` scoped to `.sitem .sub`.
 
 ## Session
 
@@ -149,8 +155,10 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Operator Next Steps
 
-- Review `.planning/ROADMAP.md`; on approval run `/gsd-discuss-phase 13` (or straight to
-  `/gsd-plan-phase 13`).
+- 🎉 Milestone v1.3 Auth Hardening is 100% complete (phases 13–18).
+- `/gsd-complete-milestone v1.3` — archive and prepare for the next milestone.
+- Before archiving: `/gsd-code-review 18 --fix` to triage the 7 open review findings
+  (0 critical, 3 warning, 4 info — see `18-REVIEW-DISPOSITION.md`).
 
 ## Performance Metrics
 
