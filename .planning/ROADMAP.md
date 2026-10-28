@@ -154,20 +154,20 @@ Plans:
   4. A human verifies the QR with Google Authenticator plus one other authenticator app on a real device (AUTH-03 — UAT, not automatable)
   5. The "looks-done-but-isn't" pitfalls checklist runs as explicit verification and each item is checked or gaps filed (AUTH-03)
 
-**Plans**: 4/4 plans executed — closing gate green (526/526 unit, lint, format, build incl. i18n-scan, 55/55 e2e); real-device UAT 3/3 PASS (18-UAT.md status: complete). Phase ready for /gsd-verify-work.
+**Plans**: 4/4 plans complete — closing gate green (526/526 unit, lint, format, build incl. i18n-scan, 55/55 e2e); real-device UAT 3/3 PASS (18-UAT.md status: complete). Phase ready for /gsd-verify-work.
 
 Plans:
 **Wave 1**
 - [x] 18-01-PLAN.md — WR-01/WR-02 client state fix in actions.js + source-structure regression test (D-84)
 
 **Wave 2** *(blocked on 18-01)*
-- [ ] 18-02-PLAN.md — Auth e2e suite in flows.spec.mjs: 2FA login (incl. recovery burn), revocation, password-change revocation — EN+FR (D-75/76/77, AUTH-03)
+- [x] 18-02-PLAN.md — Auth e2e suite in flows.spec.mjs: 2FA login (incl. recovery burn), revocation, password-change revocation — EN+FR (D-75/76/77, AUTH-03)
 
 **Wave 3** *(blocked on 18-02)*
-- [ ] 18-03-PLAN.md — Migration proof extension: post-17 schema parity, login_challenges cleanliness, workspace-JSON auth-key walk, extended snapshot (D-78/79)
+- [x] 18-03-PLAN.md — Migration proof extension: post-17 schema parity, login_challenges cleanliness, workspace-JSON auth-key walk, extended snapshot (D-78/79)
 
 **Wave 4** *(blocked on 18-02 + 18-03; human gate)*
-- [ ] 18-04-PLAN.md — 18-PITFALLS-AUDIT.md evidence table (D-80/81/85) + 18-UAT.md real-device UAT (D-82/83) + full closing gate
+- [x] 18-04-PLAN.md — 18-PITFALLS-AUDIT.md evidence table (D-80/81/85) + 18-UAT.md real-device UAT (D-82/83) + full closing gate
 
 ## Progress
 
@@ -178,7 +178,7 @@ Plans:
 | 15. Password Change End-to-End | 1/2 | Executing | - |
 | 16. TOTP Core & Enrollment | 3/3 | Complete    | 2026-10-27 |
 | 17. Login Second-Factor Flow | 2/2 | Complete    | 2026-10-27 |
-| 18. Closing Verification | 3/4 | In Progress|  |
+| 18. Closing Verification | 4/4 | Complete    | 2026-10-28 |
 
 ## Traceability
 

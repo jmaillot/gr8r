@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
 current_phase: 18
-current_phase_name: Closing Verification — i18n, Migration Proof & Real-Device UAT
-current_plan: 4
-status: executing
-stopped_at: Completed 18-04-PLAN.md — Phase 18 all 4 plans executed; closing gate green, UAT 3/3 pass; ready for /gsd-verify-work
-last_updated: "2026-10-28T00:00:00.000Z"
-state_head: 676cd3e1dffd80298f47a5be8de8827bbc865898
+current_plan: Not started
+status: completed
+stopped_at: Phase 18 complete — all phases complete
+last_updated: "2026-10-28T09:34:45.153Z"
+state_head: cb6ca324246b7953467a2f2c900241458645a3ed
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 19
-  completed_plans: 16
+  completed_plans: 19
+  percent: 83
 last_activity: 2026-10-26
 ---
 
@@ -34,14 +34,14 @@ Last updated: 2026-10-26
 
 ## Current Position
 
-Phase: 18 (Closing Verification — i18n, Migration Proof & Real-Device UAT) — EXECUTING
+Phase: 18
 
-Current Plan: 4
+Current Plan: Not started
 Total Plans in Phase: 4
 
 Plans ready: none — Phase 18 executed end to end (18-04 SUMMARY committed), ready for /gsd-verify-work
-Status: Ready to verify
-Progress: `[████████████░░░░░░░░] ~[███████████░] 100% of v1.3 plans — 6 of 6 phases executed; next: /gsd-verify-work on Phase 18
+Status: All phases complete
+Progress: `[████████████░░░░░░░░] ~[████████░░] 83% of v1.3 plans — 6 of 6 phases executed; next: /gsd-verify-work on Phase 18
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -140,7 +140,7 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 ## Session
 
 **Last session:** 2026-10-28T00:00:00Z
-**Stopped at:** Completed 18-04-PLAN.md — Phase 18 fully executed; ready for /gsd-verify-work
+**Stopped at:** Phase 18 complete — all phases complete
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
