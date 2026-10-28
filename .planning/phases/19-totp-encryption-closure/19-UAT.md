@@ -29,8 +29,8 @@ notes: docker restart — no new backup file, no migration output.
 
 ### 4. Missing MASTER_KEY at boot defers loudly
 expected: Booting with plaintext rows still pending but MASTER_KEY unset prints a loud console warning naming the deferred count; the rows stay untouched (still plaintext), and the boot completes normally.
-result: skipped
-reason: Invasive prod-config change required (unset MASTER_KEY + plant plaintext rows in production DB; container lacks sqlite3, needs node/better-sqlite3 workaround). Automated suite covers the defer path (warning + rows untouched).
+result: pass
+notes: Verified in isolated local Docker container (throwaway image gr8r-uat-test:19 + seeded volume, prod untouched). Planted plaintext row, booted without MASTER_KEY → loud warning "TOTP encryption deferred: MASTER_KEY is not configured — 1 plaintext two_fa_secret row(s) left unencrypted; migration retries on the next boot.", row stayed plaintext, no backup file, boot completed. Bonus: next boot WITH key → pre-migration backup created, 1 row migrated to v1: envelope with summary line (retry promise honored).
 
 ### 5. Corrupted secret fails closed with 503
 expected: With a stored two_fa_secret that is corrupted (garbage, plaintext, or tampered v1: envelope), attempting TOTP verification at login (2FA challenge) and the disable-2FA step-up both return HTTP 503 with error code masterKeyMissing — never a plaintext fallback, and the stored value is never rewritten. The error body matches the existing per-route copy exactly.
@@ -50,10 +50,10 @@ notes: Full enroll → enable → login-verify → disable round-trip completed 
 ## Summary
 
 total: 7
-passed: 6
+passed: 7
 issues: 0
 pending: 0
-skipped: 1
+skipped: 0
 
 ## Gaps
 
