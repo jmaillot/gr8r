@@ -155,6 +155,45 @@
 
 ---
 
+## Milestone: v1.3 — Auth Hardening
+
+**Shipped:** 2026-10-28
+**Phases:** 6 | **Plans:** 19 (+2 gap closures) | **Tasks:** 29
+
+### What Was Built
+- Canonical decisions doc (13-DECISIONS.md, D-01…D-17) pinning every auth contract before any build work
+- Real session ground truth: additive migration (sessions columns, login_challenges, dormant two_fa_* columns), doc-field strip, three /api/auth/sessions endpoints, sessions tab rewire
+- Central mid-session 401 intercept routing every revocation through one honest signOutRevoked teardown
+- Password change end-to-end: verify-inside-transaction, atomic rehash + revoke-others, honest copy with a substring-level honesty regression guard
+- TOTP core: fixture-verified totp.js (replay guard, ±1 window), vendored QR encoder, verify-before-enable, hashed burn-once recovery codes
+- Login second factor: pending2fa + gr8r_tfa_challenge cookie, structurally anonymous until verified; dual-shape client '2fa' card
+- Closing proof: login_challenges schema parity, doc auth-key walk, Chromium e2e EN+FR, real-device UAT 3/3, 526/526 green gate
+
+### What Worked
+- Investigation-first phase (13) paid off: every later phase cites D-01…D-17 instead of re-litigating; zero mid-build design surprises on the auth surface.
+- One revocation primitive reused three times (SESS-02, PASS-02, teardown) — built once in 14-03/14-05, consumed verbatim.
+- The central 401 intercept (gap-closure plan 14-05) replaced per-site branches — one honest teardown, latch + re-arm, and no stacked toasts downstream.
+
+### What Was Inefficient
+- Verification digests staled again: phases 14–17 touched shared files (server.js, api.js) after their verifiers ran; the close accepted overrides rather than re-running execute-phase ×4.
+- SUMMARY frontmatter skipped requirements-completed for 14–17 — evidence had to be pulled from VERIFICATION tables during the milestone audit.
+- validate-phase never ran during execution: all 6 VALIDATION.md files stayed draft through ship.
+
+### Patterns Established
+- Gap-closure plans (13-02, 14-05) as a first-class wave rather than reopen-and-pray.
+- Honest-copy rule enforced by regression tests (password-copy-honesty.test.mjs), not review.
+- Vendored third-party source (qrcode-generator) with upstream license header, excluded from i18n scan.
+
+### Key Lessons
+1. Pin shared-file contracts before parallel phases: when every phase edits server.js, digest staleness at close is structural — either re-verify the last phase only and audit the final tree, or serialize the verifier.
+2. A single server-side invariant (pending sign-in is anonymous) is best proven structurally (cookie never read by currentUser) rather than by endpoint-by-endpoint tests.
+
+### Cost Observations
+- 2 days elapsed (2026-10-26 → 2026-10-28), 21 plans; longest: 17-01 (115 min), 16-02/03 (~45–50 min each).
+- Notable: Phase 18 closing gate (9/9) plus the integration check made stale 14–17 digests cheap to accept.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -163,6 +202,7 @@
 |-----------|----------|--------|------------|
 | v1.1 Multitenant | 2 days | 4 | Phase verification was produced for phase 4 only; the audit backfilled phases 1–3. Next milestone: verify every phase before it closes. |
 | v1.2 Localization | 2 days | 8 | Every phase verified before close (50/50 plans); the close still re-verified all 8 after close-out commits staled the digests. Next milestone: finish close-out edits BEFORE running verifiers, and never hand-write a covered digest. |
+| v1.3 Auth Hardening | 2 days | 6 | All 6 phases verified before close, but shared-file edits across phases staled 4 of 6 digests anyway; the close accepted overrides with final-tree evidence (Phase 18 + integration check). Lesson refined: with a shared server.js, per-phase digests cannot all stay fresh — verify the last phase and audit the final tree instead. |
 
 ### Cumulative Quality
 
@@ -170,6 +210,7 @@
 |-----------|-------|----------|-------------------|
 | v1.1 Multitenant | 48 node:test + 5 Chromium | server contract, migration, privacy matrix, browser tenancy | 1 (dev only: `@playwright/test`) |
 | v1.2 Localization | 446 node:test + 45 Chromium e2e | catalogue contract (23 pins), locale selector, 21-route fr sweep + build gate, uploads/previews byte-serving | 0 (runtime) / 1 (dev only: `@playwright/test`) |
+| v1.3 Auth Hardening | 526 node:test + 55 Chromium e2e | TOTP fixtures (RFC 4226/6238), migration second-boot parity, 401 anonymity matrix, honest-copy guards, i18n-scan build gate | 0 (runtime; vendored qrcode-generator source, no package) |
 
 ### Top Lessons (Verified Across Milestones)
 
