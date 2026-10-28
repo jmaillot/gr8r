@@ -45,13 +45,13 @@ code reads of `server.js`, `src/actions/actions.js`, `src/pages/settings.js`).
 
 ### Cross-cutting
 
-- [ ] **AUTH-01**: All new user-facing strings and error codes are catalogued in English and
-  French; the `i18n-scan.mjs` build gate stays green (hard dependency, not polish).
+- [x] **AUTH-01**: All new user-facing strings and error codes are catalogued in English and
+  French; the `i18n-scan.mjs` build gate stays green (hard dependency, not polish). *(Phase 18 — i18n-scan green over final tree, 2026-10-28)*
 - [x] **AUTH-02**: Migration is additive columns/tables only with the byte-identical second-boot
   no-op guaranteed (`test/migration.test.mjs` extended); the fake `sessions` / `tfa` fields are
   removed from the workspace document (`emptyDoc()`, `seed.js`) — the v1.1 audit Active item.
-- [ ] **AUTH-03**: All three flows are covered end-to-end in both locales (Chromium e2e); the QR
-  is verified by UAT with a real device (Google Authenticator + one other app).
+- [x] **AUTH-03**: All three flows are covered end-to-end in both locales (Chromium e2e); the QR
+  is verified by UAT with a real device (Google Authenticator + one other app). *(Phase 18 — 55/55 e2e both locales; UAT 3/3 pass on real device, 2026-10-28)*
 
 ## Future Requirements (deferred)
 
@@ -90,8 +90,8 @@ Filled by the roadmap after phase mapping (phases 13–18; v1.3 continues v1.1=1
 | TFA-03 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-04 | Phase 16 — TOTP Core & Enrollment | Complete |
 | TFA-05 | Phase 17 — Login Second-Factor Flow | Complete |
-| AUTH-01 | Phase 18 — Closing Verification | Pending |
-| AUTH-03 | Phase 18 — Closing Verification | Pending |
+| AUTH-01 | Phase 18 — Closing Verification | Complete |
+| AUTH-03 | Phase 18 — Closing Verification | Complete |
 
 Coverage: 14/14 ✓ — no orphan, no duplicate. (AUTH-01 and AUTH-02 thread through the phases they
 touch but map to exactly one: AUTH-02's migration + doc-field removal lands in Phase 14; AUTH-01

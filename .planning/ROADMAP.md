@@ -19,7 +19,7 @@ gate. Research: `.planning/research/SUMMARY.md` (HIGH confidence).
 - [x] **Phase 15: Password Change End-to-End** - Password change verified against the current password, works at next login, and atomically revokes all other sessions in the same transaction that rehashes
 - [x] **Phase 16: TOTP Core & Enrollment** - Real TOTP secret generation, live code verification with replay guard, a genuinely scannable QR from a vendored encoder, and hashed single-use recovery codes shipped together at enrollment (completed 2026-10-27)
 - [x] **Phase 17: Login Second-Factor Flow** - Enrolled users must pass a 6-digit or recovery-code step after login; a pending sign-in is anonymous across every endpoint family until the code verifies (completed 2026-10-27)
-- [ ] **Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT** - Whole-surface gates: EN+FR catalogue green, byte-identical second-boot migration proven, Chromium e2e for all three flows in both locales, QR UAT with a real device
+- [x] **Phase 18: Closing Verification — i18n, Migration Proof & Real-Device UAT** - Whole-surface gates: EN+FR catalogue green, byte-identical second-boot migration proven, Chromium e2e for all three flows in both locales, QR UAT with a real device (executed 2026-10-28 — UAT 3/3 pass, awaiting /gsd-verify-work)
 
 ## Phase Details
 
@@ -154,7 +154,7 @@ Plans:
   4. A human verifies the QR with Google Authenticator plus one other authenticator app on a real device (AUTH-03 — UAT, not automatable)
   5. The "looks-done-but-isn't" pitfalls checklist runs as explicit verification and each item is checked or gaps filed (AUTH-03)
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed — closing gate green (526/526 unit, lint, format, build incl. i18n-scan, 55/55 e2e); real-device UAT 3/3 PASS (18-UAT.md status: complete). Phase ready for /gsd-verify-work.
 
 Plans:
 **Wave 1**

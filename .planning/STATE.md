@@ -6,8 +6,8 @@ current_phase: 18
 current_phase_name: Closing Verification — i18n, Migration Proof & Real-Device UAT
 current_plan: 4
 status: executing
-stopped_at: Completed 18-03-PLAN.md
-last_updated: "2026-10-27T19:02:50.528Z"
+stopped_at: Completed 18-04-PLAN.md — Phase 18 all 4 plans executed; closing gate green, UAT 3/3 pass; ready for /gsd-verify-work
+last_updated: "2026-10-28T00:00:00.000Z"
 state_head: 676cd3e1dffd80298f47a5be8de8827bbc865898
 progress:
   total_phases: 6
@@ -39,9 +39,9 @@ Phase: 18 (Closing Verification — i18n, Migration Proof & Real-Device UAT) —
 Current Plan: 4
 Total Plans in Phase: 4
 
-Plans ready: none — Phase 16 verified (UAT 3/3), ready for /gsd-next
-Status: Ready to execute
-Progress: `[██░░░░░░░░░░░░░░░░░░] ~[███████░░░] 67%` — 3 of 6 v1.3 phases complete (13, 15, 16); next: Phase 17 — Login Second-Factor Flow
+Plans ready: none — Phase 18 executed end to end (18-04 SUMMARY committed), ready for /gsd-verify-work
+Status: Ready to verify
+Progress: `[████████████░░░░░░░░] ~[███████████░] 100% of v1.3 plans — 6 of 6 phases executed; next: /gsd-verify-work on Phase 18
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -111,6 +111,8 @@ touch this milestone):
 - [Phase 18]: Client 2FA state lifecycle fix (WR-01/WR-02) applied via if/else clear to preserve genuine recovery burn count — The plan literal fix would erase the burn count; if/else preserves it while holding all ordering criteria
 - [Phase 18 / 18-03]: A2 ground truth — no `sessions.pending_tfa` column exists; the post-17 pending-2FA surface is the login_challenges table (challenge_token_hash, user_id, expires_at, attempts + expiry index); D-79 enumerated auth-key set is [sessions, tfa] mirrored from server.js normalizeDoc/docFromClient; second-boot snapshot now covers sessions rows + login_challenges count/pragma/DDL (Pitfall C closed)
 
+- [Phase 18 / 18-04]: Closing verification complete — 22 pitfalls + 13 checklist items all green with evidence (D-80), IN-02 logout-sameOrigin logged as backlog observation (D-85), no inline fixes (D-81); human real-device UAT 3/3 PASS (Google Authenticator, Microsoft Authenticator as second app, full 2FA login — test 3 single-locale on device, en/fr covered by e2e); full closing gate green over final tree including AUTH-01 i18n whole-surface re-run
+
 ## Verification commands used
 
 ```sh
@@ -137,8 +139,8 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Session
 
-**Last session:** 2026-10-27T21:40:00Z
-**Stopped at:** Completed 18-03-PLAN.md
+**Last session:** 2026-10-28T00:00:00Z
+**Stopped at:** Completed 18-04-PLAN.md — Phase 18 fully executed; ready for /gsd-verify-work
 **Resume file:** None
 
 **Decisions (15-02):** toast.passwordUpdatedAll as its own key (D-37, no client-side composition); unknown error codes fall through to call()'s generic tErr under the current field; pw-conf intentionally clears on wrongCurrentPassword re-render — D-39 protects the surviving new-password value.
@@ -170,3 +172,4 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 | Phase 17 P02 | 50m | 2 tasks | 13 files |
 | Phase 18 P01 | 10 min | 2 tasks | 2 files |
 | Phase 18 P03 | 8min | 2 tasks | 1 files |
+| Phase 18 P04 | continuation | 3 tasks | 3 files |
