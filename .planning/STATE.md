@@ -2,19 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 milestone_name: Auth Hardening
-current_phase: 18
-current_plan: Not started
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 18 complete — all phases complete
-last_updated: "2026-10-28T09:34:45.153Z"
-state_head: cb6ca324246b7953467a2f2c900241458645a3ed
+last_updated: "2026-10-28T10:37:23.724Z"
+last_activity: 2026-10-28
+last_activity_desc: Milestone v1.3 completed and archived
+state_head: a91036e29d23e7dca67c5a83336eb0762bea211c
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 19
   completed_plans: 19
-  percent: 83
-last_activity: 2026-10-26
+current_phase: 18
 ---
 
 # STATE
@@ -27,21 +26,17 @@ Last updated: 2026-10-26
   (plain ES modules + Vite, `server.js` over `node:sqlite`, opaque session cookies, scrypt)
 - **Core value:** a real project-management workspace that never ships a backend that lies —
   every feature is server-backed and honestly reported.
-- **Milestone:** v1.3 Auth Hardening — the auth surface becomes real: sessions, password change
-  and 2FA stop being doc-field stubs and work end to end.
+- **Milestone:** shipped v1.3 Auth Hardening (2026-10-28) — auth state is real: sessions,
+  password change and 2FA are server-backed end to end. Awaiting next milestone scope.
 - Previous milestones shipped: v1.0 (initial), v1.1 Multitenant (4 phases), v1.2 Localization
-  (8 phases, 12 total). Archives: `.planning/milestones/v1.1-*`, `v1.2-*`.
+  (8 phases), v1.3 Auth Hardening (6 phases). Archives: `.planning/milestones/v1.1-*`, `v1.2-*`, `v1.3-*`.
 
 ## Current Position
 
-Phase: 18
-
-Current Plan: Not started
-Total Plans in Phase: 4
-
-Plans ready: none — Phase 18 executed end to end (18-04 SUMMARY committed), ready for /gsd-verify-work
-Status: All phases complete
-Progress: `[████████████░░░░░░░░] ~[████████░░] 83% of v1.3 plans — 6 of 6 phases executed; next: /gsd-verify-work on Phase 18
+Phase: Milestone v1.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-28 — Milestone v1.3 completed and archived
 
 ## Milestone v1.3 Roadmap (phases 13–18, continuing v1.1=1–4, v1.2=5–12)
 
@@ -143,6 +138,16 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 - [Phase 18]: e2e/server.mjs sets a throwaway random MASTER_KEY (real enable path, fail-closed
   503 otherwise — no test backdoor); global `.sub{display:none}` scoped to `.sitem .sub`.
 
+## Deferred Items
+
+| Phase | Category | Item |
+|-------|----------|------|
+| 14 | deferred_items | Pre-existing test failure (i18n-prefs roadmap assertion) — RESOLVED by 14-05, commit 30ea824 |
+| 14 | deferred_items | Expiry vs. revocation toast-copy semantics — informational, copy locked by 14-02 |
+| 14 | deferred_items | 14-RESEARCH.md Open Questions marker — cosmetic, all questions resolved |
+
+_Known verification overrides: 0 newly acknowledged as unresolved, 3 carried forward as documented dispositions (all previously dispositioned in v1.3-MILESTONE-AUDIT.md)._
+
 ## Session
 
 **Last session:** 2026-10-28T00:00:00Z
@@ -155,10 +160,7 @@ node server.js                    # with DATA_DIR pointing at a copy of a real d
 
 ## Operator Next Steps
 
-- 🎉 Milestone v1.3 Auth Hardening is 100% complete (phases 13–18).
-- `/gsd-complete-milestone v1.3` — archive and prepare for the next milestone.
-- Before archiving: `/gsd-code-review 18 --fix` to triage the 7 open review findings
-  (0 critical, 3 warning, 4 info — see `18-REVIEW-DISPOSITION.md`).
+- Start the next milestone with /gsd-new-milestone
 
 ## Performance Metrics
 

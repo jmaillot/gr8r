@@ -1,5 +1,27 @@
 # Milestones
 
+## v1.3 Auth Hardening (Shipped: 2026-10-28)
+
+**Phases completed:** 6 phases, 19 plans, 29 tasks
+
+**Known verification overrides:** 0 unresolved; stale verification digests for phases 14–17
+(shared files touched by later phases) accepted with final-state evidence from Phase 18 and
+the milestone integration check; 3 deferred items acknowledged as documented dispositions.
+
+**Key accomplishments:**
+- 13-DECISIONS.md: the canonical D-01…D-17 citation target for Phases 14–18, carrying the code-verified stub diagnosis and all four pinned decision areas plus the Phase 14 removal scope
+- 13-DECISIONS.md now cites to one answer on both verification gaps: D-04's replay-guard column lands in Phase 14 (AUTH-02 migration) with Phase 16 owning the guard behavior, and D-13's generic-copy override covers the existing server.js:1235 429 string itself; 13-01-SUMMARY.md's citation count corrected 11 → 16 with erratum
+- Central mid-session 401 intercept in api.js call() funnels every revocation 401 (code signInRequired) through the single registered signOutRevoked teardown — honest signedOutElsewhere toast, full sign-out, login screen — with a once-per-revocation latch, boot-guard, and re-arm.
+- Rewrote the falsified `settings.pw.done` banner copy in EN/FR to state that other sessions were signed out, and added a substring-level honesty regression guard.
+- password-correct logins on 2FA accounts now stop at an inert 5-minute challenge (`pending2fa` + separate `gr8r_tfa_challenge` cookie); only a live TOTP or a burn-once recovery code on the new `POST /api/auth/tfa/login` mints the session — atomically, inside one shared throttle budget, with generic lockout copy.
+- a correct password on an enrolled account now parks the client on a dedicated full-screen `s === '2fa'` card — masked email, one dual-shape code field, no persisted pending state — and a correct TOTP/recovery code enters through the same post-success landing as any login, with an honest post-landing report when a recovery code was burned.
+- WR-01/WR-02 client state fixes for the 2FA login flow — the auth card resets before finishLogin and stale recovery-toast state can no longer survive a login — pinned by a 4-test source-structure regression suite
+- Chromium proof of the three auth flows — full 2FA login (TOTP computed locally via totp.js + recovery-code burn with the honest once-only toast), session revocation and password-change revocation with the signedOutElsewhere teardown — parametric EN + FR, 10 new tests inside flows.spec.mjs
+- Post-17 schema parity for login_challenges (the real pending-2FA surface — no sessions.pending_tfa column exists), a no-filter walk of every workspace document proving zero auth-bearing keys, and a second-boot snapshot extended to sessions rows + login_challenges count/pragma/DDL — D-78/D-79 discharged inside test/migration.test.mjs.
+- Evidence-audited the full pitfalls checklist (22+13 rows, all green, IN-02 filed as backlog), ran the human real-device UAT — 3/3 PASS across Google Authenticator, Microsoft Authenticator and a live 2FA login — and closed with a fully green gate (526/526 unit, lint, format, build incl. i18n-scan, 55/55 e2e).
+
+---
+
 ## v1.2 Localization (Shipped: 2026-10-25)
 
 **Phases completed:** 8 phases, 50 plans, 68 tasks

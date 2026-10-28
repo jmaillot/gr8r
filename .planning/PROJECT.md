@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-28 after Phase 18*
+*Last updated: 2026-10-28 after v1.3 milestone*
 
 ## What it is
 
@@ -14,19 +14,34 @@ board / list / table / calendar / timeline / files views, members, teams, activi
   `SEED_DATA=false`.
 - **Multi-tenant since v1.1**: a workspace is a real tenant with its own URL, document and
   membership list. An account can belong to several workspaces with a role in each.
+- **Real auth since v1.3**: sessions, password change and TOTP 2FA are server-backed
+  (`sessions`, `login_challenges`, `recovery_codes` tables) — no auth state in the document.
 
-## Current Milestone: v1.3 Auth Hardening
+## Next Milestone Goals
 
-**Goal:** The auth surface becomes real — sessions, password change and 2FA stop being (possibly)
-stubs and work end to end.
+No milestone planned yet — define scope with `/gsd-new-milestone`. Candidates carried in
+Active below (membership-surface hardening, router/URL, recent-search leak, per-user
+settings isolation) plus deferred auth items: disable-2FA flow, TOTP secret
+encryption-at-rest, recovery-code regeneration, admin session revocation.
+
+## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)
+
+**Goal:** the auth surface becomes real — sessions, password change and 2FA stop being
+doc-field stubs and work end to end.
+
+**Status:** shipped 2026-10-28 (6 phases, 19 plans + 2 gap-closure plans, 29 tasks; milestone
+audit `tech_debt` — 14/14 requirements satisfied, integration clean, no blockers). Full record:
+`milestones/v1.3-ROADMAP.md`, `milestones/v1.3-REQUIREMENTS.md`,
+`milestones/v1.3-MILESTONE-AUDIT.md`, `milestones/v1.3-phases/`.
 
 **Target features:**
-- Sessions page: "disconnect other sessions" actually revokes other sessions (button currently
-  never activates despite listing 2 active sessions)
-- Password change: new password works at login AND automatically revokes all other sessions
-- 2FA: real TOTP — secret, `otpauth://` URI, scannable QR code, 6-digit code verification
-  (current QR is fake/illegible)
-- One investigation phase first: diagnose whether all three share a stubbed auth-zone root cause
+- Sessions page backed by a real `sessions` table: device label, IP, last-seen, revoke-others
+  and per-row revoke; a central mid-session 401 teardown signs revoked browsers out honestly
+- Password change: current password verified server-side, new password works at next login,
+  all other sessions revoked atomically in the same transaction as the scrypt rehash
+- 2FA: real TOTP — `node:crypto` secret with replay guard, genuinely scannable QR from a
+  vendored MIT encoder, verify-before-enable, hashed single-use recovery codes, and a
+  pending-2FA login challenge that is anonymous across every endpoint family until verified
 
 ## Milestone v1.2 Localization — SHIPPED (2026-10-25)
 
@@ -201,6 +216,15 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   G-12-1…G-12-6 all closed and human-confirmed)
 - ✓ A logged-out browser pasting a file URL lands on the login page (not raw JSON) and
   returns to the file after sign-in — Phase 12 (T-12-13 reopened decision)
+- ✓ Real session management: sessions listed from the `sessions` table with device label, IP,
+  last-seen and this-session marker; revoke-others and per-row revoke; a central mid-session
+  401 teardown routes every revoked browser through one honest sign-out — Phase 14
+  (SESS-01…03; verification 12/12)
+- ✓ Additive migration with byte-identical second boot; the fake `sessions`/`tfa` doc fields
+  removed from the workspace document — Phase 14 (AUTH-02; extended test/migration.test.mjs)
+- ✓ Password change: current password verified inside the transaction, new password works at
+  next login, all other sessions revoked atomically with the scrypt rehash, honest success
+  copy — Phase 15 (PASS-01…03; verification 6/6, honesty regression guard)
 - ✓ TOTP enrollment core: RFC-verified TOTP with replay guard, real QR from a vendored
   encoder, enroll/enable/disable routes with password step-up and one-time hashed
   recovery codes — Phase 16 (TFA-01…04; verification 14/17 automated + UAT 3/3)
@@ -223,8 +247,8 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
       wire or remove the two routes that have no caller.
 - [ ] Close the substring-based recent-search leak and state the free-text limitation in the
       product docs.
-- [ ] Per-user settings isolation inside a workspace (`notifPrefs`, `tfa`, `sessions`,
-      `invoices` are still shared fields in the document).
+- [ ] Per-user settings isolation inside a workspace (`notifPrefs`, `invoices` are still
+      shared fields in the document; auth state moved to real tables in v1.3).
 
 ### Out of scope
 
@@ -250,18 +274,17 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
 
 ## Context
 
-- Shipped v1.1 with 4 phases, 7 plans, 10 tasks and 54 commits, on Node 24.
-- 18.8k lines of JavaScript, CSS and ESM across `src/`, `server.js`, `test/` and `e2e/`; one
-  runtime dependency-free server, one dev dependency (`@playwright/test`).
-- 50 `node:test` cases and 6 Chromium e2e tests, all against real `server.js` processes and
-  real SQLite databases — no mocked HTTP, no mocked database.
-- The milestone audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) closed three defects in
-  one family — the workspace revision moved without the client being able to follow it — so a
-  role change, an invite accepted elsewhere and a restart each locked the workspace out of
-  writing. All three are fixed, released in 1.1.1 and covered by server, client and browser
-  tests.
-- The interface is built from hand-written HTML template strings, so translating it is a
-  mechanical extraction of ~1 800 string occurrences across 37 files rather than a JSX sweep.
+- Shipped v1.3 (2026-10-28) with 6 phases, 21 plans (19 + 2 gap closures), 29 tasks across
+  173 commits (2026-10-26 → 2026-10-28); 116 files changed in the v1.3 range, ~23k insertions.
+- ~30.7k lines of JavaScript across `src/`, `server.js`, `totp.js`, `test/` and `e2e/`; still
+  zero runtime dependencies (one dev dependency: `@playwright/test`).
+- Auth ground truth: `sessions` (label, ip, last_seen_at, user_agent), dormant-per-default
+  `users.two_fa_*` columns, `login_challenges` + `recovery_codes` tables; TOTP in top-level
+  `totp.js` (RFC 4226/6238 fixture-verified); vendored qrcode-generator@2.0.4.
+- Test posture at close: 526/526 unit tests, lint/format/build incl. i18n-scan green,
+  55/55 Chromium e2e across EN+FR, real-device QR UAT 3/3 (Google + Microsoft Authenticator).
+- Known non-functional debt: stale verification digests for phases 14–17 (shared files touched
+  by later phases; final tree verified by Phase 18 + milestone audit), IN-02 in backlog.
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
 
 ## Evolution
