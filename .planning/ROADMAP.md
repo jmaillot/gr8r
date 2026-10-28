@@ -18,6 +18,7 @@ greenfield construction.
 ## Phase Details
 
 ### Phase 19: TOTP Encryption Closure
+
 **Goal**: Every TOTP secret lives in the `v1:` AES-256-GCM envelope, and every decrypt path fails closed — no plaintext fallback anywhere, ever.
 **Depends on**: Nothing (first phase of the milestone; foundation for 20 and 21)
 **Requirements**: ENC-01, ENC-02
@@ -26,13 +27,18 @@ greenfield construction.
   2. A malformed or non-`v1:` secret at any decrypt call site produces a fail-closed 503 on the affected TOTP-verify/disable endpoint — never a plaintext fallback, never silently accepted
   3. The fail-closed 503 touches only TOTP-verify/disable endpoints: normal login (non-2FA), workspace features and every other route work untouched when decryption cannot proceed
   4. Every decrypt call site has been audited and routes through the single boundary helper; grep-level tests prove no `decrypt(x) ?? x` pattern exists anywhere
+
 **Plans:** 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 19-01-PLAN.md — Boot-time plaintext→`v1:` envelope migration (`migrateTotpEncryption`, trigger-gated, transactional, backup-guaranteed) + ENC-01 tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 19-02-PLAN.md — Decrypt boundary closure: `requireTotpSecret` wrapper, two call-site swaps, three D-78 proofs (grep/behavioral/exclusivity)
 
 ### Phase 20: Recovery-Code Regeneration
+
 **Goal**: A user with 2FA enabled can replace their recovery codes when they suspect exposure — with the strongest step-up, and atomic burn-and-replace semantics.
 **Depends on**: Phase 19 (regeneration reads the encrypted secret for the live TOTP check)
 **Requirements**: REGEN-01, REGEN-02
@@ -41,9 +47,11 @@ Plans:
   2. Regeneration atomically deletes all existing recovery codes and inserts the new hashed set in one transaction — an interrupted or concurrent attempt can never leave both old and new codes valid
   3. New plaintext codes are displayed exactly once in the UI and never stored; the old set is invalid the moment the new set lands
   4. The regeneration endpoint has its own throttle budget and the response carries `Cache-Control: no-store`
+
 **Plans**: TBD
 
 ### Phase 21: Disable-2FA Verification & Closure
+
 **Goal**: Turning 2FA off is verified end-to-end against the full contract — no ghost 2FA state, no recovery-code shortcut — and covered by automated proof.
 **Depends on**: Phase 20 (disable and regeneration are siblings on the settings 2FA card; disable also consumes the encrypted-secret reality from Phase 19)
 **Requirements**: DIS-01, DIS-02
@@ -52,10 +60,12 @@ Plans:
   2. Disable in one transaction wipes `two_fa_*` columns, all recovery codes and any pending `login_challenges` — the account cannot be left in a half-disabled state where login still demands a code the account can no longer produce
   3. Disable applies an explicit, documented session policy (keep-current / revoke-others) and records the activity verb
   4. The full disable→re-enroll cycle is covered by Chromium e2e in EN + FR, with all new strings catalogued (i18n-scan green)
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 22: Operator Session Revocation
+
 **Goal**: The instance operator can forcibly sign out any non-owner user's browsers across the instance — with a hard privilege boundary — and revocation rides the existing honest 401 teardown.
 **Depends on**: Phases 19–21 (consumes the gate/throttle/i18n patterns; closes the milestone with the cross-feature e2e)
 **Requirements**: OPREV-01, OPREV-02
@@ -65,6 +75,7 @@ Plans:
   3. Owner accounts are immune: an attempt to revoke an owner's sessions is refused and regression-tested
   4. The privilege gate is instance-operator, not workspace-admin: a workspace admin who is not the operator cannot revoke another user's sessions (privilege-matrix test)
   5. One cross-feature Chromium e2e covers the full lifecycle — enroll → regenerate → login → disable → re-enroll → revoke — in EN + FR, with no v1.3 test deleted or weakened
+
 **Plans**: TBD
 
 ## Research Notes

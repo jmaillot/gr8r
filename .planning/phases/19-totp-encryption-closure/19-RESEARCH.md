@@ -285,7 +285,7 @@ No deprecated approaches to migrate away from; no external-framework currency co
 | A2 | `gr8r-preenvelope-` backup prefix naming (any distinct prefix works; only `gr8r-premultitenant-` is load-bearing in existing tests) | Pattern 1 | Zero — naming is agent discretion |
 | A3 | Legacy fixture `createLegacyDb` can be extended (or the fixture reused with a manual `update users set two_fa_secret`) to plant a plaintext secret for ENC-01 tests | Validation Architecture | If the fixture hard-freezes user rows, tests plant the plaintext via direct `withDb` SQL before boot — still fits the existing pattern |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Which users have plaintext secrets in production?**
    - What we know: any pre-v1.3 database restore; fresh installs have none (enable route only ever writes envelopes since server.js:1536).
