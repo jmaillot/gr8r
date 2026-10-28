@@ -28,14 +28,14 @@ greenfield construction.
   3. The fail-closed 503 touches only TOTP-verify/disable endpoints: normal login (non-2FA), workspace features and every other route work untouched when decryption cannot proceed
   4. Every decrypt call site has been audited and routes through the single boundary helper; grep-level tests prove no `decrypt(x) ?? x` pattern exists anywhere
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 19-01-PLAN.md — Boot-time plaintext→`v1:` envelope migration (`migrateTotpEncryption`, trigger-gated, transactional, backup-guaranteed) + ENC-01 tests ✅ 19-01-SUMMARY.md
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 19-02-PLAN.md — Decrypt boundary closure: `requireTotpSecret` wrapper, two call-site swaps, three D-78 proofs (grep/behavioral/exclusivity)
+- [x] 19-02-PLAN.md — Decrypt boundary closure: `requireTotpSecret` wrapper, two call-site swaps, three D-78 proofs (grep/behavioral/exclusivity)
 
 ### Phase 20: Recovery-Code Regeneration
 
@@ -90,7 +90,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 19. TOTP Encryption Closure | 0/? | Not started | - |
+| 19. TOTP Encryption Closure | 2/2 | In Progress|  |
 | 20. Recovery-Code Regeneration | 0/? | Not started | - |
 | 21. Disable-2FA Verification & Closure | 0/? | Not started | - |
 | 22. Operator Session Revocation | 0/? | Not started | - |
