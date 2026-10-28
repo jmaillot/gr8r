@@ -16,6 +16,7 @@
   commit `30ea824`, full suite 462/462.
 - **Suggested fix for a later plan (not 14-01):** re-point the test at the v1.2 milestone archive
   (`.planning/milestones/v1.2-ROADMAP.md`) or gate the check on milestone detection.
+  status: acknowledged
 
 ## 2026-10-27 — 14-05 revision (checker INFO dispositions)
 
@@ -26,7 +27,7 @@
   revocation — `requireUser()` emits the same 401 `signInRequired` code either way. Both
   therefore render the same honest-copy toast: `err.signedOutElsewhere` ("signed out from
   another device"), even when the cause was expiry rather than another device.
-- **Status:** the copy was agent discretion under 14-CONTEXT (honest-copy rule) and is
+- **Status:** acknowledged
   locked by executed 14-02 (EN+FR catalogue); no revision required. 14-05's Task 3 makes
   this explicit by retiring the old generic session-expired key — the teardown's copy is
   the only mid-session 401 copy from here on.
@@ -43,3 +44,4 @@
   The section header lacks the `(RESOLVED)` suffix — stale artifact, not a defect.
 - **Disposition at phase ship:** mark the section `(RESOLVED)` when archiving phase 14;
   do not edit RESEARCH.md mid-revision.
+  status: acknowledged
