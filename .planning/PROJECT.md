@@ -17,12 +17,28 @@ board / list / table / calendar / timeline / files views, members, teams, activi
 - **Real auth since v1.3**: sessions, password change and TOTP 2FA are server-backed
   (`sessions`, `login_challenges`, `recovery_codes` tables) — no auth state in the document.
 
+## Milestone v1.4 Auth Completion (current)
+
+**Goal:** every auth item deferred out of v1.3 lands — the 2FA lifecycle and session control
+become complete.
+
+**Target features:**
+- Disable-2FA flow: a user can turn 2FA off end-to-end with proper verification
+- TOTP secret encryption-at-rest: AES-256-GCM under `MASTER_KEY`, fail-closed 503 — the
+  unsettled decision carried from Phase 13, now made real
+- Recovery-code regeneration: burn-and-replace after initial enrollment
+- Admin session revocation: operator-revoked sessions across all users
+
+**Context:** builds on v1.3 ground truth (`sessions`, `login_challenges`, `recovery_codes`
+tables, dormant `users.two_fa_*` columns, TOTP in `totp.js`, password step-up pattern).
+Planning will verify what the v1.3 disable route (16-02) already covers and scope only what is
+genuinely missing.
+
 ## Next Milestone Goals
 
-No milestone planned yet — define scope with `/gsd-new-milestone`. Candidates carried in
-Active below (membership-surface hardening, router/URL, recent-search leak, per-user
-settings isolation) plus deferred auth items: disable-2FA flow, TOTP secret
-encryption-at-rest, recovery-code regeneration, admin session revocation.
+No next milestone planned yet — define scope with `/gsd-new-milestone`. Candidates remaining in
+Active below (membership-surface hardening, router/URL, recent-search leak, per-user settings
+isolation).
 
 ## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)
 
