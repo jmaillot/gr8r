@@ -26,9 +26,9 @@ current_phase_name: TOTP Encryption Closure
 ## Current Position
 
 - **Phase:** 19 — TOTP Encryption Closure
-- **Plan:** 19-01 complete (ENC-01) — next: 19-02 (Wave 2, decrypt boundary closure)
+- **Plan:** 19-01 + 19-02 complete (ENC-01, ENC-02) — Phase 19 fully executed; next: /gsd-verify-work Phase 19
 - **Status:** executing
-- **Progress:** ▓░░░░░░░░░ (0/4 phases — 1/2 plans of Phase 19 done)
+- **Progress:** ▓░░░░░░░░░ (0/4 phases — 2/2 plans of Phase 19 done)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -37,7 +37,7 @@ current_phase_name: TOTP Encryption Closure
 | REQ | Phase | Status |
 |-----|-------|--------|
 | ENC-01 | 19 | Complete (19-01) |
-| ENC-02 | 19 | Pending |
+| ENC-02 | 19 | Complete (19-02) |
 | REGEN-01 | 20 | Pending |
 | REGEN-02 | 20 | Pending |
 | DIS-01 | 21 | Pending |
@@ -52,7 +52,7 @@ current_phase_name: TOTP Encryption Closure
 | Phases planned | 4 (19–22) |
 | Requirements mapped | 8/8 |
 | Orphans | 0 |
-| Plans completed | 1 (19-01) |
+| Plans completed | 2 (19-01, 19-02) |
 
 ## Accumulated Context
 
@@ -77,10 +77,10 @@ current_phase_name: TOTP Encryption Closure
 ## Session Continuity
 
 **Last session:** 2026-10-28T14:21:10Z
-**Stopped at:** Phase 19 plan 19-01 (ENC-01) executed — SUMMARY written, commits f425ae1 + 036e836
-**Resume file:** .planning/phases/19-totp-encryption-closure/19-01-SUMMARY.md
+**Stopped at:** Phase 19 plan 19-02 (ENC-02) executed — SUMMARY written, commits 7e79b5c + 65b3dcb
+**Resume file:** .planning/phases/19-totp-encryption-closure/19-02-SUMMARY.md
 
-- **Last action:** executed 19-01 (TOTP boot migration): `migrateTotpEncryption()` in server.js (D-82/D-83 trigger-gated, D-73 defer, D-74 backup-or-skip, D-75 edge rules, D-76 console summary) + 4 ENC-01 tests in test/migration.test.mjs; full suite 530/530 green.
-- **Next action:** execute 19-02 (Wave 2 — decrypt boundary closure, ENC-02), then `/gsd-verify-work` for Phase 19.
-- **Deviations:** planted fixture secret lengthened to a valid 32-char base32 value (plan's literal was 16 chars, would be skipped as garbage); D-76 blank/already-encrypted counters read 0 by design (D-83 trigger excludes them).
+- **Last action:** executed 19-02 (decrypt boundary closure, ENC-02): `requireTotpSecret()` wrapper as the only `decryptTotpSecret` caller (D-77/D-78c), both call sites branch on ok → 503 masterKeyMissing (D-80/D-81), 12 D-78 proof tests in test/totp-encryption.test.mjs (grep/exclusivity/behavioral + Pitfall-3 negative control); full suite 542/542 green.
+- **Next action:** `/gsd-verify-work` for Phase 19, then Phase 20 discuss/plan.
+- **Deviations (19-02):** line anchors had drifted after wave 1 — call sites located by content at ~1663/~1737 instead of 1568/1641; no other deviations.
 - **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, disable route ~1548, auth routes 1371–1740), `totp.js`, `test/migration.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
