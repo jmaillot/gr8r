@@ -491,3 +491,74 @@ test('ENC-01: a legacy plaintext TOTP secret boots into a v1: envelope with a pr
   await second.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('ENC-01: a missing MASTER_KEY defers the migration — rows untouched, no backup, loud warning, normal boot (D-73)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-defer-'));
+  createLegacyDb(dir);
+  plantSecret(path.join(dir, 'gr8r.db'), 'u_alice', VALID_B32);
+
+  const server = await startServer({ dataDir: dir, env: { MASTER_KEY: undefined } });
+  assert.equal(encStored(server.dbPath), VALID_B32, 'the plaintext row is untouched byte-for-byte');
+  assert.equal(envBackups(dir).length, 0, 'a deferred boot creates no backup file');
+  assert.match(server.output(), /TOTP encryption deferred: MASTER_KEY is not configured — 1 plaintext/, 'the loud console warning names the deferred-row count');
+
+  const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
+  assert.equal(signedIn.status, 200, 'boot succeeds normally and non-2FA login works');
+  await server.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('ENC-01: a failed pre-migration backup skips the migration entirely — no backup = no mutation (D-74)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-ro-'));
+  const dbPath = path.join(dir, 'gr8r.db');
+  createLegacyDb(dir);
+  plantSecret(dbPath, 'u_alice', VALID_B32);
+
+  /* First boot materializes the schema + files dir. Then: an empty (valid) WAL/SHM
+     pair plus a read-only DATA_DIR makes the NEXT boot's `vacuum into` fail —
+     the exact D-74 backup-failure branch, no mocks. */
+  const first = await startServer({ dataDir: dir });
+  await first.stop();
+  fs.writeFileSync(path.join(dir, 'gr8r.db-wal'), '');
+  fs.writeFileSync(path.join(dir, 'gr8r.db-shm'), '');
+  fs.chmodSync(dir, 0o555);
+
+  let server;
+  try {
+    server = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+    assert.match(server.output(), /TOTP encryption skipped: pre-migration backup failed/, 'the backup-failure console.error line is present');
+    assert.equal(encStored(dbPath), VALID_B32, 'zero rows changed when the backup failed');
+    assert.equal(envBackups(dir).length, 0, 'no gr8r-preenvelope backup file was created');
+    const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
+    assert.equal(signedIn.status, 200, 'the server still boots normally after the skip');
+  } finally {
+    fs.chmodSync(dir, 0o755);
+    await server?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('ENC-01: edge rows — blank and non-base32 values are skipped, never wrapped; existing v1: rows untouched (D-75)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-edge-'));
+  const dbPath = path.join(dir, 'gr8r.db');
+  createLegacyDb(dir);
+  plantSecret(dbPath, 'u_alice', VALID_B32);
+  const staleEnvelope = 'v1:AAAA:BBBB:CCCC';
+  withDb(dbPath, db => {
+    const insert = db.prepare('insert into users (id, email, name, password_hash, created_at, two_fa_secret) values (?,?,?,?,?,?)');
+    const hash = withDb(dbPath, d => d.prepare('select password_hash from users where id = ?').get('u_bob').password_hash);
+    insert.run('u_blank', 'blank@enc.local', 'Blank', hash, 1_700_000_000_000, '');
+    insert.run('u_garbage', 'garbage@enc.local', 'Garbage', hash, 1_700_000_000_000, 'not-a-base32!!');
+    insert.run('u_stale', 'stale@enc.local', 'Stale', hash, 1_700_000_000_000, staleEnvelope);
+  });
+
+  const server = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  assert.equal(encStored(dbPath, 'u_blank'), '', 'a blank secret stays blank (2FA-disabled user)');
+  assert.equal(encStored(dbPath, 'u_garbage'), 'not-a-base32!!', 'a non-base32 value is never wrapped into an envelope');
+  assert.match(server.output(), /user u_garbage has a non-base32 two_fa_secret/, 'the garbage row is logged as skipped');
+  assert.equal(encStored(dbPath, 'u_stale'), staleEnvelope, 'an existing v1: row is never re-encrypted');
+  assert.match(encStored(dbPath, 'u_alice'), /^v1:[^:]+:[^:]+:[^:]+$/, 'the valid base32 value is encrypted');
+  assert.match(server.output(), /TOTP encryption: 1 row\(s\) migrated to the v1: envelope, 0 blank skipped, 1 non-base32 skipped, 0 already encrypted\./, 'blank and v1: rows never reach the transaction — the D-83 trigger excludes them (D-76 counts stay 0)');
+  await server.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
