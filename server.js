@@ -263,6 +263,16 @@ function decryptTotpSecret(envelope) {
   }
 }
 
+/* D-77/D-79: single decrypt boundary — requireTotpSecret is the ONLY caller of
+   decryptTotpSecret (D-78c exclusivity, proven by test/totp-encryption.test.mjs).
+   Call sites branch on ok and fail closed 503 with code masterKeyMissing (D-80);
+   per-route body copy stays verbatim (D-81). No plaintext fallback exists or may
+   be added (D-78a). */
+function requireTotpSecret(envelope) {
+  const secret = decryptTotpSecret(envelope); // already returns null on EVERY failure
+  return secret ? { ok: true, secret } : { ok: false };
+}
+
 /* D-46: pending (not-yet-verified) TOTP secrets live ONLY here — in memory,
    keyed by user_id, with a 10-minute TTL. Nothing touches users.two_fa_secret
    until enable succeeds; a server restart mid-enrollment just means re-scanning
@@ -1648,10 +1658,11 @@ async function handleApi(req, res, url) {
       if (!fresh || !verifyPassword(cur, fresh.password_hash)) return 'password';
       if (/^\d{6}$/.test(code)) {
         // Live-code shape. D-06: an undecryptable secret (missing MASTER_KEY,
-        // tampered envelope) fails closed 503 before any mutation.
-        const secret = decryptTotpSecret(fresh.two_fa_secret);
-        if (!secret) return 'masterKey';
-        if (!verifyTotpCode(secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000)).ok) return 'code';
+        // tampered envelope) fails closed 503 before any mutation. D-77: the
+        // decrypt runs only through requireTotpSecret — no plaintext fallback.
+        const wrapped = requireTotpSecret(fresh.two_fa_secret);
+        if (!wrapped.ok) return 'masterKey';
+        if (!verifyTotpCode(wrapped.secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000)).ok) return 'code';
       } else {
         // Recovery-code shape (D-57 dual input): ONE normalization + hash
         // lookup, identical to the generation-hash site (Pitfall 6).
@@ -1722,10 +1733,11 @@ async function handleApi(req, res, url) {
       let recoveryRemaining;
       if (/^\d{6}$/.test(code.trim())) {
         // D-06: an undecryptable secret fails closed before any mutation.
-        const secret = decryptTotpSecret(user.two_fa_secret);
-        if (!secret) return 'masterKey';
+        // D-77: the decrypt runs only through requireTotpSecret — no plaintext fallback.
+        const wrapped = requireTotpSecret(user.two_fa_secret);
+        if (!wrapped.ok) return 'masterKey';
         // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
-        const verified = verifyTotpCode(secret, code, user.two_fa_last_step || null, Math.floor(now() / 1000));
+        const verified = verifyTotpCode(wrapped.secret, code, user.two_fa_last_step || null, Math.floor(now() / 1000));
         if (!verified.ok) return 'code';
         db.prepare('update users set two_fa_last_step = ? where id = ?').run(verified.matchedStep, user.id);
       } else {
