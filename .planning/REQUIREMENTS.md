@@ -72,4 +72,13 @@ Out of Scope — update docs when rotation lands).
 
 | REQ | Phase | Status |
 |-----|-------|--------|
-| — | — | *(filled by roadmap)* |
+| ENC-01 | Phase 19 | Pending |
+| ENC-02 | Phase 19 | Pending |
+| REGEN-01 | Phase 20 | Pending |
+| REGEN-02 | Phase 20 | Pending |
+| DIS-01 | Phase 21 | Pending |
+| DIS-02 | Phase 21 | Pending |
+| OPREV-01 | Phase 22 | Pending |
+| OPREV-02 | Phase 22 | Pending |
+
+Coverage: 8/8 v1.4 requirements mapped, no orphans, no duplicates.
