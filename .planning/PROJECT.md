@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-27 after Phase 16*
+*Last updated: 2026-10-28 after Phase 18*
 
 ## What it is
 
@@ -204,6 +204,13 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 - ✓ TOTP enrollment core: RFC-verified TOTP with replay guard, real QR from a vendored
   encoder, enroll/enable/disable routes with password step-up and one-time hashed
   recovery codes — Phase 16 (TFA-01…04; verification 14/17 automated + UAT 3/3)
+- ✓ Login second-factor flow: pending-2FA sign-in is anonymous across every endpoint family
+  until the code verifies; challenge abandon is a real logout; recovery burn reported
+  post-landing — Phase 17 (TFA-05; 401 matrix, throttle budget survives abandon)
+- ✓ Auth surface closed as a whole: all new user-facing strings catalogued EN+FR with the
+  i18n-scan build gate green, all three flows covered by Chromium e2e in both locales, and
+  the QR verified by human UAT on a real device (Google Authenticator + Microsoft
+  Authenticator) — Phase 18 (AUTH-01, AUTH-03; verification 9/9, UAT 3/3)
 
 ### Active
 
