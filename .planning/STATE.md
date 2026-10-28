@@ -1,3 +1,18 @@
+---
+gsd_state_version: "1.0"
+milestone: v1.4
+milestone_name: Auth Completion
+status: unknown
+stopped_at: Phase 19 context gathered
+last_updated: "2026-10-28T13:29:16.346Z"
+state_head: 92e62b12f35ce70229743d64c8f9e002f17553a1
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # STATE.md
 
 ## Project Reference
@@ -40,20 +55,28 @@
 ## Accumulated Context
 
 ### Decisions carried in
+
 - Privilege model (owner-validated): operator session revocation is scoped to an **instance operator** — not workspace admins, not both tiers. The gate mechanism (`ADMIN_EMAIL`-derived vs `is_instance_admin` flag) is a Phase 22 discuss-phase decision.
 - v1.4 is gap-closure on the shipped v1.3 auth surface; encryption machinery, disable route and self-revocation already exist (ground truth verified by research).
 
 ### Open decisions (discuss-phase)
+
 - **Phase 21:** shipped disable route may accept recovery codes (server.js ~1575) vs DIS-02 requiring password + live TOTP — tighten and regression-test.
 - **Phase 22:** operator gate mechanism; audit-log location (workspace activity log vs server logs) for instance-level actions.
 
 ### Blockers
+
 - None. Phase 22 decisions block only its own discuss/plan, not earlier phases.
 
 ### Todos
+
 - Run `/gsd-discuss-phase 22` before planning Phase 22 (research flag: blocking decision).
 
 ## Session Continuity
+
+**Last session:** 2026-10-28T13:29:16.324Z
+**Stopped at:** Phase 19 context gathered
+**Resume file:** .planning/phases/19-totp-encryption-closure/19-CONTEXT.md
 
 - **Last action:** roadmap created for v1.4 (phases 19–22), REQUIREMENTS.md traceability updated.
 - **Next action:** orchestrator presents roadmap for approval → `/gsd-discuss-phase 19` → `/gsd-plan-phase 19`.
