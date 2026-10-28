@@ -3,8 +3,8 @@ phase: "19"
 slug: "totp-encryption-closure"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: false
 created: "2026-10-28"
 ---
@@ -40,9 +40,9 @@ created: "2026-10-28"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| {N}-01-01 | 01 | 1 | ENC-01 | T-19-01 / — | Legacy plaintext `two_fa_secret` encrypted into `v1:` envelope on boot, inside transaction, pre-migration backup guarantee; second boot byte-identical no-op | integration | `node --test test/migration.test.mjs` | ✅ (extend existing) | ⬜ pending |
-| {N}-01-02 | 01 | 1 | ENC-02 | T-19-02 / — | Malformed / non-`v1:` secret at any decrypt call site → fail-closed 503 on TOTP-verify/disable only; all other routes untouched | integration | `node --test test/` | ✅ (extend existing) | ⬜ pending |
-| {N}-01-03 | 01 | 1 | ENC-02 | T-19-03 / — | No `decrypt(x) ?? x` plaintext-fallback pattern anywhere; all call sites route through single boundary helper | static (grep) | `node --test test/error-codes.test.mjs` (server-source-reading convention) | ✅ | ⬜ pending |
+| {N}-01-01 | 01 | 1 | ENC-01 | T-19-01 / — | Legacy plaintext `two_fa_secret` encrypted into `v1:` envelope on boot, inside transaction, pre-migration backup guarantee; second boot byte-identical no-op | integration | `node --test test/migration.test.mjs` | ✅ (extend existing) | ✅ green |
+| {N}-01-02 | 01 | 1 | ENC-02 | T-19-02 / — | Malformed / non-`v1:` secret at any decrypt call site → fail-closed 503 on TOTP-verify/disable only; all other routes untouched | integration | `node --test test/` | ✅ (extend existing) | ✅ green |
+| {N}-01-03 | 01 | 1 | ENC-02 | T-19-03 / — | No `decrypt(x) ?? x` plaintext-fallback pattern anywhere; all call sites route through single boundary helper | static (grep) | `node --test test/error-codes.test.mjs` (server-source-reading convention) | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -77,4 +77,11 @@ created: "2026-10-28"
 - [ ] Feedback latency < 30s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-10-28
+
+## Validation Audit 2026-10-28
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
