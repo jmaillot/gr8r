@@ -937,6 +937,7 @@ function ensureAdmin({ quiet = false } = {}) {
 function bootstrap(opts) {
   ensureWorkspace();
   migrateTenancy();
+  migrateTotpEncryption();
   ensureAdmin(opts);
 }
 
@@ -975,6 +976,89 @@ function migrateTenancy() {
   }
   backfillInvites();
   backfillMemberships();
+}
+
+/*
+ * D-82/D-83: boot-time migration of legacy plaintext `users.two_fa_secret`
+ * rows into the `v1:` AES-256-GCM envelope (D-05), as a sibling of
+ * migrateTenancy(). Ordering is load-bearing (research Pitfall 2):
+ * trigger count (D-83) → MASTER_KEY check (D-73) → backup (D-74) →
+ * transaction of updates (D-75) → console summary (D-76). A deferred or
+ * empty boot never leaves a stray backup file; second boot after a
+ * completed migration is a byte-identical no-op.
+ */
+function migrateTotpEncryption() {
+  // D-83: trigger-gated no-op — zero eligible rows means no backup file and no writes.
+  const pendingRows = () =>
+    db
+      .prepare(
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v1:%'",
+      )
+      .all();
+  let rows = pendingRows();
+  if (rows.length === 0) return;
+
+  // D-73: MASTER_KEY missing with eligible plaintext rows → defer the whole
+  // migration (loud warning, rows untouched, boot proceeds); decrypt fails
+  // closed at runtime (D-06) meanwhile. Retries on the next boot.
+  if (!MASTER_KEY) {
+    console.warn(
+      `  TOTP encryption deferred: MASTER_KEY is not configured — ${rows.length} plaintext two_fa_secret row(s) left unencrypted; migration retries on the next boot.`,
+    );
+    return;
+  }
+
+  // D-74: backup first. Failure skips the migration entirely this boot —
+  // no backup = no mutation (deliberately stricter than migrateTenancy).
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `gr8r-preenvelope-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    db.exec('pragma wal_checkpoint(truncate)');
+    db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    console.log(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    console.error(`  TOTP encryption skipped: pre-migration backup failed: ${err.message}`);
+    return;
+  }
+
+  let migrated = 0;
+  let skippedBlank = 0;
+  let skippedGarbage = 0;
+  let alreadyEncrypted = 0;
+  transaction(() => {
+    // D-75: per-row re-check inside the transaction — defense in depth
+    // against double-encryption (research Pitfall 5). Skip, never wrap
+    // blanks or non-base32 garbage into an envelope.
+    rows = pendingRows();
+    for (const row of rows) {
+      const value = String(row.two_fa_secret || '').trim();
+      if (!value) {
+        skippedBlank++;
+        continue;
+      }
+      if (value.startsWith('v1:')) {
+        alreadyEncrypted++;
+        continue;
+      }
+      if (!/^[A-Z2-7]{32}$/.test(value)) {
+        skippedGarbage++;
+        console.warn(`  TOTP encryption: user ${row.id} has a non-base32 two_fa_secret — left as-is; decrypt fails closed (D-75)`);
+        continue;
+      }
+      const envelope = encryptTotpSecret(value);
+      if (!envelope) {
+        skippedGarbage++;
+        continue;
+      }
+      db.prepare('update users set two_fa_secret = ? where id = ?').run(envelope, row.id);
+      migrated++;
+    }
+  });
+  // D-76: outcomes on console only — no admin UI surface.
+  console.log(
+    `  TOTP encryption: ${migrated} row(s) migrated to the v1: envelope, ${skippedBlank} blank skipped, ${skippedGarbage} non-base32 skipped, ${alreadyEncrypted} already encrypted.`,
+  );
 }
 
 /*

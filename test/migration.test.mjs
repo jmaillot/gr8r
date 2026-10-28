@@ -2,6 +2,7 @@
    backup-first, slug/name/colour derivation, membership linking, invite scoping,
    document cleanup, preserved rows and second-boot idempotency. */
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -429,4 +430,64 @@ test('a second boot leaves the recovery_codes schema byte-identical (P-B)', asyn
   const secondBoot = schemaSnapshot();
   assert.deepEqual(secondBoot, firstBoot, 'the recovery_codes DDL is byte-identical across boots');
   assert.equal(sqliteHas('table', 'recovery_codes'), 1, 'the table survives the reboot');
+});
+
+/* ENC-01 (Phase 19): boot-time migration of legacy plaintext TOTP secrets into
+   the v1: envelope (D-82/D-83), plus the fail-closed policy branches (D-73–D-76). */
+const ENV_PREFIX = 'gr8r-preenvelope-';
+const ENC_MASTER = 'enc-migration-master-key';
+/* 32-char uppercase Base32 — the codebase's own enrollment shape (/^[A-Z2-7]{32}$/,
+   D-75). The plan's literal 'JBSWY3DPEHPK3PXP' is 16 chars and would be skipped as
+   garbage under the very rule being proven, so the valid form doubles its length. */
+const VALID_B32 = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+
+const envBackups = dir => fs.readdirSync(dir).filter(name => name.startsWith(ENV_PREFIX) && name.endsWith('.db'));
+
+/* The legacy fixture predates the 2FA columns; openDb()'s ensureColumn is
+   guarded, so pre-adding them here is what a pre-14 database looks like. */
+function plantSecret(dbPath, id, value) {
+  withDb(dbPath, db => {
+    db.exec('alter table users add column two_fa_enabled integer not null default 0');
+    db.exec('alter table users add column two_fa_last_step integer not null default 0');
+    db.exec('alter table users add column two_fa_secret text');
+    db.prepare('update users set two_fa_secret = ? where id = ?').run(value, id);
+  });
+}
+
+/* Mirror of the envelope format (D-05): sha256(MASTER_KEY)/AES-256-GCM. */
+function decryptEnvelope(envelope, masterKey) {
+  const [v, ivB64, tagB64, ctB64] = String(envelope).split(':');
+  assert.equal(v, 'v1', 'the stored value is a v1: envelope');
+  const key = crypto.createHash('sha256').update(masterKey).digest();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+}
+
+function encStored(dbPath, id = 'u_alice') {
+  return withDb(dbPath, db => db.prepare('select two_fa_secret from users where id = ?').get(id).two_fa_secret);
+}
+
+test('ENC-01: a legacy plaintext TOTP secret boots into a v1: envelope with a pre-migration backup, and a second boot is a byte-identical no-op', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-'));
+  createLegacyDb(dir);
+  plantSecret(path.join(dir, 'gr8r.db'), 'u_alice', VALID_B32);
+  const dbPath = path.join(dir, 'gr8r.db');
+
+  const first = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  const envelope = encStored(dbPath);
+  assert.match(envelope, /^v1:[^:]+:[^:]+:[^:]+$/, 'the plaintext row is wrapped in a v1: envelope');
+  assert.equal(decryptEnvelope(envelope, ENC_MASTER), VALID_B32, 'the envelope decrypts back to the planted plaintext');
+  assert.equal(envBackups(dir).length, 1, 'exactly one gr8r-preenvelope-*.db after the first boot');
+  assert.match(first.output(), /pre-migration backup: /, 'the backup path line is on the console');
+  assert.match(first.output(), /TOTP encryption: 1 row\(s\) migrated to the v1: envelope/, 'the migrated-count summary line is on the console');
+  const snapshot = envelope;
+
+  await first.stop();
+  const second = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  assert.equal(envBackups(dir).length, 1, 'a second boot adds zero backup files');
+  assert.deepEqual(encStored(dbPath), snapshot, 'the users row is untouched by the second boot');
+  assert.doesNotMatch(second.output(), /TOTP encryption:/, 'the migration stays silent when nothing is pending');
+  await second.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
 });
