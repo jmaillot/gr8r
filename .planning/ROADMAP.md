@@ -26,7 +26,11 @@ greenfield construction.
   2. A malformed or non-`v1:` secret at any decrypt call site produces a fail-closed 503 on the affected TOTP-verify/disable endpoint — never a plaintext fallback, never silently accepted
   3. The fail-closed 503 touches only TOTP-verify/disable endpoints: normal login (non-2FA), workspace features and every other route work untouched when decryption cannot proceed
   4. Every decrypt call site has been audited and routes through the single boundary helper; grep-level tests prove no `decrypt(x) ?? x` pattern exists anywhere
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 19-01-PLAN.md — Boot-time plaintext→`v1:` envelope migration (`migrateTotpEncryption`, trigger-gated, transactional, backup-guaranteed) + ENC-01 tests
+- [ ] 19-02-PLAN.md — Decrypt boundary closure: `requireTotpSecret` wrapper, two call-site swaps, three D-78 proofs (grep/behavioral/exclusivity)
 
 ### Phase 20: Recovery-Code Regeneration
 **Goal**: A user with 2FA enabled can replace their recovery codes when they suspect exposure — with the strongest step-up, and atomic burn-and-replace semantics.
