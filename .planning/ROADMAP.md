@@ -10,7 +10,7 @@ greenfield construction.
 
 ## Phases
 
-- [ ] **Phase 19: TOTP Encryption Closure** - Fail-closed decrypt surface everywhere and a boot-time plaintext→envelope migration for legacy `two_fa_secret` rows
+- [x] **Phase 19: TOTP Encryption Closure** - Fail-closed decrypt surface everywhere and a boot-time plaintext→envelope migration for legacy `two_fa_secret` rows (completed 2026-10-28)
 - [ ] **Phase 20: Recovery-Code Regeneration** - A 2FA user can burn-and-replace their recovery codes behind fresh password + live TOTP step-up
 - [ ] **Phase 21: Disable-2FA Verification & Closure** - The shipped disable route is verified against the full contract and closed with e2e + i18n coverage
 - [ ] **Phase 22: Operator Session Revocation** - The instance operator can revoke any non-owner user's sessions; revoked browsers sign out honestly
@@ -28,7 +28,7 @@ greenfield construction.
   3. The fail-closed 503 touches only TOTP-verify/disable endpoints: normal login (non-2FA), workspace features and every other route work untouched when decryption cannot proceed
   4. Every decrypt call site has been audited and routes through the single boundary helper; grep-level tests prove no `decrypt(x) ?? x` pattern exists anywhere
 
-**Plans:** 2/2 plans executed
+**Plans:** 2/2 plans complete
 **Status:** Complete (2026-10-28) — verified 12/12 must-haves, nyquist validated, security SECURED (threats_open: 0)
 
 Plans:
@@ -49,7 +49,11 @@ Plans:
   3. New plaintext codes are displayed exactly once in the UI and never stored; the old set is invalid the moment the new set lands
   4. The regeneration endpoint has its own throttle budget and the response carries `Cache-Control: no-store`
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — Wave 1: POST /api/auth/tfa/recovery route (D-85..D-100), security_log mechanism (D-99), test/tfa-recovery-regen.test.mjs
+- [ ] 20-02-PLAN.md — Wave 2: settings-card regen stage (D-90), actions + api wiring, D-53 modal reuse (D-91), EN+FR i18n (D-92)
 
 ### Phase 21: Disable-2FA Verification & Closure
 
@@ -91,7 +95,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 19. TOTP Encryption Closure | 2/2 | In Progress|  |
+| 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
 | 20. Recovery-Code Regeneration | 0/? | Not started | - |
 | 21. Disable-2FA Verification & Closure | 0/? | Not started | - |
 | 22. Operator Session Revocation | 0/? | Not started | - |
