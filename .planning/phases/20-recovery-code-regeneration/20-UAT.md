@@ -46,5 +46,11 @@ blocked: 0
   reason: "User reported: the text 'L'authentification à deux facteurs est activée. Vous saisirez un code…' displays like one word per line (test 1 passed; cosmetic layout issue on the same card)"
   severity: cosmetic
   test: 1
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  artifacts:  # Filled by diagnosis (gsd-debugger, read-only)
+    - "src/pages/settings.js:410 — tfa on-state row renders two long-label FR buttons into the srow auto column (~600px fixed: Régénérer les codes de récupération + Désactiver l'authentification à deux facteurs + gaps)"
+    - "src/styles/pages/settings.css:43-50 — .srow grid minmax(0,1fr) auto; text column collapses to ~16px inside .set-in ~640px budget (settings.css:29-31)"
+    - "src/styles/base.css:97-101 — .row flex has no flex-wrap, buttons cannot wrap"
+    - "src/styles/responsive.css:96,257-259 — .srow stacks only under @media (max-width: 640px); desktop/narrow-desktop unaffected"
+  missing:  # Filled by diagnosis
+    - "Row-level buttons need short labels: reuse existing act.turnOff (Désactiver / Turn off, verified in both locales, matches workspace danger-zone pattern settings.js:125-131) + add settings.tfa.regenShort (Régénérer / Regenerate) to en.json/fr.json; keep long labels inside the step-up forms where they already exist"
+    - "Add flex-wrap: wrap + justify-content: flex-end + row-gap to the .srow control cluster (.srow > .row) so future multi-button rows wrap instead of squeezing the text column"
