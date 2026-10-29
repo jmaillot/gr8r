@@ -26,10 +26,10 @@ Out of Scope — update docs when rotation lands).
 
 ### Recovery-Code Regeneration (REGEN)
 
-- [ ] **REGEN-01**: A user with 2FA enabled can regenerate their recovery codes via
+- [x] **REGEN-01**: A user with 2FA enabled can regenerate their recovery codes via
   `POST /api/auth/tfa/recovery` — current password **and** a live TOTP code required; a
   recovery code must never satisfy the step-up
-- [ ] **REGEN-02**: Regeneration atomically deletes all existing recovery codes and inserts the
+- [x] **REGEN-02**: Regeneration atomically deletes all existing recovery codes and inserts the
   new hashed set in one transaction; new plaintext codes are displayed once and never stored
 
 ### Disable-2FA Closure (DIS)
@@ -74,8 +74,8 @@ Out of Scope — update docs when rotation lands).
 |-----|-------|--------|
 | ENC-01 | Phase 19 | Complete (19-01) |
 | ENC-02 | Phase 19 | Complete |
-| REGEN-01 | Phase 20 | Pending |
-| REGEN-02 | Phase 20 | Pending |
+| REGEN-01 | Phase 20 | Complete |
+| REGEN-02 | Phase 20 | Complete |
 | DIS-01 | Phase 21 | Pending |
 | DIS-02 | Phase 21 | Pending |
 | OPREV-01 | Phase 22 | Pending |

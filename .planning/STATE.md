@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
 status: unknown
-stopped_at: Phase 20 context gathered
-last_updated: "2026-10-28T16:20:20.285Z"
-state_head: cd688576e02159d637d1645d7db26fd98da11b8b
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-10-29T07:57:09.350Z"
+state_head: d2562132903507f4e760887b394c1925ef0072f6
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
   percent: 25
 current_phase: 20
 current_phase_name: Recovery-Code Regeneration
@@ -55,6 +55,11 @@ current_phase_name: Recovery-Code Regeneration
 | Requirements mapped | 8/8 |
 | Orphans | 0 |
 | Plans completed | 2 (19-01, 19-02) |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 20 P01 | 35m | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -78,10 +83,15 @@ current_phase_name: Recovery-Code Regeneration
 
 ## Session Continuity
 
-**Last session:** 2026-10-28T16:20:20.251Z
-**Stopped at:** Phase 20 context gathered
-**Resume file:** .planning/phases/20-recovery-code-regeneration/20-CONTEXT.md
+**Last session:** 2026-10-29T07:57:09.315Z
+**Stopped at:** Completed 20-01-PLAN.md
+**Resume file:** None
 
 - **Last action:** /gsd-verify-work Phase 19 — 7/7 UAT tests passed on live deployment + isolated local container (Test 4 defer path verified with throwaway Docker instance; no prod config touched). Verification refreshed (stale → passed, fresh digest), phase marked complete, transitioned to Phase 20.
 - **Next action:** `/gsd-discuss-phase 20` (or `/gsd-plan-phase 20`), then Phases 21–22. Remember `/gsd-discuss-phase 22` before planning Phase 22.
 - **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, migrateTotpEncryption ~1000–1072, requireTotpSecret ~271, disable route ~1663, verify ~1737), `totp.js`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
+
+## Decisions
+
+- [Phase 20]: Regen route 503 body copy made per-route unique to honor D-81 byte-distinct-copy guard
+- [Phase 20]: D-99 mechanism: security_log table + logSecurity helper, success-only rows in regen transaction; Phase 21 DIS-01 reuses verbatim
