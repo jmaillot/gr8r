@@ -74,8 +74,12 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 21-01-PLAN.md — Tighten disable route (D-101 strict gate, D-103 challenge teardown, D-105 session policy, D-107 verb) + node:test server suite
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 21-02-PLAN.md — Chromium e2e full-cycle spec EN+FR (D-109/D-106/D-102-UI) + i18n gate
+
 **UI hint**: yes
 
 ### Phase 22: Operator Session Revocation

@@ -289,11 +289,12 @@ Not a rename/refactor phase — omitted. (Relevant note for planners: the phase 
 | A2 | Playwright Chromium browser binary is installed on this machine (dependency declared, binary not probed) | Environment Availability | e2e fails at launch → `npx playwright install chromium` fixes |
 | A3 | No UI code change is needed (disable form at `src/pages/settings.js:391–432` already sends password + code; server tightening is invisible to the client except error copy) | Recommended Project Structure | If the client pre-validates code shape, it doesn't — the disable form has no `inputmode="numeric"` unlike the regen form, so a recovery code can be typed and will hit the server 400, which the UI already renders. If desired, adding `inputmode="numeric"` to `tfa-off-code` is a one-attribute, zero-string change (i18n-safe) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the disable form get `inputmode="numeric"`?**
    - What we know: the regen code field has it (`settings.js` regen form), the disable field does not; server-side strictness makes it cosmetic.
    - Recommendation: planner's discretion (D-111 covers string safety; an attribute change needs no new strings). Low risk either way.
+   - **RESOLVED (2026-10-29): No** — planner discretion confirmed by user; no UI change this phase (zero-string change per A3; plans legitimately leave the UI untouched).
 
 ## Sources
 
