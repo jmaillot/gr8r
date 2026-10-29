@@ -1,20 +1,12 @@
----
-phase: 20-recovery-code-regeneration
-review: 20-REVIEW.md
-recorded: 2026-10-29
-source_review:
-  critical: 0
-  warning: 0
-  info: 2
----
+# Review Disposition — Phase 20
 
-# Phase 20 Review Disposition
+This file is a triage ledger, one row per finding in 20-REVIEW.md.
+Edit the `Disposition` column by hand to record `fixed`, `skipped`, or `deferred`
+(with a reason in Source). Rows the current review no longer reports are marked
+"not in the current review" and stay until triaged.
 
-Advisory ledger — one row per finding from `20-REVIEW.md` (c0fbb52). Every row defaults to `open`; triage updates the disposition column only.
+_Last updated: 2026-10-29T00:00:00Z — findings: 1 (0 critical, 0 warning, 1 info)_
 
-| ID | Severity | File | Summary | Disposition | Notes |
-|----|----------|------|---------|-------------|-------|
-| IN-01 | info | server.js | `security_log` is write-only with no retention/cleanup path | open | Deferred by design — retention sweep scheduled when DIS-01 (Phase 21) lands |
-| IN-02 | info | server.js | `logSecurity` prepares its insert statement on every call | open | Deferred — negligible at current volume; revisit if security_log volume grows |
-
-**Counts:** 0 critical / 0 warning / 2 info — 2 open, 0 triaged, 0 fixed, 0 wontfix.
+| Finding | Severity | Disposition | Source |
+|---------|----------|-------------|--------|
+| IN-01 | info | open | Stale "1549 keys" prefix inside the catalogue-size test title (test/i18n-core-features.test.mjs:216) |
