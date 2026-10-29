@@ -268,6 +268,13 @@ export const api = {
   async tfaDisable(currentPassword, code) {
     return call('POST', '/api/auth/tfa/disable', { currentPassword, code });
   },
+  /* REGEN-01/02: regenerate recovery codes with a password + live-TOTP step-up.
+     The success response carries the new one-time plaintext codes — they flow
+     straight into the D-53 recovery modal's transient state and are never
+     persisted client-side (D-91). */
+  async tfaRecover(currentPassword, code) {
+    return call('POST', '/api/auth/tfa/recovery', { currentPassword, code });
+  },
   /* TFA-05: verify the pending login challenge. Deliberately NO applyUser here —
      the caller (doTfaLogin) adopts the user through the shared post-success flow. */
   async tfaLogin(code) {
