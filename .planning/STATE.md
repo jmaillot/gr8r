@@ -5,8 +5,8 @@ milestone_name: Auth Completion
 current_plan: Not started
 status: executing
 stopped_at: Phase 22 complete — all phases complete
-last_updated: "2026-10-29T14:59:19.094Z"
-state_head: b5dab49d25ba94ff1ed3caca9a6a55a36de3192e
+last_updated: "2026-10-29T15:28:27.036Z"
+state_head: 44b89ecf7442603100e2286a9148b066983621e9
 progress:
   total_phases: 4
   completed_phases: 3
@@ -86,18 +86,24 @@ Total Plans in Phase: 2
 
 - None. Phase 22 decisions block only its own discuss/plan, not earlier phases.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 261029-moz | Hide sidebar Projects sub-items permanently and show full active-project inventory in Workspace settings > Projects | 2026-10-29 | 44b89ec | [261029-moz-hide-sidebar-projects-sub-items-permanen](./quick/261029-moz-hide-sidebar-projects-sub-items-permanen/) |
+
 ### Todos
 
 - Run `/gsd-discuss-phase 22` before planning Phase 22 (research flag: blocking decision).
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T14:39:33.913Z
-**Stopped at:** Phase 22 complete — all phases complete
+**Last session:** 2026-10-29T15:35:00.000Z
+**Stopped at:** Quick task 261029-moz complete — sidebar sub-items hidden + settings active-projects inventory
 **Resume file:** None
 
-- **Last action:** Completed 22-02-PLAN.md — operator users-list route + settings card + EN/FR catalogue + EN+FR lifecycle e2e; npm test 566/566, playwright 61/61.
-- **Next action:** `/gsd-verify-work 22` (Phase 22 execution complete; all 9 v1.4 plans done).
+- **Last action:** Completed quick task 261029-moz — hard-hide sidebar Projects sub-items (layout.js, dead expand affordance removed) + read-only active-project inventory in Workspace settings > Projects; npm test 566/566.
+- **Next action:** Pending product decisions: P3 multi-team projects (deferred), P4 notification emission half (separate product decision).
 - **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, migrateTotpEncryption ~1000–1072, requireTotpSecret ~271, disable route ~1663, verify ~1737), `totp.js`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
 
 ## Decisions
