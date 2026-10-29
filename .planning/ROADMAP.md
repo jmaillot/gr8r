@@ -13,7 +13,7 @@ greenfield construction.
 - [x] **Phase 19: TOTP Encryption Closure** - Fail-closed decrypt surface everywhere and a boot-time plaintext→envelope migration for legacy `two_fa_secret` rows (completed 2026-10-28)
 - [x] **Phase 20: Recovery-Code Regeneration** - A 2FA user can burn-and-replace their recovery codes behind fresh password + live TOTP step-up (completed 2026-10-29)
 - [x] **Phase 21: Disable-2FA Verification & Closure** - The shipped disable route is verified against the full contract and closed with e2e + i18n coverage (completed 2026-10-29)
-- [ ] **Phase 22: Operator Session Revocation** - The instance operator can revoke any non-owner user's sessions; revoked browsers sign out honestly
+- [x] **Phase 22: Operator Session Revocation** - The instance operator can revoke any non-owner user's sessions; revoked browsers sign out honestly
 
 ## Phase Details
 
@@ -94,11 +94,11 @@ Plans:
   4. The privilege gate is instance-operator, not workspace-admin: a workspace admin who is not the operator cannot revoke another user's sessions (privilege-matrix test)
   5. One cross-feature Chromium e2e covers the full lifecycle — enroll → regenerate → login → disable → re-enroll → revoke — in EN + FR, with no v1.3 test deleted or weakened
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 - [x] 22-01-PLAN.md — `is_instance_admin` flag + boot stamp + operator gate + revoke route + privilege-matrix node:test suite (D-112–D-119, D-122)
-- [ ] 22-02-PLAN.md — Users-list route + operator settings card + EN/FR catalogue + lifecycle e2e (D-120, D-121, D-123)
+- [x] 22-02-PLAN.md — Users-list route + operator settings card + EN/FR catalogue + lifecycle e2e (D-120, D-121, D-123)
 
 ## Research Notes
 
@@ -115,4 +115,4 @@ Plans:
 | 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
 | 20. Recovery-Code Regeneration | 2/2 | In Progress|  |
 | 21. Disable-2FA Verification & Closure | 2/2 | Complete    | 2026-10-29 |
-| 22. Operator Session Revocation | 1/2 | In Progress|  |
+| 22. Operator Session Revocation | 2/2 | Complete |  |

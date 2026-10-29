@@ -4,14 +4,14 @@ milestone: v1.4
 milestone_name: Auth Completion
 current_plan: 2
 status: executing
-stopped_at: Completed 22-01-PLAN.md
-last_updated: "2026-10-29T13:47:51.878Z"
-state_head: e9303b4d2d4c16519e5c41fab4ea6d3b68ce9fe5
+stopped_at: Completed 22-02-PLAN.md
+last_updated: "2026-10-29T14:39:33.965Z"
+state_head: 90e637993c94868149edfdc65dda3249081dfac8
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 50
 current_phase: 22
 current_phase_name: Operator Session Revocation
@@ -27,13 +27,13 @@ current_phase_name: Operator Session Revocation
 
 ## Current Position
 
-- **Phase:** 21 — Disable-2FA Verification & Closure
+- **Phase:** 22 — Operator Session Revocation
 
 Current Plan: 2
 Total Plans in Phase: 2
 
-- **Status:** Phase 21 plan 01 complete (disable route tightened, 8-test server suite green); plan 02 (e2e) next
-- **Progress:** ▓▓▓▓▓░░░░░ (6/7 milestone plans complete — Phases 19–20 done; Phase 21 plan 01 done, plan 02 next)
+- **Status:** Phase 22 complete (plans 01 + 02 done — flag/route/server suite + operator card/EN-FR e2e)
+- **Progress:** ▓▓▓▓▓▓▓▓░░ (8/9 milestone plans complete — Phases 19–21 done; Phase 22 done, awaiting verification)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -47,8 +47,8 @@ Total Plans in Phase: 2
 | REGEN-02 | 20 | Complete (20-01/20-02) |
 | DIS-01 | 21 | Complete (21-01) |
 | DIS-02 | 21 | Complete (21-01) |
-| OPREV-01 | 22 | Pending |
-| OPREV-02 | 22 | Pending |
+| OPREV-01 | 22 | Complete (22-01/22-02) |
+| OPREV-02 | 22 | Complete (22-01/22-02) |
 
 ## Performance Metrics
 
@@ -57,7 +57,7 @@ Total Plans in Phase: 2
 | Phases planned | 4 (19–22) |
 | Requirements mapped | 8/8 |
 | Orphans | 0 |
-| Plans completed | 6 (19-01/02, 20-01/02/03, 21-01) |
+| Plans completed | 9 (19-01/02, 20-01/02/03, 21-01/02, 22-01/02) |
 **Per-Plan Metrics:**
 
 | Plan | Duration | Tasks | Files |
@@ -68,6 +68,7 @@ Total Plans in Phase: 2
 | Phase 21 P01 | 14m | 2 tasks | 3 files |
 | Phase 21 P02 | 43m | 2 tasks | 1 files |
 | Phase 22 P01 | 26m | 3 tasks | 5 files |
+| Phase 22 P02 | 55m | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -91,12 +92,12 @@ Total Plans in Phase: 2
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T13:47:51.830Z
-**Stopped at:** Completed 22-01-PLAN.md
+**Last session:** 2026-10-29T14:39:33.913Z
+**Stopped at:** Completed 22-02-PLAN.md
 **Resume file:** None
 
-- **Last action:** /gsd-verify-work Phase 20 — UAT 2/2 passed; G-20-1 (cosmetic srow squeeze) closed via gap plan 20-03 and re-verified with user confirmation. VERIFICATION canonicalized to passed; phase marked complete in ROADMAP/STATE; transitioned to Phase 21.
-- **Next action:** `/gsd-discuss-phase 21` (or `/gsd-plan-phase 21`). Remember `/gsd-discuss-phase 22` before planning Phase 22.
+- **Last action:** Completed 22-02-PLAN.md — operator users-list route + settings card + EN/FR catalogue + EN+FR lifecycle e2e; npm test 566/566, playwright 61/61.
+- **Next action:** `/gsd-verify-work 22` (Phase 22 execution complete; all 9 v1.4 plans done).
 - **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, migrateTotpEncryption ~1000–1072, requireTotpSecret ~271, disable route ~1663, verify ~1737), `totp.js`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
 
 ## Decisions
@@ -109,3 +110,4 @@ Total Plans in Phase: 2
 - [Phase 21]: D-109 full-cycle 2FA disable e2e parametric EN+FR; re-enable via fresh API session (D-105 revokes the old one)
 - [Phase 21]: D-102 asserted at the UI form level and D-106 via two cookie-jar contexts; zero new locale strings (D-111)
 - [Phase 22]: D-112/D-113 flag + boot stamp shipped; D-118 self-target resolves to 200 (keep-current) — ownerImmune only for other flagged owners; gate-refusal code operatorOnly
+- [Phase 22]: D-120/D-121 operator card on settings sessions tab from api.user.isInstanceAdmin ground truth; users-list read route unthrottled (D-121); D-123 e2e proves the EN+FR lifecycle with the honest teardown
