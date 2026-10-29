@@ -4,15 +4,15 @@ milestone: v1.4
 milestone_name: Auth Completion
 current_plan: 2
 status: executing
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-10-29T11:05:00.880Z"
-state_head: 4859bfc6d40acbddf5a964542e432e0395cb3d84
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-10-29T11:53:33.446Z"
+state_head: 8b091524998992bf6ff79cee92098fe806185ae3
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 7
-  completed_plans: 6
-  percent: 86
+  completed_plans: 7
+  percent: 50
 current_phase: 21
 current_phase_name: Disable-2FA Verification & Closure
 ---
@@ -66,6 +66,7 @@ Total Plans in Phase: 2
 | Phase 20 P02 | 40m | 2 tasks | 8 files |
 | Phase 20 P03 | 12m | 2 tasks | 5 files |
 | Phase 21 P01 | 14m | 2 tasks | 3 files |
+| Phase 21 P02 | 43m | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -89,8 +90,8 @@ Total Plans in Phase: 2
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T11:05:00.836Z
-**Stopped at:** Completed 21-01-PLAN.md
+**Last session:** 2026-10-29T11:53:33.402Z
+**Stopped at:** Completed 21-02-PLAN.md
 **Resume file:** None
 
 - **Last action:** /gsd-verify-work Phase 20 — UAT 2/2 passed; G-20-1 (cosmetic srow squeeze) closed via gap plan 20-03 and re-verified with user confirmation. VERIFICATION canonicalized to passed; phase marked complete in ROADMAP/STATE; transitioned to Phase 21.
@@ -104,3 +105,5 @@ Total Plans in Phase: 2
 - [Phase 20]: Client regen flow reuses D-53 modal via transient S.ui.recoveryCodes; 6-digit-only code field (D-85 client half); row buttons hidden while any tfaStage open
 - [Phase 20]: G-20-1 closed via short row labels (settings.tfa.regenShort + reused act.turnOff) and .srow > .row wrap rule — no disable-route changes (Phase 21 scope preserved)
 - [Phase 21]: Disable route: D-101 strict 6-digit gate (D-57 recovery branch deleted), D-103 user-scoped challenge teardown, D-105 revoke-others via cookie-derived tokenHash, D-107 after-commit tfa_disabled verb — regression-tested in test/tfa-disable.test.mjs (8 tests)
+- [Phase 21]: D-109 full-cycle 2FA disable e2e parametric EN+FR; re-enable via fresh API session (D-105 revokes the old one)
+- [Phase 21]: D-102 asserted at the UI form level and D-106 via two cookie-jar contexts; zero new locale strings (D-111)
