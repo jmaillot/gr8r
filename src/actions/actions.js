@@ -210,7 +210,7 @@ A.go = el => {
   if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa') && api.enabled) {
     refreshSessions();
     refreshTfa(); // T-16-13: the card's on/off split re-reads the server
-    refreshOperatorUsers(); // OPREV-02: the operator card re-reads the server list
+    if (p.sec === 'sessions') refreshOperatorUsers(); // OPREV-02: card lives only on the sessions tab (IN-02)
   }
 };
 A.back = () => {
