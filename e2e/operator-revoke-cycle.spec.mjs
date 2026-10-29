@@ -41,6 +41,11 @@ function fmt(key, vars, lang) {
   return s;
 }
 
+/* Escape a catalogue string for literal use inside new RegExp(). */
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /* Status-checked fixture call, the setup.mjs convention. */
 async function must(step, res, allowed) {
   if (!allowed.includes(res.status)) {
@@ -131,7 +136,12 @@ async function loginWith2fa(page, account, secret, lang, lastStepSec) {
   await nextWindow(lastStepSec);
   const ok = await submitTfaCode(page, account.slug, totpAt(secret, Math.floor(Date.now() / 1000) + 1));
   if (!ok) {
-    await expect(page.getByText(fmt('err.invalidTfaCode', {}, lang))).toBeVisible();
+    /* The first submit can fail with a code rejection OR a challenge expiry
+       (nextWindow pushed past the 30s step the code was minted from) — the
+       retry is valid for either failure mode (IN-03). */
+    await expect(
+      page.getByText(new RegExp(`${escapeRe(fmt('err.invalidTfaCode', {}, lang))}|${escapeRe(fmt('err.challengeExpired', {}, lang))}`)),
+    ).toBeVisible();
     await nextWindow(Math.floor(Date.now() / 1000));
     const retried = await submitTfaCode(page, account.slug, totpAt(secret, Math.floor(Date.now() / 1000) + 1));
     if (!retried) throw new Error('retry with the next step code failed');
