@@ -226,18 +226,20 @@ test('D-59: disable with a live code tears everything down in one transaction', 
   assert.match(again.secret, /^[A-Z2-7]{32}$/);
 });
 
-test('D-57: a printed recovery code disables 2FA in any normalization', async () => {
+test('D-101/D-102 (supersedes D-57): a printed recovery code can never disable 2FA', async () => {
   const a = await signIn2fa('enableme@test.local');
   const printed = enablemeCodes[0];
   assert.ok(printed, 'the enable response codes were captured');
 
-  // The same printed code in UPPERCASE verifies via the ONE normalization
-  // (Pitfall 6) — case and dash/spell variants normalize identically.
+  // Phase 21 (D-101) removed the D-57 recovery shape: ANY non-6-digit code —
+  // including this printed code in any normalization (Pitfall 6) — is
+  // rejected by the strict gate before any recovery_codes access.
   const ok = await disable(a.client, { currentPassword: GOOD, code: printed.toUpperCase() });
-  assert.equal(ok.status, 200);
+  assert.equal(ok.status, 400);
+  assert.equal(ok.data.code, 'codeRejected');
   const row = userRow('enableme@test.local');
-  assert.equal(row.two_fa_enabled, 0);
-  assert.equal(recoveryRows('enableme@test.local').length, 0, 'all rows deleted by teardown');
+  assert.equal(row.two_fa_enabled, 1, '2FA is still enabled');
+  assert.equal(recoveryRows('enableme@test.local').length, 10, 'no code was burned or deleted');
 });
 
 test('D-57/T-16-14: an already-burned recovery code is rejected', async () => {
