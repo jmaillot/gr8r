@@ -116,29 +116,15 @@ export function renderSidebar() {
         <div class="sgroup-h"><span>${routeName('projects')}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newProject" data-tip="${t('a11y.newProjectTip')}" aria-label="${t('a11y.newProject')}">${ic('plus', 14)}</button></div>
         ${projs
           .map(p => {
-            const open = !!u.expanded[p.id];
             const on = inProj === p.id;
             return `<div class="sproj" data-proj-drop="${p.id}">
             <div class="sitem ${on ? 'on' : ''}" draggable="true" data-drag-proj="${p.id}" data-a="go" data-r="project" data-id="${p.id}" data-ctx="project" role="link" tabindex="0" ${u.collapsed ? `data-tip="${esc(p.name)}" data-tip-pos="right"` : ''}>
-              <span class="pico" style="--c:${pColor(p)}" data-a="toggleExpand" data-id="${p.id}" aria-label="${t('a11y.toggleSubPages')}">${ic(p.icon, 12)}</span>
+              <span class="pico" style="--c:${pColor(p)}">${ic(p.icon, 12)}</span>
               <span class="trunc">${esc(p.name)}</span>
               ${p.fav ? `<span class="fav">${ic('star', 11)}</span>` : ''}
               ${p.private ? `<span class="faint" style="margin-left:4px">${ic('lock', 11)}</span>` : ''}
               <span class="sdot" style="background:${PSTAT[p.status].c}" title="${PSTAT[p.status].name}"></span>
-              <span class="hov"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${p.id}" aria-label="${t('a11y.projectOptions')}">${ic('ellipsis', 14)}</span><span class="ibtn ibtn-xs" data-a="toggleExpand" data-id="${p.id}" aria-label="${t('a11y.expand')}">${ic('chevron-right', 13, 'chev ' + (open ? 'open' : ''))}</span></span>
-            </div>
-            <div class="sub ${open && !u.collapsed ? 'open' : ''}">
-              ${[
-                ['board', t('nav.tab.board'), 'square-kanban'],
-                ['list', t('nav.tab.list'), 'list'],
-                ['timeline', routeName('timeline'), 'chart-gantt'],
-                ['files', t('nav.tab.files'), 'paperclip'],
-              ]
-                .map(
-                  ([tab, n, i]) =>
-                    `<button class="sitem ${on && u.params.tab === tab ? 'on' : ''}" data-a="go" data-r="project" data-id="${p.id}" data-tab="${tab}">${ic(i, 14)}<span>${n}</span></button>`,
-                )
-                .join('')}
+              <span class="hov"><span class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="project" data-id="${p.id}" aria-label="${t('a11y.projectOptions')}">${ic('ellipsis', 14)}</span></span>
             </div>
           </div>`;
           })
