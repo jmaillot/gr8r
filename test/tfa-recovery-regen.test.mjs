@@ -110,3 +110,103 @@ test('REGEN-01/REGEN-02: password + live TOTP regenerates 10 hashed codes atomic
   assert.equal(logs.length, 1, 'D-99: exactly one security_log row');
   assert.equal(logs[0].verb, 'tfa_recovery_regenerated');
 });
+
+test('D-85 headline regression: a recovery code can never satisfy the step-up', async () => {
+  const a = await makeUser('regenRegress');
+  const [, oldCodes] = await enableTfa(a, 'regenRegress');
+
+  const before = recoveryRows('regenRegress@test.local');
+  assert.equal(before.length, 10);
+
+  // Post a captured plaintext recovery code verbatim as `code`.
+  const res = await regen(a.cookie(), { currentPassword: GOOD, code: oldCodes[0] });
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, 'codeRejected');
+
+  const after = recoveryRows('regenRegress@test.local');
+  assert.deepEqual(
+    after.map(r => r.code_hash).sort(),
+    before.map(r => r.code_hash).sort(),
+    'the code set is byte-unchanged',
+  );
+  for (const r of after) assert.equal(r.used_at, null, 'no code was burned');
+
+  // SC-4 kept explicit on a second success path (this user's tfa-regen budget
+  // has 4 tries left): a correct regen still answers 200 + no-store.
+  resetLastStep('regenRegress@test.local');
+  const ok = await regen(a.cookie(), { currentPassword: GOOD, code: liveCode(enabledSecrets.get('regenRegress@test.local')) });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('cache-control'), 'no-store', 'SC-4/D-100: no-store survives route refactors');
+  const okBody = await ok.json();
+  assert.equal(okBody.ok, true);
+  assert.equal(okBody.recoveryCodes.length, 10);
+  assert.equal(securityRows('regenRegress@test.local').length, 1, 'success-only logging: still exactly one row');
+});
+
+test('D-95: a 2FA-disabled user gets 409 tfaNotEnabled before any factor check', async () => {
+  const a = await makeUser('regenNoTfa');
+  const res = await regen(a.cookie(), { currentPassword: GOOD, code: '123456' });
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).code, 'tfaNotEnabled');
+  assert.equal(recoveryRows('regenNoTfa@test.local').length, 0, 'zero mutation');
+  assert.equal(securityRows('regenNoTfa@test.local').length, 0, 'no security_log row on failure');
+});
+
+test('D-93/D-94: wrong passwords burn tries and the 6th attempt locks out', async () => {
+  const a = await makeUser('regenWrongPw');
+  const [secret] = await enableTfa(a, 'regenWrongPw');
+  const before = recoveryRows('regenWrongPw@test.local');
+
+  // Five wrong-password attempts stay inside the 5-attempt band; every one
+  // burns a try (D-94) and leaves the code set untouched.
+  for (let i = 0; i < 5; i++) {
+    const res = await regen(a.cookie(), { currentPassword: `wrong-${i}-x`, code: liveCode(secret) });
+    assert.equal(res.status, 403, `attempt ${i + 1} is verified (not locked out yet)`);
+    assert.equal((await res.json()).code, 'wrongCurrentPassword');
+  }
+  const mid = recoveryRows('regenWrongPw@test.local');
+  assert.deepEqual(mid.map(r => r.code_hash).sort(), before.map(r => r.code_hash).sort(), 'code set unchanged by failures');
+
+  // The 6th tfa-regen attempt hits the generic lockout — a budget independent
+  // of the enroll/disable budgets (D-93).
+  const locked = await regen(a.cookie(), { currentPassword: GOOD, code: liveCode(secret) });
+  assert.equal(locked.status, 429);
+  assert.equal((await locked.json()).code, 'tooManyAttempts');
+
+  // The failed attempts never touched state: no burned codes, no log row.
+  assert.equal(securityRows('regenWrongPw@test.local').length, 0);
+});
+
+test('a stale-window code is rejected (±1 window) and the 503 path fails closed', async () => {
+  const a = await makeUser('regenWindow');
+  const [secret] = await enableTfa(a, 'regenWindow');
+
+  // A code from a window an hour ahead cannot verify (±1 window), even with a
+  // fresh baseline.
+  resetLastStep('regenWindow@test.local');
+  const stale = await regen(a.cookie(), { currentPassword: GOOD, code: totpAt(secret, Date.now() / 1000 + 3600) });
+  assert.equal(stale.status, 400);
+  assert.equal((await stale.json()).code, 'codeRejected');
+  const before = recoveryRows('regenWindow@test.local');
+  const stepBefore = userRow('regenWindow@test.local').two_fa_last_step;
+  assert.equal(before.length, 10, 'code set untouched by the rejected attempt');
+
+  // T-20-05/D-89: corrupt the stored envelope → requireTotpSecret fails →
+  // fail-closed 503 BEFORE any mutation (no usable-MASTER_KEY boot needed —
+  // the corrupted envelope exercises the identical decrypt-failure branch).
+  withDb(server.dbPath, db =>
+    db
+      .prepare(
+        "update users set two_fa_secret = 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC' where email = ?",
+      )
+      .run('regenWindow@test.local'),
+  );
+  const res = await regen(a.cookie(), { currentPassword: GOOD, code: liveCode(secret) });
+  assert.equal(res.status, 503);
+  assert.equal((await res.json()).code, 'masterKeyMissing');
+
+  const afterRows = recoveryRows('regenWindow@test.local');
+  assert.deepEqual(afterRows.map(r => r.code_hash).sort(), before.map(r => r.code_hash).sort(), 'zero mutation to recovery_codes');
+  assert.equal(userRow('regenWindow@test.local').two_fa_last_step, stepBefore, 'zero mutation to two_fa_last_step');
+  assert.equal(securityRows('regenWindow@test.local').length, 0, 'no security_log row on failure');
+});

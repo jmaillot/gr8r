@@ -295,6 +295,7 @@
   "err.wrongCurrentPassword": "Current password is incorrect",
   "err.passwordRequired": "Enter your current and new password",
   "err.noPendingEnrollment": "That setup has expired — start the two-step setup again",
+  "err.tfaNotEnabled": "Enable two-factor authentication first",
   "err.codeRejected": "That code is not valid",
   "err.masterKeyMissing": "Two-step verification is temporarily unavailable",
   "err.passwordWeak": "Use at least 10 characters, including a number or symbol",

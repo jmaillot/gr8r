@@ -1749,7 +1749,7 @@ async function handleApi(req, res, url) {
     });
     if (outcome === 'notEnabled') return fail(res, 409, 'tfaNotEnabled', 'Enable two-factor authentication first');
     if (outcome === 'password') return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
-    if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured or the stored secret is undecryptable');
+    if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — codes cannot be regenerated until the admin sets it');
     if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
     return json(res, 200, { ok: true, recoveryCodes: codes }); // D-100; no-store comes from json()
   }

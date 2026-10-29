@@ -70,9 +70,12 @@ test('decryptTotpSecret is referenced ONLY by its definition and requireTotpSecr
 });
 
 test('both call sites branch on wrapped.ok and feed wrapped.secret to verifyTotpCode', () => {
-  assert.equal((serverSource.match(/const wrapped = requireTotpSecret\(/g) || []).length, 2, 'expected exactly two swapped call sites');
-  assert.equal((serverSource.match(/if \(!wrapped\.ok\) return 'masterKey';/g) || []).length, 2, 'both call sites must branch on ok:false');
-  assert.equal((serverSource.match(/verifyTotpCode\(wrapped\.secret/g) || []).length, 2, 'wrapped.secret must feed verifyTotpCode');
+  /* Phase 20 added the third surface (regen route); every added surface must
+     keep the wrapper + fail-closed shape (D-77/D-89), so the count is a
+     tracked floor per route, not a hard 2. */
+  assert.equal((serverSource.match(/const wrapped = requireTotpSecret\(/g) || []).length, 3, 'expected three wrapped call sites (disable, verify, regen)');
+  assert.equal((serverSource.match(/if \(!wrapped\.ok\) return 'masterKey';/g) || []).length, 3, 'all call sites must branch on ok:false');
+  assert.equal((serverSource.match(/verifyTotpCode\(wrapped\.secret/g) || []).length, 3, 'wrapped.secret must feed verifyTotpCode');
 });
 
 test('the per-route 503 body copies are byte-identical to pre-refactor server.js (D-81)', () => {
