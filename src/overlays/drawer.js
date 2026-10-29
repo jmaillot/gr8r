@@ -5,7 +5,7 @@ import { TODAY, ago, diffD, esc, fmtDate, modKey, parse, relDate } from '../core
 /* drawerHtml's task parameter is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
+import { D, S, commentsOf, isOver, mem, pColor, proj, task, teamsList } from '../core/store.js';
 import { FT, av, filePrev, fileType, fileTypeName, fmtComment, lbl, progBar } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { actExtraHtml, cellAssignee, cellDue, cellPrio, cellProject, cellStatus, verbLabel } from '../components/task-list.js';
@@ -42,11 +42,17 @@ export function drawerHtml(t) {
   const ups = (u.uploads || []).filter(x => x.task === t.id);
   const ment =
     u.mention && u.mention.tid === t.id
-      ? D()
-          .members.filter(
-            m => m.name.toLowerCase().startsWith(u.mention.q.toLowerCase()) || m.name.split(' ')[1]?.toLowerCase().startsWith(u.mention.q.toLowerCase()),
-          )
-          .slice(0, 5)
+      ? [
+          ...D()
+            .members.filter(
+              m => m.name.toLowerCase().startsWith(u.mention.q.toLowerCase()) || m.name.split(' ')[1]?.toLowerCase().startsWith(u.mention.q.toLowerCase()),
+            )
+            .map(m => ({ id: m.id, name: m.name, title: m.title, team: false })),
+          // P4-c: @team suggestions ride the same autocomplete.
+          ...teamsList()
+            .filter(tm => tm.name.toLowerCase().startsWith(u.mention.q.toLowerCase()))
+            .map(tm => ({ id: tm.id, name: tm.name, title: tMsg('nav.route.team'), team: true })),
+        ].slice(0, 6)
       : [];
   const sub = u.subOpen && u.subOpen.tid === t.id ? t.subtasks.find(s => s.id === u.subOpen.sid) : null;
   return `<aside class="drawer ${u.drawerFull ? 'full' : ''} ${u.fx.drawer ? 'enter' : ''} ${u.fx.tabs ? 'fx-tabs' : ''}" role="dialog" aria-modal="${u.drawerFull}" aria-labelledby="d-h" tabindex="-1">
@@ -122,7 +128,7 @@ export function drawerHtml(t) {
           <div class="row" style="align-items:flex-start;gap:10px;margin-top:8px">${av(D().me, 'md', false)}<div class="grow" style="position:relative">
             <div class="cbox"><textarea id="d-cmt" data-in="draft" data-id="${t.id}" data-key-mod-enter="postComment" placeholder="${tMsg('a11y.commentPlaceholder')}" aria-label="${tMsg('act.comment')}" rows="2" data-autosize>${esc(u.drafts[t.id] || '')}</textarea>
             <div class="row"><button class="ibtn ibtn-xs" data-a="insertAt" data-id="${t.id}" data-tip="${tMsg('a11y.mentionSomeone')}" aria-label="${tMsg('a11y.mention')}">${ic('at-sign', 14)}</button><label class="ibtn ibtn-xs" data-tip="${tMsg('a11y.attachFile')}" style="cursor:pointer">${ic('paperclip', 14)}<input type="file" multiple hidden data-in="uploadFiles" data-task="${t.id}" data-project="${t.project}"></label><span class="sp"></span><span class="faint hide-m" style="font-size:11px">${modKey()}${tMsg('common.plusEnter')}</span><button class="btn btn-primary btn-sm" data-a="postComment" data-id="${t.id}">${tMsg('act.comment')}</button></div></div>
-            ${ment.length ? `<div class="pop" style="position:absolute;top:auto;bottom:calc(100% + 4px);left:0">${ment.map(m => `<button class="mi" data-a="pickMention" data-id="${t.id}" data-name="${esc(m.name)}">${av(m.id, 'sm', false)}${esc(m.name)}<span class="r">${esc(m.title)}</span></button>`).join('')}</div>` : ''}
+            ${ment.length ? `<div class="pop" style="position:absolute;top:auto;bottom:calc(100% + 4px);left:0">${ment.map(m => `<button class="mi" data-a="pickMention" data-id="${t.id}" data-name="${esc(m.name)}">${m.team ? `<span class="picon" style="--c:var(--accent);width:22px;height:22px;font-size:10px">${ic('users', 11)}</span>` : av(m.id, 'sm', false)}${esc(m.name)}<span class="r">${esc(m.title)}</span></button>`).join('')}</div>` : ''}
           </div></div>`
             : `
           <div style="padding-top:4px">${acts.map(a => `<div class="act-line"><span class="ico">${av(a.by, 'sm', false)}</span><span class="grow"><b>${esc(mem(a.by)?.id === D().me ? tMsg('common.you') : mem(a.by)?.name)}</b> ${esc(verbLabel(a.verb))}${a.extra ? ' ' + actExtraHtml(a.extra) : ''}</span><time class="faint" style="font-size:11.5px">${ago(a.at)}</time></div>`).join('')}

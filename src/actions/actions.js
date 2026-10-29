@@ -25,6 +25,7 @@ import {
   roleLabel,
   save,
   task,
+  teamsList,
   tasksOf,
   visibleProjects,
 } from '../core/store.js';
@@ -97,6 +98,55 @@ export function createTask(f) {
   return tk;
 }
 export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
+/* ---------- P4-c mentions ---------- */
+/* Parse `@Full Name`, `@First` (unique across the roster) and `@Team Name` in a
+   plain-text body. Longest names win so "Sarah Chen" is not eaten by "Sarah". */
+export function parseMentions(txt) {
+  const d = D();
+  const memberIds = new Set();
+  const teamIds = new Set();
+  const names = [
+    ...(d.members || []).filter(m => m?.status !== 'invited' && m.name).map(m => ({ id: m.id, name: m.name })),
+    ...(teamsList() || []).filter(tm => tm?.name).map(tm => ({ id: tm.id, name: tm.name, team: true })),
+  ].sort((a, b) => b.name.length - a.name.length);
+  // First pass: exact full names, longest first, consumed out of the text.
+  let rest = txt;
+  for (const { id, name, team } of names) {
+    const re = new RegExp('(?:^|\\s)@' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=\\s|$)', 'gi');
+    if (re.test(rest)) {
+      (team ? teamIds : memberIds).add(id);
+      rest = rest.replace(re, ' ');
+    }
+  }
+  // Second pass: bare first tokens, only when unique among remaining members.
+  for (const m of d.members || []) {
+    if (m?.status === 'invited' || !m.name || memberIds.has(m.id)) continue;
+    const first = m.name.split(' ')[0];
+    if (rest.match(new RegExp('(?:^|\\s)@' + first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=\\s|$)', 'i'))) {
+      const clash = (d.members || []).some(x => x !== m && x?.name && x.name.split(' ')[0] === first);
+      if (!clash) memberIds.add(m.id);
+    }
+  }
+  return { memberIds: [...memberIds], teamIds: [...teamIds] };
+}
+/* Emit mention notifications for a parsed body. Workspace notifPrefs gate the
+   emission (mention_all for members, mention_team for @team). */
+export function emitMentions(txt, tk) {
+  const { memberIds, teamIds } = parseMentions(txt || '');
+  const np = D().notifPrefs || {};
+  const targets = new Set();
+  if (np.mention_all !== false) memberIds.forEach(id => targets.add(id));
+  if (np.mention_team !== false) {
+    for (const tid of teamIds) (D().members || []).forEach(m => { if (m?.team === tid && m.status === 'active') targets.add(m.id); });
+  }
+  if (targets.size) {
+    // Snippet: a short plain excerpt around the first @, for the inbox preview.
+    const at = (txt || '').indexOf('@');
+    const snippet = at < 0 ? '' : (txt || '').slice(at, at + 70).trim();
+    notifyMembers([...targets], { type: 'mention', by: D().me, task: tk?.id ?? null, project: tk?.project ?? null, snippet });
+  }
+}
+
 export function applyPatch(t, patch) {
   const msgs = [];
   for (const k of Object.keys(patch)) {
@@ -726,8 +776,11 @@ A.submitTask = () => {
             .replace(/<[^>]+>/g, ' ')
             .replace(/\s+/g, ' ')
             .trim()
-        )
+        ) {
           tk.desc = f.desc ? `<p>${esc(f.desc)}</p>` : '';
+          /* P4-c: mentions typed in a freshly saved description notify too (dedup guards repeats). */
+          if (f.desc && f.desc.includes('@')) emitMentions(f.desc, tk);
+        }
         tk.attachments.push(...files);
       })
     )
@@ -742,6 +795,8 @@ A.submitTask = () => {
     !mutate(() => {
       tk = createTask({ ...base, desc: f.desc ? `<p>${esc(f.desc)}</p>` : '', attachments: files });
       files.forEach(x => D().files.unshift({ ...x, project: tk.project, task: tk.id }));
+      /* P4-c: mentions typed in the description notify too. */
+      if (f.desc) emitMentions(f.desc, tk);
     })
   )
     return;
@@ -998,6 +1053,8 @@ A.postComment = el => {
       S.ui.drawerTab = 'comments';
     })
   ) {
+    /* P4-c: a comment notifies the members and teams @mentioned in it. */
+    emitMentions(txt, tk);
     if (S.ui.route === 'inbox') toast(t('toast.replyPosted'));
   }
 };

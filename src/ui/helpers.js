@@ -3,7 +3,7 @@ import { TODAY, diffD, esc, foldForSearch, parse, relDate } from '../core/utils.
 import { t, formatFileSize } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { LB, PR, PSTAT, ST } from '../core/constants.js';
-import { D, mem, pColor } from '../core/store.js';
+import { D, mem, pColor, teamsList } from '../core/store.js';
 
 export function av(id, cls = '', tip = true) {
   const m = mem(id);
@@ -78,6 +78,11 @@ export function fmtComment(txt) {
   let h = esc(txt);
   D().members.forEach(m => {
     h = h.split('@' + esc(m.name)).join(`<span class="mention">@${esc(m.name)}</span>`);
+  });
+  /* P4-c: team mentions highlight too (longest names first is irrelevant here —
+     split/join is exact-match on the full name). */
+  teamsList().forEach(tm => {
+    h = h.split('@' + esc(tm.name)).join(`<span class="mention tm">@${esc(tm.name)}</span>`);
   });
   return h;
 }
