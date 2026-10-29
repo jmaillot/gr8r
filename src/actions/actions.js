@@ -19,6 +19,7 @@ import {
   logAct,
   me,
   mem,
+  notifyMembers,
   proj,
   projTeams,
   roleLabel,
@@ -91,6 +92,8 @@ export function createTask(f) {
   D().tasks.push(tk);
   fxSet({ added: tk.id });
   logAct('created', tk, {});
+  /* P4-b: a task created directly with an assignee notifies them too. */
+  if (tk.assignee) notifyMembers([tk.assignee], { type: 'assign', by: D().me, task: tk.id, project: tk.project, snippet: fmtDate(tk.due) || '' });
   return tk;
 }
 export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
@@ -124,8 +127,11 @@ export function applyPatch(t, patch) {
         delete n.prevStatus;
         msgs.push(tMsg('toast.recurringNext', { title: t.title, date: fmtDate(nd) }));
       }
-    } else if (k === 'assignee') logAct('assigned', t, nv ? { kind: 'assignedTo', value: mem(nv)?.name } : { kind: 'unassigned' });
-    else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
+    } else if (k === 'assignee') {
+      logAct('assigned', t, nv ? { kind: 'assignedTo', value: mem(nv)?.name } : { kind: 'unassigned' });
+      /* P4-b: notify the new assignee (author excluded inside notifyMembers). */
+      if (nv) notifyMembers([nv], { type: 'assign', by: D().me, task: t.id, project: t.project, snippet: fmtDate(t.due) || '' });
+    } else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
     else if (k === 'due') logAct('changedDueDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
     else if (k === 'start') logAct('changedStartDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
     else if (k === 'project') {
