@@ -45,6 +45,7 @@ blocked: 0
   status: resolved
   resolved_by: 20-03
   resolved_at: 2026-10-29
+  reverified: "User confirmed fix: description wraps normally, short Régénérer/Désactiver buttons in row"
   reason: "User reported: the text 'L'authentification à deux facteurs est activée. Vous saisirez un code…' displays like one word per line (test 1 passed; cosmetic layout issue on the same card)"
   severity: cosmetic
   test: 1

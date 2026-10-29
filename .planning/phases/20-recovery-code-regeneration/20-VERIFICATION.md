@@ -1,7 +1,7 @@
 ---
 phase: 20-recovery-code-regeneration
 verified: 2026-10-29T10:45:00Z
-status: human_needed
+status: passed
 score: 9/10 must-haves verified
 covered_files:
   - .planning/phases/20-recovery-code-regeneration/20-01-PLAN.md
@@ -19,6 +19,7 @@ covered_files:
   - src/styles/pages/settings.css
   - test/i18n-core-features.test.mjs
   - test/tfa-recovery-regen.test.mjs
+
 covered_digest: "v2:sha256:27b71c11887d827d8fd41f26c8df540032fabee62dd0986f9055f543d6b2cc00"
 behavior_unverified: 1
 overrides_applied: 0
