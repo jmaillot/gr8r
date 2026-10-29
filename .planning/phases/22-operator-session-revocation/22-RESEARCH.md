@@ -286,10 +286,10 @@ N/A — no external technology evolves here. All mechanisms are in-repo and curr
 | A3 | Missing `:userId` target → 404 using the auth family's existing not-found shape (code name not pre-verified) | Route skeleton | Wrong error code; planner verifies against `fail(…404…)` call sites |
 | A4 | "Owner" == any user with `is_instance_admin = 1` is the correct immunity predicate (D-119 says "owner accounts"; the schema has no other owner marker, and D-112 makes the flag the privilege boundary, so flagged-rows-are-immune is the consistent reading — including the operator's own row for owner-target refusals) | OPREV-02 | If "owner" means workspace-membership owners instead, the immunity check changes shape; discuss-phase wording strongly implies the flag reading, but planner should confirm the matrix covers both readings or lock one |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Immunity predicate scope (A4)** — Does owner immunity protect only `is_instance_admin` rows, or also workspace-`owner` memberships? Recommendation: implement the flag reading (D-112's logic) and note in the plan that the privilege matrix pins it; if the user wants workspace-owner immunity too, it's a one-line predicate change — flag as a checkpoint if unsure.
-2. **Gate-rejection error code** — discretion area; pick within the existing auth-family 403 codes (`forbidden` vs a new operator-specific code). Verify against `fail(res, 403, …)` call-site codes before locking.
+1. **Immunity predicate scope (A4)** — RESOLVED: the flag reading is locked by D-119 in 22-CONTEXT.md ("owner target (bootstrap-flagged operator included)") — `is_instance_admin` rows only.
+2. **Gate-rejection error code** — RESOLVED: granted to the agent's discretion in 22-CONTEXT.md; plan 01 Task 1 picks the auth-family 403 code after verifying `fail(…403…)` call-site codes.
 
 ## Environment Availability
 
