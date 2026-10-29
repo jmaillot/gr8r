@@ -130,7 +130,9 @@ export function parseMentions(txt) {
   return { memberIds: [...memberIds], teamIds: [...teamIds] };
 }
 /* Emit mention notifications for a parsed body. Workspace notifPrefs gate the
-   emission (mention_all for members, mention_team for @team). */
+   emission (mention_all for members, mention_team for @team).
+   Returns the Set of member ids notified, so a comment can skip them for the
+   plain `comment` notification (P4-d). */
 export function emitMentions(txt, tk) {
   const { memberIds, teamIds } = parseMentions(txt || '');
   const np = D().notifPrefs || {};
@@ -145,6 +147,14 @@ export function emitMentions(txt, tk) {
     const snippet = at < 0 ? '' : (txt || '').slice(at, at + 70).trim();
     notifyMembers([...targets], { type: 'mention', by: D().me, task: tk?.id ?? null, project: tk?.project ?? null, snippet });
   }
+  return targets;
+}
+
+/* P4-d/e: watchers of a task = its assignee plus everyone who commented on it.
+   The author is excluded inside notifyMembers, but pre-filtering here keeps the
+   notification lists honest for dedup and cap accounting. */
+export function taskWatchers(t) {
+  return [...new Set([t.assignee, ...commentsOf(t.id).map(c => c.by)].filter(Boolean).filter(x => x !== D().me))];
 }
 
 export function applyPatch(t, patch) {
@@ -161,6 +171,15 @@ export function applyPatch(t, patch) {
         logAct('completed', t, {});
         fxSet({ done: t.id });
       } else logAct('moved', t, { kind: 'statusMoved', from: old, to: nv });
+      /* P4-e: a status change notifies the task's watchers
+         (author excluded inside taskWatchers/notifyMembers). */
+      notifyMembers(taskWatchers(t), {
+        type: 'update',
+        by: D().me,
+        task: t.id,
+        project: t.project,
+        status: nv,
+      });
       if (nv === 'done' && t.recur && t.due) {
         const nd = iso(addD(parse(t.due), RECUR_DAYS[t.recur] || 7));
         const n = createTask({
@@ -1054,7 +1073,11 @@ A.postComment = el => {
     })
   ) {
     /* P4-c: a comment notifies the members and teams @mentioned in it. */
-    emitMentions(txt, tk);
+    const mentioned = emitMentions(txt, tk);
+    /* P4-d: the task's watchers (assignee, prior commenters) get a `comment`
+       notification — unless they were just mentioned in this same comment. */
+    const rest = taskWatchers(tk).filter(x => !mentioned.has(x));
+    if (rest.length) notifyMembers(rest, { type: 'comment', by: D().me, task: tk.id, project: tk.project, snippet: txt.slice(0, 70) });
     if (S.ui.route === 'inbox') toast(t('toast.replyPosted'));
   }
 };
