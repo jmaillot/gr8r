@@ -113,6 +113,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
-| 20. Recovery-Code Regeneration | 2/2 | In Progress|  |
+| 20. Recovery-Code Regeneration | 3/3 | Complete    | 2026-10-29 |
 | 21. Disable-2FA Verification & Closure | 2/2 | Complete    | 2026-10-29 |
 | 22. Operator Session Revocation | 2/2 | Complete    | 2026-10-29 |
