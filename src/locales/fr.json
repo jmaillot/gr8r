@@ -1204,6 +1204,8 @@
   "settings.projects.defaultViewDesc": "L’onglet affiché à l’ouverture d’un projet.",
   "settings.projects.showDone": "Afficher les tâches terminées sur les tableaux",
   "settings.projects.archived": "Projets archivés",
+  "settings.projects.active": "Projets actifs",
+  "settings.projects.noActive": "Aucun projet actif.",
   "settings.projects.noArchived": "Aucun projet archivé. Les projets archivés sont masqués dans la barre latérale mais conservent toutes leurs tâches.",
   "settings.projects.openArchive": "Ouvrir les archives",
   "settings.perms.lead": "Contrôlez ce que chaque rôle peut faire.",

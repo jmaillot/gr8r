@@ -1204,6 +1204,8 @@
   "settings.projects.defaultViewDesc": "The tab that opens when you open a project.",
   "settings.projects.showDone": "Show completed tasks on boards",
   "settings.projects.archived": "Archived projects",
+  "settings.projects.active": "Active projects",
+  "settings.projects.noActive": "No active projects.",
   "settings.projects.noArchived": "No archived projects. Archived projects are hidden from the sidebar but keep all their tasks.",
   "settings.projects.openArchive": "Open archive",
   "settings.perms.lead": "Control what each role can do.",
