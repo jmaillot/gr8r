@@ -341,7 +341,7 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 445, 'data-a sites'); // +12: the 2FA card (16-03) + doTfaLogin/tfaBackToSignIn (17-02); +3: the regen stage (20-02: tfaAskRegen, tfaRegenConfirm, its Cancel)
+  assert.equal(a, 448, 'data-a sites'); // +12: the 2FA card (16-03) + doTfaLogin/tfaBackToSignIn (17-02); +3: the regen stage (20-02: tfaAskRegen, tfaRegenConfirm, its Cancel); +3: the operator card (22-02: operatorRevokeAsk, operatorRevokeConfirm, operatorRevokeCancel)
   assert.equal(r, 57, 'data-r sites');
   assert.equal(v, 75, 'data-v sites');
 });
