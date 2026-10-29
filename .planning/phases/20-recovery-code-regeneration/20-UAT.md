@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 20-recovery-code-regeneration
-source: [20-VERIFICATION.md]
+source: [20-01-SUMMARY.md, 20-02-SUMMARY.md]
 started: 2026-10-29T00:00:00Z
 updated: 2026-10-29T00:00:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: French locale rendering of the regen flow
-expected: |
-  With the UI in French, the regenerate button, inline form labels, warning copy, and modal content all render in French with no missing-key placeholders.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -31,14 +27,14 @@ note: |
 ### 2. French locale rendering of the regen flow
 expected: |
   With the UI in French, the regenerate button, inline form labels, warning copy, and modal content all render in French with no missing-key placeholders.
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 2
-passed: 1
+passed: 2
 issues: 1
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
