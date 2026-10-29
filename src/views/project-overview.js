@@ -3,7 +3,7 @@ import { TODAY, dayBucket, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { bucketLabel, t as tk } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { STATUSES } from '../core/constants.js';
-import { D, TM, isOver, mem, pColor, progressOf, task, tasksOf } from '../core/store.js';
+import { D, TM, isOver, mem, pColor, progressOf, projTeams, task, tasksOf } from '../core/store.js';
 import { av, avStack, empty, pStatus, stIcon } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
@@ -37,7 +37,7 @@ export function projOverview(p) {
         <section class="panel"><div class="panel-h"><h2>${tk('page.project.details')}</h2></div><div class="panel-b"><dl class="kv">
           <dt>${ic('circle-dot', 14)}${tk('page.field.status')}</dt><dd><button class="pillbtn" data-a="pop" data-pop="pstatus" data-id="${p.id}">${pStatus(p.status)}</button></dd>
           <dt>${ic('user', 14)}${tk('page.member.lead')}</dt><dd><span class="pillbtn">${av(p.lead, 'sm', false)}${esc(mem(p.lead)?.name)}</span></dd>
-          <dt>${ic('users', 14)}${tk('nav.route.team')}</dt><dd><button class="pillbtn" data-a="go" data-r="team" data-id="${p.team}">${ic(TM[p.team].icon, 13)}${TM[p.team].name}</button></dd>
+          <dt>${ic('users', 14)}${tk('nav.route.team')}</dt><dd><span class="row" style="flex-wrap:wrap;gap:4px">${projTeams(p).length ? projTeams(p).map(id => `<button class="pillbtn" data-a="go" data-r="team" data-id="${id}">${ic(TM[id].icon, 13)}${TM[id].name}</button>`).join('') : `<span class="pillbtn">${TM[''].name}</span>`}</span></dd>
           <dt>${ic('calendar', 14)}${tk('page.projects.col.start')}</dt><dd><span class="pillbtn num">${fmtDate(p.start, true)}</span></dd>
           <dt>${ic('flag', 14)}${tk('page.home.col.due')}</dt><dd><span class="pillbtn num">${fmtDate(p.due, true)}</span></dd>
           <dt>${ic('user-plus', 14)}${tk('nav.route.members')}</dt><dd><button class="pillbtn" data-a="share" data-id="${p.id}">${avStack(p.members, 6)}<span class="faint">${p.members.length}</span></button></dd>

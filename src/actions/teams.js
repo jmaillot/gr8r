@@ -4,7 +4,7 @@
 import { $, uid } from '../core/utils.js';
 import { t, t as tMsg } from '../core/i18n.js';
 import { PCOLORS } from '../core/constants.js';
-import { D, S, mem, team, teamsList } from '../core/store.js';
+import { D, S, mem, projInTeam, team, teamsList } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
@@ -96,7 +96,7 @@ A.submitTeam = () => {
 A.delTeam = el => {
   const tm = team(el.dataset.id);
   const n = D().members.filter(x => x.team === tm.id).length;
-  const np = D().projects.filter(p => p.team === tm.id).length;
+  const np = D().projects.filter(p => projInTeam(p, tm.id)).length;
   S.ui.modals.pop();
   confirmDlg({
     title: t('act.deleteTitle', { name: tm.name }),
@@ -113,7 +113,8 @@ A.delTeam = el => {
             if (x.team === tm.id) x.team = '';
           });
           D().projects.forEach(p => {
-            if (p.team === tm.id) p.team = '';
+            p.teams = projTeams(p).filter(id => id !== tm.id);
+            delete p.team;
           });
         })
       ) {

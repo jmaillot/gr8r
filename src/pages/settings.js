@@ -4,7 +4,7 @@
 import { availableLocales, formatDate, formatTime, getLocale, isAutoDateFmt, t } from '../core/i18n.js';
 import { ago, dOff, deviceLabel, esc, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
-import { D, S, isMemberAdmin, me, team } from '../core/store.js';
+import { D, S, isMemberAdmin, me, projTeams, team } from '../core/store.js';
 import { api } from '../core/api.js';
 import { renderQrSvg } from '../lib/qr.js';
 import { av, pIcon } from '../ui/helpers.js';
@@ -298,8 +298,8 @@ export function settingsBody(sec, title) {
       const activeRows = active.length
         ? active
             .map(p => {
-              const tm = p.team ? team(p.team) : null;
-              return `<div class="srow"><div class="row" style="cursor:default"><a class="row" href="#" data-a="go" data-r="project" data-id="${p.id}" style="color:inherit;text-decoration:none">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></a>${tm ? `<span class="faint" style="font-size:12px">${esc(tm.name)}</span>` : ''}</div><div class="row"><span class="badge faint">${esc(p.status)}</span></div></div>`;
+              const tmNames = projTeams(p).map(id => team(id)?.name).filter(Boolean);
+              return `<div class="srow"><div class="row" style="cursor:default"><a class="row" href="#" data-a="go" data-r="project" data-id="${p.id}" style="color:inherit;text-decoration:none">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></a>${tmNames.length ? `<span class="faint" style="font-size:12px">${esc(tmNames.join(', '))}</span>` : ''}</div><div class="row"><span class="badge faint">${esc(p.status)}</span></div></div>`;
             })
             .join('')
         : `<p class="faint" style="padding:12px 0">${t('settings.projects.noActive')}</p>`;

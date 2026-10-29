@@ -746,6 +746,7 @@
   "modal.icon": "Icon",
   "modal.color": "Color",
   "modal.lead": "Lead",
+  "modal.teamsHint": "A project can belong to several teams.",
   "modal.leadLockHint": "Only the project lead, an admin or the owner can change this.",
   "modal.targetDate": "Target date",
   "modal.template": "Template",

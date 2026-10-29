@@ -304,9 +304,10 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 446, 'data-a sites'); // −2: sidebar Projects sub-items hard-hidden, toggleExpand triggers removed (quick 261029-moz)
+  assert.equal(a, 447, 'data-a sites'); // −2 sidebar hard-hidden (quick 261029-moz), +1 pformTeamToggle (P3 multi-team)
+  assert.equal(v, 76, 'data-v sites'); // +1: modal teams toggle button (P3)
   assert.equal(r, 57, 'data-r sites');
-  assert.equal(v, 75, 'data-v sites');
+
 });
 
 test("the action module's own data-a sites are byte-identical to what they were", () => {

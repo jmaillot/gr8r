@@ -20,6 +20,7 @@ import {
   me,
   mem,
   proj,
+  projTeams,
   roleLabel,
   save,
   task,
@@ -1313,7 +1314,7 @@ A.clearProjFilters = () => {
   render();
 };
 A.newProject = () => {
-  S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', team: me().team, lead: D().me, due: dOff(30), tmpl: 'blank' };
+  S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', teams: me().team ? [me().team] : [], lead: D().me, due: dOff(30), tmpl: 'blank' };
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'project' });
@@ -1321,7 +1322,7 @@ A.newProject = () => {
 A.editProject = el => {
   const p = proj(el.dataset.id);
   S.ui.pop = null;
-  S.ui.pform = { name: p.name, desc: p.desc, icon: p.icon, color: p.color, team: p.team, lead: p.lead, due: p.due, tmpl: 'blank' };
+  S.ui.pform = { name: p.name, desc: p.desc, icon: p.icon, color: p.color, teams: projTeams(p), lead: p.lead, due: p.due, tmpl: 'blank' };
   S.ui.errors = {};
   openModal({ type: 'project', edit: p.id });
 };
@@ -1338,6 +1339,13 @@ A.pformSet = el => {
     const tp = TEMPLATES.find(x => x.id === el.dataset.v);
     if (tp && S.ui.pform.icon === 'folder') S.ui.pform.icon = tp.icon === 'file' ? 'folder' : tp.icon;
   }
+  render();
+};
+/* P3 multi-team: toggle one team id inside the form's teams[] array. */
+A.pformTeamToggle = el => {
+  const id = el.dataset.v;
+  const cur = Array.isArray(S.ui.pform.teams) ? S.ui.pform.teams : [];
+  S.ui.pform.teams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
   render();
 };
 export function makeKey(name) {
@@ -1365,7 +1373,7 @@ export function createProject(f, tmplId) {
     icon: f.icon,
     color: f.color,
     status: 'planning',
-    team: f.team,
+    teams: Array.isArray(f.teams) ? f.teams.filter(Boolean) : [],
     lead: f.lead,
     due: f.due || dOff(30),
     start: dOff(0),
@@ -1411,7 +1419,7 @@ A.submitProject = () => {
           desc: f.desc,
           icon: f.icon,
           color: f.color,
-          team: f.team,
+          teams: Array.isArray(f.teams) ? f.teams.filter(Boolean) : [],
           lead: f.lead,
           due: f.due,
           members: [...new Set([...p.members, f.lead])],
@@ -1580,7 +1588,7 @@ A.shareInvite = () => {
       name: nm,
       email: v,
       role: 'Guest',
-      team: p.team,
+      team: projTeams(p)[0] || '',
       title: t('member.titleGuest'),
       c: '#6B7280',
       status: 'invited',

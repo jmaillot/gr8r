@@ -177,6 +177,18 @@ export function applyDoc(doc, revision) {
   if (doc.data) S.data = doc.data;
   S.data.recentSearches = Array.isArray(S.data.recentSearches) ? S.data.recentSearches : [];
   S.data.savedViews = Array.isArray(S.data.savedViews) ? S.data.savedViews : [];
+  /* P3 multi-team: migrate the legacy scalar project.team to teams[] for any
+     doc shape still carrying it (fresh server doc, localStorage snapshot). */
+  if (Array.isArray(S.data.projects)) {
+    for (const p of S.data.projects) {
+      if (!p || typeof p !== 'object') continue;
+      if (p.team !== undefined) {
+        p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : (typeof p.team === 'string' && p.team ? [p.team] : []);
+        delete p.team;
+      }
+      if (!Array.isArray(p.teams)) p.teams = [];
+    }
+  }
   S.prefs = stripLegacyLang(Object.assign({}, DEFAULT_PREFS, doc.prefs || {}));
   S.views = doc.views || {};
   S.ui.collapsed = !!doc.collapsed;
@@ -325,3 +337,12 @@ export function team(id) {
   return teamsList().find(t => t.id === id) || null;
 }
 export const TM = new Proxy({}, { get: (_, k) => team(k) || NO_TEAM });
+/* A project's team ids as an array — tolerant of the legacy scalar shape. */
+export function projTeams(p) {
+  if (!p) return [];
+  if (Array.isArray(p.teams)) return p.teams.filter(Boolean);
+  return p.team ? [p.team] : [];
+}
+export function projInTeam(p, teamId) {
+  return projTeams(p).includes(teamId);
+}

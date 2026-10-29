@@ -746,6 +746,7 @@
   "modal.icon": "Icône",
   "modal.color": "Couleur",
   "modal.lead": "Responsable",
+  "modal.teamsHint": "Un projet peut appartenir à plusieurs équipes.",
   "modal.leadLockHint": "Seul le responsable du projet, un admin ou le propriétaire peut modifier ce champ.",
   "modal.targetDate": "Date cible",
   "modal.template": "Modèle",

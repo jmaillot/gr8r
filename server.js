@@ -423,6 +423,14 @@ function normalizeProjects(doc) {
   const ownerId = profiles.find(m => String(m?.role || '').toLowerCase() === 'owner')?.id || null;
   for (const p of data.projects) {
     if (!p || typeof p !== 'object') continue;
+    /* P3 multi-team: the legacy scalar `team` migrates to a `teams[]` array.
+       Idempotent — a doc saved after migration has no `team` left. */
+    if (p.team !== undefined) {
+      p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : (typeof p.team === 'string' && p.team ? [p.team] : []);
+      delete p.team;
+    }
+    if (!Array.isArray(p.teams)) p.teams = [];
+    p.teams = p.teams.filter(x => typeof x === 'string' && x);
     if (!Array.isArray(p.members)) p.members = [];
     if (p.lead && !p.members.includes(p.lead)) p.members.push(p.lead);
     if (projectIsPrivate(p)) {

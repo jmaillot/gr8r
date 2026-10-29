@@ -2,7 +2,7 @@
 import { ago, esc, foldForSearch, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ROLES } from '../core/constants.js';
-import { D, S, TM, allTasks, canSee, isMemberAdmin, isOver, me, mem, progressOf, roleLabel, team, teamsList, visibleProjects } from '../core/store.js';
+import { D, S, TM, allTasks, canSee, isMemberAdmin, isOver, me, mem, progressOf, projInTeam, roleLabel, team, teamsList, visibleProjects } from '../core/store.js';
 import { t } from '../core/i18n.js';
 import { api } from '../core/api.js';
 import { av, avStack, empty, pIcon, pStatus, progBar } from '../ui/helpers.js';
@@ -99,7 +99,7 @@ export function teamsGrid() {
   return `<div class="pgrid">${teamsList()
     .map(tm => {
       const ms = D().members.filter(m => m.team === tm.id);
-      const ps = visibleProjects().filter(p => p.team === tm.id);
+      const ps = visibleProjects().filter(p => projInTeam(p, tm.id));
       return `<div class="pcard" data-a="go" data-r="team" data-id="${tm.id}" role="link" tabindex="0"><div class="row"><span class="picon" style="--c:${tm.c}">${ic(tm.icon, 15)}</span><b style="font-weight:600;font-size:14px">${tm.name}</b></div><div class="desc">${tm.desc}</div><div class="foot"><span class="row" style="gap:4px">${ic('users', 12)}${t('page.teams.nMembers', { n: ms.length })}</span><span class="row" style="gap:4px">${ic('folder', 12)}${t('page.teams.nProjects', { n: ps.length })}</span><span class="sp"></span>${avStack(
         ms.map(m => m.id),
         4,
@@ -114,7 +114,7 @@ export function pageTeam() {
   const tm = team(S.ui.params.id);
   if (!tm) return page404();
   const ms = D().members.filter(m => m.team === tm.id);
-  const ps = visibleProjects().filter(p => p.team === tm.id);
+  const ps = visibleProjects().filter(p => projInTeam(p, tm.id));
   const ts = allTasks().filter(x => ms.some(m => m.id === x.assignee) && x.status !== 'done');
   return `<div class="page">
     <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${tm.c}">${ic(tm.icon, 18)}</span><div><h1>${tm.name}</h1><p style="margin:2px 0 0">${tm.desc}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${tm.id}">${ic('pencil', 14)}${t('act.editTeam')}</button>${isMemberAdmin() ? `<button class="btn btn-secondary" data-a="invite">${ic('user-plus', 14)}${t('act.inviteToWorkspace')}</button>` : ''}</div></div>

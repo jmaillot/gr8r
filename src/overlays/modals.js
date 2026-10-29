@@ -142,9 +142,12 @@ export function projectModal(m, H) {
         .join('')}</div></div>
     </div>
     <div class="row" style="gap:12px;flex-wrap:wrap">
-      <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-team">${t('nav.route.team')}</label><select class="select" id="p-team" data-in="pform" data-f="team">${teamsList()
-        .map(tm => `<option value="${tm.id}" ${f.team === tm.id ? 'selected' : ''}>${esc(tm.name)}</option>`)
-        .join('')}</select></div>
+      <div class="field" style="flex:1;min-width:150px"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group">${teamsList()
+        .map(
+          tm =>
+            `<button type="button" role="checkbox" aria-checked="${f.teams.includes(tm.id)}" class="opt ${f.teams.includes(tm.id) ? 'on' : ''}" data-a="pformTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${f.teams.includes(tm.id) ? ic('check', 13) : ''}</button>`,
+        )
+        .join('')}</div><span class="hint">${t('modal.teamsHint')}</span></div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-lead">${t('modal.lead')}</label><select class="select" id="p-lead" data-in="pform" data-f="lead" ${leadLocked ? 'disabled' : ''}>${D()
         .members.filter(x => x.status === 'active')
         .map(x => `<option value="${x.id}" ${f.lead === x.id ? 'selected' : ''}>${esc(x.name)}</option>`)
