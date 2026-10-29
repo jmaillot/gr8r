@@ -2057,8 +2057,8 @@ A.toggleRead = el => {
   render();
 };
 A.markAllRead = () => {
-  const n = D().notifs.filter(x => !x.read).length;
-  D().notifs.forEach(x => (x.read = true));
+  const n = myNotifs().filter(x => !x.read).length;
+  myNotifs().forEach(x => (x.read = true));
   save();
   render();
   if (n) toast(t('toast.allCaughtUp'));

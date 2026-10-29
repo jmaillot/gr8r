@@ -189,6 +189,8 @@ export function applyDoc(doc, revision) {
       if (!Array.isArray(p.teams)) p.teams = [];
     }
   }
+  /* P4-a: notifications are per-recipient — rows without `to` are pre-P4 legacy/demo and purged. */
+  if (Array.isArray(S.data.notifs)) S.data.notifs = S.data.notifs.filter(n => n && typeof n.to === 'string' && n.to);
   S.prefs = stripLegacyLang(Object.assign({}, DEFAULT_PREFS, doc.prefs || {}));
   S.views = doc.views || {};
   S.ui.collapsed = !!doc.collapsed;
@@ -232,6 +234,12 @@ export async function flushPending() {
 }
 
 /* Signing out must not leave the previous account's workspace in this browser. */
+/* True while a local edit is still travelling to the server: the 30s notification
+   poll must not hydrate over an unsaved change (it would clobber the client copy). */
+export function hasPendingChanges() {
+  return dirty;
+}
+
 export function clearLocalCache() {
   try {
     localStorage.removeItem(STORE_KEY);
@@ -260,6 +268,48 @@ export const canManageProject = p => {
 export const tasksOf = pid => D().tasks.filter(t => t.project === pid && !t.archived);
 export const allTasks = () => D().tasks.filter(t => !t.archived && canSee(proj(t.project)));
 export const isOver = t => t.due && t.status !== 'done' && diffD(parse(t.due), TODAY) < 0;
+
+/* ---------- notifications (P4-a) ---------- */
+/* Rows live in the flat workspace doc; `to` scopes each row to one member.
+   Rows without `to` are legacy/demo leftovers and are dropped on hydration. */
+const NOTIF_CAP = 100;
+export const myNotifs = () => {
+  const mid = D().me;
+  return D().notifs.filter(n => n && n.to === mid);
+};
+/* Central emission primitive: one row per recipient, author excluded, deduped
+   while unread, capped FIFO per recipient. Callers pass type-specific fields
+   (task, project, snippet, status). */
+export function notifyMembers(ids, n) {
+  const d = D();
+  const now = Date.now();
+  let added = false;
+  for (const to of new Set(ids)) {
+    if (!to || to === n.by) continue;
+    if (!d.members.some(m => m.id === to)) continue;
+    if (d.notifs.some(x => x.to === to && x.type === n.type && x.task === n.task && x.by === n.by && !x.read)) continue;
+    d.notifs.push({ id: uid('n'), to, type: n.type, by: n.by ?? null, task: n.task ?? null, project: n.project ?? null, snippet: n.snippet || '', status: n.status ?? null, at: now, read: false });
+    added = true;
+  }
+  if (added) {
+    // FIFO cap per recipient: keep the NOTIF_CAP newest rows addressed to each member.
+    const byTo = new Map();
+    for (const x of d.notifs) {
+      if (!x.to) continue;
+      if (!byTo.has(x.to)) byTo.set(x.to, []);
+      byTo.get(x.to).push(x);
+    }
+    const drop = new Set();
+    for (const rows of byTo.values()) {
+      rows.sort((a, b) => b.at - a.at);
+      for (const old of rows.slice(NOTIF_CAP)) drop.add(old);
+    }
+    if (drop.size) d.notifs = d.notifs.filter(x => !drop.has(x));
+    save();
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projects:notifs'));
+  }
+  return added;
+}
 export const commentsOf = tid => D().comments.filter(c => c.task === tid);
 export function progressOf(pid) {
   const ts = tasksOf(pid);

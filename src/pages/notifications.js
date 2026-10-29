@@ -2,14 +2,14 @@
 import { ago, dayBucket, esc } from '../core/utils.js';
 import { bucketLabel, t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { D, S, proj, task } from '../core/store.js';
+import { S, myNotifs, proj, task } from '../core/store.js';
 import { empty, fmtComment } from '../ui/helpers.js';
 import { notifIcon, notifText } from './inbox.js';
 
 export function pageNotifications() {
   const f = S.ui.notifFilter;
-  let ns = D()
-    .notifs.slice()
+  let ns = myNotifs()
+    .slice()
     .sort((a, b) => b.at - a.at);
   const unread = ns.filter(n => !n.read).length;
   if (f === 'unread') ns = ns.filter(n => !n.read);

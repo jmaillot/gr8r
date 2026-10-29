@@ -419,6 +419,7 @@ export function seed() {
   const notifs = [
     {
       id: 'n1',
+      to: 'm1',
       type: 'mention',
       by: 'm2',
       task: 't3',
@@ -426,9 +427,10 @@ export function seed() {
       at: minsAgo(210),
       read: false,
     },
-    { id: 'n2', type: 'assign', by: 'm3', task: 't28', snippet: 'Due today · Medium priority', at: minsAgo(300), read: false },
+    { id: 'n2', to: 'm1', type: 'assign', by: 'm3', task: 't28', snippet: 'Due today · Medium priority', at: minsAgo(300), read: false },
     {
       id: 'n3',
+      to: 'm1',
       type: 'comment',
       by: 'm4',
       task: 't9',
@@ -438,6 +440,7 @@ export function seed() {
     },
     {
       id: 'n4',
+      to: 'm1',
       type: 'mention',
       by: 'm7',
       task: 't35',
@@ -445,9 +448,10 @@ export function seed() {
       at: minsAgo(200),
       read: false,
     },
-    { id: 'n5', type: 'update', by: 'm2', task: 't3', status: 'review', snippet: 'To Do → Review', at: minsAgo(38), read: true },
+    { id: 'n5', to: 'm1', type: 'update', by: 'm2', task: 't3', status: 'review', snippet: 'To Do → Review', at: minsAgo(38), read: true },
     {
       id: 'n6',
+      to: 'm1',
       type: 'update',
       by: null,
       project: 'p4',
@@ -457,6 +461,7 @@ export function seed() {
     },
     {
       id: 'n7',
+      to: 'm1',
       type: 'comment',
       by: 'm2',
       task: 't34',
@@ -464,9 +469,9 @@ export function seed() {
       at: minsAgo(1500),
       read: true,
     },
-    { id: 'n8', type: 'assign', by: 'm2', task: 't6', snippet: 'Due in 6 days', at: minsAgo(2900), read: true },
-    { id: 'n9', type: 'update', by: 'm3', task: 't18', status: 'done', snippet: 'Fix broken anchor links on pricing', at: minsAgo(90), read: true },
-    { id: 'n10', type: 'update', by: null, task: 't28', snippet: 'Triage beta tester feedback', at: minsAgo(20), read: false },
+    { id: 'n8', to: 'm1', type: 'assign', by: 'm2', task: 't6', snippet: 'Due in 6 days', at: minsAgo(2900), read: true },
+    { id: 'n9', to: 'm1', type: 'update', by: 'm3', task: 't18', status: 'done', snippet: 'Fix broken anchor links on pricing', at: minsAgo(90), read: true },
+    { id: 'n10', to: 'm1', type: 'update', by: null, task: 't28', snippet: 'Triage beta tester feedback', at: minsAgo(20), read: false },
   ];
   const files = [
     { id: 'f1', project: 'p1', name: 'homepage-wireframes-v3.fig', type: 'fig', size: '4.2 MB', by: 'm2', at: minsAgo(300), task: 't3' },

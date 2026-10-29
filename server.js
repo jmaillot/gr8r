@@ -391,6 +391,10 @@ function normalizeDoc(doc, meta) {
   // document (D-30): drop legacy sessions/tfa keys on every read.
   delete out.data.sessions;
   delete out.data.tfa;
+  // P4-a: notifications are per-recipient — rows without `to` are pre-P4 legacy and purged.
+  // Recipient validity is checked in docForClient, AFTER syncProfiles rebuilds the roster:
+  // the stored document intentionally carries no members.
+  if (Array.isArray(out.data.notifs)) out.data.notifs = out.data.notifs.filter(n => n && typeof n.to === 'string' && n.to);
   return out;
 }
 
@@ -684,6 +688,11 @@ function docForClient(doc, ws, membership) {
   const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
   syncProfiles(out, ws.id);
+  // P4-a: with the roster rebuilt, drop notifications addressed to removed members.
+  if (Array.isArray(out.data.notifs)) {
+    const memberIds = new Set((Array.isArray(out.data.members) ? out.data.members : []).map(m => m?.id).filter(Boolean));
+    out.data.notifs = out.data.notifs.filter(n => memberIds.has(n.to));
+  }
   return membership ? redactDoc(out, membership.member_id) : out;
 }
 

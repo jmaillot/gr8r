@@ -55,7 +55,7 @@ import './features/archive.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
-import { S, D, hydrateFromServer, save, consumeLegacyLang } from './core/store.js';
+import { S, D, hydrateFromServer, save, consumeLegacyLang, hasPendingChanges, myNotifs } from './core/store.js';
 import { api } from './core/api.js';
 import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
@@ -66,6 +66,26 @@ import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale }
    batched or debounced (D-01). The loop guard in applyPrefs() keeps this from
    cycling: setLocale only fires when the target locale actually differs. */
 addEventListener('projects:locale', () => render());
+
+/* P4-a notification poll (30s): hydrate the current workspace and re-render only
+   when my unread count changed, so other members' notifications arrive without a
+   full refresh. Skipped while a local edit is travelling to the server or the
+   session is in conflict — hydration would clobber the client copy. */
+let _pollUnread = -1;
+const pollNotifs = async () => {
+  if (!api.enabled || !api.user || S.ui.conflict || hasPendingChanges() || S.ui.auth) return;
+  const slug = api.workspace?.slug;
+  if (!slug) return;
+  const res = await hydrateFromServer(slug);
+  if (!res.ok) return;
+  const unread = myNotifs().filter(n => !n.read).length;
+  if (unread !== _pollUnread) {
+    _pollUnread = unread;
+    render();
+  }
+};
+setInterval(pollNotifs, 30000);
+addEventListener('projects:notifs', () => pollNotifs());
 
 addEventListener('projects:save-error', e => {
   const { status, error } = e.detail || {};
