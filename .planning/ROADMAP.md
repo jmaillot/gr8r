@@ -71,7 +71,11 @@ Plans:
   3. Disable applies an explicit, documented session policy (keep-current / revoke-others) and records the activity verb
   4. The full disable→re-enroll cycle is covered by Chromium e2e in EN + FR, with all new strings catalogued (i18n-scan green)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Tighten disable route (D-101 strict gate, D-103 challenge teardown, D-105 session policy, D-107 verb) + node:test server suite
+- [ ] 21-02-PLAN.md — Chromium e2e full-cycle spec EN+FR (D-109/D-106/D-102-UI) + i18n gate
 **UI hint**: yes
 
 ### Phase 22: Operator Session Revocation
