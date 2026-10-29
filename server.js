@@ -1663,39 +1663,46 @@ async function handleApi(req, res, url) {
     const cur = String(body?.currentPassword || '');
     const code = String(body?.code || '').trim();
     if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
-    if (!code) return fail(res, 400, 'codeRejected', 'Enter a verification code');
-    // One atomic unit (Pitfall 4): re-select fresh INSIDE the transaction, run
-    // the dual-shape verify, and tear down on success. No writes happen on any
-    // miss, so a failed verify commits nothing (D-57/D-59).
+    // D-101 (structural invariant): strict 6-digit-only gate with NO else-branch
+    // and NO recovery-code lookup or verify anywhere in this route — a
+    // recovery code can never satisfy the step-up. (The D-59 teardown delete
+    // below is a wipe, not a lookup.)
+    if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
+    // Pitfall 9/D-105: hash the caller's own cookie — never a body or param value.
+    const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    // One atomic unit (Pitfall 4): re-select fresh INSIDE the transaction,
+    // verify password + live TOTP, and tear down on success. No writes happen
+    // on any miss, so a failed verify commits nothing.
     const outcome = transaction(() => {
       const fresh = db.prepare('select password_hash, two_fa_secret, two_fa_last_step from users where id = ?').get(user.id);
       if (!fresh || !verifyPassword(cur, fresh.password_hash)) return 'password';
-      if (/^\d{6}$/.test(code)) {
-        // Live-code shape. D-06: an undecryptable secret (missing MASTER_KEY,
-        // tampered envelope) fails closed 503 before any mutation. D-77: the
-        // decrypt runs only through requireTotpSecret — no plaintext fallback.
-        const wrapped = requireTotpSecret(fresh.two_fa_secret);
-        if (!wrapped.ok) return 'masterKey';
-        if (!verifyTotpCode(wrapped.secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000)).ok) return 'code';
-      } else {
-        // Recovery-code shape (D-57 dual input): ONE normalization + hash
-        // lookup, identical to the generation-hash site (Pitfall 6).
-        const hash = recoveryHash(normalizeRecoveryCode(code));
-        const burned = db.prepare('select id from recovery_codes where user_id = ? and code_hash = ? and used_at is null').get(user.id, hash);
-        if (!burned) return 'code';
-        // The burn (D-57): mark used_at, then the teardown below deletes the row.
-        db.prepare('update recovery_codes set used_at = ? where id = ?').run(now(), burned.id);
-      }
+      // D-06: an undecryptable secret (missing MASTER_KEY, tampered envelope)
+      // fails closed 503 before any mutation. D-77: the decrypt runs only
+      // through requireTotpSecret — no plaintext fallback.
+      const wrapped = requireTotpSecret(fresh.two_fa_secret);
+      if (!wrapped.ok) return 'masterKey';
+      // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
+      if (!verifyTotpCode(wrapped.secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000)).ok) return 'code';
       // D-59: complete teardown — a fresh enroll afterwards is indistinguishable
       // from a first one. two_fa_last_step resets to its NOT NULL default 0
       // (the no-baseline sentinel from Phase 14).
       db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?").run(user.id);
       db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+      // D-103: all pending 2FA login challenges die with 2FA — keyed on
+      // user_id ONLY (an unscoped or token-keyed variant either misses rows
+      // or breaks other users' in-flight logins).
+      db.prepare('delete from login_challenges where user_id = ?').run(user.id);
+      // D-105: revoke-others, keep-current — the caller's own session is
+      // excluded by the != clause against its cookie-derived hash.
+      db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
       return 'ok';
     });
     if (outcome === 'password') return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
     if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured or the stored secret is undecryptable');
     if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
+    // D-107: the security verb records only on committed success — after the
+    // transaction, before the response.
+    logSecurity(user.id, 'tfa_disabled');
     return json(res, 200, { ok: true });
   }
 
