@@ -241,17 +241,11 @@ N/A — closed internal codebase, no external libraries to track. All patterns a
 
 All other claims are `[VERIFIED]` against files read this session; no external docs were needed.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **D-99 mechanism shape** (the only real design gap)
-   - What we know: no account-security activity mechanism exists; DIS-01 (Phase 21) needs the same; logAct is task-scoped only.
-   - What's unclear: minimal honest mechanism — a tiny `security_log` table + read endpoint for a future UI, vs a documented deferral with the verb defined now.
-   - Recommendation: planner picks the smallest mechanism that Phase 21 can reuse verbatim; if deferring, define the verb string constant now so both phases stay consistent.
+1. **D-99 mechanism shape** — RESOLVED. Adopted: a minimal `security_log` table (id, user_id, verb, created_at, FK to users on delete cascade + user index) plus a `logSecurity(userId, verb)` helper, implemented in 20-01 Task 1; Phase 21's DIS-01 reuses the table and helper verbatim. No deferral — the verb `tfa_recovery_regenerated` is written in the same transaction as burn-and-replace and asserted by the Wave 0 test.
 
-2. **Throttle/409 ordering**
-   - What we know: D-96 fixes guards as sameOrigin → requireUser → throttle → readJson; D-95 wants 409 before any factor check.
-   - What's unclear: whether the 409 check sits between throttle and readJson (needs no body) or inside the transaction.
-   - Recommendation: in-transaction check (Pitfall 4 discipline) with the 409 mapped after; optionally a cheap pre-transaction select for UX. Either is defensible; keep it consistent with how Phase 21 handles the same question.
+2. **Throttle/409 ordering** — RESOLVED. Adopted: the `two_fa_enabled` check runs **inside the transaction** (Pitfall 4 fresh re-select discipline), returning 'notEnabled' which maps to 409 `tfaNotEnabled` after the transaction — no pre-transaction fast-path select in 20-01. The 409 still lands before any factor verification (password/TOTP are checked after the enabled check inside the same transaction), satisfying D-95; guard order remains sameOrigin → requireUser → throttle → readJson per D-96. Phase 21 should follow the same in-transaction shape for consistency.
 
 ## Environment Availability
 
