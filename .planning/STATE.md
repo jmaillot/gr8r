@@ -28,7 +28,8 @@ current_phase_name: Recovery-Code Regeneration
 
 - **Phase:** 20 — Recovery-Code Regeneration
 - **Plan:** Not started
-- **Status:** Ready to plan
+- **Status:** Ready to execute
+- **Total Plans in Phase:** 2
 - **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done, UAT 7/7)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
