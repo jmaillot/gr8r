@@ -1,6 +1,6 @@
 # Gr8r Studio — project context
 
-*Last updated: 2026-10-28 after Phase 19*
+*Last updated: 2026-10-29 after Phase 21*
 
 ## What it is
 
@@ -257,6 +257,16 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   call site routes through a single `requireTotpSecret()` boundary that fails closed with
   503 `masterKeyMissing` — no plaintext fallback, non-2FA login untouched — Phase 19
   (ENC-01, ENC-02; verification 12/12, UAT 7/7 live + isolated container)
+- ✓ Recovery-code regeneration: burn-and-replace after initial enrollment, with throttling
+  and a fully verified lifecycle — Phase 20 (REGEN-01, REGEN-02; UAT 2/2 passed,
+  G-20-1 closed via 20-03 and re-verified)
+- ✓ Disable-2FA verified against the full contract: strict password + live-TOTP gate only
+  (a recovery code can never disable 2FA), one-transaction teardown of `two_fa_*` columns
+  + recovery codes + pending login challenges, explicit revoke-others session policy with
+  the caller kept signed in, `tfa_disabled` activity verb, EN+FR Chromium e2e of the full
+  disable→re-enroll cycle, i18n-scan green — Phase 21 (DIS-01, DIS-02; verification 9/9,
+  555/555 node tests, 59/59 e2e; 2 advisory review findings open — WR-01 missing
+  `two_fa_enabled` 409 pre-check, WR-02 verb insert outside the transaction)
 
 ### Active
 

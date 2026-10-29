@@ -23,7 +23,7 @@ current_phase_name: Operator Session Revocation
 
 - **Project:** Gr8r Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** every auth item deferred out of v1.3 lands — the 2FA lifecycle and session control become complete
-- **Current Focus:** Milestone v1.4 "Auth Completion" — Phase 21 (Disable-2FA Verification & Closure)
+- **Current Focus:** Milestone v1.4 "Auth Completion" — Phase 22 (Operator Session Revocation)
 
 ## Current Position
 
