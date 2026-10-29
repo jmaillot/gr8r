@@ -48,6 +48,13 @@
   padding: 14px 0;
   border-bottom: 1px solid var(--divider);
 }
+/* G-20-1: the control cluster sits in the srow auto column — let it wrap to a
+   second line instead of starving the minmax(0,1fr) text column. */
+.srow > .row {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: var(--s-2);
+}
 .srow .t {
   font-weight: 500;
   font-size: var(--fs);
