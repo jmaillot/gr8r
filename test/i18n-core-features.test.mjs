@@ -45,7 +45,7 @@ const WAVE_ORACLE = [
   ['err.serverUnreachable', 'Could not reach the server'],
   ['err.noWorkspaceLoaded', 'No workspace loaded'],
   // the brand logo's accessible name (icons.js)
-  ['a11y.brand', 'Gr8r'],
+  ['a11y.brand', 'Projects Studio'],
   // the archive page (archive.js)
   ['act.restore', 'Restore'],
   ['page.archived', 'Archived'],
@@ -170,8 +170,8 @@ test('the HTTP verbs and the API paths are byte-identical', () => {
 test('the icon names and the brand path are untouched', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/core/icons.js'), 'utf8');
   assert.ok(src.includes("ICONS[name] || '<rect"), 'the icon fallback moved');
-  assert.ok(src.includes('M99.1462 184.663'), 'the brand path moved');
-  assert.ok(src.includes('viewBox="45.53 114.5 241.47 102.27"'), 'the logo viewBox moved');
+  assert.ok(src.includes('M55.4 39Q69.2 39'), 'the brand path moved');
+  assert.ok(src.includes('viewBox="0 0 1412 188"'), 'the logo viewBox moved');
 });
 
 test('the ⌘ symbol is not a catalogue value — only the Ctrl label is', () => {

@@ -392,7 +392,7 @@ function buildInviteMessage(config, invite) {
   const to = bareAddress(invite.to);
   if (!addressOk(to)) throw new Error('Invite email address is invalid');
 
-  const workspace = text(invite.workspace) || 'Gr8r Studio';
+  const workspace = text(invite.workspace) || 'Projects Studio';
   const inviter = text(invite.inviter) || 'A workspace admin';
   const role = { admin: 'an admin', member: 'a member', viewer: 'a guest' }[invite.role] || 'a member';
   const url = text(invite.url);
@@ -407,7 +407,7 @@ function buildInviteMessage(config, invite) {
     : '';
 
   const subject = `You're invited to ${workspace}`;
-  const product = /^gr8r/i.test(workspace) ? '' : ' on Gr8r Studio';
+  const product = /^projects studio/i.test(workspace) ? '' : ' on Projects Studio';
   const textBody = [
     'Hi,',
     '',
@@ -450,7 +450,7 @@ function buildInviteMessage(config, invite) {
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     'Auto-Submitted: auto-generated',
-    'X-Mailer: Gr8r Studio',
+    'X-Mailer: Projects Studio',
   ];
 
   const body = [

@@ -273,7 +273,7 @@ test('the contract fixture namespace is the documented exception to the English-
 });
 
 test('the English catalogue may carry keys a non-base catalogue does not', () => {
-  const base = { 'nav.projects': 'Projects', 'app.name': 'Gr8r Studio' };
+  const base = { 'nav.projects': 'Projects', 'app.name': 'Projects Studio' };
   const breaches = lintSynthetic({ 'nav.projects': 'Projets' }, 'fr.json', base).filter(v => v.rule === 'english-base');
   assert.deepEqual(breaches, [], `the English fallback case is not a breach (${breaches.map(describeViolation).join(' | ')})`);
 });

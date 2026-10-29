@@ -1,4 +1,4 @@
-# Deploying Gr8r Studio
+# Deploying Projects Studio
 
 This guide takes a fresh Ubuntu/Debian server to a working HTTPS instance behind Traefik.
 The app runs as **one container**: a Node 24 process serves the built SPA and a JSON API,
@@ -37,7 +37,7 @@ Type  AAAA  Name  gr8r    Value  <SERVER_IPv6>   # only if you have IPv6
 Verify before starting the container — Let's Encrypt validates over HTTP/TLS:
 
 ```sh
-dig +short gr8r.example.com
+dig +short projects.example.com
 ```
 
 ## 2. Install Docker
@@ -139,12 +139,12 @@ nano .env
 Set at least:
 
 ```dotenv
-GR8R_HOST=gr8r.example.com
+GR8R_HOST=projects.example.com
 APP_URL=
 ADMIN_EMAIL=you@example.com
 ADMIN_PASSWORD=<long unique password>
 ADMIN_NAME=Your Name
-WORKSPACE_NAME=Gr8r Studio
+WORKSPACE_NAME=Projects Studio
 WORKSPACE_SLUG=gr8r-studio
 PUID=1000
 PGID=1000
@@ -180,7 +180,7 @@ value is a cheap guard against oversized binaries. Uploaded file contents live u
 `DATA_DIR/files/` (see § Backups).
 
 `APP_URL` is the absolute URL the app prints in share and invite links and shows in the
-workspace URL fields, e.g. `https://gr8r.example.com`. Leave it empty when the browser
+workspace URL fields, e.g. `https://projects.example.com`. Leave it empty when the browser
 requests the same hostname users should see: the app then uses the request host (honouring
 `X-Forwarded-Host`/`X-Forwarded-Proto`). Set it explicitly when a proxy, tunnel or alternate
 domain makes the request host differ from the public address.
@@ -237,11 +237,11 @@ If `ADMIN_PASSWORD` was empty, a generated password is printed **once** here. Sa
 Verify through Traefik:
 
 ```sh
-curl -fsS https://gr8r.example.com/api/health
+curl -fsS https://projects.example.com/api/health
 # {"ok":true,...}
 ```
 
-Then open `https://gr8r.example.com` and sign in.
+Then open `https://projects.example.com` and sign in.
 
 ## 7. First-run checks
 
@@ -439,7 +439,7 @@ SMTP_SECURE=false
 SMTP_USER=notifications@example.com
 SMTP_PASS=your-app-password
 MAIL_FROM=notifications@example.com
-MAIL_FROM_NAME=Gr8r Studio
+MAIL_FROM_NAME=Projects Studio
 ```
 
 - Use port **587** with `SMTP_SECURE=false` for STARTTLS (the usual choice), or port **465**
@@ -566,7 +566,7 @@ cd /opt/gr8r
 git pull
 docker compose up -d --build
 docker compose ps
-curl -fsS https://gr8r.example.com/api/health
+curl -fsS https://projects.example.com/api/health
 ```
 
 Rollback to a previous commit:
@@ -724,7 +724,7 @@ with French content — so the shipped image is verified to carry the French cat
 ## Appendix: minimal Traefik
 
 If you do not already run Traefik, use `/opt/traefik/docker-compose.yml`, replace the email,
-and start it before Gr8r Studio:
+and start it before Projects Studio:
 
 ```yaml
 services:

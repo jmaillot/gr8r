@@ -9,7 +9,7 @@
 //   step is <= the stored step (not just equal) — replay of the same code or
 //   an earlier-window code is refused.
 // - D-54: otpauth URI identity is
-//   otpauth://totp/Gr8r:<encodeURIComponent(email)>?secret=…&issuer=Gr8r&algorithm=SHA1&digits=6&period=30
+//   otpauth://totp/Projects Studio:<encodeURIComponent(email)>?secret=…&issuer=Projects Studio&algorithm=SHA1&digits=6&period=30
 // - D-51: recovery codes are lowercase hex xxxx-xxxx, hashed whole (sha256),
 //   never encrypted (D-09 — survive MASTER_KEY loss).
 // - Secrets and otpauth URIs are never logged (T-16-07).
@@ -76,12 +76,12 @@ export function verifyTotpCode(secretB32, code, lastStep, nowSec, period = 30) {
   return { ok: false, reason: 'no-match' };
 }
 
-// D-54: the label (Gr8r:<email>) is fully encodeURIComponent-ed so emails
+// D-54: the label (Projects Studio:<email>) is fully encodeURIComponent-ed so emails
 // containing ':', '?', '&', or spaces cannot break the issuer/label split
 // (Pitfall 5). Issuer appears both as the label prefix and the issuer= param.
 export function buildOtpauthUri(email, secretB32) {
-  const label = `Gr8r:${encodeURIComponent(email)}`;
-  return `otpauth://totp/${label}?secret=${secretB32}&issuer=Gr8r&algorithm=SHA1&digits=6&period=30`;
+  const label = `Projects Studio:${encodeURIComponent(email)}`;
+  return `otpauth://totp/${label}?secret=${secretB32}&issuer=Projects Studio&algorithm=SHA1&digits=6&period=30`;
 }
 
 // D-51: 4 random bytes → 8 lowercase hex chars → dash-grouped xxxx-xxxx.

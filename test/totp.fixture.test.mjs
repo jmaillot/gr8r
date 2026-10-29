@@ -128,17 +128,17 @@ test('base32Decode is case-insensitive and padding-tolerant (Pitfall 4)', () => 
 test('buildOtpauthUri: D-54 format with encoded email label', () => {
   assert.equal(
     buildOtpauthUri('user@example.com', 'SECRETABC'),
-    'otpauth://totp/Gr8r:user%40example.com?secret=SECRETABC&issuer=Gr8r&algorithm=SHA1&digits=6&period=30',
+    'otpauth://totp/Projects Studio:user%40example.com?secret=SECRETABC&issuer=Projects Studio&algorithm=SHA1&digits=6&period=30',
   );
 });
 
 test('buildOtpauthUri survives hostile emails (Pitfall 5)', () => {
   const uri = buildOtpauthUri('a:b?c&d e@x.com', 'SECRETABC');
-  assert.ok(uri.startsWith('otpauth://totp/Gr8r:'), uri);
+  assert.ok(uri.startsWith('otpauth://totp/Projects Studio:'), uri);
   // label fully encoded — first raw colon after totp/ splits scheme path
   const label = uri.slice('otpauth://totp/'.length, uri.indexOf('?'));
-  assert.equal(label, `Gr8r:${encodeURIComponent('a:b?c&d e@x.com')}`);
-  assert.ok(uri.includes('&issuer=Gr8r&algorithm=SHA1&digits=6&period=30'));
+  assert.equal(label, `Projects Studio:${encodeURIComponent('a:b?c&d e@x.com')}`);
+  assert.ok(uri.includes('&issuer=Projects Studio&algorithm=SHA1&digits=6&period=30'));
   assert.ok(uri.includes('secret=SECRETABC'));
 });
 

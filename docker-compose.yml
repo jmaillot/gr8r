@@ -49,14 +49,14 @@ services:
       # Must name the network shared with Traefik.
       traefik.docker.network: 'traefik'
 
-      traefik.http.routers.gr8r.rule: 'Host(`${GR8R_HOST:-gr8r.example.com}`)'
+      traefik.http.routers.gr8r.rule: 'Host(`${GR8R_HOST:-projects.example.com}`)'
       traefik.http.routers.gr8r.entrypoints: 'websecure'
       traefik.http.routers.gr8r.tls: 'true'
       traefik.http.routers.gr8r.tls.certresolver: 'letsencrypt'
       traefik.http.routers.gr8r.middlewares: 'gr8r-compress'
       traefik.http.services.gr8r.loadbalancer.server.port: '8080'
 
-      traefik.http.routers.gr8r-http.rule: 'Host(`${GR8R_HOST:-gr8r.example.com}`)'
+      traefik.http.routers.gr8r-http.rule: 'Host(`${GR8R_HOST:-projects.example.com}`)'
       traefik.http.routers.gr8r-http.entrypoints: 'web'
       traefik.http.routers.gr8r-http.middlewares: 'gr8r-https'
       traefik.http.middlewares.gr8r-https.redirectscheme.scheme: 'https'

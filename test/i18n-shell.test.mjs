@@ -120,7 +120,7 @@ const CHROME_ORACLE = [
 const REUSED_ORACLE = [
   ['common.workspace', 'Workspace'],
   ['toast.tryAgain', 'Try again'],
-  ['app.name', 'Gr8r Studio'],
+  ['app.name', 'Projects Studio'],
 ];
 
 /* The literal texts the sweep removed from the three shell files. */
@@ -195,7 +195,7 @@ const GONE = {
     'Design system',
     'System states',
     'Archive',
-    'Gr8r Studio',
+    'Projects Studio',
     'Not found',
     'Saved view',
   ],

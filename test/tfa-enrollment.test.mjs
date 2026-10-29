@@ -76,8 +76,8 @@ test('D-49 step-up + D-46: enroll returns the secret and server-built URI, nothi
   const res = await enroll(a, { currentPassword: GOOD });
   assert.equal(res.status, 200);
   assert.match(res.data.secret, /^[A-Z2-7]{32}$/, 'unpadded uppercase Base32 secret');
-  assert.ok(res.data.otpauth.startsWith('otpauth://totp/Gr8r:main%40test.local?secret='), 'D-54 URI shape');
-  for (const param of ['issuer=Gr8r', 'algorithm=SHA1', 'digits=6', 'period=30']) {
+  assert.ok(res.data.otpauth.startsWith('otpauth://totp/Projects Studio:main%40test.local?secret='), 'D-54 URI shape');
+  for (const param of ['issuer=Projects Studio', 'algorithm=SHA1', 'digits=6', 'period=30']) {
     assert.ok(res.data.otpauth.includes(param), `URI carries ${param}`);
   }
 

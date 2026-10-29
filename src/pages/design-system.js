@@ -114,7 +114,7 @@ export function pageSystem() {
           'page.design.input.error',
           `<input class="input is-error" value="alex@" id="ds-3"><span class="err">${ic('circle-alert', 12)}${t('page.design.emailError')}</span>`,
         ],
-        ['page.design.input.disabled', `<input class="input" value="hello@gr8rstudio.com" disabled id="ds-4">`],
+        ['page.design.input.disabled', `<input class="input" value="hello@projectsstudio.com" disabled id="ds-4">`],
         [
           'page.design.input.search',
           `<div class="inwrap">${ic('search', 13)}<input class="input" placeholder="${t('a11y.design.searchTasks')}" id="ds-5"><span class="kbd">/</span></div>`,
@@ -188,7 +188,7 @@ export function pageStates() {
       ${card(t('page.states.failedToSave'), 'circle-alert', `<div style="padding:18px" class="col"><div class="alert danger" style="margin-bottom:10px">${ic('circle-alert', 15)}<div><b>${t('page.design.alert.saveFailed')}</b><div class="muted">${t('page.states.serverTimeout')}</div></div></div><button class="btn btn-secondary btn-sm" style="align-self:flex-start" data-a="demoToast" data-v="err">${t('page.states.showAsToast')}</button></div>`)}
       ${card(t('page.states.permissionDenied'), 'lock', `<div class="empty-state sm"><div class="glyph">${ic('lock', 20)}</div><h3 class="es-h">${t('page.states.noAccess')}</h3><p>${t('page.states.portalPrivate')}</p><button class="btn btn-secondary btn-sm" data-a="go" data-r="project" data-id="p6">${t('page.states.openExample')}</button></div>`)}
       ${card(t('page.states.notFound'), 'file-question', `<div class="empty-state sm"><div class="glyph">${ic('file-question', 20)}</div><h3 class="es-h">${t('page.states.notFound')}</h3><p>${t('page.states.notFoundBody')}</p><button class="btn btn-secondary btn-sm" data-a="go" data-r="nowhere">${t('page.states.openExample')}</button></div>`)}
-      ${card(t('page.states.formValidation'), 'text-cursor-input', `<div style="padding:18px" class="col"><div class="field"><label class="label" for="st-e">${t('common.email')}</label><input class="input is-error" id="st-e" value="hello@gr8rstudio" aria-invalid="true"><span class="err">${ic('circle-alert', 12)}${t('page.states.emailErrorLong')}</span></div></div>`)}
+      ${card(t('page.states.formValidation'), 'text-cursor-input', `<div style="padding:18px" class="col"><div class="field"><label class="label" for="st-e">${t('common.email')}</label><input class="input is-error" id="st-e" value="hello@projectsstudio" aria-invalid="true"><span class="err">${ic('circle-alert', 12)}${t('page.states.emailErrorLong')}</span></div></div>`)}
     </div>
     <h2 class="sec" style="margin:28px 0 10px">${t('page.states.confirmTitle')}</h2>
     <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" data-a="delProject" data-id="p5" data-demo="1">${ic('trash-2', 14)}${t('act.deleteProject')}</button><button class="btn btn-secondary" data-a="delTask" data-id="t10" data-demo="1">${ic('trash-2', 14)}${t('act.deleteTask')}</button><button class="btn btn-secondary" data-a="removeMember" data-id="m8" data-demo="1">${ic('user-minus', 14)}${t('page.states.removeMember')}</button><button class="btn btn-secondary" data-a="archiveProject" data-id="p7" data-demo="1">${ic('archive', 14)}${t('page.states.archiveProject')}</button></div>

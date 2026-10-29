@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* =====================================================================
-   Gr8r Studio server — one process, zero runtime dependencies.
+   Projects Studio server — one process, zero runtime dependencies.
 
    Serves the built SPA from dist/ and a small JSON API backed by SQLite
    (node:sqlite). Auth uses scrypt + opaque session cookies. The workspace
@@ -13,7 +13,7 @@
      ADMIN_EMAIL            first-run admin account
      ADMIN_PASSWORD         first-run admin password (generated if absent)
      ADMIN_NAME=Admin
-     WORKSPACE_NAME=Gr8r Studio
+     WORKSPACE_NAME=Projects Studio
      WORKSPACE_SLUG         optional slug for a fresh install (defaults to the name)
      APP_URL                public base URL for share/invite links
      ALLOW_SIGNUP=false     let visitors create accounts and workspaces
@@ -58,7 +58,7 @@ const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
 const SEED_DATA = process.env.SEED_DATA !== 'false';
-const WORKSPACE_NAME = (process.env.WORKSPACE_NAME || 'Gr8r Studio').trim() || 'Gr8r Studio';
+const WORKSPACE_NAME = (process.env.WORKSPACE_NAME || 'Projects Studio').trim() || 'Projects Studio';
 const WORKSPACE_SLUG = String(process.env.WORKSPACE_SLUG || '').trim();
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const INVITE_DAYS = Number(process.env.INVITE_DAYS || 7);
@@ -2820,13 +2820,13 @@ function main() {
   if (MAILER.enabled && !APP_URL) {
     console.error('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
     console.error(
-      "Invitation links are built from APP_URL; without it a request host header could point invite emails at an attacker's domain. Set APP_URL (e.g. https://gr8r.example.com) or unset SMTP_HOST to disable email invitations.",
+      "Invitation links are built from APP_URL; without it a request host header could point invite emails at an attacker's domain. Set APP_URL (e.g. https://projects.example.com) or unset SMTP_HOST to disable email invitations.",
     );
     process.exit(1);
   }
 
   server.listen(PORT, HOST, () => {
-    console.log(`gr8r studio listening on http://${HOST}:${PORT}`);
+    console.log(`Projects Studio listening on http://${HOST}:${PORT}`);
     console.log(`database: ${DB_PATH}`);
     if (MAILER.enabled) console.log(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
     else if (MAILER.error) console.warn(`invite email: disabled — ${MAILER.error}`);

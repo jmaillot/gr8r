@@ -533,12 +533,12 @@ async function frenchMarker(page, route, extra) {
    equals an English-catalogue value under the normalization contract,
    minus the commented stop-list. */
 const STOP_LIST = [
-  // 'Gr8r Studio' — the app name is the brand: identical in every locale, so
+  // 'Projects Studio' — the app name is the brand: identical in every locale, so
   // its catalogue presence on the auth/join document.title is not a leak.
-  'Gr8r Studio',
-  // 'Gr8r' — the logo wordmark's aria-label: the brand, identical in every
+  'Projects Studio',
+  // 'Projects Studio' — the logo wordmark's aria-label: the brand, identical in every
   // locale.
-  'Gr8r',
+  'Projects Studio',
   // 'Notifications' — the French catalogue value is identical to the English
   // one (the 'Table' precedent from the project tab bar): a locale-'fr'
   // render legitimately shows this exact string.

@@ -39,7 +39,7 @@ const TABLES = [
   [
     // the shell
     ['a11y.auth.toggleTheme', undefined, 'Toggle theme'],
-    ['page.auth.legal', undefined, '© 2026 Gr8r Studio · Terms · Privacy'],
+    ['page.auth.legal', undefined, '© 2026 Projects Studio · Terms · Privacy'],
     ['page.auth.continueGoogle', undefined, 'Continue with Google'],
     ['page.auth.continueMicrosoft', undefined, 'Continue with Microsoft'],
     ['page.auth.continueApple', undefined, 'Continue with Apple'],
@@ -59,7 +59,7 @@ const TABLES = [
     ['page.auth.goToSignIn', undefined, 'Go to sign in'],
     ['page.auth.joinTitle', { name: 'Acme' }, 'Join Acme'],
     ['page.auth.thisAddress', undefined, 'This address'],
-    ['page.auth.existingBody', { email: 'a@b.co' }, 'a@b.co already has a Gr8r account. Sign in with it to join this workspace.'],
+    ['page.auth.existingBody', { email: 'a@b.co' }, 'a@b.co already has a Projects Studio account. Sign in with it to join this workspace.'],
     ['page.auth.signInAndJoin', undefined, 'Sign in and join'],
     ['page.auth.wrongAddress', { name: 'Acme' }, 'Invited with the wrong address? Ask an administrator of Acme for a new invite.'],
     ['page.auth.joinSubtitle', undefined, 'Create your account to get access to this workspace.'],
@@ -135,7 +135,7 @@ const TABLES = [
     // step 2 — workspace
     ['page.auth.onb2Title', undefined, 'Create your workspace'],
     ['page.auth.onb2Sub', undefined, "A workspace is where your team's projects live."],
-    ['a11y.auth.wsNamePlaceholder', undefined, 'e.g. Gr8r Studio'],
+    ['a11y.auth.wsNamePlaceholder', undefined, 'e.g. Projects Studio'],
     ['page.auth.wsUrlHint', undefined, 'Your workspace will live at'],
     // step 3 — how does your team work
     ['page.auth.onb3Title', undefined, 'How does your team work?'],
@@ -156,7 +156,7 @@ const TABLES = [
     ['page.auth.projectName', undefined, 'Project name'],
     // step 5 — invites
     ['page.auth.onb5Title', undefined, 'Invite your team'],
-    ['page.auth.onb5Sub', undefined, 'Gr8r works best with your teammates.'],
+    ['page.auth.onb5Sub', undefined, 'Projects Studio works best with your teammates.'],
     ['page.auth.onb5MailHint', undefined, "They'll get an email invite."],
     ['page.auth.onb5LinkHint', undefined, "You'll get a link to share."],
     ['a11y.auth.inviteEmail', undefined, 'Teammate email'],
@@ -185,7 +185,7 @@ const TABLES = [
   /* ---- task 2: the design-system page ---- */
   [
     ['page.design.title', undefined, 'Design system'],
-    ['page.design.subtitle', undefined, 'Tokens and components that make up Gr8r. Switch themes to see both palettes.'],
+    ['page.design.subtitle', undefined, 'Tokens and components that make up Projects Studio. Switch themes to see both palettes.'],
     ['page.design.state.default', undefined, 'Default'],
     ['page.design.state.hover', undefined, 'Hover'],
     ['page.design.state.active', undefined, 'Active'],
@@ -264,7 +264,7 @@ const TABLES = [
     ['page.design.navTitle', undefined, 'Navigation'],
     ['page.design.demo.inboxActive', undefined, 'Inbox (active)'],
     ['page.design.demo.mytasksHover', undefined, 'My Tasks (hover)'],
-    ['page.design.demo.studio', undefined, 'Gr8r Studio'],
+    ['page.design.demo.studio', undefined, 'Projects Studio'],
     ['page.design.seg.grid', undefined, 'Grid'],
     ['page.design.dataTitle', undefined, 'Data display'],
     ['page.design.lab.avatar', undefined, 'Avatar'],
@@ -290,7 +290,7 @@ const TABLES = [
     ['page.design.iconTitle', undefined, 'Iconography'],
     ['page.design.iconSub', undefined, 'Lucide · 1.8px stroke · 12–18px'],
     ['page.states.title', undefined, 'System states'],
-    ['page.states.subtitle', undefined, 'Empty, loading, error, and confirmation states used throughout Gr8r.'],
+    ['page.states.subtitle', undefined, 'Empty, loading, error, and confirmation states used throughout Projects Studio.'],
     ['page.states.backOnline', undefined, 'Go back online'],
     ['page.states.simulateOffline', undefined, 'Simulate offline'],
     ['page.states.emptyTitle', undefined, 'Empty states'],
@@ -377,7 +377,7 @@ const TABLES = [
     ],
     ['settings.ws.deleteBodyLocal', undefined, 'Permanently delete this workspace, its projects, tasks, and files. This cannot be undone.'],
     // appearance
-    ['settings.appearance.lead', undefined, 'Customize how Gr8r looks on this device.'],
+    ['settings.appearance.lead', undefined, 'Customize how Projects Studio looks on this device.'],
     ['settings.appearance.accentTitle', undefined, 'Accent color'],
     ['settings.appearance.accent', undefined, 'Accent'],
     ['settings.appearance.accentDesc', undefined, 'Used for primary buttons, focus rings, and selection.'],
@@ -470,7 +470,7 @@ const TABLES = [
     // preferences
     ['settings.prefs.lead', undefined, 'Personal defaults for how you work.'],
     ['settings.prefs.launch', undefined, 'Open on launch'],
-    ['settings.prefs.launchDesc', undefined, 'The page you see when Gr8r opens.'],
+    ['settings.prefs.launchDesc', undefined, 'The page you see when Projects Studio opens.'],
     ['settings.prefs.openTasks', undefined, 'Open tasks in'],
     ['settings.prefs.openTasksDesc', undefined, 'Side panel keeps your place in the list.'],
     ['settings.prefs.sidePanel', undefined, 'Side panel'],
@@ -607,7 +607,7 @@ test('the design-system token names, state keys, theme keys and demo values are 
   }
   for (const k of ["'light'", "'dark'", "'system'"]) assert.ok(src.includes(k), `theme key ${k} lost`);
   // the demo values the page pre-fills its form with are data, not interface text
-  for (const d of ['Homepage wireframes', 'alex@', 'hello@gr8rstudio.com', '14:30']) {
+  for (const d of ['Homepage wireframes', 'alex@', 'hello@projectsstudio.com', '14:30']) {
     assert.ok(src.includes(d), `demo value ${d} lost`);
   }
 });

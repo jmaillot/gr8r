@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { renderQrSvg } from '../src/lib/qr.js';
 
 // D-54 URI shape built by totp.js buildOtpauthUri (server-side, 16-02)
-const OTPAUTH = 'otpauth://totp/Gr8r:user%40example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Gr8r&algorithm=SHA1&digits=6&period=30';
+const OTPAUTH = 'otpauth://totp/Projects Studio:user%40example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Projects Studio&algorithm=SHA1&digits=6&period=30';
 
 test('renderQrSvg returns a full inline <svg> string', () => {
   const svg = renderQrSvg(OTPAUTH);
