@@ -12,7 +12,7 @@ greenfield construction.
 
 - [x] **Phase 19: TOTP Encryption Closure** - Fail-closed decrypt surface everywhere and a boot-time plaintext→envelope migration for legacy `two_fa_secret` rows (completed 2026-10-28)
 - [x] **Phase 20: Recovery-Code Regeneration** - A 2FA user can burn-and-replace their recovery codes behind fresh password + live TOTP step-up (completed 2026-10-29)
-- [ ] **Phase 21: Disable-2FA Verification & Closure** - The shipped disable route is verified against the full contract and closed with e2e + i18n coverage
+- [x] **Phase 21: Disable-2FA Verification & Closure** - The shipped disable route is verified against the full contract and closed with e2e + i18n coverage (completed 2026-10-29)
 - [ ] **Phase 22: Operator Session Revocation** - The instance operator can revoke any non-owner user's sessions; revoked browsers sign out honestly
 
 ## Phase Details
@@ -71,7 +71,7 @@ Plans:
   3. Disable applies an explicit, documented session policy (keep-current / revoke-others) and records the activity verb
   4. The full disable→re-enroll cycle is covered by Chromium e2e in EN + FR, with all new strings catalogued (i18n-scan green)
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -110,5 +110,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
 | 20. Recovery-Code Regeneration | 2/2 | In Progress|  |
-| 21. Disable-2FA Verification & Closure | 2/2 | In Progress|  |
+| 21. Disable-2FA Verification & Closure | 2/2 | Complete    | 2026-10-29 |
 | 22. Operator Session Revocation | 0/? | Not started | - |

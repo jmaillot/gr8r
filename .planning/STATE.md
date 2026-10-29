@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
-current_plan: 2
+current_plan: Not started
 status: executing
-stopped_at: Completed 21-02-PLAN.md
-last_updated: "2026-10-29T11:53:33.446Z"
-state_head: 8b091524998992bf6ff79cee92098fe806185ae3
+stopped_at: Phase 21 complete, ready to plan Phase 22
+last_updated: "2026-10-29T12:03:15.474Z"
+state_head: 889115b41cc0afac08afaee224f0b0e00d8887c6
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 7
   completed_plans: 7
   percent: 50
-current_phase: 21
-current_phase_name: Disable-2FA Verification & Closure
+current_phase: 22
+current_phase_name: Operator Session Revocation
 ---
 
 # STATE.md
@@ -29,7 +29,7 @@ current_phase_name: Disable-2FA Verification & Closure
 
 - **Phase:** 21 — Disable-2FA Verification & Closure
 
-Current Plan: 2
+Current Plan: Not started
 Total Plans in Phase: 2
 
 - **Status:** Phase 21 plan 01 complete (disable route tightened, 8-test server suite green); plan 02 (e2e) next
@@ -91,7 +91,7 @@ Total Plans in Phase: 2
 ## Session Continuity
 
 **Last session:** 2026-10-29T11:53:33.402Z
-**Stopped at:** Completed 21-02-PLAN.md
+**Stopped at:** Phase 21 complete, ready to plan Phase 22
 **Resume file:** None
 
 - **Last action:** /gsd-verify-work Phase 20 — UAT 2/2 passed; G-20-1 (cosmetic srow squeeze) closed via gap plan 20-03 and re-verified with user confirmation. VERIFICATION canonicalized to passed; phase marked complete in ROADMAP/STATE; transitioned to Phase 21.
