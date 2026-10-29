@@ -966,7 +966,10 @@ function ensureAdmin({ quiet = false } = {}) {
 function stampInstanceAdmin() {
   if (db.prepare('select count(*) as n from users where is_instance_admin = 1').get().n > 0) return;
   const email = (process.env.ADMIN_EMAIL || 'admin@example.com').trim();
-  db.prepare('update users set is_instance_admin = 1 where email = ? collate nocase').run(email);
+  const res = db.prepare('update users set is_instance_admin = 1 where email = ? collate nocase').run(email);
+  if (res.changes === 0) {
+    console.warn(`  [bootstrap] no operator flagged: no users row matches ADMIN_EMAIL (${email}); set is_instance_admin=1 manually (D-114)`);
+  }
 }
 
 function bootstrap(opts) {
