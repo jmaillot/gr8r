@@ -1982,8 +1982,10 @@ async function handleApi(req, res, url) {
     const operatorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, operatorTokenHash);
     const left = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
-    // D-117: success-only verb, after the delete, before the response.
-    logSecurity(target.id, 'sessions_revoked_by_operator');
+    // D-117: success-only verb, after the delete, before the response. A zero-row
+    // delete (target had no sessions, or only the kept current one) is a no-op,
+    // not a revocation — the audit trail must not claim one (IN-01).
+    if (del.changes > 0) logSecurity(target.id, 'sessions_revoked_by_operator');
     return json(res, 200, { revoked: del.changes, remaining: left.n }); // live post-delete counts (Pitfall 10)
   }
 

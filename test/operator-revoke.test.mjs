@@ -259,8 +259,11 @@ test('D-116 throttle band: every attempt consumes a try — 403 refusals include
   assert.equal(sixth.status, 429, 'the 6th attempt is throttled');
   assert.equal((await sixth.json()).code, 'tooManyAttempts');
 
-  // D-117: rows exist only for committed successes.
+  // D-117 + IN-01: rows exist only for real revocations. The first revoke
+  // deleted the target's rows; the three follow-ups were 200 no-ops
+  // (revoked: 0) and log nothing — the 200 statuses above already assert
+  // that those attempts succeeded and consumed tries.
   const targetLogs = securityRows('wsvictim@test.local', server2);
-  assert.equal(targetLogs.length, 4, 'four successful revokes logged');
+  assert.equal(targetLogs.length, 1, 'exactly one real revocation logged');
   assert.equal(securityRows('flagowner@test.local', server2).length, 0, 'the 403 refusal logged nothing');
 });
