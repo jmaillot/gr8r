@@ -55,6 +55,12 @@
   justify-content: flex-end;
   row-gap: var(--s-2);
 }
+/* Project-inventory rows (settings > projects) put an icon+name cluster in the
+   first cell: it must stay left-aligned — flex-end above is for the CONTROL
+   cluster in the auto column, not for the label cell. */
+.srow > .row:first-child {
+  justify-content: flex-start;
+}
 .srow .t {
   font-weight: 500;
   font-size: var(--fs);
