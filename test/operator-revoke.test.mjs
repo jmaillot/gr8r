@@ -162,3 +162,71 @@ test('D-113 pre-v1.4 database: the boot stamp flags the ADMIN_EMAIL account and 
   await third.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+/* --------------------- privilege-matrix expansion (plan task 3) --------------------- */
+
+let server2;
+let tempDir2;
+
+before(async () => {
+  /* Second instance: signup is IP-throttled 5/hour and the matrix needs more
+     users, so the remaining families live on their own server. */
+  tempDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-op-revoke2-'));
+  server2 = await startServer({ dataDir: tempDir2, env: { MASTER_KEY: 'gr8r-op-revoke-key-2' } });
+});
+
+after(async () => {
+  await server2?.stop();
+  if (tempDir2) {
+    fs.rmSync(tempDir2, { recursive: true, force: true });
+    assert.equal(fs.existsSync(tempDir2), false, 'temp data dir 2 removed');
+  }
+});
+
+test('workspace owner membership WITHOUT the flag is refused — the gate reads the column only', async () => {
+  const wsAdmin = await signup(server2.base, { name: 'wsAdmin', email: 'wsadmin@test.local', password: GOOD });
+  assert.equal(wsAdmin.status, 201, 'wsAdmin signed up');
+  // Pitfall 4 fixture: a real workspace 'owner' membership row on Acme, with
+  // is_instance_admin = 0. The two flags are independent by construction
+  // (memberships vs the users column); the gate must read the column only.
+  withDb(server2.dbPath, db =>
+    db
+      .prepare('insert into memberships (workspace_id, user_id, role) select id, ?, \'owner\' from workspaces where slug = \'acme\'')
+      .run(userRow('wsadmin@test.local', server2).id),
+  );
+  await signup(server2.base, { name: 'wsVictim', email: 'wsvictim@test.local', password: GOOD });
+  const before = sessionCount('wsvictim@test.local', server2);
+
+  const res = await revoke(wsAdmin.client.cookie(), userRow('wsvictim@test.local', server2).id, server2);
+  assert.equal(res.status, 403);
+  assert.equal((await res.json()).code, 'operatorOnly', 'D-112: workspace role never substitutes for the flag');
+  assert.equal(sessionCount('wsvictim@test.local', server2), before, 'target sessions intact');
+  assert.equal(securityRows('wsvictim@test.local', server2).length, 0, 'refused attempt logs nothing');
+});
+
+test('D-116 throttle band: every attempt consumes a try — 403 refusals included; the 6th is throttled', async () => {
+  const operator = (await login(server2.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  await signup(server2.base, { name: 'flagOwner', email: 'flagowner@test.local', password: GOOD });
+  await login(server2.base, 'flagowner@test.local', GOOD);
+  withDb(server2.dbPath, db => db.prepare('update users set is_instance_admin = 1 where email = ?').run('flagowner@test.local'));
+  const targetId = userRow('wsvictim@test.local', server2).id;
+  const flaggedId = userRow('flagowner@test.local', server2).id;
+
+  // 5 attempts inside the window: a valid revoke, an owner-immune refusal,
+  // then three more valid revokes.
+  assert.equal((await revoke(operator.cookie(), targetId, server2)).status, 200);
+  const refused = await revoke(operator.cookie(), flaggedId, server2);
+  assert.equal(refused.status, 403, 'the owner-immune refusal also consumed a try');
+  assert.equal((await revoke(operator.cookie(), targetId, server2)).status, 200);
+  assert.equal((await revoke(operator.cookie(), targetId, server2)).status, 200);
+  assert.equal((await revoke(operator.cookie(), targetId, server2)).status, 200);
+
+  const sixth = await revoke(operator.cookie(), targetId, server2);
+  assert.equal(sixth.status, 429, 'the 6th attempt is throttled');
+  assert.equal((await sixth.json()).code, 'tooManyAttempts');
+
+  // D-117: rows exist only for committed successes.
+  const targetLogs = securityRows('wsvictim@test.local', server2);
+  assert.equal(targetLogs.length, 4, 'four successful revokes logged');
+  assert.equal(securityRows('flagowner@test.local', server2).length, 0, 'the 403 refusal logged nothing');
+});

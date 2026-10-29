@@ -1505,6 +1505,8 @@
   "err.nameRequired": "Saisissez votre nom",
   "err.passwordTooWeak": "Utilisez au moins 10 caractères, dont un chiffre ou un symbole",
   "err.adminOnly": "Seuls les administrateurs de l’espace de travail peuvent faire cela",
+  "err.operatorOnly": "Seul l’opérateur de l’instance peut faire cela",
+  "err.ownerImmune": "Les comptes propriétaires sont immunisés contre la révocation par l’opérateur",
   "err.workspaceNotFound": "Espace de travail introuvable",
   "err.askAdminForWorkspace": "Demandez à un administrateur de l’espace de travail de vous en créer un",
   "err.workspaceNameRequired": "Saisissez un nom d’espace de travail",

@@ -1505,6 +1505,8 @@
   "err.nameRequired": "Enter your name",
   "err.passwordTooWeak": "Use at least 10 characters, including a number or symbol",
   "err.adminOnly": "Only workspace admins can do that",
+  "err.operatorOnly": "Only the instance operator can do that",
+  "err.ownerImmune": "Owner accounts are immune to operator revocation",
   "err.workspaceNotFound": "Workspace not found",
   "err.askAdminForWorkspace": "Ask a workspace administrator to create one for you",
   "err.workspaceNameRequired": "Enter a workspace name",
