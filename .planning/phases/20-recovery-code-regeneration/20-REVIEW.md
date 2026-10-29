@@ -2,55 +2,47 @@
 phase: 20-recovery-code-regeneration
 reviewed: 2026-10-29T00:00:00Z
 depth: standard
-files_reviewed: 7
+files_reviewed: 5
 files_reviewed_list:
-  - server.js
-  - test/tfa-recovery-regen.test.mjs
-  - src/core/api.js
-  - src/pages/settings.js
-  - src/actions/actions.js
   - src/locales/en.json
   - src/locales/fr.json
+  - src/pages/settings.js
+  - src/styles/pages/settings.css
+  - test/i18n-core-features.test.mjs
 findings:
   critical: 0
   warning: 0
-  info: 2
-  total: 2
-status: clean
+  info: 1
+  total: 1
+status: findings
 ---
 
-# Phase 20: Code Review Report
+# Phase 20: Code Review Report (incremental — wave 3 / plan 20-03, G-20-1)
 
-**Reviewed:** 2026-10-29
+**Reviewed:** 2026-10-29 (incremental scope: changes since `c0fbb5246707282d77e03533c13e96345b6a1709`)
 **Depth:** standard
-**Files Reviewed:** 7
-**Status:** clean
+**Files Reviewed:** 5
+**Status:** findings
 
 ## Summary
 
-Adversarial review of the recovery-code regeneration phase (commits 9e4bb5c, d948c9d, 3f97303, 2b64532): the `POST /api/auth/tfa/recovery` route, `security_log` schema + `logSecurity` helper, the 5-test integration suite, and the client half (api method, settings-card regen stage, action handlers, EN/FR locale keys).
+Incremental review of the plan 20-03 gap closure: the short row-level labels (`settings.tfa.regenShort` added to both locales, row buttons swapped to `settings.tfa.regenShort` / `act.turnOff`), the `.srow > .row` flex-wrap rule, and the i18n catalogue pin bump to 1582.
 
-**Server route (server.js:1704-1755) — verified sound.** Guard order matches the sibling convention (sameOrigin → requireUser → `tooMany('tfa-regen|<uid>', 5, 15min)` → readJson). The D-85 structural invariant holds: the strict `/^\d{6}$/` gate has no else-branch and the route block contains zero reads of `recovery_codes` (grep-verified; only its own delete/insert writes). The burn-and-replace is a single `transaction()` (server.js:861-871, `BEGIN IMMEDIATE` with rollback on throw) containing a fresh re-select, password-then-TOTP verification (D-86), `requireTotpSecret` fail-closed decrypt (returns `{ok:false}` → 503 before any mutation), the D-87 `two_fa_last_step` update, delete-all + hash-insert, and the success-only `logSecurity` row. `json()` sets `Cache-Control: no-store` on the plaintext-code response (server.js:1238). `verifyTotpCode`'s format gate precedes `timingSafeEqual`, so the length-mismatch throw (Pitfall 1) is unreachable. 503 body copy is byte-distinct from the disable route's, honoring the D-81 guard.
+Verified directly:
 
-**Client half — verified sound.** `tfaRecover` posts to the exact route; the regen stage's code field is 6-digit-only semantics (`inputmode="numeric"`, `autocomplete="one-time-code"`, dedicated `regenCodeLabel` — never the dual-shape disable `codeLabel`), satisfying the D-85 client half. Success order clears `S.ui.tfaStage` first (Pitfall 6), routes codes through transient `S.ui.recoveryCodes` into the reused D-53 modal; grep confirms no localStorage/sessionStorage write of `recoveryCodes` anywhere in `src/`. All mapped error codes (`wrongCurrentPassword`, `passwordRequired`, `codeRejected`, `tooManyAttempts`, `tfaNotEnabled`, `masterKeyMissing`) plus the client-only keys (`err.enterCurrentPassword`, `err.codeRequired`, `err.serverUnreachable`) and all six `settings.tfa.regen*` keys exist in both en.json and fr.json. Row-button mutual exclusion was correctly generalized (`stage ? '' :`), so both row buttons hide while any stage is open.
-
-**Tests (test/tfa-recovery-regen.test.mjs) — verified sound.** Re-ran `node --test test/tfa-recovery-regen.test.mjs`: 5/5 pass on a real server + real SQLite. Coverage matches the plan's validation rows: happy path (10 distinct new hashes, old set burned, `used_at` null, last_step advanced, exactly one security_log row, no-store header), D-85 regression (captured plaintext code → 400 + byte-unchanged hash set), D-95 409 with zero mutation, D-93/D-94 throttle (5×403 then 429, code set untouched), stale-window 400 and corrupted-envelope 503 with zero mutation and no log row. Assertions are meaningful (hash-set deep-equality, header checks, mutation checks), not smoke tests.
-
-Attempts to break the implementation failed: no injection surface (all statements are parameterized; no string-interpolated SQL with user input), no CSRF gap (sameOrigin first), no replay hole (D-04 guard updated in the same transaction as the burn), no plaintext-code persistence server- or client-side, no unhandled promise rejection in the new client handler (errors land in the mapped switch with a 503-specific branch). No critical or warning findings.
+- `act.turnOff` exists in both catalogues (en.json:150 "Turn off" / fr.json:151 "Désactiver"); `settings.tfa.regenShort` was added to en.json and fr.json at symmetric positions (en.json:1284 / fr.json:1284).
+- No key was orphaned by the swap: `settings.tfa.regen` is still used as the regen form's submit label (settings.js:427) and `settings.tfa.turnOff` as the disable form's confirm label (settings.js:416), exactly as the plan required ("only the row-level buttons shorten").
+- Catalogue count verified programmatically: both en.json and fr.json contain exactly 1582 keys; the only en−fr divergence is the intentional `contract.englishOnly` marker. `node --test test/i18n-core-features.test.mjs` → 14 pass, 0 fail.
+- CSS: `--s-2` is defined (tokens.css:63). The `.srow > .row` selector is well-scoped — `.srow` markup exists only in `src/pages/settings.js` (the generic `.row` class is not over-matched because the selector is prefixed with `.srow >`). The responsive single-column fallback (responsive.css:257) keeps the rule harmless on mobile: controls wrap within a full-width row.
+- No secrets, no injection vectors, no dead code introduced by the diff.
 
 ## Info
 
-### IN-01: `security_log` is write-only with no retention or cleanup path
+### IN-01: Stale "1549 keys" prefix inside the catalogue-size test title
 
-**File:** `server.js:162-168`
-**Issue:** The table grows unbounded and has no reader until Phase 21's DIS-01 lands. Every successful regen (and, later, every Phase 21 event) adds a row forever; there is no pruning query anywhere.
-**Fix:** Acceptable for now given D-99's deliberate minimalism and Phase 21 reusing the table verbatim. When Phase 21 introduces its first read, add a retention sweep (e.g., `delete from security_log where created_at < now() - RETENTION_MS`) alongside the heartbeat-style lazy sweeps already used for `attempts`/`pendingTfa`.
-
-### IN-02: `logSecurity` prepares its insert statement on every call
-
-**File:** `server.js:1425-1426`
-**Issue:** `db.prepare('insert into security_log ...')` runs per call instead of using a cached prepared statement like the hottest paths do. One extra parse per successful regen — negligible, but it diverges from the cached-prepared-statement pattern used elsewhere in the file.
-**Fix:** Hoist to a module-level `const insertSecurityLog = /* lazy */` or prepare inside `logSecurity` only once. Optional; fine to defer until Phase 21 makes this a hot path.
+**File:** `test/i18n-core-features.test.mjs:216`
+**Issue:** The test title still opens with "— 1549 keys (" while the assertion right below pins the count at 1582 and the parenthetical ledger correctly accumulates every addition since. The prefix is a historical leftover that contradicts the actual assertion and grows more misleading with every wave.
+**Fix:** Drop the hardcoded prefix from the title (e.g. start at "the catalogue holds after … (+ err.fileNotFound …)") or update it to the current count; the ledger list already tells the whole story.
 
 ---
 
