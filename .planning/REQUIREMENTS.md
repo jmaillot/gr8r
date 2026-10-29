@@ -34,10 +34,10 @@ Out of Scope — update docs when rotation lands).
 
 ### Disable-2FA Closure (DIS)
 
-- [ ] **DIS-01**: The shipped disable route is verified and, where needed, fixed: pending
+- [x] **DIS-01**: The shipped disable route is verified and, where needed, fixed: pending
   `login_challenges` teardown, one-transaction cleanup of `two_fa_*` + recovery codes, and an
   explicit session policy on disable
-- [ ] **DIS-02**: A recovery code can never disable 2FA — password + live TOTP code required
+- [x] **DIS-02**: A recovery code can never disable 2FA — password + live TOTP code required
   (regression-tested)
 
 ### Admin Session Revocation (OPREV)
@@ -76,8 +76,8 @@ Out of Scope — update docs when rotation lands).
 | ENC-02 | Phase 19 | Complete |
 | REGEN-01 | Phase 20 | Complete |
 | REGEN-02 | Phase 20 | Complete |
-| DIS-01 | Phase 21 | Pending |
-| DIS-02 | Phase 21 | Pending |
+| DIS-01 | Phase 21 | Complete |
+| DIS-02 | Phase 21 | Complete |
 | OPREV-01 | Phase 22 | Pending |
 | OPREV-02 | Phase 22 | Pending |
 

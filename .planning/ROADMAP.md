@@ -71,11 +71,11 @@ Plans:
   3. Disable applies an explicit, documented session policy (keep-current / revoke-others) and records the activity verb
   4. The full disable→re-enroll cycle is covered by Chromium e2e in EN + FR, with all new strings catalogued (i18n-scan green)
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 21-01-PLAN.md — Tighten disable route (D-101 strict gate, D-103 challenge teardown, D-105 session policy, D-107 verb) + node:test server suite
+- [x] 21-01-PLAN.md — Tighten disable route (D-101 strict gate, D-103 challenge teardown, D-105 session policy, D-107 verb) + node:test server suite
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 21-02-PLAN.md — Chromium e2e full-cycle spec EN+FR (D-109/D-106/D-102-UI) + i18n gate
@@ -110,5 +110,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
 | 20. Recovery-Code Regeneration | 2/2 | In Progress|  |
-| 21. Disable-2FA Verification & Closure | 0/? | Not started | - |
+| 21. Disable-2FA Verification & Closure | 1/2 | In Progress|  |
 | 22. Operator Session Revocation | 0/? | Not started | - |

@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
-current_plan: 1
-status: unknown
-stopped_at: Phase 21 context gathered
-last_updated: "2026-10-29T10:46:40.378Z"
-state_head: 2a8fa52fcbeab3d3e291c7decb8ba0faff4ec726
+current_plan: 2
+status: executing
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-10-29T11:05:00.880Z"
+state_head: 4859bfc6d40acbddf5a964542e432e0395cb3d84
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 7
-  completed_plans: 5
-  percent: 25
-current_phase_name: disable-2fa-verification-closure
+  completed_plans: 6
+  percent: 86
 current_phase: 21
+current_phase_name: Disable-2FA Verification & Closure
 ---
 
 # STATE.md
@@ -23,16 +23,17 @@ current_phase: 21
 
 - **Project:** Gr8r Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** every auth item deferred out of v1.3 lands — the 2FA lifecycle and session control become complete
-- **Current Focus:** Milestone v1.4 "Auth Completion" — Phase 20 (Recovery-Code Regeneration)
+- **Current Focus:** Milestone v1.4 "Auth Completion" — Phase 21 (Disable-2FA Verification & Closure)
 
 ## Current Position
 
 - **Phase:** 21 — Disable-2FA Verification & Closure
 
-Current Plan: none (not yet planned)
+Current Plan: 2
+Total Plans in Phase: 2
 
-- **Status:** Phase 20 complete and verified (UAT 2/2 passed, G-20-1 closed via 20-03 and re-verified)
-- **Progress:** ▓▓░░░░░░░░ (2/4 phases complete — Phases 19–20 done; next: Phase 21)
+- **Status:** Phase 21 plan 01 complete (disable route tightened, 8-test server suite green); plan 02 (e2e) next
+- **Progress:** ▓▓▓▓▓░░░░░ (6/7 milestone plans complete — Phases 19–20 done; Phase 21 plan 01 done, plan 02 next)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -44,8 +45,8 @@ Current Plan: none (not yet planned)
 | ENC-02 | 19 | Complete (19-02) |
 | REGEN-01 | 20 | Complete (20-01/20-02) |
 | REGEN-02 | 20 | Complete (20-01/20-02) |
-| DIS-01 | 21 | Pending |
-| DIS-02 | 21 | Pending |
+| DIS-01 | 21 | Complete (21-01) |
+| DIS-02 | 21 | Complete (21-01) |
 | OPREV-01 | 22 | Pending |
 | OPREV-02 | 22 | Pending |
 
@@ -56,7 +57,7 @@ Current Plan: none (not yet planned)
 | Phases planned | 4 (19–22) |
 | Requirements mapped | 8/8 |
 | Orphans | 0 |
-| Plans completed | 2 (19-01, 19-02) |
+| Plans completed | 6 (19-01/02, 20-01/02/03, 21-01) |
 **Per-Plan Metrics:**
 
 | Plan | Duration | Tasks | Files |
@@ -64,6 +65,7 @@ Current Plan: none (not yet planned)
 | Phase 20 P01 | 35m | 2 tasks | 6 files |
 | Phase 20 P02 | 40m | 2 tasks | 8 files |
 | Phase 20 P03 | 12m | 2 tasks | 5 files |
+| Phase 21 P01 | 14m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -87,9 +89,9 @@ Current Plan: none (not yet planned)
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T10:18:01.809Z
-**Stopped at:** Phase 21 context gathered
-**Resume file:** .planning/phases/21-disable-2fa-verification-closure/21-CONTEXT.md
+**Last session:** 2026-10-29T11:05:00.836Z
+**Stopped at:** Completed 21-01-PLAN.md
+**Resume file:** None
 
 - **Last action:** /gsd-verify-work Phase 20 — UAT 2/2 passed; G-20-1 (cosmetic srow squeeze) closed via gap plan 20-03 and re-verified with user confirmation. VERIFICATION canonicalized to passed; phase marked complete in ROADMAP/STATE; transitioned to Phase 21.
 - **Next action:** `/gsd-discuss-phase 21` (or `/gsd-plan-phase 21`). Remember `/gsd-discuss-phase 22` before planning Phase 22.
@@ -101,3 +103,4 @@ Current Plan: none (not yet planned)
 - [Phase 20]: D-99 mechanism: security_log table + logSecurity helper, success-only rows in regen transaction; Phase 21 DIS-01 reuses verbatim
 - [Phase 20]: Client regen flow reuses D-53 modal via transient S.ui.recoveryCodes; 6-digit-only code field (D-85 client half); row buttons hidden while any tfaStage open
 - [Phase 20]: G-20-1 closed via short row labels (settings.tfa.regenShort + reused act.turnOff) and .srow > .row wrap rule — no disable-route changes (Phase 21 scope preserved)
+- [Phase 21]: Disable route: D-101 strict 6-digit gate (D-57 recovery branch deleted), D-103 user-scoped challenge teardown, D-105 revoke-others via cookie-derived tokenHash, D-107 after-commit tfa_disabled verb — regression-tested in test/tfa-disable.test.mjs (8 tests)
