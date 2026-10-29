@@ -160,7 +160,7 @@ async function openSettingsSec(page, sec) {
    (#tfa-off-pw + #tfa-off-code) and submit via #tfa-off-save. Returns
    after the submit click — the caller asserts the outcome. */
 async function openDisableStage(page, lang) {
-  await expect(page.getByText(fmt('settings.tfa.on', {}, lang))).toBeVisible();
+  await expect(page.getByText(fmt('settings.tfa.on', {}, lang), { exact: true })).toBeVisible();
   await page.locator(`button[data-a='tfaAskDisable']`).click();
   await expect(page.locator(`form[data-submit='tfaDisableConfirm']`)).toBeVisible();
 }
@@ -175,24 +175,25 @@ async function fillDisableForm(page, pw, code) {
    moved the server step past the one the login consumed. One retry for
    the residual boundary race. */
 async function disableWithTotp(page, secret, lang, lastStepSec) {
+  /* Reset the stage first: any error rendered by a previous attempt
+     (e.g. the D-102 recovery-code rejection) would otherwise be visible
+     stale text and poison the success/rejection race below. */
+  await page.locator(`button[data-a='tfaCancel']`).click();
+  await page.locator(`button[data-a='tfaAskDisable']`).click();
+  await expect(page.locator(`form[data-submit='tfaDisableConfirm']`)).toBeVisible();
   await nextWindow(lastStepSec);
   await fillDisableForm(page, PASSWORD, tfaCodeAt(secret, Math.floor(Date.now() / 1000) + 1));
-  /* The API call is async — wait for the outcome before deciding to retry. */
-  let rejected = await page
-    .getByText(fmt('err.codeRejected', {}, lang))
-    .waitFor({ state: 'visible', timeout: 5000 })
-    .then(() => true)
-    .catch(() => false);
-  if (rejected) {
+  /* Race the outcome: either the codeRejected error renders under the
+     code field or the success toast pops — waiting for one alone would
+     burn the toast's lifetime on the success path. */
+  const errLoc = page.getByText(fmt('err.codeRejected', {}, lang));
+  const okLoc = page.getByText(fmt('settings.tfa.disabledToast', {}, lang));
+  await errLoc.or(okLoc).waitFor({ state: 'visible', timeout: 10_000 });
+  if (await errLoc.isVisible()) {
     await expect(page.locator(`form[data-submit='tfaDisableConfirm']`)).toBeVisible();
     await nextWindow(Math.floor(Date.now() / 1000));
     await fillDisableForm(page, PASSWORD, tfaCodeAt(secret, Math.floor(Date.now() / 1000) + 1));
-    rejected = await page
-      .getByText(fmt('err.codeRejected', {}, lang))
-      .waitFor({ state: 'visible', timeout: 5000 })
-      .then(() => true)
-      .catch(() => false);
-    if (rejected) throw new Error('disable rejected both live codes');
+    await okLoc.waitFor({ state: 'visible', timeout: 10_000 });
   }
 }
 
@@ -227,7 +228,7 @@ test.describe('phase 21 tfa disable cycle', () => {
            under the code field and 2FA stays on — nothing is disabled. */
         await fillDisableForm(page, PASSWORD, recoveryCodes[0]);
         await expect(page.getByText(fmt('err.codeRejected', {}, lang))).toBeVisible();
-        await expect(page.getByText(fmt('settings.tfa.on', {}, lang))).toBeVisible();
+        await expect(page.getByText(fmt('settings.tfa.on', {}, lang), { exact: true })).toBeVisible();
         await expect(page.locator(`form[data-submit='tfaDisableConfirm']`)).toBeVisible();
 
         /* Disable with password + live TOTP through the same form. The
@@ -235,10 +236,9 @@ test.describe('phase 21 tfa disable cycle', () => {
            guard out of the way. */
         await disableWithTotp(page, secret, lang, loginStepSec);
 
-        /* Honest success copy, then the card's server-ground-truth off
-           state (refreshTfa re-reads twoFa). */
-        await expect(page.getByText(fmt('settings.tfa.disabledToast', {}, lang))).toBeVisible();
-        await expect(page.getByText(fmt('settings.tfa.off', {}, lang))).toBeVisible();
+        /* The card's server-ground-truth off state (refreshTfa re-reads
+           twoFa); the success toast was already consumed by the helper. */
+        await expect(page.getByText(fmt('settings.tfa.off', {}, lang), { exact: true })).toBeVisible();
       } finally {
         await context.close();
       }
@@ -286,10 +286,11 @@ test.describe('phase 21 tfa disable cycle', () => {
         await openSettingsSec(a, 'tfa');
         await openDisableStage(a, lang);
         await disableWithTotp(a, secret, lang, aStepSec);
-        await expect(a.getByText(fmt('settings.tfa.disabledToast', {}, lang))).toBeVisible();
 
-        /* A's keep-current session survives: the sessions tab still
-           loads its server ground truth with this device present. */
+        /* A's keep-current session survives: the tfa card's server
+           ground truth reads off, and the sessions tab still loads its
+           server ground truth with this device present. */
+        await expect(a.getByText(fmt('settings.tfa.off', {}, lang), { exact: true })).toBeVisible();
         await openSettingsSec(a, 'sessions');
         await expect(a.getByText(fmt('settings.sessions.thisDevice', {}, lang))).toBeVisible();
 
