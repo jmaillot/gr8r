@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
 status: unknown
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-10-29T07:57:09.350Z"
-state_head: d2562132903507f4e760887b394c1925ef0072f6
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-10-29T08:04:50.921Z"
+state_head: c95378f2bb8fc455a35a621ccc3bf8631d9534ff
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 current_phase: 20
 current_phase_name: Recovery-Code Regeneration
@@ -27,10 +27,12 @@ current_phase_name: Recovery-Code Regeneration
 ## Current Position
 
 - **Phase:** 20 — Recovery-Code Regeneration
-- **Plan:** Not started
-- **Status:** Ready to execute
-- **Total Plans in Phase:** 2
-- **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done, UAT 7/7)
+
+Current Plan: 2
+Total Plans in Phase: 2
+
+- **Status:** Phase execution complete — ready for verification
+- **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done; Phase 20 executed 2/2 plans, pending verification)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -40,8 +42,8 @@ current_phase_name: Recovery-Code Regeneration
 |-----|-------|--------|
 | ENC-01 | 19 | Complete (19-01) |
 | ENC-02 | 19 | Complete (19-02) |
-| REGEN-01 | 20 | Pending |
-| REGEN-02 | 20 | Pending |
+| REGEN-01 | 20 | Complete (20-01/20-02) |
+| REGEN-02 | 20 | Complete (20-01/20-02) |
 | DIS-01 | 21 | Pending |
 | DIS-02 | 21 | Pending |
 | OPREV-01 | 22 | Pending |
@@ -60,6 +62,7 @@ current_phase_name: Recovery-Code Regeneration
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 20 P01 | 35m | 2 tasks | 6 files |
+| Phase 20 P02 | 40m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -83,8 +86,8 @@ current_phase_name: Recovery-Code Regeneration
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T07:57:09.315Z
-**Stopped at:** Completed 20-01-PLAN.md
+**Last session:** 2026-10-29T08:04:50.883Z
+**Stopped at:** Completed 20-02-PLAN.md
 **Resume file:** None
 
 - **Last action:** /gsd-verify-work Phase 19 — 7/7 UAT tests passed on live deployment + isolated local container (Test 4 defer path verified with throwaway Docker instance; no prod config touched). Verification refreshed (stale → passed, fresh digest), phase marked complete, transitioned to Phase 20.
@@ -95,3 +98,4 @@ current_phase_name: Recovery-Code Regeneration
 
 - [Phase 20]: Regen route 503 body copy made per-route unique to honor D-81 byte-distinct-copy guard
 - [Phase 20]: D-99 mechanism: security_log table + logSecurity helper, success-only rows in regen transaction; Phase 21 DIS-01 reuses verbatim
+- [Phase 20]: Client regen flow reuses D-53 modal via transient S.ui.recoveryCodes; 6-digit-only code field (D-85 client half); row buttons hidden while any tfaStage open

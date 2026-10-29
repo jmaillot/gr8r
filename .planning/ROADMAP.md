@@ -49,14 +49,14 @@ Plans:
   3. New plaintext codes are displayed exactly once in the UI and never stored; the old set is invalid the moment the new set lands
   4. The regeneration endpoint has its own throttle budget and the response carries `Cache-Control: no-store`
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 20-01-PLAN.md — Wave 1: POST /api/auth/tfa/recovery route (D-85..D-100), security_log mechanism (D-99), test/tfa-recovery-regen.test.mjs
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 20-02-PLAN.md — Wave 2: settings-card regen stage (D-90), actions + api wiring, D-53 modal reuse (D-91), EN+FR i18n (D-92)
+- [x] 20-02-PLAN.md — Wave 2: settings-card regen stage (D-90), actions + api wiring, D-53 modal reuse (D-91), EN+FR i18n (D-92)
 
 ### Phase 21: Disable-2FA Verification & Closure
 
@@ -99,6 +99,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
-| 20. Recovery-Code Regeneration | 1/2 | In Progress|  |
+| 20. Recovery-Code Regeneration | 2/2 | In Progress|  |
 | 21. Disable-2FA Verification & Closure | 0/? | Not started | - |
 | 22. Operator Session Revocation | 0/? | Not started | - |
