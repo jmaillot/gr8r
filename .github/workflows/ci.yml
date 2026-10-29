@@ -49,9 +49,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build the image
-        run: docker build -t gr8r:ci .
+        run: docker build -t projects:ci .
       - name: Run the container (throwaway, inline non-secret env)
-        run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' gr8r:ci
+        run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' projects:ci
       - name: Wait for /api/health, then assert the served French catalogue chunk
         run: |
           set -eu
@@ -61,7 +61,7 @@ jobs:
             sleep 1
           done
           if [ -z "$ok" ]; then
-            docker logs "$(docker ps -q --filter ancestor=gr8r:ci)" || true
+            docker logs "$(docker ps -q --filter ancestor=projects:ci)" || true
             exit 1
           fi
           node --input-type=module - <<'EOF'
@@ -91,4 +91,4 @@ jobs:
           EOF
       - name: Stop the container
         if: always()
-        run: docker stop "$(docker ps -q --filter ancestor=gr8r:ci)"
+        run: docker stop "$(docker ps -q --filter ancestor=projects:ci)"

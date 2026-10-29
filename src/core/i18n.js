@@ -74,7 +74,7 @@ async function activateLocale(code) {
 export async function setLocale(code) {
   const target = await activateLocale(code);
   if (typeof document !== 'undefined' && document && typeof document.dispatchEvent === 'function') {
-    document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target }, bubbles: true }));
+    document.dispatchEvent(new CustomEvent('projects:locale', { detail: { code: target }, bubbles: true }));
   }
   return target;
 }
@@ -106,8 +106,8 @@ export function negotiate(codes) {
 }
 
 /* D-15: demo mode's persistence backend. A dedicated key, deliberately outside the
-   gr8r.v2 blob, so the language can never re-enter the prefs/document pipeline. */
-export const LOCALE_STORAGE_KEY = 'gr8r.locale';
+   projects.v2 blob, so the language can never re-enter the prefs/document pipeline. */
+export const LOCALE_STORAGE_KEY = 'projects.locale';
 
 export function storeLocale(code) {
   try {

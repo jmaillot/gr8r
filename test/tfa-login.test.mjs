@@ -20,10 +20,10 @@ let dirA;
 let dirB;
 
 before(async () => {
-  dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-login-a-'));
-  A = await startServer({ dataDir: dirA, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } });
-  dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-login-b-'));
-  B = await startServer({ dataDir: dirB, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } });
+  dirA = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-login-a-'));
+  A = await startServer({ dataDir: dirA, env: { MASTER_KEY: 'projects-tfa-suite-key' } });
+  dirB = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-login-b-'));
+  B = await startServer({ dataDir: dirB, env: { MASTER_KEY: 'projects-tfa-suite-key' } });
 });
 
 after(async () => {
@@ -57,8 +57,8 @@ async function raw(base, method, pathname, body, cookie, extraHeaders = {}) {
   return { status: res.status, data, cookies: res.headers.getSetCookie?.() || [] };
 }
 
-const challengeCookieOf = cookies => cookies.find(c => c.startsWith('gr8r_tfa_challenge='))?.split(';')[0] || null;
-const hasSessionCookie = cookies => cookies.some(c => c.startsWith('gr8r_session='));
+const challengeCookieOf = cookies => cookies.find(c => c.startsWith('projects_tfa_challenge='))?.split(';')[0] || null;
+const hasSessionCookie = cookies => cookies.some(c => c.startsWith('projects_session='));
 
 /* Correct-password login on a 2FA-enabled account → the held challenge cookie. */
 async function pending(base, email, password = GOOD) {
@@ -102,7 +102,7 @@ test('D-68: correct password on an enrolled account returns an inert pending cha
   assert.equal(res.data.maskedEmail, 's***@t***', 'D-62/D-63: first-char masking, nothing TLD-preserving');
   assert.equal('user' in res.data, false, 'no user payload leaks in the pending body');
 
-  const cookieLine = res.cookies.find(c => c.startsWith('gr8r_tfa_challenge='));
+  const cookieLine = res.cookies.find(c => c.startsWith('projects_tfa_challenge='));
   assert.ok(cookieLine, 'challenge cookie set');
   assert.match(cookieLine, /Max-Age=300/, 'challenge Max-Age is ~5 minutes, never SESSION_DAYS');
   assert.equal(cookieLine.includes('HttpOnly'), true, 'challenge cookie is HttpOnly');
@@ -330,7 +330,7 @@ test('D-71: with only a challenge cookie held, every identity endpoint treats th
   // Logout from the pending state clears the challenge row and the cookie.
   const out = await raw(A.base, 'POST', '/api/auth/logout', undefined, h);
   assert.equal(out.status, 204);
-  const cleared = out.cookies.find(c => c.startsWith('gr8r_tfa_challenge='));
+  const cleared = out.cookies.find(c => c.startsWith('projects_tfa_challenge='));
   assert.ok(cleared && /Max-Age=0/.test(cleared), 'the challenge cookie is expired');
   assert.equal(
     withDb(A.dbPath, db => db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c),

@@ -95,9 +95,9 @@ let keyDir;
 let noKeyDir;
 
 before(async () => {
-  keyDir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'gr8r-totpe-key-'));
-  keyServer = await startServer({ dataDir: keyDir, env: { MASTER_KEY: 'gr8r-enc-suite-key' } });
-  noKeyDir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'gr8r-totpe-nokey-'));
+  keyDir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'projects-totpe-key-'));
+  keyServer = await startServer({ dataDir: keyDir, env: { MASTER_KEY: 'projects-enc-suite-key' } });
+  noKeyDir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'projects-totpe-nokey-'));
   noKeyServer = await startServer({ dataDir: noKeyDir, env: { MASTER_KEY: undefined } });
 });
 

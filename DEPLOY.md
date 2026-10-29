@@ -6,10 +6,10 @@ and stores everything in SQLite on a Docker volume. There is no external databas
 runtime npm dependency.
 
 ```
-browser ──HTTPS──> Traefik ──> gr8r container :8080
+browser ──HTTPS──> Traefik ──> projects-studio container :8080
                                    ├── dist/          static SPA
                                    └── /api/*         Node + node:sqlite
-                                                        └── /data/gr8r.db
+                                                        └── /data/projects.db
 ```
 
 ## 0. What you need
@@ -30,8 +30,8 @@ not have Traefik yet, see the [appendix](#appendix-minimal-traefik).
 At your DNS provider:
 
 ```
-Type  A     Name  gr8r    Value  <SERVER_IP>
-Type  AAAA  Name  gr8r    Value  <SERVER_IPv6>   # only if you have IPv6
+Type  A     Name  projects    Value  <SERVER_IP>
+Type  AAAA  Name  projects    Value  <SERVER_IPv6>   # only if you have IPv6
 ```
 
 Verify before starting the container — Let's Encrypt validates over HTTP/TLS:
@@ -94,10 +94,10 @@ The repository is private, so use a read-only deploy key.
 **On your laptop:**
 
 ```sh
-ssh-keygen -t ed25519 -f ~/.ssh/gr8r_deploy -N '' -C 'gr8r server deploy'
-gh repo deploy-key add ~/.ssh/gr8r_deploy.pub \
-  --repo jmaillot/gr8r --title 'gr8r server' --allow-write=false
-scp ~/.ssh/gr8r_deploy root@SERVER_IP:/root/.ssh/gr8r_deploy
+ssh-keygen -t ed25519 -f ~/.ssh/projects_deploy -N '' -C 'projects server deploy'
+gh repo deploy-key add ~/.ssh/projects_deploy.pub \
+  --repo jmaillot/projects --title 'projects server' --allow-write=false
+scp ~/.ssh/projects_deploy root@SERVER_IP:/root/.ssh/projects_deploy
 ```
 
 Without the GitHub CLI, add the public key under
@@ -106,22 +106,22 @@ Without the GitHub CLI, add the public key under
 **On the server:**
 
 ```sh
-chmod 600 /root/.ssh/gr8r_deploy
+chmod 600 /root/.ssh/projects_deploy
 
 cat >> /root/.ssh/config <<'EOF'
-Host gr8r-github
+Host projects-github
   HostName github.com
   User git
-  IdentityFile /root/.ssh/gr8r_deploy
+  IdentityFile /root/.ssh/projects_deploy
   IdentitiesOnly yes
 EOF
 chmod 600 /root/.ssh/config
 
-ssh -T gr8r-github     # expect "successfully authenticated" (no shell)
+ssh -T projects-github     # expect "successfully authenticated" (no shell)
 
-mkdir -p /opt/gr8r
-git clone gr8r-github:jmaillot/gr8r.git /opt/gr8r
-cd /opt/gr8r
+mkdir -p /opt/projects
+git clone projects-github:jmaillot/projects.git /opt/projects
+cd /opt/projects
 ```
 
 The alias keeps the deploy key scoped to this repository and leaves your other GitHub SSH
@@ -130,7 +130,7 @@ keys alone.
 ## 5. Configure
 
 ```sh
-cd /opt/gr8r
+cd /opt/projects
 cp .env.example .env
 chmod 600 .env
 nano .env
@@ -139,13 +139,13 @@ nano .env
 Set at least:
 
 ```dotenv
-GR8R_HOST=projects.example.com
+PRJSTUDIO_HOST=projects.example.com
 APP_URL=
 ADMIN_EMAIL=you@example.com
 ADMIN_PASSWORD=<long unique password>
 ADMIN_NAME=Your Name
 WORKSPACE_NAME=Projects Studio
-WORKSPACE_SLUG=gr8r-studio
+WORKSPACE_SLUG=projects-studio
 PUID=1000
 PGID=1000
 ALLOW_SIGNUP=false
@@ -197,8 +197,8 @@ applies when the database is first created; on an existing install:
 
 ```sh
 # keep a copy first if you might want the current data back
-docker compose exec gr8r node server.js --backup /data/pre-reset.db
-docker cp gr8r-studio:/data/pre-reset.db ./pre-reset.db
+docker compose exec projects node server.js --backup /data/pre-reset.db
+docker cp projects-studio:/data/pre-reset.db ./pre-reset.db
 # set SEED_DATA=false in .env, then:
 docker compose down -v
 docker compose up -d --build
@@ -221,14 +221,14 @@ the first start has no effect; use `--set-password` instead (section 8).
 ```sh
 docker compose up -d --build
 docker compose ps
-docker compose logs -f gr8r
+docker compose logs -f projects
 ```
 
 The first build takes a minute or two. Look for:
 
 ```
 bootstrap account: you@example.com
-gr8r studio listening on http://0.0.0.0:8080
+projects studio listening on http://0.0.0.0:8080
 ```
 
 If `ADMIN_PASSWORD` was empty, a generated password is printed **once** here. Save it.
@@ -247,21 +247,21 @@ Then open `https://projects.example.com` and sign in.
 
 - The certificate is valid and the browser shows no warning.
 - Login works and a page refresh keeps you signed in.
-- In DevTools → Application → Cookies, `gr8r_session` is **HttpOnly**, **Secure** and
+- In DevTools → Application → Cookies, `projects_session` is **HttpOnly**, **Secure** and
   **SameSite=Lax**.
 - The process runs as your `PUID` and `/data` is owned by it:
   ```sh
-  docker top gr8r-studio -o user | tail -1
-  docker compose exec gr8r ls -ldn /data
+  docker top projects-studio -o user | tail -1
+  docker compose exec projects ls -ldn /data
   ```
 - Make an edit, reload, and confirm it persisted.
-- `docker compose logs gr8r` shows no errors.
+- `docker compose logs projects` shows no errors.
 
 If you used a generated admin password, change it now:
 
 ```sh
 docker compose exec -e USER_PASSWORD='a new long password' \
-  gr8r node server.js --set-password you@example.com
+  projects node server.js --set-password you@example.com
 ```
 
 Existing sessions are revoked; sign in again.
@@ -272,14 +272,14 @@ Sign-ups stay disabled with `ALLOW_SIGNUP=false`.
 
 ```sh
 # prints a generated password unless USER_PASSWORD is set
-docker compose exec gr8r node server.js --add-user alice@example.com "Alice"
+docker compose exec projects node server.js --add-user alice@example.com "Alice"
 
 # or choose the password yourself
 docker compose exec -e USER_PASSWORD='another long password' \
-  gr8r node server.js --add-user bob@example.com "Bob"
+  projects node server.js --add-user bob@example.com "Bob"
 
 # add someone straight into a second workspace
-docker compose exec gr8r node server.js --add-user carol@example.com "Carol" acme
+docker compose exec projects node server.js --add-user carol@example.com "Carol" acme
 ```
 
 Accounts created this way get the `member` role in the workspace you name (the first one by
@@ -287,7 +287,7 @@ default). Without a slug, the CLI adds the account to the oldest workspace.
 
 ### Workspaces
 
-Every workspace has a URL of its own: `https://<GR8R_HOST>/w/<slug>`. The slug comes from
+Every workspace has a URL of its own: `https://<PROJECTS_HOST>/w/<slug>`. The slug comes from
 `WORKSPACE_SLUG` or the workspace name when the database is first created — an existing
 workspace keeps the slug it was migrated with, so changing `WORKSPACE_SLUG` later has no
 effect.
@@ -347,17 +347,17 @@ plan change, after an invite is accepted in another session, and across a restar
 which made the next write fail with `409` and drop the edit.
 
 ```sh
-cd /opt/gr8r
+cd /opt/projects
 git pull
 docker compose up -d --build
-docker compose logs --tail=20 gr8r
+docker compose logs --tail=20 projects
 ```
 
 ### Upgrading an existing install to 1.1.0
 
 The first start after this update migrates the single-workspace database in place:
 
-- it writes a consistent backup to `DATA_DIR/gr8r-premultitenant-<timestamp>.db` before touching
+- it writes a consistent backup to `DATA_DIR/projects-premultitenant-<timestamp>.db` before touching
   anything;
 - the existing workspace gets a slug derived from its URL field, or from its name if that is
   empty;
@@ -372,30 +372,30 @@ again, and a second boot is byte-identical.
 To upgrade:
 
 ```sh
-cd /opt/gr8r
+cd /opt/projects
 git pull
 # record the exact image the container runs, before the rebuild replaces its tag
-docker inspect --format '{{.Image}}' gr8r-studio > /tmp/gr8r-previous-image-id
+docker inspect --format '{{.Image}}' projects-studio > /tmp/projects-previous-image-id
 docker compose up -d --build
-docker compose logs --tail=40 gr8r  # expect: pre-migration backup written to /data/gr8r-premultitenant-<stamp>.db
+docker compose logs --tail=40 projects  # expect: pre-migration backup written to /data/projects-premultitenant-<stamp>.db
 ```
 
 To roll back to the previous image:
 
 ```sh
-cd /opt/gr8r
-docker compose stop gr8r
-docker cp gr8r-studio:/data/gr8r-premultitenant-<stamp>.db ./pre-1.1.0.db
-docker cp ./pre-1.1.0.db gr8r-studio:/data/gr8r.db
-VOL=$(docker inspect gr8r-studio \
+cd /opt/projects
+docker compose stop projects
+docker cp projects-studio:/data/projects-premultitenant-<stamp>.db ./pre-1.1.0.db
+docker cp ./pre-1.1.0.db projects-studio:/data/projects.db
+VOL=$(docker inspect projects-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
 docker run --rm --user root -v "$VOL":/data alpine:3.21 \
-  sh -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
+  sh -c 'rm -f /data/projects.db-wal /data/projects.db-shm'
 # re-tag the captured image id; Compose cannot address an untagged image
-docker tag "$(cat /tmp/gr8r-previous-image-id)" gr8r-studio:rollback
+docker tag "$(cat /tmp/projects-previous-image-id)" projects-studio:rollback
 ```
 
-Set `image: gr8r-studio:rollback` in `docker-compose.yml` for the rollback, then run
+Set `image: projects-studio:rollback` in `docker-compose.yml` for the rollback, then run
 `docker compose up -d`. Revert that line with `git checkout docker-compose.yml` once the
 previous release is running, so the next upgrade starts from the pinned tag again.
 
@@ -429,7 +429,7 @@ the links and you copy them yourself.
 
 #### Configure SMTP
 
-Add these values to `/opt/gr8r/.env` (the file is already git-ignored; keep it at mode
+Add these values to `/opt/projects/.env` (the file is already git-ignored; keep it at mode
 `600`):
 
 ```dotenv
@@ -460,7 +460,7 @@ Recreate the container so Compose picks up the new environment, then check the s
 
 ```sh
 docker compose up -d
-docker compose logs --tail=30 gr8r
+docker compose logs --tail=30 projects
 # expect: invite email: enabled via smtp.example.com:587 as notifications@example.com
 ```
 
@@ -474,15 +474,15 @@ invites**; the link stops working immediately. To invalidate _every_ pending lin
 example after a leak — delete them from the database:
 
 ```sh
-docker compose exec gr8r node -e \
-  "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/gr8r.db');db.exec('delete from invites');console.log('pending invites cleared')"
+docker compose exec projects node -e \
+  "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/projects.db');db.exec('delete from invites');console.log('pending invites cleared')"
 ```
 
 Password reset (also revokes that user's sessions):
 
 ```sh
 docker compose exec -e USER_PASSWORD='the new password' \
-  gr8r node server.js --set-password alice@example.com
+  projects node server.js --set-password alice@example.com
 ```
 
 ## 9. Backups
@@ -495,29 +495,29 @@ under `DATA_DIR/files/` — include that directory in your backup set too (it is
 same `/data` volume, so a full-volume copy covers both; the `docker cp`-based script above
 does **not**).
 
-Create `/opt/gr8r/backup.sh`:
+Create `/opt/projects/backup.sh`:
 
 ```sh
 #!/usr/bin/env bash
 set -euo pipefail
-cd /opt/gr8r
+cd /opt/projects
 
 STAMP=$(date +%F-%H%M)
 NAME="backup-$STAMP.db"
 
-docker compose exec -T gr8r node server.js --backup "/data/$NAME"
-install -d -m 700 /var/backups/gr8r
-docker cp "gr8r-studio:/data/$NAME" "/var/backups/gr8r/$NAME"
-docker compose exec -T gr8r rm -f "/data/$NAME"
+docker compose exec -T projects node server.js --backup "/data/$NAME"
+install -d -m 700 /var/backups/projects
+docker cp "projects-studio:/data/$NAME" "/var/backups/projects/$NAME"
+docker compose exec -T projects rm -f "/data/$NAME"
 
 # keep 14 days locally
-find /var/backups/gr8r -name 'backup-*.db' -mtime +14 -delete
+find /var/backups/projects -name 'backup-*.db' -mtime +14 -delete
 ```
 
 ```sh
-chmod +x /opt/gr8r/backup.sh
-/opt/gr8r/backup.sh
-ls -lh /var/backups/gr8r
+chmod +x /opt/projects/backup.sh
+/opt/projects/backup.sh
+ls -lh /var/backups/projects
 ```
 
 Schedule it:
@@ -527,13 +527,13 @@ crontab -e
 ```
 
 ```cron
-15 3 * * * /opt/gr8r/backup.sh >> /var/log/gr8r-backup.log 2>&1
+15 3 * * * /opt/projects/backup.sh >> /var/log/projects-backup.log 2>&1
 ```
 
 Copy the snapshots **off the server** (another host, object storage, restic/rclone):
 
 ```sh
-rsync -a /var/backups/gr8r/ backup@other-host:/srv/backups/gr8r/
+rsync -a /var/backups/projects/ backup@other-host:/srv/backups/projects/
 ```
 
 The database contains password hashes and session tokens: encrypt backups or restrict
@@ -542,17 +542,17 @@ access to them. Test a restore on a staging copy at least once.
 ### Restore
 
 ```sh
-cd /opt/gr8r
-docker compose stop gr8r
-docker cp /var/backups/gr8r/backup-2026-10-21-0315.db gr8r-studio:/data/gr8r.db
+cd /opt/projects
+docker compose stop projects
+docker cp /var/backups/projects/backup-2026-10-21-0315.db projects-studio:/data/projects.db
 
-VOL=$(docker inspect gr8r-studio \
+VOL=$(docker inspect projects-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
-docker run --rm --user root --entrypoint sh -v "$VOL":/data gr8r-studio:1.1.1 \
-  -c 'rm -f /data/gr8r.db-wal /data/gr8r.db-shm'
+docker run --rm --user root --entrypoint sh -v "$VOL":/data projects-studio:1.1.1 \
+  -c 'rm -f /data/projects.db-wal /data/projects.db-shm'
 
-docker compose start gr8r
-docker compose logs --tail=20 gr8r
+docker compose start projects
+docker compose logs --tail=20 projects
 ```
 
 `docker cp` preserves the snapshot's owner. The entrypoint runs `chown` on `/data` before
@@ -561,7 +561,7 @@ dropping to `PUID:PGID`, so a backup written by root is usable without extra ste
 ## 10. Updates and rollback
 
 ```sh
-cd /opt/gr8r
+cd /opt/projects
 ./backup.sh
 git pull
 docker compose up -d --build
@@ -584,13 +584,13 @@ migrations are additive, so the volume survives rebuilds — but take the backup
 
 | Symptom                                   | Check                                                                                                                                   |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `set ADMIN_EMAIL in .env` on `compose up` | You are not in `/opt/gr8r`, or `.env` is missing.                                                                                       |
+| `set ADMIN_EMAIL in .env` on `compose up` | You are not in `/opt/projects`, or `.env` is missing.                                                                                       |
 | Traefik returns 404                       | The container is not on the `traefik` network, or the `Host(...)` label does not match DNS. Try `docker network inspect traefik`.       |
-| 502 Bad Gateway                           | The container is down or unhealthy: `docker compose ps`, `docker compose logs gr8r`.                                                    |
+| 502 Bad Gateway                           | The container is down or unhealthy: `docker compose ps`, `docker compose logs projects`.                                                    |
 | No certificate                            | DNS not propagated, ports 80/443 blocked, or the resolver is not named `letsencrypt`. Check the Traefik logs.                           |
 | Login bounces back to the form            | The cookie was rejected. Confirm HTTPS, that Traefik sends `X-Forwarded-Proto`, and try `SECURE_COOKIE=true`.                           |
 | "Could not reach the server" in the UI    | `/api` is not routed. Test `https://host/api/health`.                                                                                   |
-| Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' gr8r node server.js --set-password you@example.com`                                         |
+| Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' projects node server.js --set-password you@example.com`                                         |
 | Which accounts exist?                     | See the command below.                                                                                                                  |
 | Data disappeared                          | Someone ran `docker compose down -v`, which deletes the volume. Restore from backup.                                                    |
 | `unable to open database file` at startup | `/data` is not writable by the configured `PUID` (default 1000). Usually an old image, or a manual `user:` override. See the fix below. |
@@ -598,22 +598,22 @@ migrations are additive, so the volume survives rebuilds — but take the backup
 
 ### Fix `unable to open database file`
 
-This is a permissions error, not a missing path: `/data`, `gr8r.db`, or a WAL file is not
+This is a permissions error, not a missing path: `/data`, `projects.db`, or a WAL file is not
 writable by the user the server runs as (`PUID`, default 1000).
 
 First make sure the current image is running — the entrypoint chowns `/data` on every
 start:
 
 ```sh
-cd /opt/gr8r
+cd /opt/projects
 docker compose up -d --build
-docker compose logs --tail=30 gr8r
+docker compose logs --tail=30 projects
 ```
 
 If it still fails, inspect the mount:
 
 ```sh
-docker inspect gr8r-studio --format '{{json .Mounts}}'
+docker inspect projects-studio --format '{{json .Mounts}}'
 ```
 
 If it is a **bind mount** (a host path is listed as `Source`), and you override the
@@ -628,7 +628,7 @@ docker compose up -d
 If it is a **named volume**:
 
 ```sh
-VOL=$(docker inspect gr8r-studio \
+VOL=$(docker inspect projects-studio \
   --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
 docker compose down
 docker run --rm --user root -v "$VOL":/data alpine:3.21 \
@@ -642,8 +642,8 @@ repository: the named volume is the intended location.
 List accounts:
 
 ```sh
-docker compose exec gr8r node -e \
-  "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/gr8r.db');console.log(db.prepare('select email, name from users').all())"
+docker compose exec projects node -e \
+  "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/projects.db');console.log(db.prepare('select email, name from users').all())"
 ```
 
 ## 12. Local development

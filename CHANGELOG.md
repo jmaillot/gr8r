@@ -105,9 +105,9 @@ membership list, isolation is enforced by the server, and the app ships with a r
 ### Upgrade notes
 
 - The first start on 1.1.0 migrates an existing single-workspace database in place and writes
-  `DATA_DIR/gr8r-premultitenant-<timestamp>.db` first. The migration is idempotent: a second boot
+  `DATA_DIR/projects-premultitenant-<timestamp>.db` first. The migration is idempotent: a second boot
   changes nothing and creates no second backup. `DEPLOY.md` documents the rollback (restore that
-  backup over `gr8r.db`, redeploy the previous image).
+  backup over `projects.db`, redeploy the previous image).
 - Set `TRUST_PROXY=true` behind Traefik (the default) and leave `MAX_BODY_BYTES` at the 8 MiB
   default unless a workspace document grows larger.
 - Node 24 is required for `node:sqlite`; upgrade the runtime before deploying.

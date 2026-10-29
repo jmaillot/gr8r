@@ -41,9 +41,9 @@ const securityRows = (email, srv = server) =>
   );
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-op-revoke-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-op-revoke-'));
   // D-10: a throwaway MASTER_KEY so production and tests exercise the same envelope path.
-  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-op-revoke-key' } });
+  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-op-revoke-key' } });
 });
 
 after(async () => {
@@ -129,8 +129,8 @@ test('unknown :userId is a 404 and records no security row', async () => {
 /* --------------------- D-113 provisioning paths (plan task 2) --------------------- */
 
 test('D-113 fresh install: the ADMIN_EMAIL bootstrap account is flagged', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-op-fresh-'));
-  const srv = await startServer({ dataDir: dir, env: { MASTER_KEY: 'gr8r-op-fresh-key' } });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-op-fresh-'));
+  const srv = await startServer({ dataDir: dir, env: { MASTER_KEY: 'projects-op-fresh-key' } });
   try {
     const row = withDb(srv.dbPath, db => db.prepare('select is_instance_admin from users where email = ?').get(ADMIN_EMAIL));
     assert.equal(row?.is_instance_admin, 1, 'fresh bootstrap operator flagged');
@@ -141,14 +141,14 @@ test('D-113 fresh install: the ADMIN_EMAIL bootstrap account is flagged', async 
 });
 
 test('D-113 pre-v1.4 database: the boot stamp flags the ADMIN_EMAIL account and is idempotent', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-op-legacy-'));
-  const first = await startServer({ dataDir: dir, env: { MASTER_KEY: 'gr8r-op-legacy-key' } });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-op-legacy-'));
+  const first = await startServer({ dataDir: dir, env: { MASTER_KEY: 'projects-op-legacy-key' } });
   // Build a pre-v1.4-shaped database: users exist, none flagged.
   await signup(first.base, { name: 'legacyUser', email: 'legacy@test.local', password: GOOD });
   withDb(first.dbPath, db => db.prepare('update users set is_instance_admin = 0').run());
   await first.stop();
 
-  const second = await startServer({ dataDir: dir, env: { MASTER_KEY: 'gr8r-op-legacy-key' } });
+  const second = await startServer({ dataDir: dir, env: { MASTER_KEY: 'projects-op-legacy-key' } });
   const flagOf = email =>
     withDb(second.dbPath, db => db.prepare('select is_instance_admin as f from users where email = ?').get(email)?.f);
   assert.equal(flagOf(ADMIN_EMAIL), 1, 'the ADMIN_EMAIL-matching account is now flagged');
@@ -156,7 +156,7 @@ test('D-113 pre-v1.4 database: the boot stamp flags the ADMIN_EMAIL account and 
   await second.stop();
 
   // Idempotence: a second boot with a flagged user present changes nothing.
-  const third = await startServer({ dataDir: dir, env: { MASTER_KEY: 'gr8r-op-legacy-key' } });
+  const third = await startServer({ dataDir: dir, env: { MASTER_KEY: 'projects-op-legacy-key' } });
   assert.equal(flagOf(ADMIN_EMAIL), 1, 'flag unchanged after another boot');
   assert.equal(flagOf('legacy@test.local'), 0, 'no other row changed');
   await third.stop();
@@ -205,8 +205,8 @@ let tempDir2;
 before(async () => {
   /* Second instance: signup is IP-throttled 5/hour and the matrix needs more
      users, so the remaining families live on their own server. */
-  tempDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-op-revoke2-'));
-  server2 = await startServer({ dataDir: tempDir2, env: { MASTER_KEY: 'gr8r-op-revoke-key-2' } });
+  tempDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-op-revoke2-'));
+  server2 = await startServer({ dataDir: tempDir2, env: { MASTER_KEY: 'projects-op-revoke-key-2' } });
 });
 
 after(async () => {

@@ -439,7 +439,7 @@ function buildInviteMessage(config, invite) {
 </body>
 </html>`;
 
-  const boundary = `gr8r_${crypto.randomBytes(12).toString('hex')}`;
+  const boundary = `projects_${crypto.randomBytes(12).toString('hex')}`;
   const headers = [
     `From: ${formatAddress(config.fromName || workspace, config.from)}`,
     `To: <${to}>`,

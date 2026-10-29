@@ -28,11 +28,11 @@ function resetLastStep(email, srv = server) {
 }
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-disable-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-disable-'));
   // D-10: a throwaway MASTER_KEY so production and tests exercise the same envelope path.
-  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-tfa-disable-key' } });
-  tempDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-disable2-'));
-  server2 = await startServer({ dataDir: tempDir2, env: { MASTER_KEY: 'gr8r-tfa-disable-key-2' } });
+  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-tfa-disable-key' } });
+  tempDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-disable2-'));
+  server2 = await startServer({ dataDir: tempDir2, env: { MASTER_KEY: 'projects-tfa-disable-key-2' } });
 });
 
 after(async () => {
@@ -169,7 +169,7 @@ test('D-103/D-104: disable tears down the pending login challenge — the token 
   assert.equal(challengeRows('disChallenge@test.local').length, 0, 'D-103: the pending challenge row is gone');
   // D-104: the ghost token is dead — a user with two_fa_enabled = 0 kills the
   // challenge and answers 401 challengeExpired (server.js:1772, 1798–1800).
-  const dead = await challengeLogin(server, `gr8r_tfa_challenge=${token}`, { code: '123456' });
+  const dead = await challengeLogin(server, `projects_tfa_challenge=${token}`, { code: '123456' });
   assert.equal(dead.status, 401);
   assert.equal((await dead.json()).code, 'challengeExpired');
 });
@@ -214,7 +214,7 @@ test('Pitfall 5: a different user\'s pending challenge survives another user\'s 
   // B's own challenge still completes a real 2FA login — the delete is
   // user-scoped, never unscoped.
   resetLastStep('disCrossB@test.local', server2);
-  const bLogin = await challengeLogin(server2, `gr8r_tfa_challenge=${bToken}`, { code: liveCode(bSecret) });
+  const bLogin = await challengeLogin(server2, `projects_tfa_challenge=${bToken}`, { code: liveCode(bSecret) });
   assert.equal(bLogin.status, 200, 'B\'s challenge is alive and still completes the sign-in');
 });
 

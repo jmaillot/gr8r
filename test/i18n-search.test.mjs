@@ -147,7 +147,7 @@ const d = store.D();
 d.members.push({
   id: 'm-elo',
   name: 'Élodie',
-  email: 'e.laurent@gr8r.dev',
+  email: 'e.laurent@projects.dev',
   role: 'Member',
   title: 'Designer',
   c: '#123456',

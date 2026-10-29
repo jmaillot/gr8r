@@ -154,7 +154,7 @@ export const api = {
 
   async init() {
     const r = await call('GET', '/api/config');
-    state.enabled = !!(r.ok && r.data?.app === 'gr8r');
+    state.enabled = !!(r.ok && r.data?.app === 'projects');
     state.signup = !!r.data?.signup;
     state.mail = !!r.data?.mail;
     state.creation = r.data?.workspaceCreation === 'open' ? 'open' : 'admins';

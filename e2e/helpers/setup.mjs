@@ -38,7 +38,7 @@ export function newRunId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/* Cookie-bearing API client; the server sets `gr8r_session` on sign-in and signup.
+/* Cookie-bearing API client; the server sets `projects_session` on sign-in and signup.
    Exported so a spec that needs its own isolated workspace (french-overflow:
    the language switch must not leak into the English-pinned suite) reuses the
    same boot path instead of reimplementing the cookie handling. */
@@ -56,7 +56,7 @@ export function apiClient(base, { name, ip }) {
     });
     for (const line of res.headers.getSetCookie?.() || []) {
       const pair = line.split(';')[0];
-      if (pair.startsWith('gr8r_session=')) cookie = pair;
+      if (pair.startsWith('projects_session=')) cookie = pair;
     }
     let data = null;
     try {

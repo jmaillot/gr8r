@@ -14,7 +14,7 @@ import path from 'node:path';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PORT = Number(process.env.E2E_PORT || 4317);
 const HOST = '127.0.0.1';
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-e2e-'));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-e2e-'));
 
 /* The suite serves the built app; a missing build is a setup error, not a test failure. */
 if (!fs.existsSync(path.join(ROOT, 'dist', 'index.html'))) {
@@ -29,7 +29,7 @@ const env = {
   HOST,
   DATA_DIR: dataDir,
   /* DB_PATH wins over DATA_DIR in server.js; force it so an exported DB_PATH cannot leak in. */
-  DB_PATH: path.join(dataDir, 'gr8r.db'),
+  DB_PATH: path.join(dataDir, 'projects.db'),
   SEED_DATA: 'false',
   /* PREVIEW-02 drives the oversize path in the browser: a 1 MB cap keeps the
      fixture upload (a 1×1 PNG) far under it and the rejected 2 MB drop fast. */

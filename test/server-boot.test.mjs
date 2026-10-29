@@ -56,7 +56,7 @@ test('boot gate: SMTP_HOST without APP_URL refuses to start and names both varia
   );
   /* The harness only reports the summary error message; spawn the real boot once to
      capture the operator's stderr and the exit code directly. */
-  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'gr8r-gate-'));
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'projects-gate-'));
   try {
     const result = spawnSync(process.execPath, ['server.js'], {
       cwd: ROOT,
@@ -82,14 +82,14 @@ test('boot gate: SMTP_HOST without APP_URL refuses to start and names both varia
 
 test('boot gate positive control: mail enabled with APP_URL set boots and answers /api/config', async () => {
   const server = await startServer({
-    env: { SMTP_HOST: 'smtp.example.net', MAIL_FROM: 'invites@test.local', APP_URL: 'https://gr8r.example.net' },
+    env: { SMTP_HOST: 'smtp.example.net', MAIL_FROM: 'invites@test.local', APP_URL: 'https://projects.example.net' },
   });
   try {
     const res = await fetch(`${server.base}/api/config`);
     assert.ok(res.ok);
     const data = await res.json();
     assert.equal(data.mail, true, 'the mailer is enabled behind the gate');
-    assert.equal(data.url, 'https://gr8r.example.net', 'appBase() serves APP_URL, never the request host');
+    assert.equal(data.url, 'https://projects.example.net', 'appBase() serves APP_URL, never the request host');
     assert.match(server.output(), /invite email: enabled via smtp\.example\.net/);
   } finally {
     await server.stop();

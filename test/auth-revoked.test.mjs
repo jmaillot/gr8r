@@ -7,7 +7,7 @@
 
    The client is exercised against the real src/core/api.js with globalThis.fetch
    stubbed per-call (the client-side analog of the server tests' own-HTTP harness —
-   no gr8r code is mocked). api.js is a module singleton, so the test() blocks form
+   no projects code is mocked). api.js is a module singleton, so the test() blocks form
    one ordered sequence sharing state (node:test runs them in file order). The
    cross-module wiring (actions.js registers signOutRevoked as the teardown) is
    pinned source-as-text — the house extraction pattern from test/error-codes.test.mjs. */
@@ -39,7 +39,7 @@ function stubFetch(status, data) {
   });
 }
 
-const CONFIG = { app: 'gr8r', url: 'http://test.local', signup: false, mail: false };
+const CONFIG = { app: 'projects', url: 'http://test.local', signup: false, mail: false };
 const REVOKED = { status: 401, error: 'Sign in to continue', code: 'signInRequired' };
 
 test('boot guard: a 401 with no signed-in account does not invoke the teardown', async () => {

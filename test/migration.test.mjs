@@ -11,7 +11,7 @@ import { createLegacyDb, LEGACY_PASSWORD } from './helpers/legacy-fixture.mjs';
 import { login, startServer, withDb } from './helpers/server.mjs';
 
 const SLUG = 'legacy-studio';
-const BACKUP_PREFIX = 'gr8r-premultitenant-';
+const BACKUP_PREFIX = 'projects-premultitenant-';
 
 let dataDir;
 let server;
@@ -25,9 +25,9 @@ const membershipRows = () =>
   withDb(server.dbPath, db => db.prepare('select user_id, member_id from memberships where workspace_id = ? order by user_id').all('ws_legacy'));
 
 before(async () => {
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-migration-'));
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-migration-'));
   createLegacyDb(dataDir);
-  legacyColumns = withDb(path.join(dataDir, 'gr8r.db'), db =>
+  legacyColumns = withDb(path.join(dataDir, 'projects.db'), db =>
     Object.fromEntries(
       ['workspaces', 'memberships', 'invites', 'users', 'sessions'].map(table => [
         table,
@@ -58,7 +58,7 @@ test('first boot writes exactly one pre-migration backup and logs its path', () 
   assert.equal(legacyColumns.sessions.includes('ip'), false, 'fixture has no sessions.ip');
   assert.equal(legacyColumns.users.includes('two_fa_enabled'), false, 'fixture has no users.two_fa_enabled');
 
-  assert.equal(backups().length, 1, 'exactly one gr8r-premultitenant-*.db');
+  assert.equal(backups().length, 1, 'exactly one projects-premultitenant-*.db');
   assert.match(output, /pre-migration backup: /);
 });
 
@@ -434,7 +434,7 @@ test('a second boot leaves the recovery_codes schema byte-identical (P-B)', asyn
 
 /* ENC-01 (Phase 19): boot-time migration of legacy plaintext TOTP secrets into
    the v1: envelope (D-82/D-83), plus the fail-closed policy branches (D-73–D-76). */
-const ENV_PREFIX = 'gr8r-preenvelope-';
+const ENV_PREFIX = 'projects-preenvelope-';
 const ENC_MASTER = 'enc-migration-master-key';
 /* 32-char uppercase Base32 — the codebase's own enrollment shape (/^[A-Z2-7]{32}$/,
    D-75). The plan's literal 'JBSWY3DPEHPK3PXP' is 16 chars and would be skipped as
@@ -469,16 +469,16 @@ function encStored(dbPath, id = 'u_alice') {
 }
 
 test('ENC-01: a legacy plaintext TOTP secret boots into a v1: envelope with a pre-migration backup, and a second boot is a byte-identical no-op', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-enc-'));
   createLegacyDb(dir);
-  plantSecret(path.join(dir, 'gr8r.db'), 'u_alice', VALID_B32);
-  const dbPath = path.join(dir, 'gr8r.db');
+  plantSecret(path.join(dir, 'projects.db'), 'u_alice', VALID_B32);
+  const dbPath = path.join(dir, 'projects.db');
 
   const first = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
   const envelope = encStored(dbPath);
   assert.match(envelope, /^v1:[^:]+:[^:]+:[^:]+$/, 'the plaintext row is wrapped in a v1: envelope');
   assert.equal(decryptEnvelope(envelope, ENC_MASTER), VALID_B32, 'the envelope decrypts back to the planted plaintext');
-  assert.equal(envBackups(dir).length, 1, 'exactly one gr8r-preenvelope-*.db after the first boot');
+  assert.equal(envBackups(dir).length, 1, 'exactly one projects-preenvelope-*.db after the first boot');
   assert.match(first.output(), /pre-migration backup: /, 'the backup path line is on the console');
   assert.match(first.output(), /TOTP encryption: 1 row\(s\) migrated to the v1: envelope/, 'the migrated-count summary line is on the console');
   const snapshot = envelope;
@@ -493,9 +493,9 @@ test('ENC-01: a legacy plaintext TOTP secret boots into a v1: envelope with a pr
 });
 
 test('ENC-01: a missing MASTER_KEY defers the migration — rows untouched, no backup, loud warning, normal boot (D-73)', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-defer-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-enc-defer-'));
   createLegacyDb(dir);
-  plantSecret(path.join(dir, 'gr8r.db'), 'u_alice', VALID_B32);
+  plantSecret(path.join(dir, 'projects.db'), 'u_alice', VALID_B32);
 
   const server = await startServer({ dataDir: dir, env: { MASTER_KEY: undefined } });
   assert.equal(encStored(server.dbPath), VALID_B32, 'the plaintext row is untouched byte-for-byte');
@@ -509,8 +509,8 @@ test('ENC-01: a missing MASTER_KEY defers the migration — rows untouched, no b
 });
 
 test('ENC-01: a failed pre-migration backup skips the migration entirely — no backup = no mutation (D-74)', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-ro-'));
-  const dbPath = path.join(dir, 'gr8r.db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-enc-ro-'));
+  const dbPath = path.join(dir, 'projects.db');
   createLegacyDb(dir);
   plantSecret(dbPath, 'u_alice', VALID_B32);
 
@@ -519,8 +519,8 @@ test('ENC-01: a failed pre-migration backup skips the migration entirely — no 
      the exact D-74 backup-failure branch, no mocks. */
   const first = await startServer({ dataDir: dir });
   await first.stop();
-  fs.writeFileSync(path.join(dir, 'gr8r.db-wal'), '');
-  fs.writeFileSync(path.join(dir, 'gr8r.db-shm'), '');
+  fs.writeFileSync(path.join(dir, 'projects.db-wal'), '');
+  fs.writeFileSync(path.join(dir, 'projects.db-shm'), '');
   fs.chmodSync(dir, 0o555);
 
   let server;
@@ -528,7 +528,7 @@ test('ENC-01: a failed pre-migration backup skips the migration entirely — no 
     server = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
     assert.match(server.output(), /TOTP encryption skipped: pre-migration backup failed/, 'the backup-failure console.error line is present');
     assert.equal(encStored(dbPath), VALID_B32, 'zero rows changed when the backup failed');
-    assert.equal(envBackups(dir).length, 0, 'no gr8r-preenvelope backup file was created');
+    assert.equal(envBackups(dir).length, 0, 'no projects-preenvelope backup file was created');
     const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
     assert.equal(signedIn.status, 200, 'the server still boots normally after the skip');
   } finally {
@@ -539,8 +539,8 @@ test('ENC-01: a failed pre-migration backup skips the migration entirely — no 
 });
 
 test('ENC-01: edge rows — blank and non-base32 values are skipped, never wrapped; existing v1: rows untouched (D-75)', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-enc-edge-'));
-  const dbPath = path.join(dir, 'gr8r.db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-enc-edge-'));
+  const dbPath = path.join(dir, 'projects.db');
   createLegacyDb(dir);
   plantSecret(dbPath, 'u_alice', VALID_B32);
   const staleEnvelope = 'v1:AAAA:BBBB:CCCC';

@@ -42,12 +42,12 @@ export function freePort() {
  */
 export async function startServer({ dataDir = null, env = {} } = {}) {
   const owned = !dataDir;
-  const dir = dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-test-'));
+  const dir = dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'projects-test-'));
   fs.mkdirSync(dir, { recursive: true });
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   let output = '';
-  const finalEnv = { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env, DB_PATH: path.join(dir, 'gr8r.db') };
+  const finalEnv = { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env, DB_PATH: path.join(dir, 'projects.db') };
   // A test passes `undefined` for a variable it wants ABSENT (e.g. ADMIN_EMAIL to
   // exercise the cold-start fallback); strip those keys instead of spawning with
   // the string "undefined" or leaving BASE_ENV's value in place.
@@ -80,7 +80,7 @@ export async function startServer({ dataDir = null, env = {} } = {}) {
     base,
     port,
     dataDir: dir,
-    dbPath: path.join(dir, 'gr8r.db'),
+    dbPath: path.join(dir, 'projects.db'),
     output: () => output,
     async stop() {
       if (child.exitCode === null) {
@@ -112,7 +112,7 @@ export function client(base, name = 'client') {
       const pair = line.split(';')[0];
       const eq = pair.indexOf('=');
       const cookieName = pair.slice(0, eq);
-      if (cookieName === 'gr8r_session' || cookieName === 'gr8r_tfa_challenge') jar.set(cookieName, pair);
+      if (cookieName === 'projects_session' || cookieName === 'projects_tfa_challenge') jar.set(cookieName, pair);
     }
     let data = null;
     try {

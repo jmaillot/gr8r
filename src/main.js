@@ -65,9 +65,9 @@ import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale }
 /* The locale change re-renders the app: one listener, one re-render, never
    batched or debounced (D-01). The loop guard in applyPrefs() keeps this from
    cycling: setLocale only fires when the target locale actually differs. */
-addEventListener('gr8r:locale', () => render());
+addEventListener('projects:locale', () => render());
 
-addEventListener('gr8r:save-error', e => {
+addEventListener('projects:save-error', e => {
   const { status, error } = e.detail || {};
   if (status === 401) {
     S.ui.auth = 'login';
@@ -231,4 +231,4 @@ async function seedLegacyLocale() {
 })();
 
 // Dev-only handle for debugging and screenshot tooling; stripped from production builds.
-if (import.meta.env.DEV) window.__gr8r = { S, D, A, go, render };
+if (import.meta.env.DEV) window.__projects = { S, D, A, go, render };

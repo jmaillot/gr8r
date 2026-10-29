@@ -14,7 +14,7 @@ let server;
 let tempDir;
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-pwchange-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-pwchange-'));
   server = await startServer({ dataDir: tempDir });
 });
 

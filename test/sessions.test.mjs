@@ -13,7 +13,7 @@ let server;
 let tempDir;
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-sessions-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-sessions-'));
   server = await startServer({ dataDir: tempDir });
 });
 

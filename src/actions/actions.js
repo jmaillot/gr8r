@@ -2305,7 +2305,7 @@ IN.prefSel = el => {
   toast(t('toast.prefSaved'), { ms: 1500 });
 };
 /* D-12: the language is applied instantly and persisted separately. setLocale announces
-   gr8r:locale, whose listener re-renders; the account write follows in the background and
+   projects:locale, whose listener re-renders; the account write follows in the background and
    never touches S.prefs, save() or the document revision (LOC-04). D-16: a failed write keeps
    the language for the session with a warning; a 401 rides the session-expired path. */
 IN.langSel = async el => {
@@ -2315,7 +2315,7 @@ IN.langSel = async el => {
   const r = await api.patchMe({ locale: code });
   if (r.ok) return;
   if (r.status === 401) {
-    window.dispatchEvent(new CustomEvent('gr8r:save-error', { detail: { status: 401, error: r.error } }));
+    window.dispatchEvent(new CustomEvent('projects:save-error', { detail: { status: 401, error: r.error } }));
     return;
   }
   toast(t('toast.localeSaveFailed'), { kind: 'err', ms: 6000 });
@@ -2862,7 +2862,7 @@ A.doTfaLogin = () => {
 };
 
 /* D-61 (TFA-05): abandoning the challenge is a real sign-out — the HttpOnly
-   gr8r_tfa_challenge cookie can only be cleared by the server, and plan-01's
+   projects_tfa_challenge cookie can only be cleared by the server, and plan-01's
    logout deletes the pending challenge row with it. The throttle budget is
    server-owned and intentionally survives the abandon — never touched here. */
 A.tfaBackToSignIn = async () => {

@@ -3,7 +3,7 @@
 
    The wiring under test: setLocale() resolves the French
    catalogue and sets the document's language attribute (i18n.js), and the
-   gr8r:locale event re-renders the app (main.js). The behaviour tests run
+   projects:locale event re-renders the app (main.js). The behaviour tests run
    on the leaf layer, which bare Node can import; the wiring tests read the
    SOURCE, because applyPrefs() and the render loop need the DOM.
    ===================================================================== */
@@ -117,11 +117,11 @@ test('the boot path carries no hardcoded lang="en" (D-02)', () => {
   assert.doesNotMatch(src, /documentElement\.lang\s*=\s*['"]en['"]/, 'the boot path must not hardcode English');
 });
 
-test('main.js re-renders the app on gr8r:locale, one listener and one re-render', () => {
+test('main.js re-renders the app on projects:locale, one listener and one re-render', () => {
   const src = fs.readFileSync(MAIN_SOURCE, 'utf8');
-  assert.match(src, /addEventListener\(\s*['"]gr8r:locale['"]/, 'the boot registers a gr8r:locale listener');
-  assert.match(src, /gr8r:locale['"],\s*\(\)\s*=>\s*render\(\)/, 'the listener delegates to the boot render entry point');
-  assert.equal((src.match(/gr8r:locale/g) || []).length, 1, 'exactly one listener, no other call site');
+  assert.match(src, /addEventListener\(\s*['"]projects:locale['"]/, 'the boot registers a projects:locale listener');
+  assert.match(src, /projects:locale['"],\s*\(\)\s*=>\s*render\(\)/, 'the listener delegates to the boot render entry point');
+  assert.equal((src.match(/projects:locale/g) || []).length, 1, 'exactly one listener, no other call site');
 });
 
 /* ---------- the keyboard-hint modifier is a lazy getter (WR-08, LOC-01) ---------- */

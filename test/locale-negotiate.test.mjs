@@ -59,9 +59,9 @@ test('primeLocale resolves unknown codes to base and updates the singleton', asy
 test('primeLocale is silent: no event dispatch, while setLocale still announces (Pitfall 2)', async () => {
   const prime = bodyOf(I18N, 'export async function primeLocale');
   const set = bodyOf(I18N, 'export async function setLocale');
-  assert.ok(!prime.includes('gr8r:locale'), 'primeLocale must not mention the locale event');
+  assert.ok(!prime.includes('projects:locale'), 'primeLocale must not mention the locale event');
   assert.ok(!prime.includes('dispatchEvent'), 'primeLocale must not dispatch');
-  assert.ok(set.includes("'gr8r:locale'"), 'setLocale keeps the announcement');
+  assert.ok(set.includes("'projects:locale'"), 'setLocale keeps the announcement');
 
   /* Behavioural proof with a stand-in document: priming never dispatches, switching does. */
   const events = [];
@@ -75,7 +75,7 @@ test('primeLocale is silent: no event dispatch, while setLocale still announces 
     assert.deepEqual(events, []);
     assert.equal(globalThis.document.documentElement.lang, 'fr');
     await setLocale('en');
-    assert.deepEqual(events, ['gr8r:locale']);
+    assert.deepEqual(events, ['projects:locale']);
     assert.equal(globalThis.document.documentElement.lang, 'en');
   } finally {
     if (prev === undefined) delete globalThis.document;
@@ -84,10 +84,10 @@ test('primeLocale is silent: no event dispatch, while setLocale still announces 
   }
 });
 
-test('the demo locale key is dedicated, not the gr8r.v2 document blob (D-15)', () => {
+test('the demo locale key is dedicated, not the projects.v2 document blob (D-15)', () => {
   const key = I18N.match(/LOCALE_STORAGE_KEY = '([^']+)'/)?.[1];
   const blob = STORE.match(/STORE_KEY = '([^']+)'/)?.[1];
-  assert.equal(key, 'gr8r.locale');
+  assert.equal(key, 'projects.locale');
   assert.ok(blob && key !== blob);
 });
 
@@ -100,7 +100,7 @@ test('readStoredLocale / storeLocale round-trip a registry code and reject other
     assert.equal(readStoredLocale(), null);
     storeLocale('fr');
     assert.equal(readStoredLocale(), 'fr');
-    mem.set('gr8r.locale', 'klingon');
+    mem.set('projects.locale', 'klingon');
     assert.equal(readStoredLocale(), null);
   } finally {
     if (prev === undefined) delete globalThis.localStorage;

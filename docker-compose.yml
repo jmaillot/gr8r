@@ -1,15 +1,15 @@
 services:
-  gr8r:
+  projects:
     build: .
-    image: gr8r-studio:1.1.1
-    container_name: gr8r-studio
+    image: projects-studio:1.1.1
+    container_name: projects-studio
     restart: unless-stopped
     stop_grace_period: 10s
     environment:
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
       ADMIN_NAME: ${ADMIN_NAME:-Admin}
-      WORKSPACE_NAME: ${WORKSPACE_NAME:-Gr8r Studio}
+      WORKSPACE_NAME: ${WORKSPACE_NAME:-Projects Studio}
       WORKSPACE_SLUG: ${WORKSPACE_SLUG:-}
       APP_URL: ${APP_URL:-}
       PUID: ${PUID:-1000}
@@ -38,7 +38,7 @@ services:
       DATA_DIR: /data
       MASTER_KEY: ${MASTER_KEY:?set MASTER_KEY in .env (32+ random chars; encrypts TOTP secrets — losing it locks out 2FA)}
     volumes:
-      - gr8r-data:/data
+      - projects-studio-data:/data
     # No published port: Traefik reaches the container over the shared network.
     expose:
       - '8080'
@@ -49,22 +49,22 @@ services:
       # Must name the network shared with Traefik.
       traefik.docker.network: 'traefik'
 
-      traefik.http.routers.gr8r.rule: 'Host(`${GR8R_HOST:-projects.example.com}`)'
-      traefik.http.routers.gr8r.entrypoints: 'websecure'
-      traefik.http.routers.gr8r.tls: 'true'
-      traefik.http.routers.gr8r.tls.certresolver: 'letsencrypt'
-      traefik.http.routers.gr8r.middlewares: 'gr8r-compress'
-      traefik.http.services.gr8r.loadbalancer.server.port: '8080'
+      traefik.http.routers.projects-studio.rule: 'Host(`${PRJSTUDIO_HOST:-projects.example.com}`)'
+      traefik.http.routers.projects-studio.entrypoints: 'websecure'
+      traefik.http.routers.projects-studio.tls: 'true'
+      traefik.http.routers.projects-studio.tls.certresolver: 'letsencrypt'
+      traefik.http.routers.projects-studio.middlewares: 'projects-studio-compress'
+      traefik.http.services.projects-studio.loadbalancer.server.port: '8080'
 
-      traefik.http.routers.gr8r-http.rule: 'Host(`${GR8R_HOST:-projects.example.com}`)'
-      traefik.http.routers.gr8r-http.entrypoints: 'web'
-      traefik.http.routers.gr8r-http.middlewares: 'gr8r-https'
-      traefik.http.middlewares.gr8r-https.redirectscheme.scheme: 'https'
+      traefik.http.routers.projects-studio-http.rule: 'Host(`${PRJSTUDIO_HOST:-projects.example.com}`)'
+      traefik.http.routers.projects-studio-http.entrypoints: 'web'
+      traefik.http.routers.projects-studio-http.middlewares: 'projects-https'
+      traefik.http.middlewares.projects-studio-https.redirectscheme.scheme: 'https'
 
-      traefik.http.middlewares.gr8r-compress.compress: 'true'
+      traefik.http.middlewares.projects-studio-compress.compress: 'true'
 
 volumes:
-  gr8r-data:
+  projects-studio-data:
 
 networks:
   traefik:

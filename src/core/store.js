@@ -5,7 +5,7 @@ import { PCOLORS, TEAMS_SEED } from './constants.js';
 import { seed } from '../data/seed.js';
 import { api } from './api.js';
 
-export const STORE_KEY = 'gr8r.v2';
+export const STORE_KEY = 'projects.v2';
 export const DEFAULT_PREFS = {
   theme: 'system',
   accent: 'indigo',
@@ -102,7 +102,7 @@ let changeSeq = 0;
 const docSnapshot = () => ({ data: S.data, prefs: S.prefs, views: S.views, collapsed: S.ui.collapsed });
 
 function notify(detail) {
-  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('gr8r:save-error', { detail }));
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projects:save-error', { detail }));
 }
 
 /* Push the whole document to the server. A revision mismatch means another

@@ -9,7 +9,7 @@
 
    Env:
      PORT=8080              listen port
-     DATA_DIR=/data         directory holding gr8r.db
+     DATA_DIR=/data         directory holding projects.db
      ADMIN_EMAIL            first-run admin account
      ADMIN_PASSWORD         first-run admin password (generated if absent)
      ADMIN_NAME=Admin
@@ -53,7 +53,7 @@ const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
 const SEED_FILE = path.join(HERE, 'seed.json');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
 const FILES_DIR = path.join(DATA_DIR, 'files');
-const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'gr8r.db'));
+const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'projects.db'));
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
@@ -75,10 +75,10 @@ const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
 const DEFAULT_WS_ID = 'ws_default';
-const COOKIE = 'gr8r_session';
+const COOKIE = 'projects_session';
 /* D-68: the pending second-factor challenge rides its OWN cookie — never the
    session cookie — so requireUser()/currentUser() structurally never see it. */
-const CHALLENGE_COOKIE = 'gr8r_tfa_challenge';
+const CHALLENGE_COOKIE = 'projects_tfa_challenge';
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // D-66: 5-minute challenge lifetime
 const ROLE_RANK = { viewer: 1, member: 2, admin: 3, owner: 4 };
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
@@ -989,7 +989,7 @@ function migrateTenancy() {
   const rows = db.prepare('select * from workspaces').all();
   if (rows.some(row => !row.slug)) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backup = path.join(DATA_DIR, `gr8r-premultitenant-${stamp}.db`);
+    const backup = path.join(DATA_DIR, `projects-premultitenant-${stamp}.db`);
     try {
       fs.mkdirSync(path.dirname(backup), { recursive: true });
       db.exec('pragma wal_checkpoint(truncate)');
@@ -1050,7 +1050,7 @@ function migrateTotpEncryption() {
   // D-74: backup first. Failure skips the migration entirely this boot —
   // no backup = no mutation (deliberately stricter than migrateTenancy).
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backup = path.join(DATA_DIR, `gr8r-preenvelope-${stamp}.db`);
+  const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     db.exec('pragma wal_checkpoint(truncate)');
@@ -1496,7 +1496,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/config' && method === 'GET') {
     return json(res, 200, {
-      app: 'gr8r',
+      app: 'projects',
       signup: ALLOW_SIGNUP,
       mail: MAILER.enabled,
       url: appBase(req),
@@ -2826,7 +2826,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 function backupCli(target) {
-  const dest = path.resolve(target || path.join(DATA_DIR, `gr8r-${new Date().toISOString().replace(/[:.]/g, '-')}.db`));
+  const dest = path.resolve(target || path.join(DATA_DIR, `projects-${new Date().toISOString().replace(/[:.]/g, '-')}.db`));
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   db.exec('pragma wal_checkpoint(truncate)');
   db.exec(`vacuum into '${dest.replaceAll("'", "''")}'`);

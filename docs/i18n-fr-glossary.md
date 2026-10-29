@@ -1,4 +1,4 @@
-# Glossaire français — Gr8r Studio
+# Glossaire français — Projects Studio
 
 Source de vérité terminologique pour la traduction du catalogue (`src/locales/fr.json`).
 Chaque lot de traduction (batches `page`, `settings`, `act`, `a11y`, `toast`, `modal`,
@@ -11,7 +11,7 @@ un terme existant.
 - **Vouvoiement** : la forme « vous » partout (aucun tutoiement dans l'interface).
 - **Casse** : sentence case — seule la première lettre d'un titre est capitale
   (« Nouvelle tâche », et non « Nouvelle Tâche »). Les noms propres et les sigles
-  gardent leur casse (Gr8r Studio, QA).
+  gardent leur casse (Projects Studio, QA).
 - **Pas de point médian** : aucune forme du type « membre·e ». Les formulations
   épicènes ou le masculin générique sont utilisés (« les membres », « chaque membre »).
 - **Conventions France** : mois et jours en minuscules (« janvier », « lundi »),
@@ -144,7 +144,7 @@ un terme existant.
 
 Certaines valeurs sont identiques en anglais et en français — elles doivent
 **figurer dans `fr.json`**, jamais être omises pour satisfaire une heuristique de
-diff : **Gr8r Studio**, **Ctrl**, les noms de produits, les sigles **QA**, et toute
+diff : **Projects Studio**, **Ctrl**, les noms de produits, les sigles **QA**, et toute
 valeur dont la forme coïncide (« Frontend », « Backend », « Bug », « Design »).
 
 ## Terminologie — lot A (`page.*`, plan 07-04)

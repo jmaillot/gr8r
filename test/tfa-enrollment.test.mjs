@@ -33,10 +33,10 @@ async function signIn2fa(email) {
 }
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-'));
   // D-10: a throwaway MASTER_KEY so production and tests exercise the same
   // encrypt path; the fail-closed no-key path is covered separately.
-  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } });
+  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-tfa-suite-key' } });
 });
 
 after(async () => {
@@ -286,7 +286,7 @@ test('T-16-14: the disable throttle is a distinct budget — the 6th attempt loc
 /* T-16-09/D-06: the enable path fails closed when MASTER_KEY is absent — a
    dedicated server without the key exercises the identical production path. */
 test('D-06: enable without MASTER_KEY → fail-closed 503 naming MASTER_KEY, no state change', async () => {
-  const noKeyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-nokey-'));
+  const noKeyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-nokey-'));
   const noKeyServer = await startServer({ dataDir: noKeyDir }); // no MASTER_KEY env
   try {
     const s = await signup(noKeyServer.base, { name: 'nokey', email: 'nokey@test.local', password: GOOD });

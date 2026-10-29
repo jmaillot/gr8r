@@ -121,7 +121,7 @@ test('the locale is the base locale before any switch', () => {
   assert.equal(getLocale(), 'en');
 });
 
-test('the locale switch announces itself with a gr8r:locale event', async ctx => {
+test('the locale switch announces itself with a projects:locale event', async ctx => {
   const events = [];
   globalThis.document = { dispatchEvent: e => events.push(e) };
   ctx.after(() => {
@@ -131,7 +131,7 @@ test('the locale switch announces itself with a gr8r:locale event', async ctx =>
   try {
     await setLocale('fr');
     assert.equal(events.length, 1, 'the switch announces itself exactly once');
-    assert.equal(events[0].type, 'gr8r:locale');
+    assert.equal(events[0].type, 'projects:locale');
     assert.equal(events[0].detail.code, 'fr');
     assert.equal(getLocale(), 'fr', 'the singleton answers the new code immediately');
     assert.equal(t('nav.projects'), 'Projets', 'the active catalogue is consulted');
@@ -151,6 +151,6 @@ test('an unknown locale code resolves to the base locale and still announces the
   await setLocale('zz');
   assert.equal(getLocale(), 'en', 'an unknown code resolves to the base locale');
   assert.equal(events.length, 1, 'the change is announced');
-  assert.equal(events[0].type, 'gr8r:locale');
+  assert.equal(events[0].type, 'projects:locale');
   assert.equal(events[0].detail.code, 'en');
 });

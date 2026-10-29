@@ -20,7 +20,7 @@ let dataDir;
 before(async () => {
   /* The directory is ours, so it survives the restart: the harness only
      deletes the directories it created itself. */
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-invite-'));
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-invite-'));
   server = await startServer({ dataDir });
   owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
 });

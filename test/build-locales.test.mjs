@@ -24,7 +24,7 @@ const BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'fixtures', 
 
 /* The real build, into a fresh temporary directory. The developer's dist/ is never touched. */
 function build(locales) {
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-build-'));
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-build-'));
   const result = spawnSync(process.execPath, [VITE_BIN, 'build', '--outDir', outDir, '--emptyOutDir'], {
     cwd: ROOT,
     env: { ...process.env, LOCALES: locales },

@@ -24,7 +24,7 @@ test('handleFiles uploads real bytes via XMLHttpRequest with upload.onprogress, 
 });
 
 /* The harness client only sends JSON; uploads are raw bodies, so POST them
-   with plain fetch carrying the captured gr8r_session cookie. */
+   with plain fetch carrying the captured projects_session cookie. */
 function uploadFetch(server, cookie, body, { slug = 'acme', name = 'hello.txt' } = {}) {
   return fetch(`${server.base}/w/${slug}/files?name=${encodeURIComponent(name)}`, {
     method: 'POST',

@@ -144,7 +144,7 @@ export function legacyDoc() {
 /* Build the legacy database inside `dataDir` and leave it closed on disk. */
 export function createLegacyDb(dataDir) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const dbPath = path.join(dataDir, 'gr8r.db');
+  const dbPath = path.join(dataDir, 'projects.db');
   const db = new DatabaseSync(dbPath);
   try {
     db.exec('pragma foreign_keys = on');
