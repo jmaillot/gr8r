@@ -247,6 +247,15 @@ export const api = {
   async revokeAllSessions() {
     return call('DELETE', '/api/auth/sessions/others');
   },
+  /* Operator console (OPREV-01/02, phase 22): auth-scoped like the sessions
+     family above — no slug guard. The read returns the instance's users (D-121
+     five fields only); the revoke POST is the plan 01 route. */
+  async operatorUsers() {
+    return call('GET', '/api/auth/operator/users');
+  },
+  async operatorRevokeSessions(userId) {
+    return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/revoke-sessions`);
+  },
   /* Change the signed-in account's own password (PASS-02). api.changePassword is
      the only client entry point to PATCH /api/auth/password. Auth-scoped, no slug
      guard — same family as the sessions methods above (D-34). On success the

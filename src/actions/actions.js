@@ -210,6 +210,7 @@ A.go = el => {
   if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa') && api.enabled) {
     refreshSessions();
     refreshTfa(); // T-16-13: the card's on/off split re-reads the server
+    refreshOperatorUsers(); // OPREV-02: the operator card re-reads the server list
   }
 };
 A.back = () => {
@@ -1820,6 +1821,47 @@ export async function refreshTfa() {
   render();
   return api.user;
 }
+
+/* The operator card's ground truth (OPREV-02, D-121): the users list is fetched
+   from the server on the sessions tab mount and after every revoke — never from
+   the document. A non-operator fetch simply 403s; the card renders only from
+   the api.user.isInstanceAdmin server flag, so the fetch is gated on it too. */
+export async function refreshOperatorUsers() {
+  if (!api.enabled || !api.user?.isInstanceAdmin) return null;
+  const res = await api.operatorUsers();
+  if (!res.ok) {
+    /* The 401 teardown belongs to the central intercept (D-28); other refusals
+       leave the card empty — the gate itself is the honest answer. */
+    if (res.status !== 401) S.ui.operatorUsers = null;
+    return null;
+  }
+  S.ui.operatorUsers = res.data.users || [];
+  render();
+  return S.ui.operatorUsers;
+}
+
+A.operatorRevokeAsk = el => {
+  S.ui.operatorRevoke = el.dataset.id; // D-90: the inline confirmation stage carries the target id
+  render();
+};
+A.operatorRevokeCancel = () => {
+  S.ui.operatorRevoke = null;
+  render();
+};
+A.operatorRevokeConfirm = async el => {
+  const id = el.dataset.id;
+  const res = await api.operatorRevokeSessions(id);
+  S.ui.operatorRevoke = null;
+  if (!res.ok) {
+    /* D-28: the central intercept owns every mid-session revocation 401 —
+       the operator's own teardown is already in flight. */
+    if (res.status === 401) return;
+    const c = res.data?.code;
+    return toast(tErr(c, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  await refreshOperatorUsers(); // re-fetch so the list reflects the revoke
+  toast(t('settings.operator.toastRevoked'));
+};
 
 A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
