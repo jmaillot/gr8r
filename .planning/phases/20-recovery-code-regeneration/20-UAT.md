@@ -42,7 +42,9 @@ blocked: 0
 
 - gap_id: G-20-1
   truth: "On the 2FA on-state card, the title and description text render on readable, naturally wrapped lines (not one word per line) even with the Regenerate + Turn off buttons present"
-  status: failed
+  status: resolved
+  resolved_by: 20-03
+  resolved_at: 2026-10-29
   reason: "User reported: the text 'L'authentification à deux facteurs est activée. Vous saisirez un code…' displays like one word per line (test 1 passed; cosmetic layout issue on the same card)"
   severity: cosmetic
   test: 1
