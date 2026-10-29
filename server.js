@@ -365,6 +365,7 @@ function userPayload(user) {
     name: user.name,
     locale: user.locale ?? null,
     twoFa: !!user.two_fa_enabled, // server ground truth for the settings 2FA card (16-03, T-16-13)
+    isInstanceAdmin: !!user.is_instance_admin, // server ground truth for the operator card (D-112: DB flag only)
     workspaces: membershipsOf(user.id).map(row => workspacePayload(row, row)),
   };
 }
@@ -1934,6 +1935,26 @@ async function handleApi(req, res, url) {
   }
 
   /* -------------- operator session revocation (OPREV-01, D-115) -------------- */
+
+  const operatorUsersMatch = pathname === '/api/auth/operator/users';
+  if (operatorUsersMatch && method === 'GET') {
+    // D-121: read route — sameOrigin → requireUser → operator gate. NO throttle
+    // (read-only, no oracle: the payload exposes only the five D-121 fields).
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = requireUser(req, res);
+    if (!operator) return;
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const rows = db.prepare('select id, name, email, is_instance_admin, last_login_at from users order by created_at').all();
+    return json(res, 200, {
+      users: rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        is_instance_admin: r.is_instance_admin,
+        last_login_at: r.last_login_at,
+      })),
+    });
+  }
 
   const operatorRevokeMatch = pathname.match(/^\/api\/auth\/operator\/users\/([A-Za-z0-9_-]{1,64})\/revoke-sessions$/);
   if (operatorRevokeMatch && method === 'POST') {

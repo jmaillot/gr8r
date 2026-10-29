@@ -163,6 +163,40 @@ test('D-113 pre-v1.4 database: the boot stamp flags the ADMIN_EMAIL account and 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+/* --------------------- D-121 users-list route (plan 22-02 task 1) --------------------- */
+
+const listUsers = (cookie, srv = server) =>
+  fetch(`${srv.base}/api/auth/operator/users`, { headers: { cookie } });
+
+test('D-121: operator gets 200 with rows exposing exactly the five D-121 fields', async () => {
+  const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  const res = await listUsers(operator.cookie());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(Array.isArray(body.users) && body.users.length >= 2, 'users array present');
+  for (const row of body.users) {
+    assert.deepEqual(Object.keys(row).sort(), ['email', 'id', 'is_instance_admin', 'last_login_at', 'name'], 'exactly the five D-121 fields');
+    assert.equal(typeof row.id, 'string');
+    assert.equal(typeof row.email, 'string');
+    assert.equal(typeof row.is_instance_admin, 'number');
+  }
+  const flagged = body.users.filter(u => u.is_instance_admin === 1).map(u => u.email);
+  assert.ok(flagged.includes(ADMIN_EMAIL), 'the bootstrap operator appears flagged');
+});
+
+test('D-121: a non-operator authenticated user is refused 403 operatorOnly', async () => {
+  const plain = (await login(server.base, 'victim@test.local', GOOD)).client;
+  const res = await listUsers(plain.cookie());
+  assert.equal(res.status, 403);
+  assert.equal((await res.json()).code, 'operatorOnly');
+});
+
+test('D-121: unauthenticated request is 401 signInRequired', async () => {
+  const res = await listUsers('none=ignored');
+  assert.equal(res.status, 401);
+  assert.equal((await res.json()).code, 'signInRequired');
+});
+
 /* --------------------- privilege-matrix expansion (plan task 3) --------------------- */
 
 let server2;
