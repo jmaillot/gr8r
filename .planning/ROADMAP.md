@@ -94,7 +94,7 @@ Plans:
   4. The privilege gate is instance-operator, not workspace-admin: a workspace admin who is not the operator cannot revoke another user's sessions (privilege-matrix test)
   5. One cross-feature Chromium e2e covers the full lifecycle — enroll → regenerate → login → disable → re-enroll → revoke — in EN + FR, with no v1.3 test deleted or weakened
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 - [x] 22-01-PLAN.md — `is_instance_admin` flag + boot stamp + operator gate + revoke route + privilege-matrix node:test suite (D-112–D-119, D-122)
@@ -115,4 +115,4 @@ Plans:
 | 19. TOTP Encryption Closure | 2/2 | Complete    | 2026-10-28 |
 | 20. Recovery-Code Regeneration | 2/2 | In Progress|  |
 | 21. Disable-2FA Verification & Closure | 2/2 | Complete    | 2026-10-29 |
-| 22. Operator Session Revocation | 2/2 | Complete |  |
+| 22. Operator Session Revocation | 2/2 | Complete    | 2026-10-29 |
