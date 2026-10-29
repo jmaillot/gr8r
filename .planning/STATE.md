@@ -4,17 +4,17 @@ milestone: v1.4
 milestone_name: Auth Completion
 current_plan: 1
 status: unknown
-stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-10-29T08:59:05.548Z"
-state_head: a7c10829db13659ab211902166b37672ac31484e
+stopped_at: Phase 20 verified and marked complete
+last_updated: "2026-10-29T09:30:00.000Z"
+state_head: 7583a9b
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 25
-current_phase_name: Recovery-Code Regeneration
-current_phase: 20
+  completed_plans: 5
+  percent: 50
+current_phase_name: Disable-2FA Verification & Closure
+current_phase: 21
 ---
 
 # STATE.md
@@ -27,13 +27,12 @@ current_phase: 20
 
 ## Current Position
 
-- **Phase:** 20 — Recovery-Code Regeneration
+- **Phase:** 21 — Disable-2FA Verification & Closure
 
-Current Plan: 1
-Total Plans in Phase: 3
+Current Plan: none (not yet planned)
 
-- **Status:** Phase 20 execution complete (3/3 plans) — ready for verification
-- **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done; Phase 20 executed 3/3 plans, pending verification)
+- **Status:** Phase 20 complete and verified (UAT 2/2 passed, G-20-1 closed via 20-03 and re-verified)
+- **Progress:** ▓▓░░░░░░░░ (2/4 phases complete — Phases 19–20 done; next: Phase 21)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -88,12 +87,12 @@ Total Plans in Phase: 3
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T08:04:50.883Z
-**Stopped at:** Completed 20-02-PLAN.md
+**Last session:** 2026-10-29T09:30:00.000Z
+**Stopped at:** Phase 20 verified and marked complete
 **Resume file:** None
 
-- **Last action:** /gsd-verify-work Phase 19 — 7/7 UAT tests passed on live deployment + isolated local container (Test 4 defer path verified with throwaway Docker instance; no prod config touched). Verification refreshed (stale → passed, fresh digest), phase marked complete, transitioned to Phase 20.
-- **Next action:** `/gsd-discuss-phase 20` (or `/gsd-plan-phase 20`), then Phases 21–22. Remember `/gsd-discuss-phase 22` before planning Phase 22.
+- **Last action:** /gsd-verify-work Phase 20 — UAT 2/2 passed; G-20-1 (cosmetic srow squeeze) closed via gap plan 20-03 and re-verified with user confirmation. VERIFICATION canonicalized to passed; phase marked complete in ROADMAP/STATE; transitioned to Phase 21.
+- **Next action:** `/gsd-discuss-phase 21` (or `/gsd-plan-phase 21`). Remember `/gsd-discuss-phase 22` before planning Phase 22.
 - **Ground truth anchors:** `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, migrateTotpEncryption ~1000–1072, requireTotpSecret ~271, disable route ~1663, verify ~1737), `totp.js`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`; v1.3 record in `.planning/milestones/v1.3-*`.
 
 ## Decisions

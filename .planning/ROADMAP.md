@@ -11,7 +11,7 @@ greenfield construction.
 ## Phases
 
 - [x] **Phase 19: TOTP Encryption Closure** - Fail-closed decrypt surface everywhere and a boot-time plaintext→envelope migration for legacy `two_fa_secret` rows (completed 2026-10-28)
-- [ ] **Phase 20: Recovery-Code Regeneration** - A 2FA user can burn-and-replace their recovery codes behind fresh password + live TOTP step-up
+- [x] **Phase 20: Recovery-Code Regeneration** - A 2FA user can burn-and-replace their recovery codes behind fresh password + live TOTP step-up (completed 2026-10-29)
 - [ ] **Phase 21: Disable-2FA Verification & Closure** - The shipped disable route is verified against the full contract and closed with e2e + i18n coverage
 - [ ] **Phase 22: Operator Session Revocation** - The instance operator can revoke any non-owner user's sessions; revoked browsers sign out honestly
 
@@ -49,7 +49,8 @@ Plans:
   3. New plaintext codes are displayed exactly once in the UI and never stored; the old set is invalid the moment the new set lands
   4. The regeneration endpoint has its own throttle budget and the response carries `Cache-Control: no-store`
 
-**Plans**: 2/2 plans executed
+**Plans**: 3/3 plans executed
+**Status:** Complete (2026-10-29) — UAT 2/2 passed (G-20-1 cosmetic gap closed via 20-03, re-verified), verification passed
 
 Plans:
 **Wave 1**
