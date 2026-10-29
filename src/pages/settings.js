@@ -407,13 +407,24 @@ export function settingsBody(sec, title) {
           srow(
             t('settings.tfa.on'),
             t('settings.tfa.onDesc'),
-            stage === 'disable' ? '' : `<button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('settings.tfa.turnOff')}</button>`,
+            stage ? '' : `<button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regen')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('settings.tfa.turnOff')}</button>`,
           ) +
           (stage === 'disable'
             ? `<form data-submit="tfaDisableConfirm" class="col" style="gap:14px;max-width:400px;margin-top:14px">
                 ${fld('tfa-off-pw', t('settings.tfa.pwLabel'), 'tfaOffPw', 'type="password" autocomplete="current-password"')}
                 ${fld('tfa-off-code', t('settings.tfa.codeLabel'), 'tfaOffCode', 'autocomplete="one-time-code"')}
                 <div class="row"><button class="btn btn-danger" data-a="tfaDisableConfirm" id="tfa-off-save">${t('settings.tfa.turnOff')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
+              </form>`
+            : '') +
+          (stage === 'regen'
+            ? /* REGEN-01/02 — the regenerate step-up form. The code field is
+                 6-digit-only semantics (D-85 client half): unlike the disable
+                 form it must never accept a recovery code. */
+              `<form data-submit="tfaRegenConfirm" class="col" style="gap:14px;max-width:400px;margin-top:14px">
+                ${fld('tfa-regen-pw', t('settings.tfa.regenLabel'), 'tfaRegenPw', 'type="password" autocomplete="current-password"')}
+                ${fld('tfa-regen-code', t('settings.tfa.regenCodeLabel'), 'tfaRegenCode', 'autocomplete="one-time-code" inputmode="numeric"')}
+                <span class="err">${ic('circle-alert', 12)}${t('settings.tfa.regenWarning')}</span>
+                <div class="row"><button class="btn btn-primary" data-a="tfaRegenConfirm" id="tfa-regen-save">${t('settings.tfa.regen')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
               </form>`
             : '')
         );

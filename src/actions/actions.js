@@ -2528,6 +2528,42 @@ A.tfaDisableConfirm = () => {
     toast(t('settings.tfa.disabledToast'));
   });
 };
+/* REGEN-01/02 — recovery-code regeneration from the tfa card. The confirm
+   handler clones tfaDisableConfirm's error mapping, with tfaNotEnabled mapped
+   to its own err key (the 409 the regen route adds beyond disable). On success
+   the stage is cleared FIRST (Pitfall 6 — no mounted password field), then the
+   new codes render exactly once through the reused D-53 modal; S.ui.recoveryCodes
+   is transient-only (D-91) — nothing is written to any storage. */
+A.tfaAskRegen = () => {
+  S.ui.errors = {};
+  S.ui.tfaStage = 'regen';
+  render();
+};
+A.tfaRegenConfirm = () => {
+  const e = (S.ui.errors = {});
+  const pw = $('#tfa-regen-pw')?.value || '';
+  const code = $('#tfa-regen-code')?.value?.trim() || '';
+  if (!pw) e.tfaRegenPw = t('err.enterCurrentPassword');
+  if (!code) e.tfaRegenCode = t('err.codeRequired');
+  if (Object.keys(e).length) return render();
+  loadingBtn('tfa-regen-save', 0, async () => {
+    const res = await api.tfaRecover(pw, code);
+    if (!res.ok) {
+      const c = res.data?.code;
+      if (c === 'wrongCurrentPassword' || c === 'passwordRequired') e.tfaRegenPw = t('err.' + c);
+      else if (c === 'codeRejected' || c === 'tooManyAttempts') e.tfaRegenCode = t('err.' + c);
+      else if (c === 'tfaNotEnabled') e.tfaRegenPw = t('err.tfaNotEnabled');
+      else e.tfaRegenPw = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58: the 503 body never renders
+      return render();
+    }
+    S.ui.tfaStage = null; // Pitfall 6: no password field lingers mounted
+    S.ui.recoveryCodes = res.data.recoveryCodes || []; // D-91: transient only
+    render();
+    openModal({ type: 'recovery' });
+    await refreshTfa();
+    toast(t('settings.tfa.regenToast'));
+  });
+};
 A.recoveryDismiss = () => {
   S.ui.recoveryCodes = null; // D-53: gone for good — no re-render can show them
   closeModal();
