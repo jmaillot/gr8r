@@ -101,7 +101,8 @@ const SCHEMA = `
     locale        text,
     two_fa_enabled   integer not null default 0,
     two_fa_secret    text,
-    two_fa_last_step integer not null default 0
+    two_fa_last_step integer not null default 0,
+    is_instance_admin integer not null default 0
   );
   create table if not exists sessions (
     token_hash text primary key,
@@ -197,6 +198,9 @@ function openDb() {
   ensureColumn(db, 'users', 'two_fa_enabled', 'integer not null default 0');
   ensureColumn(db, 'users', 'two_fa_secret', 'text');
   ensureColumn(db, 'users', 'two_fa_last_step', 'integer not null default 0');
+  // Phase 22 D-112: instance-operator privilege flag — def byte-identical to
+  // the SCHEMA declaration (Pitfall P-B).
+  ensureColumn(db, 'users', 'is_instance_admin', 'integer not null default 0');
   db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
   return db;
 }
@@ -951,11 +955,25 @@ function ensureAdmin({ quiet = false } = {}) {
   }
 }
 
+/* D-113/D-114: the boot stamp. Pre-v1.4 installs get a working operator: if no
+   user is flagged yet, stamp the ADMIN_EMAIL-matching account. Gated on "no
+   user currently flagged", so later boots are a no-op; reassigning the flag is
+   a documented manual DB update (D-114 — no transfer mechanism this phase).
+   Lives in bootstrap(), NOT inside ensureAdmin: ensureAdmin early-returns on
+   any existing user (Pitfall 1), so a stamp there would never fire on
+   existing databases. */
+function stampInstanceAdmin() {
+  if (db.prepare('select count(*) as n from users where is_instance_admin = 1').get().n > 0) return;
+  const email = (process.env.ADMIN_EMAIL || 'admin@example.com').trim();
+  db.prepare('update users set is_instance_admin = 1 where email = ? collate nocase').run(email);
+}
+
 function bootstrap(opts) {
   ensureWorkspace();
   migrateTenancy();
   migrateTotpEncryption();
   ensureAdmin(opts);
+  stampInstanceAdmin();
 }
 
 /*
@@ -1368,6 +1386,13 @@ function requireUser(req, res) {
     return null;
   }
   return user;
+}
+
+/* D-112: the instance-operator privilege boundary. Reads the DB flag ONLY —
+   never process.env.ADMIN_EMAIL, never workspace membership or isAdminUser().
+   Workspace roles stay tenant-bound; the flag is the sole instance-level tier. */
+function isInstanceAdmin(user) {
+  return user?.is_instance_admin === 1;
 }
 
 /* Resolve a workspace by slug and enforce a minimum role. Unknown slugs 404. */
@@ -1906,6 +1931,36 @@ async function handleApi(req, res, url) {
     // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.
     db.prepare('delete from sessions where user_id = ? and token_hash like ?').run(user.id, `${sessionMatch[1]}%`);
     return json(res, 204); // idempotent: an already-dead or foreign id is not an error (OQ4)
+  }
+
+  /* -------------- operator session revocation (OPREV-01, D-115) -------------- */
+
+  const operatorRevokeMatch = pathname.match(/^\/api\/auth\/operator\/users\/([A-Za-z0-9_-]{1,64})\/revoke-sessions$/);
+  if (operatorRevokeMatch && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = requireUser(req, res);
+    if (!operator) return;
+    // D-116: keyed on the caller, and every attempt — including 403 refusals —
+    // consumes a try, because tooMany increments before any gate decision.
+    if (tooMany(`operator-revoke|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // D-112: the gate reads the DB flag only — never env matching, never workspace role.
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const target = db.prepare('select id, is_instance_admin from users where id = ?').get(operatorRevokeMatch[1]);
+    if (!target) return fail(res, 404, 'notFound', 'Not found');
+    // D-119: owner immunity BEFORE any session lookup — other flagged owners are
+    // untouchable. A self-target is allowed (D-118): it is exactly revoke-others.
+    if (target.is_instance_admin && target.id !== operator.id)
+      return fail(res, 403, 'ownerImmune', 'Owner accounts are immune to operator revocation');
+    // D-118/Keep-current (P-H): ONE statement — the operator's own session is
+    // excluded by the != clause; for any other target the hashes differ, so
+    // every target session goes.
+    const operatorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, operatorTokenHash);
+    const left = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
+    // D-117: success-only verb, after the delete, before the response.
+    logSecurity(target.id, 'sessions_revoked_by_operator');
+    return json(res, 200, { revoked: del.changes, remaining: left.n }); // live post-delete counts (Pitfall 10)
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
