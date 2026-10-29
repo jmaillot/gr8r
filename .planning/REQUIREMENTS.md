@@ -42,11 +42,11 @@ Out of Scope — update docs when rotation lands).
 
 ### Admin Session Revocation (OPREV)
 
-- [ ] **OPREV-01**: The instance operator can revoke **all sessions of a target user** through
+- [x] **OPREV-01**: The instance operator can revoke **all sessions of a target user** through
   an operator-authorized route; the operator's own sessions are excluded from a
   revoke-others action on themselves; revocation rides the existing mid-session 401 teardown,
   so revoked browsers sign out honestly
-- [ ] **OPREV-02**: Owner accounts are immune: the operator cannot revoke an owner's sessions
+- [x] **OPREV-02**: Owner accounts are immune: the operator cannot revoke an owner's sessions
   (privilege boundary, regression-tested)
 
 ## Future Requirements (deferred)
@@ -78,7 +78,7 @@ Out of Scope — update docs when rotation lands).
 | REGEN-02 | Phase 20 | Complete |
 | DIS-01 | Phase 21 | Complete |
 | DIS-02 | Phase 21 | Complete |
-| OPREV-01 | Phase 22 | Pending |
-| OPREV-02 | Phase 22 | Pending |
+| OPREV-01 | Phase 22 | Complete |
+| OPREV-02 | Phase 22 | Complete |
 
 Coverage: 8/8 v1.4 requirements mapped, no orphans, no duplicates.

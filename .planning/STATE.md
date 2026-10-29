@@ -2,16 +2,16 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
-current_plan: Not started
+current_plan: 2
 status: executing
-stopped_at: Phase 22 context gathered
-last_updated: "2026-10-29T13:05:56.219Z"
-state_head: c8e90bc89477426671d58a0f67d33cc387e9fba0
+stopped_at: Completed 22-01-PLAN.md
+last_updated: "2026-10-29T13:47:51.878Z"
+state_head: e9303b4d2d4c16519e5c41fab4ea6d3b68ce9fe5
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 9
+  completed_plans: 8
   percent: 50
 current_phase: 22
 current_phase_name: Operator Session Revocation
@@ -29,7 +29,7 @@ current_phase_name: Operator Session Revocation
 
 - **Phase:** 21 — Disable-2FA Verification & Closure
 
-Current Plan: Not started
+Current Plan: 2
 Total Plans in Phase: 2
 
 - **Status:** Phase 21 plan 01 complete (disable route tightened, 8-test server suite green); plan 02 (e2e) next
@@ -67,6 +67,7 @@ Total Plans in Phase: 2
 | Phase 20 P03 | 12m | 2 tasks | 5 files |
 | Phase 21 P01 | 14m | 2 tasks | 3 files |
 | Phase 21 P02 | 43m | 2 tasks | 1 files |
+| Phase 22 P01 | 26m | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -90,9 +91,9 @@ Total Plans in Phase: 2
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T13:05:56.167Z
-**Stopped at:** Phase 22 context gathered
-**Resume file:** .planning/phases/22-operator-session-revocation/22-CONTEXT.md
+**Last session:** 2026-10-29T13:47:51.830Z
+**Stopped at:** Completed 22-01-PLAN.md
+**Resume file:** None
 
 - **Last action:** /gsd-verify-work Phase 20 — UAT 2/2 passed; G-20-1 (cosmetic srow squeeze) closed via gap plan 20-03 and re-verified with user confirmation. VERIFICATION canonicalized to passed; phase marked complete in ROADMAP/STATE; transitioned to Phase 21.
 - **Next action:** `/gsd-discuss-phase 21` (or `/gsd-plan-phase 21`). Remember `/gsd-discuss-phase 22` before planning Phase 22.
@@ -107,3 +108,4 @@ Total Plans in Phase: 2
 - [Phase 21]: Disable route: D-101 strict 6-digit gate (D-57 recovery branch deleted), D-103 user-scoped challenge teardown, D-105 revoke-others via cookie-derived tokenHash, D-107 after-commit tfa_disabled verb — regression-tested in test/tfa-disable.test.mjs (8 tests)
 - [Phase 21]: D-109 full-cycle 2FA disable e2e parametric EN+FR; re-enable via fresh API session (D-105 revokes the old one)
 - [Phase 21]: D-102 asserted at the UI form level and D-106 via two cookie-jar contexts; zero new locale strings (D-111)
+- [Phase 22]: D-112/D-113 flag + boot stamp shipped; D-118 self-target resolves to 200 (keep-current) — ownerImmune only for other flagged owners; gate-refusal code operatorOnly
