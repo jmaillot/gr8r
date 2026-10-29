@@ -137,7 +137,7 @@ login second-factor flow (Phase 17).
 | Relative-time rendering ('2 hours ago') | Browser / Client | — | Locked (D-21); `ago()`/`formatRelativeTime()` already implement it via `Intl` + catalogue |
 | `last_seen_at` freshness write | API / Backend | — | Throttled UPDATE in `currentUser()` (D-22/D-24) — the identity path owns the write |
 | Revocation (revoke-one, revoke-others) | API / Backend | — | Pure SQL on `sessions`; the cookie is opaque + DB-backed so deleting a row kills the session (Pitfall 11 strength) |
-| 401 → signed-out UX for a revoked browser | Browser / Client | — | Reuses `A.signOut` + the `gr8r:save-error` 401 branch (D-28) |
+| 401 → signed-out UX for a revoked browser | Browser / Client | — | Reuses `A.signOut` + the `projects:save-error` 401 branch (D-28) |
 | Sessions list UI (mount refresh, post-revoke refresh) | Browser / Client | — | No polling, no sockets (D-29); server stays a pull API |
 | Doc-field stripping (`sessions`/`tfa`) | API / Backend | — | Server-side sanitization only; the client stops emitting the fields, so both the read and write doc paths must drop them |
 | Schema migration (new columns + `login_challenges`) | Database / Storage | API / Backend (boot) | `openDb()` runs `SCHEMA` + `ensureColumn`; no new migration module |
@@ -218,7 +218,7 @@ exists in-repo.
 | `srow(t, d, ctl)` | `src/pages/settings.js:78-80` | Existing row layout for the sessions table |
 | `isMac` | `src/core/utils.js:41` | D-18 UA-sniff pattern |
 | `ago(ts)` → `formatRelativeTime` | `src/core/utils.js:91-92`, `src/core/i18n.js:426-438` | D-21 relative-time rendering (`common.justNow` for <1 min) |
-| `gr8r:save-error` 401 branch | `src/main.js:70-78` | D-28 revoked-browser redirect path |
+| `projects:save-error` 401 branch | `src/main.js:70-78` | D-28 revoked-browser redirect path |
 | `A.signOut` | `src/actions/actions.js:2081-2101` | State teardown for D-28 |
 | `node --test` harness | `test/helpers/server.mjs` | Real-server suites; never mocks SQLite or HTTP |
 
@@ -294,7 +294,7 @@ is a scope leak into Phase 16 *and* a zero-dep violation.
                                               │
                           a revoked browser's next request
                           falls into requireUser → 401 signInRequired
-                          ─► api.js call() ─► main.js gr8r:save-error 401
+                          ─► api.js call() ─► main.js projects:save-error 401
                           ─► A.signOut (clear state) ─► honest toast ─► /login
 ```
 
@@ -559,7 +559,7 @@ the repo is updated, what runtime systems still carry the old shape?*
 
 | Category | Items Found | Action Required |
 |----------|-------------|------------------|
-| Stored data | The live SQLite DB (`DATA_DIR/gr8r.db`): `sessions` (4 cols → 8), `users` (no 2FA cols → +3), new `login_challenges` table; and every stored `workspaces.doc` JSON that carries `sessions: []` / `tfa: false` | **Schema:** automatic on boot via `SCHEMA` + `ensureColumn` (additive, no rewrite). **Doc fields:** stripped from the *served* copy on first read, persisted clean on the next save — no data migration, no backfill. Covered by AUTH-02 + the extended second-boot test |
+| Stored data | The live SQLite DB (`DATA_DIR/projects.db`): `sessions` (4 cols → 8), `users` (no 2FA cols → +3), new `login_challenges` table; and every stored `workspaces.doc` JSON that carries `sessions: []` / `tfa: false` | **Schema:** automatic on boot via `SCHEMA` + `ensureColumn` (additive, no rewrite). **Doc fields:** stripped from the *served* copy on first read, persisted clean on the next save — no data migration, no backfill. Covered by AUTH-02 + the extended second-boot test |
 | Live service config | None. No external services hold auth state; the deployment is a single self-hosted process. No n8n/Datadog/Cloudflare configuration references sessions | None |
 | OS-registered state | None. No cron entries, launchd plists, systemd units or scheduled tasks reference the schema or the doc fields | None |
 | Secrets / env vars | No new env vars. D-26/D-27 introduce no configuration; `SESSION_DAYS` continues to govern session lifetime. (DEPLOY.md is not touched by this phase — see §Assumptions Log A1) | None. DEPLOY.md stays unchanged |
@@ -621,13 +621,13 @@ fails the reverse-parity test; adding a server code without both catalogue entri
 **Warning signs:** `npm test` failing on `reverse parity:` or `missing err.<code>`; red `prebuild`.
 
 ### P-E: The revoked browser's 401 only reaches the login screen if the call goes through `api.js`
-**What goes wrong:** The `gr8r:save-error` 401 branch (`src/main.js:70-78`) is dispatched only where the
+**What goes wrong:** The `projects:save-error` 401 branch (`src/main.js:70-78`) is dispatched only where the
 caller re-dispatches it. A revoked browser doing *anything* new — the sessions fetch, a revoke click — must
 route its 401 through the same teardown, or the user sees a hung tab, a raw error toast, or nothing at
 all.
-**Why it happens:** `IN.langSel` (`actions.js:2235-2237`) dispatches `gr8r:save-error` manually for its own
+**Why it happens:** `IN.langSel` (`actions.js:2235-2237`) dispatches `projects:save-error` manually for its own
 401; that dispatch is per-call-site, not automatic in `api.js call()`.
-**How to avoid:** Either (a) extend the 401 branch in `main.js` and dispatch `gr8r:save-error` from each
+**How to avoid:** Either (a) extend the 401 branch in `main.js` and dispatch `projects:save-error` from each
 new action, or (b) route the revoked-browser teardown through `A.signOut` (D-28 explicitly says "reuses the
 existing `signOut` action"). Prefer calling `A.signOut()` directly with an honest toast — it already clears
 `api.revision`, `clearLocalCache()`, `S.ui.conflict`, and resets `S.ui.auth = 'login'`.
@@ -978,7 +978,7 @@ hardcoded recovery codes), the doc-field literals in `emptyDoc()` (`server.js:77
 
 ```js
 // src/main.js:70-78 (verbatim) — the 401 branch that already lands the user on /login
-addEventListener('gr8r:save-error', e => {
+addEventListener('projects:save-error', e => {
   const { status, error } = e.detail || {};
   if (status === 401) {
     S.ui.auth = 'login';
@@ -1058,7 +1058,7 @@ custom `user-agent` header.
 ```js
 // test/migration.test.mjs — EXTEND, do not author a new file. Mirror the existing capture (:29-39) and
 // the existing absence assertions (:52-56), then prove the second boot is still a no-op (:188-196).
-legacyColumns = withDb(path.join(dataDir, 'gr8r.db'), db =>
+legacyColumns = withDb(path.join(dataDir, 'projects.db'), db =>
   Object.fromEntries(
     ['workspaces', 'memberships', 'invites', 'users', 'sessions'].map(table => [
       table,
@@ -1118,7 +1118,7 @@ test('the served document carries no sessions or tfa fields', async () => {
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | No new environment variables are required by this phase, so DEPLOY.md is not touched. Cited from CONTEXT.md's canonical refs ("DEPLOY.md — env block context (SESSION_DAYS etc.); no new env vars required by this phase's decisions"). I did **not** read DEPLOY.md in this session. | Runtime State Inventory | Low — if a knob were needed (e.g. a throttle-band override), DEPLOY.md would need one section added. No code path requires it |
-| A2 | The revoked-browser 401 for the *new* endpoints can be handled by calling `A.signOut()` directly, and the existing `gr8r:save-error` listener is not strictly needed for this phase. | Code Example 7, Pitfall P-E | Low-medium — both paths are available; picking `A.signOut()` avoids duplicating teardown logic. If a later phase adds more 401-emitting calls, a centralized listener may become preferable |
+| A2 | The revoked-browser 401 for the *new* endpoints can be handled by calling `A.signOut()` directly, and the existing `projects:save-error` listener is not strictly needed for this phase. | Code Example 7, Pitfall P-E | Low-medium — both paths are available; picking `A.signOut()` avoids duplicating teardown logic. If a later phase adds more 401-emitting calls, a centralized listener may become preferable |
 | A3 | `sessions` retains its implicit integer `rowid` because the DDL (`server.js:95-100`) declares no `WITHOUT ROWID`. | Code Example 5 | None for the recommended hash-prefix scheme; only relevant if the planner picks rowid as the opaque id |
 | A4 | Phase 14 does not need a new `sessions` index on `user_id`: per-user session counts are tiny and no query is expected to scan many users. | Pattern 1 | Low — if revocation were ever called for many users at once (admin revocation is explicitly deferred in REQUIREMENTS.md), an index would help. Adding one is harmless either way |
 | A5 | The i18n delta is small: `settings.sessions.lead`, `settings.sessions.thisDevice`, `settings.sessions.revokeAll`, `toast.sessionSignedOut`, `toast.signedOutOthers`, `palette.signOut` and `common.justNow` all already exist in both locales and are reusable. New keys are needed only for the `dev.*` device labels and the D-28 revocation toast. | Code Example 6 | Low-medium — if the planner wants a distinct per-row revoke toast rather than reusing `toast.sessionSignedOut`, one more key pair is needed. The gate is mechanical, not conceptual |
@@ -1287,7 +1287,7 @@ session-management phase — ASVS V3 is the center of gravity.
 - `src/actions/actions.js:199-210` (`A.go`), `:2081-2101` (`A.signOut`), `:1766-1793` (`refreshMembers`),
   `:2225-2240` (`IN.langSel` 401 dispatch), `:2371-2390` (`A.revokeSession`/`A.revokeAll`),
   `:2391-2427` (2FA stubs)
-- `src/main.js:70-78` (`gr8r:save-error` 401 branch), `src/data/seed.js:509-514` (seed doc fields)
+- `src/main.js:70-78` (`projects:save-error` 401 branch), `src/data/seed.js:509-514` (seed doc fields)
 - `src/locales/en.json:6,1446` and `fr.json:233-234,1249-1251` (reusable keys)
 - `test/helpers/server.mjs` (harness), `test/helpers/legacy-fixture.mjs:22-36,123,125` (legacy schema +
   doc), `test/migration.test.mjs:29-39,52-56,147-163,166-196` (capture, absence assertions, write-then-clean

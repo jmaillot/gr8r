@@ -268,7 +268,7 @@ Everything below was measured on the tree at `2026-10-22` (`grep -ro` over `src/
   `pluralRules` is a `Map<locale, Intl.PluralRules>` built once per locale (`:91-100`) — the
   date/number/relative-time formatters follow the same shape. `escHtml()` (`:77`) is the
   module's own copy of the escape table. `setLocale()` (`:47-67`) resolves an unknown code to
-  the base locale and announces the change with a `gr8r:locale` CustomEvent (`:63-65`).
+  the base locale and announces the change with a `projects:locale` CustomEvent (`:63-65`).
 - **`esc(s)` (`src/core/utils.js:10`)** — the escape helper every call site already uses for
   interpolated values; the extraction reuses it and adds nothing.
 - **`setDateFormat()` (`src/core/utils.js:46-48`)** and its caller
@@ -367,7 +367,7 @@ Everything below was measured on the tree at `2026-10-22` (`grep -ro` over `src/
   (`aria-label="${…}"`); `value="${…}"` appears 49 times, `title="${…}"` 10,
   `placeholder="${…}"` 2 and `data-tip="${…}"` 17. The two `textContent` sinks are
   `src/shell/render.js:191` (`document.title`) and `:194` (the ARIA live region).
-- **The `gr8r:locale` event** — `src/core/i18n.js:63-65` dispatches it; the renderer listens.
+- **The `projects:locale` event** — `src/core/i18n.js:63-65` dispatches it; the renderer listens.
   A format change does not need it: the formatters read the locale at call time.
 
 ### Measured `Intl` outputs (Node 24.21.0, ICU 78.3)

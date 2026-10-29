@@ -67,7 +67,7 @@ code evidence. No `package.json` change, no runtime code change, no migration in
 
 **TOTP secret encryption-at-rest**
 - **D-05:** **Encrypt.** `users.two_fa_secret` stores AES-256-GCM ciphertext under a key
-  derived from a host-provided `MASTER_KEY`. Stealing `/data/gr8r.db` alone must not yield
+  derived from a host-provided `MASTER_KEY`. Stealing `/data/projects.db` alone must not yield
   live TOTP secrets. One-way decision.
 - **D-06:** Fail-closed on missing/undecryptable key: 2FA endpoints answer **503 with an
   admin-facing message naming the missing variable**; enrollment is blocked so no
@@ -159,7 +159,7 @@ decisions commit later phases to.
 | Technology | Purpose | When to Use |
 |------------|---------|-------------|
 | `openssl rand -hex 32` | `MASTER_KEY` generation procedure (D-07) | Documented in DEPLOY.md; openssl 3.5.5 present [VERIFIED: local probe] |
-| DEPLOY.md env block | `MASTER_KEY` documentation landing spot | Lines 142–157 hold the existing `GR8R_*` dotenv block [VERIFIED: DEPLOY.md:141-158] |
+| DEPLOY.md env block | `MASTER_KEY` documentation landing spot | Lines 142–157 hold the existing `PROJECTS_*` dotenv block [VERIFIED: DEPLOY.md:141-158] |
 
 ### Alternatives Considered
 | Instead of | Could Use | Tradeoff |
@@ -233,7 +233,7 @@ paper):
 └──────────────────────────────────────────────────────────────────────────────┘
                            │
                            ▼
-                 node:sqlite /data/gr8r.db
+                 node:sqlite /data/projects.db
    users(+two_fa_*, recovery codes) · sessions (pure) · login_challenges
 ```
 
@@ -366,7 +366,7 @@ the server with a fixed dev key.
 | Stored data | Workspace JSON doc fields `sessions: []` and `tfa: false` in every workspace row (`emptyDoc()` server.js:774-775; seed data seed.js:509-514) — tenant-shared, client-mutable | Phase 14: remove doc fields (`emptyDoc()`, `seed.js`) + real per-user tables (AUTH-02); removal scoped to Phase 14 with byte-identical second-boot guarantee |
 | Live service config | None — no external services hold auth state (single-process node:sqlite app) | None |
 | OS-registered state | None — no cron/launchd/systemd registrations involved [VERIFIED: no scheduler references; app is `node server.js` in Docker per DEPLOY.md] | None |
-| Secrets/env vars | New env var `MASTER_KEY` (32-byte hex, D-07) documented at DEPLOY.md env block lines 141-158 (existing block: `GR8R_HOST`, `APP_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, `WORKSPACE_NAME`, `WORKSPACE_SLUG`, `PUID`, `PGID`, `ALLOW_SIGNUP`, `SEED_DATA`, `SESSION_DAYS`, `SECURE_COOKIE`, `TRUST_PROXY`, `MAX_BODY_BYTES`, `MAX_UPLOAD_MB` — verbatim, quoted this session) | Phase 16 lands DEPLOY.md documentation + D-08 rotation consequence |
+| Secrets/env vars | New env var `MASTER_KEY` (32-byte hex, D-07) documented at DEPLOY.md env block lines 141-158 (existing block: `PROJECTS_HOST`, `APP_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, `WORKSPACE_NAME`, `WORKSPACE_SLUG`, `PUID`, `PGID`, `ALLOW_SIGNUP`, `SEED_DATA`, `SESSION_DAYS`, `SECURE_COOKIE`, `TRUST_PROXY`, `MAX_BODY_BYTES`, `MAX_UPLOAD_MB` — verbatim, quoted this session) | Phase 16 lands DEPLOY.md documentation + D-08 rotation consequence |
 | Build artifacts | None — no compiled/stale artifacts; zero-dep Vite build | None |
 
 ## Common Pitfalls
@@ -446,7 +446,7 @@ Mirrored in seed data [VERIFIED: src/data/seed.js:509-514]:
 ```js
     sessions: [
       { id: 'se1', dev: 'MacBook Pro · Chrome', loc: 'San Francisco, US', at: 'Active now', cur: true },
-      { id: 'se2', dev: 'iPhone 15 · Gr8r app', loc: 'San Francisco, US', at: '2 hours ago' },
+      { id: 'se2', dev: 'iPhone 15 · Projects app', loc: 'San Francisco, US', at: '2 hours ago' },
       { id: 'se3', dev: 'Windows · Edge', loc: 'Oakland, US', at: 'Sep 12' },
     ],
     tfa: false,
@@ -524,7 +524,7 @@ test('a second boot is a no-op and both accounts keep access', async () => {
 ```
 
 **9. DEPLOY.md env block — `MASTER_KEY` documentation lands beside this**
-[VERIFIED: DEPLOY.md:141-158] (verbatim keys): `GR8R_HOST`, `APP_URL`, `ADMIN_EMAIL`,
+[VERIFIED: DEPLOY.md:141-158] (verbatim keys): `PROJECTS_HOST`, `APP_URL`, `ADMIN_EMAIL`,
 `ADMIN_PASSWORD`, `ADMIN_NAME`, `WORKSPACE_NAME`, `WORKSPACE_SLUG`, `PUID`, `PGID`,
 `ALLOW_SIGNUP`, `SEED_DATA`, `SESSION_DAYS`, `SECURE_COOKIE`, `TRUST_PROXY`,
 `MAX_BODY_BYTES`, `MAX_UPLOAD_MB`.
@@ -536,7 +536,7 @@ test('a second boot is a no-op and both accounts keep access', async () => {
 
 [CITED: Google Authenticator KeyUriFormat wiki, via .planning/research/PITFALLS.md Pitfall 7]
 Build with `new URL()` + `searchParams`: label `<issuer>:<accountName>` percent-encoded,
-`secret` uppercase base32, `issuer=Gr8r`, `algorithm=SHA1`, `digits=6`, `period=30` — all
+`secret` uppercase base32, `issuer=Projects`, `algorithm=SHA1`, `digits=6`, `period=30` — all
 explicit (Authy refuses/warns on absent params). Fixture-vector test per D-17.
 
 ## State of the Art

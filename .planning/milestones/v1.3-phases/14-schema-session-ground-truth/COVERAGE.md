@@ -1,9 +1,9 @@
 # API Coverage Declaration — Phase 14 gap closure (14-05)
 
 `No external API integration:` The api-coverage detector fired on false positives — it matched the
-phrase "client API methods" referring to gr8r's **own internal REST client** (`src/core/api.js`
-methods against gr8r's built-in server). The D-28 gap-closure plan (14-05) wires client-side 401
-teardown between existing gr8r modules (`api.js` → `actions.js` → `main.js`); it adds no external
+phrase "client API methods" referring to projects's **own internal REST client** (`src/core/api.js`
+methods against projects's built-in server). The D-28 gap-closure plan (14-05) wires client-side 401
+teardown between existing projects modules (`api.js` → `actions.js` → `main.js`); it adds no external
 API, SDK, or service integration, no new packages, and no new network endpoints.
 
 ---

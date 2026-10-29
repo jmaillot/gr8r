@@ -18,7 +18,7 @@ Out of scope: choosing the user's language per account, persisting the choice, a
 ## Implementation Decisions
 
 ### French reachability
-- **D-01:** French becomes reachable now through the existing selector, not through phase 8's persistence work. `applyPrefs()` maps the stored `prefs.lang` display label to a locale code and calls `setLocale()`; the `gr8r:locale` event re-renders. This mapping is explicitly throwaway — phase 8 replaces the storage format, the selector and this mapping. — **Reversibility:** reversible — phase 8 deletes the mapping and the test that pins it.
+- **D-01:** French becomes reachable now through the existing selector, not through phase 8's persistence work. `applyPrefs()` maps the stored `prefs.lang` display label to a locale code and calls `setLocale()`; the `projects:locale` event re-renders. This mapping is explicitly throwaway — phase 8 replaces the storage format, the selector and this mapping. — **Reversibility:** reversible — phase 8 deletes the mapping and the test that pins it.
 - **D-02:** `setLocale('fr')` must also set `document.documentElement.lang` to `fr`. `main.js` currently hardcodes `lang="en"`.
 - **D-03:** Unknown or unsupported stored values resolve to `en`, matching the existing `setLocale()` contract. The selector's other four labels (English UK, Deutsch, Español, 日本語) keep resolving to `en` this phase.
 
@@ -28,7 +28,7 @@ Out of scope: choosing the user's language per account, persisting the choice, a
 - **D-06:** Stored vocabulary is displayed, never rewritten. English ids (`todo`, `high`, `Owner`, `Paid`) remain the stored and wire values; `t()` supplies the label. This extends the existing phase-6 pattern in `src/core/constants.js` and `store.roleLabel`.
 
 ### Catalogue completeness
-- **D-07:** A failing completeness test enforces en→fr parity: every English key except `contract.*` must exist in `fr.json` with a non-empty string. Plural objects must carry at least `one` and `other`; CLDR categories beyond that are allowed. Values legitimately identical in both languages (`Gr8r Studio`, `Ctrl`, product names) must be present, never omitted. This is additive to `test/catalogue.test.mjs`, not a replacement.
+- **D-07:** A failing completeness test enforces en→fr parity: every English key except `contract.*` must exist in `fr.json` with a non-empty string. Plural objects must carry at least `one` and `other`; CLDR categories beyond that are allowed. Values legitimately identical in both languages (`Projects Studio`, `Ctrl`, product names) must be present, never omitted. This is additive to `test/catalogue.test.mjs`, not a replacement.
 - **D-08:** Translation workflow: a terminology glossary is written first (`docs/i18n-fr-glossary.md`), then namespaces are translated in batches — `page` 512, `settings` 196, `act` 144, `a11y` 132, `toast` 95, `modal` 67, `err` 64, remaining ~236 — each batch gated by the completeness and typography tests.
 - **D-09:** French register is `vous` (PROJECT.md D9), sentence-case headings, no middle-dot gender forms (D10), French-France conventions: lowercase months and weekdays, `1er`/`1re`/`2e`, decimal comma, narrow-NBSP digit grouping.
 

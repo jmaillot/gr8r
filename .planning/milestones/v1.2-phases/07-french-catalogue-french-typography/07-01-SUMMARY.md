@@ -9,11 +9,11 @@
 1. **The selector path end to end (Task 1).** `src/core/theme.js` resolves the stored
    `prefs.lang` display label through the throwaway `LANG_TO_LOCALE` map (`Français → fr`,
    anything else → `en`) and calls `setLocale()` only when the code differs — the loop guard,
-   because `setLocale` dispatches `gr8r:locale` unconditionally and `applyPrefs` runs at the top
+   because `setLocale` dispatches `projects:locale` unconditionally and `applyPrefs` runs at the top
    of every render. `src/core/i18n.js`'s `setLocale()` now assigns
    `document.documentElement.lang` inside the existing document guard (D-02), and `src/main.js`
    dropped its hardcoded `lang="en"` and registers one boot listener that re-renders on
-   `gr8r:locale`. The six seed values in `src/locales/fr.json` are typography-compliant:
+   `projects:locale`. The six seed values in `src/locales/fr.json` are typography-compliant:
    `greeting.hello` carries U+202F before `!`, `task.count.many` is `de {n} tâches`, and every
    value is NFC.
 

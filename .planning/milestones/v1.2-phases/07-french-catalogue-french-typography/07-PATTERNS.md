@@ -87,7 +87,7 @@ const LANG_TO_LOCALE = {
 };
 // inside applyPrefs():
 const code = LANG_TO_LOCALE[p.lang] || 'en';
-if (getLocale() !== code) setLocale(code); // gr8r:locale event re-renders
+if (getLocale() !== code) setLocale(code); // projects:locale event re-renders
 ```
 Constraint (D-03): the four other labels (`English (UK)`, `Deutsch`, `Español`, `日本語`) resolve to `en` — they simply do not appear in the map, so the `|| 'en'` default covers them.
 
@@ -320,7 +320,7 @@ function lintAll() {
 }
 ```
 
-**The completeness rule to add** (D-07): a NEW rule `french-completeness` — every English key except `contract.*` must exist in fr.json with a non-empty string. The existing `lintAgainstBase` only checks fr→en direction (fr keys must exist in en); add the reverse: en keys missing from fr. Plural objects need at least `one` + `other` (`CLDR_CATEGORIES` + `plural-other` rule at lines 116-118 already validates shape; completeness only requires presence of the key). Identical values (`Gr8r Studio`, `Ctrl`) are PRESENT keys, never omissions — the rule checks existence, not difference.
+**The completeness rule to add** (D-07): a NEW rule `french-completeness` — every English key except `contract.*` must exist in fr.json with a non-empty string. The existing `lintAgainstBase` only checks fr→en direction (fr keys must exist in en); add the reverse: en keys missing from fr. Plural objects need at least `one` + `other` (`CLDR_CATEGORIES` + `plural-other` rule at lines 116-118 already validates shape; completeness only requires presence of the key). Identical values (`Projects Studio`, `Ctrl`) are PRESENT keys, never omissions — the rule checks existence, not difference.
 
 **Violation-reporting style to copy** (`test/catalogue.test.mjs:49-55`):
 ```javascript

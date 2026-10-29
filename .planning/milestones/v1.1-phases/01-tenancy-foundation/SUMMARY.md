@@ -14,7 +14,7 @@ a slug and authorised against the caller's role in that workspace.
   `memberships.member_id`, `invites.workspace_id`. Added through `pragma table_info` guards so an
   existing database upgrades without a rebuild.
 - `migrateTenancy()`: writes a `vacuum into` backup
-  (`DATA_DIR/gr8r-premultitenant-<timestamp>.db`) before the first write, derives the slug from
+  (`DATA_DIR/projects-premultitenant-<timestamp>.db`) before the first write, derives the slug from
   the old `data.ws.url` (falling back to the name), keeps the workspace colour, links member
   profiles to accounts via `userId` and `memberships.member_id`, moves invites onto their
   workspace, drops the demo `data.workspaces` array and nulls `data.me`. Idempotent.

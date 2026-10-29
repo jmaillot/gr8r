@@ -69,7 +69,7 @@
 
 | Option | Description | Selected |
 |--------|-------------|----------|
-| email as account label | otpauth://totp/Gr8r:<email>?…; unique per user | ✓ |
+| email as account label | otpauth://totp/Projects:<email>?…; unique per user | ✓ |
 | Workspace slug as label | Colliding labels for multi-workspace users | |
 
 | Option | Description | Selected |

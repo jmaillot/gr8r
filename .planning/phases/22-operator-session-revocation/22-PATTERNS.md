@@ -166,9 +166,9 @@ let server2;
 let tempDir2;
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-disable-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-disable-'));
   // D-10: a throwaway MASTER_KEY so production and tests exercise the same envelope path.
-  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-tfa-disable-key' } });
+  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-tfa-disable-key' } });
   ...
 });
 after(async () => { await server?.stop(); await server2?.stop(); });

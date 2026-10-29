@@ -49,13 +49,13 @@ retaining a hidden project id, and the scrub is re-applied on every save.
 **Files modified:** `server.js`
 **Commit:** `d17e262`
 **Applied fix:** `parseCookies` wraps `decodeURIComponent` in a `try`/`catch` and skips a value
-that cannot be decoded, so a corrupted `gr8r_session` cookie is treated as unauthenticated.
+that cannot be decoded, so a corrupted `projects_session` cookie is treated as unauthenticated.
 
 ### WR-03: An ambient `DB_PATH` silently redirects the test suites to a real database
 
 **Files modified:** `test/helpers/server.mjs`, `e2e/server.mjs`, `test/harness.test.mjs`
 **Commit:** `f52e8df`
-**Applied fix:** Both harnesses now set `DB_PATH` to `<temp data dir>/gr8r.db` after the
+**Applied fix:** Both harnesses now set `DB_PATH` to `<temp data dir>/projects.db` after the
 environment spread, so an exported or caller-supplied `DB_PATH` cannot redirect them. Added
 `test/harness.test.mjs`, which starts a server with an ambient `DB_PATH` and asserts the database
 is created inside the harness data directory and the ambient path is untouched.
@@ -96,10 +96,10 @@ invalidating every pending link at once.
 
 **Files modified:** `docker-compose.yml`, `DEPLOY.md`
 **Commit:** `ff25e79`
-**Applied fix:** The compose image is now `gr8r-studio:1.1.0`, and the restore procedure references
+**Applied fix:** The compose image is now `projects-studio:1.1.0`, and the restore procedure references
 the same tag. The upgrade records the running container's image id
-(`docker inspect --format '{{.Image}}' gr8r-studio`) before rebuilding; the rollback re-tags that
-id as `gr8r-studio:rollback`, points Compose at it for the rollback and reverts the compose line
+(`docker inspect --format '{{.Image}}' projects-studio`) before rebuilding; the rollback re-tags that
+id as `projects-studio:rollback`, points Compose at it for the rollback and reverts the compose line
 afterwards.
 
 ### WR-09: The command palette crashes on a workspace document without `recentSearches`

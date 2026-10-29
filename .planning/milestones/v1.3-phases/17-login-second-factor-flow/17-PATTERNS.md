@@ -198,8 +198,8 @@ let server;
 let tempDir;
 
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-'));
-  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } });
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-'));
+  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-tfa-suite-key' } });
 });
 after(async () => { await server?.stop(); fs.rmSync(tempDir, { recursive: true, force: true }); ... });
 

@@ -4,7 +4,7 @@ plan: 01
 subsystem: boot-migration
 tags: [totp, encryption, migration, sqlite, enc-01]
 requires: [master-key-envelope (D-05), migrateTenancy boot sequence]
-provides: [migrateTotpEncryption(), gr8r-preenvelope-* backup, ENC-01 test coverage]
+provides: [migrateTotpEncryption(), projects-preenvelope-* backup, ENC-01 test coverage]
 affects: [server.js bootstrap, test/migration.test.mjs]
 tech-stack:
   added: []
@@ -41,7 +41,7 @@ Boot-time migration wraps every legacy plaintext `users.two_fa_secret` row into 
 - **`migrateTotpEncryption()`** (server.js, sibling of `migrateTenancy()`, called from `bootstrap()` right after `migrateTenancy()`):
   - D-83 trigger: `two_fa_secret is not null and != '' and not like 'v1:%'` — zero rows → return before any I/O (no backup file, no writes).
   - D-73: missing MASTER_KEY with pending rows → loud `console.warn` naming the deferred count, rows untouched, boot proceeds.
-  - D-74: `wal_checkpoint(truncate)` + `vacuum into gr8r-preenvelope-<stamp>.db` under DATA_DIR (quote-escaped, migrateTenancy recipe); on failure `console.error` + return — no backup = no mutation.
+  - D-74: `wal_checkpoint(truncate)` + `vacuum into projects-preenvelope-<stamp>.db` under DATA_DIR (quote-escaped, migrateTenancy recipe); on failure `console.error` + return — no backup = no mutation.
   - D-75: transaction loop encrypts eligible rows with the existing `encryptTotpSecret()`; per-row re-check skips blank/whitespace, non-`/^[A-Z2-7]{32}$/` (logged), and `v1:` values — defense in depth against double-encryption.
   - D-76: one console summary line (migrated / blank skipped / non-base32 skipped / already encrypted). Console only — no UI.
 - **`test/migration.test.mjs`** — 4 new ENC-01 tests (22 total in file): happy path + second-boot no-op, MASTER_KEY defer, backup-failure skip (real read-only DATA_DIR, no mocks), edge rows.

@@ -162,7 +162,7 @@ call the shared helper instead of duplicating the map/filter block.
 **File:** `server.js:965-973` (`parseCookies`), reached from `server.js:987` (`currentUser`)
 
 **Issue:** `decodeURIComponent(part.slice(i + 1).trim())` throws `URIError` on malformed percent-encoding,
-and `parseCookies` has no guard. A request with `Cookie: gr8r_session=%` therefore throws inside
+and `parseCookies` has no guard. A request with `Cookie: projects_session=%` therefore throws inside
 `currentUser`, which is called by `requireUser` on every authenticated route. Verified against a live
 server: `GET /api/auth/me` and `GET /api/workspaces/acme` both returned **500** with that header.
 Any client with a truncated or corrupted cookie (proxies, stale browser data, scanners) sees a server
@@ -199,7 +199,7 @@ function parseCookies(header = '') {
 `{ ...process.env, ...BASE_ENV, ... }`. `server.js:53` resolves `DB_PATH` *before* falling back to
 `DATA_DIR`, so a developer (or CI runner) with `DB_PATH` exported gets a server that ignores the
 harness's temporary directory and opens the exported database instead. The harness then reports
-`dbPath: path.join(dir, 'gr8r.db')` for a file that was never created, and every `withDb` assertion
+`dbPath: path.join(dir, 'projects.db')` for a file that was never created, and every `withDb` assertion
 reads an empty database — or worse, the suite mutates a developer's real workspace. Verified: with
 `DB_PATH` exported, `startServer()` produced no database in its temp `dataDir` and wrote to the
 ambient path.
@@ -212,12 +212,12 @@ env: {
   ...BASE_ENV,
   PORT: String(port),
   DATA_DIR: dir,
-  DB_PATH: path.join(dir, 'gr8r.db'), // DB_PATH wins over DATA_DIR in server.js
+  DB_PATH: path.join(dir, 'projects.db'), // DB_PATH wins over DATA_DIR in server.js
   ...env,
 },
 ```
 
-Apply the same change in `e2e/server.mjs` (add `DB_PATH: path.join(dataDir, 'gr8r.db')`). If callers
+Apply the same change in `e2e/server.mjs` (add `DB_PATH: path.join(dataDir, 'projects.db')`). If callers
 must be able to override it, at least assert that the resolved `DB_PATH` starts with the temp dir
 before returning.
 
@@ -282,7 +282,7 @@ container:
 
 - `WORKSPACE_SLUG` (`.env.example:24`, `DEPLOY.md:148`) — the compose `environment` block forwards
   `WORKSPACE_NAME` but not `WORKSPACE_SLUG`, so the documented first-boot URL is silently ignored and
-  the slug is derived from the name. An operator who sets `WORKSPACE_SLUG=studio` gets `/w/gr8r-studio`.
+  the slug is derived from the name. An operator who sets `WORKSPACE_SLUG=studio` gets `/w/projects-studio`.
 - `MAX_BODY_BYTES` (`.env.example:83-85`, `DEPLOY.md:168-170`) — not forwarded at all, so the
   documented "raise it if a workspace grows past 8 MiB" advice cannot be followed without editing the
   compose file.
@@ -329,26 +329,26 @@ emergency procedure ("To invalidate *every* pending link at once…"), and menti
 **File:** `docker-compose.yml:4`, `DEPLOY.md:347-363`, `DEPLOY.md:505`, `package.json:3`
 
 **Issue:** The release is `1.1.0` (`package.json`, `CHANGELOG.md:8`, `DEPLOY.md:326`), but the compose
-service pins `image: gr8r-studio:1.0.0`. Two consequences:
+service pins `image: projects-studio:1.0.0`. Two consequences:
 
 1. The upgrade procedure at `DEPLOY.md:347-363` tells the operator to "note the tag you are replacing"
    and later "redeploy the previous image tag" — but `docker compose up -d --build` rebuilds *into the
    same tag* (`1.0.0`). The previous image is untagged, and `1.0.0` now points at the new build, so
    there is no previous tag to redeploy.
-2. `DEPLOY.md:505` (restore) hard-codes `gr8r-studio:1.0.0`, so the documented restore path depends on
+2. `DEPLOY.md:505` (restore) hard-codes `projects-studio:1.0.0`, so the documented restore path depends on
    the drifted tag rather than the running version.
 
 The result is that the one recovery path the phase ships (a pre-migration backup plus a rollback) is
 documented but not executable as written.
 
-**Fix:** Tag the release correctly (`image: gr8r-studio:1.1.0`) and make rollback identity-based:
+**Fix:** Tag the release correctly (`image: projects-studio:1.1.0`) and make rollback identity-based:
 
 ```sh
 # before upgrading
-docker image inspect --format '{{.Id}}' gr8r-studio:1.1.0 > /tmp/previous-image-id
+docker image inspect --format '{{.Id}}' projects-studio:1.1.0 > /tmp/previous-image-id
 # rollback
-docker tag "$(cat /tmp/previous-image-id)" gr8r-studio:rollback
-# set image: gr8r-studio:rollback temporarily, or docker run that id
+docker tag "$(cat /tmp/previous-image-id)" projects-studio:rollback
+# set image: projects-studio:rollback temporarily, or docker run that id
 ```
 
 At minimum, replace `1.0.0` with the current version in both compose and DEPLOY.md and change the

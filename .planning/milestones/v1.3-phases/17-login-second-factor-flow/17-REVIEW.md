@@ -42,7 +42,7 @@ Reviewed the Phase 17 second-factor login implementation (server.js login branch
 
 **Threat mitigations — all verified present in code:**
 - **T-17-01** (code brute-force): throttle `2fa-login|ip|email` 5/15min (server.js:1610) + 3-wrong-codes challenge death (1626–1631) + D-03 budget carry-over — `attempts.delete` exists at exactly two success sites (1402, 1688), the pending branch never clears; `tooMany` increments before verify inside the transaction (D-67 anti-race).
-- **T-17-02** (challenge cookie as identity): `currentUser()` (1248–1261) reads only `gr8r_session`; the D-71 matrix test proves 401-anonymity across requireUser routes, file GET, PATCH me, and `{ user: null }` on the probe.
+- **T-17-02** (challenge cookie as identity): `currentUser()` (1248–1261) reads only `projects_session`; the D-71 matrix test proves 401-anonymity across requireUser routes, file GET, PATCH me, and `{ user: null }` on the probe.
 - **T-17-03** (CSRF): `sameOrigin(req)` first at server.js:1599, before body read and throttle.
 - **T-17-04** (failure oracle): one generic `invalidTfaCode` for wrong-TOTP and dead-recovery (1677); empty codes rejected pre-transaction without consuming state.
 - **T-17-05** (429 timing disclosure): `grep -c "Try again in 15 minutes" server.js` = 0; all 429s carry generic copy + catalogued `tooManyAttempts`; `err.tooManyLoginAttempts` removed from both catalogues.

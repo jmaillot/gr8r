@@ -1,6 +1,6 @@
 # Project Research Summary
 
-**Project:** Gr8r Studio — Milestone v1.4 "Auth Completion"
+**Project:** Projects Studio — Milestone v1.4 "Auth Completion"
 **Domain:** Self-hosted workspace/PM app (single-file Node server, node:sqlite, zero runtime dependencies) — auth lifecycle gap-closure
 **Researched:** 2026-10-28
 **Confidence:** HIGH (codebase ground truth verified by direct code inspection; standards claims from OWASP/NIST knowledge, MEDIUM)
@@ -11,7 +11,7 @@ The single most important finding across all four research files is a **ground-t
 
 The zero-runtime-dependency constraint holds without exception — every feature reduces to `node:crypto`, `node:sqlite` transactions, and new route handlers reusing existing patterns (step-up helper, throttle budgets, central 401 teardown, `ensureColumn` migrations). No new libraries, no new tables, no new schema except possibly one additive operator-flag column. The stack research verdict: **nothing to install; reuse everything verbatim.**
 
-The two real risks are (a) **the admin privilege-model decision** — Gr8r is multi-tenant with workspace-scoped roles and no instance-admin concept; gating cross-user revocation on the existing `isAdminUser()` would let any workspace admin log out any user on the instance, breaking v1.1 tenancy isolation. This is a discuss-phase decision (instance-operator vs workspace-admin, options: `ADMIN_EMAIL`-derived gate, env-var style, or an `is_instance_admin` flag column) and **must be settled before planning Phase 4**. (b) **MASTER_KEY becomes load-bearing**: losing it bricks 2FA for all users; DEPLOY.md must document the loss runbook.
+The two real risks are (a) **the admin privilege-model decision** — Projects is multi-tenant with workspace-scoped roles and no instance-admin concept; gating cross-user revocation on the existing `isAdminUser()` would let any workspace admin log out any user on the instance, breaking v1.1 tenancy isolation. This is a discuss-phase decision (instance-operator vs workspace-admin, options: `ADMIN_EMAIL`-derived gate, env-var style, or an `is_instance_admin` flag column) and **must be settled before planning Phase 4**. (b) **MASTER_KEY becomes load-bearing**: losing it bricks 2FA for all users; DEPLOY.md must document the loss runbook.
 
 ## Key Findings
 

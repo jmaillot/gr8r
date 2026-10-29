@@ -230,7 +230,7 @@ Each task was committed atomically:
 
 **2. [Rule 1 - Bug] The scanner reported CSS values, SVG paths and markup fragments as interface text**
 - **Found during:** Task 1 (the first scan over the live tree)
-- **Issue:** `'color:var(--red)'`, `'var(--text-2)'` and the 4 KB Gr8r wordmark path were reported as display text, and the HTML fragment `'data-tip="Unassigned"'` was reported as a label instead of as an attribute.
+- **Issue:** `'color:var(--red)'`, `'var(--text-2)'` and the 4 KB Projects wordmark path were reported as display text, and the HTML fragment `'data-tip="Unassigned"'` was reported as a label instead of as an attribute.
 - **Fix:** Added the CSS-value and SVG-path guards to `isMachineLexical`, and a string literal that holds MARKUP is now scanned as HTML, so the text nodes and the display attributes inside it are the findings.
 - **Files modified:** `scripts/i18n-scan.mjs`
 - **Verification:** `test/i18n-scan.test.mjs` — the `MACHINE_INSTANCES` excerpts report nothing.

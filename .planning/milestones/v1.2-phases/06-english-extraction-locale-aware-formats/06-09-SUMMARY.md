@@ -15,7 +15,7 @@ requires:
 provides:
   - The three heaviest page modules carry no user-visible literal — src/pages/auth.js (sign-in, sign-up, join, password, verify, the six-step onboarding wizard), src/pages/design-system.js (the token gallery, the component gallery, the system states) and src/pages/settings.js (all eighteen sections) read the catalogue; the scan reports none of them (551 findings swept)
   - The machine identifiers are untouched: the onboarding step keys (data-k/data-v, the stored team-size values), the theme keys (light/dark/system), the token CSS variables (--bg…--red), the state keys, the tab keys, the 87 data-a/data-v sites of the three files
-  - The demo values stay data: the Tanjim Islam signup placeholder, the example e-mail placeholders, 'Homepage wireframes', 'alex@', 'hello@gr8rstudio.com', '14:30'
+  - The demo values stay data: the Tanjim Islam signup placeholder, the example e-mail placeholders, 'Homepage wireframes', 'alex@', 'hello@projectsstudio.com', '14:30'
   - The settings rows keep their computed date and time previews — formatDate(SAMPLE_DATE)/formatTime(SAMPLE_TIME) render them, never the catalogue; the stored time-zone labels and language names stay byte-identical (STORED_VALUES)
   - 482 new catalogue values (719 → 1201 keys) under page.auth.* / page.design.* / page.states.* / settings.* / a11y.auth.* / a11y.design.* / a11y.settings.* / common.*
   - Scanner machine rules extended: ruleAttribute honors VALUE_EXCLUSIONS (a stored or demo value is data wherever it appears) and the stored plan tier ids (Free/Team/Business) join STORED_VALUES

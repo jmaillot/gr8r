@@ -20,7 +20,7 @@ awaiting: none
 
 ### 1. First CI run passes both jobs
 expected: Both `build` and `e2e` GitHub Actions jobs pass on Node 24; Chromium is installed with system dependencies; traces/screenshots are uploaded only on failure.
-result: pass — GitHub Actions run [39674830039](https://github.com/jmaillot/gr8r/actions/runs/39674830039) on `main`: `build` passed in 15s (npm ci, lint, format check, build, `npm test`), `e2e` passed in 30s (build, `npx playwright install --with-deps chromium`, `npm run e2e`); the upload-artifact step was skipped because the run was green.
+result: pass — GitHub Actions run [39674830039](https://github.com/jmaillot/projects/actions/runs/39674830039) on `main`: `build` passed in 15s (npm ci, lint, format check, build, `npm test`), `e2e` passed in 30s (build, `npx playwright install --with-deps chromium`, `npm run e2e`); the upload-artifact step was skipped because the run was green.
 
 ## Summary
 

@@ -4,7 +4,7 @@ plan: 01
 subsystem: auth-server
 tags: [2fa, totp, login, throttle, security, tfa-05]
 requires: [login_challenges DDL (phase 14), totp.js verify/burn primitives (phase 16), recovery_codes (phase 16)]
-provides: [POST /api/auth/tfa/login, pending2fa login branch, gr8r_tfa_challenge cookie, maskEmail(), login_challenges sweeper, D-13 generic lockout copy, err.invalidTfaCode/err.challengeExpired locale keys, test/tfa-login.test.mjs (9 tests), loginTfa() test helper]
+provides: [POST /api/auth/tfa/login, pending2fa login branch, projects_tfa_challenge cookie, maskEmail(), login_challenges sweeper, D-13 generic lockout copy, err.invalidTfaCode/err.challengeExpired locale keys, test/tfa-login.test.mjs (9 tests), loginTfa() test helper]
 affects: [17-02 (client 2FA screen consumes pending2fa/maskedEmail/recoveryRemaining), phase 18 e2e (consumes the 401-matrix)]
 tech-stack:
   added: []
@@ -13,7 +13,7 @@ key-files:
   created: [test/tfa-login.test.mjs]
   modified: [server.js, test/helpers/server.mjs, test/tfa-enrollment.test.mjs, test/error-codes.test.mjs, test/i18n-core-features.test.mjs, test/dependencies.test.mjs, src/locales/en.json, src/locales/fr.json]
 decisions:
-  - Challenge cookie gr8r_tfa_challenge is separate from the session cookie; requireUser()/currentUser() untouched (structural anonymity, D-71 matrix proves it)
+  - Challenge cookie projects_tfa_challenge is separate from the session cookie; requireUser()/currentUser() untouched (structural anonymity, D-71 matrix proves it)
   - Verify route derives the throttle email from the challenge row's user, never a body-carried email
   - One generic invalidTfaCode for wrong-TOTP and dead-recovery shapes (D-65); challengeExpired on death/expiry with the cookie cleared
   - Burn + challenge-delete + session mint are one transaction; recoveryRemaining computed inside it
@@ -33,7 +33,7 @@ plan_head_after: 48b4eaa
 
 # Phase 17 Plan 01: Login Second-Factor Flow (server) Summary
 
-**One-liner:** password-correct logins on 2FA accounts now stop at an inert 5-minute challenge (`pending2fa` + separate `gr8r_tfa_challenge` cookie); only a live TOTP or a burn-once recovery code on the new `POST /api/auth/tfa/login` mints the session — atomically, inside one shared throttle budget, with generic lockout copy.
+**One-liner:** password-correct logins on 2FA accounts now stop at an inert 5-minute challenge (`pending2fa` + separate `projects_tfa_challenge` cookie); only a live TOTP or a burn-once recovery code on the new `POST /api/auth/tfa/login` mints the session — atomically, inside one shared throttle budget, with generic lockout copy.
 
 ## What Was Built
 
@@ -60,7 +60,7 @@ plan_head_after: 48b4eaa
 - **Commit:** 46c418e
 
 **3. [Deviation - assertion shape] D-71 matrix endpoints assert the routes' pinned contracts**
-- Invite accept with a challenge cookie answers **409 `accountExistsSignIn`** (not 401): the invite flow legitimately serves anonymous account creation; the structural claim is proven by the *absence of any session mint* (no `gr8r_session` Set-Cookie, challenge row untouched).
+- Invite accept with a challenge cookie answers **409 `accountExistsSignIn`** (not 401): the invite flow legitimately serves anonymous account creation; the structural claim is proven by the *absence of any session mint* (no `projects_session` Set-Cookie, challenge row untouched).
 - `/w/:slug/file/:id` asserts the JSON 401 via a fetch-style `Sec-Fetch-Dest` (anonymous *document* navigations 302-redirect to `/login` by pinned T-12-13 design).
 - `grep -c "attempts.delete" server.js` is **3**, not 2: the two success-clear sites plus `tooMany()`'s pre-existing map-eviction line (line 1297), which is not a success-clear.
 

@@ -32,9 +32,9 @@ The phase implementation is solid. The locked decisions are honored: D-73 (MASTE
 
 **Severity:** major (blocker-adjacent for the D-83 must-have)
 **File:** `server.js:1004–1005, 1022–1031`
-**Issue:** The D-83 trigger counts rows where `two_fa_secret is not null and != '' and not like 'v1:%'`, but the D-75 per-row rules skip whitespace-only and non-base32 values forever. For a database containing one such row (e.g. `'  '` or `'not-a-base32!!'`), every boot: trigger > 0 → (MASTER_KEY set) → `wal_checkpoint` + `vacuum into gr8r-preenvelope-<stamp>.db` → transaction that skips the row without migrating it. Consequences:
+**Issue:** The D-83 trigger counts rows where `two_fa_secret is not null and != '' and not like 'v1:%'`, but the D-75 per-row rules skip whitespace-only and non-base32 values forever. For a database containing one such row (e.g. `'  '` or `'not-a-base32!!'`), every boot: trigger > 0 → (MASTER_KEY set) → `wal_checkpoint` + `vacuum into projects-preenvelope-<stamp>.db` → transaction that skips the row without migrating it. Consequences:
 
-1. A new `gr8r-preenvelope-*.db` (containing **plaintext** TOTP secrets of all other users at that moment) is created on every boot — unbounded file accumulation in DATA_DIR, and repeated plaintext-at-rest snapshots, which is exactly what ENC-01 exists to eliminate.
+1. A new `projects-preenvelope-*.db` (containing **plaintext** TOTP secrets of all other users at that moment) is created on every boot — unbounded file accumulation in DATA_DIR, and repeated plaintext-at-rest snapshots, which is exactly what ENC-01 exists to eliminate.
 2. The locked must-have "Second boot after a completed migration is a byte-identical no-op: no new backup file" is violated for any database with a garbage row — and the edge-row test (migration.test.mjs, ENC-01 edge-rows case) boots only once, so this is untested.
 
 **Fix:** Make the trigger match the eligibility rule, e.g. only rows whose value (trimmed) matches `/^[A-Z2-7]{32}$/` are eligible:
@@ -72,7 +72,7 @@ select id, two_fa_secret from users
 
 **File:** `test/totp-encryption.test.mjs:95, 97`
 **Issue:** `fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp'` — `fs.tmpdir` always exists in Node; the ternary is dead noise and silently diverges from the `os.tmpdir()` convention used in migration.test.mjs.
-**Fix:** `fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-totpe-key-'))` (import `os`), matching the sibling test file.
+**Fix:** `fs.mkdtempSync(path.join(os.tmpdir(), 'projects-totpe-key-'))` (import `os`), matching the sibling test file.
 
 ### IN-04: Wrapper-body assertions keyed to a distant marker comment
 
@@ -89,7 +89,7 @@ select id, two_fa_secret from users
 ### IN-06: Pre-migration backup contains plaintext TOTP secrets with umask-dependent permissions
 
 **File:** `server.js:1022–1026`
-**Issue:** `gr8r-preenvelope-<stamp>.db` is intentionally a full plaintext snapshot (D-74, user-emphasized invariant) but is created with default permissions and never cleaned up. On shared hosts with a permissive umask, that widens plaintext exposure indefinitely — the very property the phase closes.
+**Issue:** `projects-preenvelope-<stamp>.db` is intentionally a full plaintext snapshot (D-74, user-emphasized invariant) but is created with default permissions and never cleaned up. On shared hosts with a permissive umask, that widens plaintext exposure indefinitely — the very property the phase closes.
 **Fix (optional hardening, not a decision violation):** `fs.chmodSync(backup, 0o600)` after `vacuum into`, and note in the console line that the backup contains plaintext secrets.
 
 ### IN-07: Grep proof is approximate by design — accepts known evasions

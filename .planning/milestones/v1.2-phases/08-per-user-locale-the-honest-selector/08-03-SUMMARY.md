@@ -18,7 +18,7 @@ key-files:
   modified: [src/pages/settings.js, src/actions/actions.js, src/locales/en.json, src/locales/fr.json, test/i18n-pages.test.mjs, test/i18n-core-features.test.mjs, e2e/french-overflow.spec.mjs, e2e/helpers/setup.mjs]
 decisions:
   - "The row's selected value is getLocale() — which equals the account locale when set, the negotiated/demo-stored value otherwise (D-14) — so after a failed PATCH the row still shows the language the user is actually seeing"
-  - "A 401 on the background PATCH re-dispatches gr8r:save-error {status:401}, reusing the existing session-expired listener in main.js"
+  - "A 401 on the background PATCH re-dispatches projects:save-error {status:401}, reusing the existing session-expired listener in main.js"
   - "Save-failure toast uses kind 'err' (circle-alert icon): the toast component has no separate warning kind"
 status: complete
 commits: 2
@@ -33,11 +33,11 @@ completed: 2026-10-23
 
 # Phase 8 Plan 03: The honest selector Summary
 
-The Language row now offers exactly English and Français (from the registry), switches the interface instantly via `setLocale()` and persists in the background to the account (server) or `gr8r.locale` (demo) — the document pipeline is never touched; a new browser spec proves negotiation, no-flash boot, the no-reload switch, persistence and two members seeing their own languages.
+The Language row now offers exactly English and Français (from the registry), switches the interface instantly via `setLocale()` and persists in the background to the account (server) or `projects.locale` (demo) — the document pipeline is never touched; a new browser spec proves negotiation, no-flash boot, the no-reload switch, persistence and two members seeing their own languages.
 
 ## What was built
 
-1. **Task 1 (7e8c02e):** `settings.js` exports `langSel(v)` — options from `availableLocales()`, `data-in="langSel"` (never `prefSel`/`setPref`); the six-label array is gone. `actions.js` `IN.langSel`: `await setLocale(code)` (the `gr8r:locale` event re-renders), then demo → `storeLocale(code)`; server → `api.patchMe({locale})`; non-401 failure → `toast.localeSaveFailed`; 401 → `gr8r:save-error` with status 401. No `S.prefs`/`save()`. Catalogues gained `toast.localeSaveFailed` (fr uses U+00A0 before the colon and a curly apostrophe). Tests: the six-label assertion replaced; added registry-derived options, registry ↔ catalogue-files agreement, handler write-path (T-8-07) and a src/-wide phantom-label sweep (excluding `src/locales/`). `i18n-core-features` catalogue size 1481 → 1482.
+1. **Task 1 (7e8c02e):** `settings.js` exports `langSel(v)` — options from `availableLocales()`, `data-in="langSel"` (never `prefSel`/`setPref`); the six-label array is gone. `actions.js` `IN.langSel`: `await setLocale(code)` (the `projects:locale` event re-renders), then demo → `storeLocale(code)`; server → `api.patchMe({locale})`; non-401 failure → `toast.localeSaveFailed`; 401 → `projects:save-error` with status 401. No `S.prefs`/`save()`. Catalogues gained `toast.localeSaveFailed` (fr uses U+00A0 before the colon and a curly apostrophe). Tests: the six-label assertion replaced; added registry-derived options, registry ↔ catalogue-files agreement, handler write-path (T-8-07) and a src/-wide phantom-label sweep (excluding `src/locales/`). `i18n-core-features` catalogue size 1481 → 1482.
 2. **Task 2 (f1af97b):** `e2e/locale.spec.mjs` (4 tests): fr-FR unauthenticated first paint in French with a pre-script MutationObserver proving no English ever painted and no shell; an en-US browser with a French account boots French with no English flash on reload; the selector switch (two options, negotiated value selected, `window.__survived` sentinel, zero-mutation loop check, PATCH 200, reload keeps French, sign-out → English, sign-in → French); Alice (account fr, browser en-US) and Bob (account en, browser fr-FR) in one workspace see their own languages. `french-overflow.spec.mjs` follows the new two-option listbox and awaits the account PATCH instead of the debounced doc push; `apiClient` gained `patch`.
 
 ## Verification

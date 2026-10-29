@@ -246,12 +246,12 @@ jobs: `build` and `e2e` `[VERIFIED: ci.yml, read this session]`):
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: docker build -t gr8r:ci .
-      - run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' gr8r:ci
+      - run: docker build -t projects:ci .
+      - run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' projects:ci
       - run: |
           # wait for /api/health, then: fetch /, resolve the fr chunk asset from the page,
           # fetch the chunk, assert French content (a known fr catalogue value)
-      - run: docker stop $(docker ps -q --filter ancestor=gr8r:ci)
+      - run: docker stop $(docker ps -q --filter ancestor=projects:ci)
 ```
 
 Key facts that make the served-chunk assertion work:
@@ -339,7 +339,7 @@ spirit:
 ## Common Pitfalls
 
 ### Pitfall 1: The leak scan false-positives on legitimate English
-**What goes wrong:** brand words ("Gr8r"), plan wire values ("Free", stored ids rendered as
+**What goes wrong:** brand words ("Projects"), plan wire values ("Free", stored ids rendered as
 labels), user-created content (fixture names like "Probe"), and French values identical to English
 ones ("Table" — the spec already documents this exact case for the project tab bar) get flagged.
 **Why it happens:** catalogue-value equality is deliberately narrow, but a few real surfaces share
@@ -395,7 +395,7 @@ absent until they exist (LANG-01). CHANGELOG gets 1.2.0 notes text only — **no
 // Source: pattern authored for this phase over the surfaces named in D-02;
 // TreeWalker with no visibility filter is standard DOM API (MDN).
 const leaks = await page.evaluate((englishValues) => {
-  const stop = new Set(['Gr8r', 'Free']); // maintained, commented stop-list (D-02)
+  const stop = new Set(['Projects', 'Free']); // maintained, commented stop-list (D-02)
   const hits = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let n;

@@ -79,7 +79,7 @@ coverage:
     requirement: I18N-06
     verification:
       - kind: unit
-        ref: "test/i18n.test.mjs#the locale switch announces itself with a gr8r:locale event"
+        ref: "test/i18n.test.mjs#the locale switch announces itself with a projects:locale event"
         status: pass
     human_judgment: false
   - id: D4
@@ -103,11 +103,11 @@ coverage:
         status: pass
     human_judgment: false
   - id: D5
-    description: "The locale switch announces itself with a gr8r:locale CustomEvent carrying detail.code, dispatched on the global document and never on an imported renderer"
+    description: "The locale switch announces itself with a projects:locale CustomEvent carrying detail.code, dispatched on the global document and never on an imported renderer"
     requirement: I18N-06
     verification:
       - kind: unit
-        ref: "test/i18n.test.mjs#the locale switch announces itself with a gr8r:locale event"
+        ref: "test/i18n.test.mjs#the locale switch announces itself with a projects:locale event"
         status: pass
       - kind: unit
         ref: "test/i18n.test.mjs#an unknown locale code resolves to the base locale and still announces the change"
@@ -162,7 +162,7 @@ status: complete
 - `src/core/i18n.js` is a real leaf: the suite extracts every import specifier with a both-quote-styles regex, asserts the set is non-empty, and asserts every specifier points at `../locales/*.json`.
 - The catalogue contract is pinned: the English base string, the `{name}` interpolation, the untouched unknown placeholder, the unknown-key fallback, the raw pass-through (`Hello, <b>!`), and the escape table that matches `esc()` in `src/core/utils.js:10`.
 - The plural engine is CLDR, not hand-written: French resolves 0 to `one` and 1 000 000 to `many`, English resolves 0 to `other`, and a member that is missing falls back to `other`.
-- The locale switch announces itself with a `gr8r:locale` CustomEvent carrying `detail.code`, dispatched on the global `document` — the module never imports the renderer.
+- The locale switch announces itself with a `projects:locale` CustomEvent carrying `detail.code`, dispatched on the global `document` — the module never imports the renderer.
 - The build contract is real, not vacuous: the default build emits `assets/fr-Cx13KH9B.js` carrying the French catalogue while the entry chunk carries the English one.
 - The icon baseline is frozen from the PRE-PHASE plugin (174 names) and the shared scan reproduces it byte for byte — the new `.js` file under `src/` adds no icon.
 
@@ -174,7 +174,7 @@ Each task was committed atomically; the two TDD tasks carry the RED/GREEN pair:
 2. **Task 2 (seam): the locale switch the plural engine needs** — `acea0dd` (feat)
 3. **Task 2 RED: the plural contract** — `c32e1d4` (test)
 4. **Task 2 GREEN: the plural engine** — `1010692` (feat)
-5. **Task 3 RED: the gr8r:locale announcement** — `5e317a2` (test)
+5. **Task 3 RED: the projects:locale announcement** — `5e317a2` (test)
 6. **Task 3 GREEN: the announcement** — `f881656` (feat)
 
 ## Files Created/Modified
@@ -213,7 +213,7 @@ Each task was committed atomically; the two TDD tasks carry the RED/GREEN pair:
 **1. [Rule 3 - Blocking] The locale switch lands one task early**
 - **Found during:** Task 2 (the plural engine)
 - **Issue:** Task 2's behaviour block carries five French cases (0 → `one`, 1 000 000 → `many`, the missing-member fallback), and a French case is unobservable while the active locale is English: `t()` resolves the active catalogue first and the English catalogue second, so a French value is never consulted. The plan's task order therefore made Task 2's own acceptance criterion unprovable — the switch that Task 3 owns was needed by Task 2.
-- **Fix:** The switch was implemented in its own commit (`acea0dd`) inside Task 2's window, *without* the announcement; Task 3 then added the `gr8r:locale` dispatch on top of it. The seam's contract is exactly Task 3's action minus the event: registry resolution, an unknown code resolving to `BASE_LOCALE`, the synchronous singleton update, and the loader invocation.
+- **Fix:** The switch was implemented in its own commit (`acea0dd`) inside Task 2's window, *without* the announcement; Task 3 then added the `projects:locale` dispatch on top of it. The seam's contract is exactly Task 3's action minus the event: registry resolution, an unknown code resolving to `BASE_LOCALE`, the synchronous singleton update, and the loader invocation.
 - **Files modified:** `src/core/i18n.js`
 - **Verification:** `node --test test/i18n.test.mjs` — the five French cases fail before the plural engine and pass after it; the switch's own contract is proven by Task 3's suite.
 - **Committed in:** `acea0dd`

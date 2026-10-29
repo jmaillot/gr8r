@@ -19,7 +19,7 @@ moves the workspace revision on every switch. The phase-7 glue maps the stored l
 
 The target shape is already scaffolded by prior phases: `setLocale()` resolves unknown codes to
 the base locale, sets the singleton synchronously, sets `documentElement.lang`, and dispatches
-the bubbling `gr8r:locale` event that main.js turns into one re-render [VERIFIED:
+the bubbling `projects:locale` event that main.js turns into one re-render [VERIFIED:
 src/core/i18n.js:47-75, src/main.js:68]. The server has a proven additive-migration helper
 `ensureColumn()` [VERIFIED: server.js:127-130] and a single payload shaper `userPayload()`
 [VERIFIED: server.js:244-251]; a `PATCH /api/auth/me` endpoint does not exist yet (only GET at
@@ -37,7 +37,7 @@ The research surfaced **three findings that materially shape the plan** (details
    Removing the key from `DEFAULT_PREFS` alone silently fails LOC-04's "the document carries no
    language field". The merge points must strip the key, and the seed needs the legacy label
    captured *before* the strip.
-2. **`setLocale()` always dispatches `gr8r:locale`, and that listener re-renders.** The listener
+2. **`setLocale()` always dispatches `projects:locale`, and that listener re-renders.** The listener
    is registered at module top [VERIFIED: src/main.js:68], before `init()` runs. A boot-time
    negotiation that calls the dispatching `setLocale()` triggers `render()` on a not-yet-initialised
    `S.ui` (`S.ui.auth` is null → renders the full demo shell, [VERIFIED:
@@ -140,7 +140,7 @@ Strip `lang` from prefs at both merge points.
 - **D-16:** When `PATCH /api/auth/me` **fails** after an instant switch (offline, 500), the
   interface **keeps the newly applied language for the session** and a toast warns the choice
   could not be saved; the next boot applies the account's old locale. This mirrors the existing
-  optimistic-save pattern (`gr8r:save-error` toasts). A **401** routes to the login screen as
+  optimistic-save pattern (`projects:save-error` toasts). A **401** routes to the login screen as
   today — the existing session-expired handling is reused, not duplicated.
 
 ### the agent's Discretion
@@ -171,7 +171,7 @@ Strip `lang` from prefs at both merge points.
 
 | ID | Description | Research Support |
 |----|-------------|------------------|
-| LOC-01 | Selector switches the interface language immediately, without a reload | `setLocale()` already dispatches `gr8r:locale` → one re-render [i18n.js:47-75, main.js:68]; new selector handler must call it then background-PATCH (D-12). e2e no-reload pattern exists [french-overflow.spec.mjs:136-166] |
+| LOC-01 | Selector switches the interface language immediately, without a reload | `setLocale()` already dispatches `projects:locale` → one re-render [i18n.js:47-75, main.js:68]; new selector handler must call it then background-PATCH (D-12). e2e no-reload pattern exists [french-overflow.spec.mjs:136-166] |
 | LOC-02 | Selector offers only English and French; the four phantom labels are gone everywhere | Registry `LOCALES` already frozen to exactly en/fr with names 'English'/'Français' [i18n.js:8-12]; derive options from `availableLocales()`; agreement test (registry ↔ locales dir ↔ selector source) |
 | LOC-03 | Language is a per-user preference on the account; survives sign-out, re-login, other browsers | `users.locale` column + `userPayload()` delivery + `PATCH /api/auth/me`; sessions are cookie-based, so any browser gets the same account row |
 | LOC-04 | Language leaves the shared workspace document; changing it never touches the workspace row/revision | Language must exit `DEFAULT_PREFS`/`docSnapshot()`/`applyDoc()` AND the merge points must strip the legacy key (Pitfall 1); selector must leave the `prefSel`/`setPref` doc-write path (Pitfall 3) |
@@ -200,7 +200,7 @@ No new packages. This phase is built entirely from existing in-repo primitives:
 
 | Facility | Location | Purpose | Why Standard |
 |----------|----------|---------|--------------|
-| `setLocale()` / `LOCALES` / `availableLocales()` | `src/core/i18n.js:8-12, 47-81` | Locale switch, registry, catalogue availability | Already resolves unknown → base, sets `documentElement.lang`, dispatches `gr8r:locale` |
+| `setLocale()` / `LOCALES` / `availableLocales()` | `src/core/i18n.js:8-12, 47-81` | Locale switch, registry, catalogue availability | Already resolves unknown → base, sets `documentElement.lang`, dispatches `projects:locale` |
 | `ensureColumn()` | `server.js:127-130` | Additive, idempotent `users.locale` column | Proven by four prior columns; pragma-guarded; writes no backup |
 | `userPayload()` | `server.js:244-251` | Deliver `locale` on every auth response | Single shaping point for login/signup/me/workspaces |
 | `requireUser()` | `server.js:1105-1113` | 401 guard for the new PATCH | The established auth gate |
@@ -246,7 +246,7 @@ gate is satisfied vacuously; there is nothing to audit and no `checkpoint:human-
    SELECTOR (Settings → Appearance)
    user picks 'English' | 'Français'
         │
-        ├─► setLocale(code) ──► gr8r:locale ──► render()   (instant, no reload, LOC-01)
+        ├─► setLocale(code) ──► projects:locale ──► render()   (instant, no reload, LOC-01)
         │
         ├─► server mode:  api.patchMe({locale}) background
         │        ├─ ok    → account row updated (users.locale)
@@ -254,7 +254,7 @@ gate is satisfied vacuously; there is nothing to audit and no `checkpoint:human-
         │        └─ 401   → login screen (existing session-expired path)
         │     ✗ never S.prefs / save() / workspace doc / revision
         │
-        └─► demo mode:  localStorage['gr8r.locale'] = code (D-15)
+        └─► demo mode:  localStorage['projects.locale'] = code (D-15)
 
    SERVER (server.js)
    PATCH /api/auth/me  { locale }
@@ -285,7 +285,7 @@ e2e/french-overflow.spec.mjs  # persistence path comments/assertions follow the 
 
 ### Pattern 1: Silent prime vs dispatching switch
 
-**What:** Two ways to set the locale. The runtime switch (`setLocale`) dispatches `gr8r:locale`
+**What:** Two ways to set the locale. The runtime switch (`setLocale`) dispatches `projects:locale`
 so listeners re-render. The boot path needs the same singleton + catalogue effect **without**
 the event, because nothing has rendered yet and a dispatch would render an uninitialised shell.
 **When to use:** any `setLocale` call that happens before `init()`'s first `render()`.
@@ -313,7 +313,7 @@ export async function primeLocale(code) {
 }
 ```
 
-**Why not just call `setLocale()` at boot:** the `gr8r:locale` listener at [src/main.js:68] runs
+**Why not just call `setLocale()` at boot:** the `projects:locale` listener at [src/main.js:68] runs
 `render()` immediately; during `init()` that renders the full shell with `S.ui.auth === null`
 ([src/shell/render.js:160] renders `renderShell()` when auth is falsy), and the pending
 `await api.init()` gives the browser a paint opportunity — demo data flashes before the login
@@ -400,7 +400,7 @@ pure function with no DOM dependency is testable from bare Node like the rest of
 - **Keeping the locale inside `applyPrefs()`:** it runs at the top of every render; owning the
   locale there means the next doc-derived prefs value can fight the account locale every render
   (the reverse flash). Locale application moves to lifecycle moments.
-- **Dispatching `gr8r:locale` during boot** (Pitfall 2) — premature render of an uninitialised
+- **Dispatching `projects:locale` during boot** (Pitfall 2) — premature render of an uninitialised
   shell.
 - **Storing a display label or an unvalidated locale string server-side** — D-01 fixes the
   format to the code; the PATCH whitelist enforces it.
@@ -414,7 +414,7 @@ pure function with no DOM dependency is testable from bare Node like the rest of
 | Additive column migration | Custom `alter table` + existence bookkeeping | `ensureColumn()` [server.js:127-130] | Pragma-guarded, idempotent, proven by four columns, no-backup by construction |
 | Locale resolution/unknown-code fallback | A new mapping or normalisation layer | `setLocale()`'s registry check [i18n.js:48-49] | Already the documented contract (unknown → base); a second resolver invites drift |
 | "Which languages exist" | A hardcoded option array in settings.js | `availableLocales()` / `LOCALES` [i18n.js:8-12, 79-81] | The registry is the single truth; deriving the selector makes LOC-02 structural and the agreement test trivial |
-| Session-expired UX on PATCH 401 | A new logout-and-redirect routine | The existing `gr8r:save-error` 401 branch [main.js:70-78] | D-16 says reuse, not duplicate |
+| Session-expired UX on PATCH 401 | A new logout-and-redirect routine | The existing `projects:save-error` 401 branch [main.js:70-78] | D-16 says reuse, not duplicate |
 | Session/cookie handling for the PATCH | Custom auth plumbing | `requireUser()` + the existing cookie parse | Identical to every other authenticated endpoint |
 | Language-tag parsing | A full BCP-47 parser | Subtag-prefix split + clamp (D-09) | The requirement is a two-language clamp, not a locale database |
 
@@ -429,11 +429,11 @@ This phase relocates a stored preference — the inventory applies.
 
 | Category | Items Found | Action Required |
 |----------|-------------|------------------|
-| Stored data | `workspaces.doc` JSON carries `prefs.lang` (e.g. `"lang":"English (US)"`) in every existing install; `localStorage['gr8r.v2']` blobs carry it too [VERIFIED: docSnapshot at src/core/store.js:96 includes all of `S.prefs`; DEFAULT_PREFS.lang at store.js:16]. New `users.locale` column starts NULL. | Code edit + implicit data migration: strip `lang` at both merge points so the next natural document save drops the field (LOC-04 does not demand an explicit doc rewrite — the field disappears with the first ordinary save); seed PATCHes `users.locale` per account (D-04/D-05) |
+| Stored data | `workspaces.doc` JSON carries `prefs.lang` (e.g. `"lang":"English (US)"`) in every existing install; `localStorage['projects.v2']` blobs carry it too [VERIFIED: docSnapshot at src/core/store.js:96 includes all of `S.prefs`; DEFAULT_PREFS.lang at store.js:16]. New `users.locale` column starts NULL. | Code edit + implicit data migration: strip `lang` at both merge points so the next natural document save drops the field (LOC-04 does not demand an explicit doc rewrite — the field disappears with the first ordinary save); seed PATCHes `users.locale` per account (D-04/D-05) |
 | Live service config | None — self-hosted Node server; no external SaaS holds the locale. Verified: no external service in the phase's surface. | None |
 | OS-registered state | None — no Task Scheduler/pm2/launchd/systemd registrations embed the locale. | None |
 | Secrets/env vars | None — no secret key or env var name references the language. | None |
-| Build artifacts | The French catalogue builds as its own chunk (`import.meta.glob`, [src/core/i18n.js:22-27]) — unchanged. Old `gr8r.v2` localStorage blobs are schema-tolerant (`Object.assign` merge). No egg-info/compiled artifacts (plain JS + Vite). | None — but note the localStorage blob keeps carrying the stale `prefs.lang` key until overwritten by the next `save()`; it must be *ignored*, not trusted |
+| Build artifacts | The French catalogue builds as its own chunk (`import.meta.glob`, [src/core/i18n.js:22-27]) — unchanged. Old `projects.v2` localStorage blobs are schema-tolerant (`Object.assign` merge). No egg-info/compiled artifacts (plain JS + Vite). | None — but note the localStorage blob keeps carrying the stale `prefs.lang` key until overwritten by the next `save()`; it must be *ignored*, not trusted |
 
 ## Common Pitfalls
 
@@ -457,7 +457,7 @@ preference, and still finds `"lang"` in `workspaces.doc`; or `applyDoc` tests wh
 prefs carry `lang`.
 
 ### Pitfall 2: boot-time `setLocale()` renders an uninitialised shell
-**What goes wrong:** the `gr8r:locale` listener [src/main.js:68] calls `render()` on every
+**What goes wrong:** the `projects:locale` listener [src/main.js:68] calls `render()` on every
 dispatch, and it registers at module load — before `init()`. Negotiation that uses the
 dispatching `setLocale()` therefore renders the shell while `S.ui.auth` is still `null`, which
 renders `renderShell()` (demo seed data) [src/shell/render.js:160]; the subsequent `await
@@ -691,7 +691,7 @@ A.signOut = async () => {
 |---|-------|---------|---------------|
 | A1 | `navigator.languages` (falling back to `navigator.language`) is the right input for client-side negotiation and is stable across supported browsers | Pattern 4 / D-08 | LOW — negotiation degrades to 'en', which is today's behaviour |
 | A2 | `render()` with `S.ui.auth === null` renders the demo shell (making Pitfall 2 a real flash, not a theoretical one) | Pitfall 2 | MEDIUM — if render() early-returns on uninitialised state instead, the silent-prime variant is still correct but less critical; the plan should keep the silent prime regardless |
-| A3 | The `gr8r:save-error` 401 branch is safe to trigger from the locale PATCH path (dispatching the event with `{status:401}`) or equivalent inline handling | D-16 | LOW — either reuse or a small inline mirror of main.js:70-78 satisfies D-16 |
+| A3 | The `projects:save-error` 401 branch is safe to trigger from the locale PATCH path (dispatching the event with `{status:401}`) or equivalent inline handling | D-16 | LOW — either reuse or a small inline mirror of main.js:70-78 satisfies D-16 |
 | A4 | Playwright's `newContext({ locale })` reliably controls `navigator.languages` for the negotiation e2e | Validation Architecture | LOW — standard Playwright feature; fallback is launching Chromium with a language flag |
 | A5 | The seed can rely on the *server* doc carrying `prefs.lang` (not just localStorage) — i.e. hydration happens before the seed decision in every relevant flow | Pattern 5 / D-04 | MEDIUM — a member who never hydrated (e.g. 401 path) simply doesn't seed that boot and retries later; behaviour stays correct, only the timing of the seed shifts |
 
@@ -704,10 +704,10 @@ A.signOut = async () => {
      `state.user.locale` stays fresh without another `api.me()` round-trip. Adopted in
      08-02 Task 1 (step 4).
 2. **Does the demo-mode localStorage key need a store.js export or a local constant?** (RESOLVED)
-   - What we know: D-15 wants localStorage persistence; `STORE_KEY` ('gr8r.v2') is the existing
+   - What we know: D-15 wants localStorage persistence; `STORE_KEY` ('projects.v2') is the existing
      blob key and the locale must NOT ride inside it (it would re-enter the prefs/doc pipeline).
-   - **Resolved: a dedicated `gr8r.locale` key owned by the i18n module**, deliberately outside
-     the gr8r.v2 blob — keeps the doc snapshot clean by construction. Implemented in
+   - **Resolved: a dedicated `projects.locale` key owned by the i18n module**, deliberately outside
+     the projects.v2 blob — keeps the doc snapshot clean by construction. Implemented in
      08-02 Task 1 (step 3).
 3. **First-boot ordering edge: `join` early-return happens before `api.me()` in today's code**
    ([main.js:138-155] calls `api.me()` only when signed in). (RESOLVED)
@@ -799,7 +799,7 @@ workflow keys), so the section applies.
 - `src/core/theme.js` (full read) — `applyPrefs`, `LANG_TO_LOCALE`
 - `src/core/store.js` (full read) — `DEFAULT_PREFS`, merge points, `docSnapshot`, `applyDoc`
 - `src/core/api.js` (full read) — `call()`, `applyUser`, endpoint surface
-- `src/main.js` (full read) — boot sequence, `gr8r:locale` listener, save-error handling
+- `src/main.js` (full read) — boot sequence, `projects:locale` listener, save-error handling
 - `server.js` (lines 70-289, 1160-1342 + greps) — schema, `ensureColumn`, `userPayload`, auth
   routes, PATCH pattern, `requireUser`, `sameOrigin`
 - `src/pages/settings.js` (language/datetime sections, `sel()` helper)

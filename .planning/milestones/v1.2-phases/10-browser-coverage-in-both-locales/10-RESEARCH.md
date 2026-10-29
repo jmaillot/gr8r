@@ -205,7 +205,7 @@ account has no workspace: `S.ui.auth = api.canCreateWorkspace ? 'onboarding' : '
 [VERIFIED: src/main.js:194, src/actions/actions.js:2441]. Step contents:
 - step 0: team-type radios — `role="radio"` options rendered by `opt()` (auth.js:136)
 - step 1: workspace name input `#o-ws` (label `common.wsName`) + URL input `#o-url`
-  (`common.wsUrl`, placeholder `gr8rstudio`)
+  (`common.wsUrl`, placeholder `projectsstudio`)
 - step 2/3: team-size buttons and project name `#o-proj` + template radios
 - step 4: three invite inputs `#o-inv-0..2` with `aria-label` `a11y.auth.inviteEmail`
   ("Teammate's email") + `page.auth.sendInvites` submit

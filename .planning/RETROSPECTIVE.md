@@ -166,7 +166,7 @@
 - Central mid-session 401 intercept routing every revocation through one honest signOutRevoked teardown
 - Password change end-to-end: verify-inside-transaction, atomic rehash + revoke-others, honest copy with a substring-level honesty regression guard
 - TOTP core: fixture-verified totp.js (replay guard, ±1 window), vendored QR encoder, verify-before-enable, hashed burn-once recovery codes
-- Login second factor: pending2fa + gr8r_tfa_challenge cookie, structurally anonymous until verified; dual-shape client '2fa' card
+- Login second factor: pending2fa + projects_tfa_challenge cookie, structurally anonymous until verified; dual-shape client '2fa' card
 - Closing proof: login_challenges schema parity, doc auth-key walk, Chromium e2e EN+FR, real-device UAT 3/3, 526/526 green gate
 
 ### What Worked

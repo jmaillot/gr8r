@@ -67,7 +67,7 @@ The prior verification (12/12, `v2:ebde5862…`) went stale when planning docs a
 
 | # | Truth | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | Legacy plaintext `two_fa_secret` boots encrypted into `v1:` envelope, transactional, after `gr8r-preenvelope-*.db` backup | ✓ VERIFIED | `migrateTotpEncryption()` (server.js:1000+): trigger → MASTER_KEY check → backup → `transaction()` of `encryptTotpSecret` updates; ENC-01 tracer asserts `^v1:[^:]+:[^:]+:[^:]+$`, exactly 1 backup, decrypted round-trip — re-ran green |
+| 1 | Legacy plaintext `two_fa_secret` boots encrypted into `v1:` envelope, transactional, after `projects-preenvelope-*.db` backup | ✓ VERIFIED | `migrateTotpEncryption()` (server.js:1000+): trigger → MASTER_KEY check → backup → `transaction()` of `encryptTotpSecret` updates; ENC-01 tracer asserts `^v1:[^:]+:[^:]+:[^:]+$`, exactly 1 backup, decrypted round-trip — re-ran green |
 | 2 | Second boot after completed migration is byte-identical no-op | ✓ VERIFIED | Trigger excludes `v1:` rows (D-83, re-confirmed server.js:1004-1010); test asserts users-row deepEqual and zero new backup files — green |
 | 3 | Ordering trigger count → MASTER_KEY → backup → transaction; deferred/empty boots leave no stray backup | ✓ VERIFIED | Code order re-confirmed in source (trigger at 1004, D-73 defer at 1012-1021); 0-backup assertions green |
 | 4 | Failed `vacuum into` skips migration entirely — no backup = no mutation | ✓ VERIFIED | try/catch returns before transaction; test asserts rows unchanged — green |

@@ -19,7 +19,7 @@ v1.3 already shipped: sessions table, password change with atomic revocation, TO
 | **Disable-2FA: tear down pending login challenge** | If a disable happens mid-challenge (or the user has an in-flight pending-2FA login), the challenge must not keep demanding codes. | LOW | Check: does 16-02 clear `login_challenges` rows for the user? This is the most likely genuine gap. |
 | **Disable-2FA: session policy decision** | Comparable apps vary: GitHub keeps the session; many apps revoke *other* sessions when 2FA is removed (treat as risk event, cf. OWASP Session Mgmt "Reauthentication After Risk Events"). | LOW | A product decision, but the defensible default: keep current session, revoke others (mirrors the password-change transactional pattern already in v1.3). |
 | **Disable-2FA: wipe/clear 2FA state atomically** | `two_fa_*` columns cleared, recovery codes invalidated, replay-window state reset — in one transaction. Leaving hashed recovery codes behind is a known bug class. | LOW | Same transaction discipline as Phase 15 password change. |
-| **Disable-2FA: audit/activity entry** | Disabling 2FA is the single most security-sensitive account event; comparable apps log it. Gr8r already has the activity-verb infrastructure. | LOW | New machine verb, EN+FR copy. |
+| **Disable-2FA: audit/activity entry** | Disabling 2FA is the single most security-sensitive account event; comparable apps log it. Projects already has the activity-verb infrastructure. | LOW | New machine verb, EN+FR copy. |
 | **Recovery-code regeneration: password step-up** | Regenerating invalidates the user's only remaining recovery factor — GitHub/GitLab require password confirmation. | LOW | Reuse existing step-up helper. |
 | **Recovery-code regeneration: burn-and-replace semantics** | Old codes become invalid immediately and permanently; new hashed codes returned once, shown once. Must be atomic (delete-all + insert-all in one transaction) — a partial failure must never leave a user with zero codes or duplicated codes. | MEDIUM | v1.3 has the hashing + single-use machinery; regeneration is a transactional wrapper. |
 | **Recovery-code regeneration: show-once UX with download/copy** | Identical to enrollment UX (v1.3 already built this); regeneration reuses it. | LOW | No new component; maybe a "you regenerated on <date>" note. |
@@ -27,7 +27,7 @@ v1.3 already shipped: sessions table, password change with atomic revocation, TO
 | **TOTP encryption-at-rest: AES-256-GCM with AAD** | Standard: authenticated encryption of `two_fa_secret`, with the user id (or row id) as AAD to prevent ciphertext swapping between accounts. RFC/industry norm (Nextcloud uses master-key + AEAD after the 2020 crypto findings; Vaultwarden encrypts TOTP secrets under the vault key). | MEDIUM | `node:crypto` only — zero-dependency constraint holds. Random 12-byte nonce per encryption, stored alongside ciphertext (`nonce:ciphertext` or separate column). |
 | **TOTP encryption-at-rest: MASTER_KEY from env, fail-closed 503** | The milestone decision. Fail-closed = if MASTER_KEY is missing/wrong, 2FA verification endpoints answer 503 (with stable error code, translated client-side per ERR-01 pattern) rather than falling back to plaintext. Enrollment should be blocked too (can't safely store). | MEDIUM | Distinct error code so the client can say "server key misconfigured" vs "wrong code". Log loudly. |
 | **TOTP encryption-at-rest: migration of existing plaintext secrets** | Any v1.3 install has plaintext `two_fa_secret` values; the migration must encrypt in place (backup-first, like `migrateTenancy()`), and a second boot must be a byte-identical no-op. | MEDIUM | This is the real complexity center of the encryption feature — the crypto itself is ~30 lines; the migration is the work. |
-| **Admin session revocation: list + revoke sessions of any user** | Operators expect to see a user's active sessions and revoke them (Nextcloud, Gitea admin panels; Microsoft Entra "Revoke sessions"). | LOW-MEDIUM | New admin surface on the existing `sessions` table; role gate (`admin`/`owner` at workspace level — note Gr8r roles are per-workspace, so decide: workspace-admin revokes sessions of their members, vs instance-admin only). |
+| **Admin session revocation: list + revoke sessions of any user** | Operators expect to see a user's active sessions and revoke them (Nextcloud, Gitea admin panels; Microsoft Entra "Revoke sessions"). | LOW-MEDIUM | New admin surface on the existing `sessions` table; role gate (`admin`/`owner` at workspace level — note Projects roles are per-workspace, so decide: workspace-admin revokes sessions of their members, vs instance-admin only). |
 | **Admin session revocation: revoked browsers get the honest 401 teardown** | v1.3's central mid-session 401 teardown must fire for admin-revoked sessions too — zero new teardown code, just verify it does. | LOW | Existing SESS-01…03 machinery. |
 | **Admin session revocation: never revoke the operator's own session accidentally** | Comparable UIs mark the operator's own session and either block or warn (Entra's "Revoke sessions" works only on *other* users). | LOW | Simplest: admin revocation targets *other* users; self-revocation stays on the user's own sessions page. |
 | **Admin session revocation: audit entry** | Revoking someone's sessions is an administrative action; log who did it to whom. | LOW | Activity verb + actor. |
@@ -37,7 +37,7 @@ v1.3 already shipped: sessions table, password change with atomic revocation, TO
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
 | **Encryption key versioning (`v1:` prefix on ciphertext)** | Lets MASTER_KEY rotation happen later without a rewrite; comparable apps that skip this get a painful one-time migration later. | LOW | Prefix ciphertext with a key-version byte; costs nothing now, saves a migration later. |
-| **Admin "revoke all sessions instance-wide"** | Emergency response (breach panic). Gitea/GitLab have it at instance level. | LOW | One loop over the sessions table + 401 teardown. Only meaningful once Gr8r has an instance-admin concept — may be premature given per-workspace roles. |
+| **Admin "revoke all sessions instance-wide"** | Emergency response (breach panic). Gitea/GitLab have it at instance level. | LOW | One loop over the sessions table + 401 teardown. Only meaningful once Projects has an instance-admin concept — may be premature given per-workspace roles. |
 | **Disable-2FA requires both password AND a current TOTP code (or recovery code)** | Stronger than GitHub's password-only; proves the person disabling has live possession of the factor. OWASP endorses MFA-or-password step-up; requiring both is above the bar. | LOW | Tiny policy choice; consider making it the default since the code path exists. |
 | **Notify user (in-app activity) when admin revokes their sessions** | Trust/observability; the user sees why they were logged out. | LOW | Activity entry visible to the affected member. |
 | **Post-disable recovery-code purging with count reported** | "3 unused recovery codes were destroyed" — honest messaging consistent with v1.3's "honesty regression guard" test posture. | LOW | Cheap, on-brand for the project's honesty pattern. |
@@ -81,7 +81,7 @@ v1.3 already shipped: sessions table, password change with atomic revocation, TO
 
 - **Encryption migration is the bottleneck phase.** Everything touching `two_fa_secret` (enroll, verify, login challenge, disable) must go through a single decrypt helper *before* the disable flow is built on top, or the disable route will need dual-mode code forever. Recommend: encryption first, then disable/regeneration/admin on the clean surface.
 - **Disable-2FA session policy reuses the password-change transactional revocation** — same code path, same tests to mirror.
-- **Admin revocation conflicts with nothing** but needs a role-model decision (workspace-admin vs instance-admin) before planning; Gr8r has no instance-admin today, which may constrain scope.
+- **Admin revocation conflicts with nothing** but needs a role-model decision (workspace-admin vs instance-admin) before planning; Projects has no instance-admin today, which may constrain scope.
 
 ## MVP Definition
 
@@ -117,7 +117,7 @@ v1.3 already shipped: sessions table, password change with atomic revocation, TO
 
 ## Competitor Feature Analysis
 
-| Feature | GitHub / GitLab | Gitea / Nextcloud | Vaultwarden | Gr8r Approach |
+| Feature | GitHub / GitLab | Gitea / Nextcloud | Vaultwarden | Projects Approach |
 |---------|-----------------|-------------------|-------------|----------------|
 | Disable 2FA | Password confirmation, warning copy, session kept, activity emailed | Password confirmation; Nextcloud blocks disable when provider-locked by admin | N/A (TOTP optional) | Server-side password step-up, atomic wipe, revoke-others policy, activity verb |
 | Secret at rest | Not exposed | Nextcloud: master-key AEAD after 2020 audit findings | Encrypted under vault key | AES-256-GCM + AAD under `MASTER_KEY`, fail-closed 503, backup-first migration |
@@ -133,5 +133,5 @@ v1.3 already shipped: sessions table, password change with atomic revocation, TO
 - Comparable-app behavior (GitHub, GitLab, Gitea, Vaultwarden) from established product behavior; exact current UI details MEDIUM confidence — verify at phase research if a specific flow is copied
 
 ---
-*Feature research for: Gr8r Studio v1.4 auth completion*
+*Feature research for: Projects Studio v1.4 auth completion*
 *Researched: 2026-10-28*

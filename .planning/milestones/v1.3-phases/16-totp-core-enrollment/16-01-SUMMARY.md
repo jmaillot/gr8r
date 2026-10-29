@@ -18,7 +18,7 @@ key-files:
   modified: [scripts/i18n-scan.mjs, test/i18n-scan.test.mjs]
 decisions:
   - "TOTP helpers live in top-level totp.js (repo root, sibling of server.js) — NOT under src/ so Vite never bundles server crypto; Phase 17 imports it verbatim (Open Question 1 resolved)"
-  - "otpauth label = `Gr8r:${encodeURIComponent(email)}` — only the email is encoded; the Gr8r: prefix stays literal to match D-54's exact URI shape"
+  - "otpauth label = `Projects:${encodeURIComponent(email)}` — only the email is encoded; the Projects: prefix stays literal to match D-54's exact URI shape"
 metrics:
   duration: ~6 min
   completed: 2026-10-27
@@ -62,10 +62,10 @@ RFC-verified `node:crypto` TOTP core with the D-04 replay guard, plus the vendor
 
 ### Auto-fixed Issues
 
-**1. [Rule 1 - Bug] buildOtpauthUri encoded the `Gr8r:` prefix itself**
+**1. [Rule 1 - Bug] buildOtpauthUri encoded the `Projects:` prefix itself**
 - **Found during:** Task 1 (GREEN — first run failed 2 tests)
-- **Issue:** `encodeURIComponent('Gr8r:' + email)` produced `Gr8r%3Auser%40…`, which does not match D-54's exact URI (`otpauth://totp/Gr8r:user%40example.com?…`)
-- **Fix:** encode only the email: `` `Gr8r:${encodeURIComponent(email)}` ``
+- **Issue:** `encodeURIComponent('Projects:' + email)` produced `Projects%3Auser%40…`, which does not match D-54's exact URI (`otpauth://totp/Projects:user%40example.com?…`)
+- **Fix:** encode only the email: `` `Projects:${encodeURIComponent(email)}` ``
 - **Files modified:** totp.js
 - **Commit:** b3856df
 
@@ -84,7 +84,7 @@ TOTP/recovery helpers live in top-level `totp.js` at the repo root, sibling of `
 
 ## Key Decisions Made
 
-- `Gr8r:` prefix stays literal in the otpauth label (D-54 exact-format conformance, see deviation 1)
+- `Projects:` prefix stays literal in the otpauth label (D-54 exact-format conformance, see deviation 1)
 - `verifyTotpCode` takes an optional `period` param (default 30) — callers in 16-02/Phase 17 use the default
 - Vendored file excluded from the i18n scan (third-party source is not interface copy)
 

@@ -18,7 +18,7 @@
 | Keep all sessions | Regen D-98 style, no session touch | |
 
 **User's choice:** Revoke others, keep current
-**Notes:** Consistent with every security-sensitive action in gr8r; current browser stays signed in to see the updated card.
+**Notes:** Consistent with every security-sensitive action in projects; current browser stays signed in to see the updated card.
 
 ## Pending login-challenge teardown
 

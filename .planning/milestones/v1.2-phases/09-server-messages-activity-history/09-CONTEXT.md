@@ -87,7 +87,7 @@ tranchent dans le cadre des contraintes de la roadmap :
 ### Code existant
 - `server.js` — `httpError(status, message)` (≈ligne 1016) : point de passage unique des
   erreurs ; tous les sites d'appel à instrumenter
-- `src/main.js` — handler `gr8r:save-error` (≈lignes 75-95) : surface d'affichage des
+- `src/main.js` — handler `projects:save-error` (≈lignes 75-95) : surface d'affichage des
   erreurs ; le 403 affiche déjà le message serveur brut
 - `src/core/i18n.js` — `t(key, params)` et la registry de locales (D-01/D-02 s'y rattachent)
 - `src/locales/en.json`, `src/locales/fr.json` — catalogues, namespace `err.*` existant
@@ -113,7 +113,7 @@ tranchent dans le cadre des contraintes de la roadmap :
 - Tests de parité catalogue existants (phase 6-7) — le test D-04 suit le même gabarit
 
 ### Integration Points
-- `gr8r:save-error` (main.js) et les toasts d'erreur — là où le code machine sera consommé
+- `projects:save-error` (main.js) et les toasts d'erreur — là où le code machine sera consommé
 - `logAct` et les `unshift` directs d'activité dans actions.js — à canaliser vers les verbes
   machine
 - Filtres d'activité (activity.js) — à réécrire sur la classification du verbe stocké

@@ -40,7 +40,7 @@ actuals:
 
 ### Task 1 — docker-build CI job asserting the served French chunk (D-10) ✅ (prior session, commit b80ad55)
 
-Third sibling job in `.github/workflows/ci.yml`: `docker build -t gr8r:ci .` → throwaway `docker run -d` with inline non-secret `ADMIN_EMAIL`/`ADMIN_PASSWORD` → health-wait on `/api/health` (the image's own HEALTHCHECK target) → fetch `/`, resolve the `fr-*.js` chunk name **dynamically** from the served assets (no hardcoded content hash), fetch the chunk, assert a fixed fr-only catalogue literal via fixed-string search → `docker stop` cleanup. No push, no registry credentials, existing two jobs untouched.
+Third sibling job in `.github/workflows/ci.yml`: `docker build -t projects:ci .` → throwaway `docker run -d` with inline non-secret `ADMIN_EMAIL`/`ADMIN_PASSWORD` → health-wait on `/api/health` (the image's own HEALTHCHECK target) → fetch `/`, resolve the `fr-*.js` chunk name **dynamically** from the served assets (no hardcoded content hash), fetch the chunk, assert a fixed fr-only catalogue literal via fixed-string search → `docker stop` cleanup. No push, no registry credentials, existing two jobs untouched.
 
 ### Task 2 — Demo-mode Chromium proof (D-11) ✅ (commit 11f6a57)
 

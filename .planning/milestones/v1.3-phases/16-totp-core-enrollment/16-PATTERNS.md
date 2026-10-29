@@ -265,7 +265,7 @@ The 2FA card: off → "Add a second step" button → password prompt → QR (via
 import { after, before, test } from 'node:test';
 import { login, signup, startServer, withDb } from './helpers/server.mjs';
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-pwchange-'));
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-pwchange-'));
   server = await startServer({ dataDir: tempDir });
 });
 after(async () => { await server?.stop(); fs.rmSync(tempDir, …); });

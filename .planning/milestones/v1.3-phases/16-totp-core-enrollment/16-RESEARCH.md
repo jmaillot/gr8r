@@ -16,7 +16,7 @@
 - **D-51:** Codes are lowercase hex `xxxx-xxxx` (8 hex chars, dash-grouped), sha256-hashed **whole** (hash-only, never encrypted), generated with `node:crypto.randomBytes`.
 - **D-52:** Hashes in a dedicated `recovery_codes` table (per-code row, used/burned marker); additive migration in the `ensureColumn`/guarded-create style (P-B); byte-identical second-boot guarantee of `test/migration.test.mjs` applies.
 - **D-53:** Plaintext shown exactly once in a one-time modal at enable, copy-all affordance, `settings.tfa.recovery`/`recoveryDesc` keys; re-enrollment issues fresh set and invalidates old rows.
-- **D-54:** URI identity: `otpauth://totp/Gr8r:<email>?secret=…&issuer=Gr8r&algorithm=SHA1&digits=6&period=30`.
+- **D-54:** URI identity: `otpauth://totp/Projects:<email>?secret=…&issuer=Projects&algorithm=SHA1&digits=6&period=30`.
 - **D-55:** Copyable-secret fallback: monospace read-only field + copy button + "can't scan?" hint. QR rendering per D-15/16 (vendored encoder, inline SVG, EC level M, quiet zone 4, ~132 px).
 - **D-56:** Settings 2FA section = one inline card with states (off → enroll in place; on → status + turn-off). No wizard modal, no new routing.
 - **D-57:** Disable requires current password AND a code; code input accepts a live 6-digit code **or** a recovery code.
@@ -271,7 +271,7 @@ const svg = qr.createSvgTag({ cellSize: 4, margin: 4, scalable: false }); // qui
 
 ### Pitfall 5: otpauth label escaping
 **What goes wrong:** emails containing `:`, `?`, `&`, or spaces break the URI or the authenticator's issuer/label split (the part before the first `:` in the path is the issuer).
-**How to avoid:** `encodeURIComponent` the label (`Gr8r:${email}`) and every query param value; keep the issuer both in the label prefix and `issuer=` param (D-54 format) so authenticators don't re-prompt.
+**How to avoid:** `encodeURIComponent` the label (`Projects:${email}`) and every query param value; keep the issuer both in the label prefix and `issuer=` param (D-54 format) so authenticators don't re-prompt.
 **Warning signs:** account appears as bare email or with a wrong issuer in the app.
 
 ### Pitfall 6: Recovery-code normalization drift

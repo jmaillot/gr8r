@@ -110,7 +110,7 @@ Requirements: **LOC-01**, **LOC-02**, **LOC-03**, **LOC-04**, **LOC-05**, **LOC-
 - **D-16:** When `PATCH /api/auth/me` **fails** after an instant switch (offline, 500), the
   interface **keeps the newly applied language for the session** and a toast warns the choice
   could not be saved; the next boot applies the account's old locale. This mirrors the existing
-  optimistic-save pattern (`gr8r:save-error` toasts). A **401** routes to the login screen as
+  optimistic-save pattern (`projects:save-error` toasts). A **401** routes to the login screen as
   today — the existing session-expired handling is reused, not duplicated.
 
 ### the agent's Discretion
@@ -134,7 +134,7 @@ Requirements: **LOC-01**, **LOC-02**, **LOC-03**, **LOC-04**, **LOC-05**, **LOC-
 - `.planning/REQUIREMENTS.md` §Language preference — LOC-01…LOC-06 are the locked requirements
 - `.planning/PROJECT.md` §Decisions for milestone v1.2 (D2–D5, D14) — selector honesty, per-user
   locale, server never writes at boot, `dateFmt`/`weekStart`/`tz` stay workspace-shared
-- `.planning/phases/05-i18n-foundation-catalogue-contract/05-CONTEXT.md` — D-02 (`gr8r:locale`
+- `.planning/phases/05-i18n-foundation-catalogue-contract/05-CONTEXT.md` — D-02 (`projects:locale`
   event), and the `<specifics>` registry test recommendation that makes LOC-02 cheap to enforce
 - `.planning/phases/06-english-extraction-locale-aware-formats/06-CONTEXT.md` — D-04 (`'auto'`
   sentinel: an unset `dateFmt`/`timeFmt` follows the locale)
@@ -144,12 +144,12 @@ Requirements: **LOC-01**, **LOC-02**, **LOC-03**, **LOC-04**, **LOC-05**, **LOC-
 
 ### Code
 - `src/core/i18n.js` — `LOCALES` registry (frozen to en/fr), `setLocale()` (unknown → base),
-  the bubbling `gr8r:locale` event
+  the bubbling `projects:locale` event
 - `src/core/theme.js` — `applyPrefs()` and the `LANG_TO_LOCALE` mapping to delete
 - `src/core/store.js` — `DEFAULT_PREFS.lang`, `docSnapshot()`, `applyDoc()` (lang removal)
 - `src/pages/settings.js` — the language row (`sel('lang', …)`, ~line 188) to shrink to two
   options
-- `src/main.js` — the `init()` boot sequence (where D-07 applies) and the `gr8r:locale` listener
+- `src/main.js` — the `init()` boot sequence (where D-07 applies) and the `projects:locale` listener
 - `server.js` — `users` schema (~line 79), `ensureColumn()` (~line 127), `userPayload()`
   (~line 244), the PATCH endpoint surface (no `/api/auth/me` PATCH exists yet)
 - `src/core/api.js` — `api.me()` and the `call()` path the new PATCH joins
@@ -162,7 +162,7 @@ Requirements: **LOC-01**, **LOC-02**, **LOC-03**, **LOC-04**, **LOC-05**, **LOC-
 
 ### Reusable Assets
 - `setLocale()` / the `LOCALES` registry — already resolves unknown codes to base and dispatches
-  the bubbling `gr8r:locale` event; the selector and the negotiation layer build on it as-is.
+  the bubbling `projects:locale` event; the selector and the negotiation layer build on it as-is.
 - `ensureColumn()` (`server.js:127`) — the proven idempotent additive-migration helper for the
   new `users.locale` column.
 - `userPayload()` (`server.js:244`) — the single place where the account payload is shaped; the
@@ -176,7 +176,7 @@ Requirements: **LOC-01**, **LOC-02**, **LOC-03**, **LOC-04**, **LOC-05**, **LOC-
 - Locale as a module-level singleton read at call time, never threaded through signatures.
 - `applyPrefs()` runs at the top of every render with a loop guard — the account-locale
   application must preserve that guard discipline.
-- Optimistic UI with toasts on save errors (`gr8r:save-error`) — the PATCH-failure path reuses it.
+- Optimistic UI with toasts on save errors (`projects:save-error`) — the PATCH-failure path reuses it.
 - Demo mode honestly single-workspace: server-dependent controls are hidden or no-op'd; the
   selector instead stays functional with a localStorage backend (D-15).
 - Tests are `node:test` against real servers and real SQLite; nothing mocked.

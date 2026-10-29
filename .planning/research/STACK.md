@@ -123,5 +123,5 @@ via the existing `ensureColumn` machinery — additive, byte-identical second bo
 - `package.json` / `Dockerfile` — Node 24, engines `>=24`, dev deps — **HIGH**.
 
 ---
-*Stack research for: Gr8r Studio v1.4 Auth Completion*
+*Stack research for: Projects Studio v1.4 Auth Completion*
 *Researched: 2026-10-28*

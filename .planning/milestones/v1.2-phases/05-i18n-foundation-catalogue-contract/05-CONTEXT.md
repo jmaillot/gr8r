@@ -38,8 +38,8 @@ the detail was defaulted from the research (`SUMMARY.md` D1–D12).
   same way — never through every function signature.
   — **Reversibility:** costly — the import site of every caller changes; undoing it touches all
   37 files.
-- **D-02:** `setLocale()` notifies the renderer through a **`gr8r:locale` CustomEvent** instead
-  of importing it, mirroring the existing `gr8r:save-error` pattern. The dependency graph stays
+- **D-02:** `setLocale()` notifies the renderer through a **`projects:locale` CustomEvent** instead
+  of importing it, mirroring the existing `projects:save-error` pattern. The dependency graph stays
   acyclic: `i18n.js` imports the catalogues and nothing else from the app.
 - **D-03:** The module keeps its own **one-line `escHtml`** rather than importing `esc` from
   `src/core/utils.js`, so the leaf stays a leaf. `esc` itself stays where it is
@@ -170,7 +170,7 @@ something consistent and small; none of it is observable from outside the module
 - `src/core/store.js` holds the preferences; phase 8 removes `lang` from it.
 - `src/main.js` boots the app and is where the locale is resolved before the first render
   (phase 8).
-- `src/shell/render.js` re-renders on the `gr8r:locale` event.
+- `src/shell/render.js` re-renders on the `projects:locale` event.
 
 </code_context>
 

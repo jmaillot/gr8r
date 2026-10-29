@@ -137,7 +137,7 @@ function migrateTotpEncryption() {
   // D-73: defer when the key is absent — retry next boot
   if (!MASTER_KEY) { console.warn('  totp encryption: MASTER_KEY not configured — N plaintext secret(s) left unencrypted, will retry next boot'); return; }
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backup = path.join(DATA_DIR, `gr8r-preenvelope-${stamp}.db`);
+  const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     db.exec('pragma wal_checkpoint(truncate)');
@@ -201,7 +201,7 @@ Not a rename/refactor of existing identifiers, but the phase does mutate stored 
 ## Common Pitfalls
 
 ### Pitfall 1: Backup file created on second boot
-**What goes wrong:** If the trigger query doesn't exclude `v1:` rows (or runs after the MASTER_KEY check in the wrong order), every boot writes a new `gr8r-preenvelope-*.db`, violating "byte-identical no-op" and silently filling DATA_DIR.
+**What goes wrong:** If the trigger query doesn't exclude `v1:` rows (or runs after the MASTER_KEY check in the wrong order), every boot writes a new `projects-preenvelope-*.db`, violating "byte-identical no-op" and silently filling DATA_DIR.
 **How to avoid:** Trigger count first (D-83 query), return before the stamp/backup code. Test: assert `backups()` (existing helper pattern in migration.test.mjs:31) has zero new entries after a second boot.
 **Warning signs:** growing backup file count in data dir.
 
@@ -282,7 +282,7 @@ No deprecated approaches to migrate away from; no external-framework currency co
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | The base32 edge-rule check for D-75 can reuse an existing validation shape from totp.js / enrollment code (researcher did not read the enrollment validator this session) | Anti-Patterns / Pattern 1 | Planner may need to read totp.js and the enable route to pick the exact regex; low risk — behavior is fixed by D-75 regardless of regex choice |
-| A2 | `gr8r-preenvelope-` backup prefix naming (any distinct prefix works; only `gr8r-premultitenant-` is load-bearing in existing tests) | Pattern 1 | Zero — naming is agent discretion |
+| A2 | `projects-preenvelope-` backup prefix naming (any distinct prefix works; only `projects-premultitenant-` is load-bearing in existing tests) | Pattern 1 | Zero — naming is agent discretion |
 | A3 | Legacy fixture `createLegacyDb` can be extended (or the fixture reused with a manual `update users set two_fa_secret`) to plant a plaintext secret for ENC-01 tests | Validation Architecture | If the fixture hard-freezes user rows, tests plant the plaintext via direct `withDb` SQL before boot — still fits the existing pattern |
 
 ## Open Questions (RESOLVED)

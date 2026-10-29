@@ -5,7 +5,7 @@ subsystem: i18n-e2e-proof
 tags: [i18n, french, e2e, playwright, overflow, verification, read-through]
 requires:
   - "07-06: fr.json at 1,449 keys with 100% en→fr parity (the strings this spec renders)"
-  - "07-01: the D-01 locale wiring (applyPrefs mapping, setLocale, gr8r:locale) the spec exercises"
+  - "07-01: the D-01 locale wiring (applyPrefs mapping, setLocale, projects:locale) the spec exercises"
   - "07-02/07-03: the post-billing routes and the stored-vocabulary conversions the spec proves"
 provides:
   - "e2e/french-overflow.spec.mjs — six Chromium tests: the D-15 overflow + fixed-chrome proof at 1280×800 and 390×844, the in-place French switch with a settle (no render loop) check, the modal footer/primary-button proof, and the I18N-07 stored-id-vs-rendered-label proof"
@@ -85,10 +85,10 @@ English `todo` in the DOM. The full phase chain is green (362 unit tests, the pr
 
 ### Auto-fixed Issues
 
-**1. [Rule 1 - Bug] The gr8r:locale announcement never reached its listener in a browser**
+**1. [Rule 1 - Bug] The projects:locale announcement never reached its listener in a browser**
 - **Found during:** Task 1 (the spec's first run — the switch set `<html lang="fr">` while the
   interface stayed English)
-- **Issue:** `src/core/i18n.js` dispatched `gr8r:locale` on `document` with the CustomEvent
+- **Issue:** `src/core/i18n.js` dispatched `projects:locale` on `document` with the CustomEvent
   default `bubbles: false`; `src/main.js` listens on `window` (bare `addEventListener`). A
   non-bubbling event dispatched on the document never reaches a window listener, so the
   catalogue loaded but no re-render followed: the switch updated the language attribute while

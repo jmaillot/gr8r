@@ -76,9 +76,9 @@ see Deferred Ideas).
 
 ### QR & secret display
 
-- **D-54:** The otpauth URI identity is **`otpauth://totp/Gr8r:<email>?secret=…&issuer=Gr8r&algorithm=SHA1&digits=6&period=30`**
+- **D-54:** The otpauth URI identity is **`otpauth://totp/Projects:<email>?secret=…&issuer=Projects&algorithm=SHA1&digits=6&period=30`**
   — the user's email is the account label (unique per user, what
-  authenticators display under "Gr8r"). TFA-02's explicit params all present.
+  authenticators display under "Projects"). TFA-02's explicit params all present.
 - **D-55:** Copyable-secret fallback: a **monospace read-only field under
   the QR with a copy button** and a "can't scan? enter this code manually"
   hint. No otpauth deep-link affordance. QR rendering itself follows D-15/16

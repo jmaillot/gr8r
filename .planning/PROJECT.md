@@ -1,4 +1,4 @@
-# Gr8r Studio — project context
+# Projects Studio — project context
 
 *Last updated: 2026-10-29 after Phase 21*
 
@@ -9,7 +9,7 @@ board / list / table / calendar / timeline / files views, members, teams, activi
 
 - Frontend: plain ES modules + CSS, bundled by Vite. No UI framework, no runtime dependency.
 - Backend: `server.js`, Node's built-in `node:sqlite`, opaque session cookies, scrypt passwords.
-- Deploy: single Docker image behind Traefik (see `DEPLOY.md`), data in `/data/gr8r.db`.
+- Deploy: single Docker image behind Traefik (see `DEPLOY.md`), data in `/data/projects.db`.
 - Seed/demo data in `src/data/seed.js`; the server seeds a new database from it unless
   `SEED_DATA=false`.
 - **Multi-tenant since v1.1**: a workspace is a real tenant with its own URL, document and

@@ -122,7 +122,7 @@ and a 1.1.0 release with notes. No new tenancy capabilities, no billing, no file
 
 ### Established Patterns
 - Every server test uses a temporary `DATA_DIR`, an ephemeral port, and `fetch` with captured
-  `gr8r_session` cookies. No test mocks SQLite or the HTTP layer.
+  `projects_session` cookies. No test mocks SQLite or the HTTP layer.
 - Workspace routes are `/api/workspaces/:slug/...`; cross-tenant access is expected to answer
   `404`, not `403`.
 - Private project redaction is server-side; browser checks assert absence, not hidden CSS.

@@ -213,8 +213,8 @@ let enablemeCodes = [];          // plaintext codes captured from the enable res
 const enabledSecrets = new Map(); // secret per user, tracked at enable time
 async function signIn2fa(email) { /* reset two_fa_last_step=0 via withDb, then loginTfa with totpAt(secret, Date.now()/1000) */ }
 before(async () => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-tfa-'));
-  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } });
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-tfa-'));
+  server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-tfa-suite-key' } });
 });
 after(async () => { await server?.stop(); fs.rmSync(tempDir, { recursive: true, force: true }); });
 ```

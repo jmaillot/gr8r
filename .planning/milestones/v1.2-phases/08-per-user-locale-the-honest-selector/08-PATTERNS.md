@@ -154,7 +154,7 @@ normalised; no new plumbing.
 ### `primeLocale()` (silent boot variant) (`src/core/i18n.js`)
 
 **Analog:** `setLocale()` itself (lines 47-75) — copy the resolution + catalogue-load +
-`documentElement.lang` contract, drop ONLY the `gr8r:locale` dispatch:
+`documentElement.lang` contract, drop ONLY the `projects:locale` dispatch:
 ```js
 export async function setLocale(code) {
   const known = LOCALES.some(l => l.code === code);
@@ -169,13 +169,13 @@ export async function setLocale(code) {
   }
   if (typeof document !== 'undefined' && document && typeof document.dispatchEvent === 'function') {
     if (document.documentElement) document.documentElement.lang = target;
-    document.dispatchEvent(new CustomEvent('gr8r:locale', { detail: { code: target }, bubbles: true }));
+    document.dispatchEvent(new CustomEvent('projects:locale', { detail: { code: target }, bubbles: true }));
   }
   return target;
 }
 ```
-Why the variant exists (research Pitfall 2): the `gr8r:locale` listener at `main.js:68`
-(`addEventListener('gr8r:locale', () => render());`) registers at module load, before `init()`.
+Why the variant exists (research Pitfall 2): the `projects:locale` listener at `main.js:68`
+(`addEventListener('projects:locale', () => render());`) registers at module load, before `init()`.
 A dispatching call during boot renders the shell while `S.ui.auth` is null → demo-data flash.
 Every pre-render application (negotiation, account adoption, seed) uses the silent variant; the
 first dispatching switch is the user's selector click.
@@ -230,9 +230,9 @@ IN.prefSel = el => {
   toast(t('toast.prefSaved'), { ms: 1500 });
 };
 ```
-The new handler: `setLocale(code)` (the `gr8r:locale` event drives the re-render — no explicit
+The new handler: `setLocale(code)` (the `projects:locale` event drives the re-render — no explicit
 `render()` needed) → background `api.patchMe({ locale })` in server mode, or a
-`localStorage['gr8r.locale']` write in demo mode (D-15). **Never `S.prefs` / `save()`** (Pitfall
+`localStorage['projects.locale']` write in demo mode (D-15). **Never `S.prefs` / `save()`** (Pitfall
 3 — the doc write and revision bump are exactly what LOC-04 forbids). Failure path (D-16):
 keep the applied language for the session + error toast; a 401 rides the existing
 session-expired branch. Note `A.setPref` (lines 281-285) is the same doc-write trap via
@@ -296,11 +296,11 @@ after `hydrateFromServer()` → first `render()`. The join early-return (138-155
 unauthenticated early-return (159-165) both render AFTER the top-of-function negotiation, so
 they come up in the negotiated language (D-07/D-08).
 
-### `gr8r:save-error` reuse (D-16 401 path) (`src/main.js:70-97`)
+### `projects:save-error` reuse (D-16 401 path) (`src/main.js:70-97`)
 
 **Analog:** the existing session-expired handler — reused, not duplicated:
 ```js
-addEventListener('gr8r:save-error', e => {
+addEventListener('projects:save-error', e => {
   const { status, error } = e.detail || {};
   if (status === 401) {
     S.ui.auth = 'login';
@@ -440,7 +440,7 @@ hardcoded literals and `scripts/fr-parity.mjs` fails on en-only keys (Pitfall 8)
 sign-out fallback). Runtime selector keeps the dispatching `setLocale()`.
 
 ### Optimistic UI + failure toast, 401 → login
-**Source:** `src/main.js:70-97` (`gr8r:save-error`), `src/ui/toast.js` toast API
+**Source:** `src/main.js:70-97` (`projects:save-error`), `src/ui/toast.js` toast API
 **Apply to:** the background `api.patchMe()` failure path (D-16): keep the applied language for
 the session, warn-toast on network/5xx, route to login on 401 via the existing branch.
 
@@ -455,7 +455,7 @@ lists in a second place.
 (`IN.prefSel`)
 **Apply to:** negatively — the language never enters `S.prefs`, `docSnapshot()`, `IN.prefSel`,
 `A.setPref`, or any `save()` call. Its write path is exactly `PATCH /api/auth/me` (server) or
-`localStorage['gr8r.locale']` (demo).
+`localStorage['projects.locale']` (demo).
 
 ### Real-server test harness
 **Source:** `test/helpers/server.mjs` (client/login/signup/startServer/withDb), 
@@ -469,7 +469,7 @@ snapshot. `node --test --test-concurrency=2 test/*.test.mjs` invocation.
 |------|------|-----------|--------|----------|
 | `negotiate()` helper | utility | transform | No browser-language negotiation exists anywhere in the codebase | RESEARCH.md Pattern 4 gives the exact reference implementation (pure function, bare-Node testable, ~8 lines) |
 | The migration seed (D-04/D-06) | controller glue | event-driven | No client-side migration seed exists; the closest lifecycle glue (`applyDeepLink`, `main.js:100-119`) is unrelated | RESEARCH.md Pattern 5 specifies guard (NULL + `'Français'` only), timing (post-hydration, pre-render), failure (log/ignore, retry next boot) |
-| Demo-mode localStorage persistence (D-15) | storage | CRUD | No precedent for a second localStorage key outside `STORE_KEY` (`store.js:8`, `'gr8r.v2'`) | A separate `gr8r.locale` key owned by the i18n module — deliberately NOT inside the `gr8r.v2` blob, so it can never re-enter the prefs/doc pipeline |
+| Demo-mode localStorage persistence (D-15) | storage | CRUD | No precedent for a second localStorage key outside `STORE_KEY` (`store.js:8`, `'projects.v2'`) | A separate `projects.locale` key owned by the i18n module — deliberately NOT inside the `projects.v2` blob, so it can never re-enter the prefs/doc pipeline |
 
 ## Metadata
 

@@ -16,7 +16,7 @@ decisions:
   - pending2fa state lives ONLY in in-memory S.ui (auth flag + maskedEmail); api.login skips applyUser on pending2fa so a pending challenge is never readable as signed-in (D-70, T-17-07)
   - The 2FA card renders one dual-shape autocomplete="one-time-code" field — zero client branching on code shape (D-64, T-17-09); only the server-computed maskedEmail is esc()'d into the subtitle (D-62, T-17-08)
   - doLogin's post-success tail extracted into finishLogin() so doTfaVerify reuses the exact ?next=/queued-invite/hydrate landing (D-75); the D-11 locale-adoption pin test now asserts finishLogin adopts before hydration
-  - Challenge abandon is a real logout (the HttpOnly gr8r_tfa_challenge cookie is server-clearable only); the throttle budget is server-owned and untouched (D-61/D-03)
+  - Challenge abandon is a real logout (the HttpOnly projects_tfa_challenge cookie is server-clearable only); the throttle budget is server-owned and untouched (D-61/D-03)
   - Recovery-burn report is a post-landing toast, escalated copy only when recoveryRemaining === 0; no behavior difference between the two paths (D-73/D-74)
 metrics:
   duration: ~50m

@@ -98,7 +98,7 @@ Prior round (2026-10-25T18:47Z) passed 5/5. Since then, exactly one commit touch
 | From | To | Via | Status | Details |
 | ---- | -- | --- | ------ | ------- |
 | PATCH /api/auth/me | users table → userPayload → response | whitelist + UPDATE + select | ✓ WIRED | server.js:1270-1280, :258 |
-| selector change | setLocale → gr8r:locale → render ∥ patchMe → users.locale | actions.js:2229, main.js import :63 | ✓ WIRED | i18n.js:74 setLocale; event listener re-renders; PATCH persists |
+| selector change | setLocale → projects:locale → render ∥ patchMe → users.locale | actions.js:2229, main.js import :63 | ✓ WIRED | i18n.js:74 setLocale; event listener re-renders; PATCH persists |
 | registry LOCALES | availableLocales() → selector options | settings.js:94 | ✓ WIRED | i18n.js:131; single source of truth |
 | hydrate raw doc prefs.lang | consumeLegacyLang → guard NULL + French label → patchMe({locale:'fr'}) | store.js:198, main.js:136-137 | ✓ WIRED | seed PATCH present; never rewrites workspace row |
 | sign-out/in lifecycle | primeLocale(negotiated / account locale) | actions.js:2079, :2091 | ✓ WIRED | login path reads `api.user?.locale || negotiate()`; sign-out demo-mode carve-out is the human-approved UAT-10 semantics |

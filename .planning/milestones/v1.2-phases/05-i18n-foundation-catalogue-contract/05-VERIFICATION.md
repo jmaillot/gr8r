@@ -104,7 +104,7 @@ pattern was investigated rather than waved away:
 
 | # | Criterion | Status | Evidence (current tree) |
 | --- | --- | --- | --- |
-| 1 | A catalogue lookup returns the English base string, and a key with no value in the active catalogue falls back to English instead of rendering empty text | **✓ VERIFIED** | `t()` (`i18n.js:175-185`): active catalogue → `catalogues.get(BASE_LOCALE)` → return the key, never empty. Exercised live: under an active `fr` locale (bare Node, fr catalogue absent by design) `t('nav.projects')` → `'Projects'`. The `gr8r:locale` fallback test still runs green in `test/i18n.test.mjs` (16/16). |
+| 1 | A catalogue lookup returns the English base string, and a key with no value in the active catalogue falls back to English instead of rendering empty text | **✓ VERIFIED** | `t()` (`i18n.js:175-185`): active catalogue → `catalogues.get(BASE_LOCALE)` → return the key, never empty. Exercised live: under an active `fr` locale (bare Node, fr catalogue absent by design) `t('nav.projects')` → `'Projects'`. The `projects:locale` fallback test still runs green in `test/i18n.test.mjs` (16/16). |
 | 2 | The test suite rejects any catalogue value containing `<`, `>` or `"`, so no catalogue value can inject markup | **✓ VERIFIED** | `test/catalogue.test.mjs` 26/26 on the **1538-key** catalogues; the suite now embeds the rejection mutations (left/right angle bracket tests green in-run); independent scan over all 3076 values (strings + plural members, both locales, incl. the 6 new keys): **0 violations**. The lint lints every file in `src/locales/`, so today's keys were covered the moment they landed — no exemption existed to soften. |
 | 3 | A count is selected by the locale's CLDR categories — 0 → `one` in French and `other` in English, 1 000 000 → `many` in French — never by a hand-written `n > 1` rule | **✓ VERIFIED** | `resolvePlural()` + cached `Intl.PluralRules` (`i18n.js:149-173`) unchanged and re-probed live: fr 0 → `one`, fr 1000000 → `many` (→ `other` member when the value lacks `many`); en 1000000 → `other`. The new `act.deleteProjectTaskCount` is a CLDR-keyed object with an `other` member in both locales (`{"one":"{n} tâche","other":"{n} tâches"}` in fr). No `n > 1` rule exists in the layer. The committed plural tests (`test/i18n-plural.test.mjs`, plus `i18n.test.mjs`'s table) run green. |
 | 4 | The build emits the French catalogue as its own chunk, and a build configured for English only contains none of the French catalogue's bytes | **✓ VERIFIED** | `test/build-locales.test.mjs` **9/9 standalone** — three real `vite build` runs into a temp dir (default, `LOCALES=en`, `LOCALES=fr`), byte-asserted, with the markers computed from the **current** catalogue files (the suite's design: "survives the catalogue growing in phase 6 and phase 7" — it survived the growth to 1538). `vite.config.js` `localeSubset()` + `BUILD_LOCALES` unchanged in contract (`en` always shipped; non-base locales outside the set emptied). `build:en` still in `package.json` (`LOCALES=en vite build`). |
@@ -121,7 +121,7 @@ pattern was investigated rather than waved away:
 | 3 | Missing key in active catalogue falls back to English | 05-01 | ✓ VERIFIED (live under active `fr`) |
 | 4 | A key only in the active catalogue resolves from it | 05-01 | ✓ VERIFIED (`contract.frenchOnly` test green; `x.only` probe) |
 | 5 | Plural chosen by `Intl.PluralRules`, never `n > 1`: fr 0→one, 1000000→many | 05-01 | ✓ VERIFIED (live probe; cached per locale, `i18n.js:154-161`) |
-| 6 | `setLocale('fr')` switches the singleton and announces `gr8r:locale` | 05-01 | ✓ VERIFIED (`i18n.js:74-80`; dispatch after catalogue ready, bubbling — commit 3a62a35 refined the listener side without touching the contract) |
+| 6 | `setLocale('fr')` switches the singleton and announces `projects:locale` | 05-01 | ✓ VERIFIED (`i18n.js:74-80`; dispatch after catalogue ready, bubbling — commit 3a62a35 refined the listener side without touching the contract) |
 | 7 | `src/core/i18n.js` imports nothing but the JSON catalogues (leaf) | 05-01 | ✓ VERIFIED (single import: `en.json`; glob guarded; even at 523 lines the layer still imports nothing from the app) |
 | 8 | Layer in the entry's module graph; default build inlines en, emits fr as its own chunk | 05-01 | ✓ VERIFIED (`src/main.js:7`; build suite 9/9) |
 | 9 | Suite rejects any value with `<`, `>` or `"` | 05-02 | ✓ VERIFIED (26/26; embedded mutation tests green) |
@@ -156,7 +156,7 @@ call sites that exist today were added by phases 6-8, each with its own gates.
 | Decision | Verdict | Evidence |
 | --- | --- | --- |
 | D-01 leaf module + locale singleton | ✓ | single import; `let locale` (`i18n.js:16`) |
-| D-02 `gr8r:locale` on document, no renderer import | ✓ | `i18n.js:76-78`, plus D-02's `document.documentElement.lang` follow (`i18n.js:63`) |
+| D-02 `projects:locale` on document, no renderer import | ✓ | `i18n.js:76-78`, plus D-02's `document.documentElement.lang` follow (`i18n.js:63`) |
 | D-04 JSON only under `src/locales/` | ✓ | two files, both `.json` |
 | D-06 CLDR object plurals via `Intl.PluralRules` | ✓ | `i18n.js:152-173`; live-probed |
 | D-08 English fallback, never empty | ✓ | `i18n.js:176-184`; live-probed under active `fr` |
@@ -188,7 +188,7 @@ call sites that exist today were added by phases 6-8, each with its own gates.
 | `src/core/i18n.js` | `src/locales/en.json` | static JSON import + top-level `registerCatalogue` | ✓ WIRED | `i18n.js:6`, `i18n.js:36` — bare-Node import of the module resolves and serves English values |
 | `src/core/i18n.js` | `src/locales/*.json` (non-base) | `import.meta.glob` in try/catch, excluding `en.json` | ✓ WIRED | `i18n.js:22-27`; Node path degrades to the documented empty-loader state |
 | `src/core/i18n.js` | `Intl.PluralRules` | cached per locale | ✓ WIRED | `i18n.js:152-161`; live-probed |
-| `src/core/i18n.js` | `document` | `gr8r:locale` CustomEvent | ✓ WIRED | `i18n.js:76-78` |
+| `src/core/i18n.js` | `document` | `projects:locale` CustomEvent | ✓ WIRED | `i18n.js:76-78` |
 | `test/catalogue.test.mjs` | `src/locales/*.json` | fs + bare-Node JSON import | ✓ WIRED | lint runs on the real 1538-key files today |
 | `test/catalogue.test.mjs` | `src/core/i18n.js` | `LOCALES`/`BASE_LOCALE` import | ✓ WIRED | registry agreement test green |
 | `test/catalogue.test.mjs` | `package.json` | manifest read | ✓ WIRED | zero-dependency guard green |
@@ -269,7 +269,7 @@ phase (no rendered string changed in phase 5 itself).
 the catalogues to 1538 keys, including the six keys added today) was re-verified item by item and
 every phase-5 must-have still holds on the current tree: the contract surface of `i18n.js` is
 byte-level intact in its invariants (leaf import, raw `t()`, English fallback, cached CLDR
-plurals, glob exclusion, `gr8r:locale`), the catalogue contract passes over the full 3076 values
+plurals, glob exclusion, `projects:locale`), the catalogue contract passes over the full 3076 values
 with zero violations and zero exemptions, the build contract passes on three real vite builds, the
 catalogues remain bare-Node importable (1538 keys), and no runtime dependency exists. Both
 roadmap requirements (I18N-06, I18N-08) are satisfied and now marked Complete in

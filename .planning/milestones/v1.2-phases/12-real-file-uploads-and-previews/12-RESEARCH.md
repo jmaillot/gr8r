@@ -153,7 +153,7 @@ to the existing DB bootstrap):
 
 ```
 DATA_DIR/
-├── gr8r.db              # existing
+├── projects.db              # existing
 └── files/               # NEW: one binary per record, named <file-id>
 ```
 
@@ -268,7 +268,7 @@ missing file as success (idempotent).
 
 | Category | Items Found | Action Required |
 |----------|-------------|------------------|
-| Stored data | None — `data.files` records are metadata-only today; no binaries exist anywhere under DATA_DIR yet [VERIFIED: DATA_DIR only referenced for gr8r.db/backups, server.js:52-53, 852] | None for existing data; new writes go to `DATA_DIR/files/` |
+| Stored data | None — `data.files` records are metadata-only today; no binaries exist anywhere under DATA_DIR yet [VERIFIED: DATA_DIR only referenced for projects.db/backups, server.js:52-53, 852] | None for existing data; new writes go to `DATA_DIR/files/` |
 | Live service config | None | None |
 | OS-registered state | None | None |
 | Secrets/env vars | New env knob `MAX_UPLOAD_MB` (D-02) added to the env doc block at `server.js:10-33` and read like `MAX_BODY` at `server.js:68` | code edit only |

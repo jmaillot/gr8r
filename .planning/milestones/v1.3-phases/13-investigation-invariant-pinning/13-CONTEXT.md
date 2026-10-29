@@ -45,7 +45,7 @@ decisions below; the deliverable of this phase is these pinned contracts.
 ### TOTP secret encryption-at-rest
 
 - **D-05:** **Encrypt.** `users.two_fa_secret` stores AES-256-GCM ciphertext under a key
-  derived from a host-provided `MASTER_KEY`. Stealing `/data/gr8r.db` alone must not yield
+  derived from a host-provided `MASTER_KEY`. Stealing `/data/projects.db` alone must not yield
   live TOTP secrets. — **Reversibility:** one-way — once secrets are stored encrypted and
   enrollment is live, switching to plaintext or a different scheme is a data migration on
   every enrolled user plus a DEPLOY.md contract change.

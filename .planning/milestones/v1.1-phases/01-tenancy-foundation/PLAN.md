@@ -119,7 +119,7 @@ Verify: `format:check`.
 ## Rollback
 
 1. Stop the container.
-2. Restore the pre-migration backup (`gr8r-premultitenant-*.db`) over `gr8r.db`.
+2. Restore the pre-migration backup (`projects-premultitenant-*.db`) over `projects.db`.
 3. Redeploy the previous image tag.
    The additive columns are ignored by the old code, so a restore is only needed if the document
    migration must be undone.

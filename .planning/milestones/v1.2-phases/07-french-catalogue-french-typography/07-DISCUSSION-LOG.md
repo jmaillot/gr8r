@@ -57,7 +57,7 @@
 | Defer to phase 11 sweep | Completeness checked at the end | |
 
 **User's choice:** Failing completeness test now
-**Notes:** Values that legitimately stay identical (Gr8r Studio, Ctrl) must exist in `fr.json`, not be omitted. Human read-through remains separate.
+**Notes:** Values that legitimately stay identical (Projects Studio, Ctrl) must exist in `fr.json`, not be omitted. Human read-through remains separate.
 
 ---
 

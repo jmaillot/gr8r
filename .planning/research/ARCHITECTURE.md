@@ -172,5 +172,5 @@ Not scale-relevant (single Docker image, node:sqlite, hundreds of users max). Th
 - Standards (MEDIUM — web search blocked by anti-bot; from established knowledge of OWASP ASVS 2.5.3/2.8, NIST SP 800-63B AAL2, RFC 6238): TOTP-at-rest encryption, step-up verification on sensitive operations, single-use hashed recovery codes, session revocation semantics. Verify specific clause numbers during phase planning if citing externally.
 
 ---
-*Architecture research for: Gr8r Studio v1.4 Auth Completion*
+*Architecture research for: Projects Studio v1.4 Auth Completion*
 *Researched: 2026-10-28*

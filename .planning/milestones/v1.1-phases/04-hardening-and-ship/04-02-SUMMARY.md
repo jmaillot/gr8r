@@ -100,7 +100,7 @@ status: complete
   `data.me = 'm_alice'`, and a preserved project `p_keep` / task `t_keep`. The helper closes the
   database before returning.
 - `test/migration.test.mjs` captures the fixture's columns *before* boot, then asserts in order:
-  exactly one `gr8r-premultitenant-*.db` and the logged path; the backup holds null tenancy
+  exactly one `projects-premultitenant-*.db` and the logged path; the backup holds null tenancy
   columns, the demo array and `data.me`; the migrated row has `legacy-studio` / `Legacy Studio` /
   `#3D8E5F`; the document has no `data.workspaces`, `data.me === null`, `data.ws.url` intact and
   both preserved rows; member profiles carry `userId` and memberships carry `member_id`; the

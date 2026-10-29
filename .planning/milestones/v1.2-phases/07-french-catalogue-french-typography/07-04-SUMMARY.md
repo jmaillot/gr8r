@@ -27,7 +27,7 @@ key-files:
 decisions:
   - "Terminology for batch A fixed in the glossary add-only: système de design, token, vue enregistrée, échéance, en retard, jalon, boîte de réception, barre latérale, panneau latéral, fil d'Ariane, sous-tâche, équipe, wireframe, passation, grille, e-mail"
   - "a11y strings stay terse and noun-first; keyboard labels localized (Esc → Échap, Enter → Entrée); no trailing punctuation added where the English has none"
-  - "Identical-value keys kept present, never omitted (Gr8r, Gr8r Studio, 2-10/11-50/51-200/200+, s)"
+  - "Identical-value keys kept present, never omitted (Projects, Projects Studio, 2-10/11-50/51-200/200+, s)"
   - "English fragments with dangling punctuation preserved positionally (page.deniedPrivate, page.auth.resetExpires, page.auth.verifyClick, the two tip strings with bare key hints)"
 metrics:
   duration: ~34 min
@@ -53,7 +53,7 @@ typography lint; English output untouched.
 1. **Task 1 — Translate the page namespace (512 keys).** Every `page.*` key received a French
    value under the glossary register (vous, sentence case, lowercase months, decimal comma).
    Placeholders kept name-for-name including the one plural object (`page.auth.invitesSent`:
-   one/other). Identical-value keys written verbatim (`Gr8r Studio`, `2-10`, `s`). The glossary
+   one/other). Identical-value keys written verbatim (`Projects Studio`, `2-10`, `s`). The glossary
    gained a lot-A section (add-only). Gates: `fr-parity.mjs page` exit 0 (512/512), typography
    lint 9/9, `i18n-pages` 13/13. Commit **7e9108c**.
 

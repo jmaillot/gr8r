@@ -27,7 +27,7 @@ Copied verbatim from `17-CONTEXT.md` §decisions — the planner MUST honor all 
 - **D-75:** Post-verify landing = normal home/overview.
 
 ### the agent's Discretion
-- Challenge-cookie name/serialization (separate from `gr8r_session`; ~5 min Max-Age; httpOnly/sameSite/Secure attributes matching `setSessionCookie` style).
+- Challenge-cookie name/serialization (separate from `projects_session`; ~5 min Max-Age; httpOnly/sameSite/Secure attributes matching `setSessionCookie` style).
 - Exact verify-route path name and response key for remaining-recovery-count.
 - Masking algorithm (never leak enough to enumerate).
 - Test file placement per `test/` conventions (`tfa-enrollment.test.mjs` is the model); 401-matrix may be its own file.
@@ -47,7 +47,7 @@ None. Admin 2FA reset stays deferred from Phase 16; remember-me stays rejected. 
 
 Every primitive this phase needs already exists and was verified in the current code this session: the dormant `login_challenges` table ([VERIFIED: server.js:113-119] — `challenge_token_hash` PK, `user_id`, `expires_at`, `attempts default 0`, plus expiry index at :119), the recovery burn primitive (`normalizeRecoveryCode`/`recoveryHash` imported at [VERIFIED: server.js:49], defined at [VERIFIED: totp.js:96-99]), the TOTP verify with format gate + ±1 window + replay guard (`verifyTotpCode` [VERIFIED: totp.js:61-77]), the throttle (`tooMany` [VERIFIED: server.js:1257-1267]), the guards (`sameOrigin` :1179-1184, `requireUser` :1228-1235), and the session-mint recipe inside the current login handler ([VERIFIED: server.js:1352-1368]). This phase is wiring: branch the password-correct path, add one dedicated verify route, add the `s === '2fa'` client state, and prove anonymity with a 401-matrix test.
 
-The security invariant is structural (D-02): the challenge lives under a **separate cookie name**, `requireUser()`/`currentUser()` ([VERIFIED: server.js:1213-1235]) read only the `gr8r_session` cookie (`COOKIE = 'gr8r_session'` [VERIFIED: server.js:78]) and only `sessions` rows — a pending sign-in matches zero session rows, so every endpoint family answers 401 with zero new code. The matrix test exists to prove the structural claim, not to enforce it.
+The security invariant is structural (D-02): the challenge lives under a **separate cookie name**, `requireUser()`/`currentUser()` ([VERIFIED: server.js:1213-1235]) read only the `projects_session` cookie (`COOKIE = 'projects_session'` [VERIFIED: server.js:78]) and only `sessions` rows — a pending sign-in matches zero session rows, so every endpoint family answers 401 with zero new code. The matrix test exists to prove the structural claim, not to enforce it.
 
 **Primary recommendation:** one server plan (login branch + verify route + challenge lifecycle + D-13 copy replacement) and one client plan (`s === '2fa'` state + pending-response handling + post-login banner), with the 401-matrix test landing in the server plan; keep the `attempts.delete()` success-clear move as its own explicitly-verified task since it is the throttle-invariant crux (Pitfall 18).
 
@@ -199,7 +199,7 @@ The verify route repeats this with the challenge's `user_id`; plus `delete from 
 - Boot/hourly sweeper, matching the sessions cleaner pattern [VERIFIED: server.js:2486-2487]: `db.prepare('delete from login_challenges where expires_at <= ?').run(now())` at boot + `setInterval(..., 3600_000).unref()` — **no sweeper for this table exists yet** (verified by grep: only sessions :2486 and invites :1876 are swept).
 
 ### Anti-Patterns to Avoid
-- **Reusing the session cookie for pending state** (Pitfall 15): the entire second factor is decorative if a pending request carries any `gr8r_session` value. Separate cookie name, structural anonymity (D-02).
+- **Reusing the session cookie for pending state** (Pitfall 15): the entire second factor is decorative if a pending request carries any `projects_session` value. Separate cookie name, structural anonymity (D-02).
 - **`attempts.delete()` between steps** (Pitfall 18 / D-03): the success-clear at [VERIFIED: server.js:1352] must move so it runs only when login fully completes (i.e., on verify success) — not on the password-correct-but-pending branch.
 - **`timingSafeEqual` on unvalidated length** (Pitfall 22b): it throws on length mismatch. `verifyTotpCode` already format-gates `/^\d{6}$/` [VERIFIED: totp.js:62-63]; the recovery branch normalizes to hex so hash comparison is fixed-length — keep both gates intact.
 - **Copy-pasting `Max-Age=SESSION_DAYS` onto the challenge cookie** (Pitfall 15 warning / D-68).
@@ -325,7 +325,7 @@ if (pathname === '/api/auth/tfa/login' && method === 'POST') {
 ### Test model (no mocks, own server + temp DB)
 ```js
 // Source: test/tfa-enrollment.test.mjs:19-23
-server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } });
+server = await startServer({ dataDir: tempDir, env: { MASTER_KEY: 'projects-tfa-suite-key' } });
 ```
 Live codes come from `totpAt(secret, Date.now() / 1000)` (test/tfa-enrollment.test.mjs:56); DB assertions via `withDb(server.dbPath, ...)`; login helpers exist in `test/helpers/server.mjs`.
 
@@ -361,7 +361,7 @@ Live codes come from `totpAt(secret, Date.now() / 1000)` (test/tfa-enrollment.te
 | Dependency | Required By | Available | Version | Fallback |
 |------------|------------|-----------|---------|----------|
 | Node (server + node:test) | all tests | ✓ | 24 (project baseline) | — |
-| `MASTER_KEY` env | verify route (decrypt → verify) | set per-test (`MASTER_KEY: 'gr8r-tfa-suite-key'` model, tfa-enrollment.test.mjs:23) | — | fail-closed 503 is the existing contract (D-06) — tests set a throwaway key |
+| `MASTER_KEY` env | verify route (decrypt → verify) | set per-test (`MASTER_KEY: 'projects-tfa-suite-key'` model, tfa-enrollment.test.mjs:23) | — | fail-closed 503 is the existing contract (D-06) — tests set a throwaway key |
 
 No blocking missing dependencies.
 

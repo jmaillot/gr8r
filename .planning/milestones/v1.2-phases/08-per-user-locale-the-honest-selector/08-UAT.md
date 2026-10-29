@@ -56,7 +56,7 @@ source: automated
 note: "Deferred to e2e coverage: e2e/locale.spec.mjs already proves the toast + optimistic-switch path mechanically; live trigger of a non-401 PATCH failure not practical by hand — e2e suite passed 4/4, verifier-confirmed 2026-10-24."
 
 ### 10. Demo-Mode Language Non-Adoption (prohibition check — from 08-VERIFICATION.md)
-expected: With demo localStorage carrying a saved language (`gr8r.locale` set to fr), sign in with a real account whose locale is English (or NULL). The account rules must govern: after sign-in the interface shows the account/browser-negotiated language, never the demo-stored one.
+expected: With demo localStorage carrying a saved language (`projects.locale` set to fr), sign in with a real account whose locale is English (or NULL). The account rules must govern: after sign-in the interface shows the account/browser-negotiated language, never the demo-stored one.
 result: pass
 
 ### 11. No Phantom or Untranslated Language Anywhere (prohibition check — from 08-VERIFICATION.md)

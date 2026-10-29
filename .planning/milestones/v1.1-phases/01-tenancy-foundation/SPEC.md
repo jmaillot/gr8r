@@ -49,7 +49,7 @@ The document keeps its shape, with these server-enforced rules:
 ### Migration of an existing install
 
 1. Write a pre-migration backup next to the database
-   (`gr8r-premultitenant-<iso>.db`) and log the path.
+   (`projects-premultitenant-<iso>.db`) and log the path.
 2. Add columns/index if missing (`pragma table_info` guards).
 3. For the single existing row:
    - `slug` ← sanitised `doc.data.ws.url`, else `slugify(doc.data.ws.name)`, else `workspace`;

@@ -58,7 +58,7 @@ key-decisions:
   - "The sidebar, the bottom navigation, the breadcrumbs and the topbar bell all read routeName(id) — one source of truth per route name, no parallel nav.* keys duplicating the route values"
   - "The file-type table keeps its colour and its icon and loses only its display name; the stored ids (fig, pdf, zip, img, sheet, doc, code, other) are byte-identical and fileType()'s extension lists are pinned by a test"
   - "Five topbar literals the scanner cannot see (Breadcrumb, Search and commands, Search or jump to…, Create new, Account menu) were swept too — they are user-visible even though the scan never reported them, so the catalogue grew beyond the allow-list delta"
-  - "Reused existing values instead of duplicating keys: app.name ('Gr8r Studio'), common.workspace, common.today, toast.tryAgain, and routeName('timeline') for the sidebar's timeline sub-tab"
+  - "Reused existing values instead of duplicating keys: app.name ('Projects Studio'), common.workspace, common.today, toast.tryAgain, and routeName('timeline') for the sidebar's timeline sub-tab"
 
 requirements-completed: []  # I18N-01 stays Pending until phase close (orchestrator instruction) — this plan delivers its chrome+helpers slice
 

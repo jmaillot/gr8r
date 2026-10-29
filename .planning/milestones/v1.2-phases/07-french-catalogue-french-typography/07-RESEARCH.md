@@ -10,7 +10,7 @@
 ### Locked Decisions
 
 **French reachability**
-- **D-01:** French becomes reachable now through the existing selector, not through phase 8's persistence work. `applyPrefs()` maps the stored `prefs.lang` display label to a locale code and calls `setLocale()`; the `gr8r:locale` event re-renders. This mapping is explicitly throwaway — phase 8 replaces the storage format, the selector and this mapping. — Reversibility: reversible.
+- **D-01:** French becomes reachable now through the existing selector, not through phase 8's persistence work. `applyPrefs()` maps the stored `prefs.lang` display label to a locale code and calls `setLocale()`; the `projects:locale` event re-renders. This mapping is explicitly throwaway — phase 8 replaces the storage format, the selector and this mapping. — Reversibility: reversible.
 - **D-02:** `setLocale('fr')` must also set `document.documentElement.lang` to `fr`. `main.js` currently hardcodes `lang="en"`.
 - **D-03:** Unknown or unsupported stored values resolve to `en`, matching the existing `setLocale()` contract. The selector's other four labels (English UK, Deutsch, Español, 日本語) keep resolving to `en` this phase.
 
@@ -20,7 +20,7 @@
 - **D-06:** Stored vocabulary is displayed, never rewritten. English ids (`todo`, `high`, `Paid`) remain the stored and wire values; `t()` supplies the label. This extends the existing phase-6 pattern in `src/core/constants.js` and `store.roleLabel`.
 
 **Catalogue completeness**
-- **D-07:** A failing completeness test enforces en→fr parity: every English key except `contract.*` must exist in `fr.json` with a non-empty string. Plural objects must carry at least `one` and `other`; CLDR categories beyond that are allowed. Values legitimately identical in both languages (`Gr8r Studio`, `Ctrl`, product names) must be present, never omitted. Additive to `test/catalogue.test.mjs`.
+- **D-07:** A failing completeness test enforces en→fr parity: every English key except `contract.*` must exist in `fr.json` with a non-empty string. Plural objects must carry at least `one` and `other`; CLDR categories beyond that are allowed. Values legitimately identical in both languages (`Projects Studio`, `Ctrl`, product names) must be present, never omitted. Additive to `test/catalogue.test.mjs`.
 - **D-08:** Translation workflow: a terminology glossary first (`docs/i18n-fr-glossary.md`), then namespaces in batches — `page` 512, `settings` 196, `act` 144, `a11y` 132, `toast` 95, `modal` 67, `err` 64, remaining ~236 — each batch gated by the completeness and typography tests.
 - **D-09:** French register is `vous` (PROJECT.md D9), sentence-case headings, no middle-dot gender forms (D10), French-France conventions: lowercase months and weekdays, `1er`/`1re`/`2e`, decimal comma, narrow-NBSP digit grouping.
 
@@ -59,9 +59,9 @@
 
 ## Summary
 
-The engine is fully in place: `src/core/i18n.js` already registers `en` and `fr`, lazily loads the French chunk, dispatches `gr8r:locale`, and supplies locale-aware formatters (French dates `24/07/2026`, 24-hour clock, `il y a 2 jours`, decimal comma, narrow-NBSP grouping — all `Intl`-driven). What Phase 7 adds is (1) 1,440 French values, (2) the wiring that makes the selector actually switch the interface, (3) a typography linter, (4) four stored-vocabulary conversions (templates, estimates display, notifications structure, plus French values for the existing permission/recurrence keys), and (5) the end-to-end removal of billing.
+The engine is fully in place: `src/core/i18n.js` already registers `en` and `fr`, lazily loads the French chunk, dispatches `projects:locale`, and supplies locale-aware formatters (French dates `24/07/2026`, 24-hour clock, `il y a 2 jours`, decimal comma, narrow-NBSP grouping — all `Intl`-driven). What Phase 7 adds is (1) 1,440 French values, (2) the wiring that makes the selector actually switch the interface, (3) a typography linter, (4) four stored-vocabulary conversions (templates, estimates display, notifications structure, plus French values for the existing permission/recurrence keys), and (5) the end-to-end removal of billing.
 
-**Critical wiring fact:** nothing in `src/` listens for the `gr8r:locale` event today — `setLocale()` dispatches it (i18n.js:64) but it is dead code in the browser until phase 7 adds both the `applyPrefs()` label→code mapping and a re-render listener. `document.documentElement.lang` is hardcoded `'en'` at main.js:117 and never updated.
+**Critical wiring fact:** nothing in `src/` listens for the `projects:locale` event today — `setLocale()` dispatches it (i18n.js:64) but it is dead code in the browser until phase 7 adds both the `applyPrefs()` label→code mapping and a re-render listener. `document.documentElement.lang` is hardcoded `'en'` at main.js:117 and never updated.
 
 **Primary recommendation:** Build the wiring first (small, testable in node), then the two new tests (completeness + typography) as the gates, then translate namespace batches against those gates, then the four vocabulary conversions and the billing removal, then the Playwright overflow spec. The existing architecture needs **zero new packages**.
 
@@ -114,9 +114,9 @@ applyPrefs()  [src/core/theme.js — runs at the top of every render()]
 setLocale(code)  [src/core/i18n.js]
       │  syncs singleton; lazily imports src/locales/fr.json chunk;
       │  sets document.documentElement.lang (D-02 — NEW);
-      │  dispatches CustomEvent('gr8r:locale') AFTER the catalogue is ready
+      │  dispatches CustomEvent('projects:locale') AFTER the catalogue is ready
       ▼
-gr8r:locale listener  (NEW — one line, e.g. in render.js or main.js)
+projects:locale listener  (NEW — one line, e.g. in render.js or main.js)
       │  re-render: $('#app').innerHTML = renderShell() (house pattern)
       ▼
 Every render surface reads t(key): nav, pages, modals, popovers, toasts,
@@ -124,7 +124,7 @@ errors, palette, auth, 404 — all already t()-wired since phase 6.
 Stored vocabulary: id → t('namespace.'+id) lookup at render (D-06).
 ```
 
-**Loop-safety requirement (new finding):** `setLocale()` dispatches `gr8r:locale` **unconditionally** (even when the code is unchanged) [VERIFIED: src/core/i18n.js:63-65]. If `applyPrefs()` calls `setLocale()` on every render and the listener re-renders, the loop is: render → applyPrefs → setLocale → event → render → … **The mapping must guard:** `if (getLocale() !== target) await setLocale(target)` (or track the last-applied code). Both guards together are safest. Verify no infinite re-render in the Playwright spec.
+**Loop-safety requirement (new finding):** `setLocale()` dispatches `projects:locale` **unconditionally** (even when the code is unchanged) [VERIFIED: src/core/i18n.js:63-65]. If `applyPrefs()` calls `setLocale()` on every render and the listener re-renders, the loop is: render → applyPrefs → setLocale → event → render → … **The mapping must guard:** `if (getLocale() !== target) await setLocale(target)` (or track the last-applied code). Both guards together are safest. Verify no infinite re-render in the Playwright spec.
 
 ### Recommended Project Structure (files touched)
 
@@ -133,7 +133,7 @@ src/locales/fr.json            # +1,440 values, batch order per D-08
 src/core/i18n.js               # setLocale sets documentElement.lang (D-02)
 src/core/theme.js              # applyPrefs lang mapping (D-01)
 src/main.js                    # lang="en" default stays; listener may live here
-src/shell/render.js            # gr8r:locale listener (alternative home)
+src/shell/render.js            # projects:locale listener (alternative home)
 src/overlays/modals.js         # TEMPLATES → project.template.* keys (D-10)
 src/pages/inbox.js             # notifText() structured kinds (D-12)
 src/data/seed.js               # notifs structured; invoices removed (D-12/D-13)
@@ -197,7 +197,7 @@ From `src/core/constants.js` (verified verbatim): statuses/priorities/labels/pro
 
 ## Common Pitfalls
 
-1. **Infinite render loop (new).** `setLocale()` always dispatches `gr8r:locale`; an unguarded listener + per-render `setLocale()` = render→event→render… Guard the mapping (`getLocale() !== target`) and/or the listener (track last code). Verify in e2e that French routes settle.
+1. **Infinite render loop (new).** `setLocale()` always dispatches `projects:locale`; an unguarded listener + per-render `setLocale()` = render→event→render… Guard the mapping (`getLocale() !== target`) and/or the listener (track last code). Verify in e2e that French routes settle.
 2. **Typography in the seed catalogue itself.** The current `fr.json` seed values are already non-compliant: `greeting.hello` = `"Bonjour, {name} !"` with a **plain U+0020** before `!` (verified codepoints `… 20 21`). The lint must fire on day one so the first batch fixes the seed too — don't exempt the existing values.
 3. **Forgetting `contract.*` exemption** in the completeness test (D-07): `contract.englishOnly` exists only in en, `contract.frenchOnly` only in fr — the parity lint in catalogue.test.mjs already exempts this namespace; the new completeness test must too.
 4. **English drift after translation.** Translating a key that phase 6 pinned verbatim (e.g. `en.greeting.hello` = `'Hello, {name}!'`) breaks regression tests that assert English output. Rule: fr.json edits never touch en.json; any en.json key change is a separate flagged delta (compare `test/i18n-prefs.test.mjs` "declared English deltas" pattern).
@@ -236,7 +236,7 @@ if (typeof document !== 'undefined' && document?.documentElement) {
   document.documentElement.lang = target;
 }
 // src/shell/render.js (or main.js) — one listener, guard against loops:
-addEventListener('gr8r:locale', () => render());
+addEventListener('projects:locale', () => render());
 ```
 
 ### D-05 typography lint skeleton (test/french-typography.test.mjs)
@@ -316,7 +316,7 @@ Seed fragment kinds found [VERIFIED: src/data/seed.js notifs]: `mention` ('menti
 
 1. **Actor-less notification kinds** (`Product Launch is at risk`, `is due today`): do they fit `{ kind, actor, target }` with a nullable actor, or do they need their own keys? Recommendation: keep `kind` + `target`, actor optional; keys like `notif.update.projectAtRisk` / `notif.update.dueToday`.
 2. **`task.count` `many` member**: current fr.json `task.count` lacks `many` (en may too) — if en gains no `many`, adding it to fr alone is allowed by D-07 but the placeholder parity compares the union; verify en's `task.count` members before adding.
-3. **Where the `gr8r:locale` listener lives** (render.js vs main.js): either works; render.js is closer to the house render-loop pattern. Planner's call.
+3. **Where the `projects:locale` listener lives** (render.js vs main.js): either works; render.js is closer to the house render-loop pattern. Planner's call.
 
 ## Environment Availability
 

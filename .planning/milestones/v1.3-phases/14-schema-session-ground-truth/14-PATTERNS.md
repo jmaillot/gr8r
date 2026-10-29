@@ -583,7 +583,7 @@ exactly the teardown D-28 asks for. No duplicating that logic.
 
 **Pitfall P-E note:** the revoked-browser 401 only reaches `/login` if the call goes through the same
 teardown. Calling `A.signOut()` directly (as `signOutRevoked` does) is the correct path — the existing
-`gr8r:save-error` listener in `src/main.js:70-78` is **not** strictly needed for this phase (Assumption A2).
+`projects:save-error` listener in `src/main.js:70-78` is **not** strictly needed for this phase (Assumption A2).
 A full grep confirms no other dormant `D().sessions` / `D().tfa` references exist in `src/`.
 
 ---
@@ -654,7 +654,7 @@ button); Phase 16 restores both in one line.
 ```js
     sessions: [
       { id: 'se1', dev: 'MacBook Pro · Chrome', loc: 'San Francisco, US', at: 'Active now', cur: true },
-      { id: 'se2', dev: 'iPhone 15 · Gr8r app', loc: 'San Francisco, US', at: '2 hours ago' },
+      { id: 'se2', dev: 'iPhone 15 · Projects app', loc: 'San Francisco, US', at: '2 hours ago' },
       { id: 'se3', dev: 'Windows · Edge', loc: 'Oakland, US', at: 'Sep 12' },
     ],
     tfa: false,
@@ -736,7 +736,7 @@ second-boot test (`:166-196`).
 **Existing `legacyColumns` capture (extend `:29-39`):**
 ```js
 // test/migration.test.mjs — extend the table list at :31 to include users and sessions
-legacyColumns = withDb(path.join(dataDir, 'gr8r.db'), db =>
+legacyColumns = withDb(path.join(dataDir, 'projects.db'), db =>
   Object.fromEntries(
     ['workspaces', 'memberships', 'invites', 'users', 'sessions'].map(table => [
       table,
@@ -858,7 +858,7 @@ export function client(base, name = 'client') {
     const res = await fetch(base + pathname, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
     for (const line of res.headers.getSetCookie?.() || []) {
       const pair = line.split(';')[0];
-      if (pair.startsWith('gr8r_session=')) cookie = pair;
+      if (pair.startsWith('projects_session=')) cookie = pair;
     }
     let data = null;
     try { data = await res.json(); } catch { /* empty body */ }
@@ -939,7 +939,7 @@ test('SESS-03: per-row revoke kills exactly one row; foreign ids are scoped', as
   five per IP per window. This suite should spend its attempts deliberately or use separate
   `signup()`-created accounts to avoid burning the budget.
 - **D-28 401 teardown:** the server-side assertion is simply that the revoked cookie's next request 401s
-  (the client-side toast/redirect is exercised by the `gr8r:save-error` listener, not by this node:test suite).
+  (the client-side toast/redirect is exercised by the `projects:save-error` listener, not by this node:test suite).
 
 ---
 

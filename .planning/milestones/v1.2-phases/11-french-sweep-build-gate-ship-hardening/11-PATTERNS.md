@@ -131,8 +131,8 @@ import pkg from '../package.json' with { type: 'json' };   // JSON import form, 
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: docker build -t gr8r:ci .
-      - run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' gr8r:ci
+      - run: docker build -t projects:ci .
+      - run: docker run -d --rm -p 8080:8080 -e ADMIN_EMAIL=ci@example.com -e ADMIN_PASSWORD='ci-password-1' projects:ci
       # wait for /api/health (the image's own HEALTHCHECK target, Dockerfile:33-34), then:
       # fetch / → resolve the fr-*.js asset name dynamically from the served page/assets
       # (NEVER hardcode the content hash) → fetch the chunk → assert French content

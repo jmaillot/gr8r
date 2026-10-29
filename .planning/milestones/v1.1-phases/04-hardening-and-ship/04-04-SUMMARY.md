@@ -141,7 +141,7 @@ status: complete
   `npm run build` + `npx playwright install chromium` + `npm run e2e`, describes both CI jobs, and
   replaces the "fake switcher" paragraph with the one-local-workspace truth.
 - `DEPLOY.md` documents `TRUST_PROXY=true` and `MAX_BODY_BYTES=8388608` in the configure block,
-  adds a 1.1.0 upgrade/rollback procedure (backup name, restore over `gr8r.db`, WAL cleanup,
+  adds a 1.1.0 upgrade/rollback procedure (backup name, restore over `projects.db`, WAL cleanup,
   previous-image redeploy), a local test section and corrected operational limits
   (one JSON document per workspace, plans display-only, SMTP optional, no stored file contents).
 - `package.json` and both lockfile root version fields are `1.1.0`; `.nvmrc` is `24`; the
@@ -230,8 +230,8 @@ only; the `.gitignore` entry removes ambiguity the plan explicitly carried forwa
 
 - `T-04-09` (mitigated): demo state is derived from the current `ws` object, so a browser cache
   holding the removed `data.workspaces` array is ignored; `workspaceList()` never reads it.
-- `T-04-10` (mitigated): DEPLOY names the exact backup (`gr8r-premultitenant-<stamp>.db`), the
-  restore target (`gr8r.db`), the WAL/SHM cleanup and the previous-image redeploy, matching the
+- `T-04-10` (mitigated): DEPLOY names the exact backup (`projects-premultitenant-<stamp>.db`), the
+  restore target (`projects.db`), the WAL/SHM cleanup and the previous-image redeploy, matching the
   migration test's assertions.
 - `T-04-11` (mitigated): `.env.example` still carries placeholder credentials only; real `.env`
   stays git-ignored (`*.env` with `!.env.example`).

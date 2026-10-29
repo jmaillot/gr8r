@@ -14,7 +14,7 @@ All three device tests executed by the human on a real phone (2026-10-28). All p
 
 ### 1. QR scan with Google Authenticator — enroll → verify
 expected: |
-  Start 2FA enrollment in the running app (Settings → 2FA card → password step-up → enrolling state). Scan the rendered QR with Google Authenticator on a real phone. The app adds the Gr8r entry and shows a 6-digit code. Enter the NEXT code from the app into the verify step: 2FA flips to on and the one-time recovery-codes modal is shown. Both locales on the surface if practical.
+  Start 2FA enrollment in the running app (Settings → 2FA card → password step-up → enrolling state). Scan the rendered QR with Google Authenticator on a real phone. The app adds the Projects entry and shows a 6-digit code. Enter the NEXT code from the app into the verify step: 2FA flips to on and the one-time recovery-codes modal is shown. Both locales on the surface if practical.
 result: |
   PASS — Google Authenticator scanned the enrollment QR on a real phone; the app
   accepted the entry, showed a 6-digit code, and the verify step enabled 2FA with

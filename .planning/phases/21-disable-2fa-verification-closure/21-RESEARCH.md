@@ -204,7 +204,7 @@ Note: `tokenHash` must be computed before the transaction (`const tokenHash = sh
 // Source: test/tfa-recovery-regen.test.mjs conventions, read this session
 import { totpAt, recoveryHash, normalizeRecoveryCode } from '../totp.js';
 import { signup, startServer, withDb } from './helpers/server.mjs';
-// before: startServer({ dataDir: tmp, env: { MASTER_KEY: 'gr8r-tfa-suite-key' } })
+// before: startServer({ dataDir: tmp, env: { MASTER_KEY: 'projects-tfa-suite-key' } })
 // per-user signup (≤5 per server — signup is IP-throttled 5/hour)
 // enable 2FA via POST /api/auth/tfa/enroll + /enable with totpAt-derived code
 // D-102: post unused recovery code → assert 400 codeRejected; withDb: recovery_codes rows

@@ -6,7 +6,7 @@ tags: [locale, negotiation, boot-order, migration-seed, demo-storage]
 requires: [08-01]
 provides:
   - primeLocale (silent, no event) and negotiate (subtag clamp) in src/core/i18n.js
-  - readStoredLocale/storeLocale over localStorage key 'gr8r.locale' (demo backend)
+  - readStoredLocale/storeLocale over localStorage key 'projects.locale' (demo backend)
   - api.patchMe(patch) adopting the returned user
   - consumeLegacyLang() capture in store.js
   - init() boot order: negotiate+prime → api.me account apply → hydrate + guarded seed → first render
@@ -19,7 +19,7 @@ key-files:
   created: [test/locale-negotiate.test.mjs]
   modified: [src/core/i18n.js, src/core/api.js, src/core/store.js, src/main.js, src/actions/actions.js, test/i18n-core-features.test.mjs]
 decisions:
-  - "setLocale and primeLocale share one internal activateLocale core; only setLocale dispatches gr8r:locale (Pitfall 2)"
+  - "setLocale and primeLocale share one internal activateLocale core; only setLocale dispatches projects:locale (Pitfall 2)"
   - "Login/signup/invite-accept adopt the account locale (or negotiated if NULL) right after the auth call, before hydration and the render that follows; demo-mode sign-out keeps the stored demo choice"
   - "The migration seed runs only on a successful hydration and only calls api.patchMe({locale:'fr'})"
 status: complete
@@ -39,7 +39,7 @@ The boot now speaks the right language before the first paint: negotiated browse
 
 ## What was built
 
-1. **Task 1 (21e9db6):** `i18n.js` gains `primeLocale` (silent: resolution + catalogue load + `documentElement.lang`, no dispatch), `negotiate` (subtag-prefix clamp, first supported wins, default `'en'`), and `storeLocale`/`readStoredLocale` over the dedicated `gr8r.locale` key (outside the `gr8r.v2` blob). `setLocale` was refactored onto a shared `activateLocale` core and still announces. `api.patchMe` PATCHes `/api/auth/me` and adopts the user payload.
+1. **Task 1 (21e9db6):** `i18n.js` gains `primeLocale` (silent: resolution + catalogue load + `documentElement.lang`, no dispatch), `negotiate` (subtag-prefix clamp, first supported wins, default `'en'`), and `storeLocale`/`readStoredLocale` over the dedicated `projects.locale` key (outside the `projects.v2` blob). `setLocale` was refactored onto a shared `activateLocale` core and still announces. `api.patchMe` PATCHes `/api/auth/me` and adopts the user payload.
 2. **Task 2 (fcabcfe):** `init()` primes `negotiate()` before `api.init()`; demo mode primes the stored locale or the negotiated one; a non-NULL account locale replaces it after `api.me()`; `seedLegacyLocale()` runs after a successful hydration (NULL account locale + exact legacy label `'Français'` → `patchMe({locale:'fr'})` → silent prime). `store.js` captures the raw `doc.prefs.lang` before `applyDoc` strips it (`consumeLegacyLang`). `A.signOut` falls back to the negotiated value; `doLogin`/`doJoin`/`doSignup` adopt the account locale before hydration/render.
 
 ## Verification

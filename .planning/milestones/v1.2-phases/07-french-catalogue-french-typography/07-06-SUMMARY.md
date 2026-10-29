@@ -66,7 +66,7 @@ and the full npm test suite (362 tests) passes with `en.json` byte-identical.
    **6ac00ac**.
 
 2. **Task 2 — The straggler: app.name — parity reaches 100%.** `app.name` carries
-   the identical value `Gr8r Studio` (D-07: identical values are present, never
+   the identical value `Projects Studio` (D-07: identical values are present, never
    omitted). `fr-parity.mjs` over every namespace of the catalogue exits 0, and
    the D-07 completeness test passes for the first time (catalogue.test.mjs
    26/26, including the key-order and fr-only-key guards). Commit **7e9da13**.
@@ -77,7 +77,7 @@ and the full npm test suite (362 tests) passes with `en.json` byte-identical.
    the whole plan is empty (T-07-15 mitigated). Recorded for the SUMMARY: 1,449
    French keys, 18 plural objects (every one carrying one+other; `task.count`
    also its `many` member for the French million), and 73 keys whose values are
-   deliberately identical in both languages (Gr8r Studio, Ctrl, PDF, Figma,
+   deliberately identical in both languages (Projects Studio, Ctrl, PDF, Figma,
    Frontend, QA, size names, token names…). Commit **ef2fb70**.
 
 ## Verification

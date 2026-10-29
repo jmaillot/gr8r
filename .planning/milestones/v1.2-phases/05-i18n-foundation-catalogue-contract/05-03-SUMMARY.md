@@ -62,7 +62,7 @@ coverage:
         ref: "test/build-locales.test.mjs#an English-only build carries no French byte at all"
         status: pass
       - kind: other
-        ref: "LOCALES=en node node_modules/vite/bin/vite.js build --outDir /tmp/gr8r-en-build --emptyOutDir && the plan's byte probe — 'french bytes in the english-only build: false'"
+        ref: "LOCALES=en node node_modules/vite/bin/vite.js build --outDir /tmp/projects-en-build --emptyOutDir && the plan's byte probe — 'french bytes in the english-only build: false'"
         status: pass
     human_judgment: false
   - id: D2
@@ -164,7 +164,7 @@ Each task was committed atomically; Task 2 is a TDD task and carries the RED/GRE
 
 - **The base locale is a member of the build set, always.** `BUILD_LOCALES` is built as `{ 'en', …process.env.LOCALES }`, so the base catalogue is never emptied. The plan's own must-have says "the English catalogue is inlined in the entry chunk in every build, so the interface is never without a language", and the base catalogue is what every other catalogue falls back to (D-08). The exemption is one line in the set's construction; the plugin still empties every other locale outside the set.
 - **The suite runs three builds, not two.** The third (`LOCALES=fr`) is what proves the base catalogue ships whatever the locale set — the very assertion that failed at RED.
-- **The markers are computed, filtered and asserted non-empty.** A marker that also occurs in a `.js` file under `src/` is dropped ("Cancel", "Save", "Projects", "Gr8r Studio", "Language" are all in the app's own sources today), and the remaining set is asserted NOT empty on either side — an empty marker set is a broken test, not a passing one.
+- **The markers are computed, filtered and asserted non-empty.** A marker that also occurs in a `.js` file under `src/` is dropped ("Cancel", "Save", "Projects", "Projects Studio", "Language" are all in the app's own sources today), and the remaining set is asserted NOT empty on either side — an empty marker set is a broken test, not a passing one.
 - **The icon pattern was left exactly as the plan measured it**: `/(?:[a-z][a-z0-9]*|"[a-z0-9-]+"):'<[a-z]/g`, matching the minifier's real serialisation (bare key when it is a valid identifier, double-quoted otherwise, single-quoted value, first tag never `<svg`). The value quote was NOT loosened: the bundle's unrelated `desc:"<p>Low-fidelity …"` payload would match and break the count by one. Measured on the shipped bundle: 174 matches, 174 distinct keys, exactly the frozen baseline.
 
 ## Deviations from Plan
@@ -208,7 +208,7 @@ None. Every file created or modified in this plan carries a complete implementat
 | The build contract suite | `node --test test/build-locales.test.mjs` | 9/9 pass |
 | The whole suite | `npm test` | 98/98 pass (89 pre-existing + 9 new) |
 | Default build | `npm run build` | `index-BR2xhuQM.js` + `fr-Cx13KH9B.js` — the same hashes as before the plan |
-| English-only build | `LOCALES=en node node_modules/vite/bin/vite.js build --outDir /tmp/gr8r-en-build --emptyOutDir` | `index-Berjxgmc.js` + a 0.03 kB `_virtual_locale-empty_fr-*.js` stub |
+| English-only build | `LOCALES=en node node_modules/vite/bin/vite.js build --outDir /tmp/projects-en-build --emptyOutDir` | `index-Berjxgmc.js` + a 0.03 kB `_virtual_locale-empty_fr-*.js` stub |
 | No French byte in the English-only build | the plan's `node -e` probe | `french bytes in the english-only build: false` |
 | `build:en` script | `npm run build:en` | builds, same assets as the manual `LOCALES=en` build |
 | Icon baseline (source) | the plan's `lucideIconNames('src')` probe | `icons 174 baseline 174`, identical |

@@ -2,23 +2,23 @@
 
 **Domain:** Adding auth-completion features (2FA disable, TOTP encryption-at-rest, recovery-code regeneration, admin session revocation) to an existing self-hosted auth system
 **Researched:** 2026-10-28
-**Confidence:** HIGH (standard security-engineering failure modes, well documented across OWASP, NIST SP 800-63B, and public post-mortems; mapped to Gr8r's v1.3 ground truth)
+**Confidence:** HIGH (standard security-engineering failure modes, well documented across OWASP, NIST SP 800-63B, and public post-mortems; mapped to Projects's v1.3 ground truth)
 
-> Context that shapes every pitfall below: Gr8r has real `sessions`, `login_challenges`, `recovery_codes` tables, dormant `users.two_fa_*` columns, a password step-up pattern, and a v1.3 disable route (16-02) whose actual coverage must be verified before scoping. Zero runtime dependencies. Single Docker image, `/data/gr8r.db`, `MASTER_KEY` to be introduced.
+> Context that shapes every pitfall below: Projects has real `sessions`, `login_challenges`, `recovery_codes` tables, dormant `users.two_fa_*` columns, a password step-up pattern, and a v1.3 disable route (16-02) whose actual coverage must be verified before scoping. Zero runtime dependencies. Single Docker image, `/data/projects.db`, `MASTER_KEY` to be introduced.
 
 ## Critical Pitfalls
 
 ### Pitfall 1: Encrypting the TOTP secret but silently keeping the plaintext migration path open
 
 **What goes wrong:**
-The migration writes encrypted values for enrolled users, but the code still treats `users.two_fa_secret` as "either plaintext or ciphertext" with no version marker. Months later nobody knows which rows are which; a row written by an old code path (or restored from a pre-migration backup — and Gr8r keeps `vacuum into` backups) lands as plaintext and is decrypted by accident or read raw. Worse: the "migration" is implemented as encrypt-on-next-read, so plaintext secrets persist indefinitely for users who never log in again.
+The migration writes encrypted values for enrolled users, but the code still treats `users.two_fa_secret` as "either plaintext or ciphertext" with no version marker. Months later nobody knows which rows are which; a row written by an old code path (or restored from a pre-migration backup — and Projects keeps `vacuum into` backups) lands as plaintext and is decrypted by accident or read raw. Worse: the "migration" is implemented as encrypt-on-next-read, so plaintext secrets persist indefinitely for users who never log in again.
 
 **Why it happens:**
 Naive code does `decrypt(x) ?? x` — the fallback-to-plaintext pattern. It feels like a safe migration; it is actually a permanent downgrade path that makes plaintext a valid encoding forever.
 
 **How to avoid:**
 - Add an explicit version column or value prefix (e.g. `v1:<iv>:<tag>:<ct>`) and make the decryptor *reject* anything without the marker — fail-closed on format, not fall-open to plaintext.
-- One-shot migration at deploy time, inside a transaction: read all plaintext secrets, encrypt, write, and assert zero unmarked rows remain. A second boot must be a no-op (Gr8r already has this guarantee for migrations — extend it).
+- One-shot migration at deploy time, inside a transaction: read all plaintext secrets, encrypt, write, and assert zero unmarked rows remain. A second boot must be a no-op (Projects already has this guarantee for migrations — extend it).
 - Add a test asserting no plaintext-looking secret can ever be accepted as ciphertext input.
 
 **Warning signs:** decrypt code contains `|| secret` / `?? secret` fallback; a migration that runs lazily per-read; no version marker in the stored format.
@@ -105,9 +105,9 @@ Regeneration implemented as: read old codes → verify one → delete old → in
 ### Pitfall 6: Admin revocation that creates a privilege paradox — admin locks out owner, or becomes unremovable super-user
 
 **What goes wrong:**
-Two failure directions. (1) Admin revokes the owner's sessions (or the last admin's own) with no recovery path — the owner of a self-hosted instance is locked out of their own server. (2) The reverse: the revocation feature is usable by any workspace `admin` against any user, including admins of *other* workspaces, because the route checks "is admin" but not "admin of a workspace that shares membership with the target" — Gr8r is multi-tenant; session revocation is an *account-level* action while every existing admin power is *workspace-scoped* (`requireWorkspace`).
+Two failure directions. (1) Admin revokes the owner's sessions (or the last admin's own) with no recovery path — the owner of a self-hosted instance is locked out of their own server. (2) The reverse: the revocation feature is usable by any workspace `admin` against any user, including admins of *other* workspaces, because the route checks "is admin" but not "admin of a workspace that shares membership with the target" — Projects is multi-tenant; session revocation is an *account-level* action while every existing admin power is *workspace-scoped* (`requireWorkspace`).
 
-**Why it happens:** "admin session revocation" sounds like one feature, but Gr8r has two distinct admin surfaces (workspace admins vs. the instance operator). Conflating them breaks the tenancy isolation shipped in v1.1.
+**Why it happens:** "admin session revocation" sounds like one feature, but Projects has two distinct admin surfaces (workspace admins vs. the instance operator). Conflating them breaks the tenancy isolation shipped in v1.1.
 
 **How to avoid:**
 - Decide explicitly and document: is this *instance-operator* revocation (arguably should require a server-side mechanism, e.g. an env-configured operator identity or CLI) or *workspace-admin* revocation (then it must only revoke sessions used for that workspace — hard with account-level sessions, so scope it: workspace admins can revoke *their own* sessions and possibly members of their workspace, never other admins/owners, never accounts they don't share a workspace with)?
@@ -185,7 +185,7 @@ The migration that encrypts `two_fa_secret` also rewrites adjacent auth rows "wh
 |------|----------|------------|----------------|
 | Decrypt per request for every user-row read (not just 2FA verify) | Unnecessary AES-GCM + wrapped-key unwrap on hot paths; latency grows with every endpoint that touches `users` | Decrypt only in TOTP-verify/disable paths; cache nothing secret, but decrypt lazily and narrowly | Immediately wasteful; noticeable with many sessions |
 | Scrypt step-up + regeneration in one synchronous request | Multi-second response, client timeouts | Step-up already costs scrypt — keep the response to regeneration O(1) besides it; this is a self-hosted app, load is low, just don't stack two scrypt verifications | Low load hides it; never a real issue at this scale |
-| Migration encrypting all users on the request thread at boot | Slow first boot after upgrade for large installs | Gr8r scale (self-hosted teams) makes this a non-issue — a one-shot synchronous transactional migration is *correct* here | Only if installs reach thousands of users; not a realistic concern |
+| Migration encrypting all users on the request thread at boot | Slow first boot after upgrade for large installs | Projects scale (self-hosted teams) makes this a non-issue — a one-shot synchronous transactional migration is *correct* here | Only if installs reach thousands of users; not a realistic concern |
 
 ## Security Mistakes
 
@@ -249,9 +249,9 @@ The migration that encrypts `two_fa_secret` also rewrites adjacent auth rows "wh
 - OWASP Authentication Cheat Sheet & MFA statements ("second factor required to modify second factor")
 - NIST SP 800-63B (verifier/factor lifecycle, re-authentication for sensitive operations)
 - Public post-mortems on TOTP-at-rest designs (GitLab 2FA seed encryption, GitHub's TOTP migration notes) and on "decrypt-with-plaintext-fallback" incidents
-- Gr8r v1.3 ground truth: PROJECT.md (sessions/password-change transactional pattern, pending-2FA challenge anonymity, replay guard, throttle budget surviving abandon, central 401 teardown)
+- Projects v1.3 ground truth: PROJECT.md (sessions/password-change transactional pattern, pending-2FA challenge anonymity, replay guard, throttle budget surviving abandon, central 401 teardown)
 - Personal experience / known integration-failure patterns in additive auth features
 
 ---
-*Pitfalls research for: Gr8r Studio v1.4 auth completion (adding to an existing auth system)*
+*Pitfalls research for: Projects Studio v1.4 auth completion (adding to an existing auth system)*
 *Researched: 2026-10-28*

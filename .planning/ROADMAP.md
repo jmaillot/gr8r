@@ -1,4 +1,4 @@
-# Roadmap: Gr8r Studio
+# Roadmap: Projects Studio
 
 ## v1.4 — Auth Completion
 

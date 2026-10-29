@@ -7,7 +7,7 @@ tags: [i18n, locale-switch, escaping, crypto, client-ids]
 # Dependency graph
 requires:
   - phase: 08-per-user-locale
-    provides: the live locale switch (setLocale + gr8r:locale re-render) that the frozen-at-import keyboard hint betrayed (WR-08); t() and the catalogue contract the getter reads at call time
+    provides: the live locale switch (setLocale + projects:locale re-render) that the frozen-at-import keyboard hint betrayed (WR-08); t() and the catalogue contract the getter reads at call time
 provides:
   - modKey() — a lazy getter exporting the keyboard-hint modifier, evaluated at every render, so a hot locale switch also flips the Ctrl hint
   - a single escaping table — esc in core/utils.js is the named re-export of i18n.js's escHtml; the duplicate map is deleted, importer paths unchanged

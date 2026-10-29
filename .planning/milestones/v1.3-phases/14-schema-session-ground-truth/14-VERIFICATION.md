@@ -40,7 +40,7 @@ re_verification:
   previous_status: gaps_found
   previous_score: 11/12
   gaps_closed:
-    - "D-28: a revoked browser's next mid-session API request — document save (gr8r:save-error), boot hydration, settings sessions refresh, or the revoke actions themselves — produces the honest err.signedOutElsewhere toast, a full sign-out teardown, and the login screen, via the central registerAuthRevokedHandler intercept in api.js call() (proven by test/auth-revoked.test.mjs 6/6)"
+    - "D-28: a revoked browser's next mid-session API request — document save (projects:save-error), boot hydration, settings sessions refresh, or the revoke actions themselves — produces the honest err.signedOutElsewhere toast, a full sign-out teardown, and the login screen, via the central registerAuthRevokedHandler intercept in api.js call() (proven by test/auth-revoked.test.mjs 6/6)"
   gaps_remaining: []
   regressions: []
 deferred:
@@ -161,7 +161,7 @@ None blocking. The two browser-flow observations from the prior report (sessions
 **None.** The prior verification's single gap — truth 12 / D-28 client teardown wiring — is closed by executed plan 14-05 and re-verified against the live codebase this session:
 
 - The central intercept lives at the single fetch choke point (`call()` in api.js) and fires on exactly the mid-session condition (401 + `signInRequired` + signed-in + clear latch); the once-per-revocation latch absorbs the teardown's own logout 401 and concurrent 401s, and re-arms inside `applyUser()` after a successful re-auth.
-- Every 401 path a genuinely revoked browser takes — save (`gr8r:save-error`), boot hydration, sessions refresh, revoke actions — now flows through `call()`, so all inherit the teardown; the bypassing per-site branches are retired and the generic session-expired copy is fully gone (zero matches in `src/` and `test/`).
+- Every 401 path a genuinely revoked browser takes — save (`projects:save-error`), boot hydration, sessions refresh, revoke actions — now flows through `call()`, so all inherit the teardown; the bypassing per-site branches are retired and the generic session-expired copy is fully gone (zero matches in `src/` and `test/`).
 - The behavior is proven, not merely present: test/auth-revoked.test.mjs (6/6) exercises the real api.js module and pins fire-once, latch, boot-guard, and re-arm, plus source-as-text pins on the cross-module registration.
 - No truth regressed: the server-side surface was untouched by 14-05, all grep gates are clean, all targeted suites pass, and the full suite is **462/462** — the previously documented pre-existing i18n-prefs failure was fixed (commit 30ea824) and is not carried forward.
 

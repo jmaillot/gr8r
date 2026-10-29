@@ -256,7 +256,7 @@ test('bodyTooLarge reaches the client as a full 413 response, the socket never r
 });
 ```
 Copy this skeleton for UPLOAD-02 (`MAX_UPLOAD_MB` oversize → 413 `uploadTooLarge`, server alive after). Boilerplate to copy:
-- **Harness** (`test/helpers/server.mjs`): `startServer({ env: { MAX_UPLOAD_MB: '1' } })` boots on a free port with temp DATA_DIR and returns `{ base, port, dataDir, stop() }` (lines 43-94). `client(base, name)` is a cookie-bearing fetch wrapper (97-131) — but raw-body uploads need raw `fetch` with the cookie from `client.cookie()` (the harness client only sends JSON; upload tests POST a Blob/body manually with the captured `gr8r_session` cookie).
+- **Harness** (`test/helpers/server.mjs`): `startServer({ env: { MAX_UPLOAD_MB: '1' } })` boots on a free port with temp DATA_DIR and returns `{ base, port, dataDir, stop() }` (lines 43-94). `client(base, name)` is a cookie-bearing fetch wrapper (97-131) — but raw-body uploads need raw `fetch` with the cookie from `client.cookie()` (the harness client only sends JSON; upload tests POST a Blob/body manually with the captured `projects_session` cookie).
 - **Auth setup pattern** (error-codes.test.mjs 116-131): login as admin, invite a member, accept — reuse verbatim for the member-role upload test and the outsider-404 test (UPLOAD-03, D-05).
 - **Doc-PUT seeding** (line 323-327): `admin.put('/api/workspaces/acme', { revision, doc: { data: { ... } } })` to plant file records for the serving/deletion tests (UPLOAD-03/04/05).
 - **Static-extraction pattern** (lines 13-21) for the PREVIEW-01 static test (`setInterval` absent from the upload path).

@@ -13,7 +13,7 @@ key-files:
   created: [test/upload.test.mjs]
   modified: [server.js, src/locales/en.json, src/locales/fr.json, test/i18n-core-features.test.mjs]
 decisions:
-  - "Fetch-based test uploads use raw fetch with the captured gr8r_session cookie (harness client is JSON-only)"
+  - "Fetch-based test uploads use raw fetch with the captured projects_session cookie (harness client is JSON-only)"
   - "WriteStream gets a swallow-all 'error' handler — a write in flight when the stream is destroyed on overflow otherwise crashes the server (ERR_STREAM_DESTROYED)"
   - "Unauth/viewer gate test added under Task 2 commit to close the plan's auth-truth (401 / 403 readOnlyAccess, no files stored)"
 metrics:

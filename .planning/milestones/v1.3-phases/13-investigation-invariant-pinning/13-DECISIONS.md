@@ -35,7 +35,7 @@ Mirrored in seed data [VERIFIED: src/data/seed.js:509-514]:
 ```js
     sessions: [
       { id: 'se1', dev: 'MacBook Pro · Chrome', loc: 'San Francisco, US', at: 'Active now', cur: true },
-      { id: 'se2', dev: 'iPhone 15 · Gr8r app', loc: 'San Francisco, US', at: '2 hours ago' },
+      { id: 'se2', dev: 'iPhone 15 · Projects app', loc: 'San Francisco, US', at: '2 hours ago' },
       { id: 'se3', dev: 'Windows · Edge', loc: 'Oakland, US', at: 'Sep 12' },
     ],
     tfa: false,
@@ -113,7 +113,7 @@ test('a second boot is a no-op and both accounts keep access', async () => {
 ```
 
 **9. DEPLOY.md env block — `MASTER_KEY` documentation lands beside this**
-[VERIFIED: DEPLOY.md:141-158] (verbatim keys): `GR8R_HOST`, `APP_URL`, `ADMIN_EMAIL`,
+[VERIFIED: DEPLOY.md:141-158] (verbatim keys): `PROJECTS_HOST`, `APP_URL`, `ADMIN_EMAIL`,
 `ADMIN_PASSWORD`, `ADMIN_NAME`, `WORKSPACE_NAME`, `WORKSPACE_SLUG`, `PUID`, `PGID`,
 `ALLOW_SIGNUP`, `SEED_DATA`, `SESSION_DAYS`, `SECURE_COOKIE`, `TRUST_PROXY`,
 `MAX_BODY_BYTES`, `MAX_UPLOAD_MB`.
@@ -160,7 +160,7 @@ test('a second boot is a no-op and both accounts keep access', async () => {
 ## Area 2: TOTP secret encryption-at-rest
 
 - **D-05:** **Encrypt.** `users.two_fa_secret` stores AES-256-GCM ciphertext under a key
-  derived from a host-provided `MASTER_KEY`. Stealing `/data/gr8r.db` alone must not yield
+  derived from a host-provided `MASTER_KEY`. Stealing `/data/projects.db` alone must not yield
   live TOTP secrets.
   — **Reversibility:** one-way — once secrets are stored encrypted and enrollment is live,
   switching to plaintext or a different scheme is a data migration on every enrolled user
@@ -180,7 +180,7 @@ test('a second boot is a no-op and both accounts keep access', async () => {
 - **D-07:** Key format: 32-byte hex (`openssl rand -hex 32`; fallback
   `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`),
   documented in DEPLOY.md alongside the existing env block (`DEPLOY.md:141-158` — the
-  `GR8R_HOST`…`MAX_UPLOAD_MB` block verified in the diagnosis, item 9). Ciphertext carries a
+  `PROJECTS_HOST`…`MAX_UPLOAD_MB` block verified in the diagnosis, item 9). Ciphertext carries a
   `v1:` prefix so the algorithm/layout can evolve without a schema change — the envelope
   layout per RESEARCH Pattern 3 is `v1:` + hex(iv) + hex(ciphertext) + hex(auth-tag), derived
   once from the 32-byte hex key to a 32-byte AES-256 key; the exact serialization is

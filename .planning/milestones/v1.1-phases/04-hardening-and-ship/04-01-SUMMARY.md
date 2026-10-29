@@ -131,7 +131,7 @@ status: complete
 ## Accomplishments
 
 - `test/helpers/server.mjs` is the only place that spawns a server: free port, `mkdtemp` `DATA_DIR`,
-  captured stdout/stderr, a cookie client that keeps `gr8r_session`, `login`/`signup`, `withDb`
+  captured stdout/stderr, a cookie client that keeps `projects_session`, `login`/`signup`, `withDb`
   and `inviteToken`. Every suite imports it instead of copying spawn or cookie code.
 - `test/tenancy.test.mjs` (10 tests) pins the phase 1 contract: bootstrap owner and workspace list,
   real workspace creation, unrelated documents, `data.ws` derived from the row, the demo
@@ -144,7 +144,7 @@ status: complete
 - `test/privacy.test.mjs` (9 tests) ports the phase 3 matrix with the same fixture ids and all 70
   checks; `npm run test:privacy` remains the release gate and the standalone script is gone.
 - `npm test` runs `test/*.test.mjs` with `--test-concurrency=2`; every suite stops its server and
-  leaves no `gr8r-test-*` directory behind.
+  leaves no `projects-test-*` directory behind.
 
 ## Task Commits
 

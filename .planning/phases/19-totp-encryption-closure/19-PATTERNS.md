@@ -35,7 +35,7 @@ function bootstrap(opts) {
 **Backup recipe to copy verbatim** (lines 951–960 — wal_checkpoint + `vacuum into` with quote-escaping):
 ```js
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const backup = path.join(DATA_DIR, `gr8r-premultitenant-${stamp}.db`);   // → new prefix e.g. gr8r-preenvelope-
+const backup = path.join(DATA_DIR, `projects-premultitenant-${stamp}.db`);   // → new prefix e.g. projects-preenvelope-
 try {
   fs.mkdirSync(path.dirname(backup), { recursive: true });
   db.exec('pragma wal_checkpoint(truncate)');
@@ -183,12 +183,12 @@ Map to D-78: (a) assert no plaintext-fallback pattern (`decrypt\([^)]*\)\s*\?\?`
 ```js
 const backups = () => fs.readdirSync(dataDir).filter(name => name.startsWith(BACKUP_PREFIX) && name.endsWith('.db'));
 ```
-New tests use a distinct prefix constant (e.g. `BACKUP_PREFIX = 'gr8r-preenvelope-'`); assert zero new backups on second boot (D-83).
+New tests use a distinct prefix constant (e.g. `BACKUP_PREFIX = 'projects-preenvelope-'`); assert zero new backups on second boot (D-83).
 
 **Second-boot no-op pattern** (lines 365–379): snapshot → `server.stop()` → `startServer({ dataDir })` → deepEqual snapshots + `assert.equal(backups.length, 1)` → login still works. ENC-01's "byte-identical second boot" test copies this shape directly.
 
 **Plaintext-row planting (A3):** either extend `createLegacyDb` or plant via direct SQL before boot:
-`withDb(path.join(dataDir, 'gr8r.db'), db => db.prepare("update users set two_fa_secret = ? where id = ?").run('JBSWY3DPEHPK3PXP', 'u_…'))`.
+`withDb(path.join(dataDir, 'projects.db'), db => db.prepare("update users set two_fa_secret = ? where id = ?").run('JBSWY3DPEHPK3PXP', 'u_…'))`.
 
 **Base32 edge-rule check (D-75) — use the codebase shape, not an invented regex (resolves research A1):** the only base32 shape in the codebase is the strict enrollment form:
 ```js

@@ -94,7 +94,7 @@ coverage:
     requirement: R4
     verification:
       - kind: integration
-        ref: "two consecutive `npm run e2e` runs; /tmp/gr8r-e2e-* count is 0 after each"
+        ref: "two consecutive `npm run e2e` runs; /tmp/projects-e2e-* count is 0 after each"
         status: pass
     human_judgment: false
   - id: D5
@@ -147,7 +147,7 @@ status: complete
   Chromium with system dependencies and uploads `test-results/` only on failure.
 - Validated: `npm run build`, `npm run e2e` (4/4, twice in a row), `npm test` (40/40),
   `npm run lint`, `npm run format:check`, `npx prettier --check .github/workflows/ci.yml e2e`.
-  No `/tmp/gr8r-e2e-*` directory survives a run.
+  No `/tmp/projects-e2e-*` directory survives a run.
 
 ## Task Commits
 
@@ -171,7 +171,7 @@ status: complete
 ## Decisions Made
 
 - **`gracefulShutdown` is mandatory.** Playwright's default is no graceful shutdown: it SIGKILLs
-  the process group, so the wrapper never ran its cleanup and left `gr8r-e2e-*` directories
+  the process group, so the wrapper never ran its cleanup and left `projects-e2e-*` directories
   behind. Explicit `{ signal: 'SIGTERM', timeout: 5000 }` makes Playwright send SIGTERM to the
   group, which is exactly what the wrapper handles.
 - **Throttle-proof fixtures.** The server throttles signup (5/hour/IP), invite accept (5/hour/IP)
@@ -204,7 +204,7 @@ status: complete
 - **Committed in:** `6be21a0`
 
 **2. [Rule 3 - Blocking] Playwright SIGKILLed the wrapper, so cleanup never ran**
-- **Found during:** Task 1, first successful run — `/tmp/gr8r-e2e-*` directories were left behind
+- **Found during:** Task 1, first successful run — `/tmp/projects-e2e-*` directories were left behind
   even though the tests passed.
 - **Issue:** `webServer` had no `gracefulShutdown`, so Playwright's launcher skips graceful close
   and kills the process group with SIGKILL. The wrapper's SIGTERM handler never ran, leaving the
@@ -213,7 +213,7 @@ status: complete
 - **Fix:** `gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 }` in the config, plus a
   SIGKILL fallback inside the wrapper if the child ignores SIGTERM.
 - **Files modified:** `e2e/playwright.config.mjs`, `e2e/server.mjs`
-- **Verification:** three consecutive runs end with zero `/tmp/gr8r-e2e-*` directories.
+- **Verification:** three consecutive runs end with zero `/tmp/projects-e2e-*` directories.
 - **Committed in:** `6be21a0`
 
 **3. [Rule 1 - Bug] `getByLabel('Password')` matched the show-password toggle**
@@ -284,7 +284,7 @@ None - no external service configuration required. Locally, Chromium is installe
 
 `e2e/playwright.config.mjs`, `e2e/server.mjs`, `e2e/helpers/setup.mjs` and `e2e/tenancy.spec.mjs`
 exist; `6be21a0` and `e581712` are in history; `npm run e2e` is 4/4 and `npm test` is 40/40 on the
-final tree; no `/tmp/gr8r-e2e-*` directory remains.
+final tree; no `/tmp/projects-e2e-*` directory remains.
 
 ---
 *Phase: 04-hardening-and-ship*

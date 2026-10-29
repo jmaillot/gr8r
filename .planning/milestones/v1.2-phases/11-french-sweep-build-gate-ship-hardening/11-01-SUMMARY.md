@@ -64,7 +64,7 @@ Extended `e2e/french-overflow.spec.mjs` (D-01) with a new PHASE 11 sweep family 
 
 ## Stop-list (all with adjacent comments in the spec)
 
-`Gr8r` / `Gr8r Studio` (brand, identical everywhere), `Notifications`, `Mentions`, `Backlog`, `Table`, `Admin` (identical French/English catalogue values — verified against fr.json), `Design`/`Engineering`/`Marketing`/`Product` (TEAMS_SEED stored workspace data, English per PROJECT.md D-15), `Permissions`/`Sessions`/`Accent`/`Compact`/`Indigo`/`Violet`/`Rose`/`Graphite` (identical-across-locales settings vocabulary and colour names).
+`Projects` / `Projects Studio` (brand, identical everywhere), `Notifications`, `Mentions`, `Backlog`, `Table`, `Admin` (identical French/English catalogue values — verified against fr.json), `Design`/`Engineering`/`Marketing`/`Product` (TEAMS_SEED stored workspace data, English per PROJECT.md D-15), `Permissions`/`Sessions`/`Accent`/`Compact`/`Indigo`/`Violet`/`Rose`/`Graphite` (identical-across-locales settings vocabulary and colour names).
 
 ## Verification
 

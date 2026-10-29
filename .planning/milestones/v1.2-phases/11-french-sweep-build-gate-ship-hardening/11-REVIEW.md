@@ -103,14 +103,14 @@ one of these values, the stale stop-list entry keeps masking the English value e
 UI, and the hand list keeps growing.
 **Fix:** Derive the "legitimately identical" part of the allow-set at test time by comparing
 flattened `fr.json` and `en.json` leaf values (any value equal in both catalogues cannot be a
-leak), leaving only brand names ('Gr8r', 'Gr8r Studio') and seed-data team names as explicit,
+leak), leaving only brand names ('Projects', 'Projects Studio') and seed-data team names as explicit,
 commented entries.
 
 ### IN-03: CI failure diagnostics lose container logs under `--rm`
 
 **File:** `.github/workflows/ci.yml:60-63`
 **Issue:** The container is started with `docker run -d --rm`, so if the server crashes before
-`/api/health` responds, the container is auto-removed and `docker ps --filter ancestor=gr8r:ci`
+`/api/health` responds, the container is auto-removed and `docker ps --filter ancestor=projects:ci`
 returns empty — the `docker logs` debug step prints nothing useful, exactly when it is needed.
 **Fix:** Drop `--rm` from the run (the explicit `docker stop` + `if: always()` cleanup already
 handles teardown; add `docker rm -f` there) or capture logs to `$GITHUB_STEP_SUMMARY`/a file
