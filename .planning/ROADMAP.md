@@ -52,7 +52,10 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 20-01-PLAN.md — Wave 1: POST /api/auth/tfa/recovery route (D-85..D-100), security_log mechanism (D-99), test/tfa-recovery-regen.test.mjs
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 20-02-PLAN.md — Wave 2: settings-card regen stage (D-90), actions + api wiring, D-53 modal reuse (D-91), EN+FR i18n (D-92)
 
 ### Phase 21: Disable-2FA Verification & Closure
