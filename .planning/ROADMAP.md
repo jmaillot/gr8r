@@ -57,6 +57,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 20-02-PLAN.md — Wave 2: settings-card regen stage (D-90), actions + api wiring, D-53 modal reuse (D-91), EN+FR i18n (D-92)
+- [x] 20-03-PLAN.md — Gap closure G-20-1: short row-level 2FA button labels + wrap-tolerant .srow control cluster
 
 ### Phase 21: Disable-2FA Verification & Closure
 

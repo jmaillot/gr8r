@@ -2,18 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.4
 milestone_name: Auth Completion
+current_plan: 1
 status: unknown
 stopped_at: Completed 20-02-PLAN.md
-last_updated: "2026-10-29T08:04:50.921Z"
-state_head: c95378f2bb8fc455a35a621ccc3bf8631d9534ff
+last_updated: "2026-10-29T08:59:05.548Z"
+state_head: a7c10829db13659ab211902166b37672ac31484e
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
+  total_plans: 5
   completed_plans: 4
   percent: 25
-current_phase: 20
 current_phase_name: Recovery-Code Regeneration
+current_phase: 20
 ---
 
 # STATE.md
@@ -28,11 +29,11 @@ current_phase_name: Recovery-Code Regeneration
 
 - **Phase:** 20 — Recovery-Code Regeneration
 
-Current Plan: 2
-Total Plans in Phase: 2
+Current Plan: 1
+Total Plans in Phase: 3
 
-- **Status:** Phase execution complete — ready for verification
-- **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done; Phase 20 executed 2/2 plans, pending verification)
+- **Status:** Phase 20 execution complete (3/3 plans) — ready for verification
+- **Progress:** ▓░░░░░░░░░ (1/4 phases complete — Phase 19 done; Phase 20 executed 3/3 plans, pending verification)
 
 **Milestone roadmap:** 4 phases (19–22), 8/8 v1.4 requirements mapped, sequential phase IDs.
 
@@ -63,6 +64,7 @@ Total Plans in Phase: 2
 |------|----------|-------|-------|
 | Phase 20 P01 | 35m | 2 tasks | 6 files |
 | Phase 20 P02 | 40m | 2 tasks | 8 files |
+| Phase 20 P03 | 12m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -99,3 +101,4 @@ Total Plans in Phase: 2
 - [Phase 20]: Regen route 503 body copy made per-route unique to honor D-81 byte-distinct-copy guard
 - [Phase 20]: D-99 mechanism: security_log table + logSecurity helper, success-only rows in regen transaction; Phase 21 DIS-01 reuses verbatim
 - [Phase 20]: Client regen flow reuses D-53 modal via transient S.ui.recoveryCodes; 6-digit-only code field (D-85 client half); row buttons hidden while any tfaStage open
+- [Phase 20]: G-20-1 closed via short row labels (settings.tfa.regenShort + reused act.turnOff) and .srow > .row wrap rule — no disable-route changes (Phase 21 scope preserved)
