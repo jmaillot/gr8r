@@ -159,6 +159,13 @@ const SCHEMA = `
     created_at integer not null
   );
   create index if not exists recovery_codes_user on recovery_codes(user_id);
+  create table if not exists security_log (
+    id         text primary key,
+    user_id    text not null references users(id) on delete cascade,
+    verb       text not null,
+    created_at integer not null
+  );
+  create index if not exists security_log_user on security_log(user_id);
 `;
 
 function ensureColumn(conn, table, name, def) {
@@ -1412,6 +1419,13 @@ function touchLastSeen(tokenHash, storedLastSeen, nowTs) {
   if (lastSeenNext.size > 5000) for (const [k, v] of lastSeenNext) if (nowTs > v) lastSeenNext.delete(k);
 }
 
+/* D-99: minimal account-security event store (Phase 20) — a per-user, verb-keyed
+   log deliberately NOT the task-scoped logAct (src/core/store.js). Phase 21's
+   DIS-01 reuses this table and this helper verbatim. Never logs secrets or codes. */
+function logSecurity(userId, verb) {
+  db.prepare('insert into security_log (id, user_id, verb, created_at) values (?,?,?,?)').run(uid(), userId, verb, now());
+}
+
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -1683,6 +1697,61 @@ async function handleApi(req, res, url) {
     if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured or the stored secret is undecryptable');
     if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
     return json(res, 200, { ok: true });
+  }
+
+  /* ----------------- recovery-code regeneration (REGEN-01/02, D-85..D-100) ----------------- */
+
+  if (pathname === '/api/auth/tfa/recovery' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // T-20-02/D-93: a distinct budget from the other tfa routes (D-11 band).
+    // D-94: every attempt below — including a wrong password — has already
+    // consumed one try before it is processed.
+    if (tooMany(`tfa-regen|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const cur = String(body?.currentPassword || '');
+    const code = String(body?.code || '').trim();
+    if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
+    // D-85 (structural invariant): strict 6-digit-only gate with NO else-branch
+    // and NO recovery_codes lookup anywhere in this route — a recovery code
+    // can never satisfy the step-up.
+    if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
+    // D-50/D-97: generate the 10 plaintext codes first — returned exactly once
+    // (D-100); only their hashes hit the database.
+    const codes = [];
+    for (let i = 0; i < 10; i++) codes.push(generateRecoveryCode());
+    // One atomic unit (Pitfall 4/D-88): re-select fresh INSIDE the transaction,
+    // verify both factors (D-86), then update the replay guard, burn-all and
+    // insert-new — no writes happen on any miss.
+    const outcome = transaction(() => {
+      const fresh = db.prepare('select password_hash, two_fa_enabled, two_fa_secret, two_fa_last_step from users where id = ?').get(user.id);
+      if (!fresh || !fresh.two_fa_enabled) return 'notEnabled'; // D-95: before any factor check
+      if (!verifyPassword(cur, fresh.password_hash)) return 'password'; // D-86: password first (D-94: try already consumed)
+      // D-06/D-89/D-77: the decrypt runs only through requireTotpSecret — an
+      // undecryptable secret fails closed 503 before any mutation.
+      const wrapped = requireTotpSecret(fresh.two_fa_secret);
+      if (!wrapped.ok) return 'masterKey';
+      // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
+      const verified = verifyTotpCode(wrapped.secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000));
+      if (!verified.ok) return 'code';
+      // D-87: keep the replay-guard baseline current in the SAME transaction.
+      db.prepare('update users set two_fa_last_step = ? where id = ?').run(verified.matchedStep, user.id);
+      db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+      const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
+      for (const code0 of codes) {
+        // D-97: hash of the ONE normalization (Pitfall 6) — plaintext never stored.
+        insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
+      }
+      // D-99: the security event shares the transaction — success-only rows.
+      logSecurity(user.id, 'tfa_recovery_regenerated');
+      return 'ok';
+    });
+    if (outcome === 'notEnabled') return fail(res, 409, 'tfaNotEnabled', 'Enable two-factor authentication first');
+    if (outcome === 'password') return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured or the stored secret is undecryptable');
+    if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
+    return json(res, 200, { ok: true, recoveryCodes: codes }); // D-100; no-store comes from json()
   }
 
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */
