@@ -407,7 +407,7 @@ export function settingsBody(sec, title) {
           srow(
             t('settings.tfa.on'),
             t('settings.tfa.onDesc'),
-            stage ? '' : `<button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regen')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('settings.tfa.turnOff')}</button>`,
+            stage ? '' : `<button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regenShort')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('act.turnOff')}</button>`,
           ) +
           (stage === 'disable'
             ? `<form data-submit="tfaDisableConfirm" class="col" style="gap:14px;max-width:400px;margin-top:14px">

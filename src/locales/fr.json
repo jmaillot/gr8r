@@ -1281,6 +1281,7 @@
   "settings.tfa.disabledToast": "L’authentification à deux facteurs est désactivée.",
   "settings.tfa.dismiss": "J’ai enregistré mes codes",
   "settings.tfa.codeLabel": "Code à 6 chiffres ou code de récupération",
+  "settings.tfa.regenShort": "Régénérer",
   "settings.tfa.regen": "Régénérer les codes de récupération",
   "settings.tfa.regenDesc": "Génère un nouvel ensemble de 10 codes à usage unique.",
   "settings.tfa.regenLabel": "Mot de passe actuel",

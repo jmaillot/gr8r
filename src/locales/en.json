@@ -1281,6 +1281,7 @@
   "settings.tfa.disabledToast": "Two-factor authentication is off.",
   "settings.tfa.dismiss": "I've saved my codes",
   "settings.tfa.codeLabel": "6-digit code or recovery code",
+  "settings.tfa.regenShort": "Regenerate",
   "settings.tfa.regen": "Regenerate recovery codes",
   "settings.tfa.regenDesc": "Generates a fresh set of 10 one-time codes.",
   "settings.tfa.regenLabel": "Current password",
