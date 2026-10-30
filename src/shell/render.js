@@ -64,7 +64,7 @@ export const ROUTE_ICONS = {
 
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
-  if (!opt.back) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
+  if (!opt.back && !opt.noHistory) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
   const same = S.ui.route === route && JSON.stringify(S.ui.params) === JSON.stringify(params);
   S.ui.route = route;
   S.ui.params = params;
@@ -77,14 +77,20 @@ export function go(route, params = {}, opt = {}) {
   // Pages render instantly; motion (not a fake wait) carries the transition.
   clearTimeout(go._t);
   S.ui.loading = false;
-  /* D-03 (plan 23-01): the URL mirrors the routed view after navigation — the
-     drawer-over-page task case keeps its /w/:slug/task/:key address, everything
-     else resolves to the workspace root. replaceState for this tracer plan
-     (pushState + popstate arrive in plan 23-04). Server mode only: the demo
+  /* LINK-04 (plan 23-04): browser history mirrors the routed view. Forward
+     navigation (including the drawer open/close routed through go()) PUSHES
+     the view's URL; back navigation — popstate and the internal A.back —
+     only rewrites (replaceState), never pushes, so history never inflates
+     while going back (research Pitfall 4). The same-URL guard skips the
+     write when the browser is already on the target address (a boot-time
+     deep link re-navigating to its own URL). Server mode only: the demo
      boots at / with no workspace slugs in play. */
   if (api.enabled) {
     const url = urlForView(route, params);
-    if (url) history.replaceState(null, '', url);
+    if (url && url !== location.pathname) {
+      if (opt.back) history.replaceState(null, '', url);
+      else history.pushState(null, '', url);
+    }
   }
   if (!same) fxSet(opt.tab ? { tab: true, tabs: true } : { route: true, tabs: true });
   render();
@@ -92,18 +98,12 @@ export function go(route, params = {}, opt = {}) {
   if (c && !same) c.scrollTop = 0;
 }
 
-/* D-03 (plan 23-01): the minimal URL-for-view mapping. A task drawer open over
-   the routed view addresses /w/:slug/task/:key (key encodeURIComponent'd, the
-   exact shape notification emails carry); every other view resolves to the
-   workspace root. Only the task case exists now — extensible per the "View URL
-   scope" discretion. Returns null when no workspace is hydrated, so callers
-   never write a garbage URL. */
-/* D-03 (plan 23-01): the minimal URL-for-view mapping. A task drawer open over
-   the routed view addresses /w/:slug/task/:key (key encodeURIComponent'd, the
-   exact shape notification emails carry); every other view resolves to the
-   workspace root. Only the task case exists now — the (route, params) seam is
-   what the other views extend (plan 23-04). Returns null when no workspace is
-   hydrated, so callers never write a garbage URL. */
+/* D-03 (plan 23-01, extended by plan 23-04): the minimal URL-for-view mapping.
+   A task drawer open over the routed view addresses /w/:slug/task/:key (key
+   encodeURIComponent'd, the exact shape notification emails carry); every
+   other view resolves to the workspace root. Only the task case exists now —
+   the (route, params) seam is what the other views extend. Returns null when
+   no workspace is hydrated, so callers never write a garbage URL. */
 export function urlForView(route, params = {}) { // eslint-disable-line no-unused-vars
   const slug = D().ws?.url;
   if (!slug) return null;

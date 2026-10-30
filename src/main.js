@@ -59,7 +59,7 @@ import { S, D, hydrateFromServer, save, consumeLegacyLang, hasPendingChanges, my
 import { api } from './core/api.js';
 import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
-import { ROUTE_IDS, render, go, urlForView } from './shell/render.js';
+import { ROUTE_IDS, render, go } from './shell/render.js';
 import { $ } from './core/utils.js';
 import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale } from './core/i18n.js';
 
@@ -120,8 +120,11 @@ addEventListener('projects:save-error', e => {
   });
 });
 
-/* Restore a shared link such as /w/acme/project/website-launch. */
-function applyDeepLink(rest) {
+/* Restore a shared link such as /w/acme/project/website-launch, or resolve a
+   popstate URL (LINK-04, plan 23-04: opt.back). Both entries ride this single
+   URL→view resolution; opt.back threads into go() so a popstate never pushes
+   another history entry. */
+function applyDeepLink(rest, opt = {}) {
   const [seg, key] = String(rest).split('/');
   const data = D();
   if (!seg) return;
@@ -129,21 +132,19 @@ function applyDeepLink(rest) {
     const find = (list, field) => list.find(x => String(x[field] || '').toLowerCase() === key.toLowerCase());
     if (seg === 'project') {
       const p = find(data.projects || [], 'key');
-      if (p) return go('project', { id: p.id });
-      return go('project', { id: '__missing' });
+      if (p) return go('project', { id: p.id }, opt);
+      return go('project', { id: '__missing' }, opt);
     }
     if (seg === 'task') {
-      /* D-01/D-02/D-03 (plan 23-01): the task view IS the drawer — there is no
-         'task' page in renderPage's map, so navigating to a task route rendered
-         page404. The deep link now drives the exact state path A.openTask
-         drives (same
-         drawer mutations, same render, same focus), over a real underlying
-         page. No second render path, no minimal task page. */
+      /* D-01/D-02/D-03 (plan 23-01; plan 23-04 routes the URL write through
+         go()): the task view IS the drawer — there is no 'task' page in
+         renderPage's map. The drawer state A.openTask drives is set first so
+         urlForView() resolves the task URL inside go()'s single write path
+         (pushState on entry, nothing on popstate — the browser already set
+         it). keepDrawer preserves the drawer on narrow screens, matching the
+         pre-23-04 behaviour where the drawer was applied after go(). */
       const t = find(data.tasks || [], 'key');
       if (t && canSee(proj(t.project))) {
-        // Underlying page first: the task's project board (go() defaults the tab), home never applies —
-        // canSee(proj) truthy means the project exists in the hydrated doc.
-        go('project', { id: t.project });
         S.ui.drawer = t.id;
         S.ui.drawerFull = S.prefs.openTasks === 'full' || (S.ui.drawerFull && S.ui.drawer === t.id);
         S.ui.pop = null;
@@ -152,18 +153,16 @@ function applyDeepLink(rest) {
         S.ui.mention = null;
         S.ui.subOpen = null;
         S.ui.drawerTab = S.ui.drawerTab || 'comments';
-        render();
-        /* D-03: the URL keeps showing /w/:slug/task/:key while the task is open. */
-        const url = urlForView(S.ui.route, S.ui.params);
-        if (url) history.replaceState(null, '', url);
+        go('project', { id: t.project }, { ...opt, keepDrawer: true });
         const dr = $('.drawer');
         if (dr && !dr.contains(document.activeElement)) dr.focus({ preventScroll: true });
         return;
       }
       /* D-02 + no-oracle lean (T-23-02): an unknown key and a permission-hidden
          task land on the workspace view with the identical notice — no leak
-         that the task exists. */
-      go('home');
+         that the task exists. The drawer, if one was open, drops with the view. */
+      S.ui.drawer = null;
+      go('home', {}, opt);
       toast(tk('err.taskNotFound'), { kind: 'err' });
       return;
     }
@@ -173,10 +172,30 @@ function applyDeepLink(rest) {
         A.previewFile. One URL, one authoritative byte source; no SPA branch
         claims /file/:id. The project/task/member deep-link branches below
         still bootstrap via the generic route SPA fallback. */
-    if (seg === 'member' && (data.members || []).some(m => m.id === key)) return go('member', { id: key });
+    if (seg === 'member' && (data.members || []).some(m => m.id === key)) return go('member', { id: key }, opt);
   }
-  if (ROUTE_IDS.includes(seg)) return go(seg, {});
+  if (ROUTE_IDS.includes(seg)) return go(seg, {}, opt);
 }
+
+/* LINK-04 (plan 23-04): exactly ONE popstate handler, registered once at
+   boot. Browser back/forward resolve through the same URL→view resolution
+   deep links use (T-23-05: no new parsing surface — same canSee checks, same
+   not-found handling), always navigating with { back: true } so a popstate
+   never pushes a history entry. Auth/workspace-transition addresses (/, the
+   bare /w/:slug root the existing replaceState sites wrote, /login after
+   sign-in) map to the workspace home view; cross-workspace entries cannot be
+   restored by the hydrated document and land home too. Dropping the drawer
+   on those entries is the counterpart of its close-push (D-03): back into
+   the underlying view's entry closes the drawer without pushing. */
+addEventListener('popstate', () => {
+  if (!api.enabled || !api.user || S.ui.auth) return;
+  const m = location.pathname.match(/^\/w\/([a-z0-9-]{2,40})(?:\/(.+?))?\/?$/);
+  if (m && m[1] === D().ws?.url && m[2]) return applyDeepLink(m[2], { back: true });
+  S.ui.drawer = null;
+  S.ui.drawerFull = false;
+  S.ui.subOpen = null;
+  go('home', {}, { back: true });
+});
 
 /* D-04/D-05/D-06: the one-time migration seed. The old language lived in the shared workspace
    document; every member of a formerly-French workspace seeds their own account on their first

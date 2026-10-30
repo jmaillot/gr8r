@@ -536,7 +536,14 @@ A.openTask = el => {
   S.ui.mention = null;
   S.ui.subOpen = null;
   S.ui.drawerTab = S.ui.drawerTab || 'comments';
-  render();
+  /* LINK-04 (plan 23-04): opening the drawer routes through go() so its URL
+     write (pushState of /w/:slug/task/:key) happens in the single seam —
+     back returns to the underlying view, forward re-opens the task, and
+     internal clicks behave exactly like deep links (SC-4). noHistory keeps
+     the drawer out of the internal view-back stack (it is not a view); the
+     same-URL guard in go() skips the write when the task URL is already
+     showing (e.g. a popstate re-open). */
+  go(S.ui.route, S.ui.params, { keepDrawer: true, noHistory: true });
   const dr = $('.drawer');
   if (dr && !dr.contains(document.activeElement)) dr.focus({ preventScroll: true });
 };
@@ -544,7 +551,11 @@ A.closeDrawer = () => {
   S.ui.drawer = null;
   S.ui.drawerFull = false;
   S.ui.subOpen = null;
-  render();
+  /* LINK-04 (plan 23-04; research Open Question 2, RESOLVED — consistent
+     with D-03): closing the drawer PUSHES the underlying view's URL as a new
+     history entry — the task URL is never rewritten while the drawer is
+     open, so browser Back after closing re-opens the task. */
+  go(S.ui.route, S.ui.params, { keepDrawer: true, noHistory: true });
 };
 A.skipToContent = () => {
   const c = $('#main-content');
@@ -648,7 +659,11 @@ A.archiveTask = el => {
   const tk = task(el.dataset.id);
   const snap = snapshot();
   S.ui.pop = null;
-  if (S.ui.drawer === tk.id) S.ui.drawer = null;
+  if (S.ui.drawer === tk.id) {
+    S.ui.drawer = null;
+    /* LINK-04: the drawer URL (if any) must not outlive the drawer. */
+    go(S.ui.route, S.ui.params, { keepDrawer: true, noHistory: true });
+  }
   mutate(() => {
     tk.archived = true;
     tk.archivedAt = Date.now();
@@ -869,6 +884,8 @@ DBL.editTitle = el => {
   const row = el.closest('[data-task-row]');
   if (!row) return;
   S.ui.drawer = null;
+  /* LINK-04: the drawer URL (if any) must not outlive the drawer. */
+  go(S.ui.route, S.ui.params, { keepDrawer: true, noHistory: true });
   S.ui.editCell = { id: row.dataset.taskRow, f: 'title' };
   render();
   const i = $('#edit-title');
