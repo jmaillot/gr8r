@@ -81,6 +81,7 @@ export function createTask(f) {
       estimate: null,
       created: Date.now(),
       updated: Date.now(),
+      creator: D().me,
       order: maxO + 1,
       fav: false,
       recur: null,
@@ -150,11 +151,12 @@ export function emitMentions(txt, tk) {
   return targets;
 }
 
-/* P4-d/e: watchers of a task = its assignee plus everyone who commented on it.
-   The author is excluded inside notifyMembers, but pre-filtering here keeps the
-   notification lists honest for dedup and cap accounting. */
+/* P4-d/e: watchers of a task = its assignee, its creator (LINK-03) and
+   everyone who commented on it. The author is excluded inside
+   notifyMembers, but pre-filtering here keeps the notification lists
+   honest for dedup and cap accounting. */
 export function taskWatchers(t) {
-  return [...new Set([t.assignee, ...commentsOf(t.id).map(c => c.by)].filter(Boolean).filter(x => x !== D().me))];
+  return [...new Set([t.assignee, t.creator, ...commentsOf(t.id).map(c => c.by)].filter(Boolean).filter(x => x !== D().me))];
 }
 
 export function applyPatch(t, patch) {
