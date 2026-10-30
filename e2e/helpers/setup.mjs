@@ -91,6 +91,26 @@ export function inviteToken(url) {
   return String(url).slice(at + marker.length);
 }
 
+/* Phase 23 (post-merge gate fix): read-modify-write of the shared acme
+   document with revision-conflict retry. Parallel Playwright workers all
+   append fixtures to the same seeded workspace, so the revision-guarded PUT
+   can lose a race (409 workspaceChanged). Re-read and replay the mutation on
+   the fresh revision instead of failing the fixture. */
+export async function withAcmeDoc(client, step, mutate, { attempts = 12 } = {}) {
+  for (let i = 1; i <= attempts; i++) {
+    const got = await client.get('/api/workspaces/acme');
+    if (got.status !== 200) throw new Error(`${step}: acme GET failed with HTTP ${got.status}`);
+    const doc = got.data;
+    mutate(doc);
+    const put = await client.put('/api/workspaces/acme', { revision: doc.revision, doc: doc.doc });
+    if (put.status === 200) return doc;
+    if (put.status !== 409 || i === attempts) {
+      throw new Error(`${step} failed with HTTP ${put.status} after ${i} attempt(s): ${JSON.stringify(put.data)?.slice(0, 200)}`);
+    }
+  }
+  throw new Error(`${step}: unreachable`);
+}
+
 /* Deterministic shape for the fields the project page reads. */
 function project({ id, key, name, members, lead, isPrivate }) {
   return {

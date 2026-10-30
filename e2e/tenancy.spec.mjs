@@ -133,8 +133,10 @@ test('a role change does not lock the workspace out of writing', async ({ browse
     await page.reload();
     await expect(page.getByText('Revision Guard').first()).toBeVisible();
 
-    /* Leave the roster as it was for the tests above. */
-    await page.getByRole('button', { name: 'Members', exact: true }).click();
+    /* Leave the roster as it was for the tests above. Phase 23 per-view URLs:
+       the reload above restores the project board, so scope to the main nav —
+       the board's share row also has a button labelled "Members". */
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Members', exact: true }).click();
     const carolAfter = page.getByRole('row').filter({ hasText: 'Carol Member' });
     await carolAfter.getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: /^Member Create projects/ }).click();

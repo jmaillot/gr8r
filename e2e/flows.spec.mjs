@@ -278,7 +278,9 @@ async function walkWizard(page, lang, { wsName, slug, projName }) {
   await expect(page.getByText(fmt('page.auth.readyWorkspace', { name: wsName }, lang))).toBeVisible();
   await page.locator(`button[data-a='onbFinish']`).click();
 
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}$`));
+  /* Phase 23 per-view URLs: the landing view (project or workspace root) is now
+     reflected in the URL — assert the workspace prefix, not the bare root. */
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}(/|$)`));
   await expect(page.locator('button.ws')).toContainText(wsName);
 }
 

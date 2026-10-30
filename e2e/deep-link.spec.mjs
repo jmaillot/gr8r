@@ -11,7 +11,7 @@
    src/locales/en.json / fr.json — never hardcoded.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, OWNER, apiClient, clientIp, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, OWNER, apiClient, clientIp, newRunId, withAcmeDoc } from './helpers/setup.mjs';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
 
@@ -40,58 +40,58 @@ const fixture = { user: { ...OWNER, ip: clientIp(run, 'dl-owner') } };
 test.beforeAll(async () => {
   const client = apiClient(BASE_URL, { name: 'dl-owner', ip: fixture.user.ip });
   expectStatus('owner login', await client.post('/api/auth/login', { email: OWNER.email, password: OWNER.password }), [200]);
-  const doc = expectStatus('acme document', await client.get('/api/workspaces/acme'), [200]);
-  doc.doc.data.projects = [
-    ...(doc.doc.data.projects || []),
-    {
-      id: 'p_dl_roadmap',
-      key: 'dl-roadmap',
-      name: `Deep Link Roadmap ${run}`,
-      icon: 'map',
-      color: 'indigo',
-      status: 'active',
-      team: null,
-      lead: doc.memberId,
-      due: null,
-      start: null,
-      fav: false,
-      members: [doc.memberId],
-      desc: '',
-      milestones: [],
-      last: 0,
-      private: false,
-      perms: {},
-      seq: 200,
-    },
-  ];
-  doc.doc.data.projOrder = [...(doc.doc.data.projOrder || []), 'p_dl_roadmap'];
-  doc.doc.data.tasks = [
-    ...(doc.doc.data.tasks || []),
-    {
-      id: `t_dl_${run}`,
-      key: TASK_KEY,
-      title: TASK_TITLE,
-      project: 'p_dl_roadmap',
-      status: 'todo',
-      assignee: null,
-      priority: 'medium',
-      due: null,
-      start: null,
-      labels: [],
-      subtasks: [],
-      attachments: [],
-      deps: [],
-      desc: '',
-      estimate: null,
-      created: Date.now(),
-      updated: Date.now(),
-      order: 901,
-      fav: false,
-      recur: null,
-      creator: doc.memberId,
-    },
-  ];
-  expectStatus('dl task fixture', await client.put('/api/workspaces/acme', { revision: doc.revision, doc: doc.doc }), [200]);
+  await withAcmeDoc(client, 'dl task fixture', (doc) => {
+    doc.doc.data.projects = [
+      ...(doc.doc.data.projects || []),
+      {
+        id: 'p_dl_roadmap',
+        key: 'dl-roadmap',
+        name: `Deep Link Roadmap ${run}`,
+        icon: 'map',
+        color: 'indigo',
+        status: 'active',
+        team: null,
+        lead: doc.memberId,
+        due: null,
+        start: null,
+        fav: false,
+        members: [doc.memberId],
+        desc: '',
+        milestones: [],
+        last: 0,
+        private: false,
+        perms: {},
+        seq: 200,
+      },
+    ];
+    doc.doc.data.projOrder = [...(doc.doc.data.projOrder || []), 'p_dl_roadmap'];
+    doc.doc.data.tasks = [
+      ...(doc.doc.data.tasks || []),
+      {
+        id: `t_dl_${run}`,
+        key: TASK_KEY,
+        title: TASK_TITLE,
+        project: 'p_dl_roadmap',
+        status: 'todo',
+        assignee: null,
+        priority: 'medium',
+        due: null,
+        start: null,
+        labels: [],
+        subtasks: [],
+        attachments: [],
+        deps: [],
+        desc: '',
+        estimate: null,
+        created: Date.now(),
+        updated: Date.now(),
+        order: 901,
+        fav: false,
+        recur: null,
+        creator: doc.memberId,
+      },
+    ];
+  });
 });
 
 /* Sign in through the UI. The login form renders in the browser's negotiated
