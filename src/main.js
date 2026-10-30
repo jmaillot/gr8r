@@ -190,10 +190,16 @@ function applyDeepLink(rest, opt = {}) {
 addEventListener('popstate', () => {
   if (!api.enabled || !api.user || S.ui.auth) return;
   const m = location.pathname.match(/^\/w\/([a-z0-9-]{2,40})(?:\/(.+?))?\/?$/);
+  const isTask = !!(m && m[1] === D().ws?.url && m[2] && m[2].startsWith('task/'));
+  if (!isTask) {
+    /* Leaving the task context: the drawer drops with the entry (counterpart
+       of its close-push, D-03) — otherwise urlForView would rewrite the
+       restored view's URL back to the task address. */
+    S.ui.drawer = null;
+    S.ui.drawerFull = false;
+    S.ui.subOpen = null;
+  }
   if (m && m[1] === D().ws?.url && m[2]) return applyDeepLink(m[2], { back: true });
-  S.ui.drawer = null;
-  S.ui.drawerFull = false;
-  S.ui.subOpen = null;
   go('home', {}, { back: true });
 });
 
@@ -307,7 +313,7 @@ async function seedLegacyLocale() {
   if (!withServer && authRoutes.includes(h)) S.ui.auth = h;
   else if (h && ROUTE_IDS.includes(h)) S.ui.route = h;
   else S.ui.route = S.prefs.home || 'home';
-  if (deepLink) applyDeepLink(deepLink);
+  if (deepLink) applyDeepLink(deepLink, { replace: true });
   render();
   if (withServer && S.ui.route === 'members') refreshMembers();
 })();

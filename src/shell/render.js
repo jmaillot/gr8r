@@ -64,7 +64,7 @@ export const ROUTE_ICONS = {
 
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
-  if (!opt.back && !opt.noHistory) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
+  if (!opt.back && !opt.noHistory && !opt.replace) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
   const same = S.ui.route === route && JSON.stringify(S.ui.params) === JSON.stringify(params);
   S.ui.route = route;
   S.ui.params = params;
@@ -81,14 +81,14 @@ export function go(route, params = {}, opt = {}) {
      navigation (including the drawer open/close routed through go()) PUSHES
      the view's URL; back navigation — popstate and the internal A.back —
      only rewrites (replaceState), never pushes, so history never inflates
-     while going back (research Pitfall 4). The same-URL guard skips the
-     write when the browser is already on the target address (a boot-time
-     deep link re-navigating to its own URL). Server mode only: the demo
-     boots at / with no workspace slugs in play. */
+     while going back (research Pitfall 4). Boot-time deep-link resolution
+     (opt.replace) rewrites in place: the browser entry already carries the
+     deep-linked address and must not be duplicated. Server mode only: the
+     demo boots at / with no workspace slugs in play. */
   if (api.enabled) {
     const url = urlForView(route, params);
-    if (url && url !== location.pathname) {
-      if (opt.back) history.replaceState(null, '', url);
+    if (url) {
+      if (opt.back || opt.replace) history.replaceState(null, '', url);
       else history.pushState(null, '', url);
     }
   }
@@ -98,17 +98,25 @@ export function go(route, params = {}, opt = {}) {
   if (c && !same) c.scrollTop = 0;
 }
 
-/* D-03 (plan 23-01, extended by plan 23-04): the minimal URL-for-view mapping.
-   A task drawer open over the routed view addresses /w/:slug/task/:key (key
-   encodeURIComponent'd, the exact shape notification emails carry); every
-   other view resolves to the workspace root. Only the task case exists now —
-   the (route, params) seam is what the other views extend. Returns null when
-   no workspace is hydrated, so callers never write a garbage URL. */
+/* D-03 (plan 23-01) extended by LINK-04 (plan 23-04): every navigable view
+   gets its own address so browser back/forward can restore it (popstate
+   resolves the path through applyDeepLink). A task drawer open over the
+   routed view addresses /w/:slug/task/:key (key encodeURIComponent'd, the
+   exact shape notification emails carry); project views use their key,
+   members their id, plain views the route id, and home the workspace root.
+   Returns null when no workspace is hydrated, so callers never write a
+   garbage URL. */
 export function urlForView(route, params = {}) { // eslint-disable-line no-unused-vars
   const slug = D().ws?.url;
   if (!slug) return null;
   const t = S.ui.drawer && task(S.ui.drawer);
   if (t?.key) return `/w/${slug}/task/${encodeURIComponent(t.key)}`;
+  if (route === 'project' && params.id) {
+    const p = proj(params.id);
+    if (p?.key) return `/w/${slug}/project/${encodeURIComponent(p.key)}`;
+  }
+  if (route === 'member' && params.id) return `/w/${slug}/member/${encodeURIComponent(params.id)}`;
+  if (ROUTE_IDS.includes(route) && route !== 'home') return `/w/${slug}/${route}`;
   return `/w/${slug}`;
 }
 
