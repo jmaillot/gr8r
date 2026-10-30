@@ -25,6 +25,7 @@ deep-link path).
 ## Phase Details
 
 ### Phase 23: Email Deep Links & Creator Watching
+
 **Goal**: A notification email is a door to the task, not the app root — and the people who should hear about a task's activity (including its creator) actually do
 **Depends on**: Nothing (first phase of v1.5)
 **Requirements**: LINK-01, LINK-02, LINK-03, LINK-04
@@ -34,17 +35,24 @@ deep-link path).
   3. When a user creates a task and someone else comments on or updates it, the creator receives the notification like any watcher — and the creator is not duplicated when they are also the assignee
   4. Using the browser's back/forward buttons across SPA views returns to the previous view (popstate works); deep-link navigation and manual navigation stay consistent
   5. The `/w/:slug/file/:id` byte route still serves bytes (route ordering unchanged) — proven by test
+
 **Plans**: 4 plans
 
 Plans:
+**Wave 1**
 - [ ] 23-01-PLAN.md — Tracer: deep link → task drawer with persisted URL; APP_URL email task links; not-found toast; file-route ordering regression test (LINK-01)
-- [ ] 23-02-PLAN.md — Logged-out deep-link `?next=` carry and sign-in return (LINK-02)
 - [ ] 23-03-PLAN.md — Creator field + creator in watcher set, no self-notify (LINK-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 23-02-PLAN.md — Logged-out deep-link `?next=` carry and sign-in return (LINK-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 23-04-PLAN.md — go() pushState + popstate handler, back/forward e2e (LINK-04)
 
 **UI hint**: yes
 
 ### Phase 24: Operator Audit & Workspace-Admin Tier
+
 **Goal**: Every privileged session revocation — operator and workspace-admin — leaves a tamper-proof, owner-visible trail written in the same transaction as the action
 **Depends on**: Nothing (independent of Phase 23)
 **Requirements**: AUD-01, AUD-02, AUD-03
@@ -54,9 +62,11 @@ Plans:
   3. A failed or interrupted revocation leaves NO audit row and NO revoked sessions — the audit write rolls back with the revocation (same transaction)
   4. An owner can view the operator/admin action trail in the app, filtered by machine verbs, including actions against a user who has since been deleted (no cascade loss)
   5. No route in the app can edit or delete an audit row
+
 **Plans**: TBD
 
 ### Phase 25: Keyring & Version-Aware Envelopes
+
 **Goal**: The database can hold a `v2:` envelope without corrupting itself on boot, and secrets decrypt by key id through a keyring — the prerequisite that makes rotation possible
 **Depends on**: Nothing (must land before any v2 envelope can exist — hard prerequisite for Phase 26)
 **Requirements**: KEY-01, KEY-02
@@ -65,9 +75,11 @@ Plans:
   2. A TOTP secret written in the new `v2:<key-id>:…` envelope verifies successfully at login when the matching key is configured in the keyring (current + `MASTER_KEY_PREVIOUS`)
   3. When neither key can decrypt a secret, the existing fail-closed 503 `masterKeyMissing` behavior is unchanged — no plaintext fallback anywhere
   4. 2FA login, enrollment and disable flows behave exactly as before for existing `v1:` secrets (signature of `requireTotpSecret` unchanged)
+
 **Plans**: TBD
 
 ### Phase 26: Re-Wrap Rotation & Key-Custody Runbook
+
 **Goal**: An operator can rotate MASTER_KEY by setting an env var and rebooting — no 2FA re-enrollment — with a documented runbook for the whole custody lifecycle
 **Depends on**: Phase 25 (keyring + version-aware filter)
 **Requirements**: KEY-03, KEY-04
@@ -76,9 +88,11 @@ Plans:
   2. A second boot after rotation is a no-op (idempotent); zero stale envelopes remain after rotation — verified programmatically
   3. The pre-migration backup guarantee holds for the re-wrap pass (backup taken before any rewrite, transactional, rollback-safe)
   4. DEPLOY.md carries a runbook an operator can follow end-to-end: key generation/injection, adding the new key alongside the old, running rotation, verifying zero stale envelopes, backup-before-rotation, and the compromise policy (compromised key → honest full re-enrollment; rotation alone is not sufficient)
+
 **Plans**: TBD
 
 ### Phase 27: Due-Date Reminder Scheduler
+
 **Goal**: Assignees hear about approaching due dates from the server itself — exactly once per offset per due date, honoring prefs, restart-safe, without disturbing active clients
 **Depends on**: Phase 23 (deep-link email path + APP_URL plumbing); independent of Phases 24–26
 **Requirements**: REM-01, REM-02, REM-03, REM-04, REM-05
@@ -88,6 +102,7 @@ Plans:
   3. Restarting the server (deploy, crash) never double-sends: each (task, assignee, offset, due date) reminder fires exactly once, with the dedup key persisted transactionally in SQLite before the notification
   4. Completed and archived tasks never receive reminders; an overdue task receives exactly one "past due" nudge, also deduped; changing a due date re-arms its reminders via the key
   5. Idle scheduler ticks never bump the workspace revision — active clients see no 409 storms; an interval-callback failure cannot kill the process
+
 **Plans**: TBD
 
 ## Coverage
