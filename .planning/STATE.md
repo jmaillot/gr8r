@@ -29,9 +29,9 @@ progress:
 ## Current Position
 
 Phase: 23 (Email Deep Links & Creator Watching) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-10-30 — Phase 23 execution started
+Last activity: 2026-10-30 — 23-02 (logged-out ?next= carry) executed out of order after 23-03
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -67,6 +67,7 @@ Progress: [░░░░░░░░░░] 0%
 - Version-aware boot migration filter must land before any `v2:` envelope exists
 - Per-user timezone and custom reminder offsets deferred to v1.6/v2 (workspace-shared tz at v1.5)
 - [Phase 23]: Creator watching: creator joins the computed watcher set (add-alongside P4-d/e), no backfill for legacy tasks
+- [Phase 23]: Logged-out carry builds ?next= from location.pathname only; finishLogin's four-clause path-only validator stays the single source of truth (pinned by test/next-carry.test.mjs)
 
 ### Pending Todos
 
@@ -83,8 +84,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-30T14:07:54.415Z
-Stopped at: Completed 23-03-PLAN.md
+Last session: 2026-10-30
+Stopped at: Completed 23-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -93,3 +94,4 @@ Resume file: None
 |------|----------|-------|-------|
 | Phase 23 P01 | 17 min | 3 tasks | 10 files |
 | Phase 23 P03 | 2 min | 2 tasks | 2 files |
+| Phase 23 P02 | 25 min | 2 tasks | 3 files |
