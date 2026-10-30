@@ -55,11 +55,12 @@ import './features/archive.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
-import { S, D, hydrateFromServer, save, consumeLegacyLang, hasPendingChanges, myNotifs } from './core/store.js';
+import { S, D, hydrateFromServer, save, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee } from './core/store.js';
 import { api } from './core/api.js';
 import { A, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
-import { ROUTE_IDS, render, go } from './shell/render.js';
+import { ROUTE_IDS, render, go, urlForView } from './shell/render.js';
+import { $ } from './core/utils.js';
 import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale } from './core/i18n.js';
 
 /* The locale change re-renders the app: one listener, one re-render, never
@@ -132,8 +133,39 @@ function applyDeepLink(rest) {
       return go('project', { id: '__missing' });
     }
     if (seg === 'task') {
+      /* D-01/D-02/D-03 (plan 23-01): the task view IS the drawer — there is no
+         'task' page in renderPage's map, so navigating to a task route rendered
+         page404. The deep link now drives the exact state path A.openTask
+         drives (same
+         drawer mutations, same render, same focus), over a real underlying
+         page. No second render path, no minimal task page. */
       const t = find(data.tasks || [], 'key');
-      if (t) return go('task', { id: t.id });
+      if (t && canSee(proj(t.project))) {
+        // Underlying page first: the task's project board (go() defaults the tab), home never applies —
+        // canSee(proj) truthy means the project exists in the hydrated doc.
+        go('project', { id: t.project });
+        S.ui.drawer = t.id;
+        S.ui.drawerFull = S.prefs.openTasks === 'full' || (S.ui.drawerFull && S.ui.drawer === t.id);
+        S.ui.pop = null;
+        S.ui.palette = null;
+        S.ui.modals = [];
+        S.ui.mention = null;
+        S.ui.subOpen = null;
+        S.ui.drawerTab = S.ui.drawerTab || 'comments';
+        render();
+        /* D-03: the URL keeps showing /w/:slug/task/:key while the task is open. */
+        const url = urlForView(S.ui.route, S.ui.params);
+        if (url) history.replaceState(null, '', url);
+        const dr = $('.drawer');
+        if (dr && !dr.contains(document.activeElement)) dr.focus({ preventScroll: true });
+        return;
+      }
+      /* D-02 + no-oracle lean (T-23-02): an unknown key and a permission-hidden
+         task land on the workspace view with the identical notice — no leak
+         that the task exists. */
+      go('home');
+      toast(tk('err.taskNotFound'), { kind: 'err' });
+      return;
     }
     /* D-13 (revised, plan 12-05): the copied pathname /w/:slug/file/:id serves
         the raw bytes directly — server-side, in every world, through the

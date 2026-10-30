@@ -254,6 +254,7 @@
   "toast.teamSaved": "{name} enregistrée",
   "err.changeRole": "Impossible de modifier ce rôle",
   "err.taskAccess": "Vous n’avez pas accès à cette tâche",
+  "err.taskNotFound": "Tâche introuvable",
   "err.uploadOffline": "Échec du téléversement — vous êtes hors ligne.",
   "err.cannotChangeAccess": "Seul le responsable du projet, un admin ou le propriétaire peut modifier l’accès",
   "err.inviteFirst": "Invitez d’abord cette personne dans l’espace de travail, puis ajoutez-la à ce projet",

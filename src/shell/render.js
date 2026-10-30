@@ -3,7 +3,8 @@
    ===================================================================== */
 import { $, $$ } from '../core/utils.js';
 import { t } from '../core/i18n.js';
-import { D, S, canSee, mem, proj, team } from '../core/store.js';
+import { D, S, canSee, mem, proj, task, team } from '../core/store.js';
+import { api } from '../core/api.js';
 import { applyPrefs } from '../core/theme.js';
 import { enhanceSelects, selectMenu } from '../ui/select.js';
 import { renderShell } from './layout.js';
@@ -76,10 +77,39 @@ export function go(route, params = {}, opt = {}) {
   // Pages render instantly; motion (not a fake wait) carries the transition.
   clearTimeout(go._t);
   S.ui.loading = false;
+  /* D-03 (plan 23-01): the URL mirrors the routed view after navigation — the
+     drawer-over-page task case keeps its /w/:slug/task/:key address, everything
+     else resolves to the workspace root. replaceState for this tracer plan
+     (pushState + popstate arrive in plan 23-04). Server mode only: the demo
+     boots at / with no workspace slugs in play. */
+  if (api.enabled) {
+    const url = urlForView(route, params);
+    if (url) history.replaceState(null, '', url);
+  }
   if (!same) fxSet(opt.tab ? { tab: true, tabs: true } : { route: true, tabs: true });
   render();
   const c = $('.content');
   if (c && !same) c.scrollTop = 0;
+}
+
+/* D-03 (plan 23-01): the minimal URL-for-view mapping. A task drawer open over
+   the routed view addresses /w/:slug/task/:key (key encodeURIComponent'd, the
+   exact shape notification emails carry); every other view resolves to the
+   workspace root. Only the task case exists now — extensible per the "View URL
+   scope" discretion. Returns null when no workspace is hydrated, so callers
+   never write a garbage URL. */
+/* D-03 (plan 23-01): the minimal URL-for-view mapping. A task drawer open over
+   the routed view addresses /w/:slug/task/:key (key encodeURIComponent'd, the
+   exact shape notification emails carry); every other view resolves to the
+   workspace root. Only the task case exists now — the (route, params) seam is
+   what the other views extend (plan 23-04). Returns null when no workspace is
+   hydrated, so callers never write a garbage URL. */
+export function urlForView(route, params = {}) { // eslint-disable-line no-unused-vars
+  const slug = D().ws?.url;
+  if (!slug) return null;
+  const t = S.ui.drawer && task(S.ui.drawer);
+  if (t?.key) return `/w/${slug}/task/${encodeURIComponent(t.key)}`;
+  return `/w/${slug}`;
 }
 
 /* One-shot motion flags: read by templates during the next render, then cleared, so full re-renders never replay them. */

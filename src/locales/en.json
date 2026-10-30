@@ -253,6 +253,7 @@
   "toast.teamSaved": "Saved {name}",
   "err.changeRole": "Could not change that role",
   "err.taskAccess": "You don't have access to that task",
+ "err.taskNotFound": "Task not found",
   "err.uploadOffline": "Upload failed — you're offline.",
   "err.cannotChangeAccess": "Only the project lead, an admin or the owner can change access",
   "err.inviteFirst": "Invite them to the workspace first, then add them to this project",
