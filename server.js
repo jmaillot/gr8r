@@ -187,6 +187,8 @@ function openDb() {
   ensureColumn(db, 'workspaces', 'slug', 'text');
   ensureColumn(db, 'workspaces', 'color', 'text');
   ensureColumn(db, 'memberships', 'member_id', 'text');
+  // P4-c fix: the team picked at invite time must survive into the profile seed.
+  ensureColumn(db, 'memberships', 'team', 'text');
   ensureColumn(db, 'invites', 'workspace_id', 'text');
   ensureColumn(db, 'users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
@@ -720,6 +722,27 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs, req) {
   }
 }
 
+/* P4-c fix: team assignment for account-backed members must survive PUTs.
+   The stored document carries no members — the roster is rebuilt from the
+   memberships table — so a client-side `member.team` edit would be discarded.
+   An admin's PUT diffs the incoming roster against the authority rows; the
+   read path (syncProfiles) mirrors the result back into the doc. */
+function syncMemberTeams(workspaceId, incomingMembers, role) {
+  if (ROLE_RANK[role] < ROLE_RANK.admin || !Array.isArray(incomingMembers)) return;
+  const rows = db.prepare('select user_id, team from memberships where workspace_id = ?').all(workspaceId);
+  const byUser = new Map(rows.map(r => [r.user_id, r]));
+  for (const m of incomingMembers) {
+    if (!m?.userId) continue;
+    const row = byUser.get(m.userId);
+    if (!row) continue;
+    const team = m.team || null;
+    if ((row.team || null) !== team) {
+      db.prepare('update memberships set team = ? where workspace_id = ? and user_id = ?').run(team, workspaceId, m.userId);
+      row.team = team;
+    }
+  }
+}
+
 function docForClient(doc, ws, membership) {  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
   syncProfiles(out, ws.id);
@@ -839,7 +862,7 @@ function syncProfiles(doc, workspaceId) {
   if (!doc?.data || !Array.isArray(doc.data.members)) return;
   const rows = db
     .prepare(
-      `select m.user_id, m.role, m.member_id, u.name, u.email
+      `select m.user_id, m.role, m.member_id, m.team, u.name, u.email
          from memberships m join users u on u.id = m.user_id
         where m.workspace_id = ?`,
     )
@@ -851,6 +874,11 @@ function syncProfiles(doc, workspaceId) {
     if (!row) continue;
     if (row.member_id && profile.id !== row.member_id) profile.id = row.member_id;
     profile.role = ROLE_LABEL[row.role] || profile.role;
+    /* P4-c fix: the membership row is the authority for a member's team (set at
+       invite time or by an admin PUT via syncMemberTeams) — mirror it into the
+       doc so @team mentions and the members page resolve. Doc-only profiles
+       (no account) keep their own team field untouched. */
+    profile.team = row.team || null;
     if (profile.status === 'invited') profile.status = 'active';
     // The document stores minutes since last activity; older rows stored a timestamp.
     if (typeof profile.last === 'number' && profile.last > 1e11) profile.last = Math.max(0, Math.round((now() - profile.last) / 60000));
@@ -1197,7 +1225,9 @@ function memberProfile(row, index = 0) {
     name: row.name,
     email: row.email,
     role: ROLE_LABEL[row.role] || 'Member',
-    team: null,
+    /* The team chosen at invite time seeds the profile; afterwards the doc
+       copy is the source of truth (the teams modal edits it directly). */
+    team: row.team || null,
     title: '',
     c: ['#5A67D8', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 6],
     status: 'active',
@@ -1234,7 +1264,7 @@ function ensureMember(doc, user, role = 'member', workspaceId = null) {
   return id;
 }
 
-function addMembership(ws, user, role) {
+function addMembership(ws, user, role, team = null) {
   if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
@@ -1243,9 +1273,9 @@ function addMembership(ws, user, role) {
   db.exec('begin immediate');
   try {
     db.prepare(
-      `insert into memberships (workspace_id, user_id, role, member_id) values (?,?,?,?)
+      `insert into memberships (workspace_id, user_id, role, member_id, team) values (?,?,?,?,?)
        on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
-    ).run(ws.id, user.id, role, memberId);
+    ).run(ws.id, user.id, role, memberId, team);
     db.exec('commit');
   } catch (err) {
     db.exec('rollback');
@@ -2156,6 +2186,12 @@ async function handleApi(req, res, url) {
          must never wait on SMTP. */
       const storedNotifIds = new Set((Array.isArray(storedDoc?.data?.notifs) ? storedDoc.data.notifs : []).map(n => n?.id).filter(Boolean));
       const newNotifs = (Array.isArray(next?.data?.notifs) ? next.data.notifs : []).filter(n => n?.id && !storedNotifIds.has(n.id));
+      /* Team edits ride the same PUT (see syncMemberTeams) — applied in the
+         transaction so the doc and the authority rows stay consistent. The
+         RAW incoming roster is used: docFromClient drops account members the
+         stored doc doesn't know (it never stores members), but a legitimate
+         team edit still arrives on them. */
+      syncMemberTeams(row.id, doc?.data?.members, ctx.membership.role);
       const t = now();
       db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
       db.exec('commit');
@@ -2476,7 +2512,7 @@ async function handleApi(req, res, url) {
 
     const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
-    if (!membershipOf(ws.id, user.id)) addMembership(ws, user, invite.role);
+    if (!membershipOf(ws.id, user.id)) addMembership(ws, user, invite.role, invite.team);
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {
       db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);
