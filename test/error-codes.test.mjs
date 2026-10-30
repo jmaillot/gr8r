@@ -193,6 +193,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'codeRequired', // field guard in the tfa disable form (16-03) — no server code
   'changeRole', // toast composed in actions.js after a successful PATCH
   'taskAccess', // toast composed in actions.js after a successful task write
+  'taskNotFound', // deep-link toast composed in main.js for an unknown/hidden task key (23-01)
   'uploadOffline', // demo/offline branch in actions.js — no server call made
   'cannotChangeAccess', // permission toast composed in actions.js before the call
   'inviteFirst', // guard toast in actions.js — nothing to revoke yet

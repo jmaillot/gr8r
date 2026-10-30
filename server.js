@@ -693,8 +693,7 @@ function mergeClientDoc(incoming, stored, membership) {
    HTTP response and their failures are logged, not surfaced. */
 const NOTIF_EMAIL_KIND = { mention: 'email_mention', assign: 'email_assign', comment: 'email_comment' };
 
-function queueNotifEmails(wsRow, nextDoc, newNotifs, req) {
-  const base = appBase(req);
+function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const wsName = wsRow.name || 'Projects Studio';
   const prefs = nextDoc?.data?.notifPrefs || {};
   const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
@@ -708,8 +707,15 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs, req) {
     const profile = profiles.get(n.to);
     const to = (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;
-    const taskTitle = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task)?.title || 'a task' : 'a task';
-    const url = `${base}/`;
+    const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
+    const taskTitle = task?.title || 'a task';
+    /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
+       key is resolved at email-build time (it is mutable on project move) and
+       the absolute base is APP_URL unconditionally — the boot guard exits when
+       SMTP is enabled without it, so a request's Host header can never poison
+       an emailed link (T-23-01). A task deleted between the doc write and the
+       email build falls back to the workspace root. */
+    const url = task?.key ? `${APP_URL}/w/${wsRow.slug}/task/${encodeURIComponent(task.key)}` : `${APP_URL}/w/${wsRow.slug}/`;
     MAILER.sendNotif({
       to,
       workspace: wsName,
@@ -2197,7 +2203,7 @@ async function handleApi(req, res, url) {
       db.exec('commit');
       /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
          server delays nothing: errors logged, response already flushed. */
-      if (MAILER.enabled && newNotifs.length) queueNotifEmails(row, next, newNotifs, req);
+      if (MAILER.enabled && newNotifs.length) queueNotifEmails(row, next, newNotifs);
       /* After the commit succeeds: missing file at unlink time is success
          (idempotent); unlink errors are logged and swallowed — the doc write
          is already committed and must not be failed by a filesystem hiccup. */
@@ -2992,13 +2998,14 @@ function main() {
   db.prepare('delete from login_challenges where expires_at <= ?').run(now());
   setInterval(() => db.prepare('delete from login_challenges where expires_at <= ?').run(now()), 3600_000).unref();
 
-  /* Invite links are absolute URLs built from APP_URL; without it appBase() falls back
-     to the request's Host header, so a hostile Host would email invitation links pointing
-     at the attacker's domain. Fail loudly at boot instead of at the first invite. */
+  /* Invite + notification links are absolute URLs built from APP_URL; without it
+     appBase() falls back to the request's Host header, so a hostile Host would email
+     invitation or notification links pointing at the attacker's domain. Fail loudly
+     at boot instead of at the first email. */
   if (MAILER.enabled && !APP_URL) {
     console.error('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
     console.error(
-      "Invitation links are built from APP_URL; without it a request host header could point invite emails at an attacker's domain. Set APP_URL (e.g. https://projects.example.com) or unset SMTP_HOST to disable email invitations.",
+      'Invitation and notification links are built from APP_URL; without it a request host header could point those emails at an attacker\'s domain. Set APP_URL (e.g. https://projects.example.com) or unset SMTP_HOST to disable email invitations.',
     );
     process.exit(1);
   }

@@ -18,7 +18,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createMailer } from '../mailer.js';
-import { ROOT, freePort } from './helpers/server.mjs';
+import { ROOT } from './helpers/server.mjs';
 
 const serverSource = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 
