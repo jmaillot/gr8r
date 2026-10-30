@@ -45,7 +45,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
   the exact task after sign-in (path carried through, not just the slug)
 - [x] **LINK-03**: The task's creator is added to the watcher set at creation (dedup with the
   assignee) and receives comment/update notifications like any watcher
-- [ ] **LINK-04**: Browser back/forward buttons work across SPA views (popstate handler) —
+- [x] **LINK-04**: Browser back/forward buttons work across SPA views (popstate handler) —
   deep-link routing and manual navigation stay consistent
 
 ### MASTER_KEY Rotation (KEY)
@@ -103,7 +103,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | LINK-01 | Phase 23 | Complete |
 | LINK-02 | Phase 23 | Complete |
 | LINK-03 | Phase 23 | Complete |
-| LINK-04 | Phase 23 | Pending |
+| LINK-04 | Phase 23 | Complete |
 | AUD-01 | Phase 24 | Pending |
 | AUD-02 | Phase 24 | Pending |
 | AUD-03 | Phase 24 | Pending |

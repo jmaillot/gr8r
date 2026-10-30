@@ -36,7 +36,7 @@ deep-link path).
   4. Using the browser's back/forward buttons across SPA views returns to the previous view (popstate works); deep-link navigation and manual navigation stay consistent
   5. The `/w/:slug/file/:id` byte route still serves bytes (route ordering unchanged) — proven by test
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -47,7 +47,7 @@ Plans:
 - [x] 23-02-PLAN.md — Logged-out deep-link `?next=` carry and sign-in return (LINK-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 23-04-PLAN.md — go() pushState + popstate handler, back/forward e2e (LINK-04)
+- [x] 23-04-PLAN.md — go() pushState + popstate handler, back/forward e2e (LINK-04)
 
 **UI hint**: yes
 
@@ -121,7 +121,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Email Deep Links & Creator Watching | 3/4 | In Progress|  |
+| 23. Email Deep Links & Creator Watching | 4/4 | In Progress|  |
 | 24. Operator Audit & Workspace-Admin Tier | 0/? | Not started | - |
 | 25. Keyring & Version-Aware Envelopes | 0/? | Not started | - |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 0/? | Not started | - |
