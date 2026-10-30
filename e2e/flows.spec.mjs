@@ -750,8 +750,7 @@ function uploadDict(lang, name) {
 /* Project → expand in the sidebar → its files tab. */
 async function openFilesTab(page, pid) {
   await page.locator(`[data-a='go'][data-r='project'][data-id='${pid}']`).first().click();
-  await page.locator(`[data-a='toggleExpand'][data-id='${pid}']`).first().click();
-  await page.locator(`.sproj button[data-a='go'][data-r='project'][data-id='${pid}'][data-tab='files']`).click();
+  await page.locator(`button[data-a='go'][data-r='project'][data-id='${pid}'][data-tab='files']`).first().click();
 }
 
 /* How many file records the workspace doc holds right now (fixture API only). */
