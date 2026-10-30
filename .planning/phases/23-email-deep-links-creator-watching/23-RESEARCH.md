@@ -338,12 +338,10 @@ Not applicable in the library sense (zero-dependency, no framework churn). The r
 | A3 | Server-side SPA fallback needs NO new route for `/w/:slug/task/:key` (index.html already served) | Architecture | Low — verified fallback serves unknown `/w/` paths; e2e will prove it |
 | A4 | Closing the task drawer after a deep link should push a new history entry back to the underlying view (so back re-opens the task) | Pattern 3 / Pitfall 4 | Low — UX detail within D-03/discretion |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `queueNotifEmails` switch entirely to APP_URL (dropping `appBase(req)`) or keep request-based base for in-request emails?**
-   - What we know: the invite guard treats APP_URL as mandatory-with-SMTP; using it everywhere is simpler and Host-safe.
-   - Recommendation: use APP_URL unconditionally for notification emails (guard already guarantees it when SMTP is on). Flag for planner; behavior identical whenever APP_URL is set.
-2. **Does closing the drawer rewrite or push the URL?** Covered by D-03 + A4 recommendation; planner picks and encodes in a test.
+1. **Should `queueNotifEmails` switch entirely to APP_URL (dropping `appBase(req)`) or keep request-based base for in-request emails?** — **(RESOLVED)** Use APP_URL unconditionally for notification emails (drop `appBase(req)` for this surface); the boot guard (server.js:2995-3006) guarantees APP_URL presence whenever SMTP is on. Encoded in plan 23-01.
+2. **Does closing the drawer rewrite or push the URL?** — **(RESOLVED)** Closing the task drawer **pushes** a new history entry back to the underlying view's URL (never rewrites while the task is open, per D-03), so the browser Back button re-opens the task. Consistent with research recommendation (A4) and D-03. Encoded in plan 23-04 (Task 1 action + Task 2 e2e assertion).
 
 ## Environment Availability
 
@@ -373,7 +371,7 @@ Step 2.6 audit — phase needs no external tools beyond what the project already
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|--------------|
 | LINK-01 | `buildNotifMessage` embeds `/w/:slug/task/:key`; URL builder falls back to workspace root when task gone | unit | `node --test test/notif-email-link.test.mjs` | ❌ Wave 0 |
-| LINK-01 | Boot fails with widened message when SMTP on + APP_URL empty | unit | `node --test test/app-url-guard.test.mjs` | ❌ Wave 0 |
+| LINK-01 | Boot fails with widened message when SMTP on + APP_URL empty | unit | `node --test test/notif-email-link.test.mjs` (boot-guard assertion = Test 4 in this file) | ❌ Wave 0 |
 | LINK-02 | Logged-out deep link → login carries `?next=`; `finishLogin` returns to task path | unit + e2e | `node --test test/next-carry.test.mjs`; Playwright flow | ❌ Wave 0 |
 | LINK-03 | Creator in watcher set; dedup with assignee; no self-notify on own comment/update | unit | `node --test test/creator-watcher.test.mjs` | ❌ Wave 0 |
 | LINK-04 | pushState on `go()`; popstate restores view; back/forward across views | e2e | Playwright spec (back/forward) | ❌ Wave 0 |

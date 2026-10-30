@@ -40,7 +40,6 @@ created: "2026-10-30"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 23-01-xx | 01 | 1 | LINK-01 | — | N/A | unit | `node --test test/notif-email-link.test.mjs` | ❌ W0 | ⬜ pending |
 | 23-01-xx | 01 | 1 | LINK-01 | — | N/A | unit | `node --test test/notif-email-link.test.mjs` (boot-guard assertion lives as Test 4 in this file, not a standalone guard test) | ❌ W0 | ⬜ pending |
 | 23-xx-xx | xx | x | LINK-02 | — | `?next=` is path-only validated (no open redirect) | unit + e2e | `node --test test/next-carry.test.mjs`; Playwright flow | ❌ W0 | ⬜ pending |
 | 23-xx-xx | xx | x | LINK-03 | — | No self-notify on own comment/update | unit | `node --test test/creator-watcher.test.mjs` | ❌ W0 | ⬜ pending |
