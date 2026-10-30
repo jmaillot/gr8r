@@ -1,137 +1,147 @@
-# Feature Research — Auth Completion (v1.4)
+# Feature Research
 
-**Domain:** Self-hosted PM/workspace app — auth lifecycle completion (disable-2FA, TOTP encryption-at-rest, recovery-code regeneration, admin session revocation)
-**Researched:** 2026-10-28
-**Confidence:** HIGH (flows and policy are standardized by OWASP cheat sheets and implemented consistently across comparable self-hosted apps; only deployment-specific details are MEDIUM)
-
-## Scope Note
-
-v1.3 already shipped: sessions table, password change with atomic revocation, TOTP enroll/enable/**disable route (16-02)** with password step-up, hashed single-use recovery codes, pending-2FA login challenge. Planning must diff this landscape against the shipped 16-02 route and scope **only the gap**. The "table stakes" below describe what a *complete* disable/2FA-off flow typically includes, per comparable apps — not what must be newly built.
+**Domain:** Self-hosted PM workspace (Asana/Linear/Todoist class) — v1.5 "Reliability & Rotation" features
+**Researched:** 2026-10-30
+**Confidence:** HIGH for reminder/email/audit behavior (well-documented competitor behavior + audit-logging standards); MEDIUM for key-rotation runbook specifics (pattern is standard envelope-encryption practice, but few PM tools expose it publicly — grounded in AWS KMS/envelope-encryption references)
 
 ## Feature Landscape
 
-### Table Stakes (Users/Operators Expect These)
+### Table Stakes (Users Expect These)
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Disable-2FA: password step-up before disable** | OWASP MFA Cheat Sheet explicitly lists "Disabling MFA" as a sensitive action requiring re-authentication (password or MFA). GitHub, GitLab, Gitea, Nextcloud all require password confirmation to turn 2FA off. | LOW | v1.3 already has the password step-up pattern and the disable route (16-02). Verify it's enforced server-side on the disable route, not just client-gated. |
-| **Disable-2FA: confirmation dialog with explicit warning** | Users expect a "this removes your 2FA" warning; GitHub/GitLab show consequences (account becomes password-only). | LOW | Frontend-only; copy in EN+FR via existing i18n gate. |
-| **Disable-2FA: tear down pending login challenge** | If a disable happens mid-challenge (or the user has an in-flight pending-2FA login), the challenge must not keep demanding codes. | LOW | Check: does 16-02 clear `login_challenges` rows for the user? This is the most likely genuine gap. |
-| **Disable-2FA: session policy decision** | Comparable apps vary: GitHub keeps the session; many apps revoke *other* sessions when 2FA is removed (treat as risk event, cf. OWASP Session Mgmt "Reauthentication After Risk Events"). | LOW | A product decision, but the defensible default: keep current session, revoke others (mirrors the password-change transactional pattern already in v1.3). |
-| **Disable-2FA: wipe/clear 2FA state atomically** | `two_fa_*` columns cleared, recovery codes invalidated, replay-window state reset — in one transaction. Leaving hashed recovery codes behind is a known bug class. | LOW | Same transaction discipline as Phase 15 password change. |
-| **Disable-2FA: audit/activity entry** | Disabling 2FA is the single most security-sensitive account event; comparable apps log it. Projects already has the activity-verb infrastructure. | LOW | New machine verb, EN+FR copy. |
-| **Recovery-code regeneration: password step-up** | Regenerating invalidates the user's only remaining recovery factor — GitHub/GitLab require password confirmation. | LOW | Reuse existing step-up helper. |
-| **Recovery-code regeneration: burn-and-replace semantics** | Old codes become invalid immediately and permanently; new hashed codes returned once, shown once. Must be atomic (delete-all + insert-all in one transaction) — a partial failure must never leave a user with zero codes or duplicated codes. | MEDIUM | v1.3 has the hashing + single-use machinery; regeneration is a transactional wrapper. |
-| **Recovery-code regeneration: show-once UX with download/copy** | Identical to enrollment UX (v1.3 already built this); regeneration reuses it. | LOW | No new component; maybe a "you regenerated on <date>" note. |
-| **Recovery-code regeneration: rate limiting** | Password-gated, but still throttle (the v1.3 throttle budget pattern exists). | LOW | Reuse challenge throttle. |
-| **TOTP encryption-at-rest: AES-256-GCM with AAD** | Standard: authenticated encryption of `two_fa_secret`, with the user id (or row id) as AAD to prevent ciphertext swapping between accounts. RFC/industry norm (Nextcloud uses master-key + AEAD after the 2020 crypto findings; Vaultwarden encrypts TOTP secrets under the vault key). | MEDIUM | `node:crypto` only — zero-dependency constraint holds. Random 12-byte nonce per encryption, stored alongside ciphertext (`nonce:ciphertext` or separate column). |
-| **TOTP encryption-at-rest: MASTER_KEY from env, fail-closed 503** | The milestone decision. Fail-closed = if MASTER_KEY is missing/wrong, 2FA verification endpoints answer 503 (with stable error code, translated client-side per ERR-01 pattern) rather than falling back to plaintext. Enrollment should be blocked too (can't safely store). | MEDIUM | Distinct error code so the client can say "server key misconfigured" vs "wrong code". Log loudly. |
-| **TOTP encryption-at-rest: migration of existing plaintext secrets** | Any v1.3 install has plaintext `two_fa_secret` values; the migration must encrypt in place (backup-first, like `migrateTenancy()`), and a second boot must be a byte-identical no-op. | MEDIUM | This is the real complexity center of the encryption feature — the crypto itself is ~30 lines; the migration is the work. |
-| **Admin session revocation: list + revoke sessions of any user** | Operators expect to see a user's active sessions and revoke them (Nextcloud, Gitea admin panels; Microsoft Entra "Revoke sessions"). | LOW-MEDIUM | New admin surface on the existing `sessions` table; role gate (`admin`/`owner` at workspace level — note Projects roles are per-workspace, so decide: workspace-admin revokes sessions of their members, vs instance-admin only). |
-| **Admin session revocation: revoked browsers get the honest 401 teardown** | v1.3's central mid-session 401 teardown must fire for admin-revoked sessions too — zero new teardown code, just verify it does. | LOW | Existing SESS-01…03 machinery. |
-| **Admin session revocation: never revoke the operator's own session accidentally** | Comparable UIs mark the operator's own session and either block or warn (Entra's "Revoke sessions" works only on *other* users). | LOW | Simplest: admin revocation targets *other* users; self-revocation stays on the user's own sessions page. |
-| **Admin session revocation: audit entry** | Revoking someone's sessions is an administrative action; log who did it to whom. | LOW | Activity verb + actor. |
+| Reminder on due date itself ("due today") | Asana's core notification is "tasks due today" email/digest; Linear notifies the assignee on the due date morning. A tool with due dates but no reminder feels broken. | LOW | Server pass once/day (or every 30–60 min picking up "today" in each user's tz). Reuses notifyMembers pattern + notification rows. |
+| Reminder the day before due | Todoist's default relative reminders and Asana Rules ("X days before due date") make "1 day before" the single most-expected pre-due timing. | LOW | Same pass, second offset. Offset stored as a `reminders` pref (`['day_before','morning_of']`). |
+| Per-user reminder prefs (opt-out / choose timings) | All three competitors gate reminders behind notification settings; nobody force-sends them. Matches existing `notifPrefs` surface. | LOW | Extend `notifPrefs` with a `reminders` key; new email type `email_reminder` gated like `email_mention`. |
+| Dedup: one reminder per (task, user, offset) | Users expect exactly one "due tomorrow" reminder even if the server restarts or the pass runs twice. Restart-of-day re-sends are the #1 annoyance reported in Asana forums. | MEDIUM | Store a `reminders_sent`/dedup key (`task_id,user_id,offset,due_date`) before sending, in the same transaction as the notification row. Crash-safe: key written atomically, email fire-and-forget after. |
+| Don't remind completed or overdue-snoozed tasks | Linear/Asana stop reminders on completion instantly; reminding about a done task is a trust-breaking bug. | LOW | Filter `done`/`archived` tasks in the pass. Overdue tasks: send one "past due" nudge (Linear does) or nothing (safer MVP) — decide explicitly. |
+| Reschedule on due-date change | If the due date moves, the "day before" reminder moves with it. Dedup key includes `due_date`, so a changed date naturally re-arms. | LOW | Falls out of the dedup-key design; document it. |
+| Email links straight to the task (deep link) | Every competitor email links to the object, not the app root. "Click → see the thing" is the entire point of the email. | LOW | URL shape `/w/:slug/task/:id` (matches existing SPA routes). Requires route + login-redirect-with-`next` for logged-out clicks (the Phase 12 file-route pattern already proves this pattern). |
+| Task creator auto-watches the task | Linear and Asana auto-subscribe the author. Gr8r watchers = assignee + prior commenters, so a creator who never comments never hears about activity — a known gap. | LOW | On task creation, add creator to watcher set (dedup with assignee). |
+| Operator actions leave an audit trail | Audit standards (Sonar, Mattermost, Contentful guidance): every privileged action — session revocation, role change, key operation — is recorded append-only with who/when/target. Gr8r already has `security_log` for auth events; extending it to operator revocations is table stakes for the "operator" claim. | MEDIUM | New rows in `security_log` (or an `audit_log` table): actor, action, target user, session count revoked, timestamp, IP. Append-only; never editable through the app. |
+| Rotation without re-enrollment | Users (workspace owners) expect that changing the server's master key does NOT invalidate every member's 2FA. AWS KMS ReEncrypt is the canonical pattern: decrypt-with-old, encrypt-with-new, per envelope, transactionally. | MEDIUM | Key-version envelope `v2:<key_id>:…`; boot decrypt tries key by id, falls back through known keys. Rotation = re-wrap pass writing v2 envelopes + marking old key retired. |
+| Runbook for key custody | Self-hosted operators get no support desk; DEPLOY.md is their runbook. Must cover: generate key, inject, rotate, verify, recover. | LOW (doc) | See runbook checklist under MVP. |
 
 ### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Encryption key versioning (`v1:` prefix on ciphertext)** | Lets MASTER_KEY rotation happen later without a rewrite; comparable apps that skip this get a painful one-time migration later. | LOW | Prefix ciphertext with a key-version byte; costs nothing now, saves a migration later. |
-| **Admin "revoke all sessions instance-wide"** | Emergency response (breach panic). Gitea/GitLab have it at instance level. | LOW | One loop over the sessions table + 401 teardown. Only meaningful once Projects has an instance-admin concept — may be premature given per-workspace roles. |
-| **Disable-2FA requires both password AND a current TOTP code (or recovery code)** | Stronger than GitHub's password-only; proves the person disabling has live possession of the factor. OWASP endorses MFA-or-password step-up; requiring both is above the bar. | LOW | Tiny policy choice; consider making it the default since the code path exists. |
-| **Notify user (in-app activity) when admin revokes their sessions** | Trust/observability; the user sees why they were logged out. | LOW | Activity entry visible to the affected member. |
-| **Post-disable recovery-code purging with count reported** | "3 unused recovery codes were destroyed" — honest messaging consistent with v1.3's "honesty regression guard" test posture. | LOW | Cheap, on-brand for the project's honesty pattern. |
+| Dependency-free scheduler | Asana/Linear need infrastructure; a self-hosted single-image app with an in-process scheduler (setInterval-style pass, no cron/redis) is genuinely rare and matches the zero-dependency constraint. | LOW | Catch-up-on-boot (run missed windows once) is the one non-obvious part; persist last-run marker in DB. |
+| Public, documented key-rotation procedure | Even most self-hosted tools (e.g. older Vaultless setups) require re-enrollment on key change. Re-wrap rotation + a written runbook is a real operational differentiator. | MEDIUM | Also earns trust: fail-closed decrypt stays intact; rotation is additive. |
+| Operator audit surface visible to workspace owners | Competitors bury audit logs in enterprise tiers. Showing owner-visible "operator revoked N sessions" entries is a small UI with outsized trust value. | LOW–MEDIUM | Reuse activity-log UI patterns; filter by machine verbs (per v1.2 decision ACT-01). |
+| Timezone-aware reminder delivery | Linear delivers "morning of" in the *user's* timezone. Doing this correctly (per-user offset vs per-workspace `tz`) is a quiet quality signal. | MEDIUM | Simplest honest version: compute "due date" per the task's workspace dateFmt/tz (existing shared setting), state the limitation in docs. Per-user tz can wait. |
+| Batched digest option | Asana sends a daily digest of due tasks instead of N emails. A digest toggle in prefs prevents inbox flooding for users with many tasks. | MEDIUM | Later; single emails per reminder are fine at MVP scale. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **Admin can disable a user's 2FA directly** | "Locked-out user calls support" | Defeats the point of user-held factors; every comparable app that allows it (WordPress) has it as a footgun. Out of scope for self-hosted peer trust, and the milestone didn't ask for it. | Operator instructs the user, or the user regenerates recovery codes via password login. |
-| **Plaintext secret retained "for admin recovery"** | Tempting alongside encryption-at-rest | Negates the entire feature; breaks threat model (DB leak alone must not yield TOTP secrets). | Fail-closed 503 + recovery codes as the human fallback. |
-| **Key escrow / split MASTER_KEY / HSM integration** | Enterprise checkboxes | Massive complexity for a zero-dependency single-image app; no comparable self-hosted peer requires it. | One MASTER_KEY env var, documented in DEPLOY.md, with key-version prefix for future rotation. |
-| **"Soft disable" / grace period for 2FA** | Reduce friction | 2FA is either enforced or not; a grace window is a phishing window. | Immediate disable, one transaction. |
-| **Admin session revocation by IP or user-agent matching** | "Kick everyone on that device" | Unreliable matching, collateral revocations. | Per-user, per-session, and optionally per-user revoke-all. |
-| **Recovery-code "count remaining" always visible** | User convenience | Leakage of account state; not offered by comparable apps. | Show codes once at generation/regeneration; show "used" feedback only at burn time (already v1.3 behavior). |
+| Arbitrary N custom reminder offsets ("remind me 3 days, 2 hours, 17 min before") | Todoist offers it per task | Per-task reminder scheduling means per-task timer state, catch-up complexity, and i18n of arbitrary offsets — huge surface for marginal value. | Fixed, pref-level offsets (day-before / morning-of). Covers ~all real usage. |
+| Reminding non-assignees / whole team | "Everyone should know" | Reminder spam; duplicates the notification system's job and the existing watcher semantics. | Reminders target assignees (+ watchers as a v1.x option); activity/notifications already cover the rest. |
+| Editable/deletable audit entries (an "admin cleanup" feature) | Ops want to remove mistakes | Destroys the audit property; audit logs must be append-only and immutable (Sonar/Mattermost guidance). | Wrong entries are corrected by a new entry, not deletion. |
+| Re-encrypt-on-rotation of TOTP secrets with a brand-new algorithm namespace | "Might as well modernize" | Re-enrollment risk, test churn, no user-visible value; envelope format `v1:` → `v2:` re-wrap already achieves rotation. | Key-version re-wrap only; algorithm changes get a future `v3:` envelope, not this milestone. |
+| Email reminders for every notification type | "Email me everything" | Inbox flooding is the top complaint driving users to disable email entirely; competitors keep email high-signal. | Email stays prefs-gated per type (existing `email_*` keys); reminders get their own toggle. |
 
 ## Feature Dependencies
 
 ```
-[Password step-up helper (v1.3, shipped)]
-    └──requires──> nothing new
-    └──reused-by──> [Disable-2FA complete flow]
-                 └──reused-by──> [Recovery-code regeneration]
+[Server-side scheduler pass]
+    └──requires──> [Dedup store (reminders_sent keys)]
+    └──requires──> [Reminder prefs in notifPrefs]
+    └──requires──> [Email pipeline (exists, post-PUT fire-and-forget)]
 
-[Sessions table + 401 teardown (v1.3, shipped)]
-    └──requires──> nothing new
-    └──reused-by──> [Admin session revocation]
-    └──reused-by──> [Disable-2FA session policy]
+[Deep-linked emails]
+    └──requires──> [Task URL scheme /w/:slug/task/:id]
+    └──requires──> [Logged-out login-redirect with `next` (pattern exists from Phase 12 file route)]
+    └──enhances──> [Due-date reminders]  (reminder emails benefit from the same deep link)
 
-[MASTER_KEY encryption]
-    └──enhances──> [TOTP enrollment (v1.3)]  — secret becomes ciphertext at rest
-    └──requires──> [Plaintext → ciphertext migration]
-    └──must-not-block──> [login flow for users without 2FA]
+[Creator watcher]
+    └──requires──> [Watcher set (exists: assignee + prior commenters)]
 
-[Disable-2FA complete flow]
-    └──depends on──> [encryption migration complete]  (ordering, not logic —
-                       disabling reads/destroys the secret, so it must handle
-                       both plaintext legacy rows and ciphertext during transition)
+[MASTER_KEY rotation]
+    └──requires──> [v1: envelope (exists) → v2:<key-id> envelope versioning]
+    └──requires──> [Runbook in DEPLOY.md]
+
+[Operator audit trail]
+    └──requires──> [security_log table (exists)]
+    └──enhances──> [Operator session revocation (exists, v1.4)]
 ```
 
 ### Dependency Notes
 
-- **Encryption migration is the bottleneck phase.** Everything touching `two_fa_secret` (enroll, verify, login challenge, disable) must go through a single decrypt helper *before* the disable flow is built on top, or the disable route will need dual-mode code forever. Recommend: encryption first, then disable/regeneration/admin on the clean surface.
-- **Disable-2FA session policy reuses the password-change transactional revocation** — same code path, same tests to mirror.
-- **Admin revocation conflicts with nothing** but needs a role-model decision (workspace-admin vs instance-admin) before planning; Projects has no instance-admin today, which may constrain scope.
+- **Reminders require dedup + prefs first**: build the dedup key and the pref gate before the pass, or the first server restart after launch spams every user. This ordering is the milestone's main internal dependency.
+- **Deep links enhance reminders, not block them**: reminder emails could ship with root links and be upgraded, but shipping both together costs almost nothing since the URL scheme is one function.
+- **Rotation conflicts with nothing** but must preserve the fail-closed decrypt boundary (`requireTotpSecret()`): the boundary stays, only the key-selection logic behind it gains version awareness.
+- **Audit trail enhances operator revocation**: the v1.4 revocation endpoint is the first writer; workspace-admin revocation tier (also in v1.5 scope) becomes the second, which is why the audit writer should be a shared helper, not inline code.
 
 ## MVP Definition
 
-### Launch With (v1.4)
+### Launch With (v1.5)
 
-- [ ] Disable-2FA gap closure — verify 16-02 covers: server-side password step-up, atomic wipe of `two_fa_*` + recovery codes, pending-challenge teardown, "keep current / revoke other sessions" policy, activity entry. Build only what's missing.
-- [ ] TOTP secret AES-256-GCM under MASTER_KEY, AAD-bound, fail-closed 503 with translated stable error code, backup-first plaintext migration, byte-identical second boot.
-- [ ] Recovery-code regeneration — password step-up + atomic burn-and-replace + show-once UX (reusing enrollment components).
-- [ ] Admin session revocation — list and revoke a user's sessions, own-session exclusion, 401 teardown fires, audit entry.
+- [ ] Scheduler pass: once-daily (with boot catch-up) pass over tasks with due dates; notifies assignees per pref — the milestone's core "proactive" promise
+- [ ] Reminder timings: **day-before + morning-of, both pref-selectable, default both on** — this pair is the table-stakes answer to "what timing options are table stakes"
+- [ ] Dedup key `(task, user, offset, due_date)` written transactionally before notification — the table-stakes dedup guarantee is exactly one reminder per offset per due date
+- [ ] Reminder prefs + `email_reminder` gate in the existing notifPrefs surface
+- [ ] Deep-linked notification emails: `/w/:slug/task/:id`, login-redirect with `next` for logged-out clicks
+- [ ] Creator added to watcher set on task creation
+- [ ] `v2:<key-id>` envelope + re-wrap rotation command/boot behavior; DEPLOY.md runbook covering: (1) how MASTER_KEY is generated and injected, (2) adding the new key alongside the old, (3) running rotation, (4) verifying zero stale envelopes + tests green, (5) what to do if the old key is compromised (full re-enrollment is the honest answer), (6) backup-before-rotation (mirror of the migration-backup pattern)
+- [ ] Audit rows on operator session revocation (actor, target, session count, timestamp) via a shared `auditOperatorAction()` helper; visible to owners
 
-### Add After Validation (v1.x)
+### Add After Validation (v1.6+)
 
-- [ ] Key-version prefix enabling MASTER_KEY rotation — trivial if done at encrypt time, painful if retrofitted.
-- [ ] Disable requiring password *and* live TOTP/recovery code.
-- [ ] In-app notification to the target user on admin revocation.
+- [ ] Watcher reminders (not just assignees) — trigger: user requests
+- [ ] "Past due" nudges — trigger: users complain about silent overdue tasks
+- [ ] Digest emails instead of per-task emails — trigger: inbox-volume complaints
+- [ ] Workspace-admin revocation tier emitting the same audit rows (in v1.5 scope list but sequenced after the audit helper exists)
+- [ ] Per-user timezone for "morning of" — trigger: multi-timezone workspaces
 
 ### Future Consideration (v2+)
 
-- [ ] Instance-wide revoke-all (needs an instance-admin concept first).
-- [ ] WebAuthn/passkeys as a second factor (would interact with disable flow).
-- [ ] MASTER_KEY rotation tooling (command or boot-time re-encrypt).
+- [ ] Custom per-task reminders — why defer: timer-state complexity, low demand
+- [ ] Push/Slack delivery channels — why defer: no runtime deps constraint
+- [ ] Cryptographic audit-log chaining (hash-chain per entry) — why defer: self-hosted trust model makes tamper-evidence via file/DB backups adequate
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Disable-2FA gap closure | HIGH | LOW (likely small diff vs 16-02) | P1 |
-| TOTP encryption-at-rest + migration | HIGH (milestone decision made real) | MEDIUM (crypto trivial, migration is the work) | P1 |
-| Recovery-code regeneration | HIGH | LOW-MEDIUM | P1 |
-| Admin session revocation | HIGH (operator trust) | MEDIUM (role-model decision + admin surface) | P1 |
-| Key-version prefix | MEDIUM (future-proofing) | LOW | P2 |
-| Password+code step-up on disable | MEDIUM | LOW | P2 |
+| Scheduler pass + day-before/morning-of reminders | HIGH | MEDIUM | P1 |
+| Reminder dedup (transactional sent-keys) | HIGH | LOW | P1 |
+| Reminder prefs + email gate | HIGH | LOW | P1 |
+| Deep-linked emails + login-redirect | HIGH | LOW | P1 |
+| Creator auto-watch | MEDIUM | LOW | P1 |
+| MASTER_KEY v2 envelope + rotation | MEDIUM (ops) | MEDIUM | P1 |
+| DEPLOY.md key-custody runbook | MEDIUM (ops) | LOW | P1 |
+| Operator audit trail + owner visibility | MEDIUM | MEDIUM | P2 |
+| Workspace-admin revocation tier (audited) | MEDIUM | MEDIUM | P2 |
+| Past-due nudges / digest / watcher reminders | LOW–MEDIUM | MEDIUM | P3 |
+
+**Priority key:**
+- P1: Must have for launch
+- P2: Should have, add when possible
+- P3: Nice to have, future consideration
 
 ## Competitor Feature Analysis
 
-| Feature | GitHub / GitLab | Gitea / Nextcloud | Vaultwarden | Projects Approach |
-|---------|-----------------|-------------------|-------------|----------------|
-| Disable 2FA | Password confirmation, warning copy, session kept, activity emailed | Password confirmation; Nextcloud blocks disable when provider-locked by admin | N/A (TOTP optional) | Server-side password step-up, atomic wipe, revoke-others policy, activity verb |
-| Secret at rest | Not exposed | Nextcloud: master-key AEAD after 2020 audit findings | Encrypted under vault key | AES-256-GCM + AAD under `MASTER_KEY`, fail-closed 503, backup-first migration |
-| Recovery codes | Regenerate on demand, password-gated, show once | Same pattern | Regenerate invalidates old | Password-gated atomic burn-and-replace, show-once |
-| Admin session revoke | Admin can force sign-out of any user | Gitea admin panel deletes sessions; Entra "Revoke sessions" replaces per-factor revoke | N/A | Reuse `sessions` table + existing 401 teardown; decide workspace-admin vs instance-admin scope |
+| Feature | Asana | Linear | Todoist | Our Approach |
+|---------|-------|--------|---------|--------------|
+| Pre-due reminders | No native pre-reminder; Rules workarounds ("approaching due date") + "tasks due today" email | Due-date reminders: assignee notified around due date; due dates can have times | Per-task relative ("30 min before") or fixed-time reminders, premium-tier | Pref-level fixed offsets (day-before + morning-of); no per-task scheduling |
+| Reminder prefs | Granular notification settings incl. email digest | Per-channel notification settings | Per-reminder toggles | Extend existing `notifPrefs`; reminders as a new gated type |
+| Dedup | Skips redundant notifications (documented complaint when it fails) | "Redundant notifications are skipped" (e.g. duplicate view-add) — explicit dedup philosophy | N/A (local reminders) | Transactional dedup key per (task, user, offset, due date) |
+| Email deep links | Emails link to the task | Emails/Slack link to the issue | Emails link to the task | `/w/:slug/task/:id` + login-redirect `next` |
+| Creator watching | Author auto-follows task | Author auto-subscribed | — | Creator joins watcher set at creation |
+| Key rotation | N/A (SaaS) | N/A (SaaS) | N/A (SaaS) | Differentiator: re-wrap rotation, no re-enrollment, public runbook |
+| Audit trail | Enterprise tier | Admin API, limited | No | Differentiator at this price point: owner-visible append-only operator log built on `security_log` |
 
 ## Sources
 
-- OWASP MFA Cheat Sheet — disabling MFA listed as sensitive action requiring re-authentication (fetched 2026-10-28, HIGH confidence)
-- OWASP Session Management & Authentication Cheat Sheets — reauthentication after risk events (HIGH confidence)
-- Nextcloud server-side encryption docs + IACR eprint 2020/1439 (Nextcloud crypto audit motivating master-key AEAD) (HIGH confidence)
-- Microsoft Entra "Revoke sessions" consolidation — admin revoke semantics, own-session restrictions (MEDIUM confidence)
-- Comparable-app behavior (GitHub, GitLab, Gitea, Vaultwarden) from established product behavior; exact current UI details MEDIUM confidence — verify at phase research if a specific flow is copied
+- Asana forum: "Reminder Alert Before Due Date" (forum.asana.com/t/3794), "How can I automatically be reminded about past due dates?" (/t/101405), "Reminder Notifications for Due Dates set with Specific Times" (/t/1041429) — confirms no native pre-due reminder, "due today" email is the built-in
+- Linear docs/changelog: Issue properties (linear.app/docs/issue-properties-home), "Redundant notifications are skipped" changelog entry — dedup philosophy, due-date reminder behavior
+- Todoist help: "Add an urgent reminder in Todoist" — relative vs fixed reminder model
+- AWS KMS ReEncrypt / EKS envelope-encryption docs; qcecuring.com key-rotation strategies — re-wrap rotation pattern
+- Sonar (audit-logging), Mattermost (18 tips tamper-proof audit logs), Contentful (essential audit logs) — append-only, event-context, separate-from-app-logs guidance
+- Gr8r PROJECT.md — existing systems: notifyMembers, notifPrefs, security_log, v1: envelopes, requireTotpSecret boundary, Phase-12 login-redirect pattern
 
 ---
-*Feature research for: Projects Studio v1.4 auth completion*
-*Researched: 2026-10-28*
+*Feature research for: Projects Studio v1.5 — Reliability & Rotation*
+*Researched: 2026-10-30*

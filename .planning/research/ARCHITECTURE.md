@@ -1,176 +1,193 @@
-# Architecture Research — v1.4 Auth Completion integration
+# Architecture Research — v1.5 Integration
 
-**Domain:** Self-hosted PM app (single-file Node server, node:sqlite, zero runtime deps) — auth-lifecycle completion features
-**Researched:** 2026-10-28
-**Confidence:** HIGH (codebase ground truth read directly from `server.js`; standards claims from OWASP ASVS 2.5/2.8, NIST SP 800-63B, RFC 6238 — web search was blocked by anti-bot, so external claims are from established standards knowledge, MEDIUM confidence)
+**Domain:** due-date reminder scheduler, task email deep links, MASTER_KEY rotation (key-version envelope), operator audit hardening — grafted onto a single-process, zero-dependency Node/`node:sqlite` app
+**Researched:** 2026-10-30
+**Confidence:** HIGH (every anchor verified against the live tree; no external novelty — this is integration research, not library research)
 
-## Critical Ground-Truth Correction (read this first)
+## 0. The headline finding: task deep links already exist in the SPA
 
-The milestone brief says "two_fa_secret stored plaintext today" and implies disable-2FA is missing. **The code says otherwise.** Direct inspection of `server.js` (v1.3 shipped tree):
+The biggest scope surprise. The client already resolves `/w/:slug/task/:key`:
 
-- `encryptTotpSecret()` / `decryptTotpSecret()` **already exist** (lines ~235–262): AES-256-GCM, `v1:<iv>:<tag>:<ct>` envelope, sha256-derived key from `MASTER_KEY`, fail-closed 503 `masterKeyMissing` (D-05/D-06) on both `/api/auth/tfa/enable` and `/api/auth/tfa/login`.
-- A full disable route **already exists**: `POST /api/auth/tfa/disable` (line 1548) with password step-up, TOTP-or-recovery verification, distinct throttle budget (`tfa-disable|<userId>`, 5/15 min), atomic reset of `two_fa_enabled/secret/last_step` + recovery-code wipe, and MASTER_KEY fail-closed 503.
-- `/api/auth/sessions` GET, per-row revoke and revoke-others exist — but **self-scoped only**. There is no route where one user revokes another's sessions, and no instance-admin concept beyond `ADMIN_EMAIL` first-run seeding and an `isAdminUser()` helper (line 356: user is owner/admin of ≥1 workspace).
+- `applyDeepLink()` — `src/main.js:123-147`: at boot, `restFromPath` (`src/main.js:185`) is split and the `seg === 'task'` branch finds the task **by its `key`** and calls `go('task', { id })`, which opens the drawer (`S.ui.route='task'` + `A.openTask` renders `S.ui.drawer` — `src/overlays/drawer.js:22-23`, `src/actions/actions.js:521-530`).
+- `A.copyLink` — `src/actions/actions.js:598-615`: already builds the canonical path `task/${task(d.id).key}` for the drawer's link button. Whatever the emails produce must match **this** shape.
 
-**Implication:** the milestone scope must be re-derived from what planning verifies against this tree, not from the brief's framing. The genuinely missing pieces are: (1) plaintext-secret migration (for installs that enabled 2FA before the envelope — likely zero rows, but the migration must exist for safety), (2) recovery-code regeneration as a first-class route, (3) admin/operator session revocation across users, (4) e2e/i18n coverage of the existing disable flow. Each is small; the risk is in *integration details*, not new machinery.
-
-## Recommended Architecture
-
-### System Overview
+So the deep-link milestone item is almost entirely a **server** job: the notification email currently links to the workspace root — `const url = \`${base}/\`` in `queueNotifEmails()` (`server.js:~715`, within the 696–730 block). The change is:
 
 ```
-┌────────────────────────── server.js route handlers (existing) ──────────────────────────┐
-│  /api/auth/tfa/enroll · enable · disable (exists) · [NEW] tfa/recovery                  │
-│  /api/auth/sessions (self) · [NEW] /api/admin/sessions (cross-user)                     │
-│  /api/auth/login → login_challenges → /api/auth/tfa/login (unchanged)                   │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│  Helpers (existing → modified)                                                          │
-│  encryptTotpSecret/decryptTotpSecret (exists)   · requireWorkspace / requireAuth         │
-│  tooMany(key,n,ms) throttle budgets             · fail(res,code,status)                 │
-│  [NEW] migrateTotpSecrets() in openDb()         · [NEW] admin-gate helper               │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│  node:sqlite (existing)                                                                 │
-│  users.two_fa_*   sessions   recovery_codes   login_challenges   (no schema change       │
-│  needed — all four features fit existing tables/columns)                                 │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+url = `${base}/w/${wsRow.slug}/task/${taskKey}`
 ```
 
-### Component Responsibilities — new vs modified
+where `taskKey` comes from the task row looked up by `n.task` (the same lookup that already resolves `taskTitle` one line above). **Use `task.key`, not `task.id`** — that's what the SPA route and `copyLink` both use, and keys survive task duplication/export better than opaque ids.
 
-| Component | Status | Responsibility |
-|-----------|--------|----------------|
-| `encryptTotpSecret`/`decryptTotpSecret` | **exists, unchanged** | Envelope crypto; null on missing/undecryptable MASTER_KEY |
-| `migrateTotpSecrets()` | **NEW** (in `openDb()`, after `ensureColumn` block) | One-time: any `users.two_fa_secret` not starting with `v1:` and non-empty → encrypt. Fail-closed semantics below |
-| `POST /api/auth/tfa/recovery` | **NEW route** | Regenerate recovery codes: password step-up + live TOTP verification, burn-and-replace in one transaction |
-| `POST /api/auth/tfa/disable` | **exists — verify, extend** | Planning checks the v1.3 Phase 16 disable contract (T-16-14) against the brief's expectations; likely gaps: recovery-code verification on disable when TOTP unavailable, e2e + i18n keys |
-| `DELETE /api/admin/sessions` (+ GET list) | **NEW route(s)** | Operator-revoked sessions across users; admin-gated |
-| admin-gate helper | **NEW** (small) | Decision required (see Admin section): `isAdminUser()` (any owner/admin anywhere) vs instance-admin only |
-| `recovery_codes` table | **unchanged** | Regeneration is `delete where user_id` + reinsert inside the existing transaction pattern |
-| `sessions` table | **unchanged** | Cross-user revoke is just `delete from sessions where user_id in (...)` — the mid-session 401 teardown from v1.3 Phase 14 already handles honest sign-out on revoked clients |
-| i18n catalogues (EN+FR) | **modified** | New keys for regenerate + admin-revocation UI; `scripts/i18n-scan.mjs` build gate enforces |
-| throttle budgets | **modified (add key)** | New budget for `tfa-recovery|<userId>`, same D-11 band (5/15 min) |
+Secondary deep-link work:
 
-## Architectural Patterns
+- **Anonymous landings.** A signed-out browser opening `/w/:slug/task/ABC-12` goes through `main.js` init: `api.me()` fails → `S.ui.wantedSlug = slugFromPath` + login screen (`src/main.js:214-218`). After sign-in the user lands on the workspace home, **not** the task. The Phase-12 file route already solved this pattern server-side (`server.js:2883-2902`: anonymous navigation → `302 /login?next=<path>`, path-only, no open redirect). Reuse it: extend the SPA-fallback auth check for `/w/:slug/task/:key` to the same `next` redirect, and have the client honor `?next=` post-login (small `main.js` init addition). Alternatively accept the "login → home" UX and defer `next` — decide in discuss-phase; the file-route plumbing makes the `next` variant cheap.
+- **Watcher set (task creator).** Notifications are generated **client-side** during mutations; the server only diffs new rows post-commit (`server.js:2183-2200`). "Creator added to watcher set" must therefore ride the client mutation that creates the task / posts the first comment (add a notif row or a `watchers` field in the same `mutate()`), not a server write — a server-side injection would race the client's `revision` and produce 409s. Prefer the existing notif-row mechanism: when the creator comments/assigns, they already receive self-notifs suppressed for email; a `watchers: [creatorId]` on the task consumed by the assign path is the lightest fit.
 
-### Pattern 1: Envelope migration at boot (decrypt-then-reencrypt, with a fail-closed policy decision)
+## 1. Server-side reminder scheduler
 
-**What:** a `migrateTotpSecrets()` pass in `openDb()`: `select id, two_fa_secret from users where two_fa_enabled = 1 and two_fa_secret is not null and two_fa_secret not like 'v1:%'`, re-encrypt each. Because `encryptTotpSecret` returns null without `MASTER_KEY`, the migration must define behavior: recommended — **skip silently + log one warning** (leave the plaintext row in place; login/enable already fail-closed 503 per D-06, so the plaintext stays inert until the admin sets MASTER_KEY, at which point the next boot encrypts it). This preserves the project's "boot never mutates semantics unexpectedly" posture (the v1.2 decision that "the server never writes the locale at boot" is the analogous precedent — here a boot write is required, but it must be idempotent and never destructive).
+### Shape (per sibling research, confirmed viable here)
 
-**When to use:** always; guard it so second boot is a no-op (the `not like 'v1:%'` predicate delivers the byte-identical-second-boot guarantee the migration tests assert — extend `test/migration.test.mjs`).
+`setInterval(...).unref()` inside `server.js` + a `reminders` SQLite table with `UNIQUE(task_id, due_date, kind)` as the dedup key. The interval is a scan-and-fire pass, not a timer-per-reminder — matches the zero-dep constraint and the single-process model (one writer, no lock contention).
 
-**Trade-offs:** boot-time encryption couples DB mutation to MASTER_KEY presence. Alternative (lazy migration on next successful decrypt) spreads plaintext lifetime over time and is harder to test. Boot-time is preferred: testable, one pass, matches `migrateTenancy()` precedent.
+```
+┌──────────────┐   every N s    ┌─────────────────────────────────────┐
+│ setInterval  │───────────────▶│ reminderPass()                      │
+│ .unref()     │                │  1. select due tasks from all docs  │
+└──────────────┘                │  2. dedup vs reminders table        │
+                                │  3. per workspace: insert notif rows│
+                                │     (fresh read, BEGIN IMMEDIATE,   │
+                                │      revision+1, single UPDATE)     │
+                                │  4. email via queueNotifEmails      │
+                                └─────────────────────────────────────┘
+```
+
+### The critical integration: writing notifs into the doc without 409 storms
+
+The workspace doc is one JSON blob guarded by `workspaces.revision` (optimistic PUT). The scheduler is a second writer racing interactive clients. To avoid constant conflicts:
+
+1. **Fresh read inside the transaction.** `BEGIN IMMEDIATE` → re-read the `workspaces` row (doc + revision) → parse → append the notif rows → serialize → `UPDATE workspaces SET doc=?, revision=revision+1 WHERE id=? AND revision=<read>` → `COMMIT`. A revision mismatch inside the transaction is impossible once `BEGIN IMMEDIATE` holds the write lock (node:sqlite serializes writers), so the guard is belt-and-braces; what matters is **never reusing a doc parsed outside the transaction** — that's the 409-storm generator, because a client PUT that committed between parse and write gets silently reverted.
+2. **Batch per workspace, one bump per pass** — not one write per notification. N assignees on one task = one transaction.
+3. **Skip when a pass has nothing to do** — the common case must be zero writes, or the 30s notif poll (`src/main.js:75-88`) will show spurious revision churn.
+4. **Respect the existing notif invariants:** rows need `to`, `type`, `id`, `read`; `mergeClientDoc()` (`server.js:~651`) merges `notifs` by id, so scheduler-inserted ids must never collide with client-generated ones (prefix them, e.g. `rem-`); the redaction filters (`redactDoc`, `server.js:554`) hide notifs of private projects — scheduler notifs inherit this automatically since they're ordinary rows.
+5. **Per-type prefs:** mirror `notifPrefs` gating from `queueNotifEmails` (`server.js:699`) — the in-app row always lands, the email is gated.
+
+### The second critical integration: queueNotifEmails is req-shaped
+
+`queueNotifEmails(wsRow, nextDoc, newNotifs, req)` builds links from `appBase(req)` (`server.js:1370-1373`). The scheduler has no `req`. Refactor to `queueNotifEmails(wsRow, nextDoc, newNotifs, base)` — callers pass `appBase(req)` (PUT path, unchanged behavior) or `APP_URL` (scheduler). **`APP_URL` becomes mandatory for the scheduler**: without it the reminder pass has no absolute URL for emails. There is precedent for loud boot warnings (`server.js:2995-2998` warns when the mailer is on without `APP_URL`) — extend that warning (or hard-gate the reminder pass) when reminders + mailer are on and `APP_URL` is unset.
+
+### Doc scan problem
+
+Tasks live inside JSON blobs, not a table — "which tasks are due today?" means parsing every workspace doc each pass. At self-hosted scale (tens of workspaces) parsing every doc on a 60s tick is fine; mitigate by keeping the tick at 60s and parsing lazily (JSON.parse of each doc ≈ µs-ms each). Do **not** normalize tasks into tables for this milestone.
+
+### Reminders table
+
+```sql
+create table if not exists reminders (
+  id        text primary key,
+  workspace_id text not null,
+  task_id   text not null,
+  due_date  text not null,
+  kind      text not null,          -- 'due_soon' | 'due_today' | 'overdue'
+  fired_at  integer not null,
+  unique(task_id, due_date, kind)
+);
+```
+
+Delete rows when the task is completed or its due date changes (or just leave them — the UNIQUE key already prevents refiring a changed date; a `(task_id) = completed` cleanup keeps the table small). Prefs changes don't need retroactive handling: the dedup key is per (task, date, kind), and prefs gate only the email side.
+
+## 2. MASTER_KEY rotation: v2 envelope + re-wrap
+
+### Existing machinery (all verified)
+
+- `wrapSecret`/`unwrap` — `server.js:244-262`: `v1:<iv>:<tag>:<ct>` AES-256-GCM, key = `sha256(MASTER_KEY)`.
+- `requireTotpSecret(envelope)` — `server.js:284`: **the single decrypt boundary**; every call site routes through it and fails closed with 503 `masterKeyMissing` (D-77/D-79). This is the seam the dual-key path plugs into.
+- Boot migration `migrateTotpEncryption` — `server.js:~1102-1180`: trigger count (D-83) → MASTER_KEY check (D-73) → `vacuum into` backup (D-74) → transactional wrap of rows matching `not like 'v1:%'` (`server.js:1114`). This filter is the **known landmine**: the moment `v2:` rows can exist, `not like 'v1:%'` treats a v2 row as plaintext-eligible and the wrap pass corrupts/queries it. The filter must become version-aware *before* v2 ships:
+  ```sql
+  ... and two_fa_secret not like 'v1:%' and two_fa_secret not like 'v2:%'
+  ```
+  Better: derive the exclusion from the keyring's known prefixes so the next version can't forget it.
+- `logSecurityEvent` — `server.js:1537` inserts into `security_log` — reuse for rotation events.
+
+### The v2 design (keyring map)
+
+Replace the single derived key with a prefix-keyed map:
 
 ```js
-function migrateTotpSecrets(db) {
-  const rows = db.prepare(
-    "select id, two_fa_secret from users where two_fa_enabled = 1 " +
-    "and two_fa_secret is not null and two_fa_secret != '' " +
-    "and two_fa_secret not like 'v1:%'").all();
-  if (!rows.length) return;
-  if (!MASTER_KEY) { console.warn(`[auth] ${rows.length} plaintext TOTP secret(s); set MASTER_KEY to encrypt`); return; }
-  const upd = db.prepare('update users set two_fa_secret = ? where id = ?');
-  for (const r of rows) { const env = encryptTotpSecret(r.two_fa_secret); if (env) upd.run(env, r.id); }
-}
+const KEYRING = {};                      // prefix → derived key
+if (MASTER_KEY)        KEYRING.v2 = derive(MASTER_KEY);
+if (MASTER_KEY_PREVIOUS) KEYRING.v1 = derive(MASTER_KEY_PREVIOUS);
+const CURRENT = 'v2';
+
+wrap(plain)  → `${CURRENT}:${iv}:${tag}:${ct}` signed with KEYRING[CURRENT]
+unwrap(env)  → prefix = env.slice(0, env.indexOf(':'));
+               key = KEYRING[prefix] ?? null;   // unknown/missing prefix → null
 ```
 
-### Pattern 2: Burn-and-replace regeneration = one transaction, step-up before it
+- `requireTotpSecret` keeps its signature and fail-closed behavior; internally it dispatches on prefix. With only `MASTER_KEY` set (fresh installs), v1 prefixes are undecryptable — hence the **re-wrap pass**, not dual-key-forever.
+- Recovery codes / login challenges don't touch MASTER_KEY (hashed, not encrypted) — rotation scope is exactly `users.two_fa_secret`. Verify no other consumer exists at plan time.
+- Rotation = new boot-migration sibling: backup (D-74 pattern) → `select ... where two_fa_secret like 'v1:%'` → unwrap with KEYRING.v1 → re-wrap with CURRENT → single transaction. Runs on boot when `MASTER_KEY_PREVIOUS` is set; completion check: `select count(*) from users where two_fa_secret like 'v1:%'` = 0. Idempotent, byte-identical second boot, same guarantees as the v1 migration. After the count reaches 0 (verified on a later boot, or immediately within the runbook), the operator removes `MASTER_KEY_PREVIOUS` — at which point the `not like` filter list shrinks back.
+- **Compromise caveat for DEPLOY.md:** re-wrap protects against key *loss*, not key *compromise*. If MASTER_KEY leaks, the v1 secrets are recoverable from backups regardless of envelope version (old backups carry v1 rows) — the runbook must say "compromise ⇒ force re-enrollment", not "rotate and move on". This belongs in the key-custody runbook explicitly.
 
-**What:** `POST /api/auth/tfa/recovery`: require `two_fa_enabled`, verify current password (existing scrypt step-up helper from password-change and tfa/disable), then **live TOTP code** (not a recovery code — OWASP ASVS 2.5.3 posture: a code from the set being replaced must never authorize its own replacement). Inside one transaction: `delete from recovery_codes where user_id = ?` + insert N fresh hashed codes (same `generateRecoveryCode`/`recoveryHash` path as enable), return plaintext codes exactly once (the enable route's existing response shape `recoveryCodes: [...]` is the template).
+## 3. Operator audit hardening
 
-**When to use:** after initial enrollment; UI shows codes once. Consider auto-regeneration hint when the client sees `recoveryRemaining: 0` (already returned by `/api/auth/tfa/login`).
+### Current state
 
-**Trade-offs:** verifying TOTP requires `decryptTotpSecret` → the route inherits the MASTER_KEY fail-closed 503 (`masterKeyMissing`) automatically. That is correct and free — do not special-case it.
+`security_log(id, user_id, verb, created_at)` — `server.js:163-169` — actor-keyed, no target, no scope, no ip. Written by `logSecurityEvent(user, verb)` (`server.js:1537`). Fine for "this user did X", insufficient for "operator Y revoked user Z's sessions".
 
-### Pattern 3: Cross-user session revocation as a thin extension of the self-revoke machinery
+### Recommendation: extend security_log, don't add a table
 
-**What:** no new table, no new crypto. `GET /api/admin/sessions` (paginated list joined to `users`) and `DELETE /api/admin/sessions/:userId` (or `/api/admin/sessions` with a user list). Both reduce to existing `sessions`-table deletes; the v1.3 central mid-session 401 teardown (Phase 14) already makes revoked browsers sign out honestly, so the client side needs nothing new.
-
-**The one real decision — who is "admin"?** The app has no instance-admin role; `ADMIN_EMAIL` only seeds the first account, and `isAdminUser()` means "owner/admin of ≥1 workspace". Options: (a) `isAdminUser()` gate — revocation is workspace-staff-like power over all users (too broad for a multi-tenant app?); (b) instance admin = the user matching `ADMIN_EMAIL` (needs an env lookup at runtime or a flag column); (c) both, with a new `is_instance_admin` boolean column (additive migration, fits the machinery). **Recommendation:** (b) or (c) — cross-user revocation is an operator power, not a workspace power; scope it to the instance operator. This must be settled in discuss-phase, not decided in a plan.
-
-**Trade-offs:** an audit-trail question follows: revoking other people's sessions deserves an activity entry (machine verb, per the v1.2 activity decision) — `session_revoked_by_admin` in the target user's or a global log. Currently the activity log lives in workspace documents; instance-level revocation may have no workspace to log into. Simplest acceptable: log into the target user's workspaces, or skip the activity log and rely on server logs for v1.4.
-
-## Data Flow
-
-### Flow 1: plaintext → envelope (boot)
+Two log tables in a single-DB app is fragmentation without payoff — the milestone-audit queries ("every operator action on user Z") want one surface. The additive machinery exists: `ensureColumn(conn, table, name, def)` (`server.js:~173`).
 
 ```
-boot → openDb() → SCHEMA + ensureColumn (unchanged) → [NEW] migrateTotpSecrets(db)
-   ├─ rows already 'v1:*' → no-op (byte-identical second boot ✓)
-   ├─ no MASTER_KEY → warn, skip (existing fail-closed 503 still protects logins)
-   └─ MASTER_KEY set → per-row encryptTotpSecret → update → next boot no-op
+security_log += target_type text, target_id text, scope text, ip text   (all nullable)
 ```
 
-### Flow 2: regeneration
+- `target_type`/`target_id`: `'user'`/`users.id`, `'workspace'`/slug, `'session'`/id.
+- `scope`: `'operator'` vs `'self'` — makes "show operator actions" a single indexed predicate.
+- `ip`: free with the request already in hand; cheap forensics value.
+- New helper `auditOperatorAction(actor, verb, target, scope, req)` wrapping the insert — the existing operator-revocation route (`OPREV` surface, v1.4) is retrofitted to call it; the new workspace-admin revocation tier calls it too.
+- Index: `security_log(scope, created_at)` (or `(target_id, created_at)`) — the audit query pattern is "recent operator events" and "everything done to user X".
+- Keep `verb` machine-form (ACT-02 precedent: verbs are stored data, never prose).
+- Watch `on delete cascade` on `user_id`: revoking/deleting a user must not erase the audit trail of actions taken *against* them — target_id is a bare text column precisely so target history survives actor/target row deletion. Consider whether actor rows should cascade at all for operator verbs (log-before-delete ordering, or null the actor id — decide in plan).
+
+## Integration map (new vs modified)
+
+| # | Component | New/Modified | Location | Notes |
+|---|-----------|--------------|----------|-------|
+| 1 | `reminders` table | **new** | schema block ~`server.js:155-170` | UNIQUE(task, due_date, kind) |
+| 2 | `reminderPass()` + interval | **new** | `server.js`, near mailer init (~line 87) | `setInterval(...).unref()`, 60s |
+| 3 | `queueNotifEmails` signature | modified | `server.js:696-730` | `req` → `base`; PUT caller updated |
+| 4 | Email deep-link URL | modified | `server.js:~715` | `url = base + /w/:slug/task/:key` |
+| 5 | `APP_URL` boot guard | modified | `server.js:2995-2998` | warn/gate when reminders need it |
+| 6 | Anonymous `?next` for task routes | modified (optional) | `server.js:2883-2902` + `src/main.js` init | reuse Phase-12 pattern |
+| 7 | Creator watcher-set | modified (client) | task-create mutation, `src/actions/actions.js` | rides client mutation, not server |
+| 8 | `KEYRING` + `CURRENT` | **new** | replaces MASTER_KEY const usage `server.js:73,244-282` | `MASTER_KEY_PREVIOUS` env |
+| 9 | `requireTotpSecret` | modified | `server.js:284` | prefix dispatch; signature unchanged |
+| 10 | Boot-migration filter | modified | `server.js:1114` | version-aware `not like` list — **must land before v2 rows exist** |
+| 11 | Re-wrap migration | **new** | sibling of `migrateTotpEncryption` ~`server.js:1102-1180` | v1→v2, backup + transactional |
+| 12 | `security_log` columns | modified | `server.js:163-169` + `ensureColumn` | target/scope/ip |
+| 13 | `auditOperatorAction()` | **new** | near `logSecurityEvent` `server.js:1537` | retrofit operator-revoke route |
+| 14 | DEPLOY.md runbook | modified | `DEPLOY.md` | key custody, rotation steps, compromise policy |
+
+## Data flow after the milestone
 
 ```
-client POST /api/auth/tfa/recovery {password, code}
-   → tooMany('tfa-recovery|'+uid, 5, 15min)  → sameOrigin check (Pitfall-22 order: gate first)
-   → verifyPassword (step-up) → decryptTotpSecret (null ⇒ 503 masterKeyMissing)
-   → verifyTotpCode ±1 window + replay guard (two_fa_last_step updated on success)
-   → tx: delete recovery_codes(user) + insert 10 fresh hashed → return plaintext once
+Reminder flow:   interval tick → scan docs → dedup(reminders) → BEGIN IMMEDIATE
+                 → fresh-read ws row → append notif rows → revision+1 → COMMIT
+                 → queueNotifEmails(base=APP_URL) → email links /w/:slug/task/:key
+                 → recipient browser: SPA boot → applyDeepLink (main.js:134-137)
+                 → go('task') → drawer opens
+
+Rotation flow:   deploy with MASTER_KEY + MASTER_KEY_PREVIOUS → boot:
+                 backup → re-wrap v1 rows under v2 → count(v1)=0 → runbook:
+                 remove MASTER_KEY_PREVIOUS → later boots: v1 prefix = fail-closed
+                 (correct: nothing left to decrypt)
+
+Audit flow:      operator route → authz → auditOperatorAction(actor, verb,
+                 target, 'operator', req) → security_log (+target/scope/ip)
+                 → (existing) admin/log surface
 ```
 
-### Flow 3: admin revocation
+## Anti-patterns (specific to this codebase)
 
-```
-admin DELETE /api/admin/sessions/:userId
-   → admin gate (Pattern 3 decision) → tx: delete from sessions where user_id = :userId
-   → victim's next authenticated call: no session row → central 401 teardown → honest sign-out UI (exists)
-```
+1. **Writing scheduler notifs from a pre-transaction doc parse.** Reverts concurrent client PUTs; manifests as mysterious "my edit vanished" + 409 chains. Fresh read inside `BEGIN IMMEDIATE`, always.
+2. **Shipping `v2:` while `not like 'v1:%'` still guards the boot migration.** The filter will classify v2 rows as plaintext-eligible. Land #10 before #8 in the build order.
+3. **Building deep-link URLs from `task.id`.** The SPA and `copyLink` both use `key`; mismatched ids produce dead links after task re-creation.
+4. **A second security table for operator actions.** Forks the audit query surface; extend `security_log` with nullable columns instead.
+5. **Per-notification transactions in the reminder pass.** N writes per tick × revision bumps = poll churn for every member. Batch per workspace.
+6. **Assuming rotation protects a compromised key.** It doesn't (old backups still decrypt under the leaked key). Runbook must separate loss (rotate) from compromise (re-enroll).
 
-### Flow 4: disable (exists — verify only)
+## Suggested build order (dependency-driven)
 
-Existing route already: gate → budget → password step-up → decrypt → verify TOTP **or** burn a recovery code → tx reset of `two_fa_*` + recovery wipe → 503 `masterKeyMissing` before any mutation. Confirm it matches the brief's "proper verification" bar (does it allow recovery-code disable? — line 1575 suggests yes) and add missing e2e/i18n coverage.
-
-## Integration Points
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| New routes ↔ throttle | `tooMany(key, 5, 15*60*1000)` | Reuse D-11 band constants; key by `userId` for cookie-auth routes (D-40/D-41 precedent), never by client-supplied identifier |
-| New routes ↔ i18n gate | error `code` + English message | Client translates codes (ERR-01/02 machinery); add every new literal to EN+FR catalogues or `i18n-scan.mjs` fails the build |
-| Migration ↔ test/migration.test.mjs | extend fixture | Prove: first boot encrypts, second boot byte-identical (same contract as AUTH-02) |
-| Regeneration ↔ pendingTfa | none | Do not touch the in-memory pending map; regeneration operates only on enabled accounts |
-| Admin revoke ↔ sessions table | plain delete | No token list response; victims discover revocation via existing 401 teardown |
-| `--set-password` CLI | precedent | Cross-user session revoke already exists in CLI form (line 38); the HTTP route should behave identically server-side |
-
-## Anti-Patterns
-
-### Anti-Pattern 1: GCM without a version prefix or key-versioning plan
-**What people do:** raw AES-256-GCM blob, key derived from a single env var forever.
-**Why it's wrong:** a later key rotation forces a full decrypt/encrypt sweep with no way to tell which rows use which key.
-**Do this instead:** keep the existing `v1:` prefix (already present) and, if rotation ever lands, bump to `v2:` — the migrate function's `not like` predicate generalizes per version. No work needed now beyond preserving the prefix discipline.
-
-### Anti-Pattern 2: Migrating secrets lazily inside request handlers
-**What people do:** re-encrypt on decrypt in every read path.
-**Why it's wrong:** plaintext lifetime becomes unbounded (a user who never logs in stays plaintext forever), and writes scattered across handlers break the migration test contract.
-**Do this instead:** one boot pass, one test.
-
-### Anti-Pattern 3: Letting a recovery code authorize its own regeneration
-**What people do:** accept "any second factor" as the step-up for regeneration.
-**Why it's wrong:** an attacker who phished one recovery code burns it and mints ten fresh ones — the compromise becomes permanent.
-**Do this instead:** password + live TOTP only (Pattern 2).
-
-### Anti-Pattern 4: Admin revocation without a defined admin
-**What people do:** gate the route on `isAdminUser()` because the helper exists.
-**Why it's wrong:** in a multi-tenant app any workspace admin could log out every user on the instance — privilege inflation across tenant boundaries.
-**Do this instead:** instance-operator gate (env-derived or a migrated flag column).
-
-## Suggested Build Order (dependency-driven)
-
-1. **MASTER_KEY migration first** — it touches `openDb()`, is testable in isolation against `migration.test.mjs`, and every later feature (disable verification, regeneration, login) inherits its fail-closed semantics. Do it before any route work so tests never see plaintext rows.
-2. **Recovery-code regeneration second** — depends on (1)'s decrypt path and reuses the enable route's transaction/response shape; it is the smallest new route and warms up the step-up + throttle + i18n pattern.
-3. **Disable-2FA verification/closure third** — mostly verification of what Phase 16-02 shipped plus e2e/i18n; benefits from (2) because the disable UI and regeneration UI are siblings on the settings 2FA card.
-4. **Admin session revocation last** — independent of crypto but blocked on the *admin definition decision* (discuss-phase question); it should also consume the throttle/gate patterns established in (2).
-
-## Scaling / Scope Notes
-
-Not scale-relevant (single Docker image, node:sqlite, hundreds of users max). The only "scale" concern is operational: **MASTER_KEY is now load-bearing for every TOTP login** — losing it bricks 2FA for all users. `DEPLOY.md` must document: set it once, never rotate casually; a lost key means users must disable-2FA via recovery codes or an operator must clear `two_fa_*` (an escape-hatch CLI path worth considering explicitly). This is the single biggest non-code risk of the milestone.
+1. **Deep links + APP_URL plumbing** (#4, #5, optionally #6) — smallest, unblocks email quality for everything after; largely one-line URL change + `next` reuse. Include creator-watcher (#7) here (same feature surface).
+2. **Audit hardening** (#12, #13) — independent of 1; land before the workspace-admin revocation tier so the new tier is audited from birth.
+3. **Version-aware migration filter** (#10) — hard prerequisite for #8/#11, trivial to land early.
+4. **v2 keyring + dual-key decrypt** (#8, #9) — after #3; tests with both keys, one key, no key.
+5. **Re-wrap rotation + runbook** (#11, #14) — depends on #4's keyring; ship runbook in same phase.
+6. **Reminder scheduler** (#1, #2, #3) — biggest surface (transaction discipline, prefs, dedup); depends on #4 for email links and #5 for APP_URL; do last so its email fan-out exercises the finished link path.
 
 ## Sources
 
-- Codebase ground truth (HIGH): `server.js` lines 72–345 (MASTER_KEY, SCHEMA, ensureColumn migrations, envelope crypto, pendingTfa), 1371–1740 (auth routes, budgets, disable, sessions), 356 (isAdminUser); `totp.js`; `.planning/PROJECT.md` v1.3 record.
-- Standards (MEDIUM — web search blocked by anti-bot; from established knowledge of OWASP ASVS 2.5.3/2.8, NIST SP 800-63B AAL2, RFC 6238): TOTP-at-rest encryption, step-up verification on sensitive operations, single-use hashed recovery codes, session revocation semantics. Verify specific clause numbers during phase planning if citing externally.
-
----
-*Architecture research for: Projects Studio v1.4 Auth Completion*
-*Researched: 2026-10-28*
+- Verified anchors: `server.js` (73, 87, 163-169, 244-284, 396-399, 554, 651, 689-730, 1102-1180, 1370-1373, 1537, 1744-1747, 2183-2200, 2883-2902, 2995-2998); `src/main.js` (75-88, 123-147, 183-185, 214-218); `src/actions/actions.js` (521-530, 598-615, 2160); `src/overlays/drawer.js` (19-31); `.planning/PROJECT.md` (v1.5 scope, v1.4 encryption decisions D-05/D-06/D-58/D-73/D-74/D-77/D-79/D-83).
+- Confidence: HIGH throughout — all claims are read from the current tree; scheduler/rotation/audit patterns are sibling-researcher-established and here confirmed against actual call sites.

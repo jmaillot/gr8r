@@ -1,142 +1,155 @@
-# Project Research Summary
+# Project Research Summary — v1.5 "Reliability & Rotation"
 
-**Project:** Projects Studio — Milestone v1.4 "Auth Completion"
-**Domain:** Self-hosted workspace/PM app (single-file Node server, node:sqlite, zero runtime dependencies) — auth lifecycle gap-closure
-**Researched:** 2026-10-28
-**Confidence:** HIGH (codebase ground truth verified by direct code inspection; standards claims from OWASP/NIST knowledge, MEDIUM)
+**Project:** Projects Studio (gr8r)
+**Domain:** Self-hosted PM workspace — server-side scheduling, key-envelope rotation, operator audit, deep-linked emails, grafted onto a single-process zero-dependency Node/`node:sqlite` app
+**Researched:** 2026-10-30
+**Confidence:** HIGH — stack APIs verified by local execution on Node v24.21.0; architecture and pitfalls anchored to specific lines of the live v1.4 tree; feature landscape grounded in documented competitor behavior (Asana/Linear/Todoist) and audit-logging standards
 
 ## Executive Summary
 
-The single most important finding across all four research files is a **ground-truth correction to the milestone brief**: v1.3 already shipped most of what v1.4 was framed around. Direct inspection of `server.js` confirms `encryptTotpSecret`/`decryptTotpSecret` (AES-256-GCM, `v1:<iv>:<tag>:<ct>` envelope, sha256-derived key, fail-closed 503 `masterKeyMissing`) already exist, the disable-2FA route (16-02) already exists with password step-up, TOTP-or-recovery verification, atomic state reset, and throttle budget, and sessions self-revocation exists. **v1.4 is a gap-closure/audit/migration milestone, not a build-from-scratch milestone.** The genuinely missing pieces are small and well-defined: (1) a boot-time plaintext→envelope migration (likely zero rows, but must exist and be byte-identical on second boot), (2) a first-class recovery-code regeneration route, (3) cross-user admin session revocation, (4) verification/e2e/i18n coverage of the existing disable flow.
+v1.5 adds four capabilities to an app whose constraints are unusually firm: zero runtime dependencies, one Node process, one SQLite file, and workspace state stored as revision-optimistic JSON blobs. Research concluded that **all four features fit inside Node built-ins with no dependency exception** — `setInterval().unref()` plus a SQLite dedup table replaces cron/Redis; the existing `v1:` GCM envelope generalizes into a prefix-keyed keyring map (no new crypto); deep links are string composition off the existing `BASE_URL`/`APP_URL`; the audit trail extends the existing `security_log` table with nullable columns rather than adding a second log table. Every recommendation was verified against the actual call sites in `server.js` and `src/`.
 
-The zero-runtime-dependency constraint holds without exception — every feature reduces to `node:crypto`, `node:sqlite` transactions, and new route handlers reusing existing patterns (step-up helper, throttle budgets, central 401 teardown, `ensureColumn` migrations). No new libraries, no new tables, no new schema except possibly one additive operator-flag column. The stack research verdict: **nothing to install; reuse everything verbatim.**
+The recommended approach follows a strict dependency order. First, **email deep links + APP_URL plumbing** (smallest surface; the SPA already resolves `/w/:slug/task/:key` — the work is almost entirely server-side, and `queueNotifEmails` must drop its `req` dependency). Second, **audit hardening** (extend `security_log` with target/scope/ip + a shared `auditOperatorAction()` helper) so the workspace-admin revocation tier is audited from birth. Third, the **key-rotation sequence**: land the version-aware migration filter *before* any `v2:` row can exist, then the keyring + dual-key decrypt, then the re-wrap pass + DEPLOY.md runbook. The **reminder scheduler comes last** — it is the biggest integration surface (transaction discipline, dedup, prefs, tz semantics) and its email fan-out should exercise the finished deep-link path.
 
-The two real risks are (a) **the admin privilege-model decision** — Projects is multi-tenant with workspace-scoped roles and no instance-admin concept; gating cross-user revocation on the existing `isAdminUser()` would let any workspace admin log out any user on the instance, breaking v1.1 tenancy isolation. This is a discuss-phase decision (instance-operator vs workspace-admin, options: `ADMIN_EMAIL`-derived gate, env-var style, or an `is_instance_admin` flag column) and **must be settled before planning Phase 4**. (b) **MASTER_KEY becomes load-bearing**: losing it bricks 2FA for all users; DEPLOY.md must document the loss runbook.
+The dominant risks are all codebase-specific, not domain-specific: (1) the reminder pass writing into the JSON doc can cause 409 storms against every active client — it must do a fresh read inside `BEGIN IMMEDIATE`, batch per workspace, and persist dedup keys in SQLite (never in memory, which dies on restart); (2) the boot migration's `not like 'v1:%'` filter treats a future `v2:` envelope as plaintext-eligible and would corrupt every TOTP secret — this one-line fix must land before any v2 code; (3) rotation protects against key *loss*, not key *compromise* — the runbook must prescribe forced re-enrollment in the compromise case.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No changes. Every feature fits existing Node 24 built-ins and existing v1.3 code patterns (see STACK.md for the verified line-by-line inventory).
+Zero new dependencies — runtime or dev. Every candidate dependency (node-cron, BullMQ, cryptr, @noble/ciphers, urlcat) was rejected as adding review surface without adding capability. Verified by local execution: AES-256-GCM envelope roundtrip, `setInterval(...).unref()`, `node:sqlite` DatabaseSync prepare/exec, base64url encoding.
 
-**Core technologies (all already in use):**
-- `node:crypto` AES-256-GCM — TOTP envelope crypto — already implemented and verified against Node 24 docs; do not touch.
-- `node:sqlite` transactions — atomic burn-and-replace / admin revoke — the password-change transactional pattern from v1.3 is the template.
-- Env-var `MASTER_KEY` — key management — no KMS/Vault/HSM (anti-feature for a zero-dep single-image app).
-- `node --test` + Playwright + `scripts/i18n-scan.mjs` — existing test/i18n gates extend to all new routes.
-
-**Explicitly rejected:** plaintext-decrypt fallback (`?? secret`), scrypt/HKDF on MASTER_KEY, a `revocations` soft-delete table, encrypted (retrievable) recovery codes, key-rotation machinery this milestone (the `v1:` prefix is the future hook).
+**Core technologies:**
+- `setInterval` + `.unref()` (60s tick) — reminder scheduler inside `server.js`; timer never holds the process open; testable by injecting the tick function
+- `node:sqlite` tables — `reminders` dedup table (`UNIQUE(task_id, due_date, kind)`) persisted outside the JSON doc; audit columns on `security_log`; key-version metadata — restart-safe by construction
+- `node:crypto` keyring map — `{ v1: derive(MASTER_KEY_PREVIOUS), v2: derive(MASTER_KEY) }`; encrypt with `CURRENT`, decrypt by envelope-prefix lookup; re-wrap rotation = one transactional pass; envelope format unchanged
+- URL string building from `APP_URL`/`BASE_URL` — deep links; scheduler has no `req`, so `queueNotifEmails` signature changes from `req` → `base`
 
 ### Expected Features
 
-**Must have (v1.4, per FEATURES.md):**
-- Disable-2FA gap closure — verify 16-02 covers server-side password step-up, atomic wipe of `two_fa_*` + recovery codes + pending `login_challenges`, keep-current/revoke-others session policy, activity verb. Build only what's missing (e2e + i18n most likely).
-- Boot-time plaintext→envelope TOTP migration — `migrateTotpSecrets()` in `openDb()`, skip-and-warn without MASTER_KEY, byte-identical second boot.
-- Recovery-code regeneration — password step-up **plus live TOTP code** (a recovery code must never authorize its own replacement), atomic burn-and-replace, show-once UX reusing enrollment components, own throttle budget.
-- Admin session revocation — list + revoke any user's sessions, own-session exclusion, existing central 401 teardown fires, audit entry, privilege gate per the decision below.
+**Must have (table stakes):**
+- Due-date reminders: day-before + morning-of, pref-selectable, default both on (Asana's core notification; Linear notifies on due date)
+- Transactional dedup: exactly one reminder per (task, user, offset, due date), crash-safe across restarts
+- Per-user reminder prefs + `email_reminder` gate in existing `notifPrefs`; never remind completed/archived tasks
+- Email deep links to the task (not workspace root) with login-redirect-`next` for logged-out clicks (Phase-12 file-route pattern exists)
+- Creator auto-watched on task creation (Linear/Asana default; known gr8r gap)
+- `v2` envelope + re-wrap rotation without 2FA re-enrollment; DEPLOY.md runbook covering generate/inject/rotate/verify/recover/backup
+- Audit rows on operator session revocation (actor, target, session count, timestamp), append-only, owner-visible
 
-**Should have (cheap differentiators):** disable requires password AND live code; "N unused codes destroyed" honest messaging; in-app notification to revocation targets; key-version prefix discipline (already in place).
+**Should have (differentiators):**
+- Documented, public key-rotation procedure without re-enrollment — rare even among self-hosted tools
+- Owner-visible operator audit surface (competitors bury this in enterprise tiers)
+- Workspace-admin revocation tier emitting the same audit rows (sequenced *after* the audit helper exists)
 
-**Defer (v2+):** instance-wide revoke-all (needs instance-admin concept), WebAuthn/passkeys, MASTER_KEY rotation tooling.
+**Defer (v1.6+/v2+):**
+- Watcher reminders, past-due nudges, digest emails (v1.6, on user demand)
+- Per-user timezone for "morning of" (v1.6; use workspace-shared tz at MVP)
+- Custom per-task reminder offsets, push/Slack channels, hash-chained audit log (v2+)
 
-**Anti-features (refuse):** admin disabling a user's 2FA directly; plaintext secret "for admin recovery"; soft-disable grace periods; revocation by IP/user-agent matching; always-visible recovery-code counts.
+**Anti-features (explicitly rejected):** arbitrary per-task reminder offsets, reminders to non-assignees, editable/deletable audit entries, algorithm-namespace change under cover of rotation, email reminders for every notification type.
 
 ### Architecture Approach
 
-All four features are thin extensions of the v1.3 auth surface — no new tables, no new crypto, one small helper (`migrateTotpSecrets`), one new small gate helper, two new routes, one route verified/extended (see ARCHITECTURE.md for component table and flow diagrams).
+The headline finding: **task deep links already exist in the SPA** — `applyDeepLink()` resolves `/w/:slug/task/:key` and `A.copyLink` already produces that canonical shape. The deep-link milestone item is therefore almost entirely a server-side one-line URL change (`${base}/w/${slug}/task/${taskKey}`), **using `task.key`, not `task.id`**. Everything else is additive machinery around verified anchors: the `requireTotpSecret()` single decrypt boundary is the seam for version dispatch; `ensureColumn()` extends `security_log`; the boot-migration backup (`vacuum into`) pattern is the template for the re-wrap pass.
 
-**Major components:**
-1. `migrateTotpSecrets()` in `openDb()` — one-shot encrypt of non-`v1:` rows; no-op on second boot; warn-and-skip without MASTER_KEY (login already fail-closed).
-2. `POST /api/auth/tfa/recovery` — regeneration route; inherits MASTER_KEY fail-closed 503 for free via `decryptTotpSecret`.
-3. `GET`/`DELETE /api/admin/sessions[/:userId]` — cross-user revocation; reduces to existing `sessions`-table deletes; victims get the existing mid-session 401 teardown.
-4. `POST /api/auth/tfa/disable` — exists; verify against the brief's bar and add e2e/i18n coverage.
+**Major components (14-item integration map in ARCHITECTURE.md):**
+1. `reminders` table + `reminderPass()` — dedup state outside the doc; notif rows written into the doc via fresh-read-inside-`BEGIN IMMEDIATE`, batched per workspace, one revision bump per pass; `rem-`-prefixed notif ids to avoid client collisions
+2. KEYRING + re-wrap migration — prefix-keyed map; `MASTER_KEY_PREVIOUS` env during rotation; version-aware migration filter derived from known prefixes; completion = zero `v1:` rows
+3. `security_log` extensions + `auditOperatorAction()` — nullable `target_type/target_id/scope/ip` columns; audit write in the same transaction as the revocation; machine verbs (ACT-02)
 
 ### Critical Pitfalls
 
-1. **Plaintext fallback / lazy migration** (P1) — decryptor must reject anything without the `v1:` marker (fail-closed on format, never fall-open); one-shot transactional boot migration; no `?? secret` anywhere.
-2. **Privilege paradox on admin revocation** (P6) — never gate on `isAdminUser()` alone; cross-tenant/owner-immunity rules required; the instance-operator-vs-workspace-admin decision is a discuss-phase blocker.
-3. **Recovery code authorizing its own regeneration** (Anti-Pattern 3) — step-up must be fresh password + live TOTP only.
-4. **Fail-closed 503 with side effects** (P7) — the 503 path must still consume throttle budget and must not touch the replay guard; decrypt only at a single boundary helper; v1.3 fixture tests pass unchanged.
-5. **Cross-feature ordering** (P8) — encryption migration first, then regeneration, then disable closure, then admin revocation; never delete a failing v1.3 test; close with one cross-feature e2e (enroll→regenerate→login→disable→re-enroll→revoke, EN+FR).
+1. **409 storm from the reminder pass (CRITICAL)** — scheduler writes into the revision-optimistic JSON doc must never reuse a doc parsed outside the transaction; per-workspace `BEGIN IMMEDIATE` with fresh read, batched writes, skip-when-nothing-to-do
+2. **In-memory dedup lost on restart (CRITICAL)** — this deployment restarts (deploy, crash, intentional `process.exit(1)`); dedup keys persist in SQLite from day one, keyed on (task, due date, kind) not run timestamp
+3. **`v2:` rows re-wrapped/corrupted by the boot migration filter (CRITICAL)** — `not like 'v1:%'` matches `v2:` envelopes; fix the filter (and decrypt dispatch on the version token — no plaintext fallback, extending the D-79 exclusivity test) *before* v2 ships
+4. **No `req` in the scheduled pass → dead email links (CRITICAL)** — `appBase(req)` breaks outside requests; introduce `APP_URL` with a loud boot warning when reminders + mailer are on without it; `next` param must be path-only (open-redirect guard)
+5. **Audit insert outside the revocation transaction (MODERATE — the WR-02 trap again)** — make the audit write non-optional and same-transaction; a forced audit-insert failure must roll back the revocation
+
+Also notable: key selection by envelope key-id, never by comparing key material (use `timingSafeEqual` if ever needed); the pass must be wrapped in try/catch (an interval-callback rejection kills the process); malformed client-authored doc JSON must be skipped, not crashed on; the `popstate`/URL-writing debt (v1.1 Active item) will be exposed by deep links — fix it in the deep-link phase or explicitly scope it out.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+Based on combined research, five phases (ARCHITECTURE.md's dependency-driven build order, expanded):
 
-### Phase 1: TOTP Encryption Audit + Plaintext Migration
-**Rationale:** Everything touching `two_fa_secret` must run on a single decrypt surface before any route work; the migration is testable in isolation against `test/migration.test.mjs` and every later phase inherits its fail-closed semantics. Do it first so tests never see plaintext rows.
-**Delivers:** `migrateTotpSecrets()` boot pass, decrypt-call-site audit (every site fails closed before mutation), boot-time MASTER_KEY validation, DEPLOY.md key-lifecycle + loss runbook, migration tests (first boot encrypts, second boot byte-identical, restored-backup boots).
-**Addresses:** Encryption-at-rest gap closure; the brief's "migration" obligation.
-**Avoids:** Pitfalls 1, 2, 3, 7.
+### Phase 1: Email deep links + APP_URL plumbing
+**Rationale:** Smallest surface, unblocks email quality for everything downstream; scheduler emails and reminder fan-out both depend on it.
+**Delivers:** `queueNotifEmails` refactored (`req` → `base`), `/w/:slug/task/:key` links (using `task.key`), `APP_URL` boot guard, anonymous login-redirect-`next` (optional but cheap via Phase-12 pattern), creator auto-watch riding the client mutation.
+**Avoids:** Pitfall 4 (dead links), Pitfall 7 (route collisions — add the route-ordering test proving `/w/:slug/file/:id` still claims bytes); decide popstate scope here.
 
-### Phase 2: Recovery-Code Regeneration
-**Rationale:** Smallest new route; depends on Phase 1's decrypt path; reuses the enable route's transaction and response shape verbatim; warms up the step-up + throttle + i18n pattern used by later phases.
-**Delivers:** `POST /api/auth/tfa/recovery` (fresh password + live TOTP step-up, atomic delete-all + insert-all in one transaction, pending-challenge invalidation, show-once response, `Cache-Control: no-store`, new throttle budget), UI reuse of enrollment show-once components, tests including concurrent-burn race.
-**Addresses:** Regeneration gap (the genuine missing endpoint).
-**Avoids:** Pitfalls 5, 8; Anti-Pattern 3.
+### Phase 2: Operator audit hardening
+**Rationale:** Independent of Phase 1; must exist before the workspace-admin revocation tier so the new tier is audited from birth.
+**Delivers:** `security_log` nullable columns (target/scope/ip), `auditOperatorAction()` shared helper, retrofit of the v1.4 operator-revocation route, index on `(scope, created_at)`.
+**Avoids:** Pitfall 6 (same-transaction audit writes; failure rolls back the revocation); anti-pattern "second security table".
 
-### Phase 3: Disable-2FA Verification & Closure
-**Rationale:** Mostly verification of shipped 16-02 plus closure of whatever the diff reveals (most likely: pending-challenge teardown, e2e, i18n keys); benefits from Phase 2 because disable and regeneration UI are siblings on the settings 2FA card.
-**Delivers:** Verified disable contract (server-side password step-up, atomic `two_fa_*` + recovery + challenge wipe, keep-current/revoke-others policy, activity verb), e2e + EN/FR coverage, re-enroll-immediately-after test.
-**Addresses:** Disable-2FA table stakes; honest-messaging UX.
-**Avoids:** Pitfall 4 (verify recovery codes are NOT accepted for disable — or make that an explicit documented policy decision), ghost-2FA-state bug class.
+### Phase 3: MASTER_KEY rotation — version-aware filter + keyring
+**Rationale:** The version-aware migration filter is a hard prerequisite and trivially small; it must land before any `v2:` row can exist.
+**Delivers:** Version-aware `not like` filter (#10), KEYRING map + `MASTER_KEY_PREVIOUS`, prefix-dispatching `requireTotpSecret` (signature unchanged), tests with both keys / one key / no key.
+**Avoids:** Pitfall 3 (double-wrap corruption, plaintext fallback regression), Pitfall 9 (key-id dispatch, never key comparison).
 
-### Phase 4: Admin Session Revocation
-**Rationale:** Independent of crypto but **blocked on the privilege-model decision** (instance-operator vs workspace-admin) which must be resolved in discuss-phase before planning; consumes the gate/throttle/audit patterns established in Phase 2.
-**Delivers:** Admin-gated session list + cross-user revoke routes, own-session exclusion, central 401 teardown fires for victims, audit entry (or documented deferral to server logs), privilege-matrix tests (owner immunity, cross-tenant block, self-revocation).
-**Addresses:** The other genuine gap; operator trust.
-**Avoids:** Pitfall 6 (privilege paradox — the top architectural risk of the milestone).
+### Phase 4: Re-wrap rotation + DEPLOY.md runbook
+**Rationale:** Depends on Phase 3's keyring; the runbook ships in the same phase — an operator mid-rotation with no runbook is a support incident.
+**Delivers:** Idempotent boot-time re-wrap pass (backup → transaction → verify count(v1)=0), compromise-vs-loss policy in DEPLOY.md (compromise ⇒ forced re-enrollment), backup-before-rotation mirror of the D-74 pattern.
+**Avoids:** Pitfall 9's re-wrap ordering (verify → backup → re-wrap → sample-verify → drop old key).
+
+### Phase 5: Reminder scheduler
+**Rationale:** Biggest integration surface and consumer of everything above (deep links, APP_URL, audit-adjacent migrations); its email fan-out exercises the finished link path end to end.
+**Delivers:** `reminders` table, 60s `reminderPass()` with boot catch-up, per-workspace batched transactions, dedup keys, `email_reminder` prefs gate, tz-aware "due today" against the workspace-shared tz.
+**Avoids:** Pitfalls 1, 2, 5, 8, 11, 12 (409 storm, memory dedup, long transactions, DST/tz fixtures, unhandled rejection, doc bloat pruning).
 
 ### Phase Ordering Rationale
 
-- **Dependency order, not feature order:** encryption migration touches `openDb()` and defines the decrypt surface; regeneration and disable both read/write the secret and must be written against the encrypted reality, not retrofitted (Pitfall 8).
-- **Risk ordering:** the migration phase is the highest-certainty, highest-leverage work; the privilege decision is the only unknown, so it sits last where discuss-phase has maximal codebase context.
-- **Integration closure:** a final cross-feature e2e pass (can be part of Phase 4 or a short Phase 5) covering enroll→regenerate→login→disable→re-enroll→revoke in one Chromium flow, EN+FR, with the rule that no v1.3 test may be deleted.
+- Deep links first because they are one line + a signature refactor, and both the scheduler and all future email types depend on correct URLs.
+- Audit before the admin-revocation tier so every new privileged verb is audited from birth rather than retrofitted.
+- The rotation sequence is strictly ordered internally: migration filter → keyring → re-wrap. Shipping v2 code before the filter fix corrupts every TOTP secret on next boot.
+- The scheduler is last not because it is least important but because it has the most failure modes and the most upstream dependencies; a stable link path makes its e2e tests meaningful.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 1:** moderate — audit must enumerate *every* decrypt call site; verify the enrollment/enable path fails closed too (login path already verified at line ~1641).
-- **Phase 4:** the privilege-model decision requires a discuss-phase round with the owner; also settle the audit-log location question (workspace activity log vs server logs for instance-level actions).
+Phases likely needing deeper research during planning (`--research-phase`):
+- **Phase 5 (Reminder scheduler):** date-format semantics in `seed.js`/docs need a phase-specific look (Pitfall 8 flags this explicitly if due-date storage isn't canonical); revision-bump policy (accept bump vs side-table notifs) is the phase's central design decision and deserves discussion before planning
+- **Phase 1 (Deep links):** decide in discuss-phase whether the `?next` post-login redirect ships now or the "login → home" UX is accepted; popstate scope decision belongs here
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2:** regeneration is the enable route's transaction behind a new route; all patterns exist.
-- **Phase 3:** verification of shipped code + e2e/i18n; well-documented OWASP patterns.
+- **Phase 2 (Audit):** additive `ensureColumn` migration + one helper; proven patterns
+- **Phase 3/4 (Rotation):** everything verified against live call sites; the migration/backup test patterns exist (`test/migration.test.mjs`, `test/totp-encryption.test.mjs`)
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified against shipped code and Node 24 docs (Context7); zero additions needed. |
-| Features | HIGH | OWASP-backed table stakes; comparable-app behavior consistent; only deployment details MEDIUM. |
-| Architecture | HIGH | Ground truth read directly from `server.js`; external standards claims MEDIUM (web search blocked). |
-| Pitfalls | HIGH | Standard security-engineering failure modes mapped to verified v1.3 ground truth. |
+| Stack | HIGH | Every API executed on the target runtime (Node v24.21.0); zero-dep verdict holds across all four features |
+| Features | HIGH for reminders/emails/audit; MEDIUM for rotation runbook specifics | Competitor behavior documented; rotation pattern grounded in AWS KMS envelope-encryption references but few PM tools expose it publicly |
+| Architecture | HIGH | Every anchor verified against the live v1.4 tree with line numbers; integration research, not library research |
+| Pitfalls | HIGH | Each pitfall anchored to a specific line or established v1.4 defect class (WR-02, D-79) |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Admin privilege model (BLOCKING for Phase 4):** instance-operator vs workspace-admin. Options documented in ARCHITECTURE.md Pattern 3 — (a) `isAdminUser()` gate (rejected: tenant-boundary privilege inflation), (b) `ADMIN_EMAIL`-derived instance operator, (c) additive `is_instance_admin` flag column. Resolve in discuss-phase with the owner.
-- **Audit-log location for instance-level actions:** activity log lives in workspace documents; instance-level revocation may have no workspace to log into. Decide: log to target user's workspaces, or defer to server logs for v1.4.
-- **Disable via recovery code:** line ~1575 of `server.js` suggests the shipped disable route accepts recovery codes; FEATURES/PITFALLS argue recovery codes must never authorize disable. This is a policy conflict to resolve (tighten vs document) in Phase 3 discussion.
-- **Plaintext-row reality check:** encryption shipped in v1.3 and columns were dormant before, so likely zero plaintext rows exist — but the migration must still be built for safety (restored backups, hypothetical old installs). ARCHITECTURE recommends skip-and-warn without MASTER_KEY; confirm the fail-closed policy with the owner.
-- **Standards clause citations:** OWASP/NIST claims are from established knowledge (search was blocked); verify exact clause numbers if cited externally during planning.
+- **Revision-bump policy for scheduler writes** — accept the bump (honest; clients already handle 409→refetch) vs move notif rows to a side table. Must be decided explicitly in the Phase 5 discuss/plan, not drifted into. Research leans "accept the bump, batch per workspace, skip no-op passes."
+- **Due-date storage format** — research assumed a canonical comparable form; verify against actual doc/`seed.js` shapes during Phase 5 planning (or normalize in the migration).
+- **`?next` post-login redirect** — cheap to add (server plumbing exists from the Phase-12 file route) but needs a product decision; also interacts with the unfixed `popstate` debt (v1.1 Active item).
+- **Other MASTER_KEY consumers** — rotation scope is verified as `users.two_fa_secret` only (recovery codes/login challenges are hashed, not encrypted); confirm no other envelope column exists at Phase 3 plan time.
+- **Actor-row cascade on `security_log`** — deleting a user must not erase audit history of actions *against* them (target_id is bare text for this reason); whether actor rows should cascade for operator verbs is an explicit Phase 2 plan decision.
+- **Note:** ARCHITECTURE.md was written twice (a retry overwrote the first version); the synthesis uses the version currently on disk, which is verified line-by-line against the live tree.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Codebase inspection — `server.js` (MASTER_KEY line 73, envelope crypto ~235–262, disable route 1548, isAdminUser 356, auth routes 1371–1740), `totp.js` contracts, `package.json`/`Dockerfile`, `test/migration.test.mjs` — ground truth for all four features.
-- Context7 `/websites/nodejs_latest-v24_x_api` (crypto.html) — GCM key/IV/auth-tag semantics, verified to match shipped implementation.
+- Local execution on Node v24.21.0 (2026-10-30) — GCM envelope roundtrip, `timer.unref()`, `node:sqlite` roundtrip, base64url
+- Live v1.4 tree anchors — `server.js` (73, 87, 163-169, 244-284, 554, 651, 689-730, 1102-1180, 1370-1373, 1537, 2160-2200, 2883-2902, 2990-2998, 3020), `src/main.js` (75-88, 123-147, 183-185, 214-218), `src/actions/actions.js` (521-530, 598-615), `src/overlays/drawer.js` (19-31)
+- `.planning/PROJECT.md` — v1.5 scope, v1.4 guarantees (D-05/D-06/D-58/D-73/D-74/D-77/D-79/D-83), v1.1 audit Active items, v1.2 decisions (ACT-01/02, workspace tz, email i18n out of scope)
 
 ### Secondary (MEDIUM confidence)
-- OWASP MFA, Authentication, and Session Management Cheat Sheets — disable-as-sensitive-action, reauthentication after risk events (fetched 2026-10-28).
-- NIST SP 800-63B (AAL2), OWASP ASVS 2.5.3/2.8, RFC 6238 — step-up, factor lifecycle (established knowledge; search blocked by anti-bot).
-- Nextcloud server-side encryption + IACR eprint 2020/1439; Microsoft Entra "Revoke sessions" semantics; GitHub/GitLab/Gitea/Vaultwarden comparable behavior.
+- Asana forums (threads 3794, 101405, 1041429) — no native pre-due reminder; "due today" email is the built-in
+- Linear docs/changelog — due-date reminders, "redundant notifications are skipped" dedup philosophy
+- Todoist help — relative vs fixed reminder model
+- AWS KMS ReEncrypt / EKS envelope-encryption docs; qcecuring.com key-rotation strategies
+- Sonar, Mattermost, Contentful audit-logging guidance — append-only, event-context, tamper-resistance
 
-### Tertiary (LOW confidence — validate during planning)
-- Exact current UI details of comparable apps (MEDIUM, could have drifted).
-- Assumption that zero plaintext `two_fa_secret` rows exist in the wild.
+### Tertiary (LOW confidence)
+- None — no finding rests on a single unverified source.
 
 ---
-*Research completed: 2026-10-28*
+*Research completed: 2026-10-30*
 *Ready for roadmap: yes*
