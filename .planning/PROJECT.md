@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-10-29 after Phase 21*
+*Last updated: 2026-10-30 after v1.4 milestone completion*
 
 ## What it is
 
@@ -16,29 +16,37 @@ board / list / table / calendar / timeline / files views, members, teams, activi
   membership list. An account can belong to several workspaces with a role in each.
 - **Real auth since v1.3**: sessions, password change and TOTP 2FA are server-backed
   (`sessions`, `login_challenges`, `recovery_codes` tables) — no auth state in the document.
+- **2FA lifecycle complete since v1.4**: secrets encrypted at rest (`v1:` AES-256-GCM envelope,
+  fail-closed decrypt), recovery codes regenerable behind password + live TOTP step-up, disable
+  verified end-to-end (a recovery code can never disable), and instance-operator session
+  revocation with owner immunity.
+- **Productized since the v1.4 window** (same commit range, outside the GSD cycle): app rebrand
+  to Projects Studio, multi-team projects (a project lives in every team it belongs to), and a
+  full notification system — per-recipient rows, assign/mention/comment/update types, @member
+  and @team parsing with autocomplete, 30s polling, per-type email delivery via SMTP
+  (prefs-gated, fire-and-forget), member team persisted in `memberships`.
 
-## Milestone v1.4 Auth Completion (current)
+<details>
+<summary>Milestone v1.4 Auth Completion (shipped 2026-10-30)</summary>
 
 **Goal:** every auth item deferred out of v1.3 lands — the 2FA lifecycle and session control
 become complete.
 
-**Target features:**
-- Disable-2FA flow: a user can turn 2FA off end-to-end with proper verification
-- TOTP secret encryption-at-rest: AES-256-GCM under `MASTER_KEY`, fail-closed 503 — the
-  unsettled decision carried from Phase 13, now made real
-- Recovery-code regeneration: burn-and-replace after initial enrollment
-- Admin session revocation: operator-revoked sessions across all users
+**Shipped:** TOTP encryption closure (ENC-01/02), recovery-code regeneration (REGEN-01/02),
+disable-2FA closure (DIS-01/02), operator session revocation (OPREV-01/02). 4 phases, 9 plans.
+Milestone audit: **passed** (integration: 12 seams wired, 0 orphaned). Full record:
+`milestones/v1.4-ROADMAP.md`, `milestones/v1.4-REQUIREMENTS.md`,
+`milestones/v1.4-MILESTONE-AUDIT.md`.
 
-**Context:** builds on v1.3 ground truth (`sessions`, `login_challenges`, `recovery_codes`
-tables, dormant `users.two_fa_*` columns, TOTP in `totp.js`, password step-up pattern).
-Planning will verify what the v1.3 disable route (16-02) already covers and scope only what is
-genuinely missing.
+</details>
 
 ## Next Milestone Goals
 
-No next milestone planned yet — define scope with `/gsd-new-milestone`. Candidates remaining in
-Active below (membership-surface hardening, router/URL, recent-search leak, per-user settings
-isolation).
+No next milestone planned yet — define scope with `/gsd-new-milestone`. Candidates carried
+from the v1.4 deferred list and the notifications backlog: due-date reminders (needs a server
+scheduler), deep links in notification emails, MASTER_KEY rotation envelope, operator audit
+trail, workspace-admin revocation tier, membership-surface hardening, router/URL popstate,
+recent-search leak, per-user settings isolation.
 
 ## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)
 
