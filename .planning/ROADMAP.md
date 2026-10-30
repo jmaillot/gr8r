@@ -34,7 +34,14 @@ deep-link path).
   3. When a user creates a task and someone else comments on or updates it, the creator receives the notification like any watcher — and the creator is not duplicated when they are also the assignee
   4. Using the browser's back/forward buttons across SPA views returns to the previous view (popstate works); deep-link navigation and manual navigation stay consistent
   5. The `/w/:slug/file/:id` byte route still serves bytes (route ordering unchanged) — proven by test
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 23-01-PLAN.md — Tracer: deep link → task drawer with persisted URL; APP_URL email task links; not-found toast; file-route ordering regression test (LINK-01)
+- [ ] 23-02-PLAN.md — Logged-out deep-link `?next=` carry and sign-in return (LINK-02)
+- [ ] 23-03-PLAN.md — Creator field + creator in watcher set, no self-notify (LINK-03)
+- [ ] 23-04-PLAN.md — go() pushState + popstate handler, back/forward e2e (LINK-04)
+
 **UI hint**: yes
 
 ### Phase 24: Operator Audit & Workspace-Admin Tier
