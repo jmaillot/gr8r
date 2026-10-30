@@ -2,7 +2,7 @@
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | applyDeepLink throws TypeError on key-less project segment (Back navigation) |
+| CR-01 | critical | fixed | Guard verified in live code (src/main.js:134 `if (key)`) — reconciled per verifier cross-check |
 | HIGH-01 | warning | open | go() pushes duplicate history entries for same-URL navigations |
 | MED-01 | warning | open | Logged-out ?next= carry drops the original query string |
 | MED-02 | warning | open | popstate/deep-link task keys are not percent-decoded before lookup |
