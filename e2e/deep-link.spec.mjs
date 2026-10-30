@@ -134,5 +134,41 @@ for (const lang of ['en', 'fr']) {
       await expect(page.locator('.toast')).toContainText(fmt('err.taskNotFound', lang));
       await expect(page.locator('.drawer')).toHaveCount(0);
     });
+
+    // LINK-02 (D-04): a logged-out deep link carries its path through sign-in
+    // via ?next= and returns the visitor to the exact task. The carry is
+    // written by the logged-out boot branch (client) mirroring the server
+    // file-route 302; finishLogin's path-only validator does the return.
+    test('logged-out task deep link shows sign-in with ?next= and returns to the exact task after sign-in', async ({ page }) => {
+      await page.goto(`/w/acme/task/${TASK_KEY}`);
+
+      // The logged-out boot branch rewrote the document URL before render:
+      // the sign-in view is up and the path is carried in ?next=.
+      await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(`/w/acme/task/${TASK_KEY}`)}$`));
+      const loginEmail = page.getByLabel(fmt('common.email', lang), { exact: true });
+      await expect(loginEmail).toBeVisible();
+
+      // Sign in on the carried URL — finishLogin must navigate back to it.
+      await loginEmail.fill(fixture.user.email);
+      await page.getByLabel(fmt('common.password', lang), { exact: true }).fill(fixture.user.password);
+      await page.getByRole('button', { name: fmt('page.auth.signIn', lang) }).click();
+
+      await expect(page).toHaveURL(new RegExp(`/w/acme/task/${TASK_KEY}$`));
+      const drawer = page.locator('.drawer');
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByText(TASK_TITLE).first()).toBeVisible();
+    });
+
+    // Bare login entry must stay untouched: no ?next= is written for a plain
+    // auth route, and post-login keeps the existing workspace-root landing.
+    test('bare /login entry carries no ?next= and lands on the workspace root', async ({ page }) => {
+      await page.goto('/login');
+      await expect(page).toHaveURL(/\/login$/);
+      await page.getByLabel(fmt('common.email', lang), { exact: true }).fill(fixture.user.email);
+      await page.getByLabel(fmt('common.password', lang), { exact: true }).fill(fixture.user.password);
+      await page.getByRole('button', { name: fmt('page.auth.signIn', lang) }).click();
+      await expect(page).toHaveURL(/\/w\/acme$/);
+      await expect(page.locator('.drawer')).toHaveCount(0);
+    });
   });
 }
