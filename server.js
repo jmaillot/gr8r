@@ -684,8 +684,43 @@ function mergeClientDoc(incoming, stored, membership) {
   return next;
 }
 
-function docForClient(doc, ws, membership) {
-  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
+/* P4-f: notification emails. Gated by the workspace notifPrefs (email_mention,
+   email_assign, email_comment — the same toggles the settings page renders).
+   The `update` type has no email toggle and stays in-app only. Each recipient
+   gets at most one email per new notification row; senders never block the
+   HTTP response and their failures are logged, not surfaced. */
+const NOTIF_EMAIL_KIND = { mention: 'email_mention', assign: 'email_assign', comment: 'email_comment' };
+
+function queueNotifEmails(wsRow, nextDoc, newNotifs, req) {
+  const base = appBase(req);
+  const wsName = wsRow.name || 'Projects Studio';
+  const prefs = nextDoc?.data?.notifPrefs || {};
+  const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
+  const emailByUserId = new Map(db.prepare('select id, email from users').all().map(u => [u.id, u.email]));
+  const emailByMemberEmail = new Map();
+  for (const m of profiles.values()) if (m?.email && m.id) emailByMemberEmail.set(m.id, m.email);
+  for (const n of newNotifs) {
+    if (n.by === n.to) continue; // never email the author about their own action
+    const prefKey = NOTIF_EMAIL_KIND[n.type];
+    if (!prefKey || prefs[prefKey] === false) continue;
+    const profile = profiles.get(n.to);
+    const to = (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
+    if (!to) continue;
+    const taskTitle = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task)?.title || 'a task' : 'a task';
+    const url = `${base}/`;
+    MAILER.sendNotif({
+      to,
+      workspace: wsName,
+      by: profile && profiles.get(n.by)?.name ? profiles.get(n.by).name : 'Un membre',
+      task: taskTitle,
+      snippet: n.snippet || '',
+      kind: n.type,
+      url,
+    }).catch(err => console.warn(`notif email ${n.id} → ${to}: ${err.message}`));
+  }
+}
+
+function docForClient(doc, ws, membership) {  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
   syncProfiles(out, ws.id);
   // P4-a: with the roster rebuilt, drop notifications addressed to removed members.
@@ -2115,9 +2150,18 @@ async function handleApi(req, res, url) {
          binary. Strict same-PUT diff only — no broader orphan sweep. */
       const storedFileIds = new Set((Array.isArray(storedDoc?.data?.files) ? storedDoc.data.files : []).map(f => f?.id).filter(Boolean));
       const keptFileIds = new Set((Array.isArray(next?.data?.files) ? next.data.files : []).map(f => f?.id).filter(Boolean));
+      /* P4-f: notifications that arrived with this PUT are candidates for a
+         notification email. Diffed against the stored doc so each row emails
+         exactly once. Collected now, sent after the commit — the response
+         must never wait on SMTP. */
+      const storedNotifIds = new Set((Array.isArray(storedDoc?.data?.notifs) ? storedDoc.data.notifs : []).map(n => n?.id).filter(Boolean));
+      const newNotifs = (Array.isArray(next?.data?.notifs) ? next.data.notifs : []).filter(n => n?.id && !storedNotifIds.has(n.id));
       const t = now();
       db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
       db.exec('commit');
+      /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
+         server delays nothing: errors logged, response already flushed. */
+      if (MAILER.enabled && newNotifs.length) queueNotifEmails(row, next, newNotifs, req);
       /* After the commit succeeds: missing file at unlink time is success
          (idempotent); unlink errors are logged and swallowed — the doc write
          is already committed and must not be failed by a filesystem hiccup. */

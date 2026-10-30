@@ -388,6 +388,92 @@ class SmtpSession {
   }
 }
 
+/* P4-f: the notification email — shorter than the invite, same layout bones.
+   Types map to one sentence each; the body links straight to the task. */
+function buildNotifMessage(config, msg) {
+  const to = bareAddress(msg.to);
+  if (!addressOk(to)) throw new Error('Notification email address is invalid');
+
+  const workspace = text(msg.workspace) || 'Projects Studio';
+  const actor = text(msg.by) || 'Someone';
+  const taskTitle = text(msg.task) || 'a task';
+  const snippet = text(msg.snippet);
+  const url = text(msg.url);
+
+  const verbs = {
+    mention: 'mentioned you in',
+    assign: 'assigned you to',
+    comment: 'commented on',
+    update: 'updated',
+  };
+  const verb = verbs[msg.kind] || 'updated';
+
+  const subject = `${actor} ${verb} ${taskTitle}`;
+  const textBody = [
+    'Hi,',
+    '',
+    `${actor} ${verb} "${taskTitle}" on ${workspace}.`,
+    ...(snippet ? ['', `“${snippet}”`] : []),
+    '',
+    'Open the task:',
+    url,
+    '',
+    "You receive this because of your notification settings on Projects Studio. If you weren't expecting it, you can ignore this email.",
+  ].join('\r\n');
+
+  const htmlBody = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f6f5f2;color:#26241f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f2;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
+        <tr><td>
+          <p style="margin:0 0 14px;font-size:16px;line-height:1.55"><strong>${escapeHtml(actor)}</strong> ${escapeHtml(verb)} <strong>${escapeHtml(taskTitle)}</strong> on ${escapeHtml(workspace)}.</p>
+          ${snippet ? `<p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:#6b665c;border-left:3px solid #e7e3da;padding-left:12px">“${escapeHtml(snippet)}”</p>` : ''}
+          <p style="margin:24px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:#26241f;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">Open the task</a></p>
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const boundary = `projects_${crypto.randomBytes(12).toString('hex')}`;
+  const headers = [
+    `From: ${formatAddress(config.fromName || workspace, config.from)}`,
+    `To: <${to}>`,
+    ...(config.replyTo ? [`Reply-To: <${config.replyTo}>`] : []),
+    `Subject: ${encodeWord(subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <${crypto.randomUUID()}@${domainOf(config.from)}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    'Auto-Submitted: auto-generated',
+    'X-Mailer: Projects Studio',
+  ];
+
+  const body = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(textBody),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(htmlBody),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+
+  return {
+    to,
+    data: [...headers, '', body].join('\r\n') + '\r\n',
+  };
+}
+
 function buildInviteMessage(config, invite) {
   const to = bareAddress(invite.to);
   if (!addressOk(to)) throw new Error('Invite email address is invalid');
@@ -498,6 +584,16 @@ export function createMailer(env = process.env) {
       const session = new SmtpSession(config);
       try {
         await session.send(buildInviteMessage(config, invite));
+      } finally {
+        session.destroy();
+      }
+    },
+    /* P4-f: one notification row = one short email. Fire-and-forget from the
+       caller — failures are logged, never surfaced to the client. */
+    async sendNotif(msg) {
+      const session = new SmtpSession(config);
+      try {
+        await session.send(buildNotifMessage(config, msg));
       } finally {
         session.destroy();
       }
