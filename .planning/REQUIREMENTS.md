@@ -38,7 +38,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 
 ### Email Deep Links & Creator Watching (LINK)
 
-- [ ] **LINK-01**: Every notification email links directly to the task
+- [x] **LINK-01**: Every notification email links directly to the task
   (`/w/:slug/task/:key`), not the app root; URLs built outside a request (scheduler ticks)
   use APP_URL with a boot-time guard/warning, matching the existing invite-email guard
 - [ ] **LINK-02**: A logged-out click on a deep link lands on the sign-in page and returns to
@@ -100,7 +100,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 
 | REQ | Phase | Status |
 |-----|-------|--------|
-| LINK-01 | Phase 23 | Pending |
+| LINK-01 | Phase 23 | Complete |
 | LINK-02 | Phase 23 | Pending |
 | LINK-03 | Phase 23 | Pending |
 | LINK-04 | Phase 23 | Pending |
