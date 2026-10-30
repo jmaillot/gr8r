@@ -243,7 +243,18 @@ async function seedLegacyLocale() {
     if (user?.locale && user.locale !== getLocale()) await primeLocale(user.locale);
     if (!user) {
       // The server is authoritative: no session means the app is not usable yet.
+      // LINK-02 (D-04): a logged-out deep link must not lose its path at the
+      // login screen. When the URL is a deep link (restFromPath non-empty, so
+      // not a bare auth route), rewrite the document URL to /login?next=<path>
+      // BEFORE render — mirroring the server file-route 302 shape so both carry
+      // paths converge in finishLogin's single path-only validator. The value
+      // is built ONLY from location.pathname (never a client-supplied next),
+      // and the bare /login entry is untouched. The validator in finishLogin
+      // (src/actions/actions.js) stays the single source of truth.
       S.ui.wantedSlug = slugFromPath || null;
+      if (restFromPath) {
+        history.replaceState(null, '', `/login?next=${encodeURIComponent(location.pathname)}`);
+      }
       S.ui.auth = authRoutes.includes(h) ? h : 'login';
       render();
       return;
