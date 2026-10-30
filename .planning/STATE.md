@@ -5,16 +5,16 @@ milestone_name: Reliability & Rotation
 current_phase: 23
 current_phase_name: Email Deep Links & Creator Watching
 status: executing
-stopped_at: Completed 23-01-PLAN.md
-last_updated: "2026-10-30T14:01:58.668Z"
+stopped_at: Completed 23-03-PLAN.md
+last_updated: "2026-10-30T14:07:54.446Z"
 last_activity: 2026-10-30
 last_activity_desc: Phase 23 execution started
-state_head: 03796510c160d8eaa5e1c6cdaf04043922b3af47
+state_head: bf9806600c8f5619d3c73686f6f226feba7eef72
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 23 (Email Deep Links & Creator Watching) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-10-30 — Phase 23 execution started
 
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 - Dedup keys persist in SQLite (never in memory), written transactionally BEFORE the notification
 - Version-aware boot migration filter must land before any `v2:` envelope exists
 - Per-user timezone and custom reminder offsets deferred to v1.6/v2 (workspace-shared tz at v1.5)
+- [Phase 23]: Creator watching: creator joins the computed watcher set (add-alongside P4-d/e), no backfill for legacy tasks
 
 ### Pending Todos
 
@@ -82,8 +83,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-30T14:01:58.636Z
-Stopped at: Completed 23-01-PLAN.md
+Last session: 2026-10-30T14:07:54.415Z
+Stopped at: Completed 23-03-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -91,3 +92,4 @@ Resume file: None
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 23 P01 | 17 min | 3 tasks | 10 files |
+| Phase 23 P03 | 2 min | 2 tasks | 2 files |

@@ -43,7 +43,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
   use APP_URL with a boot-time guard/warning, matching the existing invite-email guard
 - [ ] **LINK-02**: A logged-out click on a deep link lands on the sign-in page and returns to
   the exact task after sign-in (path carried through, not just the slug)
-- [ ] **LINK-03**: The task's creator is added to the watcher set at creation (dedup with the
+- [x] **LINK-03**: The task's creator is added to the watcher set at creation (dedup with the
   assignee) and receives comment/update notifications like any watcher
 - [ ] **LINK-04**: Browser back/forward buttons work across SPA views (popstate handler) —
   deep-link routing and manual navigation stay consistent
@@ -102,7 +102,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 |-----|-------|--------|
 | LINK-01 | Phase 23 | Complete |
 | LINK-02 | Phase 23 | Pending |
-| LINK-03 | Phase 23 | Pending |
+| LINK-03 | Phase 23 | Complete |
 | LINK-04 | Phase 23 | Pending |
 | AUD-01 | Phase 24 | Pending |
 | AUD-02 | Phase 24 | Pending |
