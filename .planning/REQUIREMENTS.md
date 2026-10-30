@@ -100,4 +100,19 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 
 | REQ | Phase | Status |
 |-----|-------|--------|
-| (filled by roadmap) | | |
+| LINK-01 | Phase 23 | Pending |
+| LINK-02 | Phase 23 | Pending |
+| LINK-03 | Phase 23 | Pending |
+| LINK-04 | Phase 23 | Pending |
+| AUD-01 | Phase 24 | Pending |
+| AUD-02 | Phase 24 | Pending |
+| AUD-03 | Phase 24 | Pending |
+| KEY-01 | Phase 25 | Pending |
+| KEY-02 | Phase 25 | Pending |
+| KEY-03 | Phase 26 | Pending |
+| KEY-04 | Phase 26 | Pending |
+| REM-01 | Phase 27 | Pending |
+| REM-02 | Phase 27 | Pending |
+| REM-03 | Phase 27 | Pending |
+| REM-04 | Phase 27 | Pending |
+| REM-05 | Phase 27 | Pending |
