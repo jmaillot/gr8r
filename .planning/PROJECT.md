@@ -40,12 +40,30 @@ Milestone audit: **passed** (integration: 12 seams wired, 0 orphaned). Full reco
 
 </details>
 
+## Milestone v1.5 Reliability & Rotation (current)
+
+**Goal:** the notification system becomes proactive and operationally closed — due-date
+reminders fire from a server-side pass, notification emails land on the task, and the v1.4
+operator/key-custody tech debt is paid down.
+
+**Target features:**
+- Due-date reminders: a server-side scheduled pass notifies assignees before/on due dates
+  (zero-dependency scheduler inside server.js, per-type prefs, dedup)
+- Notification email deep links: every notification email links straight to the task;
+  the task creator is added to the watcher set
+- MASTER_KEY rotation: key-version envelope, re-wrap rotation without re-enrollment,
+  DEPLOY.md key-custody runbook
+- Operator/security hardening: audit trail for operator revocations, workspace-admin
+  revocation tier, membership-surface hardening
+
+**Context:** the app has zero runtime dependencies — scheduling must stay dependency-free.
+v1.4 shipped the notification backbone P4-a…f and the operator revocation surface this
+milestone builds on. Established patterns: node:test suites, Chromium e2e EN+FR,
+i18n catalogue gates.
+
 ## Next Milestone Goals
 
-No next milestone planned yet — define scope with `/gsd-new-milestone`. Candidates carried
-from the v1.4 deferred list and the notifications backlog: due-date reminders (needs a server
-scheduler), deep links in notification emails, MASTER_KEY rotation envelope, operator audit
-trail, workspace-admin revocation tier, membership-surface hardening, router/URL popstate,
+Defined above for v1.5. Candidates still parked after that: router/URL popstate,
 recent-search leak, per-user settings isolation.
 
 ## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)

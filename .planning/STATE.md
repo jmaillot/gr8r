@@ -1,19 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: none
-milestone_name: ""
-current_plan: Not started
-status: between_milestones
-stopped_at: v1.4 milestone complete — audit passed, archived 2026-10-30
-last_updated: "2026-10-30T10:45:00.000Z"
+milestone: v1.5
+milestone_name: Reliability & Rotation
+status: planning
+last_updated: "2026-10-30T10:41:38.692Z"
+last_activity: 2026-10-30
 progress:
   total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-current_phase: none
-current_phase_name: ""
 ---
 
 # STATE.md
@@ -25,9 +22,10 @@ current_phase_name: ""
 
 ## Current Position
 
-- **Milestone:** none — v1.4 "Auth Completion" shipped and archived 2026-10-30
-- **Status:** between milestones — start the next one with `/gsd-new-milestone`
-- **Last milestone record:** `milestones/v1.4-*` (4 phases, 9 plans, audit: passed)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-10-30 — Milestone v1.5 started
 
 ## Milestone History
 
