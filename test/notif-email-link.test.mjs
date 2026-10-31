@@ -89,7 +89,7 @@ test('queueNotifEmails sources names/emails from the authority rows (memberships
 function authorityMapBuilder() {
   const m = queueSource.match(/const authority =([\s\S]*?);\n/);
   assert.ok(m, 'queueNotifEmails no longer builds an authority map');
-  return new Function('db', `return (${m[1].trim()});`);
+  return new Function('db', 'wsRow', `return (${m[1].trim()});`);
 }
 
 function bylineResolver() {
@@ -110,7 +110,7 @@ const mkAuthority = rows => new Map(rows.map(r => [r.member_id, r]));
 test('the authority map is keyed by member_id and built from the workspace-scoped query', () => {
   const prepared = [];
   const db = { prepare: sql => { prepared.push(sql); return { all: () => AUTH_ROWS }; } };
-  const authority = authorityMapBuilder()(db);
+  const authority = authorityMapBuilder()(db, { id: 'ws1' });
   assert.ok(prepared[0].includes('where m.workspace_id = ?'), 'the query must be workspace-scoped');
   assert.deepEqual([...authority.keys()], ['m_acc']);
   assert.equal(authority.get('m_acc').name, 'Alice');

@@ -700,15 +700,27 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const emailByUserId = new Map(db.prepare('select id, email from users').all().map(u => [u.id, u.email]));
   const emailByMemberEmail = new Map();
   for (const m of profiles.values()) if (m?.email && m.id) emailByMemberEmail.set(m.id, m.email);
+  /* G-23-1: the stored doc never persists account-backed member profiles (the
+     roster is authority-backed in memberships+users, rebuilt only on read via
+     syncProfiles), so the doc-profile map is empty of account members at
+     email-build time. Resolve names/emails from the authority rows first —
+     workspace-scoped so a name is only ever revealed to co-members (T-23-06)
+     — keeping the doc profiles as the fallback for doc-only members. */
+  const authority = new Map(
+    db.prepare('select m.member_id, m.user_id, u.name, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
+      .all(wsRow.id)
+      .map(r => [r.member_id, r]),
+  );
   for (const n of newNotifs) {
     if (n.by === n.to) continue; // never email the author about their own action
     const prefKey = NOTIF_EMAIL_KIND[n.type];
     if (!prefKey || prefs[prefKey] === false) continue;
     const profile = profiles.get(n.to);
-    const to = (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
+    const to = authority.get(n.to)?.email || (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;
     const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
     const taskTitle = task?.title || 'a task';
+    const by = authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
     /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
        key is resolved at email-build time (it is mutable on project move) and
        the absolute base is APP_URL unconditionally — the boot guard exits when
@@ -719,7 +731,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
     MAILER.sendNotif({
       to,
       workspace: wsName,
-      by: profile && profiles.get(n.by)?.name ? profiles.get(n.by).name : 'Un membre',
+      by,
       task: taskTitle,
       snippet: n.snippet || '',
       kind: n.type,
