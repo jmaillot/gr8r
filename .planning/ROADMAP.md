@@ -67,12 +67,12 @@ Plans:
   4. An owner can view the operator/admin action trail in the app, filtered by machine verbs, including actions against a user who has since been deleted (no cascade loss)
   5. No route in the app can edit or delete an audit row
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans executed
 
 Plans:
 - [x] 24-01-PLAN.md — Tracer: audit_log DDL + transaction-wrapped operator revoke + Wave 0 test suite (AUD-01)
 - [x] 24-02-PLAN.md — Workspace-admin revoke route + members UI + e2e lifecycle (AUD-02)
-- [ ] 24-03-PLAN.md — Tier-scoped keyset audit read endpoint + owner trail Settings section (AUD-03)
+- [x] 24-03-PLAN.md — Tier-scoped keyset audit read endpoint + owner trail Settings section (AUD-03)
 
 ### Phase 25: Keyring & Version-Aware Envelopes
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
-| 24. Operator Audit & Workspace-Admin Tier | 2/3 | In Progress|  |
+| 24. Operator Audit & Workspace-Admin Tier | 3/3 | In Progress|  |
 | 25. Keyring & Version-Aware Envelopes | 0/? | Not started | - |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 0/? | Not started | - |
 | 27. Due-Date Reminder Scheduler | 0/? | Not started | - |

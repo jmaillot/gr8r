@@ -74,7 +74,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 - [x] **AUD-02**: A workspace admin can revoke the sessions of members of their own
   workspace (below the operator tier, with the same owner-immunity and self-exclusion
   semantics), and every such action rides the same audited path
-- [ ] **AUD-03**: Owners can see the operator/admin action trail (filtered machine verbs) in
+- [x] **AUD-03**: Owners can see the operator/admin action trail (filtered machine verbs) in
   the app; audit rows survive the deletion of the target user (no cascade loss)
 
 ## Future Requirements (deferred)
@@ -106,7 +106,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | LINK-04 | Phase 23 | Complete |
 | AUD-01 | Phase 24 | Complete |
 | AUD-02 | Phase 24 | Complete |
-| AUD-03 | Phase 24 | Pending |
+| AUD-03 | Phase 24 | Complete |
 | KEY-01 | Phase 25 | Pending |
 | KEY-02 | Phase 25 | Pending |
 | KEY-03 | Phase 26 | Pending |
