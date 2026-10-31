@@ -8,6 +8,7 @@
    server.js cannot be imported by a test (it boots on load) — the static half
    reads the source as text, the house extraction pattern (error-codes.test.mjs). */
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
@@ -261,4 +262,40 @@ test('requireTotpSecret keeps its D-77/D-79 signature and single-decrypt-boundar
   const body = serverSource.slice(at, at + 300);
   assert.match(body, /function requireTotpSecret\(envelope\) \{/, 'the single-decrypt-boundary signature changed');
   assert.match(body, /decryptTotpSecret\(envelope\)/, 'requireTotpSecret must keep delegating to decryptTotpSecret');
+});
+
+/* ---------- KEY-02 (Phase 25): keyring + v2 envelope ---------- */
+
+const SUITE_KEY = 'projects-enc-suite-key';
+const sha256Hex = (m) => crypto.createHash('sha256').update(m).digest('hex');
+const idOf = (m) => sha256Hex(m).slice(0, 8); // D-K3 mirror: first 8 hex of sha256(raw material)
+const encKey = (m) => crypto.createHash('sha256').update(m).digest();
+
+/* Test-side v2 mirror (envelope mirror pattern): wraps a known secret exactly
+   as D-K4 specifies, against an explicit key material — used to plant
+   hand-built envelopes. One sha256 call yields both the AES key and the id. */
+function wrapV2(secret, material) {
+  const digest = crypto.createHash('sha256').update(material);
+  const key = digest.digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([cipher.update(String(secret), 'utf8'), cipher.final()]);
+  return `v2:${key.toString('hex').slice(0, 8)}:${iv.toString('base64')}:${cipher.getAuthTag().toString('base64')}:${ct.toString('base64')}`;
+}
+
+const enableFor = (server, email) =>
+  withDb(server.dbPath, db =>
+    db.prepare('update users set two_fa_enabled = 1, two_fa_last_step = 0 where email = ?').run(email));
+
+test('tracer: a planted v2 envelope with the current key id verifies through the real login path (SC-2)', async () => {
+  const email = 'v2-current@test.local';
+  const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+  const s = await signup(keyServer.base, { name: 'V2', email, password: GOOD });
+  assert.equal(s.status, 201);
+  plant(keyServer.dbPath, email, wrapV2(secret, SUITE_KEY));
+  enableFor(keyServer, email);
+  assert.match(wrapV2(secret, SUITE_KEY), /^v2:[0-9a-f]{8}:/, 'the envelope mirror must produce the 5-part v2 shape');
+  const { totpAt } = await import('../totp.js');
+  const res = await verifyLogin(keyServer, email, totpAt(secret, Date.now() / 1000));
+  assert.equal(res.status, 200, `v2 round-trip verify must succeed: ${JSON.stringify(res.data)}`);
 });

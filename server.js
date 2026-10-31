@@ -71,6 +71,27 @@ const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 /* D-05: the AES-256 master key material comes from the environment. Missing or
    unusable on the enable path → fail-closed 503 naming MASTER_KEY (D-06/D-58). */
 const MASTER_KEY = String(process.env.MASTER_KEY || '');
+/* D-K1/D-K2/D-K3: a two-key keyring — the current MASTER_KEY plus an optional
+   MASTER_KEY_PREVIOUS (rotation support, Phase 26). No open-ended chain: no
+   _2/_3 variables exist. The key id (D-K3) is the first 8 hex chars of ONE
+   sha256 call over the raw key material — the same call that yields the AES
+   key (raw digest bytes), so id and key can never drift apart (Pitfall 3).
+   D-K2: PREVIOUS without CURRENT fails boot loudly — never serve requests. */
+const MASTER_KEY_PREVIOUS = String(process.env.MASTER_KEY_PREVIOUS || '');
+const keyIdFor = (material) => crypto.createHash('sha256').update(material).digest('hex').slice(0, 8);
+const KEYRING = new Map();
+if (MASTER_KEY) KEYRING.set(keyIdFor(MASTER_KEY), MASTER_KEY);
+if (MASTER_KEY_PREVIOUS) {
+  if (!MASTER_KEY) {
+    throw new Error('MASTER_KEY_PREVIOUS is set but MASTER_KEY is not — configure the current key before a previous one (fail-closed, D-K2)');
+  }
+  KEYRING.set(keyIdFor(MASTER_KEY_PREVIOUS), MASTER_KEY_PREVIOUS);
+}
+/* A1 (Pitfall 2): identical key material collapses both ids — harmless for
+   decrypt, but Phase 26 rotation would re-wrap zero rows. Warn, never fail. */
+if (MASTER_KEY && MASTER_KEY_PREVIOUS && keyIdFor(MASTER_KEY) === keyIdFor(MASTER_KEY_PREVIOUS)) {
+  console.warn('TOTP encryption: MASTER_KEY_PREVIOUS hashes to the same key id as MASTER_KEY — identical key material?');
+}
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
@@ -282,15 +303,37 @@ function encryptTotpSecret(secretB32) {
 // Mirror of encryptTotpSecret — returns the plaintext secret or null when the
 // envelope is undecryptable (wrong/missing MASTER_KEY, tampered tag). Callers
 // fail closed 503 (D-06) rather than proceeding.
+// D-K4/D-K5: version dispatch. v1 resolves against the CURRENT key (no key id
+// in the v1 layout — unchanged behavior). v2 = `v2:<key-id>:<iv>:<tag>:<ct>`:
+// the id is validated strictly as [0-9a-f]{8} and resolved through the keyring;
+// every failure (malformed shape, unknown id, missing key, tampered tag) is the
+// SAME null return — no third error shape, no plaintext fallback (D-78a). The
+// catch swallows GCM auth failures exactly like v1; no try/catch flow control.
 function decryptTotpSecret(envelope) {
   if (!MASTER_KEY) return null;
   try {
-    const [v, ivB64, tagB64, ctB64] = String(envelope).split(':');
-    if (v !== 'v1' || !ivB64 || !tagB64 || !ctB64) return null;
-    const key = crypto.createHash('sha256').update(MASTER_KEY).digest();
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
-    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
-    return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+    const parts = String(envelope).split(':');
+    if (parts[0] === 'v1') {
+      const [, ivB64, tagB64, ctB64] = parts;
+      if (!ivB64 || !tagB64 || !ctB64) return null;
+      const key = crypto.createHash('sha256').update(MASTER_KEY).digest();
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+      decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+      return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+    }
+    if (parts[0] === 'v2') {
+      const [, kid, ivB64, tagB64, ctB64] = parts;
+      if (parts.length !== 5) return null;
+      if (!/^[0-9a-f]{8}$/.test(kid || '')) return null; // D-K5 strictness
+      if (!ivB64 || !tagB64 || !ctB64) return null;
+      const material = KEYRING.get(kid);
+      if (!material) return null; // unknown key id → fail closed, same as tampered
+      const key = crypto.createHash('sha256').update(material).digest();
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+      decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+      return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+    }
+    return null;
   } catch {
     return null;
   }
