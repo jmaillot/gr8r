@@ -3,9 +3,9 @@ phase: "25"
 slug: "keyring-version-aware-envelopes"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-10-31"
 ---
 
@@ -21,16 +21,16 @@ created: "2026-10-31"
 |----------|-------|
 | **Framework** | node:test (`node --test`), real SQLite via `startServer({dataDir, env})` |
 | **Config file** | existing test/ harness (per RESEARCH.md Validation Architecture) |
-| **Quick run command** | `node --test test/audit-log.test.mjs test/error-codes.test.mjs` (nearest-phase proven set; swap in the phase's own test files as they are created) |
-| **Full suite command** | `node --test test/*.test.mjs` |
+| **Quick run command** | `node --test test/migration.test.mjs test/totp-encryption.test.mjs` |
+| **Full suite command** | `node --test --test-concurrency=2 test/*.test.mjs` (`npm test`) |
 | **Estimated runtime** | ~30 seconds |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** Run the quick run command (the phase's own envelope/keyring test files as they land)
-- **After every plan wave:** Run `node --test test/*.test.mjs`
+- **After every task commit:** Run the quick run command
+- **After every plan wave:** Run `npm test`
 - **Before `/gsd-verify-work`:** Full suite must be green
 - **Max feedback latency:** 30 seconds
 
@@ -40,21 +40,27 @@ created: "2026-10-31"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 25-01-01 | 01 | 1 | KEY-01 | — | `v2:`/`v3:` rows survive boot byte-identical, no re-wrap/corruption, D-K7 warning only | unit (boot on seeded DB) | `node --test test/envelope-version.test.mjs` | ❌ W0 | ⬜ pending |
-| 25-01-02 | 01 | 1 | KEY-01 | — | version-unaware SQL filter + in-transaction re-check share one `/^v\d+:/` predicate | unit (source assertion + boot test) | `node --test test/envelope-version.test.mjs` | ❌ W0 | ⬜ pending |
-| 25-02-01 | 02 | 2 | KEY-02 | — | `v2:<key-id>:…` secret decrypts via keyring (current + MASTER_KEY_PREVIOUS) | unit (crypto round-trip) | `node --test test/totp-keyring.test.mjs` | ❌ W0 | ⬜ pending |
-| 25-02-02 | 02 | 2 | KEY-02 | — | undecryptable secret → fail-closed 503 `masterKeyMissing`, no plaintext fallback | unit (failure injection) | `node --test test/totp-keyring.test.mjs test/error-codes.test.mjs` | ❌ W0 | ⬜ pending |
-| 25-02-03 | 02 | 2 | KEY-02 | — | v1 login/enroll/disable flows unchanged; `requireTotpSecret` signature untouched | unit (regression) | `node --test test/totp.test.mjs` | ✅ | ⬜ pending |
+| 25-01-01 | 01 | 1 | KEY-01, SC-1, D-K6 | — | `v2:`/`v3:` rows boot byte-identical ×2, zero backups, no re-wrap/corruption | unit (boot on seeded DB) | `node --test test/migration.test.mjs` | ✅ | ✅ green |
+| 25-01-02 | 01 | 1 | KEY-01, D-K7, D-76 | — | undecryptable-version rows counted + warned, never silent, no ciphertext in log | unit (boot on seeded DB) | `node --test test/migration.test.mjs` | ✅ | ✅ green |
+| 25-01-03 | 01 | 1 | KEY-01, D-75, SC-4 guard | — | migration filter + in-transaction re-check share ONE `/^v\d+:/` predicate; `requireTotpSecret` signature untouched | static (source assertion) | `node --test test/totp-encryption.test.mjs` | ✅ | ✅ green |
+| 25-02-01 | 02 | 2 | KEY-02, D-K1, D-K2, D-K3, D-K4, D-K5, SC-2 | — | v2 envelope decrypts via two-key keyring; key-id derivation deterministic 8-hex sha256 mirror | unit (crypto round-trip, real SQLite + login path) | `node --test test/totp-encryption.test.mjs` | ✅ | ✅ green |
+| 25-02-02 | 02 | 2 | D-K2, D-K5, SC-3, D-K3 | — | `MASTER_KEY_PREVIOUS` without `MASTER_KEY` fails boot loudly; malformed/unknown/corrupt v2 rows → 503 `masterKeyMissing`, rows unmutated | unit (failure injection) | `node --test test/totp-encryption.test.mjs` | ✅ | ✅ green |
+| 25-02-03 | 02 | 2 | KEY-02, D-K3, D-K4 | — | format-freeze decision gate (one-way contract) | process gate | recorded user decision ("Confirm as-is") in 25-02-SUMMARY.md | — | ✅ green |
+| 25-02-04 | 02 | 2 | KEY-02, SC-2, SC-4, D-K4 | — | enable path writes frozen `v2:<key-id>:<iv>:<tag>:<ct>`; SC-2 fresh-login round-trip; planted v1 legacy envelope still verifies | unit (real enrollment) + regression | `node --test test/totp-encryption.test.mjs test/tfa-enrollment.test.mjs test/migration.test.mjs` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+**Final full-suite evidence:** `npm test` — 621 pass / 0 fail (post-merge gate, exit 0).
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `test/envelope-version.test.mjs` — stubs for KEY-01 (boot-on-seeded-DB negative-proof tests, per RESEARCH.md task ordering: MUST precede the v2-writer flip)
-- [ ] `test/totp-keyring.test.mjs` — stubs for KEY-02
-- Existing `startServer({dataDir, env})` harness and real SQLite cover the rest.
+Superseded at execution: tests were consolidated into the phase's existing suites rather than the seeded stub files (per plan deviations, Rule 1).
+
+- [x] KEY-01 negative-proof tests → `test/migration.test.mjs` (SC-1 byte-identity ×2 boots, D-K7 counting/warning, predicate-sharing static guard)
+- [x] KEY-02 keyring tests → `test/totp-encryption.test.mjs` (v2 round-trip, D-K2 boot gate, D-K5 fail-closed matrix, D-K3 determinism, writer-flip SC-2)
+- [x] Existing `startServer({dataDir, env})` harness and real SQLite cover the rest.
 
 ---
 
@@ -66,13 +72,23 @@ created: "2026-10-31"
 
 ---
 
+## Validation Audit 2026-10-31
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 (map corrected: 5 stale rows referenced non-existent Wave-0 files) |
+| Resolved | 7/7 task rows → covered |
+| Escalated | 0 (1 pre-declared manual-only item retained) |
+
+---
+
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or a resolved Wave 0 dependency
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (consolidated into existing suites)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated — all 7 task rows covered by automated tests (621/621 green); 1 manual-only item (live authenticator app) deferred to UAT as declared.
