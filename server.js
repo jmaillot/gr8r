@@ -1136,6 +1136,19 @@ function migrateTenancy() {
 }
 
 /*
+ * D-K6: generic envelope-version recognition — ANY `v<digits>:` prefix marks a
+ * stored value as an envelope, never plaintext. This is a pattern, not a
+ * known-versions list, so future envelope versions are never re-wrapped as
+ * plaintext by this migration (T-25-01). ONE predicate, shared by the
+ * migration's candidate path and the in-transaction re-check — the D-75
+ * defense-in-depth layers must not drift apart.
+ */
+const ENVELOPE_VERSION_RE = /^v\d+:/;
+function isEnvelopeVersion(value) {
+  return ENVELOPE_VERSION_RE.test(String(value || '').trim());
+}
+
+/*
  * D-82/D-83: boot-time migration of legacy plaintext `users.two_fa_secret`
  * rows into the `v1:` AES-256-GCM envelope (D-05), as a sibling of
  * migrateTenancy(). Ordering is load-bearing (research Pitfall 2):
@@ -1146,10 +1159,15 @@ function migrateTenancy() {
  */
 function migrateTotpEncryption() {
   // D-83: trigger-gated no-op — zero eligible rows means no backup file and no writes.
+  // KEY-01/D-K6: the SQL exclusion is deliberately broad — `v<char>:` requires a
+  // colon, which bare base32 plaintext never contains — so envelope rows of any
+  // version are excluded and zero-envelope DBs still yield zero eligible rows.
+  // The authoritative version test is the shared JS predicate, applied per row
+  // in the transaction below.
   const pendingRows = () =>
     db
       .prepare(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v1:%'",
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'",
       )
       .all();
   let rows = pendingRows();
@@ -1194,7 +1212,10 @@ function migrateTotpEncryption() {
         skippedBlank++;
         continue;
       }
-      if (value.startsWith('v1:')) {
+      // D-75 re-check — the SAME shared predicate as the candidate filter
+      // (anti-pattern: filter and re-check drifting apart). Any envelope
+      // version, not just v1:, is recognized and never re-wrapped.
+      if (isEnvelopeVersion(value)) {
         alreadyEncrypted++;
         continue;
       }

@@ -468,6 +468,24 @@ function encStored(dbPath, id = 'u_alice') {
   return withDb(dbPath, db => db.prepare('select two_fa_secret from users where id = ?').get(id).two_fa_secret);
 }
 
+/* Seed several secrets at once — plantSecret's ensureColumn guard would fail on
+   a second call against the same database (duplicate alter table). */
+function plantSecrets(dbPath, entries) {
+  withDb(dbPath, db => {
+    db.exec('alter table users add column two_fa_enabled integer not null default 0');
+    db.exec('alter table users add column two_fa_last_step integer not null default 0');
+    db.exec('alter table users add column two_fa_secret text');
+    for (const [id, value] of entries) {
+      db.prepare('update users set two_fa_secret = ? where id = ?').run(value, id);
+    }
+  });
+}
+
+/* Syntactically valid future-version envelope shapes (5-part, D-K4 layout).
+   They are never decrypted in these tests — only compared byte-for-byte. */
+const V2_SEED = 'v2:deadbeef:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCC';
+const V3_SEED = 'v3:cafef00d:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCC';
+
 test('ENC-01: a legacy plaintext TOTP secret boots into a v1: envelope with a pre-migration backup, and a second boot is a byte-identical no-op', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-enc-'));
   createLegacyDb(dir);
@@ -505,6 +523,35 @@ test('ENC-01: a missing MASTER_KEY defers the migration — rows untouched, no b
   const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
   assert.equal(signedIn.status, 200, 'boot succeeds normally and non-2FA login works');
   await server.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/* KEY-01 (Phase 25, SC-1): a DB holding v2:/v3: envelope rows boots unharmed.
+   Negative proof — landed BEFORE any v2-writing code exists — that the D-K6
+   version-aware filter never re-wraps, mutates, or backs-up future-version
+   envelope rows. */
+test('KEY-01 SC-1: v2:/v3: envelope rows boot byte-identical — never re-wrapped, no backup, across two boots', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-keyring-'));
+  createLegacyDb(dir);
+  const dbPath = path.join(dir, 'projects.db');
+  plantSecrets(dbPath, [
+    ['u_alice', V2_SEED],
+    ['u_bob', V3_SEED],
+  ]);
+
+  const first = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  assert.equal(encStored(dbPath, 'u_alice'), V2_SEED, 'the v2: row is byte-identical after the first boot');
+  assert.equal(encStored(dbPath, 'u_bob'), V3_SEED, 'the v3: row is byte-identical after the first boot');
+  assert.equal(envBackups(dir).length, 0, 'an envelope-only DB creates zero projects-preenvelope-*.db backups');
+  assert.doesNotMatch(first.output(), /migrated to the v1: envelope/, 'no re-wrap happened on boot');
+  assert.doesNotMatch(first.output(), /non-base32/, 'v2:/v3: rows are not treated as plaintext garbage');
+  await first.stop();
+
+  const second = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  assert.equal(encStored(dbPath, 'u_alice'), V2_SEED, 'the v2: row survives the second boot byte-identical');
+  assert.equal(encStored(dbPath, 'u_bob'), V3_SEED, 'the v3: row survives the second boot byte-identical');
+  assert.equal(envBackups(dir).length, 0, 'no backup file appears on the second boot either');
+  await second.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
