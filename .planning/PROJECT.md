@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-10-30 after v1.4 milestone completion*
+*Last updated: 2026-10-31 after Phase 25*
 
 ## What it is
 
@@ -286,6 +286,14 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 - ✓ Recovery-code regeneration: burn-and-replace after initial enrollment, with throttling
   and a fully verified lifecycle — Phase 20 (REGEN-01, REGEN-02; UAT 2/2 passed,
   G-20-1 closed via 20-03 and re-verified)
+- ✓ Keyring & version-aware envelopes: the boot migration's plaintext-re-wrap filter is
+  version-aware (generic `/^v\d+:/` predicate — any version-tagged envelope survives boot
+  byte-identical), TOTP secrets write the frozen `v2:<key-id>:<iv>:<tag>:<ct>` envelope on
+  enrollment, and decrypt dispatches by key id through a two-key keyring (`MASTER_KEY` +
+  optional `MASTER_KEY_PREVIOUS`) with loud D-K2 boot validation and fail-closed 503 on
+  unknown/tampered envelopes — the prerequisite that makes rotation (Phase 26) possible —
+  Phase 25 (KEY-01, KEY-02; verification 9/9, 621/621 tests, security audit 6/6 threats
+  closed, format freeze decision D-K3/D-K4 approved)
 - ✓ Disable-2FA verified against the full contract: strict password + live-TOTP gate only
   (a recovery code can never disable 2FA), one-transaction teardown of `two_fa_*` columns
   + recovery codes + pending login challenges, explicit revoke-others session policy with

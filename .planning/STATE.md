@@ -24,7 +24,7 @@ progress:
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** Phase 23 — Email Deep Links & Creator Watching
+- **Current focus:** Phase 24 — Operator Audit & Workspace-Admin Tier
 
 ## Current Position
 
