@@ -545,12 +545,55 @@ test('KEY-01 SC-1: v2:/v3: envelope rows boot byte-identical — never re-wrappe
   assert.equal(envBackups(dir).length, 0, 'an envelope-only DB creates zero projects-preenvelope-*.db backups');
   assert.doesNotMatch(first.output(), /migrated to the v1: envelope/, 'no re-wrap happened on boot');
   assert.doesNotMatch(first.output(), /non-base32/, 'v2:/v3: rows are not treated as plaintext garbage');
+  assert.match(
+    first.output(),
+    /TOTP encryption: 2 row\(s\) carry unrecognized secret envelope version\(s\) \(v2, v3\) — left as-is; decryption attempts fail closed \(D-K7\)\./,
+    'the D-K7 warning counts unrecognized versions in D-73 tone',
+  );
+  assert.doesNotMatch(first.output(), /deadbeef|cafef00d:AAAA|BBBBBBBBBBBBBBBBBBBBBB:CCCC/, 'no envelope ciphertext or key material in the warn line');
   await first.stop();
 
   const second = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
   assert.equal(encStored(dbPath, 'u_alice'), V2_SEED, 'the v2: row survives the second boot byte-identical');
   assert.equal(encStored(dbPath, 'u_bob'), V3_SEED, 'the v3: row survives the second boot byte-identical');
   assert.equal(envBackups(dir).length, 0, 'no backup file appears on the second boot either');
+  await second.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/* KEY-01 (Phase 25, D-K7): unrecognized versions are counted and warned
+   distinctly from migrated/already-encrypted, in the D-76 summary line. */
+test('KEY-01 D-K7: mixed DB — plaintext still migrates while v2: rows are counted, warned, and left as-is', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-keyring-warn-'));
+  createLegacyDb(dir);
+  const dbPath = path.join(dir, 'projects.db');
+  plantSecrets(dbPath, [
+    ['u_alice', VALID_B32],
+    ['u_bob', V2_SEED],
+  ]);
+
+  const first = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  assert.match(first.output(), /TOTP encryption: 1 row\(s\) migrated to the v1: envelope/, 'the plaintext row still migrates');
+  assert.match(
+    first.output(),
+    /TOTP encryption: 1 row\(s\) migrated to the v1: envelope, 0 blank skipped, 0 non-base32 skipped, 0 already encrypted, 1 unrecognized version\(s\) left as-is\./,
+    'the D-76 summary counts unrecognized versions distinctly from migrated',
+  );
+  assert.match(
+    first.output(),
+    /TOTP encryption: 1 row\(s\) carry unrecognized secret envelope version\(s\) \(v2\)/,
+    'the D-K7 warn line appears for the v2: row',
+  );
+  assert.equal(encStored(dbPath, 'u_bob'), V2_SEED, 'the v2: row is left as-is');
+  assert.match(encStored(dbPath, 'u_alice'), /^v1:/, 'the plaintext row was wrapped normally');
+  await first.stop();
+
+  const second = await startServer({ dataDir: dir, env: { MASTER_KEY: ENC_MASTER } });
+  assert.match(
+    second.output(),
+    /TOTP encryption: 1 row\(s\) carry unrecognized secret envelope version\(s\) \(v2\)/,
+    'the second boot re-reports the unrecognized row — never silent (D-K7)',
+  );
   await second.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -605,7 +648,11 @@ test('ENC-01: edge rows — blank and non-base32 values are skipped, never wrapp
   assert.match(server.output(), /user u_garbage has a non-base32 two_fa_secret/, 'the garbage row is logged as skipped');
   assert.equal(encStored(dbPath, 'u_stale'), staleEnvelope, 'an existing v1: row is never re-encrypted');
   assert.match(encStored(dbPath, 'u_alice'), /^v1:[^:]+:[^:]+:[^:]+$/, 'the valid base32 value is encrypted');
-  assert.match(server.output(), /TOTP encryption: 1 row\(s\) migrated to the v1: envelope, 0 blank skipped, 1 non-base32 skipped, 0 already encrypted\./, 'blank and v1: rows never reach the transaction — the D-83 trigger excludes them (D-76 counts stay 0)');
+  assert.match(
+    server.output(),
+    /TOTP encryption: 1 row\(s\) migrated to the v1: envelope, 0 blank skipped, 1 non-base32 skipped, 0 already encrypted, 1 unrecognized version\(s\) left as-is\./,
+    'blank and v1: rows never reach the transaction — the D-83 trigger excludes them; the undecryptable stale v1: envelope is counted unrecognized (D-76/D-K7)',
+  );
   await server.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });

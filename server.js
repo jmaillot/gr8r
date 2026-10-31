@@ -1158,6 +1158,34 @@ function isEnvelopeVersion(value) {
  * completed migration is a byte-identical no-op.
  */
 function migrateTotpEncryption() {
+  // D-K7: unrecognized-version envelope rows are counted and warned about —
+  // skip-silently is never an option. Decryptability is the authoritative
+  // test (research A2): an envelope this server cannot decrypt today counts
+  // as unrecognized, so rows stop warning automatically when a version gains
+  // decrypt support. Only MASTER_KEY-bearing boots scan — without a key the
+  // D-73 defer governs and every decrypt fails closed anyway. Warn lines
+  // quote only version tags + counts, never key material or ciphertext.
+  let unrecognizedVersion = 0;
+  const unrecognizedTags = new Set();
+  if (MASTER_KEY) {
+    const envelopeCandidates = db
+      .prepare(
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
+      )
+      .all();
+    for (const row of envelopeCandidates) {
+      const value = String(row.two_fa_secret || '').trim();
+      if (!isEnvelopeVersion(value) || decryptTotpSecret(value) !== null) continue;
+      unrecognizedVersion++;
+      unrecognizedTags.add(value.split(':', 1)[0]);
+    }
+  }
+  if (unrecognizedVersion > 0) {
+    console.warn(
+      `  TOTP encryption: ${unrecognizedVersion} row(s) carry unrecognized secret envelope version(s) (${[...unrecognizedTags].join(', ')}) — left as-is; decryption attempts fail closed (D-K7).`,
+    );
+  }
+
   // D-83: trigger-gated no-op — zero eligible rows means no backup file and no writes.
   // KEY-01/D-K6: the SQL exclusion is deliberately broad — `v<char>:` requires a
   // colon, which bare base32 plaintext never contains — so envelope rows of any
@@ -1233,9 +1261,10 @@ function migrateTotpEncryption() {
       migrated++;
     }
   });
-  // D-76: outcomes on console only — no admin UI surface.
+  // D-76: outcomes on console only — no admin UI surface. The unrecognized
+  // count (D-K7) is part of the same summary so every outcome is represented.
   console.log(
-    `  TOTP encryption: ${migrated} row(s) migrated to the v1: envelope, ${skippedBlank} blank skipped, ${skippedGarbage} non-base32 skipped, ${alreadyEncrypted} already encrypted.`,
+    `  TOTP encryption: ${migrated} row(s) migrated to the v1: envelope, ${skippedBlank} blank skipped, ${skippedGarbage} non-base32 skipped, ${alreadyEncrypted} already encrypted, ${unrecognizedVersion} unrecognized version(s) left as-is.`,
   );
 }
 
