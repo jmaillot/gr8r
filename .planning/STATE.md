@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 23
 current_phase_name: Email Deep Links & Creator Watching
-status: verifying
-stopped_at: Completed 23-04-PLAN.md
-last_updated: "2026-10-30T14:59:57.364Z"
-last_activity: 2026-10-30
-last_activity_desc: Phase 23 execution started
-state_head: 36c08273956de7fe238102e0c03229b6d5a797e9
+status: executing
+stopped_at: Completed 23-05-PLAN.md
+last_updated: "2026-10-31T13:05:00.000Z"
+last_activity: 2026-10-31
+last_activity_desc: Gap-closure plan 23-05 executed (G-23-1 email byline authority resolution)
+state_head: 5341d4554054383f2ea639021c4e784484c42886
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
   percent: 0
 ---
 
@@ -29,9 +29,9 @@ progress:
 ## Current Position
 
 Phase: 23 (Email Deep Links & Creator Watching) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-10-30 — 23-02 (logged-out ?next= carry) executed out of order after 23-03
+Plan: 1 of 6 (23-05 gap closure complete; 23-04 outstanding)
+Status: Executing Phase 23
+Last activity: 2026-10-31 — 23-05 executed (G-23-1 closed)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -68,7 +68,8 @@ Progress: [░░░░░░░░░░] 0%
 - Per-user timezone and custom reminder offsets deferred to v1.6/v2 (workspace-shared tz at v1.5)
 - [Phase 23]: Creator watching: creator joins the computed watcher set (add-alongside P4-d/e), no backfill for legacy tasks
 - [Phase 23]: Logged-out carry builds ?next= from location.pathname only; finishLogin's four-clause path-only validator stays the single source of truth (pinned by test/next-carry.test.mjs)
-- [Phase 23]: urlForView maps every navigable view to its own path (plan 23-04): per-view URLs are what make popstate back/forward restore views; drawer open/close push task/underlying URLs through go()
+- [Phase 23]: urlForView maps every navigable view to its own path (plan 23-04): per-view URLs are what make popstate back/forward resolve views; drawer open/close push task/underlying URLs through go()
+- [Phase 23]: G-23-1 closed (plan 23-05): queueNotifEmails resolves byline/recipient from memberships⋈users authority rows (workspace-scoped), doc profiles as fallback, 'Un membre' last resort
 
 ### Pending Todos
 
@@ -85,8 +86,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-30T14:59:57.330Z
-Stopped at: Completed 23-04-PLAN.md
+Last session: 2026-10-31T13:05:00.000Z
+Stopped at: Completed 23-05-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -97,3 +98,4 @@ Resume file: None
 | Phase 23 P03 | 2 min | 2 tasks | 2 files |
 | Phase 23 P02 | 25 min | 2 tasks | 3 files |
 | Phase 23 P04 | 40 min | 2 tasks | 4 files |
+| Phase 23 P05 | 15 min | 2 tasks | 2 files |
