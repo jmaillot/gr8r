@@ -164,7 +164,7 @@ test('the HTTP verbs and the API paths are byte-identical', () => {
     verbs.every(v => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(v)),
     'a verb changed',
   );
-  assert.equal(verbs.length, 33, 'a call site moved'); // 32: patchMe (08-02) + the three session endpoints (14-02) + changePassword (15-02) + the five tfa methods (16-03, tfaLogin 17-02, tfaRecover 20-02) + the two operator endpoints (22-02) + revokeMemberSessions (24-02)
+  assert.equal(verbs.length, 34, 'a call site moved'); // 32: patchMe (08-02) + the three session endpoints (14-02) + changePassword (15-02) + the five tfa methods (16-03, tfaLogin 17-02, tfaRecover 20-02) + the two operator endpoints (22-02) + revokeMemberSessions (24-02) + auditLog (24-03)
 });
 
 test('the icon names and the brand path are untouched', () => {
@@ -215,7 +215,7 @@ test('the allow-list carries no entry of the nine files of the wave and stays so
 
 test('the catalogue holds after the billing removal, the D-10/D-12/D-16 additions, the phase 9 error codes and the phase 9 activity keys — 1551 keys (+ err.fileNotFound, phase 12 plan 2; + err.uploadTooLarge, phase 12 plan 1; + toast.localeSaveFailed, phase 8; + 43 err.<code> keys, phase 9; + 4 act.verb/act.extra keys, phase 9 plan 3; + act.download, phase 12 plan 8; + toast.dirUp/dirDown, act.deleteProjectTaskCount, act.removeAccess.losesAccess/unassigns, page.files.browse, deferred-07 i18n literals; + 10 dev.<device> keys and err.signedOutElsewhere, phase 14 plan 2; + err.wrongCurrentPassword/err.passwordRequired, phase 15 plan 1; + toast.passwordUpdatedAll, phase 15 plan 2; + err.noPendingEnrollment/err.codeRejected/err.masterKeyMissing, phase 16 plan 2; + err.challengeExpired/err.invalidTfaCode, phase 17 plan 1; − err.tooManyLoginAttempts, phase 17 plan 1 — D-13 generic copy; − the generic session-expired key, phase 14 plan 5 — orphaned by the central teardown retirement; + page.auth.tfaTitle/tfaSubtitle/tfaCodeLabel/tfaVerify + auth.recoveryUsed/recoveryUsedLast, phase 17 plan 2; + err.tfaNotEnabled, phase 20 plan 1; + the six settings.tfa.regen* keys, phase 20 plan 2; + settings.tfa.regenShort, phase 20 plan 3; + err.operatorOnly/err.ownerImmune, phase 22 plan 1; + the ten settings.operator.* keys, phase 22 plan 2; + err.taskNotFound, phase 23 plan 1; + members.toastRevoked, phase 24 plan 2), none under the reserved namespace', () => {
   const keys = Object.keys(en);
-  assert.equal(keys.length, 1599, 'the catalogue size moved'); // +1: members.toastRevoked (24-02)
+  assert.equal(keys.length, 1610, 'the catalogue size moved'); // +1: members.toastRevoked (24-02); +10 settings.audit.* keys (24-03)
   assert.ok(
     keys.every(k => !k.startsWith('contract.') || k === 'contract.englishOnly'),
     'a phase key sits under contract.*',

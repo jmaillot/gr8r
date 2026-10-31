@@ -304,8 +304,8 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 450, 'data-a sites'); // −2 sidebar hard-hidden (quick 261029-moz), +1 pformTeamToggle (P3 multi-team), +3 member revoke stage (24-02)
-  assert.equal(v, 76, 'data-v sites'); // +1: modal teams toggle button (P3)
+  assert.equal(a, 452, 'data-a sites'); // −2 sidebar hard-hidden (quick 261029-moz), +1 pformTeamToggle (P3 multi-team), +3 member revoke stage (24-02), +2 audit trail chips/load-more (24-03)
+  assert.equal(v, 77, 'data-v sites'); // +1: modal teams toggle button (P3), +1 audit verb chip data-v (24-03)
   assert.equal(r, 57, 'data-r sites');
 
 });
