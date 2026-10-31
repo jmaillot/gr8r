@@ -418,31 +418,20 @@ import { startServer } from './helpers/...'; // reuse existing harness
 | A2 | D-K7 warning counts by version tag per row (aggregate count acceptable) | Pattern 3 | Minor log-format drift vs D-73 tone |
 | A3 | Boot failure mechanism for D-K2: `throw` during boot init (server exits) rather than warn-and-continue | Pattern 2 | "fails loudly" satisfied either way; throw is the literal reading |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `encryptTotpSecret` start writing v2 in this phase, or stay v1 until Phase 26?**
-   - What we know: SC-2 requires a v2-written secret to verify, so a v2 writer must
-     exist by end of phase. SC-1 only requires the filter fix to precede it. Writing
-     v2 from the enable path here means new secrets immediately depend on D-K3/D-K4
-     being final (D-K3/D-K4 are marked **one-way** in CONTEXT.md reversibility).
-   - Recommendation: enable-path writes v2 in this phase (that is what makes SC-2
-     testable and the format frozen before rotation exists); planner sequences the
-     writer flip as the last task after SC-1 + round-trip tests pass.
+1. **RESOLVED — enable-path writes v2 in this phase.** Adopted verbatim by Plan 25-02
+   Task 3 (writer flip sequenced after the SC-1 proof and the D-K3/D-K4
+   checkpoint:decision freeze in 25-02).
 
-2. **v1 rows decrypt with the *current* key only — even when the current key doesn't match?**
-   - What we know: v1 has no key id; by D-K4 it stays resolved against `MASTER_KEY`
-     (current). If an operator rotates by hand without Phase 26 (new MASTER_KEY, old
-     rows v1), v1 rows fail closed — same as today. No change needed; document in the
-     plan that v1 dispatch always uses the current key.
+2. **RESOLVED — v1 rows always resolve against the current key.** Per D-K4 there is
+   no key id in v1; no dispatch change is needed. Documented in Plan 25-02 Task 1
+   ("keep the `v1` path byte-for-byte as today").
 
-3. **JS-side regex vs SQL-side LIKE for the pendingRows filter** (Pattern 1 discretion):
-   - What we know: the SQL filter currently drives the trigger-gated no-op (D-83) and
-     the D-73 defer count. Moving recognition fully to JS means selecting all non-empty
-     rows each boot — cheap at this scale, but changes the "zero eligible rows" gate.
-   - Recommendation: keep the SQL filter as the candidate selector (add a broad
-     exclusion that cannot match plaintext, e.g. `not like 'v_:%'` covering `v<1char>:`),
-     then apply the authoritative `/^v\d+:/` JS predicate per row. Preserves the no-op
-     gate while keeping one source of truth for "is an envelope".
+3. **RESOLVED — keep SQL candidate filter + JS predicate.** Adopted verbatim in
+   Plan 25-01 Task 1: broad SQL exclusion that cannot match base32 plaintext,
+   then the authoritative `/^v\d+:/` JS predicate per row (D-K6 single
+   source of truth, D-83 no-op gate preserved).
 
 ## Environment Availability
 
