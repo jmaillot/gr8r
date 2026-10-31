@@ -3,7 +3,7 @@ status: complete
 phase: 23-email-deep-links-creator-watching
 source: [23-VERIFICATION.md]
 started: 2026-10-30T16:57:37+01:00
-updated: 2026-10-31T00:00:00+01:00
+updated: 2026-10-31T11:40:02+01:00
 ---
 
 ## Current Test
