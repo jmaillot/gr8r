@@ -116,7 +116,7 @@ test('AUD-01 criterion 3: forced audit-write failure rolls back the entire revoc
       created_at    integer not null
     )`);
   });
-  assert.equal(auditRows().length, auditsBefore, 'zero new audit rows after the failed attempt');
+  assert.equal(auditRows().length, 0, 'zero audit rows in the freshly recreated table — the failed attempt wrote nothing');
 });
 
 /* --------------------- criterion 5 groundwork: append-only scan --------------------- */

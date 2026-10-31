@@ -167,6 +167,26 @@ const SCHEMA = `
     created_at integer not null
   );
   create index if not exists security_log_user on security_log(user_id);
+  /* AUD-01: append-only audit trail. FK-free by design (D-A2) — no references,
+     no cascade, no trigger: the security_log cascade is exactly what audit_log
+     must not have. Rows carry actor/target name+email snapshots so the trail
+     survives user deletion. Written in the same transaction as the mutation. */
+  create table if not exists audit_log (
+    id            text primary key,
+    actor_id      text,
+    target_id     text,
+    action        text not null,
+    session_count integer not null,
+    ip            text,
+    workspace_id  text,
+    actor_name    text not null,
+    actor_email   text not null,
+    target_name   text not null,
+    target_email  text not null,
+    created_at    integer not null
+  );
+  create index if not exists audit_log_created on audit_log(created_at desc);
+  create index if not exists audit_log_workspace on audit_log(workspace_id, created_at desc);
 `;
 
 function ensureColumn(conn, table, name, def) {
@@ -2070,7 +2090,7 @@ async function handleApi(req, res, url) {
     if (tooMany(`operator-revoke|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     // D-112: the gate reads the DB flag only — never env matching, never workspace role.
     if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
-    const target = db.prepare('select id, is_instance_admin from users where id = ?').get(operatorRevokeMatch[1]);
+    const target = db.prepare('select id, name, email, is_instance_admin from users where id = ?').get(operatorRevokeMatch[1]);
     if (!target) return fail(res, 404, 'notFound', 'Not found');
     // D-119: owner immunity BEFORE any session lookup — other flagged owners are
     // untouchable. A self-target is allowed (D-118): it is exactly revoke-others.
@@ -2080,13 +2100,21 @@ async function handleApi(req, res, url) {
     // excluded by the != clause; for any other target the hashes differ, so
     // every target session goes.
     const operatorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
-    const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, operatorTokenHash);
-    const left = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
-    // D-117: success-only verb, after the delete, before the response. A zero-row
-    // delete (target had no sessions, or only the kept current one) is a no-op,
-    // not a revocation — the audit trail must not claim one (IN-01).
-    if (del.changes > 0) logSecurity(target.id, 'sessions_revoked_by_operator');
-    return json(res, 200, { revoked: del.changes, remaining: left.n }); // live post-delete counts (Pitfall 10)
+    // AUD-01: the audit row must be written in the SAME transaction as the
+    // session DELETE (D-R3 — the shared transaction() helper, never hand-rolled
+    // BEGIN/COMMIT). A forced audit failure rolls back the entire revocation.
+    const out = transaction(() => {
+      const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, operatorTokenHash);
+      const remaining = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
+      if (del.changes > 0) {
+        logSecurity(target.id, 'sessions_revoked_by_operator');
+        db.prepare(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(uid(), operator.id, target.id, 'sessions_revoked_by_operator', del.changes, clientIp(req), null, operator.name, operator.email, target.name, target.email, now());
+      }
+      return { revoked: del.changes, remaining: remaining.n };
+    });
+    return json(res, 200, out); // live post-delete counts (Pitfall 10)
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
