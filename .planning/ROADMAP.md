@@ -36,7 +36,7 @@ deep-link path).
   4. Using the browser's back/forward buttons across SPA views returns to the previous view (popstate works); deep-link navigation and manual navigation stay consistent
   5. The `/w/:slug/file/:id` byte route still serves bytes (route ordering unchanged) — proven by test
 
-**Plans**: 6 plans (4 executed + 2 gap-closure from UAT)
+**Plans**: 6/6 plans executed (4 executed + 2 gap-closure from UAT)
 
 Plans:
 **Wave 1**
@@ -50,8 +50,8 @@ Plans:
 - [x] 23-04-PLAN.md — go() pushState + popstate handler, back/forward e2e (LINK-04)
 
 **Gap closure (Wave 1, from 23-UAT)**
-- [ ] 23-05-PLAN.md — G-23-1: email byline + recipient resolution from authority rows (memberships⋈users) (LINK-01)
-- [ ] 23-06-PLAN.md — G-23-4: team deep-link URLs — /w/:slug/team/:id, bare /team → list, unknown-id no-leak (LINK-04)
+- [x] 23-05-PLAN.md — G-23-1: email byline + recipient resolution from authority rows (memberships⋈users) (LINK-01)
+- [x] 23-06-PLAN.md — G-23-4: team deep-link URLs — /w/:slug/team/:id, bare /team → list, unknown-id no-leak (LINK-04)
 
 **UI hint**: yes
 
@@ -125,7 +125,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Email Deep Links & Creator Watching | 4/4 | In Progress|  |
+| 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
 | 24. Operator Audit & Workspace-Admin Tier | 0/? | Not started | - |
 | 25. Keyring & Version-Aware Envelopes | 0/? | Not started | - |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 0/? | Not started | - |

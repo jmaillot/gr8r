@@ -18,6 +18,21 @@ findings:
   low: 3
   total: 7
 status: issues_found
+gap_closure_review:
+  reviewed: 2026-10-31T00:00:00Z
+  scope: commits d2caf49 (23-05), 87947d5 + a660379 (23-06)
+  files_reviewed_list:
+    - server.js
+    - test/notif-email-link.test.mjs
+    - src/shell/render.js
+    - src/main.js
+    - e2e/deep-link.spec.mjs
+  findings:
+    critical: 0
+    warning: 0
+    info: 3
+    total: 3
+  status: clean_with_notes
 ---
 
 # Phase 23: Code Review Report
@@ -122,5 +137,64 @@ history.replaceState(null, '',
 ---
 
 _Reviewed: 2026-10-30_
+_Reviewer: gsd-code-reviewer (subagent)_
+_Depth: standard_
+
+---
+
+# Gap-Closure Review (2026-10-31) — plans 23-05 & 23-06
+
+**Reviewed:** 2026-10-31T00:00:00Z
+**Depth:** standard
+**Scope:** commits `d2caf49` (23-05: server.js, test/notif-email-link.test.mjs), `87947d5` + `a660379` (23-06: src/shell/render.js, src/main.js, e2e/deep-link.spec.mjs)
+**Files Reviewed:** 5
+**Status:** clean (no critical or warning findings in the gap-closure changes; 3 info notes below)
+
+## Summary
+
+Reviewed the two gap-closure plans on top of the phase-wide review of 2026-10-30.
+
+**23-05 (`server.js` `queueNotifEmails`, G-23-1):** The new workspace-scoped authority map (memberships ⋈ users, `server.js:709-713`) is parameterized (`where m.workspace_id = ?`), keyed by `member_id`, and correctly takes precedence for account-backed members while doc-only members still fall through `emailByUserId` → `emailByMemberEmail`. Byline resolution (`server.js:723`) preserves the co-member-visibility guarantee (T-23-06): names come only from rows scoped to `wsRow.id`. The `n.by === n.to` self-notify guard and the pref gates are unchanged and still run before any lookup. URL construction untouched (pinned by notifUrlBuilder tests). The test change (`test/notif-email-link.test.mjs:92,113`) correctly threads `wsRow` into the extracted `new Function` and still asserts the workspace-scoping clause.
+
+**23-06 (team deep link, G-23-4):** `urlForView`'s team branch (`src/shell/render.js:124-126`) sits before the ROUTE_IDS catch-all, eliminating the lossy `/team` write; the no-id path addresses `/w/slug/teams`, which re-enters `applyDeepLink` through `ROUTE_IDS` (includes `'teams'`, `render.js:34`) → `go('teams')` → `pageTeams` (`src/shell/layout.js:60`) — a closed, consistent loop. `applyDeepLink`'s team branches (`src/main.js:181-182, 187`) mirror the established member branch: found id → `go('team', {id})` through `go()`'s single URL write; unknown id → silent home (no oracle, T-23-07, verified against `pageTeam`'s own `page404` path which is now unreachable via URL resolution); bare `/team` → teams list ahead of the catch-all. `pageTeam` (`src/pages/members.js:114-117`) reads `S.ui.params.id` via the `team()` helper; navigation between two team ids re-renders (`go()`'s `same` compares route + JSON params). Server-side SPA fallback (`server.js:2676-2689`) serves `index.html` for extensionless `/w/:slug/team/:id`, so direct load and F5 resolve. E2E fixtures prune stale `dl-` prefixed tasks/teams before appending, making `beforeAll` idempotent on a persistent server; `newRunId()` (`e2e/helpers/setup.mjs:37-39`) is URL-safe base36, so the raw `TEAM_ID` in URL and `RegExp` assertions is safe.
+
+No security issues found: no new injection surface (all queries parameterized, all URL params `encodeURIComponent`'d), no new listener beyond the existing single popstate handler, unknown-id handling leaks no existence signal.
+
+**Verified clean checks:** authority query parameterized and workspace-scoped; self-notify and pref gates precede email build; team/member id matching consistent with each other; `ROUTE_IDS`/`layout.js`/`pageTeam`/`pageTeams` route chain coherent; e2e fixture pruning correct (`t.key !== TASK_KEY`, `!String(t.id).startsWith('tm_dl_')`).
+
+## Info (new findings in gap-closure code)
+
+### IN-G1: Bare `/w/:slug/team` silently rewrites the address bar to `/w/:slug/teams` on boot
+
+**File:** `src/main.js:187` (+ `src/shell/render.js:125`)
+**Issue:** Boot resolution runs `applyDeepLink(deepLink, { replace: true })` (`src/main.js:327`), so a legacy bookmark to `/team` is `replaceState`'d to `/teams` — the user's bookmarked address changes in the bar without any indication. Intentional per the plan ("no-id write lands on the list"), and harmless, but a visible URL mutation worth being aware of.
+**Fix:** None required; if the rewrite is unwanted, address the list view via hash or keep the bare path with `opt.replace` skipped for this branch.
+
+### IN-G2: Id matching is case-sensitive in team/member branches, case-insensitive in project/task branches
+
+**File:** `src/main.js:132` vs `src/main.js:175,181`
+**Issue:** The `find` helper lowercases both sides for project keys and task keys, while the member and team branches compare `m.id === key` / `t.id === key` exactly. Internally generated ids make this moot today, but the two conventions coexist in one function; a future externally-supplied id with mixed case would resolve in one branch and not the other.
+**Fix:** If ids can ever be user-visible-typed, normalize both branches through a case-insensitive comparison (or document why ids are exact-match).
+
+### IN-G3: Authority map is built on every `queueNotifEmails` call, even when no email can be sent
+
+**File:** `server.js:709-713`
+**Issue:** The memberships ⋈ users query runs before the notification loop, including when `newNotifs` is empty or every email pref is `false`. A wasted query per doc write in the common case. Correctness is unaffected; performance findings are out of v1 scope, noted here only as a cheap future guard (`if (!newNotifs.length) return;` or build lazily on first use).
+**Fix:** Early-return when `newNotifs` is empty, or construct the map lazily inside the loop on first need.
+
+## Prior findings — still open, unchanged in code
+
+Re-verified against current file state; the gap-closure commits did not touch any of these:
+
+- **HIGH-01** — `src/shell/render.js:88-93`: `go()` pushes duplicate history entries for same-URL navigations; the "same-URL guard" relied on by the `A.openTask` comment does not exist (only skips fx flags). Fix proposed in prior review stands.
+- **MED-01** — `src/main.js:292`: logged-out `?next=` carry uses `location.pathname` only; query strings are lost across the login round-trip. Fix: `encodeURIComponent(location.pathname + location.search)`.
+- **MED-02** — `src/main.js:128, 146, 181`: deep-link segments are not percent-decoded before lookup. Now also applies to team ids (`main.js:181`), though internally generated ids are URL-safe so it cannot trigger today. Fix: one round of `decodeURIComponent` (guarded) on `key`.
+- **LOW-01** — `src/shell/render.js:109-113`: local `t` shadows the i18n `t` import; `// eslint-disable-line no-unused-vars` is stale (function is exported and used).
+- **LOW-02** — `src/locales/en.json:256`: `"err.taskNotFound"` one-space indent vs sibling two-space keys.
+- **LOW-03** — `e2e/helpers/setup.mjs:98-110`: `withAcmeDoc` retry loop exhaust-silently edge case + `attempts` magic number (test-infra only).
+
+---
+
+_Reviewed: 2026-10-31_
 _Reviewer: gsd-code-reviewer (subagent)_
 _Depth: standard_
