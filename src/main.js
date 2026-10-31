@@ -173,7 +173,18 @@ function applyDeepLink(rest, opt = {}) {
         claims /file/:id. The project/task/member deep-link branches below
         still bootstrap via the generic route SPA fallback. */
     if (seg === 'member' && (data.members || []).some(m => m.id === key)) return go('member', { id: key }, opt);
+    /* G-23-4 (plan 23-06): the team branch mirrors the member branch. Found →
+       the team view rides go()'s single URL write (urlForView's team branch).
+       Unknown id → workspace home with NO toast and NO 404 page — no oracle
+       distinguishing an existing team from an unknown one (T-23-07, mirroring
+       the task branch's T-23-02 lean, silent per the UAT missing-item spec). */
+    if (seg === 'team' && (data.teams || []).some(t => t.id === key)) return go('team', { id: key }, opt);
+    if (seg === 'team') return go('home', {}, opt);
   }
+  /* G-23-4: bare /w/:slug/team (old bookmarks, or the legacy lossy write) →
+     the teams list, never go('team', {}) which renders page404. Must precede
+     the plain-route fallback, which is the exact defect path. */
+  if (seg === 'team') return go('teams', {}, opt);
   if (ROUTE_IDS.includes(seg)) return go(seg, {}, opt);
 }
 

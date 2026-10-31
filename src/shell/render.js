@@ -116,6 +116,14 @@ export function urlForView(route, params = {}) { // eslint-disable-line no-unuse
     if (p?.key) return `/w/${slug}/project/${encodeURIComponent(p.key)}`;
   }
   if (route === 'member' && params.id) return `/w/${slug}/member/${encodeURIComponent(params.id)}`;
+  /* G-23-4 (plan 23-06): a team view with an id addresses /w/:slug/team/:id —
+     the plain ROUTE_IDS catch-all below would emit the lossy /team (no id),
+     which is exactly the 404-on-refresh defect. No id → address the teams
+     list explicitly, so a future no-id write lands on the list, never on a
+     URL that resolves to page404. */
+  if (route === 'team') {
+    return params.id ? `/w/${slug}/team/${encodeURIComponent(params.id)}` : `/w/${slug}/teams`;
+  }
   if (ROUTE_IDS.includes(route) && route !== 'home') return `/w/${slug}/${route}`;
   return `/w/${slug}`;
 }
