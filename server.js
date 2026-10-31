@@ -283,17 +283,26 @@ function verifyPassword(password, stored) {
 const DUMMY_HASH = hashPassword(crypto.randomBytes(16).toString('hex'));
 
 /* D-05: AES-256-GCM envelope for the TOTP secret at rest — `v1:<iv>:<tag>:<ct>`,
-   key derived from MASTER_KEY via sha256. Returns null when MASTER_KEY is
-   missing/undecryptable; the caller must fail closed 503 (D-06) BEFORE any
-   state mutation. Recovery codes are never encrypted (D-09/D-51). */
-function encryptTotpSecret(secretB32) {
+   key derived from MASTER_KEY via sha256. D-K4 (frozen format, checkpoint-
+   confirmed): version='v2' — written ONLY by the enable path — emits
+   `v2:<key-id>:<iv>:<tag>:<ct>` where the id is the first 8 hex chars of the
+   SAME sha256 call that yields the AES key (Pitfall 3: one hash, both uses).
+   The boot migration keeps writing v1 (Phase 26 re-wrap owns the rest).
+   Returns null when MASTER_KEY is missing/undecryptable; the caller must fail
+   closed 503 (D-06) BEFORE any state mutation. Recovery codes are never
+   encrypted (D-09/D-51). */
+function encryptTotpSecret(secretB32, version = 'v1') {
   if (!MASTER_KEY) return null;
   try {
-    const key = crypto.createHash('sha256').update(MASTER_KEY).digest();
+    const digest = crypto.createHash('sha256').update(MASTER_KEY);
+    const key = digest.digest();
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const ct = Buffer.concat([cipher.update(String(secretB32), 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
+    if (version === 'v2') {
+      return `v2:${key.toString('hex').slice(0, 8)}:${iv.toString('base64')}:${tag.toString('base64')}:${ct.toString('base64')}`;
+    }
     return `v1:${iv.toString('base64')}:${tag.toString('base64')}:${ct.toString('base64')}`;
   } catch {
     return null;
@@ -1874,7 +1883,9 @@ async function handleApi(req, res, url) {
     if (!verified.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
     // D-06/T-16-09: MASTER_KEY missing/undecryptable → fail closed BEFORE any
     // state mutation. The body names MASTER_KEY — admin-facing, never user copy.
-    const envelope = encryptTotpSecret(pending.secret);
+    // D-K4: the enable path is the ONLY v2 writer (frozen format, checkpoint-
+    // confirmed); disable/verify/regen call sites and the boot migration keep v1.
+    const envelope = encryptTotpSecret(pending.secret, 'v2');
     if (!envelope) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
     // D-50: generate the 10 plaintext codes first — they are returned exactly
     // once in this response (D-53) and only their hashes hit the database.

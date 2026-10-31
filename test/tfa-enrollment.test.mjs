@@ -109,7 +109,7 @@ test('TFA-03/TFA-04: enable with a live code flips 2FA on and issues 10 hashed r
 
   const row = userRow('enableme@test.local');
   assert.equal(row.two_fa_enabled, 1);
-  assert.ok(row.two_fa_secret.startsWith('v1:'), 'D-05 AES-256-GCM envelope stored');
+  assert.match(row.two_fa_secret, /^v2:[0-9a-f]{8}:[^:]+:[^:]+:[^:]+$/, 'D-K4: 5-part v2 envelope stored (enable path, frozen format)');
   assert.equal(typeof row.two_fa_last_step, 'number');
   assert.ok(row.two_fa_last_step > 0, 'the D-04 replay-guard baseline is the matched step');
 

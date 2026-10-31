@@ -373,3 +373,73 @@ test('D-K5 strictness: malformed-id, unknown-id and corrupt-tag v2 rows each 503
     assert.equal(row.two_fa_enabled, 1, `${variant}: two_fa_enabled must not be mutated`);
   }
 });
+
+/* ---------- Writer flip (D-K4, frozen format): the enable path writes v2 ---------- */
+
+test('writer flip: real enrollment stores a v2 envelope with the CURRENT key id and the user verifies at login (SC-2)', async () => {
+  const dir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'projects-totpe-write-'));
+  const CURRENT = 'enroll-current-key';
+  const PREVIOUS = 'enroll-previous-key';
+  const email = 'v2-enroll@test.local';
+  let s;
+  try {
+    const { totpAt } = await import('../totp.js');
+    s = await startServer({ dataDir: dir, env: { MASTER_KEY: CURRENT, MASTER_KEY_PREVIOUS: PREVIOUS } });
+    const u = await signup(s.base, { name: 'En', email, password: GOOD });
+    assert.equal(u.status, 201, `signup of ${email}`);
+    // Real enable path: enroll mints the pending secret (D-46), enable wraps it.
+    const enroll = await u.client.post('/api/auth/tfa/enroll', { currentPassword: GOOD });
+    assert.equal(enroll.status, 200, `enroll: ${JSON.stringify(enroll.data)}`);
+    const { secret } = enroll.data;
+    const enable = await u.client.post('/api/auth/tfa/enable', { code: totpAt(secret, Date.now() / 1000) });
+    assert.equal(enable.status, 200, `enable: ${JSON.stringify(enable.data)}`);
+    const row = userRow(dir + '/projects.db', email);
+    assert.match(
+      row.two_fa_secret,
+      new RegExp(`^v2:${idOf(CURRENT)}:[^:]+:[^:]+:[^:]+$`),
+      'enrollment must store the 5-part v2 envelope carrying the CURRENT key id (D-K4)',
+    );
+    assert.equal(row.two_fa_enabled, 1, 'the enable flip persisted');
+    /* D-04 baseline reset: this suite proves the decrypt boundary, not the
+       replay guard (tfa-login owns that) — a zeroed last_step makes the SC-2
+       round-trip deterministic regardless of the 30s TOTP period boundary. */
+    withDb(dir + '/projects.db', db =>
+      db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email));
+    // SC-2 end-to-end: a fresh login verifies against the stored v2 envelope.
+    const c = await login(s.base, email, GOOD);
+    assert.ok(c.data?.pending2fa, 'a 2FA-enabled account answers pending2fa at the password step');
+    const verify = await c.client.post('/api/auth/tfa/login', { code: totpAt(secret, Date.now() / 1000) });
+    assert.equal(verify.status, 200, `SC-2 login round-trip must succeed: ${JSON.stringify(verify.data)}`);
+  } finally {
+    await s?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SC-4 legacy guard: a planted v1 envelope still verifies through the current-key v1 path', async () => {
+  const dir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'projects-totpe-v1ok-'));
+  let s;
+  const email = 'v1-legacy@test.local';
+  const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+  try {
+    /* Dedicated server: the shared keyServer's signup budget is spent by the
+       corrupt-variant tests above; a fresh one keeps the 201 deterministic. */
+    s = await startServer({ dataDir: dir, env: { MASTER_KEY: SUITE_KEY } });
+    const su = await signup(s.base, { name: 'Legacy', email, password: GOOD });
+    assert.equal(su.status, 201);
+    /* Test-side v1 mirror (D-05): sha256(MASTER_KEY) → AES-256-GCM, 4-part shape. */
+    const key = crypto.createHash('sha256').update(SUITE_KEY).digest();
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const ct = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
+    const v1 = `v1:${iv.toString('base64')}:${cipher.getAuthTag().toString('base64')}:${ct.toString('base64')}`;
+    plant(dir + '/projects.db', email, v1);
+    enableFor(s, email);
+    const { totpAt: at } = await import('../totp.js');
+    const res = await verifyLogin(s, email, at(secret, Date.now() / 1000));
+    assert.equal(res.status, 200, `a v1 envelope must still decrypt against the current key: ${JSON.stringify(res.data)}`);
+  } finally {
+    await s?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
