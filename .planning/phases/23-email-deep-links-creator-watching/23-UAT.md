@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 23-email-deep-links-creator-watching
 source: [23-VERIFICATION.md]
 started: 2026-10-30T16:57:37+01:00
-updated: 2026-10-31T11:40:02+01:00
+updated: 2026-10-31T12:50:00+01:00
 ---
 
 ## Current Test
@@ -14,9 +14,8 @@ updated: 2026-10-31T11:40:02+01:00
 
 ### 1. Email link end-to-end on a real deployment
 expected: Trigger a real notification email, click its task link in a mail client. Lands directly on the task drawer (not app root), URL is /w/:slug/task/:key.
-result: issue
-reported: "URL is linked to the task, it's good, but the email says 'Un membre mentioned you' instead of the author's username"
-severity: minor
+result: pass
+re_test_of: G-23-1 (fixed by 23-05 — byline + recipients resolved from authority rows)
 
 ### 2. Logged-out click → sign-in → return
 expected: In a private window, click an emailed task link, sign in. Address bar shows ?next=… at the sign-in view; after login you land on the exact task; a crafted //evil.com next is rejected.
@@ -28,15 +27,14 @@ result: pass
 
 ### 4. Team page survives refresh
 expected: Loading https://projects.jeremymaillot.fr/w/prod/team directly (or hitting F5 on it) renders the team information view — no 404.
-result: issue
-reported: "Two teams 'Infra' & 'BDD'; on https://projects.jeremymaillot.fr/w/prod/team, F5 gives a 404 — the URL doesn't map into the team view but falls back to the root"
-severity: major
+result: pass
+re_test_of: G-23-4 (fixed by 23-06 — /w/:slug/team/:id resolvable deep link, bare /team → teams list)
 
 ## Summary
 
 total: 4
-passed: 2
-issues: 2
+passed: 4
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -45,7 +43,9 @@ blocked: 0
 
 - gap_id: G-23-1
   truth: "Email shows the acting user's name (e.g. 'Alice mentioned you'), not the fallback 'Un membre'"
-  status: failed
+  status: resolved
+  resolved_by: "23-05-PLAN.md (gap_closure: true, gap_ids: [G-23-1]) — executed 2026-10-31, commits c75c6ac/d2caf49"
+  resolved_at: 2026-10-31
   reason: "User reported: URL is linked to the task, it's good, but the email says 'Un membre mentioned you' instead of the author's username"
   severity: minor
   test: 1
@@ -59,7 +59,9 @@ blocked: 0
   debug_session: ".planning/debug/23-un-membre-byline.md"
 - gap_id: G-23-4
   truth: "Refreshing (F5) or directly loading /w/:slug/team renders the team view — no 404"
-  status: failed
+  status: resolved
+  resolved_by: "23-06-PLAN.md (gap_closure: true, gap_ids: [G-23-4]) — executed 2026-10-31, commits a660379/87947d5"
+  resolved_at: 2026-10-31
   reason: "User reported: on https://projects.jeremymaillot.fr/w/prod/team, F5 gives a 404 — the URL doesn't map into the team view but falls back to the root"
   severity: major
   test: 4
