@@ -1,21 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 23-email-deep-links-creator-watching
 source: [23-VERIFICATION.md]
 started: 2026-10-30T16:57:37+01:00
-updated: 2026-10-30T16:57:37+01:00
+updated: 2026-10-31T00:00:00+01:00
 ---
 
 ## Current Test
 
-number: 3
-name: Back/forward feel across views with drawer open
-expected: |
-  Navigate several views, open a task drawer, close it, then use browser
-  Back/Forward repeatedly. Back re-opens the task after close; no dead
-  Back presses; history doesn't accumulate duplicates on repeated
-  same-view navigation.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -31,7 +24,7 @@ result: pass
 
 ### 3. Back/forward feel across views with drawer open
 expected: Navigate several views, open a task drawer, close it, then use browser Back/Forward repeatedly. Back re-opens the task after close; no dead Back presses; history doesn't accumulate duplicates on repeated same-view navigation.
-result: [pending]
+result: pass
 
 ### 4. Team page survives refresh
 expected: Loading https://projects.jeremymaillot.fr/w/prod/team directly (or hitting F5 on it) renders the team information view — no 404.
@@ -42,9 +35,9 @@ severity: major
 ## Summary
 
 total: 4
-passed: 1
+passed: 2
 issues: 2
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
