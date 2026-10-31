@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.5
 milestone_name: Reliability & Rotation
-current_phase: 24
-current_phase_name: Operator Audit & Workspace-Admin Tier
-status: verifying
+current_phase: 25
+current_phase_name: keyring-version-aware-envelopes
+status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-10-31T16:16:21.534Z"
+last_updated: "2026-10-31T16:36:01.989Z"
 last_activity: 2026-10-31
 last_activity_desc: Phase 24 execution started
-state_head: 505d6490b570291c7fe4d01a63c177ff567e0648
+state_head: c786fb58d55128a7465777d310cdc7a8ce69638c
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 9
+  total_plans: 11
   completed_plans: 9
-  percent: 20
+  percent: 0
 ---
 
 # STATE.md
@@ -28,12 +28,12 @@ progress:
 
 ## Current Position
 
-Phase: 24 (Operator Audit & Workspace-Admin Tier) — EXECUTING
+Phase: 25 (keyring-version-aware-envelopes) — READY TO EXECUTE
 Plan: 3 of 3
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-10-31 — Phase 24 execution started
 
-Progress: [██░░░░░░░░] 20%
+Progress: [░░░░░░░░░░] 0%
 
 ## Milestone History
 
