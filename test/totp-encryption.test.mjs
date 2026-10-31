@@ -47,24 +47,30 @@ test('requireTotpSecret returns ok:false on null — never a plaintext pass-thro
   assert.ok(!/\?\?/.test(body) && !/\|\|/.test(body), 'the wrapper itself carries a fallback');
 });
 
-/* ---------- D-78c: the exclusivity proof — wrapper is the only caller ---------- */
+/* ---------- D-78c: the exclusivity proof — the wrapper is the ONLY plaintext producer ---------- */
 
-test('decryptTotpSecret is referenced ONLY by its definition and requireTotpSecret (D-78c)', () => {
-  /* Call-syntax occurrences: the `function decryptTotpSecret(` definition line and the
-     single call inside requireTotpSecret. Comment mentions use a space before "(" and
+test('decryptTotpSecret is referenced ONLY by its definition, requireTotpSecret, and the D-K7 boot probe', () => {
+  /* Call-syntax occurrences: the `function decryptTotpSecret(` definition line,
+     the call inside requireTotpSecret, and the D-K7 (Phase 25) decryptability
+     probe in migrateTotpEncryption — a boolean check whose result is DISCARDED,
+     never exposed as plaintext. Comment mentions use a space before "(" and
      never match. */
   const callSites = [...serverSource.matchAll(/decryptTotpSecret\(/g)].map(m => m.index);
-  assert.equal(callSites.length, 2, `expected definition + one wrapper call, found ${callSites.length} call-syntax occurrences`);
+  assert.equal(callSites.length, 3, `expected definition + wrapper call + D-K7 probe, found ${callSites.length} call-syntax occurrences`);
 
   const defAt = serverSource.indexOf('function decryptTotpSecret(');
   const wrapperAt = serverSource.indexOf('function requireTotpSecret(');
   const wrapperBodyEnd = serverSource.indexOf('/* D-46: pending');
+  const migrationAt = serverSource.indexOf('function migrateTotpEncryption(');
+  const migrationBodyEnd = serverSource.indexOf('/*\n * Invites created before');
   assert.ok(defAt !== -1, 'the decryptTotpSecret definition is missing');
   assert.ok(wrapperAt !== -1 && wrapperBodyEnd > wrapperAt, 'the requireTotpSecret wrapper is missing');
+  assert.ok(migrationAt !== -1 && migrationBodyEnd > migrationAt, 'the migrateTotpEncryption block is missing');
   for (const at of callSites) {
     const inDef = at >= defAt && at < defAt + 'function decryptTotpSecret('.length;
     const inWrapper = at > wrapperAt && at < wrapperBodyEnd;
-    assert.ok(inDef || inWrapper, `a direct decryptTotpSecret call site exists outside requireTotpSecret at offset ${at}`);
+    const inMigration = at > migrationAt && at < migrationBodyEnd;
+    assert.ok(inDef || inWrapper || inMigration, `a direct decryptTotpSecret call site exists outside the sanctioned regions at offset ${at}`);
   }
   assert.equal(serverSource.indexOf('function requireTotpSecret('), wrapperAt, 'requireTotpSecret defined exactly once');
 });
@@ -220,4 +226,39 @@ test('positive control: with a valid envelope AND a matching MASTER_KEY nothing 
   assert.equal(res.status, 200, `disable with a live code must succeed: ${JSON.stringify(res.data)}`);
   const row = userRow(keyServer.dbPath, 'happy@test.local');
   assert.equal(row.two_fa_enabled, 0, 'the teardown ran');
+});
+
+/* ---------- KEY-01 (Phase 25): structural drift guards on the migration ---------- */
+
+test('the migration filter and re-check share exactly ONE version-recognizer predicate (KEY-01, D-75)', () => {
+  /* Exactly one definition, and it is the generic /^v\d+:/ pattern — never a
+     known-versions list (D-K6 prohibition). */
+  const defs = [...serverSource.matchAll(/function isEnvelopeVersion\(/g)].length;
+  assert.equal(defs, 1, `expected exactly one predicate definition, found ${defs}`);
+  const defAt = serverSource.indexOf('function isEnvelopeVersion(');
+  assert.ok(
+    serverSource.includes('const ENVELOPE_VERSION_RE = /^v\\d+:/;') && defAt > -1,
+    'the predicate must be backed by the generic /^v\\d+:/ envelope pattern',
+  );
+
+  /* The two v1-only shapes are gone for good: a resurfaced `not like 'v1:%'`
+     sole filter or `startsWith('v1:')` re-check would destroy future-version
+     envelope rows on boot (T-25-01). */
+  assert.ok(!serverSource.includes("not like 'v1:%'"), "a v1-only SQL filter resurfaced");
+  assert.ok(!serverSource.includes("startsWith('v1:')"), "a v1-only startsWith re-check resurfaced");
+
+  /* The in-transaction D-75 re-check calls the shared predicate — the
+     defense-in-depth layers cannot silently drift apart. */
+  const recheckAt = serverSource.indexOf('// D-75: per-row re-check');
+  assert.ok(recheckAt > -1, 'the D-75 re-check anchor moved');
+  const recheckRegion = serverSource.slice(recheckAt, recheckAt + 900);
+  assert.match(recheckRegion, /if \(isEnvelopeVersion\(value\)\) \{/, 'the in-transaction re-check must call the shared predicate');
+});
+
+test('requireTotpSecret keeps its D-77/D-79 signature and single-decrypt-boundary shape (SC-4 guard)', () => {
+  const at = serverSource.indexOf('function requireTotpSecret(');
+  assert.ok(at > -1, 'requireTotpSecret moved');
+  const body = serverSource.slice(at, at + 300);
+  assert.match(body, /function requireTotpSecret\(envelope\) \{/, 'the single-decrypt-boundary signature changed');
+  assert.match(body, /decryptTotpSecret\(envelope\)/, 'requireTotpSecret must keep delegating to decryptTotpSecret');
 });
