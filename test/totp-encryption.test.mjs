@@ -299,3 +299,77 @@ test('tracer: a planted v2 envelope with the current key id verifies through the
   const res = await verifyLogin(keyServer, email, totpAt(secret, Date.now() / 1000));
   assert.equal(res.status, 200, `v2 round-trip verify must succeed: ${JSON.stringify(res.data)}`);
 });
+
+test('D-K3 determinism: key-id derivation is a stable 8-hex-char mirror of sha256(raw material)', () => {
+  const id = idOf(SUITE_KEY);
+  assert.match(id, /^[0-9a-f]{8}$/, 'the key id must be exactly 8 lowercase hex chars');
+  assert.equal(id, idOf(SUITE_KEY), 'the derivation must be deterministic');
+  assert.equal(id, sha256Hex(SUITE_KEY).slice(0, 8), 'id and AES key must come from the same hash input (Pitfall 3)');
+  assert.notEqual(idOf(SUITE_KEY), idOf('another-material'), 'different material must yield a different id');
+});
+
+test('D-K2: MASTER_KEY_PREVIOUS set without MASTER_KEY fails boot loudly', async () => {
+  await assert.rejects(
+    () => startServer({ env: { MASTER_KEY: undefined, MASTER_KEY_PREVIOUS: 'orphaned-previous' } }),
+    /MASTER_KEY_PREVIOUS is set but MASTER_KEY is not/,
+    'boot must fail with the D-K2 message',
+  );
+});
+
+test('previous-key v2 envelope: decrypts with both keys configured, 503 fail-closed when only the current key is set', async () => {
+  const dir = fs.mkdtempSync(path.join(fs.tmpdir !== undefined ? fs.tmpdir() : '/tmp', 'projects-totpe-ring-'));
+  const CURRENT = 'ring-current-key';
+  const PREVIOUS = 'ring-previous-key';
+  const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+  const email = 'v2-previous@test.local';
+  const { totpAt } = await import('../totp.js');
+  try {
+    const both = await startServer({ dataDir: dir, env: { MASTER_KEY: CURRENT, MASTER_KEY_PREVIOUS: PREVIOUS } });
+    const s = await signup(both.base, { name: 'Prev', email, password: GOOD });
+    assert.equal(s.status, 201);
+    const envelope = wrapV2(secret, PREVIOUS);
+    assert.match(envelope, new RegExp(`^v2:${idOf(PREVIOUS)}:`), 'the planted envelope must carry the PREVIOUS key id');
+    plant(both.dbPath, email, envelope);
+    enableFor(both, email);
+    const ok = await verifyLogin(both, email, totpAt(secret, Date.now() / 1000));
+    assert.equal(ok.status, 200, `previous-key envelope must decrypt with both keys: ${JSON.stringify(ok.data)}`);
+    await both.stop();
+
+    const currentOnly = await startServer({ dataDir: dir, env: { MASTER_KEY: CURRENT, MASTER_KEY_PREVIOUS: undefined } });
+    const missing = await verifyLogin(currentOnly, email, totpAt(secret, Date.now() / 1000));
+    assert.equal(missing.status, 503, 'a v2 row whose key left the keyring must 503 (D-K5 fail-closed)');
+    assert.equal(missing.data.code, 'masterKeyMissing', 'wrong error code');
+    assert.equal(missing.data.error, VERIFY_COPY, 'verify-route copy changed');
+    const row = userRow(dir + '/projects.db', email);
+    assert.equal(row.two_fa_secret, envelope, 'the stored row must never be mutated');
+    assert.equal(row.two_fa_enabled, 1, 'the row must never be disabled or rewritten');
+    await currentOnly.stop();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('D-K5 strictness: malformed-id, unknown-id and corrupt-tag v2 rows each 503 fail-closed with rows unmutated', async () => {
+  const email = 'v2-bad@test.local';
+  const s = await signup(keyServer.base, { name: 'Bad', email, password: GOOD });
+  assert.equal(s.status, 201);
+  enableFor(keyServer, email);
+  const good = wrapV2('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', SUITE_KEY);
+  const [v, kid, ivB64, tagB64, ctB64] = good.split(':');
+  const corruptTag = [v, kid, ivB64, `${tagB64.slice(0, -2)}AA`, ctB64].join(':');
+  const variants = [
+    ['malformed-id-non-hex', 'v2:zzzzzzzz:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCC'],
+    ['malformed-id-wrong-length', 'v2:abc:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCC'],
+    ['unknown-id', good.replace(`v2:${kid}:`, 'v2:00000000:')],
+    ['corrupt-tag', corruptTag],
+  ];
+  for (const [variant, value] of variants) {
+    plant(keyServer.dbPath, email, value);
+    const res = await verifyLogin(keyServer, email);
+    assert.equal(res.status, 503, `${variant}: expected the fail-closed 503`);
+    assert.equal(res.data.code, 'masterKeyMissing', `${variant}: wrong error code`);
+    const row = userRow(keyServer.dbPath, email);
+    assert.equal(row.two_fa_secret, value, `${variant}: the stored value must not be rewritten`);
+    assert.equal(row.two_fa_enabled, 1, `${variant}: two_fa_enabled must not be mutated`);
+  }
+});
