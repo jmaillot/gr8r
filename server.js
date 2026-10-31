@@ -2057,6 +2057,65 @@ async function handleApi(req, res, url) {
     return json(res, 204); // idempotent: an already-dead or foreign id is not an error (OQ4)
   }
 
+  /* ----------------------- audit trail read (AUD-03, D-T3) -----------------------
+     Read-only trail endpoint. Gate order mirrors the D-121 operator-users GET
+     precedent: sameOrigin → requireUser → tier gate, NO throttle (read-only,
+     capped at 101 rows per query — T-24-05 accept). Visibility is decided
+     SERVER-side, never from a query param (D-T3/T-24-06):
+       - instance operator (D-112 DB flag): every row, workspace-less included;
+       - workspace admin/owner: only rows whose workspace_id is one of their
+         admin-or-owner memberships (workspace_id null rows never leave);
+       - anyone else: 403 adminOnly (honest gate, D-V1). */
+  if (pathname === '/api/audit-log' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+
+    const where = [];
+    const args = [];
+    // The verb filter compares against the two fixed D-T1 verbs only; any other
+    // value matches zero rows rather than erroring (flagged AUD-03 assumption).
+    if (url.searchParams.get('verb')) {
+      if (url.searchParams.get('verb') === 'sessions_revoked_by_operator') {
+        where.push('action = ?');
+        args.push('sessions_revoked_by_operator');
+      } else if (url.searchParams.get('verb') === 'sessions_revoked_by_workspace_admin') {
+        where.push('action = ?');
+        args.push('sessions_revoked_by_workspace_admin');
+      } else {
+        where.push('0'); // unknown verb → empty result, never a 400
+      }
+    }
+
+    if (isInstanceAdmin(user)) {
+      // Operators see the whole trail — workspace-less operator-tier rows included.
+    } else {
+      const adminWsIds = membershipsOf(user.id)
+        .filter(m => ROLE_RANK[m.role] >= ROLE_RANK.admin)
+        .map(m => m.id);
+      if (!adminWsIds.length) return fail(res, 403, 'adminOnly', 'Only workspace admins can do that');
+      where.push(`workspace_id in (${adminWsIds.map(() => '?').join(',')})`);
+      args.push(...adminWsIds);
+    }
+
+    // Keyset cursor (RESEARCH Pattern 2): (created_at, id) < (before, beforeId),
+    // latest first — forward-stable for an append-only trail (flagged assumption).
+    const beforeTs = Number(url.searchParams.get('before'));
+    const beforeId = url.searchParams.get('beforeId');
+    if (Number.isFinite(beforeTs) && beforeId) {
+      where.push('(created_at < ? or (created_at = ? and id < ?))');
+      args.push(beforeTs, beforeTs, beforeId);
+    }
+
+    const clause = where.length ? `where ${where.join(' and ')}` : '';
+    // 101st row = cursor for the next page; only 100 are served.
+    const rows = db
+      .prepare(`select * from audit_log ${clause} order by created_at desc, id desc limit 101`)
+      .all(...args);
+    const nextBefore = rows.length > 100 ? { created_at: rows[100].created_at, id: rows[100].id } : null;
+    return json(res, 200, { rows: rows.slice(0, 100), nextBefore });
+  }
+
   /* -------------- operator session revocation (OPREV-01, D-115) -------------- */
 
   const operatorUsersMatch = pathname === '/api/auth/operator/users';

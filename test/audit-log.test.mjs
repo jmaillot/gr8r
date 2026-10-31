@@ -306,6 +306,13 @@ const auditGet = (cookie, query = '') =>
 
 test('AUD-03: instance operator reads the whole trail — both verbs, workspace-less rows included', async () => {
   const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  // The rollback-atomicity test above recreated an empty audit_log, so seed one
+  // workspace-less operator row to stand for the operator tier.
+  withDb(server.dbPath, db =>
+    db.prepare(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).run('op-seed-row', 'op-actor', 'op-target', 'sessions_revoked_by_operator', 1, '127.0.0.1', null, 'Op Actor', 'op@t.local', 'Op Target', 'target@t.local', Date.now() + 5000),
+  );
   const res = await auditGet(operator.cookie());
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -337,6 +344,14 @@ test('AUD-03: plain member is refused — 403 adminOnly (honest gate, D-V1)', as
 test('AUD-03: verb filter — exactly one verb per query, unknown verbs match nothing (not a 400)', async () => {
   const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
   const c = operator.cookie();
+  // Seed one row per verb (the rollback test wiped earlier operator rows).
+  withDb(server.dbPath, db => {
+    const ins = db.prepare(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+    );
+    ins.run('vf-op-row', 'a', 'b', 'sessions_revoked_by_operator', 1, '127.0.0.1', null, 'A', 'a@t.local', 'B', 'b@t.local', Date.now() + 6000);
+    ins.run('vf-ad-row', 'a', 'b', 'sessions_revoked_by_workspace_admin', 1, '127.0.0.1', ws?.id || null, 'A', 'a@t.local', 'B', 'b@t.local', Date.now() + 7000);
+  });
   const opRes = await auditGet(c, '?verb=sessions_revoked_by_operator');
   assert.equal(opRes.status, 200);
   const opBody = await opRes.json();
@@ -394,6 +409,13 @@ test('AUD-03: keyset pagination — 100 per page, no duplicates, terminates with
 test('AUD-03: deleted-user survival — trail rows render from snapshot columns after target deletion', async () => {
   const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
   const victim = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('auditvictim@test.local'));
+  // The rollback-atomicity test wiped earlier operator rows, so re-seed a trail
+  // row for the victim exactly as the revoke route would have written it.
+  withDb(server.dbPath, db =>
+    db.prepare(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).run('victim-row', 'op-actor', victim.id, 'sessions_revoked_by_operator', 2, '127.0.0.1', null, 'Owner', 'owner@test.local', victim.name, victim.email, Date.now() + 8000),
+  );
   // No FK on audit_log (D-A2): deleting the user leaves the trail row intact.
   withDb(server.dbPath, db => db.prepare('delete from users where id = ?').run(victim.id));
 
