@@ -5,11 +5,11 @@ titles: json
 findings:
   - id: "WR-01"
     severity: "warning"
-    disposition: "open"
+    disposition: "fixed"
     title: "SQLite LIKE prefilter is ASCII case-insensitive but isEnvelopeVersion is case-sensitive — a V2:-prefixed row is silently skipped by both D-K7 counting and the migration"
   - id: "WR-02"
     severity: "warning"
-    disposition: "open"
+    disposition: "fixed"
     title: "v1 row sealed with a rotated-away key never converges — every boot writes a new preenvelope backup and re-runs the transaction (unbounded accumulation until Phase 26 re-wrap)"
   - id: "IN-01"
     severity: "info"
@@ -31,17 +31,17 @@ findings:
     severity: "info"
     disposition: "open"
     title: "Negligible local timing difference between unknown-id and tampered-tag paths (no response oracle)"
-open: 7
+open: 5
 total: 7
-recorded: 2026-10-31T18:30:00Z
+recorded: 2026-10-31T19:30:00Z
 ---
 
 # Phase 25: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
+| WR-01 | warning | fixed | 25-REVIEW-FIX.md |
+| WR-02 | warning | fixed | 25-REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
