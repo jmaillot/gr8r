@@ -298,6 +298,114 @@ test('AUD-02: zero active sessions — 200 {revoked: 0}, no audit row, no securi
   );
 });
 
+/* ==================== AUD-03: the tier-scoped audit trail read ==================== */
+
+/* The audit read: GET /api/audit-log?verb=&before=&beforeId= → { rows, nextBefore }. */
+const auditGet = (cookie, query = '') =>
+  fetch(`${server.base}/api/audit-log${query}`, { headers: { cookie } });
+
+test('AUD-03: instance operator reads the whole trail — both verbs, workspace-less rows included', async () => {
+  const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  const res = await auditGet(operator.cookie());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(Array.isArray(body.rows), 'rows array');
+  const actions = new Set(body.rows.map(r => r.action));
+  assert.ok(actions.has('sessions_revoked_by_operator'), 'operator-tier rows served');
+  assert.ok(actions.has('sessions_revoked_by_workspace_admin'), 'admin-tier rows served');
+  assert.ok(body.rows.some(r => r.workspace_id === null), 'workspace_id null rows visible to the operator');
+});
+
+test('AUD-03: workspace admin reads only their workspace rows — null-workspace rows NEVER served', async () => {
+  if (!ws) await seedAdminTierFixtures();
+  const boss = await bossLogin();
+  const res = await auditGet(boss.cookie());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.rows.length > 0, 'admin sees their own workspace rows');
+  assert.ok(body.rows.every(r => r.workspace_id === ws.id), 'every row scoped to the admin workspace');
+  assert.ok(body.rows.some(r => r.action === 'sessions_revoked_by_workspace_admin'), 'admin verb row present');
+});
+
+test('AUD-03: plain member is refused — 403 adminOnly (honest gate, D-V1)', async () => {
+  const mate = (await login(server.base, 'rollbackvictim@test.local', GOOD)).client;
+  const res = await auditGet(mate.cookie());
+  assert.equal(res.status, 403);
+  assert.equal((await res.json()).code, 'adminOnly');
+});
+
+test('AUD-03: verb filter — exactly one verb per query, unknown verbs match nothing (not a 400)', async () => {
+  const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  const c = operator.cookie();
+  const opRes = await auditGet(c, '?verb=sessions_revoked_by_operator');
+  assert.equal(opRes.status, 200);
+  const opBody = await opRes.json();
+  assert.ok(opBody.rows.length > 0, 'operator-verb rows exist');
+  assert.ok(opBody.rows.every(r => r.action === 'sessions_revoked_by_operator'), 'only operator rows');
+
+  const adRes = await auditGet(c, '?verb=sessions_revoked_by_workspace_admin');
+  assert.equal(adRes.status, 200);
+  const adBody = await adRes.json();
+  assert.ok(adBody.rows.length > 0, 'admin-verb rows exist');
+  assert.ok(adBody.rows.every(r => r.action === 'sessions_revoked_by_workspace_admin'), 'only admin rows');
+
+  const unRes = await auditGet(c, '?verb=some_unknown_verb');
+  assert.equal(unRes.status, 200, 'unknown verb is a filter, not a 400 (flagged assumption)');
+  assert.deepEqual(await unRes.json(), { rows: [], nextBefore: null });
+});
+
+test('AUD-03: keyset pagination — 100 per page, no duplicates, terminates with null nextBefore', async () => {
+  const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  const c = operator.cookie();
+  // Seed 105 synthetic rows with strictly decreasing created_at (unique ts → id tie-break never decides).
+  const base = Date.now() + 100000;
+  withDb(server.dbPath, db => {
+    const ins = db.prepare(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+    );
+    for (let i = 0; i < 105; i++) {
+      ins.run(`pg-${String(i).padStart(5, '0')}`, 'pg-actor', 'pg-target', 'sessions_revoked_by_operator', 1, '127.0.0.1', null, 'Pagination Actor', 'actor@pg.test', 'Pagination Target', 'target@pg.test', base - i * 1000);
+    }
+  });
+
+  const seen = [];
+  let before = null;
+  let beforeId = null;
+  let pages = 0;
+  for (;;) {
+    const q = before == null ? '' : `?before=${before}&beforeId=${encodeURIComponent(beforeId)}`;
+    const res = await auditGet(c, q);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(body.rows.length <= 100, 'page capped at 100');
+    for (const r of body.rows) seen.push(r.id);
+    pages++;
+    if (!body.nextBefore) break;
+    assert.equal(body.rows.length, 100, 'non-final pages are full');
+    before = body.nextBefore.created_at;
+    beforeId = body.nextBefore.id;
+    assert.ok(pages < 10, 'pagination terminates (guard against infinite loop)');
+  }
+  assert.equal(new Set(seen).size, seen.length, 'no row appears twice across pages');
+  assert.ok(seen.length >= 105, 'every seeded row was walked');
+  assert.ok(seen.includes('pg-00000'), 'the oldest seeded row is on the final page');
+});
+
+test('AUD-03: deleted-user survival — trail rows render from snapshot columns after target deletion', async () => {
+  const operator = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  const victim = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('auditvictim@test.local'));
+  // No FK on audit_log (D-A2): deleting the user leaves the trail row intact.
+  withDb(server.dbPath, db => db.prepare('delete from users where id = ?').run(victim.id));
+
+  const res = await auditGet(operator.cookie(), '?verb=sessions_revoked_by_operator');
+  assert.equal(res.status, 200);
+  const row = (await res.json()).rows.find(r => r.target_id === victim.id);
+  assert.ok(row, 'the trail row survives the target deletion');
+  assert.equal(row.target_name, 'audit victim', 'target name snapshot still readable');
+  assert.equal(row.target_email, 'auditvictim@test.local', 'target email snapshot still readable');
+  assert.ok(row.actor_name && row.actor_email, 'actor snapshots still readable');
+});
+
 test('D-A4: server.js contains no UPDATE or DELETE against audit_log', async () => {
   const text = fs.readFileSync(path.resolve(import.meta.dirname, '..', 'server.js'), 'utf8');
   assert.ok(!/update\s+audit_log/i.test(text), 'no UPDATE audit_log anywhere in server.js');
