@@ -288,7 +288,10 @@ A.go = el => {
   if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa') && api.enabled) {
     refreshSessions();
     refreshTfa(); // T-16-13: the card's on/off split re-reads the server
-    if (p.sec === 'sessions') refreshOperatorUsers(); // OPREV-02: card lives only on the sessions tab (IN-02)
+    if (p.sec === 'sessions') {
+      refreshOperatorUsers(); // OPREV-02: card lives only on the sessions tab (IN-02)
+      refreshAuditLog(); // AUD-03: the trail card lives beside the operator card
+    }
   }
 };
 A.back = () => {
@@ -1974,6 +1977,46 @@ A.operatorRevokeConfirm = async el => {
   }
   await refreshOperatorUsers(); // re-fetch so the list reflects the revoke
   toast(t('settings.operator.toastRevoked'));
+};
+
+/* AUD-03: the audit trail card's ground truth (owner-facing, D-V1): the rows
+   come from GET /api/audit-log — never synthesized client-side. A non-401
+   failure leaves the state null; the 401 teardown belongs to the central
+   intercept (D-28). Workspace admins get 403 here, so the null state IS the
+   honest answer for non-owners too. */
+const auditVerb = () => S.ui.auditVerb || '';
+async function fetchAuditPage(params) {
+  const res = await api.auditLog(params);
+  if (!res.ok) {
+    if (res.status !== 401) S.ui.auditTrail = null; // D-28: 401 defers to the intercept
+    return null;
+  }
+  S.ui.auditTrail = { rows: res.data.rows || [], nextBefore: res.data.nextBefore || null };
+  render();
+  return S.ui.auditTrail;
+}
+export async function refreshAuditLog() {
+  if (!api.enabled || !api.user?.isInstanceAdmin) return null;
+  S.ui.auditTrail = null;
+  return fetchAuditPage(auditVerb() ? { verb: auditVerb() } : {});
+}
+A.auditVerbFilter = async el => {
+  S.ui.auditVerb = el.dataset.v || '';
+  await refreshAuditLog(); // D-V2: a chip click resets state and re-fetches page 1
+};
+A.auditLoadMore = async () => {
+  const trail = S.ui.auditTrail;
+  if (!trail?.nextBefore) return; // D-V3: the button only exists when a cursor exists
+  const params = { before: trail.nextBefore.created_at, beforeId: trail.nextBefore.id };
+  if (auditVerb()) params.verb = auditVerb();
+  const res = await api.auditLog(params);
+  if (!res.ok) {
+    if (res.status !== 401) return;
+    return; // D-28
+  }
+  trail.rows = [...trail.rows, ...(res.data.rows || [])]; // APPEND — never replace
+  trail.nextBefore = res.data.nextBefore || null;
+  render();
 };
 
 /* AUD-02: the workspace-admin revoke stage on the members surface — the same

@@ -265,6 +265,17 @@ export const api = {
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('POST', `/api/w/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/revoke-sessions`);
   },
+  /* AUD-03: the audit trail read — tier-scoped SERVER-side (D-T3); the client
+     only forwards the verb filter and the keyset cursor. Auth-scoped, no slug
+     guard — same family as the operator methods above (D-121 read precedent). */
+  async auditLog(params = {}) {
+    const q = new URLSearchParams();
+    if (params.verb) q.set('verb', params.verb);
+    if (params.before != null) q.set('before', String(params.before));
+    if (params.beforeId) q.set('beforeId', params.beforeId);
+    const qs = q.toString();
+    return call('GET', `/api/audit-log${qs ? `?${qs}` : ''}`);
+  },
   /* Change the signed-in account's own password (PASS-02). api.changePassword is
      the only client entry point to PATCH /api/auth/password. Auth-scoped, no slug
      guard — same family as the sessions methods above (D-34). On success the

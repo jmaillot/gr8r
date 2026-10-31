@@ -122,6 +122,34 @@ export function operatorCard() {
     .join('')}</div>`;
 }
 
+/* The audit trail (AUD-03, D-V1): owner-facing read of the append-only
+   audit_log, mounted beside the operator card on the sessions tab. Rows render
+   purely from snapshot columns (D-V4) — no joins — so rows whose target user
+   was deleted stay fully readable. Verb filter chips (D-V2) re-query the
+   server; load-more appends the next keyset page (D-V3). */
+export function auditTrailCard() {
+  const trail = S.ui.auditTrail;
+  if (!trail) return '';
+  const verbLabel = a => t(a === 'sessions_revoked_by_workspace_admin' ? 'settings.audit.verbAdmin' : 'settings.audit.verbOperator');
+  const chips = [
+    ['', 'settings.audit.filterAll'],
+    ['sessions_revoked_by_operator', 'settings.audit.filterOperator'],
+    ['sessions_revoked_by_workspace_admin', 'settings.audit.filterAdmin'],
+  ];
+  const row = r =>
+    srow(
+      `<span class="row" style="gap:8px">${esc(r.actor_name || '')}<span class="faint">${esc(r.actor_email || '')}</span><span class="badge">${verbLabel(r.action)}</span></span>`,
+      `<span class="row" style="gap:8px;flex-wrap:wrap"><span>${t('settings.audit.target')} ${esc(r.target_name || '')} <span class="faint">${esc(r.target_email || '')}</span></span><span class="faint">${t('settings.audit.sessions')}: ${esc(String(r.session_count ?? ''))}</span><span class="faint">${esc(r.ip || '—')}</span><span class="faint">${esc(r.workspace_id || '—')}</span><span class="faint">${ago(r.created_at)}</span></span>`,
+      '',
+    );
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.audit.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.audit.lead')}</p><div class="row" style="gap:8px;margin-bottom:10px">${chips
+    .map(([v, k]) => `<button class="btn btn-sm ${auditVerbMatch(v) ? 'btn-primary' : 'btn-secondary'}" data-a="auditVerbFilter" data-v="${v}" aria-pressed="${auditVerbMatch(v)}">${t(k)}</button>`)
+    .join('')}</div>${
+    trail.rows.length ? trail.rows.map(row).join('') : `<p class="hint">${t('settings.audit.empty')}</p>`
+  }${trail.nextBefore ? `<div style="margin-top:10px"><button class="btn btn-secondary btn-sm" data-a="auditLoadMore">${t('settings.audit.loadMore')}</button></div>` : ''}</div>`;
+}
+const auditVerbMatch = v => (S.ui.auditVerb || '') === v;
+
 export function pageSettings() {
   const sec = S.ui.params.sec || S.ui.settings || 'appearance';
   const title = SET_NAV.flatMap(g => g[1]).find(x => x[0] === sec) || ['appearance', 'settings.nav.appearance'];
@@ -520,7 +548,7 @@ export function settingsBody(sec, title) {
           )
           .join('') +
         `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${rows.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
-      ) + (api.user?.isInstanceAdmin ? operatorCard() : '');
+      ) + (api.user?.isInstanceAdmin ? operatorCard() + auditTrailCard() : '');
     }
   }
   return page404();
