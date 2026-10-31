@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 25
-current_phase_name: keyring-version-aware-envelopes
+current_phase_name: Keyring & Version-Aware Envelopes
 status: executing
 stopped_at: Phase 25 context gathered
-last_updated: "2026-10-31T16:36:01.989Z"
+last_updated: "2026-10-31T16:37:26.852Z"
 last_activity: 2026-10-31
-last_activity_desc: Phase 24 execution started
-state_head: c786fb58d55128a7465777d310cdc7a8ce69638c
+last_activity_desc: Phase 25 execution started
+state_head: 2cda44c2d54de9275a1587bfec6caec8937c9786
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
   completed_plans: 9
-  percent: 0
+  percent: 20
 ---
 
 # STATE.md
@@ -28,12 +28,12 @@ progress:
 
 ## Current Position
 
-Phase: 25 (keyring-version-aware-envelopes) — READY TO EXECUTE
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-10-31 — Phase 24 execution started
+Phase: 25 (Keyring & Version-Aware Envelopes) — EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 25 — plan 25-01 complete
+Last activity: 2026-10-31 — 25-01 executed (version-aware filter + SC-1 proof, D-K7 reporting)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Milestone History
 
@@ -71,6 +71,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 23]: urlForView maps every navigable view to its own path (plan 23-04): per-view URLs are what make popstate back/forward resolve views; drawer open/close push task/underlying URLs through go()
 - [Phase 23]: G-23-1 closed (plan 23-05): queueNotifEmails resolves byline/recipient from memberships⋈users authority rows (workspace-scoped), doc profiles as fallback, 'Un membre' last resort
 - [Phase 23]: 23-06: unknown team id falls back to workspace home silently (no oracle, T-23-07); bare /team resolves to the teams list
+- [Phase 25]: D-K6 realized as one isEnvelopeVersion predicate (/^v\d+:/) behind a broad `not like 'v_:%'` SQL prefilter — no known-versions list
+- [Phase 25]: D-K7 recognition is decryptability-based (decryptTotpSecret === null ⇒ unrecognized) — v2 rows silence themselves when Plan 02's decrypt support lands; D-78c gained a sanctioned third caller (the boot probe)
 
 ### Pending Todos
 
@@ -87,9 +89,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:16:21.490Z
-Stopped at: Phase 25 context gathered
-Resume file: .planning/phases/25-keyring-version-aware-envelopes/25-CONTEXT.md
+Last session: 2026-10-31T16:53:08Z
+Stopped at: Completed 25-01-PLAN.md
+Resume file: .planning/phases/25-keyring-version-aware-envelopes/25-02-PLAN.md
 
 ## Performance Metrics
 
@@ -104,3 +106,4 @@ Resume file: .planning/phases/25-keyring-version-aware-envelopes/25-CONTEXT.md
 | Phase 24 P01 | 15 min | 2 tasks | 2 files |
 | Phase 24 P02 | 25 min | 3 tasks | 10 files |
 | Phase 24 P03 | 35 min | 2 tasks | 10 files |
+| Phase 25 P01 | 12 min | 3 tasks | 3 files |

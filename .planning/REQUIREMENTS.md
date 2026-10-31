@@ -50,7 +50,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 
 ### MASTER_KEY Rotation (KEY)
 
-- [ ] **KEY-01**: The boot migration filter is version-aware — an existing `v2:` (or any
+- [x] **KEY-01**: The boot migration filter is version-aware — an existing `v2:` (or any
   `v<n>:`) envelope is never re-wrapped or treated as plaintext; proven by test before any
   v2 envelope can exist
 - [ ] **KEY-02**: TOTP secrets support a self-describing key-version envelope
@@ -107,7 +107,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | AUD-01 | Phase 24 | Complete |
 | AUD-02 | Phase 24 | Complete |
 | AUD-03 | Phase 24 | Complete |
-| KEY-01 | Phase 25 | Pending |
+| KEY-01 | Phase 25 | Complete |
 | KEY-02 | Phase 25 | Pending |
 | KEY-03 | Phase 26 | Pending |
 | KEY-04 | Phase 26 | Pending |
