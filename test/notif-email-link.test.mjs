@@ -70,6 +70,84 @@ test('the boot guard message covers notification links as well as invitation lin
   assert.match(guard, /invitation/i, 'the boot-guard message must keep mentioning invitation links');
 });
 
+/* ---------- G-23-1: byline/recipient resolution from the authority rows ----------
+
+   The stored workspace doc never persists account-backed member profiles
+   (roster authority lives in memberships+users, rebuilt on read via
+   syncProfiles). queueNotifEmails must therefore resolve the byline and the
+   recipient email from the authority rows first, keeping the doc-profile map
+   as the fallback for doc-only members and 'Un membre' as the last resort.
+   Same static-extraction pattern as the URL tests above. */
+
+test('queueNotifEmails sources names/emails from the authority rows (memberships ⋈ users)', () => {
+  assert.ok(
+    queueSource.includes('from memberships m join users u on u.id = m.user_id where m.workspace_id = ?'),
+    'the authority query must live inside queueNotifEmails',
+  );
+});
+
+function authorityMapBuilder() {
+  const m = queueSource.match(/const authority =([\s\S]*?);\n/);
+  assert.ok(m, 'queueNotifEmails no longer builds an authority map');
+  return new Function('db', `return (${m[1].trim()});`);
+}
+
+function bylineResolver() {
+  const m = queueSource.match(/const by =([\s\S]*?);\n/);
+  assert.ok(m, 'queueNotifEmails no longer resolves the byline');
+  return new Function('authority', 'profiles', 'n', `return (${m[1].trim()});`);
+}
+
+function recipientResolver() {
+  const m = queueSource.match(/const to =([\s\S]*?);\n/);
+  assert.ok(m, 'queueNotifEmails no longer resolves the recipient email');
+  return new Function('authority', 'profile', 'emailByUserId', 'emailByMemberEmail', 'n', `return (${m[1].trim()});`);
+}
+
+const AUTH_ROWS = [{ member_id: 'm_acc', user_id: 'u1', name: 'Alice', email: 'alice@test.local' }];
+const mkAuthority = rows => new Map(rows.map(r => [r.member_id, r]));
+
+test('the authority map is keyed by member_id and built from the workspace-scoped query', () => {
+  const prepared = [];
+  const db = { prepare: sql => { prepared.push(sql); return { all: () => AUTH_ROWS }; } };
+  const authority = authorityMapBuilder()(db);
+  assert.ok(prepared[0].includes('where m.workspace_id = ?'), 'the query must be workspace-scoped');
+  assert.deepEqual([...authority.keys()], ['m_acc']);
+  assert.equal(authority.get('m_acc').name, 'Alice');
+});
+
+test('byline: an account-backed author resolves to their account name even with an empty doc roster', () => {
+  assert.equal(bylineResolver()(mkAuthority(AUTH_ROWS), new Map(), { by: 'm_acc' }), 'Alice');
+});
+
+test('byline: a doc-only member still resolves from the doc profile', () => {
+  const profiles = new Map([['m_doc', { id: 'm_doc', name: 'Bob Doc' }]]);
+  assert.equal(bylineResolver()(new Map(), profiles, { by: 'm_doc' }), 'Bob Doc');
+});
+
+test('byline: authority wins over the doc profile; neither → the Un membre fallback', () => {
+  const profiles = new Map([['m_acc', { id: 'm_acc', name: 'Stale Doc Name' }]]);
+  assert.equal(bylineResolver()(mkAuthority(AUTH_ROWS), profiles, { by: 'm_acc' }), 'Alice');
+  assert.equal(bylineResolver()(new Map(), new Map(), { by: 'm_ghost' }), 'Un membre');
+});
+
+test('recipient: an account-backed recipient gets their email even when the doc profile is absent', () => {
+  assert.equal(recipientResolver()(mkAuthority(AUTH_ROWS), null, new Map(), new Map(), { to: 'm_acc' }), 'alice@test.local');
+});
+
+test('recipient: a doc-only profile still resolves via userId → emailByUserId, then member email', () => {
+  const emailByUserId = new Map([['u9', 'u9@test.local']]);
+  const emailByMemberEmail = new Map([['m_doc2', 'direct@test.local']]);
+  assert.equal(recipientResolver()(new Map(), { userId: 'u9' }, emailByUserId, new Map(), { to: 'm_doc' }), 'u9@test.local');
+  assert.equal(recipientResolver()(new Map(), null, new Map(), emailByMemberEmail, { to: 'm_doc2' }), 'direct@test.local');
+});
+
+test('recipient: authority wins over the profile path; neither → undefined (skipped as today)', () => {
+  const emailByUserId = new Map([['u1', 'stale@test.local']]);
+  assert.equal(recipientResolver()(mkAuthority(AUTH_ROWS), { userId: 'u1' }, emailByUserId, new Map(), { to: 'm_acc' }), 'alice@test.local');
+  assert.equal(recipientResolver()(new Map(), null, new Map(), new Map(), { to: 'm_ghost' }), undefined);
+});
+
 /* ---------- the URL lands in both message bodies (real mailer, loopback SMTP) ---------- */
 
 /* A throwaway SMTP peer: greets, advertises nothing fancy (no STARTTLS, no
