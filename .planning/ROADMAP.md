@@ -85,7 +85,11 @@ Plans:
   3. When neither key can decrypt a secret, the existing fail-closed 503 `masterKeyMissing` behavior is unchanged — no plaintext fallback anywhere
   4. 2FA login, enrollment and disable flows behave exactly as before for existing `v1:` secrets (signature of `requireTotpSecret` unchanged)
 
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 25-01-PLAN.md — Version-aware boot filter + SC-1 negative proof (KEY-01, wave 1)
+- [ ] 25-02-PLAN.md — Keyring + v2 envelopes + enable-path writer flip (KEY-02, wave 2, depends on 25-01)
 
 ### Phase 26: Re-Wrap Rotation & Key-Custody Runbook
 
