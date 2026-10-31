@@ -18,7 +18,7 @@ deep-link path).
 
 - [x] **Phase 23: Email Deep Links & Creator Watching** - Every notification email links straight to the task, a logged-out click returns to that task after sign-in, and the task creator is auto-watched
 - [ ] **Phase 24: Operator Audit & Workspace-Admin Tier** - Every operator/admin session revocation writes a same-transaction, append-only audit row, and workspace admins get their own revocation tier on the same audited path
-- [ ] **Phase 25: Keyring & Version-Aware Envelopes** - The boot migration filter becomes version-aware before any v2 envelope exists, and TOTP secrets carry a self-describing key-version envelope decrypted through a keyring
+- [x] **Phase 25: Keyring & Version-Aware Envelopes** - The boot migration filter becomes version-aware before any v2 envelope exists, and TOTP secrets carry a self-describing key-version envelope decrypted through a keyring (completed 2026-10-31)
 - [ ] **Phase 26: Re-Wrap Rotation & Key-Custody Runbook** - MASTER_KEY rotates via an idempotent boot-time re-wrap pass with no 2FA re-enrollment, and DEPLOY.md documents the full custody runbook
 - [ ] **Phase 27: Due-Date Reminder Scheduler** - A dependency-free server-side pass notifies assignees before/on due dates, restart-safe and exactly-once, honoring per-type prefs and email deep links
 
@@ -85,7 +85,7 @@ Plans:
   3. When neither key can decrypt a secret, the existing fail-closed 503 `masterKeyMissing` behavior is unchanged — no plaintext fallback anywhere
   4. 2FA login, enrollment and disable flows behave exactly as before for existing `v1:` secrets (signature of `requireTotpSecret` unchanged)
 
-**Plans:** 2/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -139,6 +139,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
 | 24. Operator Audit & Workspace-Admin Tier | 3/3 | In Progress|  |
-| 25. Keyring & Version-Aware Envelopes | 2/2 | Complete |  |
+| 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 0/? | Not started | - |
 | 27. Due-Date Reminder Scheduler | 0/? | Not started | - |
