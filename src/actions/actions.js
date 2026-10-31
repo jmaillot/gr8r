@@ -1976,6 +1976,34 @@ A.operatorRevokeConfirm = async el => {
   toast(t('settings.operator.toastRevoked'));
 };
 
+/* AUD-02: the workspace-admin revoke stage on the members surface — the same
+   D-90 two-stage inline confirm as the operator card, staged by member id. */
+A.memberRevokeAsk = el => {
+  S.ui.memberRevoke = el.dataset.id;
+  render();
+};
+A.memberRevokeCancel = () => {
+  S.ui.memberRevoke = null;
+  render();
+};
+A.memberRevokeConfirm = async el => {
+  const id = el.dataset.id;
+  const m = mem(id);
+  S.ui.memberRevoke = null;
+  if (!m?.userId) {
+    render();
+    return toast(t('err.noAccountYet', { name: m?.name || '' }), { kind: 'err' });
+  }
+  const res = await api.revokeMemberSessions(m.userId);
+  if (!res.ok) {
+    /* D-28: the central intercept owns every mid-session revocation 401. */
+    if (res.status === 401) return;
+    return toast(tErr(res.data?.code, res.data, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  await refreshMembers();
+  toast(t('members.toastRevoked', { name: m.name }));
+};
+
 A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
   if (!row?.email) return;

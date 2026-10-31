@@ -1353,6 +1353,7 @@
   "act.inviteToWorkspace": "Inviter dans l’espace de travail",
   "page.team.noProjects": "Aucun projet",
   "page.members.invitePending": "Invitation en attente",
+  "members.toastRevoked": "Sessions révoquées pour {name}. La personne doit se reconnecter.",
   "page.members.neverSignedIn": "Jamais connecté",
   "page.members.onlineNow": "En ligne actuellement",
   "page.members.activeAgo": "Actif {ago}",

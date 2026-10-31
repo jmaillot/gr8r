@@ -1353,6 +1353,7 @@
   "act.inviteToWorkspace": "Invite to workspace",
   "page.team.noProjects": "No projects",
   "page.members.invitePending": "Invite pending",
+  "members.toastRevoked": "Sessions revoked for {name}. They must sign in again.",
   "page.members.neverSignedIn": "Never signed in",
   "page.members.onlineNow": "Online now",
   "page.members.activeAgo": "Active {ago}",

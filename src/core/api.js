@@ -256,6 +256,15 @@ export const api = {
   async operatorRevokeSessions(userId) {
     return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/revoke-sessions`);
   },
+  /* AUD-02 (phase 24): the workspace-admin tier — revoke a member's sessions
+     from the members surface. D-R1 locks the /api/w/ prefix even though the
+     sibling member routes use /api/workspaces/. The slug resolves from the
+     loaded workspace like every workspace-scoped method above. */
+  async revokeMemberSessions(userId) {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    return call('POST', `/api/w/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/revoke-sessions`);
+  },
   /* Change the signed-in account's own password (PASS-02). api.changePassword is
      the only client entry point to PATCH /api/auth/password. Auth-scoped, no slug
      guard — same family as the sessions methods above (D-34). On success the

@@ -52,7 +52,9 @@ export function pageMembers() {
       <td style="text-align:left"><span class="row">${ic(TM[m.team].icon, 13)}${TM[m.team].name}</span></td><td class="num">${ap}</td><td class="num">${ot}</td>
       <td style="text-align:left" class="muted">${m.last == null ? '—' : m.last < 5 ? `<span style="color:var(--green)">${t('page.members.online')}</span>` : ago(minsAgo(m.last))}</td>
       <td style="text-align:left">${m.status === 'invited' ? `<span class="badge amber"><span class="dot"></span>${t('page.members.invited')}</span>` : m.status === 'deactivated' ? `<span class="badge gray">${t('page.members.deactivated')}</span>` : `<span class="badge green"><span class="dot"></span>${t('page.members.active')}</span>`}</td>
-      <td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.memberOptions')}">${ic('ellipsis', 14)}</button></td></tr>`;
+      <td>${isAdmin && m.userId ? (S.ui.memberRevoke === m.id
+        ? `<span class="row" style="gap:8px;justify-content:flex-end"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="memberRevokeConfirm" data-id="${esc(m.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="memberRevokeCancel">${t('common.cancel')}</button></span>`
+        : `<button class="btn btn-secondary btn-sm" data-a="memberRevokeAsk" data-id="${esc(m.id)}">${t('settings.operator.revokeShort')}</button>`) : ''}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.memberOptions')}">${ic('ellipsis', 14)}</button></td></tr>`;
       })
       .join('')}
     </tbody></table>`
