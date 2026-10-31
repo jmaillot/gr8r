@@ -53,7 +53,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 - [x] **KEY-01**: The boot migration filter is version-aware — an existing `v2:` (or any
   `v<n>:`) envelope is never re-wrapped or treated as plaintext; proven by test before any
   v2 envelope can exist
-- [ ] **KEY-02**: TOTP secrets support a self-describing key-version envelope
+- [x] **KEY-02**: TOTP secrets support a self-describing key-version envelope
   (`v2:<key-id>:…`); decrypt resolves the key by id through a keyring (current +
   `MASTER_KEY_PREVIOUS`) via `requireTotpSecret` with its fail-closed contract unchanged —
   no plaintext fallback anywhere
@@ -108,7 +108,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | AUD-02 | Phase 24 | Complete |
 | AUD-03 | Phase 24 | Complete |
 | KEY-01 | Phase 25 | Complete |
-| KEY-02 | Phase 25 | Pending |
+| KEY-02 | Phase 25 | Complete |
 | KEY-03 | Phase 26 | Pending |
 | KEY-04 | Phase 26 | Pending |
 | REM-01 | Phase 27 | Pending |

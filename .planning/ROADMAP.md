@@ -85,14 +85,14 @@ Plans:
   3. When neither key can decrypt a secret, the existing fail-closed 503 `masterKeyMissing` behavior is unchanged — no plaintext fallback anywhere
   4. 2FA login, enrollment and disable flows behave exactly as before for existing `v1:` secrets (signature of `requireTotpSecret` unchanged)
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 25-01-PLAN.md — Version-aware boot filter + SC-1 negative proof (KEY-01, wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 25-02-PLAN.md — Keyring + v2 envelopes + enable-path writer flip (KEY-02, wave 2, depends on 25-01)
+- [x] 25-02-PLAN.md — Keyring + v2 envelopes + enable-path writer flip (KEY-02, wave 2, depends on 25-01)
 
 ### Phase 26: Re-Wrap Rotation & Key-Custody Runbook
 
@@ -139,6 +139,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
 | 24. Operator Audit & Workspace-Admin Tier | 3/3 | In Progress|  |
-| 25. Keyring & Version-Aware Envelopes | 0/? | Not started | - |
+| 25. Keyring & Version-Aware Envelopes | 2/2 | Complete |  |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 0/? | Not started | - |
 | 27. Due-Date Reminder Scheduler | 0/? | Not started | - |

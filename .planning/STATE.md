@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 25 (Keyring & Version-Aware Envelopes) — EXECUTING
-Plan: 2 of 2
-Status: Executing Phase 25 — plan 25-01 complete
-Last activity: 2026-10-31 — 25-01 executed (version-aware filter + SC-1 proof, D-K7 reporting)
+Phase: 25 (Keyring & Version-Aware Envelopes) — COMPLETE
+Plan: 2 of 2 (all executed)
+Status: Phase 25 complete — ready for verify-work / Phase 26
+Last activity: 2026-10-31 — 25-02 executed (keyring, D-K3/D-K4 frozen v2 envelope, writer flip, SC-2/SC-3/SC-4 proven)
 
 Progress: [██░░░░░░░░] 20%
 
@@ -73,6 +73,8 @@ Progress: [██░░░░░░░░] 20%
 - [Phase 23]: 23-06: unknown team id falls back to workspace home silently (no oracle, T-23-07); bare /team resolves to the teams list
 - [Phase 25]: D-K6 realized as one isEnvelopeVersion predicate (/^v\d+:/) behind a broad `not like 'v_:%'` SQL prefilter — no known-versions list
 - [Phase 25]: D-K7 recognition is decryptability-based (decryptTotpSecret === null ⇒ unrecognized) — v2 rows silence themselves when Plan 02's decrypt support lands; D-78c gained a sanctioned third caller (the boot probe)
+- [Phase 25]: D-K3/D-K4 format frozen by user checkpoint — key id = first 8 hex chars of sha256(raw key material), envelope = `v2:<key-id>:<iv>:<tag>:<ct>`
+- [Phase 25]: encryptTotpSecret gained a version param (default 'v1'); ONLY the enable call site writes v2 — boot migration keeps v1 (Phase 26 re-wrap owns the stock)
 
 ### Pending Todos
 
@@ -89,9 +91,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:53:08Z
-Stopped at: Completed 25-01-PLAN.md
-Resume file: .planning/phases/25-keyring-version-aware-envelopes/25-02-PLAN.md
+Last session: 2026-10-31
+Stopped at: Completed 25-02-PLAN.md — Phase 25 complete
+Resume file: None
 
 ## Performance Metrics
 
@@ -107,3 +109,4 @@ Resume file: .planning/phases/25-keyring-version-aware-envelopes/25-02-PLAN.md
 | Phase 24 P02 | 25 min | 3 tasks | 10 files |
 | Phase 24 P03 | 35 min | 2 tasks | 10 files |
 | Phase 25 P01 | 12 min | 3 tasks | 3 files |
+| Phase 25 P02 | ~75 min | 3 tasks | 3 files |
