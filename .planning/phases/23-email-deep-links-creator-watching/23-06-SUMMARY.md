@@ -68,3 +68,9 @@ None.
 
 - T-23-07 (Information Disclosure, unknown team id): mitigated — silent workspace-home fallback, no toast, no 404 page, id never echoed; e2e asserts `.toast` count 0 and no drawer.
 - T-23-SC (package installs): N/A — zero runtime dependencies, no installs performed.
+
+## Self-Check: PASSED
+
+- SUMMARY.md exists at the expected phase path
+- Commits a660379 (RED) and 87947d5 (fix) present in history; docs commit a699cb1
+- Verification commands cited above all run green at plan_head_after 87947d5
