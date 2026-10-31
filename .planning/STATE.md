@@ -5,11 +5,11 @@ milestone_name: Reliability & Rotation
 current_phase: 24
 current_phase_name: Operator Audit & Workspace-Admin Tier
 status: verifying
-stopped_at: Completed 24-03-PLAN.md
-last_updated: "2026-10-31T16:03:50.242Z"
+stopped_at: Phase 25 context gathered
+last_updated: "2026-10-31T16:16:21.534Z"
 last_activity: 2026-10-31
 last_activity_desc: Phase 24 execution started
-state_head: 9643b92612a7987b4dd30aa5809d6fdf8a673dc5
+state_head: 505d6490b570291c7fe4d01a63c177ff567e0648
 progress:
   total_phases: 5
   completed_phases: 1
@@ -87,9 +87,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-31T16:03:50.196Z
-Stopped at: Completed 24-03-PLAN.md
-Resume file: None
+Last session: 2026-10-31T16:16:21.490Z
+Stopped at: Phase 25 context gathered
+Resume file: .planning/phases/25-keyring-version-aware-envelopes/25-CONTEXT.md
 
 ## Performance Metrics
 
