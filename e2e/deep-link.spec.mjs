@@ -35,6 +35,8 @@ function expectStatus(step, res, allowed) {
 const run = newRunId();
 const TASK_KEY = 'dl-roadmap-201';
 const TASK_TITLE = `Deep Link Target ${run}`;
+const TEAM_ID = `tm_dl_${run}`;
+const TEAM_NAME = `Deep Link Team ${run}`;
 const fixture = { user: { ...OWNER, ip: clientIp(run, 'dl-owner') } };
 
 test.beforeAll(async () => {
@@ -65,8 +67,11 @@ test.beforeAll(async () => {
       },
     ];
     doc.doc.data.projOrder = [...(doc.doc.data.projOrder || []), 'p_dl_roadmap'];
+    /* Idempotent across runs on a persistent e2e server: drop stale dl fixtures
+       from previous runs before appending this run's, so duplicate-key lookups
+       (find by key/id) always resolve to THIS run's fixture. */
     doc.doc.data.tasks = [
-      ...(doc.doc.data.tasks || []),
+      ...(doc.doc.data.tasks || []).filter(t => t.key !== TASK_KEY),
       {
         id: `t_dl_${run}`,
         key: TASK_KEY,
@@ -90,6 +95,13 @@ test.beforeAll(async () => {
         recur: null,
         creator: doc.memberId,
       },
+    ];
+    /* G-23-4: a real team fixture so /w/acme/team/:id has something to resolve
+       against (applyDeepLink's team branch matches data.teams by id). */
+    const teams = (doc.doc.data.teams || []).filter(t => !String(t.id).startsWith('tm_dl_'));
+    doc.doc.data.teams = [
+      ...teams,
+      { id: TEAM_ID, name: TEAM_NAME, icon: 'users', c: '#3B82C4', desc: `Deep-link team fixture ${run}` },
     ];
   });
 });
@@ -157,6 +169,42 @@ for (const lang of ['en', 'fr']) {
       const drawer = page.locator('.drawer');
       await expect(drawer).toBeVisible();
       await expect(drawer.getByText(TASK_TITLE).first()).toBeVisible();
+    });
+
+    // G-23-4 (T-23-07): /w/:slug/team/:id must be a first-class deep link —
+    // direct load and F5 render the team view (never page404), an unknown id
+    // lands on the workspace view with no existence oracle, and the bare
+    // /team address (old bookmarks) renders the teams list.
+    test('direct load of a team URL renders the team view; URL persists across reload', async ({ page }) => {
+      await signIn(page, lang);
+      await page.goto(`/w/acme/team/${TEAM_ID}`);
+
+      await expect(page).toHaveURL(new RegExp(`/w/acme/team/${TEAM_ID}$`));
+      await expect(page.locator('.page h1').first()).toHaveText(TEAM_NAME);
+
+      // The exact reported defect: F5 on a team URL never 404s.
+      await page.reload();
+      await expect(page).toHaveURL(new RegExp(`/w/acme/team/${TEAM_ID}$`));
+      await expect(page.locator('.page h1').first()).toHaveText(TEAM_NAME);
+    });
+
+    test('unknown team id lands on the workspace view with no existence oracle', async ({ page }) => {
+      await signIn(page, lang);
+      await page.goto('/w/acme/team/does-not-exist-999');
+
+      // Silent fallback to the workspace view — no toast, no 404 page, no
+      // signal that the id was rejected as a team specifically (T-23-07).
+      await expect(page).toHaveURL(/\/w\/acme$/);
+      await expect(page.locator('.drawer')).toHaveCount(0);
+      await expect(page.locator('.toast')).toHaveCount(0);
+    });
+
+    test('bare /w/acme/team renders the teams list, not a 404', async ({ page }) => {
+      await signIn(page, lang);
+      await page.goto('/w/acme/team');
+
+      await expect(page.locator('.page h1').first()).toHaveText(fmt('page.teams.title', lang));
+      await expect(page.locator('.page').getByText(TEAM_NAME).first()).toBeVisible();
     });
 
     // Bare login entry must stay untouched: no ?next= is written for a plain
