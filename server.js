@@ -1193,9 +1193,14 @@ function migrateTenancy() {
  * known-versions list, so future envelope versions are never re-wrapped as
  * plaintext by this migration (T-25-01). ONE predicate, shared by the
  * migration's candidate path and the in-transaction re-check — the D-75
- * defense-in-depth layers must not drift apart.
+ * defense-in-depth layers must not drift apart. The pattern is case-
+ * insensitive (WR-01) to agree with SQLite LIKE's ASCII case-insensitivity:
+ * the `v_:%` SQL prefilter already selects `V2:...` rows, so a case-sensitive
+ * predicate here would silently drop them from the D-K7 counter (never
+ * silent). SQLite LIKE remains the broad prefilter; this predicate is the
+ * per-row authority.
  */
-const ENVELOPE_VERSION_RE = /^v\d+:/;
+const ENVELOPE_VERSION_RE = /^v\d+:/i;
 function isEnvelopeVersion(value) {
   return ENVELOPE_VERSION_RE.test(String(value || '').trim());
 }

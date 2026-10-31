@@ -232,14 +232,17 @@ test('positive control: with a valid envelope AND a matching MASTER_KEY nothing 
 /* ---------- KEY-01 (Phase 25): structural drift guards on the migration ---------- */
 
 test('the migration filter and re-check share exactly ONE version-recognizer predicate (KEY-01, D-75)', () => {
-  /* Exactly one definition, and it is the generic /^v\d+:/ pattern — never a
-     known-versions list (D-K6 prohibition). */
+  /* Exactly one definition, and it is the generic /^v\d+:/i pattern — never a
+     known-versions list (D-K6 prohibition). The `i` flag (WR-01) keeps the
+     predicate aligned with SQLite LIKE's ASCII case-insensitivity, so
+     uppercase-prefixed envelope rows reach the D-K7 counter instead of being
+     silently skipped. */
   const defs = [...serverSource.matchAll(/function isEnvelopeVersion\(/g)].length;
   assert.equal(defs, 1, `expected exactly one predicate definition, found ${defs}`);
   const defAt = serverSource.indexOf('function isEnvelopeVersion(');
   assert.ok(
-    serverSource.includes('const ENVELOPE_VERSION_RE = /^v\\d+:/;') && defAt > -1,
-    'the predicate must be backed by the generic /^v\\d+:/ envelope pattern',
+    serverSource.includes('const ENVELOPE_VERSION_RE = /^v\\d+:/i;') && defAt > -1,
+    'the predicate must be backed by the generic /^v\\d+:/i envelope pattern',
   );
 
   /* The two v1-only shapes are gone for good: a resurfaced `not like 'v1:%'`
