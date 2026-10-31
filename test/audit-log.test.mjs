@@ -155,12 +155,16 @@ async function seedAdminTierFixtures() {
 
   ws.bossUserId = await mkMember('tier boss', 'tierboss@test.local', 'admin');
   ws.boss2UserId = await mkMember('tier boss two', 'tierbosstwo@test.local', 'admin');
-  ws.mateUserId = await mkMember('tier mate', 'tiermate@test.local', 'member');
-  ws.outsiderUserId = await mkMember('outsider', 'tieroutsider@test.local', 'member');
-  // The instance operator already exists (bootstrap account): invite + accept only,
-  // so the signup throttle is never consumed and the ownerImmune path stays
-  // reachable AFTER the notAMember gate.
-  ws.operatorUserId = await mkMember('the operator', ADMIN_EMAIL, 'member', { exists: true });
+  // The signup throttle allows 5/hour/IP and the AUD-01 tests above already
+  // spent two, so the member and outsider roles reuse the AUD-01 victim
+  // accounts (exists: true) instead of signing up fresh ones.
+  ws.mateUserId = await mkMember('rollback victim', 'rollbackvictim@test.local', 'member', { exists: true });
+  ws.outsiderUserId = (await signup(server.base, { name: 'non member', email: 'nonmember@test.local', password: GOOD })).data?.user?.id
+    || withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('nonmember@test.local')).id; // no invite: a true non-member
+  // The instance operator is ALREADY a member of this workspace: the workspace
+  // creator (ADMIN_EMAIL) becomes its owner, so no invite is needed — the
+  // ownerImmune path must be reachable BEFORE the rank rule for this target.
+  ws.operatorUserId = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get(ADMIN_EMAIL)).id;
 }
 
 /* The admin-tier revoke call: POST /api/w/<slug>/members/<id>/revoke-sessions. */
@@ -171,11 +175,12 @@ const adminRevoke = (cookie, userId, slug = ws.slug) =>
   });
 
 const bossLogin = async () => (await login(server.base, 'tierboss@test.local', GOOD)).client;
+const boss2Login = async () => (await login(server.base, 'tierbosstwo@test.local', GOOD)).client;
 
 test('AUD-02: workspace admin revokes a member — one audited row with workspace_id and the admin verb', async () => {
   if (!ws) await seedAdminTierFixtures();
   const boss = await bossLogin();
-  const mateRow = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('tiermate@test.local'));
+  const mateRow = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('rollbackvictim@test.local'));
   const bossRow = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('tierboss@test.local'));
 
   const res = await adminRevoke(boss.cookie(), ws.mateUserId);
@@ -222,16 +227,16 @@ test('AUD-02: admin targets a PEER ADMIN — 403 adminOnly, nothing deleted, not
 });
 
 test('AUD-02: admin targets an instance operator — 403 ownerImmune (defense in depth)', async () => {
-  const boss = await bossLogin();
+  const boss2 = await boss2Login(); // boss2's budget: peer-admin + ownerImmune + notAMember + zero-row pair
   const auditsBefore = auditRows().length;
-  const res = await adminRevoke(boss.cookie(), ws.operatorUserId);
+  const res = await adminRevoke(boss2.cookie(), ws.operatorUserId);
   assert.equal(res.status, 403);
   assert.equal((await res.json()).code, 'ownerImmune');
   assert.equal(auditRows().length, auditsBefore, 'no audit row on refusal');
 });
 
 test('AUD-02: admin targets a non-member — 404 notAMember', async () => {
-  const boss = await bossLogin();
+  const boss2 = await boss2Login();
   const auditsBefore = auditRows().length;
   const res = await adminRevoke(boss2.cookie(), ws.outsiderUserId);
   assert.equal(res.status, 404);
@@ -257,32 +262,39 @@ test('AUD-02: admin self-target — 200, current session survives, others revoke
 });
 
 test('AUD-02: member and viewer callers are refused by requireWorkspace — 403 adminOnly', async () => {
-  const outsider = (await login(server.base, 'tieroutsider@test.local', GOOD)).client;
-  const res = await adminRevoke(outsider.cookie(), ws.outsiderUserId);
+  const mate = (await login(server.base, 'rollbackvictim@test.local', GOOD)).client;
+  const res = await adminRevoke(mate.cookie(), ws.outsiderUserId);
   assert.equal(res.status, 403);
   assert.equal((await res.json()).code, 'adminOnly');
 });
 
 test('AUD-02: zero active sessions — 200 {revoked: 0}, no audit row, no security row (D-117)', async () => {
-  const boss = await bossLogin();
-  const mateRow = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('tiermate@test.local'));
+  const boss2 = await boss2Login(); // boss2's 5th and final throttle try
+  const mateRow = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('rollbackvictim@test.local'));
   const secBefore = withDb(server.dbPath, db =>
     db.prepare('select count(*) as n from security_log where user_id = ?').get(mateRow.id).n,
   );
   const auditsBefore = auditRows().filter(r => r.action === 'sessions_revoked_by_workspace_admin').length;
 
-  const res = await adminRevoke(boss.cookie(), ws.mateUserId); // sessions were already revoked in the first test
+  // The member-caller gate test above re-logged mate in, so this first revoke
+  // consumes that one live session (a fresh audit row) and the SECOND call
+  // proves the zero-row no-op: 200 {revoked: 0} and NOTHING written (D-117).
+  const first = await adminRevoke(boss2.cookie(), ws.mateUserId);
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).revoked, 1);
+
+  const res = await adminRevoke(boss2.cookie(), ws.mateUserId);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { revoked: 0, remaining: 0 });
   assert.equal(
     auditRows().filter(r => r.action === 'sessions_revoked_by_workspace_admin').length,
-    auditsBefore,
-    'no NEW audit row — the count is unchanged',
+    auditsBefore + 1,
+    'exactly the one new row from the first call — the zero-row call wrote nothing',
   );
   assert.equal(
     withDb(server.dbPath, db => db.prepare('select count(*) as n from security_log where user_id = ?').get(mateRow.id).n),
-    secBefore,
-    'no security_log row either',
+    secBefore + 1,
+    'security_log: one row from the first call, none from the zero-row call',
   );
 });
 
