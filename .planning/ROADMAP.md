@@ -16,7 +16,7 @@ deep-link path).
 
 ## Phases
 
-- [ ] **Phase 23: Email Deep Links & Creator Watching** - Every notification email links straight to the task, a logged-out click returns to that task after sign-in, and the task creator is auto-watched
+- [x] **Phase 23: Email Deep Links & Creator Watching** - Every notification email links straight to the task, a logged-out click returns to that task after sign-in, and the task creator is auto-watched
 - [ ] **Phase 24: Operator Audit & Workspace-Admin Tier** - Every operator/admin session revocation writes a same-transaction, append-only audit row, and workspace admins get their own revocation tier on the same audited path
 - [ ] **Phase 25: Keyring & Version-Aware Envelopes** - The boot migration filter becomes version-aware before any v2 envelope exists, and TOTP secrets carry a self-describing key-version envelope decrypted through a keyring
 - [ ] **Phase 26: Re-Wrap Rotation & Key-Custody Runbook** - MASTER_KEY rotates via an idempotent boot-time re-wrap pass with no 2FA re-enrollment, and DEPLOY.md documents the full custody runbook
