@@ -71,7 +71,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 - [x] **AUD-01**: Every operator session revocation writes an append-only audit row (actor,
   action, target, session count revoked, timestamp, IP) in the SAME transaction as the
   revocation; audit rows are never editable or deletable through the app
-- [ ] **AUD-02**: A workspace admin can revoke the sessions of members of their own
+- [x] **AUD-02**: A workspace admin can revoke the sessions of members of their own
   workspace (below the operator tier, with the same owner-immunity and self-exclusion
   semantics), and every such action rides the same audited path
 - [ ] **AUD-03**: Owners can see the operator/admin action trail (filtered machine verbs) in
@@ -105,7 +105,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | LINK-03 | Phase 23 | Complete |
 | LINK-04 | Phase 23 | Complete |
 | AUD-01 | Phase 24 | Complete |
-| AUD-02 | Phase 24 | Pending |
+| AUD-02 | Phase 24 | Complete |
 | AUD-03 | Phase 24 | Pending |
 | KEY-01 | Phase 25 | Pending |
 | KEY-02 | Phase 25 | Pending |
