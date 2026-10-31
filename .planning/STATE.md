@@ -5,16 +5,16 @@ milestone_name: Reliability & Rotation
 current_phase: 23
 current_phase_name: Email Deep Links & Creator Watching
 status: executing
-stopped_at: Completed 23-05-PLAN.md
-last_updated: "2026-10-31T13:05:00.000Z"
+stopped_at: Completed 23-06-PLAN.md
+last_updated: "2026-10-31T12:00:34.362Z"
 last_activity: 2026-10-31
-last_activity_desc: Gap-closure plan 23-05 executed (G-23-1 email byline authority resolution)
-state_head: 5341d4554054383f2ea639021c4e784484c42886
+last_activity_desc: Gap-closure plan 23-06 executed (G-23-4 team deep-link resolution)
+state_head: 87947d52f9645b9735741d021e783e9638847d02
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -29,11 +29,11 @@ progress:
 ## Current Position
 
 Phase: 23 (Email Deep Links & Creator Watching) — EXECUTING
-Plan: 1 of 6 (23-05 gap closure complete; 23-04 outstanding)
-Status: Executing Phase 23
-Last activity: 2026-10-31 — 23-05 executed (G-23-1 closed)
+Plan: 3 of 6 (23-05 and 23-06 gap closures complete; 23-04 outstanding)
+Status: Ready to execute
+Last activity: 2026-10-31 — 23-06 executed (G-23-4 closed)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Milestone History
 
@@ -70,6 +70,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 23]: Logged-out carry builds ?next= from location.pathname only; finishLogin's four-clause path-only validator stays the single source of truth (pinned by test/next-carry.test.mjs)
 - [Phase 23]: urlForView maps every navigable view to its own path (plan 23-04): per-view URLs are what make popstate back/forward resolve views; drawer open/close push task/underlying URLs through go()
 - [Phase 23]: G-23-1 closed (plan 23-05): queueNotifEmails resolves byline/recipient from memberships⋈users authority rows (workspace-scoped), doc profiles as fallback, 'Un membre' last resort
+- [Phase 23]: 23-06: unknown team id falls back to workspace home silently (no oracle, T-23-07); bare /team resolves to the teams list
 
 ### Pending Todos
 
@@ -86,8 +87,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-31T13:05:00.000Z
-Stopped at: Completed 23-05-PLAN.md
+Last session: 2026-10-31T12:00:34.239Z
+Stopped at: Completed 23-06-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -99,3 +100,4 @@ Resume file: None
 | Phase 23 P02 | 25 min | 2 tasks | 3 files |
 | Phase 23 P04 | 40 min | 2 tasks | 4 files |
 | Phase 23 P05 | 15 min | 2 tasks | 2 files |
+| Phase 23 P06 | ~50 min | 2 tasks | 3 files |
