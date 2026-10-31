@@ -2392,6 +2392,50 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* ---------- workspace-admin session revocation (AUD-02, D-R1/R2/R4) ----------
+     D-R1 locks the /api/w/ prefix for this route even though sibling member
+     routes use /api/workspaces/. The gate order mirrors the operator route
+     (Pitfall 22): sameOrigin → requireUser → throttle (D-116, every attempt
+     consumes a try) → requireWorkspace('admin') → notAMember → tier rule. */
+  const adminRevokeMatch = pathname.match(/^\/api\/w\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/revoke-sessions$/);
+  if (adminRevokeMatch && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const actor = requireUser(req, res);
+    if (!actor) return;
+    // D-116: keyed on the caller; refusals consume a try too.
+    if (tooMany(`admin-revoke|${actor.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const ctx = requireWorkspace(req, res, adminRevokeMatch[1], 'admin');
+    if (!ctx) return;
+    const target = db.prepare('select id, name, email, is_instance_admin from users where id = ?').get(adminRevokeMatch[2]);
+    const membership = target ? membershipOf(ctx.ws.id, target.id) : null;
+    if (!target || !membership) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    // D-R2 tier refusals, in D-119 order: the instance operator first (honest
+    // error copy, defense in depth), then the rank rule — strictly-below-admin
+    // only. Peer admins and workspace owners are untouchable from the admin
+    // tier. A self-target is allowed (D-118): it is exactly revoke-my-others.
+    if (target.is_instance_admin && target.id !== actor.id) return fail(res, 403, 'ownerImmune', 'Owner accounts are immune to revocation');
+    // Strictly-below-admin — but a self-target is always allowed (D-118:
+    // revoke-my-others; the keep-current DELETE protects the acting session).
+    if (target.id !== actor.id && ROLE_RANK[membership.role] >= ROLE_RANK.admin)
+      return fail(res, 403, 'adminOnly', 'Only members below admin rank can be revoked here');
+    // Keep-current (P-H) + audited transaction, same shape as the operator route:
+    // DELETE + security verb + audit row in one transaction(), all three gated on
+    // del.changes > 0 (D-117); refusals never reach this point.
+    const actorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    const out = transaction(() => {
+      const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, actorTokenHash);
+      const remaining = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
+      if (del.changes > 0) {
+        logSecurity(target.id, 'sessions_revoked_by_workspace_admin');
+        db.prepare(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(uid(), actor.id, target.id, 'sessions_revoked_by_workspace_admin', del.changes, clientIp(req), ctx.ws.id, actor.name, actor.email, target.name, target.email, now());
+      }
+      return { revoked: del.changes, remaining: remaining.n };
+    });
+    return json(res, 200, out); // live post-delete counts (Pitfall 10)
+  }
+
   /* ------------------------------- invites ------------------------------- */
   const wsInviteMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites$/);
   if (wsInviteMatch && method === 'POST') {
