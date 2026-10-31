@@ -1206,6 +1206,32 @@ function isEnvelopeVersion(value) {
 }
 
 /*
+ * WR-02: bound pre-migration backup accumulation. A row that never converges —
+ * a non-base32 plaintext value the D-75 skip leaves in the pending set, or (if
+ * the SQL prefilter ever drifts) a permanently-undecryptable envelope — would
+ * otherwise mint a fresh `projects-preenvelope-<timestamp>.db` on every boot,
+ * forever. Keep only the newest PREENVELOPE_BACKUP_KEEP backups (re-wrap
+ * rotation of the rows themselves is Phase 26's scope, not this cleanup).
+ */
+const PREENVELOPE_BACKUP_KEEP = 5;
+function prunePreenvelopeBackups(currentBackup) {
+  try {
+    const stale = fs
+      .readdirSync(DATA_DIR)
+      .filter(name => /^projects-preenvelope-.*\.db$/.test(name) && name !== path.basename(currentBackup))
+      .map(name => ({ name, mtimeMs: fs.statSync(path.join(DATA_DIR, name)).mtimeMs }))
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(PREENVELOPE_BACKUP_KEEP - 1);
+    for (const { name } of stale) {
+      fs.rmSync(path.join(DATA_DIR, name), { force: true });
+    }
+  } catch (err) {
+    // Pruning is best-effort housekeeping; a failure never blocks the migration.
+    console.warn(`  pre-migration backup pruning failed: ${err.message}`);
+  }
+}
+
+/*
  * D-82/D-83: boot-time migration of legacy plaintext `users.two_fa_secret`
  * rows into the `v1:` AES-256-GCM envelope (D-05), as a sibling of
  * migrateTenancy(). Ordering is load-bearing (research Pitfall 2):
@@ -1248,13 +1274,16 @@ function migrateTotpEncryption() {
   // colon, which bare base32 plaintext never contains — so envelope rows of any
   // version are excluded and zero-envelope DBs still yield zero eligible rows.
   // The authoritative version test is the shared JS predicate, applied per row
-  // in the transaction below.
+  // below (WR-02): the JS filter — not the SQL prefilter — is what keeps an
+  // envelope-shaped row out of the pending set, so SQL/JS drift can never put
+  // a permanently-undecryptable envelope back on the backup-every-boot churn.
   const pendingRows = () =>
     db
       .prepare(
         "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'",
       )
-      .all();
+      .all()
+      .filter(row => !isEnvelopeVersion(row.two_fa_secret));
   let rows = pendingRows();
   if (rows.length === 0) return;
 
@@ -1277,6 +1306,7 @@ function migrateTotpEncryption() {
     db.exec('pragma wal_checkpoint(truncate)');
     db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
     console.log(`  pre-migration backup: ${backup}`);
+    prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
   } catch (err) {
     console.error(`  TOTP encryption skipped: pre-migration backup failed: ${err.message}`);
     return;
