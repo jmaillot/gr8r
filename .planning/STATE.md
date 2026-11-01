@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 24
 current_phase_name: Operator Audit & Workspace-Admin Tier
-status: planning
-stopped_at: Phase 26 complete, ready to plan Phase 24
-last_updated: "2026-11-01T09:45:21.409Z"
+status: verifying
+stopped_at: Completed 24-04-PLAN.md (G-24-5 gap closure)
+last_updated: "2026-11-01T10:32:29.693Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 26 complete, transitioned to Phase 24
-state_head: e51fd9416c6666c8d33df55dee2e911791de4698
+state_head: 9d7903860a7f2771e9f4d3015522babbf73f3d62
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 15
+  completed_plans: 15
   percent: 40
 ---
 
@@ -29,8 +29,8 @@ progress:
 ## Current Position
 
 Phase: 24 — Operator Audit & Workspace-Admin Tier
-Plan: Not started
-Status: Ready to plan
+Plan: 4 of 4
+Status: Phase complete — ready for verification
 Last activity: 2026-11-01 — Phase 26 complete, transitioned to Phase 24
 
 Progress: [████░░░░░░] 40%
@@ -78,6 +78,7 @@ Progress: [████░░░░░░] 40%
 - [Phase 26]: Re-wrap rotation (26-01): two env vars + one reboot converges every old envelope to v2:<new-id>; nudge fires iff PREVIOUS resolves nothing (D-K12); undecryptable rows preserved forever, D-74 backup re-mints per rotation boot (bounded by WR-02)
 - [Phase 26]: Runbook (26-02): DEPLOY.md §14 covers the full key-custody lifecycle; key-id discovery and the D-K13 query are env-only (never argv), and its commands are pinned by doc-parsing parity tests in test/totp-rewrap.test.mjs
 - [Phase 26]: G-26-1 closed (26-03): §14 gates rotation on two preconditions — image currency (grep -c migrateTotpReWrap server.js ≥ 1) and key-id coverage (id(MASTER_KEY_PREVIOUS) vs DB-stamped v2: substr prefixes, env-only) — plus a no-data-loss recovery note for the D-K7-without-re-wrap signature
+- [Phase 24]: 24-04: audit-trail client fetch is unconditional — only the server knows the caller's full admin/owner membership set (D-T3), the card self-guards via the null state (D-V1)
 
 ### Pending Todos
 
@@ -94,8 +95,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T09:39:48.442Z
-Stopped at: Phase 26 complete, ready to plan Phase 24
+Last session: 2026-11-01T10:32:29.633Z
+Stopped at: Completed 24-04-PLAN.md (G-24-5 gap closure)
 Resume file: None
 
 ## Performance Metrics
@@ -116,3 +117,4 @@ Resume file: None
 | Phase 26 P01 | 35 min | 3 tasks | 3 files |
 | Phase 26 P02 | 14 min | 2 tasks | 2 files |
 | Phase 26 P03 | 4 min | 2 tasks | 1 files |
+| Phase 24 P04 | 22 min | 2 tasks | 3 files |
