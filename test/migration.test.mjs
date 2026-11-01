@@ -29,7 +29,7 @@ before(async () => {
   createLegacyDb(dataDir);
   legacyColumns = withDb(path.join(dataDir, 'projects.db'), db =>
     Object.fromEntries(
-      ['workspaces', 'memberships', 'invites', 'users', 'sessions'].map(table => [
+      ['workspaces', 'memberships', 'invites', 'users', 'sessions', 'totp_factors'].map(table => [
         table,
         db
           .prepare(`pragma table_info(${table})`)
@@ -449,6 +449,33 @@ test('the second boot leaves team_members byte-identical — no duplicates, no s
     'exactly two rows after the second boot — the backfill never duplicates (Pitfall 4)',
   );
   assert.equal(teamBackups().length, 1, 'no second pre-team-members backup');
+});
+
+/* TOTP2 (Phase 31): the totp_factors additive table rides the same guarded
+   create — byte-identical on every boot after it lands (D-06). The fixture
+   has no 2FA users, so the boot copy must never fire: zero rows, zero
+   backups, byte-identical DDL across the reboot performed here. The DDL is
+   read from sqlite_master so the pin stays green before the table exists
+   (Wave 0) and asserts real byte-identity once the schema lands (Task 2). */
+test('totp_factors rides the additive-migration discipline — byte-identical across boots (D-06)', async () => {
+  const factorDdl = () => withDb(server.dbPath, db => db.prepare("select type, name, sql from sqlite_master where tbl_name = 'totp_factors' order by type, name").all());
+  const factorRowCount = () =>
+    withDb(server.dbPath, db => {
+      const exists = db.prepare("select count(*) as n from sqlite_master where type = 'table' and name = 'totp_factors'").get().n;
+      return exists ? db.prepare('select count(*) as n from totp_factors').get().n : -1;
+    });
+  assert.equal(factorRowCount(), -1, 'the legacy fixture boots without 2FA users — nothing to copy yet');
+  const ddl = factorDdl();
+  const rows = factorRowCount();
+  await server.stop();
+  server = await startServer({ dataDir });
+  assert.deepEqual(factorDdl(), ddl, 'totp_factors DDL is byte-identical across the boot');
+  assert.equal(factorRowCount(), rows, 'the boot writes nothing into totp_factors');
+  assert.equal(
+    fs.readdirSync(dataDir).filter(name => name.startsWith('projects-prefactors-') && name.endsWith('.db')).length,
+    0,
+    'no pre-factor backup — zero eligible rows return before any backup',
+  );
 });
 
 /* Phase 16 plan 02: the recovery_codes additive migration (D-52). The guarded
