@@ -777,6 +777,58 @@ Rotation replaces `MASTER_KEY` with a new key and moves the old key to
 `MASTER_KEY_PREVIOUS` for one boot. No flag, no endpoint — the server detects
 the two-key configuration at boot and re-wraps everything by itself:
 
+**Before you rotate — two checks.** If either fails, stop: the rotation will
+silently do nothing (the re-wrap pass never runs) and every 2FA user will be
+locked out of login (503 `masterKeyMissing`) — the failure mode this check
+exists to prevent. The envelope rows are untouched in that case; recovering is
+easy (see the recovery note below), but preventing it is easier.
+
+1. **Image currency.** Verify the deployed image actually contains the Phase 26
+   re-wrap pass — an image built from older code has no re-wrap pass at all,
+   and rotating onto it is the classic lock-out:
+
+   ```sh
+   docker compose exec projects sh -c 'grep -c migrateTotpReWrap server.js'
+   ```
+
+   Expected: a count ≥ 1. Output `0` means the image predates the re-wrap
+   pass — rebuild/pull the current code **first**, re-check, and only then
+   rotate.
+
+2. **Key-id coverage.** Confirm the envelope key id stamped in the database
+   resolves under one of the two keys you are about to configure. Rotation
+   spans exactly one generation: a `v2:` envelope sealed under a key that is
+   neither the new `MASTER_KEY` nor the old `MASTER_KEY_PREVIOUS` cannot be
+   re-wrapped by rotation. Read the id of the OLD key from the container
+   environment (key material never on the command line):
+
+   ```sh
+   docker compose exec projects node -e \
+     'console.log(require("crypto").createHash("sha256").update(process.env.MASTER_KEY_PREVIOUS).digest("hex").slice(0, 8))'
+   ```
+
+   Then list the distinct key ids stamped on the envelope rows (the prefix
+   `v2:` plus the 8-hex key id is 11 characters). If `sqlite3` is installed on
+   the host:
+
+   ```sh
+   sqlite3 /path/to/data/projects.db "select distinct substr(two_fa_secret, 1, 11) from users where two_fa_secret like 'v2:%';"
+   ```
+
+   Otherwise use the container one-liner:
+
+   ```sh
+   docker compose exec projects node -e \
+     "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/projects.db');console.log(JSON.stringify(db.prepare(\"select distinct substr(two_fa_secret, 1, 11) from users where two_fa_secret like 'v2:%'\").all()))"
+   ```
+
+   Every stamped id must match the id derived from `MASTER_KEY_PREVIOUS`
+   above — or, in the current-generation case, the id of the new `MASTER_KEY`
+   (rows already `v2:<new-key-id>:` are fine; there is nothing to re-wrap).
+   If neither key id matches a stamped id, **stop**: rotation cannot recover
+   that envelope (one-generation policy — see *Completing rotation* below);
+   the row needs manual recovery.
+
 1. Generate the new key (above), then edit `/opt/projects/.env`:
 
    ```dotenv
@@ -808,6 +860,42 @@ the two-key configuration at boot and re-wraps everything by itself:
    rows need manual recovery, not another reboot.
 
 4. Users notice nothing: 2FA devices keep working, no re-enrollment is needed.
+
+### If the rotation boot logged an unrecognized-version line but no re-wrap line
+
+If the boot logs show the D-K7 scan line
+
+```
+  TOTP encryption: N row(s) carry unrecognized secret envelope version(s) (v2) — left as-is; decryption attempts fail closed (D-K7).
+```
+
+and **no** `TOTP re-wrap:` line anywhere (not the summary, not a D-K9
+undecryptable warning, not the rotation-complete nudge), the re-wrap pass
+never ran: the old key was absent from the container's effective environment
+(env/compose misconfig, wrong `.env` file, container not recreated) or the
+image predates the re-wrap pass (precondition 1). The envelope rows are
+byte-identical — there is **no data loss**. Recovery:
+
+1. **Restore login first.** Put the OLD key back as `MASTER_KEY` (remove
+   `MASTER_KEY_PREVIOUS`) in `/opt/projects/.env` and recreate:
+
+   ```sh
+   cd /opt/projects
+   docker compose up -d
+   ```
+
+   The row's key id resolves again under the single old key and login works.
+2. **Fix the deployment.** Verify the image-currency precondition (the
+   `grep -c migrateTotpReWrap server.js` check above), correct the
+   env/compose so the old key actually reaches the container, and confirm
+   with the key-id coverage precondition — then re-run *Running a rotation*
+   from the two checks.
+
+This note applies only to the D-K7-with-no-re-wrap-line signature above. If
+instead a `TOTP re-wrap:` line ran and warned that a row `decrypts under
+neither keyring key`, that row needs the manual recovery path described in
+*Running a rotation* step 3 — rebooting will not recover it.
+
 
 ### Verifying zero stale envelopes
 
