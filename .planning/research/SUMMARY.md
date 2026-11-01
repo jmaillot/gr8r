@@ -1,155 +1,156 @@
-# Project Research Summary — v1.5 "Reliability & Rotation"
+# Project Research Summary
 
-**Project:** Projects Studio (gr8r)
-**Domain:** Self-hosted PM workspace — server-side scheduling, key-envelope rotation, operator audit, deep-linked emails, grafted onto a single-process zero-dependency Node/`node:sqlite` app
-**Researched:** 2026-10-30
-**Confidence:** HIGH — stack APIs verified by local execution on Node v24.21.0; architecture and pitfalls anchored to specific lines of the live v1.4 tree; feature landscape grounded in documented competitor behavior (Asana/Linear/Todoist) and audit-logging standards
+**Project:** Projects Studio v1.6 — Team Access & Federation
+**Domain:** Self-hosted PM workspace (zero-dependency Node.js monolith) — multi-team membership, team/project-scoped permissions, Microsoft Entra OIDC SSO, second TOTP factor
+**Researched:** 2026-11-01
+**Confidence:** HIGH
 
 ## Executive Summary
 
-v1.5 adds four capabilities to an app whose constraints are unusually firm: zero runtime dependencies, one Node process, one SQLite file, and workspace state stored as revision-optimistic JSON blobs. Research concluded that **all four features fit inside Node built-ins with no dependency exception** — `setInterval().unref()` plus a SQLite dedup table replaces cron/Redis; the existing `v1:` GCM envelope generalizes into a prefix-keyed keyring map (no new crypto); deep links are string composition off the existing `BASE_URL`/`APP_URL`; the audit trail extends the existing `security_log` table with nullable columns rather than adding a second log table. Every recommendation was verified against the actual call sites in `server.js` and `src/`.
+Projects Studio is a self-hosted, zero-runtime-dependency PM workspace built on a single `server.js` monolith, `node:sqlite` authority rows, and a redacted/merged JSON workspace document. The v1.6 milestone adds four features that experts (Linear, Notion, Slack, GitHub) all build the same way: membership as a *set* of teams, permissions as *role × scope* (workspace rank stays the ceiling; team/project scope restricts reach), SSO as a third env-gated sign-in path with email-verified linking and JIT provisioning, and multiple named TOTP factors riding a per-factor envelope table. The research converges on one headline: **zero new packages** — raw OIDC (~300–400 lines over `node:crypto` + `fetch`), one join table, scope columns on existing rows, and a `totp_factors` table reusing the v1.5 keyring verbatim.
 
-The recommended approach follows a strict dependency order. First, **email deep links + APP_URL plumbing** (smallest surface; the SPA already resolves `/w/:slug/task/:key` — the work is almost entirely server-side, and `queueNotifEmails` must drop its `req` dependency). Second, **audit hardening** (extend `security_log` with target/scope/ip + a shared `auditOperatorAction()` helper) so the workspace-admin revocation tier is audited from birth. Third, the **key-rotation sequence**: land the version-aware migration filter *before* any `v2:` row can exist, then the keyring + dual-key decrypt, then the re-wrap pass + DEPLOY.md runbook. The **reminder scheduler comes last** — it is the biggest integration surface (transaction discipline, dedup, prefs, tz semantics) and its email fan-out should exercise the finished deep-link path.
+The recommended build order matches PROJECT.md's own sequencing: multi-team membership first (every other feature reads the team set), scoped permissions second (consumes the set, extends `requireWorkspace` + `redactDoc`), Entra SSO third (independent but must compose with the pending-2FA challenge contract), second TOTP factor last (pure addition on the proven keyring). Phases 1 and 4 can plan from codebase patterns alone; Phase 2 (scoping) needs the deepest plan-level work because it is a route-by-route authorization sweep, not a feature bolt-on.
 
-The dominant risks are all codebase-specific, not domain-specific: (1) the reminder pass writing into the JSON doc can cause 409 storms against every active client — it must do a fresh read inside `BEGIN IMMEDIATE`, batch per workspace, and persist dedup keys in SQLite (never in memory, which dies on restart); (2) the boot migration's `not like 'v1:%'` filter treats a future `v2:` envelope as plaintext-eligible and would corrupt every TOTP secret — this one-line fix must land before any v2 code; (3) rotation protects against key *loss*, not key *compromise* — the runbook must prescribe forced re-enrollment in the compromise case.
+The dominant risks are all integration, not acquisition: (1) membership truth leaking into the client-mergeable doc and getting clobbered by concurrent writes — authority rows only; (2) scoped-permission bypass through by-id endpoints that only check workspace role — a named `requireProject` wrapper plus a 404-matrix test per endpoint family; (3) hand-rolled OIDC mistakes (state/nonce/PKCE, JWKS caching, issuer pinning, unverified-email account takeover) — one tested token-validation module with a table-driven suite and a live-tenant spike; (4) migration regressions against the byte-identical-second-boot guarantee — additive-only migrations pinned by an extended `test/migration.test.mjs` fixture from Phase 1 onward.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Zero new dependencies — runtime or dev. Every candidate dependency (node-cron, BullMQ, cryptr, @noble/ciphers, urlcat) was rejected as adding review surface without adding capability. Verified by local execution: AES-256-GCM envelope roundtrip, `setInterval(...).unref()`, `node:sqlite` DatabaseSync prepare/exec, base64url encoding.
+**Zero new dependencies — runtime or dev.** All four features build on what the project already runs; the work is implementation, not acquisition (see STACK.md).
 
-**Core technologies:**
-- `setInterval` + `.unref()` (60s tick) — reminder scheduler inside `server.js`; timer never holds the process open; testable by injecting the tick function
-- `node:sqlite` tables — `reminders` dedup table (`UNIQUE(task_id, due_date, kind)`) persisted outside the JSON doc; audit columns on `security_log`; key-version metadata — restart-safe by construction
-- `node:crypto` keyring map — `{ v1: derive(MASTER_KEY_PREVIOUS), v2: derive(MASTER_KEY) }`; encrypt with `CURRENT`, decrypt by envelope-prefix lookup; re-wrap rotation = one transactional pass; envelope format unchanged
-- URL string building from `APP_URL`/`BASE_URL` — deep links; scheduler has no `req`, so `queueNotifEmails` signature changes from `req` → `base`
+**Core technologies (all existing):**
+- **Node.js ≥ 24 built-ins** (`node:crypto`, global `fetch`, `Buffer` base64url): PKCE, state/nonce, RS256/RS384 JWKS verification via `crypto.createPublicKey({format:'jwk'})` + `crypto.verify` — everything the hand-rolled OIDC flow needs, verified against official Node v24 docs.
+- **node:sqlite** + existing migration machinery (`vacuum into` backup, transactional, byte-identical second boot): four schema additions — `team_members` join table, scope columns on `memberships`/`invites`, `totp_factors` table, `sso_identities` + `oidc_states` tables.
+- **Existing keyring (`v2:` envelopes, `requireTotpSecret()`)**: second TOTP factor is "another row," zero crypto changes.
+- **Mock IdP in tests** (~50-line `node:http` server): real Entra can't run in CI; the mock enables tampered-token/kid-swap/negative-claim tests Playwright can't intercept.
+
+**Do NOT use:** MSAL/openid-client/jsonwebtoken/jose (runtime deps violate the hard constraint); team membership in the workspace doc (client-mergeable, no indexed lookup); `common` tenant endpoint (pin `ENTRA_TENANT_ID`); SSO bypassing the TOTP challenge.
 
 ### Expected Features
 
+See FEATURES.md for the full Linear/Notion/Slack/GitHub comparison.
+
 **Must have (table stakes):**
-- Due-date reminders: day-before + morning-of, pref-selectable, default both on (Asana's core notification; Linear notifies on due date)
-- Transactional dedup: exactly one reminder per (task, user, offset, due date), crash-safe across restarts
-- Per-user reminder prefs + `email_reminder` gate in existing `notifPrefs`; never remind completed/archived tasks
-- Email deep links to the task (not workspace root) with login-redirect-`next` for logged-out clicks (Phase-12 file-route pattern exists)
-- Creator auto-watched on task creation (Linear/Asana default; known gr8r gap)
-- `v2` envelope + re-wrap rotation without 2FA re-enrollment; DEPLOY.md runbook covering generate/inject/rotate/verify/recover/backup
-- Audit rows on operator session revocation (actor, target, session count, timestamp), append-only, owner-visible
+- Member visible in every team they belong to; rosters/assignment/@team read the team *set* (with dedup'd notifications)
+- Task assignment filtered to members who can actually see the project
+- Scoped members see only their team/project — server-side read filtering (redaction pattern) + write rejection, **404 not 403** on out-of-scope data
+- SSO as an env-gated additional sign-in path (button only when configured; routes 404 otherwise)
+- Multiple named TOTP factors, revocable individually, verify-any-at-login
 
-**Should have (differentiators):**
-- Documented, public key-rotation procedure without re-enrollment — rare even among self-hosted tools
-- Owner-visible operator audit surface (competitors bury this in enterprise tiers)
-- Workspace-admin revocation tier emitting the same audit rows (sequenced *after* the audit helper exists)
+**Should have (competitive):**
+- Named factors + per-factor `last_used_at` — beats GitHub's own 2FA (their #1 long-running community complaint)
+- Project-level guest scope (rides the same mechanism as team scope)
+- SSO-only enforcement flag (`PASSWORD_AUTH_ENABLED=false`) — nearly free, completes the env-configured story
+- JIT provisioning with default role (`OIDC_DEFAULT_ROLE`) + pending-invite reconciliation at SSO login
 
-**Defer (v1.6+/v2+):**
-- Watcher reminders, past-due nudges, digest emails (v1.6, on user demand)
-- Per-user timezone for "morning of" (v1.6; use workspace-shared tz at MVP)
-- Custom per-task reminder offsets, push/Slack channels, hash-chained audit log (v2+)
+**Defer (v2+):**
+- OIDC groups → team mapping (needs real tenants to design against)
+- SCIM (explicitly out of scope per PROJECT.md)
+- Per-team admin tier
 
-**Anti-features (explicitly rejected):** arbitrary per-task reminder offsets, reminders to non-assignees, editable/deletable audit entries, algorithm-namespace change under cover of rotation, email reminders for every notification type.
+**Anti-features (refuse):** per-team roles inside the role ladder (explodes the auth matrix — Linear keeps role workspace-level); per-factor recovery codes (account-level break-glass stays); auto-linking on anything but verified email.
 
 ### Architecture Approach
 
-The headline finding: **task deep links already exist in the SPA** — `applyDeepLink()` resolves `/w/:slug/task/:key` and `A.copyLink` already produces that canonical shape. The deep-link milestone item is therefore almost entirely a server-side one-line URL change (`${base}/w/${slug}/task/${taskKey}`), **using `task.key`, not `task.id`**. Everything else is additive machinery around verified anchors: the `requireTotpSecret()` single decrypt boundary is the seam for version dispatch; `ensureColumn()` extends `security_log`; the boot-migration backup (`vacuum into`) pattern is the template for the re-wrap pass.
+The existing monolith holds; no architectural change is needed (see ARCHITECTURE.md). The integration surface is well-defined: `requireWorkspace` gains an optional context arg returning `ctx.scope` (computed once per request from `team_members`); `redactDoc`/`mergeClientDoc` gain scope-based redaction and authority-restores; OIDC lives inside the `/api/auth` dispatch as a *first-factor variant* reusing `sessions`, `login_challenges`, cookies, and revocation unchanged — the single biggest integration win; `totp_factors` mirrors the primary factor into `users.two_fa_secret` so every existing call site survives unmodified.
 
-**Major components (14-item integration map in ARCHITECTURE.md):**
-1. `reminders` table + `reminderPass()` — dedup state outside the doc; notif rows written into the doc via fresh-read-inside-`BEGIN IMMEDIATE`, batched per workspace, one revision bump per pass; `rem-`-prefixed notif ids to avoid client collisions
-2. KEYRING + re-wrap migration — prefix-keyed map; `MASTER_KEY_PREVIOUS` env during rotation; version-aware migration filter derived from known prefixes; completion = zero `v1:` rows
-3. `security_log` extensions + `auditOperatorAction()` — nullable `target_type/target_id/scope/ip` columns; audit write in the same transaction as the revocation; machine verbs (ACT-02)
+**Major components:**
+1. **`teams` + `team_members` tables** — authority for membership; doc `teams[].members` becomes a display projection rebuilt on read
+2. **Extended `requireWorkspace`** — role rank + scope set resolution; every project-scoped endpoint consumes `ctx.scope` (checklist invariant, no per-endpoint sprinkles)
+3. **Raw OIDC module** — discovery/authorize/PKCE/token/JWKS-verify in one module with table-driven tests; identity key is `(issuer, subject)`, email only for verified linking/display
+4. **`totp_factors` table** — per-factor envelope, per-factor replay guard, last-factor removal = existing disable-2FA transaction
 
 ### Critical Pitfalls
 
-1. **409 storm from the reminder pass (CRITICAL)** — scheduler writes into the revision-optimistic JSON doc must never reuse a doc parsed outside the transaction; per-workspace `BEGIN IMMEDIATE` with fresh read, batched writes, skip-when-nothing-to-do
-2. **In-memory dedup lost on restart (CRITICAL)** — this deployment restarts (deploy, crash, intentional `process.exit(1)`); dedup keys persist in SQLite from day one, keyed on (task, due date, kind) not run timestamp
-3. **`v2:` rows re-wrapped/corrupted by the boot migration filter (CRITICAL)** — `not like 'v1:%'` matches `v2:` envelopes; fix the filter (and decrypt dispatch on the version token — no plaintext fallback, extending the D-79 exclusivity test) *before* v2 ships
-4. **No `req` in the scheduled pass → dead email links (CRITICAL)** — `appBase(req)` breaks outside requests; introduce `APP_URL` with a loud boot warning when reminders + mailer are on without it; `next` param must be path-only (open-redirect guard)
-5. **Audit insert outside the revocation transaction (MODERATE — the WR-02 trap again)** — make the audit write non-optional and same-transaction; a forced audit-insert failure must roll back the revocation
+See PITFALLS.md for all seven plus the "looks done but isn't" checklist.
 
-Also notable: key selection by envelope key-id, never by comparing key material (use `timingSafeEqual` if ever needed); the pass must be wrapped in try/catch (an interval-callback rejection kills the process); malformed client-authored doc JSON must be skipped, not crashed on; the `popstate`/URL-writing debt (v1.1 Active item) will be exposed by deep links — fix it in the deep-link phase or explicitly scope it out.
+1. **Doc-merge clobbering membership edits** (Phase 1) — membership authority in rows only; `mergeClientDoc` always restores `members[].teams` from authority; two-session concurrency regression test is the gate.
+2. **Scoped permissions bypassed via by-id endpoints** (Phase 2/4) — one `canAccessProject` predicate wired into a `requireProject` wrapper; route-by-route sweep as a *named plan task*; 404-matrix test per endpoint family; notification fan-out runs the same predicate.
+3. **Hand-rolled OIDC crypto/claim mistakes** (Phase 3) — state/nonce/PKCE always; exact issuer pinning (Entra's `/v2.0` trailing path matters); JWKS TTL cache + kid-miss refetch; full signature + claim checklist before any trust; reject `alg:none`/HS256 explicitly.
+4. **SSO account takeover via unverified-email linking** (Phase 3) — match on `iss`+`sub`, never email alone; verified-email gate; session cookie rotation at every login transition; `safeNext()` reused on the callback.
+5. **Migration breaks byte-identical second boot** (all phases) — additive-only, nullable/defaulted; no boot-time writes; v1.6 fixture in `test/migration.test.mjs`; boot-pass order pinned by test. **Key cross-phase decision:** the OIDC identity columns' shape must be decided during Phase 1 planning even though they land in Phase 3.
 
 ## Implications for Roadmap
 
-Based on combined research, five phases (ARCHITECTURE.md's dependency-driven build order, expanded):
+Based on combined research, suggested phase structure (matches PROJECT.md's own ordering, which research validates):
 
-### Phase 1: Email deep links + APP_URL plumbing
-**Rationale:** Smallest surface, unblocks email quality for everything downstream; scheduler emails and reminder fan-out both depend on it.
-**Delivers:** `queueNotifEmails` refactored (`req` → `base`), `/w/:slug/task/:key` links (using `task.key`), `APP_URL` boot guard, anonymous login-redirect-`next` (optional but cheap via Phase-12 pattern), creator auto-watch riding the client mutation.
-**Avoids:** Pitfall 4 (dead links), Pitfall 7 (route collisions — add the route-ordering test proving `/w/:slug/file/:id` still claims bytes); decide popstate scope here.
+### Phase 1: Multi-Team Membership
+**Rationale:** Foundation — scoped permissions compute their predicate from the team set; nothing else can proceed without it. Also sets the migration pattern (Pitfall 7) for the whole milestone.
+**Delivers:** `teams` + `team_members` tables, scalar→set migration, `mergeClientDoc` sync replacement, rosters/assignment/@team/notification rewiring with dedup, two-session concurrency test.
+**Addresses:** "Member visible in every team," assignment filtering, @team fan-out (P1 items).
+**Avoids:** Pitfall 1 (doc clobber), Pitfall 7 (migration guarantee). **Also decides:** OIDC identity column shape (Pitfall 5's cross-phase note) and the `oidc_states`/`sso_identities` schema.
 
-### Phase 2: Operator audit hardening
-**Rationale:** Independent of Phase 1; must exist before the workspace-admin revocation tier so the new tier is audited from birth.
-**Delivers:** `security_log` nullable columns (target/scope/ip), `auditOperatorAction()` shared helper, retrofit of the v1.4 operator-revocation route, index on `(scope, created_at)`.
-**Avoids:** Pitfall 6 (same-transaction audit writes; failure rolls back the revocation); anti-pattern "second security table".
+### Phase 2: Team/Project-Scoped Permissions
+**Rationale:** Compounds directly on Phase 1's `team_members` (PROJECT.md: #3 before #4); must ship with its route sweep, not after it.
+**Delivers:** `scope` columns on `memberships`/`invites`, `ctx.scope` in extended `requireWorkspace`, `requireProject` wrapper, redaction extension, scoped-invite UI with effective-scope display, 404-matrix test suite.
+**Addresses:** "Scoped members see only their team/project" (highest complexity, P1); project-level guest scope rides the same plumbing.
+**Avoids:** Pitfall 2 (by-id bypass). **Rule encoded in tests:** scope restricts, never elevates; admin/owner ignore scope.
 
-### Phase 3: MASTER_KEY rotation — version-aware filter + keyring
-**Rationale:** The version-aware migration filter is a hard prerequisite and trivially small; it must land before any `v2:` row can exist.
-**Delivers:** Version-aware `not like` filter (#10), KEYRING map + `MASTER_KEY_PREVIOUS`, prefix-dispatching `requireTotpSecret` (signature unchanged), tests with both keys / one key / no key.
-**Avoids:** Pitfall 3 (double-wrap corruption, plaintext fallback regression), Pitfall 9 (key-id dispatch, never key comparison).
+### Phase 3: Entra OIDC SSO
+**Rationale:** Independent of Phases 1–2 but must compose with the pending-2FA contract that Phase 4 touches; landing it before second-2FA lets the SSO×TOTP interaction be decided once.
+**Delivers:** Raw OIDC module (discovery/PKCE/token/JWKS), `/api/auth/oidc/start` + `/callback`, `sso_identities`/`oidc_states`, env-gated login button, JIT provisioning (invited-shaped), optional SSO-only flag, mock IdP test suite.
+**Addresses:** Env-gated SSO, JIT + email-match linking, SSO enforcement toggle (P1/P2).
+**Avoids:** Pitfalls 3, 4, 5. Requires a **live-tenant spike** at phase time.
 
-### Phase 4: Re-wrap rotation + DEPLOY.md runbook
-**Rationale:** Depends on Phase 3's keyring; the runbook ships in the same phase — an operator mid-rotation with no runbook is a support incident.
-**Delivers:** Idempotent boot-time re-wrap pass (backup → transaction → verify count(v1)=0), compromise-vs-loss policy in DEPLOY.md (compromise ⇒ forced re-enrollment), backup-before-rotation mirror of the D-74 pattern.
-**Avoids:** Pitfall 9's re-wrap ordering (verify → backup → re-wrap → sample-verify → drop old key).
-
-### Phase 5: Reminder scheduler
-**Rationale:** Biggest integration surface and consumer of everything above (deep links, APP_URL, audit-adjacent migrations); its email fan-out exercises the finished link path end to end.
-**Delivers:** `reminders` table, 60s `reminderPass()` with boot catch-up, per-workspace batched transactions, dedup keys, `email_reminder` prefs gate, tz-aware "due today" against the workspace-shared tz.
-**Avoids:** Pitfalls 1, 2, 5, 8, 11, 12 (409 storm, memory dedup, long transactions, DST/tz fixtures, unhandled rejection, doc bloat pruning).
+### Phase 4: Second TOTP Factor
+**Rationale:** Strictly last — pure addition on the proven keyring, lowest coupling, and the SSO-callback×pending-2FA interaction is settled by then.
+**Delivers:** `totp_factors` table + primary-factor mirror migration, enroll-with-step-up, factor picker at login, per-factor replay guards, per-factor removal with last-factor = full-disable transaction, recovery codes untouched.
+**Addresses:** Multiple named factors, per-factor revocation, last-used tracking (P1 + cheap P3).
+**Avoids:** Pitfall 6 (lockout/replay/keyring drift).
 
 ### Phase Ordering Rationale
 
-- Deep links first because they are one line + a signature refactor, and both the scheduler and all future email types depend on correct URLs.
-- Audit before the admin-revocation tier so every new privileged verb is audited from birth rather than retrofitted.
-- The rotation sequence is strictly ordered internally: migration filter → keyring → re-wrap. Shipping v2 code before the filter fix corrupts every TOTP secret on next boot.
-- The scheduler is last not because it is least important but because it has the most failure modes and the most upstream dependencies; a stable link path makes its e2e tests meaningful.
+- **Dependency chain:** scoping reads `team_members` (1→2); SSO × 2FA interaction needs single-factor challenge in place before factor N (3→4); migration pattern established once in Phase 1 propagates to the other three.
+- **Risk ordering:** the two hardest features (scoping sweep, OIDC) land mid-milestone when the foundation is stable; the safest feature closes.
+- **Cross-cutting gates:** i18n EN+FR catalogue at write time (build gate fails CI otherwise) and byte-identical-boot fixture apply to *every* phase — the roadmapper should state them as milestone-wide invariants, not per-phase tasks.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning (`--research-phase`):
-- **Phase 5 (Reminder scheduler):** date-format semantics in `seed.js`/docs need a phase-specific look (Pitfall 8 flags this explicitly if due-date storage isn't canonical); revision-bump policy (accept bump vs side-table notifs) is the phase's central design decision and deserves discussion before planning
-- **Phase 1 (Deep links):** decide in discuss-phase whether the `?next` post-login redirect ships now or the "login → home" UX is accepted; popstate scope decision belongs here
+Phases likely needing deeper research during planning:
+- **Phase 2 (Scoped permissions):** route-by-route authorization sweep across every `requireWorkspace` call site; scoping depth for workspace-level surfaces (inbox/activity) is an open product question — use `/gsd-plan-phase --research-phase` or at minimum a thorough discuss-phase.
+- **Phase 3 (Entra SSO):** Entra-specific claim behavior varies by tenant config (`xms_edov`, verified-domain posture); needs a live-tenant spike and the linking-policy decision (auto-provision vs link/invite-only) before routes are built.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (Audit):** additive `ensureColumn` migration + one helper; proven patterns
-- **Phase 3/4 (Rotation):** everything verified against live call sites; the migration/backup test patterns exist (`test/migration.test.mjs`, `test/totp-encryption.test.mjs`)
+- **Phase 1 (Multi-team membership):** join-table + migration follows the codebase's own `migrateTenancy` precedent; patterns are internal.
+- **Phase 4 (Second TOTP):** rides the shipped keyring verbatim; the architecture research fully specifies it.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Every API executed on the target runtime (Node v24.21.0); zero-dep verdict holds across all four features |
-| Features | HIGH for reminders/emails/audit; MEDIUM for rotation runbook specifics | Competitor behavior documented; rotation pattern grounded in AWS KMS envelope-encryption references but few PM tools expose it publicly |
-| Architecture | HIGH | Every anchor verified against the live v1.4 tree with line numbers; integration research, not library research |
-| Pitfalls | HIGH | Each pitfall anchored to a specific line or established v1.4 defect class (WR-02, D-79) |
+| Stack | HIGH | Entra endpoints/params and node:crypto APIs verified via Context7 against official Microsoft and Node v24 docs; zero-dep conclusion grounded in verified built-in capabilities |
+| Features | HIGH | Patterns verified against Linear/Notion/GitHub/WorkOS docs; app-specific complexity assessed against PROJECT.md |
+| Architecture | HIGH | Derived directly from first-party `server.js` code with line-level references; all integration points verified against existing invariants |
+| Pitfalls | HIGH (integration) / MEDIUM (Entra quirks) | Integration pitfalls derived from documented project invariants; tenant-specific claim behavior must be verified at Phase 3 spike time |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Revision-bump policy for scheduler writes** — accept the bump (honest; clients already handle 409→refetch) vs move notif rows to a side table. Must be decided explicitly in the Phase 5 discuss/plan, not drifted into. Research leans "accept the bump, batch per workspace, skip no-op passes."
-- **Due-date storage format** — research assumed a canonical comparable form; verify against actual doc/`seed.js` shapes during Phase 5 planning (or normalize in the migration).
-- **`?next` post-login redirect** — cheap to add (server plumbing exists from the Phase-12 file route) but needs a product decision; also interacts with the unfixed `popstate` debt (v1.1 Active item).
-- **Other MASTER_KEY consumers** — rotation scope is verified as `users.two_fa_secret` only (recovery codes/login challenges are hashed, not encrypted); confirm no other envelope column exists at Phase 3 plan time.
-- **Actor-row cascade on `security_log`** — deleting a user must not erase audit history of actions *against* them (target_id is bare text for this reason); whether actor rows should cascade for operator verbs is an explicit Phase 2 plan decision.
-- **Note:** ARCHITECTURE.md was written twice (a retry overwrote the first version); the synthesis uses the version currently on disk, which is verified line-by-line against the live tree.
+- **Entra claim behavior in a real tenant** (`email_verified`-equivalent, `xms_edov`, group claims): resolve via a Phase 3 live-tenant spike before the linking policy is finalized.
+- **Scoping depth for workspace-level surfaces** (do scoped members see inbox/activity beyond their projects?): product decision for discuss-phase of Phase 2.
+- **OIDC linking policy** (auto-provision vs link/invite-only; recommended: link/invite-only respecting `ALLOW_SIGNUP`): decide in Phase 1 planning (schema) and confirm in Phase 3 discuss.
+- **Invite-time vs post-acceptance scoping** (is a team scope set at invite creation or by an admin afterwards?): open question for Phase 2 discuss-phase.
+- **SSO MFA semantics** (does Entra `amr` MFA substitute local TOTP?): recommend no — record the explicit decision in Phase 3.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Local execution on Node v24.21.0 (2026-10-30) — GCM envelope roundtrip, `timer.unref()`, `node:sqlite` roundtrip, base64url
-- Live v1.4 tree anchors — `server.js` (73, 87, 163-169, 244-284, 554, 651, 689-730, 1102-1180, 1370-1373, 1537, 2160-2200, 2883-2902, 2990-2998, 3020), `src/main.js` (75-88, 123-147, 183-185, 214-218), `src/actions/actions.js` (521-530, 598-615), `src/overlays/drawer.js` (19-31)
-- `.planning/PROJECT.md` — v1.5 scope, v1.4 guarantees (D-05/D-06/D-58/D-73/D-74/D-77/D-79/D-83), v1.1 audit Active items, v1.2 decisions (ACT-01/02, workspace tz, email i18n out of scope)
+- Context7 `/websites/learn_microsoft_en-us_entra_identity-platform` — authorization code flow, PKCE params, token endpoint, issuer format
+- Context7 `/websites/nodejs_latest-v24_x_api` — `createPublicKey` JWK, `crypto.verify`, base64url
+- `.planning/PROJECT.md` + `server.js` — architecture invariants, migration precedents, keyring, challenge contracts (owner-maintained ground truth)
+- Linear docs (members/roles), Notion Help (sharing/permissions), WorkOS multi-tenant permissions analysis, GitHub 2FA docs + community #78027/#54699
+- tududi / Baserow / LangSmith self-hosted OIDC docs — hybrid vs SSO-only, JIT, email-match linking
 
 ### Secondary (MEDIUM confidence)
-- Asana forums (threads 3794, 101405, 1041429) — no native pre-due reminder; "due today" email is the built-in
-- Linear docs/changelog — due-date reminders, "redundant notifications are skipped" dedup philosophy
-- Todoist help — relative vs fixed reminder model
-- AWS KMS ReEncrypt / EKS envelope-encryption docs; qcecuring.com key-rotation strategies
-- Sonar, Mattermost, Contentful audit-logging guidance — append-only, event-context, tamper-resistance
+- OAuth 2.0 Security BCP (RFC 9700), OIDC Core spec — state/nonce/PKCE, issuer pinning, JWKS caching practice
+- Stitchflow/SteelSync Linear user-management analyses — role × scope layering
+- Widely documented unverified-email SSO takeover class (GitHub/Heroku-style post-mortems)
 
 ### Tertiary (LOW confidence)
-- None — no finding rests on a single unverified source.
+- Entra tenant-specific claim behavior (`xms_edov`, group claims) — verify at Phase 3 spike time
 
 ---
-*Research completed: 2026-10-30*
+*Research completed: 2026-11-01*
 *Ready for roadmap: yes*
