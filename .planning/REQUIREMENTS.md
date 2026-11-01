@@ -117,7 +117,36 @@ method. Zero new runtime dependencies throughout.
 
 ## Traceability
 
-*Filled by the roadmap — each REQ maps to exactly one phase.*
+*Each REQ maps to exactly one phase.*
 
 | REQ | Phase |
 |-----|-------|
+| TEAM-01 | Phase 28 |
+| TEAM-02 | Phase 28 |
+| TEAM-03 | Phase 28 |
+| TEAM-04 | Phase 28 |
+| TEAM-05 | Phase 28 |
+| SCOPE-01 | Phase 29 |
+| SCOPE-02 | Phase 29 |
+| SCOPE-03 | Phase 29 |
+| SCOPE-04 | Phase 29 |
+| SCOPE-05 | Phase 29 |
+| SCOPE-06 | Phase 29 |
+| SSO-01 | Phase 30 |
+| SSO-02 | Phase 30 |
+| SSO-03 | Phase 30 |
+| SSO-04 | Phase 30 |
+| SSO-05 | Phase 30 |
+| SSO-06 | Phase 30 |
+| SSO-07 | Phase 30 |
+| SSO-08 | Phase 30 |
+| TOTP2-01 | Phase 31 |
+| TOTP2-02 | Phase 31 |
+| TOTP2-03 | Phase 31 |
+| TOTP2-04 | Phase 31 |
+| TOTP2-05 | Phase 31 |
+
+Cross-cutting obligations (EN+FR catalogue, additive byte-identical migrations, green
+suite, zero new deps) apply to all four phases as milestone-wide invariants, stated in
+ROADMAP.md. The OIDC identity-schema decision is owned by Phase 28's planning; the
+columns land in Phase 30.
