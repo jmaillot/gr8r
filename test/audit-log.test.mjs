@@ -334,6 +334,45 @@ test('AUD-03: workspace admin reads only their workspace rows — null-workspace
   assert.ok(body.rows.some(r => r.action === 'sessions_revoked_by_workspace_admin'), 'admin verb row present');
 });
 
+test('AUD-03: cross-membership — the server resolves ALL admin memberships, not the current workspace (G-24-5)', async () => {
+  if (!ws) await seedAdminTierFixtures();
+  // The tier boss is admin of workspace A (the admin-tier fixture). Put the
+  // SAME user in a second workspace B as a plain member: if the read ever
+  // keyed on the current-workspace role, no workspace context could decide
+  // this correctly — only the caller's full membership set, resolved
+  // server-side, can (the reason the client fetch is unconditional).
+  const ownerClient = (await login(server.base, ADMIN_EMAIL, ADMIN_PASSWORD)).client;
+  const slugB = `xmem-${Date.now().toString(36)}`;
+  const createdB = await ownerClient.post('/api/workspaces', { name: 'Cross Mem B', slug: slugB });
+  assert.equal(createdB.status, 201, `workspace B create failed: ${JSON.stringify(createdB.data)}`);
+  const invite = await ownerClient.post(`/api/workspaces/${slugB}/invites`, { emails: ['tierboss@test.local'], role: 'member' });
+  assert.equal(invite.status, 201, `invite to B failed: ${JSON.stringify(invite.data)}`);
+  const url = invite.data.invites[0].url;
+  const token = url.slice(url.lastIndexOf('/join/') + '/join/'.length);
+  const boss = await bossLogin();
+  const joined = await boss.post(`/api/invites/${token}/accept`, {});
+  assert.ok([200, 201].includes(joined.status), `join B failed: ${JSON.stringify(joined.data)}`);
+  const wsB = withDb(server.dbPath, db => db.prepare('select * from workspaces where slug = ?').get(slugB));
+
+  // Seed workspace B rows plus a null-workspace operator row in the same
+  // window: an A-admin must see A's rows only — never B's, never operator's.
+  withDb(server.dbPath, db => {
+    const ins = db.prepare(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+    );
+    ins.run('xmem-b-row', ws.bossUserId, ws.bossUserId, 'sessions_revoked_by_workspace_admin', 1, '127.0.0.1', wsB.id, 'Boss', 'tierboss@test.local', 'Boss', 'tierboss@test.local', Date.now() + 9000);
+    ins.run('xmem-op-row', 'x-op', 'x-target', 'sessions_revoked_by_operator', 1, '127.0.0.1', null, 'Op', 'op@t.local', 'T', 't@t.local', Date.now() + 9500);
+  });
+
+  const res = await auditGet(boss.cookie());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.rows.length > 0, 'rows served');
+  assert.ok(body.rows.every(r => r.workspace_id === ws.id), 'every served row belongs to workspace A — never B, never NULL');
+  assert.ok(body.rows.some(r => r.id === 'xmem-b-row') === false, 'workspace B row is NOT served');
+  assert.ok(body.rows.some(r => r.id === 'xmem-op-row') === false, 'null-workspace operator row is NOT served');
+});
+
 test('AUD-03: plain member is refused — 403 adminOnly (honest gate, D-V1)', async () => {
   const mate = (await login(server.base, 'rollbackvictim@test.local', GOOD)).client;
   const res = await auditGet(mate.cookie());
