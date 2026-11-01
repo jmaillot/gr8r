@@ -208,6 +208,16 @@ const SCHEMA = `
   );
   create index if not exists audit_log_created on audit_log(created_at desc);
   create index if not exists audit_log_workspace on audit_log(workspace_id, created_at desc);
+  /* REM-03: exactly-once reminder ledger. One row per (workspace, task, assignee,
+     offset, due date) — the dedup key carries the due date, so editing a due
+     date re-arms the reminder. Claimed with INSERT OR IGNORE inside the same
+     transaction that appends the notification row. */
+  create table if not exists reminders_sent (
+    dedup_key    text primary key,
+    workspace_id text not null,
+    created_at   integer not null
+  );
+  create index if not exists reminders_sent_ws on reminders_sent(workspace_id, created_at);
 `;
 
 function ensureColumn(conn, table, name, def) {
@@ -784,7 +794,19 @@ function mergeClientDoc(incoming, stored, membership) {
    The `update` type has no email toggle and stays in-app only. Each recipient
    gets at most one email per new notification row; senders never block the
    HTTP response and their failures are logged, not surfaced. */
-const NOTIF_EMAIL_KIND = { mention: 'email_mention', assign: 'email_assign', comment: 'email_comment' };
+/* REM-05: reminder emails ride the same pipeline — both reminder notif types
+   gate on the single `email_reminder` pref (D-27-5). */
+const NOTIF_EMAIL_KIND = {
+  mention: 'email_mention',
+  assign: 'email_assign',
+  comment: 'email_comment',
+  due_reminder: 'email_reminder',
+  past_due: 'email_reminder',
+};
+
+/* D-27-4: reminder rows carry `by: null` (system actor) so the self-skip below
+   never drops them; their emails must not read "from Un membre". */
+const REMINDER_TYPES = new Set(['due_reminder', 'past_due']);
 
 function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const wsName = wsRow.name || 'Projects Studio';
@@ -813,7 +835,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
     if (!to) continue;
     const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
     const taskTitle = task?.title || 'a task';
-    const by = authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
+    const by = REMINDER_TYPES.has(n.type) ? 'Reminders' : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
     /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
        key is resolved at email-build time (it is mutable on project move) and
        the absolute base is APP_URL unconditionally — the boot guard exits when
@@ -831,6 +853,148 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
       url,
     }).catch(err => console.warn(`notif email ${n.id} → ${to}: ${err.message}`));
   }
+}
+
+/* =======================================================================
+   Due-date reminder scheduler (phase 27, REM-01..REM-05).
+
+   D-27-1: both reminder offsets fire at 09:00 in the workspace's shared
+   timezone. D-27-2: the pass runs at boot (restart catch-up — window-open
+   predicates + the reminders_sent ledger make a replay pass harmless) and
+   every minute from an unref'd interval. D-27-3: the past-due nudge fires at
+   the first 09:00 after the due date passes, exactly once. Idle ticks (hour
+   !== 9) are pure reads: no claim, no doc write, no revision bump (REM-01 /
+   SC-5 — this gate MUST precede any write).
+   ======================================================================= */
+
+/* A1 resolved (plan 27-01 task 1): `tz` is a per-member profile field — the
+   settings page saves sel('tz') into the member profile the client renders as
+   P, i.e. doc.data.members[*].tz (seeded '' in memberProfile). CONTEXT.md
+   D-27-1 gives the workspace ONE shared timezone, so the first membership row
+   (insert order) provides it; an unknown or empty label falls back to UTC. */
+const TZ_BY_LABEL = {
+  '(GMT-08:00) Pacific Time': 'America/Los_Angeles',
+  '(GMT-05:00) Eastern Time': 'America/New_York',
+  '(GMT+00:00) London': 'Europe/London',
+  '(GMT+01:00) Berlin': 'Europe/Berlin',
+  '(GMT+08:00) Singapore': 'Asia/Singapore',
+};
+
+function localParts(tzLabel, date = new Date()) {
+  const zone = TZ_BY_LABEL[tzLabel] || 'UTC';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = t => parts.find(p => p.type === t)?.value;
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) % 24 };
+}
+
+/* Pure YYYY-MM-DD string arithmetic via Date.UTC — never local-midnight Date
+   math, which is DST-fragile. */
+function addDaysIso(iso, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return null;
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n)).toISOString().slice(0, 10);
+}
+
+function workspaceTzLabel(doc, wsId) {
+  const first = db.prepare('select member_id from memberships where workspace_id = ? order by rowid limit 1').get(wsId);
+  const members = Array.isArray(doc?.data?.members) ? doc.data.members : [];
+  const member = members.find(x => x?.id && x.id === first?.member_id);
+  return member?.tz || '';
+}
+
+/* REM-04 + RESEARCH Pitfall 4: one predicate for every offset. Mirrors the
+   client's isOver (t.due && status !== 'done') plus archived-task and
+   archived-project exclusions and private-project visibility (canSee) so a
+   reminder never leaks to a member who cannot see the task. */
+function remindable(task, project) {
+  if (!task || !/^\d{4}-\d{2}-\d{2}$/.test(task.due || '')) return false;
+  if (task.status === 'done' || task.archived) return false;
+  if (!project || project.archived) return false;
+  return canSeeProject(project, task.assignee);
+}
+
+function reminderSnippet(offset, task) {
+  const title = task?.title || 'a task';
+  if (offset === 'day_before') return `Due tomorrow: ${title}`;
+  if (offset === 'morning_of') return `Due today: ${title}`;
+  return `Past due: ${title}`;
+}
+
+/*
+ * One scheduler pass over every workspace. Injectable clock (`now`, a Date)
+ * so tests drive 09:00-local instants without sleeping or fake timers.
+ * Returns the notification rows emitted this pass (dedup claims included).
+ */
+function runReminderPass({ now: at = new Date() } = {}) {
+  const emitted = [];
+  for (const ws of db.prepare('select * from workspaces').all()) {
+    try {
+      const doc = JSON.parse(ws.doc);
+      /* Per-workspace localDate/hour — never cached across workspaces or
+         ticks (RESEARCH Pitfall 6). */
+      const { date: localDate, hour } = localParts(workspaceTzLabel(doc, ws.id), at);
+      /* D-27-1 hour gate: idle outside 09:00 → pure read, zero writes. */
+      if (hour !== 9) continue;
+      const prefs = doc?.data?.notifPrefs || {};
+      const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
+      const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
+      for (const t of tasks) {
+        const project = projects.get(t?.projectId);
+        if (!remindable(t, project)) continue;
+        const due = t.due;
+        /* Window-open predicates on plain YYYY-MM-DD string compare — the
+           open window plus an absent dedup key IS the boot catch-up. */
+        const offsets = [];
+        if (prefs.due_reminder !== false) {
+          if (localDate >= addDaysIso(due, -1)) offsets.push('day_before');
+          if (localDate >= due) offsets.push('morning_of');
+        }
+        if (prefs.past_due !== false && localDate > due) offsets.push('past_due');
+        for (const offset of offsets) {
+          const notif = {
+            id: uid(),
+            type: offset === 'past_due' ? 'past_due' : 'due_reminder',
+            to: t.assignee,
+            by: null, // system actor — queueNotifEmails' self-skip must never drop a reminder
+            task: t.id,
+            snippet: reminderSnippet(offset, t),
+            ts: at.getTime(),
+          };
+          /* T-27-03: claim + append commit together or not at all. */
+          let claimed = false;
+          transaction(() => {
+            const r = db
+              .prepare('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)')
+              .run(`${ws.id}:${t.id}:${t.assignee}:${offset}:${due}`, ws.id, now());
+            if (r.changes === 0) return; // already sent — exactly-once (REM-03)
+            updateDoc(ws.id, d => {
+              d.data.notifs.push(notif);
+            });
+            claimed = true;
+          });
+          if (!claimed) continue;
+          emitted.push(notif);
+          /* Post-commit fan-out — NEVER inside the transaction (a hung SMTP
+             server would hold the SQLite write lock). Uses the post-write doc. */
+          if (MAILER.enabled) {
+            const nextDoc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
+            queueNotifEmails(ws, nextDoc, [notif]);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`reminder pass ${ws.id}: ${err.message}`);
+    }
+  }
+  return emitted;
 }
 
 /* P4-c fix: team assignment for account-backed members must survive PUTs.
@@ -1914,6 +2078,20 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/health' && method === 'GET') {
     return json(res, 200, { ok: true, uptime: Math.round(process.uptime()) });
+  }
+
+  /* Plan 27-01: test-only clock injection for the reminder scheduler. The
+     route exists ONLY while REMINDER_TEST_TOKEN is set (the node:test harness
+     sets it); unset in production the path 404s like any unknown route. It
+     merely runs runReminderPass early — idempotent by construction (window
+     open + reminders_sent claim). */
+  if (pathname === '/api/internal/reminder-pass' && method === 'POST') {
+    if (!process.env.REMINDER_TEST_TOKEN || req.headers['x-reminder-token'] !== process.env.REMINDER_TEST_TOKEN) {
+      return fail(res, 404, 'notFound', 'Not found');
+    }
+    const body = await readJson(req).catch(() => ({}));
+    const emitted = runReminderPass({ now: body?.now ? new Date(body.now) : undefined });
+    return json(res, 200, { emitted });
   }
 
   if (pathname === '/api/config' && method === 'GET') {
@@ -3456,6 +3634,20 @@ function main() {
     );
     process.exit(1);
   }
+
+  /* REM-01 boot catch-up: reminder windows that opened while the server was
+     down fire once here (window-open predicate + reminders_sent claim). Then
+     D-27-2's 1-minute tick. The try/catch inside the interval callback is
+     mandatory — an uncaught throw in a setInterval callback kills the
+     process. unref() keeps the timer from holding the event loop open. */
+  runReminderPass();
+  setInterval(() => {
+    try {
+      runReminderPass();
+    } catch (err) {
+      console.warn(`reminder tick: ${err.message}`);
+    }
+  }, 60_000).unref();
 
   server.listen(PORT, HOST, () => {
     console.log(`Projects Studio listening on http://${HOST}:${PORT}`);
