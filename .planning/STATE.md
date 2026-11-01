@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 26
 current_phase_name: Re-Wrap Rotation & Key-Custody Runbook
-status: verifying
-stopped_at: Completed 26-02-PLAN.md
-last_updated: "2026-11-01T08:59:11.415Z"
+status: executing
+stopped_at: Completed 26-03-PLAN.md
+last_updated: "2026-11-01T09:39:48.523Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 26 execution started
-state_head: 15bf26ad4018d7c5bc01787ca8399c5a732bfcda
+state_head: 9c182eff454164ac0da38188b33031a58a811f92
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 14
+  completed_plans: 14
   percent: 20
 ---
 
@@ -29,8 +29,8 @@ progress:
 ## Current Position
 
 Phase: 26 (Re-Wrap Rotation & Key-Custody Runbook) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-11-01 — Phase 26 execution started
 
 Progress: [██░░░░░░░░] 20%
@@ -77,6 +77,7 @@ Progress: [██░░░░░░░░] 20%
 - [Phase 25]: encryptTotpSecret gained a version param (default 'v1'); ONLY the enable call site writes v2 — boot migration keeps v1 (Phase 26 re-wrap owns the stock)
 - [Phase 26]: Re-wrap rotation (26-01): two env vars + one reboot converges every old envelope to v2:<new-id>; nudge fires iff PREVIOUS resolves nothing (D-K12); undecryptable rows preserved forever, D-74 backup re-mints per rotation boot (bounded by WR-02)
 - [Phase 26]: Runbook (26-02): DEPLOY.md §14 covers the full key-custody lifecycle; key-id discovery and the D-K13 query are env-only (never argv), and its commands are pinned by doc-parsing parity tests in test/totp-rewrap.test.mjs
+- [Phase 26]: G-26-1 closed (26-03): §14 gates rotation on two preconditions — image currency (grep -c migrateTotpReWrap server.js ≥ 1) and key-id coverage (id(MASTER_KEY_PREVIOUS) vs DB-stamped v2: substr prefixes, env-only) — plus a no-data-loss recovery note for the D-K7-without-re-wrap signature
 
 ### Pending Todos
 
@@ -93,8 +94,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T08:59:11.366Z
-Stopped at: Completed 26-02-PLAN.md
+Last session: 2026-11-01T09:39:48.442Z
+Stopped at: Completed 26-03-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -114,3 +115,4 @@ Resume file: None
 | Phase 25 P02 | ~75 min | 3 tasks | 3 files |
 | Phase 26 P01 | 35 min | 3 tasks | 3 files |
 | Phase 26 P02 | 14 min | 2 tasks | 2 files |
+| Phase 26 P03 | 4 min | 2 tasks | 1 files |
