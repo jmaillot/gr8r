@@ -4,17 +4,17 @@ milestone: v1.6
 milestone_name: Team Access & Federation
 current_phase: 31
 current_phase_name: Second TOTP Factor
-status: executing
-stopped_at: Completed 31-02-PLAN.md (re-execution; stale run superseded)
-last_updated: "2026-11-01T20:22:37.051Z"
+status: verifying
+stopped_at: Completed 31-03-PLAN.md
+last_updated: "2026-11-01T21:03:55.860Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 31 execution started
-state_head: eb9f3615643157a64c8492ddb291c2f8a9781432
+state_head: f7e3135308f47730602977339ec5397a4a6de895
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -30,7 +30,7 @@ progress:
 
 Phase: 31 (Second TOTP Factor) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-01 — Phase 31 execution started
 
 Progress: [███░░░░░░░] 25% of phase plans (4/4)
@@ -78,6 +78,7 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 31]: 31-02: legacy tfa/enable keeps the users.two_fa_last_step baseline for the first-ever enable (the pending secret is unrelated to any enrolled factor's replay state) — Factor-row baselines are per-factor; only additional factors (factors/enable) use a null baseline
 - [Phase 31]: 31-02: requirements TOTP2-01/02/03 left unmarked — they span 31-02 (API) and 31-03 (client wiring); shared-ID gate would mark early — requirements.ready-ids would flip them Complete before 31-03 SUMMARY exists
 - [Phase 31]: Plan 31-02: last-factor removal verifies the target's own code (exclusion only with >1 factor) or the D-18 disable path would be unreachable; first-ever enable via factors/enable returns rotated recovery codes exactly once.
+- [Phase 31]: Client factor lifecycle wired: Add-factor staged wizard + per-factor remove confirm over the Plan 02 routes, EN+FR complete
 
 ### Pending Todos
 
@@ -100,8 +101,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T20:22:37.010Z
-Stopped at: Completed 31-02-PLAN.md (re-execution; stale run superseded)
+Last session: 2026-11-01T21:03:50.954Z
+Stopped at: Completed 31-03-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -112,6 +113,7 @@ Resume file: None
 | Phase 31 P01 | 23min | 3 tasks | 12 files |
 | Phase 31 P02 | 1h 9min | 3 tasks | 4 files |
 | Phase 31 P02 | ~50 min | 3 tasks | 10 files |
+| Phase 31 P03 | 40 min | 3 tasks | 14 files |
 
 ## Operator Next Steps
 
