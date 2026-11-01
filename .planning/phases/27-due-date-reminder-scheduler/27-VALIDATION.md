@@ -4,7 +4,7 @@ slug: "due-date-reminder-scheduler"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: "2026-11-01"
 ---
@@ -43,8 +43,10 @@ created: "2026-11-01"
 | 27-01-01 | 01 | 1 | REM-01 | T-27-01 | Idle tick writes nothing (revision unchanged); boot catch-up fires missed window once | unit (clock-injectable pass) | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
 | 27-01-02 | 01 | 1 | REM-02 | T-27-02 | day-before & morning-of rows per assignee at 09:00 workspace-local; prefs default ON | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
 | 27-01-03 | 01 | 1 | REM-03 | T-27-03 | Two ticks / simulated restart → exactly one row per (task, assignee, offset, due date); due-date change re-arms | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
-| 27-0X-XX | 0X | X | REM-04 | T-27-04 | done/archived task & archived project → no rows; overdue → exactly one past_due | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
-| 27-0X-XX | 0X | X | REM-05 | T-27-05 | email_reminder=false → no email; true → deep-link URL (APP_URL + /w/:slug/task/:key) in email body | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
+| 27-01-02 | 01 | 1 | REM-04 | T-27-04 | done/archived task & archived project → no rows; overdue → exactly one past_due | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
+| 27-01-03 | 01 | 1 | REM-05 | T-27-05 | email_reminder=false → no email; true → deep-link URL (APP_URL + /w/:slug/task/:key) in email body | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
+| 27-02-01 | 02 | 2 | REM-02 | T-27-02 | three prefs toggles all ON by default incl. legacy docs; toggle-off suppresses rows/emails | unit | `node --test test/due-reminders.test.mjs` | ❌ W0 | ⬜ pending |
+| 27-02-02 | 02 | 2 | REM-05 | T-27-05 | inbox filters + EN/FR rendering of due_reminder / past_due | unit | `npm test` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
