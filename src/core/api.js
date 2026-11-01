@@ -321,6 +321,9 @@ export const api = {
   async tfaFactorEnable({ stagedId, code }) {
     return call('POST', '/api/auth/tfa/factors/enable', { stagedId, code });
   },
+  async tfaFactorRemove({ factorId, currentPassword, code }) {
+    return call('POST', '/api/auth/tfa/factors/remove', { factorId, currentPassword, code });
+  },
   /* TFA-05: verify the pending login challenge. Deliberately NO applyUser here —
      the caller (doTfaLogin) adopts the user through the shared post-success flow. */
   async tfaLogin(code) {

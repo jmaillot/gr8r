@@ -479,6 +479,9 @@ export function settingsBody(sec, title) {
            guard's matched step (step × 30s; 0 = never used). No add/remove
            controls yet — Plan 02/03 own those. */
         const factors = S.ui.tfaFactors || [];
+        /* TOTP2 (D-19): the remove confirm echoes the factor's localized name —
+           looked up from the same server ground-truth list that rendered it. */
+        const rmName = t(factors.find(f => f.id === S.ui.tfaRemoveId)?.name || '');
         return (
           H(t('settings.tfa.lead')) +
           srow(
@@ -496,7 +499,10 @@ export function settingsBody(sec, title) {
               srow(
                 `<span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(t(f.name))}</span>`,
                 f.lastStep > 0 ? ago(f.lastStep * 30 * 1000) : '—',
-                '',
+                /* TOTP2 (D-19): per-factor remove opens the in-place staged
+                   confirm — never a picker. The id selects the target; the
+                   confirm form echoes the name via the factor list lookup. */
+                `<button class="btn btn-danger-ghost btn-sm" data-a="tfaAskRemove" data-id="${esc(f.id)}">${t('settings.tfa.remove')}</button>`,
               ),
             )
             .join('') +
@@ -546,6 +552,19 @@ export function settingsBody(sec, title) {
                   <div><button class="btn btn-primary" data-a="tfaAddFactorVerify" id="tfa-add-verify-save">${t('settings.tfa.verify')}</button></div>
                 </form>
               </div></div>`
+            : '') +
+          /* TOTP2 (D-19/D-16): the per-factor remove confirm — an in-place
+             staged form echoing the factor's name, password + live code. No
+             picker anywhere (the factor's own id opens the form, D-16's
+             exclusion lives server-side). */
+          (stage === 'remove'
+            ? `<form data-submit="tfaFactorRemove" class="col" style="gap:14px;max-width:400px;margin-top:14px">
+                <span class="err">${ic('circle-alert', 12)}${esc(rmName)}</span>
+                ${fld('tfa-rm-pw', t('settings.tfa.pwLabel'), 'tfaRmPw', 'type="password" autocomplete="current-password"')}
+                ${fld('tfa-rm-code', t('settings.tfa.codeLabel'), 'tfaRmCode', 'autocomplete="one-time-code" inputmode="numeric"')}
+                <span class="hint">${t('settings.tfa.removeHint')}</span>
+                <div class="row"><button class="btn btn-danger" data-a="tfaFactorRemove" id="tfa-rm-save">${t('settings.tfa.remove')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
+              </form>`
             : '')
         );
       }

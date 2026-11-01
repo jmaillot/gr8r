@@ -2959,6 +2959,45 @@ A.tfaAddFactorVerify = () => {
     toast(t('settings.tfa.factorAddedToast'));
   });
 };
+/* TOTP2 (D-19/D-16) — the per-factor remove handlers. The confirm form echoes
+   the factor's name (settings.js looks it up from the server list); the error
+   mapping clones tfaDisableConfirm's, with factorNotFound clearing the stage
+   (the row is gone from server ground truth) and the D-15 survivor-verify
+   refusal arriving as codeRejected. */
+A.tfaAskRemove = el => {
+  S.ui.errors = {};
+  S.ui.tfaRemoveId = el.dataset.id;
+  S.ui.tfaStage = 'remove';
+  render();
+};
+A.tfaFactorRemove = () => {
+  const e = (S.ui.errors = {});
+  const pw = $('#tfa-rm-pw')?.value || '';
+  const code = $('#tfa-rm-code')?.value?.trim() || '';
+  const id = S.ui.tfaRemoveId;
+  if (!pw) e.tfaRmPw = t('err.enterCurrentPassword');
+  if (!code) e.tfaRmCode = t('err.codeRequired');
+  if (Object.keys(e).length) return render();
+  loadingBtn('tfa-rm-save', 0, async () => {
+    const res = await api.tfaFactorRemove({ factorId: id, currentPassword: pw, code });
+    if (!res.ok) {
+      const c = res.data?.code;
+      if (c === 'wrongCurrentPassword' || c === 'passwordRequired') e.tfaRmPw = t('err.' + c);
+      else if (c === 'codeRejected' || c === 'tooManyAttempts') e.tfaRmCode = t('err.' + c);
+      else if (c === 'factorNotFound') {
+        S.ui.tfaStage = null; // the target no longer exists — re-list from the server
+        S.ui.tfaRemoveId = null;
+        e.tfaMsg = t('err.factorNotFound');
+      } else e.tfaRmPw = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58: the 503 body never renders
+      return render();
+    }
+    S.ui.tfaStage = null; // stage cleared BEFORE the refresh (Pitfall 6)
+    S.ui.tfaRemoveId = null;
+    render();
+    await refreshTfa(); // server ground truth re-lists the factors (D-05)
+    toast(t('settings.tfa.removedToast'));
+  });
+};
 A.recoveryDismiss = () => {
   S.ui.recoveryCodes = null; // D-53: gone for good — no re-render can show them
   closeModal();
