@@ -43,11 +43,11 @@ authority-row discipline the rest of the milestone builds on.
      change in one session survives the other session's doc write (regression test green).
   5. An existing single-team install migrates additively with a pre-migration backup and a
      byte-identical second boot, pinned in `test/migration.test.mjs`.
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 28-01-PLAN.md — team_members authority: schema, guarded migration with pre-backup, admin PUT route, teams[] projection, api wrapper (tracer)
+- [x] 28-01-PLAN.md — team_members authority: schema, guarded migration with pre-backup, admin PUT route, teams[] projection, api wrapper (tracer)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 28-02-PLAN.md — client surfaces: teams modal multiselect, member edit picker, mention dedup, picker intersection, TEAM-05 regression
@@ -134,7 +134,7 @@ guards, individual removal, and no half-states. Safest feature closes the milest
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 28. Multi-Team Membership | 0/? | Not started | - |
+| 28. Multi-Team Membership | 1/3 | In Progress|  |
 | 29. Team/Project-Scoped Permissions | 0/? | Not started | - |
 | 30. Entra SSO (OIDC) | 0/? | Not started | - |
 | 31. Second TOTP Factor | 0/? | Not started | - |
