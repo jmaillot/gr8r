@@ -304,6 +304,12 @@ export const api = {
   async tfaRecover(currentPassword, code) {
     return call('POST', '/api/auth/tfa/recovery', { currentPassword, code });
   },
+  /* TOTP2 (Phase 31): the enrolled-factor list for the settings 2FA card.
+     Auth-scoped like the family above; names arrive as catalogue keys and are
+     localized at display time — no secret ever crosses this boundary. */
+  async tfaFactors() {
+    return call('GET', '/api/auth/tfa/factors');
+  },
   /* TFA-05: verify the pending login challenge. Deliberately NO applyUser here —
      the caller (doTfaLogin) adopts the user through the shared post-success flow. */
   async tfaLogin(code) {

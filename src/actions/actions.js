@@ -1999,6 +1999,11 @@ export async function refreshSessions() {
 export async function refreshTfa() {
   if (!api.enabled) return null;
   await api.me();
+  /* TOTP2 (Phase 31): the factor list rides the same ground-truth refresh —
+     server data only, never a client flag; a failed fetch renders no rows
+     rather than a stale client-side copy. */
+  const factors = await api.tfaFactors();
+  S.ui.tfaFactors = factors.ok ? factors.data.factors || [] : [];
   render();
   return api.user;
 }

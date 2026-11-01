@@ -473,6 +473,12 @@ export function settingsBody(sec, title) {
         `<div class="field"><label class="label" for="${id}">${label}</label><input class="input ${e[errKey] ? 'is-error' : ''}" id="${id}" ${extra}>${e[errKey] ? `<span class="err">${ic('circle-alert', 12)}${e[errKey]}</span>` : ''}</div>`;
       if (!api.enabled) return H(t('settings.tfa.lead')) + srow(t('settings.tfa.off'), t('settings.tfa.offDesc'), '');
       if (on) {
+        /* TOTP2 (Phase 31, D-01/D-05): the enrolled-factor list — one row per
+           factor (sessions-row pattern), catalogue-localized name (the row
+           stores a key, D-07) + relative last-used derived from the replay
+           guard's matched step (step × 30s; 0 = never used). No add/remove
+           controls yet — Plan 02/03 own those. */
+        const factors = S.ui.tfaFactors || [];
         return (
           H(t('settings.tfa.lead')) +
           srow(
@@ -480,6 +486,15 @@ export function settingsBody(sec, title) {
             t('settings.tfa.onDesc'),
             stage ? '' : `<button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regenShort')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('act.turnOff')}</button>`,
           ) +
+          factors
+            .map(f =>
+              srow(
+                `<span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(t(f.name))}</span>`,
+                f.lastStep > 0 ? ago(f.lastStep * 30 * 1000) : '—',
+                '',
+              ),
+            )
+            .join('') +
           (stage === 'disable'
             ? `<form data-submit="tfaDisableConfirm" class="col" style="gap:14px;max-width:400px;margin-top:14px">
                 ${fld('tfa-off-pw', t('settings.tfa.pwLabel'), 'tfaOffPw', 'type="password" autocomplete="current-password"')}

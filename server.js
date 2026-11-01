@@ -2792,6 +2792,22 @@ async function handleApi(req, res, url) {
     return json(res, 200, payload);
   }
 
+  /* --------------------- TOTP2: factor list (TOTP2-01 slice) --------------------- */
+
+  if (pathname === '/api/auth/tfa/factors' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`tfa-factors|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    /* T-31 trust boundary: names + steps only — a secret never leaves the
+       server. Last-used is derived at display time from the replay guard's
+       matched step (RESEARCH A3): step * period seconds; 0 = never used. */
+    const rows = db.prepare('select id, name, last_step, created_at from totp_factors where user_id = ? order by created_at').all(user.id);
+    return json(res, 200, {
+      factors: rows.map(r => ({ id: r.id, name: r.name, createdAt: r.created_at, lastStep: r.last_step })),
+    });
+  }
+
   if (pathname === '/api/auth/sessions' && method === 'GET') {
     const user = requireUser(req, res);
     if (!user) return;
