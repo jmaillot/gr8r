@@ -132,7 +132,10 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 27-01-PLAN.md — Scheduler core: reminders_sent dedup table, tz helper, clock-injectable runReminderPass (day_before/morning_of/past_due), transactional claim+emit, email fan-out, Wave 0 tests (REM-01..05, wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 27-02-PLAN.md — Client surface: notifPrefs defaults + normalize-on-read (all ON), three Settings toggles, inbox filters/rendering for due_reminder/past_due, EN+FR i18n (REM-02/REM-05, wave 2, depends on 27-01)
 
 ## Coverage
