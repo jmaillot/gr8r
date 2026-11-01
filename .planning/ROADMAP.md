@@ -24,6 +24,7 @@ membership, team/project-scoped permissions, optional Microsoft Entra SSO, and a
 ## Phase Details
 
 ### Phase 28: Multi-Team Membership
+
 **Goal**: A member belongs to a real *set* of teams stored in authority rows, and every
 surface — rosters, autocomplete, assignment, @team mentions, project visibility — reads
 that set instead of a single scalar. This phase establishes the migration pattern and the
@@ -45,12 +46,19 @@ authority-row discipline the rest of the milestone builds on.
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 28-01-PLAN.md — team_members authority: schema, guarded migration with pre-backup, admin PUT route, teams[] projection, api wrapper (tracer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 28-02-PLAN.md — client surfaces: teams modal multiselect, member edit picker, mention dedup, picker intersection, TEAM-05 regression
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 28-03-PLAN.md — multi-team invites end-to-end (D-07), scalar sweep completion, full-suite gate
+
 **UI hint**: yes
 
 ### Phase 29: Team/Project-Scoped Permissions
+
 **Goal**: A membership can be limited in reach to specific teams or projects while its
 role stays the permission level — scoped members see only what their scope grants,
 server-side, with no existence oracle. The hardest phase: a named route sweep over every
@@ -74,6 +82,7 @@ project-touching endpoint, not a feature bolt-on.
 **UI hint**: yes
 
 ### Phase 30: Entra SSO (OIDC)
+
 **Goal**: When env-configured, users can sign in with Microsoft Entra via a raw-OIDC
 authorization-code flow (PKCE, JWKS RS256) over Node built-ins — no sign-in button and no
 routes when unconfigured. SSO composes honestly with 2FA and existing account contracts.
@@ -99,6 +108,7 @@ order; consumes the Phase 28-settled OIDC identity schema)
 **UI hint**: yes
 
 ### Phase 31: Second TOTP Factor
+
 **Goal**: A user can register multiple named TOTP factors alongside the first — each a
 row in `totp_factors` riding the existing `v2:` envelope keyring — with per-factor replay
 guards, individual removal, and no half-states. Safest feature closes the milestone.
