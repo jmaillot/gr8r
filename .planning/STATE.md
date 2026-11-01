@@ -5,16 +5,16 @@ milestone_name: Team Access & Federation
 current_phase: 31
 current_phase_name: Second TOTP Factor
 status: executing
-stopped_at: Completed 31-02-PLAN.md
-last_updated: "2026-11-01T20:02:40.644Z"
+stopped_at: Completed 31-02-PLAN.md (re-execution; stale run superseded)
+last_updated: "2026-11-01T20:22:37.051Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 31 execution started
-state_head: 555586d983cb9465018531ef2539b2b54eb9e67e
+state_head: eb9f3615643157a64c8492ddb291c2f8a9781432
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 25
 ---
 
@@ -77,6 +77,7 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 31]: 31-01: migrated factor name stores the full locale key settings.tfa.factor.primary, rendered via t(row.name) (D-07 wording discretion)
 - [Phase 31]: 31-02: legacy tfa/enable keeps the users.two_fa_last_step baseline for the first-ever enable (the pending secret is unrelated to any enrolled factor's replay state) — Factor-row baselines are per-factor; only additional factors (factors/enable) use a null baseline
 - [Phase 31]: 31-02: requirements TOTP2-01/02/03 left unmarked — they span 31-02 (API) and 31-03 (client wiring); shared-ID gate would mark early — requirements.ready-ids would flip them Complete before 31-03 SUMMARY exists
+- [Phase 31]: Plan 31-02: last-factor removal verifies the target's own code (exclusion only with >1 factor) or the D-18 disable path would be unreachable; first-ever enable via factors/enable returns rotated recovery codes exactly once.
 
 ### Pending Todos
 
@@ -99,8 +100,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T20:02:33.302Z
-Stopped at: Completed 31-02-PLAN.md
+Last session: 2026-11-01T20:22:37.010Z
+Stopped at: Completed 31-02-PLAN.md (re-execution; stale run superseded)
 Resume file: None
 
 ## Performance Metrics
@@ -110,6 +111,7 @@ Resume file: None
 | *(v1.6 — no plans executed yet)* | | | |
 | Phase 31 P01 | 23min | 3 tasks | 12 files |
 | Phase 31 P02 | 1h 9min | 3 tasks | 4 files |
+| Phase 31 P02 | ~50 min | 3 tasks | 10 files |
 
 ## Operator Next Steps
 

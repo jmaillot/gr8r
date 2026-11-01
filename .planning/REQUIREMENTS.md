@@ -71,19 +71,19 @@ method. Zero new runtime dependencies throughout.
 
 ### Second 2FA Factor (Kanzo #1 — last phase)
 
-- [ ] **TOTP2-01**: A user can register a second (and further) TOTP method alongside the
+- [x] **TOTP2-01**: A user can register a second (and further) TOTP method alongside the
       first — each factor is a row in a `totp_factors` table whose secret rides the existing
       `v2:` envelope keyring through `requireTotpSecret()`; no new crypto, no change to
       recovery codes.
-- [ ] **TOTP2-02**: Factors are named ("Work phone") and show a last-used timestamp; a user
+- [x] **TOTP2-02**: Factors are named ("Work phone") and show a last-used timestamp; a user
       can remove one factor with password step-up (and a live code from a remaining factor)
       while the others keep working.
-- [ ] **TOTP2-03**: Login and the pending-2FA challenge accept a code from ANY enrolled
+- [x] **TOTP2-03**: Login and the pending-2FA challenge accept a code from ANY enrolled
       factor; the replay guard works per factor, and step-up (`requireTotpSecret` call sites)
       accepts any factor.
-- [ ] **TOTP2-04**: Removing the last factor runs the existing disable-2FA transaction — no
+- [x] **TOTP2-04**: Removing the last factor runs the existing disable-2FA transaction — no
       half-state where 2FA is nominally on with zero factors.
-- [ ] **TOTP2-05**: Enrollment of a new factor requires proving the existing factor works
+- [x] **TOTP2-05**: Enrollment of a new factor requires proving the existing factor works
       (step-up) so a user cannot lock themselves out mid-flow.
 
 ## Cross-cutting (every phase)
