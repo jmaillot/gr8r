@@ -105,9 +105,11 @@ Plans:
   3. The pre-migration backup guarantee holds for the re-wrap pass (backup taken before any rewrite, transactional, rollback-safe)
   4. DEPLOY.md carries a runbook an operator can follow end-to-end: key generation/injection, adding the new key alongside the old, running rotation, verifying zero stale envelopes, backup-before-rotation, and the compromise policy (compromised key → honest full re-enrollment; rotation alone is not sufficient)
 
-**Plans**: 2/2 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
+- [x] 26-03-PLAN.md
+
 **Wave 1**
 - [x] 26-01-PLAN.md — migrateTotpReWrap() + decryptV1WithMaterial + seed-matrix rotation tests (KEY-03, wave 1)
 
@@ -147,5 +149,5 @@ Plans:
 | 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
 | 24. Operator Audit & Workspace-Admin Tier | 3/3 | In Progress|  |
 | 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
-| 26. Re-Wrap Rotation & Key-Custody Runbook | 2/2 | In Progress|  |
+| 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | In Progress|  |
 | 27. Due-Date Reminder Scheduler | 0/? | Not started | - |
