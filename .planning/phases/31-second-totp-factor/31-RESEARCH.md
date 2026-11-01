@@ -310,9 +310,14 @@ template for D-06/D-08.
 
 ## Open Questions
 
-1. **All-factors-undecryptable at step-up/login** — 503 (preserve D-06 contract) vs skip-to-reject (strict D-12)? Recommendation: 503 when zero factors decrypted; `codeRejected` otherwise (Pitfall 3). Confirm in planning.
-2. **Phase 30 status** — is SSO landed before Phase 31 executes? If not, verify the pending-2FA challenge surface is unchanged by SSO work.
-3. **Copy migration vs missing MASTER_KEY** — copy is decrypt-free (envelope copied verbatim), so no MASTER_KEY dependency; the planner may confirm this reading of the discretion note.
+> **RESOLVED at planning (2026-11-01):**
+> - **Q1 — resolved in Plan 02 Task 1:** 503 `masterKeyMissing` when zero factors decrypt (fail-closed, preserves the D-06 contract and existing test expectations); `codeRejected` otherwise.
+> - **Q3 — resolved in Plan 01 Task 2:** the boot copy is decrypt-free (envelope copied verbatim), no MASTER_KEY dependency.
+> - **Q2 — noted, not blocking these plans:** Phase 30 (SSO) scheduling fact; if SSO lands before Phase 31 executes, re-check that the pending-2FA challenge surface (server.js:2424-2427) is unchanged.
+
+1. ~~**All-factors-undecryptable at step-up/login** — 503 (preserve D-06 contract) vs skip-to-reject (strict D-12)?~~ RESOLVED — 503 when zero factors decrypted; `codeRejected` otherwise (Pitfall 3). Decided in Plan 02 Task 1.
+2. **Phase 30 status** — is SSO landed before Phase 31 executes? If not, verify the pending-2FA challenge surface is unchanged by SSO work. (Scheduling fact, not blocking plan approval.)
+3. ~~**Copy migration vs missing MASTER_KEY** — copy is decrypt-free (envelope copied verbatim), so no MASTER_KEY dependency~~ RESOLVED — confirmed in Plan 01 Task 2.
 
 ## Environment Availability
 
