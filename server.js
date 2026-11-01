@@ -353,10 +353,31 @@ function decryptTotpSecret(envelope) {
    Call sites branch on ok and fail closed 503 with code masterKeyMissing (D-80);
    per-route body copy stays verbatim (D-81). No plaintext fallback exists or may
    be added (D-78a). */
+/* Parameterized copy of decryptTotpSecret's v1 branch — Phase 26 re-wrap helper.
+   The v1 layout carries NO key id (D-K4), so rotation cannot dispatch it through
+   the keyring: the re-wrap pass supplies the material (current first, then
+   PREVIOUS — D-K8 trial order). Standalone sibling on purpose (lean choice):
+   decryptTotpSecret's D-78c-tested body is untouched. Returns utf8 plaintext or
+   null on ANY error — same single failure shape as decryptTotpSecret (D-78a).
+   Not a runtime boundary: the only caller is migrateTotpReWrap at boot. */
+function decryptV1WithMaterial(envelope, material) {
+  try {
+    const [, ivB64, tagB64, ctB64] = String(envelope).split(':');
+    if (!ivB64 || !tagB64 || !ctB64) return null;
+    const key = crypto.createHash('sha256').update(material).digest();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(ctB64, 'base64')), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
 function requireTotpSecret(envelope) {
   const secret = decryptTotpSecret(envelope); // already returns null on EVERY failure
   return secret ? { ok: true, secret } : { ok: false };
 }
+
 
 /* D-46: pending (not-yet-verified) TOTP secrets live ONLY here — in memory,
    keyed by user_id, with a 10-minute TTL. Nothing touches users.two_fa_secret
@@ -1146,6 +1167,7 @@ function bootstrap(opts) {
   ensureWorkspace();
   migrateTenancy();
   migrateTotpEncryption();
+  migrateTotpReWrap();
   ensureAdmin(opts);
   stampInstanceAdmin();
 }
@@ -1203,6 +1225,24 @@ function migrateTenancy() {
 const ENVELOPE_VERSION_RE = /^v\d+:/i;
 function isEnvelopeVersion(value) {
   return ENVELOPE_VERSION_RE.test(String(value || '').trim());
+}
+
+/*
+ * D-75/WR-01 (Phase 26): stale-envelope predicate for the re-wrap rotation pass.
+ * A value is stale iff it is an envelope (isEnvelopeVersion — plaintext is the
+ * OTHER pass's stock, Pitfall 2) whose id is not EXACTLY the current key id:
+ * the version tag compares case-insensitively (to agree with SQLite LIKE's
+ * ASCII case-insensitivity, exactly like ENVELOPE_VERSION_RE — WR-01), the key
+ * id compares exactly (key ids are derived lowercase hex; no normalization or
+ * merging, ever). ONE shared predicate — closed over by the candidate scan AND
+ * the in-transaction re-check — so the two defense-in-depth layers cannot drift
+ * apart (T-26-04: no double-encryption via predicate drift).
+ */
+function isStaleEnvelope(value, currentId) {
+  const v = String(value || '').trim();
+  if (!isEnvelopeVersion(v)) return false;
+  const parts = v.split(':');
+  return !(parts[0].toLowerCase() === 'v2' && parts[1] === currentId);
 }
 
 /*
@@ -1352,6 +1392,110 @@ function migrateTotpEncryption() {
   // count (D-K7) is part of the same summary so every outcome is represented.
   console.log(
     `  TOTP encryption: ${migrated} row(s) migrated to the v1: envelope, ${skippedBlank} blank skipped, ${skippedGarbage} non-base32 skipped, ${alreadyEncrypted} already encrypted, ${unrecognizedVersion} unrecognized version(s) left as-is.`,
+  );
+}
+
+/*
+ * D-K15: boot-time re-wrap rotation pass — the sibling that converges every
+ * old-envelope secret onto the CURRENT key. An operator rotates MASTER_KEY by
+ * setting MASTER_KEY (new) + MASTER_KEY_PREVIOUS (old) and rebooting; one boot
+ * re-wraps every v1 and stale-v2 envelope to `v2:<new-key-id>:…` (SC-1), a
+ * second boot is a byte-identical no-op (SC-2). Ordering is load-bearing:
+ * called AFTER migrateTotpEncryption() so plaintext rows are already sealed
+ * before this pass scans (Pitfall 2 — the two passes never touch each other's
+ * stock). Structure mirrors migrateTotpEncryption (D-83 gate → backup →
+ * transaction → summary):
+ *   - D-K14 gate: env-var driven every boot — both keys must be set; boots
+ *     with only MASTER_KEY never scan, never warn, never touch rows. No
+ *     operator flag, endpoint, or manual trigger exists (D-K14).
+ *   - D-74: pre-migration backup first — failure skips the pass entirely,
+ *     no mutation (same guarantee as the encryption pass).
+ *   - D-75: per-row re-check inside the transaction via the SAME shared
+ *     isStaleEnvelope predicate as the candidate scan (WR-01/WR-02 — no drift).
+ *   - D-K8: v1 rows trial-decrypt CURRENT first, then PREVIOUS.
+ *   - D-K9: rows decryptable under neither key are left byte-identical,
+ *     counted, and warned — never deleted, never guessed (decrypt fails
+ *     closed at runtime).
+ *   - D-K10: re-seal target is ALWAYS v2 (encryptTotpSecret is the single v2
+ *     writer, D-K4) — v1 rows are never re-keyed as v1 (one-way per decision).
+ *   - D-76/D-K7 tone: console lines carry counts, version tags and user ids
+ *     only — never key material, ciphertext, or plaintext (T-26-01).
+ */
+function migrateTotpReWrap() {
+  // D-K14 gate: the pass exists for rotation only.
+  if (!MASTER_KEY || !MASTER_KEY_PREVIOUS) return;
+  const currentId = keyIdFor(MASTER_KEY);
+  // SQL prefilter broad, JS predicate authoritative (same discipline as the
+  // encryption pass, WR-02): `v_:%` is the broad SQLite net, isStaleEnvelope
+  // is the per-row authority — SQL/JS drift can never widen the mutation set.
+  const staleCandidates = () =>
+    db
+      .prepare(
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
+      )
+      .all()
+      .filter(row => isStaleEnvelope(row.two_fa_secret, currentId));
+  const rows = staleCandidates();
+  if (rows.length === 0) {
+    // Zero stale candidates: byte-identical no-op — no backup, no writes.
+    // (D-K12 rotation-complete nudge refined in the empty-candidates branch
+    // below once PREVIOUS resolution is probed.)
+    return;
+  }
+
+  // D-74: backup first — verbatim sibling of the encryption pass's block.
+  // Failure skips the pass entirely this boot: no backup = no mutation.
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    db.exec('pragma wal_checkpoint(truncate)');
+    db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    console.log(`  pre-migration backup: ${backup}`);
+    prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
+  } catch (err) {
+    console.error(`  TOTP re-wrap skipped: pre-migration backup failed: ${err.message}`);
+    return;
+  }
+
+  let rewrapped = 0;
+  let undecryptable = 0;
+  let sealFailed = 0;
+  transaction(() => {
+    // D-75 re-check — the SAME shared isStaleEnvelope predicate as the scan
+    // (anti-pattern: filter and re-check drifting apart, T-26-04).
+    const txnRows = staleCandidates();
+    for (const row of txnRows) {
+      const value = String(row.two_fa_secret || '').trim();
+      const tag = (value.split(':', 1)[0] || '').toLowerCase();
+      // D-K8 trial order: current first, then PREVIOUS (v1 has no key id);
+      // v2 dispatches through the keyring, which resolves stale ids.
+      const plaintext =
+        tag === 'v1'
+          ? decryptV1WithMaterial(value, MASTER_KEY) ?? decryptV1WithMaterial(value, MASTER_KEY_PREVIOUS)
+          : tag === 'v2'
+            ? decryptTotpSecret(value)
+            : null;
+      if (plaintext === null) {
+        undecryptable++;
+        console.warn(
+          `  TOTP re-wrap: user ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`,
+        );
+        continue; // byte-identical, never deleted (D-K9)
+      }
+      // D-K10: the ONLY writer is encryptTotpSecret(…, 'v2') — never re-key as v1.
+      const envelope = encryptTotpSecret(plaintext, 'v2');
+      if (!envelope) {
+        sealFailed++;
+        continue;
+      }
+      db.prepare('update users set two_fa_secret = ? where id = ?').run(envelope, row.id);
+      rewrapped++;
+    }
+  });
+  // D-76: outcomes on console only — counts, version tags, ids; no key material.
+  console.log(
+    `  TOTP re-wrap: ${rewrapped} row(s) re-sealed to v2:<current-key-id>, ${undecryptable} undecryptable left as-is, ${sealFailed} seal failure(s).`,
   );
 }
 

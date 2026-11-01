@@ -50,28 +50,34 @@ test('requireTotpSecret returns ok:false on null — never a plaintext pass-thro
 
 /* ---------- D-78c: the exclusivity proof — the wrapper is the ONLY plaintext producer ---------- */
 
-test('decryptTotpSecret is referenced ONLY by its definition, requireTotpSecret, and the D-K7 boot probe', () => {
+test('decryptTotpSecret is referenced ONLY by its definition, requireTotpSecret, the D-K7 boot probe, and the re-wrap pass', () => {
   /* Call-syntax occurrences: the `function decryptTotpSecret(` definition line,
-     the call inside requireTotpSecret, and the D-K7 (Phase 25) decryptability
-     probe in migrateTotpEncryption — a boolean check whose result is DISCARDED,
-     never exposed as plaintext. Comment mentions use a space before "(" and
-     never match. */
+     the call inside requireTotpSecret, the D-K7 (Phase 25) decryptability
+     probe in migrateTotpEncryption, and the stale-v2 re-wrap call in
+     migrateTotpReWrap (Phase 26) — a boot-time value producer feeding the
+     single v2 writer, not a runtime boundary (D-78c exclusivity unchanged:
+     requireTotpSecret remains the ONLY runtime plaintext producer; comment
+     mentions use a space before "(" and never match). */
   const callSites = [...serverSource.matchAll(/decryptTotpSecret\(/g)].map(m => m.index);
-  assert.equal(callSites.length, 3, `expected definition + wrapper call + D-K7 probe, found ${callSites.length} call-syntax occurrences`);
+  assert.equal(callSites.length, 4, `expected definition + wrapper call + D-K7 probe + re-wrap call, found ${callSites.length} call-syntax occurrences`);
 
   const defAt = serverSource.indexOf('function decryptTotpSecret(');
   const wrapperAt = serverSource.indexOf('function requireTotpSecret(');
   const wrapperBodyEnd = serverSource.indexOf('/* D-46: pending');
   const migrationAt = serverSource.indexOf('function migrateTotpEncryption(');
   const migrationBodyEnd = serverSource.indexOf('/*\n * Invites created before');
+  const rewrapAt = serverSource.indexOf('function migrateTotpReWrap(');
+  const rewrapBodyEnd = serverSource.indexOf('/*\n * Invites created before');
   assert.ok(defAt !== -1, 'the decryptTotpSecret definition is missing');
   assert.ok(wrapperAt !== -1 && wrapperBodyEnd > wrapperAt, 'the requireTotpSecret wrapper is missing');
   assert.ok(migrationAt !== -1 && migrationBodyEnd > migrationAt, 'the migrateTotpEncryption block is missing');
+  assert.ok(rewrapAt !== -1 && rewrapBodyEnd > rewrapAt, 'the migrateTotpReWrap block is missing');
   for (const at of callSites) {
     const inDef = at >= defAt && at < defAt + 'function decryptTotpSecret('.length;
     const inWrapper = at > wrapperAt && at < wrapperBodyEnd;
     const inMigration = at > migrationAt && at < migrationBodyEnd;
-    assert.ok(inDef || inWrapper || inMigration, `a direct decryptTotpSecret call site exists outside the sanctioned regions at offset ${at}`);
+    const inRewrap = at > rewrapAt && at < rewrapBodyEnd;
+    assert.ok(inDef || inWrapper || inMigration || inRewrap, `a direct decryptTotpSecret call site exists outside the sanctioned regions at offset ${at}`);
   }
   assert.equal(serverSource.indexOf('function requireTotpSecret('), wrapperAt, 'requireTotpSecret defined exactly once');
 });
