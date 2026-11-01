@@ -313,14 +313,14 @@ Not applicable — internal pattern continuation, no library landscape. The only
 | A3 | D-K13's "nor decryptable under any keyring key" disjunct cannot be expressed in pure SQL; the runbook query given (not-like-v2-current-id) is stricter and expected-0-safe. CONTEXT.md does not prescribe the exact query text | Code Examples (D-K13) | Runbook query wording may need the discuss owner's glance during verify-work |
 | A4 | sqlite3 CLI is the operator's natural tool for the verification query — DEPLOY.md's backup/restore sections already assume direct DB file access | Runbook | If the operator environment lacks sqlite3, the query could alternatively run via `docker compose exec` node one-liner; planner may include both |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **decrypt helper shape: extract vs. duplicate** — Pulling the v1 branch out of `decryptTotpSecret` into a shared `decryptV1WithMaterial` is DRY but touches a function whose failure shapes are asserted by test/totp-encryption.test.mjs; a standalone sibling duplicates ~10 lines.
    - What we know: both are safe; D-78c exclusivity applies to runtime decrypt boundary either way.
-   - Recommendation: standalone sibling (lean, zero churn to proven code). Planner's call per the discretion grant.
+   - Resolution: standalone sibling adopted — implemented in 26-01 Task 1 step 3. [RESOLVED]
 
 2. **D-K12 detection scope** — "zero envelopes resolving under PREVIOUS" technically requires trial-decrypting v1 rows on EVERY both-keys boot, even when the candidate set is empty (a v1 row could exist that resolves under current). Cheap (few rows), but the nudge condition should be specified precisely in the plan: nudge iff PREVIOUS set AND no row is v1-decryptable-under-either AND no row is v2-under-previous-id.
-   - Recommendation: compute during the existing scan; no extra pass.
+   - Resolution: precision condition adopted — implemented in 26-01 Task 3 with its three test cases. [RESOLVED]
 
 ## Environment Availability
 
