@@ -398,3 +398,78 @@ test('D-K12 (d): zero envelope rows with both keys set — the pass returns befo
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/* ---------- Plan 02: runbook-parity tests — DEPLOY.md is pinned by these ----------
+
+   The two runbook commands below are read OUT of DEPLOY.md itself (not
+   duplicated here): if the doc and this suite drift, the suite fails. That is
+   the intended coupling — the runbook is only operator-usable if its
+   copy-pasteable commands are provably correct against the server (D-K18). */
+
+import { execFileSync } from 'node:child_process';
+
+const DEPLOY = fs.readFileSync(new URL('../DEPLOY.md', import.meta.url), 'utf8');
+
+/* The key-id one-liner: first `node -e '…'` fenced line carrying the sha256
+   derivation. Fails loudly (and intentionally) if DEPLOY.md rephrases it. */
+const oneLinerMatch = DEPLOY.match(/node -e '(console\.log\(require\("crypto"\)\.createHash\("sha256"\)\.update\(process\.env\.MASTER_KEY\)\.digest\("hex"\)\.slice\(0, 8\)\))'/);
+if (!oneLinerMatch) throw new Error('runbook one-liner not found in DEPLOY.md — doc/test drift; fix the runbook or this parser');
+const RUNBOOK_ONE_LINER = oneLinerMatch[1];
+
+/* The D-K13 verification query, extracted from inside the sqlite3 command
+   line's double quotes, with the <CURRENT_KEY_ID> placeholder. */
+const sqlMatch = DEPLOY.match(/sqlite3 [^\n]*"(select count\(\*\) from users[^"]*)"/);
+if (!sqlMatch) throw new Error('D-K13 verification query not found in DEPLOY.md — doc/test drift; fix the runbook or this parser');
+const RUNBOOK_SQL = sqlMatch[1];
+assert.ok(/not like 'v2:<CURRENT_KEY_ID>:%'/.test(RUNBOOK_SQL), 'the runbook query must count non-v2-under-current rows (D-K13)');
+
+const countStale = (dbPath, currentId) => {
+  const sql = RUNBOOK_SQL.replaceAll('<CURRENT_KEY_ID>', currentId);
+  const row = withDb(dbPath, db => db.prepare(sql).get());
+  return Number(Object.values(row)[0]);
+};
+
+test('runbook parity: the DEPLOY.md key-id one-liner equals keyIdFor for tested materials (D-K3/D-K18)', () => {
+  // Materials include a trailing-newline case: the documented env-var
+  // invocation must pass the key through byte-exact (Pitfall 5 — no
+  // echo-piping that could mangle trailing newlines).
+  const materials = [K2, 'a second key material', 'trailing newline key\n'];
+  for (const material of materials) {
+    const stdout = execFileSync('node', ['-e', RUNBOOK_ONE_LINER], {
+      env: { ...process.env, MASTER_KEY: material }, // key via env, never argv (T-26-05)
+      encoding: 'utf8',
+    });
+    assert.equal(stdout.trim(), idOf(material), `one-liner output must equal keyIdFor for ${JSON.stringify(material)}`);
+  }
+});
+
+test('runbook parity: the DEPLOY.md D-K13 query returns ≥1 on a stale fixture and 0 after a rotation boot (both directions)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-runbook-'));
+  const dbPath = path.join(dir, 'projects.db');
+  const email = 'runbook-parity@test.local';
+  const servers = [];
+  try {
+    // Create a user, then plant a stale v1-under-PREVIOUS envelope.
+    const boot0 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot0);
+    const s = await signup(boot0.base, { name: 'R', email, password: GOOD });
+    assert.equal(s.status, 201);
+    await boot0.stop();
+    plant(dbPath, email, wrapV1(SECRET, K1));
+
+    // Negative control: BEFORE the rotation boot the query must see the
+    // staleness — proves it can detect, not just rubber-stamp 0 (D-K13).
+    assert.ok(countStale(dbPath, idOf(K2)) >= 1, 'the runbook query must count stale envelopes on a not-yet-rotated fixture');
+
+    // The rotation boot per the runbook: both keys, one reboot.
+    const boot1 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot1);
+    assert.match(boot1.output(), /  TOTP re-wrap: 1 row\(s\) re-sealed/);
+
+    // Converged: the runbook's own query, with the current key id substituted, returns 0.
+    assert.equal(countStale(dbPath, idOf(K2)), 0, 'after a rotation boot the DEPLOY.md query must return 0');
+  } finally {
+    for (const server of servers) await server?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
