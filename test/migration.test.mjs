@@ -569,7 +569,11 @@ test('ENC-01: a missing MASTER_KEY defers the migration — rows untouched, no b
   const server = await startServer({ dataDir: dir, env: { MASTER_KEY: undefined } });
   assert.equal(encStored(server.dbPath), VALID_B32, 'the plaintext row is untouched byte-for-byte');
   assert.equal(envBackups(dir).length, 0, 'a deferred boot creates no backup file');
-  assert.match(server.output(), /TOTP encryption deferred: MASTER_KEY is not configured — 1 plaintext/, 'the loud console warning names the deferred-row count');
+  assert.match(
+    server.output(),
+    /TOTP encryption deferred: MASTER_KEY is not configured — 1 plaintext/,
+    'the loud console warning names the deferred-row count',
+  );
 
   const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
   assert.equal(signedIn.status, 200, 'boot succeeds normally and non-2FA login works');
