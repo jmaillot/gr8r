@@ -131,11 +131,11 @@ guards, individual removal, and no half-states. Safest feature closes the milest
   5. Each factor's secret is stored as a `v2:` envelope through `requireTotpSecret()` and
      the replay guard works per factor — recovery codes and the v1.4 disable contract
      unchanged.
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 31-01-PLAN.md — tracer: totp_factors schema + boot copy (D-06/09), verifyTotpAgainstFactors helper, login conversion, factor list slice, Wave 0 test suite + pin adjustments
+- [x] 31-01-PLAN.md — tracer: totp_factors schema + boot copy (D-06/09), verifyTotpAgainstFactors helper, login conversion, factor list slice, Wave 0 test suite + pin adjustments
 
 **Wave 2** *(blocked on Wave 1)*
 - [ ] 31-02-PLAN.md — server routes: remaining call-site conversions, add-factor enroll/enable with step-up (TOTP2-05), remove route with last-factor disable delegation (TOTP2-04), final pin shape
@@ -150,4 +150,4 @@ Plans:
 | 28. Multi-Team Membership | 4/4 | Complete    | 2026-11-01 |
 | 29. Team/Project-Scoped Permissions | 0/? | Not started | - |
 | 30. Entra SSO (OIDC) | 0/? | Not started | - |
-| 31. Second TOTP Factor | 0/? | Not started | - |
+| 31. Second TOTP Factor | 1/3 | In Progress|  |

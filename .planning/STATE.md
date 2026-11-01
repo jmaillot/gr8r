@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
-current_phase: 29
-current_phase_name: Team/Project-Scoped Permissions
-status: planning
-stopped_at: Phase 31 context gathered
-last_updated: "2026-11-01T19:12:20.834Z"
+current_phase: 31
+current_phase_name: Second TOTP Factor
+status: executing
+stopped_at: Completed 31-01-PLAN.md
+last_updated: "2026-11-01T20:01:17.822Z"
 last_activity: 2026-11-01
-last_activity_desc: Phase 28 complete, transitioned to Phase 29
-state_head: 19fc3379afb9863c62327e5af393e84715ac04bb
+last_activity_desc: Phase 31 execution started
+state_head: ed5990b99c7bf0debb6de7ead30fdbdece3b6ab9
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 7
+  completed_plans: 5
   percent: 25
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 29 — Team/Project-Scoped Permissions
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-01 — Phase 28 complete, transitioned to Phase 29
+Phase: 31 (Second TOTP Factor) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-11-01 — Phase 31 execution started
 
 Progress: [███░░░░░░░] 25% of phase plans (4/4)
 
@@ -73,6 +73,8 @@ migrations, full suite green, zero new runtime dependencies.
 - [v1.6 roadmap]: Scope restricts, role governs; no per-team roles inside the role ladder (explicit out-of-scope)
 - [v1.6 roadmap]: SSO links on verified email only, keyed by (issuer, subject); JIT provisioning shaped as invited members
 - [v1.6 roadmap]: Second TOTP factor = rows in `totp_factors` mirroring the primary factor into `users.two_fa_secret` so existing call sites survive unmodified; recovery codes untouched (account-level break-glass)
+- [Phase 31]: 31-01: totp_factors is the single source of truth — boot copy carries the users envelope verbatim (decrypt-free) with last_step continuity; enable inserts the factor row, disable deletes them, rotation re-wrap covers factor rows
+- [Phase 31]: 31-01: migrated factor name stores the full locale key settings.tfa.factor.primary, rendered via t(row.name) (D-07 wording discretion)
 
 ### Pending Todos
 
@@ -95,15 +97,16 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T19:12:20.788Z
-Stopped at: Phase 31 context gathered
-Resume file: .planning/phases/31-second-totp-factor/31-CONTEXT.md
+Last session: 2026-11-01T20:01:17.782Z
+Stopped at: Completed 31-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | *(v1.6 — no plans executed yet)* | | | |
+| Phase 31 P01 | 23min | 3 tasks | 12 files |
 
 ## Operator Next Steps
 
