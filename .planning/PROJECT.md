@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-10-31 after Phase 25*
+*Last updated: 2026-11-01 after Phase 26*
 
 ## What it is
 
@@ -294,6 +294,14 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   unknown/tampered envelopes — the prerequisite that makes rotation (Phase 26) possible —
   Phase 25 (KEY-01, KEY-02; verification 9/9, 621/621 tests, security audit 6/6 threats
   closed, format freeze decision D-K3/D-K4 approved)
+- ✓ Re-wrap MASTER_KEY rotation + key-custody runbook: `migrateTotpReWrap()` boot pass
+  converges every old-envelope secret to `v2:<new-key-id>:…` in one reboot with two env
+  vars, idempotently and transactionally behind the pre-migration backup (no 2FA
+  re-enrollment); DEPLOY.md §14 documents the full key-custody lifecycle with
+  copy-pasteable, env-only commands pinned by doc-parsing parity tests, gated by two
+  pre-rotation preconditions (image currency + key-id coverage) and a no-data-loss
+  recovery note for the keyring-miss signature — Phase 26 (KEY-03, KEY-04; verification
+  5/5 after gap-closure re-verification, 632/632 tests; G-26-1 closed via 26-03)
 - ✓ Disable-2FA verified against the full contract: strict password + live-TOTP gate only
   (a recovery code can never disable 2FA), one-transaction teardown of `two_fa_*` columns
   + recovery codes + pending login challenges, explicit revoke-others session policy with
