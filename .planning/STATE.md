@@ -5,11 +5,11 @@ milestone_name: Team Access & Federation
 current_phase: 31
 current_phase_name: Second TOTP Factor
 status: executing
-stopped_at: Completed 31-01-PLAN.md
-last_updated: "2026-11-01T20:01:17.822Z"
+stopped_at: Completed 31-02-PLAN.md
+last_updated: "2026-11-01T20:02:40.644Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 31 execution started
-state_head: ed5990b99c7bf0debb6de7ead30fdbdece3b6ab9
+state_head: 555586d983cb9465018531ef2539b2b54eb9e67e
 progress:
   total_phases: 4
   completed_phases: 1
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 31 (Second TOTP Factor) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-11-01 — Phase 31 execution started
 
@@ -75,6 +75,8 @@ migrations, full suite green, zero new runtime dependencies.
 - [v1.6 roadmap]: Second TOTP factor = rows in `totp_factors` mirroring the primary factor into `users.two_fa_secret` so existing call sites survive unmodified; recovery codes untouched (account-level break-glass)
 - [Phase 31]: 31-01: totp_factors is the single source of truth — boot copy carries the users envelope verbatim (decrypt-free) with last_step continuity; enable inserts the factor row, disable deletes them, rotation re-wrap covers factor rows
 - [Phase 31]: 31-01: migrated factor name stores the full locale key settings.tfa.factor.primary, rendered via t(row.name) (D-07 wording discretion)
+- [Phase 31]: 31-02: legacy tfa/enable keeps the users.two_fa_last_step baseline for the first-ever enable (the pending secret is unrelated to any enrolled factor's replay state) — Factor-row baselines are per-factor; only additional factors (factors/enable) use a null baseline
+- [Phase 31]: 31-02: requirements TOTP2-01/02/03 left unmarked — they span 31-02 (API) and 31-03 (client wiring); shared-ID gate would mark early — requirements.ready-ids would flip them Complete before 31-03 SUMMARY exists
 
 ### Pending Todos
 
@@ -97,8 +99,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T20:01:17.782Z
-Stopped at: Completed 31-01-PLAN.md
+Last session: 2026-11-01T20:02:33.302Z
+Stopped at: Completed 31-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -107,6 +109,7 @@ Resume file: None
 |------|----------|-------|-------|
 | *(v1.6 — no plans executed yet)* | | | |
 | Phase 31 P01 | 23min | 3 tasks | 12 files |
+| Phase 31 P02 | 1h 9min | 3 tasks | 4 files |
 
 ## Operator Next Steps
 
