@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.5
-milestone_name: Reliability & Rotation
-status: Awaiting next milestone
-stopped_at: Phase 27 complete — all phases complete
-last_updated: "2026-11-01T13:19:45.139Z"
+milestone: v1.6
+milestone_name: Team Access & Federation
+status: planning
+last_updated: "2026-11-01T13:27:13.617Z"
 last_activity: 2026-11-01
-last_activity_desc: Milestone v1.5 completed and archived
-state_head: cfd4212b7caf6312945d6860a59253a97f4b3153
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
-current_phase: 27
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -27,10 +23,10 @@ current_phase: 27
 
 ## Current Position
 
-Phase: Milestone v1.5 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-01 — Milestone v1.5 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-01 — Milestone v1.6 started
 
 ## Milestone History
 

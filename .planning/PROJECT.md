@@ -1,6 +1,25 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-01 after v1.5 milestone*
+*Last updated: 2026-11-01 — milestone v1.6 started*
+
+## Current Milestone: v1.6 Team Access & Federation
+
+**Goal:** membership and sign-in get real team scoping and a second door — multi-team
+membership, team/project-scoped permissions, optional Microsoft Entra SSO, and a second
+2FA method.
+
+**Target features:**
+- Multi-team membership: a member can belong to several teams (#3, first phase — #4 compounds on it)
+- Team/project-scoped permissions: Membre and invités can have their permissions limited to the
+  team/project they were invited to (#4, adjacent to the v1.5 Phase 24 workspace-admin tier)
+- Microsoft Entra sign-in: optional OIDC, visible only if the env is configured (#2, third phase)
+- Second 2FA method: a user can register a second TOTP factor alongside the first, without
+  touching recovery codes (#1, last phase — rides the v1.5 keyring / `v2:` envelope infra from
+  Phases 25–26)
+
+**Constraints:** zero runtime dependencies held (Entra = raw OIDC over Node built-ins); the
+parked candidates (membership-surface hardening, recent-search leak, per-user settings
+isolation) stay out of this milestone.
 
 ## What it is
 
@@ -68,8 +87,8 @@ dependencies. Full record: `milestones/v1.5-ROADMAP.md`, `milestones/v1.5-REQUIR
 
 ## Next Milestone Goals
 
-Not yet scoped — run `/gsd-new-milestone`. Candidates still parked: membership-surface
-hardening, recent-search leak closure, per-user settings isolation (see Active below).
+Scoped as **v1.6 Team Access & Federation** (2026-11-01): multi-team membership,
+team/project-scoped permissions, Microsoft Entra SSO (env-gated), second 2FA method.
 
 ## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)
 
