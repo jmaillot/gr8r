@@ -341,6 +341,14 @@ export const api = {
     if (r.ok) adoptRevision(r.data);
     return r;
   },
+  /* TEAM-01: set a member's full team set in one call. The route edits only the
+     team_members authority rows — the document and its revision are untouched,
+     so there is deliberately no adoptRevision here (revokeInvite precedent). */
+  async setMemberTeams(userId, teams) {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    return call('PUT', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/teams`, { teams });
+  },
   async leave() {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };

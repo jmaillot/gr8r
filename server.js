@@ -160,6 +160,21 @@ const SCHEMA = `
     member_id    text,
     primary key (workspace_id, user_id)
   );
+  /* TEAM-01: the single authority for team membership (Phase 28, D-01/D-03).
+     team_id references the doc's teams[] definitions, which stay in the document
+     (D-02) — so no FK there, only a whitelist check at write time. Both id columns
+     are carried, exactly like memberships: doc profiles key on member_id, sessions
+     and the API on user_id. The user_id FK mirrors memberships exactly, which
+     settles the Phase 30 OIDC identity-column decision (research Pitfall 5): any
+     future identity table joins users(id) independently — this shape is additive. */
+  create table if not exists team_members (
+    workspace_id text not null references workspaces(id) on delete cascade,
+    team_id      text not null,
+    member_id    text,
+    user_id      text not null references users(id) on delete cascade,
+    primary key (workspace_id, team_id, user_id)
+  );
+  create index if not exists team_members_user on team_members(workspace_id, user_id);
   create table if not exists invites (
     token_hash   text primary key,
     email        text,
@@ -240,6 +255,10 @@ function openDb() {
   ensureColumn(db, 'memberships', 'member_id', 'text');
   // P4-c fix: the team picked at invite time must survive into the profile seed.
   ensureColumn(db, 'memberships', 'team', 'text');
+  // TEAM-01: one-time backfill of the team_members join table from the scalar
+  // memberships.team column (D-03). Runs after the ensureColumn above so the
+  // column always exists on a legacy database (Pitfall 4).
+  migrateTeamMembership(db);
   ensureColumn(db, 'invites', 'workspace_id', 'text');
   ensureColumn(db, 'users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
@@ -1100,6 +1119,24 @@ function membersOf(workspaceId) {
     .all(workspaceId);
 }
 
+/* TEAM-01: the team set of one member, read from the join-table authority. */
+function teamsOfUser(workspaceId, userId) {
+  return db
+    .prepare('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id')
+    .all(workspaceId, userId)
+    .map(r => r.team_id);
+}
+
+/* TEAM-01: bulk form for syncProfiles — Map<user_id, string[]> over the workspace. */
+function teamsByUser(workspaceId) {
+  const map = new Map();
+  for (const r of db.prepare('select user_id, team_id from team_members where workspace_id = ? order by team_id').all(workspaceId)) {
+    if (!map.has(r.user_id)) map.set(r.user_id, []);
+    map.get(r.user_id).push(r.team_id);
+  }
+  return map;
+}
+
 function memberPayload(row, doc, selfId) {
   const profile = (doc?.data?.members || []).find(p => (row.user_id && p.userId === row.user_id) || (row.member_id && p.id === row.member_id));
   return {
@@ -1109,7 +1146,10 @@ function memberPayload(row, doc, selfId) {
     email: row.email,
     role: row.role,
     roleLabel: ROLE_LABEL[row.role] || row.role,
-    team: profile?.team ?? null,
+    /* TEAM-01/D-04: the scalar `team` is retired — the projected teams[] array
+       (filled by syncProfiles from the team_members authority) is the only
+       membership surface a payload exposes. */
+    teams: profile?.teams || [],
     title: profile?.title || '',
     status: profile?.status || 'active',
     lastLoginAt: row.last_login_at || null,
@@ -1151,23 +1191,28 @@ function syncProfiles(doc, workspaceId) {
   if (!doc?.data || !Array.isArray(doc.data.members)) return;
   const rows = db
     .prepare(
-      `select m.user_id, m.role, m.member_id, m.team, u.name, u.email
+      `select m.user_id, m.role, m.member_id, u.name, u.email
          from memberships m join users u on u.id = m.user_id
         where m.workspace_id = ?`,
     )
     .all(workspaceId);
   const byUser = new Map(rows.map(r => [r.user_id, r]));
+  /* TEAM-01/D-04: the team_members join table is the authority; the projection
+     is a sorted teams[] array per account-backed profile. The scalar
+     memberships.team column stays on disk but is never read (D-04). */
+  const teamMap = teamsByUser(workspaceId);
   for (const profile of doc.data.members) {
     if (!profile?.userId) continue;
     const row = byUser.get(profile.userId);
     if (!row) continue;
     if (row.member_id && profile.id !== row.member_id) profile.id = row.member_id;
     profile.role = ROLE_LABEL[row.role] || profile.role;
-    /* P4-c fix: the membership row is the authority for a member's team (set at
-       invite time or by an admin PUT via syncMemberTeams) — mirror it into the
-       doc so @team mentions and the members page resolve. Doc-only profiles
-       (no account) keep their own team field untouched. */
-    profile.team = row.team || null;
+    /* Membership lives in the team_members rows, not the doc (D-01/D-04): the
+       projection writes the teams[] array and retires any stale scalar `team`
+       the stored document still carries. Doc-only profiles (no account) keep
+       their own fields untouched. */
+    profile.teams = teamMap.get(profile.userId) || [];
+    delete profile.team;
     if (profile.status === 'invited') profile.status = 'active';
     // The document stores minutes since last activity; older rows stored a timestamp.
     if (typeof profile.last === 'number' && profile.last > 1e11) profile.last = Math.max(0, Math.round((now() - profile.last) / 60000));
@@ -1177,7 +1222,9 @@ function syncProfiles(doc, workspaceId) {
   const known = new Set(doc.data.members.map(m => m?.userId).filter(Boolean));
   for (const row of rows) {
     if (known.has(row.user_id)) continue;
-    doc.data.members.push(memberProfile(row, doc.data.members.length));
+    const profile = memberProfile(row, doc.data.members.length);
+    profile.teams = teamMap.get(row.user_id) || [];
+    doc.data.members.push(profile);
   }
 }
 
@@ -1351,6 +1398,58 @@ function bootstrap(opts) {
   migrateTotpReWrap();
   ensureAdmin(opts);
   stampInstanceAdmin();
+}
+
+/*
+ * TEAM-01 (Phase 28, D-03): one-time backfill of the team_members join table
+ * from the scalar memberships.team column. The guard is per-row, not a global
+ * "table empty" check: a memberships row is eligible iff its team is set AND
+ * the user has NO team_members row yet. This is what keeps the migration a
+ * byte-identical no-op on every boot after the first — a plain
+ * `insert ... select ... where team is not null` would resurrect a team a
+ * member has since left, because the scalar column stays on disk unread (D-04)
+ * while team_members has moved on. A fresh workspace is safe: it has zero
+ * scalar-team memberships, so zero eligible rows and no backup.
+ *
+ * No backup = no mutation (deliberately stricter than migrateTenancy, same
+ * policy as the TOTP envelope migration, D-74).
+ */
+function migrateTeamMembership(conn) {
+  const eligible = () =>
+    conn
+      .prepare(
+        `select count(*) as n from memberships m
+          where m.team is not null
+            and not exists (select 1 from team_members tm
+                             where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
+      )
+      .get().n;
+  if (!eligible()) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-pre-team-members-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    conn.exec('pragma wal_checkpoint(truncate)');
+    conn.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    console.log(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    console.error(`  pre-migration backup failed: ${err.message}`);
+    return;
+  }
+  conn.exec('begin immediate');
+  try {
+    conn.prepare(
+      `insert or ignore into team_members (workspace_id, team_id, member_id, user_id)
+       select m.workspace_id, m.team, m.member_id, m.user_id from memberships m
+        where m.team is not null
+          and not exists (select 1 from team_members tm
+                           where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
+    ).run();
+    conn.exec('commit');
+  } catch (err) {
+    conn.exec('rollback');
+    throw err;
+  }
 }
 
 /*
@@ -1746,9 +1845,9 @@ function memberProfile(row, index = 0) {
     name: row.name,
     email: row.email,
     role: ROLE_LABEL[row.role] || 'Member',
-    /* The team chosen at invite time seeds the profile; afterwards the doc
-       copy is the source of truth (the teams modal edits it directly). */
-    team: row.team || null,
+    /* TEAM-01/D-04: membership is projected as the teams[] array by syncProfiles
+       from the team_members authority — the profile seed starts teamless. */
+    teams: [],
     title: '',
     c: ['#5A67D8', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 6],
     status: 'active',
@@ -1797,6 +1896,12 @@ function addMembership(ws, user, role, team = null) {
       `insert into memberships (workspace_id, user_id, role, member_id, team) values (?,?,?,?,?)
        on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
     ).run(ws.id, user.id, role, memberId, team);
+    /* TEAM-01: the team picked at invite time lands in the authority rows too —
+       the scalar column is backfill-only legacy (D-04), and an invite accepted
+       between boots must not wait for the next backfill to appear in rosters. */
+    if (team) {
+      db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)').run(ws.id, team, memberId, user.id);
+    }
     db.exec('commit');
   } catch (err) {
     db.exec('rollback');
@@ -2863,6 +2968,7 @@ async function handleApi(req, res, url) {
     const ctx = requireWorkspace(req, res, wsMembersMatch[1]);
     if (!ctx) return;
     const doc = JSON.parse(ctx.ws.doc);
+    syncProfiles(doc, ctx.ws.id); // TEAM-01: project the team_members authority into teams[]
     return json(res, 200, {
       members: membersOf(ctx.ws.id).map(row => memberPayload(row, doc, ctx.user.id)),
       invites: roleRank(ctx.membership.role) >= ROLE_RANK.admin ? invitesOf(ctx.ws.id) : [],
@@ -2937,6 +3043,51 @@ async function handleApi(req, res, url) {
       member: memberPayload(
         {
           role: nextRole,
+          member_id: row.member_id,
+          user_id: target.id,
+          email: target.email,
+          name: target.name,
+          last_login_at: target.last_login_at,
+          created_at: target.created_at,
+        },
+        doc,
+        ctx.user.id,
+      ),
+    });
+  }
+
+  /* TEAM-01 (D-01): set a member's full team set in one call. Admin-gated — any
+     admin may edit any member's teams, no owner-tier restriction (unlike role
+     management). The route edits ONLY the team_members authority rows inside its
+     own transaction; the document and its revision are untouched, so the response
+     carries no `revision` claim (Open Question 2 / TEAM-05 precondition: another
+     session's pending doc write can never be clobbered by a membership change). */
+  const wsMemberTeamsMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/teams$/);
+  if (wsMemberTeamsMatch && method === 'PUT') {
+    const ctx = requireWorkspace(req, res, wsMemberTeamsMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    const target = db.prepare('select * from users where id = ?').get(wsMemberTeamsMatch[2]);
+    const row = target ? membershipOf(ctx.ws.id, target.id) : null;
+    if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    if (!Array.isArray(body?.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
+    if (body.teams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
+    // Whitelist: every team id must be a team defined in the workspace document (T-28-02).
+    const known = new Set(((JSON.parse(ctx.ws.doc)?.data?.teams) || []).map(t => t?.id).filter(Boolean));
+    const teams = [...new Set(body.teams.map(t => String(t).slice(0, 40)))];
+    if (teams.some(t => !known.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
+    transaction(() => {
+      db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+      const insert = db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)');
+      for (const t of teams) insert.run(ctx.ws.id, t, row.member_id, target.id);
+    });
+    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
+    syncProfiles(doc, ctx.ws.id); // the response projects the fresh teams[] set
+    return json(res, 200, {
+      member: memberPayload(
+        {
+          role: row.role,
           member_id: row.member_id,
           user_id: target.id,
           email: target.email,

@@ -342,3 +342,70 @@ test('deleting a workspace cascades memberships and invites', async () => {
 
   assert.equal((await owner.get('/api/workspaces/acme')).status, 200, 'the other workspace is untouched');
 });
+
+/* TEAM-01/TEAM-02 (Phase 28): the team_members authority path over HTTP.
+   Runs on its own server instance — the shared suite above has already spent
+   the shared server's invite-accept throttle budget. */
+test('PUT member teams writes authority rows, projects teams[] and gates on admin', async () => {
+  const s = await startServer();
+  try {
+    const signedIn = await login(s.base, ADMIN.email, ADMIN.password);
+    assert.equal(signedIn.status, 200);
+    const boss = signedIn.client;
+
+    // Define two teams in the workspace document (definitions stay in the doc, D-02).
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [
+      { id: 'team_a', name: 'Alpha', members: [] },
+      { id: 'team_b', name: 'Beta', members: [] },
+    ];
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    // Invite and accept a member on the fresh server's throttle budget.
+    const [inv] = (await boss.post('/api/workspaces/acme/invites', { emails: ['tm@test.local'], role: 'member' })).data.invites;
+    const memberAccount = (await signup(s.base, ACCOUNT('Tm', 'tm@test.local'))).client;
+    assert.equal((await memberAccount.post(`/api/invites/${inviteToken(inv.url)}/accept`)).status, 200);
+
+    const members = (await boss.get('/api/workspaces/acme/members')).data.members;
+    const target = members.find(m => m.email === 'tm@test.local');
+    assert.ok(target, 'the member joined');
+    assert.deepEqual(target.teams, [], 'a freshly invited member starts teamless');
+
+    // A plain member gets the admin gate; an unknown team id is whitelisted out.
+    assert.equal((await memberAccount.put(`/api/workspaces/acme/members/${target.userId}/teams`, { teams: ['team_a'] })).status, 403);
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${target.userId}/teams`, { teams: ['team_nope'] })).status, 400);
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${target.userId}/teams`, { teams: 'team_a' })).status, 400);
+    assert.equal((await boss.put('/api/workspaces/acme/members/not-a-user/teams', { teams: ['team_a'] })).status, 404);
+
+    // The one-call set: two teams at once.
+    const set = await boss.put(`/api/workspaces/acme/members/${target.userId}/teams`, { teams: ['team_b', 'team_a', 'team_a'] });
+    assert.equal(set.status, 200);
+    assert.equal('revision' in set.data, false, 'a membership route never claims a doc revision (TEAM-05 precondition)');
+    assert.deepEqual(set.data.member.teams, ['team_a', 'team_b'], 'the payload projects the full set');
+
+    const wsId = (await boss.get('/api/workspaces/acme')).data.id;
+    assert.ok(wsId, 'the workspace id is resolvable for authority-row checks');
+
+    // The join table is the authority: two rows, deduped and sorted.
+    withDb(s.dbPath, db => {
+      assert.deepEqual(
+        db.prepare('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id').all(wsId, target.userId).map(r => r.team_id),
+        ['team_a', 'team_b'],
+      );
+    });
+
+    // The roster projection reads the same authority.
+    const rostered = (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'tm@test.local');
+    assert.deepEqual(rostered.teams, ['team_a', 'team_b'], 'both teams appear in the member payload');
+
+    // Teamless is a valid state: setting zero teams leaves zero rows (D-03).
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${target.userId}/teams`, { teams: [] })).status, 200);
+    withDb(s.dbPath, db => {
+      assert.equal(db.prepare('select count(*) as n from team_members where user_id = ?').get(target.userId).n, 0, 'no rows for a teamless member');
+    });
+    assert.deepEqual((await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'tm@test.local').teams, []);
+  } finally {
+    await s.stop();
+  }
+});
