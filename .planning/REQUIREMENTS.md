@@ -11,19 +11,19 @@ method. Zero new runtime dependencies throughout.
 
 ### Multi-Team Membership (Kanzo #3 — first phase)
 
-- [ ] **TEAM-01**: A member can belong to several teams in the same workspace — team
+- [x] **TEAM-01**: A member can belong to several teams in the same workspace — team
       membership is stored in authority rows (`teams` + `team_members` join table), migrated
       additively from the current single-team membership with a pre-migration backup and a
       byte-identical second boot. The workspace role ladder (`viewer < member < admin < owner`)
       stays the ceiling — no per-team roles.
-- [ ] **TEAM-02**: Every surface that shows teams reads the real set: rosters list a member on
+- [x] **TEAM-02**: Every surface that shows teams reads the real set: rosters list a member on
       every team they belong to, task-assignment and mention autocomplete reflect team
       membership, and project `teams[]` visibility matches.
-- [ ] **TEAM-03**: @team mentions fan out to all members of the mentioned team, and a user in
+- [x] **TEAM-03**: @team mentions fan out to all members of the mentioned team, and a user in
       two mentioned teams receives exactly one notification (dedup across overlapping teams).
-- [ ] **TEAM-04**: Task assignment is restricted to members whose team set intersects the
+- [x] **TEAM-04**: Task assignment is restricted to members whose team set intersects the
       project's `teams[]` — the assignment picker offers no one who cannot see the project.
-- [ ] **TEAM-05**: Team membership never lives in the client-mergeable workspace document —
+- [x] **TEAM-05**: Team membership never lives in the client-mergeable workspace document —
       concurrent doc writes from two sessions cannot clobber a team-membership change
       (regression test).
 

@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
-current_phase: 28
-current_phase_name: Multi-Team Membership
-status: executing
-stopped_at: Phase 28 context gathered
-last_updated: "2026-11-01T18:50:00.399Z"
+current_phase: 29
+current_phase_name: Team/Project-Scoped Permissions
+status: planning
+stopped_at: Phase 28 complete, ready to plan Phase 29
+last_updated: "2026-11-01T18:57:36.446Z"
 last_activity: 2026-11-01
-last_activity_desc: Phase 28 execution started
-state_head: 56d401fc9265191c4dc54eacdace10616ccdc83f
+last_activity_desc: Phase 28 complete, transitioned to Phase 29
+state_head: 9ab9cf7905beca4d954b067363cedc5208366193
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 4
-  percent: 100
+  percent: 25
 ---
 
 # STATE.md
@@ -28,14 +28,15 @@ progress:
 
 ## Current Position
 
-Phase: 28 (Multi-Team Membership) — EXECUTING
-Plan: 4 of 4
-Status: Executing Phase 28
-Last activity: 2026-11-01 — Completed 28-04-PLAN.md (TEAM-04 picker filter gap closure)
+Phase: 29 — Team/Project-Scoped Permissions
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-01 — Phase 28 complete, transitioned to Phase 29
 
-Progress: [██████████] 100% of phase plans (4/4)
+Progress: [███░░░░░░░] 25% of phase plans (4/4)
 
 ## Recent Decisions
+
 - 28-04: picker predicate `assignableInProject` — empty teams[] = unscoped project (all members assignable); current assignee always offered; bulk-assignee popover intentionally unfiltered (cross-project)
 
 ## v1.6 Phase Order (research-validated build order)
@@ -95,7 +96,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-01T17:36:30.844Z
-Stopped at: Phase 28 context gathered
+Stopped at: Phase 28 complete, ready to plan Phase 29
 Resume file: .planning/phases/28-multi-team-membership/28-CONTEXT.md
 
 ## Performance Metrics
