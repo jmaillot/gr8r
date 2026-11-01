@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 27
 current_phase_name: Due-Date Reminder Scheduler
-status: planning
-stopped_at: Phase 27 context gathered
-last_updated: "2026-11-01T11:43:22.916Z"
+status: executing
+stopped_at: Completed 27-01-PLAN.md
+last_updated: "2026-11-01T12:18:39.473Z"
 last_activity: 2026-11-01
-last_activity_desc: Phase 24 complete, transitioned to Phase 27
-state_head: 14e5e537aa973cd3ff699d0549367fb8b70b2d06
+last_activity_desc: Phase 27 execution started
+state_head: 2506782d16cb9a682745194b41386e1bd65ebdfa
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 17
+  completed_plans: 16
   percent: 80
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 27 — Due-Date Reminder Scheduler
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-01 — Phase 24 complete, transitioned to Phase 27
+Phase: 27 (Due-Date Reminder Scheduler) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-11-01 — Phase 27 execution started
 
 Progress: [████████░░] 80%
 
@@ -79,6 +79,8 @@ Progress: [████████░░] 80%
 - [Phase 26]: Runbook (26-02): DEPLOY.md §14 covers the full key-custody lifecycle; key-id discovery and the D-K13 query are env-only (never argv), and its commands are pinned by doc-parsing parity tests in test/totp-rewrap.test.mjs
 - [Phase 26]: G-26-1 closed (26-03): §14 gates rotation on two preconditions — image currency (grep -c migrateTotpReWrap server.js ≥ 1) and key-id coverage (id(MASTER_KEY_PREVIOUS) vs DB-stamped v2: substr prefixes, env-only) — plus a no-data-loss recovery note for the D-K7-without-re-wrap signature
 - [Phase 24]: 24-04: audit-trail client fetch is unconditional — only the server knows the caller's full admin/owner membership set (D-T3), the card self-guards via the null state (D-V1)
+- [Phase 27]: Workspace-shared tz = first membership member's profile tz; unknown/empty label falls back to UTC (A1 resolved)
+- [Phase 27]: Reminder clock injection via test-only /api/internal/reminder-pass route gated by REMINDER_TEST_TOKEN
 
 ### Pending Todos
 
@@ -95,9 +97,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T11:43:22.844Z
-Stopped at: Phase 27 context gathered
-Resume file: .planning/phases/27-due-date-reminder-scheduler/27-CONTEXT.md
+Last session: 2026-11-01T12:18:39.411Z
+Stopped at: Completed 27-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -118,3 +120,4 @@ Resume file: .planning/phases/27-due-date-reminder-scheduler/27-CONTEXT.md
 | Phase 26 P02 | 14 min | 2 tasks | 2 files |
 | Phase 26 P03 | 4 min | 2 tasks | 1 files |
 | Phase 24 P04 | 22 min | 2 tasks | 3 files |
+| Phase 27 P01 | 35m | 3 tasks | 2 files |

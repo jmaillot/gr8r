@@ -19,20 +19,20 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 
 ### Due-Date Reminders (REM)
 
-- [ ] **REM-01**: A server-side scheduled pass runs in-process (no external cron) and notifies
+- [x] **REM-01**: A server-side scheduled pass runs in-process (no external cron) and notifies
   task assignees of approaching due dates via notification rows + optional email; the pass is
   restart-safe (boot catch-up runs missed windows once) and never writes a workspace-doc
   revision unless it has rows to add (no 409 storms on idle ticks)
-- [ ] **REM-02**: Reminder timings are "day before" and "morning of" due date — both
+- [x] **REM-02**: Reminder timings are "day before" and "morning of" due date — both
   pref-selectable in notifPrefs, both ON by default; due dates are computed per the
   workspace's shared timezone setting (per-user tz explicitly deferred)
-- [ ] **REM-03**: Exactly one reminder per (task, assignee, offset, due date) is ever sent —
+- [x] **REM-03**: Exactly one reminder per (task, assignee, offset, due date) is ever sent —
   the dedup key is written in SQLite transactionally before the notification, so process
   restarts and repeated ticks cannot double-send; changing a due date re-arms its reminders
   naturally via the key
-- [ ] **REM-04**: Completed or archived tasks are never reminded; an overdue task gets
+- [x] **REM-04**: Completed or archived tasks are never reminded; an overdue task gets
   exactly one "past due" nudge (send-one-or-nothing), also deduped
-- [ ] **REM-05**: Reminder emails honor a dedicated `email_reminder` prefs gate and link
+- [x] **REM-05**: Reminder emails honor a dedicated `email_reminder` prefs gate and link
   straight to the task (deep link); reminders respect the same prefs surface as other
   notification types
 
@@ -111,8 +111,8 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | KEY-02 | Phase 25 | Complete |
 | KEY-03 | Phase 26 | Complete |
 | KEY-04 | Phase 26 | Complete |
-| REM-01 | Phase 27 | Pending |
-| REM-02 | Phase 27 | Pending |
-| REM-03 | Phase 27 | Pending |
-| REM-04 | Phase 27 | Pending |
-| REM-05 | Phase 27 | Pending |
+| REM-01 | Phase 27 | Complete |
+| REM-02 | Phase 27 | Complete |
+| REM-03 | Phase 27 | Complete |
+| REM-04 | Phase 27 | Complete |
+| REM-05 | Phase 27 | Complete |
