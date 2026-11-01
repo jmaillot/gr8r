@@ -1979,11 +1979,15 @@ A.operatorRevokeConfirm = async el => {
   toast(t('settings.operator.toastRevoked'));
 };
 
-/* AUD-03: the audit trail card's ground truth (owner-facing, D-V1): the rows
-   come from GET /api/audit-log — never synthesized client-side. A non-401
-   failure leaves the state null; the 401 teardown belongs to the central
-   intercept (D-28). Workspace admins get 403 here, so the null state IS the
-   honest answer for non-owners too. */
+/* AUD-03: the audit trail card's ground truth (D-T3, D-V1): the rows come from
+   GET /api/audit-log — never synthesized client-side. The server decides the
+   tier: instance operators get all rows, workspace admins get their own
+   workspaces' rows (server.js tier scoping), and a plain member's 403 leaves
+   the state null — the honest absence the card's null-guard renders (D-V1).
+   A non-401 failure leaves the state null; the 401 teardown belongs to the
+   central intercept (D-28). The fetch is unconditional because only the server
+   knows the caller's full admin/owner membership set (a client-side role gate
+   could never replicate it). */
 const auditVerb = () => S.ui.auditVerb || '';
 async function fetchAuditPage(params) {
   const res = await api.auditLog(params);
@@ -1996,7 +2000,7 @@ async function fetchAuditPage(params) {
   return S.ui.auditTrail;
 }
 export async function refreshAuditLog() {
-  if (!api.enabled || !api.user?.isInstanceAdmin) return null;
+  if (!api.enabled) return null;
   S.ui.auditTrail = null;
   return fetchAuditPage(auditVerb() ? { verb: auditVerb() } : {});
 }

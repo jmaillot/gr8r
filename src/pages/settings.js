@@ -122,11 +122,14 @@ export function operatorCard() {
     .join('')}</div>`;
 }
 
-/* The audit trail (AUD-03, D-V1): owner-facing read of the append-only
-   audit_log, mounted beside the operator card on the sessions tab. Rows render
-   purely from snapshot columns (D-V4) — no joins — so rows whose target user
-   was deleted stay fully readable. Verb filter chips (D-V2) re-query the
-   server; load-more appends the next keyset page (D-V3). */
+/* The audit trail (AUD-03, D-T3, D-V1): tier-scoped read of the append-only
+   audit_log, mounted unconditionally beside the operator card on the sessions
+   tab — the server decides who sees what (instance operators: all rows,
+   workspace admins: their own workspaces' rows, plain members: 403 → null →
+   the card renders nothing). Rows render purely from snapshot columns (D-V4)
+   — no joins — so rows whose target user was deleted stay fully readable.
+   Verb filter chips (D-V2) re-query the server; load-more appends the next
+   keyset page (D-V3). */
 export function auditTrailCard() {
   const trail = S.ui.auditTrail;
   if (!trail) return '';
@@ -548,7 +551,7 @@ export function settingsBody(sec, title) {
           )
           .join('') +
         `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${rows.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
-      ) + (api.user?.isInstanceAdmin ? operatorCard() + auditTrailCard() : '');
+      ) + (operatorCard() + auditTrailCard());
     }
   }
   return page404();
