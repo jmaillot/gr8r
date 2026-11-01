@@ -194,6 +194,43 @@
 
 ---
 
+## Milestone: v1.5 — Reliability & Rotation
+
+**Shipped:** 2026-11-01
+**Phases:** 5 | **Plans:** 17
+
+### What Was Built
+- Email deep links: `APP_URL + /w/:slug/task/:key` lands on the task drawer (logged-out carry via `?next=`), team deep links, per-view URL mirror with popstate, creator auto-watching, authority-row email bylines
+- Operator audit trail + workspace-admin revocation tier: same-transaction append-only audit rows, tier-scoped keyset read endpoint, owner Settings trail
+- Keyring & version-aware envelopes: generic `/^v\d+:/` boot filter, frozen `v2:<key-id>:<iv>:<tag>:<ct>` format, two-key keyring, fail-closed decrypt dispatch
+- Re-wrap MASTER_KEY rotation: one reboot converges all old envelopes, no 2FA re-enrollment; DEPLOY.md §14 custody runbook pinned by parity tests
+- Due-date reminder scheduler: clock-injectable `runReminderPass()`, transactional exactly-once dedup in `reminders_sent`, boot catch-up, three notifPrefs toggles, inbox chips EN+FR
+
+### What Worked
+- The research-derived build order (deep links → audit → keyring filter → rotation → scheduler last) meant each phase consumed finished prerequisites — zero cross-phase rework.
+- Decision docs (D-K1…D-K13) frozen at plan time with user checkpoints (envelope format) avoided any mid-build format churn.
+- Clock injection via a test-only internal route made the scheduler testable without waiting on real time; 13 new scheduler tests landed in the core plan.
+
+### What Was Inefficient
+- Verification digests staled for phases 23–26 yet again (shared server.js) — the close accepted overrides with final-tree evidence, per the v1.3 lesson. The lesson is now confirmed structural: stop re-litigating, verify the last phase + audit the final tree.
+- VALIDATION.md files stayed draft for phases 23, 24, 26, 27 (Nyquist partial-coverage) — validate-phase still never ran during execution.
+- Two debug sessions were left in `unknown` state (admin-revoke-only-own-session, login-broken-after-rotation) and had to be acknowledged blind at close.
+
+### Patterns Established
+- Version-tagged envelope format (`v<n>:…`) as the general shape for secret-at-rest evolution.
+- Env-only key-custody operations (never argv), pinned by doc-parsing parity tests against DEPLOY.md.
+- `reminders_sent`-style transactional dedup tables as the exactly-once pattern for background sends.
+
+### Key Lessons
+1. The zero-dependency ground rule is still cheap to honor: an in-process interval + boot catch-up covered scheduling, dedup tables covered restart safety.
+2. The `?next=` path-only carry validator from v1.1 (four-clause) was reusable verbatim for task deep links — investing in one pinned redirect guard keeps paying off.
+
+### Cost Observations
+- 2 days elapsed in the phase range (2026-10-30 → 2026-11-01), 17 plans; longest: 25-02 (~75 min), 23-06 (~50 min).
+- Notable: full suite grew 526 → 649 across the milestone with zero new runtime dependencies.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -203,6 +240,7 @@
 | v1.1 Multitenant | 2 days | 4 | Phase verification was produced for phase 4 only; the audit backfilled phases 1–3. Next milestone: verify every phase before it closes. |
 | v1.2 Localization | 2 days | 8 | Every phase verified before close (50/50 plans); the close still re-verified all 8 after close-out commits staled the digests. Next milestone: finish close-out edits BEFORE running verifiers, and never hand-write a covered digest. |
 | v1.3 Auth Hardening | 2 days | 6 | All 6 phases verified before close, but shared-file edits across phases staled 4 of 6 digests anyway; the close accepted overrides with final-tree evidence (Phase 18 + integration check). Lesson refined: with a shared server.js, per-phase digests cannot all stay fresh — verify the last phase and audit the final tree instead. |
+| v1.5 Reliability & Rotation | 2 days | 5 | The v1.3 lesson applied as-is: digests for 23–26 staled (shared server.js) and the close accepted overrides with Phase 27 final-tree evidence + milestone audit, without debate. Research-derived build order eliminated cross-phase rework; VALIDATION.md drafts remain the standing gap. |
 
 ### Cumulative Quality
 
@@ -211,6 +249,7 @@
 | v1.1 Multitenant | 48 node:test + 5 Chromium | server contract, migration, privacy matrix, browser tenancy | 1 (dev only: `@playwright/test`) |
 | v1.2 Localization | 446 node:test + 45 Chromium e2e | catalogue contract (23 pins), locale selector, 21-route fr sweep + build gate, uploads/previews byte-serving | 0 (runtime) / 1 (dev only: `@playwright/test`) |
 | v1.3 Auth Hardening | 526 node:test + 55 Chromium e2e | TOTP fixtures (RFC 4226/6238), migration second-boot parity, 401 anonymity matrix, honest-copy guards, i18n-scan build gate | 0 (runtime; vendored qrcode-generator source, no package) |
+| v1.5 Reliability & Rotation | 649 node:test (e2e extended in v1.4 window) | deep-link resolver + redirect-guard pins, audit same-transaction rollback tests, envelope seed matrix + rotation idempotence, scheduler dedup/caught-up/off-hour tests, doc-parsing parity for DEPLOY.md §14 | 0 (runtime) |
 
 ### Top Lessons (Verified Across Milestones)
 

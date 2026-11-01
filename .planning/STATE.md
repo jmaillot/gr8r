@@ -23,7 +23,7 @@ current_phase: 27
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** Phase 24 — Operator Audit & Workspace-Admin Tier
+- **Current focus:** Planning next milestone — run `/gsd-new-milestone`
 
 ## Current Position
 
@@ -38,6 +38,7 @@ Last activity: 2026-11-01 — Milestone v1.5 completed and archived
 - ✅ v1.2 Localization — shipped 2026-10-25, archived
 - ✅ v1.3 Auth Hardening — shipped 2026-10-28, archived
 - ✅ v1.4 Auth Completion — shipped 2026-10-30, archived (audit passed; integration 12 seams wired, 0 orphaned)
+- ✅ v1.5 Reliability & Rotation — shipped 2026-11-01, archived (audit tech_debt, no blockers; 16/16 REQs)
 
 ## Shipped Outside the GSD Cycle (v1.4 window)
 
@@ -86,12 +87,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 27 planning must resolve the revision-bump policy (accept bump vs side-table) and
-  verify due-date storage format in seed.js/docs — flagged for `--research-phase`
-- Phase 23 discuss-phase must decide the `?next` post-login redirect scope and the popstate
-  scope (v1.1 Active debt)
-- Phase 25 plan-time check: confirm `users.two_fa_secret` is the only envelope column
-- Membership-surface hardening items (v1.1 Active) remain parked in PROJECT.md — not in v1.5 scope
+- Membership-surface hardening items (v1.1 Active) remain parked in PROJECT.md — candidate
+  for the next milestone alongside the recent-search leak and per-user settings isolation.
+- Deferred at v1.5 close: 2 unknown debug sessions (admin-revoke-only-own-session,
+  login-broken-after-rotation) and phase 26 WR-01/WR-02 — see STATE.md Deferred Items.
 
 ## Deferred Items
 

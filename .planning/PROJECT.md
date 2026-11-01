@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-01 after Phase 26*
+*Last updated: 2026-11-01 after v1.5 milestone*
 
 ## What it is
 
@@ -40,31 +40,36 @@ Milestone audit: **passed** (integration: 12 seams wired, 0 orphaned). Full reco
 
 </details>
 
-## Milestone v1.5 Reliability & Rotation (current)
+- **Proactive since v1.5**: the notification system became proactive and operationally closed —
+  every notification email deep-links to its task (`/w/:slug/task/:key`, logged-out carry via
+  `?next=`), every SPA view mirrors into browser history (popstate works), the task creator is
+  auto-watched, workspace admins get an audited revocation tier, TOTP secrets ride a
+  version-aware keyring (`v2:<key-id>:…` envelopes) with one-reboot MASTER_KEY rotation, and a
+  zero-dependency scheduler sends exactly-once due-date reminders (day-before / morning-of /
+  past-due) with per-type prefs and workspace-shared timezone.
+
+<details>
+<summary>Milestone v1.5 Reliability & Rotation (shipped 2026-11-01)</summary>
 
 **Goal:** the notification system becomes proactive and operationally closed — due-date
 reminders fire from a server-side pass, notification emails land on the task, and the v1.4
 operator/key-custody tech debt is paid down.
 
-**Target features:**
-- Due-date reminders: a server-side scheduled pass notifies assignees before/on due dates
-  (zero-dependency scheduler inside server.js, per-type prefs, dedup)
-- Notification email deep links: every notification email links straight to the task;
-  the task creator is added to the watcher set
-- MASTER_KEY rotation: key-version envelope, re-wrap rotation without re-enrollment,
-  DEPLOY.md key-custody runbook
-- Operator/security hardening: audit trail for operator revocations, workspace-admin
-  revocation tier, membership-surface hardening
+**Shipped:** email deep links + creator watching (LINK-01..04), operator audit trail +
+workspace-admin tier (AUD-01..03), keyring & version-aware envelopes (KEY-01/02), re-wrap
+MASTER_KEY rotation + DEPLOY.md §14 key-custody runbook (KEY-03/04), due-date reminder
+scheduler (REM-01..05). 5 phases, 17 plans, 16/16 requirements. Milestone audit:
+**tech_debt** (no blockers — 15/15 REQs, integration 6/6, flows 5/5; accumulated deferred
+items documented in the audit + STATE.md). Full suite 649/649 tests green, zero new runtime
+dependencies. Full record: `milestones/v1.5-ROADMAP.md`, `milestones/v1.5-REQUIREMENTS.md`,
+`milestones/v1.5-MILESTONE-AUDIT.md`.
 
-**Context:** the app has zero runtime dependencies — scheduling must stay dependency-free.
-v1.4 shipped the notification backbone P4-a…f and the operator revocation surface this
-milestone builds on. Established patterns: node:test suites, Chromium e2e EN+FR,
-i18n catalogue gates.
+</details>
 
 ## Next Milestone Goals
 
-Defined above for v1.5. Candidates still parked after that: router/URL popstate,
-recent-search leak, per-user settings isolation.
+Not yet scoped — run `/gsd-new-milestone`. Candidates still parked: membership-surface
+hardening, recent-search leak closure, per-user settings isolation (see Active below).
 
 ## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)
 
@@ -310,15 +315,33 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   555/555 node tests, 59/59 e2e; 2 advisory review findings open — WR-01 missing
   `two_fa_enabled` 409 pre-check, WR-02 verb insert outside the transaction)
 
+- ✓ Email deep links + creator watching: every notification email links to
+  `APP_URL + /w/:slug/task/:key` (task drawer over the board, URL persisted across reload,
+  localized not-found toast), logged-out clicks carry the path via `?next=` and land on the
+  exact task after sign-in (open-redirect-guarded), every SPA view mirrors into browser
+  history (go() pushState + boot popstate handler), the task creator joins the computed
+  watcher set, and email bylines/recipients resolve from authority rows — Phase 23
+  (LINK-01..04; verification 1/1, 575/575 suite at the time, G-23-1/G-23-4 closed)
+- ✓ Operator audit trail & workspace-admin tier: same-transaction, append-only audit rows for
+  operator revocations, a workspace-admin revocation route on the same audited path (owner
+  immunity, self-exclusion), tier-scoped keyset audit read endpoint + owner Settings trail,
+  and workspace-scoped audit visibility for workspace admins — Phase 24 (AUD-01..03;
+  verification 1/1, G-24-5 closed)
+- ✓ Keyring & version-aware envelopes (validated in v1.5, see above)
+- ✓ Re-wrap MASTER_KEY rotation + key-custody runbook (validated in v1.5, see above)
+- ✓ Due-date reminder scheduler: clock-injectable `runReminderPass()` with 09:00
+  workspace-local window scan, transactional exactly-once dedup in `reminders_sent`,
+  day-before / morning-of / past-due offsets, `by:null` reminder rows behind the
+  `email_reminder` gate, boot catch-up + unref'd tick that never writes off-hour or bumps
+  revisions, three notifPrefs toggles (ON by default), inbox filter chips + system-actor
+  rendering with EN+FR keys — Phase 27 (REM-01..05; verification 11/11, 646/646 suite)
+
 ### Active
 
 From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this milestone's scope:
 
 - [ ] Harden the membership surface: `sameOrigin` on invite accept, no admin link-only
       invites, no `firstWorkspace()` fallback, no guest-profile spoof.
-- [ ] Write the browser URL on navigation and handle `popstate`; delete the orphaned client
-      exports (`api.listWorkspaces`, `api.invites`, `wsPath`, `appUrl`, `appHost`) and either
-      wire or remove the two routes that have no caller.
 - [ ] Close the substring-based recent-search leak and state the free-text limitation in the
       product docs.
 - [ ] Per-user settings isolation inside a workspace (`notifPrefs`, `invoices` are still
@@ -348,17 +371,18 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
 
 ## Context
 
-- Shipped v1.3 (2026-10-28) with 6 phases, 21 plans (19 + 2 gap closures), 29 tasks across
-  173 commits (2026-10-26 → 2026-10-28); 116 files changed in the v1.3 range, ~23k insertions.
-- ~30.7k lines of JavaScript across `src/`, `server.js`, `totp.js`, `test/` and `e2e/`; still
-  zero runtime dependencies (one dev dependency: `@playwright/test`).
-- Auth ground truth: `sessions` (label, ip, last_seen_at, user_agent), dormant-per-default
-  `users.two_fa_*` columns, `login_challenges` + `recovery_codes` tables; TOTP in top-level
-  `totp.js` (RFC 4226/6238 fixture-verified); vendored qrcode-generator@2.0.4.
-- Test posture at close: 526/526 unit tests, lint/format/build incl. i18n-scan green,
-  55/55 Chromium e2e across EN+FR, real-device QR UAT 3/3 (Google + Microsoft Authenticator).
-- Known non-functional debt: stale verification digests for phases 14–17 (shared files touched
-  by later phases; final tree verified by Phase 18 + milestone audit), IN-02 in backlog.
+- Shipped v1.5 (2026-11-01) with 5 phases, 17 plans, 13 tasks across the v1.4 → v1.5 range
+  (2026-10-30 → 2026-11-01); 183 files changed, +17,105/−7,952.
+- ~18.4k lines of JavaScript across `server.js`, `test/`, `public/` and `src/`; still zero
+  runtime dependencies (one dev dependency: `@playwright/test`).
+- Scheduler ground truth: `reminders_sent` dedup table, clock-injectable `runReminderPass()`
+  in `server.js`, test-only `/api/internal/reminder-pass` route behind `REMINDER_TEST_TOKEN`;
+  keyring ground truth: `v2:<key-id>:<iv>:<tag>:<ct>` envelopes (key id = first 8 hex of
+  sha256(key material)), `MASTER_KEY` + `MASTER_KEY_PREVIOUS`, DEPLOY.md §14 runbook.
+- Test posture at close: 649/649 unit tests, lint/format/build incl. i18n-scan green.
+- Known deferred items: 4 debug sessions + 1 diagnosed UAT gap acknowledged at close (see
+  STATE.md Deferred Items); phase 23–26 verification digests stale (shared files touched by
+  later phases; final tree verified by Phase 27 + v1.5 milestone audit).
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
 
 ## Evolution

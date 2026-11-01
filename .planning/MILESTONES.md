@@ -4,6 +4,11 @@
 
 **Phases completed:** 5 phases, 17 plans, 13 tasks
 
+**Known verification overrides:** 5 newly acknowledged, 3 carried forward from a prior close
+(see STATE.md Deferred Items). Verification digests for phases 23–26 are stale (shared files
+touched by later phases); final-tree evidence from Phase 27 verification (11/11) and the
+v1.5 milestone audit (tech_debt, 15/15 REQs, integration 6/6, flows 5/5).
+
 **Key accomplishments:**
 - /w/:slug/task/:key now lands on the existing task drawer over the project board with the URL persisted across reload, unknown/hidden keys get the localized not-found toast, and every notification email links to APP_URL + /w/:slug/task/:key — proven by 4 e2e scenarios (EN+FR), 6 node tests, and a 575/575 full suite.
 - A signed-out visitor hitting /w/:slug/task/:key gets the sign-in view with the path carried via ?next= and lands on the exact task after sign-in; the open-redirect guard is pinned by tests at both carry sites.
