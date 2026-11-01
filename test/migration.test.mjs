@@ -115,8 +115,39 @@ test('both member profiles and memberships are linked to their accounts', () => 
     [
       ['u_alice', 'm_alice'],
       ['u_bob', 'm_bob'],
+      ['u_cara', 'm_u_cara'],
     ],
   );
+});
+
+/* TEAM-01 (Phase 28): the team_members backfill — two scalar-team members become
+   exactly two authority rows, the teamless member gets zero rows (D-03), the
+   pre-migration backup exists exactly once, and every boot after the first is a
+   byte-identical no-op (the per-row eligible guard never resurrects a team a
+   member has left). */
+const TEAM_BACKUP_PREFIX = 'projects-pre-team-members-';
+const teamBackups = () => fs.readdirSync(dataDir).filter(name => name.startsWith(TEAM_BACKUP_PREFIX) && name.endsWith('.db'));
+const teamMemberRows = () =>
+  withDb(server.dbPath, db => db.prepare('select workspace_id, team_id, member_id, user_id from team_members order by user_id, team_id').all());
+
+test('the first boot backfills exactly the scalar-team members into team_members', () => {
+  assert.deepEqual(
+    teamMemberRows().map(r => [r.user_id, r.team_id, r.member_id]),
+    [
+      ['u_bob', 'eng', 'm_bob'],
+      ['u_cara', 'eng', 'm_u_cara'],
+    ],
+  );
+  assert.equal(
+    withDb(server.dbPath, db => db.prepare('select count(*) as n from team_members where user_id = ?').get('u_alice').n),
+    0,
+    'the teamless member gets zero rows (D-03)',
+  );
+});
+
+test('the team_members backfill wrote exactly one pre-migration backup', () => {
+  assert.equal(teamBackups().length, 1, 'exactly one projects-pre-team-members-*.db');
+  assert.match(server.output(), /pre-migration backup: /);
 });
 
 test('the pending invite is scoped to the migrated workspace', () => {
@@ -335,6 +366,11 @@ function snapshot() {
     doc: row.doc,
     updatedAt: row.updated_at,
     memberIds: membershipRows().map(r => [r.user_id, r.member_id]),
+    teamMembers: teamMemberRows(),
+    teamMembersDdl: {
+      table: withDb(server.dbPath, db => db.prepare("select sql from sqlite_master where type = 'table' and name = 'team_members'").get()?.sql),
+      index: withDb(server.dbPath, db => db.prepare("select sql from sqlite_master where type = 'index' and name = 'team_members_user'").get()?.sql),
+    },
     inviteWorkspaceId: invite.workspace_id,
     users: withDb(server.dbPath, db =>
       db
@@ -382,6 +418,21 @@ test('a second boot is a no-op and both accounts keep access', async () => {
   assert.equal(read.status, 200);
   assert.equal(read.data.doc.data.projects.find(p => p.id === 'p_keep')?.name, 'Surviving Project');
   assert.equal((await bob.client.get('/api/workspaces/unknown-tenant')).status, 404);
+});
+
+test('the second boot leaves team_members byte-identical — no duplicates, no second backup', async () => {
+  /* The reboot itself happened in the test above, whose snapshot() deepEqual
+     already covers the rows and the DDL; these assertions pin the two
+     TEAM-01-specific failure modes explicitly. */
+  assert.deepEqual(
+    teamMemberRows().map(r => [r.user_id, r.team_id]),
+    [
+      ['u_bob', 'eng'],
+      ['u_cara', 'eng'],
+    ],
+    'exactly two rows after the second boot — the backfill never duplicates (Pitfall 4)',
+  );
+  assert.equal(teamBackups().length, 1, 'no second pre-team-members backup');
 });
 
 /* Phase 16 plan 02: the recovery_codes additive migration (D-52). The guarded

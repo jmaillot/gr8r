@@ -46,6 +46,9 @@ const LEGACY_SCHEMA = `
     workspace_id text not null references workspaces(id) on delete cascade,
     user_id      text not null references users(id) on delete cascade,
     role         text not null check (role in ('owner','admin','member','viewer')),
+    /* The P4-c scalar team column, as an install that has already run the
+       ensureColumn but predates the Phase 28 team_members authority. */
+    team         text,
     primary key (workspace_id, user_id)
   );
   create table invites (
@@ -154,6 +157,11 @@ export function createLegacyDb(dataDir) {
     const insertUser = db.prepare('insert into users (id, email, name, password_hash, member_id, created_at) values (?,?,?,?,?,?)');
     insertUser.run('u_alice', 'alice@legacy.local', 'Alice Legacy', hash, 'm_alice', LEGACY_CREATED_AT);
     insertUser.run('u_bob', 'bob@legacy.local', 'Bob Legacy', hash, 'm_bob', LEGACY_CREATED_AT);
+    /* TEAM-01 fixture (Phase 28): two members share the scalar team 'eng' and
+       one member is teamless — the migration must backfill exactly two
+       team_members rows and leave the teamless member with zero rows (D-03).
+       Cara has no document profile: her membership row keeps member_id null. */
+    insertUser.run('u_cara', 'cara@legacy.local', 'Cara Legacy', hash, 'm_cara', LEGACY_CREATED_AT);
 
     db.prepare('insert into workspaces (id, name, doc, revision, created_at, updated_at) values (?,?,?,?,?,?)').run(
       'ws_legacy',
@@ -164,9 +172,10 @@ export function createLegacyDb(dataDir) {
       LEGACY_CREATED_AT,
     );
 
-    const insertMembership = db.prepare('insert into memberships (workspace_id, user_id, role) values (?,?,?)');
-    insertMembership.run('ws_legacy', 'u_alice', 'owner');
-    insertMembership.run('ws_legacy', 'u_bob', 'member');
+    const insertMembership = db.prepare('insert into memberships (workspace_id, user_id, role, team) values (?,?,?,?)');
+    insertMembership.run('ws_legacy', 'u_alice', 'owner', null);
+    insertMembership.run('ws_legacy', 'u_bob', 'member', 'eng');
+    insertMembership.run('ws_legacy', 'u_cara', 'member', 'eng');
 
     db.prepare(
       `insert into invites (token_hash, email, role, team, created_by, created_at, expires_at)

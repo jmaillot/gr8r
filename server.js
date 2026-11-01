@@ -255,10 +255,6 @@ function openDb() {
   ensureColumn(db, 'memberships', 'member_id', 'text');
   // P4-c fix: the team picked at invite time must survive into the profile seed.
   ensureColumn(db, 'memberships', 'team', 'text');
-  // TEAM-01: one-time backfill of the team_members join table from the scalar
-  // memberships.team column (D-03). Runs after the ensureColumn above so the
-  // column always exists on a legacy database (Pitfall 4).
-  migrateTeamMembership(db);
   ensureColumn(db, 'invites', 'workspace_id', 'text');
   ensureColumn(db, 'users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
@@ -1394,6 +1390,14 @@ function stampInstanceAdmin() {
 function bootstrap(opts) {
   ensureWorkspace();
   migrateTenancy();
+  /* TEAM-01: one-time backfill of the team_members join table from the scalar
+     memberships.team column (D-03). Runs AFTER migrateTenancy — not inside
+     openDb() — because the backfill carries member_id, and on a cold legacy
+     database that column is only populated by tenancy's membership linking
+     (Pitfall 4: migration order is load-bearing). The ensureColumn for
+     memberships.team has long since run inside openDb(), so the source column
+     always exists here. */
+  migrateTeamMembership(db);
   migrateTotpEncryption();
   migrateTotpReWrap();
   ensureAdmin(opts);
