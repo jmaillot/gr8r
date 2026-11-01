@@ -69,8 +69,14 @@ blocked: 3
   reason: "User reported: the admin only sees its session"
   severity: major
   test: 5
-  artifacts: []
-  missing: []
+  artifacts:
+    - path: src/pages/settings.js
+      issue: "line 551 — audit-trail card mounted only when api.user?.isInstanceAdmin; workspace admins (the tier that revokes) never see the trail"
+    - path: src/actions/actions.js
+      issue: "lines 1982-2002 — refreshAuditLog() gated on the same instance-admin flag; stale comment claims admins get 403, but server serves admin-tier rows per D-T3 (server.js:2394-2403)"
+  missing:
+    - "Mount auditTrailCard and refresh the audit log for workspace admins (admin/owner memberships), not just instance admins — server already supports it, plain member 403 still renders honest absence"
+    - "Correct the stale 'admins get 403' comment in actions.js"
 
 
 ## Deferred Follow-Ups
