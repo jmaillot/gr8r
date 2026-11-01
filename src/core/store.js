@@ -183,7 +183,7 @@ export function applyDoc(doc, revision) {
     for (const p of S.data.projects) {
       if (!p || typeof p !== 'object') continue;
       if (p.team !== undefined) {
-        p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : (typeof p.team === 'string' && p.team ? [p.team] : []);
+        p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : typeof p.team === 'string' && p.team ? [p.team] : [];
         delete p.team;
       }
       if (!Array.isArray(p.teams)) p.teams = [];
@@ -288,7 +288,18 @@ export function notifyMembers(ids, n) {
     if (!to || to === n.by) continue;
     if (!d.members.some(m => m.id === to)) continue;
     if (d.notifs.some(x => x.to === to && x.type === n.type && x.task === n.task && x.by === n.by && !x.read)) continue;
-    d.notifs.push({ id: uid('n'), to, type: n.type, by: n.by ?? null, task: n.task ?? null, project: n.project ?? null, snippet: n.snippet || '', status: n.status ?? null, at: now, read: false });
+    d.notifs.push({
+      id: uid('n'),
+      to,
+      type: n.type,
+      by: n.by ?? null,
+      task: n.task ?? null,
+      project: n.project ?? null,
+      snippet: n.snippet || '',
+      status: n.status ?? null,
+      at: now,
+      read: false,
+    });
     added = true;
   }
   if (added) {
@@ -393,6 +404,21 @@ export function projTeams(p) {
   if (Array.isArray(p.teams)) return p.teams.filter(Boolean);
   return p.team ? [p.team] : [];
 }
+/* A member's team ids as an array — the client-side mirror of the same
+   scalar→array tolerance projTeams applies to projects. One shared predicate
+   for every roster/mention/picker surface; the API's teams[] payload and the
+   legacy scalar doc shape both read through this. */
+export function memberTeams(m) {
+  if (!m) return [];
+  if (Array.isArray(m.teams)) return m.teams.filter(Boolean);
+  return m.team ? [m.team] : [];
+}
 export function projInTeam(p, teamId) {
   return projTeams(p).includes(teamId);
+}
+/* TEAM-04: a member is assignable to a project when their team set intersects
+   the project's team set. */
+export function memberInProjectTeams(m, p) {
+  const mt = memberTeams(m);
+  return projTeams(p).some(id => mt.includes(id));
 }

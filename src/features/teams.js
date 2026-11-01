@@ -5,7 +5,7 @@ import { esc } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
-import { D, S, TM } from '../core/store.js';
+import { D, S, TM, memberTeams } from '../core/store.js';
 import { av } from '../ui/helpers.js';
 
 export function teamModal(m, H) {
@@ -31,7 +31,17 @@ export function teamModal(m, H) {
         .join('')}</div></div>
     </div>
     <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.members')} <span class="faint" style="font-weight:400">· ${f.members.length} selected</span></legend>
-      <div class="panel" style="max-height:220px;overflow-y:auto;padding:4px">${people.map(x => `<label class="mi" style="cursor:pointer;min-height:36px"><input type="checkbox" class="check" data-a="tformMember" data-id="${x.id}" ${f.members.includes(x.id) ? 'checked' : ''}>${av(x.id, 'sm', false)}<span class="grow trunc">${esc(x.name)}</span><span class="r">${x.team && x.team !== m.edit ? esc(TM[x.team].name) : ''}</span></label>`).join('')}</div>
+      <div class="panel" style="max-height:220px;overflow-y:auto;padding:4px">${people
+        .map(
+          x =>
+            `<label class="mi" style="cursor:pointer;min-height:36px"><input type="checkbox" class="check" data-a="tformMember" data-id="${x.id}" ${f.members.includes(x.id) ? 'checked' : ''}>${av(x.id, 'sm', false)}<span class="grow trunc">${esc(x.name)}</span><span class="r">${memberTeams(
+              x,
+            )
+              .filter(id => id !== m.edit)
+              .map(id => esc(TM[id].name))
+              .join(', ')}</span></label>`,
+        )
+        .join('')}</div>
       <span class="hint">${t('page.team.membersHint')}</span></fieldset>
   </form>
   <div class="modal-f">${m.edit ? `<button class="btn btn-danger-ghost" data-a="delTeam" data-id="${m.edit}">${ic('trash-2', 14)}${t('act.deleteTeam')}</button>` : ''}<span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitTeam">${m.edit ? t('act.saveChanges') : t('act.createTeam')}</button></div>`;

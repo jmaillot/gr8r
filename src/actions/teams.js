@@ -4,7 +4,8 @@
 import { $, uid } from '../core/utils.js';
 import { t, t as tMsg } from '../core/i18n.js';
 import { PCOLORS } from '../core/constants.js';
-import { D, S, mem, projInTeam, team, teamsList } from '../core/store.js';
+import { D, S, mem, memberTeams, projInTeam, projTeams, team, teamsList } from '../core/store.js';
+import { api } from '../core/api.js';
 import { mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
 import { openModal } from '../overlays/modals.js';
@@ -27,7 +28,7 @@ A.editTeam = el => {
     icon: t.icon,
     color: Object.keys(PCOLORS).find(k => PCOLORS[k] === t.c) || 'slate',
     members: D()
-      .members.filter(m => m.team === t.id)
+      .members.filter(m => memberTeams(m).includes(t.id))
       .map(m => m.id),
   };
   openModal({ type: 'team', edit: t.id });
@@ -49,7 +50,7 @@ A.tformMember = el => {
   S.ui.tform.members = l.includes(id) ? l.filter(x => x !== id) : [...l, id];
   render();
 };
-A.submitTeam = () => {
+A.submitTeam = async () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const f = S.ui.tform;
   f.name = ($('#tm-name')?.value || '').trim();
@@ -66,24 +67,46 @@ A.submitTeam = () => {
     $('#tm-name')?.focus();
     return;
   }
+  const before = new Map(D().members.map(x => [x.id, memberTeams(x)]));
   let t;
   const ok = mutate(() => {
     if (m.edit) {
       t = team(m.edit);
       Object.assign(t, { name: f.name, desc: f.desc, icon: f.icon, c: PCOLORS[f.color] });
-      D().members.forEach(x => {
-        if (x.team === t.id && !f.members.includes(x.id)) x.team = '';
-      });
     } else {
       t = { id: uid('tm'), name: f.name, desc: f.desc || tMsg('common.noDescriptionYet'), icon: f.icon, c: PCOLORS[f.color] };
       teamsList().push(t);
     }
+    /* Membership rides the authority set (D-01): the mutate envelope only
+       renders the projected set optimistically — the server call below is
+       the authority. Teamless stays an empty array (D-03). */
     f.members.forEach(id => {
       const x = mem(id);
-      if (x) x.team = t.id;
+      if (x) x.teams = Array.from(new Set([...memberTeams(x), t.id]));
     });
+    if (m.edit) {
+      D().members.forEach(x => {
+        if (!f.members.includes(x.id)) x.teams = memberTeams(x).filter(id => id !== t.id);
+      });
+    }
   });
   if (!ok) return;
+  /* Persist the changed memberships through the API (server mode) — the doc
+     write above never reaches the wire as membership. */
+  if (api.enabled) {
+    const changed = D()
+      .members.map(x => ({ x, next: memberTeams(x) }))
+      .filter(({ x, next }) => JSON.stringify(before.get(x.id)) !== JSON.stringify(next));
+    const results = await Promise.all(changed.map(({ x, next }) => api.setMemberTeams(x.userId, next)));
+    if (results.some(r => !r?.ok)) {
+      changed.forEach(({ x }) => {
+        x.teams = before.get(x.id) || [];
+      });
+      render();
+      toast(tMsg('err.changeTeam'), { kind: 'err' });
+      return;
+    }
+  }
   S.ui.modals.pop();
   if (m.edit) {
     render();
@@ -95,7 +118,7 @@ A.submitTeam = () => {
 };
 A.delTeam = el => {
   const tm = team(el.dataset.id);
-  const n = D().members.filter(x => x.team === tm.id).length;
+  const n = D().members.filter(x => memberTeams(x).includes(tm.id)).length;
   const np = D().projects.filter(p => projInTeam(p, tm.id)).length;
   S.ui.modals.pop();
   confirmDlg({
@@ -104,13 +127,32 @@ A.delTeam = el => {
     ok: t('act.deleteTeam'),
     danger: true,
     icon: 'users',
-    run: () => {
+    run: async () => {
+      /* T-28-05: purge the authority rows for the deleted team BEFORE the doc
+         team definition disappears — every affected member is re-PUT with the
+         team filtered out of their set (transactional delete+insert on the
+         server), so no orphaned team_members rows survive the doc deletion. */
+      const affected = D().members.filter(x => memberTeams(x).includes(tm.id));
+      if (api.enabled) {
+        const results = await Promise.all(
+          affected.map(x =>
+            api.setMemberTeams(
+              x.userId,
+              memberTeams(x).filter(id => id !== tm.id),
+            ),
+          ),
+        );
+        if (results.some(r => !r?.ok)) {
+          toast(t('err.changeTeam'), { kind: 'err' });
+          return;
+        }
+      }
       const snap = snapshot();
       if (
         mutate(() => {
           D().teams = teamsList().filter(x => x !== tm);
-          D().members.forEach(x => {
-            if (x.team === tm.id) x.team = '';
+          affected.forEach(x => {
+            x.teams = memberTeams(x).filter(id => id !== tm.id);
           });
           D().projects.forEach(p => {
             p.teams = projTeams(p).filter(id => id !== tm.id);
