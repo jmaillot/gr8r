@@ -751,6 +751,7 @@
   "modal.lead": "Lead",
   "modal.teamsHint": "A project can belong to several teams.",
   "modal.memberTeamsHint": "A person can belong to several teams.",
+  "modal.inviteTeamsHint": "Pick every team the invitees join — they can be changed later.",
   "modal.leadLockHint": "Only the project lead, an admin or the owner can change this.",
   "modal.targetDate": "Target date",
   "modal.template": "Template",

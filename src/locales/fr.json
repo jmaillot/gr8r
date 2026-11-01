@@ -751,6 +751,7 @@
   "modal.lead": "Responsable",
   "modal.teamsHint": "Un projet peut appartenir à plusieurs équipes.",
   "modal.memberTeamsHint": "Une personne peut appartenir à plusieurs équipes.",
+  "modal.inviteTeamsHint": "Choisissez toutes les équipes que les invités rejoignent — modifiable plus tard.",
   "modal.leadLockHint": "Seul le responsable du projet, un admin ou le propriétaire peut modifier ce champ.",
   "modal.targetDate": "Date cible",
   "modal.template": "Modèle",

@@ -239,10 +239,13 @@ export function inviteModal(m, H) {
   return `${H(t('modal.inviteTo', { name: esc(D().ws.name) }), api.mailEnabled ? t('modal.inviteMailHint') : api.enabled ? t('modal.inviteLinkHint') : t('modal.inviteLocalHint'))}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
-    <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role">${['Member', 'Admin', 'Guest'].map(r => `<option>${r}</option>`).join('')}</select></div>
-    <div class="field grow"><label class="label" for="inv-team">${t('nav.route.team')}</label><select class="select" id="inv-team">${teamsList()
-      .map(tm => `<option value="${tm.id}">${esc(tm.name)}</option>`)
-      .join('')}</select></div></div>
+    <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role">${['Member', 'Admin', 'Guest'].map(r => `<option>${r}</option>`).join('')}</select></div></div>
+    <div class="field"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
+      .map(tm => {
+        const on = (S.ui.inviteTeams || []).includes(tm.id);
+        return `<button type="button" role="checkbox" aria-checked="${on}" class="opt ${on ? 'on' : ''}" data-a="invTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${on ? ic('check', 13) : ''}</button>`;
+      })
+      .join('')}</div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>
     <div class="alert info">${ic('info', 14)}<span><b>${t('modal.guests')}</b> ${t('modal.guestsHint')}</span></div>
     ${
       links.length

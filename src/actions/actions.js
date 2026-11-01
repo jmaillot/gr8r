@@ -1749,6 +1749,7 @@ IN.shareAccess = el => {
 };
 A.invite = () => {
   S.ui.inviteDraft = '';
+  S.ui.inviteTeams = [];
   S.ui.inviteLinks = null;
   S.ui.errors = {};
   S.ui.pop = null;
@@ -1756,7 +1757,7 @@ A.invite = () => {
 };
 const API_ROLE = { Owner: 'owner', Admin: 'admin', Member: 'member', Guest: 'viewer' };
 
-function addInvitedMember(invites, role, team) {
+function addInvitedMember(invites, role, teams) {
   invites.forEach(inv => {
     if (!inv.email) return;
     const email = inv.email.toLowerCase();
@@ -1764,7 +1765,7 @@ function addInvitedMember(invites, role, team) {
     if (existing) {
       existing.status = 'invited';
       existing.role = role;
-      existing.teams = team ? [team] : memberTeams(existing);
+      existing.teams = teams?.length ? [...new Set(teams)] : memberTeams(existing);
       return;
     }
     D().members.push({
@@ -1775,7 +1776,7 @@ function addInvitedMember(invites, role, team) {
         .replace(/\b\w/g, c => c.toUpperCase()),
       email: inv.email,
       role,
-      teams: team ? [team] : [],
+      teams: [...(teams || [])],
       title: role,
       c: '#6B7280',
       status: 'invited',
@@ -1789,7 +1790,7 @@ A.submitInvite = () => {
   const raw = $('#inv-emails').value;
   S.ui.inviteDraft = raw;
   const role = $('#inv-role').value;
-  const team = $('#inv-team').value;
+  const teams = [...new Set(S.ui.inviteTeams || [])];
   const list = raw
     .split(/[\s,;]+/)
     .map(s => s.trim())
@@ -1812,7 +1813,7 @@ A.submitInvite = () => {
           addInvitedMember(
             list.map(email => ({ email })),
             role,
-            team,
+            teams,
           ),
         )
       )
@@ -1830,7 +1831,7 @@ A.submitInvite = () => {
       btn?.classList.remove('is-loading');
       btn?.removeAttribute('aria-busy');
     };
-    const res = await api.createInvites(list, API_ROLE[role] || 'member', team || null);
+    const res = await api.createInvites(list, API_ROLE[role] || 'member', teams);
     done();
     if (!res.ok) {
       S.ui.errors = { invite: res.error || t('err.invitesCreateFailed') };
@@ -1861,11 +1862,19 @@ A.submitInvite = () => {
     }
   });
 };
+/* D-07: the invite form's team multi-select — same toggle pattern as the
+   member teams picker (mteamToggle), state rides S.ui.inviteTeams. */
+A.invTeamToggle = el => {
+  const cur = S.ui.inviteTeams || [];
+  const id = el.dataset.v;
+  S.ui.inviteTeams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+  render();
+};
 A.copyInviteLink = async () => {
   if (!api.enabled) return copy(`${api.url}/join/${D().ws.url}-7f3k2`, t('toast.inviteLinkCopied'));
   const role = API_ROLE[$('#inv-role')?.value] || 'member';
-  const team = $('#inv-team')?.value || null;
-  const res = await api.createInvites([], role, team);
+  const teams = [...new Set(S.ui.inviteTeams || [])];
+  const res = await api.createInvites([], role, teams);
   if (!res.ok) return toast(res.error || t('err.inviteLink'), { kind: 'err' });
   await copy(res.data.invites[0].url, t('toast.inviteLinkCopied'));
 };
@@ -1875,7 +1884,7 @@ A.resendInvite = async el => {
   render();
   if (!api.enabled) return toast(t('toast.inviteResent', { email: m.email }));
   if (!m) return;
-  const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', memberTeams(m)[0] || null);
+  const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', memberTeams(m));
   if (!res.ok) return toast(res.error || t('err.newInvite'), { kind: 'err' });
   const invite = res.data.invites?.[0];
   if (invite?.sent) return toast(t('toast.invitationSentTo', { email: m.email }));
@@ -2110,7 +2119,7 @@ A.memberRevokeConfirm = async el => {
 A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
   if (!row?.email) return;
-  const res = await api.createInvites([row.email], row.role, row.team || null);
+  const res = await api.createInvites([row.email], row.role, row.teams || []);
   if (!res.ok) return toast(res.error || t('err.newInvite'), { kind: 'err' });
   const invite = res.data.invites?.[0];
   await refreshMembers();
@@ -3428,7 +3437,7 @@ A.onbFinish = async () => {
       );
   });
   if (api.enabled && emails.length) {
-    const inv = await api.createInvites(emails, 'member', null);
+    const inv = await api.createInvites(emails, 'member', []);
     if (!inv.ok) toast(inv.error || t('err.sendInvites'), { kind: 'err' });
   }
   S.ui.auth = null;

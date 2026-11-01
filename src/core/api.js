@@ -316,10 +316,11 @@ export const api = {
     if (r.ok) this.revision = r.data.revision;
     return r;
   },
-  async createInvites(emails, role, team) {
+  async createInvites(emails, role, teams) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
-    return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/invites`, { emails, role, team });
+    /* D-07: the payload carries the full team set, never a scalar team. */
+    return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/invites`, { emails, role, teams: Array.isArray(teams) ? teams : [] });
   },
   /* Members and their roles. The server owns both; the document only mirrors them. */
   async members() {
