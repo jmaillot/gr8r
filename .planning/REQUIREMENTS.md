@@ -57,7 +57,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
   (`v2:<key-id>:…`); decrypt resolves the key by id through a keyring (current +
   `MASTER_KEY_PREVIOUS`) via `requireTotpSecret` with its fail-closed contract unchanged —
   no plaintext fallback anywhere
-- [ ] **KEY-03**: Rotation is a boot-time re-wrap pass (idempotent, transactional, with the
+- [x] **KEY-03**: Rotation is a boot-time re-wrap pass (idempotent, transactional, with the
   pre-migration backup guarantee): with the new key set and the old key still configured,
   every old-envelope secret is re-wrapped to the new key id; a second boot is a no-op;
   rotation never requires 2FA re-enrollment
@@ -109,7 +109,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | AUD-03 | Phase 24 | Complete |
 | KEY-01 | Phase 25 | Complete |
 | KEY-02 | Phase 25 | Complete |
-| KEY-03 | Phase 26 | Pending |
+| KEY-03 | Phase 26 | Complete |
 | KEY-04 | Phase 26 | Pending |
 | REM-01 | Phase 27 | Pending |
 | REM-02 | Phase 27 | Pending |

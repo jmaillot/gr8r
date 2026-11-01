@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 26
-current_phase_name: re-wrap-rotation-key-custody-runbook
+current_phase_name: Re-Wrap Rotation & Key-Custody Runbook
 status: executing
-stopped_at: Phase 26 context gathered
-last_updated: "2026-11-01T08:30:56.492Z"
-last_activity: 2026-10-31
-last_activity_desc: Phase 25 complete, transitioned to Phase 24
-state_head: 80e8c3bcc85dc531a4c76acae8f25922dd75cd36
+stopped_at: Completed 26-01-PLAN.md
+last_updated: "2026-11-01T08:52:24.459Z"
+last_activity: 2026-11-01
+last_activity_desc: Phase 26 execution started
+state_head: f06725d79100cbb3d56b40bd652d359e2d1b177e
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 20
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 26 (re-wrap-rotation-key-custody-runbook) — READY TO EXECUTE
-Plan: Not started
+Phase: 26 (Re-Wrap Rotation & Key-Custody Runbook) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-10-31 — Phase 25 complete, transitioned to Phase 24
+Last activity: 2026-11-01 — Phase 26 execution started
 
 Progress: [██░░░░░░░░] 20%
 
@@ -75,6 +75,7 @@ Progress: [██░░░░░░░░] 20%
 - [Phase 25]: D-K7 recognition is decryptability-based (decryptTotpSecret === null ⇒ unrecognized) — v2 rows silence themselves when Plan 02's decrypt support lands; D-78c gained a sanctioned third caller (the boot probe)
 - [Phase 25]: D-K3/D-K4 format frozen by user checkpoint — key id = first 8 hex chars of sha256(raw key material), envelope = `v2:<key-id>:<iv>:<tag>:<ct>`
 - [Phase 25]: encryptTotpSecret gained a version param (default 'v1'); ONLY the enable call site writes v2 — boot migration keeps v1 (Phase 26 re-wrap owns the stock)
+- [Phase 26]: Re-wrap rotation (26-01): two env vars + one reboot converges every old envelope to v2:<new-id>; nudge fires iff PREVIOUS resolves nothing (D-K12); undecryptable rows preserved forever, D-74 backup re-mints per rotation boot (bounded by WR-02)
 
 ### Pending Todos
 
@@ -91,9 +92,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-31T17:45:42.830Z
-Stopped at: Phase 26 context gathered
-Resume file: .planning/phases/26-re-wrap-rotation-key-custody-runbook/26-CONTEXT.md
+Last session: 2026-11-01T08:52:17.439Z
+Stopped at: Completed 26-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -110,3 +111,4 @@ Resume file: .planning/phases/26-re-wrap-rotation-key-custody-runbook/26-CONTEXT
 | Phase 24 P03 | 35 min | 2 tasks | 10 files |
 | Phase 25 P01 | 12 min | 3 tasks | 3 files |
 | Phase 25 P02 | ~75 min | 3 tasks | 3 files |
+| Phase 26 P01 | 35 min | 3 tasks | 3 files |

@@ -184,3 +184,9 @@ None - no external service configuration required.
 ---
 *Phase: 26-re-wrap-rotation-key-custody-runbook*
 *Completed: 2026-11-01*
+
+## Self-Check: PASSED
+
+- test/totp-rewrap.test.mjs exists on disk; migrateTotpReWrap / decryptV1WithMaterial / isStaleEnvelope all present in server.js (3/3 grep hits)
+- Commits verified in git log: 5956807, b3c4025, 020cbd7 (+ docs f06725d, c7427ba)
+- Plan-level verification re-run: `node --test test/totp-rewrap.test.mjs test/totp-encryption.test.mjs test/migration.test.mjs` 54/54; `npm test` 630/630
