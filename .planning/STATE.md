@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.5
 milestone_name: Reliability & Rotation
-current_phase: 27
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 27 complete — all phases complete
-last_updated: "2026-11-01T12:52:23.632Z"
+last_updated: "2026-11-01T13:19:45.139Z"
 last_activity: 2026-11-01
-last_activity_desc: Phase 27 complete
-state_head: 58ced6331a826d6fab5b8f36876f3baa85898dd1
+last_activity_desc: Milestone v1.5 completed and archived
+state_head: cfd4212b7caf6312945d6860a59253a97f4b3153
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 17
   completed_plans: 17
   percent: 100
+current_phase: 27
 ---
 
 # STATE.md
@@ -27,12 +27,10 @@ progress:
 
 ## Current Position
 
-Phase: 27
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-01 — Phase 27 complete
-
-Progress: [██████████] 100%
+Phase: Milestone v1.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-01 — Milestone v1.5 completed and archived
 
 ## Milestone History
 
@@ -95,6 +93,18 @@ None yet.
 - Phase 25 plan-time check: confirm `users.two_fa_secret` is the only envelope column
 - Membership-surface hardening items (v1.1 Active) remain parked in PROJECT.md — not in v1.5 scope
 
+## Deferred Items
+
+Items acknowledged and deferred at milestone close, most recent first:
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| debug_sessions | 23-team-route-404 | resolved (fix shipped in 23-05 / 23-06, verified 2026-10-31) | 2026-11-01 | v1.5 |
+| debug_sessions | 23-un-membre-byline | resolved (fix shipped in 23-05 / 23-06, verified 2026-10-31) | 2026-11-01 | v1.5 |
+| debug_sessions | admin-revoke-only-own-session | unknown | 2026-11-01 | v1.5 |
+| debug_sessions | login-broken-after-rotation | unknown | 2026-11-01 | v1.5 |
+| uat_gaps | 26/26-UAT.md | diagnosed (0 pending scenarios) | 2026-11-01 | v1.5 |
+
 ## Session Continuity
 
 Last session: 2026-11-01T12:26:33.762Z
@@ -122,3 +132,7 @@ Resume file: None
 | Phase 24 P04 | 22 min | 2 tasks | 3 files |
 | Phase 27 P01 | 35m | 3 tasks | 2 files |
 | Phase 27 P02 | 25m | 2 tasks | 7 files |
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

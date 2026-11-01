@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.5 Reliability & Rotation (Shipped: 2026-11-01)
+
+**Phases completed:** 5 phases, 17 plans, 13 tasks
+
+**Key accomplishments:**
+- /w/:slug/task/:key now lands on the existing task drawer over the project board with the URL persisted across reload, unknown/hidden keys get the localized not-found toast, and every notification email links to APP_URL + /w/:slug/task/:key — proven by 4 e2e scenarios (EN+FR), 6 node tests, and a 575/575 full suite.
+- A signed-out visitor hitting /w/:slug/task/:key gets the sign-in view with the path carried via ?next= and lands on the exact task after sign-in; the open-redirect guard is pinned by tests at both carry sites.
+- Every SPA view now mirrors into browser history — go() pushes per-view URLs (/w/:slug/inbox, /project/:key, /task/:key…), one boot-time popstate handler restores views through the deep-link resolver with { back: true }, and closing the task drawer pushes the underlying view URL so Back re-opens the task.
+- queueNotifEmails now resolves the byline and recipient email from the memberships⋈users authority rows (workspace-scoped), so account-backed authors show their real name instead of "Un membre" and account-backed recipients are never silently skipped.
+- /w/:slug/team/:id is now a first-class deep link — urlForView() emits the keyed team URL and applyDeepLink resolves it (unknown ids land home with no oracle, bare /team shows the list) — closing the last lossy URL from 23-04.
+- Relaxed the audit-trail client gates (fetch + card mount) so workspace admins see their workspace-scoped revoke rows on Settings → sessions, with the server-contract pinned by a cross-membership test — closing UAT gap G-24-5.
+- Boot-time TOTP re-wrap rotation: two env vars + one reboot converges every old-envelope 2FA secret to `v2:<new-key-id>` — idempotent, transactional, backup-guaranteed, with no 2FA re-enrollment (KEY-03)
+- DEPLOY.md §14 "Key custody & rotation" — a copy-pasteable operator lifecycle (generate → inject → rotate → verify 0 stale → roll back → converge → compromise policy) with every command pinned to server behavior by doc-parsing parity tests (KEY-04)
+- DEPLOY.md §14 now stops a broken keyring BEFORE rotating — image-currency grep (`migrateTotpReWrap ≥ 1`) and key-id coverage (`id(MASTER_KEY_PREVIOUS)` vs DB-stamped `v2:` ids) — and a no-data-loss recovery note covers the D-K7-without-re-wrap signature (closes gap G-26-1)
+- Clock-injectable `runReminderPass()` in server.js — 09:00 workspace-local window scan with transactional exactly-once dedup in a new `reminders_sent` table, `by:null` reminder rows riding the existing `queueNotifEmails` pipeline behind the `email_reminder` gate, boot catch-up + 60s unref'd tick that never writes off-hour (13 new tests, full suite 646 green).
+- Three notifPrefs reminder toggles (email_reminder/due_reminder/past_due, all ON by default for new and legacy workspaces via bootstrap defaults + a normalize-on-read merge) rendered through the existing Settings tog/np save path, plus inbox filter chips and guarded system-actor rendering for the two reminder types with complete EN+FR catalogue entries (8 new keys).
+
+---
+
 ## v1.3 Auth Hardening (Shipped: 2026-10-28)
 
 **Phases completed:** 6 phases, 19 plans, 29 tasks

@@ -1,0 +1,1 @@
+No external API integration: the phase touches only in-repo Node `crypto` (built-in), better-sqlite3 (already installed), and the existing node:test harness — no new packages, SDKs, or network services.
