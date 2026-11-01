@@ -1,7 +1,7 @@
 /* ---------- INBOX ---------- */
 import { ago, esc, modKey } from '../core/utils.js';
 import { ic } from '../core/icons.js';
-import { D, S, commentsOf, mem, myNotifs, pColor, proj, task } from '../core/store.js';
+import { S, commentsOf, mem, myNotifs, pColor, proj, task } from '../core/store.js';
 import { t } from '../core/i18n.js';
 import { av, empty, fmtComment } from '../ui/helpers.js';
 import { cellAssignee, cellDue, cellPrio, cellStatus } from '../components/task-list.js';
@@ -13,6 +13,8 @@ export function pageInbox() {
     ['mention', t('settings.notif.mentions')],
     ['assign', t('settings.notif.assignments')],
     ['comment', t('settings.notif.comments')],
+    ['due_reminder', t('settings.notif.dueReminder')],
+    ['past_due', t('settings.notif.pastDue')],
     ['update', t('page.inbox.cat.updates')],
   ];
   const cat = S.ui.inboxCat;
@@ -50,6 +52,12 @@ export function notifText(n) {
     return `${who} <span class="muted">${esc(n.text)}</span> ${tgt ? `<b style="font-weight:500">${esc(tgt.title)}</b>` : ''}`;
   }
   /* Structured rows compose the sentence through the notif.* catalogue keys in the active locale. */
+  /* D-27-4: reminder rows are system-actor (by:null) — guard them BEFORE the
+     generic !n.by branch (which would render taskDueToday for every reminder)
+     and never fabricate a member by-line for the system actor (T-27-07). The
+     day-before vs morning-of context lives in the server-built snippet. */
+  if ((n.type === 'due_reminder' || n.type === 'past_due') && tgt)
+    return `<b style="font-weight:600">${esc(tgt.title)}</b> <span class="muted">${t(n.type === 'due_reminder' ? 'notif.dueReminder' : 'notif.pastDue')}</span>`;
   if (!n.by && p && !tgt) return `<b style="font-weight:600">${esc(p.name)}</b> <span class="muted">${t('notif.projectAtRisk')}</span>`;
   if (!n.by && tgt) return `<b style="font-weight:600">${esc(tgt.title)}</b> <span class="muted">${t('notif.taskDueToday')}</span>`;
   const fragment = n.type === 'update' && n.status ? t('notif.update', { status: t(`task.status.${n.status}`) }) : t(`notif.${n.type}`);
@@ -63,7 +71,7 @@ export function notifIcon(n) {
 export function inboxItem(n, on) {
   const tk = n.task ? task(n.task) : null;
   const p = n.project ? proj(n.project) : tk ? proj(tk.project) : null;
-  const typeIc = { mention: 'at-sign', assign: 'user-plus', comment: 'message-square', update: 'refresh-cw' }[n.type];
+  const typeIc = { mention: 'at-sign', assign: 'user-plus', comment: 'message-square', update: 'refresh-cw', due_reminder: 'clock', past_due: 'triangle-alert' }[n.type];
   return `<div class="row" style="align-items:flex-start;gap:10px;padding:12px var(--gutter);border-bottom:1px solid var(--divider);cursor:pointer;position:relative;${on ? 'background:var(--surface-2);' : ''}" data-a="selNotif" data-id="${n.id}" role="button" tabindex="0">
     ${!n.read ? `<span style="position:absolute;left:6px;top:22px;width:6px;height:6px;border-radius:50%;background:var(--accent)" aria-label="${t('page.inbox.unread')}"></span>` : ''}
     ${notifIcon(n)}

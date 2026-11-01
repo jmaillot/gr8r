@@ -1629,6 +1629,8 @@
   "notif.update": "déplacée vers {status}",
   "notif.projectAtRisk": "est à risque",
   "notif.taskDueToday": "est à échéance aujourd’hui",
+  "notif.dueReminder": "arrive à échéance",
+  "notif.pastDue": "est en retard",
   "estimate.minutes": "min",
   "estimate.hours": "h",
   "estimate.days": "j",

@@ -1629,6 +1629,8 @@
   "notif.update": "moved to {status}",
   "notif.projectAtRisk": "is at risk",
   "notif.taskDueToday": "is due today",
+  "notif.dueReminder": "is coming due",
+  "notif.pastDue": "is overdue",
   "estimate.minutes": "min",
   "estimate.hours": "h",
   "estimate.days": "j",
