@@ -429,9 +429,15 @@ function requireTotpSecret(envelope) {
    the QR. Re-enroll overwrites the single pending entry. */
 const PENDING_TFA_TTL = 10 * 60 * 1000;
 const pendingTfa = new Map();
-function stashPendingTfa(userId, secret, otpauth) {
+/* TOTP2 (Phase 31 Plan 02, D-13): stagedId extends the SAME map's key to
+   `${userId}:${stagedId}` for additional-factor enrollments (a user may stage
+   several factors at once) — the legacy userId key stays for the first-ever
+   enroll route. Label rides the entry: the enable step stores it verbatim.
+   Memory-only, 10-minute TTL, lazy sweep — never persisted (D-46 invariant). */
+function stashPendingTfa(userId, secret, otpauth, stagedId = null, label = null) {
   const t = now();
-  pendingTfa.set(userId, { secret, otpauth, expiresAt: t + PENDING_TFA_TTL });
+  const key = stagedId ? `${userId}:${stagedId}` : userId;
+  pendingTfa.set(key, { secret, otpauth, expiresAt: t + PENDING_TFA_TTL, label });
   // Lazy sweep, same shape as the attempts Map — bounded memory (T-16-08).
   if (pendingTfa.size > 5000) for (const [k, v] of pendingTfa) if (t > v.expiresAt) pendingTfa.delete(k);
 }
@@ -2692,6 +2698,120 @@ async function handleApi(req, res, url) {
       return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — codes cannot be regenerated until the admin sets it');
     if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
     return json(res, 200, { ok: true, recoveryCodes: codes }); // D-100; no-store comes from json()
+  }
+
+  /* --------------- additional TOTP factors (TOTP2-02, D-02/D-04/D-13) --------------- */
+
+  if (pathname === '/api/auth/tfa/factors/enroll' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // Distinct budget band (D-11) from the other tfa routes; every attempt —
+    // including a wrong password — has consumed one try before it is processed.
+    if (tooMany(`tfa-add-enroll|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const cur = String(body?.currentPassword || '');
+    const code = String(body?.code || '').trim();
+    // D-02: a factor is never stored unnamed — blank after trim is a 400, and
+    // an oversized label is refused before any secret is generated.
+    const label = String(body?.label || '').trim();
+    if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
+    if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
+    if (!label) return fail(res, 400, 'labelRequired', 'Give this factor a name');
+    if (label.length > 64) return fail(res, 400, 'labelTooLong', 'Keep the factor name under 64 characters');
+    // T-16-03: a wrong password never reveals a secret.
+    if (!verifyPassword(cur, user.password_hash)) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    // Route contract (D-04 consequence): additional factors ONLY — a
+    // first-ever enrollment (zero factor rows) rides /api/auth/tfa/enroll,
+    // which is password-only and carries no existing-factor step-up by design.
+    const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+    if (factorCount === 0) return fail(res, 409, 'tfaNotEnabled', 'Enable two-factor authentication first');
+    // TOTP2-05/T-31-06: a LIVE code from an EXISTING factor is verified
+    // server-side BEFORE the new secret is generated or revealed — the
+    // lock-out guard against QR-bombing an hijacked session. D-14: strict
+    // 6-digit shape only, no recovery lookup anywhere in this route.
+    const stepUp = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+    if (stepUp.decrypted === 0) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be verified until the admin sets it');
+    if (!stepUp.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
+    // D-04: the step-up code's replay guard advances on its matched factor.
+    db.prepare('update totp_factors set last_step = ? where id = ?').run(stepUp.matchedStep, stepUp.factorId);
+    const secret = generateTotpSecret();
+    const otpauth = buildOtpauthUri(user.email, secret);
+    const stagedId = uid();
+    // D-13: per-factor staging key under the SAME in-memory 10-min TTL map.
+    stashPendingTfa(user.id, secret, otpauth, stagedId, label);
+    return json(res, 200, { secret, otpauth, stagedId, label }); // D-48: the server owns the URI format
+  }
+
+  if (pathname === '/api/auth/tfa/factors/enable' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // D-11 budget shape — the same band the legacy enable route uses.
+    if (tooMany(`2fa-verify|${clientIp(req)}|${user.email}`, 5, 15 * 60 * 1000))
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const code = String(body?.code || '').trim();
+    const stagedId = String(body?.stagedId || '');
+    // T-31-09: strict 6-digit-only gate with no recovery lookup (D-14).
+    if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
+    // TFA-03 verify-before-enable: no pending entry → no enable, no state
+    // change. D-13: the per-factor key first; the legacy userId key is the
+    // fallback — the first-ever re-enable rides /api/auth/tfa/enroll, which
+    // was never re-keyed.
+    let resolvedKey = stagedId ? `${user.id}:${stagedId}` : user.id;
+    let pending = pendingTfa.get(resolvedKey);
+    if (!pending) {
+      resolvedKey = user.id;
+      pending = pendingTfa.get(resolvedKey);
+    }
+    if (!pending || now() > pending.expiresAt) {
+      pendingTfa.delete(resolvedKey);
+      return fail(res, 409, 'noPendingEnrollment', 'Start the enrollment again — no pending setup');
+    }
+    // RESEARCH Pattern 1/Pitfall 2: the staged pending secret verifies with
+    // the NEW factor's own null baseline — the shared helper cannot serve
+    // here (a first-ever enable has zero factor rows to load).
+    const verified = verifyTotpCode(pending.secret, code, null, Math.floor(now() / 1000));
+    if (!verified.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
+    // D-K4: the enable path is the ONLY v2 writer (frozen format). Fail
+    // closed BEFORE any state mutation (D-58: admin-facing body copy).
+    const envelope = encryptTotpSecret(pending.secret, 'v2');
+    if (!envelope) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
+    // D-02: the enroll step validated the label; a legacy-keyed pending entry
+    // (first-ever re-enable) carries none and stores the primary catalogue key.
+    const label = pending.label || 'settings.tfa.factor.primary';
+    const wasFirst = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c === 0;
+    // D-50/D-53: the plaintext codes are generated first and returned exactly
+    // once — first-ever enable (or first after a disable) rotates recovery.
+    const codes = wasFirst ? Array.from({ length: 10 }, () => generateRecoveryCode()) : null;
+    transaction(() => {
+      // D-13/Pitfall 4: the factor insert (with its own baseline) and the
+      // first-ever flip are ONE atomic unit — no half-state on failure.
+      db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)').run(
+        uid(),
+        user.id,
+        label,
+        envelope,
+        verified.matchedStep,
+        now(),
+      );
+      if (wasFirst) {
+        // D-13: two_fa_enabled flips only for the first-ever factor;
+        // D-17: the recovery rotation rides the same first-ever semantics.
+        db.prepare('update users set two_fa_enabled = 1 where id = ?').run(user.id);
+        db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+        const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
+        for (const code0 of codes) {
+          // D-09/D-51: hash of the ONE normalization (Pitfall 6).
+          insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
+        }
+      }
+      pendingTfa.delete(resolvedKey); // whichever key the entry was found under
+    });
+    // Success-only security event (D-107 discipline).
+    logSecurity(user.id, 'tfa_factor_added');
+    return json(res, 200, codes ? { ok: true, recoveryCodes: codes } : { ok: true });
   }
 
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */

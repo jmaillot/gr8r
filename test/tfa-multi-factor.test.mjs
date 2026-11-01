@@ -27,6 +27,13 @@ let schemaSnap; // pragma table_info snapshot after the copy boot (M2 baseline)
 const factors = () => withDb(server.dbPath, db => db.prepare('select * from totp_factors order by created_at').all());
 const factorInfo = () => withDb(server.dbPath, db => db.prepare("pragma table_info('totp_factors')").all().map(c => ({ ...c })));
 const prefactorBackups = () => fs.readdirSync(dataDir).filter(name => name.startsWith('projects-prefactors-') && name.endsWith('.db'));
+const userIdOf = email => withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
+const recoveryRows = email =>
+  withDb(server.dbPath, db =>
+    db.prepare('select rc.* from recovery_codes rc join users u on u.id = rc.user_id where u.email = ? order by rc.created_at').all(email));
+/* Zero a user's per-factor replay guards so a current-window code verifies (D-04). */
+const zeroFactorSteps = (email = EMAIL) =>
+  withDb(server.dbPath, db => db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run(email));
 const { totpAt } = await import('../totp.js');
 
 before(async () => {
@@ -113,4 +120,110 @@ test('M2: the second boot is byte-identical — zero additional rows, schema unc
   assert.deepEqual(factorInfo(), schemaSnap, 'totp_factors schema is byte-identical after the second boot');
   assert.ok(!/totp factors: copied/i.test(server.output()), 'the copy never logs on an idempotent boot');
   assert.equal(prefactorBackups().length, 1, 'exactly one pre-copy backup ever — zero eligible rows skip the backup');
+});
+
+/* ---------- Plan 02: add-factor enroll/enable (TOTP2-02, TOTP2-05, T4..T8) ---------- */
+
+test('T4: add-factor without an existing-factor code is refused (TOTP2-05/D-04)', async () => {
+  zeroFactorSteps();
+  const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
+  const res = await auth.post('/api/auth/tfa/factors/enroll', { currentPassword: PASSWORD, code: '', label: 'Phone' });
+  assert.equal(res.status, 400, 'a missing code is refused by the strict 6-digit gate');
+  assert.equal(res.data?.code, 'codeRejected');
+  assert.equal(factors().length, 1, 'no factor row was created');
+});
+
+test('T5: a wrong existing-factor code is refused at add-factor (TOTP2-05/D-04)', async () => {
+  zeroFactorSteps();
+  const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
+  const res = await auth.post('/api/auth/tfa/factors/enroll', { currentPassword: PASSWORD, code: '000000', label: 'Phone' });
+  assert.equal(res.status, 400, 'a wrong code never reveals a new secret');
+  assert.equal(res.data?.code, 'codeRejected');
+  assert.equal(factors().length, 1, 'no factor row was created');
+});
+
+test('T6: a second factor enrolls with a label, enables, and verifies at login (TOTP2-02/D-02/D-13)', async () => {
+  zeroFactorSteps();
+  const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
+  // Step-up gate: a live code from the EXISTING factor before the QR is shown.
+  const enroll = await auth.post('/api/auth/tfa/factors/enroll', {
+    currentPassword: PASSWORD,
+    // +30s window: the login above already advanced the guard past the
+    // current step (D-04) — the ±1 window admits the next-step code.
+    code: totpAt(plainSecret, Date.now() / 1000 + 30),
+    label: 'Tablet',
+  });
+  assert.equal(enroll.status, 200, `enroll: ${JSON.stringify(enroll.data)}`);
+  assert.equal(enroll.data.label, 'Tablet', 'the label round-trips (D-02)');
+  const { secret: s2, stagedId } = enroll.data;
+  assert.ok(stagedId, 'a per-factor stagedId is returned (D-13)');
+  const enable = await auth.post('/api/auth/tfa/factors/enable', { stagedId, code: totpAt(s2, Date.now() / 1000) });
+  assert.equal(enable.status, 200, `enable: ${JSON.stringify(enable.data)}`);
+  assert.equal(enable.data.recoveryCodes, undefined, 'no recovery rotation for an additional factor (D-17)');
+  const rows = factors().filter(f => f.user_id === userIdOf(EMAIL));
+  assert.equal(rows.length, 2, 'two factor rows for the user');
+  const second = rows[1];
+  assert.equal(second.name, 'Tablet', 'the stored label (D-02)');
+  assert.ok(second.last_step > 0, 'the new factor row carries the matched baseline (D-13)');
+  const urow = withDb(server.dbPath, db => db.prepare('select two_fa_enabled from users where email = ?').get(EMAIL));
+  assert.equal(urow.two_fa_enabled, 1, '2FA stays enabled');
+  // Both factors verify at the login second step (TOTP2-01).
+  zeroFactorSteps();
+  const l1 = await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000));
+  assert.equal(l1.status, 200, 'the primary factor still authenticates');
+  zeroFactorSteps();
+  const l2 = await loginTfa(server.base, EMAIL, PASSWORD, totpAt(s2, Date.now() / 1000));
+  assert.equal(l2.status, 200, 'the second factor authenticates');
+});
+
+test('T7: a blank label is refused — no unnamed factor (D-02)', async () => {
+  zeroFactorSteps();
+  const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
+  const res = await auth.post('/api/auth/tfa/factors/enroll', {
+    currentPassword: PASSWORD,
+    code: totpAt(plainSecret, Date.now() / 1000 + 30),
+    label: '   ',
+  });
+  assert.equal(res.status, 400);
+  assert.equal(res.data?.code, 'labelRequired');
+  assert.equal(factors().filter(f => f.user_id === userIdOf(EMAIL)).length, 2, 'no factor row was created');
+});
+
+test('T8: first-ever (post-disable) re-enable rides tfa/enroll → factors/enable and rotates recovery (D-17/D-13)', async () => {
+  const email = 'reenable@test.local';
+  const s = await signup(server.base, { name: 'Reenable', email, password: PASSWORD });
+  assert.equal(s.status, 201);
+  const c = s.client;
+  // First enable via the legacy password-only pair, then full disable teardown.
+  const enroll1 = await c.post('/api/auth/tfa/enroll', { currentPassword: PASSWORD });
+  assert.equal(enroll1.status, 200, `enroll1: ${JSON.stringify(enroll1.data)}`);
+  const s1 = enroll1.data.secret;
+  const enable1 = await c.post('/api/auth/tfa/enable', { code: totpAt(s1, Date.now() / 1000) });
+  assert.equal(enable1.status, 200, `enable1: ${JSON.stringify(enable1.data)}`);
+  zeroFactorSteps(email);
+  const dis = await c.post('/api/auth/tfa/disable', { currentPassword: PASSWORD, code: totpAt(s1, Date.now() / 1000) });
+  assert.equal(dis.status, 200, `disable: ${JSON.stringify(dis.data)}`);
+  const afterDis = withDb(server.dbPath, db => db.prepare('select two_fa_enabled from users where email = ?').get(email));
+  assert.equal(afterDis.two_fa_enabled, 0, 'the teardown ran');
+  assert.equal(factors().filter(f => f.user_id === userIdOf(email)).length, 0, 'factor rows died with the disable');
+  // Re-enroll via the LEGACY enroll route (password-only, no step-up by
+  // design) — its pending entry lands under the LEGACY userId key.
+  const enroll2 = await c.post('/api/auth/tfa/enroll', { currentPassword: PASSWORD });
+  assert.equal(enroll2.status, 200, `enroll2: ${JSON.stringify(enroll2.data)}`);
+  const s2 = enroll2.data.secret;
+  // factors/enable with no stagedId resolves the legacy-key fallback.
+  const enable2 = await c.post('/api/auth/tfa/factors/enable', { code: totpAt(s2, Date.now() / 1000) });
+  assert.equal(enable2.status, 200, `enable2: ${JSON.stringify(enable2.data)}`);
+  assert.equal(enable2.data.recoveryCodes?.length, 10, 'first-ever rotation returns the fresh codes exactly once (D-53)');
+  const urow = withDb(server.dbPath, db => db.prepare('select two_fa_enabled from users where email = ?').get(email));
+  assert.equal(urow.two_fa_enabled, 1, 'two_fa_enabled flips for the first-ever factor (D-13)');
+  const rows = factors().filter(f => f.user_id === userIdOf(email));
+  assert.equal(rows.length, 1, 'exactly one factor row');
+  assert.equal(rows[0].name, 'settings.tfa.factor.primary', 'a legacy pending entry stores the primary catalogue key');
+  assert.ok(rows[0].last_step > 0, 'the first factor row carries the matched baseline (D-13)');
+  assert.equal(recoveryRows(email).length, 10, 'recovery codes were rotated (D-17)');
+  // The re-enabled factor authenticates at login.
+  zeroFactorSteps(email);
+  const login = await loginTfa(server.base, email, PASSWORD, totpAt(s2, Date.now() / 1000));
+  assert.equal(login.status, 200, 'the re-enabled factor verifies at login');
 });
