@@ -308,3 +308,93 @@ test('SC-1 tail: a real 2FA login verifies with the SAME enrolled device secret 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/* ---------- Task 3: D-K12 nudge precision + empty-boot no-op hardening ---------- */
+
+const NUDGE = 'rotation appears complete — MASTER_KEY_PREVIOUS resolves no envelopes and can be removed (D-K12)';
+
+test('D-K12 (a): a converged fleet with both keys set emits the nudge and mutates nothing', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-nudge-ok-'));
+  const email = 'converged@test.local';
+  const dbPath = path.join(dir, 'projects.db');
+  const servers = [];
+  try {
+    const boot1 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot1);
+    assert.equal((await signup(boot1.base, { name: 'C', email, password: GOOD })).status, 201);
+    await boot1.stop();
+    const envelope = wrapV2(SECRET, K2); // already v2 under the CURRENT id — converged
+    plant(dbPath, email, envelope);
+
+    const boot2 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot2);
+    assert.ok(boot2.output().includes(NUDGE), 'the D-K12 nudge must fire on a converged fleet');
+    assert.equal(userRow(dbPath, email).two_fa_secret, envelope, 'the converged row must stay byte-identical');
+    assert.equal(backups(dir).length, 0, 'the nudge boot mints no backup');
+    assert.doesNotMatch(boot2.output(), /row\(s\) re-sealed/, 'no re-seal on a converged boot');
+    await boot2.stop();
+  } finally {
+    for (const server of servers) await server?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('D-K12 (b): a lingering v2-under-previous row suppresses the nudge and is re-sealed in the same boot', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-nudge-no-'));
+  const email = 'lingering@test.local';
+  const dbPath = path.join(dir, 'projects.db');
+  const servers = [];
+  try {
+    const boot1 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot1);
+    assert.equal((await signup(boot1.base, { name: 'L', email, password: GOOD })).status, 201);
+    await boot1.stop();
+    plant(dbPath, email, wrapV2(SECRET, K1)); // PREVIOUS still resolves this envelope
+
+    const boot2 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot2);
+    assert.ok(!boot2.output().includes(NUDGE), 'the nudge must NOT fire while PREVIOUS still resolves an envelope (Pitfall 4)');
+    assert.match(userRow(dbPath, email).two_fa_secret, new RegExp(`^v2:${idOf(K2)}:`), 'the lingering row must be re-sealed in the same boot');
+    await boot2.stop();
+  } finally {
+    for (const server of servers) await server?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('D-K12 (c): PREVIOUS unset — the nudge never appears regardless of fleet state', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-nudge-gate-'));
+  const email = 'noprev@test.local';
+  const dbPath = path.join(dir, 'projects.db');
+  const servers = [];
+  try {
+    const boot1 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot1);
+    assert.equal((await signup(boot1.base, { name: 'N', email, password: GOOD })).status, 201);
+    await boot1.stop();
+    plant(dbPath, email, wrapV2(SECRET, K2)); // converged — would nudge if the gate were absent
+
+    const boot2 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: undefined } });
+    servers.push(boot2);
+    assert.ok(!boot2.output().includes('TOTP re-wrap'), 'without PREVIOUS the whole pass — nudge included — stays silent');
+    await boot2.stop();
+  } finally {
+    for (const server of servers) await server?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('D-K12 (d): zero envelope rows with both keys set — the pass returns before any backup and the nudge fires', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-nudge-empty-'));
+  const servers = [];
+  try {
+    const boot1 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
+    servers.push(boot1);
+    assert.ok(boot1.output().includes(NUDGE), 'PREVIOUS resolves nothing on an empty fleet — the nudge is the only output');
+    assert.equal(backups(dir).length, 0, 'an empty-candidate boot mints no backup');
+    await boot1.stop();
+  } finally {
+    for (const server of servers) await server?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -1438,8 +1438,29 @@ function migrateTotpReWrap() {
   const rows = staleCandidates();
   if (rows.length === 0) {
     // Zero stale candidates: byte-identical no-op — no backup, no writes.
-    // (D-K12 rotation-complete nudge refined in the empty-candidates branch
-    // below once PREVIOUS resolution is probed.)
+    // D-K12: when PREVIOUS is configured AND resolves no envelope anywhere in
+    // the users table, rotation is complete — nudge the operator to remove it.
+    // Resolution means: a v1 row decrypts under PREVIOUS, or a v2 row carries
+    // PREVIOUS's key id (trial-decrypt the few envelope rows; the candidate
+    // set is empty, so nothing here is stale). The nudge is the ONLY output
+    // of this boot: no backup, no mutation.
+    const previousId = keyIdFor(MASTER_KEY_PREVIOUS);
+    const envelopeRows = db
+      .prepare(
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
+      )
+      .all();
+    const resolvesPrevious = envelopeRows.some(row => {
+      const value = String(row.two_fa_secret || '').trim();
+      const parts = value.split(':');
+      const tag = (parts[0] || '').toLowerCase();
+      if (tag === 'v1') return decryptV1WithMaterial(value, MASTER_KEY_PREVIOUS) !== null;
+      if (tag === 'v2') return parts[1] === previousId;
+      return false;
+    });
+    if (!resolvesPrevious) {
+      console.warn('  TOTP re-wrap: rotation appears complete — MASTER_KEY_PREVIOUS resolves no envelopes and can be removed (D-K12).');
+    }
     return;
   }
 
