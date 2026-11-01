@@ -147,7 +147,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
+| 23. Email Deep Links & Creator Watching | 6/6 | Complete    | 2026-10-31 |
 | 24. Operator Audit & Workspace-Admin Tier | 4/4 | Complete    | 2026-11-01 |
 | 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | Complete    | 2026-11-01 |
