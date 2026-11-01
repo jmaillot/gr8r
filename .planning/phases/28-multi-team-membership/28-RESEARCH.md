@@ -249,15 +249,13 @@ for (const tid of teamIds) (D().members || []).forEach(m => {
 | A3 | Mention fan-out stays client-side (only predicate changes) vs moving fan-out server-side | Architecture | If fan-out should be server-authoritative, an extra task appears; CONTEXT leaves mechanics to discretion |
 | A4 | Seed demo data (`src/data/seed.js` member `teams` arrays) currently holds team sets in doc shape and needs re-alignment | Structure note | Demo mode shows wrong rosters |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should TEAM-04 (assignment eligibility) be enforced server-side on task writes?**
+1. **Should TEAM-04 (assignment eligibility) be enforced server-side on task writes?** — **(RESOLVED: client picker filter in Phase 28; server write-guard deferred to Phase 29 seam)** Adopted in 28-02 Task 3: client-side picker filter via `memberTeams(m) ∩ projTeams`, with a documented Phase 29 server-guard seam (within the CONTEXT.md discretion domain).
    - What we know: the success criterion speaks of the picker; the server currently accepts any assignee.
-   - What's unclear: whether a write-guard belongs in this phase or Phase 29 (scoped permissions does route-sweep enforcement).
-   - Recommendation: client picker filter in Phase 28 (requirement wording), note server guard as a Phase 29 seam.
-2. **Does a membership-only API change bump the workspace revision?**
-   - What we know: doc-touching routes must return `wsRevision()`; membership routes may not touch the doc.
-   - Recommendation: return the updated member payload + `membersChanged: true`; keep doc revision untouched so other sessions' pending writes survive (supports TEAM-05 criterion 4).
+   - Recommendation (adopted): client picker filter in Phase 28 (requirement wording), server guard as a Phase 29 seam.
+2. **Does a membership-only API change bump the workspace revision?** — **(RESOLVED: no)** Adopted in 28-01 Task 1 step 5: membership-only routes return the updated member payload with NO `revision` field; the doc revision stays untouched so other sessions' pending writes survive (TEAM-05 criterion 4).
+   - Recommendation (adopted): return the updated member payload; keep doc revision untouched.
 
 ## Environment Availability
 
