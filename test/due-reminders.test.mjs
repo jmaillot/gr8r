@@ -164,8 +164,23 @@ test('REM-02/03: due-day morning fires (both open windows) once; second run is a
   assert.ok(reArmed.every(n => !emitted.some(e => e.id === n.id)), 'fresh notification rows');
 });
 
-/* ----------------- Task 2: window matrix — day_before ----------------- */
+/* CR-01 contract drift: reminder rows must carry the client notif contract —
+   `at` (number) + `read: false` (store.js notifyMembers shape), not just `ts`. */
+test('CR-01: emitted rows match the client notif contract (at + read)', async () => {
+  const { ws, own } = await makeWorkspace(m => [task(m, { due: '2026-03-02' })]);
+  const emitted = own(await trigger(at9('2026-03-02')));
+  assert.ok(emitted.length >= 1, 'at least one reminder emitted');
+  for (const n of emitted) {
+    assert.equal(typeof n.at, 'number', 'row carries `at` as a number (inbox sort / ago())');
+    assert.ok(!Number.isNaN(new Date(n.at).getTime()), 'at is a valid epoch ms');
+    assert.equal(n.read, false, 'row starts unread (inbox unread toggle)');
+    assert.ok(n.snippet, 'row carries snippet');
+  }
+  const rows = notifRows(ws.slug);
+  assert.ok(rows.every(r => typeof r.at === 'number' && r.read === false), 'doc-persisted rows match the contract');
+});
 
+/* ----------------- Task 2: window matrix — day_before ----------------- */
 test('REM-02: day_before opens the day before; month rollover is pure string math', async () => {
   const { ws, memberId: memberIdOf, own } = await makeWorkspace(m => [task(m, { due: '2026-02-01' })]);
   /* Jan 30: window not yet open (day_before = Jan 31). */

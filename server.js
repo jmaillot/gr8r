@@ -976,6 +976,10 @@ function runReminderPass({ now: at = new Date() } = {}) {
             by: null, // system actor — queueNotifEmails' self-skip must never drop a reminder
             task: t.id,
             snippet: reminderSnippet(offset, t),
+            /* Client notif contract is `at` + `read` (store.js notifyMembers) —
+               `ts` kept only for existing test assertions. */
+            at: at.getTime(),
+            read: false,
             ts: at.getTime(),
           };
           /* T-27-03: claim + append commit together or not at all. */

@@ -87,11 +87,11 @@ export function inboxPreview(n) {
   const tk = n.task ? task(n.task) : null;
   const p = n.project ? proj(n.project) : tk ? proj(tk.project) : null;
   if (!tk)
-    return `<div style="padding:24px 28px"><button class="btn btn-sm btn-ghost" data-a="set" data-k="inboxSel" data-v="" style="margin:-4px 0 12px -8px">${ic('arrow-left', 14)}${t('page.auth.back')}</button><div class="alert danger">${ic('triangle-alert', 16)}<div><b>${esc(n.text)}</b><div class="muted" style="margin-top:2px">${esc(n.snippet)}</div></div></div><div style="margin-top:14px"><button class="btn btn-secondary" data-a="go" data-r="project" data-id="${p.id}" data-tab="overview">${t('popover.openProject')}</button></div></div>`;
+    return `<div style="padding:24px 28px"><button class="btn btn-sm btn-ghost" data-a="set" data-k="inboxSel" data-v="" style="margin:-4px 0 12px -8px">${ic('arrow-left', 14)}${t('page.auth.back')}</button><div class="alert danger">${ic('triangle-alert', 16)}<div><b>${esc(n.text || t('notif.' + String(n.type || '').replace(/_(\w)/g, (_, c) => c.toUpperCase())) || n.type)}</b><div class="muted" style="margin-top:2px">${esc(n.snippet)}</div></div></div>${p ? `<div style="margin-top:14px"><button class="btn btn-secondary" data-a="go" data-r="project" data-id="${p.id}" data-tab="overview">${t('popover.openProject')}</button></div>` : ''}</div>`;
   const cs = commentsOf(tk.id).slice(-4);
   return `<div class="row" style="height:46px;padding:0 16px;border-bottom:1px solid var(--border);gap:8px;flex-shrink:0">
       <button class="ibtn ibtn-sm" data-a="set" data-k="inboxSel" data-v="" aria-label="${t('page.auth.back')}">${ic('arrow-left', 15)}</button>
-      <span class="pdot" style="--c:${pColor(p)}"></span><span class="muted" style="font-size:12.5px">${esc(p.name)}</span><span class="faint mono">${tk.key}</span><span class="sp"></span>
+      ${p ? `<span class="pdot" style="--c:${pColor(p)}"></span><span class="muted" style="font-size:12.5px">${esc(p.name)}</span>` : ''}<span class="faint mono">${tk.key}</span><span class="sp"></span>
       <button class="btn btn-sm btn-secondary" data-a="openTask" data-id="${tk.id}">${ic('panel-right-open', 14)}${t('page.inbox.openTask')}</button></div>
     <div style="padding:24px 28px;max-width:720px;width:100%">
       <h2 style="font-size:var(--fs-xl);margin:0 0 10px;font-weight:600;letter-spacing:-.015em">${esc(tk.title)}</h2>
