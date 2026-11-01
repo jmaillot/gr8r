@@ -21,6 +21,7 @@ let dataDir;
 let server;
 let legacy; // { secret, lastStep } captured from users before the copy boot
 let plainSecret; // plaintext TOTP secret captured from the enroll response
+let plainSecret2; // plaintext secret of the second (Tablet) factor added in T6
 let factorSnap; // totp_factors snapshot after the copy boot (M2 baseline)
 let schemaSnap; // pragma table_info snapshot after the copy boot (M2 baseline)
 
@@ -156,6 +157,7 @@ test('T6: a second factor enrolls with a label, enables, and verifies at login (
   assert.equal(enroll.status, 200, `enroll: ${JSON.stringify(enroll.data)}`);
   assert.equal(enroll.data.label, 'Tablet', 'the label round-trips (D-02)');
   const { secret: s2, stagedId } = enroll.data;
+  plainSecret2 = s2;
   assert.ok(stagedId, 'a per-factor stagedId is returned (D-13)');
   const enable = await auth.post('/api/auth/tfa/factors/enable', { stagedId, code: totpAt(s2, Date.now() / 1000) });
   assert.equal(enable.status, 200, `enable: ${JSON.stringify(enable.data)}`);
@@ -226,4 +228,103 @@ test('T8: first-ever (post-disable) re-enable rides tfa/enroll → factors/enabl
   zeroFactorSteps(email);
   const login = await loginTfa(server.base, email, PASSWORD, totpAt(s2, Date.now() / 1000));
   assert.equal(login.status, 200, 'the re-enabled factor verifies at login');
+});
+
+/* ---------- Plan 02: remove-factor route (TOTP2-04, D-15/D-16/D-17/D-18, T9..T13) ---------- */
+
+test('T9: removing a factor with a code from the REMOVED factor itself is refused (D-15)', async () => {
+  zeroFactorSteps(EMAIL);
+  const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
+  const primaryId = factors().filter(f => f.user_id === userIdOf(EMAIL))[0].id;
+  const res = await auth.post('/api/auth/tfa/factors/remove', {
+    factorId: primaryId,
+    currentPassword: PASSWORD,
+    code: totpAt(plainSecret, Date.now() / 1000),
+  });
+  assert.equal(res.status, 400, 'the removed factor cannot vouch for its own removal');
+  assert.equal(res.data?.code, 'codeRejected');
+  assert.equal(factors().filter(f => f.user_id === userIdOf(EMAIL)).length, 2, 'no row was deleted');
+});
+
+test('T10: removing with a REMAINING factor\'s code succeeds and the survivor still logs in (D-15/D-16)', async () => {
+  zeroFactorSteps(EMAIL);
+  const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
+  const [primaryId, tabletId] = factors().filter(f => f.user_id === userIdOf(EMAIL)).map(f => f.id);
+  const recoveryBefore = recoveryRows(EMAIL).map(r => r.code_hash).sort();
+  // The code comes from the SURVIVOR (Tablet), not the removed primary.
+  zeroFactorSteps(EMAIL);
+  const res = await auth.post('/api/auth/tfa/factors/remove', {
+    factorId: primaryId,
+    currentPassword: PASSWORD,
+    code: totpAt(plainSecret2, Date.now() / 1000),
+  });
+  assert.equal(res.status, 200, `remove: ${JSON.stringify(res.data)}`);
+  const rows = factors().filter(f => f.user_id === userIdOf(EMAIL));
+  assert.equal(rows.length, 1, 'only the target row died');
+  assert.equal(rows[0].id, tabletId, 'the remaining factor survives');
+  assert.equal(recoveryRows(EMAIL).map(r => r.code_hash).sort().join(), recoveryBefore.join(), 'recovery codes untouched (D-17)');
+  // The survivor still authenticates at login.
+  zeroFactorSteps(EMAIL);
+  const l = await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret2, Date.now() / 1000));
+  assert.equal(l.status, 200, 'the remaining factor still verifies at login');
+});
+
+test('T11: removing the LAST factor runs the disable teardown verbatim (D-18/TOTP2-04)', async () => {
+  // A second session must die with the teardown (revoke-others-keep-current).
+  const other = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret2, Date.now() / 1000))).client;
+  zeroFactorSteps(EMAIL); // the first login advanced the guard — the second needs a fresh window
+  const keep = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret2, Date.now() / 1000))).client;
+  zeroFactorSteps(EMAIL);
+  const tabletId = factors().filter(f => f.user_id === userIdOf(EMAIL))[0].id;
+  const res = await keep.post('/api/auth/tfa/factors/remove', {
+    factorId: tabletId,
+    currentPassword: PASSWORD,
+    code: totpAt(plainSecret2, Date.now() / 1000),
+  });
+  assert.equal(res.status, 200, `last removal: ${JSON.stringify(res.data)}`);
+  assert.equal(recoveryRows(EMAIL).length, 0, 'recovery codes wiped (disable contract)');
+  const othersGone = await other.get('/api/auth/tfa/factors');
+  assert.equal(othersGone.status, 401, 'other sessions were revoked');
+  const keepAlive = await keep.get('/api/auth/tfa/factors');
+  assert.equal(keepAlive.status, 200, 'the caller\'s own session survives (revoke-others-keep-current)');
+});
+
+test('T13: no half-state after the last removal — zero factors, 2FA off (Pitfall 4)', async () => {
+  const rows = factors().filter(f => f.user_id === userIdOf(EMAIL));
+  assert.equal(rows.length, 0, 'factor count is 0');
+  const urow = withDb(server.dbPath, db => db.prepare('select two_fa_enabled, two_fa_secret from users where email = ?').get(EMAIL));
+  assert.equal(urow.two_fa_enabled, 0, 'two_fa_enabled is 0');
+  assert.equal(urow.two_fa_secret, '', 'the users envelope is cleared by the verbatim teardown');
+});
+
+test('T12: a single (non-last) factor removal does NOT rotate recovery codes (D-17)', async () => {
+  const email = 'solo@test.local';
+  const s = await signup(server.base, { name: 'Solo', email, password: PASSWORD });
+  assert.equal(s.status, 201);
+  const c = s.client;
+  const enroll = await c.post('/api/auth/tfa/enroll', { currentPassword: PASSWORD });
+  assert.equal(enroll.status, 200);
+  const s1 = enroll.data.secret;
+  const enable = await c.post('/api/auth/tfa/enable', { code: totpAt(s1, Date.now() / 1000) });
+  assert.equal(enable.status, 200);
+  const before = recoveryRows(email).map(r => r.code_hash).sort();
+  assert.equal(before.length, 10);
+  // Add a second factor (step-up from the first), then remove it.
+  zeroFactorSteps(email);
+  const add = await c.post('/api/auth/tfa/factors/enroll', { currentPassword: PASSWORD, code: totpAt(s1, Date.now() / 1000), label: 'Spare' });
+  assert.equal(add.status, 200, `add: ${JSON.stringify(add.data)}`);
+  const enable2 = await c.post('/api/auth/tfa/factors/enable', { stagedId: add.data.stagedId, code: totpAt(add.data.secret, Date.now() / 1000) });
+  assert.equal(enable2.status, 200, `enable2: ${JSON.stringify(enable2.data)}`);
+  assert.equal(enable2.data.recoveryCodes, undefined, 'no rotation on the additional enable (D-17)');
+  zeroFactorSteps(email);
+  const spareId = factors().filter(f => f.user_id === userIdOf(email)).map(f => f.id)[1];
+  const rm = await c.post('/api/auth/tfa/factors/remove', {
+    factorId: spareId,
+    currentPassword: PASSWORD,
+    code: totpAt(s1, Date.now() / 1000),
+  });
+  assert.equal(rm.status, 200, `remove: ${JSON.stringify(rm.data)}`);
+  assert.equal(recoveryRows(email).map(r => r.code_hash).sort().join(), before.join(), 'recovery codes byte-identical — no rotation');
+  const urow = withDb(server.dbPath, db => db.prepare('select two_fa_enabled from users where email = ?').get(email));
+  assert.equal(urow.two_fa_enabled, 1, '2FA stays on with one factor left');
 });

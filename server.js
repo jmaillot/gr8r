@@ -451,9 +451,15 @@ function stashPendingTfa(userId, secret, otpauth, stagedId = null, label = null)
    counts ONE failed attempt per submission regardless of factor count.
    decrypted === 0 tells the caller nothing was verifiable → fail closed 503
    (Pitfall 3). Callers persist matchedStep to the matched factor's last_step
-   — the users.two_fa_last_step column is never written from here (D-06). */
-function verifyTotpAgainstFactors(userId, code, nowSec) {
-  const rows = db.prepare('select id, secret, last_step from totp_factors where user_id = ? order by created_at').all(userId);
+   — the users.two_fa_last_step column is never written from here (D-06).
+   excludeFactorId (Plan 02, D-15/D-16): removes ONE factor from the
+   candidate set — the remove route requires a code from a factor that is
+   NOT the removed one, so self-lockout is structurally impossible. */
+function verifyTotpAgainstFactors(userId, code, nowSec, excludeFactorId = null) {
+  const rows = db
+    .prepare('select id, secret, last_step from totp_factors where user_id = ? order by created_at')
+    .all(userId)
+    .filter(row => row.id !== excludeFactorId);
   let decrypted = 0;
   for (const row of rows) {
     const wrapped = requireTotpSecret(row.secret);
@@ -2812,6 +2818,60 @@ async function handleApi(req, res, url) {
     // Success-only security event (D-107 discipline).
     logSecurity(user.id, 'tfa_factor_added');
     return json(res, 200, codes ? { ok: true, recoveryCodes: codes } : { ok: true });
+  }
+
+  if (pathname === '/api/auth/tfa/factors/remove' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    // Own budget band (D-11) — removal is its own throttle surface.
+    if (tooMany(`tfa-factor-remove|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const body = await readJson(req);
+    const cur = String(body?.currentPassword || '');
+    const code = String(body?.code || '').trim();
+    const factorId = String(body?.factorId || '');
+    if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
+    // T-16-03: a wrong password never reaches the verify.
+    if (!verifyPassword(cur, user.password_hash)) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    // T-31-09: strict 6-digit-only gate with NO recovery lookup (D-14/D-59/D-72).
+    if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
+    // Ownership: an unknown or foreign factorId is a 404 before any verify.
+    const target = db.prepare('select id from totp_factors where id = ? and user_id = ?').get(factorId, user.id);
+    if (!target) return fail(res, 404, 'factorNotFound', 'That factor does not exist');
+    // D-15/T-31-08: with more than one factor the code must verify against a
+    // factor that is NOT the removed one — self-lockout is structurally
+    // impossible. D-16: no factor picker — the exclusion param, not a
+    // route-level second loop. When the target is the LAST factor the removal
+    // IS a disable (D-18): its own live code satisfies the disable contract,
+    // so the helper runs unexcluded. Pitfall 3: zero verifiable factors →
+    // fail closed 503 either way.
+    const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+    const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000), factorCount > 1 ? target.id : null);
+    if (result.decrypted === 0) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be verified until the admin sets it');
+    if (!result.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
+    // D-04: the verifying code's replay guard advances on ITS matched factor.
+    db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
+    // Pitfall 9/D-105: hash the caller's own cookie — never a body value.
+    const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
+    transaction(() => {
+      if (factorCount > 1) {
+        // D-17: single-factor removal touches NOTHING else — the target row
+        // dies alone; recovery codes, sessions and 2FA itself stay.
+        db.prepare('delete from totp_factors where id = ? and user_id = ?').run(factorId, user.id);
+      } else {
+        // D-18: the LAST factor's removal IS the disable-2FA transaction —
+        // the teardown block runs verbatim (users flip, recovery wipe,
+        // challenge wipe, revoke-others-keep-current; D-53 rotation rides
+        // the next enable). No divergent half-state path exists.
+        db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?").run(user.id);
+        db.prepare('delete from totp_factors where user_id = ?').run(user.id);
+        db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+        db.prepare('delete from login_challenges where user_id = ?').run(user.id);
+        db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
+      }
+    });
+    logSecurity(user.id, 'tfa_factor_removed');
+    return json(res, 200, { ok: true });
   }
 
   /* ----------------------- session revocation (D-26/D-27) ----------------------- */

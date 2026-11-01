@@ -133,7 +133,9 @@ test('D-69: a live TOTP code on /api/auth/tfa/login mints the session and delete
   const dbState = withDb(A.dbPath, db => ({
     challenges: db.prepare('select count(*) as c from login_challenges where user_id = ?').get(id).c,
     sessions: db.prepare('select count(*) as c from sessions where user_id = ?').get(id).c,
-    lastStep: db.prepare('select two_fa_last_step from users where id = ?').get(id).two_fa_last_step,
+    /* Plan 02: the D-04 baseline lives on the FACTOR row (D-10) — the users
+       column is kept, unread (D-08). */
+    lastStep: db.prepare('select last_step from totp_factors where user_id = ? order by created_at').get(id).last_step,
   }));
   assert.equal(dbState.challenges, 0, 'the challenge row is deleted on success');
   assert.equal(dbState.sessions, sessionsBefore + 1, 'a live sessions row was minted');

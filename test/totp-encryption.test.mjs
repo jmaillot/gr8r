@@ -111,7 +111,11 @@ test('the shared helper is the ONLY wrapped call site — step-ups verify any fa
 });
 
 test('the per-route 503 body copies are byte-identical to pre-refactor server.js (D-81)', () => {
-  assert.equal((serverSource.match(new RegExp(VERIFY_COPY.replaceAll('—', '—'), 'g')) || []).length, 1, 'verify-route copy changed');
+  /* Phase 31 Plan 02: the add-factor enroll and remove routes share the
+     verify-route copy (T-31-06/T-31-08 — the same fail-closed 503 contract
+     for an undecryptable factor set), so it legitimately appears three
+     times (login verify, factors/enroll, factors/remove). */
+  assert.equal((serverSource.match(new RegExp(VERIFY_COPY.replaceAll('—', '—'), 'g')) || []).length, 3, 'verify-route copy changed');
   assert.equal((serverSource.match(new RegExp(DISABLE_COPY, 'g')) || []).length, 1, 'disable-route copy changed');
 });
 
