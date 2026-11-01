@@ -5,11 +5,11 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Server reminder rows use `ts`; the client contract is `at` + `read` — blank timestamps, broken sort, permanent unread state"
   - id: CR-02
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Inbox preview crashes (TypeError) when a reminder's task was deleted"
   - id: WR-01
     severity: warning
@@ -31,7 +31,7 @@ findings:
     severity: info
     disposition: open
     title: "`reminders_sent` ledger grows without bound"
-open: 7
+open: 5
 total: 7
 recorded: 2026-11-01T12:34:10.118Z
 ---
@@ -40,8 +40,8 @@ recorded: 2026-11-01T12:34:10.118Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| CR-02 | critical | open | - |
+| CR-01 | critical | fixed | 8402e18 — rows emit `at`+`read` (contract-drift test added) |
+| CR-02 | critical | fixed | 8402e18 — inboxPreview guards missing task/project/text |
 | WR-01 | warning | open | - |
 | WR-02 | warning | open | - |
 | IN-01 | info | open | - |
