@@ -18,6 +18,7 @@ import {
   roleLabel,
   task,
   visibleProjects,
+  assignableInProject,
   workspaceList as wsList,
 } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -138,7 +139,7 @@ export function popHtml(p) {
         [
           { id: '', name: tMsg('common.unassigned'), html: av(null, 'sm', false), on: !sb.assignee },
           ...D()
-            .members.filter(m => m.status !== 'deactivated')
+            .members.filter(m => m.status !== 'deactivated' && assignableInProject(m, proj(tk.project), sb.assignee))
             .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? tMsg('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: sb.assignee === m.id })),
         ],
         { search: tMsg('a11y.assignSubtask') },
@@ -156,7 +157,7 @@ export function popHtml(p) {
         [
           { id: '', name: tMsg('common.unassigned'), html: av(null, 'sm', false), on: !t?.assignee },
           ...D()
-            .members.filter(m => m.status !== 'deactivated')
+            .members.filter(m => m.status !== 'deactivated' && assignableInProject(m, proj(t?.project), t?.assignee))
             .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? tMsg('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: t?.assignee === m.id })),
         ],
         { search: tMsg('act.assignTo') },
@@ -405,6 +406,9 @@ export function popHtml(p) {
       inner = PRIOS.map(s => `<button class="mi" data-a="bulkSet" data-f="priority" data-v="${s.id}">${prIcon(s.id)}${s.name}</button>`).join('');
       break;
     case 'bulk-assignee':
+      /* Intentionally unfiltered (T-28-10 scope): bulk assignment spans a
+         multi-selection of tasks that may cross projects, so a single
+         per-project team intersection is undefined here. */
       inner = [{ id: '', name: tMsg('common.unassigned') }, ...D().members]
         .map(m => `<button class="mi" data-a="bulkSet" data-f="assignee" data-v="${m.id}">${av(m.id || null, 'sm', false)}${esc(m.name)}</button>`)
         .join('');
