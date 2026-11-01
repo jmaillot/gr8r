@@ -20,7 +20,7 @@ deep-link path).
 - [x] **Phase 24: Operator Audit & Workspace-Admin Tier** - Every operator/admin session revocation writes a same-transaction, append-only audit row, and workspace admins get their own revocation tier on the same audited path (completed 2026-11-01)
 - [x] **Phase 25: Keyring & Version-Aware Envelopes** - The boot migration filter becomes version-aware before any v2 envelope exists, and TOTP secrets carry a self-describing key-version envelope decrypted through a keyring (completed 2026-10-31)
 - [x] **Phase 26: Re-Wrap Rotation & Key-Custody Runbook** - MASTER_KEY rotates via an idempotent boot-time re-wrap pass with no 2FA re-enrollment, and DEPLOY.md documents the full custody runbook (completed 2026-11-01)
-- [ ] **Phase 27: Due-Date Reminder Scheduler** - A dependency-free server-side pass notifies assignees before/on due dates, restart-safe and exactly-once, honoring per-type prefs and email deep links
+- [x] **Phase 27: Due-Date Reminder Scheduler** - A dependency-free server-side pass notifies assignees before/on due dates, restart-safe and exactly-once, honoring per-type prefs and email deep links (completed 2026-11-01)
 
 ## Phase Details
 
@@ -129,7 +129,7 @@ Plans:
   4. Completed and archived tasks never receive reminders; an overdue task receives exactly one "past due" nudge, also deduped; changing a due date re-arms its reminders via the key
   5. Idle scheduler ticks never bump the workspace revision — active clients see no 409 storms; an interval-callback failure cannot kill the process
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -158,4 +158,4 @@ Plans:
 | 24. Operator Audit & Workspace-Admin Tier | 4/4 | Complete    | 2026-11-01 |
 | 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | Complete    | 2026-11-01 |
-| 27. Due-Date Reminder Scheduler | 2/2 | In Progress|  |
+| 27. Due-Date Reminder Scheduler | 2/2 | Complete    | 2026-11-01 |
