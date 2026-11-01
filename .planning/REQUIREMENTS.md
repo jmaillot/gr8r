@@ -61,7 +61,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
   pre-migration backup guarantee): with the new key set and the old key still configured,
   every old-envelope secret is re-wrapped to the new key id; a second boot is a no-op;
   rotation never requires 2FA re-enrollment
-- [ ] **KEY-04**: DEPLOY.md carries a key-custody runbook covering: key generation and
+- [x] **KEY-04**: DEPLOY.md carries a key-custody runbook covering: key generation and
   injection, adding the new key alongside the old, running rotation, verifying zero stale
   envelopes, backup-before-rotation, and the compromise policy (compromised key → honest
   full re-enrollment, rotation alone is not sufficient)
@@ -110,7 +110,7 @@ in-process `setInterval` pass with boot catch-up, no cron/redis.
 | KEY-01 | Phase 25 | Complete |
 | KEY-02 | Phase 25 | Complete |
 | KEY-03 | Phase 26 | Complete |
-| KEY-04 | Phase 26 | Pending |
+| KEY-04 | Phase 26 | Complete |
 | REM-01 | Phase 27 | Pending |
 | REM-02 | Phase 27 | Pending |
 | REM-03 | Phase 27 | Pending |

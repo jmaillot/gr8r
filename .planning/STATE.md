@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 26
 current_phase_name: Re-Wrap Rotation & Key-Custody Runbook
-status: executing
-stopped_at: Completed 26-01-PLAN.md
-last_updated: "2026-11-01T08:52:24.459Z"
+status: verifying
+stopped_at: Completed 26-02-PLAN.md
+last_updated: "2026-11-01T08:59:11.415Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 26 execution started
-state_head: f06725d79100cbb3d56b40bd652d359e2d1b177e
+state_head: 15bf26ad4018d7c5bc01787ca8399c5a732bfcda
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 20
 ---
 
@@ -30,7 +30,7 @@ progress:
 
 Phase: 26 (Re-Wrap Rotation & Key-Custody Runbook) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-01 — Phase 26 execution started
 
 Progress: [██░░░░░░░░] 20%
@@ -76,6 +76,7 @@ Progress: [██░░░░░░░░] 20%
 - [Phase 25]: D-K3/D-K4 format frozen by user checkpoint — key id = first 8 hex chars of sha256(raw key material), envelope = `v2:<key-id>:<iv>:<tag>:<ct>`
 - [Phase 25]: encryptTotpSecret gained a version param (default 'v1'); ONLY the enable call site writes v2 — boot migration keeps v1 (Phase 26 re-wrap owns the stock)
 - [Phase 26]: Re-wrap rotation (26-01): two env vars + one reboot converges every old envelope to v2:<new-id>; nudge fires iff PREVIOUS resolves nothing (D-K12); undecryptable rows preserved forever, D-74 backup re-mints per rotation boot (bounded by WR-02)
+- [Phase 26]: Runbook (26-02): DEPLOY.md §14 covers the full key-custody lifecycle; key-id discovery and the D-K13 query are env-only (never argv), and its commands are pinned by doc-parsing parity tests in test/totp-rewrap.test.mjs
 
 ### Pending Todos
 
@@ -92,8 +93,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T08:52:17.439Z
-Stopped at: Completed 26-01-PLAN.md
+Last session: 2026-11-01T08:59:11.366Z
+Stopped at: Completed 26-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -112,3 +113,4 @@ Resume file: None
 | Phase 25 P01 | 12 min | 3 tasks | 3 files |
 | Phase 25 P02 | ~75 min | 3 tasks | 3 files |
 | Phase 26 P01 | 35 min | 3 tasks | 3 files |
+| Phase 26 P02 | 14 min | 2 tasks | 2 files |
