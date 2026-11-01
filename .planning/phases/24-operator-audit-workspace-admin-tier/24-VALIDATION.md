@@ -43,9 +43,9 @@ created: "2026-10-31"
 | 24-01-01 | 01 | 1 | AUD-01 | T-24-01 | Audit row written in same transaction as revoke; all fields (actor, action, target, session count, timestamp, IP) | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
 | 24-01-02 | 01 | 1 | AUD-01 | T-24-02 | Forced audit failure → rollback: no revoked sessions, no audit row (drop-table atomicity) | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
 | 24-01-03 | 01 | 1 | AUD-01/03 | T-24-03 | Append-only: static scan finds no UPDATE/DELETE on audit_log; route cycle only grows rows | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
-| 24-0X-XX | 0X | X | AUD-02 | T-24-04 | Admin revokes member of own workspace; owner immunity / self-exclusion / peer-admin refusals (ownerImmune/adminOnly/notAMember) | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
-| 24-0X-XX | 0X | X | AUD-02 | T-24-05 | Full admin-revoke lifecycle in real browser, EN+FR parametric | e2e | `npx playwright test e2e/admin-revoke-cycle.spec.mjs` | ❌ W0 | ⬜ pending |
-| 24-0X-XX | 0X | X | AUD-03 | T-24-06 | Trail endpoint tier visibility (operator all / admin own-ws / member 403), verb filter, keyset pagination, rows readable with no users row | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
+| 24-0X-XX | 0X | X | AUD-02 | T-24-11 | Admin revokes member of own workspace; owner immunity / self-exclusion / peer-admin refusals (ownerImmune/adminOnly/notAMember) | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
+| 24-0X-XX | 0X | X | AUD-02 | T-24-09 | Full admin-revoke lifecycle in real browser, EN+FR parametric | e2e | `npx playwright test e2e/admin-revoke-cycle.spec.mjs` | ❌ W0 | ⬜ pending |
+| 24-0X-XX | 0X | X | AUD-03 | T-24-17 | Trail endpoint tier visibility (operator all / admin own-ws / member 403), verb filter, keyset pagination, rows readable with no users row | unit | `node --test test/audit-log.test.mjs` | ❌ W0 | ⬜ pending |
 | — | — | — | — | — | err-code parity for any new fail() codes; catalogue parity for new UI keys | unit | `node --test test/error-codes.test.mjs test/catalogue.test.mjs` | ✅ existing | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
