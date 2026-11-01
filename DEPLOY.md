@@ -721,6 +721,169 @@ with French content — so the shipped image is verified to carry the French cat
 - **CSP allows Google Fonts.** For an air-gapped deployment, self-host the fonts and
   tighten `Content-Security-Policy` in `server.js`.
 
+## 14. Key custody & rotation
+
+Two-factor secrets are encrypted at rest with a key only you hold: `MASTER_KEY`
+(set in `/opt/projects/.env`). There is no backdoor — losing the key loses every
+2FA secret, and each user must re-enroll. This section covers the whole key
+lifecycle: generating, injecting, rotating, verifying and retiring keys.
+
+### Key generation & injection
+
+Generate a 256-bit key:
+
+```sh
+openssl rand -hex 32
+```
+
+Keys live in `/opt/projects/.env` (mode `600`, never committed, never logged).
+For a fresh install, add `MASTER_KEY` before the first start; the key is
+injected through the environment only — never as a command argument (arguments
+are visible to every local user via `ps`), and never echoed to the terminal:
+
+```dotenv
+MASTER_KEY=<64 hex chars>
+```
+
+If `MASTER_KEY` is unset and users already have 2FA secrets, the server logs a
+deferral line at boot and leaves the plaintext rows untouched; configure the key
+and reboot — the migration retries on its own.
+
+### Discover a key's id
+
+Envelopes in the database are stamped with a key id: the first 8 hex chars of
+the key material's SHA-256, lowercase. To find the id of the key currently in
+`.env`, read it from the environment — never paste the key into a command line:
+
+```sh
+cd /opt/projects
+set -a; source .env; set +a
+node -e 'console.log(require("crypto").createHash("sha256").update(process.env.MASTER_KEY).digest("hex").slice(0, 8))'
+```
+
+The output is 8 lowercase hex characters, byte-identical to what the server
+derives. Do not pipe the key via `echo … |` variants: a trailing newline changes
+the hash. If the container is running you can read the id straight from its
+environment instead:
+
+```sh
+docker compose exec projects node -e \
+  'console.log(require("crypto").createHash("sha256").update(process.env.MASTER_KEY).digest("hex").slice(0, 8))'
+```
+
+### Running a rotation
+
+Rotation replaces `MASTER_KEY` with a new key and moves the old key to
+`MASTER_KEY_PREVIOUS` for one boot. No flag, no endpoint — the server detects
+the two-key configuration at boot and re-wraps everything by itself:
+
+1. Generate the new key (above), then edit `/opt/projects/.env`:
+
+   ```dotenv
+   MASTER_KEY=<new key>
+   MASTER_KEY_PREVIOUS=<old key>
+   ```
+
+2. Recreate the container so Compose picks up the new environment:
+
+   ```sh
+   cd /opt/projects
+   docker compose up -d
+   docker compose logs --tail=40 projects
+   ```
+
+3. Expect these boot log lines:
+
+   ```
+     pre-migration backup: /data/projects-preenvelope-<timestamp>.db
+     TOTP re-wrap: N row(s) re-sealed to v2:<current-key-id>, 0 undecryptable left as-is, 0 seal failure(s).
+   ```
+
+   The backup line is written **before** anything is modified — it is the
+   rollback artifact (see *Backup-before-rotation / rollback* below). Two
+   `pre-migration backup:` lines in one boot are normal: the plaintext-sealing
+   pass and the re-wrap pass each mint their own when both have work to do.
+   If a row decrypts under neither key, a warning names the user id and leaves
+   the row byte-identical (`… decrypts under neither keyring key …`) — those
+   rows need manual recovery, not another reboot.
+
+4. Users notice nothing: 2FA devices keep working, no re-enrollment is needed.
+
+### Verifying zero stale envelopes
+
+After the rotation boot, confirm nothing was missed. Substitute the key id
+discovered above for `<CURRENT_KEY_ID>` (or read it from the running container
+first). If `sqlite3` is not installed on the host, use the container one-liner
+below instead:
+
+```sh
+sqlite3 /path/to/data/projects.db "select count(*) from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v2:<CURRENT_KEY_ID>:%';"
+```
+
+The expected output is `0`. The query is deliberately stricter than the server's
+own completeness test — it also counts rows the server could not decrypt, which
+is the safe direction: a non-zero result always deserves a look at the boot log
+warnings, never a silent retry loop.
+
+```sh
+docker compose exec projects node -e \
+  "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/projects.db');console.log(db.prepare(\"select count(*) from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v2:<CURRENT_KEY_ID>:%'\").get())"
+```
+
+### Backup-before-rotation / rollback
+
+The `projects-preenvelope-<timestamp>.db` backup minted before the re-wrap
+**is** the rollback artifact; the newest few are kept under `/data` (older ones
+are pruned automatically). If the rotation went wrong, restore it:
+
+```sh
+cd /opt/projects
+docker compose stop projects
+docker cp projects-studio:/data/projects-preenvelope-<timestamp>.db projects-studio:/data/projects.db
+VOL=$(docker inspect projects-studio \
+  --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')
+docker run --rm --user root -v "$VOL":/data alpine:3.21 \
+  sh -c 'rm -f /data/projects.db-wal /data/projects.db-shm'
+```
+
+Then put the **old** key back in `.env` (`MASTER_KEY=<old key>`, and remove
+`MASTER_KEY_PREVIOUS` unless you keep both deliberately) and start the server
+again:
+
+```sh
+docker compose start projects
+docker compose logs --tail=20 projects
+```
+
+### Completing rotation
+
+Once a rotation boot is verified — the query above returns `0` — retire the old
+key: remove `MASTER_KEY_PREVIOUS` from `.env` and reboot. The keyring converges
+to one key. Setting `MASTER_KEY_PREVIOUS` again later simply starts another
+rotation.
+
+**Rotate one generation at a time.** There are exactly two key slots (current +
+previous); no key chains exist and none are planned. If two rotations stack up
+back-to-back, run the first to completion (verify `0`, remove
+`MASTER_KEY_PREVIOUS`, reboot) before starting the next.
+
+### If a key is compromised — rotation alone is not sufficient
+
+**Read this before reaching for the rotation section.** Rotation does NOT
+respond to a compromised key. A compromised key must be assumed to have
+exported every 2FA secret it ever sealed — re-sealing those secrets with a new
+key only locks the attacker's *old* copies; the attacker already has the
+plaintext. The honest response is:
+
+1. Disable 2FA for all affected users (or the whole workspace).
+2. Have **every user re-enroll 2FA** with fresh device secrets, encrypted under
+   a newly generated `MASTER_KEY`.
+3. Investigate how the key leaked — `.env` permissions, shell history, backup
+   encryption, host access — before trusting the new key.
+
+`MASTER_KEY_PREVIOUS` and rotation exist for *planned* key hygiene, never for
+incident response.
+
 ## Appendix: minimal Traefik
 
 If you do not already run Traefik, use `/opt/traefik/docker-compose.yml`, replace the email,
