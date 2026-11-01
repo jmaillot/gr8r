@@ -19,7 +19,7 @@ deep-link path).
 - [x] **Phase 23: Email Deep Links & Creator Watching** - Every notification email links straight to the task, a logged-out click returns to that task after sign-in, and the task creator is auto-watched
 - [ ] **Phase 24: Operator Audit & Workspace-Admin Tier** - Every operator/admin session revocation writes a same-transaction, append-only audit row, and workspace admins get their own revocation tier on the same audited path
 - [x] **Phase 25: Keyring & Version-Aware Envelopes** - The boot migration filter becomes version-aware before any v2 envelope exists, and TOTP secrets carry a self-describing key-version envelope decrypted through a keyring (completed 2026-10-31)
-- [ ] **Phase 26: Re-Wrap Rotation & Key-Custody Runbook** - MASTER_KEY rotates via an idempotent boot-time re-wrap pass with no 2FA re-enrollment, and DEPLOY.md documents the full custody runbook
+- [x] **Phase 26: Re-Wrap Rotation & Key-Custody Runbook** - MASTER_KEY rotates via an idempotent boot-time re-wrap pass with no 2FA re-enrollment, and DEPLOY.md documents the full custody runbook (completed 2026-11-01)
 - [ ] **Phase 27: Due-Date Reminder Scheduler** - A dependency-free server-side pass notifies assignees before/on due dates, restart-safe and exactly-once, honoring per-type prefs and email deep links
 
 ## Phase Details
@@ -105,7 +105,7 @@ Plans:
   3. The pre-migration backup guarantee holds for the re-wrap pass (backup taken before any rewrite, transactional, rollback-safe)
   4. DEPLOY.md carries a runbook an operator can follow end-to-end: key generation/injection, adding the new key alongside the old, running rotation, verifying zero stale envelopes, backup-before-rotation, and the compromise policy (compromised key → honest full re-enrollment; rotation alone is not sufficient)
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 - [x] 26-03-PLAN.md
@@ -149,5 +149,5 @@ Plans:
 | 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
 | 24. Operator Audit & Workspace-Admin Tier | 3/3 | In Progress|  |
 | 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
-| 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | In Progress|  |
+| 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | Complete    | 2026-11-01 |
 | 27. Due-Date Reminder Scheduler | 0/? | Not started | - |
