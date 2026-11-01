@@ -24,7 +24,12 @@ const enabledSecrets = new Map();
 
 /* Reset the D-04 baseline (test-side DB access) so a current-window code verifies. */
 function resetLastStep(email, srv = server) {
-  withDb(srv.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email));
+  withDb(srv.dbPath, db => {
+    db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email);
+    /* Phase 31: the login verify reads the per-factor guard (D-06) — zero it
+       alongside the users column so a post-enable code stays deterministic. */
+    db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run(email);
+  });
 }
 
 before(async () => {

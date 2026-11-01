@@ -24,7 +24,12 @@ const enabledSecrets = new Map();
 /* Deterministic 2FA sign-in: reset the D-04 baseline (test-side DB access) so
    a current-window code verifies, then complete the login challenge. */
 async function signIn2fa(email) {
-  withDb(server.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email));
+  withDb(server.dbPath, db => {
+    db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email);
+    /* Phase 31: the login verify reads the per-factor guard (D-06) — zero it
+       alongside the users column so a current-window code verifies. */
+    db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run(email);
+  });
   const secret = enabledSecrets.get(email);
   assert.ok(secret, `a tracked 2FA secret for ${email}`);
   const a = await loginTfa(server.base, email, GOOD, totpAt(secret, Date.now() / 1000));

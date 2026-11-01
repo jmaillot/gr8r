@@ -125,6 +125,22 @@ const SCHEMA = `
     two_fa_last_step integer not null default 0,
     is_instance_admin integer not null default 0
   );
+  /* TOTP2 (Phase 31, D-06): the totp_factors single source of truth. Additive
+     create-if-not-exists — boot-time idempotent by construction
+     (second boot is a no-op for free). One row per enrolled factor; the
+     migrated primary carries the users-column envelope verbatim (decrypt-free
+     copy) and last_step seeded from two_fa_last_step (D-09 replay-guard
+     continuity). users.two_fa_secret / two_fa_last_step stay in schema kept,
+     unread after migration (D-08); users.two_fa_enabled stays the switch. */
+  create table if not exists totp_factors (
+    id         text primary key,
+    user_id    text not null references users(id) on delete cascade,
+    name       text not null,
+    secret     text not null,
+    last_step  integer not null default 0,
+    created_at integer not null
+  );
+  create index if not exists totp_factors_user on totp_factors(user_id);
   create table if not exists sessions (
     token_hash text primary key,
     user_id    text not null references users(id) on delete cascade,
@@ -418,6 +434,29 @@ function stashPendingTfa(userId, secret, otpauth) {
   pendingTfa.set(userId, { secret, otpauth, expiresAt: t + PENDING_TFA_TTL });
   // Lazy sweep, same shape as the attempts Map — bounded memory (T-16-08).
   if (pendingTfa.size > 5000) for (const [k, v] of pendingTfa) if (t > v.expiresAt) pendingTfa.delete(k);
+}
+
+/* TOTP2 (Phase 31, D-10/D-11/D-12): the shared factor-loop verifier — the ONE
+   runtime TOTP verification surface for enrolled factors. Loads every
+   totp_factors row in enrollment order, decrypts each through
+   requireTotpSecret (D-77: the ONLY boundary — never decryptTotpSecret
+   directly) and skips an undecryptable factor alone, failing closed for that
+   factor only (D-12). First matching code short-circuits (D-11); the caller
+   counts ONE failed attempt per submission regardless of factor count.
+   decrypted === 0 tells the caller nothing was verifiable → fail closed 503
+   (Pitfall 3). Callers persist matchedStep to the matched factor's last_step
+   — the users.two_fa_last_step column is never written from here (D-06). */
+function verifyTotpAgainstFactors(userId, code, nowSec) {
+  const rows = db.prepare('select id, secret, last_step from totp_factors where user_id = ? order by created_at').all(userId);
+  let decrypted = 0;
+  for (const row of rows) {
+    const wrapped = requireTotpSecret(row.secret);
+    if (!wrapped.ok) continue; // D-12: undecryptable factor skipped alone
+    decrypted++;
+    const verified = verifyTotpCode(wrapped.secret, code, row.last_step || null, nowSec);
+    if (verified.ok) return { ok: true, factorId: row.id, matchedStep: verified.matchedStep, decrypted };
+  }
+  return { ok: false, decrypted };
 }
 
 /* --------------------------- tenancy helpers --------------------------- */
@@ -1425,6 +1464,11 @@ function bootstrap(opts) {
      always exists here. */
   migrateTeamMembership(db);
   migrateTotpEncryption();
+  /* TOTP2 (Phase 31): one-time primary-factor copy into totp_factors (D-06).
+     AFTER migrateTotpEncryption — a legacy plaintext secret is already sealed
+     before the copy carries the envelope over (migration order is
+     load-bearing, Pitfall 2 discipline). */
+  migrateTotpFactors();
   migrateTotpReWrap();
   ensureAdmin(opts);
   stampInstanceAdmin();
@@ -1714,6 +1758,62 @@ function migrateTotpEncryption() {
 }
 
 /*
+ * TOTP2 (Phase 31, D-06/D-09): one-time boot copy of the primary 2FA factor
+ * into totp_factors — the single-source-of-truth migration. A legacy 2FA user
+ * (two_fa_enabled = 1, non-empty two_fa_secret) gets exactly one factor row
+ * whose secret is the users-column envelope copied VERBATIM (decrypt-free —
+ * no MASTER_KEY gate, RESEARCH Open Question 3) and whose last_step is the
+ * users two_fa_last_step value (D-09 replay-guard continuity: no window where
+ * a pre-migration code replays). Structure mirrors migrateTotpEncryption
+ * (D-83 trigger gate → backup → transaction → summary):
+ *   - zero eligible rows → return BEFORE any backup or console output
+ *     (byte-identical second boot);
+ *   - JS anti-join: users that already have any totp_factors row are skipped;
+ *   - D-75: per-row re-check inside the transaction — defense in depth
+ *     against double-copy;
+ *   - name is the fixed catalogue key (D-07 — localized at display time,
+ *     never free text).
+ * D-06 reversibility: one-way — the copy IS the migration, pinned by
+ * test/migration.test.mjs + test/tfa-multi-factor.test.mjs.
+ */
+function migrateTotpFactors() {
+  const eligibleRows = () =>
+    db
+      .prepare("select id, two_fa_secret, two_fa_last_step from users where two_fa_enabled = 1 and two_fa_secret is not null and two_fa_secret != ''")
+      .all()
+      .filter(row => !db.prepare('select 1 from totp_factors where user_id = ?').get(row.id));
+  let rows = eligibleRows();
+  if (rows.length === 0) return;
+
+  // D-74: backup first — failure skips the copy entirely this boot, no mutation.
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-prefactors-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    db.exec('pragma wal_checkpoint(truncate)');
+    db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    console.log(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    console.error(`  TOTP factor copy skipped: pre-migration backup failed: ${err.message}`);
+    return;
+  }
+
+  let copied = 0;
+  transaction(() => {
+    // D-75: per-row re-check inside the transaction — defense in depth
+    // against double-copy (anti-pattern: candidate filter drifting apart).
+    rows = eligibleRows();
+    const insert = db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)');
+    for (const row of rows) {
+      insert.run(uid(), row.id, 'settings.tfa.factor.primary', row.two_fa_secret, row.two_fa_last_step || 0, now());
+      copied++;
+    }
+  });
+  // D-76: outcomes on console only — counts + user ids, never secrets.
+  if (copied > 0) console.log(`  TOTP factors: copied ${copied} primary factor row(s) into totp_factors (D-06/D-09).`);
+}
+
+/*
  * D-K15: boot-time re-wrap rotation pass — the sibling that converges every
  * old-envelope secret onto the CURRENT key. An operator rotates MASTER_KEY by
  * setting MASTER_KEY (new) + MASTER_KEY_PREVIOUS (old) and rebooting; one boot
@@ -1746,11 +1846,21 @@ function migrateTotpReWrap() {
   // SQL prefilter broad, JS predicate authoritative (same discipline as the
   // encryption pass, WR-02): `v_:%` is the broad SQLite net, isStaleEnvelope
   // is the per-row authority — SQL/JS drift can never widen the mutation set.
-  const staleCandidates = () =>
-    db
+  // TOTP2 (Phase 31, D-06): totp_factors rows ride the SAME rotation pass —
+  // a factor row left under the old key would brick TOTP login after the
+  // users column converges. One pass, one backup, one summary.
+  const staleCandidates = () => [
+    ...db
       .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
       .all()
-      .filter(row => isStaleEnvelope(row.two_fa_secret, currentId));
+      .filter(row => isStaleEnvelope(row.two_fa_secret, currentId))
+      .map(row => ({ table: 'users', id: row.id, value: row.two_fa_secret })),
+    ...db
+      .prepare("select id, secret from totp_factors where secret is not null and secret != '' and secret like 'v_:%'")
+      .all()
+      .filter(row => isStaleEnvelope(row.secret, currentId))
+      .map(row => ({ table: 'totp_factors', id: row.id, value: row.secret })),
+  ];
   const rows = staleCandidates();
   if (rows.length === 0) {
     // Zero stale candidates: byte-identical no-op — no backup, no writes.
@@ -1801,7 +1911,7 @@ function migrateTotpReWrap() {
     // (anti-pattern: filter and re-check drifting apart, T-26-04).
     const txnRows = staleCandidates();
     for (const row of txnRows) {
-      const value = String(row.two_fa_secret || '').trim();
+      const value = String(row.value || '').trim();
       const tag = (value.split(':', 1)[0] || '').toLowerCase();
       // D-K8 trial order: current first, then PREVIOUS (v1 has no key id);
       // v2 dispatches through the keyring, which resolves stale ids.
@@ -1813,7 +1923,7 @@ function migrateTotpReWrap() {
             : null;
       if (plaintext === null) {
         undecryptable++;
-        console.warn(`  TOTP re-wrap: user ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`);
+        console.warn(`  TOTP re-wrap: ${row.table === 'users' ? 'user' : 'factor row'} ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`);
         continue; // byte-identical, never deleted (D-K9)
       }
       // D-K10: the ONLY writer is encryptTotpSecret(…, 'v2') — never re-key as v1.
@@ -1822,7 +1932,8 @@ function migrateTotpReWrap() {
         sealFailed++;
         continue;
       }
-      db.prepare('update users set two_fa_secret = ? where id = ?').run(envelope, row.id);
+      if (row.table === 'users') db.prepare('update users set two_fa_secret = ? where id = ?').run(envelope, row.id);
+      else db.prepare('update totp_factors set secret = ? where id = ?').run(envelope, row.id);
       rewrapped++;
     }
   });
@@ -2439,6 +2550,18 @@ async function handleApi(req, res, url) {
     // rotate recovery codes (D-53), clear the pending entry.
     transaction(() => {
       db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = ? where id = ?').run(envelope, verified.matchedStep, user.id);
+      // TOTP2 (Phase 31, D-06): the factor row is the single source of truth —
+      // the first-ever enable inserts it alongside the users columns so the
+      // any-factor verify path sees it without a reboot. First-ever semantics
+      // (recovery rotation, the enable flip) are unchanged.
+      db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)').run(
+        uid(),
+        user.id,
+        'settings.tfa.factor.primary',
+        envelope,
+        verified.matchedStep,
+        now(),
+      );
       db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
       const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
       for (const code0 of codes) {
@@ -2484,6 +2607,10 @@ async function handleApi(req, res, url) {
       // from a first one. two_fa_last_step resets to its NOT NULL default 0
       // (the no-baseline sentinel from Phase 14).
       db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?").run(user.id);
+      // TOTP2 (Phase 31, D-06/D-18): the factor rows die with 2FA — the
+      // no-half-state guarantee (a fresh enroll afterwards is indistinguishable
+      // from a first one, and the boot copy's anti-join never resurrects rows).
+      db.prepare('delete from totp_factors where user_id = ?').run(user.id);
       db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
       // D-103: all pending 2FA login challenges die with 2FA — keyed on
       // user_id ONLY (an unscoped or token-keyed variant either misses rows
@@ -2606,14 +2733,18 @@ async function handleApi(req, res, url) {
       }
       let recoveryRemaining;
       if (/^\d{6}$/.test(code.trim())) {
-        // D-06: an undecryptable secret fails closed before any mutation.
-        // D-77: the decrypt runs only through requireTotpSecret — no plaintext fallback.
-        const wrapped = requireTotpSecret(user.two_fa_secret);
-        if (!wrapped.ok) return 'masterKey';
-        // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
-        const verified = verifyTotpCode(wrapped.secret, code, user.two_fa_last_step || null, Math.floor(now() / 1000));
-        if (!verified.ok) return 'code';
-        db.prepare('update users set two_fa_last_step = ? where id = ?').run(verified.matchedStep, user.id);
+        // D-06/D-10: the shared factor-loop verifier — an undecryptable factor
+        // set fails closed before any mutation; every factor decrypt runs
+        // through requireTotpSecret inside the helper (D-77), no plaintext
+        // fallback. decrypted === 0 → 503 (Pitfall 3). One attempt per
+        // submission regardless of factor count (D-11 — the increment above
+        // already consumed it).
+        const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+        if (result.decrypted === 0) return 'masterKey';
+        if (!result.ok) return 'code';
+        // D-04/D-09: the replay guard advances on the MATCHED FACTOR's row —
+        // no two_fa_last_step writes remain on this path (Pitfall 5).
+        db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
       } else {
         // D-64/D-72 recovery shape: the race-safe conditional burn — a used
         // (or unknown) code matches zero eligible rows.

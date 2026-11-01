@@ -464,7 +464,7 @@ test('totp_factors rides the additive-migration discipline — byte-identical ac
       const exists = db.prepare("select count(*) as n from sqlite_master where type = 'table' and name = 'totp_factors'").get().n;
       return exists ? db.prepare('select count(*) as n from totp_factors').get().n : -1;
     });
-  assert.equal(factorRowCount(), -1, 'the legacy fixture boots without 2FA users — nothing to copy yet');
+  assert.equal(factorRowCount(), 0, 'the fixture has no 2FA users — zero factor rows, the copy never fires');
   const ddl = factorDdl();
   const rows = factorRowCount();
   await server.stop();

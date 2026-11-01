@@ -27,7 +27,12 @@ const VARIANTS = [
   ['valid-envelope-no-key', 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCC'],
 ];
 const plant = (dbPath, email, value) =>
-  withDb(dbPath, db => db.prepare('update users set two_fa_secret = ? where email = ?').run(value, email));
+  withDb(dbPath, db => {
+    db.prepare('update users set two_fa_secret = ? where email = ?').run(value, email);
+    /* Phase 31: the login verify reads totp_factors (D-06) — a plant syncs the
+       user's factor rows too, so the two stores never disagree in this suite. */
+    db.prepare('update totp_factors set secret = ? where user_id = (select id from users where email = ?)').run(value, email);
+  });
 const userRow = (dbPath, email) => withDb(dbPath, db => db.prepare('select * from users where email = ?').get(email));
 
 /* ---------- D-78a: the grep proof — no plaintext fallback can exist ---------- */
@@ -83,11 +88,19 @@ test('decryptTotpSecret is referenced ONLY by its definition, requireTotpSecret,
 });
 
 test('both call sites branch on wrapped.ok and feed wrapped.secret to verifyTotpCode', () => {
-  /* Phase 20 added the third surface (regen route); every added surface must
-     keep the wrapper + fail-closed shape (D-77/D-89), so the count is a
-     tracked floor per route, not a hard 2. */
-  assert.equal((serverSource.match(/const wrapped = requireTotpSecret\(/g) || []).length, 3, 'expected three wrapped call sites (disable, verify, regen)');
-  assert.equal((serverSource.match(/if \(!wrapped\.ok\) return 'masterKey';/g) || []).length, 3, 'all call sites must branch on ok:false');
+  /* Phase 31 (TOTP2): the login second step now verifies through the shared
+     verifyTotpAgainstFactors helper, so the three `wrapped` call sites are the
+     helper, the disable step-up and the regen route. The helper skips an
+     undecryptable factor with `continue` (D-12) instead of the route-level
+     `return 'masterKey'`, so the masterKey-branch pin drops 3→2 — documented,
+     deliberate (RESEARCH Pitfall 1); Plan 02 finalizes the remaining counts
+     when disable/regen convert to the helper. */
+  assert.equal((serverSource.match(/const wrapped = requireTotpSecret\(/g) || []).length, 3, 'expected three wrapped call sites (helper, disable, regen)');
+  assert.equal(
+    (serverSource.match(/if \(!wrapped\.ok\) return 'masterKey';/g) || []).length,
+    2,
+    "route call sites must branch on ok:false — the helper uses `continue` per D-12 (undecryptable factor skipped alone)",
+  );
   assert.equal((serverSource.match(/verifyTotpCode\(wrapped\.secret/g) || []).length, 3, 'wrapped.secret must feed verifyTotpCode');
 });
 
@@ -124,13 +137,26 @@ after(async () => {
 
 const GOOD = 'correct-horse-9';
 /* 2FA-enabled row planted straight into SQL — this suite proves the decrypt boundary,
-   not enrollment (covered by tfa-enrollment.test.mjs). */
+   not enrollment (covered by tfa-enrollment.test.mjs). Phase 31: the login verify
+   reads totp_factors, so an enabled plant also seeds its factor row with the same
+   envelope (mirroring what the boot copy / enable path would have written). */
 async function make2faUser(server, email) {
   const s = await signup(server.base, { name: email.split('@')[0], email, password: GOOD });
   assert.equal(s.status, 201, `signup of ${email}`);
-  withDb(server.dbPath, db =>
-    db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = 7 where email = ?').run('v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCC', email),
-  );
+  withDb(server.dbPath, db => {
+    db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = 7 where email = ?').run(
+      'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+      email,
+    );
+    const row = db.prepare('select id, two_fa_secret from users where email = ?').get(email);
+    db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,7,?)').run(
+      crypto.randomUUID(),
+      row.id,
+      'settings.tfa.factor.primary',
+      row.two_fa_secret,
+      Date.now(),
+    );
+  });
   return s.client;
 }
 
@@ -293,8 +319,21 @@ function wrapV2(secret, material) {
 }
 
 const enableFor = (server, email) =>
-  withDb(server.dbPath, db =>
-    db.prepare('update users set two_fa_enabled = 1, two_fa_last_step = 0 where email = ?').run(email));
+  /* Phase 31: an enabled plant also seeds the totp_factors row with the same
+     envelope — the login verify reads the factor table (D-06). */
+  withDb(server.dbPath, db => {
+    db.prepare('update users set two_fa_enabled = 1, two_fa_last_step = 0 where email = ?').run(email);
+    const row = db.prepare('select id, two_fa_secret from users where email = ?').get(email);
+    /* D-K5 callers enable BEFORE planting a secret — a placeholder envelope
+       keeps the NOT NULL shape; the subsequent plant overwrites both stores. */
+    db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,0,?)').run(
+      crypto.randomUUID(),
+      row.id,
+      'settings.tfa.factor.primary',
+      row.two_fa_secret || 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+      Date.now(),
+    );
+  });
 
 test('tracer: a planted v2 envelope with the current key id verifies through the real login path (SC-2)', async () => {
   const email = 'v2-current@test.local';
@@ -410,10 +449,13 @@ test('writer flip: real enrollment stores a v2 envelope with the CURRENT key id 
     );
     assert.equal(row.two_fa_enabled, 1, 'the enable flip persisted');
     /* D-04 baseline reset: this suite proves the decrypt boundary, not the
-       replay guard (tfa-login owns that) — a zeroed last_step makes the SC-2
-       round-trip deterministic regardless of the 30s TOTP period boundary. */
-    withDb(dir + '/projects.db', db =>
-      db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email));
+       replay guard (tfa-login owns that) — a zeroed per-factor last_step makes
+       the SC-2 round-trip deterministic regardless of the 30s TOTP period
+       boundary. The login verify reads totp_factors (Phase 31, D-06). */
+    withDb(dir + '/projects.db', db => {
+      db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email);
+      db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run(email);
+    });
     // SC-2 end-to-end: a fresh login verifies against the stored v2 envelope.
     const c = await login(s.base, email, GOOD);
     assert.ok(c.data?.pending2fa, 'a 2FA-enabled account answers pending2fa at the password step');

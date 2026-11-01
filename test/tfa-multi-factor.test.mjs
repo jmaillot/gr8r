@@ -47,6 +47,10 @@ before(async () => {
   const row = withDb(boot.dbPath, db => db.prepare('select two_fa_secret, two_fa_last_step from users where email = ?').get(EMAIL));
   legacy = { secret: row.two_fa_secret, lastStep: row.two_fa_last_step };
   assert.ok(legacy.secret, 'the legacy state has a non-empty secret envelope');
+  /* Revert to the TRUE legacy shape: a users row with no factor row yet. The
+     production enable path now inserts the factor row itself (D-06) — deleting
+     it here recreates the pre-migration state the boot copy must migrate. */
+  withDb(boot.dbPath, db => db.prepare('delete from totp_factors').run());
   await boot.stop();
 
   server = await startServer({ dataDir, env: { MASTER_KEY: KEY } }); // the migration boot
