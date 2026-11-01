@@ -43,7 +43,7 @@ authority-row discipline the rest of the milestone builds on.
      change in one session survives the other session's doc write (regression test green).
   5. An existing single-team install migrates additively with a pre-migration backup and a
      byte-identical second boot, pinned in `test/migration.test.mjs`.
-**Plans**: 3/3 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -54,6 +54,9 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 28-03-PLAN.md — multi-team invites end-to-end (D-07), scalar sweep completion, full-suite gate
+
+**Wave 4** *(gap closure — verification truth 6 / TEAM-04)*
+- [x] 28-04-PLAN.md — picker filter gap closure: `assignableInProject` predicate wired into assignee/subassignee/ctx pickers (T-28-10 mitigation basis)
 
 **UI hint**: yes
 

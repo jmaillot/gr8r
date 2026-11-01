@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
 current_phase: 28
-current_phase_name: multi-team-membership
+current_phase_name: Multi-Team Membership
 status: executing
 stopped_at: Phase 28 context gathered
-last_updated: "2026-11-01T18:49:09.918Z"
+last_updated: "2026-11-01T18:50:00.399Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 28 execution started
-state_head: 278f26f90451a2e39af92292f24433312671e0e4
+state_head: 56d401fc9265191c4dc54eacdace10616ccdc83f
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 100
 ---
 
 # STATE.md
@@ -28,12 +28,15 @@ progress:
 
 ## Current Position
 
-Phase: 28 (multi-team-membership) — READY TO EXECUTE
-Plan: 1 of 3
-Status: Ready to execute
-Last activity: 2026-11-01 — Phase 28 execution started
+Phase: 28 (Multi-Team Membership) — EXECUTING
+Plan: 4 of 4
+Status: Executing Phase 28
+Last activity: 2026-11-01 — Completed 28-04-PLAN.md (TEAM-04 picker filter gap closure)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100% of phase plans (4/4)
+
+## Recent Decisions
+- 28-04: picker predicate `assignableInProject` — empty teams[] = unscoped project (all members assignable); current assignee always offered; bulk-assignee popover intentionally unfiltered (cross-project)
 
 ## v1.6 Phase Order (research-validated build order)
 
