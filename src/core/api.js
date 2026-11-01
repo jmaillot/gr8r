@@ -310,6 +310,17 @@ export const api = {
   async tfaFactors() {
     return call('GET', '/api/auth/tfa/factors');
   },
+  /* TOTP2 (Phase 31, Plan 02/03): the additional-factor lifecycle. Enroll
+     requires a label (D-02) plus the password + existing-factor step-up
+     (TOTP2-05) BEFORE any secret is revealed; enable verifies the staged
+     secret; remove is the password + live-code confirm (D-19). Auth-scoped,
+     no workspace slug. */
+  async tfaFactorEnroll({ currentPassword, code, label }) {
+    return call('POST', '/api/auth/tfa/factors/enroll', { currentPassword, code, label });
+  },
+  async tfaFactorEnable({ stagedId, code }) {
+    return call('POST', '/api/auth/tfa/factors/enable', { stagedId, code });
+  },
   /* TFA-05: verify the pending login challenge. Deliberately NO applyUser here —
      the caller (doTfaLogin) adopts the user through the shared post-success flow. */
   async tfaLogin(code) {

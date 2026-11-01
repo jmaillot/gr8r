@@ -484,7 +484,12 @@ export function settingsBody(sec, title) {
           srow(
             t('settings.tfa.on'),
             t('settings.tfa.onDesc'),
-            stage ? '' : `<button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regenShort')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('act.turnOff')}</button>`,
+            /* TOTP2 (D-01): "Add factor" relaunches the staged wizard — hidden
+               while any stage is open and for first-ever enrollment (zero
+               factors; the legacy password-only setup wizard owns that path). */
+            stage || !factors.length
+              ? ''
+              : `<button class="btn btn-secondary" data-a="tfaAddFactor">${t('settings.tfa.addFactor')}</button><button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regenShort')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('act.turnOff')}</button>`,
           ) +
           factors
             .map(f =>
@@ -512,6 +517,35 @@ export function settingsBody(sec, title) {
                 <span class="err">${ic('circle-alert', 12)}${t('settings.tfa.regenWarning')}</span>
                 <div class="row"><button class="btn btn-primary" data-a="tfaRegenConfirm" id="tfa-regen-save">${t('settings.tfa.regen')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
               </form>`
+            : '') +
+          /* TOTP2 (Phase 31, Plan 03) — the Add-factor wizard stages (D-02/D-04):
+             name → password + existing-factor code → QR/verify. The verify stage
+             clones the first-enrollment QR rendering; the secret fallback stays
+             monospace, read-only, copyable. */
+          (stage === 'addName'
+            ? `<form data-submit="tfaAddFactorName" class="col" style="gap:14px;max-width:400px;margin-top:14px">
+                ${fld('tfa-add-name', t('settings.tfa.addNameLabel'), 'tfaAddName', 'maxlength="64"')}
+                <span class="hint">${t('settings.tfa.addNameHint')}</span>
+                <div class="row"><button class="btn btn-primary" data-a="tfaAddFactorName" id="tfa-add-name-save">${t('common.next')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
+              </form>`
+            : '') +
+          (stage === 'addPw'
+            ? `<form data-submit="tfaAddFactorPw" class="col" style="gap:14px;max-width:400px;margin-top:14px">
+                ${fld('tfa-add-pw', t('settings.tfa.pwLabel'), 'tfaAddPw', 'type="password" autocomplete="current-password"')}
+                ${fld('tfa-add-pw-code', t('settings.tfa.addPwCodeLabel'), 'tfaAddPwCode', 'autocomplete="one-time-code" inputmode="numeric"')}
+                <span class="hint">${t('settings.tfa.addPwHint')}</span>
+                <div class="row"><button class="btn btn-primary" data-a="tfaAddFactorPw" id="tfa-add-pw-save">${t('common.next')}</button><button type="button" class="btn btn-secondary" data-a="tfaCancel">${t('common.cancel')}</button></div>
+              </form>`
+            : '') +
+          (stage === 'addVerify'
+            ? `<div class="sblock" style="margin-top:14px"><div class="col" style="gap:14px;max-width:400px">
+                <div class="field"><span class="label">${t('settings.tfa.scan')} — ${esc(S.ui.tfaLabel || '')}</span><div style="margin-top:8px">${renderQrSvg(S.ui.tfaOtpauth || '')}</div><span class="hint">${t('settings.tfa.appHint')}</span></div>
+                <div class="field"><label class="label" for="tfa-add-secret">${t('settings.tfa.cantScan')}</label><div class="row" style="gap:0"><input class="input" id="tfa-add-secret" readonly value="${esc(S.ui.tfaSecret || '')}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.tfaSecret || '')}">${t('settings.tfa.copy')}</button></div></div>
+                <form data-submit="tfaAddFactorVerify" class="col" style="gap:14px">
+                  ${fld('tfa-add-code', t('settings.tfa.enterCode'), 'tfaAddCode', 'autocomplete="one-time-code" inputmode="numeric"')}
+                  <div><button class="btn btn-primary" data-a="tfaAddFactorVerify" id="tfa-add-verify-save">${t('settings.tfa.verify')}</button></div>
+                </form>
+              </div></div>`
             : '')
         );
       }

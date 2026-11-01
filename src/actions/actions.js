@@ -2748,6 +2748,13 @@ A.tfaStart = () => {
 A.tfaCancel = () => {
   S.ui.errors = {};
   S.ui.tfaStage = null;
+  /* TOTP2: the add-factor wizard's transient staging rides the same cancel —
+     no staged secret or id outlives the stage. */
+  S.ui.tfaSecret = null;
+  S.ui.tfaOtpauth = null;
+  S.ui.tfaStagedId = null;
+  S.ui.tfaLabel = null;
+  S.ui.tfaRemoveId = null;
   render();
 };
 A.tfaBeginEnroll = () => {
@@ -2862,6 +2869,94 @@ A.tfaRegenConfirm = () => {
     openModal({ type: 'recovery' });
     await refreshTfa();
     toast(t('settings.tfa.regenToast'));
+  });
+};
+/* TOTP2 (Phase 31, Plan 03) — the Add-factor wizard handlers (D-01/D-02/D-04,
+   TOTP2-05). Each clones A.tfaBeginEnroll's validation-then-loadingBtn-then-api
+   shape: errors cleared at stage entry, per-field error keys mapped from the
+   server codes, 503 mapped to the localized masterKeyMissing copy — the
+   response body never renders (D-58). */
+A.tfaAddFactor = () => {
+  S.ui.errors = {};
+  S.ui.tfaStage = 'addName';
+  render();
+};
+A.tfaAddFactorName = () => {
+  const e = (S.ui.errors = {});
+  const label = $('#tfa-add-name')?.value?.trim() || '';
+  /* D-02: a factor is never stored unnamed — the client mirrors the server's
+     labelRequired gate before anything else happens. */
+  if (!label) e.tfaAddName = t('err.labelRequired');
+  if (Object.keys(e).length) return render();
+  S.ui.tfaLabel = label;
+  S.ui.tfaStage = 'addPw';
+  render();
+};
+A.tfaAddFactorPw = () => {
+  const e = (S.ui.errors = {});
+  const pw = $('#tfa-add-pw')?.value || '';
+  const code = $('#tfa-add-pw-code')?.value?.trim() || '';
+  if (!pw) e.tfaAddPw = t('err.enterCurrentPassword');
+  if (!code) e.tfaAddPwCode = t('err.codeRequired');
+  else if (!/^\d{6}$/.test(code)) e.tfaAddPwCode = t('err.codeRejected'); // D-85 client half: 6-digit only
+  if (Object.keys(e).length) return render();
+  loadingBtn('tfa-add-pw-save', 0, async () => {
+    const res = await api.tfaFactorEnroll({ currentPassword: pw, code, label: S.ui.tfaLabel });
+    if (!res.ok) {
+      const c = res.data?.code;
+      if (c === 'wrongCurrentPassword' || c === 'passwordRequired') e.tfaAddPw = t('err.' + c);
+      else if (c === 'codeRejected' || c === 'tooManyAttempts') e.tfaAddPwCode = t('err.' + c);
+      else if (c === 'labelRequired' || c === 'labelTooLong') {
+        // back to the naming step with the field error
+        S.ui.tfaStage = 'addName';
+        e.tfaAddName = t('err.' + c);
+      } else if (c === 'tfaNotEnabled') {
+        S.ui.tfaStage = null; // no factors left (removed elsewhere) — back to the off state
+        e.tfaMsg = t('err.tfaNotEnabled');
+      } else e.tfaAddPw = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58: the 503 body never renders
+      return render();
+    }
+    S.ui.tfaSecret = res.data.secret;
+    S.ui.tfaOtpauth = res.data.otpauth;
+    S.ui.tfaStagedId = res.data.stagedId;
+    S.ui.tfaStage = 'addVerify';
+    render();
+  });
+};
+A.tfaAddFactorVerify = () => {
+  const e = (S.ui.errors = {});
+  const code = $('#tfa-add-code')?.value?.trim() || '';
+  if (!code) return render(); // empty submits nothing (TFA-02 empty edge)
+  loadingBtn('tfa-add-verify-save', 0, async () => {
+    const res = await api.tfaFactorEnable({ stagedId: S.ui.tfaStagedId, code });
+    if (!res.ok) {
+      const c = res.data?.code;
+      if (c === 'noPendingEnrollment') {
+        S.ui.tfaStage = null; // the staged setup expired — back to the factor list
+        S.ui.tfaStagedId = null;
+        S.ui.tfaSecret = null;
+        S.ui.tfaOtpauth = null;
+        e.tfaMsg = t('err.noPendingEnrollment');
+      } else if (c === 'codeRejected' || c === 'tooManyAttempts') {
+        e.tfaAddCode = t('err.' + c);
+      } else {
+        e.tfaAddCode = res.status === 503 ? t('err.masterKeyMissing') : t('err.serverUnreachable'); // D-58
+      }
+      return render();
+    }
+    S.ui.tfaStage = null; // stage cleared BEFORE the refresh (Pitfall 6)
+    S.ui.tfaStagedId = null;
+    S.ui.tfaSecret = null;
+    S.ui.tfaOtpauth = null;
+    S.ui.tfaLabel = null;
+    /* D-53 (Plan 02 contract): factors/enable returns rotated recovery codes
+       exactly once on the first-ever re-enable path — surface them through the
+       same transient modal, never persisted (D-91). */
+    if (res.data.recoveryCodes) S.ui.recoveryCodes = res.data.recoveryCodes;
+    render();
+    if (S.ui.recoveryCodes) openModal({ type: 'recovery' });
+    await refreshTfa();
+    toast(t('settings.tfa.factorAddedToast'));
   });
 };
 A.recoveryDismiss = () => {
