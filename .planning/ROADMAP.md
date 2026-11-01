@@ -129,14 +129,14 @@ Plans:
   4. Completed and archived tasks never receive reminders; an overdue task receives exactly one "past due" nudge, also deduped; changing a due date re-arms its reminders via the key
   5. Idle scheduler ticks never bump the workspace revision — active clients see no 409 storms; an interval-callback failure cannot kill the process
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 27-01-PLAN.md — Scheduler core: reminders_sent dedup table, tz helper, clock-injectable runReminderPass (day_before/morning_of/past_due), transactional claim+emit, email fan-out, Wave 0 tests (REM-01..05, wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 27-02-PLAN.md — Client surface: notifPrefs defaults + normalize-on-read (all ON), three Settings toggles, inbox filters/rendering for due_reminder/past_due, EN+FR i18n (REM-02/REM-05, wave 2, depends on 27-01)
+- [x] 27-02-PLAN.md — Client surface: notifPrefs defaults + normalize-on-read (all ON), three Settings toggles, inbox filters/rendering for due_reminder/past_due, EN+FR i18n (REM-02/REM-05, wave 2, depends on 27-01)
 
 ## Coverage
 
@@ -158,4 +158,4 @@ Plans:
 | 24. Operator Audit & Workspace-Admin Tier | 4/4 | Complete    | 2026-11-01 |
 | 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | Complete    | 2026-11-01 |
-| 27. Due-Date Reminder Scheduler | 1/2 | In Progress|  |
+| 27. Due-Date Reminder Scheduler | 2/2 | In Progress|  |

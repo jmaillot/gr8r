@@ -4,17 +4,17 @@ milestone: v1.5
 milestone_name: Reliability & Rotation
 current_phase: 27
 current_phase_name: Due-Date Reminder Scheduler
-status: executing
-stopped_at: Completed 27-01-PLAN.md
-last_updated: "2026-11-01T12:18:39.473Z"
+status: verifying
+stopped_at: Completed 27-02-PLAN.md
+last_updated: "2026-11-01T12:26:33.823Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 27 execution started
-state_head: 2506782d16cb9a682745194b41386e1bd65ebdfa
+state_head: 03785d600ef250aacdac6c8f20f64553fd6b894f
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
   percent: 80
 ---
 
@@ -30,7 +30,7 @@ progress:
 
 Phase: 27 (Due-Date Reminder Scheduler) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-01 — Phase 27 execution started
 
 Progress: [████████░░] 80%
@@ -81,6 +81,7 @@ Progress: [████████░░] 80%
 - [Phase 24]: 24-04: audit-trail client fetch is unconditional — only the server knows the caller's full admin/owner membership set (D-T3), the card self-guards via the null state (D-V1)
 - [Phase 27]: Workspace-shared tz = first membership member's profile tz; unknown/empty label falls back to UTC (A1 resolved)
 - [Phase 27]: Reminder clock injection via test-only /api/internal/reminder-pass route gated by REMINDER_TEST_TOKEN
+- [Phase 27]: Reminder prefs are flat boolean notifPrefs keys; catalogue keys camelCase (notif.dueReminder/pastDue) despite snake_case row types
 
 ### Pending Todos
 
@@ -97,8 +98,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-01T12:18:39.411Z
-Stopped at: Completed 27-01-PLAN.md
+Last session: 2026-11-01T12:26:33.762Z
+Stopped at: Completed 27-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -121,3 +122,4 @@ Resume file: None
 | Phase 26 P03 | 4 min | 2 tasks | 1 files |
 | Phase 24 P04 | 22 min | 2 tasks | 3 files |
 | Phase 27 P01 | 35m | 3 tasks | 2 files |
+| Phase 27 P02 | 25m | 2 tasks | 7 files |
