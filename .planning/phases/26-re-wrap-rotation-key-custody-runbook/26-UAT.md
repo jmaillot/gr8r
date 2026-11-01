@@ -1,32 +1,39 @@
 ---
-status: testing
+status: complete
 phase: 26-re-wrap-rotation-key-custody-runbook
 source: [26-VERIFICATION.md]
 started: 2026-11-01T09:07:31Z
-updated: 2026-11-01T09:07:31Z
+updated: 2026-11-01T10:00:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Live runbook walkthrough on staging (DEPLOY.md §14 end-to-end)
-expected: |
-  One-boot rotation verified on a real deployment: configure the new key + MASTER_KEY_PREVIOUS, reboot, D-K13 stale query returns 0, 2FA users log in without re-enrolling, and a second boot is a no-op.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
 ### 1. Live runbook walkthrough on staging
 expected: Follow DEPLOY.md §14 end-to-end (env config, reboot, D-K13 query returns 0, no re-enrollment, second boot no-op)
-result: [pending]
+result: issue
+reported: "unable to login after rotation"
+severity: blocker
 
 ## Summary
 
 total: 1
 passed: 0
-issues: 0
-pending: 1
+issues: 1
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+- gap_id: G-26-1
+  truth: "One-boot rotation: 2FA users log in without re-enrolling after rotation boot"
+  status: failed
+  reason: "User reported: unable to login after rotation"
+  severity: blocker
+  test: 1
+  artifacts: []
+  missing: []
