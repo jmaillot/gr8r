@@ -87,21 +87,27 @@ test('decryptTotpSecret is referenced ONLY by its definition, requireTotpSecret,
   assert.equal(serverSource.indexOf('function requireTotpSecret('), wrapperAt, 'requireTotpSecret defined exactly once');
 });
 
-test('both call sites branch on wrapped.ok and feed wrapped.secret to verifyTotpCode', () => {
-  /* Phase 31 (TOTP2): the login second step now verifies through the shared
-     verifyTotpAgainstFactors helper, so the three `wrapped` call sites are the
-     helper, the disable step-up and the regen route. The helper skips an
-     undecryptable factor with `continue` (D-12) instead of the route-level
-     `return 'masterKey'`, so the masterKey-branch pin drops 3→2 — documented,
-     deliberate (RESEARCH Pitfall 1); Plan 02 finalizes the remaining counts
-     when disable/regen convert to the helper. */
-  assert.equal((serverSource.match(/const wrapped = requireTotpSecret\(/g) || []).length, 3, 'expected three wrapped call sites (helper, disable, regen)');
+test('the shared helper is the ONLY wrapped call site — step-ups verify any factor through it (D-10/D-12)', () => {
+  /* Phase 31 Plan 02 final shape (D-10): the disable step-up and the regen
+     route verify through verifyTotpAgainstFactors, so the only
+     `const wrapped = requireTotpSecret(` occurrence is inside the helper
+     (count 1) and the only verifyTotpCode(wrapped.secret is the helper's.
+     The helper skips an undecryptable factor with `continue` (D-12) instead
+     of a route-level `return 'masterKey'` — zero such branches may bypass
+     the helper. The pending-2FA enable challenge verifies the STAGED pending
+     secret directly (no wrapped local, no factor-row lookup — Pitfall 2). */
+  assert.equal((serverSource.match(/const wrapped = requireTotpSecret\(/g) || []).length, 1, 'the helper is the only wrapped call site (D-10)');
+  assert.equal((serverSource.match(/verifyTotpCode\(wrapped\.secret/g) || []).length, 1, 'wrapped.secret must feed verifyTotpCode inside the helper only');
+  assert.equal(
+    (serverSource.match(/if \(!wrapped\.ok\) continue;/g) || []).length,
+    1,
+    'the helper must skip an undecryptable factor alone (D-12)',
+  );
   assert.equal(
     (serverSource.match(/if \(!wrapped\.ok\) return 'masterKey';/g) || []).length,
-    2,
-    "route call sites must branch on ok:false — the helper uses `continue` per D-12 (undecryptable factor skipped alone)",
+    0,
+    'zero route-level masterKey returns may bypass the helper (D-12)',
   );
-  assert.equal((serverSource.match(/verifyTotpCode\(wrapped\.secret/g) || []).length, 3, 'wrapped.secret must feed verifyTotpCode');
 });
 
 test('the per-route 503 body copies are byte-identical to pre-refactor server.js (D-81)', () => {
@@ -254,7 +260,13 @@ test('positive control: with a valid envelope AND a matching MASTER_KEY nothing 
   withDb(keyServer.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run('happy@test.local'));
   const enable = await c.post('/api/auth/tfa/enable', { code: totpAt(enroll.data.secret, Date.now() / 1000) });
   assert.equal(enable.status, 200, `enable succeeded: ${JSON.stringify(enable.data)}`);
-  withDb(keyServer.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run('happy@test.local'));
+  withDb(keyServer.dbPath, db => {
+    db.prepare('update users set two_fa_last_step = 0 where email = ?').run('happy@test.local');
+    /* Phase 31 Plan 02: the disable step-up reads the per-factor guard now —
+       zero both stores so the fresh code cannot collide with the enable-time
+       matchedStep (30s window). */
+    db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run('happy@test.local');
+  });
   const res = await disableWithCode(c, totpAt(enroll.data.secret, Date.now() / 1000));
   assert.equal(res.status, 200, `disable with a live code must succeed: ${JSON.stringify(res.data)}`);
   const row = userRow(keyServer.dbPath, 'happy@test.local');

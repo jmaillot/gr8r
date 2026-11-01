@@ -260,10 +260,11 @@ test('D-108/T-21-06: a corrupted secret envelope fails closed 503 masterKeyMissi
   const a = await makeUser('disCorrupt', server2);
   const [secret] = await enableTfa(a, 'disCorrupt', server2);
 
+  // Plan 02: the decrypt boundary reads totp_factors — corrupt the factor row.
   withDb(server2.dbPath, db =>
     db
       .prepare(
-        "update users set two_fa_secret = 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC' where email = ?",
+        "update totp_factors set secret = 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC' where user_id = (select id from users where email = ?)",
       )
       .run('disCorrupt@test.local'),
   );

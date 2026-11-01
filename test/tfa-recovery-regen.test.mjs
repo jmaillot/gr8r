@@ -18,7 +18,12 @@ const enabledSecrets = new Map();
 
 /* Reset the D-04 baseline (test-side DB access) so a current-window code verifies. */
 function resetLastStep(email) {
-  withDb(server.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email));
+  withDb(server.dbPath, db => {
+    db.prepare('update users set two_fa_last_step = 0 where email = ?').run(email);
+    /* Phase 31 Plan 02: the regen step-up reads the per-factor guard (D-10) —
+       zero it alongside the users column so a current-window code verifies. */
+    db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run(email);
+  });
 }
 
 before(async () => {
@@ -104,7 +109,12 @@ test('REGEN-01/REGEN-02: password + live TOTP regenerates 10 hashed codes atomic
 
   const row = userRow('regenmain@test.local');
   assert.equal(row.two_fa_enabled, 1);
-  assert.ok(row.two_fa_last_step > 0, 'D-87: the replay-guard baseline advanced');
+  const factorRow = withDb(server.dbPath, db =>
+    db.prepare('select last_step from totp_factors where user_id = (select id from users where email = ?)').get('regenmain@test.local'),
+  );
+  /* Plan 02: D-87 advances the MATCHED FACTOR's last_step (D-10); the users
+     column is kept, unread (D-08). */
+  assert.ok(factorRow.last_step > 0, 'D-87: the replay-guard baseline advanced');
 
   const logs = securityRows('regenmain@test.local');
   assert.equal(logs.length, 1, 'D-99: exactly one security_log row');
@@ -191,13 +201,13 @@ test('a stale-window code is rejected (±1 window) and the 503 path fails closed
   const stepBefore = userRow('regenWindow@test.local').two_fa_last_step;
   assert.equal(before.length, 10, 'code set untouched by the rejected attempt');
 
-  // T-20-05/D-89: corrupt the stored envelope → requireTotpSecret fails →
-  // fail-closed 503 BEFORE any mutation (no usable-MASTER_KEY boot needed —
-  // the corrupted envelope exercises the identical decrypt-failure branch).
+  // T-20-05/D-89: corrupt the stored factor envelope → requireTotpSecret
+  // (inside the shared helper) fails → fail-closed 503 BEFORE any mutation.
+  // Plan 02: totp_factors is the runtime store — corruption targets it.
   withDb(server.dbPath, db =>
     db
       .prepare(
-        "update users set two_fa_secret = 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC' where email = ?",
+        "update totp_factors set secret = 'v1:AAAAAAAAAAAAAAAAAAAAAA:BBBBBBBBBBBBBBBBBBBBBBBBBBBB:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC' where user_id = (select id from users where email = ?)",
       )
       .run('regenWindow@test.local'),
   );

@@ -2532,9 +2532,13 @@ async function handleApi(req, res, url) {
       pendingTfa.delete(user.id);
       return fail(res, 409, 'noPendingEnrollment', 'Start the enrollment again — no pending setup');
     }
-    // ±1 window + D-04 replay guard vs the stored two_fa_last_step (16-01 contract).
-    const row = db.prepare('select two_fa_last_step from users where id = ?').get(user.id);
-    const verified = verifyTotpCode(pending.secret, code, row?.two_fa_last_step ?? null, Math.floor(now() / 1000));
+    // TOTP2 (Phase 31, RESEARCH Pattern 1/Pitfall 2): the pending challenge
+    // verifies the STAGED pending secret directly — NOT the shared factor
+    // helper, which loads totp_factors rows and would find none on a
+    // first-ever enable. The new factor carries its own null baseline (a
+    // fresh row has no replay history); no users.two_fa_last_step read
+    // remains here (D-08 kept-unread).
+    const verified = verifyTotpCode(pending.secret, code, null, Math.floor(now() / 1000));
     if (!verified.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
     // D-06/T-16-09: MASTER_KEY missing/undecryptable → fail closed BEFORE any
     // state mutation. The body names MASTER_KEY — admin-facing, never user copy.
@@ -2549,7 +2553,7 @@ async function handleApi(req, res, url) {
     // One atomic unit: flip on, write the D-05 envelope + D-04 baseline,
     // rotate recovery codes (D-53), clear the pending entry.
     transaction(() => {
-      db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ?, two_fa_last_step = ? where id = ?').run(envelope, verified.matchedStep, user.id);
+      db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ? where id = ?').run(envelope, user.id);
       // TOTP2 (Phase 31, D-06): the factor row is the single source of truth —
       // the first-ever enable inserts it alongside the users columns so the
       // any-factor verify path sees it without a reboot. First-ever semantics
@@ -2594,15 +2598,19 @@ async function handleApi(req, res, url) {
     // verify password + live TOTP, and tear down on success. No writes happen
     // on any miss, so a failed verify commits nothing.
     const outcome = transaction(() => {
-      const fresh = db.prepare('select password_hash, two_fa_secret, two_fa_last_step from users where id = ?').get(user.id);
+      const fresh = db.prepare('select password_hash from users where id = ?').get(user.id);
       if (!fresh || !verifyPassword(cur, fresh.password_hash)) return 'password';
-      // D-06: an undecryptable secret (missing MASTER_KEY, tampered envelope)
-      // fails closed 503 before any mutation. D-77: the decrypt runs only
-      // through requireTotpSecret — no plaintext fallback.
-      const wrapped = requireTotpSecret(fresh.two_fa_secret);
-      if (!wrapped.ok) return 'masterKey';
-      // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
-      if (!verifyTotpCode(wrapped.secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000)).ok) return 'code';
+      // TOTP2 (Phase 31, D-10): the step-up verifies a code from ANY enrolled
+      // factor through the shared helper. D-77: every decrypt runs through
+      // requireTotpSecret inside the helper — no plaintext fallback.
+      // decrypted === 0 → fail closed 503 (Pitfall 3) with the D-81 route
+      // copy unchanged.
+      const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+      if (result.decrypted === 0) return 'masterKey';
+      if (!result.ok) return 'code';
+      // D-04/D-09: the replay guard advances on the MATCHED FACTOR's row —
+      // no users.two_fa_last_step write on this path (Pitfall 5/D-08).
+      db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
       // D-59: complete teardown — a fresh enroll afterwards is indistinguishable
       // from a first one. two_fa_last_step resets to its NOT NULL default 0
       // (the no-baseline sentinel from Phase 14).
@@ -2656,18 +2664,18 @@ async function handleApi(req, res, url) {
     // verify both factors (D-86), then update the replay guard, burn-all and
     // insert-new — no writes happen on any miss.
     const outcome = transaction(() => {
-      const fresh = db.prepare('select password_hash, two_fa_enabled, two_fa_secret, two_fa_last_step from users where id = ?').get(user.id);
+      const fresh = db.prepare('select password_hash, two_fa_enabled from users where id = ?').get(user.id);
       if (!fresh || !fresh.two_fa_enabled) return 'notEnabled'; // D-95: before any factor check
       if (!verifyPassword(cur, fresh.password_hash)) return 'password'; // D-86: password first (D-94: try already consumed)
-      // D-06/D-89/D-77: the decrypt runs only through requireTotpSecret — an
-      // undecryptable secret fails closed 503 before any mutation.
-      const wrapped = requireTotpSecret(fresh.two_fa_secret);
-      if (!wrapped.ok) return 'masterKey';
-      // ±1 window + D-04 replay guard vs the stored two_fa_last_step.
-      const verified = verifyTotpCode(wrapped.secret, code, fresh.two_fa_last_step || null, Math.floor(now() / 1000));
-      if (!verified.ok) return 'code';
-      // D-87: keep the replay-guard baseline current in the SAME transaction.
-      db.prepare('update users set two_fa_last_step = ? where id = ?').run(verified.matchedStep, user.id);
+      // TOTP2 (Phase 31, D-10): the step-up verifies a code from ANY enrolled
+      // factor through the shared helper (D-77 boundary inside; decrypted === 0
+      // → fail closed 503, Pitfall 3).
+      const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+      if (result.decrypted === 0) return 'masterKey';
+      if (!result.ok) return 'code';
+      // D-87: keep the replay guard current in the SAME transaction — on the
+      // MATCHED FACTOR's row (no users.two_fa_last_step write, Pitfall 5/D-08).
+      db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
       db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
       const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
       for (const code0 of codes) {

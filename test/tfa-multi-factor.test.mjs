@@ -101,6 +101,12 @@ test('T3: the shared helper decrypts only through requireTotpSecret — never de
 });
 
 test('M2: the second boot is byte-identical — zero additional rows, schema unchanged, no copy output', async () => {
+  /* Refresh the baseline first: T1's successful login advanced the factor's
+     last_step (D-04), and Plan 02 retired the enable-time users write that
+     used to keep the pre-login copy in sync. M2 proves boot idempotency —
+     the snapshot must reflect the state the second boot starts FROM. */
+  factorSnap = factors();
+  schemaSnap = factorInfo();
   await server.stop();
   server = await startServer({ dataDir, env: { MASTER_KEY: KEY } }); // second boot, same dataDir
   assert.deepEqual(factors(), factorSnap, 'no additional rows after the second boot');

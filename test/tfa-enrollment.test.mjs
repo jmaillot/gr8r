@@ -115,8 +115,13 @@ test('TFA-03/TFA-04: enable with a live code flips 2FA on and issues 10 hashed r
   const row = userRow('enableme@test.local');
   assert.equal(row.two_fa_enabled, 1);
   assert.match(row.two_fa_secret, /^v2:[0-9a-f]{8}:[^:]+:[^:]+:[^:]+$/, 'D-K4: 5-part v2 envelope stored (enable path, frozen format)');
-  assert.equal(typeof row.two_fa_last_step, 'number');
-  assert.ok(row.two_fa_last_step > 0, 'the D-04 replay-guard baseline is the matched step');
+  const factorRow = withDb(server.dbPath, db =>
+    db.prepare('select last_step from totp_factors where user_id = (select id from users where email = ?)').get('enableme@test.local'),
+  );
+  /* Plan 02: the replay guard lives on the factor row (D-10) — the users
+     column is kept, unread (D-08). */
+  assert.equal(typeof factorRow.last_step, 'number');
+  assert.ok(factorRow.last_step > 0, 'the D-04 replay-guard baseline is the matched step');
 
   const rows = recoveryRows('enableme@test.local');
   assert.equal(rows.length, 10);
