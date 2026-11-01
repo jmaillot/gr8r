@@ -270,6 +270,33 @@ test('D-27-5: due_reminder/past_due prefs === false gate in-app rows; missing ke
   assert.ok(gated.every(n => n.type === 'due_reminder'), 'due reminders unaffected by past_due: false');
 });
 
+/* --------------------- D-27-5: defaults ON, plan 02 --------------------- */
+
+test('D-27-5: a new workspace seeds email_reminder/due_reminder/past_due as true', async () => {
+  const owner = owners.get(server.base);
+  const created = await owner.c.post('/api/workspaces', { name: `Ws${++seq}`, slug: `ws-${seq}` });
+  assert.equal(created.status, 201, 'workspace created');
+  const res = await owner.c.get(`/api/workspaces/ws-${seq}`);
+  assert.equal(res.status, 200, 'workspace fetched');
+  const np = res.data.doc.data.notifPrefs;
+  assert.equal(np.email_reminder, true, 'email_reminder seeds ON');
+  assert.equal(np.due_reminder, true, 'due_reminder seeds ON');
+  assert.equal(np.past_due, true, 'past_due seeds ON');
+});
+
+test('D-27-5: a legacy doc whose notifPrefs lack the keys reads all-ON via docForClient', async () => {
+  const { ws, own } = await makeWorkspace(m => [task(m, { id: 'tLegacy', key: 'P1-L', due: '2026-01-15' })], {});
+  const res = await owners.get(server.base).c.get(`/api/workspaces/${ws.slug}`);
+  assert.equal(res.status, 200, 'workspace fetched');
+  const np = res.data.doc.data.notifPrefs;
+  assert.equal(np.email_reminder, true, 'legacy doc reads email_reminder ON');
+  assert.equal(np.due_reminder, true, 'legacy doc reads due_reminder ON');
+  assert.equal(np.past_due, true, 'legacy doc reads past_due ON');
+  /* The behavior half of the same coin: the scheduler treats the missing keys
+     as ON through the real pass. */
+  assert.equal(own(await trigger(at9('2026-01-15'))).length, 2, 'legacy doc still reminds');
+});
+
 /* --------------------- REM-02: DST + label allow-list --------------------- */
 
 test('REM-02: Pacific label maps through DST — the local date, not the UTC date, decides', async () => {

@@ -500,6 +500,15 @@ function normalizeDoc(doc, meta) {
   // Recipient validity is checked in docForClient, AFTER syncProfiles rebuilds the roster:
   // the stored document intentionally carries no members.
   if (Array.isArray(out.data.notifs)) out.data.notifs = out.data.notifs.filter(n => n && typeof n.to === 'string' && n.to);
+  // D-27-5: the three reminder prefs default ON — a stored doc predating them
+  // must read as all-ON (=== false disables), never silently silenced. The
+  // merge is on read only; existing workspaces are not rewritten.
+  out.data.notifPrefs = {
+    email_reminder: true,
+    due_reminder: true,
+    past_due: true,
+    ...(out.data.notifPrefs && typeof out.data.notifPrefs === 'object' ? out.data.notifPrefs : {}),
+  };
   return out;
 }
 
@@ -1251,6 +1260,9 @@ function emptyDoc(meta) {
           email_assign: true,
           email_digest: true,
           email_comment: false,
+          email_reminder: true,
+          due_reminder: true,
+          past_due: true,
           push_mention: true,
           push_assign: true,
           push_comment: true,

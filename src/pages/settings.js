@@ -370,7 +370,8 @@ export function settingsBody(sec, title) {
         srow(t('settings.notif.mentions'), t('settings.notif.mentionsDesc'), tog('email_mention', np.email_mention, 'np')) +
         srow(t('settings.notif.assignments'), t('settings.notif.assignmentsDesc'), tog('email_assign', np.email_assign, 'np')) +
         srow(t('settings.notif.comments'), t('settings.notif.commentsDesc'), tog('email_comment', np.email_comment, 'np')) +
-        srow(t('settings.notif.digest'), t('settings.notif.digestDesc'), tog('email_digest', np.email_digest, 'np'))
+        srow(t('settings.notif.digest'), t('settings.notif.digestDesc'), tog('email_digest', np.email_digest, 'np')) +
+        srow(t('settings.notif.emailReminder'), t('settings.notif.emailReminderDesc'), tog('email_reminder', np.email_reminder, 'np'))
       );
     case 'notif-push':
       return (
@@ -378,7 +379,9 @@ export function settingsBody(sec, title) {
         srow(t('settings.notif.mentions'), '', tog('push_mention', np.push_mention, 'np')) +
         srow(t('settings.notif.assignments'), '', tog('push_assign', np.push_assign, 'np')) +
         srow(t('settings.notif.comments'), '', tog('push_comment', np.push_comment, 'np')) +
-        srow(t('settings.notif.dueReminders'), t('settings.notif.dueDesc'), tog('push_due', np.push_due, 'np'))
+        srow(t('settings.notif.dueReminders'), t('settings.notif.dueDesc'), tog('push_due', np.push_due, 'np')) +
+        srow(t('settings.notif.dueReminder'), t('settings.notif.dueReminderDesc'), tog('due_reminder', np.due_reminder, 'np')) +
+        srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np'))
       );
     case 'notif-mentions':
       return (
