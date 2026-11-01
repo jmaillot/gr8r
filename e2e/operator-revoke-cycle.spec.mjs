@@ -21,7 +21,7 @@
    imported out of flows.spec.mjs so that file stays untouched.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, PASSWORD, OWNER, apiClient, clientIp, createAccount, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, PASSWORD, OWNER, clientIp, createAccount, newRunId } from './helpers/setup.mjs';
 import { totpAt } from '../totp.js';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };

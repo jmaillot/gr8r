@@ -106,7 +106,7 @@ export function go(route, params = {}, opt = {}) {
    members their id, plain views the route id, and home the workspace root.
    Returns null when no workspace is hydrated, so callers never write a
    garbage URL. */
-export function urlForView(route, params = {}) { // eslint-disable-line no-unused-vars
+export function urlForView(route, params = {}) {
   const slug = D().ws?.url;
   if (!slug) return null;
   const t = S.ui.drawer && task(S.ui.drawer);

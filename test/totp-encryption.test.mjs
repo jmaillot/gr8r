@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { ADMIN, ROOT, login, signup, startServer, withDb } from './helpers/server.mjs';
+import { ROOT, login, signup, startServer, withDb } from './helpers/server.mjs';
 
 const serverSource = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 
@@ -320,7 +320,6 @@ test('requireTotpSecret keeps its D-77/D-79 signature and single-decrypt-boundar
 const SUITE_KEY = 'projects-enc-suite-key';
 const sha256Hex = (m) => crypto.createHash('sha256').update(m).digest('hex');
 const idOf = (m) => sha256Hex(m).slice(0, 8); // D-K3 mirror: first 8 hex of sha256(raw material)
-const encKey = (m) => crypto.createHash('sha256').update(m).digest();
 
 /* Test-side v2 mirror (envelope mirror pattern): wraps a known secret exactly
    as D-K4 specifies, against an explicit key material — used to plant

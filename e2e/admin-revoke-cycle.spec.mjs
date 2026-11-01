@@ -66,7 +66,7 @@ async function fillLogin(page, account, lang) {
 
 /* The signed-in member dies on its next requireUser surface through the
    central honest 401 teardown (D-106). */
-async function openSettingsSessions(page, lang) {
+async function openSettingsSessions(page) {
   await page.locator(`[data-a='go'][data-r='settings']`).first().click();
   await page.locator(`.sitem[data-sec='sessions']`).click();
 }
@@ -154,7 +154,7 @@ test.describe('phase 24 admin revoke cycle', () => {
 
         /* The member dies on its next requireUser surface through the
            central honest 401 teardown (D-106) — signed out, honest copy. */
-        await openSettingsSessions(memberPage, lang);
+        await openSettingsSessions(memberPage);
         await expect(memberPage.getByText(fmt('err.signedOutElsewhere', {}, lang))).toBeVisible();
 
         /* The admin's session survives: the members surface answers again. */

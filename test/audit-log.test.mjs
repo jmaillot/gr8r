@@ -88,7 +88,6 @@ test('AUD-01 criterion 3: forced audit-write failure rolls back the entire revoc
   const targetRow = withDb(server.dbPath, db => db.prepare('select * from users where email = ?').get('rollbackvictim@test.local'));
   const countBefore = withDb(server.dbPath, db => db.prepare('select count(*) as n from sessions where user_id = ?').get(targetRow.id).n);
   assert.equal(countBefore, 1, 'target holds one session');
-  const auditsBefore = auditRows().length;
 
   // Force the audit INSERT to throw: drop the table. The DELETE succeeds first,
   // but the whole transaction must roll back — zero sessions deleted.

@@ -9,8 +9,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { after, before, test } from 'node:test';
-import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
+import { after, test } from 'node:test';
+import { login, signup, startServer, withDb } from './helpers/server.mjs';
 
 const GOOD = 'password-1234';
 const BACKUP_PREFIX = 'projects-preenvelope-';
@@ -98,7 +98,7 @@ test('tracer: one v1-under-previous row re-wraps to v2 under the NEW key id in o
     1,
     `exactly one pre-migration backup for the rotation boot, found: ${backups(tracerDir).join(', ')}`,
   );
-  assert.match(boot2.output(), /  TOTP re-wrap: 1 row\(s\) re-sealed/, 'the re-wrap summary line must report the re-seal');
+  assert.match(boot2.output(), / {2}TOTP re-wrap: 1 row\(s\) re-sealed/, 'the re-wrap summary line must report the re-seal');
   await boot2.stop();
 
   // Boot 3: idempotence core — byte-identical no-op, zero new backups (SC-2).
@@ -178,8 +178,8 @@ test('seed matrix: v1-under-previous, v1-under-current, v2-under-previous, v2-un
       boot2.output().includes(`user ${undecId} carries an envelope that decrypts under neither keyring key`),
       'a D-K9 warn naming the user id must have been emitted',
     );
-    assert.match(boot2.output(), /  TOTP re-wrap: 4 row\(s\) re-sealed/, 'summary counters must match the candidates: 3 planted stale + the plaintext the encryption pass sealed earlier in the same boot');
-    assert.match(boot2.output(), /  TOTP re-wrap: 4 row\(s\) re-sealed to v2:<current-key-id>, 1 undecryptable/, 'the undecryptable count must be reported');
+    assert.match(boot2.output(), / {2}TOTP re-wrap: 4 row\(s\) re-sealed/, 'summary counters must match the candidates: 3 planted stale + the plaintext the encryption pass sealed earlier in the same boot');
+    assert.match(boot2.output(), / {2}TOTP re-wrap: 4 row\(s\) re-sealed to v2:<current-key-id>, 1 undecryptable/, 'the undecryptable count must be reported');
     const minted = backups(dir);
     assert.ok(minted.length >= 1 && minted.length <= 2, `one backup per pass at most (encryption + re-wrap), found ${minted.length}`);
     await boot2.stop();
@@ -464,7 +464,7 @@ test('runbook parity: the DEPLOY.md D-K13 query returns ≥1 on a stale fixture 
     // The rotation boot per the runbook: both keys, one reboot.
     const boot1 = await startServer({ dataDir: dir, env: { MASTER_KEY: K2, MASTER_KEY_PREVIOUS: K1 } });
     servers.push(boot1);
-    assert.match(boot1.output(), /  TOTP re-wrap: 1 row\(s\) re-sealed/);
+    assert.match(boot1.output(), / {2}TOTP re-wrap: 1 row\(s\) re-sealed/);
 
     // Converged: the runbook's own query, with the current key id substituted, returns 0.
     assert.equal(countStale(dbPath, idOf(K2)), 0, 'after a rotation boot the DEPLOY.md query must return 0');

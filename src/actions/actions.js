@@ -20,6 +20,7 @@ import {
   me,
   mem,
   memberTeams,
+  myNotifs,
   notifyMembers,
   proj,
   projTeams,
