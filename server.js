@@ -180,6 +180,7 @@ const SCHEMA = `
     email        text,
     role         text not null check (role in ('admin','member','viewer')),
     team         text,
+    teams        text,
     workspace_id text references workspaces(id) on delete cascade,
     created_by   text not null references users(id) on delete cascade,
     created_at   integer not null,
@@ -256,6 +257,9 @@ function openDb() {
   // P4-c fix: the team picked at invite time must survive into the profile seed.
   ensureColumn(db, 'memberships', 'team', 'text');
   ensureColumn(db, 'invites', 'workspace_id', 'text');
+  // Phase 28 D-07: invites carry a JSON array of teams. The scalar `team`
+  // column above stays on disk as backfill-only legacy (D-04) — never read.
+  ensureColumn(db, 'invites', 'teams', 'text');
   ensureColumn(db, 'users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -1169,21 +1173,30 @@ function memberPayload(row, doc, selfId) {
 function invitesOf(workspaceId) {
   return db
     .prepare(
-      `select token_hash, email, role, team, created_at, expires_at
+      `select token_hash, email, role, teams, created_at, expires_at
          from invites
         where workspace_id = ? and used_at is null and expires_at > ?
         order by created_at desc`,
     )
     .all(workspaceId, now())
-    .map(r => ({
-      id: r.token_hash,
-      email: r.email,
-      role: r.role,
-      roleLabel: ROLE_LABEL[r.role] || r.role,
-      team: r.team,
-      createdAt: r.created_at,
-      expiresAt: r.expires_at,
-    }));
+    .map(r => {
+      let teams = [];
+      try {
+        teams = JSON.parse(r.teams || '[]');
+      } catch {
+        /* unreadable set degrades to teamless (D-03), never to the scalar */
+      }
+      if (!Array.isArray(teams)) teams = [];
+      return {
+        id: r.token_hash,
+        email: r.email,
+        role: r.role,
+        roleLabel: ROLE_LABEL[r.role] || r.role,
+        teams,
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+      };
+    });
 }
 
 function ownerCount(workspaceId, excludeUserId = null) {
@@ -1441,7 +1454,12 @@ function migrateTeamMembership(conn) {
                              where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
       )
       .get().n;
-  if (!eligible()) return;
+  /* TEAM-01/D-07: the invites scalar→array backfill shares this guard, this
+     backup and this transaction — one pre-migration snapshot covers both
+     mutations, and a boot where only invites need backfilling still backs up
+     before writing. */
+  const invitesEligible = () => conn.prepare('select count(*) as n from invites where team is not null and teams is null').get().n;
+  if (!eligible() && !invitesEligible()) return;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backup = path.join(DATA_DIR, `projects-pre-team-members-${stamp}.db`);
   try {
@@ -1464,6 +1482,11 @@ function migrateTeamMembership(conn) {
                            where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
       )
       .run();
+    /* D-07: scalar invites.team becomes a one-element JSON array in invites.teams.
+       The scalar column is never read again — this is its last reader (D-04). */
+    for (const row of conn.prepare('select rowid, team from invites where team is not null and teams is null').all()) {
+      conn.prepare('update invites set teams = ? where rowid = ?').run(JSON.stringify([row.team]), row.rowid);
+    }
     conn.exec('commit');
   } catch (err) {
     conn.exec('rollback');
@@ -1893,23 +1916,35 @@ function ensureMember(doc, user, role = 'member', workspaceId = null) {
   return id;
 }
 
-function addMembership(ws, user, role, team = null) {
+function addMembership(ws, user, role, teams = []) {
   if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
      document's revision and never invalidates another session's write. */
   const memberId = memberIdFor(ws.id, user);
+  /* D-07: the invited team set lands as one authority row per team inside the
+     same transaction — an invite accepted between boots must not wait for the
+     next backfill to appear in rosters. Scalar-tolerant only for the sake of
+     the two no-team internal callers that pass nothing at all. */
+  const teamList = [
+    ...new Set(
+      []
+        .concat(teams || [])
+        .filter(Boolean)
+        .map(t => String(t).slice(0, 40)),
+    ),
+  ];
   db.exec('begin immediate');
   try {
     db.prepare(
       `insert into memberships (workspace_id, user_id, role, member_id, team) values (?,?,?,?,?)
        on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
-    ).run(ws.id, user.id, role, memberId, team);
-    /* TEAM-01: the team picked at invite time lands in the authority rows too —
-       the scalar column is backfill-only legacy (D-04), and an invite accepted
-       between boots must not wait for the next backfill to appear in rosters. */
-    if (team) {
-      db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)').run(ws.id, team, memberId, user.id);
+    ).run(ws.id, user.id, role, memberId, null);
+    /* TEAM-01: the teams picked at invite time land in the authority rows too —
+       the scalar column is backfill-only legacy (D-04). */
+    if (teamList.length) {
+      const insert = db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)');
+      for (const team of teamList) insert.run(ws.id, team, memberId, user.id);
     }
     db.exec('commit');
   } catch (err) {
@@ -3189,7 +3224,25 @@ async function handleApi(req, res, url) {
 
     const body = await readJson(req);
     const role = inviteRole(body?.role);
-    const team = body?.team ? String(body.team).slice(0, 40) : null;
+    /* D-07: an invite carries the full team set. Validation mirrors the PUT
+       members/:uid/teams route exactly (T-28-07): per-item trim + 40-char
+       slice, Set-dedup, whitelist against the doc's team definitions, cap 25.
+       An absent teams field degrades to the empty set (D-03), not an error. */
+    if (body?.teams !== undefined && !Array.isArray(body.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
+    if ((body?.teams || []).length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
+    const knownTeams = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
+    const teams = [
+      ...new Set(
+        (body?.teams || [])
+          .map(t =>
+            String(t || '')
+              .trim()
+              .slice(0, 40),
+          )
+          .filter(Boolean),
+      ),
+    ];
+    if (teams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
     let emails = Array.isArray(body?.emails) ? body.emails : [];
     emails = [
       ...new Set(
@@ -3222,17 +3275,17 @@ async function handleApi(req, res, url) {
           db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(t, ctx.ws.id, email);
         }
         const token = crypto.randomBytes(24).toString('base64url');
-        db.prepare('insert into invites (token_hash, email, role, team, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?)').run(
+        db.prepare('insert into invites (token_hash, email, role, teams, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?)').run(
           sha256(token),
           email,
           role,
-          team,
+          JSON.stringify(teams),
           ctx.ws.id,
           ctx.user.id,
           t,
           expiresAt,
         );
-        rows.push({ email, role, url: `${appBase(req)}/join/${token}`, expiresAt });
+        rows.push({ id: sha256(token), email, role, teams, url: `${appBase(req)}/join/${token}`, expiresAt });
       }
       db.exec('commit');
     } catch (err) {
@@ -3346,7 +3399,19 @@ async function handleApi(req, res, url) {
 
     const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
-    if (!membershipOf(ws.id, user.id)) addMembership(ws, user, invite.role, invite.team);
+    if (!membershipOf(ws.id, user.id))
+      addMembership(
+        ws,
+        user,
+        invite.role,
+        (() => {
+          try {
+            return JSON.parse(invite.teams || '[]');
+          } catch {
+            return [];
+          }
+        })(),
+      );
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {
       db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);

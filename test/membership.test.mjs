@@ -488,6 +488,88 @@ test('a doc PUT and a setMemberTeams call interleave without clobbering (TEAM-05
   }
 });
 
+/* D-07 (Phase 28): multi-team invites over HTTP — the POST carries the full
+   team set, the payload serializes teams[], and acceptance lands one
+   team_members row per team. Each test boots its own server instance so the
+   shared suite's five-accept throttle budget stays untouched. */
+test('a multi-team invite lands one team_members row per team at acceptance', async () => {
+  const s = await startServer();
+  try {
+    const boss = (await login(s.base, ADMIN.email, ADMIN.password)).client;
+
+    // Define two teams in the workspace document (definitions stay in the doc, D-02).
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [
+      { id: 'team_a', name: 'Alpha', members: [] },
+      { id: 'team_b', name: 'Beta', members: [] },
+    ];
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    // Dedup + order stability: a repeated id collapses in the payload.
+    const [row] = (await boss.post('/api/workspaces/acme/invites', { emails: ['mt@test.local'], role: 'member', teams: ['team_b', 'team_a', 'team_b'] })).data
+      .invites;
+    assert.deepEqual(row.teams, ['team_b', 'team_a'], 'the invite payload serializes the deduped team set');
+    const listed = (await boss.get('/api/workspaces/acme/invites')).data.invites.find(i => i.id === row.id);
+    assert.deepEqual(listed.teams, ['team_b', 'team_a'], 'the pending-invites list serializes teams[]');
+    assert.equal('team' in listed, false, 'the scalar team is gone from the payload (D-04)');
+
+    const account = (await signup(s.base, ACCOUNT('Mt', 'mt@test.local'))).client;
+    const joined = await account.post(`/api/invites/${inviteToken(row.url)}/accept`);
+    assert.ok([200, 201].includes(joined.status), 'the invite is accepted');
+
+    const member = (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'mt@test.local');
+    assert.deepEqual(member.teams, ['team_a', 'team_b'], 'both teams appear in the member payload');
+    withDb(s.dbPath, db => {
+      const userId = db.prepare('select user_id from memberships m join users u on u.id = m.user_id where u.email = ?').get('mt@test.local').user_id;
+      assert.deepEqual(
+        db
+          .prepare('select team_id from team_members where user_id = ? order by team_id')
+          .all(userId)
+          .map(r => r.team_id),
+        ['team_a', 'team_b'],
+        'acceptance inserted one team_members row per invited team',
+      );
+    });
+  } finally {
+    await s.stop();
+  }
+});
+
+test('a teamless invite inserts zero team_members rows and invalid team sets are rejected', async () => {
+  const s = await startServer();
+  try {
+    const boss = (await login(s.base, ADMIN.email, ADMIN.password)).client;
+    const base = '/api/workspaces/acme/invites';
+
+    assert.equal((await boss.post(base, { emails: ['a@x.local'], role: 'member', teams: 'team_a' })).status, 400, 'non-array teams → teamsRequired');
+    assert.equal((await boss.post(base, { emails: ['a@x.local'], role: 'member', teams: ['nope'] })).status, 400, 'unknown team id → unknownTeam');
+    assert.equal(
+      (await boss.post(base, { emails: ['a@x.local'], role: 'member', teams: Array.from({ length: 26 }, (_, i) => `t${i}`) })).status,
+      400,
+      'over the cap → tooManyTeams',
+    );
+
+    // A teamless invite is a valid state (D-03): accept → zero authority rows.
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [{ id: 'team_a', name: 'Alpha', members: [] }];
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+    const [row] = (await boss.post(base, { emails: ['solo@test.local'], role: 'member', teams: [] })).data.invites;
+    assert.deepEqual(row.teams, [], 'the payload carries the empty set');
+    const account = (await signup(s.base, ACCOUNT('Solo', 'solo@test.local'))).client;
+    const joined = await account.post(`/api/invites/${inviteToken(row.url)}/accept`);
+    assert.ok([200, 201].includes(joined.status), 'the invite is accepted');
+    const member = (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'solo@test.local');
+    assert.deepEqual(member.teams, [], 'the member is teamless');
+    withDb(s.dbPath, db =>
+      assert.equal(db.prepare('select count(*) as n from team_members where user_id = ?').get(member.userId).n, 0, 'zero rows for a teamless invite'),
+    );
+  } finally {
+    await s.stop();
+  }
+});
+
 /* TEAM-03/TEAM-04 (Phase 28): the client-side predicates, unit-level.
    The browser modules read `document`, `navigator` and `localStorage` while
    they load, so the globals are stubbed before the store and actions are

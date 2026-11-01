@@ -184,7 +184,9 @@ export function createLegacyDb(dataDir) {
       crypto.createHash('sha256').update(LEGACY_INVITE_TOKEN).digest('hex'),
       'new@legacy.local',
       'member',
-      null,
+      /* TEAM-01/D-07 (Phase 28): the scalar invite team must backfill into the
+         invites.teams JSON array on the same guarded first boot. */
+      'eng',
       'u_alice',
       LEGACY_CREATED_AT,
       Date.now() + 7 * 86400 * 1000,

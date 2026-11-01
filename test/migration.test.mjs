@@ -156,6 +156,21 @@ test('the pending invite is scoped to the migrated workspace', () => {
   assert.equal(invite.email, 'new@legacy.local');
 });
 
+/* D-07 (Phase 28): the scalar invite team backfills into the JSON array on the
+   same guarded boot — one backup covers both mutations, and the second boot
+   never touches it again (the snapshot deepEqual below pins the byte-identity). */
+const inviteTeams = () => withDb(server.dbPath, db => db.prepare('select team, teams from invites').get());
+
+test('the first boot backfills the scalar invite team into the invites.teams array', () => {
+  const row = inviteTeams();
+  assert.equal(row.team, 'eng', 'the scalar column stays on disk unread (D-04)');
+  assert.deepEqual(JSON.parse(row.teams), ['eng'], 'the array carries exactly the invited team');
+});
+
+test('the scalar invite team still reads back as the array after the second boot', () => {
+  assert.deepEqual(JSON.parse(inviteTeams().teams), ['eng'], 'the backfill is a one-time pass');
+});
+
 test('the migrated owner signs in and reads the preserved workspace', async () => {
   const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
   assert.equal(signedIn.status, 200);
@@ -372,6 +387,7 @@ function snapshot() {
       index: withDb(server.dbPath, db => db.prepare("select sql from sqlite_master where type = 'index' and name = 'team_members_user'").get()?.sql),
     },
     inviteWorkspaceId: invite.workspace_id,
+    inviteTeams: withDb(server.dbPath, db => db.prepare('select team, teams from invites').get()),
     users: withDb(server.dbPath, db =>
       db
         .prepare('select id, email, locale, two_fa_enabled, two_fa_secret, two_fa_last_step from users order by id')
