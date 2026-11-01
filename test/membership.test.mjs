@@ -596,7 +596,7 @@ Object.defineProperty(globalThis, 'navigator', {
 const { register } = await import('node:module');
 register(new URL('./virtual-icons-loader.mjs', import.meta.url), import.meta.url);
 
-const { applyDoc, D, memberInProjectTeams, memberTeams } = await import('../src/core/store.js');
+const { applyDoc, D, memberInProjectTeams, memberTeams, assignableInProject } = await import('../src/core/store.js');
 const { emitMentions } = await import('../src/actions/actions.js');
 
 function memberDoc(members, teams, projects = []) {
@@ -660,6 +660,19 @@ test('TEAM-04: the assignment-picker intersection excludes members outside the p
   /* Legacy tolerance mirrors projTeams: scalar member shapes still read. */
   assert.equal(memberInProjectTeams({ id: 'm3', team: 't1' }, { id: 'p1', teams: ['t1'] }), true);
   assert.deepEqual(memberTeams(null), [], 'the accessor tolerates a null member');
+});
+
+test('TEAM-04: the picker predicate assignableInProject filters picker options', () => {
+  const scoped = { id: 'p1', teams: ['t1'] };
+  const inSet = { id: 'm1', teams: ['t1'] };
+  const outOfSet = { id: 'm2', teams: ['t2'] };
+  assert.equal(assignableInProject(inSet, scoped, null), true, 'an intersecting member is offered');
+  assert.equal(assignableInProject(outOfSet, scoped, null), false, 'an out-of-set member is excluded (fails_when case)');
+  assert.equal(assignableInProject(outOfSet, scoped, 'm2'), true, 'the currently-assigned out-of-set member stays visible');
+  assert.equal(assignableInProject({ id: 'm3', teams: [] }, scoped, null), false, 'a teamless member is excluded from a scoped project');
+  assert.equal(assignableInProject(inSet, { id: 'p1', teams: [] }, null), true, 'an unscoped project (empty teams[]) keeps everyone assignable');
+  assert.equal(assignableInProject({ id: 'm1', team: 't1' }, scoped, null), true, 'legacy scalar member shape tolerated');
+  assert.equal(assignableInProject(null, scoped, null), false, 'a null member is tolerated');
 });
 
 /* TEAM-02..05 composite (Phase 28 close-out): one member, one team set — the

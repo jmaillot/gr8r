@@ -417,8 +417,17 @@ export function projInTeam(p, teamId) {
   return projTeams(p).includes(teamId);
 }
 /* TEAM-04: a member is assignable to a project when their team set intersects
-   the project's team set. */
+   the project's team set. Feeds assignment pickers via assignableInProject. */
 export function memberInProjectTeams(m, p) {
   const mt = memberTeams(m);
   return projTeams(p).some(id => mt.includes(id));
+}
+/* TEAM-04: assignment-picker predicate — every assignee/subassignee option
+   source filters through this. A project with an empty teams[] is unscoped:
+   every member stays assignable (mirrors canSee's broad-access semantics).
+   The currently-assigned member is always offered so existing state is never
+   silently hidden from the picker. */
+export function assignableInProject(m, p, currentAssigneeId) {
+  if (!p || projTeams(p).length === 0) return true;
+  return m?.id === currentAssigneeId || memberInProjectTeams(m, p);
 }
