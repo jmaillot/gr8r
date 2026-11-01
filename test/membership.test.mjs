@@ -661,3 +661,71 @@ test('TEAM-04: the assignment-picker intersection excludes members outside the p
   assert.equal(memberInProjectTeams({ id: 'm3', team: 't1' }, { id: 'p1', teams: ['t1'] }), true);
   assert.deepEqual(memberTeams(null), [], 'the accessor tolerates a null member');
 });
+
+/* TEAM-02..05 composite (Phase 28 close-out): one member, one team set — the
+   invite path lands it, the admin API extends it, @team mentions target it,
+   and a concurrent doc PUT never clobbers it. */
+test('TEAM composite: the team set survives invites, edits, mentions and concurrent doc writes', async () => {
+  const s = await startServer();
+  try {
+    const boss = (await login(s.base, ADMIN.email, ADMIN.password)).client;
+
+    // Two team definitions live in the doc (D-02); the doc also carries a task
+    // so the concurrent PUT below has something real to change.
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [
+      { id: 'team_a', name: 'Alpha', members: [] },
+      { id: 'team_b', name: 'Beta', members: [] },
+    ];
+    doc.data.tasks = doc.data.tasks || [];
+    doc.data.tasks.push({ id: 't_comp', project: doc.data.projects?.[0]?.id || 'p0', title: 'Composite', status: 'todo', labels: [], subtasks: [] });
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    // The multi-team invite path lands the member in BOTH rosters at once.
+    const [inv] = (await boss.post('/api/workspaces/acme/invites', { emails: ['duo@test.local'], role: 'member', teams: ['team_a', 'team_b'] })).data.invites;
+    const duo = (await signup(s.base, ACCOUNT('Duo', 'duo@test.local'))).client;
+    const accepted = await duo.post(`/api/invites/${inviteToken(inv.url)}/accept`);
+    assert.ok([200, 201].includes(accepted.status), 'the multi-team invite is accepted');
+    let row = (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'duo@test.local');
+    assert.deepEqual(row.teams, ['team_a', 'team_b'], 'the member appears in both rosters (teams[] projection)');
+
+    // The admin API reads and rewrites the same authority set.
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${row.userId}/teams`, { teams: ['team_b', 'team_a', 'team_a'] })).status, 200);
+    row = (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'duo@test.local');
+    assert.deepEqual(row.teams, ['team_a', 'team_b'], 'the set is deduped and stable across the round-trip');
+
+    // A concurrent doc PUT does not clobber the membership set (TEAM-05).
+    const mid = (await boss.get('/api/workspaces/acme')).data;
+    const docA = structuredClone(mid.doc);
+    docA.data.tasks.find(t => t.id === 't_comp').title = 'Renamed';
+    const [ra, rb] = await Promise.all([
+      boss.put('/api/workspaces/acme', { revision: mid.revision, doc: docA }),
+      boss.put(`/api/workspaces/acme/members/${row.userId}/teams`, { teams: ['team_a', 'team_b'] }),
+    ]);
+    assert.equal(ra.status, 200, 'the doc PUT survives');
+    assert.equal(rb.status, 200, 'the membership PUT survives');
+    const after = (await boss.get('/api/workspaces/acme')).data;
+    assert.equal(after.doc.data.tasks.find(t => t.id === 't_comp').title, 'Renamed', 'the doc edit is intact');
+    assert.deepEqual(
+      (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'duo@test.local').teams,
+      ['team_a', 'team_b'],
+      'the team set is intact',
+    );
+
+    // @team mentions target the member through either team, exactly once (TEAM-03).
+    memberDoc(
+      [{ id: row.memberId, name: 'Duo', status: 'active', teams: row.teams }],
+      [
+        { id: 'team_a', name: 'Alpha' },
+        { id: 'team_b', name: 'Beta' },
+      ],
+    );
+    D().notifPrefs = {};
+    const targets = emitMentions('@Alpha @Beta wrap the phase', null);
+    assert.deepEqual([...targets], [row.memberId], 'the member is targeted once through either team');
+    assert.equal((D().notifs || []).filter(n => n.to === row.memberId && n.type === 'mention').length, 1, 'exactly one notification row');
+  } finally {
+    await s.stop();
+  }
+});
