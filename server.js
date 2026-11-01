@@ -78,7 +78,7 @@ const MASTER_KEY = String(process.env.MASTER_KEY || '');
    key (raw digest bytes), so id and key can never drift apart (Pitfall 3).
    D-K2: PREVIOUS without CURRENT fails boot loudly — never serve requests. */
 const MASTER_KEY_PREVIOUS = String(process.env.MASTER_KEY_PREVIOUS || '');
-const keyIdFor = (material) => crypto.createHash('sha256').update(material).digest('hex').slice(0, 8);
+const keyIdFor = material => crypto.createHash('sha256').update(material).digest('hex').slice(0, 8);
 const KEYRING = new Map();
 if (MASTER_KEY) KEYRING.set(keyIdFor(MASTER_KEY), MASTER_KEY);
 if (MASTER_KEY_PREVIOUS) {
@@ -403,7 +403,6 @@ function requireTotpSecret(envelope) {
   return secret ? { ok: true, secret } : { ok: false };
 }
 
-
 /* D-46: pending (not-yet-verified) TOTP secrets live ONLY here — in memory,
    keyed by user_id, with a 10-minute TTL. Nothing touches users.two_fa_secret
    until enable succeeds; a server restart mid-enrollment just means re-scanning
@@ -520,8 +519,9 @@ function normalizeDoc(doc, meta) {
      members arrays is stripped on every read; the roster lives in team_members. */
   if (Array.isArray(out.data.teams)) {
     out.data.teams = out.data.teams.map(t => {
-      if (!t || typeof t !== 'object') return t;
-      const { members: _membership, ...definition } = t;
+      if (!t || typeof t !== 'object' || !('members' in t)) return t;
+      const definition = { ...t };
+      delete definition.members;
       return definition;
     });
   }
@@ -569,7 +569,7 @@ function normalizeProjects(doc) {
     /* P3 multi-team: the legacy scalar `team` migrates to a `teams[]` array.
        Idempotent — a doc saved after migration has no `team` left. */
     if (p.team !== undefined) {
-      p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : (typeof p.team === 'string' && p.team ? [p.team] : []);
+      p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : typeof p.team === 'string' && p.team ? [p.team] : [];
       delete p.team;
     }
     if (!Array.isArray(p.teams)) p.teams = [];
@@ -847,7 +847,12 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const wsName = wsRow.name || 'Projects Studio';
   const prefs = nextDoc?.data?.notifPrefs || {};
   const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
-  const emailByUserId = new Map(db.prepare('select id, email from users').all().map(u => [u.id, u.email]));
+  const emailByUserId = new Map(
+    db
+      .prepare('select id, email from users')
+      .all()
+      .map(u => [u.id, u.email]),
+  );
   const emailByMemberEmail = new Map();
   for (const m of profiles.values()) if (m?.email && m.id) emailByMemberEmail.set(m.id, m.email);
   /* G-23-1: the stored doc never persists account-backed member profiles (the
@@ -857,7 +862,8 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
      workspace-scoped so a name is only ever revealed to co-members (T-23-06)
      — keeping the doc profiles as the fallback for doc-only members. */
   const authority = new Map(
-    db.prepare('select m.member_id, m.user_id, u.name, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
+    db
+      .prepare('select m.member_id, m.user_id, u.name, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
       .all(wsRow.id)
       .map(r => [r.member_id, r]),
   );
@@ -1040,7 +1046,8 @@ function runReminderPass({ now: at = new Date() } = {}) {
    team_members authority rows, edited only through the dedicated
    PUT /members/:uid/teams route (D-01) — the document never carries it. */
 
-function docForClient(doc, ws, membership) {  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
+function docForClient(doc, ws, membership) {
+  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
   syncProfiles(out, ws.id);
   // P4-a: with the roster rebuilt, drop notifications addressed to removed members.
@@ -1092,8 +1099,9 @@ function docFromClient(incoming, stored, ws, role, membership) {
      even when a stale client ships teams[].members. */
   if (Array.isArray(next.data.teams)) {
     next.data.teams = next.data.teams.map(t => {
-      if (!t || typeof t !== 'object') return t;
-      const { members: _membership, ...definition } = t;
+      if (!t || typeof t !== 'object' || !('members' in t)) return t;
+      const definition = { ...t };
+      delete definition.members;
       return definition;
     });
   }
@@ -1447,13 +1455,15 @@ function migrateTeamMembership(conn) {
   }
   conn.exec('begin immediate');
   try {
-    conn.prepare(
-      `insert or ignore into team_members (workspace_id, team_id, member_id, user_id)
+    conn
+      .prepare(
+        `insert or ignore into team_members (workspace_id, team_id, member_id, user_id)
        select m.workspace_id, m.team, m.member_id, m.user_id from memberships m
         where m.team is not null
           and not exists (select 1 from team_members tm
                            where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
-    ).run();
+      )
+      .run();
     conn.exec('commit');
   } catch (err) {
     conn.exec('rollback');
@@ -1581,9 +1591,7 @@ function migrateTotpEncryption() {
   const unrecognizedTags = new Set();
   if (MASTER_KEY) {
     const envelopeCandidates = db
-      .prepare(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
-      )
+      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
       .all();
     for (const row of envelopeCandidates) {
       const value = String(row.two_fa_secret || '').trim();
@@ -1608,9 +1616,7 @@ function migrateTotpEncryption() {
   // a permanently-undecryptable envelope back on the backup-every-boot churn.
   const pendingRows = () =>
     db
-      .prepare(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'",
-      )
+      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'")
       .all()
       .filter(row => !isEnvelopeVersion(row.two_fa_secret));
   let rows = pendingRows();
@@ -1719,9 +1725,7 @@ function migrateTotpReWrap() {
   // is the per-row authority — SQL/JS drift can never widen the mutation set.
   const staleCandidates = () =>
     db
-      .prepare(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
-      )
+      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
       .all()
       .filter(row => isStaleEnvelope(row.two_fa_secret, currentId));
   const rows = staleCandidates();
@@ -1735,9 +1739,7 @@ function migrateTotpReWrap() {
     // of this boot: no backup, no mutation.
     const previousId = keyIdFor(MASTER_KEY_PREVIOUS);
     const envelopeRows = db
-      .prepare(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
-      )
+      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
       .all();
     const resolvesPrevious = envelopeRows.some(row => {
       const value = String(row.two_fa_secret || '').trim();
@@ -1782,15 +1784,13 @@ function migrateTotpReWrap() {
       // v2 dispatches through the keyring, which resolves stale ids.
       const plaintext =
         tag === 'v1'
-          ? decryptV1WithMaterial(value, MASTER_KEY) ?? decryptV1WithMaterial(value, MASTER_KEY_PREVIOUS)
+          ? (decryptV1WithMaterial(value, MASTER_KEY) ?? decryptV1WithMaterial(value, MASTER_KEY_PREVIOUS))
           : tag === 'v2'
             ? decryptTotpSecret(value)
             : null;
       if (plaintext === null) {
         undecryptable++;
-        console.warn(
-          `  TOTP re-wrap: user ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`,
-        );
+        console.warn(`  TOTP re-wrap: user ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`);
         continue; // byte-identical, never deleted (D-K9)
       }
       // D-K10: the ONLY writer is encryptTotpSecret(…, 'v2') — never re-key as v1.
@@ -2518,7 +2518,8 @@ async function handleApi(req, res, url) {
     });
     if (outcome === 'notEnabled') return fail(res, 409, 'tfaNotEnabled', 'Enable two-factor authentication first');
     if (outcome === 'password') return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
-    if (outcome === 'masterKey') return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — codes cannot be regenerated until the admin sets it');
+    if (outcome === 'masterKey')
+      return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — codes cannot be regenerated until the admin sets it');
     if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
     return json(res, 200, { ok: true, recoveryCodes: codes }); // D-100; no-store comes from json()
   }
@@ -2722,9 +2723,7 @@ async function handleApi(req, res, url) {
 
     const clause = where.length ? `where ${where.join(' and ')}` : '';
     // 101st row = cursor for the next page; only 100 are served.
-    const rows = db
-      .prepare(`select * from audit_log ${clause} order by created_at desc, id desc limit 101`)
-      .all(...args);
+    const rows = db.prepare(`select * from audit_log ${clause} order by created_at desc, id desc limit 101`).all(...args);
     const nextBefore = rows.length > 100 ? { created_at: rows[100].created_at, id: rows[100].id } : null;
     return json(res, 200, { rows: rows.slice(0, 100), nextBefore });
   }
@@ -2766,8 +2765,7 @@ async function handleApi(req, res, url) {
     if (!target) return fail(res, 404, 'notFound', 'Not found');
     // D-119: owner immunity BEFORE any session lookup — other flagged owners are
     // untouchable. A self-target is allowed (D-118): it is exactly revoke-others.
-    if (target.is_instance_admin && target.id !== operator.id)
-      return fail(res, 403, 'ownerImmune', 'Owner accounts are immune to operator revocation');
+    if (target.is_instance_admin && target.id !== operator.id) return fail(res, 403, 'ownerImmune', 'Owner accounts are immune to operator revocation');
     // D-118/Keep-current (P-H): ONE statement — the operator's own session is
     // excluded by the != clause; for any other target the hashes differ, so
     // every target session goes.
@@ -2782,7 +2780,20 @@ async function handleApi(req, res, url) {
         logSecurity(target.id, 'sessions_revoked_by_operator');
         db.prepare(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-        ).run(uid(), operator.id, target.id, 'sessions_revoked_by_operator', del.changes, clientIp(req), null, operator.name, operator.email, target.name, target.email, now());
+        ).run(
+          uid(),
+          operator.id,
+          target.id,
+          'sessions_revoked_by_operator',
+          del.changes,
+          clientIp(req),
+          null,
+          operator.name,
+          operator.email,
+          target.name,
+          target.email,
+          now(),
+        );
       }
       return { revoked: del.changes, remaining: remaining.n };
     });
@@ -3085,7 +3096,7 @@ async function handleApi(req, res, url) {
     if (!Array.isArray(body?.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
     if (body.teams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
     // Whitelist: every team id must be a team defined in the workspace document (T-28-02).
-    const known = new Set(((JSON.parse(ctx.ws.doc)?.data?.teams) || []).map(t => t?.id).filter(Boolean));
+    const known = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
     const teams = [...new Set(body.teams.map(t => String(t).slice(0, 40)))];
     if (teams.some(t => !known.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
     transaction(() => {
@@ -3095,21 +3106,21 @@ async function handleApi(req, res, url) {
     });
     const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
     syncProfiles(doc, ctx.ws.id); // the response projects the fresh teams[] set
-    return json(res, 200, {
-      member: memberPayload(
-        {
-          role: row.role,
-          member_id: row.member_id,
-          user_id: target.id,
-          email: target.email,
-          name: target.name,
-          last_login_at: target.last_login_at,
-          created_at: target.created_at,
-        },
-        doc,
-        ctx.user.id,
-      ),
-    });
+    const member = memberPayload(
+      {
+        role: row.role,
+        member_id: row.member_id,
+        user_id: target.id,
+        email: target.email,
+        name: target.name,
+        last_login_at: target.last_login_at,
+        created_at: target.created_at,
+      },
+      doc,
+      ctx.user.id,
+    );
+    member.teams = teamsOfUser(ctx.ws.id, target.id); // read back from the authority, not the request
+    return json(res, 200, { member });
   }
 
   /* ---------- workspace-admin session revocation (AUD-02, D-R1/R2/R4) ----------
@@ -3149,7 +3160,20 @@ async function handleApi(req, res, url) {
         logSecurity(target.id, 'sessions_revoked_by_workspace_admin');
         db.prepare(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-        ).run(uid(), actor.id, target.id, 'sessions_revoked_by_workspace_admin', del.changes, clientIp(req), ctx.ws.id, actor.name, actor.email, target.name, target.email, now());
+        ).run(
+          uid(),
+          actor.id,
+          target.id,
+          'sessions_revoked_by_workspace_admin',
+          del.changes,
+          clientIp(req),
+          ctx.ws.id,
+          actor.name,
+          actor.email,
+          target.name,
+          target.email,
+          now(),
+        );
       }
       return { revoked: del.changes, remaining: remaining.n };
     });
@@ -3809,7 +3833,7 @@ function main() {
   if (MAILER.enabled && !APP_URL) {
     console.error('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
     console.error(
-      'Invitation and notification links are built from APP_URL; without it a request host header could point those emails at an attacker\'s domain. Set APP_URL (e.g. https://projects.example.com) or unset SMTP_HOST to disable email invitations.',
+      "Invitation and notification links are built from APP_URL; without it a request host header could point those emails at an attacker's domain. Set APP_URL (e.g. https://projects.example.com) or unset SMTP_HOST to disable email invitations.",
     );
     process.exit(1);
   }

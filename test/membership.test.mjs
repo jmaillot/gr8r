@@ -389,7 +389,10 @@ test('PUT member teams writes authority rows, projects teams[] and gates on admi
     // The join table is the authority: two rows, deduped and sorted.
     withDb(s.dbPath, db => {
       assert.deepEqual(
-        db.prepare('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id').all(wsId, target.userId).map(r => r.team_id),
+        db
+          .prepare('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id')
+          .all(wsId, target.userId)
+          .map(r => r.team_id),
         ['team_a', 'team_b'],
       );
     });
@@ -428,11 +431,7 @@ test('a doc PUT carrying teams[].members leaves the authority rows untouched and
     const stored = JSON.parse(withDb(s.dbPath, db => db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
     assert.equal('members' in stored.data.teams[0], false, 'the STORED document is stripped too (write path, D-30 precedent)');
 
-    assert.equal(
-      withDb(s.dbPath, db => db.prepare('select count(*) as n from team_members').get()).n,
-      0,
-      'no team_members row was created by the doc PUT',
-    );
+    assert.equal(withDb(s.dbPath, db => db.prepare('select count(*) as n from team_members').get()).n, 0, 'no team_members row was created by the doc PUT');
   } finally {
     await s.stop();
   }
