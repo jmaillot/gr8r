@@ -188,6 +188,7 @@ test('task 1: the context menu action keys and icon names are byte-identical', (
     ['assignToMember', 'plus'],
     ['copyEmail', 'mail'],
     ['ctxRole', 'shield'],
+    ['editMemberTeams', 'users'],
     ['resendInvite', 'send'],
     ['removeMember', 'user-minus'],
     ['previewFile', 'eye'],

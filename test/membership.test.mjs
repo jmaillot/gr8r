@@ -436,3 +436,146 @@ test('a doc PUT carrying teams[].members leaves the authority rows untouched and
     await s.stop();
   }
 });
+
+/* TEAM-05 (Phase 28, client half): interleaving a doc PUT with a membership
+   PUT must not clobber either side — the doc write carries no membership and
+   the membership route never claims a revision. */
+test('a doc PUT and a setMemberTeams call interleave without clobbering (TEAM-05)', async () => {
+  const s = await startServer();
+  try {
+    const signedIn = await login(s.base, ADMIN.email, ADMIN.password);
+    const boss = signedIn.client;
+
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [{ id: 'team_m', name: 'Mix', members: [] }];
+    doc.data.tasks = doc.data.tasks || [];
+    doc.data.tasks.push({ id: 't_mix', project: doc.data.projects?.[0]?.id || 'p0', title: 'Racy', status: 'todo', labels: [], subtasks: [] });
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    const [inv] = (await boss.post('/api/workspaces/acme/invites', { emails: ['racy@test.local'], role: 'member' })).data.invites;
+    const account = (await signup(s.base, ACCOUNT('Racy', 'racy@test.local'))).client;
+    assert.equal((await account.post(`/api/invites/${inviteToken(inv.url)}/accept`)).status, 200);
+    const uid2 = (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'racy@test.local').userId;
+
+    // Client A PUTs the doc while client B changes the member's team set.
+    const mid = (await boss.get('/api/workspaces/acme')).data;
+    const docA = structuredClone(mid.doc);
+    docA.data.tasks.find(t => t.id === 't_mix').title = 'Renamed by A';
+    const putA = boss.put('/api/workspaces/acme', { revision: mid.revision, doc: docA });
+    const setB = boss.put(`/api/workspaces/acme/members/${uid2}/teams`, { teams: ['team_m'] });
+    const [ra, rb] = await Promise.all([putA, setB]);
+    assert.equal(ra.status, 200, 'the doc PUT survives the concurrent membership write');
+    assert.equal(rb.status, 200, 'the membership PUT survives the concurrent doc write');
+
+    const after = (await boss.get('/api/workspaces/acme')).data;
+    assert.equal(after.doc.data.tasks.find(t => t.id === 't_mix').title, 'Renamed by A', 'the doc edit is intact');
+    assert.deepEqual(
+      (await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'racy@test.local').teams,
+      ['team_m'],
+      'the membership change is intact',
+    );
+    const wsId = after.id;
+    withDb(s.dbPath, db => {
+      assert.equal(
+        db.prepare('select count(*) as n from team_members where workspace_id = ? and user_id = ?').get(wsId, uid2).n,
+        1,
+        'the authority row survived',
+      );
+    });
+  } finally {
+    await s.stop();
+  }
+});
+
+/* TEAM-03/TEAM-04 (Phase 28): the client-side predicates, unit-level.
+   The browser modules read `document`, `navigator` and `localStorage` while
+   they load, so the globals are stubbed before the store and actions are
+   imported dynamically — the same pattern as test/creator-watcher.test.mjs. */
+globalThis.document = {
+  querySelectorAll: () => [],
+  documentElement: { lang: 'en' },
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  body: { appendChild: () => {}, classList: { add: () => {}, remove: () => {} } },
+  createElement: () => ({ style: {}, classList: { add: () => {}, remove: () => {} }, appendChild: () => {} }),
+};
+globalThis.window = { addEventListener: () => {}, removeEventListener: () => {}, matchMedia: () => ({ addEventListener: () => {} }), dispatchEvent: () => {} };
+globalThis.addEventListener = () => {};
+globalThis.removeEventListener = () => {};
+globalThis.matchMedia = () => ({ addEventListener: () => {} });
+globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+Object.defineProperty(globalThis, 'navigator', {
+  value: { platform: 'Linux', userAgent: 'node' },
+  configurable: true,
+  writable: true,
+});
+
+const { register } = await import('node:module');
+register(new URL('./virtual-icons-loader.mjs', import.meta.url), import.meta.url);
+
+const { applyDoc, D, memberInProjectTeams, memberTeams } = await import('../src/core/store.js');
+const { emitMentions } = await import('../src/actions/actions.js');
+
+function memberDoc(members, teams, projects = []) {
+  applyDoc(
+    {
+      data: {
+        me: 'boss',
+        members: members.map(m => ({ ...m })),
+        teams: teams.map(t => ({ ...t })),
+        projects,
+        projOrder: projects.map(p => p.id),
+        tasks: [],
+        comments: [],
+        notifs: [],
+        activity: [],
+      },
+    },
+    1,
+  );
+}
+
+test('TEAM-03: a member in two mentioned teams is targeted exactly once', () => {
+  memberDoc(
+    [
+      { id: 'm1', name: 'Ada Lovelace', status: 'active', teams: ['t1', 't2'] },
+      { id: 'm2', name: 'Bob Chen', status: 'active', teams: ['t2'] },
+      { id: 'm3', name: 'Cara Diaz', status: 'active', teams: [] },
+    ],
+    [
+      { id: 't1', name: 'Alpha' },
+      { id: 't2', name: 'Beta' },
+    ],
+  );
+  D().notifPrefs = {};
+  const targets = emitMentions('@Alpha @Beta ship it', null);
+  assert.deepEqual([...targets].sort(), ['m1', 'm2'], 'Ada is in both teams but lands in the Set once');
+  assert.equal((D().notifs || []).filter(n => n.to === 'm1' && n.type === 'mention').length, 1, 'exactly one notification row for the double-mentioned member');
+  assert.equal([...targets].includes('m3'), false, 'a teamless member is not targeted');
+});
+
+test('TEAM-03: a member not in the mentioned team is not targeted', () => {
+  memberDoc(
+    [
+      { id: 'm1', name: 'Ada Lovelace', status: 'active', teams: ['t1'] },
+      { id: 'm2', name: 'Bob Chen', status: 'active', teams: ['t2'] },
+    ],
+    [{ id: 't1', name: 'Alpha' }],
+  );
+  D().notifPrefs = {};
+  const targets = emitMentions('ping @Alpha', null);
+  assert.deepEqual([...targets], ['m1']);
+  assert.equal([...targets].includes('m2'), false, 'Bob (t2 only) is excluded');
+});
+
+test('TEAM-04: the assignment-picker intersection excludes members outside the project teams', () => {
+  const project = { id: 'p1', teams: ['t1'] };
+  const dual = { id: 'm1', teams: ['t1', 't2'] };
+  const other = { id: 'm2', teams: ['t2'] };
+  assert.equal(memberInProjectTeams(dual, project), true, 'a member whose set intersects is assignable');
+  assert.equal(memberInProjectTeams(other, project), false, 'a member outside every project team is excluded');
+  /* Legacy tolerance mirrors projTeams: scalar member shapes still read. */
+  assert.equal(memberInProjectTeams({ id: 'm3', team: 't1' }, { id: 'p1', teams: ['t1'] }), true);
+  assert.deepEqual(memberTeams(null), [], 'the accessor tolerates a null member');
+});
