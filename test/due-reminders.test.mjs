@@ -8,6 +8,7 @@
    assertions filter the emitted rows down to the fixture's own tasks. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
@@ -39,24 +40,25 @@ const trigger = (nowIso, srv = server) =>
 const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
 const at8 = iso => new Date(`${iso}T08:00:00Z`).toISOString();
 
-let owner = null; // one shared account — signup is throttled to 5/hour/IP per server process
+const owners = new Map(); // one shared account PER SERVER — signup is throttled to 5/hour/IP
 
-/* Create a workspace under the shared account and overwrite its doc with a
-   crafted fixture. `tasks` is a fn(memberId) so fixtures can reference the
-   real member id. Returns the fixture handle plus an `own` row filter. */
-async function makeWorkspace(tasks, prefs = {}, tz = TZ) {
-  if (!owner) {
+/* Create a workspace on `srv` under the shared account and overwrite its doc
+   with a crafted fixture. `tasks` is a fn(memberId) so fixtures can reference
+   the real member id. Returns the fixture handle plus an `own` row filter. */
+async function makeWorkspace(tasks, prefs = {}, tz = TZ, srv = server) {
+  if (!owners.has(srv.base)) {
     const email = `owner-${++seq}@test.local`;
-    await signup(server.base, { name: 'Owner', email, password: GOOD });
-    const c = client(server.base, email);
+    await signup(srv.base, { name: 'Owner', email, password: GOOD });
+    const c = client(srv.base, email);
     const logged = await c.post('/api/auth/login', { email, password: GOOD });
     assert.equal(logged.status, 200, 'owner login');
-    owner = { email, c };
+    owners.set(srv.base, { email, c });
   }
+  const owner = owners.get(srv.base);
   const created = await owner.c.post('/api/workspaces', { name: `Ws${++seq}`, slug: `ws-${seq}` });
   assert.equal(created.status, 201, `workspace create ${created.status}`);
-  const ws = withDb(server.dbPath, db => db.prepare('select * from workspaces where slug = ?').get(`ws-${seq}`));
-  const mem = withDb(server.dbPath, db => db.prepare('select member_id from memberships where workspace_id = ? order by rowid limit 1').get(ws.id));
+  const ws = withDb(srv.dbPath, db => db.prepare('select * from workspaces where slug = ?').get(`ws-${seq}`));
+  const mem = withDb(srv.dbPath, db => db.prepare('select member_id from memberships where workspace_id = ? order by rowid limit 1').get(ws.id));
   assert.ok(mem?.member_id, 'membership carries a member_id');
   const fixtureTasks = tasks(mem.member_id);
   const doc = {
@@ -71,14 +73,15 @@ async function makeWorkspace(tasks, prefs = {}, tz = TZ) {
       notifPrefs: prefs,
     },
   };
-  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id));
+  withDb(srv.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id));
   const ids = new Set(fixtureTasks.map(t => t.id));
   return { ws, memberId: mem.member_id, email: owner.email, own: emitted => emitted.filter(n => ids.has(n.task)) };
 }
 
-const revisionOf = slug => withDb(server.dbPath, db => db.prepare('select revision from workspaces where slug = ?').get(slug).revision);
-const notifRows = slug =>
-  withDb(server.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get(slug).doc).data.notifs);
+const revisionOf = (slug, srv = server) =>
+  withDb(srv.dbPath, db => db.prepare('select revision from workspaces where slug = ?').get(slug).revision);
+const notifRows = (slug, srv = server) =>
+  withDb(srv.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get(slug).doc).data.notifs);
 const reminderKeys = wsId =>
   withDb(server.dbPath, db => db.prepare('select dedup_key from reminders_sent where workspace_id = ?').all(wsId).map(r => r.dedup_key));
 
@@ -279,4 +282,152 @@ test('REM-02: Pacific label maps through DST — the local date, not the UTC dat
   /* Unknown/empty label → UTC fallback (legacy docs seed tz: ''). */
   const { own: ownU } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {}, '');
   assert.ok(ownU(await trigger(at9('2026-01-15'))).some(n => n.snippet === 'Due today: Ship it'), 'empty tz label falls back to UTC');
+});
+
+/* ==================== REM-05: reminder email path (Task 3) ==================== */
+
+/* Minimal SMTP sink: captures DATA payloads so assertions can inspect the
+   real message mailer.js builds. Speaks just enough SMTP (no TLS/AUTH). */
+function fakeSmtp() {
+  const messages = [];
+  const srv = net.createServer(sock => {
+    sock.write('220 test ESMTP\r\n');
+    let buffer = '';
+    let inData = false;
+    let current = null;
+    sock.on('data', chunk => {
+      buffer += chunk.toString();
+      let idx;
+      while ((idx = buffer.indexOf('\r\n')) !== -1) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (inData) {
+          if (line === '.') {
+            inData = false;
+            messages.push(current.join('\n'));
+            current = null;
+            sock.write('250 OK\r\n');
+          } else if (current) {
+            current.push(line.startsWith('..') ? line.slice(1) : line);
+          }
+        } else if (/^EHLO/i.test(line)) {
+          sock.write('250-test\r\n250 OK\r\n');
+        } else if (/^DATA/i.test(line)) {
+          inData = true;
+          current = [];
+          sock.write('354 go\r\n');
+        } else if (/^QUIT/i.test(line)) {
+          sock.write('221 bye\r\n');
+          sock.end();
+        } else {
+          sock.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+  return new Promise(resolve => {
+    srv.listen(0, '127.0.0.1', () => resolve({ srv, port: srv.address().port, messages }));
+  });
+}
+
+/* Decode the base64 text/plain part of a captured message. */
+function textPart(raw) {
+  const lines = raw.split('\n');
+  const i = lines.indexOf('Content-Type: text/plain; charset=UTF-8');
+  assert.ok(i !== -1, 'message has a text/plain part');
+  const body = [];
+  for (let j = i + 2; j < lines.length && !lines[j].startsWith('--'); j++) body.push(lines[j]);
+  return Buffer.from(body.join(''), 'base64').toString('utf8');
+}
+
+test('REM-05: email gate, deep link, by:null never self-skipped, failure isolation', async t => {
+  const smtp = await fakeSmtp();
+  const mailDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-reminders-mail-'));
+  const mail = await startServer({
+    dataDir: mailDir,
+    env: {
+      MASTER_KEY: 'projects-reminders-mail-key',
+      REMINDER_TEST_TOKEN: TOKEN,
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(smtp.port),
+      SMTP_REQUIRE_TLS: 'false',
+      MAIL_FROM: 'noreply@test.local',
+      APP_URL: 'http://app.test',
+    },
+  });
+
+  await t.test('email on: one email per reminder row with the exact deep link (LINK-01)', async () => {
+    const { ws, email, own } = await makeWorkspace(m => [task(m, { id: 'tMail', key: 'K-M1', due: '2026-01-15' })], {}, TZ, mail);
+    const emitted = own(await trigger(at9('2026-01-15'), mail));
+    assert.equal(emitted.length, 2, 'in-app rows present');
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(smtp.messages.length, 2, 'one email per reminder row');
+    for (const raw of smtp.messages) {
+      assert.ok(raw.includes(`To: <${email}>`), 'by:null reminder rows are never self-skipped — owner emailed');
+      assert.ok(textPart(raw).includes(`http://app.test/w/${ws.slug}/task/`), 'deep link shape');
+      assert.ok(raw.includes('Reminders'), 'by-label is the system "Reminders", not "Un membre"');
+    }
+    // Exact deep link resolves the task key.
+    assert.ok(smtp.messages.every(raw => textPart(raw).includes(`http://app.test/w/${ws.slug}/task/`)));
+    const keys = new Set(smtp.messages.map(raw => textPart(raw).match(/http:\/\/app\.test\/w\/[^/]+\/task\/(\S+)/)?.[1]));
+    assert.deepEqual([...keys], ['K-M1'], 'deep link points at the task key');
+    /* Claim this workspace's remaining past_due window so later clocks in
+       this suite emit nothing further for it. */
+    const nudge = own(await trigger(at9('2026-01-16'), mail));
+    assert.deepEqual(nudge.map(n => n.type), ['past_due']);
+    await new Promise(r => setTimeout(r, 300));
+  });
+
+  await t.test('email_reminder false: in-app row present, no email queued (D-27-5)', async () => {
+    /* Due Jan 20 so the first workspace's windows are all claimed by now —
+       the pass scans every workspace, so only this fixture's emits differ. */
+    const { ws, own } = await makeWorkspace(m => [task(m, { id: 'tGate', key: 'K-M2', due: '2026-01-20' })], { email_reminder: false }, TZ, mail);
+    const emitted = own(await trigger(at9('2026-01-20'), mail));
+    assert.equal(emitted.length, 2, 'in-app rows still generated');
+    assert.equal(notifRows(ws.slug, mail).length, 2);
+    const countBefore = smtp.messages.length;
+    await new Promise(r => setTimeout(r, 200));
+    assert.equal(smtp.messages.length, countBefore, 'no email queued while email_reminder is false');
+  });
+
+  await t.test('simulated restart: second pass yields no second email (REM-03)', async () => {
+    const countBefore = smtp.messages.length;
+    await trigger(at9('2026-01-20'), mail); // same clocks again — everything claimed
+    await new Promise(r => setTimeout(r, 200));
+    assert.equal(smtp.messages.length, countBefore, 'no duplicate emails on a replay pass');
+  });
+
+  await mail.stop();
+  smtp.srv.close();
+  fs.rmSync(mailDir, { recursive: true, force: true });
+});
+
+test('REM-05: MAILER rejection is isolated — logged, never rethrown, process survives', async () => {
+  /* Dead SMTP port: connection refused → sendNotif rejects on the .catch path. */
+  const dead = net.createServer();
+  await new Promise(r => dead.listen(0, '127.0.0.1', r));
+  const deadPort = dead.address().port;
+  dead.close();
+  const deadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-reminders-dead-'));
+  const deadSrv = await startServer({
+    dataDir: deadDir,
+    env: {
+      MASTER_KEY: 'projects-reminders-dead-key',
+      REMINDER_TEST_TOKEN: TOKEN,
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(deadPort),
+      SMTP_REQUIRE_TLS: 'false',
+      MAIL_FROM: 'noreply@test.local',
+      APP_URL: 'http://app.test',
+    },
+  });
+  const { own } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {}, TZ, deadSrv);
+  const emitted = own(await trigger(at9('2026-01-15'), deadSrv));
+  assert.equal(emitted.length, 2, 'in-app rows written regardless of SMTP health');
+  await new Promise(r => setTimeout(r, 300));
+  const health = await fetch(`${deadSrv.base}/api/health`);
+  assert.equal(health.status, 200, 'process survived the MAILER rejection');
+  assert.ok(deadSrv.output().includes('notif email'), 'failure logged via console.warn');
+  await deadSrv.stop();
+  fs.rmSync(deadDir, { recursive: true, force: true });
 });

@@ -805,8 +805,9 @@ const NOTIF_EMAIL_KIND = {
 };
 
 /* D-27-4: reminder rows carry `by: null` (system actor) so the self-skip below
-   never drops them; their emails must not read "from Un membre". */
-const REMINDER_TYPES = new Set(['due_reminder', 'past_due']);
+   never drops them; their emails must not read "from Un membre". The reminder
+   check is inlined in the by-resolution (not a module constant) so the
+   notif-email-link source-extraction tests keep evaluating that line standalone. */
 
 function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const wsName = wsRow.name || 'Projects Studio';
@@ -835,7 +836,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
     if (!to) continue;
     const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
     const taskTitle = task?.title || 'a task';
-    const by = REMINDER_TYPES.has(n.type) ? 'Reminders' : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
+    const by = ['due_reminder', 'past_due'].includes(n.type) ? 'Reminders' : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
     /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
        key is resolved at email-build time (it is mutable on project move) and
        the absolute base is APP_URL unconditionally — the boot guard exits when
