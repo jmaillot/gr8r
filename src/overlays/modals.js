@@ -64,6 +64,20 @@ export function modalHtml(m) {
       return wrap('lg', shortcutsModal(H));
     case 'team':
       return wrap('', teamModal(m, H));
+    case 'memberTeams': {
+      const st = S.ui.memberTeams || { teams: [] };
+      return wrap(
+        'sm',
+        `${H(t('act.editTeams'), esc(st.name || ''))}<form class="modal-b" data-submit="submitMemberTeams"><fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.team')}</legend><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
+          .map(
+            tm =>
+              `<button type="button" role="checkbox" aria-checked="${st.teams.includes(tm.id)}" class="opt ${st.teams.includes(tm.id) ? 'on' : ''}" data-a="mteamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${st.teams.includes(tm.id) ? ic('check', 13) : ''}</button>`,
+          )
+          .join(
+            '',
+          )}</div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
+      );
+    }
     case 'filePreview':
       return wrap(m.file?.type === 'pdf' ? 'xl' : 'lg', filePreviewModal(m, H));
     case 'saveView':

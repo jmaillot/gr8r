@@ -69,6 +69,7 @@ export function ctxMenu(p) {
       I('copyEmail', 'mail', tMsg('act.copyEmail')) +
       (canRm
         ? I('ctxRole', 'shield', tMsg('act.changeRole')) +
+          I('editMemberTeams', 'users', tMsg('act.editTeams')) +
           (m.status === 'invited' ? I('resendInvite', 'send', tMsg('act.resendInvite')) : '') +
           sep +
           I('removeMember', 'user-minus', tMsg('act.removeFromWorkspace'), 'danger')

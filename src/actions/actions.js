@@ -19,6 +19,7 @@ import {
   logAct,
   me,
   mem,
+  memberTeams,
   notifyMembers,
   proj,
   projTeams,
@@ -140,7 +141,10 @@ export function emitMentions(txt, tk) {
   const targets = new Set();
   if (np.mention_all !== false) memberIds.forEach(id => targets.add(id));
   if (np.mention_team !== false) {
-    for (const tid of teamIds) (D().members || []).forEach(m => { if (m?.team === tid && m.status === 'active') targets.add(m.id); });
+    for (const tid of teamIds)
+      (D().members || []).forEach(m => {
+        if (memberTeams(m).includes(tid) && m.status === 'active') targets.add(m.id);
+      });
   }
   if (targets.size) {
     // Snippet: a short plain excerpt around the first @, for the inbox preview.
@@ -1422,7 +1426,7 @@ A.clearProjFilters = () => {
   render();
 };
 A.newProject = () => {
-  S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', teams: me().team ? [me().team] : [], lead: D().me, due: dOff(30), tmpl: 'blank' };
+  S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', teams: memberTeams(me()), lead: D().me, due: dOff(30), tmpl: 'blank' };
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'project' });
@@ -1760,7 +1764,7 @@ function addInvitedMember(invites, role, team) {
     if (existing) {
       existing.status = 'invited';
       existing.role = role;
-      existing.team = team;
+      existing.teams = team ? [team] : memberTeams(existing);
       return;
     }
     D().members.push({
@@ -1771,7 +1775,7 @@ function addInvitedMember(invites, role, team) {
         .replace(/\b\w/g, c => c.toUpperCase()),
       email: inv.email,
       role,
-      team,
+      teams: team ? [team] : [],
       title: role,
       c: '#6B7280',
       status: 'invited',
@@ -1871,13 +1875,65 @@ A.resendInvite = async el => {
   render();
   if (!api.enabled) return toast(t('toast.inviteResent', { email: m.email }));
   if (!m) return;
-  const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', m.team || null);
+  const res = await api.createInvites([m.email], API_ROLE[m.role] || 'member', memberTeams(m)[0] || null);
   if (!res.ok) return toast(res.error || t('err.newInvite'), { kind: 'err' });
   const invite = res.data.invites?.[0];
   if (invite?.sent) return toast(t('toast.invitationSentTo', { email: m.email }));
   await copy(invite?.url || '', api.mailEnabled ? t('toast.emailFailedLinkCopied') : t('toast.newInviteLinkCopied'));
 };
 A.viewProfile = el => go('member', { id: el.dataset.id });
+/* D-06: the person-centric mirror of the teams modal — the member context
+   menu opens a multi-select team picker over the same authority set. */
+A.editMemberTeams = el => {
+  const m = mem(el.dataset.id);
+  if (!m) return;
+  S.ui.memberTeams = { id: m.id, name: m.name, teams: [...memberTeams(m)] };
+  S.ui.pop = null;
+  openModal({ type: 'memberTeams' });
+};
+A.mteamToggle = el => {
+  const st = S.ui.memberTeams;
+  if (!st) return;
+  const id = el.dataset.v;
+  st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
+  render();
+};
+A.submitMemberTeams = async () => {
+  const st = S.ui.memberTeams;
+  const m = mem(st?.id);
+  if (!m) {
+    S.ui.memberTeams = null;
+    S.ui.modals.pop();
+    return;
+  }
+  S.ui.memberTeams = null;
+  S.ui.modals.pop();
+  const previous = memberTeams(m);
+  const next = [...new Set(st.teams)];
+  if (JSON.stringify(previous) === JSON.stringify(next)) {
+    render();
+    return;
+  }
+  mutate(() => {
+    m.teams = next;
+  });
+  if (!api.enabled) {
+    render();
+    toast(t('toast.teamSaved', { name: m.name }));
+    return;
+  }
+  /* Hybrid revision contract (Plan 01): setMemberTeams returns no revision —
+     never adopt one — while a role PATCH on the same modal would. */
+  const res = await api.setMemberTeams(m.userId, next);
+  if (!res.ok) {
+    m.teams = previous;
+    render();
+    toast(res.error || t('err.changeTeam'), { kind: 'err' });
+    return;
+  }
+  render();
+  toast(t('toast.teamSaved', { name: m.name }));
+};
 A.assignToMember = el => {
   S.ui.pop = null;
   A.newTask({ dataset: { assignee: el.dataset.id } });
@@ -1897,7 +1953,7 @@ export async function refreshMembers() {
       name: row.name,
       email: row.email,
       role: row.roleLabel,
-      team: row.team ?? existing?.team ?? '',
+      teams: row.teams || existing?.teams || [],
       title: row.title || existing?.title || '',
       c: existing?.c || '#6B7280',
       status: row.status,
@@ -3349,7 +3405,7 @@ A.onbFinish = async () => {
         name: o.proj.trim() || t(`project.template.${tm.id}.name`),
         icon: tm.icon === 'file' ? 'folder' : tm.icon,
         color: 'indigo',
-        team: me().team,
+        teams: memberTeams(me()),
         lead: D().me,
         desc: t('act.createdFromTemplate', { name: t(`project.template.${tm.id}.name`) }),
       },
@@ -3362,7 +3418,7 @@ A.onbFinish = async () => {
           name: e.split('@')[0].replace(/\b\w/g, c => c.toUpperCase()),
           email: e,
           role: 'Member',
-          team: me().team,
+          teams: memberTeams(me()),
           title: t('member.titleMember'),
           c: '#6B7280',
           status: 'invited',

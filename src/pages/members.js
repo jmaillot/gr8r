@@ -2,7 +2,24 @@
 import { ago, esc, foldForSearch, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { ROLES } from '../core/constants.js';
-import { D, S, TM, allTasks, canSee, isMemberAdmin, isOver, me, mem, progressOf, projInTeam, roleLabel, team, teamsList, visibleProjects } from '../core/store.js';
+import {
+  D,
+  S,
+  TM,
+  allTasks,
+  canSee,
+  isMemberAdmin,
+  isOver,
+  me,
+  mem,
+  memberTeams,
+  progressOf,
+  projInTeam,
+  roleLabel,
+  team,
+  teamsList,
+  visibleProjects,
+} from '../core/store.js';
 import { t } from '../core/i18n.js';
 import { api } from '../core/api.js';
 import { av, avStack, empty, pIcon, pStatus, progBar } from '../ui/helpers.js';
@@ -49,12 +66,19 @@ export function pageMembers() {
         const ot = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
         return `<tr data-ctx="member" data-id="${m.id}"><td style="padding-left:14px"><button class="row" data-a="go" data-r="member" data-id="${m.id}" style="gap:10px;text-align:left">${av(m.id, 'md', false)}<span class="col"><b style="font-weight:500">${esc(m.name)}${m.id === D().me ? ` <span class="faint" style="font-weight:400">(${t('page.members.you')})</span>` : ''}</b><span class="faint" style="font-size:12px">${esc(m.email)}</span></span></button></td>
       <td style="text-align:left">${canManage(m) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${roleLabel(m.role)}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${roleLabel(m.role)}</span>`}</td>
-      <td style="text-align:left"><span class="row">${ic(TM[m.team].icon, 13)}${TM[m.team].name}</span></td><td class="num">${ap}</td><td class="num">${ot}</td>
+      <td style="text-align:left">${(() => {
+        const mt = memberTeams(m);
+        return `<span class="row">${ic(TM[mt[0] || ''].icon, 13)}${mt.length ? esc(TM[mt[0]].name) : TM[''].name}${mt.length > 1 ? ` <span class="faint">+${mt.length - 1}</span>` : ''}</span>`;
+      })()}</td><td class="num">${ap}</td><td class="num">${ot}</td>
       <td style="text-align:left" class="muted">${m.last == null ? '—' : m.last < 5 ? `<span style="color:var(--green)">${t('page.members.online')}</span>` : ago(minsAgo(m.last))}</td>
       <td style="text-align:left">${m.status === 'invited' ? `<span class="badge amber"><span class="dot"></span>${t('page.members.invited')}</span>` : m.status === 'deactivated' ? `<span class="badge gray">${t('page.members.deactivated')}</span>` : `<span class="badge green"><span class="dot"></span>${t('page.members.active')}</span>`}</td>
-      <td>${isAdmin && m.userId ? (S.ui.memberRevoke === m.id
-        ? `<span class="row" style="gap:8px;justify-content:flex-end"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="memberRevokeConfirm" data-id="${esc(m.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="memberRevokeCancel">${t('common.cancel')}</button></span>`
-        : `<button class="btn btn-secondary btn-sm" data-a="memberRevokeAsk" data-id="${esc(m.id)}">${t('settings.operator.revokeShort')}</button>`) : ''}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.memberOptions')}">${ic('ellipsis', 14)}</button></td></tr>`;
+      <td>${
+        isAdmin && m.userId
+          ? S.ui.memberRevoke === m.id
+            ? `<span class="row" style="gap:8px;justify-content:flex-end"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="memberRevokeConfirm" data-id="${esc(m.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="memberRevokeCancel">${t('common.cancel')}</button></span>`
+            : `<button class="btn btn-secondary btn-sm" data-a="memberRevokeAsk" data-id="${esc(m.id)}">${t('settings.operator.revokeShort')}</button>`
+          : ''
+      }<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.memberOptions')}">${ic('ellipsis', 14)}</button></td></tr>`;
       })
       .join('')}
     </tbody></table>`
@@ -100,7 +124,7 @@ export function permsTable() {
 export function teamsGrid() {
   return `<div class="pgrid">${teamsList()
     .map(tm => {
-      const ms = D().members.filter(m => m.team === tm.id);
+      const ms = D().members.filter(m => memberTeams(m).includes(tm.id));
       const ps = visibleProjects().filter(p => projInTeam(p, tm.id));
       return `<div class="pcard" data-a="go" data-r="team" data-id="${tm.id}" role="link" tabindex="0"><div class="row"><span class="picon" style="--c:${tm.c}">${ic(tm.icon, 15)}</span><b style="font-weight:600;font-size:14px">${tm.name}</b></div><div class="desc">${tm.desc}</div><div class="foot"><span class="row" style="gap:4px">${ic('users', 12)}${t('page.teams.nMembers', { n: ms.length })}</span><span class="row" style="gap:4px">${ic('folder', 12)}${t('page.teams.nProjects', { n: ps.length })}</span><span class="sp"></span>${avStack(
         ms.map(m => m.id),
@@ -115,7 +139,7 @@ export function pageTeams() {
 export function pageTeam() {
   const tm = team(S.ui.params.id);
   if (!tm) return page404();
-  const ms = D().members.filter(m => m.team === tm.id);
+  const ms = D().members.filter(m => memberTeams(m).includes(tm.id));
   const ps = visibleProjects().filter(p => projInTeam(p, tm.id));
   const ts = allTasks().filter(x => ms.some(m => m.id === x.assignee) && x.status !== 'done');
   return `<div class="page">
@@ -148,7 +172,7 @@ export function pageMember() {
     <div class="row" style="gap:18px;margin-bottom:22px;flex-wrap:wrap;align-items:flex-start">
       ${av(m.id, 'xl ' + (m.last != null && m.last < 5 ? 'presence' : ''), false)}
       <div class="grow" style="min-width:220px"><div class="row" style="gap:10px;flex-wrap:wrap"><h1 style="font-size:var(--fs-2xl);margin:0;font-weight:600;letter-spacing:-.02em">${esc(m.name)}</h1><span class="badge">${m.role === 'Owner' ? ic('crown', 11) : ''}${roleLabel(m.role)}</span>${m.status === 'invited' ? `<span class="badge amber">${t('page.members.invitePending')}</span>` : ''}</div>
-        <div class="muted" style="margin-top:3px">${esc(m.title)} · ${TM[m.team].name}</div>
+        <div class="muted" style="margin-top:3px">${esc(m.title)} · ${(mt => (mt.length ? esc(mt.map(id => TM[id].name).join(', ')) : TM[''].name))(memberTeams(m))}</div>
         <div class="row faint" style="margin-top:8px;gap:14px;font-size:12.5px;flex-wrap:wrap"><span class="row" style="gap:5px">${ic('mail', 13)}<span style="user-select:all">${esc(m.email)}</span></span><span class="row" style="gap:5px">${ic('map-pin', 13)}${esc(m.tz)}</span><span class="row" style="gap:5px">${ic('clock', 13)}${m.last == null ? t('page.members.neverSignedIn') : m.last < 5 ? t('page.members.onlineNow') : t('page.members.activeAgo', { ago: ago(minsAgo(m.last)) })}</span></div></div>
       <div class="row"><button class="btn btn-secondary" data-a="copyText" data-text="${esc(m.email)}">${ic('copy', 14)}${t('act.copyEmail')}</button><button class="btn btn-primary" data-a="newTask" data-assignee="${m.id}">${ic('plus', 14)}${t('act.assignTask')}</button><button class="ibtn" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.more')}">${ic('ellipsis', 16)}</button></div>
     </div>
