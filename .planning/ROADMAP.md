@@ -17,7 +17,7 @@ deep-link path).
 ## Phases
 
 - [x] **Phase 23: Email Deep Links & Creator Watching** - Every notification email links straight to the task, a logged-out click returns to that task after sign-in, and the task creator is auto-watched
-- [ ] **Phase 24: Operator Audit & Workspace-Admin Tier** - Every operator/admin session revocation writes a same-transaction, append-only audit row, and workspace admins get their own revocation tier on the same audited path
+- [x] **Phase 24: Operator Audit & Workspace-Admin Tier** - Every operator/admin session revocation writes a same-transaction, append-only audit row, and workspace admins get their own revocation tier on the same audited path (completed 2026-11-01)
 - [x] **Phase 25: Keyring & Version-Aware Envelopes** - The boot migration filter becomes version-aware before any v2 envelope exists, and TOTP secrets carry a self-describing key-version envelope decrypted through a keyring (completed 2026-10-31)
 - [x] **Phase 26: Re-Wrap Rotation & Key-Custody Runbook** - MASTER_KEY rotates via an idempotent boot-time re-wrap pass with no 2FA re-enrollment, and DEPLOY.md documents the full custody runbook (completed 2026-11-01)
 - [ ] **Phase 27: Due-Date Reminder Scheduler** - A dependency-free server-side pass notifies assignees before/on due dates, restart-safe and exactly-once, honoring per-type prefs and email deep links
@@ -67,7 +67,7 @@ Plans:
   4. An owner can view the operator/admin action trail in the app, filtered by machine verbs, including actions against a user who has since been deleted (no cascade loss)
   5. No route in the app can edit or delete an audit row
 
-**Plans:** 4/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 24-04-PLAN.md
@@ -148,7 +148,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 23. Email Deep Links & Creator Watching | 6/6 | In Progress|  |
-| 24. Operator Audit & Workspace-Admin Tier | 4/4 | In Progress|  |
+| 24. Operator Audit & Workspace-Admin Tier | 4/4 | Complete    | 2026-11-01 |
 | 25. Keyring & Version-Aware Envelopes | 2/2 | Complete    | 2026-10-31 |
 | 26. Re-Wrap Rotation & Key-Custody Runbook | 3/3 | Complete    | 2026-11-01 |
 | 27. Due-Date Reminder Scheduler | 0/? | Not started | - |
