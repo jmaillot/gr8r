@@ -515,6 +515,16 @@ function normalizeDoc(doc, meta) {
   // Recipient validity is checked in docForClient, AFTER syncProfiles rebuilds the roster:
   // the stored document intentionally carries no members.
   if (Array.isArray(out.data.notifs)) out.data.notifs = out.data.notifs.filter(n => n && typeof n.to === 'string' && n.to);
+  /* TEAM-05 (D-02): membership left the document — doc.teams[] carries only the
+     team definitions (id, name, color). A stale or crafted document carrying
+     members arrays is stripped on every read; the roster lives in team_members. */
+  if (Array.isArray(out.data.teams)) {
+    out.data.teams = out.data.teams.map(t => {
+      if (!t || typeof t !== 'object') return t;
+      const { members: _membership, ...definition } = t;
+      return definition;
+    });
+  }
   // D-27-5: the three reminder prefs default ON — a stored doc predating them
   // must read as all-ON (=== false disables), never silently silenced. The
   // merge is on read only; existing workspaces are not rewritten.
@@ -1026,26 +1036,9 @@ function runReminderPass({ now: at = new Date() } = {}) {
   return emitted;
 }
 
-/* P4-c fix: team assignment for account-backed members must survive PUTs.
-   The stored document carries no members — the roster is rebuilt from the
-   memberships table — so a client-side `member.team` edit would be discarded.
-   An admin's PUT diffs the incoming roster against the authority rows; the
-   read path (syncProfiles) mirrors the result back into the doc. */
-function syncMemberTeams(workspaceId, incomingMembers, role) {
-  if (ROLE_RANK[role] < ROLE_RANK.admin || !Array.isArray(incomingMembers)) return;
-  const rows = db.prepare('select user_id, team from memberships where workspace_id = ?').all(workspaceId);
-  const byUser = new Map(rows.map(r => [r.user_id, r]));
-  for (const m of incomingMembers) {
-    if (!m?.userId) continue;
-    const row = byUser.get(m.userId);
-    if (!row) continue;
-    const team = m.team || null;
-    if ((row.team || null) !== team) {
-      db.prepare('update memberships set team = ? where workspace_id = ? and user_id = ?').run(team, workspaceId, m.userId);
-      row.team = team;
-    }
-  }
-}
+/* TEAM-01: team assignment for account-backed members lives in the
+   team_members authority rows, edited only through the dedicated
+   PUT /members/:uid/teams route (D-01) — the document never carries it. */
 
 function docForClient(doc, ws, membership) {  const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
@@ -1094,6 +1087,16 @@ function docFromClient(incoming, stored, ws, role, membership) {
   delete next.data.invoices;
   delete next.data.sessions;
   delete next.data.tfa;
+  /* TEAM-05 (D-02): the write path strips doc-carried membership independently
+     of the read path (D-30 precedent), so the STORED document comes out clean
+     even when a stale client ships teams[].members. */
+  if (Array.isArray(next.data.teams)) {
+    next.data.teams = next.data.teams.map(t => {
+      if (!t || typeof t !== 'object') return t;
+      const { members: _membership, ...definition } = t;
+      return definition;
+    });
+  }
   normalizeProjects(next);
   return next;
 }
@@ -1254,7 +1257,9 @@ function stripMember(doc, memberId, userId = null) {
     }
     return { ...p, lead, members, perms };
   });
-  d.teams = (d.teams || []).map(t => (Array.isArray(t.members) ? { ...t, members: t.members.filter(x => !hit(x)) } : t));
+  /* TEAM-05 (D-02): doc.teams[] carries definitions only — there is no member
+     roster left to strip. The team_members authority rows are purged by the
+     caller in the same transaction. */
 }
 
 /* Read-modify-write the workspace document inside the caller's transaction. */
@@ -2899,12 +2904,10 @@ async function handleApi(req, res, url) {
          must never wait on SMTP. */
       const storedNotifIds = new Set((Array.isArray(storedDoc?.data?.notifs) ? storedDoc.data.notifs : []).map(n => n?.id).filter(Boolean));
       const newNotifs = (Array.isArray(next?.data?.notifs) ? next.data.notifs : []).filter(n => n?.id && !storedNotifIds.has(n.id));
-      /* Team edits ride the same PUT (see syncMemberTeams) — applied in the
-         transaction so the doc and the authority rows stay consistent. The
-         RAW incoming roster is used: docFromClient drops account members the
-         stored doc doesn't know (it never stores members), but a legitimate
-         team edit still arrives on them. */
-      syncMemberTeams(row.id, doc?.data?.members, ctx.membership.role);
+      /* TEAM-05 (D-02): membership no longer rides the doc PUT — the
+         team_members rows are edited only through the dedicated PUT
+         /members/:uid/teams route, inside its own transaction. Doc writes can
+         neither carry nor clobber membership. */
       const t = now();
       db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
       db.exec('commit');
@@ -2989,6 +2992,8 @@ async function handleApi(req, res, url) {
     }
     transaction(() => {
       db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
+      // TEAM-01: leaving purges the team_members authority rows too.
+      db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
       updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
     });
     return json(res, 200, { left: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
@@ -3012,6 +3017,8 @@ async function handleApi(req, res, url) {
       if (row.role === 'owner' && ownerCount(ctx.ws.id, target.id) === 0) return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
       transaction(() => {
         db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+        // TEAM-01: membership is authority rows — removal purges the team set too.
+        db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
         updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
       });
       return json(res, 200, { removed: true, userId: target.id, revision: wsRevision(ctx.ws.id) });
@@ -3026,8 +3033,9 @@ async function handleApi(req, res, url) {
     if (row.role === 'owner' && nextRole !== 'owner' && ownerCount(ctx.ws.id, target.id) === 0) {
       return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
     }
-    const team = body?.team === undefined ? undefined : body.team ? String(body.team).slice(0, 40) : null;
     const title = body?.title === undefined ? undefined : String(body.title).slice(0, 60);
+    /* TEAM-05 (D-02): the PATCH route no longer accepts `team` — membership is
+       edited only through PUT /members/:uid/teams against the authority rows. */
     transaction(() => {
       if (nextRole !== row.role) {
         db.prepare('update memberships set role = ? where workspace_id = ? and user_id = ?').run(nextRole, ctx.ws.id, target.id);
@@ -3037,7 +3045,6 @@ async function handleApi(req, res, url) {
         const profile = (doc.data.members || []).find(m => m.id === memberId || m.userId === target.id);
         if (!profile) return;
         profile.role = ROLE_LABEL[nextRole] || profile.role;
-        if (team !== undefined) profile.team = team;
         if (title !== undefined) profile.title = title;
       });
     });

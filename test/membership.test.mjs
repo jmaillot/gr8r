@@ -278,7 +278,6 @@ test('removing a member cleans up their assignments and access', async () => {
   ];
   doc.data.teams = [{ id: 'team_core', name: 'Core', members: [caraRow.memberId, ownerId] }];
   assert.equal((await owner.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
-
   const before = (await owner.get('/api/workspaces/acme')).data;
   const removed = await owner.del(`/api/workspaces/acme/members/${caraRow.userId}`);
   assert.equal(removed.status, 200);
@@ -298,7 +297,7 @@ test('removing a member cleans up their assignments and access', async () => {
   const project = after.doc.data.projects.find(p => p.id === 'p_cleanup');
   assert.equal(project.members.includes(caraRow.memberId), false, 'the project roster is stripped');
   assert.equal(caraRow.memberId in project.perms, false, 'the project permissions are stripped');
-  assert.equal(after.doc.data.teams[0].members.includes(caraRow.memberId), false, 'the team roster is stripped');
+  assert.equal(after.doc.data.teams[0].members, undefined, 'the team carries no member roster (TEAM-05: membership left the doc)');
   assert.equal((await cara.get('/api/workspaces/acme')).status, 404, 'the removed account loses access');
 });
 
@@ -405,6 +404,35 @@ test('PUT member teams writes authority rows, projects teams[] and gates on admi
       assert.equal(db.prepare('select count(*) as n from team_members where user_id = ?').get(target.userId).n, 0, 'no rows for a teamless member');
     });
     assert.deepEqual((await boss.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'tm@test.local').teams, []);
+  } finally {
+    await s.stop();
+  }
+});
+
+/* TEAM-05 (Phase 28, D-02) server-side pin: a doc PUT carrying teams[].members
+   can neither carry membership into the authority rows nor store it in the doc. */
+test('a doc PUT carrying teams[].members leaves the authority rows untouched and the doc clean', async () => {
+  const s = await startServer();
+  try {
+    const signedIn = await login(s.base, ADMIN.email, ADMIN.password);
+    const boss = signedIn.client;
+
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [{ id: 'team_x', name: 'X', members: ['m_someone', 'm_other'] }];
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    const after = (await boss.get('/api/workspaces/acme')).data;
+    assert.equal('members' in after.doc.data.teams[0], false, 'the served document carries no members array on teams');
+
+    const stored = JSON.parse(withDb(s.dbPath, db => db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
+    assert.equal('members' in stored.data.teams[0], false, 'the STORED document is stripped too (write path, D-30 precedent)');
+
+    assert.equal(
+      withDb(s.dbPath, db => db.prepare('select count(*) as n from team_members').get()).n,
+      0,
+      'no team_members row was created by the doc PUT',
+    );
   } finally {
     await s.stop();
   }
