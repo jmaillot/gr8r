@@ -24,7 +24,7 @@ covered_files:
   - src/pages/members.js
   - test/membership.test.mjs
   - test/migration.test.mjs
-covered_digest: "v2:sha256:f142cd36a68963d487b60355622d037202bee4eba3c09da93b32c1708494620a"
+covered_digest: "v2:sha256:36ab0c38c5da0c239d36607ee1205c5aee35d9574f843c568055ecfa6fc8c913"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
