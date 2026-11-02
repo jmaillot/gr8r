@@ -276,6 +276,12 @@ function openDb() {
   // Phase 28 D-07: invites carry a JSON array of teams. The scalar `team`
   // column above stays on disk as backfill-only legacy (D-04) — never read.
   ensureColumn(db, 'invites', 'teams', 'text');
+  // Phase 29 D-02: a membership or invite can carry a JSON scope
+  // ({teams:[],projects:[]}). null = workspace-wide is the correct legacy
+  // state — no backfill. Additive-only: second boot is a no-op by
+  // construction and pinned byte-identical in test/migration.test.mjs.
+  ensureColumn(db, 'memberships', 'scope', 'text');
+  ensureColumn(db, 'invites', 'scope', 'text');
   ensureColumn(db, 'users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -609,6 +615,62 @@ function canManageProject(p, memberId, role) {
   return !!memberId && p?.lead === memberId;
 }
 
+/* --------------------------- scope predicate (Phase 29) --------------------------- */
+
+/*
+ * The membership's project scope (D-01/D-02/D-04): null = workspace-wide, else
+ * { teams:[], projects:[] } — reach is the union of the scoped teams' projects
+ * plus the explicitly scoped projects. Parsing is defensive: unreadable JSON,
+ * non-object payloads and non-string ids degrade to workspace-wide (null)
+ * rather than locking a member out. D-04: scope only subtracts reach, and an
+ * admin/owner membership is ALWAYS workspace-wide — stored JSON can never
+ * blind a higher role, whatever the column says.
+ */
+function projectScope(membership) {
+  if (!membership || ROLE_RANK[membership.role] >= ROLE_RANK.admin) return null;
+  let raw = membership.scope;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const teams = Array.isArray(raw.teams) ? [...new Set(raw.teams.filter(t => typeof t === 'string' && t))] : [];
+  const projects = Array.isArray(raw.projects) ? [...new Set(raw.projects.filter(p => typeof p === 'string' && p))] : [];
+  // D-01: an empty scope ({teams:[],projects:[]}) IS workspace-wide.
+  if (!teams.length && !projects.length) return null;
+  return { teams, projects };
+}
+
+/* Does a project fall inside the scope's reach? Null scope = workspace-wide. */
+function inScopeProject(p, scope) {
+  if (!scope) return true;
+  if (p?.id && scope.projects.includes(p.id)) return true;
+  return Array.isArray(p?.teams) && p.teams.some(t => scope.teams.includes(t));
+}
+
+/*
+ * The ONE hidden-project funnel (Phase 29): private-hidden ∪ out-of-scope for
+ * scoped members, plain private-hidden otherwise. Both document read
+ * (redactDoc) and write (mergeClientDoc) consume this — never a second
+ * pipeline. Out-of-scope composition must NOT be `canSeeProject && inScope`:
+ * the D-03 scope-grants-access inversion (a scoped guest opening a private
+ * project) later rides this same function, and a conjunctive form would
+ * structurally forbid it.
+ */
+function hiddenFor(doc, membership) {
+  const scope = projectScope(membership);
+  if (!scope) return hiddenProjectIds(doc, membership?.member_id || null);
+  const seen = new Set();
+  for (const p of doc?.data?.projects || []) {
+    if (!p?.id) continue;
+    if (!canSeeProject(p, membership.member_id) || !inScopeProject(p, scope)) seen.add(p.id);
+  }
+  return seen;
+}
+
 /*
  * Normalises project access in place. The document is the source of truth, but legacy rows and
  * crafted documents can carry strings, missing lists, retired `access` flags or no manager.
@@ -728,10 +790,11 @@ function mergeRecentSearches(storedList, incomingList, hiddenTerms, keepStored) 
   return out.slice(0, 5);
 }
 
-function redactDoc(doc, memberId) {
+function redactDoc(doc, membership) {
   const data = doc?.data;
   if (!data) return doc;
-  const hiddenProjects = hiddenProjectIds(doc, memberId);
+  // Phase 29: the single scope-aware funnel — private-hidden ∪ out-of-scope.
+  const hiddenProjects = hiddenFor(doc, membership);
   if (!hiddenProjects.size) return doc;
   const hiddenTasks = hiddenTaskIds(doc, hiddenProjects);
   const hiddenViews = new Set((data.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
@@ -796,7 +859,9 @@ function mergeClientDoc(incoming, stored, membership) {
   normalizeProjects(next);
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
-  const hiddenProjects = hiddenProjectIds(stored, memberId);
+  // Phase 29: same single scope-aware funnel as the read side — reserved
+  // out-of-scope rows can never be resurrected by a stale client doc PUT.
+  const hiddenProjects = hiddenFor(stored, membership);
   const storedData = stored?.data || {};
   const nextData = next.data;
 
@@ -1110,7 +1175,7 @@ function docForClient(doc, ws, membership) {
     const memberIds = new Set((Array.isArray(out.data.members) ? out.data.members : []).map(m => m?.id).filter(Boolean));
     out.data.notifs = out.data.notifs.filter(n => memberIds.has(n.to));
   }
-  return membership ? redactDoc(out, membership.member_id) : out;
+  return membership ? redactDoc(out, membership) : out;
 }
 
 function docFromClient(incoming, stored, ws, role, membership) {
@@ -3540,6 +3605,58 @@ async function handleApi(req, res, url) {
     );
     member.teams = teamsOfUser(ctx.ws.id, target.id); // read back from the authority, not the request
     return json(res, 200, { member });
+  }
+
+  /* SCOPE-01 (Phase 29, D-01/D-04/D-12): set a member's project scope in one
+     call. Admin-gated like the teams route, and it edits ONLY the
+     memberships.scope authority column inside its own transaction — the
+     document and its revision are untouched, so the response carries no
+     `revision` claim (same TEAM-05 precondition as above: another session's
+     pending doc write can never be clobbered by a membership change). D-04:
+     admin and owner memberships are always workspace-wide — a scope write to
+     an admin+ target is rejected outright rather than silently nulled. D-05:
+     memberPayload never projects scope details to anyone. */
+  const wsMemberScopeMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/scope$/);
+  if (wsMemberScopeMatch && method === 'PUT') {
+    const ctx = requireWorkspace(req, res, wsMemberScopeMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    const target = db.prepare('select * from users where id = ?').get(wsMemberScopeMatch[2]);
+    const row = target ? membershipOf(ctx.ws.id, target.id) : null;
+    if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    if (ROLE_RANK[row.role] >= ROLE_RANK.admin) return fail(res, 400, 'scopeNotAllowed', 'Admin and owner memberships are always workspace-wide');
+    // Minimal shape validation (Phase 29 plan task 1): whitelist, caps and the
+    // scope-explicit contract arrive with the full-validation pass (task 2).
+    const raw = body?.scope;
+    if (raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) return fail(res, 400, 'scopeRequired', 'Provide a scope object or null');
+    let scope = null;
+    if (raw) {
+      if (!Array.isArray(raw.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
+      if (!Array.isArray(raw.projects)) return fail(res, 400, 'projectsRequired', 'Provide a projects array');
+      const teams = [...new Set(raw.teams.map(t => String(t || '').trim().slice(0, 40)).filter(Boolean))];
+      const projects = [...new Set(raw.projects.map(p => String(p || '').trim().slice(0, 40)).filter(Boolean))];
+      // D-01: an empty scope is workspace-wide — stored as null.
+      if (teams.length || projects.length) scope = { teams, projects };
+    }
+    transaction(() => {
+      db.prepare('update memberships set scope = ? where workspace_id = ? and user_id = ?').run(scope ? JSON.stringify(scope) : null, ctx.ws.id, target.id);
+    });
+    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
+    const member = memberPayload(
+      {
+        role: row.role,
+        member_id: row.member_id,
+        user_id: target.id,
+        email: target.email,
+        name: target.name,
+        last_login_at: target.last_login_at,
+        created_at: target.created_at,
+      },
+      doc,
+      ctx.user.id,
+    );
+    return json(res, 200, { member }); // no `revision` claim — doc untouched
   }
 
   /* ---------- workspace-admin session revocation (AUD-02, D-R1/R2/R4) ----------
