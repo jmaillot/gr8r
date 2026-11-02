@@ -474,6 +474,96 @@ function buildNotifMessage(config, msg) {
   };
 }
 
+/* TFA-MAIL: security alert — a 2FA factor was added or removed on the
+   account. Unlike notification emails this is NOT gated by workspace prefs:
+   security alerts always reach the account address. */
+function buildSecurityAlertMessage(config, msg) {
+  const to = bareAddress(msg.to);
+  if (!addressOk(to)) throw new Error('Security alert address is invalid');
+
+  const actions = {
+    added: 'Two-factor factor added',
+    removed: 'Two-factor factor removed',
+    disabled: 'Two-factor authentication disabled',
+  };
+  const sentences = {
+    added: 'A new two-factor authentication factor was added to your account.',
+    removed: 'A two-factor authentication factor was removed from your account.',
+    disabled: 'Two-factor authentication was disabled on your account.',
+  };
+  const action = actions[msg.action] ? msg.action : 'added';
+  const factor = text(msg.factor);
+  const ip = text(msg.ip) || 'unknown';
+  const when = text(msg.when) || new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+  const subject = `Security alert: ${actions[action]}`;
+  const detail = factor ? `Factor: ${factor}` : null;
+  const textBody = [
+    'Hi,',
+    '',
+    sentences[action],
+    ...(detail ? ['', detail] : []),
+    '',
+    `When: ${when}`,
+    `IP address: ${ip}`,
+    '',
+    "If this wasn't you, change your password immediately and review your account's active sessions.",
+  ].join('\r\n');
+
+  const htmlBody = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f6f5f2;color:#26241f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f2;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
+        <tr><td>
+          <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(sentences[action])}</p>
+          ${detail ? `<p style="margin:0 0 14px;font-size:15px;line-height:1.55"><strong>${escapeHtml(detail)}</strong></p>` : ''}
+          <p style="margin:0 0 4px;font-size:13px;line-height:1.55;color:#6b665c">When: ${escapeHtml(when)}</p>
+          <p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#6b665c">IP address: ${escapeHtml(ip)}</p>
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">If this wasn't you, change your password immediately and review your account's active sessions.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const boundary = `projects_${crypto.randomBytes(12).toString('hex')}`;
+  const headers = [
+    `From: ${formatAddress(config.fromName || 'Projects Studio', config.from)}`,
+    `To: <${to}>`,
+    ...(config.replyTo ? [`Reply-To: <${config.replyTo}>`] : []),
+    `Subject: ${encodeWord(subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <${crypto.randomUUID()}@${domainOf(config.from)}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    'Auto-Submitted: auto-generated',
+    'X-Mailer: Projects Studio',
+  ];
+
+  const body = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(textBody),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(htmlBody),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+
+  return {
+    to,
+    data: [...headers, '', body].join('\r\n') + '\r\n',
+  };
+}
+
 function buildInviteMessage(config, invite) {
   const to = bareAddress(invite.to);
   if (!addressOk(to)) throw new Error('Invite email address is invalid');
@@ -571,6 +661,9 @@ export function createMailer(env = process.env) {
       async sendInvite() {
         throw new Error(error || 'Email delivery is not configured');
       },
+      async sendSecurityAlert() {
+        throw new Error(error || 'Email delivery is not configured');
+      },
     };
   }
 
@@ -594,6 +687,16 @@ export function createMailer(env = process.env) {
       const session = new SmtpSession(config);
       try {
         await session.send(buildNotifMessage(config, msg));
+      } finally {
+        session.destroy();
+      }
+    },
+    /* TFA-MAIL: account-level security alert (2FA factor added/removed).
+       Fire-and-forget from the caller, same failure discipline as sendNotif. */
+    async sendSecurityAlert(msg) {
+      const session = new SmtpSession(config);
+      try {
+        await session.send(buildSecurityAlertMessage(config, msg));
       } finally {
         session.destroy();
       }

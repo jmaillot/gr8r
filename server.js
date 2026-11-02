@@ -2497,6 +2497,24 @@ function logSecurity(userId, verb) {
   db.prepare('insert into security_log (id, user_id, verb, created_at) values (?,?,?,?)').run(uid(), userId, verb, now());
 }
 
+/* TFA-MAIL: fire-and-forget security alert on 2FA factor changes. Account-level
+   by design — it deliberately does NOT ride queueNotifEmails: no workspace
+   notif prefs gate a security alert, and the pipeline's self-skip (by === to)
+   plus member-email resolution are workspace concepts this must bypass.
+   Failures are logged, never surfaced to the client (same discipline as
+   notif emails). The primary factor's server-side name is a catalogue key —
+   humanize it for the email body. */
+function sendTfaSecurityAlert(user, action, factorName, req) {
+  if (!MAILER.enabled) return;
+  const factor = factorName === 'settings.tfa.factor.primary' ? 'Primary authenticator' : factorName || '';
+  MAILER.sendSecurityAlert({
+    to: user.email,
+    action,
+    factor,
+    ip: clientIp(req),
+  }).catch(err => console.warn(`tfa security alert ${action} → ${user.email}: ${err.message}`));
+}
+
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -2777,6 +2795,7 @@ async function handleApi(req, res, url) {
       // WR-03: the pending entry was already consumed before verification —
       // nothing left to clear here.
     });
+    sendTfaSecurityAlert(user, 'added', 'settings.tfa.factor.primary', req);
     return json(res, 200, { ok: true, recoveryCodes: codes });
   }
 
@@ -2838,6 +2857,7 @@ async function handleApi(req, res, url) {
     // D-107: the security verb records only on committed success — after the
     // transaction, before the response.
     logSecurity(user.id, 'tfa_disabled');
+    sendTfaSecurityAlert(user, 'disabled', '', req);
     return json(res, 200, { ok: true });
   }
 
@@ -3021,6 +3041,7 @@ async function handleApi(req, res, url) {
     });
     // Success-only security event (D-107 discipline).
     logSecurity(user.id, 'tfa_factor_added');
+    sendTfaSecurityAlert(user, 'added', label, req);
     return json(res, 200, codes ? { ok: true, recoveryCodes: codes } : { ok: true });
   }
 
@@ -3040,7 +3061,7 @@ async function handleApi(req, res, url) {
     // T-31-09: strict 6-digit-only gate with NO recovery lookup (D-14/D-59/D-72).
     if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
     // Ownership: an unknown or foreign factorId is a 404 before any verify.
-    const target = db.prepare('select id from totp_factors where id = ? and user_id = ?').get(factorId, user.id);
+    const target = db.prepare('select id, name from totp_factors where id = ? and user_id = ?').get(factorId, user.id);
     if (!target) return fail(res, 404, 'factorNotFound', 'That factor does not exist');
     // D-15/T-31-08: with more than one factor the code must verify against a
     // factor that is NOT the removed one — self-lockout is structurally
@@ -3083,6 +3104,7 @@ async function handleApi(req, res, url) {
       }
     });
     logSecurity(user.id, 'tfa_factor_removed');
+    sendTfaSecurityAlert(user, 'removed', target.name, req);
     return json(res, 200, { ok: true });
   }
 
