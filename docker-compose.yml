@@ -37,6 +37,12 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       DATA_DIR: /data
       MASTER_KEY: ${MASTER_KEY:?set MASTER_KEY in .env (32+ random chars; encrypts TOTP secrets — losing it locks out 2FA)}
+      OIDC_ENABLED: ${OIDC_ENABLED:-false}
+      OIDC_TENANT_ID: ${OIDC_TENANT_ID:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_SSO_ONLY: ${OIDC_SSO_ONLY:-false}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
     volumes:
       - projects-studio-data:/data
     # No published port: Traefik reaches the container over the shared network.

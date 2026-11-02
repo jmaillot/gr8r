@@ -223,7 +223,8 @@ Users then click **Continue with Microsoft** on the sign-in page and any invitat
 surface; the button appears **only** when the server config below is complete — nothing
 is rendered from a client-side guess.
 
-Add to `.env`:
+Add to `.env` (docker-compose.yml already forwards these to the container — no compose
+edit needed):
 
 ```dotenv
 OIDC_ENABLED=true
@@ -257,6 +258,30 @@ credential intact and password sign-in resumes with no data loss.
 After restarting the container, run one real sign-in with a tenant account as a smoke
 test — the authorize → Microsoft → callback round-trip is the one check that cannot be
 verified without the real tenant.
+
+**Smoke-test checklist** (from an empty config to a working sign-in):
+
+1. `cp .env.example .env` (or edit your existing `.env`) and fill `OIDC_TENANT_ID`,
+   `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`; set `OIDC_ENABLED=true`. Leave
+   `OIDC_SSO_ONLY=false` for the first test so password sign-in still works as a fallback.
+2. In the Azure portal (Entra admin center → App registration, step 3 above), make sure
+   the redirect URI `https://<your-host>/api/auth/oidc/callback` is registered.
+3. Rebuild and restart — the image must contain the new `oidc.js` module:
+
+   ```sh
+   docker compose up -d --build
+   ```
+
+4. Sanity checks before signing in:
+   - `docker compose logs projects` — the server must boot with **no** `ERR_MODULE_NOT_FOUND`
+     for `oidc.js` (that error means the runtime image predates the fix or the build cache
+     is stale: `docker compose build --no-cache projects`).
+   - `curl -s https://<your-host>/api/config | grep oidc` — must show `"oidcEnabled":true`.
+5. Open `https://<your-host>/login` — the **Continue with Microsoft** button must be
+   visible. Click it: you should be redirected to `login.microsoftonline.com`, sign in
+   with a tenant account, and land back in the app as a signed-in user.
+6. Negative check: with `OIDC_ENABLED=false` (or the three vars blank), the button must
+   disappear and `/api/auth/oidc/start` must answer 404 after a restart.
 
 ## 6. Start it
 
