@@ -20,23 +20,13 @@ awaiting: user response (retest after redeploying the server build)
 
 ### 1. Scope limits visibility to the assigned team/project
 expected: User2 (Member) sees only the projects his scope names. Admin flow: member modal
-  → scope editor → check EquipeB ⇒ User2 sees ProjetB (EquipeB) and not ProjetA (EquipeA).
-result: issue
-reported: "User2 basculé de EquipeA vers EquipeB voit toujours ProjetA et pas ProjetB"
-severity: major
-root_cause: "Tested against a stale deployment, not the phase-29 build. The running server
-  (PID 4037, root, dist/start/server.js) started 07:29 today — before phase 29 finished
-  (11:06) and before the review fixes (11:30+). This repo's dist/ has no start/ entry, so the
-  process serves an older deployed copy. Additionally, team membership alone never drives
-  visibility (by design): visibility is governed by the membership SCOPE (member modal scope
-  editor), not by the teams picker. Phase 28 moved memberships to the DB; the scope column
-  (D-02) is independent of membership.team."
-missing:
-  - "Redeploy/restart the server from the pushed main (0e88542) and retest"
-  - "Set User2's scope via the member modal scope editor (teams: EquipeB) — moving teams
-     between EquipeA/EquipeB does not update scope"
-test: 1
-artifacts: []
+  scope editor — check EquipeB ⇒ User2 sees ProjetB, not ProjetA.
+result: skipped
+reason: "Deferred follow-up: Product-model change decided during UAT — visibility must be
+  derived from team membership for ALL members (project.teams ∩ member.teams), projects
+  with no team stay workspace-wide. The phase-29 scope stays as an optional admin
+  restriction on top. Routed to ROADMAP backlog 999.1; not a phase-29 gap (its contract,
+  the explicit scope predicate, works as designed — verified by test/scope.test.mjs)."
 debug_session: ""
 
 ### 2. Guest / scoped-member browser walkthrough (D-05/D-08/D-11)
@@ -48,27 +38,23 @@ result: pending
 
 total: 2
 passed: 0
-issues: 1
+issues: 0
 pending: 1
-skipped: 0
+skipped: 1
 blocked: 0
+
+## Deferred Follow-Ups
+
+- test: 1
+  idea: "Visibilité dérivée des équipes pour tout le workspace : un projet est lisible par
+    les membres de ses équipes (project.teams ∩ member.teams ≠ ∅) ; un projet sans équipe
+    reste workspace-wide ; le scope phase 29 demeure une restriction admin optionnelle
+    par-dessus. Décidé en UAT le 2026-11-02 (scénario User2 EquipeA→EquipeB)."
+  deferred_at: 2026-11-02
 
 ## Gaps
 
-- gap_id: G-29-1
-  truth: "Member scoped to EquipeB sees ProjetB and not ProjetA; team moves alone do not
-    change visibility — scope does."
-  status: failed
-  reason: "User reported: User2 basculé de EquipeA vers EquipeB voit toujours ProjetA et pas
-    ProjetB. Diagnosed: server under test predates phase 29 (deployed dist/start/server.js
-    started 07:29, phase finished 11:06); plus design clarification — scope (member modal),
-    not team membership, drives visibility."
-  severity: major
-  test: 1
-  artifacts: []
-  missing:
-    - "Redeploy from main (0e88542) and restart the server"
-    - "Set scope via member modal scope editor, then retest"
+[none]
 
 
 # Phase 29: User Acceptance Testing
