@@ -16,6 +16,8 @@ import { ADMIN, inviteToken, login, signup, startServer, withDb } from './helper
 
 const PASSWORD = 'scope-password-1';
 const ACCOUNT = (name, email) => ({ name, email, password: PASSWORD });
+/* Test token for the internal reminder-pass route (family-5 matrix probes). */
+const SCOPE_TOKEN = 'scope-reminder-token';
 
 let server;
 let owner;
@@ -28,7 +30,9 @@ const scopeOf = userId =>
   withDb(server.dbPath, db => db.prepare('select scope from memberships where workspace_id = ? and user_id = ?').get(server.wsId, userId).scope);
 
 before(async () => {
-  server = await startServer();
+  // REMINDER_TEST_TOKEN enables the test-only reminder-pass route — the
+  // family-5 matrix probes drive it (see the SCOPE-04 block below).
+  server = await startServer({ env: { REMINDER_TEST_TOKEN: SCOPE_TOKEN } });
   const signedIn = await login(server.base, ADMIN.email, ADMIN.password);
   assert.equal(signedIn.status, 200, 'bootstrap owner signs in');
   owner = signedIn.client;
@@ -391,11 +395,12 @@ test('a workspace-wide outsider hits the closed gap: private-project file now 40
    Checked, NOT affected (no probe needed):
    - family 3 (file upload): metadata rides the doc channel — family 2's
      write guard covers what a caller can attach;
-   - family 7 (members roster): D-05 keeps it unfiltered; scope edits are
+   - family 7 (members roster): D-05 keeps it unfiltered; the full roster is
+     shown and scope details are never projected — scope edits are
      admin-gated authority writes;
    - family 8 (workspace meta): D-08 untouched — no project surface.
 
-   Families 5–7 below are placeholder rows covered by Plans 03/04; a new
+   Family 6 below is the remaining placeholder row (Plan 29-04); a new
    project-touching family added later must visibly extend this table. */
 
 const MATRIX = [
@@ -417,10 +422,22 @@ const MATRIX = [
     kind: 'file',
     expected: { inScope: 200, outOfScope: 404, unknown: 404 },
   },
+  {
+    family: 5,
+    name: 'reminder pass (server send-time skip, SCOPE-04)',
+    kind: 'reminder',
+    expected: { inScope: 'reminded', outOfScope: 'skipped', unknown: null },
+    skipUnknown: 'reminders address tasks, not raw project ids — no unknown probe exists',
+  },
+  {
+    family: 5,
+    name: 'notification fan-out (client emit pre-filter, A4)',
+    kind: 'fanout',
+    expected: { inScope: 'present', outOfScope: 'absent', unknown: null },
+    skipUnknown: 'notifications address members and tasks, not raw project ids — no unknown probe exists',
+  },
   { family: 3, name: 'file upload', skip: 'covered by Plan 29-02 family 2 — metadata rides the doc channel' },
-  { family: 5, name: 'reminder pass', skip: 'covered by Plan 29-03 (SCOPE-04 server-side skip)' },
   { family: 6, name: 'invites', skip: 'covered by Plan 29-04 (SCOPE-05/06 invite-carried scope)' },
-  { family: 7, name: 'members', skip: 'covered by Plan 29-04 (D-05 roster unfiltered, admin-gated scope edits)' },
 ];
 
 const MATRIX_SCOPE = { projects: ['p_in'], teams: [] };
@@ -454,11 +471,39 @@ const matrixProbe = {
     const body = res.status === 200 ? null : await res.json();
     return { status: res.status, code: body?.code ?? null, error: body?.error ?? null };
   },
+  reminder: async probe => {
+    if (probe === 'unknown') return null;
+    const emitted = await triggerReminders(server, at9('2027-04-20'));
+    const rows = emitted.filter(n => n.type === 'due_reminder');
+    const tid = probe === 'inScope' ? 't_m_rem_in' : 't_m_rem_out';
+    return rows.some(n => n.task === tid) ? 'reminded' : 'skipped';
+  },
+  fanout: async probe => {
+    if (probe === 'unknown') return null;
+    clientDoc();
+    const targets = clientEmitMentions('@Ann Marker @Bill Plain', { id: 't_matrix_fan', project: MATRIX_PROJECTS[probe] });
+    assert.ok(targets.has('m_plain'), 'the default-allow (underivable) target is never dropped');
+    return targets.has('m_marked') ? 'present' : 'absent';
+  },
 };
 
 test('404-matrix fixture: the fixture member holds scope { projects: [p_in], teams: [] }', async () => {
   const res = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: MATRIX_SCOPE });
   assert.equal(res.status, 200);
+});
+
+test('404-matrix fixture: reminder probes planted on both projects (family 5)', () => {
+  const scopedMid = withDb(server.dbPath, db =>
+    db
+      .prepare('select m.member_id from memberships m join users u on u.id = m.user_id where m.workspace_id = ? and u.email = ?')
+      .get(server.wsId, 'scoped@test.local'),
+  ).member_id;
+  const doc = storedDoc();
+  doc.data.tasks.push(
+    { id: 't_m_rem_in', key: 'IN-9', title: 'Matrix in-scope reminder', status: 'todo', assignee: scopedMid, projectId: 'p_in', due: '2027-04-20', labels: [], subtasks: [] },
+    { id: 't_m_rem_out', key: 'OUT-9', title: 'Matrix out-of-scope reminder', status: 'todo', assignee: scopedMid, projectId: 'p_out', due: '2027-04-20', labels: [], subtasks: [] },
+  );
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
 });
 
 for (const row of MATRIX) {
@@ -468,7 +513,7 @@ for (const row of MATRIX) {
   }
   for (const probe of ['inScope', 'outOfScope', 'unknown']) {
     if (row.expected[probe] === null) {
-      test(`404-matrix [family ${row.family}] ${row.name} — ${probe}`, { skip: 'dangling-project writes are pre-phase semantics, not a scope hole' }, () => {});
+      test(`404-matrix [family ${row.family}] ${row.name} — ${probe}`, { skip: row.skipUnknown || 'dangling-project writes are pre-phase semantics, not a scope hole' }, () => {});
       continue;
     }
     test(`404-matrix [family ${row.family}] ${row.name} — ${probe} → ${JSON.stringify(row.expected[probe])}`, async () => {
@@ -496,7 +541,6 @@ for (const row of MATRIX) {
    the email mirror is exercised for real (the same fakeSmtp pattern as
    test/due-reminders.test.mjs). */
 
-const SCOPE_TOKEN = 'scope-reminder-token';
 const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
 
 function fakeSmtp() {
