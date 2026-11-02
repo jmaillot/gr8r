@@ -370,15 +370,13 @@ const knownTeams = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => 
 
 Note on A4 — the interesting tension: D-05 says scope *details* are never shown, yet SCOPE-04 send-time filtering needs the actor to know who is out of scope for a project. Resolution options: server projects a boolean per member (e.g. derived eligibility) without the raw scope, or the server rejects rather than the client filters. Flag for planning.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does team-derived reach open private projects (D-03 extension)?**
-   - What we know: D-03 names explicit project scope as the grant; D-01 defines reach as union of scoped teams' projects.
-   - Recommendation: treat team reach as granting visibility too (consistent union semantics), and prove it in the matrix. Cheap to flip.
-2. **How does the client filter mention/assign recipients without seeing scope details (D-05)?**
-   - Recommendation: server projects a per-member eligibility boolean for the current context, or client filters by "member would see this project" derived from projected data; the server-side guard (Pitfall 4) is the authority either way.
-3. **Scope-write on admin target: 400 vs silent null?**
-   - D-04 says "reject/ignore" — planner picks one; recommend explicit 400 (`scopeNotAllowed`) for honesty, silent null for invites where role may change later.
+All three questions were resolved by plan backstops at planning time:
+
+1. **Does team-derived reach open private projects (D-03 extension)?** — **(RESOLVED)** Yes: union semantics per Plan 02's scope predicate truth table (visible = inScope && (projects.includes || teamReach || !private || onAccessList)); proven by the matrix truth-table rows.
+2. **How does the client filter mention/assign recipients without seeing scope details (D-05)?** — **(RESOLVED)** Per Plan 03's send-time filter backstop: eligibility derived from server-projected data; server-side guard (Pitfall 4) is the authority either way.
+3. **Scope-write on admin target: 400 vs silent null?** — **(RESOLVED)** Explicit 400 `scopeNotAllowed` (Plan 01 scope-edit route behavior; 29-04 Task 1 applies the same code to invites).
 
 ## Environment Availability
 
