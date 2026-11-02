@@ -39,5 +39,16 @@ blocked: 0
   reason: "User reported: i want email to be verified"
   severity: major
   test: 1
-  artifacts: []
-  missing: []
+  root_cause: "server.js oidc callback (~line 2714): canLink = isPinnedTenant && !guestShape never consults claims.email_verified; assumption A2 substituted pinned-tenant member vouching for the claim, which the operator has now rejected."
+  artifacts:
+    - path: "server.js"
+      issue: "Identity-resolution block computes canLink without email_verified"
+    - path: "test/oidc-sso.test.mjs"
+      issue: "Mock IdP fixtures don't model email_verified; SSO-03 tests pin the A2 policy"
+    - path: "DEPLOY.md"
+      issue: "Documents A2 verified-email policy that no longer matches intended behavior"
+  missing:
+    - "Require claims.email_verified === true (fail closed otherwise) before linking, JIT provisioning, or invite reconciliation"
+    - "Update mock IdP fixtures and SSO-03 tests for the strict policy"
+    - "Update DEPLOY.md verified-email documentation"
+  debug_session: "(inline diagnosis — root cause directly observable in code, matches WR-02)"
