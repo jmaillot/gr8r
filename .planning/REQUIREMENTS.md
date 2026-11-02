@@ -86,16 +86,30 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
   `${MASTER_KEY_PREVIOUS:-}` optional form (never `:?` — fresh installs must keep booting);
   DEPLOY.md §14 key-custody runbook updated to note compose users need no extra step.
 
-## Requirement → Item Traceability
+## Traceability (v1.7 Roadmap)
 
-| Item | Requirements |
-|------|--------------|
-| VIS (Backlog 999.1) | VIS-01..05 |
-| UNDO (v1.6 deferred) | UNDO-01..02 |
-| HARD (v1.1 audit) | HARD-01..05 |
-| SEARCH (v1.1 audit) | SEARCH-01 |
-| SETTINGS (v1.1 audit) | SETTINGS-01..03 |
-| DEPLOY (CR-01) | DEPLOY-01 |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| VIS-01 | Phase 32 | Pending |
+| VIS-02 | Phase 32 | Pending |
+| VIS-03 | Phase 32 | Pending |
+| VIS-04 | Phase 32 | Pending |
+| VIS-05 | Phase 32 | Pending |
+| HARD-01 | Phase 33 | Pending |
+| HARD-02 | Phase 33 | Pending |
+| HARD-03 | Phase 33 | Pending |
+| HARD-04 | Phase 33 | Pending |
+| HARD-05 | Phase 33 | Pending |
+| SETTINGS-01 | Phase 34 | Pending |
+| SETTINGS-02 | Phase 34 | Pending |
+| SETTINGS-03 | Phase 34 | Pending |
+| SEARCH-01 | Phase 34 | Pending |
+| UNDO-01 | Phase 35 | Pending |
+| UNDO-02 | Phase 35 | Pending |
+| DEPLOY-01 | Phase 35 | Pending |
+
+Coverage: 17/17 requirement rows mapped (16 REQ-ID groups: VIS-01..05, UNDO-01..02,
+HARD-01..05, SEARCH-01, SETTINGS-01..03, DEPLOY-01) — no orphans, no duplicates.
 
 ## Out of Scope (carried)
 
