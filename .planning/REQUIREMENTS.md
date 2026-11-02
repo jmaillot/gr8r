@@ -61,7 +61,7 @@ method. Zero new runtime dependencies throughout.
 - [x] **SSO-05**: SSO does not bypass 2FA — an account with TOTP enrolled still passes through
       the pending-2FA challenge after SSO authentication; the session teardown and 401
       contracts apply to SSO sessions identically.
-- [ ] **SSO-06**: An env flag can make the IdP the only door: the password sign-in path is
+- [x] **SSO-06**: An env flag can make the IdP the only door: the password sign-in path is
       hidden/disabled when SSO-only is configured.
 - [x] **SSO-07**: Pending invitations for the SSO user's email are reconciled at first login —
       surfaced or accepted, never silently stranded.

@@ -121,7 +121,7 @@ order; consumes the Phase 28-settled OIDC identity schema)
   5. The token-validation suite (mock IdP, table-driven) proves tampered tokens, wrong
      kid, bad issuer/audience/expiry/state/nonce/PKCE all fail closed — and with SSO-only
      configured, the password sign-in path is hidden/disabled.
-**Plans**: 2/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -134,7 +134,7 @@ Plans:
 - [x] 30-03-PLAN.md — Composition: 2FA challenge verbatim + invite reconciliation (SSO-05/SSO-07, D-06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 30-04-PLAN.md — SSO-only mode + client surface + docs (SSO-06, D-03/D-07/D-08/D-09)
+- [x] 30-04-PLAN.md — SSO-only mode + client surface + docs (SSO-06, D-03/D-07/D-08/D-09)
 
 **UI hint**: yes
 

@@ -5,17 +5,17 @@ milestone_name: Team Access & Federation
 current_phase: 30
 current_phase_name: Entra SSO (OIDC)
 status: executing
-stopped_at: Completed 30-03-PLAN.md
-last_updated: "2026-11-02T15:05:00.000Z"
+stopped_at: Completed 30-04-PLAN.md
+last_updated: "2026-11-02T16:10:00.000Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 30 execution started
+last_activity_desc: Phase 30 execution complete (30-04 done)
 state_head: 50aff4f7452755b0f96f990926d0a5af92502b18
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 15
-  completed_plans: 13
-  percent: 75
+  completed_plans: 14
+  percent: 93
 ---
 
 # STATE.md
@@ -31,12 +31,13 @@ progress:
 Phase: 30 (Entra SSO (OIDC)) — EXECUTING
 Plan: 4 of 4
 Status: Ready to execute
-Last activity: 2026-11-02 — Completed 30-03 (SSO × 2FA + invite reconciliation)
+Last activity: 2026-11-02 — Completed 30-04 (SSO-only mode + client surface + operator docs)
 
-Progress: [████████░░] 75% of phase plans (4/4)
+Progress: [██████████] 100% of phase plans (4/4)
 
 ## Recent Decisions
 
+- 30-04: SSO-only gate precedes the sameOrigin guard on /api/auth/login — bare 404 under any input (no 403 oracle); the invitations fragment is an honest email-links card; catalogue/identifier guard pins bumped for the 3 new locale keys + the invitations signOut site
 - 28-04: picker predicate `assignableInProject` — empty teams[] = unscoped project (all members assignable); current assignee always offered; bulk-assignee popover intentionally unfiltered (cross-project)
 - 29-03: server guards are the notification authority; client eligibility default-allow (A4); assignee write-guard rejects cross-scope assignments regardless of actor role
 
@@ -119,7 +120,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-02T15:05:00.000Z
-Stopped at: Completed 30-03-PLAN.md
+Stopped at: Completed 30-04-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -138,6 +139,7 @@ Resume file: None
 | Phase 30 P01 | 35min | 2 tasks | 5 files |
 | Phase 30 P02 | 12min | 3 tasks | 2 files |
 | Phase 30 P03 | 20min | 2 tasks | 2 files |
+| Phase 30 P04 | 25min | 3 tasks | 12 files |
 
 ## Operator Next Steps
 
