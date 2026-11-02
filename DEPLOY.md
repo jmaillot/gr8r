@@ -216,6 +216,51 @@ openssl rand -base64 24
 The admin account is created **only when the database is empty**. Changing `ADMIN_*` after
 the first start has no effect; use `--set-password` instead (section 8).
 
+### Optional: single sign-on with Microsoft Entra
+
+The app can delegate sign-in to a Microsoft Entra (Azure AD) tenant via OpenID Connect.
+Users then click **Continue with Microsoft** on the sign-in page and any invitation
+surface; the button appears **only** when the server config below is complete — nothing
+is rendered from a client-side guess.
+
+Add to `.env`:
+
+```dotenv
+OIDC_ENABLED=true
+OIDC_TENANT_ID=<your Entra tenant GUID>
+OIDC_CLIENT_ID=<application (client) ID>
+OIDC_CLIENT_SECRET=<client secret value>
+# OIDC_SSO_ONLY=true
+# OIDC_DEFAULT_ROLE=member        # or viewer — JIT-provisioned accounts never get more
+# OIDC_SCOPES=openid profile email # the default; rarely needs changing
+```
+
+Activation rule: SSO turns on only when `OIDC_ENABLED=true` **and** the complete variable
+set (`OIDC_TENANT_ID`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) is present. A partial set is
+treated exactly like a disabled one — the routes answer a plain 404 and reveal nothing.
+`OIDC_DEFAULT_ROLE` is clamped to `member` or `viewer`; any other value falls back to
+`member`.
+
+**Azure Portal app registration** (Entra admin center → Applications → App registrations →
+New registration):
+
+1. Name the app, select *Accounts in this organizational directory only* (single tenant).
+2. Platform **Web**, redirect URI: `https://<your-host>/api/auth/oidc/callback` — this
+   exact path, HTTPS, no trailing slash.
+3. Certificates & secrets → New client secret → copy the **value** (not the secret ID)
+   into `OIDC_CLIENT_SECRET`.
+4. Copy the Directory (tenant) ID and Application (client) ID from the overview page.
+
+**SSO-only mode** (`OIDC_SSO_ONLY=true`): the password sign-in path is closed —
+`/api/auth/login` answers a plain 404 with no explanation, and the login page shows only
+the Microsoft button. The 2FA, logout and session endpoints keep working. The mode is
+fully **reversible**: clear `OIDC_SSO_ONLY` and restart; every account keeps its password
+credential intact and password sign-in resumes with no data loss.
+
+After restarting the container, run one real sign-in with a tenant account as a smoke
+test — the authorize → Microsoft → callback round-trip is the one check that cannot be
+verified without the real tenant.
+
 ## 6. Start it
 
 ```sh
