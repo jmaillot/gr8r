@@ -240,3 +240,66 @@ test('promoting a scoped member to admin clears the scope in the same transactio
   const demoted = await owner.patch(`/api/workspaces/acme/members/${scopedUserId}`, { role: 'member' });
   assert.equal(demoted.status, 200, 'back to member for the suite');
 });
+
+/* ---- Phase 29 Plan 02 task 1: the D-03 grant truth table ----
+
+   For a scoped member, the scope OPENS projects inside its reach — the grant
+   terms short-circuit the private check (D-03), and a team scope reaches the
+   scoped teams' projects including private team-linked ones (A1 union read).
+   Workspace-wide (null scope) members keep the pre-phase canSeeProject path. */
+
+let scopedMemberId;
+
+test('truth-table fixture: the scoped member joins a private project access list', async () => {
+  scopedMemberId = (await owner.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'scoped@test.local').memberId;
+  const live = (await owner.get('/api/workspaces/acme')).data;
+  const doc = structuredClone(live.doc);
+  doc.data.projects.find(p => p.id === 'p_priv1').members.push(scopedMemberId);
+  assert.equal((await owner.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+});
+
+const truthTable = [
+  { name: 'public + in-scope', scope: { projects: ['p_in'], teams: [] }, expected: ['p_in'] },
+  { name: 'public + out-of-scope', scope: { projects: ['p_out'], teams: [] }, expected: ['p_out'] },
+  {
+    name: 'private + in-scope + on the access list',
+    scope: { projects: ['p_priv1'], teams: [] },
+    expected: ['p_priv1'],
+  },
+  {
+    name: 'private + in-scope + OFF the access list (D-03 grant, guest-critical)',
+    scope: { projects: ['p_priv2'], teams: [] },
+    expected: ['p_priv2'],
+  },
+  {
+    name: 'private + out-of-scope + on the access list (out-of-scope still wins)',
+    scope: { projects: ['p_in'], teams: [] },
+    expected: ['p_in'],
+  },
+  {
+    name: 'team scope covering a private team-linked project (A1 union read)',
+    scope: { projects: [], teams: ['team_a'] },
+    expected: ['p_priv2'],
+  },
+];
+
+for (const cell of truthTable) {
+  test(`D-03 truth table: ${cell.name} → [${cell.expected.join(', ')}]`, async () => {
+    const res = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: cell.scope });
+    assert.equal(res.status, 200, 'the scope lands');
+    const view = (await scoped.get('/api/workspaces/acme')).data;
+    assert.deepEqual(
+      view.doc.data.projects.map(p => p.id),
+      cell.expected,
+      `${cell.name}: visibility must be exactly the expected set`,
+    );
+  });
+}
+
+test('null-scope membership keeps the pre-phase workspace-wide view (regression)', async () => {
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  // Pre-phase semantics: everything except private projects the member is not
+  // on the access list of. The fixture put them on p_priv1's list only.
+  assert.deepEqual(view.doc.data.projects.map(p => p.id), ['p_in', 'p_out', 'p_priv1']);
+});
