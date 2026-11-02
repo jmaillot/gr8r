@@ -25,7 +25,7 @@ covered_files:
   - src/locales/fr.json
   - DEPLOY.md
   - package.json
-covered_digest: "v2:sha256:6af7ea5177a6df021a00a2b3d54a16812193aed7e7f343d97c7e019a38ff424b"
+covered_digest: "v2:sha256:974a9067a4792f0371c928b903c60075af5b5c102eebb7f31bb7d1f73f1cbab3"
 behavior_unverified: 0
 overrides_applied: 1
 overrides:
