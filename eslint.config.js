@@ -12,7 +12,7 @@ export default [
     /* e2e specs are Node at the module level (the Playwright import and the
        fixture plumbing) and browser inside the test bodies, so they carry
        both environments' globals. */
-    files: ['vite.config.js', 'eslint.config.js', 'server.js', 'mailer.js', 'totp.js', 'scripts/**/*.mjs', 'test/**/*.mjs'],
+    files: ['vite.config.js', 'eslint.config.js', 'server.js', 'mailer.js', 'totp.js', 'oidc.js', 'scripts/**/*.mjs', 'test/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } },
   },
   {
