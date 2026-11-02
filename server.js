@@ -978,7 +978,7 @@ function mergeClientDoc(incoming, stored, membership, wsId) {
       const assignmentScope = projectScope(scopeByMember.get(t.assignee));
       if (!assignmentScope) continue;
       if (!inScopeProject(projectById.get(t.project), assignmentScope)) {
-        const err = new Error('Assignee is out of scope for the task project');
+        const err = new Error("Assignee is out of scope for the task project");
         err.code = 'assigneeOutOfScope';
         throw err;
       }
@@ -1059,7 +1059,9 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
        when present, else the referenced task; underivable → keep flowing. */
     const recipientScope = projectScope(scopeByMember.get(n.to));
     if (recipientScope) {
-      const projectId = n.project || task?.project || task?.projectId || null;
+      /* Tasks carry `project` (the client's createTask writes it); the retired
+         `projectId` key is never read — it made this lookup always undefined. */
+      const projectId = n.project || task?.project || null;
       if (!inScopeProject(projectId ? projectById.get(projectId) : null, recipientScope)) continue;
     }
     const taskTitle = task?.title || 'a task';
@@ -1175,7 +1177,7 @@ function runReminderPass({ now: at = new Date() } = {}) {
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
       for (const t of tasks) {
-        const project = projects.get(t?.projectId);
+        const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
         /* SCOPE-04: a scoped member is never reminded about content outside
            their scope — the same projectScope/inScopeProject predicate the

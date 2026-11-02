@@ -122,7 +122,7 @@ test('a scoped doc PUT cannot resurrect out-of-scope rows', async () => {
   doc.data.tasks.push({ id: 't_evil', project: 'p_out', title: 'Resurrected', status: 'todo', labels: [], subtasks: [] });
   doc.data.projects.push({ id: 'p_out', key: 'out', name: 'Out of Scope', private: false, members: [], teams: [] });
   const saved = await scoped.put('/api/workspaces/acme', { revision: live.revision, doc });
-  assert.equal(saved.status, 200, 'the merge is silent, not an error');
+    assert.equal(saved.status, 200, "the merge is silent, not an error");
 
   const stored = storedDoc();
   assert.equal(stored.data.tasks.some(t => t.id === 't_evil'), false, 'the out-of-scope task never landed');
@@ -590,7 +590,7 @@ const matrixProbe = {
     const doc = structuredClone(live.doc);
     doc.data.tasks.push({ id: tid, project: MATRIX_PROJECTS[probe], title: 'matrix probe', status: 'todo', labels: [], subtasks: [] });
     const saved = await scoped.put('/api/workspaces/acme', { revision: live.revision, doc });
-    assert.equal(saved.status, 200, 'the merge is silent, not an error');
+    assert.equal(saved.status, 200, "the merge is silent, not an error");
     const landed = storedDoc().data.tasks.some(t => t.id === tid);
     return landed ? 'lands' : 'reserved';
   },
@@ -601,6 +601,7 @@ const matrixProbe = {
   },
   reminder: async probe => {
     if (probe === 'unknown') return null;
+    plantReminderProbes();
     const emitted = await triggerReminders(server, at9('2027-04-20'));
     const rows = emitted.filter(n => n.type === 'due_reminder');
     const tid = probe === 'inScope' ? 't_m_rem_in' : 't_m_rem_out';
@@ -639,20 +640,6 @@ test('404-matrix fixture: the fixture member holds scope { projects: [p_in], tea
   assert.equal(res.status, 200);
 });
 
-test('404-matrix fixture: reminder probes planted on both projects (family 5)', () => {
-  const scopedMid = withDb(server.dbPath, db =>
-    db
-      .prepare('select m.member_id from memberships m join users u on u.id = m.user_id where m.workspace_id = ? and u.email = ?')
-      .get(server.wsId, 'scoped@test.local'),
-  ).member_id;
-  const doc = storedDoc();
-  doc.data.tasks.push(
-    { id: 't_m_rem_in', key: 'IN-9', title: 'Matrix in-scope reminder', status: 'todo', assignee: scopedMid, projectId: 'p_in', due: '2027-04-20', labels: [], subtasks: [] },
-    { id: 't_m_rem_out', key: 'OUT-9', title: 'Matrix out-of-scope reminder', status: 'todo', assignee: scopedMid, projectId: 'p_out', due: '2027-04-20', labels: [], subtasks: [] },
-  );
-  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
-});
-
 for (const row of MATRIX) {
   if (row.skip) {
     test(`404-matrix [family ${row.family}] ${row.name}`, { skip: row.skip }, () => {});
@@ -677,6 +664,27 @@ for (const row of MATRIX) {
       }
     });
   }
+}
+
+/* Family-5 reminder probes are planted lazily (first reminder probe), AFTER
+   the doc-put matrix families: they carry an out-of-scope assignment
+   (t_m_rem_out) that the SCOPE-04 assignee write-guard correctly refuses to
+   round-trip on any doc write — the fixture bypasses the write path on
+   purpose (direct DB plant), so no probe PUT may precede it. */
+function plantReminderProbes() {
+  const existing = storedDoc().data.tasks.some(t => t.id === 't_m_rem_in');
+  if (existing) return;
+  const scopedMid = withDb(server.dbPath, db =>
+    db
+      .prepare('select m.member_id from memberships m join users u on u.id = m.user_id where m.workspace_id = ? and u.email = ?')
+      .get(server.wsId, 'scoped@test.local'),
+  ).member_id;
+  const doc = storedDoc();
+  doc.data.tasks.push(
+    { id: 't_m_rem_in', key: 'IN-9', title: 'Matrix in-scope reminder', status: 'todo', assignee: scopedMid, project: 'p_in', due: '2027-04-20', labels: [], subtasks: [] },
+    { id: 't_m_rem_out', key: 'OUT-9', title: 'Matrix out-of-scope reminder', status: 'todo', assignee: scopedMid, project: 'p_out', due: '2027-04-20', labels: [], subtasks: [] },
+  );
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
 }
 
 /* ---- Phase 29 Plan 03: SCOPE-04 — send-time notification enforcement ----
@@ -789,8 +797,10 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
       m => m.email === 'guard@test.local',
     ).userId;
 
-    // Shape the workspace: two public projects, one task per probe, all due
-    // inside the same injected 09:00 window.
+    // Shape the workspace: two public projects, all due inside the same
+    // injected 09:00 window. The reminder tasks are planted later, AFTER the
+    // write-guard probes — t_s_out carries an out-of-scope assignment the
+    // SCOPE-04 write-guard correctly refuses to round-trip (direct DB plant).
     const doc = {
       data: {
         members: [{ id: ownerMid, name: 'Owner' }],
@@ -798,11 +808,7 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
           { id: 'p_in', key: 'in', name: 'In Scope', private: false, members: [], teams: [] },
           { id: 'p_out', key: 'out', name: 'Out of Scope', private: false, members: [], teams: [] },
         ],
-        tasks: [
-          { id: 't_s_in', key: 'IN-1', title: 'In-scope reminder task', status: 'todo', assignee: scopedMid, projectId: 'p_in', due: '2027-03-15', labels: [], subtasks: [] },
-          { id: 't_s_out', key: 'OUT-1', title: 'Out-of-scope reminder task', status: 'todo', assignee: scopedMid, projectId: 'p_out', due: '2027-03-15', labels: [], subtasks: [] },
-          { id: 't_s_admin', key: 'OUT-2', title: 'Admin reminder task', status: 'todo', assignee: ownerMid, projectId: 'p_out', due: '2027-03-15', labels: [], subtasks: [] },
-        ],
+        tasks: [],
         comments: [],
         activity: [],
         notifs: [],
@@ -817,6 +823,39 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
       scope: { projects: ['p_in'], teams: [] },
     });
     assert.equal(scopedRes.status, 200, 'scope lands on the mail server');
+
+    await t.test('a doc PUT cannot assign an out-of-scope member to an out-of-scope task', async () => {
+      const live = (await ownerMail.get('/api/workspaces/acme')).data;
+      const next = structuredClone(live.doc);
+      next.data.tasks.push({ id: 't_guard_out', key: 'OUT-3', title: 'Guard probe', status: 'todo', assignee: scopedMid, project: 'p_out', labels: [], subtasks: [] });
+      const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
+      assert.equal(res.status, 400, 'the write is rejected');
+      assert.equal(res.data?.code, 'assigneeOutOfScope');
+      const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
+      assert.ok(!stored.data.tasks.some(x => x.id === 't_guard_out'), 'the stored doc is unchanged');
+    });
+
+    await t.test('workspace-wide (null-scope) assignees are never rejected', async () => {
+      const live = (await ownerMail.get('/api/workspaces/acme')).data;
+      const next = structuredClone(live.doc);
+      next.data.tasks.push({ id: 't_guard_admin', key: 'OUT-4', title: 'Admin assignee probe', status: 'todo', assignee: ownerMid, project: 'p_out', labels: [], subtasks: [] });
+      const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
+      assert.equal(res.status, 200, 'a null-scope assignee lands');
+      const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
+      assert.ok(stored.data.tasks.some(x => x.id === 't_guard_admin'), 'the task is stored');
+    });
+
+    // Reminder fixtures planted after the write-guard probes (see note above).
+    withDb(mail.dbPath, db => {
+      const row = db.prepare('select doc from workspaces where id = ?').get(wsRow.id);
+      const live = JSON.parse(row.doc);
+      live.data.tasks.push(
+        { id: 't_s_in', key: 'IN-1', title: 'In-scope reminder task', status: 'todo', assignee: scopedMid, project: 'p_in', due: '2027-03-15', labels: [], subtasks: [] },
+        { id: 't_s_out', key: 'OUT-1', title: 'Out-of-scope reminder task', status: 'todo', assignee: scopedMid, project: 'p_out', due: '2027-03-15', labels: [], subtasks: [] },
+        { id: 't_s_admin', key: 'OUT-2', title: 'Admin reminder task', status: 'todo', assignee: ownerMid, project: 'p_out', due: '2027-03-15', labels: [], subtasks: [] },
+      );
+      db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(live), wsRow.id);
+    });
 
     await t.test('the reminder pass skips an out-of-scope assignee, delivers the in-scope one', async () => {
       const emitted = await triggerReminders(mail, at9('2027-03-15'));
@@ -834,27 +873,6 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
       }
       assert.ok(smtp.messages.some(raw => textPart(raw).includes('In-scope reminder task')), 'the in-scope reminder email arrived');
       assert.ok(!smtp.messages.some(raw => textPart(raw).includes('Out-of-scope reminder task')), 'no out-of-scope email');
-    });
-
-    await t.test('a doc PUT cannot assign an out-of-scope member to an out-of-scope task', async () => {
-      const live = (await ownerMail.get('/api/workspaces/acme')).data;
-      const next = structuredClone(live.doc);
-      next.data.tasks.push({ id: 't_guard_out', key: 'OUT-3', title: 'Guard probe', status: 'todo', assignee: scopedMid, project: 'p_out', projectId: 'p_out', labels: [], subtasks: [] });
-      const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
-      assert.equal(res.status, 400, 'the write is rejected');
-      assert.equal(res.data?.code, 'assigneeOutOfScope');
-      const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
-      assert.ok(!stored.data.tasks.some(x => x.id === 't_guard_out'), 'the stored doc is unchanged');
-    });
-
-    await t.test('workspace-wide (null-scope) assignees are never rejected', async () => {
-      const live = (await ownerMail.get('/api/workspaces/acme')).data;
-      const next = structuredClone(live.doc);
-      next.data.tasks.push({ id: 't_guard_admin', key: 'OUT-4', title: 'Admin assignee probe', status: 'todo', assignee: ownerMid, project: 'p_out', projectId: 'p_out', labels: [], subtasks: [] });
-      const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
-      assert.equal(res.status, 200, 'a null-scope assignee lands');
-      const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
-      assert.ok(stored.data.tasks.some(x => x.id === 't_guard_admin'), 'the task is stored');
     });
   } finally {
     await mail.stop();

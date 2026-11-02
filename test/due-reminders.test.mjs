@@ -93,7 +93,7 @@ const task = (memberId, over = {}) => ({
   title: 'Ship it',
   status: 'todo',
   assignee: memberId,
-  projectId: 'p1',
+  project: 'p1',
   ...over,
 });
 
@@ -226,8 +226,8 @@ test('REM-04: done, archived, project-archived, private-hidden and due-less task
   const { own } = await makeWorkspace(m => [
     task(m, { id: 'tDone', key: 'P1-2', due: '2026-01-15', status: 'done' }),
     task(m, { id: 'tArch', key: 'P1-3', due: '2026-01-15', archived: true }),
-    task(m, { id: 'tProjArch', key: 'P1-4', due: '2026-01-15', projectId: 'pArch' }),
-    task(m, { id: 'tHidden', key: 'P1-5', due: '2026-01-15', projectId: 'pPriv' }),
+    task(m, { id: 'tProjArch', key: 'P1-4', due: '2026-01-15', project: 'pArch' }),
+    task(m, { id: 'tHidden', key: 'P1-5', due: '2026-01-15', project: 'pPriv' }),
     task(m, { id: 'tNoDue', key: 'P1-6', due: null }),
     task(m, { id: 'tOk', key: 'P1-7', due: '2026-01-15' }),
   ]);
