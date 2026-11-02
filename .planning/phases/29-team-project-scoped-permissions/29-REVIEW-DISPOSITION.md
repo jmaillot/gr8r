@@ -5,23 +5,23 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Resending a scoped invite silently strips its scope (access broadening)"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "`runReminderPass` reads `t.projectId` but tasks store `project` — the scheduler, and the SCOPE-04 guard riding it, never run"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The file-serve scope check runs on the un-normalized stored document — legacy scalar-`team` projects 404 inconsistently"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "`copyInviteLink` compares a UI label against an API role — an admin link can be submitted with scope and rejected"
   - id: WR-04
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "An unparseable stored scope fails open to workspace-wide, silently"
   - id: IN-01
     severity: info
@@ -35,20 +35,20 @@ findings:
     severity: info
     disposition: open
     title: "Scope-building logic is triplicated across the client"
-open: 8
+open: 3
 total: 8
-recorded: 2026-11-02T10:14:12.481Z
+recorded: 2026-11-02T10:50:21.054Z
 ---
 
 # Phase 29: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| WR-04 | warning | open | - |
+| CR-01 | critical | fixed | 29-REVIEW-FIX.md |
+| WR-01 | warning | fixed | 29-REVIEW-FIX.md |
+| WR-02 | warning | fixed | 29-REVIEW-FIX.md |
+| WR-03 | warning | fixed | 29-REVIEW-FIX.md |
+| WR-04 | warning | fixed | 29-REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
