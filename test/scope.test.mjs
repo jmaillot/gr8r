@@ -8,6 +8,8 @@
    are refused (D-04) and scope details are never projected (D-05). */
 
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { ADMIN, inviteToken, login, signup, startServer, withDb } from './helpers/server.mjs';
 
@@ -302,4 +304,78 @@ test('null-scope membership keeps the pre-phase workspace-wide view (regression)
   // Pre-phase semantics: everything except private projects the member is not
   // on the access list of. The fixture put them on p_priv1's list only.
   assert.deepEqual(view.doc.data.projects.map(p => p.id), ['p_in', 'p_out', 'p_priv1']);
+});
+
+/* ---- Phase 29 Plan 02 task 2: the file-serve side door ----
+
+   File binaries ride /w/:slug/file/:id OUTSIDE the doc funnel, so the
+   record.project visibility check has to happen in serveFileBinary itself
+   (T-29-05) — unknown, foreign and out-of-scope ids must answer the same
+   byte-identical 404 fileNotFound (no existence oracle). */
+
+/* Plant a file record (metadata rides the doc channel) and its binary. */
+async function plantScopedFile(id, projectId) {
+  const bytes = Buffer.from(`${id}:${projectId}:gr8r-scope-matrix`, 'utf8');
+  fs.writeFileSync(path.join(server.dataDir, 'files', id), bytes);
+  const live = (await owner.get('/api/workspaces/acme')).data;
+  const doc = structuredClone(live.doc);
+  doc.data.files = Array.isArray(doc.data.files) ? doc.data.files : [];
+  doc.data.files.push({ id, name: `${id}.txt`, size: bytes.length, type: 'txt', project: projectId });
+  const res = await owner.put('/api/workspaces/acme', { revision: live.revision, doc });
+  assert.equal(res.status, 200, `plant ${id} on ${projectId}`);
+  return bytes;
+}
+
+/* The harness client is JSON-only; file GETs are plain fetch with the cookie. */
+const fileGet = (cl, id) => fetch(`${server.base}/w/acme/file/${id}`, { headers: { cookie: cl.cookie() } });
+
+test('file-serve fixture: records planted on in-scope, out-of-scope and private projects', async () => {
+  await plantScopedFile('f_in', 'p_in');
+  await plantScopedFile('f_out', 'p_out');
+  await plantScopedFile('f_priv1', 'p_priv1');
+  await plantScopedFile('f_priv2', 'p_priv2');
+});
+
+test('a scoped member downloads an in-scope file (200 with the exact bytes)', async () => {
+  assert.equal(
+    (await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { projects: ['p_in'], teams: [] } })).status,
+    200,
+  );
+  const res = await fileGet(scoped, 'f_in');
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), 'f_in:p_in:gr8r-scope-matrix');
+});
+
+test('an out-of-scope file answers the byte-identical unknown-id 404 (no oracle)', async () => {
+  const out = await fileGet(scoped, 'f_out');
+  const unknown = await fileGet(scoped, 'f_missing');
+  assert.equal(out.status, 404);
+  assert.equal(unknown.status, 404);
+  const outBody = await out.json();
+  const unknownBody = await unknown.json();
+  assert.equal(outBody.code, 'fileNotFound');
+  assert.equal(unknownBody.code, 'fileNotFound');
+  assert.equal(outBody.error, unknownBody.error, 'status AND code AND message are identical');
+});
+
+test('an in-scope private project file is visible to the scoped member (D-03 rides the side door too)', async () => {
+  // scope = { projects: ['p_in'] } from the previous cell: p_priv1 is
+  // out-of-scope here, so flip to the grant scope first.
+  assert.equal(
+    (await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { projects: ['p_priv1'], teams: [] } })).status,
+    200,
+  );
+  const res = await fileGet(scoped, 'f_priv1');
+  assert.equal(res.status, 200, 'the grant opens the private project and its files');
+  assert.equal(await res.text(), 'f_priv1:p_priv1:gr8r-scope-matrix');
+});
+
+test('a workspace-wide outsider hits the closed gap: private-project file now 404s (pre-existing hole)', async () => {
+  // Restore the pre-phase reach: null scope. The member is on p_priv1's
+  // access list, so use p_priv2 (private, off-list) — previously this served
+  // bytes to ANY member with the id.
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+  const res = await fileGet(scoped, 'f_priv2');
+  assert.equal(res.status, 404);
+  assert.equal((await res.json()).code, 'fileNotFound');
 });
