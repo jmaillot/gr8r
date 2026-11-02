@@ -173,3 +173,67 @@ test('a member cannot edit scopes at all', async () => {
   const res = await scoped.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { projects: ['p_out'], teams: [] } });
   assert.equal(res.status, 403, 'requireWorkspace(admin) gates the route');
 });
+
+/* ---- Phase 29 task 2: full validation — whitelists, caps, D-04 promotion ---- */
+
+test('scope ids are whitelisted against the workspace document (T-29-01)', async () => {
+  const ghostTeam = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { teams: ['ghost-team'], projects: ['p_in'] } });
+  assert.equal(ghostTeam.status, 400);
+  assert.equal(ghostTeam.data.code, 'unknownTeam');
+
+  const ghostProject = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { teams: ['team_a'], projects: ['ghost-project'] } });
+  assert.equal(ghostProject.status, 400);
+  assert.equal(ghostProject.data.code, 'unknownProject');
+
+  // The refused writes stored nothing.
+  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: [], projects: ['p_in'] });
+});
+
+test('scope caps mirror the teams cap (25 per list)', async () => {
+  const tooManyProjects = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, {
+    scope: { teams: [], projects: Array.from({ length: 26 }, (_, i) => `p_${i}`) },
+  });
+  assert.equal(tooManyProjects.status, 400);
+  assert.equal(tooManyProjects.data.code, 'tooManyProjects');
+
+  const tooManyTeams = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, {
+    scope: { teams: Array.from({ length: 26 }, (_, i) => `t_${i}`), projects: [] },
+  });
+  assert.equal(tooManyTeams.status, 400);
+  assert.equal(tooManyTeams.data.code, 'tooManyTeams');
+  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: [], projects: ['p_in'] }, 'still nothing stored');
+});
+
+test('scope lists are trimmed, sliced and deduped like the teams route', async () => {
+  const res = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, {
+    scope: { teams: [' team_a ', 'team_a', 'x'.repeat(60)], projects: [' p_in ', 'p_in'] },
+  });
+  assert.equal(res.status, 400, "a 60-char team id slices to 40 and misses the whitelist");
+  const trimmed = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, {
+    scope: { teams: [' team_a ', 'team_a'], projects: [' p_in ', 'p_in'] },
+  });
+  assert.equal(trimmed.status, 200);
+  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: ['team_a'], projects: ['p_in'] }, 'trimmed and deduped before the whitelist');
+});
+
+test('the route is scope-explicit: an absent scope field is a 400', async () => {
+  const res = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, {});
+  assert.equal(res.status, 400);
+  assert.equal(res.data.code, 'scopeRequired');
+});
+
+test('promoting a scoped member to admin clears the scope in the same transaction (D-04)', async () => {
+  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: ['team_a'], projects: ['p_in'] }, 'precondition: a scope is stored');
+
+  const promoted = await owner.patch(`/api/workspaces/acme/members/${scopedUserId}`, { role: 'admin' });
+  assert.equal(promoted.status, 200);
+  assert.equal(scopeOf(scopedUserId), null, 'promotion nulled the scope transactionally');
+
+  // And the now-admin target can carry no scope either way (D-04).
+  const rescope = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { projects: ['p_in'], teams: [] } });
+  assert.equal(rescope.status, 400);
+  assert.equal(rescope.data.code, 'scopeNotAllowed');
+
+  const demoted = await owner.patch(`/api/workspaces/acme/members/${scopedUserId}`, { role: 'member' });
+  assert.equal(demoted.status, 200, 'back to member for the suite');
+});
