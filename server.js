@@ -4303,6 +4303,11 @@ async function serveFileBinary(req, res, slug, id) {
   let data = null;
   try {
     data = JSON.parse(ctx.ws.doc)?.data;
+    /* T-29-06 (WR-02): the scope funnel reads p.teams — normalize first so a
+       legacy scalar-`team` project gets the same reach on the file path as it
+       does on the (normalized) doc read. Parses fresh above, so mutating in
+       place never touches shared state. */
+    if (data) normalizeProjects({ data });
     record = Array.isArray(data?.files) ? data.files.find(f => f?.id === id) : null;
   } catch {
     /* fall through to the 404 */
