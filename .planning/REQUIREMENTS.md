@@ -39,7 +39,7 @@ method. Zero new runtime dependencies throughout.
 - [x] **SCOPE-03**: Every by-id endpoint that touches a project enforces the scope — a named
       route sweep over `server.js` with a 404-matrix test per endpoint family; scoped checks
       cannot be bypassed by knowing an id.
-- [ ] **SCOPE-04**: Notification and mention recipient resolution runs the same scope
+- [x] **SCOPE-04**: Notification and mention recipient resolution runs the same scope
       predicate — a scoped member is never assigned, mentioned or notified for content outside
       their scope.
 - [ ] **SCOPE-05**: Invitations can carry a scope: the invite form lets an admin invite a user
