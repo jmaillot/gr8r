@@ -2740,6 +2740,62 @@ async function handleApi(req, res, url) {
         }
       }
 
+      /* SSO-07 (D-06): reconcile pending invitations at the first sight of
+         the identity. Only accounts with ZERO memberships are candidates —
+         linked users who already belong to a workspace skip this entirely,
+         which also makes repeat logins idempotent (no duplicate rows). The
+         criteria mirror the accept route: unused, unexpired, email match.
+         Expired invites are filtered out here — they neither block nor
+         auto-accept. */
+      let ssoRedirect = '/';
+      if (!db.prepare('select 1 from memberships where user_id = ?').get(row.id)) {
+        const pendingInvites = db
+          .prepare('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?')
+          .all(row.email, now());
+        if (pendingInvites.length === 1) {
+          /* Exactly one pending invite: auto-accept with the acceptance
+             recipe VERBATIM from the accept route — addMembership with the
+             invite's stored role/teams/scope plus the same invite-clearing
+             writes. Never a parallel membership insert (T-30-11). */
+          const invite = pendingInvites[0];
+          const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
+          if (ws) {
+            addMembership(
+              ws,
+              row,
+              invite.role,
+              (() => {
+                try {
+                  return JSON.parse(invite.teams || '[]');
+                } catch {
+                  return [];
+                }
+              })(),
+              /* SCOPE-05: only the admin-validated scope stored on the invite
+                 row — never a token-controlled value. */
+              (() => {
+                try {
+                  const s = JSON.parse(invite.scope || 'null');
+                  return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
+                } catch {
+                  return null;
+                }
+              })(),
+            );
+            /* Same single-use clearing as the accept route: the consumed
+               token plus every other pending link for that address. */
+            db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), row.id, invite.token_hash);
+            db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(now(), ws.id, invite.email);
+            logSecurity(row.id, 'sso_invite_accepted');
+          }
+        } else if (pendingInvites.length > 1) {
+          /* Multiple pending invites: surface, don't guess — no silent
+             mass-accept. Every invite stays pending; the 302 lands the SPA
+             on the invitations surface (plan 30-04 wires the fragment). */
+          ssoRedirect = '/#invitations';
+        }
+      }
+
       /* SSO-05 (T-30-09): the D-68 challenge-then-stop branch, VERBATIM from
          the login route below — a TOTP-enrolled account is exactly as
          untrusted after the IdP round-trip as after a password. Same
@@ -2781,7 +2837,7 @@ async function handleApi(req, res, url) {
       db.prepare('update oidc_identities set last_login_at = ? where issuer = ? and subject = ?').run(t, OIDC.config.issuer, subject);
       setSessionCookie(req, res, token);
       logSecurity(row.id, 'sso_login');
-      res.writeHead(302, { Location: '/' });
+      res.writeHead(302, { Location: ssoRedirect });
       return res.end();
     } catch {
       /* Pitfall 7: exchange/verification failures (timeout, HTTP error,

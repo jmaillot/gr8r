@@ -617,6 +617,95 @@ test('SSO-05 source pin: the callback challenge branch carries the verbatim D-68
   assert.ok(loginBlock.includes(INSERT) && loginBlock.includes('setChallengeCookie(req, res, challengeToken)'), 'the login-route recipe itself is untouched');
 });
 
+/* ---------------- SSO-07 (Phase 30 plan 03): invite reconciliation ---------------- */
+
+const sha256hex = s => crypto.createHash('sha256').update(s).digest('hex');
+
+function seedInvite(db, email, role, { expired = false, teams = null, scope = null } = {}) {
+  const ws = db.prepare('select id from workspaces order by rowid limit 1').get();
+  const owner = db.prepare('select id from users where email = ?').get('owner@test.local');
+  const token = crypto.randomBytes(32).toString('base64url');
+  db.prepare('insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)').run(
+    sha256hex(token),
+    email,
+    role,
+    teams,
+    scope,
+    ws.id,
+    owner.id,
+    Date.now(),
+    expired ? Date.now() - 1000 : Date.now() + 86400000,
+  );
+  return token;
+}
+
+test('SSO-07/D-06: a first-login SSO user with exactly one pending invite gets it auto-accepted', async () => {
+  inviteServer = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer },
+  });
+  withDb(inviteServer.dbPath, db => seedInvite(db, 'invite.one@example.com', 'viewer', { teams: '["t-1"]', scope: '{"projects":["p-1"]}' }));
+
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-1', claims: { sub: 'sub-inv-one', email: 'INVITE.ONE@example.com' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/', 'the auto-accepted user lands in the app');
+  assert.ok(sessionCookieOf(callback.cookies), 'a session was minted');
+
+  withDb(inviteServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get('invite.one@example.com');
+    assert.ok(user, 'the JIT account exists');
+    const memberships = db.prepare('select * from memberships where user_id = ?').all(user.id);
+    assert.equal(memberships.length, 1, 'exactly one membership row');
+    assert.equal(memberships[0].role, 'viewer', 'the membership carries the INVITE role via the acceptance recipe');
+    assert.equal(memberships[0].scope, '{"projects":["p-1"]}', 'the invite-carried scope landed on the membership (verbatim addMembership)');
+    const teams = db.prepare('select * from team_members where user_id = ?').all(user.id);
+    assert.equal(teams.length, 1, 'the invite-carried team landed as an authority row');
+    const invites = db.prepare('select * from invites where lower(email) = ?').all('invite.one@example.com');
+    assert.equal(invites.length, 1);
+    assert.ok(invites[0].used_at, 'the invite was cleared (used_at stamped) — never stranded');
+    assert.equal(invites[0].used_by, user.id);
+    const log = db.prepare('select * from security_log where user_id = ? and verb = ?').all(user.id, 'sso_invite_accepted');
+    assert.equal(log.length, 1, 'the auto-accept was security-logged');
+  });
+});
+
+test('SSO-07: a first-login SSO user with MULTIPLE pending invites is surfaced, not mass-accepted', async () => {
+  withDb(inviteServer.dbPath, db => {
+    seedInvite(db, 'invite.multi@example.com', 'member');
+    seedInvite(db, 'invite.multi@example.com', 'viewer');
+  });
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-2', claims: { sub: 'sub-inv-multi', email: 'invite.multi@example.com' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/#invitations', 'the callback redirects to the invitations landing');
+  withDb(inviteServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get('invite.multi@example.com');
+    assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 0, 'no silent mass-accept: no membership row');
+    assert.equal(db.prepare('select count(*) as n from invites where email = ? and used_at is null').get('invite.multi@example.com').n, 2, 'BOTH invites remain pending — never stranded');
+  });
+});
+
+test('SSO-07: expired invites are ignored — not accepted, not blocking', async () => {
+  withDb(inviteServer.dbPath, db => seedInvite(db, 'invite.expired@example.com', 'admin', { expired: true }));
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-3', claims: { sub: 'sub-inv-exp', email: 'invite.expired@example.com' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/', 'the expired invite neither blocks nor elevates');
+  withDb(inviteServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get('invite.expired@example.com');
+    assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 0, 'no membership from an expired invite');
+    assert.equal(db.prepare('select used_at from invites where email = ?').get('invite.expired@example.com').used_at, null, 'the expired invite stays untouched');
+  });
+});
+
+test('SSO-07: a repeat SSO login after acceptance creates no duplicate membership', async () => {
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-4', claims: { sub: 'sub-inv-one', email: 'invite.one@example.com' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/', 'the repeat login signs in normally');
+  withDb(inviteServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get('invite.one@example.com');
+    assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 1, 'still exactly ONE membership row');
+    assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-inv-one').n, 1, 'still exactly one identity row');
+  });
+});
+
 /* SSO-02 / D-02: the env-gating matrix. Each row boots its own server —
    partial config NEVER half-enables SSO, and every gate is the same
    generic 404 notFound (no-oracle: the response never reveals which var
