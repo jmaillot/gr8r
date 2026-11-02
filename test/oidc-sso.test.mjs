@@ -81,10 +81,16 @@ function startMockIdp() {
         req.on('data', c => chunks.push(c));
         req.on('end', () => {
           const form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+          /* demandVerifier (SSO-08 wrong-verifier row): the mock insists on an
+             exact verifier it was handed — the server's real PKCE verifier can
+             never match, so the exchange 400s and the callback fails closed. */
+          const verifierOk = idp.tokenConfig.demandVerifier
+            ? form.get('code_verifier') === idp.tokenConfig.demandVerifier
+            : (form.get('code_verifier') || '').length >= 43;
           const ok =
             form.get('grant_type') === 'authorization_code' &&
             form.get('code') === idp.tokenConfig.code &&
-            (form.get('code_verifier') || '').length >= 43 &&
+            verifierOk &&
             form.get('client_secret') === 'sec';
           if (!ok) {
             res.writeHead(400, { 'content-type': 'application/json' });
@@ -143,6 +149,7 @@ before(async () => {
 
 after(async () => {
   await server?.stop();
+  await matrixServer?.stop();
   await new Promise(resolve => mockIdp.close(resolve));
 });
 
@@ -251,15 +258,36 @@ for (const [label, value, expected] of [
 /* SSO-03 helpers: a full start → callback flow against the shared mock IdP,
    plus direct users-row creation for the "existing account" side of the
    link policy. */
-async function runFlow({ claims = {}, code = 'auth-code-1', callbackPath = null } = {}) {
-  const start = await nav(server.base, '/api/auth/oidc/start');
+/* The matrix gives EACH row a fresh server instance: a fresh throttle map
+   (the start route allows 10 attempts per IP per 15 min — 13 rows would trip
+   it on a shared instance) and a fresh database, so sessions-count assertions
+   are isolated. */
+let matrixServer = null;
+async function freshMatrixServer() {
+  if (matrixServer) await matrixServer.stop();
+  matrixServer = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer },
+  });
+  return matrixServer;
+}
+
+async function runFlow({ srv, claims = {}, alg, kid, signKey, demandVerifier, code = 'auth-code-1', callbackPath = null } = {}) {
+  const target = srv || server;
+  const start = await nav(target.base, '/api/auth/oidc/start');
   assert.equal(start.status, 302);
   const q = queryOf(start.location);
   const flowCookie = flowCookieOf(start.cookies);
-  idp.tokenConfig = { code, claims: { nonce: q.get('nonce'), ...claims } };
+  idp.tokenConfig = {
+    code,
+    claims: { nonce: q.get('nonce'), ...claims },
+    ...(alg && { alg }),
+    ...(kid && { kid }),
+    ...(signKey && { signKey }),
+    ...(demandVerifier && { demandVerifier }),
+  };
   const path =
     callbackPath || `/api/auth/oidc/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(q.get('state'))}`;
-  const callback = await nav(server.base, path, flowCookie);
+  const callback = await nav(target.base, path, flowCookie);
   return { start, callback, flowCookie, q };
 }
 
@@ -379,6 +407,81 @@ test('two JIT accounts carry DIFFERENT random password hashes (never a shared co
     assert.notEqual(a.password_hash, b.password_hash, 'hashes are per-account random, not a shared constant');
     assert.notEqual(a.password_hash, 'x', 'not a placeholder');
   });
+});
+
+/* SSO-08: the fail-closed validation matrix (Pitfall 2). Every row drives a
+   full start → callback flow and must NOT mint a session: generic error
+   redirect, no session cookie, zero new sessions rows. No order-dependent
+   acceptance — each malformed vector is rejected by the fixed verification
+   chain (shape → alg → kid → signature → iss → aud → exp → nonce), and
+   verification runs fully on every callback (Pitfall 5b). */
+const sessionsTotal = (srv = server) => withDb(srv.dbPath, db => db.prepare('select count(*) as n from sessions').get().n);
+
+const MATRIX_ROWS = [
+  ['alg none (unsigned JWT)', { alg: 'none' }],
+  ['HS256 symmetric signature', { alg: 'HS256' }],
+  ['valid header but kid absent from JWKS', { kid: 'no-such-kid' }],
+  ['payload signed by a key the JWKS never published', { signKey: 'foreign', claims: { sub: 'sub-mx-foreign' } }],
+  ['wrong iss (foreign tenant issuer)', { claims: { iss: 'https://login.microsoftonline.com/other-tenant/v2.0', sub: 'sub-mx-iss' } }],
+  ['wrong aud', { claims: { aud: 'other-audience', sub: 'sub-mx-aud' } }],
+  ['exp in the past', { claims: { exp: Math.floor(Date.now() / 1000) - 100, sub: 'sub-mx-exp' } }],
+  ['nonce mismatched', { claims: { nonce: 'wrong-nonce', sub: 'sub-mx-nonce' } }],
+  ['sub claim missing/empty', { claims: { sub: '' } }],
+  ['email claim missing on a linking attempt', { claims: { email: '', sub: 'sub-mx-email' } }],
+];
+
+let matrixIndex = 0;
+for (const [label, row] of MATRIX_ROWS) {
+  matrixIndex += 1;
+  test(`SSO-08 matrix: ${label} → no session`, async () => {
+    const srv = await freshMatrixServer();
+    const before = sessionsTotal(srv);
+    const { callback } = await runFlow({ srv, code: `mx-code-${matrixIndex}`, ...row });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/login?sso=error', 'generic error redirect — no cause leakage in the target');
+    assert.equal(sessionCookieOf(callback.cookies), null, 'no session cookie minted');
+    assert.equal(sessionsTotal(srv), before, 'zero new sessions rows');
+  });
+}
+
+test('SSO-08 matrix: state mismatched → no session', async () => {
+  const srv = await freshMatrixServer();
+  const before = sessionsTotal(srv);
+  const { callback } = await runFlow({ srv, code: 'mx-code-state', callbackPath: '/api/auth/oidc/callback?code=mx-code-state&state=tampered-state' });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/login?sso=error');
+  assert.equal(sessionCookieOf(callback.cookies), null);
+  assert.equal(sessionsTotal(srv), before);
+});
+
+test('SSO-08 matrix: state replayed (same callback URL twice) → no second session', async () => {
+  const srv = await freshMatrixServer();
+  const before = sessionsTotal(srv);
+  const { callback: first, q, flowCookie } = await runFlow({ srv, code: 'mx-code-replay', claims: { sub: 'sub-mx-replay', email: 'replay.user@example.com' } });
+  assert.equal(first.location, '/', 'the first callback legitimately signs in');
+  const afterFirst = sessionsTotal(srv);
+  assert.equal(afterFirst, before + 1, 'exactly one session from the first callback');
+
+  const replayPath = `/api/auth/oidc/callback?code=mx-code-replay&state=${encodeURIComponent(q.get('state'))}`;
+  const second = await nav(srv.base, replayPath, flowCookie);
+  assert.equal(second.status, 302);
+  assert.equal(second.location, '/login?sso=error', 'the replayed callback fails closed (delete-on-use flow state)');
+  assert.equal(sessionCookieOf(second.cookies), null, 'the replay mints no session cookie');
+  assert.equal(sessionsTotal(srv), afterFirst, 'no second sessions row for the replayed state');
+});
+
+test('SSO-08 matrix: wrong PKCE verifier at token exchange → no session', async () => {
+  const srv = await freshMatrixServer();
+  const before = sessionsTotal(srv);
+  const { callback } = await runFlow({ srv, code: 'mx-code-pkce', demandVerifier: 'A'.repeat(64) });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/login?sso=error', 'the rejected exchange lands on the generic error redirect');
+  assert.equal(sessionCookieOf(callback.cookies), null);
+  assert.equal(sessionsTotal(srv), before);
+});
+
+test('the matrix carries every required fail-closed row (no skips/todos)', () => {
+  assert.equal(MATRIX_ROWS.length + 3, 13, '10 claim/token rows + state mismatch + replay + wrong verifier = 13');
 });
 
 /* SSO-02 / D-02: the env-gating matrix. Each row boots its own server —
