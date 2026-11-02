@@ -32,25 +32,39 @@ export const socialBtns = () => `<div class="social">
   <button class="btn btn-secondary btn-lg" data-a="socialAuth" data-v="Apple">${ic('apple', 15)}${t('page.auth.continueApple')}</button></div>`;
 export const ferr = k => (S.ui.errors[k] ? `<span class="err" id="${k}-err">${ic('circle-alert', 12)}${S.ui.errors[k]}</span>` : '');
 export const icls = k => (S.ui.errors[k] ? 'is-error' : '');
+/* Phase 30 (D-09/D-10): the Microsoft SSO entry renders ONLY when the server's
+   /api/config ground truth says OIDC is enabled — never a client-side guess,
+   and the false defaults keep it hidden until the config resolves. A real
+   link (browser navigation) — the flow starts with a 302, not XHR. Same
+   socialBtns styling + the four-square Microsoft glyph (brand fills kept). */
+export const ssoBtn = () =>
+  api.oidcEnabled
+    ? `<div class="social"><a class="btn btn-secondary btn-lg" href="/api/auth/oidc/start"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect width="6.4" height="6.4" fill="#F25022"/><rect x="7.6" width="6.4" height="6.4" fill="#7FBA00"/><rect y="7.6" width="6.4" height="6.4" fill="#00A4EF"/><rect x="7.6" y="7.6" width="6.4" height="6.4" fill="#FFB900"/></svg>${t('page.auth.continueMicrosoft')}</a></div>`
+    : '';
 export function renderAuth() {
   const s = S.ui.auth;
   const e = S.ui.errors;
   const f = S.ui.af || (S.ui.af = { email: '', name: '' });
   if (s === 'onboarding') return renderOnboarding();
-  if (s === 'login')
+  if (s === 'login') {
+    /* D-07 client side: under SSO-only (server ground truth) the password
+       form vanishes ENTIRELY — no disabled form, no explanatory message. */
+    const ssoOnly = api.oidcSsoOnly;
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate>
     <div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>${t('page.auth.welcomeBack')}</h1><p class="sub">${t('page.auth.signInTo')} ${esc(D().ws.name)}</p>
     ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.login)}</span></div>` : ''}
-    <div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
+    ${ssoOnly ? '' : `<div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
     <div class="field"><div class="row"><label class="label" for="l-pw">${t('common.password')}</label><span class="sp"></span>${api.enabled ? '' : `<button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">${t('page.auth.forgotPassword')}</button>`}</div>
       <div class="inwrap"><input class="input input-lg ${icls('pw')}" id="l-pw" type="${S.ui.showPw ? 'text' : 'password'}" autocomplete="current-password" style="padding-right:38px" aria-invalid="${!!e.pw}"><button type="button" class="ibtn ibtn-sm" style="position:absolute;right:5px" data-a="toggleShowPw" aria-label="${S.ui.showPw ? t('page.auth.hidePw') : t('page.auth.showPw')}">${ic(S.ui.showPw ? 'eye-off' : 'eye', 15)}</button></div>${ferr('pw')}</div>
     <label class="row" style="font-size:13px;gap:8px;cursor:pointer"><input type="checkbox" class="check" id="l-rem" checked>${t('page.auth.rememberMe')}</label>
-    <button class="btn btn-primary btn-lg btn-block" data-a="doLogin" id="login-btn">${t('page.auth.signIn')}</button>
+    <button class="btn btn-primary btn-lg btn-block" data-a="doLogin" id="login-btn">${t('page.auth.signIn')}</button>`}
     ${api.enabled ? '' : `<div class="or">${t('page.auth.or')}</div>${socialBtns()}`}
+    ${api.oidcEnabled ? `${ssoOnly ? '' : `<div class="or">${t('page.auth.or')}</div>`}${ssoBtn()}` : ''}
     ${api.enabled ? (api.allowSignup ? `<p class="auth-foot">${t('page.auth.noAccount')} <button type="button" class="link" data-a="auth" data-v="signup">${t('page.auth.signUp')}</button></p>` : `<p class="auth-foot">${t('page.auth.adminCreates')}</p>`) : `<p class="auth-foot">${t('page.auth.noAccount')} <button type="button" class="link" data-a="auth" data-v="signup">${t('page.auth.signUp')}</button></p>`}</form>`,
       api.enabled ? '' : `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="signup">${t('page.auth.signUp')}</button>`,
     );
+  }
   if (s === 'join') {
     const j = S.ui.join || {};
     if (j.error)
@@ -63,6 +77,7 @@ export function renderAuth() {
         `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${LOGO(30)}</div><h1>${t('page.auth.joinTitle', { name: esc(j.workspace?.name || D().ws.name) })}</h1><p class="sub">${t('page.auth.existingBody', { email: esc(j.email || t('page.auth.thisAddress')) })}</p>
     ${S.ui.errors.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(S.ui.errors.login)}</span></div>` : ''}
     <button class="btn btn-primary btn-lg btn-block" data-a="auth" data-v="login">${ic('log-in', 15)}${t('page.auth.signInAndJoin')}</button>
+    ${api.oidcEnabled ? `<div class="or">${t('page.auth.or')}</div>${ssoBtn()}` : ''}
     <p class="auth-foot">${t('page.auth.wrongAddress', { name: esc(j.workspace?.name || D().ws.name) })}</p></div>`,
       );
     const email = j.email || S.ui.af.email;
@@ -104,6 +119,14 @@ export function renderAuth() {
     <div class="field"><label class="label" for="tfa-login-code">${t('page.auth.tfaCodeLabel')}</label><input class="input input-lg" id="tfa-login-code" autocomplete="one-time-code" inputmode="numeric" autofocus></div>
     <button class="btn btn-primary btn-lg btn-block" data-a="doTfaLogin" id="tfa-login-btn">${t('page.auth.tfaVerify')}</button>
     <p class="auth-foot"><button type="button" class="link row" style="display:inline-flex;gap:6px" data-a="tfaBackToSignIn">${ic('arrow-left', 14)}${t('page.auth.backToSignIn')}</button></p></form>`);
+  if (s === 'invitations')
+    /* Phase 30 (D-06): a multi-invite SSO login lands here (/#invitations,
+       session already minted) — surfaced, never mass-accepted. Each invite
+       stays pending and remains reachable through its emailed /join/<token>
+       link, so the honest surface points back at the inbox. */
+    return authShell(
+      `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center"><span class="ftype" style="--c:var(--accent);width:44px;height:44px;border-radius:11px">${ic('mail', 20)}</span></div><h1>${t('page.auth.invitationsTitle')}</h1><p class="sub">${t('page.auth.invitationsBody')}</p><button class="btn btn-secondary btn-lg btn-block" data-a="signOut">${t('palette.signOut')}</button></div>`,
+    );
   if (s === 'forgot')
     return authShell(`<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doForgot" novalidate>
     <div style="display:flex;justify-content:center"><span class="ftype" style="--c:var(--accent);width:44px;height:44px;border-radius:11px">${ic('key-round', 20)}</span></div><h1>${t('page.auth.resetTitle')}</h1><p class="sub">${t('page.auth.resetSubtitle')}</p>

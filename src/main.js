@@ -245,7 +245,10 @@ async function seedLegacyLocale() {
   await primeLocale(negotiated);
 
   const h = (location.hash || '').slice(1);
-  const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding'];
+  /* Phase 30: /#tfa (SSO 2FA challenge) and /#invitations (multi-invite SSO
+     landing) are hash fragments the OIDC callback 302s to — hash fragments
+     survive a mid-challenge refresh (Pitfall 9). */
+  const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding', 'tfa', 'invitations'];
   const withServer = await api.init();
   if (!withServer) await primeLocale(readStoredLocale() || negotiated);
   const joinToken = (location.pathname.match(/^\/join\/([A-Za-z0-9_-]{16,128})\/?$/) || [])[1];
@@ -287,11 +290,26 @@ async function seedLegacyLocale() {
       // is built ONLY from location.pathname (never a client-supplied next),
       // and the bare /login entry is untouched. The validator in finishLogin
       // (src/actions/actions.js) stays the single source of truth.
+      /* Phase 30 (T-30-14, no-oracle): the OIDC callback funnels EVERY failure
+         into one generic /login?sso=error marker — the client surfaces the
+         single generic ssoError string, never a cause. */
+      if (new URLSearchParams(location.search).get('sso') === 'error') {
+        S.ui.errors.login = tk('page.auth.ssoError');
+        history.replaceState(null, '', '/login');
+      }
       S.ui.wantedSlug = slugFromPath || null;
       if (restFromPath) {
         history.replaceState(null, '', `/login?next=${encodeURIComponent(location.pathname)}`);
       }
       S.ui.auth = authRoutes.includes(h) ? h : 'login';
+      render();
+      return;
+    }
+    /* Phase 30 (D-06): a multi-invite SSO login lands on /#invitations with a
+       fresh session and zero memberships — surface it before the generic
+       no-workspace routing would swallow the fragment into onboarding. */
+    if (h === 'invitations') {
+      S.ui.auth = 'invitations';
       render();
       return;
     }

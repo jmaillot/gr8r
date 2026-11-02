@@ -19,6 +19,10 @@ const state = {
   workspace: null,
   memberId: null,
   maxUploadMb: 25, // /api/config discloses the server's MAX_UPLOAD_MB knob (G-12-3); 25 is the server default
+  /* Phase 30 (D-10): SSO visibility is SERVER ground truth from /api/config —
+     both default false so the SSO button stays hidden until the config lands. */
+  oidcEnabled: false,
+  oidcSsoOnly: false, // D-07 client side: hides the password form when SSO is the only door
 };
 
 /* Base URL for links the user can share. Set by the server (APP_URL or the
@@ -125,6 +129,14 @@ export const api = {
   get maxUploadMb() {
     return state.maxUploadMb;
   },
+  /* Phase 30 (D-10): SSO button + SSO-only form hiding render ONLY from the
+     server's /api/config values — never a client-side env guess. */
+  get oidcEnabled() {
+    return state.oidcEnabled;
+  },
+  get oidcSsoOnly() {
+    return state.oidcSsoOnly;
+  },
   get user() {
     return state.user;
   },
@@ -160,6 +172,8 @@ export const api = {
     state.creation = r.data?.workspaceCreation === 'open' ? 'open' : 'admins';
     state.url = typeof r.data?.url === 'string' ? r.data.url.replace(/\/+$/, '') : '';
     state.maxUploadMb = Number(r.data?.maxUploadMb) || 25;
+    state.oidcEnabled = !!r.data?.oidcEnabled;
+    state.oidcSsoOnly = !!r.data?.oidcSsoOnly; // the server already composes ssoOnly ⊆ enabled
     return state.enabled;
   },
   async me() {
