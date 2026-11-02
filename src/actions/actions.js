@@ -1942,11 +1942,14 @@ A.copyInviteLink = async () => {
   if (!api.enabled) return copy(`${api.url}/join/${D().ws.url}-7f3k2`, t('toast.inviteLinkCopied'));
   const role = S.ui.inviteRole || API_ROLE[$('#inv-role')?.value] || 'member';
   const teams = [...new Set(S.ui.inviteTeams || [])];
-  /* SCOPE-05 (29-04): the copied link honours the form's configured scope. */
+  /* SCOPE-05 (29-04): the copied link honours the form's configured scope.
+     The picker state is a UI label ('Member' | 'Admin' | 'Guest'), so the
+     admin check must compare against ROLE_ADMIN_UI — the raw 'admin' check
+     never matched and let a stale scope ride an admin link (WR-03). */
   const st = S.ui.inviteScope || { teams: [], projects: [] };
   const scopeTeams = [...new Set(st.teams || [])];
   const scopeProjects = [...new Set(st.projects || [])];
-  const scope = role === 'admin' ? null : scopeTeams.length || scopeProjects.length ? { teams: scopeTeams, projects: scopeProjects } : null;
+  const scope = role === ROLE_ADMIN_UI ? null : scopeTeams.length || scopeProjects.length ? { teams: scopeTeams, projects: scopeProjects } : null;
   const res = await api.createInvites([], role, teams, scope);
   if (!res.ok) return toast(res.error || t('err.inviteLink'), { kind: 'err' });
   await copy(res.data.invites[0].url, t('toast.inviteLinkCopied'));
