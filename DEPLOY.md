@@ -259,6 +259,17 @@ After restarting the container, run one real sign-in with a tenant account as a 
 test — the authorize → Microsoft → callback round-trip is the one check that cannot be
 verified without the real tenant.
 
+**Linking policy — verified email required**: SSO only links an existing account,
+JIT-provisions a new one, or auto-accepts a pending invitation when the Entra ID token
+carries `email_verified: true`. Tokens without a verified email fail closed with the
+generic SSO error — no account is created, linked, or reconciled. Once an identity has
+been linked, repeat sign-ins resolve to the same account without re-checking the claim.
+
+**Operator note**: Microsoft Entra sets `email_verified` for tenant-member accounts whose
+mail attribute is verified in the tenant. If a real-tenant sign-in fails with the generic
+SSO error, check that the account's email is verified in the tenant (Entra admin center →
+Users → the account → contact info) before debugging the app config.
+
 **Smoke-test checklist** (from an empty config to a working sign-in):
 
 1. `cp .env.example .env` (or edit your existing `.env`) and fill `OIDC_TENANT_ID`,
