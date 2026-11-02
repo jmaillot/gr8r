@@ -32,6 +32,14 @@
      MAIL_FROM              sender address (required with SMTP_HOST)
      MAIL_FROM_NAME         sender display name
      MAIL_REPLY_TO          optional Reply-To address
+     OIDC_ENABLED           true to enable Entra SSO (also needs the three vars below)
+     OIDC_TENANT_ID         Entra directory (tenant) id
+     OIDC_CLIENT_ID         app registration application (client) id
+     OIDC_CLIENT_SECRET     app registration client secret
+     OIDC_SSO_ONLY          true = SSO is the only sign-in door (Phase 30 plan 02)
+     OIDC_DEFAULT_ROLE      member | viewer for JIT-provisioned accounts (default member)
+     OIDC_SCOPES            default "openid profile email"
+     OIDC_ISSUER_OVERRIDE   TEST-ONLY issuer override for the mock IdP — never in production
 
    CLI:
      node server.js --add-user <email> [name] [workspace-slug]  (USER_PASSWORD env or generated)
@@ -46,6 +54,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createMailer } from './mailer.js';
+import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -101,11 +110,29 @@ const COOKIE = 'projects_session';
    session cookie — so requireUser()/currentUser() structurally never see it. */
 const CHALLENGE_COOKIE = 'projects_tfa_challenge';
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // D-66: 5-minute challenge lifetime
+/* SSO-01: the transient flow cookie keys a server-side entry holding the
+   HASHED state/nonce plus the PKCE verifier — raw values never ride a cookie
+   (30-01 prohibition). ~10-minute Max-Age, delete-on-use at the callback. */
+const OIDC_FLOW_COOKIE = 'projects_oidc_flow';
+const OIDC_FLOW_TTL_MS = 10 * 60 * 1000;
+/* Server-side flow entries, keyed by the opaque cookie value. The PKCE
+   verifier and nonce live here raw ONLY because the token exchange and the
+   id_token check need them verbatim — they never touch a cookie or any
+   persistent store (T-30-01/T-30-02/T-30-03). Pruned on every start. */
+const OIDC_FLOWS = new Map();
+/* Timing-safe compare over two fixed-length sha256 hex digests. */
+function timingSafeHex(aHex, bHex) {
+  const a = Buffer.from(String(aHex), 'hex');
+  const b = Buffer.from(String(bHex), 'hex');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 const ROLE_RANK = { viewer: 1, member: 2, admin: 3, owner: 4 };
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' };
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
 const RESERVED_SLUGS = new Set(['api', 'w', 'join', 'assets', 'static', 'health', 'login', 'signup', 'onboarding', 'settings', 'admin']);
 const MAILER = createMailer();
+const OIDC = createOidc();
 /* Registry codes the interface actually renders (src/core/i18n.js LOCALES). */
 const LOCALE_CODES = ['en', 'fr'];
 
@@ -141,6 +168,21 @@ const SCHEMA = `
     created_at integer not null
   );
   create index if not exists totp_factors_user on totp_factors(user_id);
+  /* SSO-01 (Phase 30): one row per (issuer, subject) Entra identity, joined to
+     users(id) independently — the exact shape the Phase 28 comment below
+     settled for the OIDC identity table. The unique (issuer, subject) index
+     is the race-safety anchor for plan 30-02's linking policy: a concurrent
+     double-login can never create two identities for one IdP subject. */
+  create table if not exists oidc_identities (
+    id            text primary key,
+    user_id       text not null references users(id) on delete cascade,
+    issuer        text not null,
+    subject       text not null,
+    created_at    integer not null,
+    last_login_at integer
+  );
+  create unique index if not exists oidc_identities_subject on oidc_identities(issuer, subject);
+  create index if not exists oidc_identities_user on oidc_identities(user_id);
   create table if not exists sessions (
     token_hash text primary key,
     user_id    text not null references users(id) on delete cascade,
@@ -2576,7 +2618,133 @@ async function handleApi(req, res, url) {
       url: appBase(req),
       workspaceCreation: ALLOW_SIGNUP ? 'open' : 'admins',
       maxUploadMb: MAX_UPLOAD_MB,
+      oidcEnabled: OIDC.enabled,
+      oidcSsoOnly: OIDC.ssoOnly,
     });
+  }
+
+  /* SSO-01 (Phase 30): the Entra OIDC authorization-code flow. Both routes are
+     404-no-oracle when OIDC is disabled (D-02/D-10) — the body never reveals
+     WHICH var is missing, because a disabled client hides the config entirely. */
+  if (pathname === '/api/auth/oidc/start' && method === 'GET') {
+    if (!OIDC.enabled) return fail(res, 404, 'notFound', 'Not found');
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    if (tooMany(`oidc|${clientIp(req)}`)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+
+    const state = crypto.randomBytes(32).toString('base64url');
+    const nonce = crypto.randomBytes(32).toString('base64url');
+    const { verifier, challenge } = pkcePair();
+    const redirectUri = `${appBase(req)}/api/auth/oidc/callback`;
+    /* Hashed-at-rest flow state (prohibition): raw state/nonce live only
+       inside the authorize URL and the IdP token round-trip — never in a
+       cookie. The cookie carries a fresh opaque key into the in-memory map. */
+    const flowKey = crypto.randomBytes(32).toString('base64url');
+    OIDC_FLOWS.set(flowKey, {
+      stateHash: sha256(state),
+      nonce,
+      verifier,
+      redirectUri,
+      createdAt: now(),
+    });
+    for (const [key, entry] of OIDC_FLOWS) if (now() - entry.createdAt > OIDC_FLOW_TTL_MS) OIDC_FLOWS.delete(key);
+
+    const secure = SECURE_COOKIE === 'true' || (SECURE_COOKIE === 'auto' && proto(req) === 'https');
+    appendCookie(res, `${OIDC_FLOW_COOKIE}=${flowKey}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${OIDC_FLOW_TTL_MS / 1000}${secure ? '; Secure' : ''}`);
+    res.writeHead(302, { Location: OIDC.buildAuthUrl(redirectUri, { state, nonce, challenge }) });
+    return res.end();
+  }
+
+  if (pathname === '/api/auth/oidc/callback' && method === 'GET') {
+    /* No-oracle failure surface: every failure branch below funnels into ONE
+       generic 302 back to the login page — never a JSON error, never a cause,
+       never a redirect target taken from the request (open-redirect ban). */
+    const errorRedirect = () => {
+      appendCookie(res, `${OIDC_FLOW_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+      res.writeHead(302, { Location: '/login?sso=error' });
+      res.end();
+    };
+    if (!OIDC.enabled) return fail(res, 404, 'notFound', 'Not found');
+    try {
+      const flowKey = parseCookies(req.headers.cookie)[OIDC_FLOW_COOKIE];
+      /* Delete-on-use (T-30-01): the entry is consumed on the FIRST callback,
+         so a replayed ?code&state with the same flow cookie finds nothing. */
+      const flow = flowKey ? OIDC_FLOWS.get(flowKey) : null;
+      if (flowKey) OIDC_FLOWS.delete(flowKey);
+      if (!flow || now() - flow.createdAt > OIDC_FLOW_TTL_MS) return errorRedirect();
+
+      const code = String(url.searchParams.get('code') || '');
+      const state = String(url.searchParams.get('state') || '');
+      if (!code || !state || !timingSafeHex(flow.stateHash, sha256(state))) return errorRedirect();
+
+      const tokenSet = await OIDC.exchangeCode(code, flow.verifier, flow.redirectUri);
+      if (!tokenSet?.id_token) return errorRedirect();
+
+      let jwks = await OIDC.getJwks();
+      const verifyOpts = { issuer: OIDC.config.issuer, audience: OIDC.config.clientId, nonce: flow.nonce, now: now() / 1000 };
+      let verdict = verifyIdToken(tokenSet.id_token, jwks, verifyOpts);
+      /* Pitfall 3: unknown kid → exactly one JWKS refetch (key rotation),
+         then fail closed on the second miss. */
+      if (!verdict.ok && verdict.reason === 'kid') {
+        jwks = await OIDC.getJwks(true);
+        verdict = verifyIdToken(tokenSet.id_token, jwks, verifyOpts);
+      }
+      if (!verdict.ok) return errorRedirect();
+
+      const claims = verdict.claims;
+      const subject = String(claims.sub || '');
+      const email = String(claims.email || '').trim().toLowerCase();
+      if (!subject || !emailOk(email)) return errorRedirect();
+
+      /* Identity resolution — this plan provisions the bare path; plan 30-02
+         adds the pinned-tenant guest policy, 30-03 the invite reconciliation. */
+      let row = db.prepare('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?').get(OIDC.config.issuer, subject);
+      if (!row) {
+        const existing = db.prepare('select * from users where email = ?').get(email);
+        if (existing) {
+          row = existing;
+        } else {
+          /* Pitfall 5: JIT accounts get a RANDOM unusable scrypt hash — never
+             a constant — into the password_hash NOT NULL column. Bare account,
+             no workspace (D-05); the onboarding flow lands them next. */
+          const created = createUser(email, String(claims.name || ''), crypto.randomBytes(24).toString('base64url'));
+          row = db.prepare('select * from users where id = ?').get(created.id);
+        }
+        db.prepare('insert into oidc_identities (id, user_id, issuer, subject, created_at, last_login_at) values (?,?,?,?,?,?)').run(
+          uid(),
+          row.id,
+          OIDC.config.issuer,
+          subject,
+          now(),
+          now(),
+        );
+      }
+
+      /* Session mint — VERBATIM from the login route (server.js 2613-2629);
+         only the final response becomes a 302 (browser navigation, not XHR). */
+      const token = crypto.randomBytes(32).toString('base64url');
+      const t = now();
+      const ua = String(req.headers['user-agent'] || '');
+      const ip = clientIp(req);
+      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+        sha256(token),
+        row.id,
+        t,
+        t + SESSION_DAYS * 86400 * 1000,
+        ip,
+        ua,
+        t, // a just-created session was seen at creation (D-25 need not apply to new rows)
+      );
+      db.prepare('update users set last_login_at = ? where id = ?').run(t, row.id);
+      db.prepare('update oidc_identities set last_login_at = ? where issuer = ? and subject = ?').run(t, OIDC.config.issuer, subject);
+      setSessionCookie(req, res, token);
+      logSecurity(row.id, 'sso_login');
+      res.writeHead(302, { Location: '/' });
+      return res.end();
+    } catch {
+      /* Pitfall 7: exchange/verification failures (timeout, HTTP error,
+         malformed token) fail closed to the same generic redirect. */
+      return errorRedirect();
+    }
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {

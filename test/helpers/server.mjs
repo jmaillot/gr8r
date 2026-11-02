@@ -112,7 +112,7 @@ export function client(base, name = 'client') {
       const pair = line.split(';')[0];
       const eq = pair.indexOf('=');
       const cookieName = pair.slice(0, eq);
-      if (cookieName === 'projects_session' || cookieName === 'projects_tfa_challenge') jar.set(cookieName, pair);
+      if (cookieName === 'projects_session' || cookieName === 'projects_tfa_challenge' || cookieName === 'projects_oidc_flow') jar.set(cookieName, pair);
     }
     let data = null;
     try {
