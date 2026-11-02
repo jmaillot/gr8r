@@ -3,6 +3,10 @@ status: resolved (fix shipped in 23-05 / 23-06, verified 2026-10-31)
 trigger: "G-23-4: On production, F5 on /w/prod/team gives a 404; the URL doesn't map into the team view. Task deep links /w/:slug/task/:key reportedly work."
 created: 2026-10-31T10:45:00Z
 updated: 2026-10-31T11:00:00Z
+audit_acknowledged:
+  milestone: v1.5
+  at: 2026-11-01
+  status: resolved (fix shipped in 23-05 / 23-06, verified 2026-10-31)
 ---
 
 ## Current Focus

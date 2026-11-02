@@ -3,6 +3,10 @@ status: resolved (fix shipped in 23-05 / 23-06, verified 2026-10-31)
 trigger: "Prod emails read 'Un membre mentioned you in test notif test on Prod.' instead of the author's username (UAT gap G-23-1)"
 created: 2026-10-31T11:40:00Z
 updated: 2026-10-31T12:05:00Z
+audit_acknowledged:
+  milestone: v1.5
+  at: 2026-11-01
+  status: resolved (fix shipped in 23-05 / 23-06, verified 2026-10-31)
 ---
 
 ## Current Focus

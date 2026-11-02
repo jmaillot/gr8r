@@ -1,5 +1,30 @@
 # Milestones
 
+## v1.6 Team Access & Federation (Shipped: 2026-11-02)
+
+**Phases completed:** 4 phases, 17 plans, 13 tasks
+
+**Key accomplishments:**
+- `team_members` join table is the single membership authority — guarded backfill
+- every client roster/mention/picker surface now reads the projected `teams[]`
+- invites now carry a full team set — `invites.teams` JSON column backfilled from
+- Wired `memberInProjectTeams` into assignment surfaces via new `assignableInProject(m, p, currentAssigneeId)` predicate — assignee, subassignee, and ctx-menu pickers now exclude out-of-set members while keeping the current assignee visible.
+- Membership/invite JSON scope columns + the shared `projectScope`/`hiddenFor` predicate funneled into both `redactDoc` and `mergeClientDoc`, with an admin-gated whitelist-validated scope route — proven end-to-end by a tracer slice (set → read filters → write reserved).
+- The D-03 grant inversion (scope OPENS private projects — visible ⟺ in scope for scoped members) riding the single `hiddenFor` funnel, the file-serve by-id side door closed with byte-identical 404 `fileNotFound`, and the named table-driven 404-matrix per endpoint family.
+- The scope predicate runs through every send-time resolution point — the server reminder pass, the defensive email mirror, the server-side assignee write-guard (400 `assigneeOutOfScope`), and the advisory client emit pre-filter (`memberScopeEligible`) — so a scoped member is never assigned, mentioned, reminded, or emailed about out-of-scope content.
+- Invitations now carry a validated scope (`invites.scope`) that lands on the membership at acceptance, the guest collaborator model rides viewer + exactly-one-project (server-enforced `guestSingleProject`, private projects included via the D-03 grant), and both admin UI surfaces — invite form scope section and member modal scope editor — express the same id-based scope model with EN+FR strings at write time and no scoped-member self-indicator.
+- Hand-rolled Entra OIDC authorization-code flow (confidential client + PKCE S256, RS256 id_token via JWKS) over node:crypto only — two no-oracle routes in server.js with the verbatim login session-mint, an additive oidc_identities table, oidcEnabled ground truth in /api/config, and a mock-IdP integration suite proving the whole path plus the D-02 env-gating matrix.
+- Pinned-tenant verified-email linking (tid match + non-guest shape + email claim) with guest-shape rejection and a unique-index race backstop in the callback, JIT default-role clamp test-pinned at readConfig, and a 13-row table-driven SSO-08 matrix proving every tamper/claim vector fails closed with no session minted.
+- The OIDC callback now stops at the verbatim D-68 challenge for TOTP-enrolled accounts (challenge row + cookie, NO session, 302 → /#tfa; the unchanged /api/auth/tfa/login completes it), and JIT provisioning reconciles pending invitations — auto-accepting a single unexpired invite through the verbatim acceptance recipe, surfacing (never mass-accepting) multiple, ignoring expired — pinned by 6 new test rows.
+- With `OIDC_SSO_ONLY=true` the password door is a bare 404 (never 403-with-message, auth family intact, fully reversible with password_hash retained), the Microsoft button renders on login + join surfaces strictly from `/api/config` ground truth, all callback failures surface one generic `page.auth.ssoError` banner, the `/#tfa` and `/#invitations` fragments are wired into the SPA, and DEPLOY.md makes Entra deployment self-serve.
+- Removed the parsed-but-never-consumed `OIDC_DEFAULT_ROLE` env var end-to-end (oidc.js config + factories, server.js env doc, DEPLOY.md contract, 8 clamp unit tests) per D-05's locked bare-account model, and recorded the required override on plan-02's SSO-04 must-have truth.
+- Replaced the A2 tenant-vouching approximation with the literal `email_verified === true` claim — SSO linking, JIT provisioning and invite reconciliation now all fail closed to `/login?sso=error` for unverified-email tokens, pinned by 3 new negative tests and documented for operators.
+- `totp_factors` single source of truth with one-time boot copy (D-06/D-09), a shared `verifyTotpAgainstFactors()` helper converted into the login second step, and a localized factor list in the existing settings 2FA card.
+- All tfa step-ups and the enable challenge verify through the `totp_factors` single source of truth, plus the three factor-lifecycle routes — enroll (password + existing-factor code + required label), enable (staged secret, per-factor baseline, transactional insert), and remove (survivor-code guard, verbatim disable teardown for the last factor).
+- The settings 2FA card gains the full factor lifecycle — localized list rows with relative last-used, the "Add factor" staged wizard (required naming → password + existing-factor code → QR/verify), and a per-factor remove confirm echoing the factor name — completing TOTP2-02/TOTP2-05 and the EN+FR i18n gate.
+
+---
+
 ## v1.5 Reliability & Rotation (Shipped: 2026-11-01)
 
 **Phases completed:** 5 phases, 17 plans, 13 tasks

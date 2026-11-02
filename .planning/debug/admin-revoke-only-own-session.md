@@ -1,3 +1,10 @@
+---
+audit_acknowledged:
+  milestone: v1.5
+  at: 2026-11-01
+  status: unknown
+---
+
 # Debug: admin only sees its session on members revoke (UAT G-24-5)
 
 Phase: 24 — operator-audit-workspace-admin-tier
@@ -14,9 +21,11 @@ Severity: major
 ## Evidence
 
 ### E1 — The server-side admin revoke route is correct (server.js:2763-2800)
+
 `POST /api/w/:slug/members/:id/revoke-sessions`: sameOrigin → requireUser → throttle → `requireWorkspace(slug,'admin')` → notAMember → ownerImmune (D-119 order) → strictly-below-admin rank rule (self exempt, D-118) → `transaction()` with `delete from sessions where user_id = ? and token_hash != ?` — the WHERE clause targets the **target's** user_id and keeps the **actor's** current token (P-H). Audit INSERT + logSecurity gated on `del.changes > 0` (D-117). No scoping inversion, no wrong-user delete. Backed by 7 AUD-02 unit tests (real SQLite) and `e2e/admin-revoke-cycle.spec.mjs` (EN+FR: member dies with `err.signedOutElsewhere`, admin survives, peer-admin `adminOnly` toast). The revocation mechanics are NOT the bug.
 
 ### E2 — The only surface where the admin could SEE revoke activity is operator-gated client-side
+
 Settings → sessions tab (src/pages/settings.js:532-551) shows:
 - `S.ui.sessions` = the **current user's own** sessions only (SESS-01, GET /api/auth/sessions — by design since phase 14).
 - `operatorCard() + auditTrailCard()` appended **only when `api.user?.isInstanceAdmin`** (settings.js:551).
@@ -24,11 +33,13 @@ Settings → sessions tab (src/pages/settings.js:532-551) shows:
 `isInstanceAdmin` is the instance-operator DB flag (server.js:463, D-112) — a workspace admin (non-operator) never has it. So for a workspace admin, the sessions tab renders exactly one thing: its own session list. **"The admin only sees its session" is literally what the UI shows.**
 
 ### E3 — The client gate contradicts both D-T3 and the actual server behavior
+
 - D-T3 (24-CONTEXT): "workspace admins see only rows for their own workspace (admin-tier rows)" — the audit trail IS meant to be visible to workspace admins, tier-scoped.
 - The server honors D-T3 (server.js:2394-2403): `/api/audit-log` serves workspace admins their own-workspace rows and only 403s plain members.
 - But `refreshAuditLog()` (src/actions/actions.js:1999) bails: `if (!api.enabled || !api.user?.isInstanceAdmin) return null;` and the card is mounted behind the same flag. The comment at actions.js:1985 asserts "Workspace admins get 403 here" — **factually wrong for the shipped server**: only plain members get 403. 24-03-PLAN flagged the deferral ("a workspace-admin variant of the section is not required by D-V1 — the endpoint already serves admins if later surfaced") but D-T3 already required the admin view.
 
 ### E4 — The UAT flow makes the gap visible exactly as reported
+
 The admin revokes a member from the members page (button appears — members.js:55 gates on `isAdmin && m.userId`, works). Success toast fires, member's browser dies. But the admin has **no surface** that reflects the action: the members page shows no session/audit state, and the Settings sessions tab shows only the admin's own sessions with no audit trail card. The user then looked for verification, saw "only its session", and could not exercise tests 6-8 (peer-admin refusal toast copy, trail-row survival, end-to-end audit rows) because the trail was invisible to the admin tier.
 
 ## Hypotheses considered
