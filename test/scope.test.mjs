@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { ADMIN, inviteToken, login, signup, startServer, withDb } from './helpers/server.mjs';
 
@@ -302,6 +303,105 @@ for (const cell of truthTable) {
     );
   });
 }
+
+/* ---- Phase 29 Plan 04 task 1: invite-carried scope (SCOPE-05, D-04, D-13) ----
+
+   The invite POST accepts body.scope with validation identical to the member
+   scope route; a viewer invite carrying a projects scope is the guest path and
+   must carry exactly one project; admin/owner invites never carry scope. The
+   scope lands on the membership at acceptance — the guest's first doc GET is
+   already filtered. This block spends the second accept of this server's
+   invite budget (5/IP/hour). */
+
+let guest;
+let guestUserId;
+
+test('an invite carrying a multi-project viewer scope is refused (D-13 guestSingleProject)', async () => {
+  const res = await owner.post('/api/workspaces/acme/invites', {
+    emails: ['guest@test.local'],
+    role: 'viewer',
+    scope: { projects: ['p_in', 'p_out'], teams: [] },
+  });
+  assert.equal(res.status, 400);
+  assert.equal(res.data.code, 'guestSingleProject');
+});
+
+test('invite scope ids are whitelisted and shaped like the member scope route', async () => {
+  const ghost = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role: 'member', scope: { projects: ['p_ghost'], teams: [] } });
+  assert.equal(ghost.status, 400);
+  assert.equal(ghost.data.code, 'unknownProject');
+  const ghostTeam = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role: 'member', scope: { projects: ['p_in'], teams: ['ghost-team'] } });
+  assert.equal(ghostTeam.status, 400);
+  assert.equal(ghostTeam.data.code, 'unknownTeam');
+  const malformed = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role: 'member', scope: 'p_in' });
+  assert.equal(malformed.status, 400);
+  assert.equal(malformed.data.code, 'scopeRequired');
+  const missingTeams = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role: 'member', scope: { projects: [] } });
+  assert.equal(missingTeams.status, 400);
+  assert.equal(missingTeams.data.code, 'teamsRequired');
+  const missingProjects = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role: 'member', scope: { teams: [] } });
+  assert.equal(missingProjects.status, 400);
+  assert.equal(missingProjects.data.code, 'projectsRequired');
+  const capped = await owner.post('/api/workspaces/acme/invites', {
+    emails: ['guest@test.local'],
+    role: 'member',
+    scope: { teams: [], projects: Array.from({ length: 26 }, (_, i) => `p_${i}`) },
+  });
+  assert.equal(capped.status, 400);
+  assert.equal(capped.data.code, 'tooManyProjects');
+});
+
+test('an admin or owner invite never carries scope (D-04 scopeNotAllowed)', async () => {
+  for (const role of ['admin', 'owner']) {
+    const res = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role, scope: { projects: ['p_in'], teams: [] } });
+    assert.equal(res.status, 400, `${role} + scope refused`);
+    assert.equal(res.data.code, 'scopeNotAllowed');
+  }
+});
+
+test('invite fixture: a guest invite (viewer + exactly one PRIVATE project) is created and accepted', async () => {
+  const [inv] = (
+    await owner.post('/api/workspaces/acme/invites', {
+      emails: ['guest@test.local'],
+      role: 'viewer',
+      scope: { projects: ['p_priv2'], teams: [] },
+    })
+  ).data.invites;
+  assert.equal(inv.role, 'viewer', 'the guest is a viewer (D-13: no new role)');
+  const storedScope = withDb(server.dbPath, db =>
+    db.prepare('select scope from invites where token_hash = ?').get(createHash('sha256').update(inviteToken(inv.url)).digest('hex')),
+  );
+  assert.deepEqual(JSON.parse(storedScope.scope), { teams: [], projects: ['p_priv2'] }, 'the scope JSON is stored on the invite row');
+  guest = (await signup(server.base, ACCOUNT('Guest', 'guest@test.local'))).client;
+  const joined = await guest.post(`/api/invites/${inviteToken(inv.url)}/accept`);
+  assert.ok([200, 201].includes(joined.status), 'the guest joined');
+  guestUserId = (await owner.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'guest@test.local').userId;
+});
+
+test('acceptance lands the invite scope on the membership (SCOPE-05)', async () => {
+  assert.deepEqual(JSON.parse(scopeOf(guestUserId)), { teams: [], projects: ['p_priv2'] }, 'the membership row carries the invite scope');
+});
+
+test('the guest sees exactly their one private project and nothing else (D-03 grant, D-14)', async () => {
+  const view = (await guest.get('/api/workspaces/acme')).data;
+  assert.deepEqual(view.doc.data.projects.map(p => p.id), ['p_priv2'], 'exactly one project survives the read — the private grant included');
+  assert.deepEqual(view.doc.data.tasks, [], 'no out-of-scope tasks ride along');
+  // D-14: the guest is a viewer — writes are refused by the existing role gate.
+  const live = (await guest.get('/api/workspaces/acme')).data;
+  const doc = structuredClone(live.doc);
+  doc.data.tasks.push({ id: 't_guest', project: 'p_priv2', title: 'Guest write', status: 'todo', labels: [], subtasks: [] });
+  const put = await guest.put('/api/workspaces/acme', { revision: live.revision, doc });
+  assert.equal(put.status, 403, 'viewer semantics reject the write');
+  assert.equal(put.data.code, 'readOnlyAccess');
+});
+
+test('an invite without a scope field leaves memberships.scope null (unscooped regression)', () => {
+  assert.equal(scopeOf(scopedUserId), null, 'the pre-existing member was invited without scope and stayed workspace-wide');
+});
+
+test('a workspace document is byte-unchanged by an invite carrying scope', () => {
+  assert.equal(storedDoc().data.projects.length, 4, 'the scope never enters the workspace document');
+});
 
 test('null-scope membership keeps the pre-phase workspace-wide view (regression)', async () => {
   assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
