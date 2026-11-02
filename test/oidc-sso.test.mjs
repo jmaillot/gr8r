@@ -46,6 +46,10 @@ const idp = {
         email: 'sso.user@example.com',
         name: 'SSO User',
         tid: 't-1',
+        /* G-30-1: `email_verified` is NOT in the default payload — the strict
+           policy gates on the claim, so its omission is the failure mode the
+           fixtures must model explicitly. Every test where the policy should
+           ALLOW the flow supplies `email_verified: true` in its claims. */
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 300,
         nonce,
@@ -186,7 +190,7 @@ test('the happy path: start → authorize URL → callback → session (SSO-01)'
 
   /* 2. the mock IdP binds the authorize-time nonce (as Entra does at the
      authorize step) and mints a valid id_token for the configured identity. */
-  idp.tokenConfig = { code: 'auth-code-1', claims: { nonce: q.get('nonce') } };
+  idp.tokenConfig = { code: 'auth-code-1', claims: { nonce: q.get('nonce'), email_verified: true } };
 
   /* 3. callback: state matches, code exchanges, id_token verifies. */
   const callback = await nav(server.base, `/api/auth/oidc/callback?code=auth-code-1&state=${encodeURIComponent(q.get("state"))}`, flowCookie);
@@ -271,16 +275,19 @@ function createExistingUser(db, email) {
   );
 }
 
-/* SSO-03 (Phase 30 plan 02): pinned-tenant verified-email linking. A managed-
-   user token (pinned iss + tid match + non-guest shape + non-empty email)
-   links to the existing users row; ANY guest shape or tenant mismatch never
-   links — the existing account is never signed into. */
+/* SSO-03 (Phase 30 plan 02, tightened by gap closure 30-06 / G-30-1): strict
+   verified-email linking. "Verified email" is the literal `email_verified: true`
+   claim from the IdP — pinned-tenant member vouching (flagged assumption A2)
+   is SUPERSEDED and no longer substitutes for it. A token links to the
+   existing users row only when it is pinned-tenant, non-guest AND carries
+   `email_verified: true`; without a verified email it never links, never
+   JIT-provisions, never reconciles an invitation — all fail closed. */
 
 test('a pinned-tenant member token links to the existing account by email (SSO-03)', async () => {
   const linkEmail = 'link.me@example.com';
   withDb(server.dbPath, db => createExistingUser(db, linkEmail));
 
-  const { callback } = await runFlow({ claims: { sub: 'sub-link', email: '  LINK.ME@example.com ' } });
+  const { callback } = await runFlow({ claims: { sub: 'sub-link', email: '  LINK.ME@example.com ', email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/', 'the member token signed into the linked account');
   assert.ok(sessionCookieOf(callback.cookies), 'a session was minted');
@@ -294,6 +301,36 @@ test('a pinned-tenant member token links to the existing account by email (SSO-0
   });
 });
 
+/* G-30-1 strict policy negatives: the same pinned-tenant non-guest shape
+   without a verified email NEVER links — no session, no identity row, no
+   users row change. Each row gets a fresh server instance (fresh throttle
+   map + fresh database), same isolation as the SSO-08 matrix. */
+for (const [label, verifiedClaim] of [
+  ['email_verified: false', false],
+  ['email_verified absent', undefined],
+]) {
+  test(`a pinned-tenant member token WITHOUT a verified email never links: ${label} (SSO-03/G-30-1)`, async () => {
+    const srv = await freshMatrixServer();
+    const unverifiedEmail = `unverified.${Math.random().toString(36).slice(2, 8)}@example.com`;
+    withDb(srv.dbPath, db => createExistingUser(db, unverifiedEmail));
+    const claims = { sub: `sub-unverified-${verifiedClaim === false ? 'false' : 'absent'}`, email: unverifiedEmail };
+    if (verifiedClaim === false) claims.email_verified = false;
+    const usersBefore = withDb(srv.dbPath, db => db.prepare('select count(*) as n from users').get().n);
+
+    const { callback } = await runFlow({ srv, code: `unv-code-${verifiedClaim === false ? 'false' : 'absent'}`, claims });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/login?sso=error', 'unverified email fails closed to the generic error marker');
+    assert.equal(sessionCookieOf(callback.cookies), null, 'no session minted');
+    withDb(srv.dbPath, db => {
+      assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get(claims.sub).n, 0, 'no identity row');
+      assert.ok(db.prepare('select id from users where email = ?').get(unverifiedEmail), 'the existing account is untouched');
+      assert.equal(db.prepare('select count(*) as n from users').get().n, usersBefore, 'no users row was created');
+      const victim = db.prepare('select id from users where email = ?').get(unverifiedEmail);
+      assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(victim.id).n, 0, 'no session row for the existing account');
+    });
+  });
+}
+
 for (const [label, guestClaims] of [
   ['idp claim differing from iss (guest)', { idp: 'live.com' }],
   ['acct === 1 (guest)', { acct: '1' }],
@@ -303,7 +340,9 @@ for (const [label, guestClaims] of [
     const victimEmail = `victim.${Math.random().toString(36).slice(2, 8)}@example.com`;
     withDb(server.dbPath, db => createExistingUser(db, victimEmail));
 
-    const { callback } = await runFlow({ claims: { ...guestClaims, sub: `sub-guest-${guestClaims.idp ?? guestClaims.acct ?? guestClaims.tid}`, email: victimEmail } });
+    /* email_verified: true in every row — the failure is specifically the
+       guest/tenant shape, never an unverified-email side effect (G-30-1). */
+    const { callback } = await runFlow({ claims: { ...guestClaims, sub: `sub-guest-${guestClaims.idp ?? guestClaims.acct ?? guestClaims.tid}`, email: victimEmail, email_verified: true } });
     assert.equal(callback.status, 302);
     assert.equal(callback.location, '/login?sso=error', 'the guest token fails closed to the generic error marker');
     assert.equal(sessionCookieOf(callback.cookies), null, 'the existing account is never signed into');
@@ -316,9 +355,24 @@ for (const [label, guestClaims] of [
   });
 }
 
-test('a guest token with a fresh email provisions a SEPARATE account, never a link (SSO-03)', async () => {
+test('a guest token with a fresh email and NO verified email gets NO JIT account (G-30-1 fail closed)', async () => {
+  const srv = await freshMatrixServer();
+  const freshGuest = 'fresh.guest.unverified@example.com';
+  const usersBefore = withDb(srv.dbPath, db => db.prepare('select count(*) as n from users').get().n);
+  const { callback } = await runFlow({ srv, code: 'guest-unv-code', claims: { sub: 'sub-guest-fresh-unv', email: freshGuest, idp: 'live.com' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/login?sso=error', 'unverified guest email fails closed — not even a separate bare account');
+  assert.equal(sessionCookieOf(callback.cookies), null, 'no session minted');
+  withDb(srv.dbPath, db => {
+    assert.equal(db.prepare('select id from users where email = ?').get(freshGuest), undefined, 'NO JIT account was created');
+    assert.equal(db.prepare('select count(*) as n from users').get().n, usersBefore, 'no users row was written');
+    assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-guest-fresh-unv').n, 0, 'no identity row');
+  });
+});
+
+test('a guest token with a fresh email and a verified email still provisions a SEPARATE account, never a link (SSO-03/G-30-1)', async () => {
   const freshGuest = 'fresh.guest@example.com';
-  const { callback } = await runFlow({ claims: { sub: 'sub-guest-fresh', email: freshGuest, idp: 'live.com' } });
+  const { callback } = await runFlow({ claims: { sub: 'sub-guest-fresh', email: freshGuest, idp: 'live.com', email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/', 'a fresh guest identity still gets its own bare account');
   withDb(server.dbPath, db => {
@@ -344,7 +398,7 @@ test('repeated SSO logins with the same (issuer, subject) resolve to the same us
   });
   assert.ok(before.identity, 'precondition: the happy path created the sub-1 identity');
 
-  const { callback } = await runFlow({ code: 'auth-code-2' });
+  const { callback } = await runFlow({ code: 'auth-code-2', claims: { email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/');
   withDb(server.dbPath, db => {
@@ -368,8 +422,8 @@ test('a password sign-in against a JIT account fails closed (SSO-04)', async () 
 });
 
 test('two JIT accounts carry DIFFERENT random password hashes (never a shared constant)', async () => {
-  await runFlow({ claims: { sub: 'sub-jit-a', email: 'jit.a@example.com' } });
-  await runFlow({ claims: { sub: 'sub-jit-b', email: 'jit.b@example.com' } });
+  await runFlow({ claims: { sub: 'sub-jit-a', email: 'jit.a@example.com', email_verified: true } });
+  await runFlow({ claims: { sub: 'sub-jit-b', email: 'jit.b@example.com', email_verified: true } });
   withDb(server.dbPath, db => {
     const a = db.prepare('select password_hash from users where email = ?').get('jit.a@example.com');
     const b = db.prepare('select password_hash from users where email = ?').get('jit.b@example.com');
@@ -427,7 +481,7 @@ test('SSO-08 matrix: state mismatched → no session', async () => {
 test('SSO-08 matrix: state replayed (same callback URL twice) → no second session', async () => {
   const srv = await freshMatrixServer();
   const before = sessionsTotal(srv);
-  const { callback: first, q, flowCookie } = await runFlow({ srv, code: 'mx-code-replay', claims: { sub: 'sub-mx-replay', email: 'replay.user@example.com' } });
+  const { callback: first, q, flowCookie } = await runFlow({ srv, code: 'mx-code-replay', claims: { sub: 'sub-mx-replay', email: 'replay.user@example.com', email_verified: true } });
   assert.equal(first.location, '/', 'the first callback legitimately signs in');
   const afterFirst = sessionsTotal(srv);
   assert.equal(afterFirst, before + 1, 'exactly one session from the first callback');
@@ -491,7 +545,7 @@ test('SSO-05: a TOTP-enrolled account authenticating via SSO gets the challenge,
      callback's own session delta is what gets asserted. */
   const sessionsBeforeSso = withDb(tfaServer.dbPath, db => db.prepare('select count(*) as n from sessions where user_id = ?').get(id).n);
 
-  const flow = await runFlow({ srv: tfaServer, code: 'tfa-code-1', claims: { sub: 'sub-2fa', email: EMAIL } });
+  const flow = await runFlow({ srv: tfaServer, code: 'tfa-code-1', claims: { sub: 'sub-2fa', email: EMAIL, email_verified: true } });
   const callback = flow.callback;
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/#tfa', 'the callback 302s to the pending-2FA SPA state (Pitfall 9 hash fragment)');
@@ -553,8 +607,8 @@ test('SSO-05: a TOTP-enrolled account authenticating via SSO gets the challenge,
 test('SSO-05: parallel logins for the same user produce per-attempt challenge rows (never shared/overwritten)', async () => {
   const EMAIL2 = '2fa.sso.two@example.com';
   await enrollTfa(tfaServer, EMAIL2, 'correct-horse-9');
-  const first = await runFlow({ srv: tfaServer, code: 'tfa-code-2', claims: { sub: 'sub-2fa-two', email: EMAIL2 } });
-  const second = await runFlow({ srv: tfaServer, code: 'tfa-code-3', claims: { sub: 'sub-2fa-two', email: EMAIL2 } });
+  const first = await runFlow({ srv: tfaServer, code: 'tfa-code-2', claims: { sub: 'sub-2fa-two', email: EMAIL2, email_verified: true } });
+  const second = await runFlow({ srv: tfaServer, code: 'tfa-code-3', claims: { sub: 'sub-2fa-two', email: EMAIL2, email_verified: true } });
   assert.equal(first.callback.location, '/#tfa');
   assert.equal(second.callback.location, '/#tfa');
   const c1 = challengeCookieOf(first.callback.cookies);
@@ -614,7 +668,7 @@ test('SSO-07/D-06: a first-login SSO user with exactly one pending invite gets i
   });
   withDb(inviteServer.dbPath, db => seedInvite(db, 'invite.one@example.com', 'viewer', { teams: '["t-1"]', scope: '{"projects":["p-1"]}' }));
 
-  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-1', claims: { sub: 'sub-inv-one', email: 'INVITE.ONE@example.com' } });
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-1', claims: { sub: 'sub-inv-one', email: 'INVITE.ONE@example.com', email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/', 'the auto-accepted user lands in the app');
   assert.ok(sessionCookieOf(callback.cookies), 'a session was minted');
@@ -642,7 +696,7 @@ test('SSO-07: a first-login SSO user with MULTIPLE pending invites is surfaced, 
     seedInvite(db, 'invite.multi@example.com', 'member');
     seedInvite(db, 'invite.multi@example.com', 'viewer');
   });
-  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-2', claims: { sub: 'sub-inv-multi', email: 'invite.multi@example.com' } });
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-2', claims: { sub: 'sub-inv-multi', email: 'invite.multi@example.com', email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/#invitations', 'the callback redirects to the invitations landing');
   withDb(inviteServer.dbPath, db => {
@@ -654,7 +708,7 @@ test('SSO-07: a first-login SSO user with MULTIPLE pending invites is surfaced, 
 
 test('SSO-07: expired invites are ignored — not accepted, not blocking', async () => {
   withDb(inviteServer.dbPath, db => seedInvite(db, 'invite.expired@example.com', 'admin', { expired: true }));
-  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-3', claims: { sub: 'sub-inv-exp', email: 'invite.expired@example.com' } });
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-3', claims: { sub: 'sub-inv-exp', email: 'invite.expired@example.com', email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/', 'the expired invite neither blocks nor elevates');
   withDb(inviteServer.dbPath, db => {
@@ -665,7 +719,7 @@ test('SSO-07: expired invites are ignored — not accepted, not blocking', async
 });
 
 test('SSO-07: a repeat SSO login after acceptance creates no duplicate membership', async () => {
-  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-4', claims: { sub: 'sub-inv-one', email: 'invite.one@example.com' } });
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-4', claims: { sub: 'sub-inv-one', email: 'invite.one@example.com', email_verified: true } });
   assert.equal(callback.status, 302);
   assert.equal(callback.location, '/', 'the repeat login signs in normally');
   withDb(inviteServer.dbPath, db => {

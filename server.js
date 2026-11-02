@@ -2694,26 +2694,39 @@ async function handleApi(req, res, url) {
       const email = String(claims.email || '').trim().toLowerCase();
       if (!subject || !emailOk(email)) return errorRedirect();
 
-      /* Identity resolution — SSO-03 pinned-tenant verified-email linking
-         (T-30-06). "Verified email" is pinned-tenant member vouching
-         (planner policy, flagged assumption A2): the token must carry
-         tid === OIDC_TENANT_ID, must NOT be a guest shape, and must carry a
-         non-empty email. preferred_username is never consulted — only the
-         email claim can link. Guests and foreign-tenant tokens NEVER link:
-         they get a separate bare account, or fail closed when the email
-         already belongs to an existing account (users.email is UNIQUE, so
-         "separate account" is impossible there). */
+      /* Identity resolution — SSO-03 strict verified-email linking (T-30-06,
+         tightened by gap closure G-30-1). "Verified email" is the LITERAL
+         `email_verified: true` claim from the IdP — planner assumption A2
+         (pinned-tenant member vouching substitutes for verification) is
+         SUPERSEDED by operator decision and no longer substitutes for the
+         claim. Gating (fail closed, generic /login?sso=error):
+           - LINKING an existing account requires pinned-tenant tid match +
+             non-guest shape AND email_verified === true;
+           - JIT-PROVISIONING a fresh email (guest or member) requires
+             email_verified === true;
+           - invite reconciliation (SSO-07) flows through the same row
+             resolution, so it inherits both gates.
+         An ALREADY-LINKED (issuer, subject) identity row still resolves
+         without re-checking the claim — repeat logins must not break; the
+         fail-closed policy applies to linking/provisioning, not to an
+         established identity. preferred_username is never consulted — only
+         the email claim can link. */
       const isPinnedTenant = claims.tid === OIDC.config.tenantId;
       const guestShape =
         (typeof claims.idp === 'string' && claims.idp !== '' && claims.idp !== OIDC.config.issuer) ||
         String(claims.acct ?? '') === '1';
       const canLink = isPinnedTenant && !guestShape;
+      const verifiedEmail = claims.email_verified === true;
       let row = db.prepare('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?').get(OIDC.config.issuer, subject);
       if (!row) {
         const existing = db.prepare('select * from users where email = ?').get(email);
-        if (existing && !canLink) return errorRedirect();
+        if (existing && !(canLink && verifiedEmail)) return errorRedirect();
         if (existing) {
           row = existing;
+        } else if (!verifiedEmail) {
+          /* G-30-1: no verified email → no JIT account, guest or not —
+             fail closed BEFORE any users/oidc_identities write. */
+          return errorRedirect();
         } else {
           /* Pitfall 5: JIT accounts get a RANDOM unusable scrypt hash — never
              a constant — into the password_hash NOT NULL column. Bare account,
