@@ -1167,6 +1167,14 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
          `projectId` key is never read — it made this lookup always undefined. */
       const projectId = n.project || task?.project || null;
       if (!inScopeProject(projectId ? projectById.get(projectId) : null, recipientScope)) continue;
+    } else {
+      /* Phase 32 (VIS-04/D-04): a null-scope recipient's reach now includes
+         team intersection — skip when the project is hidden from them under
+         the SAME shared predicate hiddenFor's null-scope branch uses (never a
+         second pipeline). Scoped recipients keep the exact inScopeProject
+         semantics above: the D-03 grant short-circuit is not re-tightened. */
+      const projectId = n.project || task?.project || null;
+      if (projectId && !memberCanReadProject(projectById.get(projectId), wsRow.id, n.to)) continue;
     }
     const taskTitle = task?.title || 'a task';
     const by = ['due_reminder', 'past_due'].includes(n.type) ? 'Reminders' : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
@@ -1291,6 +1299,13 @@ function runReminderPass({ now: at = new Date() } = {}) {
           .prepare('select role, scope from memberships where workspace_id = ? and member_id = ?')
           .get(ws.id, t.assignee);
         if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
+        /* Phase 32 (VIS-04/D-04): a null-scope assignee's reach now includes
+           team intersection — skip when the project is team-hidden from them
+           under the SAME shared predicate the read funnel uses (never a
+           second pipeline). Scoped assignees keep the exact inScopeProject
+           semantics above; ids are passed explicitly (ws.id + t.assignee, the
+           member_id) because this row carries only {role, scope} — Pitfall 2. */
+        if (!projectScope(assigneeMembership) && !memberCanReadProject(project, ws.id, t.assignee)) continue;
         const due = t.due;
         /* Window-open predicates on plain YYYY-MM-DD string compare — the
            open window plus an absent dedup key IS the boot catch-up. */

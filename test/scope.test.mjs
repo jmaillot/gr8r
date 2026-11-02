@@ -701,8 +701,13 @@ test('team fixture: probe members resolved and team-linked projects planted', as
     { id: 'p_teamX', key: 'tmx', name: 'Team X Private', private: true, members: [ownerMid], lead: ownerMid, teams: ['team_a'] },
     { id: 'p_pubA', key: 'pba', name: 'Public Team A', private: false, members: [], teams: ['team_a'] },
     { id: 'p_priv3', key: 'prv3', name: 'Private No Teams', private: true, members: [scopedMemberId], lead: ownerMid, teams: [] },
+    // Reminder-probe project: team-linked AND the on-team assignee is on its
+    // access list — remindable()'s pre-existing canSeeProject gate composes
+    // with the pass-level team check (RESEARCH Pitfall 4), so the on-team
+    // reminder can only flow for a member the OLD predicate already saw.
+    { id: 'p_teamL', key: 'tml', name: 'Team Listed', private: true, members: [teamOnMid], lead: teamOnMid, teams: ['team_a'] },
   );
-  doc.data.projOrder.push('p_teamX', 'p_pubA', 'p_priv3');
+  doc.data.projOrder.push('p_teamX', 'p_pubA', 'p_priv3', 'p_teamL');
   assert.equal((await owner.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
 });
 
@@ -736,6 +741,53 @@ test('team cell [file]: the zero-team member answers the byte-identical unknown-
   const offBody = await off.json();
   assert.equal(offBody.code, 'fileNotFound');
   assert.deepEqual(offBody, await unknown.json(), 'team-hidden ≡ unknown: identical status, code AND message');
+});
+
+/* ---- Phase 32 (VIS-04): send-time adoption — reminder pass + fanout ---- */
+
+test('team cell [reminder]: the on-team assignee is reminded, the zero-team assignee is skipped (VIS-04)', async () => {
+  const doc = storedDoc();
+  doc.data.tasks.push(
+    { id: 't_team_rem_on', key: 'TMX-1', title: 'Team reminder on-team', status: 'todo', assignee: teamOnMid, project: 'p_teamL', due: '2027-05-18', labels: [], subtasks: [] },
+    { id: 't_team_rem_off', key: 'TMX-2', title: 'Team reminder off-team', status: 'todo', assignee: scopedMemberId, project: 'p_teamL', due: '2027-05-18', labels: [], subtasks: [] },
+  );
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
+  const emitted = await triggerReminders(server, at9('2027-05-18'));
+  const rows = emitted.filter(n => n.type === 'due_reminder');
+  assert.ok(rows.some(n => n.task === 't_team_rem_on' && n.to === teamOnMid), 'on-team assignee reminded');
+  assert.ok(!rows.some(n => n.task === 't_team_rem_off'), 'zero-team assignee never reminded (empty-teams branch, Pitfall 3)');
+});
+
+function clientDocTeam() {
+  applyClientDoc(
+    {
+      data: {
+        me: 'm_actor',
+        members: [
+          { id: 'm_actor', name: 'Actor', status: 'active', role: 'Owner' },
+          { id: 'm_teamon', name: 'Tia Team', status: 'active', role: 'member' },
+          { id: 'm_teamoff', name: 'Ollie Offteam', status: 'active', role: 'member', scope: { projects: ['p_in'], teams: [] } },
+        ],
+        projOrder: ['p_in', 'p_teamX'],
+        projects: [
+          { id: 'p_in', key: 'IN', seq: 1, name: 'In', teams: [] },
+          { id: 'p_teamX', key: 'TMX', seq: 3, name: 'Team X Private', private: true, teams: ['team_a'] },
+        ],
+        tasks: [],
+        comments: [],
+        notifs: [],
+        activity: [],
+      },
+    },
+    1,
+  );
+}
+
+test('team cell [fanout]: the on-team target is present, the off-team scoped target is absent (VIS-04)', () => {
+  clientDocTeam();
+  const targets = clientEmitMentions('@Tia Team @Ollie Offteam', { id: 't_fan_team', project: 'p_teamX' });
+  assert.ok(targets.has('m_teamon'), 'the on-team target is never dropped');
+  assert.ok(!targets.has('m_teamoff'), 'the off-team scoped target is filtered from the emit Set');
 });
 
 /* Family-5 reminder probes are planted lazily (first reminder probe), AFTER
