@@ -2847,6 +2847,13 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/auth/login' && method === 'POST') {
+    /* SSO-06/D-07 (plan 04): under SSO-only the password door is a bare 404 —
+       the exact no-oracle shape of any unknown route, answered BEFORE the
+       sameOrigin guard so a cross-origin POST never earns a 403-with-message
+       either. OIDC.ssoOnly is true only when OIDC is enabled (readConfig in
+       oidc.js). Reversible: clearing OIDC_SSO_ONLY reopens the door; no
+       password_hash is ever touched (D-08). */
+    if (OIDC.ssoOnly) return fail(res, 404, 'notFound', 'Not found');
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');

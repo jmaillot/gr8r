@@ -5,9 +5,11 @@
    runs end-to-end with no mocks inside server.js itself. */
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import http from 'node:http';
+import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { startServer, withDb } from './helpers/server.mjs';
+import { signup, startServer, withDb } from './helpers/server.mjs';
 
 /* ------------------------------ mock IdP ------------------------------ */
 
@@ -487,7 +489,6 @@ test('the matrix carries every required fail-closed row (no skips/todos)', () =>
 /* ---------------- SSO-05 (Phase 30 plan 03): SSO × 2FA ---------------- */
 
 import { totpAt } from '../totp.js';
-import { signup } from './helpers/server.mjs';
 
 const challengeCookieOf = cookies => cookies.find(c => c.startsWith('projects_tfa_challenge='))?.split(';')[0] || null;
 const liveCode = secret => totpAt(secret, Date.now() / 1000 + 30);
@@ -742,3 +743,129 @@ for (const [label, env] of GATING_ROWS) {
     }
   });
 }
+
+/* ---------------- SSO-06 (Phase 30 plan 04): SSO-only mode — D-07/D-08 ----------------
+   With OIDC_SSO_ONLY=true the password door is a bare 404 (no-oracle, never
+   403-with-message), the REST of the auth family stays functional (Pitfall 6
+   coherence matrix), and clearing the flag reverses everything with no data
+   loss (password_hash intact — D-08). Each row below drives a real server. */
+
+test('SSO-06 config row: oidcSsoOnly tracks the env when SSO is enabled', async () => {
+  const sso = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer, OIDC_SSO_ONLY: 'true' },
+  });
+  try {
+    const config = await fetch(`${sso.base}/api/config`).then(r => r.json());
+    assert.equal(config.oidcEnabled, true);
+    assert.equal(config.oidcSsoOnly, true);
+  } finally {
+    await sso.stop();
+  }
+});
+
+test('SSO-06/D-07: /api/auth/login under SSO-only answers a bare 404 notFound — never 403-with-message', async () => {
+  const sso = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer, OIDC_SSO_ONLY: 'true' },
+  });
+  try {
+    const res = await fetch(`${sso.base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@test.local', password: 'owner-password-1' }),
+    });
+    assert.equal(res.status, 404);
+    assert.notEqual(res.status, 403, 'no 403 oracle under SSO-only');
+    const body = await res.json();
+    assert.equal(body.code, 'notFound', 'the exact generic notFound shape');
+    // Even a cross-origin POST (Origin header present, mismatched) gets the same
+    // 404 — the gate sits BEFORE the sameOrigin guard, so no 403 leaks either.
+    const cors = await fetch(`${sso.base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://evil.example' },
+      body: JSON.stringify({ email: 'owner@test.local', password: 'owner-password-1' }),
+    });
+    assert.equal(cors.status, 404, 'cross-origin POST is equally a bare 404');
+  } finally {
+    await sso.stop();
+  }
+});
+
+test('SSO-06/Pitfall-6 coherence: tfa/login, logout and me stay functional under SSO-only', async () => {
+  const sso = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer, OIDC_SSO_ONLY: 'true' },
+  });
+  try {
+    // tfa/login: NO challenge cookie → 401 challengeExpired — the route RAN (not 404).
+    const tfa = await fetch(`${sso.base}/api/auth/tfa/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: '123456' }),
+    });
+    assert.equal(tfa.status, 401);
+    assert.equal((await tfa.json()).code, 'challengeExpired', 'the 2FA route is alive under SSO-only (SSO users need it)');
+
+    // logout: 204 — functional.
+    const logout = await fetch(`${sso.base}/api/auth/logout`, { method: 'POST' });
+    assert.equal(logout.status, 204, 'logout stays functional under SSO-only');
+
+    // me: 200 {user:null} — the probe endpoint is alive.
+    const me = await fetch(`${sso.base}/api/auth/me`).then(r => r.json());
+    assert.deepEqual(me, { user: null }, '/api/auth/me stays functional under SSO-only');
+  } finally {
+    await sso.stop();
+  }
+});
+
+test('SSO-06: signup remains governed by the existing ALLOW_SIGNUP flag (no new behavior)', async () => {
+  const sso = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer, OIDC_SSO_ONLY: 'true' },
+  });
+  try {
+    const s = await signup(sso.base, { name: 'Still Open', email: 'signup.ssoonly@example.com', password: 'password-1234' });
+    assert.equal(s.status, 201, 'signup works under SSO-only while ALLOW_SIGNUP=true (default BASE_ENV)');
+  } finally {
+    await sso.stop();
+  }
+});
+
+test('SSO-06/D-08: SSO-only is REVERSIBLE — clearing the flag reopens password sign-in, password_hash intact', async () => {
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-sso-rev-'));
+  const boot = extra =>
+    startServer({
+      dataDir: dir,
+      env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer, ...extra },
+    });
+  const first = await boot({ OIDC_SSO_ONLY: 'true' });
+  try {
+    // A real password account exists under SSO-only (signup route unaffected).
+    const acc = await signup(first.base, { name: 'Revive Me', email: 'revive.me@example.com', password: 'correct-horse-9' });
+    assert.equal(acc.status, 201);
+    // ...but its password sign-in is a 404.
+    const locked = await fetch(`${first.base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'revive.me@example.com', password: 'correct-horse-9' }),
+    });
+    assert.equal(locked.status, 404, 'the password door is closed under SSO-only');
+    // The credential material was never touched.
+    const hash = withDb(first.dbPath, db => db.prepare('select password_hash from users where email = ?').get('revive.me@example.com').password_hash);
+    assert.ok(hash && hash !== '', 'password_hash retained while SSO-only is on');
+  } finally {
+    await first.stop();
+  }
+  // Reboot the SAME database WITHOUT the flag: the door reopens, no data wipe.
+  const second = await boot({});
+  try {
+    const res = await fetch(`${second.base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'revive.me@example.com', password: 'correct-horse-9' }),
+    });
+    assert.equal(res.status, 200, 'removing OIDC_SSO_ONLY restores password sign-in for the same account');
+    assert.ok(res.headers.getSetCookie?.().some(c => c.startsWith('projects_session=')), 'a session was minted');
+  } finally {
+    await second.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
