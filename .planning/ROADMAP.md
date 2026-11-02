@@ -81,7 +81,13 @@ project-touching endpoint, not a feature bolt-on.
      invited user lands with that scope at acceptance.
   5. An external collaborator invited with project-level guest scope sees exactly that one
      project and nothing else in the workspace.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 29-01-PLAN.md — Scope substrate: columns, predicate, shared read/write funnel, scope-edit route, migration pin (SCOPE-01)
+- [ ] 29-02-PLAN.md — D-03 grant inversion, file-serve side door, named 404-matrix sweep (SCOPE-02, SCOPE-03)
+- [ ] 29-03-PLAN.md — Notification/mention/assignment send-time scope filtering, server guards (SCOPE-04)
+- [ ] 29-04-PLAN.md — Invite-carried scope, guest model, invite-form/member-modal UI (SCOPE-05, SCOPE-06)
 **UI hint**: yes
 
 ### Phase 30: Entra SSO (OIDC)
