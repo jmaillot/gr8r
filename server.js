@@ -651,6 +651,39 @@ function canSeeProject(p, memberId) {
   return !!memberId && Array.isArray(p.members) && p.members.includes(memberId);
 }
 
+/* ---------------------- team-derived visibility (Phase 32) ---------------------- */
+
+/*
+ * Phase 32 (D-04/D-05): the team term of the visibility predicate — true iff
+ * the project carries a non-empty teams[] that intersects the member's team
+ * set. The set is the LIVE team_members authority read at predicate time
+ * (never cached, D-05) and never the doc roster (stripped display
+ * projection). Purely widening: this term can only OPEN projects, never add
+ * to a hidden set.
+ */
+function teamIntersects(p, teamSet) {
+  return Array.isArray(p?.teams) && p.teams.length > 0 && Array.isArray(teamSet) && teamSet.length > 0 && p.teams.some(t => teamSet.includes(t));
+}
+
+/*
+ * Phase 32 (VIS-01/VIS-04/D-04): the ONE member-level readable predicate —
+ * existing rules (public ∨ access list) OR a live team intersection. Shared
+ * by hiddenFor's null-scope branch and both send-time surfaces (reminder
+ * pass, email mirror): never a second visibility pipeline. Ids are passed
+ * explicitly in member_id space, but team_members is keyed by user_id, so
+ * the membership row is resolved first (Pitfall 2). `liveTeams` lets
+ * high-frequency callers (hiddenFor) resolve the set once per document.
+ */
+function memberCanReadProject(p, wsId, memberId, liveTeams = null) {
+  if (canSeeProject(p, memberId)) return true;
+  if (!p || !wsId || !memberId) return false;
+  if (!liveTeams) {
+    const row = db.prepare('select user_id from memberships where workspace_id = ? and member_id = ?').get(wsId, memberId);
+    liveTeams = row?.user_id ? teamsOfUser(wsId, row.user_id) : [];
+  }
+  return teamIntersects(p, liveTeams);
+}
+
 function canManageProject(p, memberId, role) {
   if (role === 'owner' || role === 'admin') return true;
   return !!memberId && p?.lead === memberId;
@@ -729,7 +762,28 @@ function scopeGrants(p, scope, memberId) {
 
 function hiddenFor(doc, membership) {
   const scope = projectScope(membership);
-  if (!scope) return hiddenProjectIds(doc, membership?.member_id || null);
+  if (!scope) {
+    /* Phase 32 (VIS-01/D-03/D-06): the team term lands in the null-scope
+       branch ONLY — the Phase-29 scoped branch below stays byte-identical.
+       Admin/owner (projectScope null via role) keep the plain
+       hiddenProjectIds path (exemption on top, D-06); a non-admin null-scope
+       membership hides exactly the projects neither its access list nor a
+       live team intersection reaches. Purely additive: the team term only
+       ever SUBTRACTS from the hidden set. */
+    if (membership?.workspace_id && ROLE_RANK[membership.role] < ROLE_RANK.admin) {
+      const memberId = membership.member_id || null;
+      const mRow = memberId
+        ? db.prepare('select user_id from memberships where workspace_id = ? and member_id = ?').get(membership.workspace_id, memberId)
+        : null;
+      const liveTeams = mRow?.user_id ? teamsOfUser(membership.workspace_id, mRow.user_id) : [];
+      const seen = new Set();
+      for (const p of doc?.data?.projects || []) {
+        if (p?.id && !memberCanReadProject(p, membership.workspace_id, memberId, liveTeams)) seen.add(p.id);
+      }
+      return seen;
+    }
+    return hiddenProjectIds(doc, membership?.member_id || null);
+  }
   const seen = new Set();
   for (const p of doc?.data?.projects || []) {
     if (!p?.id) continue;

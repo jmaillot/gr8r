@@ -666,6 +666,78 @@ for (const row of MATRIX) {
   }
 }
 
+/* ---- Phase 32 (VIS-01): team-derived project visibility — tracer slice ----
+
+   A second probe member rides the null-scope branch: one member ON team_a
+   (via the authority route), one member with ZERO team rows (the JIT-shaped
+   zero-team probe). A private project carrying teams:[team_a] (p_teamX) opens
+   for the on-team member and answers the byte-identical 404 for the
+   zero-team member; a private teams:[] project (p_priv3) stays access-list
+   gated (D-06); the public teams:[team_a] project (p_pubA) stays
+   workspace-wide for everyone (A1 widening-only). */
+
+let teamOn; // the on-team probe client (null scope, team_a via the authority route)
+let teamOnUserId;
+let teamOnMid;
+let ownerMid;
+
+test('team fixture: probe members resolved and team-linked projects planted', async () => {
+  const members = (await owner.get('/api/workspaces/acme/members')).data.members;
+  teamOnUserId = members.find(m => m.email === 'plain@test.local').userId;
+  teamOnMid = members.find(m => m.email === 'plain@test.local').memberId;
+  ownerMid = members.find(m => m.email === ADMIN.email).memberId;
+  teamOn = (await login(server.base, 'plain@test.local', PASSWORD)).client;
+
+  // On-team membership lives in the team_members authority rows, edited only
+  // through the dedicated route (D-01) — never the doc roster.
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${teamOnUserId}/teams`, { teams: ['team_a'] })).status, 200);
+
+  // The zero-team probe reads workspace-wide (null scope, no team rows).
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+
+  const live = (await owner.get('/api/workspaces/acme')).data;
+  const doc = structuredClone(live.doc);
+  doc.data.projects.push(
+    { id: 'p_teamX', key: 'tmx', name: 'Team X Private', private: true, members: [ownerMid], lead: ownerMid, teams: ['team_a'] },
+    { id: 'p_pubA', key: 'pba', name: 'Public Team A', private: false, members: [], teams: ['team_a'] },
+    { id: 'p_priv3', key: 'prv3', name: 'Private No Teams', private: true, members: [scopedMemberId], lead: ownerMid, teams: [] },
+  );
+  doc.data.projOrder.push('p_teamX', 'p_pubA', 'p_priv3');
+  assert.equal((await owner.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+});
+
+test('team cell [doc-get]: the on-team member reads the private team-linked project (VIS-01)', async () => {
+  const view = (await teamOn.get('/api/workspaces/acme')).data;
+  const ids = view.doc.data.projects.map(p => p.id);
+  assert.ok(ids.includes('p_teamX'), 'the team intersection opens the private team-linked project');
+  assert.ok(!ids.includes('p_priv3'), 'D-06: a private teams:[] project is NOT leaked workspace-wide');
+  assert.ok(!ids.includes('p_priv1'), 'the access list of an unshared private project still gates');
+});
+
+test('team cell [doc-get]: the zero-team member keeps the pre-phase view — additive only (SC 2, D-02)', async () => {
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  const ids = view.doc.data.projects.map(p => p.id);
+  assert.ok(!ids.includes('p_teamX'), 'no team intersection: the private team-linked project stays hidden (JIT zero-team)');
+  assert.ok(ids.includes('p_pubA'), 'A1: a public teams:[X] project stays workspace-wide (widening-only)');
+  assert.ok(ids.includes('p_priv1') && ids.includes('p_priv3'), 'D-02: the access-list disjunct is untouched');
+});
+
+test('team cell [file]: the on-team member downloads the team-linked project file (D-08 side door)', async () => {
+  await plantScopedFile('f_teamX', 'p_teamX');
+  const res = await fileGet(teamOn, 'f_teamX');
+  assert.equal(res.status, 200, 'the file side door agrees with the doc read for team reach');
+  assert.equal(await res.text(), 'f_teamX:p_teamX:gr8r-scope-matrix');
+});
+
+test('team cell [file]: the zero-team member answers the byte-identical unknown-id 404 (no oracle, D-08)', async () => {
+  const off = await fileGet(scoped, 'f_teamX');
+  const unknown = await fileGet(scoped, 'f_missing');
+  assert.equal(off.status, 404);
+  const offBody = await off.json();
+  assert.equal(offBody.code, 'fileNotFound');
+  assert.deepEqual(offBody, await unknown.json(), 'team-hidden ≡ unknown: identical status, code AND message');
+});
+
 /* Family-5 reminder probes are planted lazily (first reminder probe), AFTER
    the doc-put matrix families: they carry an out-of-scope assignment
    (t_m_rem_out) that the SCOPE-04 assignee write-guard correctly refuses to
