@@ -451,6 +451,34 @@ test('the second boot leaves team_members byte-identical — no duplicates, no s
   assert.equal(teamBackups().length, 1, 'no second pre-team-members backup');
 });
 
+/* SCOPE-01 (Phase 29, D-02): the membership/invite scope columns ride the
+   same additive discipline — null = workspace-wide legacy state, no backfill,
+   byte-identical across boots. The pin locks the schema outcome one-way. */
+test('the scope columns land on memberships and invites and survive the reboot unchanged', async () => {
+  const scopeColumns = () =>
+    withDb(server.dbPath, db => ({
+      memberships: db.prepare('pragma table_info(memberships)').all().find(c => c.name === 'scope') || null,
+      invites: db.prepare('pragma table_info(invites)').all().find(c => c.name === 'scope') || null,
+    }));
+
+  const firstBoot = scopeColumns();
+  assert.ok(firstBoot.memberships, 'memberships.scope exists after boot');
+  assert.ok(firstBoot.invites, 'invites.scope exists after boot');
+  assert.equal(firstBoot.memberships.type, 'TEXT', 'memberships.scope is a plain text column');
+  assert.equal(firstBoot.invites.type, 'TEXT', 'invites.scope is a plain text column');
+  // No backfill: null = workspace-wide is the correct legacy state (D-02).
+  assert.deepEqual(
+    withDb(server.dbPath, db => db.prepare('select distinct scope from memberships').all().map(r => r.scope)),
+    [null],
+    'every membership reads scope-null by absence',
+  );
+
+  await server.stop();
+  server = await startServer({ dataDir });
+  const secondBoot = scopeColumns();
+  assert.deepEqual(secondBoot, firstBoot, 'the scope column definitions are byte-identical across the boot (additive-only, no re-alter)');
+});
+
 /* TOTP2 (Phase 31): the totp_factors additive table rides the same guarded
    create — byte-identical on every boot after it lands (D-06). The fixture
    has no 2FA users, so the boot copy must never fire: zero rows, zero
