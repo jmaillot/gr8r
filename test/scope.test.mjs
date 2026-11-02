@@ -9,6 +9,7 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { ADMIN, inviteToken, login, signup, startServer, withDb } from './helpers/server.mjs';
@@ -485,3 +486,185 @@ for (const row of MATRIX) {
     });
   }
 }
+
+/* ---- Phase 29 Plan 03: SCOPE-04 — send-time notification enforcement ----
+
+   A scoped member is never assigned, mentioned, reminded or emailed about
+   content outside their scope. Three server guards (reminder pass, email
+   mirror, assignee write-guard) are the AUTHORITY; the client emit filter is
+   advisory (A4). The guards run on their own SMTP-enabled server instance so
+   the email mirror is exercised for real (the same fakeSmtp pattern as
+   test/due-reminders.test.mjs). */
+
+const SCOPE_TOKEN = 'scope-reminder-token';
+const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
+
+function fakeSmtp() {
+  const messages = [];
+  const srv = net.createServer(sock => {
+    sock.write('220 test ESMTP\r\n');
+    let buffer = '';
+    let inData = false;
+    let current = null;
+    sock.on('data', chunk => {
+      buffer += chunk.toString();
+      let idx;
+      while ((idx = buffer.indexOf('\r\n')) !== -1) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (inData) {
+          if (line === '.') {
+            inData = false;
+            messages.push(current.join('\n'));
+            current = null;
+            sock.write('250 OK\r\n');
+          } else if (current) {
+            current.push(line.startsWith('..') ? line.slice(1) : line);
+          }
+        } else if (/^EHLO/i.test(line)) {
+          sock.write('250-test\r\n250 OK\r\n');
+        } else if (/^DATA/i.test(line)) {
+          inData = true;
+          current = [];
+          sock.write('354 go\r\n');
+        } else if (/^QUIT/i.test(line)) {
+          sock.write('221 bye\r\n');
+          sock.end();
+        } else {
+          sock.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+  return new Promise(resolve => {
+    srv.listen(0, '127.0.0.1', () => resolve({ srv, port: srv.address().port, messages }));
+  });
+}
+
+function textPart(raw) {
+  const lines = raw.split('\n');
+  const i = lines.indexOf('Content-Type: text/plain; charset=UTF-8');
+  assert.ok(i !== -1, 'message has a text/plain part');
+  const body = [];
+  for (let j = i + 2; j < lines.length && !lines[j].startsWith('--'); j++) body.push(lines[j]);
+  return Buffer.from(body.join(''), 'base64').toString('utf8');
+}
+
+const triggerReminders = (srv, nowIso) =>
+  fetch(`${srv.base}/api/internal/reminder-pass`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-reminder-token': SCOPE_TOKEN },
+    body: JSON.stringify({ now: nowIso }),
+  }).then(async r => {
+    assert.equal(r.status, 200, 'reminder trigger status');
+    return (await r.json()).emitted;
+  });
+
+test('SCOPE-04: the send-time server guards never reach an out-of-scope member', async t => {
+  const smtp = await fakeSmtp();
+  const mail = await startServer({
+    env: {
+      REMINDER_TEST_TOKEN: SCOPE_TOKEN,
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(smtp.port),
+      SMTP_REQUIRE_TLS: 'false',
+      MAIL_FROM: 'noreply@test.local',
+      APP_URL: 'http://app.test',
+    },
+  });
+  try {
+    const signedIn = await login(mail.base, ADMIN.email, ADMIN.password);
+    assert.equal(signedIn.status, 200, 'owner signs in on the mail server');
+    const ownerMail = signedIn.client;
+
+    // One member-role membership (this server spends its own invite budget).
+    const [inv] = (await ownerMail.post('/api/workspaces/acme/invites', { emails: ['guard@test.local'], role: 'member' })).data.invites;
+    const memberClient = (await signup(mail.base, ACCOUNT('Guard', 'guard@test.local'))).client;
+    const joined = await memberClient.post(`/api/invites/${inviteToken(inv.url)}/accept`);
+    assert.ok([200, 201].includes(joined.status), 'the member joined');
+
+    const wsRow = withDb(mail.dbPath, db => db.prepare('select id from workspaces where slug = ?').get('acme'));
+    const memberIds = withDb(mail.dbPath, db =>
+      db
+        .prepare(
+          'select m.member_id, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?',
+        )
+        .all(wsRow.id),
+    );
+    const scopedMid = memberIds.find(r => r.email === 'guard@test.local').member_id;
+    const ownerMid = memberIds.find(r => r.email === ADMIN.email).member_id;
+    const guardUserId = (await ownerMail.get('/api/workspaces/acme/members')).data.members.find(
+      m => m.email === 'guard@test.local',
+    ).userId;
+
+    // Shape the workspace: two public projects, one task per probe, all due
+    // inside the same injected 09:00 window.
+    const doc = {
+      data: {
+        members: [{ id: ownerMid, name: 'Owner' }],
+        projects: [
+          { id: 'p_in', key: 'in', name: 'In Scope', private: false, members: [], teams: [] },
+          { id: 'p_out', key: 'out', name: 'Out of Scope', private: false, members: [], teams: [] },
+        ],
+        tasks: [
+          { id: 't_s_in', key: 'IN-1', title: 'In-scope reminder task', status: 'todo', assignee: scopedMid, projectId: 'p_in', due: '2027-03-15', labels: [], subtasks: [] },
+          { id: 't_s_out', key: 'OUT-1', title: 'Out-of-scope reminder task', status: 'todo', assignee: scopedMid, projectId: 'p_out', due: '2027-03-15', labels: [], subtasks: [] },
+          { id: 't_s_admin', key: 'OUT-2', title: 'Admin reminder task', status: 'todo', assignee: ownerMid, projectId: 'p_out', due: '2027-03-15', labels: [], subtasks: [] },
+        ],
+        comments: [],
+        activity: [],
+        notifs: [],
+        files: [],
+        notifPrefs: {},
+      },
+    };
+    withDb(mail.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsRow.id));
+
+    // The member is scoped to p_in only.
+    const scopedRes = await ownerMail.put(`/api/workspaces/acme/members/${guardUserId}/scope`, {
+      scope: { projects: ['p_in'], teams: [] },
+    });
+    assert.equal(scopedRes.status, 200, 'scope lands on the mail server');
+
+    await t.test('the reminder pass skips an out-of-scope assignee, delivers the in-scope one', async () => {
+      const emitted = await triggerReminders(mail, at9('2027-03-15'));
+      const reminders = emitted.filter(n => n.type === 'due_reminder');
+      assert.ok(reminders.some(n => n.task === 't_s_in' && n.to === scopedMid), 'in-scope reminder delivered');
+      assert.ok(!reminders.some(n => n.task === 't_s_out'), 'no reminder row for the out-of-scope task');
+      assert.ok(reminders.some(n => n.task === 't_s_admin' && n.to === ownerMid), 'null-scope (admin) assignee still reminded');
+    });
+
+    await t.test('the email mirror never queues an out-of-scope reminder email', async () => {
+      const deadline = Date.now() + 3000;
+      while (smtp.messages.length < 1 && Date.now() < deadline) await new Promise(r => setTimeout(r, 50));
+      assert.equal(smtp.messages.length, 1, 'exactly one reminder email (the in-scope one)');
+      const text = textPart(smtp.messages[0]);
+      assert.ok(text.includes('In-scope reminder task'), 'the in-scope task is in the email body');
+      assert.ok(!smtp.messages.some(raw => textPart(raw).includes('Out-of-scope reminder task')), 'no out-of-scope email');
+    });
+
+    await t.test('a doc PUT cannot assign an out-of-scope member to an out-of-scope task', async () => {
+      const live = (await ownerMail.get('/api/workspaces/acme')).data;
+      const next = structuredClone(live.doc);
+      next.data.tasks.push({ id: 't_guard_out', key: 'OUT-3', title: 'Guard probe', status: 'todo', assignee: scopedMid, project: 'p_out', projectId: 'p_out', labels: [], subtasks: [] });
+      const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
+      assert.equal(res.status, 400, 'the write is rejected');
+      assert.equal((await res.json()).code, 'assigneeOutOfScope');
+      const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
+      assert.ok(!stored.data.tasks.some(x => x.id === 't_guard_out'), 'the stored doc is unchanged');
+    });
+
+    await t.test('workspace-wide (null-scope) assignees are never rejected', async () => {
+      const live = (await ownerMail.get('/api/workspaces/acme')).data;
+      const next = structuredClone(live.doc);
+      next.data.tasks.push({ id: 't_guard_admin', key: 'OUT-4', title: 'Admin assignee probe', status: 'todo', assignee: ownerMid, project: 'p_out', projectId: 'p_out', labels: [], subtasks: [] });
+      const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
+      assert.equal(res.status, 200, 'a null-scope assignee lands');
+      const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
+      assert.ok(stored.data.tasks.some(x => x.id === 't_guard_admin'), 'the task is stored');
+    });
+  } finally {
+    await mail.stop();
+    smtp.srv.close();
+  }
+});
