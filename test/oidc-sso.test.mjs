@@ -12,6 +12,9 @@ import { startServer, withDb } from './helpers/server.mjs';
 /* ------------------------------ mock IdP ------------------------------ */
 
 const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+/* A second RSA key the real IdP does not publish — signatures from it are
+   the SSO-08 "valid shape, wrong key" vector. */
+const { privateKey: foreignPrivateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const KID = 'mock-key-1';
 const PUBLIC_JWK = { ...publicKey.export({ format: 'jwk' }), kid: KID, alg: 'RS256', use: 'sig' };
 
@@ -23,10 +26,16 @@ const b64u = buf => Buffer.from(buf).toString('base64url');
 const idp = {
   base: null,
   issuer: null,
-  tokenConfig: { code: 'auth-code-1', claims: {}, sign: true },
+  tokenConfig: { code: 'auth-code-1', claims: {} },
+  /* Mint one id_token per token-endpoint call. Row knobs:
+     claims     — claim overrides spread over the defaults (tid: 't-1' is the
+                  pinned tenant, present on every honest managed-user token)
+     alg        — 'RS256' (default) | 'none' | 'HS256' (SSO-08 confusion vectors)
+     kid        — header kid override (unknown kid → JWKS miss)
+     signKey    — 'own' (default) | 'foreign' (a key the JWKS never published) */
   mintIdToken(nonce) {
-    const { claims, sign } = this.tokenConfig;
-    const header = b64u(JSON.stringify({ alg: 'RS256', kid: KID, typ: 'JWT' }));
+    const { claims, alg = 'RS256', kid = KID, signKey = 'own' } = this.tokenConfig;
+    const header = b64u(JSON.stringify({ alg, kid, typ: 'JWT' }));
     const payload = b64u(
       JSON.stringify({
         iss: this.issuer,
@@ -34,6 +43,7 @@ const idp = {
         sub: 'sub-1',
         email: 'sso.user@example.com',
         name: 'SSO User',
+        tid: 't-1',
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 300,
         nonce,
@@ -41,8 +51,13 @@ const idp = {
       }),
     );
     const unsigned = `${header}.${payload}`;
-    if (!sign) return `${unsigned}.`;
-    const sig = crypto.sign('RSA-SHA256', Buffer.from(unsigned), privateKey);
+    if (alg === 'none') return `${unsigned}.`;
+    if (alg === 'HS256') {
+      const sig = crypto.createHmac('sha256', 'symmetric-secret-shared').update(unsigned).digest();
+      return `${unsigned}.${b64u(sig)}`;
+    }
+    const key = signKey === 'foreign' ? foreignPrivateKey : privateKey;
+    const sig = crypto.sign('RSA-SHA256', Buffer.from(unsigned), key);
     return `${unsigned}.${b64u(sig)}`;
   },
 };
@@ -162,7 +177,7 @@ test('the happy path: start → authorize URL → callback → session (SSO-01)'
 
   /* 2. the mock IdP binds the authorize-time nonce (as Entra does at the
      authorize step) and mints a valid id_token for the configured identity. */
-  idp.tokenConfig = { code: 'auth-code-1', claims: { nonce: q.get('nonce') }, sign: true };
+  idp.tokenConfig = { code: 'auth-code-1', claims: { nonce: q.get('nonce') } };
 
   /* 3. callback: state matches, code exchanges, id_token verifies. */
   const callback = await nav(server.base, `/api/auth/oidc/callback?code=auth-code-1&state=${encodeURIComponent(q.get("state"))}`, flowCookie);
@@ -198,6 +213,114 @@ test('the happy path: start → authorize URL → callback → session (SSO-01)'
   withDb(server.dbPath, db => {
     const user = db.prepare('select id from users where email = ?').get(email);
     assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(user.id).n, 1);
+  });
+});
+
+/* SSO-03 helpers: a full start → callback flow against the shared mock IdP,
+   plus direct users-row creation for the "existing account" side of the
+   link policy. */
+async function runFlow({ claims = {}, code = 'auth-code-1', callbackPath = null } = {}) {
+  const start = await nav(server.base, '/api/auth/oidc/start');
+  assert.equal(start.status, 302);
+  const q = queryOf(start.location);
+  const flowCookie = flowCookieOf(start.cookies);
+  idp.tokenConfig = { code, claims: { nonce: q.get('nonce'), ...claims } };
+  const path =
+    callbackPath || `/api/auth/oidc/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(q.get('state'))}`;
+  const callback = await nav(server.base, path, flowCookie);
+  return { start, callback, flowCookie, q };
+}
+
+function createExistingUser(db, email) {
+  db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(
+    `u_${email.replace(/[^a-z0-9]/gi, '_')}`,
+    email,
+    'Existing User',
+    'not-a-real-scrypt-hash',
+    Date.now(),
+  );
+}
+
+/* SSO-03 (Phase 30 plan 02): pinned-tenant verified-email linking. A managed-
+   user token (pinned iss + tid match + non-guest shape + non-empty email)
+   links to the existing users row; ANY guest shape or tenant mismatch never
+   links — the existing account is never signed into. */
+
+test('a pinned-tenant member token links to the existing account by email (SSO-03)', async () => {
+  const linkEmail = 'link.me@example.com';
+  withDb(server.dbPath, db => createExistingUser(db, linkEmail));
+
+  const { callback } = await runFlow({ claims: { sub: 'sub-link', email: '  LINK.ME@example.com ' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/', 'the member token signed into the linked account');
+  assert.ok(sessionCookieOf(callback.cookies), 'a session was minted');
+
+  withDb(server.dbPath, db => {
+    const linked = db.prepare('select id from users where email = ?').get(linkEmail);
+    const identity = db.prepare('select * from oidc_identities where subject = ?').get('sub-link');
+    assert.ok(identity, 'an oidc_identities row exists for the identity');
+    assert.equal(identity.user_id, linked.id, 'the identity links to the EXISTING account, not a new one');
+    assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-link').n, 1);
+  });
+});
+
+for (const [label, guestClaims] of [
+  ['idp claim differing from iss (guest)', { idp: 'live.com' }],
+  ['acct === 1 (guest)', { acct: '1' }],
+  ['tid !== OIDC_TENANT_ID (foreign tenant)', { tid: 'other-tenant' }],
+]) {
+  test(`a guest-shaped token NEVER links: ${label} (SSO-03)`, async () => {
+    const victimEmail = `victim.${Math.random().toString(36).slice(2, 8)}@example.com`;
+    withDb(server.dbPath, db => createExistingUser(db, victimEmail));
+
+    const { callback } = await runFlow({ claims: { ...guestClaims, sub: `sub-guest-${guestClaims.idp ?? guestClaims.acct ?? guestClaims.tid}`, email: victimEmail } });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/login?sso=error', 'the guest token fails closed to the generic error marker');
+    assert.equal(sessionCookieOf(callback.cookies), null, 'the existing account is never signed into');
+
+    withDb(server.dbPath, db => {
+      const victim = db.prepare('select id from users where email = ?').get(victimEmail);
+      assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(victim.id).n, 0, 'no session row for the existing account');
+      assert.equal(db.prepare('select count(*) as n from oidc_identities where user_id = ?').get(victim.id).n, 0, 'no identity row ever links the guest to the existing account');
+    });
+  });
+}
+
+test('a guest token with a fresh email provisions a SEPARATE account, never a link (SSO-03)', async () => {
+  const freshGuest = 'fresh.guest@example.com';
+  const { callback } = await runFlow({ claims: { sub: 'sub-guest-fresh', email: freshGuest, idp: 'live.com' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/', 'a fresh guest identity still gets its own bare account');
+  withDb(server.dbPath, db => {
+    const created = db.prepare('select id from users where email = ?').get(freshGuest);
+    assert.ok(created, 'the separate JIT account exists');
+    assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(created.id).n, 0, 'separate bare account: no membership');
+  });
+});
+
+test('a token with a missing/empty email claim never links nor provisions (SSO-03)', async () => {
+  const { callback } = await runFlow({ claims: { sub: 'sub-noemail', email: '' } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/login?sso=error', 'no email → fail closed');
+  withDb(server.dbPath, db => {
+    assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-noemail').n, 0);
+  });
+});
+
+test('repeated SSO logins with the same (issuer, subject) resolve to the same user row (SSO-03 idempotency)', async () => {
+  const before = withDb(server.dbPath, db => {
+    const identity = db.prepare('select * from oidc_identities where subject = ?').get('sub-1');
+    return { identity, userId: identity?.user_id ?? null };
+  });
+  assert.ok(before.identity, 'precondition: the happy path created the sub-1 identity');
+
+  const { callback } = await runFlow({ code: 'auth-code-2' });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/');
+  withDb(server.dbPath, db => {
+    const identities = db.prepare('select * from oidc_identities where subject = ?').all('sub-1');
+    assert.equal(identities.length, 1, 'still exactly ONE identity row for (issuer, sub-1)');
+    assert.equal(identities[0].user_id, before.userId, 'same user row as the first login');
   });
 });
 

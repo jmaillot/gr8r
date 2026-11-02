@@ -2695,11 +2695,24 @@ async function handleApi(req, res, url) {
       const email = String(claims.email || '').trim().toLowerCase();
       if (!subject || !emailOk(email)) return errorRedirect();
 
-      /* Identity resolution — this plan provisions the bare path; plan 30-02
-         adds the pinned-tenant guest policy, 30-03 the invite reconciliation. */
+      /* Identity resolution — SSO-03 pinned-tenant verified-email linking
+         (T-30-06). "Verified email" is pinned-tenant member vouching
+         (planner policy, flagged assumption A2): the token must carry
+         tid === OIDC_TENANT_ID, must NOT be a guest shape, and must carry a
+         non-empty email. preferred_username is never consulted — only the
+         email claim can link. Guests and foreign-tenant tokens NEVER link:
+         they get a separate bare account, or fail closed when the email
+         already belongs to an existing account (users.email is UNIQUE, so
+         "separate account" is impossible there). */
+      const isPinnedTenant = claims.tid === OIDC.config.tenantId;
+      const guestShape =
+        (typeof claims.idp === 'string' && claims.idp !== '' && claims.idp !== OIDC.config.issuer) ||
+        String(claims.acct ?? '') === '1';
+      const canLink = isPinnedTenant && !guestShape;
       let row = db.prepare('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?').get(OIDC.config.issuer, subject);
       if (!row) {
         const existing = db.prepare('select * from users where email = ?').get(email);
+        if (existing && !canLink) return errorRedirect();
         if (existing) {
           row = existing;
         } else {
@@ -2709,14 +2722,22 @@ async function handleApi(req, res, url) {
           const created = createUser(email, String(claims.name || ''), crypto.randomBytes(24).toString('base64url'));
           row = db.prepare('select * from users where id = ?').get(created.id);
         }
-        db.prepare('insert into oidc_identities (id, user_id, issuer, subject, created_at, last_login_at) values (?,?,?,?,?,?)').run(
-          uid(),
-          row.id,
-          OIDC.config.issuer,
-          subject,
-          now(),
-          now(),
-        );
+        try {
+          db.prepare('insert into oidc_identities (id, user_id, issuer, subject, created_at, last_login_at) values (?,?,?,?,?,?)').run(
+            uid(),
+            row.id,
+            OIDC.config.issuer,
+            subject,
+            now(),
+            now(),
+          );
+        } catch (err) {
+          /* Concurrency backstop (SSO-03): a parallel first-login for the same
+             (issuer, subject) won the unique index — resolve to ITS row instead
+             of failing the login. Any other SQL error rethrows (fail closed). */
+          if (!/UNIQUE|oidc_identities_subject/i.test(String(err?.message || ''))) throw err;
+          row = db.prepare('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?').get(OIDC.config.issuer, subject);
+        }
       }
 
       /* Session mint — VERBATIM from the login route (server.js 2613-2629);
