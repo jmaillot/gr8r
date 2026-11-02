@@ -5,10 +5,10 @@ milestone_name: Team Access & Federation
 current_phase: 29
 current_phase_name: Team/Project-Scoped Permissions
 status: executing
-stopped_at: Completed 29-01-PLAN.md
-last_updated: "2026-11-02T08:54:47.464Z"
+stopped_at: Completed 29-02-PLAN.md
+last_updated: "2026-11-02T09:30:00.000Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 29 execution started
+last_activity_desc: Completed 29-02-PLAN.md
 state_head: 0521cea4a3964d1a2a6203763eab22739be00eb1
 progress:
   total_phases: 4
@@ -29,9 +29,9 @@ progress:
 ## Current Position
 
 Phase: 29 (Team/Project-Scoped Permissions) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
-Last activity: 2026-11-02 — Phase 29 execution started
+Last activity: 2026-11-02 — Completed 29-02-PLAN.md
 
 Progress: [███░░░░░░░] 25% of phase plans (4/4)
 
@@ -81,6 +81,8 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 31]: Client factor lifecycle wired: Add-factor staged wizard + per-factor remove confirm over the Plan 02 routes, EN+FR complete
 - [Phase 29]: 29-01: hiddenFor() composes private-hidden ∪ out-of-scope disjunctively — the D-03 scope-opens-private grant (Plan 02) rides the same single funnel
 - [Phase 29]: 29-01: empty scope stored as null = workspace-wide (D-01); projectScope() returns null for admin+ regardless of stored JSON; promotion to admin/owner clears scope in-transaction (D-04)
+- [Phase 29]: 29-02: D-03 grant inversion — scoped members see everything in scope (scopeGrants() short-circuits the private check); private+out-of-scope stays hidden even on-list; A1 team reach opens private team-linked projects (backstop assumption)
+- [Phase 29]: 29-02: project-less file records (workspace-level uploads) stay member-visible — only project-bound records are scope-checked in serveFileBinary; the matrix artifact (MATRIX in test/scope.test.mjs) is the named SCOPE-03 sweep future families must extend
 
 ### Pending Todos
 
@@ -103,8 +105,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T08:54:47.415Z
-Stopped at: Completed 29-01-PLAN.md
+Last session: 2026-11-02T09:30:00Z
+Stopped at: Completed 29-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -117,6 +119,7 @@ Resume file: None
 | Phase 31 P02 | ~50 min | 3 tasks | 10 files |
 | Phase 31 P03 | 40 min | 3 tasks | 14 files |
 | Phase 29 P01 | 11 min | 3 tasks | 6 files |
+| Phase 29 P02 | 27 min | 3 tasks | 2 files |
 
 ## Operator Next Steps
 

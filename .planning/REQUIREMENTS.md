@@ -32,11 +32,11 @@ method. Zero new runtime dependencies throughout.
 - [x] **SCOPE-01**: A membership can carry a scope — workspace-wide (default) or limited to
       specific teams or specific projects — while its role stays the permission level; scope
       only restricts reach, never elevates it.
-- [ ] **SCOPE-02**: Scoped members see only what their scope grants: server-side reads filter
+- [x] **SCOPE-02**: Scoped members see only what their scope grants: server-side reads filter
       out-of-scope projects (redaction-style), writes to out-of-scope targets are rejected,
       and out-of-scope data answers 404 — no existence oracle, preserving the v1.1 isolation
       contract.
-- [ ] **SCOPE-03**: Every by-id endpoint that touches a project enforces the scope — a named
+- [x] **SCOPE-03**: Every by-id endpoint that touches a project enforces the scope — a named
       route sweep over `server.js` with a 404-matrix test per endpoint family; scoped checks
       cannot be bypassed by knowing an id.
 - [ ] **SCOPE-04**: Notification and mention recipient resolution runs the same scope
