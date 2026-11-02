@@ -509,8 +509,8 @@ test('a workspace-wide outsider hits the closed gap: private-project file now 40
      admin-gated authority writes;
    - family 8 (workspace meta): D-08 untouched — no project surface.
 
-   Family 6 below is the remaining placeholder row (Plan 29-04); a new
-   project-touching family added later must visibly extend this table. */
+   Family 6 is live below (Plan 29-04): the invite-carried scope probes. A
+   new project-touching family added later must visibly extend this table. */
 
 const MATRIX = [
   {
@@ -545,8 +545,12 @@ const MATRIX = [
     expected: { inScope: 'present', outOfScope: 'absent', unknown: null },
     skipUnknown: 'notifications address members and tasks, not raw project ids — no unknown probe exists',
   },
-  { family: 3, name: 'file upload', skip: 'covered by Plan 29-02 family 2 — metadata rides the doc channel' },
-  { family: 6, name: 'invites', skip: 'covered by Plan 29-04 (SCOPE-05/06 invite-carried scope)' },
+  {
+    family: 6,
+    name: 'invite-carried scope (SCOPE-05: invites.scope stored; unknown id refused, T-29-12)',
+    kind: 'invite',
+    expected: { inScope: 'stored', outOfScope: 'stored', unknown: 'refused' },
+  },
 ];
 
 const MATRIX_SCOPE = { projects: ['p_in'], teams: [] };
@@ -593,6 +597,25 @@ const matrixProbe = {
     const targets = clientEmitMentions('@Ann Marker @Bill Plain', { id: 't_matrix_fan', project: MATRIX_PROJECTS[probe] });
     assert.ok(targets.has('m_plain'), 'the default-allow (underivable) target is never dropped');
     return targets.has('m_marked') ? 'present' : 'absent';
+  },
+  /* Family 6 (29-04): the invite POST is not caller-scope-gated — any doc
+     project id is a valid invite scope for an admin (T-29-14: the stored
+     scope is what the admin validated). The unknown id stays refused. */
+  invite: async probe => {
+    const scope = { teams: [], projects: [MATRIX_PROJECTS[probe]] };
+    const res = await owner.post('/api/workspaces/acme/invites', { emails: [`matrix-${probe}@test.local`], role: 'member', scope });
+    if (probe === 'unknown') {
+      assert.equal(res.status, 400);
+      assert.equal(res.data.code, 'unknownProject');
+      return 'refused';
+    }
+    assert.equal(res.status, 201);
+    const [row] = res.data.invites;
+    const stored = withDb(server.dbPath, db =>
+      db.prepare('select scope from invites where token_hash = ?').get(createHash('sha256').update(inviteToken(row.url)).digest('hex')),
+    );
+    assert.deepEqual(JSON.parse(stored.scope), scope, 'the invite scope JSON is stored verbatim');
+    return 'stored';
   },
 };
 
@@ -858,6 +881,7 @@ register(new URL('./virtual-icons-loader.mjs', import.meta.url), import.meta.url
 
 const { applyDoc: applyClientDoc, D: CD, memberScopeEligible } = await import('../src/core/store.js');
 const { createTask: clientCreateTask, emitMentions: clientEmitMentions, taskWatchers: clientTaskWatchers } = await import('../src/actions/actions.js');
+const { searchAll: clientSearchAll } = await import('../src/pages/search.js');
 
 function clientDoc() {
   applyClientDoc(
@@ -918,4 +942,40 @@ test('SCOPE-04: the assign notify and the watcher set ride the same eligibility 
   const watchers = clientTaskWatchers(tOut);
   assert.ok(!watchers.includes('m_marked'), 'out-of-scope watcher filtered');
   assert.ok(watchers.includes('m_plain'), 'default-allow watcher kept');
+});
+
+/* ---- Phase 29 Plan 04 task 3: the D-06 workspace-level matrix rows ----
+
+   For the scoped fixture member, the workspace-level surfaces ride the same
+   redactDoc funnel: the activity feed lists no event referencing an
+   out-of-scope project, recent-search terms naming one are scrubbed, and a
+   cross-project search over the client-visible payload (the redacted doc IS
+   the client's whole world) returns no out-of-scope hits. */
+
+test('404-matrix fixture [D-06]: activity rows and recent-search terms planted on both projects', () => {
+  const doc = storedDoc();
+  doc.data.activity = [
+    { id: 'act_in', project: 'p_in', text: 'In-scope activity', at: 1 },
+    { id: 'act_out', project: 'p_out', text: 'Out-of-scope activity', at: 2 },
+  ];
+  doc.data.recentSearches = ['Out of Scope sprint', 'In Scope planning', 'generic term'];
+  /* The client search folds t.desc — the API fixture tasks predate the field. */
+  for (const t of doc.data.tasks || []) if (t.desc === undefined) t.desc = '';
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
+});
+
+test('404-matrix [D-06] the scoped member\u2019s activity feed and recent searches carry zero out-of-scope references', async () => {
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: MATRIX_SCOPE })).status, 200);
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  assert.deepEqual(view.doc.data.activity.map(a => a.id), ['act_in'], 'the activity feed lists no out-of-scope event');
+  assert.deepEqual(view.doc.data.recentSearches, ['In Scope planning', 'generic term'], 'recent-search terms naming an out-of-scope project are scrubbed');
+});
+
+test('404-matrix [D-06] a cross-project search over the client-visible payload returns no out-of-scope hits', async () => {
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  applyClientDoc(view.doc, 1); // the redacted doc is the client's whole world
+  assert.deepEqual(clientSearchAll('Hidden task').tasks, [], 'the out-of-scope task is unfindable');
+  assert.equal(clientSearchAll('Out of Scope').projects.length, 0, 'the out-of-scope project is unfindable');
+  assert.equal(clientSearchAll('Visible task').tasks.length, 1, 'the in-scope task is still findable');
+  assert.equal(clientSearchAll('In Scope').projects.length, 1, 'the in-scope project is still findable');
 });
