@@ -5,16 +5,16 @@ milestone_name: Team Access & Federation
 current_phase: 29
 current_phase_name: Team/Project-Scoped Permissions
 status: executing
-stopped_at: Phase 29 context gathered
-last_updated: "2026-11-02T08:36:45.121Z"
-last_activity: 2026-11-01
-last_activity_desc: Phase 31 execution started
-state_head: 547014cb67d2a1a143bc68524ba66bee50642172
+stopped_at: Completed 29-01-PLAN.md
+last_updated: "2026-11-02T08:54:47.464Z"
+last_activity: 2026-11-02
+last_activity_desc: Phase 29 execution started
+state_head: 0521cea4a3964d1a2a6203763eab22739be00eb1
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 29 (Team/Project-Scoped Permissions) — READY TO EXECUTE
-Plan: 3 of 3
+Phase: 29 (Team/Project-Scoped Permissions) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-11-01 — Phase 31 execution started
+Last activity: 2026-11-02 — Phase 29 execution started
 
 Progress: [███░░░░░░░] 25% of phase plans (4/4)
 
@@ -79,6 +79,8 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 31]: 31-02: requirements TOTP2-01/02/03 left unmarked — they span 31-02 (API) and 31-03 (client wiring); shared-ID gate would mark early — requirements.ready-ids would flip them Complete before 31-03 SUMMARY exists
 - [Phase 31]: Plan 31-02: last-factor removal verifies the target's own code (exclusion only with >1 factor) or the D-18 disable path would be unreachable; first-ever enable via factors/enable returns rotated recovery codes exactly once.
 - [Phase 31]: Client factor lifecycle wired: Add-factor staged wizard + per-factor remove confirm over the Plan 02 routes, EN+FR complete
+- [Phase 29]: 29-01: hiddenFor() composes private-hidden ∪ out-of-scope disjunctively — the D-03 scope-opens-private grant (Plan 02) rides the same single funnel
+- [Phase 29]: 29-01: empty scope stored as null = workspace-wide (D-01); projectScope() returns null for admin+ regardless of stored JSON; promotion to admin/owner clears scope in-transaction (D-04)
 
 ### Pending Todos
 
@@ -101,9 +103,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T07:22:40.457Z
-Stopped at: Phase 29 context gathered
-Resume file: .planning/phases/29-team-project-scoped-permissions/29-CONTEXT.md
+Last session: 2026-11-02T08:54:47.415Z
+Stopped at: Completed 29-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -114,6 +116,7 @@ Resume file: .planning/phases/29-team-project-scoped-permissions/29-CONTEXT.md
 | Phase 31 P02 | 1h 9min | 3 tasks | 4 files |
 | Phase 31 P02 | ~50 min | 3 tasks | 10 files |
 | Phase 31 P03 | 40 min | 3 tasks | 14 files |
+| Phase 29 P01 | 11 min | 3 tasks | 6 files |
 
 ## Operator Next Steps
 

@@ -29,7 +29,7 @@ method. Zero new runtime dependencies throughout.
 
 ### Scoped Permissions (Kanzo #4 — second phase)
 
-- [ ] **SCOPE-01**: A membership can carry a scope — workspace-wide (default) or limited to
+- [x] **SCOPE-01**: A membership can carry a scope — workspace-wide (default) or limited to
       specific teams or specific projects — while its role stays the permission level; scope
       only restricts reach, never elevates it.
 - [ ] **SCOPE-02**: Scoped members see only what their scope grants: server-side reads filter

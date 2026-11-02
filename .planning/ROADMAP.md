@@ -81,11 +81,11 @@ project-touching endpoint, not a feature bolt-on.
      invited user lands with that scope at acceptance.
   5. An external collaborator invited with project-level guest scope sees exactly that one
      project and nothing else in the workspace.
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 29-01-PLAN.md — Scope substrate: columns, predicate, shared read/write funnel, scope-edit route, migration pin (SCOPE-01)
+- [x] 29-01-PLAN.md — Scope substrate: columns, predicate, shared read/write funnel, scope-edit route, migration pin (SCOPE-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 29-02-PLAN.md — D-03 grant inversion, file-serve side door, named 404-matrix sweep (SCOPE-02, SCOPE-03)
@@ -162,6 +162,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 28. Multi-Team Membership | 4/4 | Complete    | 2026-11-01 |
-| 29. Team/Project-Scoped Permissions | 0/? | Not started | - |
+| 29. Team/Project-Scoped Permissions | 1/4 | In Progress|  |
 | 30. Entra SSO (OIDC) | 0/? | Not started | - |
 | 31. Second TOTP Factor | 3/3 | In Progress|  |
