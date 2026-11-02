@@ -660,13 +660,30 @@ function inScopeProject(p, scope) {
  * project) later rides this same function, and a conjunctive form would
  * structurally forbid it.
  */
+/*
+ * D-03 grant inversion: inside a scoped member's reach, the scope OPENS the
+ * project. The grant terms short-circuit the private check — the canonical
+ * cell is a scoped guest opening a private project they were never added to.
+ * Order matters only for readability; `inScopeProject(p, scope)` already
+ * implies the first two grant terms, so the effective semantics for a scoped
+ * member are "visible ⟺ in scope" — private+out-of-scope stays hidden even
+ * when the member is on the access list.
+ */
+function scopeGrants(p, scope, memberId) {
+  if (scope.projects.includes(p.id)) return true;
+  /* A1 union read: team reach also opens private team-linked projects. */
+  if (Array.isArray(p?.teams) && p.teams.some(t => scope.teams.includes(t))) return true;
+  if (!projectIsPrivate(p)) return true;
+  return !!memberId && Array.isArray(p.members) && p.members.includes(memberId);
+}
+
 function hiddenFor(doc, membership) {
   const scope = projectScope(membership);
   if (!scope) return hiddenProjectIds(doc, membership?.member_id || null);
   const seen = new Set();
   for (const p of doc?.data?.projects || []) {
     if (!p?.id) continue;
-    if (!canSeeProject(p, membership.member_id) || !inScopeProject(p, scope)) seen.add(p.id);
+    if (!inScopeProject(p, scope) || !scopeGrants(p, scope, membership.member_id)) seen.add(p.id);
   }
   return seen;
 }
