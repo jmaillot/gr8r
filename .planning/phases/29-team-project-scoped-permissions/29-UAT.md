@@ -1,20 +1,15 @@
 ---
-status: testing
+status: complete
 phase: 29-team-project-scoped-permissions
 source: 29-01-SUMMARY.md, 29-02-SUMMARY.md, 29-03-SUMMARY.md, 29-04-SUMMARY.md
 started: 2026-11-02T11:05:00Z
-updated: 2026-11-02T12:10:00Z
+updated: 2026-11-02T12:25:00Z
 ---
 
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-number: 1
-name: Scope limits visibility to the assigned team/project
-expected: |
-  Member scoped to EquipeB sees ProjetB (team-linked) and not ProjetA. Team moves alone
-  do not change visibility — the admin sets the scope in the member modal.
-awaiting: user response (retest after redeploying the server build)
+[testing complete]
 
 ## Tests
 
@@ -32,14 +27,14 @@ debug_session: ""
 ### 2. Guest / scoped-member browser walkthrough (D-05/D-08/D-11)
 expected: Scoped member sees exactly the scoped projects, no scope indicator, out-of-scope
   by-id requests 404 identical to unknown.
-result: pending
+result: pass
 
 ## Summary
 
 total: 2
-passed: 0
+passed: 1
 issues: 0
-pending: 1
+pending: 0
 skipped: 1
 blocked: 0
 
