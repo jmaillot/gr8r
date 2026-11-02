@@ -502,6 +502,7 @@ const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
 function fakeSmtp() {
   const messages = [];
   const srv = net.createServer(sock => {
+    sock.on('error', () => {}); // the server under test may reset mid-teardown
     sock.write('220 test ESMTP\r\n');
     let buffer = '';
     let inData = false;
@@ -635,11 +636,12 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
     });
 
     await t.test('the email mirror never queues an out-of-scope reminder email', async () => {
-      const deadline = Date.now() + 3000;
-      while (smtp.messages.length < 1 && Date.now() < deadline) await new Promise(r => setTimeout(r, 50));
-      assert.equal(smtp.messages.length, 1, 'exactly one reminder email (the in-scope one)');
-      const text = textPart(smtp.messages[0]);
-      assert.ok(text.includes('In-scope reminder task'), 'the in-scope task is in the email body');
+      // The invite email may arrive first — wait for the in-scope reminder itself.
+      const deadline = Date.now() + 5000;
+      while (!smtp.messages.some(raw => textPart(raw).includes('In-scope reminder task')) && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      assert.ok(smtp.messages.some(raw => textPart(raw).includes('In-scope reminder task')), 'the in-scope reminder email arrived');
       assert.ok(!smtp.messages.some(raw => textPart(raw).includes('Out-of-scope reminder task')), 'no out-of-scope email');
     });
 
@@ -649,7 +651,7 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
       next.data.tasks.push({ id: 't_guard_out', key: 'OUT-3', title: 'Guard probe', status: 'todo', assignee: scopedMid, project: 'p_out', projectId: 'p_out', labels: [], subtasks: [] });
       const res = await ownerMail.put('/api/workspaces/acme', { revision: live.revision, doc: next });
       assert.equal(res.status, 400, 'the write is rejected');
-      assert.equal((await res.json()).code, 'assigneeOutOfScope');
+      assert.equal(res.data?.code, 'assigneeOutOfScope');
       const stored = withDb(mail.dbPath, db => JSON.parse(db.prepare('select doc from workspaces where slug = ?').get('acme').doc));
       assert.ok(!stored.data.tasks.some(x => x.id === 't_guard_out'), 'the stored doc is unchanged');
     });
@@ -667,4 +669,100 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
     await mail.stop();
     smtp.srv.close();
   }
+});
+
+/* ---- Phase 29 Plan 03 task 2: the client emit pre-filter (SCOPE-04, A4) ----
+
+   The browser modules read `document`, `navigator` and `localStorage` while
+   they load, so those globals are stubbed before the store and the actions
+   are imported dynamically — the same pattern as test/creator-watcher.test.mjs.
+   A4: the server guards are the authority; the client filter is advisory and
+   DEFAULTS TO ELIGIBLE whenever the projection cannot determine scope (D-05
+   forbids projecting scope details, so a marker is the only forward-compat
+   signal — never a raw scope read for UI). */
+
+globalThis.document = {
+  querySelectorAll: () => [],
+  documentElement: { lang: 'en' },
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  body: { appendChild: () => {}, classList: { add: () => {}, remove: () => {} } },
+  createElement: () => ({ style: {}, classList: { add: () => {}, remove: () => {} }, appendChild: () => {} }),
+};
+globalThis.window = { addEventListener: () => {}, removeEventListener: () => {}, matchMedia: () => ({ addEventListener: () => {} }), dispatchEvent: () => {} };
+globalThis.addEventListener = () => {};
+globalThis.removeEventListener = () => {};
+globalThis.matchMedia = () => ({ addEventListener: () => {} });
+globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+Object.defineProperty(globalThis, 'navigator', {
+  value: { platform: 'Linux', userAgent: 'node' },
+  configurable: true,
+  writable: true,
+});
+
+const { register } = await import('node:module');
+register(new URL('./virtual-icons-loader.mjs', import.meta.url), import.meta.url);
+
+const { applyDoc: applyClientDoc, D: CD, memberScopeEligible } = await import('../src/core/store.js');
+const { createTask: clientCreateTask, emitMentions: clientEmitMentions, taskWatchers: clientTaskWatchers } = await import('../src/actions/actions.js');
+
+function clientDoc() {
+  applyClientDoc(
+    {
+      data: {
+        me: 'm_actor',
+        members: [
+          { id: 'm_actor', name: 'Actor', status: 'active', role: 'Owner' },
+          { id: 'm_marked', name: 'Ann Marker', status: 'active', role: 'member', scope: { projects: ['p_in'], teams: [] } },
+          { id: 'm_plain', name: 'Bill Plain', status: 'active', role: 'member' },
+          { id: 'm_admin', name: 'Cara Admin', status: 'active', role: 'Admin' },
+        ],
+        projOrder: ['p_in', 'p_out'],
+        projects: [
+          { id: 'p_in', key: 'IN', seq: 1, name: 'In', teams: [] },
+          { id: 'p_out', key: 'OUT', seq: 2, name: 'Out', teams: [] },
+        ],
+        tasks: [],
+        comments: [],
+        notifs: [],
+        activity: [],
+      },
+    },
+    1,
+  );
+}
+
+test('SCOPE-04: memberScopeEligible defaults to eligible when the projection cannot determine scope (A4)', () => {
+  clientDoc();
+  const plain = CD().members.find(m => m.id === 'm_plain');
+  assert.equal(memberScopeEligible(plain, 'p_in'), true, 'unmarked member: eligible (default-allow)');
+  assert.equal(memberScopeEligible(plain, 'p_out'), true, 'unmarked member stays eligible on any project');
+  assert.equal(memberScopeEligible(null, 'p_in'), false, 'an unknown target is not eligible');
+  assert.equal(memberScopeEligible(plain, null), true, 'workspace-level content: eligible');
+  const admin = CD().members.find(m => m.id === 'm_admin');
+  assert.equal(memberScopeEligible(admin, 'p_out'), true, 'admin/owner is workspace-wide (D-04)');
+});
+
+test('SCOPE-04: the projection-marked out-of-scope target never lands in the mention fan-out', () => {
+  clientDoc();
+  const marked = CD().members.find(m => m.id === 'm_marked');
+  assert.equal(memberScopeEligible(marked, 'p_in'), true, 'in scope: eligible');
+  assert.equal(memberScopeEligible(marked, 'p_out'), false, 'out of scope: filtered');
+  const targetsOut = clientEmitMentions('@Ann Marker @Bill Plain', { id: 't1', project: 'p_out' });
+  assert.ok(!targetsOut.has('m_marked'), 'out-of-scope target filtered from the emit Set');
+  assert.ok(targetsOut.has('m_plain'), 'default-allow target NOT dropped (guards over-filtering)');
+  const targetsIn = clientEmitMentions('@Ann Marker', { id: 't2', project: 'p_in' });
+  assert.ok(targetsIn.has('m_marked'), 'the same target is eligible inside their scope');
+});
+
+test('SCOPE-04: the assign notify and the watcher set ride the same eligibility filter', () => {
+  clientDoc();
+  clientCreateTask({ title: 'Out of scope assign', project: 'p_out', assignee: 'm_marked' });
+  assert.ok(!CD().notifs.some(n => n.to === 'm_marked' && n.type === 'assign'), 'no assign notify to an out-of-scope assignee');
+  clientCreateTask({ title: 'In scope assign', project: 'p_in', assignee: 'm_marked' });
+  assert.ok(CD().notifs.some(n => n.to === 'm_marked' && n.type === 'assign'), 'in-scope assignee still notified');
+  const tOut = { id: 't3', project: 'p_out', assignee: 'm_plain', creator: 'm_marked' };
+  const watchers = clientTaskWatchers(tOut);
+  assert.ok(!watchers.includes('m_marked'), 'out-of-scope watcher filtered');
+  assert.ok(watchers.includes('m_plain'), 'default-allow watcher kept');
 });
