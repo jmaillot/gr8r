@@ -177,6 +177,9 @@ test('a member cannot edit scopes at all', async () => {
 /* ---- Phase 29 task 2: full validation — whitelists, caps, D-04 promotion ---- */
 
 test('scope ids are whitelisted against the workspace document (T-29-01)', async () => {
+  // Known baseline, so "nothing stored" below is provable.
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { teams: ['team_a'], projects: ['p_in'] } })).status, 200);
+
   const ghostTeam = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { teams: ['ghost-team'], projects: ['p_in'] } });
   assert.equal(ghostTeam.status, 400);
   assert.equal(ghostTeam.data.code, 'unknownTeam');
@@ -186,7 +189,7 @@ test('scope ids are whitelisted against the workspace document (T-29-01)', async
   assert.equal(ghostProject.data.code, 'unknownProject');
 
   // The refused writes stored nothing.
-  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: [], projects: ['p_in'] });
+  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: ['team_a'], projects: ['p_in'] });
 });
 
 test('scope caps mirror the teams cap (25 per list)', async () => {
@@ -201,7 +204,7 @@ test('scope caps mirror the teams cap (25 per list)', async () => {
   });
   assert.equal(tooManyTeams.status, 400);
   assert.equal(tooManyTeams.data.code, 'tooManyTeams');
-  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: [], projects: ['p_in'] }, 'still nothing stored');
+  assert.deepEqual(JSON.parse(scopeOf(scopedUserId)), { teams: ['team_a'], projects: ['p_in'] }, 'still nothing stored');
 });
 
 test('scope lists are trimmed, sliced and deduped like the teams route', async () => {

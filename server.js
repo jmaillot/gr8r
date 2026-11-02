@@ -3534,6 +3534,13 @@ async function handleApi(req, res, url) {
     transaction(() => {
       if (nextRole !== row.role) {
         db.prepare('update memberships set role = ? where workspace_id = ? and user_id = ?').run(nextRole, ctx.ws.id, target.id);
+        // SCOPE-01/D-04 (Phase 29): promotion always clears scope — admin and
+        // owner memberships are workspace-wide by definition, cleared in the
+        // same transaction as the role change so no window exists where an
+        // admin carries a stored scope.
+        if (ROLE_RANK[nextRole] >= ROLE_RANK.admin) {
+          db.prepare('update memberships set scope = null where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+        }
       }
       updateDoc(ctx.ws.id, doc => {
         const memberId = ensureMember(doc, target, nextRole) || row.member_id;
@@ -3626,9 +3633,12 @@ async function handleApi(req, res, url) {
     const row = target ? membershipOf(ctx.ws.id, target.id) : null;
     if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
     if (ROLE_RANK[row.role] >= ROLE_RANK.admin) return fail(res, 400, 'scopeNotAllowed', 'Admin and owner memberships are always workspace-wide');
-    // Minimal shape validation (Phase 29 plan task 1): whitelist, caps and the
-    // scope-explicit contract arrive with the full-validation pass (task 2).
+    // Scope-explicit route: an absent scope field is a 400, an explicit null
+    // clears back to workspace-wide. Validation mirrors the invite-teams
+    // path (server.js:3611–3632 / T-28-07) per list: trim + 40-char slice,
+    // Set-dedup, cap 25, whitelist against the doc's team/project ids (T-29-01).
     const raw = body?.scope;
+    if (raw === undefined) return fail(res, 400, 'scopeRequired', 'Provide a scope object or null');
     if (raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) return fail(res, 400, 'scopeRequired', 'Provide a scope object or null');
     let scope = null;
     if (raw) {
@@ -3636,6 +3646,12 @@ async function handleApi(req, res, url) {
       if (!Array.isArray(raw.projects)) return fail(res, 400, 'projectsRequired', 'Provide a projects array');
       const teams = [...new Set(raw.teams.map(t => String(t || '').trim().slice(0, 40)).filter(Boolean))];
       const projects = [...new Set(raw.projects.map(p => String(p || '').trim().slice(0, 40)).filter(Boolean))];
+      if (teams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
+      if (projects.length > 25) return fail(res, 400, 'tooManyProjects', 'Too many projects');
+      const knownTeams = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
+      const knownProjects = new Set((JSON.parse(ctx.ws.doc)?.data?.projects || []).map(p => p?.id).filter(Boolean));
+      if (teams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
+      if (projects.some(p => !knownProjects.has(p))) return fail(res, 400, 'unknownProject', 'Unknown project');
       // D-01: an empty scope is workspace-wide — stored as null.
       if (teams.length || projects.length) scope = { teams, projects };
     }
