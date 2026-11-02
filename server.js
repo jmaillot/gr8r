@@ -626,6 +626,7 @@ function canManageProject(p, memberId, role) {
  * admin/owner membership is ALWAYS workspace-wide — stored JSON can never
  * blind a higher role, whatever the column says.
  */
+const CORRUPT_SCOPE_WARNED = new Set(); // one warn per distinct corrupt payload (WR-04)
 function projectScope(membership) {
   if (!membership || ROLE_RANK[membership.role] >= ROLE_RANK.admin) return null;
   let raw = membership.scope;
@@ -633,6 +634,14 @@ function projectScope(membership) {
     try {
       raw = JSON.parse(raw);
     } catch {
+      /* WR-04: the fail-open default stands (availability, D-01/D-04), but a
+         corrupt scope column is indistinguishable from a cleared one — warn
+         once per distinct payload so an admin can tell tamper/corruption
+         from "scope cleared" without spamming the log. */
+      if (!CORRUPT_SCOPE_WARNED.has(membership.scope)) {
+        CORRUPT_SCOPE_WARNED.add(membership.scope);
+        console.warn(`membership ${membership.member_id || '?'} in workspace context has an unparseable scope column — treating as workspace-wide (D-04 fail-open)`);
+      }
       return null;
     }
   }
