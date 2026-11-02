@@ -1,10 +1,10 @@
 ---
 phase: 29-team-project-scoped-permissions
 verified: 2026-11-02T10:18:53Z
-status: human_needed
+status: passed
 score: 17/18 must-haves verified
-covered_files: [server.js, src/core/store.js, src/actions/actions.js, src/overlays/modals.js, src/locales/en.json, src/locales/fr.json, test/scope.test.mjs, test/migration.test.mjs]
-covered_digest: "v2:sha256:05456291c1a2a9d81c230cd703a8f922e0f1a538eaed12dfc1676cd0a2932de9"
+covered_files: [server.js, src/core/store.js, src/actions/actions.js, src/overlays/modals.js, src/locales/en.json, src/locales/fr.json, test/scope.test.mjs, test/migration.test.mjs, .planning/phases/29-team-project-scoped-permissions/29-01-PLAN.md, .planning/phases/29-team-project-scoped-permissions/29-02-PLAN.md, .planning/phases/29-team-project-scoped-permissions/29-03-PLAN.md, .planning/phases/29-team-project-scoped-permissions/29-04-PLAN.md, .planning/phases/29-team-project-scoped-permissions/29-01-SUMMARY.md, .planning/phases/29-team-project-scoped-permissions/29-02-SUMMARY.md, .planning/phases/29-team-project-scoped-permissions/29-03-SUMMARY.md, .planning/phases/29-team-project-scoped-permissions/29-04-SUMMARY.md]
+covered_digest: "v2:sha256:62a718ff22a8ce73146aff3c73d4c14d68c644a39d95d2d509cf40ee931bdac8"
 behavior_unverified: 1
 behavior_unverified_items:
   - truth: "runReminderPass skips assignees whose scope excludes the task's project"
