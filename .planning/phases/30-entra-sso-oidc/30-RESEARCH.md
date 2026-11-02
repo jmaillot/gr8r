@@ -457,9 +457,10 @@ const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oaut
 | A4 | `prompt=select_account` is desirable UX | Code Examples | Minor UX-only |
 | A5 | AbortSignal.timeout works on Node 24 global fetch | Pitfall 7 | Falls back to manual AbortController if unavailable (trivial) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Link policy for tenant-member emails (Pitfall 1) — confirm with user.**
+1. **Link policy for tenant-member emails (Pitfall 1)** — RESOLVED: pinned-tenant email-vouching policy implemented in plan 30-02 (assumption A2, both directions test-pinned).
+2. **Auto-accept vs. surface for SSO-07 invites** — RESOLVED: auto-accept single pending invite, surface multiple — implemented in plan 30-03.
    - What we know: SSO-03 + REQUIREMENTS exclusions forbid linking on unverified/mutable claims; Entra doesn't emit `email_verified` for managed users.
    - What's unclear: whether "tenant-member email inside the pinned tenant = verified" is the intended reading, and whether guest-shaped tokens should hard-fail or JIT-create separately.
    - Recommendation: confirm at planning; implement pinned-tenant policy + guest rejection; encode both directions in the mock-IdP table.
