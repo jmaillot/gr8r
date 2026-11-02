@@ -18,7 +18,7 @@ membership, team/project-scoped permissions, optional Microsoft Entra SSO, and a
 
 - [x] **Phase 28: Multi-Team Membership** - Team membership becomes a set of authority rows migrated from the single-team model; every surface reads the real set. (completed 2026-11-01)
 - [x] **Phase 29: Team/Project-Scoped Permissions** - Memberships can be scoped to specific teams or projects; scoped members see only what their scope grants, with 404-matrix proof. (completed 2026-11-02)
-- [ ] **Phase 30: Entra SSO (OIDC)** - Env-gated Microsoft Entra sign-in as a third, hand-rolled-OIDC sign-in path that composes with 2FA.
+- [x] **Phase 30: Entra SSO (OIDC)** - Env-gated Microsoft Entra sign-in as a third, hand-rolled-OIDC sign-in path that composes with 2FA. (completed 2026-11-02)
 - [x] **Phase 31: Second TOTP Factor** - A user can register multiple named TOTP factors riding the existing v2: keyring, removable individually. (completed 2026-11-02)
 
 ## Phase Details
@@ -121,7 +121,7 @@ order; consumes the Phase 28-settled OIDC identity schema)
   5. The token-validation suite (mock IdP, table-driven) proves tampered tokens, wrong
      kid, bad issuer/audience/expiry/state/nonce/PKCE all fail closed — and with SSO-only
      configured, the password sign-in path is hidden/disabled.
-**Plans**: 6/6 plans executed
+**Plans**: 6/6 plans complete
 
 Plans:
 - [x] 30-06-PLAN.md
@@ -182,7 +182,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 28. Multi-Team Membership | 4/4 | Complete    | 2026-11-01 |
 | 29. Team/Project-Scoped Permissions | 4/4 | Complete    | 2026-11-02 |
-| 30. Entra SSO (OIDC) | 5/5 | In Progress|  |
+| 30. Entra SSO (OIDC) | 6/6 | Complete    | 2026-11-02 |
 | 31. Second TOTP Factor | 3/3 | Complete    | 2026-11-02 |
 
 ## Backlog
