@@ -1,10 +1,75 @@
 ---
+status: testing
 phase: 29-team-project-scoped-permissions
-status: awaiting_human_verification
-verification: 29-VERIFICATION.md
-verification_result: human_needed
-recorded: 2026-11-02
+source: 29-01-SUMMARY.md, 29-02-SUMMARY.md, 29-03-SUMMARY.md, 29-04-SUMMARY.md
+started: 2026-11-02T11:05:00Z
+updated: 2026-11-02T12:10:00Z
 ---
+
+## Current Test
+<!-- OVERWRITE each test - shows where we are -->
+
+number: 1
+name: Scope limits visibility to the assigned team/project
+expected: |
+  Member scoped to EquipeB sees ProjetB (team-linked) and not ProjetA. Team moves alone
+  do not change visibility — the admin sets the scope in the member modal.
+awaiting: user response (retest after redeploying the server build)
+
+## Tests
+
+### 1. Scope limits visibility to the assigned team/project
+expected: User2 (Member) sees only the projects his scope names. Admin flow: member modal
+  → scope editor → check EquipeB ⇒ User2 sees ProjetB (EquipeB) and not ProjetA (EquipeA).
+result: issue
+reported: "User2 basculé de EquipeA vers EquipeB voit toujours ProjetA et pas ProjetB"
+severity: major
+root_cause: "Tested against a stale deployment, not the phase-29 build. The running server
+  (PID 4037, root, dist/start/server.js) started 07:29 today — before phase 29 finished
+  (11:06) and before the review fixes (11:30+). This repo's dist/ has no start/ entry, so the
+  process serves an older deployed copy. Additionally, team membership alone never drives
+  visibility (by design): visibility is governed by the membership SCOPE (member modal scope
+  editor), not by the teams picker. Phase 28 moved memberships to the DB; the scope column
+  (D-02) is independent of membership.team."
+missing:
+  - "Redeploy/restart the server from the pushed main (0e88542) and retest"
+  - "Set User2's scope via the member modal scope editor (teams: EquipeB) — moving teams
+     between EquipeA/EquipeB does not update scope"
+test: 1
+artifacts: []
+debug_session: ""
+
+### 2. Guest / scoped-member browser walkthrough (D-05/D-08/D-11)
+expected: Scoped member sees exactly the scoped projects, no scope indicator, out-of-scope
+  by-id requests 404 identical to unknown.
+result: pending
+
+## Summary
+
+total: 2
+passed: 0
+issues: 1
+pending: 1
+skipped: 0
+blocked: 0
+
+## Gaps
+
+- gap_id: G-29-1
+  truth: "Member scoped to EquipeB sees ProjetB and not ProjetA; team moves alone do not
+    change visibility — scope does."
+  status: failed
+  reason: "User reported: User2 basculé de EquipeA vers EquipeB voit toujours ProjetA et pas
+    ProjetB. Diagnosed: server under test predates phase 29 (deployed dist/start/server.js
+    started 07:29, phase finished 11:06); plus design clarification — scope (member modal),
+    not team membership, drives visibility."
+  severity: major
+  test: 1
+  artifacts: []
+  missing:
+    - "Redeploy from main (0e88542) and restart the server"
+    - "Set scope via member modal scope editor, then retest"
+
 
 # Phase 29: User Acceptance Testing
 
