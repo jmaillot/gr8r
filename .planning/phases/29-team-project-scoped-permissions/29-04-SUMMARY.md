@@ -108,3 +108,10 @@ None beyond the documented deviations.
 ## Next Phase Readiness
 
 Phase 29 is functionally complete: SCOPE-01..06 all landed, the 404/behavior matrix is finished with zero placeholder rows, and the milestone invariants hold (zero new runtime dependencies, EN+FR at write time, additive-only columns from 29-01, full suite green). Ready for /gsd-verify-work UAT (recommended clicks: invite form scope section incl. guest toggle, member modal scope editor, and the guest's one-project view).
+
+## Self-Check: PASSED
+
+- 29-04-SUMMARY.md exists with `status: complete`
+- All 6 commits verified in git log (eaff9e2, 5f66663, ff3dc2a, 9d658cc, 29750ba, 7e3a312)
+- Full suite green at concurrency 2: 749 tests, 746 pass, 0 fail, 3 intentional skips
+- Matrix placeholder check: `grep -c "covered by Plan" test/scope.test.mjs` = 0
