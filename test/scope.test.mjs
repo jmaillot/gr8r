@@ -680,6 +680,7 @@ let teamOn; // the on-team probe client (null scope, team_a via the authority ro
 let teamOnUserId;
 let teamOnMid;
 let ownerMid;
+let zeroteamMid; // dedicated null-scope, zero-team member (the JIT/doc-only probe)
 
 test('team fixture: probe members resolved and team-linked projects planted', async () => {
   const members = (await owner.get('/api/workspaces/acme/members')).data.members;
@@ -694,6 +695,19 @@ test('team fixture: probe members resolved and team-linked projects planted', as
 
   // The zero-team probe reads workspace-wide (null scope, no team rows).
   assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+
+  // A dedicated null-scope zero-team member (4th accept of this server's
+  // invite budget) — the reminder off-probe assignee. The Phase-29 assignee
+  // write-guard runs over the MERGED task list, so a stored self-assignment
+  // on a project outside the caller's scope would 400 any later doc PUT by
+  // that caller; the off-probe assignee must be someone whose assignments
+  // never trip it (null scope passes the guard unconditionally).
+  const [ztInv] = (await owner.post('/api/workspaces/acme/invites', { emails: ['zeroteam@test.local'], role: 'member' })).data.invites;
+  const ztClient = (await signup(server.base, ACCOUNT('ZeroTeam', 'zeroteam@test.local'))).client;
+  const ztJoined = await ztClient.post(`/api/invites/${inviteToken(ztInv.url)}/accept`);
+  assert.ok([200, 201].includes(ztJoined.status), 'the zero-team member joined');
+  const ztRow = (await owner.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'zeroteam@test.local');
+  zeroteamMid = ztRow.memberId;
 
   const live = (await owner.get('/api/workspaces/acme')).data;
   const doc = structuredClone(live.doc);
@@ -749,7 +763,7 @@ test('team cell [reminder]: the on-team assignee is reminded, the zero-team assi
   const doc = storedDoc();
   doc.data.tasks.push(
     { id: 't_team_rem_on', key: 'TMX-1', title: 'Team reminder on-team', status: 'todo', assignee: teamOnMid, project: 'p_teamL', due: '2027-05-18', labels: [], subtasks: [] },
-    { id: 't_team_rem_off', key: 'TMX-2', title: 'Team reminder off-team', status: 'todo', assignee: scopedMemberId, project: 'p_teamL', due: '2027-05-18', labels: [], subtasks: [] },
+    { id: 't_team_rem_off', key: 'TMX-2', title: 'Team reminder off-team', status: 'todo', assignee: zeroteamMid, project: 'p_teamX', due: '2027-05-18', labels: [], subtasks: [] },
   );
   withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
   const emitted = await triggerReminders(server, at9('2027-05-18'));
@@ -1135,4 +1149,82 @@ test('404-matrix [D-06] a cross-project search over the client-visible payload r
   assert.equal(clientSearchAll('Out of Scope').projects.length, 0, 'the out-of-scope project is unfindable');
   assert.equal(clientSearchAll('Visible task').tasks.length, 1, 'the in-scope task is still findable');
   assert.equal(clientSearchAll('In Scope').projects.length, 1, 'the in-scope project is still findable');
+});
+
+/* ---- Phase 32 (VIS-02/VIS-05, D-05..D-08): full MATRIX team extension ---- */
+
+test('team cell [A1 widening]: a PUBLIC project carrying teams:[X] stays visible to a non-X member (widening-only)', async () => {
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  assert.equal(view.doc.data.projects.some(p => p.id === 'p_pubA'), true, 'public is an independent disjunct in D-01 — nobody loses access');
+});
+
+test('team cell [VIS-02 D-03 inversion]: a scope grant still opens a team-hidden project the member does not intersect', async () => {
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { projects: ['p_teamX'], teams: [] } })).status, 200);
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  assert.equal(view.doc.data.projects.some(p => p.id === 'p_teamX'), true, 'the grant inverts the private check — additive composition survives');
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+});
+
+test('team cell [VIS-02]: the admin/owner exemption survives — the plain hiddenProjectIds path (D-06)', async () => {
+  const view = (await owner.get('/api/workspaces/acme')).data;
+  assert.equal(view.doc.data.projects.some(p => p.id === 'p_teamX'), true, 'admin sees the team-hidden private project');
+  assert.equal(view.doc.data.projects.some(p => p.id === 'p_priv3'), true, 'admin sees the empty-teams private project');
+});
+
+test('team cell [doc-put]: a team-hidden row PUT by a scoped caller lands as reserved (Pitfall 5)', async () => {
+  // The caller scope covers p_out so the stored t_m_rem_out self-assignment
+  // (restored by the merge) never trips the untouched Phase-29 assignee
+  // write-guard — p_teamX stays out of reach, which is what this cell pins.
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: { projects: ['p_in', 'p_out'], teams: [] } })).status, 200);
+  const live = (await scoped.get('/api/workspaces/acme')).data;
+  const doc = structuredClone(live.doc);
+  doc.data.tasks.push({ id: 't_team_put', project: 'p_teamX', title: 'Team-hidden put probe', status: 'todo', labels: [], subtasks: [] });
+  const saved = await scoped.put('/api/workspaces/acme', { revision: live.revision, doc });
+  assert.equal(saved.status, 200, 'the merge is silent, not an error');
+  assert.equal(storedDoc().data.tasks.some(t => t.id === 't_team_put'), false, 'the team-hidden row is reserved, never merged');
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+});
+
+test('team cell [D-08]: a legacy scalar-team project rides the same reach on the file side door', async () => {
+  // Craft directly into the stored doc — the doc write path normalizes the
+  // scalar `team` away (normalizeProjects), so only a crafted fixture can
+  // exercise the raw stored shape both read paths must normalize.
+  const doc = storedDoc();
+  doc.data.projects.push({ id: 'p_legacy', key: 'lgy', name: 'Legacy Scalar', private: true, members: [ownerMid], lead: ownerMid, team: 'team_a' });
+  doc.data.files.push({ id: 'f_legacy', name: 'f_legacy.txt', size: 5, type: 'txt', project: 'p_legacy' });
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
+  fs.writeFileSync(path.join(server.dataDir, 'files', 'f_legacy'), Buffer.from('f_legacy:p_legacy:gr8r-scope-matrix', 'utf8'));
+  const on = await fileGet(teamOn, 'f_legacy');
+  assert.equal(on.status, 200, 'the on-team member reads the legacy scalar-team file (side door ≡ doc read)');
+  const off = await fileGet(scoped, 'f_legacy');
+  const unknown = await fileGet(scoped, 'f_missing');
+  assert.equal(off.status, 404);
+  assert.deepEqual(await off.json(), await unknown.json(), 'legacy team-hidden ≡ unknown: identical status, code AND message');
+});
+
+test('team cell [D-05 live read]: the team set is read live — reach flips on the next request after a roster edit', async () => {
+  const before = (await scoped.get('/api/workspaces/acme')).data;
+  assert.equal(before.doc.data.projects.some(p => p.id === 'p_teamX'), false, 'precondition: zero-team probe is off p_teamX');
+  withDb(server.dbPath, db =>
+    db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)').run(server.wsId, 'team_a', scopedMemberId, scopedUserId),
+  );
+  const after = (await scoped.get('/api/workspaces/acme')).data;
+  assert.equal(after.doc.data.projects.some(p => p.id === 'p_teamX'), true, 'no caching (D-05): the roster edit takes effect immediately');
+  withDb(server.dbPath, db =>
+    db.prepare('delete from team_members where workspace_id = ? and team_id = ? and user_id = ?').run(server.wsId, 'team_a', scopedUserId),
+  );
+  const restored = (await scoped.get('/api/workspaces/acme')).data;
+  assert.equal(restored.doc.data.projects.some(p => p.id === 'p_teamX'), false, 'the removal also takes effect immediately');
+});
+
+test('team cell [SC 2 JIT]: a zero-team account reads teams:[] projects per their public/access-list state and never teams:[X] private ones', async () => {
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: null })).status, 200);
+  assert.equal(scopeOf(scopedUserId), null, 'the zero-team probe carries no scope (JIT-shaped)');
+  assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) n from team_members where workspace_id = ? and user_id = ?').get(server.wsId, scopedUserId).n), 0, 'zero team_members rows');
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  const ids = view.doc.data.projects.map(p => p.id);
+  assert.equal(ids.includes('p_pubA'), true, 'teams:[] public project: workspace-wide (empty-teams first branch, D-06)');
+  assert.equal(ids.includes('p_priv3'), true, 'teams:[] private project: gated by its access list, NOT leaked, NOT sealed');
+  assert.equal(ids.includes('p_teamX'), false, 'teams:[X] private project stays 404 for the zero-team account');
 });
