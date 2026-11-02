@@ -869,7 +869,7 @@ function mergeIds(storedList, incomingList, reserved) {
   return out;
 }
 
-function mergeClientDoc(incoming, stored, membership) {
+function mergeClientDoc(incoming, stored, membership, wsId) {
   const next = incoming && typeof incoming === 'object' ? JSON.parse(JSON.stringify(incoming)) : {};
   next.data = next.data && typeof next.data === 'object' ? next.data : {};
   normalizeProjects(stored);
@@ -957,6 +957,33 @@ function mergeClientDoc(incoming, stored, membership) {
     mergedViews[key] = value;
   }
   next.views = mergedViews;
+  /* SCOPE-04 (server-side authority, T-29-10): a document write can never
+     assign a member to a task whose project sits outside the assignee's
+     scope — this closes the assignableInProject picker seam (Phase 28).
+     The client emit filter is advisory; this guard is the authority.
+     Admin/owner assignees (workspace-wide, D-04), members without a
+     membership row, and tasks without a project always pass. */
+  if (wsId) {
+    const projectById = new Map(
+      [...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]),
+    );
+    const scopeByMember = new Map(
+      db
+        .prepare('select member_id, role, scope from memberships where workspace_id = ?')
+        .all(wsId)
+        .map(r => [r.member_id, r]),
+    );
+    for (const t of nextData.tasks || []) {
+      if (!t?.id || !t.assignee || !t.project) continue;
+      const assignmentScope = projectScope(scopeByMember.get(t.assignee));
+      if (!assignmentScope) continue;
+      if (!inScopeProject(projectById.get(t.project), assignmentScope)) {
+        const err = new Error('Assignee is out of scope for the task project');
+        err.code = 'assigneeOutOfScope';
+        throw err;
+      }
+    }
+  }
   return next;
 }
 
@@ -992,6 +1019,21 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   );
   const emailByMemberEmail = new Map();
   for (const m of profiles.values()) if (m?.email && m.id) emailByMemberEmail.set(m.id, m.email);
+  /* SCOPE-04 (defense in depth, T-29-09): the email mirror re-checks each
+     recipient's scope against the notification's project before queuing.
+     Workspace-level rows (no project) keep flowing — send-time enforcement
+     only, never a notifications-list filter (D-07). */
+  const scopeByMember = new Map(
+    db
+      .prepare('select member_id, role, scope from memberships where workspace_id = ?')
+      .all(wsRow.id)
+      .map(r => [r.member_id, r]),
+  );
+  const projectById = new Map(
+    (Array.isArray(nextDoc?.data?.projects) ? nextDoc.data.projects : [])
+      .filter(p => p?.id)
+      .map(p => [p.id, p]),
+  );
   /* G-23-1: the stored doc never persists account-backed member profiles (the
      roster is authority-backed in memberships+users, rebuilt only on read via
      syncProfiles), so the doc-profile map is empty of account members at
@@ -1012,6 +1054,14 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
     const to = authority.get(n.to)?.email || (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;
     const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
+    /* SCOPE-04: skip recipients whose scope excludes the notification's
+       project (null scope = workspace-wide, D-04). The project rides the row
+       when present, else the referenced task; underivable → keep flowing. */
+    const recipientScope = projectScope(scopeByMember.get(n.to));
+    if (recipientScope) {
+      const projectId = n.project || task?.project || task?.projectId || null;
+      if (!inScopeProject(projectId ? projectById.get(projectId) : null, recipientScope)) continue;
+    }
     const taskTitle = task?.title || 'a task';
     const by = ['due_reminder', 'past_due'].includes(n.type) ? 'Reminders' : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
     /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
@@ -1127,6 +1177,14 @@ function runReminderPass({ now: at = new Date() } = {}) {
       for (const t of tasks) {
         const project = projects.get(t?.projectId);
         if (!remindable(t, project)) continue;
+        /* SCOPE-04: a scoped member is never reminded about content outside
+           their scope — the same projectScope/inScopeProject predicate the
+           read funnel uses. No membership row (doc-only assignee) reads
+           workspace-wide, matching projectScope's defensive default. */
+        const assigneeMembership = db
+          .prepare('select role, scope from memberships where workspace_id = ? and member_id = ?')
+          .get(ws.id, t.assignee);
+        if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
         const due = t.due;
         /* Window-open predicates on plain YYYY-MM-DD string compare — the
            open window plus an absent dedup key IS the boot catch-up. */
@@ -1196,7 +1254,7 @@ function docForClient(doc, ws, membership) {
 }
 
 function docFromClient(incoming, stored, ws, role, membership) {
-  const next = mergeClientDoc(incoming, stored, membership);
+  const next = mergeClientDoc(incoming, stored, membership, ws.id);
   delete next.data.workspaces;
   next.data.me = null;
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
@@ -3438,6 +3496,8 @@ async function handleApi(req, res, url) {
       return json(res, 200, { revision: revision + 1, updatedAt: t });
     } catch (err) {
       db.exec('rollback');
+      // SCOPE-04: the assignee write-guard rejects with an explicit 400.
+      if (err?.code === 'assigneeOutOfScope') return fail(res, 400, 'assigneeOutOfScope', 'Assignee is out of scope for this project');
       throw err;
     }
   }
