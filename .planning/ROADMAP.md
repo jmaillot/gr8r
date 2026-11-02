@@ -84,7 +84,10 @@ adjacent routes.
      whitelist is pinned by test.
   5. `sameOrigin()` and the proxy-header readers agree on multi-value `x-forwarded-*`
      handling (first-value discipline), pinned by test.
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 33-01-PLAN.md — accept-route sameOrigin guard + first-value header helper + silent body whitelist (HARD-01/04/05)
+- [ ] 33-02-PLAN.md — both twins fail closed in one commit + link-only admin invite block at both ends + boot sweep (HARD-02/03)
 
 ### Phase 34: Per-User Settings Isolation & Search Leak Closure
 
