@@ -1,0 +1,1 @@
+No external API integration: Phase 32 is internal visibility-semantics logic over the existing `hiddenFor()` funnel, `team_members` authority rows, and existing HTTP endpoints — no new external API is integrated, consumed, or exposed.

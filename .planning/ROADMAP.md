@@ -55,7 +55,10 @@ admin × guest, 404-matrix extension shape) get an explicit gap-closure allowanc
   5. A member whose teams do not reach a project is never reminded or emailed about it:
      the reminder pass and email mirror resolve reach through the same team-intersect
      helper as `hiddenFor` (no second visibility pipeline anywhere).
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 32-01-PLAN.md — Shared team-intersect helper + hiddenFor null-scope branch + send-time adoption + full MATRIX extension (VIS-01..05, D-01..D-08)
 
 ### Phase 33: Membership-Surface Hardening
 

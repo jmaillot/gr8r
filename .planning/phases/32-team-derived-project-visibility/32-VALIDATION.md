@@ -43,10 +43,10 @@ created: "2026-11-02"
 | 32-01-01 | 01 | 1 | VIS-01 | T-32-01 / — | team-intersect opens private team-linked project; off-team member 404 no-oracle | integration (MATRIX cells) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
 | 32-01-02 | 01 | 1 | VIS-02 | T-32-02 | scope grant still opens private out-of-team project (D-03); admin exemption survives | regression | `node --test test/scope.test.mjs` | ✅ + ❌ new admin cell | ⬜ pending |
 | 32-01-03 | 01 | 1 | VIS-03 | — | guest sees exactly one granted project; team derivation never widens guest reach | integration | `node --test test/scope.test.mjs` | ✅ Phase-29 pins must stay green | ⬜ pending |
-| 32-0X-XX | — | — | VIS-04 | T-32-03 | reminder pass + email mirror skip team-hidden projects (shared helper) | integration (MATRIX reminder + fanout cells) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
-| 32-0X-XX | — | — | VIS-05 | T-32-02 | 404 byte-identical no-oracle across families incl. file-serve side door; empty-teams workspace-wide (JIT fixture) | integration (MATRIX file cross-check) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
-| 32-0X-XX | — | — | D-06 | — | JIT zero-team account: empty-teams predicate first branch | integration fixture | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
-| 32-0X-XX | — | — | D-08 | — | file side door agrees with doc read (test pin on existing normalizeProjects call) | integration (file family cell) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
+| 32-01-02 | 01 | 1 | VIS-04 | T-32-03 | reminder pass + email mirror skip team-hidden projects (shared helper) | integration (MATRIX reminder + fanout cells) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
+| 32-01-03 | 01 | 1 | VIS-05 | T-32-02 | 404 byte-identical no-oracle across families incl. file-serve side door; empty-teams workspace-wide (JIT fixture) | integration (MATRIX file cross-check) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
+| 32-01-03 | 01 | 1 | D-06 | — | JIT zero-team account: empty-teams predicate first branch | integration fixture | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
+| 32-01-03 | 01 | 1 | D-08 | — | file side door agrees with doc read (test pin on existing normalizeProjects call) | integration (file family cell) | `node --test test/scope.test.mjs` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky — Task IDs are finalized by the planner; requirement→test mapping above is binding.*
 
