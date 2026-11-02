@@ -5,10 +5,10 @@ milestone_name: Team Access & Federation
 current_phase: 29
 current_phase_name: Team/Project-Scoped Permissions
 status: executing
-stopped_at: Completed 29-03-PLAN.md
-last_updated: "2026-11-02T09:55:00.000Z"
+stopped_at: Completed 29-04-PLAN.md (phase 29 complete — ready for verify-work)
+last_updated: "2026-11-02T10:05:00.000Z"
 last_activity: 2026-11-02
-last_activity_desc: Completed 29-03-PLAN.md
+last_activity_desc: Completed 29-04-PLAN.md
 state_head: 0521cea4a3964d1a2a6203763eab22739be00eb1
 progress:
   total_phases: 4
@@ -29,11 +29,11 @@ progress:
 ## Current Position
 
 Phase: 29 (Team/Project-Scoped Permissions) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute (last plan)
-Last activity: 2026-11-02 — Completed 29-03-PLAN.md
+Plan: 4 of 4 — COMPLETE (all plans executed)
+Status: Ready for /gsd-verify-work (phase UAT)
+Last activity: 2026-11-02 — Completed 29-04-PLAN.md
 
-Progress: [███░░░░░░░] 25% of phase plans (4/4)
+Progress: [██████████] 100% of phase plans (4/4)
 
 ## Recent Decisions
 
@@ -86,6 +86,9 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 29]: 29-02: project-less file records (workspace-level uploads) stay member-visible — only project-bound records are scope-checked in serveFileBinary; the matrix artifact (MATRIX in test/scope.test.mjs) is the named SCOPE-03 sweep future families must extend
 - [Phase 29]: 29-03: send-time-only enforcement (D-07) — three server guards (reminder pass, email mirror, assignee write-guard 400 assigneeOutOfScope) are the authority; memberScopeEligible on the client is advisory and defaults to allow when scope is underivable (D-05) — notifications lists are never server-side filtered
 - [Phase 29]: 29-03: MATRIX family 5 (reminder pass + notification fan-out) is live; family 6 (invites) is the single remaining placeholder for Plan 29-04
+- [Phase 29]: 29-04: invites carry validated scope end-to-end (invite POST mirror-validation → invites.scope JSON → acceptance → addMembership 5th arg, coalesce-on-conflict); guest = viewer + exactly-one-project enforced at creation (400 guestSingleProject); D-04 admin/owner invites with scope refused
+- [Phase 29]: 29-04: member modal scope editor starts empty+untouched and never writes scope unless touched — D-05 payload silence means no cross-session read-back (S.ui.memberScopes caches in-session); changing that needs a D-05 policy decision
+- [Phase 29]: 29-04: the 404-matrix is complete (family 6 live, zero "covered by Plan" rows); D-06 workspace-level rows assert zero out-of-scope references in activity, recent searches and client searchAll
 
 ### Pending Todos
 
@@ -108,8 +111,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T09:55:00Z
-Stopped at: Completed 29-03-PLAN.md
+Last session: 2026-11-02T10:05:00Z
+Stopped at: Completed 29-04-PLAN.md (phase 29 complete)
 Resume file: None
 
 ## Performance Metrics
@@ -124,6 +127,7 @@ Resume file: None
 | Phase 29 P01 | 11 min | 3 tasks | 6 files |
 | Phase 29 P02 | 27 min | 3 tasks | 2 files |
 | Phase 29 P03 | ~35 min | 3 tasks | 7 files |
+| Phase 29 P04 | ~30 min | 3 tasks | 11 files |
 
 ## Operator Next Steps
 

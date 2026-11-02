@@ -94,7 +94,7 @@ Plans:
 - [x] 29-03-PLAN.md — Notification/mention/assignment send-time scope filtering, server guards (SCOPE-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 29-04-PLAN.md — Invite-carried scope, guest model, invite-form/member-modal UI (SCOPE-05, SCOPE-06)
+- [x] 29-04-PLAN.md — Invite-carried scope, guest model, invite-form/member-modal UI (SCOPE-05, SCOPE-06)
 
 **UI hint**: yes
 

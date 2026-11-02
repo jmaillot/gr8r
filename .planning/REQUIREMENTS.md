@@ -42,9 +42,9 @@ method. Zero new runtime dependencies throughout.
 - [x] **SCOPE-04**: Notification and mention recipient resolution runs the same scope
       predicate — a scoped member is never assigned, mentioned or notified for content outside
       their scope.
-- [ ] **SCOPE-05**: Invitations can carry a scope: the invite form lets an admin invite a user
+- [x] **SCOPE-05**: Invitations can carry a scope: the invite form lets an admin invite a user
       with team or project scope, and the invited user lands with that scope at acceptance.
-- [ ] **SCOPE-06**: External collaborators can be invited to exactly one project
+- [x] **SCOPE-06**: External collaborators can be invited to exactly one project
       (project-level guest scope) without seeing the rest of the workspace.
 
 ### Entra SSO (Kanzo #2 — third phase)
