@@ -1,25 +1,10 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-01 — milestone v1.6 started*
+*Last updated: 2026-11-02 after v1.6 milestone*
 
-## Current Milestone: v1.6 Team Access & Federation
+## Current Milestone
 
-**Goal:** membership and sign-in get real team scoping and a second door — multi-team
-membership, team/project-scoped permissions, optional Microsoft Entra SSO, and a second
-2FA method.
-
-**Target features:**
-- Multi-team membership: a member can belong to several teams (#3, first phase — #4 compounds on it)
-- Team/project-scoped permissions: Membre and invités can have their permissions limited to the
-  team/project they were invited to (#4, adjacent to the v1.5 Phase 24 workspace-admin tier)
-- Microsoft Entra sign-in: optional OIDC, visible only if the env is configured (#2, third phase)
-- Second 2FA method: a user can register a second TOTP factor alongside the first, without
-  touching recovery codes (#1, last phase — rides the v1.5 keyring / `v2:` envelope infra from
-  Phases 25–26)
-
-**Constraints:** zero runtime dependencies held (Entra = raw OIDC over Node built-ins); the
-parked candidates (membership-surface hardening, recent-search leak, per-user settings
-isolation) stay out of this milestone.
+None — v1.6 shipped 2026-11-02. Scope the next milestone with `/gsd-new-milestone`.
 
 ## What it is
 
@@ -85,10 +70,25 @@ dependencies. Full record: `milestones/v1.5-ROADMAP.md`, `milestones/v1.5-REQUIR
 
 </details>
 
-## Next Milestone Goals
+<details>
+<summary>Milestone v1.6 Team Access & Federation (shipped 2026-11-02)</summary>
 
-Scoped as **v1.6 Team Access & Federation** (2026-11-01): multi-team membership,
-team/project-scoped permissions, Microsoft Entra SSO (env-gated), second 2FA method.
+**Goal:** membership and sign-in get real team scoping and a second door — multi-team
+membership, team/project-scoped permissions, optional Microsoft Entra SSO, and a second
+2FA method. Zero new runtime dependencies throughout.
+
+**Shipped:** `team_members` authority rows with multi-team membership everywhere rosters,
+pickers and mentions read; team/project-scoped permissions with the D-03 grant inversion,
+`hiddenFor` redaction funnel and 404-matrix proof; hand-rolled Entra OIDC (PKCE S256, RS256
+via JWKS over `node:crypto` only) with pinned-tenant verified-email linking, JIT bare
+accounts, SSO×2FA challenge-then-stop and SSO-only mode; multiple named TOTP factors on the
+`v2:` keyring with per-factor replay guards and survivor-code removal. 4 phases, 17 plans,
+24/24 requirements. Full suite 803 tests (800 pass, 3 env-gated skips), lint clean, zero new
+runtime dependencies. Phase 30 carried a full security contract (17 threats closed,
+`threats_open: 0`). Full record: `milestones/v1.6-ROADMAP.md`,
+`milestones/v1.6-REQUIREMENTS.md`, `milestones/v1.6-phases/`.
+
+</details>
 
 ## Milestone v1.3 Auth Hardening — SHIPPED (2026-10-28)
 
@@ -354,6 +354,32 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   `email_reminder` gate, boot catch-up + unref'd tick that never writes off-hour or bumps
   revisions, three notifPrefs toggles (ON by default), inbox filter chips + system-actor
   rendering with EN+FR keys — Phase 27 (REM-01..05; verification 11/11, 646/646 suite)
+- ✓ Multi-team membership via `team_members` authority rows: guarded additive migration
+  (pre-backup, byte-identical second boot), admin PUT route, `teams[]` projection read by
+  every roster/picker/mention surface, @team mention dedup, picker intersection guard
+  (`assignableInProject`), multi-team invites with `invites.teams` backfill — Phase 28
+  (TEAM-01..05; re-verified 13/13, 803-test suite green)
+- ✓ Team/project-scoped permissions: membership scope columns, shared `projectScope`/
+  `hiddenFor` read/write funnel, D-03 grant inversion (scope OPENS private projects),
+  byte-identical 404 `fileNotFound` on the file-serve side door, named 404-matrix per
+  endpoint family, send-time scope filtering (reminders, email mirror, assignee write-guard,
+  client emit pre-filter), invite-carried scope, guest collaborator model (viewer + exactly
+  one project), invite-form/member-modal UI with EN+FR strings — Phase 29 (SCOPE-01..06;
+  re-verified 18/18, UAT walkthrough pass)
+- ✓ Microsoft Entra SSO (OIDC): hand-rolled authorization-code flow (confidential client,
+  PKCE S256, RS256 id_token via JWKS) over Node built-ins only; env-gated no-oracle routes
+  (404 when unconfigured, identical bodies when partially configured); pinned-tenant
+  verified-email linking with guest-shape rejection; JIT bare accounts (no default role);
+  SSO×2FA challenge-then-stop (no session minted pre-TOTP); SSO-only mode 404s the password
+  door; one generic `ssoError` surface; `OIDC_DEFAULT_ROLE` removed end-to-end; strict
+  `email_verified === true` gate on linking/JIT/invite reconciliation — Phase 30 (SSO-01..08;
+  verification passed, UAT 2/2 live-tenant, security audit 17/17 threats closed)
+- ✓ Second TOTP factor: `totp_factors` single source of truth with one-time boot copy,
+  shared `verifyTotpAgainstFactors()` helper across login/challenge/step-ups, per-factor
+  replay guards, enroll (password + existing-factor code + required label), enable (staged
+  secret, per-factor baseline), remove (survivor-code guard), last-factor teardown runs the
+  existing disable transaction, localized factor list + staged wizard + remove confirm —
+  Phase 31 (TOTP2-01..05; re-verified 9/9, UAT 3/3)
 
 ### Active
 
@@ -370,7 +396,7 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
 
 - Real billing and plan enforcement (quotas, seats, storage, invoices). The plan stays a
   display value, but only an owner may change it.
-- Subdomain tenancy, SSO/SAML, SCIM.
+- Subdomain tenancy, SAML/SCIM (Entra OIDC shipped in v1.6; SAML/SCIM stay out).
 - File storage hardening beyond Phase 12: upload quotas per workspace/user, antivirus
   scanning, and external object storage (real binary uploads under `DATA_DIR/files/`
   shipped in Phase 12).
@@ -390,18 +416,15 @@ From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this mi
 
 ## Context
 
-- Shipped v1.5 (2026-11-01) with 5 phases, 17 plans, 13 tasks across the v1.4 → v1.5 range
-  (2026-10-30 → 2026-11-01); 183 files changed, +17,105/−7,952.
-- ~18.4k lines of JavaScript across `server.js`, `test/`, `public/` and `src/`; still zero
-  runtime dependencies (one dev dependency: `@playwright/test`).
-- Scheduler ground truth: `reminders_sent` dedup table, clock-injectable `runReminderPass()`
-  in `server.js`, test-only `/api/internal/reminder-pass` route behind `REMINDER_TEST_TOKEN`;
-  keyring ground truth: `v2:<key-id>:<iv>:<tag>:<ct>` envelopes (key id = first 8 hex of
-  sha256(key material)), `MASTER_KEY` + `MASTER_KEY_PREVIOUS`, DEPLOY.md §14 runbook.
-- Test posture at close: 649/649 unit tests, lint/format/build incl. i18n-scan green.
-- Known deferred items: 4 debug sessions + 1 diagnosed UAT gap acknowledged at close (see
-  STATE.md Deferred Items); phase 23–26 verification digests stale (shared files touched by
-  later phases; final tree verified by Phase 27 + v1.5 milestone audit).
+- Shipped v1.6 (2026-11-02) with 4 phases, 17 plans, 13 tasks across the v1.5 → v1.6 range
+  (2026-11-01 → 2026-11-02); full suite 803 tests (800 pass, 3 env-gated skips), lint clean.
+- ~19k lines of JavaScript across `server.js`, `oidc.js`, `test/`, `public/` and `src/`; still
+  zero runtime dependencies (one dev dependency: `@playwright/test`).
+- Auth ground truth: `sessions` / `login_challenges` / `recovery_codes` / `totp_factors`
+  tables, `v2:` keyring envelopes, `team_members` authority rows with scope columns,
+  `oidc_identities` + `oidc.js` (raw OIDC, `node:crypto` only).
+- Known deferred items: delTeam undo doesn't restore memberships + TEAM-05 born-green pin
+  acknowledged at close; eslint debt and D-12 resolved (see STATE.md Deferred Items).
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
 
 ## Evolution

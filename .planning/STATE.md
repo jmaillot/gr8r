@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
-current_phase: 30
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 30 complete — all phases complete
-last_updated: "2026-11-02T17:25:15.152Z"
+last_updated: "2026-11-02T18:00:40.915Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 30 complete
-state_head: 5c2db427ae81d13b50bee3e873968229c71b3ffa
+last_activity_desc: Milestone v1.6 completed and archived
+state_head: e29cf8b100b1d53bfcf07061c8eeaf20b35ebfd9
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 17
   completed_plans: 17
   percent: 100
+current_phase: 30
 ---
 
 # STATE.md
@@ -27,12 +27,10 @@ progress:
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-02 — Phase 30 complete
-
-Progress: [██████████] 100% of phase plans (4/4)
+Phase: Milestone v1.6 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-02 — Milestone v1.6 completed and archived
 
 ## Recent Decisions
 
@@ -150,4 +148,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 28 with /gsd-plan-phase 28 (settles the OIDC identity schema decision)
+- Start the next milestone with /gsd-new-milestone
