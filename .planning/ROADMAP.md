@@ -121,10 +121,10 @@ order; consumes the Phase 28-settled OIDC identity schema)
   5. The token-validation suite (mock IdP, table-driven) proves tampered tokens, wrong
      kid, bad issuer/audience/expiry/state/nonce/PKCE all fail closed — and with SSO-only
      configured, the password sign-in path is hidden/disabled.
-**Plans**: 5/5 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
-- [x] 30-05-PLAN.md
+- [x] 30-06-PLAN.md
 
 **Wave 1**
 - [x] 30-01-PLAN.md — Tracer: oidc.js + routes + config ground truth + mock-IdP happy path & env-gating matrix (SSO-01/SSO-02, D-01/D-02/D-10)
@@ -137,6 +137,9 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 30-04-PLAN.md — SSO-only mode + client surface + docs (SSO-06, D-03/D-07/D-08/D-09)
+
+**Wave 1 (gap closure)**
+- [x] 30-06-PLAN.md — G-30-1 gap closure: strict verified-email policy — linking/JIT/invite reconciliation require `email_verified: true`, fail closed (SSO-03, T-30-17)
 
 **UI hint**: yes
 

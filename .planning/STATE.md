@@ -5,17 +5,17 @@ milestone_name: Team Access & Federation
 current_phase: 30
 current_phase_name: Entra SSO (OIDC)
 status: executing
-stopped_at: Completed 30-05-PLAN.md
-last_updated: "2026-11-02T15:26:54.290Z"
+stopped_at: Completed 30-06-PLAN.md
+last_updated: "2026-11-02T16:48:00.000Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 30 execution started
-state_head: fc80b604394dfd303c20842b2703ea724b0de941
+state_head: d176696
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 16
-  completed_plans: 16
-  percent: 75
+  total_plans: 17
+  completed_plans: 17
+  percent: 100
 ---
 
 # STATE.md
@@ -29,8 +29,8 @@ progress:
 ## Current Position
 
 Phase: 30 (Entra SSO (OIDC)) — EXECUTING
-Plan: 2 of 5
-Status: Ready to execute
+Plan: 1 of 6
+Status: Executing Phase 30
 Last activity: 2026-11-02 — Phase 30 execution started
 
 Progress: [████████░░] 75% of phase plans (4/4)
@@ -93,7 +93,8 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 30]: 30-01: flow state (hashed state, raw nonce/verifier) lives in a server-side Map keyed by an opaque 10-min cookie — raw values never ride a cookie; delete-on-use consumes it (replay pinned)
 - [Phase 30]: 30-01: sso_login security verb logged only once a user row resolves — pre-identity failures skip it (security_log.user_id is a NOT NULL FK)
 - [Phase 30]: 30-01: 2FA challenge composition intentionally deferred to 30-02 per plan objective; this plan mints the session directly after identity resolution
-- [Phase 30]: SSO-03 verified email = pinned-tenant member vouching (tid+non-guest+email); guests fail closed on email collision, JIT separate account on fresh email
+- [Phase 30]: SSO-03 verified email = pinned-tenant member vouching (tid+non-guest+email); guests fail closed on email collision, JIT separate account on fresh email — **SUPERSEDED by 30-06 (G-30-1, operator decision)**: verified email is the literal `email_verified: true` IdP claim; linking requires pinned-tenant non-guest AND verified, JIT requires verified, all unverified paths fail closed
+- [Phase 30]: 30-06: already-linked (issuer, subject) identities resolve without re-checking the claim — fail closed applies to linking/provisioning, not to established identities (repeat logins unbroken)
 - [Phase 30]: D-04 JIT role clamp enforced at oidc.js readConfig and test-pinned both directions; bare account writes no membership row until 30-03
 - [Phase 30]: 30-03: SSO 2FA redirect targets are hash fragments — /#tfa (pending-2FA) and /#invitations (multi-invite surface); 30-04 wires the SPA fragments
 - [Phase 30]: 30-03: invite reconciliation gated on zero memberships (covers linked-memberless users; repeat logins idempotent by construction); OIDC.defaultRole never reaches a membership write (D-05 bare account + invite-carried roles)
@@ -120,8 +121,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T15:26:54.225Z
-Stopped at: Completed 30-05-PLAN.md
+Last session: 2026-11-02T16:48:00.000Z
+Stopped at: Completed 30-06-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -133,6 +134,7 @@ Resume file: None
 | Phase 31 P02 | 1h 9min | 3 tasks | 4 files |
 | Phase 31 P02 | ~50 min | 3 tasks | 10 files |
 | Phase 31 P03 | 40 min | 3 tasks | 14 files |
+| Phase 30 P06 | ~14 min | 2 tasks | 3 files |
 | Phase 29 P01 | 11 min | 3 tasks | 6 files |
 | Phase 29 P02 | 27 min | 3 tasks | 2 files |
 | Phase 29 P03 | ~35 min | 3 tasks | 7 files |
