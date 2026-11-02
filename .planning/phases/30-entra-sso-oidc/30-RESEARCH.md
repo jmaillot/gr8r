@@ -461,14 +461,6 @@ const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oaut
 
 1. **Link policy for tenant-member emails (Pitfall 1)** — RESOLVED: pinned-tenant email-vouching policy implemented in plan 30-02 (assumption A2, both directions test-pinned).
 2. **Auto-accept vs. surface for SSO-07 invites** — RESOLVED: auto-accept single pending invite, surface multiple — implemented in plan 30-03.
-   - What we know: SSO-03 + REQUIREMENTS exclusions forbid linking on unverified/mutable claims; Entra doesn't emit `email_verified` for managed users.
-   - What's unclear: whether "tenant-member email inside the pinned tenant = verified" is the intended reading, and whether guest-shaped tokens should hard-fail or JIT-create separately.
-   - Recommendation: confirm at planning; implement pinned-tenant policy + guest rejection; encode both directions in the mock-IdP table.
-
-2. **Auto-accept vs. surface for SSO-07 invites.**
-   - What we know: acceptance machinery is reusable (`addMembership` + invite clearing, server.js:4068-4097).
-   - What's unclear: auto-accept on JIT vs. surfacing a choice when multiple pending invites exist for the email.
-   - Recommendation: auto-accept (single workspace or accept-all is unlikely in practice); surface only if >1 pending workspace invite exists.
 
 ## Environment Availability
 
