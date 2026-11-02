@@ -7,6 +7,10 @@
 - **`estimate` note:** plan estimated `tokens: 90000`; the realized diff is ~437 insertions /
   79 deletions across 8 files — well under estimate (no deviation action needed, recorded for
   calibration only).
+status: resolved
+- resolved 2026-11-02: lint is clean at milestone close — the pre-existing errors were
+  progressively fixed in later phases and the last 6 (oidc.js no-undef, a phase-30 file missing
+  from the eslint node-globals block) were fixed in commit 61a026c. `npx eslint .` exits 0.
 
 # Deferred Items — Phase 28 (found during 28-02 execution)
 
@@ -21,3 +25,4 @@
   serialized doc PUTs vs membership PUTs after 28-01's revisionless contract, so the regression
   pin was born green. The pin's value is protection against future reintroduction, documented
   per the TDD fail-fast rules as an intentional no-RED.
+  status: acknowledged

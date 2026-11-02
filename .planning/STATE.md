@@ -117,6 +117,10 @@ None yet.
 | debug_sessions | admin-revoke-only-own-session | unknown | 2026-11-01 | v1.5 |
 | debug_sessions | login-broken-after-rotation | unknown | 2026-11-01 | v1.5 |
 | uat_gaps | 26/26-UAT.md | diagnosed (0 pending scenarios) | 2026-11-01 | v1.5 |
+| deferred_items | 28-01 eslint pre-existing errors | resolved (lint clean; last 6 fixed 61a026c) | 2026-11-02 | v1.6 |
+| deferred_items | 28-02 delTeam undo doesn't restore memberships | acknowledged (cosmetic; same irreversibility class as role changes) | 2026-11-02 | v1.6 |
+| deferred_items | 28-02 TEAM-05 pin born green | acknowledged (intentional no-RED per TDD rules) | 2026-11-02 | v1.6 |
+| deferred_items | 30 D-12 dependencies COPY allow-list | resolved (75f21bb) | 2026-11-02 | v1.6 |
 
 ## Session Continuity
 
