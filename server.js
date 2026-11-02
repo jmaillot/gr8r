@@ -1364,7 +1364,7 @@ function memberPayload(row, doc, selfId) {
 function invitesOf(workspaceId) {
   return db
     .prepare(
-      `select token_hash, email, role, teams, created_at, expires_at
+      `select token_hash, email, role, teams, scope, created_at, expires_at
          from invites
         where workspace_id = ? and used_at is null and expires_at > ?
         order by created_at desc`,
@@ -1378,12 +1378,23 @@ function invitesOf(workspaceId) {
         /* unreadable set degrades to teamless (D-03), never to the scalar */
       }
       if (!Array.isArray(teams)) teams = [];
+      /* SCOPE-05 (29-05): the scope rides the payload so a resend echoes it
+         back — omitting it made every resend silently strip a scoped invite
+         into a workspace-wide membership (CR-01). */
+      let scope = null;
+      try {
+        scope = JSON.parse(r.scope || 'null');
+      } catch {
+        scope = null;
+      }
+      if (!scope || typeof scope !== 'object' || Array.isArray(scope)) scope = null;
       return {
         id: r.token_hash,
         email: r.email,
         role: r.role,
         roleLabel: ROLE_LABEL[r.role] || r.role,
         teams,
+        scope,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
       };

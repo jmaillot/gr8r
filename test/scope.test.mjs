@@ -382,6 +382,21 @@ test('acceptance lands the invite scope on the membership (SCOPE-05)', async () 
   assert.deepEqual(JSON.parse(scopeOf(guestUserId)), { teams: [], projects: ['p_priv2'] }, 'the membership row carries the invite scope');
 });
 
+test('CR-01: the invites payload projects scope and a resend preserves it (no silent strip)', async () => {
+  const scope = { teams: [], projects: ['p_in'] };
+  const [inv] = (await owner.post('/api/workspaces/acme/invites', { emails: ['resend-scope@test.local'], role: 'member', scope })).data.invites;
+  // The projection the admin UI's resend echoes back must carry the scope.
+  const listed = (await owner.get('/api/workspaces/acme/invites')).data.invites.find(i => i.id === inv.id);
+  assert.deepEqual(listed?.scope, scope, 'GET /invites projects the stored scope');
+  // Resend = a fresh POST for the same address (one live invite replaces the previous one).
+  const [resent] = (await owner.post('/api/workspaces/acme/invites', { emails: ['resend-scope@test.local'], role: 'member', scope: listed.scope })).data.invites;
+  assert.notEqual(resent.id, inv.id, 'the resend replaced the original invite');
+  const stored = withDb(server.dbPath, db =>
+    db.prepare('select scope from invites where token_hash = ?').get(createHash('sha256').update(inviteToken(resent.url)).digest('hex')),
+  );
+  assert.deepEqual(JSON.parse(stored.scope), scope, 'the resent invite row still carries the scope');
+});
+
 test('the guest sees exactly their one private project and nothing else (D-03 grant, D-14)', async () => {
   const view = (await guest.get('/api/workspaces/acme')).data;
   assert.deepEqual(view.doc.data.projects.map(p => p.id), ['p_priv2'], 'exactly one project survives the read — the private grant included');
