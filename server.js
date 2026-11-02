@@ -2557,6 +2557,10 @@ async function handleApi(req, res, url) {
     // existing-factor step-up. The add-factor flow owns additional factors.
     if (db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c > 0)
       return fail(res, 409, 'tfaNotEnabled', 'Additional factors use the add-factor flow');
+    // WR-03 (double-submit race): consume the pending entry ATOMICALLY before
+    // verification (WR-03 note on factors/enable). A failed verify re-stashes
+    // it below — retry semantics unchanged.
+    pendingTfa.delete(user.id);
     // TOTP2 (Phase 31, RESEARCH Pattern 1/Pitfall 2): the pending challenge
     // verifies the STAGED pending secret directly — NOT the shared factor
     // helper, which loads totp_factors rows and would find none on a
@@ -2564,13 +2568,19 @@ async function handleApi(req, res, url) {
     // fresh row has no replay history); no users.two_fa_last_step read
     // remains here (D-08 kept-unread).
     const verified = verifyTotpCode(pending.secret, code, null, Math.floor(now() / 1000));
-    if (!verified.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
+    if (!verified.ok) {
+      pendingTfa.set(user.id, pending); // WR-03: the wrong code doesn't burn the staged setup
+      return fail(res, 400, 'codeRejected', 'That code is not valid');
+    }
     // D-06/T-16-09: MASTER_KEY missing/undecryptable → fail closed BEFORE any
     // state mutation. The body names MASTER_KEY — admin-facing, never user copy.
     // D-K4: the enable path is the ONLY v2 writer (frozen format, checkpoint-
     // confirmed); disable/verify/regen call sites and the boot migration keep v1.
     const envelope = encryptTotpSecret(pending.secret, 'v2');
-    if (!envelope) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
+    if (!envelope) {
+      pendingTfa.set(user.id, pending); // WR-03: fail closed, not fail-lost
+      return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
+    }
     // D-50: generate the 10 plaintext codes first — they are returned exactly
     // once in this response (D-53) and only their hashes hit the database.
     const codes = [];
@@ -2597,7 +2607,8 @@ async function handleApi(req, res, url) {
         // D-09/D-51: hash of the ONE normalization (Pitfall 6) — plaintext never stored.
         insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
       }
-      pendingTfa.delete(user.id);
+      // WR-03: the pending entry was already consumed before verification —
+      // nothing left to clear here.
     });
     return json(res, 200, { ok: true, recoveryCodes: codes });
   }
@@ -2788,15 +2799,27 @@ async function handleApi(req, res, url) {
       pendingTfa.delete(resolvedKey);
       return fail(res, 409, 'noPendingEnrollment', 'Start the enrollment again — no pending setup');
     }
+    // WR-03 (double-submit race): consume the pending entry ATOMICALLY before
+    // any verification — get+delete land in the same synchronous turn, so a
+    // concurrent duplicate submission finds nothing and bails with
+    // noPendingEnrollment instead of inserting a second factor row. A failed
+    // verify re-stashes the entry below, so the retry semantics are unchanged.
+    pendingTfa.delete(resolvedKey);
     // RESEARCH Pattern 1/Pitfall 2: the staged pending secret verifies with
     // the NEW factor's own null baseline — the shared helper cannot serve
     // here (a first-ever enable has zero factor rows to load).
     const verified = verifyTotpCode(pending.secret, code, null, Math.floor(now() / 1000));
-    if (!verified.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
+    if (!verified.ok) {
+      pendingTfa.set(resolvedKey, pending); // WR-03: the wrong code doesn't burn the staged setup
+      return fail(res, 400, 'codeRejected', 'That code is not valid');
+    }
     // D-K4: the enable path is the ONLY v2 writer (frozen format). Fail
     // closed BEFORE any state mutation (D-58: admin-facing body copy).
     const envelope = encryptTotpSecret(pending.secret, 'v2');
-    if (!envelope) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
+    if (!envelope) {
+      pendingTfa.set(resolvedKey, pending); // WR-03: fail closed, not fail-lost
+      return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be enabled until the admin sets it');
+    }
     // D-02: the enroll step validated the label; a legacy-keyed pending entry
     // (first-ever re-enable) carries none and stores the primary catalogue key.
     const label = pending.label || 'settings.tfa.factor.primary';
@@ -2826,7 +2849,8 @@ async function handleApi(req, res, url) {
           insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
         }
       }
-      pendingTfa.delete(resolvedKey); // whichever key the entry was found under
+      // WR-03: the pending entry was already consumed before verification —
+      // nothing left to clear here.
     });
     // Success-only security event (D-107 discipline).
     logSecurity(user.id, 'tfa_factor_added');
