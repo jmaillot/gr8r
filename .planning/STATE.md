@@ -5,16 +5,16 @@ milestone_name: Team Access & Federation
 current_phase: 30
 current_phase_name: Entra SSO (OIDC)
 status: executing
-stopped_at: Completed 30-01-PLAN.md
-last_updated: "2026-11-02T14:04:46.809Z"
+stopped_at: Completed 30-02-PLAN.md
+last_updated: "2026-11-02T14:19:57.630Z"
 last_activity: 2026-11-02
 last_activity_desc: Phase 30 execution started
-state_head: 15cac4266b4df3fdba7caadb25550ad432d66cdb
+state_head: 50aff4f7452755b0f96f990926d0a5af92502b18
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 30 (Entra SSO (OIDC)) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-11-02 — Phase 30 execution started
 
@@ -92,6 +92,8 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 30]: 30-01: flow state (hashed state, raw nonce/verifier) lives in a server-side Map keyed by an opaque 10-min cookie — raw values never ride a cookie; delete-on-use consumes it (replay pinned)
 - [Phase 30]: 30-01: sso_login security verb logged only once a user row resolves — pre-identity failures skip it (security_log.user_id is a NOT NULL FK)
 - [Phase 30]: 30-01: 2FA challenge composition intentionally deferred to 30-02 per plan objective; this plan mints the session directly after identity resolution
+- [Phase 30]: SSO-03 verified email = pinned-tenant member vouching (tid+non-guest+email); guests fail closed on email collision, JIT separate account on fresh email
+- [Phase 30]: D-04 JIT role clamp enforced at oidc.js readConfig and test-pinned both directions; bare account writes no membership row until 30-03
 
 ### Pending Todos
 
@@ -114,8 +116,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T14:04:46.747Z
-Stopped at: Completed 30-01-PLAN.md
+Last session: 2026-11-02T14:19:57.567Z
+Stopped at: Completed 30-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -132,6 +134,7 @@ Resume file: None
 | Phase 29 P03 | ~35 min | 3 tasks | 7 files |
 | Phase 29 P04 | ~30 min | 3 tasks | 11 files |
 | Phase 30 P01 | 35min | 2 tasks | 5 files |
+| Phase 30 P02 | 12min | 3 tasks | 2 files |
 
 ## Operator Next Steps
 

@@ -54,9 +54,9 @@ method. Zero new runtime dependencies throughout.
       `fetch`, JWKS RS256 verification, pinned tenant issuer) — zero new packages.
 - [x] **SSO-02**: SSO is env-gated and honestly hidden: when not configured, no sign-in button
       renders and the OIDC routes answer 404; `oidcEnabled` is server ground truth.
-- [ ] **SSO-03**: Existing accounts link by verified email only — no linking on unverified
+- [x] **SSO-03**: Existing accounts link by verified email only — no linking on unverified
       claims; mismatched identities create a separate account rather than guessing.
-- [ ] **SSO-04**: New users are provisioned just-in-time on first SSO login with a
+- [x] **SSO-04**: New users are provisioned just-in-time on first SSO login with a
       default role (env-configurable), shaped as invited members, not auto-elevated.
 - [ ] **SSO-05**: SSO does not bypass 2FA — an account with TOTP enrolled still passes through
       the pending-2FA challenge after SSO authentication; the session teardown and 401
@@ -65,7 +65,7 @@ method. Zero new runtime dependencies throughout.
       hidden/disabled when SSO-only is configured.
 - [ ] **SSO-07**: Pending invitations for the SSO user's email are reconciled at first login —
       surfaced or accepted, never silently stranded.
-- [ ] **SSO-08**: The OIDC token validation (signature, issuer, audience, expiry, state, nonce,
+- [x] **SSO-08**: The OIDC token validation (signature, issuer, audience, expiry, state, nonce,
       PKCE) is pinned by a table-driven test suite against a mock IdP — tampered tokens,
       wrong kid, bad claims all fail closed.
 
