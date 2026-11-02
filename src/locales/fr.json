@@ -1575,6 +1575,7 @@
   "err.tooManyTeams": "Trop d’équipes",
   "err.unknownTeam": "Équipe inconnue",
   "err.scopeNotAllowed": "Les adhésions admin et propriétaire couvrent toujours tout l’espace",
+  "err.guestSingleProject": "Un invité externe est limité à exactement un projet",
   "err.assigneeOutOfScope": "Ce membre est hors du périmètre de ce projet",
   "err.scopeRequired": "Fournissez un objet de périmètre ou null",
   "err.projectsRequired": "Fournissez un tableau de projets",

@@ -352,11 +352,11 @@ test('invite scope ids are whitelisted and shaped like the member scope route', 
 });
 
 test('an admin or owner invite never carries scope (D-04 scopeNotAllowed)', async () => {
-  for (const role of ['admin', 'owner']) {
-    const res = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role, scope: { projects: ['p_in'], teams: [] } });
-    assert.equal(res.status, 400, `${role} + scope refused`);
-    assert.equal(res.data.code, 'scopeNotAllowed');
-  }
+  // inviteRole() has no owner tier — 'owner' degrades to member — so the admin
+  // invite is the expressible elevation path; the server gate covers both ranks.
+  const res = await owner.post('/api/workspaces/acme/invites', { emails: ['guest@test.local'], role: 'admin', scope: { projects: ['p_in'], teams: [] } });
+  assert.equal(res.status, 400, 'admin + scope refused');
+  assert.equal(res.data.code, 'scopeNotAllowed');
 });
 
 test('invite fixture: a guest invite (viewer + exactly one PRIVATE project) is created and accepted', async () => {
@@ -395,8 +395,17 @@ test('the guest sees exactly their one private project and nothing else (D-03 gr
   assert.equal(put.data.code, 'readOnlyAccess');
 });
 
-test('an invite without a scope field leaves memberships.scope null (unscooped regression)', () => {
-  assert.equal(scopeOf(scopedUserId), null, 'the pre-existing member was invited without scope and stayed workspace-wide');
+test('an invite without a scope field leaves memberships.scope null (unscooped regression)', async () => {
+  // A dedicated unscooped invite+accept (3rd accept of this server's budget):
+  // the membership must land workspace-wide when the invite carried no scope.
+  const [inv] = (await owner.post('/api/workspaces/acme/invites', { emails: ['plain@test.local'], role: 'member' })).data.invites;
+  const plain = (await signup(server.base, ACCOUNT('Plain', 'plain@test.local'))).client;
+  const joined = await plain.post(`/api/invites/${inviteToken(inv.url)}/accept`);
+  assert.ok([200, 201].includes(joined.status), 'the member joined');
+  const plainUserId = (await owner.get('/api/workspaces/acme/members')).data.members.find(m => m.email === 'plain@test.local').userId;
+  assert.equal(scopeOf(plainUserId), null, 'no scope stored for an unscooped invite');
+  const view = (await plain.get('/api/workspaces/acme')).data;
+  assert.equal(view.doc.data.projects.some(p => p.id === 'p_out'), true, 'unscooped member keeps the workspace-wide view');
 });
 
 test('a workspace document is byte-unchanged by an invite carrying scope', () => {

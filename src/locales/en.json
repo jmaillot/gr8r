@@ -1575,6 +1575,7 @@
   "err.tooManyTeams": "Too many teams",
   "err.unknownTeam": "Unknown team",
   "err.scopeNotAllowed": "Admin and owner memberships are always workspace-wide",
+  "err.guestSingleProject": "A guest is limited to exactly one project",
   "err.assigneeOutOfScope": "That member is out of scope for this project",
   "err.scopeRequired": "Provide a scope object or null",
   "err.projectsRequired": "Provide a projects array",

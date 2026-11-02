@@ -2179,7 +2179,7 @@ function ensureMember(doc, user, role = 'member', workspaceId = null) {
   return id;
 }
 
-function addMembership(ws, user, role, teams = []) {
+function addMembership(ws, user, role, teams = [], scope = null) {
   if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
@@ -2197,12 +2197,17 @@ function addMembership(ws, user, role, teams = []) {
         .map(t => String(t).slice(0, 40)),
     ),
   ];
+  /* SCOPE-05 (Phase 29): an invite-carried scope lands on the membership row in
+     the same transaction. The coalesce keeps the legacy internal callers
+     (which pass nothing at all) from ever erasing a scope a re-run finds. */
+  const scopeJson = scope && typeof scope === 'object' && (Array.isArray(scope.teams) || Array.isArray(scope.projects)) ? JSON.stringify(scope) : null;
   db.exec('begin immediate');
   try {
     db.prepare(
-      `insert into memberships (workspace_id, user_id, role, member_id, team) values (?,?,?,?,?)
-       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
-    ).run(ws.id, user.id, role, memberId, null);
+      `insert into memberships (workspace_id, user_id, role, member_id, team, scope) values (?,?,?,?,?,?)
+       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id,
+       scope = coalesce(excluded.scope, memberships.scope)`,
+    ).run(ws.id, user.id, role, memberId, null, scopeJson);
     /* TEAM-01: the teams picked at invite time land in the authority rows too —
        the scalar column is backfill-only legacy (D-04). */
     if (teamList.length) {
@@ -3837,6 +3842,30 @@ async function handleApi(req, res, url) {
       ),
     ];
     if (teams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
+    /* SCOPE-05 (Phase 29, T-29-12): an invite may carry a scope, validated with
+       the exact mirror of the PUT members/:uid/scope route — non-array guards
+       (scopeRequired/teamsRequired/projectsRequired), per-item trim + 40-char
+       slice, Set-dedup, cap 25, whitelist against the doc's teams/projects.
+       D-04 (T-29-13): an admin/owner invite never carries scope. D-13/A3: the
+       guest path (role=viewer + a projects scope) must carry EXACTLY one
+       project id — enforced server-side at creation only. An absent scope
+       field degrades to null (unscooped invite). */
+    let scope = null;
+    if (body?.scope !== undefined && body?.scope !== null) {
+      if (typeof body.scope !== 'object' || Array.isArray(body.scope)) return fail(res, 400, 'scopeRequired', 'Provide a scope object');
+      if (!Array.isArray(body.scope.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
+      if (!Array.isArray(body.scope.projects)) return fail(res, 400, 'projectsRequired', 'Provide a projects array');
+      const scopeTeams = [...new Set(body.scope.teams.map(t => String(t || '').trim().slice(0, 40)).filter(Boolean))];
+      const scopeProjects = [...new Set(body.scope.projects.map(p => String(p || '').trim().slice(0, 40)).filter(Boolean))];
+      if (scopeTeams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
+      if (scopeProjects.length > 25) return fail(res, 400, 'tooManyProjects', 'Too many projects');
+      const knownProjects = new Set((JSON.parse(ctx.ws.doc)?.data?.projects || []).map(p => p?.id).filter(Boolean));
+      if (scopeTeams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
+      if (scopeProjects.some(p => !knownProjects.has(p))) return fail(res, 400, 'unknownProject', 'Unknown project');
+      if (ROLE_RANK[role] >= ROLE_RANK.admin) return fail(res, 400, 'scopeNotAllowed', 'Admin and owner invites are always workspace-wide');
+      if (role === 'viewer' && scopeProjects.length > 1) return fail(res, 400, 'guestSingleProject', 'A guest is limited to exactly one project');
+      if (scopeTeams.length || scopeProjects.length) scope = { teams: scopeTeams, projects: scopeProjects };
+    }
     let emails = Array.isArray(body?.emails) ? body.emails : [];
     emails = [
       ...new Set(
@@ -3869,17 +3898,18 @@ async function handleApi(req, res, url) {
           db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(t, ctx.ws.id, email);
         }
         const token = crypto.randomBytes(24).toString('base64url');
-        db.prepare('insert into invites (token_hash, email, role, teams, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?)').run(
+        db.prepare('insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)').run(
           sha256(token),
           email,
           role,
           JSON.stringify(teams),
+          scope ? JSON.stringify(scope) : null,
           ctx.ws.id,
           ctx.user.id,
           t,
           expiresAt,
         );
-        rows.push({ id: sha256(token), email, role, teams, url: `${appBase(req)}/join/${token}`, expiresAt });
+        rows.push({ id: sha256(token), email, role, teams, scope, url: `${appBase(req)}/join/${token}`, expiresAt });
       }
       db.exec('commit');
     } catch (err) {
@@ -4003,6 +4033,16 @@ async function handleApi(req, res, url) {
             return JSON.parse(invite.teams || '[]');
           } catch {
             return [];
+          }
+        })(),
+        /* SCOPE-05 (T-29-14): acceptance writes only the scope the admin
+           validated at creation — never a client-controlled value. */
+        (() => {
+          try {
+            const s = JSON.parse(invite.scope || 'null');
+            return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
+          } catch {
+            return null;
           }
         })(),
       );
