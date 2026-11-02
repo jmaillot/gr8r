@@ -124,10 +124,18 @@ order; consumes the Phase 28-settled OIDC identity schema)
 **Plans**: 4 plans
 
 Plans:
+**Wave 1**
 - [ ] 30-01-PLAN.md — Tracer: oidc.js + routes + config ground truth + mock-IdP happy path & env-gating matrix (SSO-01/SSO-02, D-01/D-02/D-10)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 30-02-PLAN.md — Identity resolution: pinned-tenant link policy, JIT role clamp, SSO-08 fail-closed matrix (SSO-03/SSO-04/SSO-08, D-04/D-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 30-03-PLAN.md — Composition: 2FA challenge verbatim + invite reconciliation (SSO-05/SSO-07, D-06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 30-04-PLAN.md — SSO-only mode + client surface + docs (SSO-06, D-03/D-07/D-08/D-09)
+
 **UI hint**: yes
 
 ### Phase 31: Second TOTP Factor
