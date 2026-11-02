@@ -131,18 +131,34 @@ test('TFA-03/TFA-04: enable with a live code flips 2FA on and issues 10 hashed r
   }
 });
 
-test('D-53 rotation: re-enroll + enable deletes the old 10 rows and issues a fresh set', async () => {
+test('D-53 rotation: disable teardown → re-enroll + enable deletes the old 10 rows and issues a fresh set', async () => {
   const a = await makeUser('rotator');
   const first = (await enroll(a, { currentPassword: GOOD })).data;
   await enable(a, { code: liveCode(first.secret) });
   const oldRows = recoveryRows('rotator@test.local');
   assert.equal(oldRows.length, 10);
 
+  /* CR-01 (TOTP2-05): legacy re-enroll on a 2FA-enabled account is fenced —
+     the password-only pair can no longer mint additional factor rows. */
+  const fenced = await enroll(a, { currentPassword: GOOD });
+  assert.equal(fenced.status, 409, `fenced enroll: ${JSON.stringify(fenced.data)}`);
+  assert.equal(fenced.data.code, 'tfaNotEnabled');
+
+  /* Rotation now rides the disable teardown (the codes are wiped with 2FA,
+     D-59) and a fresh first-factor enable — the "old rows deleted" property
+     holds transitively. Zero the per-factor guard so the disable code
+     verifies deterministically. */
+  withDb(server.dbPath, db => {
+    db.prepare('update users set two_fa_last_step = 0 where email = ?').run('rotator@test.local');
+    db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run('rotator@test.local');
+  });
+  const dis = await a.post('/api/auth/tfa/disable', { currentPassword: GOOD, code: liveCode(first.secret) });
+  assert.equal(dis.status, 200, `disable: ${JSON.stringify(dis.data)}`);
+  assert.equal(recoveryRows('rotator@test.local').length, 0, 'the teardown wiped the old set');
+
   const second = (await enroll(a, { currentPassword: GOOD })).data;
-  // The next 30s window: the D-04 guard correctly rejects a same-step replay,
-  // so the fresh enrollment verifies against the following step.
-  const res = await enable(a, { code: totpAt(second.secret, Date.now() / 1000 + 30) });
-  assert.equal(res.status, 200);
+  const res = await enable(a, { code: liveCode(second.secret) });
+  assert.equal(res.status, 200, `re-enable: ${JSON.stringify(res.data)}`);
   enabledSecrets.set('rotator@test.local', second.secret);
   const fresh = recoveryRows('rotator@test.local');
   assert.equal(fresh.length, 10, 'fresh set, not 20');
@@ -210,16 +226,16 @@ test('D-57: valid password but no valid code → codeRejected, 2FA stays on', as
 
 test('D-59: disable with a live code tears everything down in one transaction', async () => {
   const a = await signIn2fa('rotator@test.local');
-  // The rotation test verified a future-window code, so the D-04 baseline sits
-  // one step ahead; reset it (as a later real-world window would) so this
-  // test's fresh enrollment can verify on the current step.
-  withDb(server.dbPath, db => db.prepare('update users set two_fa_last_step = 0 where email = ?').run('rotator@test.local'));
-  // Re-enroll: the test needs the pending secret to derive live codes. Enable
-  // consumes the current step; the disable code comes from the NEXT window,
-  // which the D-04 guard correctly permits (> matchedStep) and ±1 covers.
-  const { secret } = (await enroll(a.client, { currentPassword: GOOD })).data;
-  const enabled = await enable(a.client, { code: liveCode(secret) });
-  assert.equal(enabled.status, 200);
+  /* CR-01 (TOTP2-05): re-enrollment on a 2FA-enabled account is fenced, so
+     the disable code derives from the ALREADY-ENROLLED secret (the one
+     signIn2fa just used). Reset the per-factor guard so the NEXT-window code
+     verifies deterministically (D-04: > matchedStep, ±1 covers). */
+  withDb(server.dbPath, db => {
+    db.prepare('update users set two_fa_last_step = 0 where email = ?').run('rotator@test.local');
+    db.prepare('update totp_factors set last_step = 0 where user_id = (select id from users where email = ?)').run('rotator@test.local');
+  });
+  const secret = enabledSecrets.get('rotator@test.local');
+  assert.ok(secret, 'the enrolled secret is tracked');
   assert.equal(recoveryRows('rotator@test.local').length, 10);
 
   const ok = await disable(a.client, { currentPassword: GOOD, code: totpAt(secret, Date.now() / 1000 + 30) });

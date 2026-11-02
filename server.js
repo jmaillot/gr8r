@@ -2523,6 +2523,13 @@ async function handleApi(req, res, url) {
     if (!cur) return fail(res, 400, 'passwordRequired', 'Enter your current password');
     // T-16-03: a wrong password never generates a secret.
     if (!verifyPassword(cur, user.password_hash)) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
+    // TOTP2-05 (CR-01): this legacy route is the FIRST-factor path only. Once
+    // factor rows exist, adding a factor requires the existing-factor step-up
+    // (factors/enroll) — password-only enrollment here would let a hijacked
+    // session QR-bomb itself past TOTP2-05 and stack a duplicate
+    // "Primary authenticator" row.
+    const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+    if (factorCount > 0) return fail(res, 409, 'tfaNotEnabled', 'Additional factors use the add-factor flow');
     const secret = generateTotpSecret();
     const otpauth = buildOtpauthUri(user.email, secret);
     stashPendingTfa(user.id, secret, otpauth); // memory-only (D-46), 10-min TTL
@@ -2544,6 +2551,12 @@ async function handleApi(req, res, url) {
       pendingTfa.delete(user.id);
       return fail(res, 409, 'noPendingEnrollment', 'Start the enrollment again — no pending setup');
     }
+    // TOTP2-05 (CR-01): the legacy enable route is the FIRST-factor path only.
+    // With factor rows present, the pending entry is dead weight — enabling
+    // through here would stack a second verifiable factor with no
+    // existing-factor step-up. The add-factor flow owns additional factors.
+    if (db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c > 0)
+      return fail(res, 409, 'tfaNotEnabled', 'Additional factors use the add-factor flow');
     // TOTP2 (Phase 31, RESEARCH Pattern 1/Pitfall 2): the pending challenge
     // verifies the STAGED pending secret directly — NOT the shared factor
     // helper, which loads totp_factors rows and would find none on a

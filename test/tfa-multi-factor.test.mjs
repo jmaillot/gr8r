@@ -230,8 +230,49 @@ test('T8: first-ever (post-disable) re-enable rides tfa/enroll → factors/enabl
   assert.equal(login.status, 200, 'the re-enabled factor verifies at login');
 });
 
-/* ---------- Plan 02: remove-factor route (TOTP2-04, D-15/D-16/D-17/D-18, T9..T13) ---------- */
+/* CR-01 (TOTP2-05): the legacy enroll/enable pair is the FIRST-factor path
+   only. Once factor rows exist, both routes are fenced with 409 — a hijacked
+   session cannot QR-bomb past the existing-factor step-up through them. */
+test('T8b: legacy enroll/enable are fenced once factor rows exist (TOTP2-05/CR-01)', async () => {
+  const email = 'fence@test.local';
+  const s = await signup(server.base, { name: 'Fence', email, password: PASSWORD });
+  assert.equal(s.status, 201);
+  const c = s.client;
+  // Zero factor rows: the legacy password-only enroll still works (first factor).
+  const enroll = await c.post('/api/auth/tfa/enroll', { currentPassword: PASSWORD });
+  assert.equal(enroll.status, 200, `enroll: ${JSON.stringify(enroll.data)}`);
+  const secret = enroll.data.secret;
+  // A factor row appears under the user (as if enabled from another session)
+  // while the legacy pending entry is still live.
+  const uid = userIdOf(email);
+  withDb(server.dbPath, db => db.prepare('update users set two_fa_enabled = 1 where id = ?').run(uid));
+  withDb(server.dbPath, db =>
+    db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)').run(
+      'fence-factor',
+      uid,
+      'Other',
+      'v1:fence',
+      0,
+      Date.now(),
+    ));
+  // Legacy enroll on a 2FA-enabled account is refused (TOTP2-05) — no new
+  // pending secret is minted, no factor row is stacked.
+  const enroll2 = await c.post('/api/auth/tfa/enroll', { currentPassword: PASSWORD });
+  assert.equal(enroll2.status, 409, `enroll2: ${JSON.stringify(enroll2.data)}`);
+  assert.equal(enroll2.data?.code, 'tfaNotEnabled');
+  // Legacy enable with the still-pending first secret is refused too.
+  const enable = await c.post('/api/auth/tfa/enable', { code: totpAt(secret, Date.now() / 1000) });
+  assert.equal(enable.status, 409, `enable: ${JSON.stringify(enable.data)}`);
+  assert.equal(enable.data?.code, 'tfaNotEnabled');
+  assert.equal(factors().filter(f => f.user_id === uid).length, 1, 'no additional factor row was created');
+  // Cleanup: the fixture user leaves no rows behind for the later assertions.
+  withDb(server.dbPath, db => {
+    db.prepare('delete from totp_factors where user_id = ?').run(uid);
+    db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '' where id = ?").run(uid);
+  });
+});
 
+/* ---------- Plan 02: remove-factor route (TOTP2-04, D-15/D-16/D-17/D-18, T9..T13) ---------- */
 test('T9: removing a factor with a code from the REMOVED factor itself is refused (D-15)', async () => {
   zeroFactorSteps(EMAIL);
   const auth = (await loginTfa(server.base, EMAIL, PASSWORD, totpAt(plainSecret, Date.now() / 1000))).client;
