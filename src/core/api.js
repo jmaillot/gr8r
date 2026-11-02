@@ -336,11 +336,16 @@ export const api = {
     if (r.ok) this.revision = r.data.revision;
     return r;
   },
-  async createInvites(emails, role, teams) {
+  async createInvites(emails, role, teams, scope = undefined) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
-    /* D-07: the payload carries the full team set, never a scalar team. */
-    return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/invites`, { emails, role, teams: Array.isArray(teams) ? teams : [] });
+    /* D-07: the payload carries the full team set, never a scalar team.
+       SCOPE-05 (29-04): the optional 4th arg carries the validated scope —
+       omitted (undefined) for the legacy call sites, null for an explicit
+       workspace-wide guest, an object for the scoped invite. */
+    const body = { emails, role, teams: Array.isArray(teams) ? teams : [] };
+    if (scope !== undefined) body.scope = scope;
+    return call('POST', `/api/workspaces/${encodeURIComponent(slug)}/invites`, body);
   },
   /* Members and their roles. The server owns both; the document only mirrors them. */
   async members() {
@@ -369,6 +374,15 @@ export const api = {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('PUT', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/teams`, { teams });
+  },
+  /* SCOPE-01 (29-04, D-12): set a member's scope in one call. Like
+     setMemberTeams the route edits only the authority column — the document
+     and its revision are untouched, so there is deliberately no adoptRevision
+     here. An explicit null restores workspace-wide reach (D-01). */
+  async setMemberScope(userId, scope) {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    return call('PUT', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/scope`, { scope });
   },
   async leave() {
     const slug = state.workspace?.slug;

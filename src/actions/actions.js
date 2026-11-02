@@ -1770,12 +1770,20 @@ IN.shareAccess = el => {
 A.invite = () => {
   S.ui.inviteDraft = '';
   S.ui.inviteTeams = [];
+  /* SCOPE-05 (29-04): the invite form's scope section state — role drives the
+     D-04 gate and the D-13 guest path. */
+  S.ui.inviteRole = ROLE_MEMBER_UI;
+  S.ui.inviteScope = { teams: [], projects: [] };
   S.ui.inviteLinks = null;
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'invite' });
 };
 const API_ROLE = { Owner: 'owner', Admin: 'admin', Member: 'member', Guest: 'viewer' };
+/* The invite form's role options and their named UI keys (29-04): the display
+   labels double as the stored picker state; API_ROLE bridges them to the API
+   roles. Owner is not an invitable role. */
+const [ROLE_MEMBER_UI, ROLE_ADMIN_UI, ROLE_GUEST_UI] = Object.keys(API_ROLE).filter(r => r !== 'Owner');
 
 function addInvitedMember(invites, role, teams) {
   invites.forEach(inv => {
@@ -1809,8 +1817,20 @@ function addInvitedMember(invites, role, teams) {
 A.submitInvite = () => {
   const raw = $('#inv-emails').value;
   S.ui.inviteDraft = raw;
-  const role = $('#inv-role').value;
+  const role = S.ui.inviteRole || $('#inv-role')?.value || ROLE_MEMBER_UI;
   const teams = [...new Set(S.ui.inviteTeams || [])];
+  /* SCOPE-05/D-04 (29-04): the scope section only ever holds data for
+     Member/Guest roles — an admin/owner invite sends no scope at all. An
+     all-empty picker state degrades to no scope (workspace-wide, D-01). */
+  const scope =
+    role === ROLE_ADMIN_UI
+      ? null
+      : (() => {
+          const st = S.ui.inviteScope || { teams: [], projects: [] };
+          const scopeTeams = [...new Set(st.teams || [])];
+          const scopeProjects = [...new Set(st.projects || [])];
+          return scopeTeams.length || scopeProjects.length ? { teams: scopeTeams, projects: scopeProjects } : null;
+        })();
   const list = raw
     .split(/[\s,;]+/)
     .map(s => s.trim())
@@ -1851,7 +1871,7 @@ A.submitInvite = () => {
       btn?.classList.remove('is-loading');
       btn?.removeAttribute('aria-busy');
     };
-    const res = await api.createInvites(list, API_ROLE[role] || 'member', teams);
+    const res = await api.createInvites(list, API_ROLE[role] || 'member', teams, scope);
     done();
     if (!res.ok) {
       S.ui.errors = { invite: res.error || t('err.invitesCreateFailed') };
@@ -1890,11 +1910,44 @@ A.invTeamToggle = el => {
   S.ui.inviteTeams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
   render();
 };
+/* SCOPE-05/06 (29-04, D-09/D-10/D-13): the invite form's scope pickers. The
+   projects picker degrades to single-select on the guest path (D-13: exactly
+   one project), the teams picker stays multi. */
+A.invProjToggle = el => {
+  const st = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
+  const id = el.dataset.v;
+  const guest = (S.ui.inviteRole || ROLE_MEMBER_UI) === ROLE_GUEST_UI;
+  st.projects = guest ? (st.projects.includes(id) ? [] : [id]) : st.projects.includes(id) ? st.projects.filter(x => x !== id) : [...st.projects, id];
+  render();
+};
+A.invScopeTeamToggle = el => {
+  const st = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
+  const id = el.dataset.v;
+  st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
+  render();
+};
+/* The role select re-renders the form: the scope section is D-04-gated on
+   admin, and the guest toggle follows the Guest role. */
+IN.invRole = el => {
+  S.ui.inviteRole = el.value;
+  render();
+};
+/* The guest checkbox is the role select's mirror — switching it on selects
+   the Guest role (viewer + one project, D-13), off returns to Member. */
+IN.invGuest = el => {
+  S.ui.inviteRole = el.checked ? ROLE_GUEST_UI : (S.ui.inviteRole || ROLE_MEMBER_UI) === ROLE_GUEST_UI ? ROLE_MEMBER_UI : S.ui.inviteRole || ROLE_MEMBER_UI;
+  render();
+};
 A.copyInviteLink = async () => {
   if (!api.enabled) return copy(`${api.url}/join/${D().ws.url}-7f3k2`, t('toast.inviteLinkCopied'));
-  const role = API_ROLE[$('#inv-role')?.value] || 'member';
+  const role = S.ui.inviteRole || API_ROLE[$('#inv-role')?.value] || 'member';
   const teams = [...new Set(S.ui.inviteTeams || [])];
-  const res = await api.createInvites([], role, teams);
+  /* SCOPE-05 (29-04): the copied link honours the form's configured scope. */
+  const st = S.ui.inviteScope || { teams: [], projects: [] };
+  const scopeTeams = [...new Set(st.teams || [])];
+  const scopeProjects = [...new Set(st.projects || [])];
+  const scope = role === 'admin' ? null : scopeTeams.length || scopeProjects.length ? { teams: scopeTeams, projects: scopeProjects } : null;
+  const res = await api.createInvites([], role, teams, scope);
   if (!res.ok) return toast(res.error || t('err.inviteLink'), { kind: 'err' });
   await copy(res.data.invites[0].url, t('toast.inviteLinkCopied'));
 };
@@ -1916,7 +1969,18 @@ A.viewProfile = el => go('member', { id: el.dataset.id });
 A.editMemberTeams = el => {
   const m = mem(el.dataset.id);
   if (!m) return;
-  S.ui.memberTeams = { id: m.id, name: m.name, teams: [...memberTeams(m)] };
+  /* SCOPE-01 (29-04): the scope editor's start state. D-05 keeps the member
+     payload silent about scope, so the pickers start empty and UNTOUCHED — a
+     submit without touching them never writes scope (no blind clear of an
+     invite-carried scope). Values the acting admin set in this session are
+     reflected on reopen from S.ui.memberScopes. */
+  S.ui.memberTeams = {
+    id: m.id,
+    name: m.name,
+    teams: [...memberTeams(m)],
+    scope: structuredClone(S.ui.memberScopes?.[m.userId] || { teams: [], projects: [] }),
+    scopeTouched: false,
+  };
   S.ui.pop = null;
   openModal({ type: 'memberTeams' });
 };
@@ -1925,6 +1989,25 @@ A.mteamToggle = el => {
   if (!st) return;
   const id = el.dataset.v;
   st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
+  render();
+};
+/* SCOPE-01 (29-04, D-09/D-10): the member modal's scope pickers — touching
+   either marks the scope dirty so the submit PUTs it; untouched submits never
+   write scope. */
+A.mScopeProjToggle = el => {
+  const st = S.ui.memberTeams;
+  if (!st?.scope) return;
+  const id = el.dataset.v;
+  st.scope.projects = st.scope.projects.includes(id) ? st.scope.projects.filter(x => x !== id) : [...st.scope.projects, id];
+  st.scopeTouched = true;
+  render();
+};
+A.mScopeTeamToggle = el => {
+  const st = S.ui.memberTeams;
+  if (!st?.scope) return;
+  const id = el.dataset.v;
+  st.scope.teams = st.scope.teams.includes(id) ? st.scope.teams.filter(x => x !== id) : [...st.scope.teams, id];
+  st.scopeTouched = true;
   render();
 };
 A.submitMemberTeams = async () => {
@@ -1939,26 +2022,43 @@ A.submitMemberTeams = async () => {
   S.ui.modals.pop();
   const previous = memberTeams(m);
   const next = [...new Set(st.teams)];
-  if (JSON.stringify(previous) === JSON.stringify(next)) {
-    render();
-    return;
+  const teamsChanged = JSON.stringify(previous) !== JSON.stringify(next);
+  if (teamsChanged) {
+    mutate(() => {
+      m.teams = next;
+    });
   }
-  mutate(() => {
-    m.teams = next;
-  });
   if (!api.enabled) {
     render();
-    toast(t('toast.teamSaved', { name: m.name }));
+    if (teamsChanged) toast(t('toast.teamSaved', { name: m.name }));
     return;
   }
-  /* Hybrid revision contract (Plan 01): setMemberTeams returns no revision —
-     never adopt one — while a role PATCH on the same modal would. */
-  const res = await api.setMemberTeams(m.userId, next);
-  if (!res.ok) {
-    m.teams = previous;
-    render();
-    toast(res.error || t('err.changeTeam'), { kind: 'err' });
-    return;
+  if (teamsChanged) {
+    /* Hybrid revision contract (Plan 01): setMemberTeams returns no revision —
+       never adopt one — while a role PATCH on the same modal would. */
+    const res = await api.setMemberTeams(m.userId, next);
+    if (!res.ok) {
+      m.teams = previous;
+      render();
+      toast(res.error || t('err.changeTeam'), { kind: 'err' });
+      return;
+    }
+  }
+  /* SCOPE-05 (29-04): a touched scope editor PUTs /members/:uid/scope (D-12).
+     An all-empty touched state is an explicit clear back to workspace-wide
+     (D-01); an untouched editor never writes. */
+  if (st.scopeTouched) {
+    const scopeTeams = [...new Set(st.scope?.teams || [])];
+    const scopeProjects = [...new Set(st.scope?.projects || [])];
+    const scope = scopeTeams.length || scopeProjects.length ? { teams: scopeTeams, projects: scopeProjects } : null;
+    const res = await api.setMemberScope(m.userId, scope);
+    if (!res.ok) {
+      render();
+      toast(res.error || t('err.changeScope'), { kind: 'err' });
+      return;
+    }
+    S.ui.memberScopes = S.ui.memberScopes || {};
+    S.ui.memberScopes[m.userId] = scope;
   }
   render();
   toast(t('toast.teamSaved', { name: m.name }));
@@ -2144,7 +2244,7 @@ A.memberRevokeConfirm = async el => {
 A.resendPendingInvite = async el => {
   const row = (S.ui.pendingInvites || []).find(i => i.id === el.dataset.id);
   if (!row?.email) return;
-  const res = await api.createInvites([row.email], row.role, row.teams || []);
+  const res = await api.createInvites([row.email], row.role, row.teams || [], row.scope || null);
   if (!res.ok) return toast(res.error || t('err.newInvite'), { kind: 'err' });
   const invite = res.data.invites?.[0];
   await refreshMembers();

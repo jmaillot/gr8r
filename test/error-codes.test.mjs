@@ -193,6 +193,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'codeRequired', // field guard in the tfa disable form (16-03) — no server code
   'changeRole', // toast composed in actions.js after a successful PATCH
   'changeTeam', // toast composed in actions.js/teams.js after a failed PUT teams (28-02)
+  'changeScope', // toast composed in actions.js after a failed PUT scope (29-04)
   'taskAccess', // toast composed in actions.js after a successful task write
   'taskNotFound', // deep-link toast composed in main.js for an unknown/hidden task key (23-01)
   'uploadOffline', // demo/offline branch in actions.js — no server call made

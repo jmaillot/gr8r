@@ -65,7 +65,27 @@ export function modalHtml(m) {
     case 'team':
       return wrap('', teamModal(m, H));
     case 'memberTeams': {
-      const st = S.ui.memberTeams || { teams: [] };
+      const st = S.ui.memberTeams || { teams: [], scope: { teams: [], projects: [] } };
+      /* SCOPE-01 (Phase 29, D-09/D-10): the member edit modal gains the scope
+         editor — the same multi-selects as the invite form, PUT to
+         /members/:uid/scope on submit. D-04: admin/owner targets are always
+         workspace-wide, so they get a fixed note instead of an editor. The
+         editor starts untouched — submitting without touching the pickers
+         never writes scope (a blind clear would wipe an invite-carried scope
+         the acting admin cannot read back: D-05 keeps the payload silent). */
+      const target = mem(st.id);
+      const adminTarget = !!target && (target.role === 'Admin' || target.role === 'Owner');
+      const sc = st.scope || { teams: [], projects: [] };
+      const scopePicker = (list, action, icon) =>
+        `<div class="tmpls" role="group" aria-label="${t('modal.scopeSection')}">${teamsList()
+          .map(
+            tm =>
+              `<button type="button" role="checkbox" aria-checked="${list.includes(tm.id)}" class="opt ${list.includes(tm.id) ? 'on' : ''}" data-a="${action}" data-v="${tm.id}" style="padding:8px">${ic(icon, 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${list.includes(tm.id) ? ic('check', 13) : ''}</button>`,
+          )
+          .join('')}</div>`;
+      const scopeBlock = adminTarget
+        ? `<fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('modal.scopeSection')}</legend><span class="hint">${t('modal.scopeFixedHint')}</span></fieldset>`
+        : `<fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('modal.scopeSection')}</legend><div class="field" style="margin:0"><span class="hint" style="margin:0 0 4px">${t('modal.scopeProjectsLabel')}</span>${scopePicker(sc.projects, 'mScopeProjToggle', 'folder')}</div><div class="field" style="margin:0"><span class="hint" style="margin:8px 0 4px">${t('modal.scopeTeamsLabel')}</span>${scopePicker(sc.teams, 'mScopeTeamToggle', 'users')}</div><span class="hint">${t('modal.workspaceWideHint')}</span></fieldset>`;
       return wrap(
         'sm',
         `${H(t('act.editTeams'), esc(st.name || ''))}<form class="modal-b" data-submit="submitMemberTeams"><fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.team')}</legend><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
@@ -75,7 +95,7 @@ export function modalHtml(m) {
           )
           .join(
             '',
-          )}</div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
+          )}</div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset>${scopeBlock}</form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
       );
     }
     case 'filePreview':
@@ -233,19 +253,45 @@ export function shareModal(m, H) {
   </div>
   <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-pid="${p.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('act.done')}</button></div>`;
 }
+/* The invite form's role options (29-04) — display labels stored as picker
+   state; api.js bridges them to the API roles via its own map. */
+const INVITE_ROLE_OPTIONS = ['Member', 'Admin', 'Guest'];
 export function inviteModal(m, H) {
   const err = S.ui.errors.invite;
   const links = S.ui.inviteLinks || [];
+  /* SCOPE-05/06 (Phase 29, D-09/D-10): the role select is the scope section's
+     gate — admin/owner invites are workspace-wide by definition (D-04), so the
+     scope section renders only for Member/Guest. The state rides
+     S.ui.inviteScope; the Guest path (D-13) is a viewer + exactly one project. */
+  const role = S.ui.inviteRole || INVITE_ROLE_OPTIONS[0];
+  const scope = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
+  const guest = role === 'Guest';
+  const scopePicker = (kind, list, action, icon) =>
+    `<div class="tmpls" role="group" aria-label="${t('modal.scopeSection')}">${teamsList()
+      .map(
+        tm =>
+          `<button type="button" role="checkbox" aria-checked="${list.includes(tm.id)}" class="opt ${list.includes(tm.id) ? 'on' : ''}" data-a="${action}" data-v="${tm.id}" style="padding:8px">${ic(icon, 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${list.includes(tm.id) ? ic('check', 13) : ''}</button>`,
+      )
+      .join('')}</div>`;
   return `${H(t('modal.inviteTo', { name: esc(D().ws.name) }), api.mailEnabled ? t('modal.inviteMailHint') : api.enabled ? t('modal.inviteLinkHint') : t('modal.inviteLocalHint'))}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
-    <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role">${['Member', 'Admin', 'Guest'].map(r => `<option>${r}</option>`).join('')}</select></div></div>
+    <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role" data-in="invRole">${INVITE_ROLE_OPTIONS.map(r => `<option ${role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
     <div class="field"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
       .map(tm => {
         const on = (S.ui.inviteTeams || []).includes(tm.id);
         return `<button type="button" role="checkbox" aria-checked="${on}" class="opt ${on ? 'on' : ''}" data-a="invTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${on ? ic('check', 13) : ''}</button>`;
       })
       .join('')}</div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>
+    ${
+      role === 'Admin'
+        ? ''
+        : `<div class="field"><span class="label">${t('modal.scopeSection')}</span>
+    <div class="field" style="margin:0"><span class="hint" style="margin:0 0 4px">${t('modal.scopeProjectsLabel')}</span>${scopePicker('proj', scope.projects, 'invProjToggle', 'folder')}</div>
+    <div class="field" style="margin:0"><span class="hint" style="margin:8px 0 4px">${t('modal.scopeTeamsLabel')}</span>${scopePicker('team', scope.teams, 'invScopeTeamToggle', 'users')}</div>
+    <label class="row" style="gap:8px;font-size:12.5px;color:var(--text-2);cursor:pointer;margin-top:8px"><input type="checkbox" class="toggle" data-in="invGuest" ${guest ? 'checked' : ''}>${t('modal.guestToggle')}</label>
+    <span class="hint">${guest ? t('modal.guestHint') : t('modal.workspaceWideHint')}</span></div>`
+    }
     <div class="alert info">${ic('info', 14)}<span><b>${t('modal.guests')}</b> ${t('modal.guestsHint')}</span></div>
     ${
       links.length
