@@ -29,7 +29,7 @@ before(async () => {
   createLegacyDb(dataDir);
   legacyColumns = withDb(path.join(dataDir, 'projects.db'), db =>
     Object.fromEntries(
-      ['workspaces', 'memberships', 'invites', 'users', 'sessions', 'totp_factors'].map(table => [
+      ['workspaces', 'memberships', 'invites', 'users', 'sessions', 'totp_factors', 'oidc_identities'].map(table => [
         table,
         db
           .prepare(`pragma table_info(${table})`)
@@ -449,6 +449,51 @@ test('the second boot leaves team_members byte-identical — no duplicates, no s
     'exactly two rows after the second boot — the backfill never duplicates (Pitfall 4)',
   );
   assert.equal(teamBackups().length, 1, 'no second pre-team-members backup');
+});
+
+/* SSO-01 (Phase 30): the oidc_identities additive table rides the same
+   guarded-create discipline as totp_factors/recovery_codes — exact SCHEMA
+   columns after the first boot, byte-identical DDL across a second boot
+   (the interrupted/parallel-boot backstop: both boots run the same
+   idempotent create table if not exists, so a re-boot can neither duplicate
+   the index nor mutate the definition). */
+test('oidc_identities lands with its SCHEMA definition and is byte-identical across boots', async () => {
+  const identitySchema = () =>
+    withDb(server.dbPath, db => ({
+      columns: db
+        .prepare('pragma table_info(oidc_identities)')
+        .all()
+        .map(c => [c.name, c.type, c.notnull, c.pk]),
+      table: db.prepare('select sql from sqlite_master where type = ? and name = ?').get('table', 'oidc_identities')?.sql,
+      indexes: withDb(server.dbPath, d =>
+        d
+          .prepare("select name, sql from sqlite_master where type = 'index' and tbl_name = 'oidc_identities' order by name")
+          .all(),
+      ),
+      rows: withDb(server.dbPath, d => d.prepare('select count(*) as n from oidc_identities').get().n),
+    }));
+
+  const firstBoot = identitySchema();
+  assert.deepEqual(
+    firstBoot.columns,
+    [
+      // SQLite reports notnull=0 for a bare `text primary key` (rowid-table quirk)
+      ['id', 'TEXT', 0, 1],
+      ['user_id', 'TEXT', 1, 0],
+      ['issuer', 'TEXT', 1, 0],
+      ['subject', 'TEXT', 1, 0],
+      ['created_at', 'INTEGER', 1, 0],
+      ['last_login_at', 'INTEGER', 0, 0],
+    ],
+    'the guarded-create definition matches the SCHEMA declaration',
+  );
+  assert.ok(firstBoot.indexes.some(i => i.name === 'oidc_identities_subject'), 'the unique (issuer, subject) index exists');
+  assert.ok(firstBoot.indexes.some(i => i.name === 'oidc_identities_user'), 'the user index exists');
+  assert.equal(firstBoot.rows, 0, 'the legacy fixture has no SSO identities — zero rows land at boot');
+
+  await server.stop();
+  server = await startServer({ dataDir });
+  assert.deepEqual(identitySchema(), firstBoot, 'oidc_identities DDL is byte-identical across the second boot');
 });
 
 /* SCOPE-01 (Phase 29, D-02): the membership/invite scope columns ride the

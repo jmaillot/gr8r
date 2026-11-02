@@ -200,3 +200,40 @@ test('the happy path: start → authorize URL → callback → session (SSO-01)'
     assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(user.id).n, 1);
   });
 });
+
+/* SSO-02 / D-02: the env-gating matrix. Each row boots its own server —
+   partial config NEVER half-enables SSO, and every gate is the same
+   generic 404 notFound (no-oracle: the response never reveals which var
+   is missing). */
+const GATING_ROWS = [
+  ['fully unconfigured', {}],
+  ['flag on but every var missing', { OIDC_ENABLED: 'true' }],
+  ['flag on, tenant only', { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1' }],
+  ['flag on, tenant + client id, EMPTY secret', { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: '' }],
+  ['flag on, empty-string tenant', { OIDC_ENABLED: 'true', OIDC_TENANT_ID: '' }],
+  ['all vars present, flag OFF', { OIDC_ENABLED: 'false', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec' }],
+];
+
+for (const [label, env] of GATING_ROWS) {
+  test(`gating: ${label} → honest 404s and oidcEnabled:false`, async () => {
+    const gated = await startServer({ env });
+    try {
+      const start = await nav(gated.base, '/api/auth/oidc/start');
+      assert.equal(start.status, 404);
+      assert.equal(start.location, null);
+      const startBody = await fetch(gated.base + '/api/auth/oidc/start').then(r => r.json());
+      assert.equal(startBody.code, 'notFound', 'the start gate is the generic notFound');
+
+      const callback = await nav(gated.base, '/api/auth/oidc/callback?code=x&state=y');
+      assert.equal(callback.status, 404);
+      const callbackBody = await fetch(gated.base + '/api/auth/oidc/callback?code=x&state=y').then(r => r.json());
+      assert.equal(callbackBody.code, 'notFound', 'the callback gate is the same generic notFound');
+
+      const config = await fetch(gated.base + '/api/config').then(r => r.json());
+      assert.equal(config.oidcEnabled, false);
+      assert.equal(config.oidcSsoOnly, false);
+    } finally {
+      await gated.stop();
+    }
+  });
+}
