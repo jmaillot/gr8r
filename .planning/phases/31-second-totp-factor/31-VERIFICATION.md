@@ -1,10 +1,10 @@
 ---
 phase: 31-second-totp-factor
 verified: 2026-11-01T21:30:00Z
-status: human_needed
+status: passed
 score: 9/9 must-haves verified
 covered_files: [".planning/phases/31-second-totp-factor/31-01-PLAN.md", ".planning/phases/31-second-totp-factor/31-01-SUMMARY.md", ".planning/phases/31-second-totp-factor/31-02-PLAN.md", ".planning/phases/31-second-totp-factor/31-02-SUMMARY.md", ".planning/phases/31-second-totp-factor/31-03-PLAN.md", ".planning/phases/31-second-totp-factor/31-03-SUMMARY.md", "server.js", "src/pages/settings.js", "src/actions/actions.js", "src/core/api.js", "src/locales/en.json", "src/locales/fr.json", "test/tfa-multi-factor.test.mjs", "test/migration.test.mjs", "test/totp-encryption.test.mjs"]
-covered_digest: "v2:sha256:1959f26ce7933b5956c063c510014fd70b6bcdd030ad7bcc46c859fa820aa541"
+covered_digest: "v2:sha256:3c34cfa810fcc2659d0796ac29a4e6b557beaf8e3237e18e53401ea80afffb40"
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
