@@ -20,6 +20,7 @@ import {
   me,
   mem,
   memberTeams,
+  memberScopeEligible,
   myNotifs,
   notifyMembers,
   proj,
@@ -96,8 +97,11 @@ export function createTask(f) {
   D().tasks.push(tk);
   fxSet({ added: tk.id });
   logAct('created', tk, {});
-  /* P4-b: a task created directly with an assignee notifies them too. */
-  if (tk.assignee) notifyMembers([tk.assignee], { type: 'assign', by: D().me, task: tk.id, project: tk.project, snippet: fmtDate(tk.due) || '' });
+  /* P4-b: a task created directly with an assignee notifies them too.
+     SCOPE-04 (A4): the eligibility pre-filter is advisory — the server's
+     assignee write-guard is the authority. */
+  if (tk.assignee && memberScopeEligible(mem(tk.assignee), tk.project))
+    notifyMembers([tk.assignee], { type: 'assign', by: D().me, task: tk.id, project: tk.project, snippet: fmtDate(tk.due) || '' });
   return tk;
 }
 export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
@@ -147,6 +151,13 @@ export function emitMentions(txt, tk) {
         if (memberTeams(m).includes(tid) && m.status === 'active') targets.add(m.id);
       });
   }
+  /* SCOPE-04 (A4): send-time eligibility pre-filter — an out-of-scope target
+     never enters the fan-out. Advisory only: the projection cannot always
+     determine scope (D-05), so memberScopeEligible defaults to allow and the
+     server guards are the authority. No notifications-list filtering (D-07). */
+  for (const id of [...targets]) {
+    if (!memberScopeEligible(mem(id), tk?.project ?? null)) targets.delete(id);
+  }
   if (targets.size) {
     // Snippet: a short plain excerpt around the first @, for the inbox preview.
     const at = (txt || '').indexOf('@');
@@ -161,7 +172,13 @@ export function emitMentions(txt, tk) {
    notifyMembers, but pre-filtering here keeps the notification lists
    honest for dedup and cap accounting. */
 export function taskWatchers(t) {
-  return [...new Set([t.assignee, t.creator, ...commentsOf(t.id).map(c => c.by)].filter(Boolean).filter(x => x !== D().me))];
+  /* SCOPE-04 (A4): the eligibility pre-filter is advisory — the server guards
+     are the authority; memberScopeEligible defaults to allow when scope is
+     underivable (D-05). */
+  return [...new Set([t.assignee, t.creator, ...commentsOf(t.id).map(c => c.by)])]
+    .filter(Boolean)
+    .filter(x => x !== D().me)
+    .filter(x => memberScopeEligible(mem(x), t.project));
 }
 
 export function applyPatch(t, patch) {
@@ -205,8 +222,10 @@ export function applyPatch(t, patch) {
       }
     } else if (k === 'assignee') {
       logAct('assigned', t, nv ? { kind: 'assignedTo', value: mem(nv)?.name } : { kind: 'unassigned' });
-      /* P4-b: notify the new assignee (author excluded inside notifyMembers). */
-      if (nv) notifyMembers([nv], { type: 'assign', by: D().me, task: t.id, project: t.project, snippet: fmtDate(t.due) || '' });
+      /* P4-b: notify the new assignee (author excluded inside notifyMembers).
+         SCOPE-04 (A4): the eligibility pre-filter is advisory — the server's
+         assignee write-guard is the authority. */
+      if (nv && memberScopeEligible(mem(nv), t.project)) notifyMembers([nv], { type: 'assign', by: D().me, task: t.id, project: t.project, snippet: fmtDate(t.due) || '' });
     } else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
     else if (k === 'due') logAct('changedDueDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
     else if (k === 'start') logAct('changedStartDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });

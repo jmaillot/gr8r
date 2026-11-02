@@ -431,3 +431,33 @@ export function assignableInProject(m, p, currentAssigneeId) {
   if (!p || projTeams(p).length === 0) return true;
   return m?.id === currentAssigneeId || memberInProjectTeams(m, p);
 }
+/* Phase 29 SCOPE-04 (A4): send-time emit eligibility for notification
+   targets. D-05 forbids projecting scope details, so this derives from the
+   ACTOR's projected data only and DEFAULTS TO ELIGIBLE whenever scope is
+   underivable — the server guards (reminder pass, email mirror, assignee
+   write-guard) are the authority; an underivable target is never silently
+   dropped. The only readable signals: the roster role (admin/owner is always
+   workspace-wide, D-04) and an optional forward-compat scope marker on the
+   projected profile — never rendered, never a UI scope read. */
+export function memberScopeEligible(m, projectId) {
+  if (!m) return false;
+  if (!projectId) return true;
+  const role = String(m.role || '').toLowerCase();
+  if (role === 'admin' || role === 'owner') return true;
+  let raw = m.scope;
+  if (raw === undefined || raw === null) return true; // no marker in the projection → default-allow
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return true; // unreadable marker → default-allow, like the server predicate
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return true;
+  const teams = Array.isArray(raw.teams) ? raw.teams.filter(t => typeof t === 'string' && t) : [];
+  const projects = Array.isArray(raw.projects) ? raw.projects.filter(p => typeof p === 'string' && p) : [];
+  if (!teams.length && !projects.length) return true; // empty scope = workspace-wide (D-01)
+  const p = proj(projectId);
+  if (p && projects.includes(p.id)) return true;
+  return !!p && projTeams(p).some(t => teams.includes(t));
+}
