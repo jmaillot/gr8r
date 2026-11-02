@@ -20,20 +20,20 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 ### VIS — Team-derived project visibility (Backlog 999.1)
 
-- [ ] **VIS-01**: For every non-guest member, a project is readable if and only if the member
+- [x] **VIS-01**: For every non-guest member, a project is readable if and only if the member
   is a member of at least one of the project's teams (`project.teams ∩ member.teams ≠ ∅`) OR
   the project has no teams (workspace-wide default) OR an explicit Phase-29 scope grants
   access — visibility derivation rides the single `hiddenFor()` funnel, never a second
   redaction pipeline.
-- [ ] **VIS-02**: The composition stays additive (union of hidden sets): the D-03 grant
+- [x] **VIS-02**: The composition stays additive (union of hidden sets): the D-03 grant
   inversion survives — explicit scope still OPENS a private project even when the member's
   team set does not intersect the project's teams; the admin exemption survives.
-- [ ] **VIS-03**: Guest collaborators (viewer + exactly one project) stay locked to their
+- [x] **VIS-03**: Guest collaborators (viewer + exactly one project) stay locked to their
   granted project — team derivation never widens guest reach.
-- [ ] **VIS-04**: Send-time surfaces honor team-derived visibility: the reminder pass and the
+- [x] **VIS-04**: Send-time surfaces honor team-derived visibility: the reminder pass and the
   email mirror resolve visibility through the same team-intersect helper — a member is never
   reminded or emailed about a project their teams do not reach.
-- [ ] **VIS-05**: The named 404-matrix (per endpoint family) is extended with
+- [x] **VIS-05**: The named 404-matrix (per endpoint family) is extended with
   team-derivation cells: out-of-team by-id requests answer 404 with the byte-identical
   `fileNotFound`/`notFound` bodies — no existence oracle; no-team projects stay reachable
   workspace-wide.
@@ -90,11 +90,11 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIS-01 | Phase 32 | Pending |
-| VIS-02 | Phase 32 | Pending |
-| VIS-03 | Phase 32 | Pending |
-| VIS-04 | Phase 32 | Pending |
-| VIS-05 | Phase 32 | Pending |
+| VIS-01 | Phase 32 | Complete |
+| VIS-02 | Phase 32 | Complete |
+| VIS-03 | Phase 32 | Complete |
+| VIS-04 | Phase 32 | Complete |
+| VIS-05 | Phase 32 | Complete |
 | HARD-01 | Phase 33 | Pending |
 | HARD-02 | Phase 33 | Pending |
 | HARD-03 | Phase 33 | Pending |

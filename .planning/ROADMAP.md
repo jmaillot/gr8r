@@ -18,7 +18,7 @@ hardening, the recent-search leak, per-user settings isolation, and the compose 
 
 ## Phases
 
-- [ ] **Phase 32: Team-Derived Project Visibility** - A project is readable iff a member's teams intersect the project's teams; no-team projects stay workspace-wide; rides the single `hiddenFor` funnel. (Backlog 999.1)
+- [x] **Phase 32: Team-Derived Project Visibility** - A project is readable iff a member's teams intersect the project's teams; no-team projects stay workspace-wide; rides the single `hiddenFor` funnel. (Backlog 999.1) (completed 2026-11-02)
 - [ ] **Phase 33: Membership-Surface Hardening** - Invite-accept gets sameOrigin, explicit workspace resolution (SSO twin in the same commit), no link-only admin invites, spoof closed. (v1.1 audit)
 - [ ] **Phase 34: Per-User Settings Isolation & Search Leak Closure** - `notifPrefs` move to real per-user rows via additive migration; the substring recent-search leak closes against post-VIS visibility.
 - [ ] **Phase 35: Honest Undo & Deploy Gap** - delTeam undo restores purged memberships without clobbering newer changes; docker-compose forwards `MASTER_KEY_PREVIOUS`.
@@ -55,7 +55,7 @@ admin × guest, 404-matrix extension shape) get an explicit gap-closure allowanc
   5. A member whose teams do not reach a project is never reminded or emailed about it:
      the reminder pass and email mirror resolve reach through the same team-intersect
      helper as `hiddenFor` (no second visibility pipeline anywhere).
-**Plans**: 1/1 plans executed
+**Plans**: 1/1 plans complete
 
 Plans:
 - [x] 32-01-PLAN.md — Shared team-intersect helper + hiddenFor null-scope branch + send-time adoption + full MATRIX extension (VIS-01..05, D-01..D-08)
@@ -145,7 +145,7 @@ final VIS semantics)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 32. Team-Derived Project Visibility | 1/1 | In Progress|  |
+| 32. Team-Derived Project Visibility | 1/1 | Complete    | 2026-11-02 |
 | 33. Membership-Surface Hardening | 0/? | Not started | - |
 | 34. Per-User Settings Isolation & Search Leak Closure | 0/? | Not started | - |
 | 35. Honest Undo & Deploy Gap | 0/? | Not started | - |
