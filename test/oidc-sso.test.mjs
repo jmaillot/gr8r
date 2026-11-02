@@ -216,6 +216,38 @@ test('the happy path: start → authorize URL → callback → session (SSO-01)'
   });
 });
 
+/* SSO-04 / D-04: the JIT default role clamp in oidc.js readConfig. Only the
+   exact strings member|viewer are ever JIT-provisioned; anything else —
+   absent, empty, admin, owner, a typo — falls back to member. Never
+   owner/admin (T-30-08). */
+import { createOidc } from '../oidc.js';
+
+const oidcFactoryEnv = role => ({
+  OIDC_ENABLED: 'true',
+  OIDC_TENANT_ID: 't-1',
+  OIDC_CLIENT_ID: 'cid',
+  OIDC_CLIENT_SECRET: 'sec',
+  ...(role === undefined ? {} : { OIDC_DEFAULT_ROLE: role }),
+});
+
+for (const [label, value, expected] of [
+  ['absent (unset)', undefined, 'member'],
+  ['empty string', '', 'member'],
+  ['member', 'member', 'member'],
+  ['viewer', 'viewer', 'viewer'],
+  ['admin (must never elevate)', 'admin', 'member'],
+  ['owner (must never elevate)', 'owner', 'member'],
+  ['garbage typo', 'garbage', 'member'],
+  ['ADMIN uppercase', 'ADMIN', 'member'],
+]) {
+  test(`OIDC_DEFAULT_ROLE ${label} → JIT role ${expected} (SSO-04/D-04)`, () => {
+    const oidc = createOidc(oidcFactoryEnv(value));
+    assert.equal(oidc.enabled, true);
+    assert.equal(oidc.defaultRole, expected);
+    assert.ok(['member', 'viewer'].includes(oidc.defaultRole), 'the clamp output is always member|viewer, never owner/admin');
+  });
+}
+
 /* SSO-03 helpers: a full start → callback flow against the shared mock IdP,
    plus direct users-row creation for the "existing account" side of the
    link policy. */
@@ -321,6 +353,31 @@ test('repeated SSO logins with the same (issuer, subject) resolve to the same us
     const identities = db.prepare('select * from oidc_identities where subject = ?').all('sub-1');
     assert.equal(identities.length, 1, 'still exactly ONE identity row for (issuer, sub-1)');
     assert.equal(identities[0].user_id, before.userId, 'same user row as the first login');
+  });
+});
+
+/* SSO-04 / Pitfall 5: the JIT account's password_hash is a fresh RANDOM
+   scrypt hash per account (never a shared constant) — a password sign-in
+   against any JIT account must fail closed. */
+
+test('a password sign-in against a JIT account fails closed (SSO-04)', async () => {
+  const res = await fetch(`${server.base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'sso.user@example.com', password: 'any-guessable-password' }),
+  });
+  assert.equal(res.status, 401, 'no password works against the JIT account');
+});
+
+test('two JIT accounts carry DIFFERENT random password hashes (never a shared constant)', async () => {
+  await runFlow({ claims: { sub: 'sub-jit-a', email: 'jit.a@example.com' } });
+  await runFlow({ claims: { sub: 'sub-jit-b', email: 'jit.b@example.com' } });
+  withDb(server.dbPath, db => {
+    const a = db.prepare('select password_hash from users where email = ?').get('jit.a@example.com');
+    const b = db.prepare('select password_hash from users where email = ?').get('jit.b@example.com');
+    assert.ok(a?.password_hash && b?.password_hash, 'both JIT accounts have a password_hash (NOT NULL honored)');
+    assert.notEqual(a.password_hash, b.password_hash, 'hashes are per-account random, not a shared constant');
+    assert.notEqual(a.password_hash, 'x', 'not a placeholder');
   });
 });
 
