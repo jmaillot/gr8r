@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
-current_phase: 29
-current_phase_name: Team/Project-Scoped Permissions
-status: executing
-stopped_at: Completed 29-04-PLAN.md (phase 29 complete — ready for verify-work)
-last_updated: "2026-11-02T10:05:00.000Z"
+current_phase: 30
+current_phase_name: Entra SSO (OIDC)
+status: planning
+stopped_at: Phase 29 complete, ready to plan Phase 30
+last_updated: "2026-11-02T11:41:55.078Z"
 last_activity: 2026-11-02
-last_activity_desc: Completed 29-04-PLAN.md
-state_head: 0521cea4a3964d1a2a6203763eab22739be00eb1
+last_activity_desc: Phase 29 complete, transitioned to Phase 30
+state_head: 8e691916e51d086caf2e3eb7058e091c8e20a58b
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 9
-  percent: 27
+  completed_plans: 11
+  percent: 50
 ---
 
 # STATE.md
@@ -28,12 +28,12 @@ progress:
 
 ## Current Position
 
-Phase: 29 (Team/Project-Scoped Permissions) — EXECUTING
-Plan: 4 of 4 — COMPLETE (all plans executed)
-Status: Ready for /gsd-verify-work (phase UAT)
-Last activity: 2026-11-02 — Completed 29-04-PLAN.md
+Phase: 30 — Entra SSO (OIDC)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-02 — Phase 29 complete, transitioned to Phase 30
 
-Progress: [██████████] 100% of phase plans (4/4)
+Progress: [█████░░░░░] 50% of phase plans (4/4)
 
 ## Recent Decisions
 
@@ -112,7 +112,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-02T10:05:00Z
-Stopped at: Completed 29-04-PLAN.md (phase 29 complete)
+Stopped at: Phase 29 complete, ready to plan Phase 30
 Resume file: None
 
 ## Performance Metrics
