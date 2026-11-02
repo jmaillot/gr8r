@@ -379,3 +379,109 @@ test('a workspace-wide outsider hits the closed gap: private-project file now 40
   assert.equal(res.status, 404);
   assert.equal((await res.json()).code, 'fileNotFound');
 });
+
+/* ---- Phase 29 Plan 02 task 3: the named 404-matrix (SCOPE-03) ----
+
+   Table-driven sweep: family → probe (in-scope id / out-of-scope known id /
+   unknown id) → expected outcome, all driven by one fixture member holding
+   scope { projects: ['p_in'], teams: [] }. Unknown ≡ out-of-scope must be
+   byte-identical wherever a status exists (no existence oracle, T-29-06).
+
+   Checked, NOT affected (no probe needed):
+   - family 3 (file upload): metadata rides the doc channel — family 2's
+     write guard covers what a caller can attach;
+   - family 7 (members roster): D-05 keeps it unfiltered; scope edits are
+     admin-gated authority writes;
+   - family 8 (workspace meta): D-08 untouched — no project surface.
+
+   Families 5–7 below are placeholder rows covered by Plans 03/04; a new
+   project-touching family added later must visibly extend this table. */
+
+const MATRIX = [
+  {
+    family: 1,
+    name: 'doc GET omission (the 404-equivalent is absence from the payload)',
+    kind: 'doc-get',
+    expected: { inScope: 'present', outOfScope: 'absent', unknown: 'absent' },
+  },
+  {
+    family: 2,
+    name: 'doc PUT rejection/rollback (out-of-scope rows never land)',
+    kind: 'doc-put',
+    expected: { inScope: 'lands', outOfScope: 'reserved', unknown: null },
+  },
+  {
+    family: 4,
+    name: 'file serve (byte-identical 404 fileNotFound)',
+    kind: 'file',
+    expected: { inScope: 200, outOfScope: 404, unknown: 404 },
+  },
+  { family: 3, name: 'file upload', skip: 'covered by Plan 29-02 family 2 — metadata rides the doc channel' },
+  { family: 5, name: 'reminder pass', skip: 'covered by Plan 29-03 (SCOPE-04 server-side skip)' },
+  { family: 6, name: 'invites', skip: 'covered by Plan 29-04 (SCOPE-05/06 invite-carried scope)' },
+  { family: 7, name: 'members', skip: 'covered by Plan 29-04 (D-05 roster unfiltered, admin-gated scope edits)' },
+];
+
+const MATRIX_SCOPE = { projects: ['p_in'], teams: [] };
+const MATRIX_OUT_ID = 'p_out';
+const MATRIX_UNKNOWN_ID = 'p_ghost';
+const MATRIX_FILES = { inScope: 'f_in', outOfScope: 'f_out', unknown: 'f_missing' };
+const MATRIX_PROJECTS = { inScope: 'p_in', outOfScope: MATRIX_OUT_ID, unknown: MATRIX_UNKNOWN_ID };
+
+/* One helper drives every family with the same fixture member. */
+const matrixProbe = {
+  'doc-get': async probe => {
+    const view = (await scoped.get('/api/workspaces/acme')).data;
+    const present = view.doc.data.projects.some(p => p.id === MATRIX_PROJECTS[probe])
+      || view.doc.data.tasks.some(t => t.project === MATRIX_PROJECTS[probe])
+      || view.doc.data.files.some(f => f.project === MATRIX_PROJECTS[probe]);
+    return present ? 'present' : 'absent';
+  },
+  'doc-put': async probe => {
+    if (probe === 'unknown') return null; // dangling-project write semantics pre-date this phase; not a scope hole
+    const tid = `t_matrix_${probe}`;
+    const live = (await scoped.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.tasks.push({ id: tid, project: MATRIX_PROJECTS[probe], title: 'matrix probe', status: 'todo', labels: [], subtasks: [] });
+    const saved = await scoped.put('/api/workspaces/acme', { revision: live.revision, doc });
+    assert.equal(saved.status, 200, 'the merge is silent, not an error');
+    const landed = storedDoc().data.tasks.some(t => t.id === tid);
+    return landed ? 'lands' : 'reserved';
+  },
+  file: async probe => {
+    const res = await fileGet(scoped, MATRIX_FILES[probe]);
+    const body = res.status === 200 ? null : await res.json();
+    return { status: res.status, code: body?.code ?? null, error: body?.error ?? null };
+  },
+};
+
+test('404-matrix fixture: the fixture member holds scope { projects: [p_in], teams: [] }', async () => {
+  const res = await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: MATRIX_SCOPE });
+  assert.equal(res.status, 200);
+});
+
+for (const row of MATRIX) {
+  if (row.skip) {
+    test(`404-matrix [family ${row.family}] ${row.name}`, { skip: row.skip }, () => {});
+    continue;
+  }
+  for (const probe of ['inScope', 'outOfScope', 'unknown']) {
+    if (row.expected[probe] === null) {
+      test(`404-matrix [family ${row.family}] ${row.name} — ${probe}`, { skip: 'dangling-project writes are pre-phase semantics, not a scope hole' }, () => {});
+      continue;
+    }
+    test(`404-matrix [family ${row.family}] ${row.name} — ${probe} → ${JSON.stringify(row.expected[probe])}`, async () => {
+      const got = await matrixProbe[row.kind](probe);
+      if (row.kind === 'file') {
+        assert.equal(got.status, row.expected[probe]);
+        if (row.expected[probe] === 404) {
+          assert.equal(got.code, 'fileNotFound');
+          const cross = await matrixProbe.file(probe === 'unknown' ? 'outOfScope' : 'unknown');
+          assert.deepEqual(got, cross, 'unknown ≡ out-of-scope: identical status, code AND message (no oracle)');
+        }
+      } else {
+        assert.equal(got, row.expected[probe]);
+      }
+    });
+  }
+}
