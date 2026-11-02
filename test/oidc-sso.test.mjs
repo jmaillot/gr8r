@@ -484,6 +484,139 @@ test('the matrix carries every required fail-closed row (no skips/todos)', () =>
   assert.equal(MATRIX_ROWS.length + 3, 13, '10 claim/token rows + state mismatch + replay + wrong verifier = 13');
 });
 
+/* ---------------- SSO-05 (Phase 30 plan 03): SSO × 2FA ---------------- */
+
+import { totpAt } from '../totp.js';
+import { signup } from './helpers/server.mjs';
+
+const challengeCookieOf = cookies => cookies.find(c => c.startsWith('projects_tfa_challenge='))?.split(';')[0] || null;
+const liveCode = secret => totpAt(secret, Date.now() / 1000 + 30);
+
+/* Enroll + enable 2FA for a password account through the real API (the same
+   recipe test/tfa-login.test.mjs uses), so the SSO callback meets a genuinely
+   TOTP-enrolled user. */
+async function enrollTfa(srv, email, password) {
+  const s = await signup(srv.base, { name: 'Two Fa', email, password });
+  assert.equal(s.status, 201, `signup of ${email} succeeded`);
+  const { secret } = (await s.client.post('/api/auth/tfa/enroll', { currentPassword: password })).data;
+  const enabled = await s.client.post('/api/auth/tfa/enable', { code: totpAt(secret, Date.now() / 1000) });
+  assert.equal(enabled.status, 200, `2FA enabled for ${email}`);
+  return secret;
+}
+
+let tfaServer;
+let inviteServer;
+after(async () => {
+  await tfaServer?.stop();
+  await inviteServer?.stop();
+});
+
+test('SSO-05: a TOTP-enrolled account authenticating via SSO gets the challenge, NEVER a session', async () => {
+  tfaServer = await startServer({
+    env: { OIDC_ENABLED: 'true', OIDC_TENANT_ID: 't-1', OIDC_CLIENT_ID: 'cid', OIDC_CLIENT_SECRET: 'sec', OIDC_ISSUER_OVERRIDE: idp.issuer, MASTER_KEY: 'projects-oidc-tfa-suite' },
+  });
+  const EMAIL = '2fa.sso@example.com';
+  const secret = await enrollTfa(tfaServer, EMAIL, 'correct-horse-9');
+  const id = withDb(tfaServer.dbPath, db => db.prepare('select id from users where email = ?').get(EMAIL).id);
+  /* The signup API auto-mints a session — capture the baseline so the SSO
+     callback's own session delta is what gets asserted. */
+  const sessionsBeforeSso = withDb(tfaServer.dbPath, db => db.prepare('select count(*) as n from sessions where user_id = ?').get(id).n);
+
+  const flow = await runFlow({ srv: tfaServer, code: 'tfa-code-1', claims: { sub: 'sub-2fa', email: EMAIL } });
+  const callback = flow.callback;
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/#tfa', 'the callback 302s to the pending-2FA SPA state (Pitfall 9 hash fragment)');
+  const challengeCookie = challengeCookieOf(callback.cookies);
+  assert.ok(challengeCookie, 'the challenge cookie was set');
+  assert.equal(sessionCookieOf(callback.cookies), null, 'NO session cookie — SSO never bypasses 2FA');
+
+  withDb(tfaServer.dbPath, db => {
+    assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(id).n, sessionsBeforeSso, 'zero NEW sessions rows before TOTP verification');
+    const rows = db.prepare('select * from login_challenges where user_id = ?').all(id);
+    assert.equal(rows.length, 1, 'exactly one login_challenges row for the user');
+    const ttl = rows[0].expires_at - Date.now();
+    assert.ok(ttl > 4 * 60 * 1000 && ttl <= 5 * 60 * 1000, `the challenge carries the D-66 5-minute TTL (got ${Math.round(ttl / 1000)}s)`);
+  });
+
+  /* /api/auth/tfa/login needs ZERO changes — the challenge is user-scoped. */
+  const verify = await fetch(`${tfaServer.base}/api/auth/tfa/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: challengeCookie },
+    body: JSON.stringify({ code: liveCode(secret) }),
+  });
+  assert.equal(verify.status, 200, 'a valid TOTP code completes the SSO-initiated pending-2FA login');
+  const verifyCookies = verify.headers.getSetCookie?.() || [];
+  assert.ok(sessionCookieOf(verifyCookies), 'the session cookie was minted by the UNCHANGED route');
+  assert.ok(verifyCookies.some(c => c.startsWith('projects_tfa_challenge=') && c.includes('Max-Age=0')), 'the challenge cookie was cleared');
+  withDb(tfaServer.dbPath, db => {
+    assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(id).n, sessionsBeforeSso + 1, 'exactly one NEW session after TOTP');
+    assert.equal(db.prepare('select count(*) as n from login_challenges where user_id = ?').get(id).n, 0, 'the challenge row was consumed');
+  });
+
+  /* SSO sessions are ordinary sessions rows: the existing revocation path
+     teardown applies identically (SSO-05). */
+  const tokenHash = withDb(tfaServer.dbPath, db =>
+    db.prepare('select token_hash from sessions where user_id = ? order by created_at desc limit 1').get(id).token_hash,
+  );
+  const revoke = await fetch(`${tfaServer.base}/api/auth/sessions/${tokenHash.slice(0, 12)}`, {
+    method: 'DELETE',
+    headers: { cookie: sessionCookieOf(verifyCookies) },
+  });
+  assert.equal(revoke.status, 204, 'the existing revoke route accepted the SSO session');
+  const afterRevoke = await fetch(`${tfaServer.base}/api/auth/sessions`, {
+    headers: { cookie: sessionCookieOf(verifyCookies) },
+  });
+  assert.equal(afterRevoke.status, 401, 'a subsequent authenticated request 401s after revocation');
+
+  /* Idempotency: replaying the consumed callback URL cannot mint a second
+     challenge or a second session (T-30-10). */
+  const replay = await nav(tfaServer.base, `/api/auth/oidc/callback?code=tfa-code-1&state=${encodeURIComponent(flow.q.get('state'))}`, flow.flowCookie);
+  assert.equal(replay.status, 302);
+  assert.equal(replay.location, '/login?sso=error', 'the replayed callback fails closed (delete-on-use flow state)');
+  assert.equal(challengeCookieOf(replay.cookies), null, 'the replay mints no second challenge cookie');
+  withDb(tfaServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get(EMAIL);
+    assert.equal(db.prepare('select count(*) as n from login_challenges where user_id = ?').get(user.id).n, 0, 'no second challenge row');
+    assert.equal(db.prepare('select count(*) as n from sessions where user_id = ?').get(user.id).n, sessionsBeforeSso, 'no second session (the revoked SSO session was not resurrected)');
+  });
+});
+
+test('SSO-05: parallel logins for the same user produce per-attempt challenge rows (never shared/overwritten)', async () => {
+  const EMAIL2 = '2fa.sso.two@example.com';
+  await enrollTfa(tfaServer, EMAIL2, 'correct-horse-9');
+  const first = await runFlow({ srv: tfaServer, code: 'tfa-code-2', claims: { sub: 'sub-2fa-two', email: EMAIL2 } });
+  const second = await runFlow({ srv: tfaServer, code: 'tfa-code-3', claims: { sub: 'sub-2fa-two', email: EMAIL2 } });
+  assert.equal(first.callback.location, '/#tfa');
+  assert.equal(second.callback.location, '/#tfa');
+  const c1 = challengeCookieOf(first.callback.cookies);
+  const c2 = challengeCookieOf(second.callback.cookies);
+  assert.ok(c1 && c2, 'both attempts set a challenge cookie');
+  assert.notEqual(c1, c2, 'each login attempt carries its OWN challenge token');
+  withDb(tfaServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get(EMAIL2);
+    const rows = db.prepare('select challenge_token_hash from login_challenges where user_id = ?').all(user.id);
+    assert.equal(rows.length, 2, 'two distinct challenge rows — per-attempt, never overwritten');
+    assert.notEqual(rows[0].challenge_token_hash, rows[1].challenge_token_hash);
+  });
+});
+
+/* Source assertion (plan acceptance): the callback's two_fa_enabled branch
+   reuses the D-68 recipe verbatim — same login_challenges insert column list
+   and the same setChallengeCookie call as the login route. */
+test('SSO-05 source pin: the callback challenge branch carries the verbatim D-68 recipe', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const callbackStart = src.indexOf("pathname === '/api/auth/oidc/callback'");
+  const loginStart = src.indexOf("pathname === '/api/auth/login'");
+  const callbackBlock = src.slice(callbackStart, loginStart);
+  const loginBlock = src.slice(loginStart);
+  const INSERT = 'insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)';
+  assert.ok(callbackBlock.includes(INSERT), 'the callback uses the SAME login_challenges insert column list as the login route');
+  assert.ok(callbackBlock.includes('setChallengeCookie(req, res, challengeToken)'), 'the callback sets the SAME challenge cookie via setChallengeCookie');
+  assert.ok(callbackBlock.includes('CHALLENGE_TTL_MS'), 'the callback uses the SAME CHALLENGE_TTL_MS');
+  assert.ok(loginBlock.includes(INSERT) && loginBlock.includes('setChallengeCookie(req, res, challengeToken)'), 'the login-route recipe itself is untouched');
+});
+
 /* SSO-02 / D-02: the env-gating matrix. Each row boots its own server —
    partial config NEVER half-enables SSO, and every gate is the same
    generic 404 notFound (no-oracle: the response never reveals which var

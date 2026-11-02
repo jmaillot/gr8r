@@ -2740,6 +2740,28 @@ async function handleApi(req, res, url) {
         }
       }
 
+      /* SSO-05 (T-30-09): the D-68 challenge-then-stop branch, VERBATIM from
+         the login route below — a TOTP-enrolled account is exactly as
+         untrusted after the IdP round-trip as after a password. Same
+         login_challenges insert, same setChallengeCookie, same
+         CHALLENGE_TTL_MS; only the response differs (browser 302, not XHR
+         JSON): /#tfa lands the SPA on the pending-2FA state (Pitfall 9 — the
+         hash fragment survives a mid-challenge refresh). The throttle
+         attempts map is NOT touched (D-03/Pitfall 18 discipline) and
+         /api/auth/tfa/login needs ZERO changes — challenge rows are
+         user-scoped. */
+      if (row.two_fa_enabled) {
+        const challengeToken = crypto.randomBytes(32).toString('base64url');
+        db.prepare('insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)').run(
+          sha256(challengeToken),
+          row.id,
+          now() + CHALLENGE_TTL_MS,
+        );
+        setChallengeCookie(req, res, challengeToken);
+        res.writeHead(302, { Location: '/#tfa' });
+        return res.end();
+      }
+
       /* Session mint — VERBATIM from the login route (server.js 2613-2629);
          only the final response becomes a 302 (browser navigation, not XHR). */
       const token = crypto.randomBytes(32).toString('base64url');
