@@ -1,156 +1,140 @@
 # Project Research Summary
 
-**Project:** Projects Studio v1.6 — Team Access & Federation
-**Domain:** Self-hosted PM workspace (zero-dependency Node.js monolith) — multi-team membership, team/project-scoped permissions, Microsoft Entra OIDC SSO, second TOTP factor
-**Researched:** 2026-11-01
-**Confidence:** HIGH
+**Project:** Projects Studio — Milestone v1.7 "Team Visibility & Hardening"
+**Domain:** Self-hosted PM workspace — debt-closure milestone (no new surface area)
+**Researched:** 2026-11-02
+**Confidence:** HIGH — every code claim across all four reports was read directly from the current tree this session; Node 24 confirmed (`node:24-alpine` both Dockerfile stages, local v24.21.0).
 
 ## Executive Summary
 
-Projects Studio is a self-hosted, zero-runtime-dependency PM workspace built on a single `server.js` monolith, `node:sqlite` authority rows, and a redacted/merged JSON workspace document. The v1.6 milestone adds four features that experts (Linear, Notion, Slack, GitHub) all build the same way: membership as a *set* of teams, permissions as *role × scope* (workspace rank stays the ceiling; team/project scope restricts reach), SSO as a third env-gated sign-in path with email-verified linking and JIT provisioning, and multiple named TOTP factors riding a per-factor envelope table. The research converges on one headline: **zero new packages** — raw OIDC (~300–400 lines over `node:crypto` + `fetch`), one join table, scope columns on existing rows, and a `totp_factors` table reusing the v1.5 keyring verbatim.
+v1.7 is a debt-closure milestone over a mature, heavily-tested codebase (803 tests, zero runtime dependencies, additive-only migrations with byte-identical second boot). All six items (VIS, UNDO, HARD, SEARCH, SETTINGS, DEPLOY) hook into well-understood seams that were pinned to exact `server.js` line numbers during research. Five of the six are localized fixes; only VIS is structural. The recommended approach: extend the single Phase-29 `hiddenFor` redaction funnel (server.js:730) with the team-intersection predicate, never build a second visibility pipeline; implement SETTINGS with the proven `migrateTeamMembership` migration recipe (additive table, row-level eligibility guard, pre-backup); make HARD a set of small, contract-aware edits to the invite surface; keep UNDO client-side; and ship DEPLOY as a one-line compose change with a doc-parity test.
 
-The recommended build order matches PROJECT.md's own sequencing: multi-team membership first (every other feature reads the team set), scoped permissions second (consumes the set, extends `requireWorkspace` + `redactDoc`), Entra SSO third (independent but must compose with the pending-2FA challenge contract), second TOTP factor last (pure addition on the proven keyring). Phases 1 and 4 can plan from codebase patterns alone; Phase 2 (scoping) needs the deepest plan-level work because it is a route-by-route authorization sweep, not a feature bolt-on.
-
-The dominant risks are all integration, not acquisition: (1) membership truth leaking into the client-mergeable doc and getting clobbered by concurrent writes — authority rows only; (2) scoped-permission bypass through by-id endpoints that only check workspace role — a named `requireProject` wrapper plus a 404-matrix test per endpoint family; (3) hand-rolled OIDC mistakes (state/nonce/PKCE, JWKS caching, issuer pinning, unverified-email account takeover) — one tested token-validation module with a table-driven suite and a live-tenant spike; (4) migration regressions against the byte-identical-second-boot guarantee — additive-only migrations pinned by an extended `test/migration.test.mjs` fixture from Phase 1 onward.
+The dominant risk is VIS regression: team-hidden projects leaking through send-time filters (reminder/email paths at server.js:1110 and :1239 re-derive reach from the scope column alone and bypass `hiddenFor`), the D-03 grant inversion being broken by a conjunctive rewrite, the byte-identical-404 no-oracle property being broken by a distinguishable error, or no-team projects accidentally becoming team-restricted. All four are avoidable with an additive (union-of-hidden-sets) predicate, one shared helper consumed by `hiddenFor` **and** the two send-time filter sites, and an extension of the named 404-matrix test pattern. UNDO carries an unresolved owner decision (compensating replay vs. removing the misleading Undo offer); SETTINGS carries one (invoices: purge, not migrate — research strongly recommends purge since the doc field is already stripped on write).
 
 ## Key Findings
 
 ### Recommended Stack
 
-**Zero new dependencies — runtime or dev.** All four features build on what the project already runs; the work is implementation, not acquisition (see STACK.md).
+**No new dependencies — nothing to install.** Zero-runtime-dependency held since v1.1; every v1.7 item uses existing codebase machinery or Node 24 built-ins. No Node upgrade (node:24-alpine stays).
 
-**Core technologies (all existing):**
-- **Node.js ≥ 24 built-ins** (`node:crypto`, global `fetch`, `Buffer` base64url): PKCE, state/nonce, RS256/RS384 JWKS verification via `crypto.createPublicKey({format:'jwk'})` + `crypto.verify` — everything the hand-rolled OIDC flow needs, verified against official Node v24 docs.
-- **node:sqlite** + existing migration machinery (`vacuum into` backup, transactional, byte-identical second boot): four schema additions — `team_members` join table, scope columns on `memberships`/`invites`, `totp_factors` table, `sso_identities` + `oidc_states` tables.
-- **Existing keyring (`v2:` envelopes, `requireTotpSecret()`)**: second TOTP factor is "another row," zero crypto changes.
-- **Mock IdP in tests** (~50-line `node:http` server): real Entra can't run in CI; the mock enables tampered-token/kid-swap/negative-claim tests Playwright can't intercept.
-
-**Do NOT use:** MSAL/openid-client/jsonwebtoken/jose (runtime deps violate the hard constraint); team membership in the workspace doc (client-mergeable, no indexed lookup); `common` tenant endpoint (pin `ENTRA_TENANT_ID`); SSO bypassing the TOTP challenge.
+**Core technologies (all already in the codebase):**
+- `node:sqlite` (`DatabaseSync` at server.js:54) — the new `user_notif_prefs` table and VIS's `team_members` queries; flat columns over JSON blobs so defaults express in SQL; keep 1/0 explicit boolean binding (boolean binding only landed in 24.21, too new to assume).
+- `sameOrigin(req)` (server.js:2389) — battle-tested on ~35 routes; HARD adds call sites, not a new mechanism. Keep the exact string compare (no `new URL()`), mirror `proto()`'s first-value split for `x-forwarded-host` (currently inconsistent), never require Origin (breaks non-browser/server paths and legit email navigation GETs), never add Referer fallback.
+- Phase-29 redaction funnel (`projectScope`/`hiddenFor`/`canSeeProject`, server.js:649–880) — VIS's sole seam; the contract comment at :705-711 makes the single-funnel rule explicit and testable.
+- Migration recipe (`migrateTeamMembership`, server.js:1693–1741) — SETTINGS copies it: guarded one-time backfill with pre-backup, row-level eligibility, `insert or ignore`.
+- Client undo idiom (`snapshot()/restore()` + `api.setMemberTeams`, teams.js:70–167) — UNDO's fix reuses it with the snapshot moved above the purge.
 
 ### Expected Features
 
-See FEATURES.md for the full Linear/Notion/Slack/GitHub comparison.
+All six items are the milestone scope; this is a debt milestone — any new surface area is out of scope by brief. Competitor comparison (Plane, Wekan, Focalboard, Taiga) confirms the plan matches the standard: derived access never rewrites stored membership rows, no per-project opt-out exists anywhere, removal is symmetric and immediate (gr8r reads are computed per-request — free), and admins keep wildcard access.
 
-**Must have (table stakes):**
-- Member visible in every team they belong to; rosters/assignment/@team read the team *set* (with dedup'd notifications)
-- Task assignment filtered to members who can actually see the project
-- Scoped members see only their team/project — server-side read filtering (redaction pattern) + write rejection, **404 not 403** on out-of-scope data
-- SSO as an env-gated additional sign-in path (button only when configured; routes 404 otherwise)
-- Multiple named TOTP factors, revocable individually, verify-any-at-login
+**Must have (table stakes for this milestone):**
+- **VIS** — team-intersection visibility inside the single `hiddenFor` funnel: visible ⟺ `p.teams ∩ memberTeams ≠ ∅` ∨ existing rules; empty `teams[]` ⇒ workspace-wide; admin/owner exemption preserved; Phase-29 scope composes on top (D-03 grant inversion must survive).
+- **HARD** — `sameOrigin` on invite-accept POST (server.js:4316, before body read/throttle per Pitfall-22 order); remove `firstWorkspace()` fallback at :4354 (accept) and :2773 (SSO reconcile — a verbatim-twin contract, change both in one commit); end link-only invites (:4242) so every accept is email-bound; spoof window (:4330-4352) closes as a consequence. Leave read-path `firstWorkspace()` uses (:4822, :2166) and the seed bootstrap (:1647) alone.
+- **SEARCH** — close the two-directional `includes()` leak (server.js:825-854): guard empty hidden terms, bidirectional containment, tighten normalization; document the residual free-text limitation (explicitly sanctioned by the milestone).
+- **SETTINGS** — dedicated `user_notif_prefs` table (one-table-per-concern precedent: `totp_factors`, `reminders_sent`); all four notifPrefs read sites (1062, 1226, 633, 1585) routed through one accessor; doc field kept as legacy fallback initially; `invoices` purged, not migrated (it is already stripped on write, server.js:1341).
+- **UNDO** — delTeam undo becomes honest: either compensating replay (Option A) or drop the Undo offer (Option C).
+- **DEPLOY** — `MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-}` in compose (never `:?`), extending the existing DEPLOY.md §14 doc-parity test harness.
 
-**Should have (competitive):**
-- Named factors + per-factor `last_used_at` — beats GitHub's own 2FA (their #1 long-running community complaint)
-- Project-level guest scope (rides the same mechanism as team scope)
-- SSO-only enforcement flag (`PASSWORD_AUTH_ENABLED=false`) — nearly free, completes the env-configured story
-- JIT provisioning with default role (`OIDC_DEFAULT_ROLE`) + pending-invite reconciliation at SSO login
-
-**Defer (v2+):**
-- OIDC groups → team mapping (needs real tenants to design against)
-- SCIM (explicitly out of scope per PROJECT.md)
-- Per-team admin tier
-
-**Anti-features (refuse):** per-team roles inside the role ladder (explodes the auth matrix — Linear keeps role workspace-level); per-factor recovery codes (account-level break-glass stays); auto-linking on anything but verified email.
+**Defer (v1.x+):** moving `recentSearches` per-user (only if SETTINGS infra makes it near-free); "visible via team X" affordance. **Never:** Teamspaces entity model, server-side trash, CSRF tokens, ACL UI, per-user invoice migration — all anti-features at this scale.
 
 ### Architecture Approach
 
-The existing monolith holds; no architectural change is needed (see ARCHITECTURE.md). The integration surface is well-defined: `requireWorkspace` gains an optional context arg returning `ctx.scope` (computed once per request from `team_members`); `redactDoc`/`mergeClientDoc` gain scope-based redaction and authority-restores; OIDC lives inside the `/api/auth` dispatch as a *first-factor variant* reusing `sessions`, `login_challenges`, cookies, and revocation unchanged — the single biggest integration win; `totp_factors` mirrors the primary factor into `users.two_fa_secret` so every existing call site survives unmodified.
-
-**Major components:**
-1. **`teams` + `team_members` tables** — authority for membership; doc `teams[].members` becomes a display projection rebuilt on read
-2. **Extended `requireWorkspace`** — role rank + scope set resolution; every project-scoped endpoint consumes `ctx.scope` (checklist invariant, no per-endpoint sprinkles)
-3. **Raw OIDC module** — discovery/authorize/PKCE/token/JWKS-verify in one module with table-driven tests; identity key is `(issuer, subject)`, email only for verified linking/display
-4. **`totp_factors` table** — per-factor envelope, per-factor replay guard, last-factor removal = existing disable-2FA transaction
+Everything hangs off the one funnel: `hiddenFor(doc, membership)` (server.js:730) is consumed by both `redactDoc` (:860) and `mergeClientDoc` (:922); everything downstream (tasks, comments, recent searches, filters) derives from that one set. VIS's minimal seam is extending `hiddenFor` with a memoized per-request `team_members` query plus one shared team-intersect helper that the two send-time filter sites (:1110 email mirror, :1239 reminders) must also adopt — otherwise team-hidden projects leak through emails. The hidden set must be built **additively** (`privateHidden ∪ outOfScope ∪ teamGated`) so the D-03 scope-grant inversion keeps working; scope grants short-circuit VIS per project. SETTINGS's per-user rows change the email/reminder pref gates to per-recipient lookups with workspace-shared fallback (normalizeDoc's merge stays as the legacy fallback). There is no server-side team-delete route today — team deletion is a client doc edit plus a pre-PUT authority purge — which is exactly why the undo snapshot (client-only) cannot restore memberships.
 
 ### Critical Pitfalls
 
-See PITFALLS.md for all seven plus the "looks done but isn't" checklist.
-
-1. **Doc-merge clobbering membership edits** (Phase 1) — membership authority in rows only; `mergeClientDoc` always restores `members[].teams` from authority; two-session concurrency regression test is the gate.
-2. **Scoped permissions bypassed via by-id endpoints** (Phase 2/4) — one `canAccessProject` predicate wired into a `requireProject` wrapper; route-by-route sweep as a *named plan task*; 404-matrix test per endpoint family; notification fan-out runs the same predicate.
-3. **Hand-rolled OIDC crypto/claim mistakes** (Phase 3) — state/nonce/PKCE always; exact issuer pinning (Entra's `/v2.0` trailing path matters); JWKS TTL cache + kid-miss refetch; full signature + claim checklist before any trust; reject `alg:none`/HS256 explicitly.
-4. **SSO account takeover via unverified-email linking** (Phase 3) — match on `iss`+`sub`, never email alone; verified-email gate; session cookie rotation at every login transition; `safeNext()` reused on the callback.
-5. **Migration breaks byte-identical second boot** (all phases) — additive-only, nullable/defaulted; no boot-time writes; v1.6 fixture in `test/migration.test.mjs`; boot-pass order pinned by test. **Key cross-phase decision:** the OIDC identity columns' shape must be decided during Phase 1 planning even though they land in Phase 3.
+1. **VIS-1: Second visibility predicate beside the funnel** — the easiest silent fork of the Phase-29 invariant. Avoid by extending `hiddenFor` itself and adopting the same helper at :1110/:1239; never compute team visibility at call sites.
+2. **VIS-2: 404 no-oracle broken** — team-invisible projects answering 403/400 with descriptive codes is an existence oracle. Pin byte-identical 404 per endpoint family in the extended 404-matrix (test/scope.test.mjs:512 SCOPE-03 pattern), including the file-serve side door.
+3. **VIS-3: Teamless breakage** — naive intersection hides every no-team project from everyone, and zero-team members (SSO JIT) see nothing. Empty-`teams[]` ⇒ workspace-wide must be the predicate's first branch, tested with JIT-shaped fixtures.
+4. **UNDO-1: Blind undo resurrects stale rows** — compensating replay must reconcile captured rows against live `memberships` (`insert or ignore`), never blind-restore; a member removed or re-invited between delete and undo must not get stale teams; undo must be exercised as admin (workspace-wide VIS invariant).
+5. **SETTINGS-1: Byte-identical second boot dies** — a global (not row-level) eligibility guard resurrects changed prefs; route all four read sites through one accessor or split-brain prefs return; handle stale clients PUTting `notifPrefs` back (write-path strip decision made explicitly, not by default).
+6. **DEPLOY-1: Compose mis-edit makes the previous key required** — `:?` breaks fresh installs; only the optional `:-` form is correct, pinned by a compose-config test both with and without the var.
 
 ## Implications for Roadmap
 
-Based on combined research, suggested phase structure (matches PROJECT.md's own ordering, which research validates):
+Based on research (presented as evidence for the roadmapper's decision, not a decision in itself), the reports' combined dependency analysis supports a 5-phase structure:
 
-### Phase 1: Multi-Team Membership
-**Rationale:** Foundation — scoped permissions compute their predicate from the team set; nothing else can proceed without it. Also sets the migration pattern (Pitfall 7) for the whole milestone.
-**Delivers:** `teams` + `team_members` tables, scalar→set migration, `mergeClientDoc` sync replacement, rosters/assignment/@team/notification rewiring with dedup, two-session concurrency test.
-**Addresses:** "Member visible in every team," assignment filtering, @team fan-out (P1 items).
-**Avoids:** Pitfall 1 (doc clobber), Pitfall 7 (migration guarantee). **Also decides:** OIDC identity column shape (Pitfall 5's cross-phase note) and the `oidc_states`/`sso_identities` schema.
+### Phase 1: VIS — Team-Derived Visibility (the headline, structural item)
+**Rationale (evidence):** VIS must land **before or with** SEARCH tuning and before any send-time-filter test updates — the reminder/email paths (:1110, :1239) and the hidden-term list (:825) all derive their behavior from what VIS makes hidden (ARCHITECTURE.md: "the one ordering decision that matters"). Landing VIS first means every later phase tests against the final visibility semantics.
+**Delivers:** team-intersection inside `hiddenFor`, shared team-intersect helper adopted at :1110/:1239, additive hidden-set composition preserving D-03, empty-teams ⇒ workspace-wide, admin exemption intact; extended 404-matrix with team-visible rows.
+**Avoids:** VIS-1, VIS-2, VIS-3.
 
-### Phase 2: Team/Project-Scoped Permissions
-**Rationale:** Compounds directly on Phase 1's `team_members` (PROJECT.md: #3 before #4); must ship with its route sweep, not after it.
-**Delivers:** `scope` columns on `memberships`/`invites`, `ctx.scope` in extended `requireWorkspace`, `requireProject` wrapper, redaction extension, scoped-invite UI with effective-scope display, 404-matrix test suite.
-**Addresses:** "Scoped members see only their team/project" (highest complexity, P1); project-level guest scope rides the same plumbing.
-**Avoids:** Pitfall 2 (by-id bypass). **Rule encoded in tests:** scope restricts, never elevates; admin/owner ignore scope.
+### Phase 2: HARD — Membership-Surface Hardening
+**Rationale:** independent of VIS but high-value audit closure; small, well-pinned edits. Doing it early keeps the security surface settled while later phases touch adjacent routes.
+**Delivers:** `sameOrigin` first on accept POST (:4316, Pitfall-22 order), strict workspace resolution on :4354 + :2773 in one commit (410 `workspaceGone`, never a cross-tenant join), email-bound invites only (:4242), spoof-payload whitelist test.
+**Avoids:** HARD-1 (guard only the POST, never the GET; test behind proxy headers), HARD-2, HARD-3.
 
-### Phase 3: Entra OIDC SSO
-**Rationale:** Independent of Phases 1–2 but must compose with the pending-2FA contract that Phase 4 touches; landing it before second-2FA lets the SSO×TOTP interaction be decided once.
-**Delivers:** Raw OIDC module (discovery/PKCE/token/JWKS), `/api/auth/oidc/start` + `/callback`, `sso_identities`/`oidc_states`, env-gated login button, JIT provisioning (invited-shaped), optional SSO-only flag, mock IdP test suite.
-**Addresses:** Env-gated SSO, JIT + email-match linking, SSO enforcement toggle (P1/P2).
-**Avoids:** Pitfalls 3, 4, 5. Requires a **live-tenant spike** at phase time.
+### Phase 3: SETTINGS — Per-User Settings Isolation
+**Rationale:** the only additive-migration item, so it carries the byte-identical-second-boot test burden; also provides the per-user row pattern SEARCH can optionally reuse.
+**Delivers:** `user_notif_prefs` table + guarded backfill (row-level eligibility, `insert or ignore`, pre-backup), one accessor over all four read sites, per-user routes beside the membership routes, `invoices` purge decision executed.
+**Avoids:** SETTINGS-1.
 
-### Phase 4: Second TOTP Factor
-**Rationale:** Strictly last — pure addition on the proven keyring, lowest coupling, and the SSO-callback×pending-2FA interaction is settled by then.
-**Delivers:** `totp_factors` table + primary-factor mirror migration, enroll-with-step-up, factor picker at login, per-factor replay guards, per-factor removal with last-factor = full-disable transaction, recovery codes untouched.
-**Addresses:** Multiple named factors, per-factor revocation, last-used tracking (P1 + cheap P3).
-**Avoids:** Pitfall 6 (lockout/replay/keyring drift).
+### Phase 4: SEARCH — Substring-Leak Closure (+ UNDO if kept separate, see below)
+**Rationale:** SEARCH's filter tightens for free once VIS lands (team-hidden projects add redaction terms) — tuning it after VIS avoids double test churn. Can be folded into Phase 3 if the owner opts to move `recentSearches` per-user.
+**Delivers:** bidirectional containment in `referencesHidden`, empty-term guard, variant-normalization leak tests, documented free-text limitation in `CHANGELOG.md`.
+**Avoids:** SEARCH-1 (keep conservative `includes()`; document false-positives).
+
+### Phase 5: UNDO + DEPLOY — Honesty Fixes & Operator Gap
+**Rationale:** UNDO is independent and small; DEPLOY is trivial (one line + parity test) and can bundle anywhere — pairing it with UNDO gives the milestone a light close. Alternatively DEPLOY ships inside Phase 2 as a rider.
+**Delivers:** honest delTeam undo per the owner's decision (A or C below), or removal of the offer; compose `MASTER_KEY_PREVIOUS` passthrough with `:-` form + compose-config parity test.
+**Avoids:** UNDO-1, DEPLOY-1.
 
 ### Phase Ordering Rationale
 
-- **Dependency chain:** scoping reads `team_members` (1→2); SSO × 2FA interaction needs single-factor challenge in place before factor N (3→4); migration pattern established once in Phase 1 propagates to the other three.
-- **Risk ordering:** the two hardest features (scoping sweep, OIDC) land mid-milestone when the foundation is stable; the safest feature closes.
-- **Cross-cutting gates:** i18n EN+FR catalogue at write time (build gate fails CI otherwise) and byte-identical-boot fixture apply to *every* phase — the roadmapper should state them as milestone-wide invariants, not per-phase tasks.
+- **VIS first is forced by data flow, not preference:** SEARCH and the send-time filters both consume what VIS hides; landing VIS later would mean revisiting their tests twice.
+- **HARD and SETTINGS are independent of each other** and could swap; SETTINGS placed third because its migration machinery deserves a full phase of attention and its infra optionally serves SEARCH.
+- **UNDO × VIS interaction is managed by ordering:** undo re-PUTs flow through `mergeClientDoc`, so undo tests are written after VIS semantics are final (exercised as admin — workspace-wide, no VIS interference, pinned as an invariant in tests).
+- **DEPLOY is trivially cheap** and schedulable anywhere; its only coupling is to the DEPLOY.md parity-test harness.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 2 (Scoped permissions):** route-by-route authorization sweep across every `requireWorkspace` call site; scoping depth for workspace-level surfaces (inbox/activity) is an open product question — use `/gsd-plan-phase --research-phase` or at minimum a thorough discuss-phase.
-- **Phase 3 (Entra SSO):** Entra-specific claim behavior varies by tenant config (`xms_edov`, verified-domain posture); needs a live-tenant spike and the linking-policy decision (auto-provision vs link/invite-only) before routes are built.
+- **Phase 1 (VIS):** the composition semantics (VIS × scope × admin × guest) have genuine design decisions — the exact additive predicate form, whether guests see team-gated projects at all, and the 404-matrix extension shape. Recommend `--research-phase` or at minimum a thorough discuss-phase.
+- **Phase 3 (SETTINGS):** migration-order placement in `bootstrap()` is load-bearing; write-path strip vs. tolerate-and-ignore for stale clients is an explicit decision.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Multi-team membership):** join-table + migration follows the codebase's own `migrateTenancy` precedent; patterns are internal.
-- **Phase 4 (Second TOTP):** rides the shipped keyring verbatim; the architecture research fully specifies it.
+- **Phase 2 (HARD):** every fix is a one-line guard or fallback removal at pinned lines, following established in-repo idioms; the SSO twin-contract and e2e email-link flow are already mapped.
+- **Phase 4 (SEARCH):** single-function change to an existing helper with existing tests.
+- **Phase 5 (UNDO/DEPLOY):** both use existing patterns verbatim (`submitTeam`'s before-map, doc-parity test harness).
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Entra endpoints/params and node:crypto APIs verified via Context7 against official Microsoft and Node v24 docs; zero-dep conclusion grounded in verified built-in capabilities |
-| Features | HIGH | Patterns verified against Linear/Notion/GitHub/WorkOS docs; app-specific complexity assessed against PROJECT.md |
-| Architecture | HIGH | Derived directly from first-party `server.js` code with line-level references; all integration points verified against existing invariants |
-| Pitfalls | HIGH (integration) / MEDIUM (Entra quirks) | Integration pitfalls derived from documented project invariants; tenant-specific claim behavior must be verified at Phase 3 spike time |
+| Stack | HIGH | Zero new dependencies; every capability verified in the tree or Node 24 docs; no install step at all. |
+| Features | HIGH (codebase claims) / MEDIUM-HIGH (competitor comparisons) | All code claims read directly; competitor details from official docs (Plane, Wekan) with some community sources treated as directional. |
+| Architecture | HIGH | Seam map pinned to exact line numbers across server.js (4,920 lines), teams.js, actions.js, compose file; Node sqlite transaction surface doc-verified. |
+| Pitfalls | HIGH | Every pitfall verified at HEAD; the two general-practice items (proxy/Origin misconfig, stale-undo reconcile) are labeled and structural, not speculative. |
 
-**Overall confidence:** HIGH
+**Overall confidence:** HIGH — unusually so; this is a research-informed hardening milestone over a fully mapped codebase, with every fix anchored to a verified seam.
 
 ### Gaps to Address
 
-- **Entra claim behavior in a real tenant** (`email_verified`-equivalent, `xms_edov`, group claims): resolve via a Phase 3 live-tenant spike before the linking policy is finalized.
-- **Scoping depth for workspace-level surfaces** (do scoped members see inbox/activity beyond their projects?): product decision for discuss-phase of Phase 2.
-- **OIDC linking policy** (auto-provision vs link/invite-only; recommended: link/invite-only respecting `ALLOW_SIGNUP`): decide in Phase 1 planning (schema) and confirm in Phase 3 discuss.
-- **Invite-time vs post-acceptance scoping** (is a team scope set at invite creation or by an admin afterwards?): open question for Phase 2 discuss-phase.
-- **SSO MFA semantics** (does Entra `amr` MFA substitute local TOTP?): recommend no — record the explicit decision in Phase 3.
+- **UNDO direction (owner decision):** Option A (compensating client-side replay of `setMemberTeams`, snapshot moved above the purge, with failure-rollback and concurrent-edit reconciliation) vs. Option C (drop the Undo offer, keep the honest confirm dialog with impact counts). The research recommends A but flags it as a feature-vs-honesty call, not a technical one. Note: research found the server purge happens in the per-member re-PUT loop (:136-144) before `snapshot()` (:150) — whichever option, the client capture must move before the purge.
+- **Invoices disposition (owner confirmation):** research strongly recommends purge-not-migrate (the doc field is already stripped on write at server.js:1341 and the migration test proves the pattern); milestone text says "invoices already purged" — confirm no per-user invoice rows are actually wanted.
+- **VIS × guest semantics:** does a guest (viewer + exactly one project) see team-gated projects at all? Recommended reading: no (guests are already maximally restricted), but pin it in the 404-matrix.
+- **`x-forwarded-host` first-value discipline:** making `sameOrigin` consistent with `proto()` changes behavior behind multi-hop proxies — verify the actual Traefik topology during Phase 2 planning.
+- **Stale-client handling for `notifPrefs`:** write-path strip vs. tolerate-and-ignore once per-user rows exist — decide explicitly in the phase, don't default.
+- **`DatabaseSync` deprecation alias (DEP0210):** not a v1.7 concern; note in STATE.md deferred items.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Context7 `/websites/learn_microsoft_en-us_entra_identity-platform` — authorization code flow, PKCE params, token endpoint, issuer format
-- Context7 `/websites/nodejs_latest-v24_x_api` — `createPublicKey` JWK, `crypto.verify`, base64url
-- `.planning/PROJECT.md` + `server.js` — architecture invariants, migration precedents, keyring, challenge contracts (owner-maintained ground truth)
-- Linear docs (members/roles), Notion Help (sharing/permissions), WorkOS multi-tenant permissions analysis, GitHub 2FA docs + community #78027/#54699
-- tududi / Baserow / LangSmith self-hosted OIDC docs — hybrid vs SSO-only, JIT, email-match linking
+- `server.js` (full read, ~4,920 lines, current tree) — all cited seams: funnel (:649–880), sameOrigin (:2389), invite surface (:4180–4390), migration machinery (:1558–1741), notifPrefs reads (:633, :1062, :1226, :1585), recent searches (:825–882)
+- `src/actions/teams.js:70–167`, `src/actions/actions.js:265–272` — undo trap verified end to end
+- `docker-compose.yml` — MASTER_KEY forwarded (:39), MASTER_KEY_PREVIOUS absent [file-verified]
+- `test/scope.test.mjs`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`, `test/due-reminders.test.mjs` — 404-matrix, byte-identical second boot, D-K2 loud-fail, legacy all-ON pins
+- Node.js official `node:sqlite` docs (Context7, `/nodejs/node`) — transaction/UDF/boolean-binding surface on 24.x
 
-### Secondary (MEDIUM confidence)
-- OAuth 2.0 Security BCP (RFC 9700), OIDC Core spec — state/nonce/PKCE, issuer pinning, JWKS caching practice
-- Stitchflow/SteelSync Linear user-management analyses — role × scope layering
-- Widely documented unverified-email SSO takeover class (GitHub/Heroku-style post-mortems)
+### Secondary (MEDIUM-HIGH confidence)
+- Plane official docs (Teamspaces, roles, project members) — derived-access semantics the VIS predicate mirrors
+- Wekan docs (GitHub) — per-user watch/mute prefs, board visibility
+- UX standards: vocab.design "Undo", Marigold UI "Destructive Actions", undo-toast catalogs (2026-06/2026-10)
 
-### Tertiary (LOW confidence)
-- Entra tenant-specific claim behavior (`xms_edov`, group claims) — verify at Phase 3 spike time
+### Tertiary (LOW confidence, directional only)
+- Focalboard/Taiga positioning via Pi Stack (2026-04) and TechRepublic (2026-03) comparisons
 
 ---
-*Research completed: 2026-11-01*
+*Research completed: 2026-11-02*
 *Ready for roadmap: yes*

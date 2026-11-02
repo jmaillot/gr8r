@@ -1,134 +1,147 @@
-# Feature Research
+# Feature Research — v1.7 Team Visibility & Hardening
 
-**Domain:** Self-hosted PM workspace — v1.6 "Team Access & Federation" (multi-team membership, team/project-scoped permissions, Entra ID OIDC SSO, second TOTP factor)
-**Researched:** 2026-11-01
-**Confidence:** HIGH (patterns verified against Linear/Notion/GitHub docs and WorkOS multi-tenant-permissions analysis; app-specific complexity assessed against PROJECT.md)
+**Domain:** Self-hosted PM workspace — debt-closure milestone (no new surface area)
+**Researched:** 2026-11-02
+**Confidence:** HIGH on all codebase claims (read directly); MEDIUM-HIGH on competitor comparisons (official docs; Wekan/Focalboard details partly community sources)
+**Comparison set:** Plane (Teamspaces), Wekan, Focalboard, Taiga — plus generic undo/CSRF UX standards
+
+---
 
 ## Feature Landscape
 
-### Table Stakes (Users Expect These)
-
-What Linear, Notion, Slack and GitHub all do for each of the four features. Missing these makes a feature feel half-built.
+### Table Stakes (for this milestone's six items)
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Member visible in every team they belong to** | Linear members "can be added to multiple teams" and appear in each team's roster; Notion teamspaces list their own members. Users check "is this person in my team?" per team, not per workspace. | MEDIUM | Today `memberships` stores one team per user per workspace. Move to a `team_memberships(user_id, team_id, role)` join table (or `teams[]` on the membership row — but a join table is what the ecosystem converges on). Rosters, autocomplete pickers and assignment dropdowns all read from it. **Owner's decision point:** keep the workspace-level role as the ceiling and treat team membership as visibility/access only (Linear's model), vs. per-team roles (Slack channel model). Linear's model is simpler and fits the existing `viewer<member<admin<owner` ladder. |
-| **Task assignment limited to people who can see the project/task** | In Linear you cannot assign to a member who lacks access to the team; in Notion you cannot share to a non-member. | MEDIUM | With multi-team membership, assignment must filter to members whose team set intersects the project's `teams[]`. This is a natural tightening once membership is a set. Existing assign/mention notifications then resolve recipients the same way. |
-| **@team mentions resolve against the mentioner's visible teams** | Slack @channel/@team semantics: you mention a group, only its members get notified; the autocomplete only shows groups you belong to or can see. | LOW | @team parsing already exists (v1.4 window). It must stop assuming "the member's team" and fan out to all the mentioned team's members. Mostly a query-shape change, plus dedup (a user in 2 mentioned teams gets ONE notification). |
-| **Scoped members see only their team/project** | Linear guests: "Access limited to specific teams or projects they are explicitly invited to… cannot access workspace-wide settings, other teams, or billing." Notion guests: "access only to the pages they are invited to." | HIGH | This is the hardest of the four. Today authorization is `requireWorkspace(slug, minRole)` — binary at workspace level. Scoped access needs a second check layer: after role check, if the caller holds a scoped (team/project-invited) membership, API reads must filter (like `redactDoc()` already does for private projects) and writes must reject targets outside the scope. Reuse the redaction machinery — it is the proven pattern in this codebase. **Key design decision:** scoped membership as a *new membership kind* (`scope: 'workspace' \| 'team:<id>' \| 'project:<id>'`) rather than a fourth role. Role stays the permission level; scope stays the reach. That matches Linear (Guest role × team/project scope) and Notion (permission level × page scope). |
-| **SSO appears as an additional sign-in path when configured** | Every self-hosted tool with OIDC (tududi, Baserow, LangSmith, GitLab) shows the "Sign in with SSO" button only when the provider is configured, alongside the password form. | MEDIUM | Env-gated: `OIDC_ENABLED` + issuer/client-id/secret present → login page renders the button, `/api/auth/oidc/*` routes exist. Not configured → routes 404 and button absent. Zero-runtime-dependency constraint means hand-rolling the authorization-code flow over `node:crypto`/`node:http` (well-documented flow, ~200–300 lines: authorize redirect, state+nonce, PKCE recommended, token exchange, ID token validation against the JWKS). |
-| **Just-in-time provisioning with a defined default role** | Baserow, tududi, LangSmith: "new users created automatically on first login via SSO." | LOW | On first successful OIDC login, create the account from the `email`/`name` claims and attach a default membership (viewer or member — owner's choice via env, e.g. `OIDC_DEFAULT_ROLE`). Existing accounts match by verified email → link, don't duplicate. This email-match linking is the universal pattern (GitHub does it, GitLab does it). |
-| **Multiple TOTP factors listed with names, revocable individually** | GitHub settings lists each authenticator; Slack and cloud IdPs (Okta/Entra) let you name ("Work phone", "Personal") and delete one factor without touching the others. Community pressure on GitHub (#78027, #54699) shows this is exactly what users ask for. | MEDIUM | New `totp_factors(id, user_id, name, secret_envelope, created_at, last_used_at)` table; enrollment writes a row (name prompted), login accepts a code from ANY factor, delete-factor requires password step-up (and existing 2FA code). Recovery codes stay a separate, untouched table — universally recovery codes are NOT per-factor; they're an account-level fallback. The existing `v2:` keyring envelope already encrypts one secret; factors just multiply the rows. |
+| **VIS — Team-derived project visibility** | Every tool in the comparison set derives project access from team membership (see Competitor table). gr8r already has 80% of the machinery: `project.teams[]` exists on every project (migrated in P3), `team_members` scope columns exist (Phase 28), and `scopeGrants()` (server.js:722-728) already implements the union read "a team's reach opens private team-linked projects". The v1.7 change is one predicate widened from "scoped members" to "all members": readable ⟺ `p.teams ∩ member.teams ≠ ∅` ∨ existing rules; no-team projects stay workspace-wide. | LOW-MEDIUM | **Must ride the ONE funnel.** The code comment at server.js:705-711 is explicit: redactDoc AND mergeClientDoc both consume `hiddenFor()` — never a second pipeline. Add the team-intersection term inside `scopeGrants`/`inScopeProject` so writes are protected by the same predicate. Phase-29 scope stays as an optional admin restriction layered on top (it already composes as a pre-filter). |
+| **UNDO — delTeam undo honesty** | The undo-toast standard (vocab.design, Marigold: "Honest — never promise a recovery the system cannot deliver") makes a lying Undo offer worse than no offer. Current code (src/actions/teams.js:130-165) purges `team_members` rows server-side via `api.setMemberTeams` BEFORE `mutate()`/`snapshot()`, then offers `restore(snap)` which restores only the local document — the memberships stay deleted. Two standard exits: (a) make undo real, or (b) drop the offer. | LOW (b) / MEDIUM (a) | **Recommendation: (a) make undo real, client-side only.** Defer the server purge: keep the "re-PUT with team filtered out" as the *commit* path but capture `affected` teams first and restore via the same `api.setMemberTeams` calls on undo. This matches the existing undo idiom everywhere else in the app (task delete, project delete, member removal all use `snapshot()/restore()`). Simpler honest fallback: keep the confirm dialog (it already exists and is bulk-aware) and remove the Undo button for teams only. |
+| **HARD — sameOrigin on invite accept** | CSRF on state-changing, cookie-authenticated routes is table stakes. gr8r already enforces `sameOrigin()` on ~20+ POST routes (server.js:2630-3780, "Pitfall 22 order: sameOrigin FIRST, before any body read or throttle"). The invite-accept route is the known gap (v1.1 audit). Fix is a one-line guard matching the established idiom. | LOW | Note the subtlety: invite-accept is often hit by a *logged-out* browser arriving from an email link (cross-site navigation then form POST). The existing `?next=` carry pattern (v1.5 LINK-01..04) means the accept flow renders a page first; the POST from that page is same-origin. Verify the accept POST's referrer/origin expectations for anonymous visitors — SameSite=Lax cookies (server.js:2415) already block the cross-site POST payload from carrying a session, so the guard is defense-in-depth, not a behavior change. |
+| **HARD — no admin link-only invites / no firstWorkspace() fallback** | Invites must resolve to their workspace row; a fallback to "the first workspace ever created" is a tenant-confusion bug (`firstWorkspace()` at server.js:2773 in the SSO reconcile path, 2166, 1647). Competitors (Plane) never guess: invite → workspace_id is a hard relation; a missing workspace = dead invite. | LOW | Replace `|| firstWorkspace()` at 2773 with "workspace gone → skip reconcile (invite is dead)". The 1647 call is the seed-owner bootstrap (legitimate — the workspace was just created); leave it. |
+| **HARD — no guest-profile spoof** | gr8r's guest model (viewer + exactly one project scope, server.js:4180-4196) is enforced on writes; the spoof risk is the client trusting a self-reported profile shape. Plane gates guests server-side everywhere ("Workspace guests can't browse or join projects"). gr8r's `docForClient` redaction funnel is the right place — guest-visible member payloads should carry only what redaction already allows. | LOW-MEDIUM | Scope this item tightly: derive guest member projections server-side from the existing `hiddenFor`/redaction output rather than adding a new "spoof" concept. Flag anything beyond that as over-engineering. |
+| **SEARCH — close the substring recent-search leak** | Recent searches live in the *shared* workspace document (`out.data.recentSearches`, server.js:607) and are filtered by `referencesHidden(term, hiddenTerms)` (server.js:882) — an exact/substring match against hidden terms. The leak: a redacted project name is a substring of a saved term (e.g. searching "Acme Confidential Q3" matches hidden project "Acme Confidential"), so the *existence* of the hidden name leaks through a term the searcher can already see. Competitors store search history per user (Plane workspace views are per-user; Wekan filters are per-board-member). | LOW | Two-part fix per the milestone brief: (1) close the leak — cheapest correct rule is to redact any stored term that *contains* a hidden name as a substring (invert the current containment direction — verify current code and pick the direction that hides more), or move `recentSearches` into SETTINGS' per-user rows (kills two birds); (2) document the residual free-text limitation (users can still type hidden names into search; results are redacted, only the *query text* is user-visible). Documenting is explicitly sanctioned by the milestone. |
+| **SETTINGS — per-user settings isolation** | v1.2 already tracked this as WS-01 ("Per-user isolation of notifPrefs, invoices"). Every competitor has per-user notification prefs (Wekan: per-user watch/track/mute per board; Plane: per-user notification preferences; Focalboard: per-user via Mattermost). gr8r has the proven migration pattern: the per-user `locale` column (v1.2 Phase 8) — nullable column, server never writes at boot, byte-identical second boot, `PATCH` route. | MEDIUM | `notifPrefs` is workspace-shared today (server.js:633-638 normalize-on-read merge defaults ON; email gates read `doc.data.notifPrefs` at 1062, 1226). Moving to per-user rows changes the *email gate* read path (per-recipient lookup, which Phase 27's per-recipient notification rows already anticipate). `invoices` is legacy display data being purged anyway (server.js:1341 deletes it on write; migration.test.mjs:196 proves the pattern) — for invoices, "delete like plan/invoices precedent" is simpler than "migrate per user". Verify owner intent: invoices likely needs purge, not migration. |
+| **DEPLOY — MASTER_KEY_PREVIOUS in compose** | The v1.5 rotation runbook (DEPLOY.md §14, KEY-03/04) requires two env vars during rotation; docker-compose.yml forwards `MASTER_KEY` but not `MASTER_KEY_PREVIOUS` (verified — full env block read). Operators doing the documented rotation through compose silently lose the old key. | LOW | One line: `MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-}`. Pin a doc-parity test if DEPLOY.md references compose (the codebase already has doc-parsing parity tests for DEPLOY.md §14 — extend, don't invent a new mechanism). |
 
-### Differentiators (Competitive Advantage)
+### Differentiators (none needed — this is a debt milestone)
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| **Named TOTP factors** ("Laptop", "Backup phone") | GitHub famously does NOT let you register a second TOTP device or remove one without re-enrolling everything — its own community discussions (#78027, #54699) are long-running complaints. Naming + per-factor revocation + last-used tracking beats GitHub. | LOW (on top of multi-factor) | One column each: `name`, `last_used_at`. The last-used timestamp also enables future "stale factor" hygiene. |
-| **Project-level guest access** (not just team-level) | Linear supports both team and project guest scope; Notion's page-level guests are its signature sharing feature. For a self-hosted tool, inviting an external collaborator to exactly one project without exposing the rest of the workspace is a strong story. | HIGH (on top of team-scoped) | Same scope mechanism, different scope target. The `teams[]` intersection logic generalizes: a scoped member sees projects whose `teams[]` intersect their granted teams, or whose explicit project grant matches. Do team scope first; project scope rides the same plumbing. |
-| **OIDC groups → team membership mapping** | Entra ID emits `groups` claims; mapping them to teams gives IT-driven provisioning (join the AD group, you're in the team). GitLab and Baserow support group mapping; it's the #1 enterprise ask after basic SSO. | MEDIUM | Post-MVP. Needs group→team UUID mapping config (env or admin UI) and a sync policy (on-login is the cheap, standard option vs. SCIM). |
-| **SSO enforcement toggle** (`PASSWORD_AUTH_ENABLED=false`) | tududi, GitLab ("SSO-only mode"): admins want to force the IdP as the only door once it's proven. | LOW | One env flag + hiding/404ing the password path. Do it in the first SSO phase — it's nearly free and completes the "optional, env-configured" story. |
-| **Pending-invitation reconciliation at SSO login** | If an invite exists for the SSO user's email, auto-accept or surface it post-login (Baserow/LangSmith behavior). | LOW | The invites table already exists; a lookup by email at JIT-provision time is enough. |
+Nothing here. v1.7's brief explicitly forbids new features; flag any roadmap suggestion of new surface area as out of scope. The only "differentiator-flavored" outcome is trust: honest undo + airtight redaction are the qualities self-hosted admins audit for.
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features (over-engineering traps for this scale)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **Per-team roles inside the role ladder** (admin of team A, viewer of team B) | "I want to give Elodie admin over just Design." | Explodes the authorization matrix: `requireWorkspace` checks would need per-team role resolution everywhere, and workspace settings still need a single answer. Every tool that tried full per-team roles gates it behind enterprise (Slack) or avoids it (Linear keeps role workspace-level, membership team-level). | Keep role workspace-level + scope team-level. A team-scoped *admin* is a future tier, not part of this milestone (and v1.5's Phase 24 workspace-admin tier shows how a scoped admin tier was handled before). |
-| **SCIM provisioning** | "Real companies need automated user lifecycle." | Requires the IdP to speak SCIM, a whole admin surface, de-provisioning semantics, and test suites — disproportionate for a zero-dependency self-hosted app. PROJECT.md already lists SCIM out of scope. | JIT provisioning on login + group mapping later. De-provision = disable the user in Entra; the SSO login then fails. |
-| **Per-factor recovery codes** | "If I lose device 2, I want separate codes." | Recovery codes are the account-level break-glass; splitting them per factor multiplies secret material and weakens the invariant "a recovery code never disables 2FA" that v1.4 hardened. No major tool does per-factor codes. | One account-level recovery-code set, untouched by factor add/remove. Exactly what the milestone specifies. |
-| **Deleting the last TOTP factor independently of "disable 2FA"** | "I just want to swap phones." | If deleting the final factor silently disables 2FA, you get two half-states; GitHub's flow confusion (#54699) is the cautionary tale. | Deleting the last factor = the existing disable-2FA flow (password + live TOTP step-up, one-transaction teardown). Deleting factor 2 of 2 is just "disable" under the hood; the UI can present it as "remove device". |
-| **Auto-linking SSO identities by more than verified email** (username, custom claim) | "Our emails differ between systems." | False-positive account takeover risk. Every credible implementation links on verified email only. | Email match; mismatch = new account or explicit admin action. |
+| Plane-style Teamspaces as a first-class entity (dashboards, views, pages per team) | "Plane does it" | Plane's Teamspaces are a separate resource with lead/members/link relations — a whole new feature. gr8r's `team_members` + `project.teams[]` already model the access semantics. | Keep visibility as a *derived predicate* over existing rows. Zero new tables. |
+| Server-side undo/soft-delete trash for teams (30-day retention, trash view) | "Undo should survive navigation" | A trash is first-class UI plus retention policy — a feature, not a fix. Team deletion is rare and already confirm-dialog'd with impact counts (teams.js:124-126 counts affected members and projects). | Client snapshot + deferred server commit, within the existing toast window. |
+| CSRF tokens (synchronizer-token pattern) on all routes | "Stronger than Origin checking" | Requires per-session token plumbing and template injection across a no-framework vanilla-JS frontend. Origin/Referer validation is what same-origin frameworks (and gr8r's 20+ existing routes) already do; SameSite=Lax cookies close the cross-site POST gap. | Extend the existing `sameOrigin()` guard to the two missing routes. |
+| Full ACL UI (per-project member pickers duplicating Plane's project-membership model) | "Visibility needs management UI" | Team-derived visibility is *implicit* — it needs no new UI beyond maybe surfacing "visible because of team X". Adding per-project membership editing recreates Phase 29's scope model for everyone. | Display-only: show team chips on projects (they already render) and let the intersection rule do the work. |
+| Per-user `invoices` migration | "WS-01 lists it with notifPrefs" | Invoices are already purged-on-write legacy display data (server.js:1341, migration tests prove the precedent). Migrating shared rows into per-user rows is work with no user asking for it. | Delete `invoices` from the doc like `plan`; if any consumer needs it, that's a separate question. Verify with owner. |
+| Moving ALL recent-search history per-user in the same change as the leak fix | "It's the thorough fix" | Recent searches are in the shared doc; moving them is a migration + new route + client change. It can ride SETTINGS' per-user infra but shouldn't gate the leak fix. | Close the leak with the containment rule now; optionally move `recentSearches` per-user as a follow-up inside SETTINGS if the infra makes it trivial. |
+
+---
 
 ## Feature Dependencies
 
 ```
-[Multi-team membership (join table)]
-    └──requires──> [memberships migration: team per user → team set]
-                        └──requires──> [existing migrateTenancy() machinery (proven)]
+[SETTINGS per-user rows] ──provides-pattern──> [SEARCH recentSearches per-user (optional)]
+                                                     │
+[VIS team-derived visibility]                        └──> [SEARCH substring leak fix] (independent, ship first)
+        └──requires──> [team_members rows (Phase 28) — shipped]
+        └──requires──> [hiddenFor single funnel (Phase 29) — shipped]
+        └──modifies──> [redactDoc + mergeClientDoc] (both consumers of the funnel)
 
-[Task assignment/@team/roster surfaces] ──enhances──> [Multi-team membership]
-    (all three read the same team-set; must ship together or rosters lie)
-
-[Team/project-scoped permissions]
-    └──requires──> [Multi-team membership]           (scope targets a team, so teams must be set-valued first — PROJECT.md: #3 before #4)
-    └──requires──> [redactDoc()/mergeClientDoc() pattern]   (reuse, don't reinvent)
-    └──conflicts-with→ [no existence oracle: 404 on unknown slug]  (scoped users must 404 on out-of-scope data, not 403 — preserve)
-
-[Entra OIDC SSO]
-    └──requires──> [accounts table + sessions (v1.3) — independent of teams/scopes]
-    └──requires──> [invites table]                    (email-match JIT linking + pending-invite reconciliation)
-    └──optional-enhances→ [group→team mapping]  → requires [multi-team membership]
-
-[Second TOTP factor]
-    └──requires──> [v2: keyring envelopes (v1.5 Phases 25–26)]   (each factor secret is one envelope)
-    └──requires──> [pending-2FA login challenge (v1.3 Phase 17)] (verify against ANY factor)
-    └──independent-of→ [recovery codes table]                    (explicitly untouched)
-    └──requires──> [disable-2FA teardown (v1.4 Phase 21)]        (redefined as "remove last factor")
+[UNDO delTeam] ──independent──> everything else
+[HARD sameOrigin] ──independent (server.js, ~2 routes)
+[DEPLOY compose] ──independent (1 line + doc parity test)
 ```
 
 ### Dependency Notes
 
-- **Scoped permissions require multi-team membership:** PROJECT.md already sequences #3 → #4. A team-scoped grant is meaningless if a user has exactly one team.
-- **Entra SSO is orthogonal to the team work** — it can be built in parallel with #4 (its only team coupling is the optional group mapping, which is a differentiator, not MVP).
-- **Second 2FA factor is fully orthogonal** and rides v1.5's keyring — safest phase, good closer (PROJECT.md orders it last).
-- **The 404-not-403 principle conflicts with naive scope enforcement:** scoped users must not learn what exists outside their scope. The redaction pattern already solves this for private projects; extend, don't bypass.
+- **VIS is the only structural change.** Everything else is a localized fix. VIS must not ship as a second redaction pipeline — the code comment at server.js:705-711 makes the single-funnel rule explicit and testable (the 404-matrix proof pattern from Phase 29 exists and should be extended with team-intersection cells).
+- **SETTINGS provides the per-user row pattern** that SEARCH can optionally reuse; they are naturally adjacent phases.
+- **UNDO and VIS interact conceptually:** if a team is deleted and members' team sets change, team-derived visibility changes with it. The undo restore path must re-run through `api.setMemberTeams` so the server and doc agree — do not restore the doc alone.
 
-## MVP Definition
+---
 
-### Launch With (v1.6)
+## MVP Definition (v1.7 scope)
 
-- [ ] **Multi-team membership** — join table + migration, rosters/assignment/@team read the set, dedup notifications. Foundation for #4; PROJECT.md orders it first.
-- [ ] **Team-scoped membership kind** — `scope` on the membership, server-side read filtering (redaction-style) + write rejection, scoped members 404 on out-of-scope data. Project-level scope can share the mechanism but team scope is the minimum.
-- [ ] **Entra OIDC sign-in, env-gated** — button only when configured, raw-OIDC code flow + PKCE over Node built-ins, email-match linking, JIT provision with default role, optional SSO-only flag.
-- [ ] **Multiple named TOTP factors** — factor table, enroll with name, verify any factor at login, remove one with password step-up, last-used timestamp; last-factor removal = disable-2FA flow; recovery codes untouched.
+### Launch With (all six — they are the milestone)
 
-### Add After Validation (v1.6.x)
+- [ ] VIS — team-intersection visibility inside the single `hiddenFor` funnel, no-team projects workspace-wide, Phase-29 scope composes on top — the headline item; needs the 404-matrix test extension
+- [ ] SEARCH — substring-leak containment fix + documented free-text limitation (CHANGELOG/docs) — smallest item, independent
+- [ ] HARD — `sameOrigin` on invite accept; `firstWorkspace()` fallback removed from invite reconcile (2773); guest projection derived from redaction — three small server.js fixes, one phase
+- [ ] UNDO — real delTeam undo via deferred purge/restore, or honest removal of the offer (decide with owner) — small, isolated
+- [ ] SETTINGS — per-user `notifPrefs` rows via the `locale`-column migration pattern; `invoices` purged not migrated (confirm with owner) — the only additive-migration item, so it carries the byte-identical-second-boot test burden
+- [ ] DEPLOY — `MASTER_KEY_PREVIOUS` in compose + doc-parity test — trivial, bundle anywhere
 
-- [ ] Project-level guest scope (if not in the team-scope phase) — when external-collaborator demand materializes.
-- [ ] Pending-invite auto-reconciliation at SSO login — when SSO usage grows.
-- [ ] `last_used_at`-driven stale-factor hints — cheap follow-on to factor tracking.
+### Add After Validation (v1.x)
+
+- [ ] Move `recentSearches` per-user — only if SETTINGS' per-user infra makes it near-free
+- [ ] "Visible via team X" affordance in project headers — only if UAT shows confusion about why a project appeared
 
 ### Future Consideration (v2+)
 
-- [ ] OIDC groups → team mapping — needs real Entra tenants to design against.
-- [ ] SCIM — explicitly out of scope in PROJECT.md; revisit only for enterprise posture.
-- [ ] Per-team admin tier — after team scoping proves itself.
+- [ ] Per-project explicit membership management UI (Plane model) — explicitly out of scope; Phase 29 scope remains the admin restriction mechanism
+- [ ] Teamspaces-style team dashboards — new feature, violates the no-new-features brief
+
+---
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Multi-team membership | HIGH | MEDIUM | P1 |
-| Team-scoped permissions (read-filter + write-gate) | HIGH | HIGH | P1 |
-| Project-scoped guests | MEDIUM | MEDIUM (after team scope) | P2 |
-| Entra OIDC SSO (env-gated, JIT, email-link) | HIGH | MEDIUM | P1 |
-| SSO-only enforcement flag | MEDIUM | LOW | P2 |
-| OIDC group→team mapping | MEDIUM | MEDIUM | P3 |
-| Multiple named TOTP factors | HIGH | MEDIUM | P1 |
-| Per-factor last-used tracking | LOW | LOW | P3 |
+| VIS team-derived visibility | HIGH (closes deferred Backlog 999.1; makes teams mean something for access) | MEDIUM | P1 |
+| SEARCH leak fix | MEDIUM (privacy correctness) | LOW | P1 |
+| HARD membership-surface hardening | MEDIUM-HIGH (audit closure, tenant correctness) | LOW | P1 |
+| SETTINGS per-user isolation | MEDIUM (correctness; one admin's prefs stop controlling everyone's emails) | MEDIUM | P2 |
+| UNDO delTeam honesty | MEDIUM (trust; small blast radius) | LOW | P2 |
+| DEPLOY compose var | LOW-MEDIUM (operator runbook correctness) | LOW | P3 (but trivially cheap — do it) |
 
-**Priority key:** P1 must-have for the milestone · P2 should-have · P3 future.
+---
 
 ## Competitor Feature Analysis
 
-| Feature | Linear | Notion | Slack | GitHub | Our Approach |
-|---------|--------|--------|-------|--------|--------------|
-| Multi-team membership | Members join N teams; see only their teams | Teamspaces with own member lists | One workspace membership + channel-level membership | Org membership + team membership | Join table, membership = set of teams, workspace role unchanged (Linear model) |
-| Scoped permissions | Guest role × team/project invite scope; members see only their teams | Permission level × page/teamspace scope; guests page-only | Channel-level guest access (Enterprise) | Repo-level collaborator access | Scope field on membership (workspace/team/project) × existing role ladder; redaction-based read filtering |
-| SSO coexistence | SSO on Business+; password fallback unless enforced | SAML/OIDC SSO; standard login remains | SSO with optional forced-SSO per workspace | SAML + password coexist; org-level enforcement | Third sign-in path, env-gated visibility, email-match linking, JIT, optional SSO-only flag |
-| Multiple TOTP | N/A (uses IdP) | N/A (IdP) | Multiple factors incl. named devices | ONE TOTP device only (major user complaint); no per-device removal | Named factor rows, verify-any, remove-one with step-up, last-remove = disable, recovery codes account-level |
+| Feature | Plane | Wekan | Focalboard | Taiga | gr8r v1.7 plan |
+|---------|-------|-------|------------|-------|----------------|
+| Team-derived project access | Teamspaces: linking a teamspace to a project grants every teamspace member Contributor; direct and derived access evaluated together, higher role wins; unlink removes only derived access | No teams at board level — boards are public/private with explicit members | No real teams (Mattermost channels play the role externally) | Teams exist but visibility is per-project member lists; no team-derived read | Intersection predicate over existing `project.teams[]`/`team_members` — no new membership rows created, access always derived (like Plane's "Plane does not add them to the member list") ✓ matches Plane semantics without its entity model |
+| Guest handling | Guests can't browse/join public projects; explicit invite only | Board-level member roles | N/A (Mattermost roles) | Member roles per project | Guests keep viewer + exactly-one-project scope; guest projections derived from redaction funnel |
+| Per-user notification settings | Per-user notification preferences in account settings | Per-user watch/track/mute per board/list/card | Per-user (via Mattermost) | Per-user "config change default subscription" | `notifPrefs` moves from shared doc to per-user rows; per-recipient notification rows (P4) already make the read path per-recipient — settings finally match it |
+| Invite CSRF protection | Server-side session + standard framework protections; invite links are single-use tokens | Meteor accounts framework (DDP origin checks) | Mattermost session model | Django CSRF on all forms (framework default) | Extend existing `sameOrigin()` guard to invite accept — same idiom as 20+ existing routes; SameSite=Lax already blocks cross-site session use |
+| Destructive-action UX | Private→public visibility change warns "cannot undo"; deletes confirm | Deletes confirm; archive recoverable | Deletes confirm | Deletes confirm | gr8r's undo-toast idiom is *ahead* of all four competitors — the fix is making the one lying offer honest, not adding dialogs |
+
+### UX expectations for team-based auto-visibility (from the comparison)
+
+1. **Implicit membership is the norm, display-only.** Plane's rule is the standard: derived access never rewrites stored membership rows ("Plane does not add them to the member list and does not change the role stored on a direct membership"). gr8r's derived predicate matches exactly — no `team_members` churn, no migration of memberships when visibility rules change.
+2. **No opt-out in any competitor.** Nobody offers "project teams grant access, but let me disable that per project." Access follows membership unconditionally; the only control is *which teams the project belongs to*. gr8r should not invent a per-project opt-out flag — an admin who wants a project invisible to a team simply removes that team from `project.teams[]` (or keeps it private with explicit members, which the existing `private`+`members` path already handles).
+3. **Removal is symmetric and immediate.** Removing a user from a team removes team-derived access on the next read (Plane: "Unlinking a project removes only the access that came through the teamspace"). No grace period, no caching layer to worry about — gr8r reads are computed per-request, so this is free.
+4. **Admins keep wildcard access.** Plane: workspace admins access all projects via inheritance. gr8r's existing owner/admin role behavior should be preserved through the funnel (verify `scopeGrants` handles the no-scope admin case — the "not an admin" branches in redaction already special-case admins).
+
+### UX expectations for undo of destructive actions (standards summary)
+
+- **Undo (5–10s toast) for reversible; confirm dialog for irreversible** — gr8r already follows the hybrid (confirm dialog *plus* undo toast on teams), which the "asking twice is not twice as safe" guidance flags as one safety net too many. Either real undo or confirm, not both — the current delTeam code has both, and the undo half is the dishonest one.
+- **Never offer undo you can't deliver.** This is the exact delTeam bug: the server write (team_members purge) committed immediately, the client "restore" only rewinds the document. The Marigold rule — "Honest. Never promise a recovery the system cannot deliver" — is the acceptance criterion.
+- **Bulk actions must be restorable in one move** — the fix path (re-PUT the captured `affected` team sets) is inherently bulk-shaped, matching the existing `api.setMemberTeams` per-member loop.
+- **If undo can't be made real, the confirm dialog with impact counts is the honest fallback** — teams.js:124-126 already names the counts ("N members will have no team"), which is the standard's "the body says what is lost".
+
+---
 
 ## Sources
 
-- Linear docs — Members and roles (linear.app/docs/members-roles): guest = team/project invite scope; members in multiple teams see only their teams. HIGH.
-- Stitchflow/SteelSync Linear user-management analyses — role × team-scope layering. MEDIUM.
-- Notion Help — Sharing & permissions: teamspace permission defaults, guests page-scoped. HIGH.
-- WorkOS — "Multi-tenant permissions done right: What Slack, Notion, and Linear can teach" — convergence on role × scope. HIGH.
-- GitHub Docs — Configuring 2FA: single TOTP secret scannable by multiple devices; community discussions #78027 / #54699 — no second TOTP factor, no per-device removal (the gap we exploit). HIGH.
-- tududi / Baserow / LangSmith self-hosted OIDC docs — hybrid vs SSO-only modes, JIT provisioning, email-match account linking. HIGH.
-- PROJECT.md constraints — zero runtime dependencies, v2: keyring, redaction machinery, 404-not-403 isolation. HIGH (owner-authored).
+**Codebase (HIGH confidence — read directly):**
+- `server.js:594-596` `firstWorkspace()`, `:607` recentSearches in shared doc, `:633-638` shared notifPrefs normalize, `:705-728` single-funnel comment + `scopeGrants` union read, `:730-739` `hiddenFor`, `:1341` invoices purge, `:2389+` `sameOrigin` + ~20 guarded routes, `:2773` invite-reconcile `firstWorkspace()` fallback, `:4180-4196` guest single-project gate
+- `src/actions/teams.js:119-168` delTeam: server purge before snapshot, dishonest undo offer
+- `src/actions/actions.js` undo-toast idiom throughout (snapshot/restore)
+- `docker-compose.yml` — `MASTER_KEY` forwarded, `MASTER_KEY_PREVIOUS` absent
+- `.planning/milestones/v1.2-REQUIREMENTS.md` WS-01 (per-user settings debt origin), `v1.3-REQUIREMENTS.md` (notifPrefs/invoices explicitly deferred)
+- `test/migration.test.mjs:196` plan/invoices purge precedent; `test/scope.test.mjs` Phase-29 404-matrix test pattern
+
+**Competitor docs (MEDIUM-HIGH confidence — official documentation unless noted):**
+- Plane docs: core-concepts/projects/overview, roles-and-permissions/overview, core-concepts/workspaces/teamspaces, manage-project-members
+- Wekan docs (GitHub): Features/Boards, Admin-Panel/Settings/Visibility
+- Focalboard/Taiga positioning via Pi Stack (2026-04) and TechRepublic (2026-03) comparisons — community sources, treated as directional only
+
+**UX standards (MEDIUM-HIGH):**
+- vocab.design "Undo" pattern; Marigold UI "Destructive Actions"; DEV Community undo-window vs soft-delete sizing (2026-06); envydesign undo-toast catalog (2026-10)
 
 ---
-*Feature research for: Projects Studio v1.6 Team Access & Federation*
-*Researched: 2026-11-01*
+*Feature research for: gr8r v1.7 Team Visibility & Hardening (debt closure)*
+*Researched: 2026-11-02*

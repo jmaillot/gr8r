@@ -1,188 +1,102 @@
-# Stack Research — v1.6 Team Access & Federation
+# Technology Stack
 
-**Domain:** Self-hosted PM workspace — new capabilities: multi-team membership, team/project-scoped permissions, Microsoft Entra OIDC SSO, second TOTP factor
-**Researched:** 2026-11-01
-**Confidence:** HIGH (Entra endpoints/parameters verified via Context7 `/websites/learn_microsoft_en-us_entra_identity-platform`; node:crypto JWK/verify verified via `/websites/nodejs_latest-v24_x_api`; schema recommendations grounded in PROJECT.md current state)
+**Project:** Projects Studio — v1.7 "Team Visibility & Hardening"
+**Researched:** 2026-11-02
+**Mode:** Ecosystem (platform-capability research for six debt-closure items)
+**Hard constraint:** zero runtime dependencies (held since v1.1; verified in PROJECT.md and `Dockerfile`)
 
-## Headline Answer
+## Runtime Ground Truth
 
-**Zero new packages — including dev dependencies.** All four features are buildable with what the project already runs (Node ≥ 24 built-ins, `node:sqlite`, vendored code). npm has nothing to add here; the work is implementation, not acquisition.
+**Node version: 24.** Both Dockerfile stages are `node:24-alpine` (build stage line 2, runtime stage line 12) — no Node upgrade is needed or desired for v1.7. Local dev matches: `node -v` → **v24.21.0**. All APIs below are verified against Node 24 docs/codebase reality.
 
-| Feature | Stack addition |
-|---|---|
-| Multi-team membership | `node:sqlite` schema change only |
-| Team/project-scoped permissions | Pure logic in `server.js` (`requireWorkspace` extension) |
-| Entra OIDC SSO | ~300–400 lines of vendored OIDC code using `node:crypto` + global `fetch` |
-| Second TOTP factor | `node:sqlite` schema change + existing `v2:` envelope infra |
+## Recommended Stack (what v1.7 uses — all already in the codebase or in Node 24 built-ins)
 
-## Recommended Stack
-
-### Core Technologies (unchanged — versions current as of research date)
+### Core Runtime
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| Node.js | ≥ 24 (project currently on 24.x) | Runtime | Native `fetch` (undici, no dep), `Buffer.from(..., 'base64url')`, `crypto.createPublicKey({key: jwk, format: 'jwk'})`, `crypto.verify('RSA-SHA256', …)` — everything OIDC signature validation needs |
-| node:sqlite | built-in | All schema changes below | Existing migration machinery is proven (`migrateTenancy`, `migrateTotpReWrap` precedent) |
-| node:crypto | built-in | PKCE, state/nonce, JWT signature validation, TOTP | Already proven for TOTP (HMAC-SHA1) and AES-GCM envelopes |
-| global `fetch` | built-in (undici) | Discovery + JWKS + token endpoint calls | Use this, **not** `node:http` — outbound HTTPS with redirects, timeouts (AbortSignal.timeout) and connection pooling are already handled. `node:http` is only needed for the *inbound* callback route, which `server.js` already owns |
-| Vendored code | per-file MIT | Nothing new needed | The only vendored file today is the QR encoder; the second-TOTP feature reuses it as-is. OIDC should be *written*, not vendored — no small enough clean-room source exists |
+| Node.js | 24 (node:24-alpine, Dockerfile) | Server runtime | Already the shipped image; Alpine SQLite build is fine for the DB sizes involved |
+| `node:sqlite` (`DatabaseSync`) | introduced 22.5; unflagged since 22.13/23.4; release-candidate from 24.15/25.7 | All persistence, incl. the new per-user settings rows | Already used (`server.js:54`); in Node 24 the class is now `Database` with `DatabaseSync` kept as a documented deprecated alias (DEP0210) — existing imports keep working, do NOT churn them for v1.7 |
+| `node:crypto` | Node 24 | Nothing new needed | scrypt, `timingSafeEqual`, `randomBytes`, `createHash` (sha256 `keyIdFor`), AES-256-GCM keyring all exist (`server.js:83–101`); v1.7 adds no cryptography |
+| `node:http` | Node 24 | `req.headers` origin/host handling for HARD | Already parsed by hand throughout; no HTTP framework anywhere |
 
-### Schema Additions (node:sqlite)
+### Per-Item Capability Map
 
-**1. Multi-team membership.** The `teams[]` array in the workspace JSON document remains the source of team identity (names, colors, ordering). Team membership becomes a real table — do **not** encode it in the JSON document:
+| Item | Node capability used | Codebase reuse |
+|------|---------------------|----------------|
+| VIS | `node:sqlite` prepared statements (`prepare().all()` on `team_members` + project doc `teams[]`) | `team_members` table + `team_members_user` index already exist (`server.js:227–234`); the Phase-29 `projectScope`/`hiddenFor` redaction funnel (`server.js:~700–880`) is the single choke point to extend with the team-intersection rule — no new machinery |
+| UNDO | Client-side only: existing `restore(snap)` toast pattern + `setMemberTeams` PUT | `A.delTeam` in `src/actions/teams.js:119` already captures a doc snapshot; the fix is capturing per-member `before` team sets and re-PUTting them (or suppressing the undo offer) — zero server capability required |
+| HARD | `req.headers.origin`, `x-forwarded-host`, `x-forwarded-proto` | `sameOrigin()` already exists (`server.js:2389–2394`) and is already applied to ~35 routes — HARD item 1 is adding one call to the invite-accept route, which verifiably lacks it (`server.js:4316–4320` has throttle + token lookup, no `sameOrigin`) |
+| SEARCH | `String.toLowerCase().includes` + existing redaction | `referencesHidden()` (`server.js:837`), `mergeRecentSearches()` (`server.js:844`), `hiddenProjectTerms()` already do substring redaction; SEARCH is closing their gaps (empty-term edge, free-text limitation doc) — no new API |
+| SETTINGS | `node:sqlite` `CREATE TABLE` / `ALTER TABLE` additive migration + `prepare().run()` | Migration machinery proven: `vacuum into` backup (`server.js:1727` et al.), guarded one-time backfill precedent (team_members, `server.js:1693–1741`), byte-identical second boot pinned by `test/migration.test.mjs`; per-user precedent exists — `locale` column (v1.2) and `notifications` per-recipient rows (v1.4) |
+| DEPLOY | docker-compose `environment:` passthrough | Server already reads `MASTER_KEY_PREVIOUS` (`server.js:88–101`); only the compose file line is missing (verified: `docker-compose.yml:8–45` has no `MASTER_KEY_PREVIOUS`) |
 
-```sql
-CREATE TABLE team_memberships (
-  team_id    TEXT NOT NULL,   -- team id from the workspace doc's teams[]
-  workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
-  user_id    INTEGER NOT NULL REFERENCES users(id),
-  role       TEXT NOT NULL DEFAULT 'member',  -- reserve for future team-lead tier
-  PRIMARY KEY (team_id, user_id)
-);
-```
+## Platform API Details & Pitfalls (verified)
 
-Why a table and not the document: `requireWorkspace` already authorizes against SQL rows (`memberships`) per request — server-side team-permission checks must be one indexed lookup, not a document parse; the document is client-mergeable (`mergeClientDoc`) and must never be the authority for access (the same principle that moved auth state out of the document in v1.3). Migration: seed `team_memberships` from each user's existing single `memberships.team` value (the v1.4 "member team" column), keeping that column readable during transition, then drop it. Follow the established pattern: transactional, preceded by `vacuum into` backup, byte-identical second boot.
+### `node:sqlite` (Node 24)
 
-**2. Team/project-scoped permissions.** No new table — extend existing ones:
+- **Type conversion table (doc-verified):** booleans bind as INTEGER 1/0; `undefined` binds as NULL; integers outside safe range throw unless `readBigInts` is on. The codebase already binds 1/0 explicitly — keep that style; do not rely on boolean binding, which only landed in 24.21 (too new to assume on any 24.x patch).
+- **JSON columns:** there is no native JS↔JSON column type. Follow the established `workspaces.doc` pattern: `JSON.stringify` into a TEXT column, `JSON.parse` on read. For per-user settings, one row per `(workspace_id, user_id)` with a small TEXT JSON payload (or flat columns for `notifPrefs` toggles) — flat columns are preferred because each toggle becomes an updatable column with a default, matching the `notifPrefs`-default-ON semantics (`D-27-5` in `test/due-reminders.test.mjs`).
+- **Transactions:** no `.transaction()` helper — the codebase's existing `db.exec('BEGIN')/COMMIT` inline pattern is correct. `db.isTransaction` (added 24.0/22.16) exists if a guard is wanted. Additive migration must stay inside the existing backup-then-transaction boot flow.
+- **`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`** are the additive-migration primitives already used at boot (`server.js:160–234`) — no `ALTER TABLE` needed if the new settings table is new-shaped.
+- **`DatabaseSync` deprecation nuance:** `DatabaseSync`/`StatementSync` are deprecated *aliases* (DEP0210/DEP0211) as of late Node 24.x. Not a v1.7 concern (renaming touches every call site for zero behavior change), but note it in STATE.md deferred items.
 
-```sql
-ALTER TABLE memberships ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
--- scope = 'workspace' (full role) | 'team' | 'project'
-ALTER TABLE memberships ADD COLUMN scope_team_id TEXT;      -- set when scope='team'
-ALTER TABLE memberships ADD COLUMN scope_project_id TEXT;   -- set when scope='project'
-ALTER TABLE invites ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
-ALTER TABLE invites ADD COLUMN scope_team_id TEXT;
-ALTER TABLE invites ADD COLUMN scope_project_id TEXT;
-```
+### Origin / Referer parsing for the `sameOrigin` check (HARD)
 
-Enforcement point: `requireWorkspace(req, res, slug, minRole)` gains an optional context arg (`{teamId?, projectId?}`) and resolves effective role = workspace role intersected with scope. Scoped users keep `role='member'` (or `'viewer'`) but the scope columns clamp it outside their team/project. Rule of thumb to encode in tests: a scope can only *restrict* a membership role, never elevate it; `admin`/`owner` ignore scope.
+- The existing `sameOrigin()` compares the raw `Origin` header string against `` `${proto(req)}://${host}` `` — an exact string compare, **no URL parsing**. This is the right design to extend: `new URL(origin)` would normalize the default port away (`https://x:443` → `https://x`) and make the comparison *stricter than needed* or introduce case/port surprises. Keep the string compare.
+- **Pitfall 1 — proxy headers:** `proto()` and the host both honor `x-forwarded-*` but take `.split(',')[0].trim()` of proto (`server.js:2357–2360`) while `sameOrigin` uses `x-forwarded-host` *without* the first-value split (`server.js:2392`). A multi-hop `X-Forwarded-Host: real, internal` makes the origin comparison fail (closed proxy setups) — and a spoofable chain header makes it *pass* for an attacker if TRUST_PROXY is on and Traefik doesn't strip inbound `X-Forwarded-Host`. Any HARD work here should mirror the first-value discipline used by `proto()`/`clientIp()` (`server.js:2384–2387`).
+- **Pitfall 2 — missing Origin:** `sameOrigin` returns `true` when Origin is absent (non-browser clients; `server.js:2391`). Correct for CSRF but means "sameOrigin on invite accept" is not a fix for non-browser abuse — the route keeps its per-IP throttle (`tooMany`, `server.js:4318`) as the real control. Do not tighten this to Origin-required: same-site navigations from older browsers and the `/join` GET legitimately omit Origin.
+- **Pitfall 3 — Referer:** do NOT add Referer-based fallback. Referer parsing needs `new URL(referer)` and a `.origin` comparison, which reintroduces URL-normalization pitfalls (port, case, punycode) for marginal benefit; the Origin check plus `SameSite=Lax` cookie (already set, `server.js:2415`) covers the CSRF window.
+- **Pitfall 4 — Origin `null`:** sandboxed iframes and redirects send `Origin: null`; the exact string compare rejects it correctly, which is the desired outcome. No special case.
 
-**3. Second TOTP factor.** Replace the `two_fa_*` columns with a factors table (or keep the primary column as factor #1 and add the table for #2 — see Alternatives). Recommended shape:
+### Search redaction (SEARCH)
 
-```sql
-CREATE TABLE totp_factors (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id      INTEGER NOT NULL REFERENCES users(id),
-  label        TEXT NOT NULL DEFAULT '',      -- user-named, e.g. "Phone", "Tablet"
-  secret_enc   TEXT NOT NULL,                 -- existing v2:<key-id>:<iv>:<tag>:<ct> envelope, unchanged format
-  confirmed_at INTEGER,                       -- NULL until verify-before-enable passes (pending enrollment)
-  last_counter INTEGER NOT NULL DEFAULT 0,    -- per-factor replay guard (existing TOTP counter logic, per row)
-  created_at   INTEGER NOT NULL
-);
-```
+- `referencesHidden` does `term.toLowerCase().includes(name)` (server.js:837). Known residual leak classes: (a) a hidden term that is itself empty/whitespace matches everything — guard `hiddenTerms.some(name => name && ...)`; (b) free-text search hitting task titles/comments is *not* redacted and cannot be, without indexing — that limitation is what the milestone says to **document**, not fix. No platform API beyond `toLowerCase`/`includes`/`Intl.Collator` (already used for accent-insensitive matching elsewhere per PROJECT.md).
 
-The keyring work in v1.5 pays off exactly here: `v2:` envelopes and `requireTotpSecret()` need **zero changes** — the second factor is just another row with its own envelope. Login flow change: a user with ≥1 confirmed factor enters *any* factor's code; verify loops confirmed factors with each factor's own replay guard (per-factor counter, never shared). Disable-2FA teardown (the Phase 21 one-transaction contract) extends to delete all factor rows + recovery codes + pending challenges in the same transaction. Recovery codes stay a single per-user set, untouched.
+### HTTP/misc
 
-**4. OIDC SSO.** Two small tables plus env config:
+- `fetch` (global, used in the healthcheck, Dockerfile:36) — unaffected by v1.7.
+- `crypto.randomUUID()` for row ids — already the house pattern for authority rows (`team_members.id`-style text PKs); reuse for per-user settings rows.
+- `Date.now()` epoch-ms integers for `created_at` — house pattern in every table (`server.js:161–233`).
 
-```sql
-CREATE TABLE sso_identities (
-  provider   TEXT NOT NULL DEFAULT 'entra',
-  issuer     TEXT NOT NULL,          -- https://login.microsoftonline.com/{tenant}/v2.0
-  subject    TEXT NOT NULL,          -- id_token `oid` claim (stable, tenant-scoped)
-  user_id    INTEGER NOT NULL REFERENCES users(id),
-  email      TEXT,                   -- mirror of preferred_username/claim at link time
-  PRIMARY KEY (provider, issuer, subject)
-);
-CREATE TABLE oidc_states (
-  state_hash TEXT PRIMARY KEY,       -- sha256(state), single-use, like the existing login_challenges pattern
-  nonce_hash TEXT NOT NULL,
-  verifier_hash TEXT NOT NULL,       -- sha256(verifier); plaintext verifier kept only until callback
-  next_path  TEXT,
-  created_at INTEGER NOT NULL        -- TTL ~10 min, purge like login_challenges
-);
-```
+## Alternatives Considered
 
-Env config (all required before the SSO UI renders — the env-gated visibility requirement):
-
-```
-ENTRA_TENANT_ID, ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET (optional if PKCE-only public-ish flow, but keep secret: confidential client), APP_URL (exists)
-```
-
-### The Raw OIDC Surface (what gets written, not installed)
-
-Verified against Microsoft Entra docs (Context7, `/websites/learn_microsoft_en-us_entra_identity-platform`, v2-oauth2-auth-code-flow):
-
-1. **Discovery** — `GET https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration` via `fetch`. Cache the document in memory (TTL ~1h); read `authorization_endpoint`, `token_endpoint`, `jwks_uri`, `issuer`. **Do not hardcode endpoints** — the issuer check later depends on the discovered issuer string (Entra's issuer *does* carry a trailing `/v2.0`, e.g. `https://login.microsoftonline.com/{tid}/v2.0`; compare exact string).
-
-2. **Authorization redirect** (inbound route already in `server.js`) — build the authorize URL with: `response_type=code`, `client_id`, `redirect_uri` (must *exactly* match an app-registration redirect URI), `response_mode=query`, `scope=openid profile email` (no Graph scopes needed — you only read the id_token), `state` (256-bit random, `crypto.randomBytes(32).toString('base64url')`), `nonce`, `code_challenge` + `code_challenge_method=S256`, `prompt=select_account`. Store sha256 hashes of state/nonce/verifier in `oidc_states` with a 10-minute TTL (mirrors the `login_challenges` single-use pattern).
-
-3. **PKCE** — verifier = 32 random bytes → base64url (43 chars); challenge = `createHash('sha256').update(verifier).digest('base64url')`. `Buffer` base64url support is native; no base64url shim needed.
-
-4. **Token exchange** — `fetch(token_endpoint, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams({ client_id, client_secret, grant_type: 'authorization_code', code, redirect_uri, code_verifier }) })`. You only consume `id_token` from the response; the access token can be discarded (no Graph API calls in scope).
-
-5. **JWKS validation (the security-critical part)**:
-   - Fetch `jwks_uri` (cache ~1h; on unknown `kid`, refetch once).
-   - Base64url-decode the JWT header/payload with `Buffer.from(part, 'base64url')`.
-   - Match `kid` in the JWKS; build the key with `crypto.createPublicKey({ key: jwk, format: 'jwk' })` (verified: Node accepts JWK objects directly).
-   - Verify signature: `crypto.verify('RSA-SHA256', Buffer.from(`${h}.${p}`), keyObject, sig)` — or `createVerify('RSA-SHA256')`. Entra signs with RS256/RS384; support both, reject `none` and everything else explicitly.
-   - Claim checks, each of which must fail the login individually: `iss` exactly equals the discovered issuer; `aud` equals `ENTRA_CLIENT_ID` (array or string); `exp > now` with small leeway (≤60s); `nonce` hash matches the stored one, state consumed exactly once (delete row in the same transaction as session creation); `iat` sane (optional). Email (`preferred_username` / `email` claim) is used only for account linking via `sso_identities`.
-
-6. **Account linking policy** (decision to surface to the owner): SSO sign-in links to an existing account only when the email matches an existing verified user — never auto-provisions unless explicitly chosen; a pending-2FA user completing SSO still must satisfy the TOTP challenge (SSO proves identity, 2FA stays the second door — recommend SSO does *not* bypass 2FA).
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| @playwright/test (existing) | e2e for SSO + 2FA flows | Real Entra can't run in CI; test against a local mock IdP (a ~50-line `node:http` server issuing unsigned-then-signed JWTs with a test RSA key) — this also gives replay/`kid`-swap/negative-claim tests for the validator. Playwright can't intercept the outbound token POST, so the mock IdP is the right seam |
-| node:test (existing) | unit tests for PKCE/claims/schema | Clock-injectable `Date.now` for `exp` tests, same pattern as `runReminderPass()` |
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Per-user settings storage | New table, one row per (workspace_id, user_id) | Keep in workspace doc under per-user keys | Defeats the point: the doc is shared, redacted and merged on every read/write — the milestone explicitly moves settings OUT of it |
+| Settings columns | Flat columns with defaults | One JSON TEXT blob | Defaults + `D-27-5` all-ON semantics are expressible in SQL; JSON blob re-creates the doc-merge problem at row scale |
+| Invite-accept origin guard | Reuse existing `sameOrigin()` | New `parseOrigin`/Referer check | URL-normalization pitfalls (see above); the existing guard is battle-tested across ~35 routes |
+| delTeam undo | Capture per-member `before` team sets, re-PUT on undo | New server-side undo log table | Massive overbuild for a client-side optimistic action; re-PUT reuses the `PUT /members/:uid/teams` route unchanged |
+| VIS enforcement | Extend the single `projectScope`/`hiddenFor` funnel | Per-route visibility checks | Per-route checks are exactly the drift the v1.6 funnel was built to prevent (PROJECT.md Phase 29) |
+| Node upgrade | None | node:25-alpine | No v1.7 item needs it; bumps `node:sqlite` from experimental-adjacent to RC but risks behavioral churn mid-debt-milestone |
 
 ## Installation
 
 ```bash
 # Nothing. Zero runtime dependencies held.
-# Optional dev tooling only if the team wants lint coverage of the new module:
-npm install -D eslint-plugin-... # not required — existing lint config suffices
+# Dev dependency remains @playwright/test only (package.json).
 ```
 
-## Alternatives Considered
+## Reusable Codebase Inventory (checked, do not rebuild)
 
-| Recommended | Alternative | When the Alternative Would Win |
-|---|---|---|
-| Hand-written OIDC on built-ins (~400 lines) | `openid-client` (npm, 0-dep-ish but a runtime dep) | Only if the constraint were lifted; it handles rotation/edge cases, but is precisely the dependency the project forbids |
-| `team_memberships` table | JSON `teams[].members[]` in the workspace doc | Never for authorization (document is client-mergeable; no indexed lookup); acceptable only as a display mirror |
-| One `totp_factors` table replacing `two_fa_*` columns | Keep primary column, add single secondary column (`two_fa_secret_2`) | Column approach is a smaller migration but bakes in "two forever" — a third factor, per-factor labels, or future factors (passkeys) would need another migration; the table is the same effort now |
-| `memberships` scope columns | Separate `scoped_memberships` table | Columns win: the membership row already exists and `requireWorkspace` already reads it; a parallel table would fork the membership-resolution logic |
-| Mock IdP for tests | Live Entra dev tenant in CI | A dev tenant is flaky and network-dependent; keep a manual UAT pass against the real tenant (like the QR device UAT in v1.3) |
-| `global fetch` for outbound OIDC calls | `node:http`/`node:https` | Only if a proxy/TLS-policy requirement appears; fetch handles redirects, timeouts (`AbortSignal.timeout()`), and pooling |
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| MSAL Node (`@azure/msal-node`) or `openid-client` | Runtime dependencies — violates the hard constraint | Hand-written authorization-code + PKCE flow above |
-| `jsonwebtoken` / `jose` for id_token validation | Same reason; also `jose` drags a large webcrypto surface for one RS256 verify | `crypto.verify` + `createPublicKey({format:'jwk'})` |
-| Decoding the JWT without verifying the signature (or trusting the token endpoint's `id_token` claims as JSON without validation) | Classic OIDC vuln; the token endpoint response is *not* automatically trustworthy for linking | Full JWKS signature verification before any claim is trusted |
-| Storing team membership in the workspace JSON document | The document is client-mergeable and redacted; access authority must live in SQL rows (the v1.3 principle) | `team_memberships` table |
-| Sharing one replay counter across TOTP factors | Two factors would invalidate each other's codes | Per-factor `last_counter` |
-| Letting SSO bypass the TOTP challenge | Defeats the "second door" the milestone exists to add | SSO → identity proof, then normal pending-2FA challenge |
-| Entra `common` tenant endpoint | Allows any Microsoft tenant to sign in — wrong for a self-hosted single-org install | `ENTRA_TENANT_ID` (specific tenant GUID) in all URLs |
-
-## Stack Patterns by Variant
-
-**If the owner wants passwordless Entra-first sign-in later:** the `sso_identities` + `oidc_states` schema already supports it; only the linking policy and login-page ordering change.
-
-**If a third TOTP factor or passkeys ever arrive:** `totp_factors` generalizes; passkeys would need a sibling `webauthn_credentials` table, not a schema rethink.
-
-**If team-lead roles are wanted later:** `team_memberships.role` is already in the schema; today it stays `DEFAULT 'member'` and is never read — cheap to reserve.
-
-## Version Compatibility
-
-| Component | Compatible With | Notes |
-|-----------|-----------------|-------|
-| `crypto.createPublicKey` JWK format | Node ≥ 15.12 | Project on 24.x — fine |
-| `Buffer.from(x, 'base64url')` | Node ≥ 15.7 | Fine |
-| `crypto.verify('RSA-SHA256', …)` one-call form | Node ≥ 15 | Fine |
-| Global `fetch` / `AbortSignal.timeout` | Node ≥ 18 / ≥ 17.3 | Fine on 24.x |
-| Entra v2.0 endpoints (`login.microsoftonline.com/{tid}/v2.0`) | current | Verified via Context7, learn.microsoft.com |
+| Existing piece | Location | Reused by |
+|----------------|----------|-----------|
+| `sameOrigin(req)` | server.js:2389 | HARD (one new call site) |
+| `proto(req)` / `clientIp(req)` first-value proxy discipline | server.js:2357, 2384 | HARD (make `x-forwarded-host` consistent) |
+| `team_members` table + index | server.js:227–234 | VIS |
+| `projectScope`/`hiddenFor` read funnel | server.js:~700–880 | VIS |
+| `referencesHidden` / `mergeRecentSearches` / `hiddenProjectTerms` | server.js:837/844/868 | SEARCH |
+| `vacuum into` backup + guarded one-time backfill migration pattern | server.js:1693–1741, 1727 | SETTINGS |
+| `setMemberTeams` PUT route | server.js:3990+ | UNDO |
+| Keyring reading `MASTER_KEY_PREVIOUS` | server.js:88–101 | DEPLOY (compose line only) |
+| `restore(snap)` toast-undo client pattern | src/actions/actions.js:699+ | UNDO |
+| Per-user `locale` column precedent (per-user state outside doc) | v1.2, PROJECT.md | SETTINGS |
 
 ## Sources
 
-- Context7 `/websites/learn_microsoft_en-us_entra_identity-platform` — authorization code flow endpoints, PKCE parameters, token request body (HIGH, official docs)
-- Context7 `/websites/nodejs_latest-v24_x_api` — `createPublicKey` JWK support, `verify` API (HIGH, official docs)
-- `node:crypto` TOTP replay-guard and `v2:` envelope patterns — project's own v1.4/v1.5 implementation (ground truth, PROJECT.md)
-- JWKS caching/kid-rotation and claim-validation checklist — standard OIDC practice (MEDIUM, well-established; verified against the Entra doc structure above)
-
----
-*Stack research for: Projects Studio v1.6 Team Access & Federation*
-*Researched: 2026-11-01*
+- `Dockerfile` (lines 2, 12) — node:24-alpine, both stages [HIGH]
+- `docker-compose.yml` lines 8–45 — no `MASTER_KEY_PREVIOUS` today [HIGH, file-verified]
+- `server.js` — all line references above, read directly [HIGH]
+- `.planning/PROJECT.md`, `STATE.md`, `milestones/v1.6-phases/28-multi-team-membership/28-REVIEW.md` — UNDO root cause (WR-02/WR-03, deferred-item 28-02) [HIGH]
+- Node.js official `sqlite.md` docs (pinned to main, introduced_in v22.5; changes log verified for 24.x) [HIGH]
+- Local runtime check: `node -v` → v24.21.0 [HIGH]
