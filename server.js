@@ -2882,6 +2882,10 @@ async function handleApi(req, res, url) {
     // IS a disable (D-18): its own live code satisfies the disable contract,
     // so the helper runs unexcluded. Pitfall 3: zero verifiable factors →
     // fail closed 503 either way.
+    // WR-01 (TOCTOU): the outside read feeds only the VERIFY exclusion; the
+    // branch decision itself is re-read INSIDE the transaction below — two
+    // concurrent removes both observing "2 factors" could otherwise take the
+    // single-delete path twice and strand the user at 0 rows with 2FA on.
     const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
     const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000), factorCount > 1 ? target.id : null);
     if (result.decrypted === 0) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be verified until the admin sets it');
@@ -2891,7 +2895,11 @@ async function handleApi(req, res, url) {
     // Pitfall 9/D-105: hash the caller's own cookie — never a body value.
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     transaction(() => {
-      if (factorCount > 1) {
+      // WR-01: the count is re-read inside the transaction (Pitfall 4) — the
+      // branch below can no longer race a concurrent removal into a
+      // 0-factors-but-2FA-on half-state.
+      const freshCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+      if (freshCount > 1) {
         // D-17: single-factor removal touches NOTHING else — the target row
         // dies alone; recovery codes, sessions and 2FA itself stay.
         db.prepare('delete from totp_factors where id = ? and user_id = ?').run(factorId, user.id);
