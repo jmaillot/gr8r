@@ -231,15 +231,12 @@ OIDC_TENANT_ID=<your Entra tenant GUID>
 OIDC_CLIENT_ID=<application (client) ID>
 OIDC_CLIENT_SECRET=<client secret value>
 # OIDC_SSO_ONLY=true
-# OIDC_DEFAULT_ROLE=member        # or viewer — JIT-provisioned accounts never get more
 # OIDC_SCOPES=openid profile email # the default; rarely needs changing
 ```
 
 Activation rule: SSO turns on only when `OIDC_ENABLED=true` **and** the complete variable
 set (`OIDC_TENANT_ID`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) is present. A partial set is
 treated exactly like a disabled one — the routes answer a plain 404 and reveal nothing.
-`OIDC_DEFAULT_ROLE` is clamped to `member` or `viewer`; any other value falls back to
-`member`.
 
 **Azure Portal app registration** (Entra admin center → Applications → App registrations →
 New registration):

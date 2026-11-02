@@ -21,7 +21,6 @@
      OIDC_CLIENT_ID      app registration application (client) id
      OIDC_CLIENT_SECRET  app registration client secret
      OIDC_SSO_ONLY       true = SSO becomes the only sign-in door
-     OIDC_DEFAULT_ROLE   member | viewer (JIT-provisioned accounts, D-04)
      OIDC_SCOPES         default "openid profile email"
      OIDC_ISSUER_OVERRIDE  TEST-ONLY issuer override for the mock IdP
                          (test/oidc-sso.test.mjs); never set in production.
@@ -55,16 +54,12 @@ function readConfig(env) {
   const clientSecret = String(env.OIDC_CLIENT_SECRET ?? '').trim();
   if (!tenantId || !clientId || !clientSecret) return null;
   const issuer = text(env.OIDC_ISSUER_OVERRIDE) || `https://login.microsoftonline.com/${tenantId}/v2.0`;
-  const defaultRoleRaw = text(env.OIDC_DEFAULT_ROLE).toLowerCase();
   return {
     tenantId,
     clientId,
     clientSecret,
     issuer,
     scopes: text(env.OIDC_SCOPES) || 'openid profile email',
-    /* D-04: only member|viewer are ever JIT-provisioned; anything else
-       falls back to member. Consumed by plan 30-02's provisioning. */
-    defaultRole: defaultRoleRaw === 'viewer' ? 'viewer' : 'member',
     ssoOnly: flag(env.OIDC_SSO_ONLY),
   };
 }
@@ -143,7 +138,6 @@ export function createOidc(env = process.env) {
     return {
       enabled: false,
       ssoOnly: false,
-      defaultRole: null,
       config: null,
       buildAuthUrl() {
         throw new Error('OIDC is not configured');
@@ -187,7 +181,6 @@ export function createOidc(env = process.env) {
   return {
     enabled: true,
     ssoOnly: config.ssoOnly,
-    defaultRole: config.defaultRole,
     config: { tenantId: config.tenantId, clientId: config.clientId, issuer: config.issuer },
 
     /* The authorize URL carries the full D-01 shape: confidential-client id,

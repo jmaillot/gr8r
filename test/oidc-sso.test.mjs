@@ -225,38 +225,6 @@ test('the happy path: start → authorize URL → callback → session (SSO-01)'
   });
 });
 
-/* SSO-04 / D-04: the JIT default role clamp in oidc.js readConfig. Only the
-   exact strings member|viewer are ever JIT-provisioned; anything else —
-   absent, empty, admin, owner, a typo — falls back to member. Never
-   owner/admin (T-30-08). */
-import { createOidc } from '../oidc.js';
-
-const oidcFactoryEnv = role => ({
-  OIDC_ENABLED: 'true',
-  OIDC_TENANT_ID: 't-1',
-  OIDC_CLIENT_ID: 'cid',
-  OIDC_CLIENT_SECRET: 'sec',
-  ...(role === undefined ? {} : { OIDC_DEFAULT_ROLE: role }),
-});
-
-for (const [label, value, expected] of [
-  ['absent (unset)', undefined, 'member'],
-  ['empty string', '', 'member'],
-  ['member', 'member', 'member'],
-  ['viewer', 'viewer', 'viewer'],
-  ['admin (must never elevate)', 'admin', 'member'],
-  ['owner (must never elevate)', 'owner', 'member'],
-  ['garbage typo', 'garbage', 'member'],
-  ['ADMIN uppercase', 'ADMIN', 'member'],
-]) {
-  test(`OIDC_DEFAULT_ROLE ${label} → JIT role ${expected} (SSO-04/D-04)`, () => {
-    const oidc = createOidc(oidcFactoryEnv(value));
-    assert.equal(oidc.enabled, true);
-    assert.equal(oidc.defaultRole, expected);
-    assert.ok(['member', 'viewer'].includes(oidc.defaultRole), 'the clamp output is always member|viewer, never owner/admin');
-  });
-}
-
 /* SSO-03 helpers: a full start → callback flow against the shared mock IdP,
    plus direct users-row creation for the "existing account" side of the
    link policy. */

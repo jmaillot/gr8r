@@ -37,7 +37,6 @@
      OIDC_CLIENT_ID         app registration application (client) id
      OIDC_CLIENT_SECRET     app registration client secret
      OIDC_SSO_ONLY          true = SSO is the only sign-in door (Phase 30 plan 02)
-     OIDC_DEFAULT_ROLE      member | viewer for JIT-provisioned accounts (default member)
      OIDC_SCOPES            default "openid profile email"
      OIDC_ISSUER_OVERRIDE   TEST-ONLY issuer override for the mock IdP — never in production
 
