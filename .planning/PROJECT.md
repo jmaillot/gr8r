@@ -1,10 +1,27 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-02 after v1.6 milestone*
+*Last updated: 2026-11-02 — milestone v1.7 started*
 
-## Current Milestone
+## Current Milestone: v1.7 Team Visibility & Hardening
 
-None — v1.6 shipped 2026-11-02. Scope the next milestone with `/gsd-new-milestone`.
+**Goal:** close every open thread from previous milestones — no new features, all debt:
+team-derived project visibility, the delTeam undo trap, membership-surface hardening,
+the recent-search leak, per-user settings isolation, and the compose key-rotation gap.
+
+**Target features:**
+- VIS — Team-derived project visibility for ALL members: `project.teams ∩ member.teams ≠ ∅`;
+  no-team projects stay workspace-wide; Phase-29 scope remains an optional admin restriction
+  (Backlog 999.1, deferred from the v1.6 Phase 29 UAT session)
+- UNDO — delTeam undo restores the purged memberships (or removes the misleading Undo offer)
+- HARD — Membership-surface hardening (v1.1 audit): `sameOrigin` on invite accept, no admin
+  link-only invites, no `firstWorkspace()` fallback, no guest-profile spoof
+- SEARCH — Close the substring-based recent-search leak; document the free-text limitation
+- SETTINGS — Per-user settings isolation: `notifPrefs`/`invoices` out of the shared workspace
+  document into real per-user rows (additive migration + routes)
+- DEPLOY — docker-compose forwards `MASTER_KEY_PREVIOUS` (CR-01, Phase 30 review)
+
+**Constraints:** zero runtime dependencies held; migrations additive-only with byte-identical
+second boot; full suite green; EN+FR i18n gate.
 
 ## What it is
 
@@ -383,14 +400,8 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-From the v1.1 audit (`.planning/milestones/v1.1-MILESTONE-AUDIT.md`) and this milestone's scope:
-
-- [ ] Harden the membership surface: `sameOrigin` on invite accept, no admin link-only
-      invites, no `firstWorkspace()` fallback, no guest-profile spoof.
-- [ ] Close the substring-based recent-search leak and state the free-text limitation in the
-      product docs.
-- [ ] Per-user settings isolation inside a workspace (`notifPrefs`, `invoices` are still
-      shared fields in the document; auth state moved to real tables in v1.3).
+All v1.1-audit and v1.6-deferred items are scoped into v1.7 (see Current Milestone).
+New requirements will land here as the milestone evolves.
 
 ### Out of scope
 

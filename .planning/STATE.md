@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.6
-milestone_name: Team Access & Federation
-status: Awaiting next milestone
-stopped_at: Phase 30 complete — all phases complete
-last_updated: "2026-11-02T18:00:40.915Z"
+milestone: v1.7
+milestone_name: Team Visibility & Hardening
+status: planning
+last_updated: "2026-11-02T18:48:14.381Z"
 last_activity: 2026-11-02
-last_activity_desc: Milestone v1.6 completed and archived
-state_head: e29cf8b100b1d53bfcf07061c8eeaf20b35ebfd9
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
-current_phase: 30
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -27,10 +23,10 @@ current_phase: 30
 
 ## Current Position
 
-Phase: Milestone v1.6 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-02 — Milestone v1.6 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-02 — Milestone v1.7 started
 
 ## Recent Decisions
 
