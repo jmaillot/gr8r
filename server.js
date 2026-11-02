@@ -4187,15 +4187,26 @@ async function serveFileBinary(req, res, slug, id) {
   const ctx = requireWorkspace(req, res, slug, 'viewer');
   if (!ctx) return;
   let record = null;
+  let data = null;
   try {
-    const files = JSON.parse(ctx.ws.doc)?.data?.files;
-    record = Array.isArray(files) ? files.find(f => f?.id === id) : null;
+    data = JSON.parse(ctx.ws.doc)?.data;
+    record = Array.isArray(data?.files) ? data.files.find(f => f?.id === id) : null;
   } catch {
     /* fall through to the 404 */
   }
   /* T-12-02: the id never builds a path outside FILES_DIR. */
   const file = path.join(FILES_DIR, id);
   if (!record || path.dirname(file) !== FILES_DIR) return fail(res, 404, 'fileNotFound', 'File not found');
+  /* T-29-05: the by-id side door rides the same scope-aware funnel as the
+     doc reads — a record whose project is hidden (private the caller cannot
+     see, or out-of-scope) answers the SAME 404 as an unknown id so status,
+     code and message give away no existence oracle. A record WITHOUT a
+     project is a workspace-level attachment (uploads outside a project
+     context serialize without the key) and stays member-visible — the
+     pre-phase contract; only project-bound records are scope-checked. */
+  if (record.project && hiddenFor({ data }, ctx.membership).has(record.project)) {
+    return fail(res, 404, 'fileNotFound', 'File not found');
+  }
   let stat = null;
   try {
     stat = fs.statSync(file);
