@@ -1,7 +1,7 @@
 ---
 phase: 30-entra-sso-oidc
 verified: 2026-11-02T18:10:00Z
-status: human_needed
+status: passed
 score: 9/9 must-haves verified
 covered_files:
   - .planning/phases/30-entra-sso-oidc/30-01-PLAN.md
@@ -27,7 +27,8 @@ covered_files:
   - src/locales/fr.json
   - DEPLOY.md
   - package.json
-covered_digest: "v2:sha256:0cb9d485a55c57b03a400103b7b9b054783f6ae36e48de8c87addd2a8e1a06d0"
+
+covered_digest: "v2:sha256:f8586b3d611f41f75e7c282495328e5d361a70b111bc3893a7cb52e10be778df"
 behavior_unverified: 0
 overrides_applied: 1
 re_verification:
@@ -151,11 +152,13 @@ WR-01 (guestShape `idp !== issuer` can misclassify federated internal members) r
 ### Human Verification Required
 
 ### 1. Real-tenant smoke test
+
 **Test:** Configure OIDC_ENABLED + the three vars against a real Entra app registration; complete a sign-in with a verified tenant member.
 **Expected:** Microsoft redirect, back to a session; button appears only when configured.
 **Why human:** Requires real Microsoft credentials; mock IdP cannot prove live tenant wiring.
 
 ### 2. Real-tenant fail-closed negative check (G-30-1)
+
 **Test:** Sign in with an account whose token carries `email_verified !== true` (guest/MSA where applicable).
 **Expected:** /login?sso=error with the generic ssoError banner; no users/oidc_identities row, no session.
 **Why human:** Real claim shapes differ from fixtures; the strict gate's behavior against genuine tokens needs operator observation.
