@@ -3031,7 +3031,11 @@ async function handleApi(req, res, url) {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = requireUser(req, res);
     if (!user) return;
-    if (tooMany(`tfa-factors|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    /* WR-02: NO throttle on this read-only GET — the client refreshes it on
+       every settings-tab visit and after every mutation, so a 5/15-min budget
+       429s into a silently emptied factor list (indistinguishable from
+       removal). It leaks nothing (names + steps only, owner-gated), matching
+       the unthrottled /api/auth/sessions GET. */
     /* T-31 trust boundary: names + steps only — a secret never leaves the
        server. Last-used is derived at display time from the replay guard's
        matched step (RESEARCH A3): step * period seconds; 0 = never used. */
