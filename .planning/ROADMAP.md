@@ -131,7 +131,7 @@ Plans:
 - [x] 30-02-PLAN.md — Identity resolution: pinned-tenant link policy, JIT role clamp, SSO-08 fail-closed matrix (SSO-03/SSO-04/SSO-08, D-04/D-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 30-03-PLAN.md — Composition: 2FA challenge verbatim + invite reconciliation (SSO-05/SSO-07, D-06)
+- [x] 30-03-PLAN.md — Composition: 2FA challenge verbatim + invite reconciliation (SSO-05/SSO-07, D-06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 30-04-PLAN.md — SSO-only mode + client surface + docs (SSO-06, D-03/D-07/D-08/D-09)
@@ -177,7 +177,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 28. Multi-Team Membership | 4/4 | Complete    | 2026-11-01 |
 | 29. Team/Project-Scoped Permissions | 4/4 | Complete    | 2026-11-02 |
-| 30. Entra SSO (OIDC) | 2/4 | In Progress|  |
+| 30. Entra SSO (OIDC) | 3/4 | In Progress|  |
 | 31. Second TOTP Factor | 3/3 | Complete    | 2026-11-02 |
 
 ## Backlog

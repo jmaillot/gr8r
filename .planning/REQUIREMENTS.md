@@ -58,12 +58,12 @@ method. Zero new runtime dependencies throughout.
       claims; mismatched identities create a separate account rather than guessing.
 - [x] **SSO-04**: New users are provisioned just-in-time on first SSO login with a
       default role (env-configurable), shaped as invited members, not auto-elevated.
-- [ ] **SSO-05**: SSO does not bypass 2FA — an account with TOTP enrolled still passes through
+- [x] **SSO-05**: SSO does not bypass 2FA — an account with TOTP enrolled still passes through
       the pending-2FA challenge after SSO authentication; the session teardown and 401
       contracts apply to SSO sessions identically.
 - [ ] **SSO-06**: An env flag can make the IdP the only door: the password sign-in path is
       hidden/disabled when SSO-only is configured.
-- [ ] **SSO-07**: Pending invitations for the SSO user's email are reconciled at first login —
+- [x] **SSO-07**: Pending invitations for the SSO user's email are reconciled at first login —
       surfaced or accepted, never silently stranded.
 - [x] **SSO-08**: The OIDC token validation (signature, issuer, audience, expiry, state, nonce,
       PKCE) is pinned by a table-driven test suite against a mock IdP — tampered tokens,
