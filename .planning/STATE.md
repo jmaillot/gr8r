@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
 current_phase: 30
-current_phase_name: entra-sso-oidc
+current_phase_name: Entra SSO (OIDC)
 status: executing
-stopped_at: Completed 30-04-PLAN.md
-last_updated: "2026-11-02T15:07:55.559Z"
+stopped_at: Completed 30-05-PLAN.md
+last_updated: "2026-11-02T15:26:54.290Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 30 execution complete (30-04 done)
-state_head: 8b7f64ec8d33e19fa629f3d4c344d79450e683e4
+last_activity_desc: Phase 30 execution started
+state_head: fc80b604394dfd303c20842b2703ea724b0de941
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 16
   percent: 75
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 30 (entra-sso-oidc) — READY TO EXECUTE
-Plan: 4 of 4
+Phase: 30 (Entra SSO (OIDC)) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-11-02 — Completed 30-04 (SSO-only mode + client surface + operator docs)
+Last activity: 2026-11-02 — Phase 30 execution started
 
 Progress: [████████░░] 75% of phase plans (4/4)
 
@@ -97,6 +97,7 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 30]: D-04 JIT role clamp enforced at oidc.js readConfig and test-pinned both directions; bare account writes no membership row until 30-03
 - [Phase 30]: 30-03: SSO 2FA redirect targets are hash fragments — /#tfa (pending-2FA) and /#invitations (multi-invite surface); 30-04 wires the SPA fragments
 - [Phase 30]: 30-03: invite reconciliation gated on zero memberships (covers linked-memberless users; repeat logins idempotent by construction); OIDC.defaultRole never reaches a membership write (D-05 bare account + invite-carried roles)
+- [Phase 30]: 30-05: SSO-04 closed by removal (route 2 per D-05) — OIDC_DEFAULT_ROLE deleted from env surface; plan-02 truth carries explicit D-05 override
 
 ### Pending Todos
 
@@ -119,8 +120,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T15:05:00.000Z
-Stopped at: Completed 30-04-PLAN.md
+Last session: 2026-11-02T15:26:54.225Z
+Stopped at: Completed 30-05-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -140,6 +141,7 @@ Resume file: None
 | Phase 30 P02 | 12min | 3 tasks | 2 files |
 | Phase 30 P03 | 20min | 2 tasks | 2 files |
 | Phase 30 P04 | 25min | 3 tasks | 12 files |
+| Phase 30 P05 | 12min | 2 tasks | 5 files |
 
 ## Operator Next Steps
 

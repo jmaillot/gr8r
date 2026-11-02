@@ -121,9 +121,11 @@ order; consumes the Phase 28-settled OIDC identity schema)
   5. The token-validation suite (mock IdP, table-driven) proves tampered tokens, wrong
      kid, bad issuer/audience/expiry/state/nonce/PKCE all fail closed — and with SSO-only
      configured, the password sign-in path is hidden/disabled.
-**Plans**: 4/4 plans executed
+**Plans**: 5/5 plans executed
 
 Plans:
+- [x] 30-05-PLAN.md
+
 **Wave 1**
 - [x] 30-01-PLAN.md — Tracer: oidc.js + routes + config ground truth + mock-IdP happy path & env-gating matrix (SSO-01/SSO-02, D-01/D-02/D-10)
 
@@ -177,7 +179,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 28. Multi-Team Membership | 4/4 | Complete    | 2026-11-01 |
 | 29. Team/Project-Scoped Permissions | 4/4 | Complete    | 2026-11-02 |
-| 30. Entra SSO (OIDC) | 3/4 | In Progress|  |
+| 30. Entra SSO (OIDC) | 5/5 | In Progress|  |
 | 31. Second TOTP Factor | 3/3 | Complete    | 2026-11-02 |
 
 ## Backlog
