@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.6
 milestone_name: Team Access & Federation
 current_phase: 30
-current_phase_name: entra-sso-oidc
+current_phase_name: Entra SSO (OIDC)
 status: executing
-stopped_at: Phase 30 context gathered
-last_updated: "2026-11-02T13:52:20.996Z"
+stopped_at: Completed 30-01-PLAN.md
+last_updated: "2026-11-02T14:04:46.809Z"
 last_activity: 2026-11-02
-last_activity_desc: Phase 31 complete, transitioned to Phase 30
-state_head: c2bdc02099e4eb01e5139f80bfb7e7b9cd0ca18d
+last_activity_desc: Phase 30 execution started
+state_head: 15cac4266b4df3fdba7caadb25550ad432d66cdb
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 75
 ---
 
 # STATE.md
@@ -28,12 +28,12 @@ progress:
 
 ## Current Position
 
-Phase: 30 (entra-sso-oidc) — READY TO EXECUTE
-Plan: Not started
+Phase: 30 (Entra SSO (OIDC)) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-11-02 — Phase 31 complete, transitioned to Phase 30
+Last activity: 2026-11-02 — Phase 30 execution started
 
-Progress: [███████░░░] 73% of phase plans (4/4)
+Progress: [████████░░] 75% of phase plans (4/4)
 
 ## Recent Decisions
 
@@ -89,6 +89,9 @@ migrations, full suite green, zero new runtime dependencies.
 - [Phase 29]: 29-04: invites carry validated scope end-to-end (invite POST mirror-validation → invites.scope JSON → acceptance → addMembership 5th arg, coalesce-on-conflict); guest = viewer + exactly-one-project enforced at creation (400 guestSingleProject); D-04 admin/owner invites with scope refused
 - [Phase 29]: 29-04: member modal scope editor starts empty+untouched and never writes scope unless touched — D-05 payload silence means no cross-session read-back (S.ui.memberScopes caches in-session); changing that needs a D-05 policy decision
 - [Phase 29]: 29-04: the 404-matrix is complete (family 6 live, zero "covered by Plan" rows); D-06 workspace-level rows assert zero out-of-scope references in activity, recent searches and client searchAll
+- [Phase 30]: 30-01: flow state (hashed state, raw nonce/verifier) lives in a server-side Map keyed by an opaque 10-min cookie — raw values never ride a cookie; delete-on-use consumes it (replay pinned)
+- [Phase 30]: 30-01: sso_login security verb logged only once a user row resolves — pre-identity failures skip it (security_log.user_id is a NOT NULL FK)
+- [Phase 30]: 30-01: 2FA challenge composition intentionally deferred to 30-02 per plan objective; this plan mints the session directly after identity resolution
 
 ### Pending Todos
 
@@ -111,9 +114,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T13:27:21.146Z
-Stopped at: Phase 30 context gathered
-Resume file: .planning/phases/30-entra-sso-oidc/30-CONTEXT.md
+Last session: 2026-11-02T14:04:46.747Z
+Stopped at: Completed 30-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -128,6 +131,7 @@ Resume file: .planning/phases/30-entra-sso-oidc/30-CONTEXT.md
 | Phase 29 P02 | 27 min | 3 tasks | 2 files |
 | Phase 29 P03 | ~35 min | 3 tasks | 7 files |
 | Phase 29 P04 | ~30 min | 3 tasks | 11 files |
+| Phase 30 P01 | 35min | 2 tasks | 5 files |
 
 ## Operator Next Steps
 

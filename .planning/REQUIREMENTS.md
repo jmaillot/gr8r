@@ -49,10 +49,10 @@ method. Zero new runtime dependencies throughout.
 
 ### Entra SSO (Kanzo #2 — third phase)
 
-- [ ] **SSO-01**: Microsoft Entra sign-in works as a third sign-in path using the OIDC
+- [x] **SSO-01**: Microsoft Entra sign-in works as a third sign-in path using the OIDC
       authorization-code flow with PKCE, hand-rolled over Node built-ins (`node:crypto`,
       `fetch`, JWKS RS256 verification, pinned tenant issuer) — zero new packages.
-- [ ] **SSO-02**: SSO is env-gated and honestly hidden: when not configured, no sign-in button
+- [x] **SSO-02**: SSO is env-gated and honestly hidden: when not configured, no sign-in button
       renders and the OIDC routes answer 404; `oidcEnabled` is server ground truth.
 - [ ] **SSO-03**: Existing accounts link by verified email only — no linking on unverified
       claims; mismatched identities create a separate account rather than guessing.
