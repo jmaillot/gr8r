@@ -324,6 +324,8 @@ in this compose file (every line but MASTER_KEY, PRJSTUDIO_HOST labels).
 2. **Test file placement** — discretion per CONTEXT.md. Existing authority-row suite
    (test/membership.test.mjs, PUT-teams coverage at :348) is the natural home for the
    UNDO-02 regression; compose test wants its own focused file or a deploy-adjacent home.
+   - **RESOLVED (35-01/35-02):** UNDO pin lives in `test/undo-membership.test.mjs`
+     (35-01, planner discretion); compose test in `test/compose-config.test.mjs` (35-02).
 
 ## Environment Availability
 
