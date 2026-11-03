@@ -38,7 +38,8 @@ test('tokenize normalizes NFC + lowercase and splits on non-word boundaries', ()
    (e) surrounding punctuation: "(Sarah)" drops; "Sarah's" tokenizes to
        [sarah, s] and shares the full token "sarah" — drop (pinned actual);
    (f) case variants; (g) empty hiddenTerms keeps everything;
-   (h) non-string terms are kept and never throw. */
+   (h) non-string terms are kept and never throw;
+   (i) tokenless (symbol-only) hidden names fall back to a substring match. */
 
 const TABLE = [
   // (a) the canonical Sarah/Sara directions (D-13)
@@ -74,6 +75,12 @@ const TABLE = [
   // key/name both contribute hidden terms (hiddenProjectTerms pushes both)
   { term: 'out sprint', hiddenTerms: ['Out of Scope', 'out'], expected: true },
   { term: 'in scope planning', hiddenTerms: ['Out of Scope', 'out'], expected: true, note: 'shares the full token "scope" — the accepted T-34-08 residual' },
+
+  // (i) tokenless hidden names (symbols/punctuation only): substring fallback
+  { term: 'looking at ### today', hiddenTerms: ['###'], expected: true, note: 'symbol-only hidden name matches via substring fallback' },
+  { term: 'unrelated query', hiddenTerms: ['###'], expected: false, note: 'substring fallback does not over-match' },
+  { term: 'notes about *** launch', hiddenTerms: ['***'], expected: true, note: 'second symbol-only name' },
+  { term: 'planning ###-internal rework', hiddenTerms: ['###-internal'], expected: true, note: 'name whose distinguishing part is symbolic' },
 ];
 
 for (const row of TABLE) {

@@ -24,13 +24,24 @@ export function tokenize(value) {
 }
 
 /* A free-text term that shares at least one full token with a hidden name.
-   Non-string terms never match (kept); an empty hidden list never matches. */
+   Non-string terms never match (kept); an empty hidden list never matches.
+   A hidden name that tokenizes to nothing (symbols/punctuation only, e.g.
+   "###" or "!!!") can never share a token, so it falls back to a substring
+   check — the pre-34-03 behavior — for that name only. */
 export function referencesHidden(term, hiddenTerms) {
   if (typeof term !== 'string') return false;
   const tokens = new Set(tokenize(term));
   if (tokens.size === 0) return false;
   for (const name of Array.isArray(hiddenTerms) ? hiddenTerms : []) {
-    for (const token of tokenize(name)) {
+    const nameTokens = tokenize(name);
+    if (nameTokens.length === 0) {
+      // Tokenless name: substring fallback so symbol-only hidden names keep
+      // the same protection they had under the pre-tokenized matcher.
+      const norm = String(name ?? '').normalize('NFC').toLowerCase().trim();
+      if (norm && term.normalize('NFC').toLowerCase().includes(norm)) return true;
+      continue;
+    }
+    for (const token of nameTokens) {
       if (tokens.has(token)) return true;
     }
   }
