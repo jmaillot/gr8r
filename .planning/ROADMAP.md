@@ -21,7 +21,7 @@ hardening, the recent-search leak, per-user settings isolation, and the compose 
 - [x] **Phase 32: Team-Derived Project Visibility** - A project is readable iff a member's teams intersect the project's teams; no-team projects stay workspace-wide; rides the single `hiddenFor` funnel. (Backlog 999.1) (completed 2026-11-02)
 - [x] **Phase 33: Membership-Surface Hardening** - Invite-accept gets sameOrigin, explicit workspace resolution (SSO twin in the same commit), no link-only admin invites, spoof closed. (v1.1 audit) (completed 2026-11-03)
 - [x] **Phase 34: Per-User Settings Isolation & Search Leak Closure** - `notifPrefs` move to real per-user rows via additive migration; the substring recent-search leak closes against post-VIS visibility. (completed 2026-11-03)
-- [ ] **Phase 35: Honest Undo & Deploy Gap** - delTeam undo restores purged memberships without clobbering newer changes; docker-compose forwards `MASTER_KEY_PREVIOUS`.
+- [x] **Phase 35: Honest Undo & Deploy Gap** - delTeam undo restores purged memberships without clobbering newer changes; docker-compose forwards `MASTER_KEY_PREVIOUS`. (completed 2026-11-03)
 
 ## Phase Details
 
@@ -154,7 +154,7 @@ final VIS semantics)
      optional form — a compose-config test passes both with and without the variable set
      (fresh installs keep booting) — and DEPLOY.md §14 notes compose users need no extra
      rotation step.
-**Plans**: 3/3 plans executed + 1 gap-closure plan
+**Plans**: 3/3 plans complete + 1 gap-closure plan
 
 Plans:
 - [x] 35-01-PLAN.md — Honest undo: before-map capture above the purge, awaited doc push, union membership replay via existing PUT route (UNDO-01, UNDO-02, D-01..D-06)
@@ -170,7 +170,7 @@ Plans:
 | 32. Team-Derived Project Visibility | 1/1 | Complete    | 2026-11-02 |
 | 33. Membership-Surface Hardening | 2/2 | Complete    | 2026-11-03 |
 | 34. Per-User Settings Isolation & Search Leak Closure | 6/6 | Complete    | 2026-11-03 |
-| 35. Honest Undo & Deploy Gap | 3/3 | In Progress|  |
+| 35. Honest Undo & Deploy Gap | 3/3 | Complete    | 2026-11-03 |
 
 ## Backlog
 
