@@ -97,3 +97,141 @@ test('UNDO-01: the undo sequence (doc PUT awaited, then union PUT) re-creates pu
     await s.stop();
   }
 });
+
+/* UNDO-02 (D-03): a member who gained a different team between deletion and
+   undo keeps it after the undo replay — the union PUT (current ∪ captured)
+   lands rows {team_a, team_c}; the newer team_c row survives. */
+test('UNDO-02: a newer independent team change survives the undo union replay', async () => {
+  const { s, boss, putDoc, inviteMember } = await boot();
+  try {
+    const base = structuredClone((await boss.get('/api/workspaces/acme')).data.doc);
+    base.data.teams = [
+      { id: 'team_a', name: 'Alpha', members: [] },
+      { id: 'team_c', name: 'Gamma', members: [] },
+    ];
+    await putDoc(base);
+
+    const { row } = await inviteMember('undo2@test.local');
+    const uid = row.userId;
+    const wsId = (await boss.get('/api/workspaces/acme')).data.id;
+
+    // Member starts on team_a; the delete purges it to an empty set.
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_a'] })).status, 200);
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: [] })).status, 200);
+
+    // The newer independent change: the member moved to team_c meanwhile.
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_c'] })).status, 200);
+
+    // The undo replay: doc PUT restores team_a's definition, then the union
+    // PUT (current {team_c} ∪ captured {team_a}).
+    const restored = structuredClone((await boss.get('/api/workspaces/acme')).data.doc);
+    restored.data.teams = [...restored.data.teams, { id: 'team_a', name: 'Alpha', members: [] }];
+    await putDoc(restored);
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_c', 'team_a'] })).status, 200);
+
+    withDb(s.dbPath, db => assert.deepEqual(teamRows(db, wsId, uid), ['team_a', 'team_c'], 'the newer team_c row survives the undo'));
+  } finally {
+    await s.stop();
+  }
+});
+
+/* D-04 stale-before-map corner: the server's teams PUT is a full-set replace,
+   so a degenerate client replaying ONLY the captured set would clobber the
+   newer team_c row — the union shape the real client sends is what keeps the
+   corner safe. The pin demonstrates both sides. */
+test('UNDO-02/D-04: only the union PUT shape keeps a newer row safe over the full-set replace', async () => {
+  const { s, boss, inviteMember } = await boot();
+  try {
+    const live = (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    doc.data.teams = [
+      { id: 'team_a', name: 'Alpha', members: [] },
+      { id: 'team_c', name: 'Gamma', members: [] },
+    ];
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    const { row } = await inviteMember('undo3@test.local');
+    const uid = row.userId;
+    const wsId = (await boss.get('/api/workspaces/acme')).data.id;
+
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_a'] })).status, 200);
+    // The newer change the stale before-map cannot know about.
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_c'] })).status, 200);
+
+    // The degenerate shape (captured set ONLY): full-set replace erases team_c
+    // — this is exactly what the union contract exists to prevent.
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_a'] })).status, 200);
+    withDb(s.dbPath, db => assert.deepEqual(teamRows(db, wsId, uid), ['team_a'], 'a captured-only PUT would clobber the newer row'));
+
+    // The UNION shape the client actually sends: both rows land.
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${uid}/teams`, { teams: ['team_c', 'team_a'] })).status, 200);
+    withDb(s.dbPath, db => assert.deepEqual(teamRows(db, wsId, uid), ['team_a', 'team_c'], 'the union PUT keeps the corner safe'));
+  } finally {
+    await s.stop();
+  }
+});
+
+/* Flagged assumption (UNDO-01 empty): a deleted team with a zero-member
+   captured roster — the undo sequence performs zero teams PUTs and leaves the
+   authority table clean; no error path fires. */
+test('UNDO-01 empty roster: a memberless team undo restores the definition and writes zero rows', async () => {
+  const { s, boss, putDoc } = await boot();
+  try {
+    const base = structuredClone((await boss.get('/api/workspaces/acme')).data.doc);
+    base.data.teams = [{ id: 'team_e', name: 'Empty', members: [] }];
+    await putDoc(base);
+
+    // Delete: the doc PUT removes the definition; the affected list is empty,
+    // so no membership PUT fires at all (zero rows to purge or restore).
+    const deleted = structuredClone((await boss.get('/api/workspaces/acme')).data.doc);
+    deleted.data.teams = deleted.data.teams.filter(t => t.id !== 'team_e');
+    await putDoc(deleted);
+    withDb(s.dbPath, db => assert.equal(db.prepare('select count(*) as n from team_members where team_id = ?').get('team_e').n, 0));
+
+    // Undo: the doc PUT restores the definition; zero teams PUTs needed.
+    const restored = structuredClone((await boss.get('/api/workspaces/acme')).data.doc);
+    restored.data.teams = [...restored.data.teams, { id: 'team_e', name: 'Empty', members: [] }];
+    await putDoc(restored);
+    withDb(s.dbPath, db =>
+      assert.equal(db.prepare('select count(*) as n from team_members where team_id = ?').get('team_e').n, 0, 'zero rows for a memberless team'),
+    );
+    const rostered = (await boss.get('/api/workspaces/acme')).data.doc.data.teams.some(t => t.id === 'team_e');
+    assert.equal(rostered, true, 'the restored doc carries the team definition again');
+  } finally {
+    await s.stop();
+  }
+});
+
+/* D-06 local-mode pin (source-level, mirroring the i18n-actions-modules.test.mjs
+   file-scan style): the undo onAction's restore(snap) sits OUTSIDE any
+   api.enabled conditional — local mode runs the plain restore and stops — and
+   every setMemberTeams call in the undo path is lexically inside the
+   api.enabled branch. No production-code changes here: a failure means Task 1's
+   implementation regressed. */
+test('D-06: the local-mode undo stays a plain restore(snap) with zero API calls', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/actions/teams.js', import.meta.url), 'utf8');
+
+  const actionStart = src.indexOf('onAction: async () => {');
+  assert.ok(actionStart > -1, 'the undo onAction closure exists');
+  const body = src.slice(actionStart);
+
+  assert.match(body, /^onAction: async \(\) => \{\s*restore\(snap\);/, 'the onAction body opens with an unguarded restore(snap)');
+  const idxRestore = body.indexOf('restore(snap);');
+  const idxApi = body.indexOf('api.enabled');
+  assert.ok(idxRestore > -1 && idxApi > -1 && idxRestore < idxApi, 'restore(snap) runs before any api.enabled check');
+
+  const idxGate = body.indexOf('if (!api.enabled) return;');
+  const idxSet = body.indexOf('setMemberTeams', idxGate);
+  assert.ok(idxGate > -1 && idxSet > -1, 'the undo path gates on api.enabled before any membership write');
+  assert.ok(
+    !body.slice(idxRestore, idxGate).includes('setMemberTeams'),
+    'no membership write appears before the api.enabled gate',
+  );
+  assert.equal(
+    [...body.matchAll(/setMemberTeams/g)].length,
+    1,
+    'the undo path performs exactly one membership-write call site',
+  );
+});
+
