@@ -24,7 +24,7 @@ progress:
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** v1.7 Team Visibility & Hardening — Phase 32 ready to plan
+- **Current focus:** v1.7 Team Visibility & Hardening — Phase 34 ready to plan
 
 ## Current Position
 
