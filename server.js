@@ -291,6 +291,17 @@ const SCHEMA = `
     created_at   integer not null
   );
   create index if not exists reminders_sent_ws on reminders_sent(workspace_id, created_at);
+  /* PREFS (Phase 34, D-04/D-10): one row per (workspace, user) — the single
+     authority for per-user notification preferences. The workspace document
+     never carries prefs again (normalizeDoc/mergeClientDoc strip notifPrefs in
+     both directions); getUserNotifPrefs is the only reader. The composite PK
+     needs no extra index and no FK — the same shape Plan 02's backfill writes. */
+  create table if not exists user_notif_prefs (
+    workspace_id text not null,
+    user_id      text not null,
+    prefs        text not null,
+    primary key (workspace_id, user_id)
+  );
 `;
 
 function ensureColumn(conn, table, name, def) {
@@ -627,15 +638,11 @@ function normalizeDoc(doc, meta) {
       return definition;
     });
   }
-  // D-27-5: the three reminder prefs default ON — a stored doc predating them
-  // must read as all-ON (=== false disables), never silently silenced. The
-  // merge is on read only; existing workspaces are not rewritten.
-  out.data.notifPrefs = {
-    email_reminder: true,
-    due_reminder: true,
-    past_due: true,
-    ...(out.data.notifPrefs && typeof out.data.notifPrefs === 'object' ? out.data.notifPrefs : {}),
-  };
+  /* PREFS (Phase 34, D-02/D-04): per-user notification preferences live in the
+     user_notif_prefs table — the document is never a prefs carrier again. A
+     stale or crafted document carrying notifPrefs is stripped on every read;
+     the D-27-5 read-side default merge is retired with the doc field itself. */
+  delete out.data.notifPrefs;
   return out;
 }
 
@@ -1098,6 +1105,65 @@ function mergeClientDoc(incoming, stored, membership, wsId) {
    HTTP response and their failures are logged, not surfaced. */
 /* REM-05: reminder emails ride the same pipeline — both reminder notif types
    gate on the single `email_reminder` pref (D-27-5). */
+/* PREFS (Phase 34, D-03/D-09): the exact 17-key whitelist and the 13-key
+   default layer (emptyDoc's set; email_comment is the ONLY false). The 4 extra
+   keys (mention_team, mention_ws, assign_status, assign_over) have NO default —
+   undefined-falsy preserves the D-09 zero-change switch-over; a PUT upsert
+   writes them explicitly once toggled. */
+const NOTIF_PREF_KEYS = [
+  'email_mention',
+  'email_assign',
+  'email_comment',
+  'email_digest',
+  'email_reminder',
+  'push_mention',
+  'push_assign',
+  'push_comment',
+  'push_due',
+  'due_reminder',
+  'past_due',
+  'mention_all',
+  'mention_team',
+  'mention_ws',
+  'assign_self',
+  'assign_status',
+  'assign_over',
+];
+
+const NOTIF_PREF_DEFAULTS = {
+  email_mention: true,
+  email_assign: true,
+  email_digest: true,
+  email_comment: false,
+  email_reminder: true,
+  due_reminder: true,
+  past_due: true,
+  push_mention: true,
+  push_assign: true,
+  push_comment: true,
+  push_due: true,
+  mention_all: true,
+  assign_self: true,
+};
+
+/* PREFS (Phase 34, D-04): the ONLY reader of per-user notification prefs —
+   one prepared SELECT, JSON.parse with a try/catch backstop (malformed or
+   unreadable rows read as {}), merged over the defaults. `=== false` disables;
+   everything else (including the 4 undefined-falsy keys) stays on. */
+function getUserNotifPrefs(userId, workspaceId) {
+  const row = db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(workspaceId, userId);
+  let stored = {};
+  if (row) {
+    try {
+      stored = JSON.parse(row.prefs);
+    } catch {
+      stored = {};
+    }
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+  }
+  return { ...NOTIF_PREF_DEFAULTS, ...stored };
+}
+
 const NOTIF_EMAIL_KIND = {
   mention: 'email_mention',
   assign: 'email_assign',
@@ -1410,6 +1476,10 @@ function docFromClient(incoming, stored, ws, role, membership) {
   delete next.data.invoices;
   delete next.data.sessions;
   delete next.data.tfa;
+  /* PREFS (Phase 34, D-02): notification preferences are per-user rows now —
+     a stale client's notifPrefs copy must never be merged back into a stored
+     document. Stripped here (write) and in normalizeDoc (read), D-30-style. */
+  delete next.data.notifPrefs;
   /* TEAM-05 (D-02): the write path strips doc-carried membership independently
      of the read path (D-30 precedent), so the STORED document comes out clean
      even when a stale client ships teams[].members. */
@@ -3033,6 +3103,46 @@ async function handleApi(req, res, url) {
     db.prepare('update users set locale = ? where id = ?').run(locale, user.id);
     const fresh = db.prepare('select * from users where id = ?').get(user.id);
     return json(res, 200, { user: userPayload(fresh) });
+  }
+
+  /* ------------------- per-user notif prefs (Phase 34, SETTINGS-01/02) ------------------- */
+
+  if (pathname === '/api/me/notif-prefs' && method === 'GET') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const wsId = String(url.searchParams.get('workspace') || '');
+    const ws = wsId ? db.prepare('select id from workspaces where id = ?').get(wsId) : null;
+    const member = ws ? db.prepare('select 1 from memberships where workspace_id = ? and user_id = ?').get(ws.id, user.id) : null;
+    // No-oracle: a workspace the caller is not a member of reads as not-found.
+    if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    return json(res, 200, { prefs: getUserNotifPrefs(user.id, ws.id) });
+  }
+
+  if (pathname === '/api/me/notif-prefs' && method === 'PUT') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    // Only body.workspace and body.prefs.prefs-keys are read; user_id always
+    // comes from the session — never the body (same mass-assignment discipline
+    // as body.locale above). Every key must be whitelisted (D-03, the
+    // LOCALE_CODES analog) and every value coerced to boolean.
+    const incoming = body?.prefs;
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+      return fail(res, 400, 'unknownPrefKey', 'Unknown preference key');
+    }
+    for (const key of Object.keys(incoming)) {
+      if (!NOTIF_PREF_KEYS.includes(key)) return fail(res, 400, 'unknownPrefKey', 'Unknown preference key');
+    }
+    const wsId = String(body?.workspace || '');
+    const ws = wsId ? db.prepare('select id from workspaces where id = ?').get(wsId) : null;
+    const member = ws ? db.prepare('select 1 from memberships where workspace_id = ? and user_id = ?').get(ws.id, user.id) : null;
+    if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    const prefs = {};
+    for (const key of Object.keys(incoming)) prefs[key] = Boolean(incoming[key]);
+    db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, user.id, JSON.stringify(prefs));
+    return json(res, 200, { prefs: getUserNotifPrefs(user.id, ws.id) });
   }
 
   /* ----------------------- password change (PASS-01/02) ----------------------- */
