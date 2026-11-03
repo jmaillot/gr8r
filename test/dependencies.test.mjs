@@ -50,9 +50,10 @@ test('the Dockerfile runtime stage stays bare node + su-exec with exactly the fi
     .filter(t => t !== '/usr/local/bin/docker-entrypoint.sh');
   // 7668ece: server.js imports totp.js at runtime, so the image ships it too.
   // Phase 30: server.js imports oidc.js at runtime (Entra SSO / OIDC), so the image ships it too.
+  // Phase 34: server.js imports src/lib/redaction.js at runtime, so the image ships src/ too.
   assert.deepEqual(
     copyTargets.sort(),
-    ['dist', 'mailer.js', 'oidc.js', 'seed.json', 'server.js', 'totp.js'],
-    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, seed.json and dist — found: ${copyTargets.join(' | ')} (D-12)`,
+    ['dist', 'mailer.js', 'oidc.js', 'seed.json', 'server.js', 'src', 'totp.js'],
+    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, seed.json, src and dist — found: ${copyTargets.join(' | ')} (D-12)`,
   );
 });
