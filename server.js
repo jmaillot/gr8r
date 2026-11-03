@@ -4412,11 +4412,17 @@ async function handleApi(req, res, url) {
     }
 
     if (!user) {
-      const name = String(body?.name || '').trim();
-      const email = String(body?.email || '')
+      /* HARD-04 (D-06): structural silent whitelist — exactly these three
+         fields are read; everything else in the body is discarded by
+         construction (no 400 on unknown keys: no schema probe, no breakage
+         of future client fields). Role, teams and scope come ONLY from the
+         invite row below (SCOPE-05). */
+      const { name: rawName, email: rawEmail, password: rawPassword } = body || {};
+      const name = String(rawName || '').trim();
+      const email = String(rawEmail || '')
         .trim()
         .toLowerCase();
-      const password = String(body?.password || '');
+      const password = String(rawPassword || '');
       if (!name) return fail(res, 400, 'nameRequired', 'Enter your name');
       if (!emailOk(email)) return fail(res, 400, 'enterValidEmail', 'Enter a valid email address');
       if (invite.email && invite.email !== email) return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`, { email: invite.email });
