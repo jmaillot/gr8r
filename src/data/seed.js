@@ -511,17 +511,5 @@ export function seed() {
     projOrder: projects.map(p => p.id),
     savedViews: [{ id: 'v1', project: 'p1', name: 'High priority', type: 'list', filters: [{ f: 'priority', op: 'is', v: ['urgent', 'high'] }] }],
     recentSearches: ['homepage', 'Sarah', 'wireframes'],
-    notifPrefs: {
-      email_mention: true,
-      email_assign: true,
-      email_digest: true,
-      email_comment: false,
-      push_mention: true,
-      push_assign: true,
-      push_comment: true,
-      push_due: true,
-      mention_all: true,
-      assign_self: true,
-    },
   };
 }

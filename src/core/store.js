@@ -28,12 +28,23 @@ function stripLegacyLang(prefs) {
   delete prefs.lang;
   return prefs;
 }
+/* Phase 34 D-01: notifPrefs is per-user server rows (or per-workspace
+   localStorage), never a document field. An old localStorage blob (or any stale
+   snapshot) carrying data.notifPrefs must not re-enter S.data, or docSnapshot()
+   would write it back into workspaces.doc on every save — the resurrection the
+   double strip in server.js (normalizeDoc read / mergeClientDoc write) already
+   blocks server-side; this closes the client side of the same hole. The blob
+   shape is { data, prefs, views }: the field rides on the doc (blob.data). */
+function stripLegacyNotifPrefs(blob) {
+  if (blob?.data && typeof blob.data === 'object') delete blob.data.notifPrefs;
+  return blob;
+}
 export function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const j = JSON.parse(raw);
-      if (j && j.data && j.data.tasks) return j;
+      if (j && j.data && j.data.tasks) return stripLegacyNotifPrefs(j);
     }
   } catch {
     /* storage blocked or corrupt: start from seed data */
@@ -104,7 +115,14 @@ let flushing = false;
 let dirty = false;
 let changeSeq = 0;
 
-const docSnapshot = () => ({ data: S.data, prefs: S.prefs, views: S.views, collapsed: S.ui.collapsed });
+/* Phase 34 Pitfall 3: docSnapshot must never include notifPrefs — belt-and-braces
+   on top of the load-time strip, so a legacy field that somehow reached S.data
+   (an old hydrate path, a restored backup) can never ride a save back into
+   workspaces.doc. Deleting in place keeps the snapshot allocation-free. */
+const docSnapshot = () => {
+  delete S.data.notifPrefs;
+  return { data: S.data, prefs: S.prefs, views: S.views, collapsed: S.ui.collapsed };
+};
 
 function notify(detail) {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('projects:save-error', { detail }));

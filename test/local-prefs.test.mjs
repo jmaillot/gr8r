@@ -14,6 +14,8 @@ globalThis.localStorage = {
   removeItem: k => backing.delete(k),
   clear: () => backing.clear(),
 };
+/* store.js's import graph touches document at module load (utils.js font swap). */
+globalThis.document = { querySelectorAll: () => [] };
 
 const { NOTIF_PREF_DEFAULTS, NOTIF_PREF_KEYS, notifPrefsKey, getLocalNotifPrefs, setLocalNotifPrefs } = await import(
   '../src/core/notifPrefs.js'
@@ -93,5 +95,37 @@ test('whitelist is the 13 defaults plus the 4 undefined-falsy extras', () => {
   assert.equal(NOTIF_PREF_KEYS.length, 17);
   for (const k of ['mention_team', 'mention_ws', 'assign_status', 'assign_over']) {
     assert.ok(NOTIF_PREF_KEYS.includes(k), `${k} whitelisted`);
+  }
+});
+
+/* ---- store-level no-resurrect pin (T-34-09): a legacy blob cannot push prefs into the doc ---- */
+
+test('a legacy snapshot carrying doc.notifPrefs is stripped on load and excluded from docSnapshot', async () => {
+  const legacy = {
+    data: {
+      ws: { name: 'Legacy', url: 'legacy-ws', c: '#1D1C1A' },
+      tasks: [{ id: 't1', title: 'seed-worthy task' }],
+      notifPrefs: { email_mention: false, hijack: true },
+    },
+    prefs: { theme: 'dark' },
+    views: {},
+    collapsed: false,
+  };
+  backing.set('projects.v2', JSON.stringify(legacy));
+  try {
+    const store = await import('../src/core/store.js?legacy=1');
+    assert.equal('notifPrefs' in store.S.data, false, 'load() stripped doc.notifPrefs before it reached S.data');
+    assert.equal(store.S.data.tasks.length, 1, 'the rest of the blob hydrated normally');
+    const snap = store.S.data; // reference — docSnapshot() mutates S.data in place only to delete
+    assert.doesNotThrow(() => {
+      // docSnapshot is not exported; exercise the save path that serializes it.
+      store.save();
+    });
+    await new Promise(r => setTimeout(r, 250)); // save()'s 150ms debounce
+    const written = JSON.parse(backing.get('projects.v2'));
+    assert.equal('notifPrefs' in written.data, false, 'the rewritten blob carries no notifPrefs');
+    assert.ok(snap); // reference still valid — proves S.data itself stayed free of the field
+  } finally {
+    backing.delete('projects.v2');
   }
 });

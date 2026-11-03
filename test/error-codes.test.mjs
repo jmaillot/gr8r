@@ -249,6 +249,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'wsLoadFailed', // toast composed in main.js when the document load fails
   'code404', // static error-page copy in pages/errors.js
   'code403', // static error-page copy in pages/errors.js
+  'notifPrefsSaveFailed', // toast composed by IN.npToggle when the prefs PUT fails (34-04)
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {
