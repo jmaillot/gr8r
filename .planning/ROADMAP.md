@@ -154,11 +154,12 @@ final VIS semantics)
      optional form — a compose-config test passes both with and without the variable set
      (fresh installs keep booting) — and DEPLOY.md §14 notes compose users need no extra
      rotation step.
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans executed + 1 gap-closure plan
 
 Plans:
 - [x] 35-01-PLAN.md — Honest undo: before-map capture above the purge, awaited doc push, union membership replay via existing PUT route (UNDO-01, UNDO-02, D-01..D-06)
 - [x] 35-02-PLAN.md — Compose `MASTER_KEY_PREVIOUS` `:-` forwarding + two-case config test + DEPLOY.md §14 walkthrough (DEPLOY-01, D-07..D-09)
+- [ ] 35-03-PLAN.md — Gap closure: WR-02 pushNow() pushing-mutex + WR-01 undo early-return on failed doc push (UNDO-01, UNDO-02)
 
 **UI hint**: yes
 
