@@ -2847,7 +2847,9 @@ async function handleApi(req, res, url) {
              invite's stored role/teams/scope plus the same invite-clearing
              writes. Never a parallel membership insert (T-30-11). */
           const invite = pendingInvites[0];
-          const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
+          /* HARD-03 (D-03/D-05): resolve explicitly — no firstWorkspace()
+             fallback, no cross-tenant join. */
+          const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id);
           if (ws) {
             addMembership(
               ws,
@@ -2876,6 +2878,15 @@ async function handleApi(req, res, url) {
             db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), row.id, invite.token_hash);
             db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(now(), ws.id, invite.email);
             logSecurity(row.id, 'sso_invite_accepted');
+          } else {
+            /* HARD-03 (D-03/D-04): fail closed — the invite's workspace is
+               gone. Consume the ONE invite with the same :2868-shaped write so
+               the zombie link can never be retried; NO membership is granted,
+               the address-wide clearing write is skipped (no ws.id to scope it
+               to), no success security verb fires (that would log a lie), and
+               the login lands on the ONE generic ssoError surface. */
+            db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), row.id, invite.token_hash);
+            ssoRedirect = '/login?sso=error';
           }
         } else if (pendingInvites.length > 1) {
           /* Multiple pending invites: surface, don't guess — no silent
@@ -4436,7 +4447,9 @@ async function handleApi(req, res, url) {
       }
     }
 
-    const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id) || firstWorkspace();
+    /* HARD-03 (D-05): resolve explicitly — no firstWorkspace() fallback. A
+       missing row fails closed to the 410 below; never a cross-tenant join. */
+    const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id);
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
     if (!membershipOf(ws.id, user.id))
       addMembership(

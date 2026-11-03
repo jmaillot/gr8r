@@ -11,6 +11,8 @@
    - "spoof" server .......................... 2 accepts (clean + spoofed) */
 
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { ADMIN, inviteToken, login, startServer, withDb } from './helpers/server.mjs';
 
@@ -191,6 +193,59 @@ test('smuggled role/teams/scope keys cannot influence the acceptance outcome (HA
     assert.deepEqual(spoofRow.teams, cleanRow.teams, 'granted teams identical to the clean accept');
     assert.deepEqual(spoofRow.teams, [], 'smuggled teams array never lands in authority rows');
     assert.equal(spoofRow.scope, cleanRow.scope, 'granted scope identical to the clean accept');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- HARD-03 / D-05: both invite twins fail closed ---------- */
+
+/* Seed an invite row whose workspace is GONE — direct DatabaseSync insert
+   (the hardened creation route can never mint this shape again). FKs are
+   disabled on this connection: the invite must dangle, not cascade away. */
+function seedDeadWorkspaceInvite(server, { email = null, role = 'member' } = {}) {
+  const token = crypto.randomBytes(24).toString('base64url');
+  const db = new DatabaseSync(server.dbPath, { enableForeignKeyConstraints: false });
+  try {
+    const owner = db.prepare('select id from users where email = ?').get(ADMIN.email);
+    db.prepare(
+      'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
+    ).run(
+      crypto.createHash('sha256').update(token).digest('hex'),
+      email,
+      role,
+      null,
+      null,
+      'ws-deleted-hardening-test',
+      owner.id,
+      Date.now(),
+      Date.now() + 86400000,
+    );
+  } finally {
+    db.close();
+  }
+  return token;
+}
+
+test('an accept whose invite points at a deleted workspace returns 410 workspaceGone — no fallback join, no membership row (HARD-03a)', async () => {
+  const server = await startServer();
+  try {
+    const token = seedDeadWorkspaceInvite(server);
+    const res = await fetch(`${server.base}/api/invites/${token}/accept`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Late', email: 'late@test.local', password: PASSWORD }),
+    });
+    assert.equal(res.status, 410);
+    const data = await res.json();
+    assert.equal(data.code, 'workspaceGone');
+    assert.equal(data.error, 'This workspace no longer exists', 'the message is byte-identical to the locked D-05 body');
+    assert.deepEqual(Object.keys(data).sort(), ['code', 'error'], 'no-oracle body: exactly {code, error}');
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select id from users where email = ?').get('late@test.local');
+      const count = user ? db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n : 0;
+      assert.equal(count, 0, 'zero new membership rows — the fallback join is gone');
+    });
   } finally {
     await server.stop();
   }

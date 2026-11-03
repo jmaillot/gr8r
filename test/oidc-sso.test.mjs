@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { after, before, test } from 'node:test';
 import { signup, startServer, withDb } from './helpers/server.mjs';
 
@@ -726,6 +727,41 @@ test('SSO-07: a repeat SSO login after acceptance creates no duplicate membershi
     const user = db.prepare('select id from users where email = ?').get('invite.one@example.com');
     assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 1, 'still exactly ONE membership row');
     assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-inv-one').n, 1, 'still exactly one identity row');
+  });
+});
+
+/* HARD-03 (D-03/D-04/D-05): the SSO twin fails closed — an invite whose
+   workspace row is gone is CONSUMED, never silently skipped, never joined
+   across tenants. */
+test('SSO-07/HARD-03: an invite whose workspace was deleted is consumed with no membership, no address-wide clearing, and the generic error landing', async () => {
+  const token = crypto.randomBytes(32).toString('base64url');
+  /* FKs off: the dead-workspace invite must dangle, not cascade away. */
+  const seed = new DatabaseSync(inviteServer.dbPath, { enableForeignKeyConstraints: false });
+  try {
+    const owner = seed.prepare('select id from users where email = ?').get('owner@test.local');
+    seed.prepare(
+      'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
+    ).run(sha256hex(token), 'invite.gone@example.com', 'member', null, null, 'ws-deleted-hardening', owner.id, Date.now(), Date.now() + 86400000);
+    /* A second pending invite for a DIFFERENT address proves the twin skipped
+       the address-wide clearing write (which the happy path always fires). */
+    seedInvite(seed, 'invite.untouched@example.com', 'member');
+  } finally {
+    seed.close();
+  }
+  const { callback } = await runFlow({ srv: inviteServer, code: 'inv-code-gone', claims: { sub: 'sub-inv-gone', email: 'invite.gone@example.com', email_verified: true } });
+  assert.equal(callback.status, 302);
+  assert.equal(callback.location, '/login?sso=error', 'the dead-workspace reconcile lands on the ONE generic ssoError surface (D-04)');
+  withDb(inviteServer.dbPath, db => {
+    const user = db.prepare('select id from users where email = ?').get('invite.gone@example.com');
+    assert.ok(user, 'the JIT account exists — the login itself proceeded');
+    const invite = db.prepare('select * from invites where email = ?').get('invite.gone@example.com');
+    assert.ok(invite.used_at, 'the ONE dead invite was consumed (used_at set) — no zombie link');
+    assert.equal(invite.used_by, user.id);
+    assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 0, 'NO membership row — no cross-tenant join');
+    const untouched = db.prepare('select * from invites where email = ?').get('invite.untouched@example.com');
+    assert.equal(untouched.used_at, null, 'the address-wide clearing write was skipped — the other address stays pending');
+    const log = db.prepare('select * from security_log where user_id = ? and verb = ?').all(user.id, 'sso_invite_accepted');
+    assert.equal(log.length, 0, 'no sso_invite_accepted success verb — the grant never happened, the log must not lie');
   });
 });
 
