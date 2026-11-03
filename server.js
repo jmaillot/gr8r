@@ -55,6 +55,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createMailer } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
+import { referencesHidden } from './src/lib/redaction.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
@@ -888,14 +889,11 @@ function hiddenProjectTerms(doc, hiddenProjects) {
   for (const p of doc?.data?.projects || []) {
     if (!p?.id || !hiddenProjects.has(p.id)) continue;
     for (const value of [p.name, p.key]) {
-      if (typeof value === 'string' && value.trim()) terms.push(value.trim().toLowerCase());
+      if (typeof value === 'string' && value.trim()) terms.push(value.trim().normalize('NFC').toLowerCase());
     }
   }
   return terms;
 }
-
-/* A free-text term that names a project the caller cannot see. Non-strings never match. */
-const referencesHidden = (term, hiddenTerms) => typeof term === 'string' && hiddenTerms.some(name => term.toLowerCase().includes(name));
 
 /*
  * Merge workspace-wide recent searches. They are free text shared by the workspace, so a

@@ -1139,7 +1139,7 @@ test('404-matrix [D-06] the scoped member\u2019s activity feed and recent search
   assert.equal((await owner.put(`/api/workspaces/acme/members/${scopedUserId}/scope`, { scope: MATRIX_SCOPE })).status, 200);
   const view = (await scoped.get('/api/workspaces/acme')).data;
   assert.deepEqual(view.doc.data.activity.map(a => a.id), ['act_in'], 'the activity feed lists no out-of-scope event');
-  assert.deepEqual(view.doc.data.recentSearches, ['In Scope planning', 'generic term'], 'recent-search terms naming an out-of-scope project are scrubbed');
+  assert.deepEqual(view.doc.data.recentSearches, ['generic term'], 'recent-search terms naming an out-of-scope project are scrubbed (SEARCH-01: token matching also drops "In Scope planning" — it shares the full token "scope" with the hidden name, the accepted T-34-08 residual)');
 });
 
 test('404-matrix [D-06] a cross-project search over the client-visible payload returns no out-of-scope hits', async () => {
@@ -1149,6 +1149,23 @@ test('404-matrix [D-06] a cross-project search over the client-visible payload r
   assert.equal(clientSearchAll('Out of Scope').projects.length, 0, 'the out-of-scope project is unfindable');
   assert.equal(clientSearchAll('Visible task').tasks.length, 1, 'the in-scope task is still findable');
   assert.equal(clientSearchAll('In Scope').projects.length, 1, 'the in-scope project is still findable');
+});
+
+/* ---- Phase 34 (SEARCH-01, D-13): tokenized redaction end-to-end ----
+
+   The substring matcher is gone: a recent-search term is dropped only when it
+   shares a FULL token with a hidden project name (after NFC + toLowerCase on
+   both sides). Both canonical directions in one pass — "sarah smith" shares
+   the token "sarah" with hidden "Sarah" (dropped), while "Sara Corp" collides
+   only as a substring inside longer tokens (kept). */
+
+test('404-matrix [SEARCH-01 D-13] recent-search redaction matches on full tokens, not substrings', async () => {
+  const doc = storedDoc();
+  doc.data.projects.push({ id: 'p_sarah', key: 'srh', name: 'Sarah', private: true, members: [], lead: null, teams: [] });
+  doc.data.recentSearches = ['sarah smith', 'Sara Corp'];
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
+  const view = (await scoped.get('/api/workspaces/acme')).data;
+  assert.deepEqual(view.doc.data.recentSearches, ['Sara Corp'], 'a full-token collision is dropped; a substring-only collision survives');
 });
 
 /* ---- Phase 32 (VIS-02/VIS-05, D-05..D-08): full MATRIX team extension ---- */
