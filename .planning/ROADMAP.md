@@ -121,9 +121,14 @@ before the leak tests are written)
 **UI hint**: yes
 
 Plans:
+**Wave 1**
 - [ ] 34-01-PLAN.md — Server prefs core: user_notif_prefs table, one accessor, GET/PUT routes, double doc strip, per-recipient consumers (SETTINGS-01/02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 34-02-PLAN.md — migrateUserNotifPrefs guarded backfill + byte-identical second-boot pins + invoices pin (SETTINGS-01/03)
 - [ ] 34-04-PLAN.md — Client prefs isolation: one branching persistence adapter, per-workspace localStorage, seed removal, no-resurrect strip (SETTINGS-02) [wave 2, parallel with 02]
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 34-03-PLAN.md — Tokenized redaction matcher extraction + table-driven SEARCH-01 suite + CHANGELOG note (SEARCH-01) [wave 3, after 01's server.js edits]
 
 ### Phase 35: Honest Undo & Deploy Gap
