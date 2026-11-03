@@ -1,9 +1,9 @@
 ---
 phase: 34-per-user-settings-isolation-search-leak-closure
-verified: 2026-11-03T13:05:00Z
+verified: 2026-11-03T16:40:00Z
 status: human_needed
-score: 15/15 must-haves verified
-behavior_unverified: 0
+score: 16/16 must-haves verified
+behavior_unverified: 1
 covered_files:
   - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-01-PLAN.md
   - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-01-SUMMARY.md
@@ -13,6 +13,8 @@ covered_files:
   - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-03-SUMMARY.md
   - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-04-PLAN.md
   - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-04-SUMMARY.md
+  - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-05-PLAN.md
+  - .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-05-SUMMARY.md
   - server.js
   - src/lib/redaction.js
   - src/core/notifPrefs.js
@@ -21,137 +23,137 @@ covered_files:
   - src/actions/actions.js
   - src/pages/settings.js
   - src/data/seed.js
+  - test/notif-hydration.test.mjs
   - test/notif-prefs.test.mjs
   - test/migration.test.mjs
   - test/redaction.test.mjs
   - test/local-prefs.test.mjs
   - test/scope.test.mjs
-covered_digest: "v2:sha256:1ee6c2acf9ee5903048c5ccd63803a7cdc8302c7f1294d59eee155f832ee53b9"
-behavior_unverified_items: []
-human_verification:
-  - test: "Open the settings page in API mode as two different users of the same workspace and toggle prefs for each"
-    expected: "Each user sees their own stored prefs after their first toggle; the two users' toggles stay independent (no shared state)"
-    why_human: "UI rendering and per-user visual differentiation can't be asserted by grep; server-side independence is test-pinned but the rendered page is not"
-  - test: "In API mode, open settings BEFORE toggling anything"
-    expected: "KNOWN LIMITATION (Plan 04, ApiModeUX, human_judgment): the page shows all-ON defaults, not the user's stored row, until the first PUT of the session adopts the server merge. Confirm this is acceptable or schedule a fetch-on-workspace-open"
-    why_human: "Product-acceptance decision on a deliberately scoped-out hydration path; executor flagged it for human review"
-  - test: "In local mode, toggle a pref, reload the page, switch to another local workspace and back"
-    expected: "Prefs survive reload, no bleed between local workspaces (per-workspace localStorage keys)"
-    why_human: "Browser localStorage + reload behavior is outside node test reach (local-prefs.test.mjs covers the adapter logic, not the live page)"
+  - CHANGELOG.md
+covered_digest: "v2:d132519277474be12a4cf49c"
+behavior_unverified_items:
+  - truth: "In API mode, an unchecked notification pref stays unchecked after F5 reload (G-34-4 fix, live browser)"
+    test: "Re-run UAT Test 4: in API mode (rebuilt client), toggle a notification pref OFF, press F5"
+    expected: "The pref stays OFF after reload — hydrateNotifPrefs fetches the stored row at workspace open and adopts it before the next render"
+    why_human: "The merge semantics are test-pinned (notif-hydration.test.mjs) and the GET wiring is grep-verified at all 5 entry paths, but the live deployed page's render-before-fetch ordering and caching behavior can only be observed in a real browser session"
+overrides_applied: 0
 re_verification:
   previous_status: human_needed
   previous_score: 15/15
-  gaps_closed: []
+  gaps_closed:
+    - "G-34-4: API-mode notif-prefs hydration on workspace open (plan 34-05) — fix verified in code: mergeNotifPrefs helper + hydrateNotifPrefs wired at all 5 hydrateFromServer paths + test/notif-hydration.test.mjs pins (5/5 pass)"
   gaps_remaining: []
   regressions: []
-  note: "Report had gone stale only because src/actions/actions.js carries an uncommitted comment-only reword (the 401-path comment now reads 'the langSel shape'). Diff inspected: zero code change; IN.npToggle wiring identical. Digest recomputed over current on-disk content. All suites re-ran this session."
 ---
 
 # Phase 34: Per-User Settings Isolation & Search Leak Closure — Verification Report
 
 **Phase Goal:** Notification preferences stop living in the shared workspace document and become real per-user rows (`user_notif_prefs`, additive guarded migration, byte-identical second boot) with one accessor for every consumer; `invoices` pinned out; the substring recent-search leak closed by tokenized `referencesHidden`.
-**Verified:** 2026-11-03T13:05:00Z
-**Status:** human_needed (UI/UX acceptance only — all technical truths verified)
-**Re-verification:** Yes — after stale-report detection (uncommitted comment-only reword in src/actions/actions.js)
+**Verified:** 2026-11-03T16:40:00Z
+**Status:** human_needed (one live-browser re-test of the G-34-4 fix remains — all code truths verified)
+**Re-verification:** Yes — after gap closure (plan 34-05 closed G-34-4, the API-mode notif-prefs hydration gap from UAT Test 4)
 
-## Why Re-Verification
+## Re-Verification Scope
 
-The previous report's `covered_digest` no longer matched disk: `src/actions/actions.js` has an uncommitted diff. The full diff was inspected this session — it is a **comment-only reword** inside the `IN.npToggle` doc comment (`401 rides the session-expired path like IN.langSel` → `401 rides the session-expired path (the langSel shape)`). No executable line changed; wiring, branching, and state handling are byte-identical. The current on-disk content is what was verified below, and the digest was recomputed accordingly.
+Previous report: `human_needed`, 15/15 technical truths verified, with three human-verification items. Since then the UAT session produced gaps: G-34-2 and G-34-5 resolved by agent Playwright runs (server rows independent; local mode survives F5), G-34-3 resolved by commit 4af1d9b (Dockerfile COPYs src/), and **G-34-4** (API-mode unchecked pref resets to all-ON after F5) closed by gap-closure plan 34-05. This re-verification:
+
+1. Fully re-verified the G-34-4 fix (exists, substantive, wired, behavior-pinned).
+2. Regression-checked all other phase suites (0 failures across 141 tests).
+3. Confirmed commits cf72c1d / f88ec88 / 353f156 exist (`git log`).
+
+## G-34-4 Fix Verification (Plan 34-05)
+
+| Check | Evidence | Status |
+|-------|----------|--------|
+| `mergeNotifPrefs` helper exists and is pure | src/core/notifPrefs.js:64–66 — defaults → sanitize(client) → sanitize(server); reuses the 17-key whitelist + boolean-only `sanitize`; no store/DOM/api import; inputs never mutated | ✓ VERIFIED |
+| Canonical-server semantics (mirrors PUT adoption) | test (d): server row wins over client; non-boolean server values rejected (T-34-11) | ✓ VERIFIED (test-pinned) |
+| `hydrateNotifPrefs` guard/order/error shape | src/actions/actions.js:3209–3220 — `if (!api.enabled) return` (local mode untouched, D-08); on ok adopts `S.notifPrefs = mergeNotifPrefs(S.notifPrefs, r.data?.prefs)` (store-only, D-01); 401 dispatches the same `projects:save-error` CustomEvent as IN.npToggle; any other non-ok is silent and non-blocking (T-34-12) | ✓ VERIFIED |
+| Wired at EVERY API-mode workspace entry | All 5 `hydrateFromServer` call sites (actions.js:3225, 3285, 3302, 3493, 3555) are each followed by `await hydrateNotifPrefs()` (:3227, :3287, :3309, :3500, :3562) — openWorkspace, join, primary login, signup, invite-accept. Grep: 9 matches, 1 real `api.getNotifPrefs` call in code | ✓ WIRED |
+| Merge behavior pinned by node test | test/notif-hydration.test.mjs — 5 tests (a)–(e): D-27-5 defaults shape, stored-row-wins + whitelist drop, **the F5 shape (empty client, server row fills store)**, canonical-server + non-boolean rejection, immutability + D-01 no-carrier | ✓ VERIFIED — 5/5 pass (re-ran this session) |
+| Workspace id resolved like npToggle | actions.js:3210 `api.enabled ? api.workspace?.id : D().ws.url` | ✓ WIRED |
+| Commits | cf72c1d (RED test), f88ec88 (GREEN helper), 353f156 (wiring) — all in `git log` | ✓ VERIFIED |
+
+**Residual:** the *live deployed page* behavior (GET fires at workspace open, store adopted before settings renders, browser cache does not serve a stale bundle) is client-runtime behavior no node test exercises — routed to human re-test of UAT Test 4 (the only remaining item).
 
 ## Goal Achievement
 
 ### Observable Truths
 
+Truths 1–15 from the previous report remain verified; none regressed (regression run below). Truth 16 added for the G-34-4 closure.
+
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | `notifPrefs` lives as per-user rows after a guarded backfill; second boot byte-identical; doc no longer carries the field | ✓ VERIFIED | `migrateUserNotifPrefs` (server.js:1912) — JS guard, `vacuum into` backup gate, one `begin immediate` tx copying every member + `delete stripped.data.notifPrefs`. Tests: migration.test.mjs "first boot backfills…", "second boot leaves user_notif_prefs byte-identical", "second boot is a no-op" — 37/37 pass (re-ran this session, 5.3s) |
-| 2 | Every consumer reads through one accessor `getUserNotifPrefs`; stale-client doc writes stripped not merged; two users differ | ✓ VERIFIED | server.js:1152 the only prefs reader; reminder gate :1373 and `queueNotifEmails` :1225 both resolve per recipient via memberships map; `normalizeDoc` :646 and `mergeClientDoc` :1489 strip. notif-prefs.test.mjs 10/10 pass incl. "PUT carrying notifPrefs has the field dropped" and per-user routing |
-| 3 | PUT stores (workspace_id, user_id) keyed on the SESSION user; GET returns defaults merged under stored row; 17-key whitelist 400 + Boolean coercion | ✓ VERIFIED | server.js:3182–3219 — `user.id` from `requireUser`, `NOTIF_PREF_KEYS` loop → 400 `unknownPrefKey`, `Boolean()` coercion, no-oracle 404 for non-members. Pinned in notif-prefs.test.mjs (unknown-key 400, boolean coercion, merged GET) |
-| 4 | `invoices` never re-enters the workspace document write path — pinned, no migration | ✓ VERIFIED | migration.test.mjs:1005 "SETTINGS-03: a doc carrying invoices hydrates and the field is gone after a write" — pass in the 37/37 run |
-| 5 | Corrupt doc blob never crashes the boot; eligibility guard false forever after first migrating boot; later joiners read defaults | ✓ VERIFIED | try/catch per doc (server.js:1923), guard requires a member lacking a row. Pinned: "corrupt doc skipped without crashing the boot (T-34-05)" and "a later workspace joiner reads the all-default prefs (D-11)" — pass |
-| 6 | Full-token collision drops, substring-only collision ("Sara Corp" vs hidden "Sarah") survives | ✓ VERIFIED | src/lib/redaction.js `referencesHidden` — token-set intersection, no `includes`. 22-test table in test/redaction.test.mjs rows (a)/(b) + end-to-end scope.test.mjs D-13 pin (`["sarah smith","Sara Corp"]` → `["Sara Corp"]`) — pass |
-| 7 | NFC+toLowerCase both sides; Café ≠ cafe; NFC/NFD variants match identically; no diacritic stripping, no Intl casefold | ✓ VERIFIED | redaction.js:20 `.normalize('NFC').toLowerCase()` split on `[^\p{L}\p{N}]+`; server.js:892 hiddenProjectTerms NFC-normalizes. Table rows for Café≠cafe and NFC/NFD both directions — pass |
-| 8 | Recent searches remain one workspace-wide list (D-15), explicitly pinned | ✓ VERIFIED | test/redaction.test.mjs D-15 source-assertion pin on the `redactDoc` filter shape + absence of any per-user side table — pass |
-| 9 | Residual free-text limitation documented in CHANGELOG.md | ✓ VERIFIED | CHANGELOG.md:30 "Recent-search redaction is token-boundary exact (SEARCH-01)" with residual note |
-| 10 | Backstops: non-string terms / empty or hostile hidden lists never throw or drop | ✓ VERIFIED | redaction.js type guards; redaction.test.mjs backstop tests (null/42/{}/non-array hiddenTerms) — pass |
-| 11 | Settings toggle persists through exactly one branch: api.enabled → PUT /api/me/notif-prefs, else per-workspace localStorage — never a doc write | ✓ VERIFIED | actions.js:2685–2702 (current on-disk content incl. reworded comment) single `IN.npToggle` handler with one `if (!api.enabled)` branch; optimistic write lands on `S.notifPrefs` store state only; no `D().notifPrefs` write anywhere |
-| 12 | Settings page renders `S.notifPrefs`, not `d.notifPrefs`; seed carries no notifPrefs block | ✓ VERIFIED | settings.js:169 `const np = S.notifPrefs`; seed.js: 0 `notifPrefs` occurrences; recentSearches 'Sarah' retained for the D-13 fixture |
-| 13 | Legacy localStorage blob cannot resurrect doc notifPrefs (strip on load + docSnapshot exclusion) | ✓ VERIFIED | store.js:39 `delete blob.data.notifPrefs` on load, :123 `delete S.data.notifPrefs` in docSnapshot; local-prefs.test.mjs pin — 7/7 pass |
-| 14 | Local mode: per-workspace key (`projects.notifPrefs.` + ws id), all-ON defaults when absent, whitelist sanitize, survives reload | ✓ VERIFIED | notifPrefs.js:41,58,67; local-prefs.test.mjs defaults/isolation/whitelist/reload pins — pass (browser-level reload behavior routed to human) |
-| 15 | 34-01 backstop truths: no-row reads defaults; two equal rows stay distinct (no collapse) | ✓ VERIFIED | accessor `{...DEFAULTS, ...stored}`; PK (workspace_id,user_id) makes collapse structurally impossible; `insert or replace` is per-row — notif-prefs.test.mjs pass |
+| 1 | `notifPrefs` lives as per-user rows after a guarded backfill; second boot byte-identical; doc no longer carries the field | ✓ VERIFIED | `migrateUserNotifPrefs` (server.js:1912); migration.test.mjs pins pass |
+| 2 | Every consumer reads through one accessor `getUserNotifPrefs`; stale-client doc writes stripped not merged; two users differ | ✓ VERIFIED | server.js:1152 sole reader; :1373, :1225 per-recipient; :646/:1489 strip; notif-prefs tests pass |
+| 3 | PUT keyed on SESSION user; GET defaults-merged; 17-key whitelist 400 + Boolean coercion | ✓ VERIFIED | server.js:3182–3219; notif-prefs.test.mjs |
+| 4 | `invoices` never re-enters the doc write path — pinned | ✓ VERIFIED | migration.test.mjs:1005 pin passes |
+| 5 | Corrupt doc blob never crashes boot; eligibility guard false forever; later joiners read defaults | ✓ VERIFIED | server.js:1923 try/catch; guard shape; pins pass |
+| 6 | Full-token collision drops; substring-only collision ("Sara Corp" vs "Sarah") survives | ✓ VERIFIED | redaction.js token-set intersection; 22-test table + scope D-13 pin |
+| 7 | NFC+toLowerCase both sides; Café ≠ cafe; NFC/NFD match identically | ✓ VERIFIED | redaction.js:20; table rows pass |
+| 8 | Recent searches remain one workspace-wide list (D-15) | ✓ VERIFIED | D-15 source-assertion pin passes |
+| 9 | Residual free-text limitation documented in CHANGELOG.md | ✓ VERIFIED | CHANGELOG.md:30 |
+| 10 | Backstops: non-string terms / hostile hidden lists never throw | ✓ VERIFIED | redaction backstop tests pass |
+| 11 | Toggle persists through exactly one branch (PUT or localStorage), never a doc write | ✓ VERIFIED | actions.js single `IN.npToggle` branch |
+| 12 | Settings page renders `S.notifPrefs`, not `d.notifPrefs`; seed carries none | ✓ VERIFIED | settings.js:169; seed.js 0 occurrences |
+| 13 | Legacy localStorage blob cannot resurrect doc notifPrefs | ✓ VERIFIED | store.js:39, :123; local-prefs pin |
+| 14 | Local mode: per-workspace key, defaults, whitelist, survives reload | ✓ VERIFIED | notifPrefs.js:41–83; local-prefs tests 7/7 (browser-level item closed by agent Playwright run, G-34-5) |
+| 15 | No-row reads defaults; two equal rows stay distinct | ✓ VERIFIED | accessor merge + composite PK; notif-prefs tests |
+| 16 | **NEW (G-34-4 closure):** API-mode workspace entry fetches the stored row via `api.getNotifPrefs` and adopts it into `S.notifPrefs` before the next render; local mode issues no GET; 401 rides session-expired; other failures silent | ✓ VERIFIED (code + merge tests) / ⚠️ PRESENT_BEHAVIOR_UNVERIFIED (live F5 in deployed browser) | actions.js:3209–3220 + 5 wiring sites; notif-hydration.test.mjs 5/5 pass — the live-browser invariant routes to human re-test of UAT Test 4 |
 
-**Score:** 15/15 truths verified (0 present-but-behavior-unverified)
+**Score:** 16/16 truths verified at presence/wiring/test level (1 with a live-browser behavior residual — see behavior_unverified_items)
 
-### Required Artifacts
+### Required Artifacts (new/changed by 34-05)
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| server.js: user_notif_prefs DDL | composite PK ws+user | ✓ VERIFIED | :300 `create table if not exists user_notif_prefs` |
-| server.js: getUserNotifPrefs | only reader | ✓ VERIFIED | :1152; all 3 consumer call sites route through it |
-| server.js: GET/PUT /api/me/notif-prefs | session-keyed, whitelist | ✓ VERIFIED | :3182/:3195, requireUser + sameOrigin + readJson |
-| server.js: migrateUserNotifPrefs | in boot sequence | ✓ VERIFIED | :1816 `migrateUserNotifPrefs(db)` after migrateTeamMembership |
-| src/lib/redaction.js | pure tokenize + referencesHidden | ✓ VERIFIED | 38 lines, exports only these two; server imports at :58 |
-| src/core/notifPrefs.js | localStorage adapter | ✓ VERIFIED | imported by store.js:6 and actions.js:8 |
-| src/core/api.js getNotifPrefs/putNotifPrefs | client methods | ✓ VERIFIED | used by actions.js:2693 npToggle (current disk content) |
-| src/core/store.js strip | load strip + snapshot exclusion | ✓ VERIFIED | :39, :123 |
-| src/pages/settings.js np binding | S.notifPrefs | ✓ VERIFIED | :169 |
-| test/notif-prefs.test.mjs | server integration suite | ✓ VERIFIED | 10/10 pass (re-ran) |
-| test/migration.test.mjs | migration pins incl. SETTINGS-03 invoice pin | ✓ VERIFIED | 37/37 pass (re-ran) |
-| test/redaction.test.mjs | 22-test table suite | ✓ VERIFIED | 22/22 pass (re-ran) |
-| test/local-prefs.test.mjs | 7-test local suite | ✓ VERIFIED | 7/7 pass (re-ran) |
-| CHANGELOG.md | SEARCH-01 note | ✓ VERIFIED | line 30 |
+| src/core/notifPrefs.js mergeNotifPrefs | pure canonical-server merge | ✓ VERIFIED | :64–66; reuses whitelist sanitize; D-27-5/D-01 preserved |
+| src/actions/actions.js hydrateNotifPrefs | GET-on-open at every entry, guard + 401 + silent-fail | ✓ VERIFIED | :3209–3220; wired ×5 |
+| test/notif-hydration.test.mjs | merge/adopt pins | ✓ VERIFIED | 5/5 pass |
 
-### Key Link Verification
+All other artifacts from the previous report (server routes, DDL, migration, redaction, settings, store, CHANGELOG) re-confirmed present; no regression.
 
-| From | To | Via | Status | Details |
-|------|----|----|--------|---------|
-| reminder gate | getUserNotifPrefs per task assignee | memberships map → user_id | ✓ WIRED | server.js:1373 |
-| queueNotifEmails | getUserNotifPrefs per recipient | authority.get(n.to) | ✓ WIRED | server.js:1225 |
-| normalizeDoc / mergeClientDoc | notifPrefs strip both directions | delete out.data.notifPrefs | ✓ WIRED | server.js:646, :1489 |
-| boot sequence | migrateUserNotifPrefs | migration chain | ✓ WIRED | server.js:1816 |
-| mergeRecentSearches + redactDoc | referencesHidden | ES import | ✓ WIRED | server.js:58, :908, :913, :941 |
-| npToggle | PUT /api/me/notif-prefs or localStorage | api.enabled branch | ✓ WIRED | actions.js:2690/:2693 — verified against current on-disk content (reword is comment-only) |
-| settings.js np | S.notifPrefs store object | store render | ✓ WIRED | settings.js:169 |
-| store load/docSnapshot | legacy strip | stripLegacyNotifPrefs + delete | ✓ WIRED | store.js:39, :123 |
+### Key Link Verification (new)
 
-### Behavioral Spot-Checks
+| From | To | Via | Status |
+|------|----|----|--------|
+| every `hydrateFromServer` success path (×5) | `hydrateNotifPrefs` → `api.getNotifPrefs(wsId)` | await after res.ok | ✓ WIRED (actions.js:3227/3287/3309/3500/3562) |
+| GET response | `S.notifPrefs` | mergeNotifPrefs canonical-server adoption | ✓ WIRED (actions.js:3214) |
+| 401 GET | session-expired path | `projects:save-error` CustomEvent | ✓ WIRED (actions.js:3218) |
+| mergeNotifPrefs | NOTIF_PREF_KEYS whitelist + boolean sanitize | sanitize() reuse | ✓ WIRED (notifPrefs.js:46–54) |
 
-All five suites were re-executed this session (Step 7b re-run for re-verification):
+### Behavioral Spot-Checks (re-run this session)
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Server prefs routes + double strip | `node --test test/notif-prefs.test.mjs` | 10 pass / 0 fail | ✓ PASS |
-| Guarded backfill, byte-identical reboot, corrupt doc, invoices pin | `node --test test/migration.test.mjs` | 37 pass / 0 fail | ✓ PASS |
-| Tokenized matcher table + backstops | `node --test test/redaction.test.mjs` | 22 pass / 0 fail | ✓ PASS |
-| Local adapter defaults/isolation/whitelist | `node --test test/local-prefs.test.mjs` | 7 pass / 0 fail | ✓ PASS |
-| D-13 e2e + D-15 pin + regression scope | `node --test test/scope.test.mjs` | 79 pass / 3 pre-existing skips / 0 fail | ✓ PASS |
+| Hydration merge pins + local + server prefs suites | `node --test test/notif-hydration.test.mjs test/local-prefs.test.mjs test/notif-prefs.test.mjs` | 22 pass / 0 fail | ✓ PASS |
+| Migration, redaction, scope regression | `node --test test/migration.test.mjs test/redaction.test.mjs test/scope.test.mjs` | 141 tests, 138 pass, 0 fail, 3 pre-existing skips | ✓ PASS |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|------------|-------------|--------|----------|
-| SETTINGS-01 | 34-01, 34-02 | notifPrefs → per-user rows, additive guarded migration, byte-identical reboot, doc stripped | ✓ SATISFIED | Truths 1–5; migration + notif-prefs suites pass |
-| SETTINGS-02 | 34-01, 34-04 | All consumers through one accessor; per-user isolation; client branching adapter | ✓ SATISFIED | Truths 2, 11–14 |
-| SETTINGS-03 | 34-02 | invoices stays out, write-path pin, no migration | ✓ SATISFIED | Truth 4; migration.test.mjs:1005 pin passes |
-| SEARCH-01 | 34-03 | Substring leak closed; tokenized matching; normalization/collision table tests; CHANGELOG note | ✓ SATISFIED | Truths 6–10 |
+| SETTINGS-01 | 34-01, 34-02 | notifPrefs → per-user rows, additive guarded migration, byte-identical reboot, doc stripped | ✓ SATISFIED | Truths 1–5 |
+| SETTINGS-02 | 34-01, 34-04, 34-05 | All consumers through one accessor; per-user isolation; client branching adapter; **state survives reload (G-34-4 fix)** | ✓ SATISFIED | Truths 2, 11–14, 16 |
+| SETTINGS-03 | 34-02 | invoices stays out, write-path pin | ✓ SATISFIED | Truth 4 |
+| SEARCH-01 | 34-03 | Substring leak closed; tokenized matching; normalization/collision table; CHANGELOG note | ✓ SATISFIED | Truths 6–10 |
 
-All 4 phase requirement IDs are claimed by plans and accounted for. No orphaned requirements (REQUIREMENTS.md trace table maps exactly SETTINGS-01..03 + SEARCH-01 to Phase 34, all marked Complete).
+All 4 requirement IDs claimed by plans and accounted for; REQUIREMENTS.md maps exactly SETTINGS-01..03 + SEARCH-01 to Phase 34 — no orphans.
 
 ### Anti-Patterns Found
 
-| File | Line | Pattern | Severity | Impact |
-|------|------|---------|----------|--------|
-| — | — | No TBD/FIXME/XXX/placeholder markers in any phase-modified file | — | Clean |
+None — no TBD/FIXME/XXX/placeholder markers in any phase-modified file, including the 34-05 files.
 
 ### Human Verification Required
 
-See frontmatter `human_verification`: (1) two-user per-workspace settings isolation in the live UI, (2) the known API-mode pre-toggle hydration gap the executor flagged for product acceptance, (3) local-mode reload/workspace-switch behavior in a real browser.
+One item remains (all previously-flagged items are closed: UAT tests 1, 3, 6, 7 passed; tests 2 & 5 resolved by agent Playwright runs; the pre-toggle hydration display gap that was test 3's subject is superseded by the G-34-4 fix):
+
+1. **Re-run UAT Test 4 in API mode (G-34-4 fix, live browser)** — rebuild/redeploy the client, then in API mode toggle a notification pref OFF and press F5. **Expected:** the pref stays OFF after reload. **Why human:** GET-on-workspace-open render ordering and bundle caching are observable only in a real browser; the merge semantics are node-test-pinned but the deployed-page invariant is not.
 
 ### Gaps Summary
 
-None. All server-side, migration, and matcher truths are verified with passing behavioral tests; all wiring and requirement IDs accounted for. The stale-report trigger (uncommitted diff in `src/actions/actions.js`) was inspected and is a comment-only reword with zero behavioral impact — the report was refreshed against current on-disk content and the digest recomputed. The phase routes to `human_needed` solely for UI-level acceptance (the phase carries `UI hint: yes`), including one deliberate scope decision (API-mode prefs hydrate only on first toggle) that the executor itself escalated to human judgment.
+None blocking. G-34-4 is fixed in code and test-pinned: `mergeNotifPrefs` (pure, whitelist/boolean sanitize, server-canonical) plus `hydrateNotifPrefs` wired at all five API-mode workspace-entry paths, with the local-mode path explicitly untouched. All suites pass with zero regressions (163 tests re-run across 6 files this session). The phase remains `human_needed` solely for the live-browser re-test of the fix (UAT Test 4). Known out-of-scope item carried in deferred-items.md: the pre-existing `test/dependencies.test.mjs` Dockerfile-allowlist failure (reproduced at base commit 3116272, not caused by 34-05).
 
 ---
 
-_Verified: 2026-11-03T13:05:00Z_
+_Verified: 2026-11-03T16:40:00Z_
 _Verifier: the agent (gsd-verifier)_

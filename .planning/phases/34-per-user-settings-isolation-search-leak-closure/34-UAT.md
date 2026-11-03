@@ -49,12 +49,16 @@ expected: On the boot where the notif-prefs backfill first runs, a timestamped b
 result: pass
 reason: "Agent-verified: migration.test.mjs 37/37 incl. backups.length === 1 after second boot and byte-identical reboot snapshot, all green in this session.
 
+### 8. Re-run Test 4 after gap closure G-34-4 (live UI, rebuilt client)
+expected: In API mode with the rebuilt client, toggle a notification pref OFF and press F5 — the pref stays OFF. hydrateNotifPrefs fetches the stored row at workspace open and adopts it before the next render (fixed by commits cf72c1d/f88ec88/353f156).
+result: [pending]
+
 ## Summary
 
-total: 7
+total: 8
 passed: 4
 issues: 3
-pending: 0
+pending: 1
 skipped: 0
 blocked: 0
 
@@ -74,7 +78,9 @@ blocked: 0
 
 - gap_id: G-34-4
   truth: "In API mode, an unchecked notification pref stays unchecked after F5 reload"
-  status: failed
+  status: resolved
+  resolved_by: "gap-closure plan 34-05 (commits cf72c1d, f88ec88, 353f156): pure mergeNotifPrefs helper + hydrateNotifPrefs wired at all 5 API-mode hydrateFromServer success paths; local mode untouched. Code-verified by re-verification (16/16 must-haves); live-browser re-test pending as Test 8."
+  resolved_at: 2026-11-03
   reason: "User reported: after rebuild when i remove one notification and i click F5, it toggles on everytime"
   severity: major
   test: 4
