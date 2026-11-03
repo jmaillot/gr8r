@@ -309,7 +309,7 @@ in this compose file (every line but MASTER_KEY, PRJSTUDIO_HOST labels).
 | A2 | The undo tests can be written at the server-harness level (membership.test.mjs pattern) for the UNDO-02 no-clobber pin, while the D-06 "local undo is plain restore(snap)" pin rides whatever client-module test convention exists — exact client-module test harness not inspected this session | Validation Architecture | Test placement may shift (planner's discretion anyway) |
 | A3 | Cap-25 `tooManyTeams` unreachable in the 5-second undo window — reasoning, not tested | Pattern 2 | Cosmetic; add a comment or ignore |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **How should the undo force the doc push before the authority PUTs?**
    - What we know: restore→save is double-debounced; server whitelists against the stored
@@ -318,6 +318,8 @@ in this compose file (every line but MASTER_KEY, PRJSTUDIO_HOST labels).
      putWorkspace in the handler vs export a flush/awaitable save.
    - Recommendation: planner decides in-plan; prefer awaiting an explicit doc push inside
      the onAction (keeps store.js surface untouched).
+   - **RESOLVED (35-01/35-03):** 35-01 awaits an explicit `pushNow()` inside the onAction
+     exactly per this recommendation; 35-03 adds the failure gate on its result.
 
 2. **Test file placement** — discretion per CONTEXT.md. Existing authority-row suite
    (test/membership.test.mjs, PUT-teams coverage at :348) is the natural home for the
