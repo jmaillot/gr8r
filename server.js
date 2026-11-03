@@ -1811,6 +1811,11 @@ function bootstrap(opts) {
      memberships.team has long since run inside openDb(), so the source column
      always exists here. */
   migrateTeamMembership(db);
+  /* PREFS (Phase 34, SETTINGS-01, D-09): one-time notifPrefs doc→rows backfill.
+     AFTER migrateTeamMembership — same recipe, same load-bearing-order
+     discipline: it reads the memberships authority rows that earlier
+     migrations guarantee (Pitfall 2). */
+  migrateUserNotifPrefs(db);
   migrateTotpEncryption();
   /* TOTP2 (Phase 31): one-time primary-factor copy into totp_factors (D-06).
      AFTER migrateTotpEncryption — a legacy plaintext secret is already sealed
@@ -1878,6 +1883,83 @@ function migrateTeamMembership(conn) {
        The scalar column is never read again — this is its last reader (D-04). */
     for (const row of conn.prepare('select rowid, team from invites where team is not null and teams is null').all()) {
       conn.prepare('update invites set teams = ? where rowid = ?').run(JSON.stringify([row.team]), row.rowid);
+    }
+    conn.exec('commit');
+  } catch (err) {
+    conn.exec('rollback');
+    throw err;
+  }
+}
+
+/*
+ * PREFS (Phase 34, SETTINGS-01, D-09/D-11): one-time guarded backfill of the
+ * per-user notification preferences. Legacy installs carried prefs in the
+ * workspace document's data.notifPrefs blob; the authority now lives in
+ * user_notif_prefs rows keyed (workspace_id, user_id). Structural clone of
+ * migrateTeamMembership: JS guard (the field lives inside the doc JSON —
+ * SQL can't see it, research Pitfall 5) → pre-migration backup → one
+ * `begin immediate` transaction that copies the workspace-level prefs object
+ * into a row for EVERY member of every eligible workspace (D-09: zero
+ * behavior change at switch-over) and deletes the field from the stored doc
+ * in the SAME transaction (D-11: rows and doc can never disagree). A corrupt
+ * doc blob parses as {} and is skipped — it can never crash the boot
+ * (T-34-05, the migrateTenancy precedent). The guard is false forever after
+ * the first migrating boot: the field is gone from every doc, so later boots
+ * are byte-identical no-ops, and later workspace joiners read the accessor
+ * defaults instead of stale workspace prefs.
+ *
+ * No backup = no mutation (deliberately stricter than migrateTenancy, same
+ * policy as migrateTeamMembership and the TOTP envelope migration, D-74).
+ */
+function migrateUserNotifPrefs(conn) {
+  /* Guard, evaluated in JS: a workspace is eligible iff its stored doc carries
+     data.notifPrefs AND at least one member (from the memberships authority
+     table) lacks a user_notif_prefs row for (workspace_id, user_id). */
+  const eligible = [];
+  for (const row of conn.prepare('select id, doc from workspaces').all()) {
+    let doc = {};
+    try {
+      doc = JSON.parse(row.doc);
+    } catch {
+      /* unreadable document: never crash the boot (T-34-05) — the row is skipped */
+      continue;
+    }
+    const prefs = doc?.data?.notifPrefs;
+    if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) continue;
+    const missing = conn
+      .prepare('select user_id from memberships where workspace_id = ?')
+      .all(row.id)
+      .some(m => !conn.prepare('select 1 from user_notif_prefs where workspace_id = ? and user_id = ?').get(row.id, m.user_id));
+    if (missing) eligible.push({ id: row.id, doc, prefs });
+  }
+  if (eligible.length === 0) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-pre-notif-prefs-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    conn.exec('pragma wal_checkpoint(truncate)');
+    conn.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    console.log(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    console.error(`  pre-migration backup failed: ${err.message}`);
+    return;
+  }
+  conn.exec('begin immediate');
+  try {
+    const insert = conn.prepare('insert or ignore into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)');
+    const updateDoc = conn.prepare('update workspaces set doc = ? where id = ?');
+    for (const ws of eligible) {
+      /* D-09: EVERY member of the workspace gets the workspace-level prefs —
+         not just members who "already have a row" (insert or ignore keeps any
+         pre-existing per-user row the user set after the accessor shipped). */
+      for (const m of conn.prepare('select user_id from memberships where workspace_id = ?').all(ws.id)) {
+        insert.run(ws.id, m.user_id, JSON.stringify(ws.prefs));
+      }
+      /* D-11: the doc-field delete lives in the SAME transaction as the row
+         copies, so a crashed boot can never leave rows and doc disagreeing. */
+      const stripped = { ...ws.doc, data: { ...ws.doc.data } };
+      delete stripped.data.notifPrefs;
+      updateDoc.run(JSON.stringify(stripped), ws.id);
     }
     conn.exec('commit');
   } catch (err) {
