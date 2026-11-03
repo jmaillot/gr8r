@@ -164,7 +164,9 @@ export function pageSettings() {
 export function settingsBody(sec, title) {
   const P = S.prefs;
   const d = D();
-  const np = d.notifPrefs;
+  /* Phase 34 D-01: notifPrefs no longer rides the workspace document — the
+     settings page renders the per-user prefs object from store state. */
+  const np = S.notifPrefs;
   const H = lead => `<h1>${t(title)}</h1><p class="lead">${lead}</p>`;
   switch (sec) {
     case 'workspace': {

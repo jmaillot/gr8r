@@ -3,6 +3,7 @@ import { TODAY, diffD, iso, parse, uid } from './utils.js';
 import { t } from './i18n.js';
 import { PCOLORS, TEAMS_SEED } from './constants.js';
 import { seed } from '../data/seed.js';
+import { getLocalNotifPrefs } from './notifPrefs.js';
 import { api } from './api.js';
 
 export const STORE_KEY = 'projects.v2';
@@ -44,6 +45,10 @@ export const S = {
   data: saved?.data || seed(),
   prefs: stripLegacyLang(Object.assign({}, DEFAULT_PREFS, saved?.prefs || {})),
   views: saved?.views || {},
+  /* Per-user notif prefs (Phase 34 D-01): never on the document. Local mode
+     hydrates from the per-workspace localStorage key; API mode adopts the
+     server row's canonical merge on the first toggle. */
+  notifPrefs: getLocalNotifPrefs(saved?.data?.ws?.url),
   ui: {
     fx: {},
     auth: null,

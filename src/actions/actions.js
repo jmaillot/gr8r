@@ -5,6 +5,7 @@ import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { PR, PSTAT } from '../core/constants.js';
 import { seed } from '../data/seed.js';
+import { setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
   D,
   DEFAULT_PREFS,
@@ -136,13 +137,15 @@ export function parseMentions(txt) {
   }
   return { memberIds: [...memberIds], teamIds: [...teamIds] };
 }
-/* Emit mention notifications for a parsed body. Workspace notifPrefs gate the
-   emission (mention_all for members, mention_team for @team).
+/* Emit mention notifications for a parsed body. The per-user notifPrefs gate the
+   emission (mention_all for members, mention_team for @team) — Phase 34 D-01:
+   the field no longer rides the document, so the gating reads the per-user
+   prefs object from store state.
    Returns the Set of member ids notified, so a comment can skip them for the
    plain `comment` notification (P4-d). */
 export function emitMentions(txt, tk) {
   const { memberIds, teamIds } = parseMentions(txt || '');
-  const np = D().notifPrefs || {};
+  const np = S.notifPrefs || {};
   const targets = new Set();
   if (np.mention_all !== false) memberIds.forEach(id => targets.add(id));
   if (np.mention_team !== false) {
@@ -2673,10 +2676,30 @@ IN.prefToggle = el => {
   S.prefs[el.dataset.k] = el.checked;
   save();
 };
-IN.npToggle = el => {
-  D().notifPrefs[el.dataset.k] = el.checked;
-  save();
-  toast(t('toast.notifPrefsSaved'), { ms: 1500 });
+/* D-07: the settings toggle persists through exactly one branch. The optimistic
+   write lands on the per-user prefs object in store state — never the document
+   (D-01). Local mode stores per-workspace localStorage (D-08); API mode PUTs
+   the row and adopts the canonical merged prefs the server returns. 401 rides
+   the session-expired path like IN.langSel; any other failure is an error
+   toast and the toggle stays where the user left it for the session. */
+IN.npToggle = async el => {
+  S.notifPrefs[el.dataset.k] = el.checked;
+  const wsId = api.enabled ? api.workspace?.id : D().ws.url;
+  render();
+  if (!api.enabled) {
+    setLocalNotifPrefs(wsId, S.notifPrefs);
+    return toast(t('toast.notifPrefsSaved'), { ms: 1500 });
+  }
+  const r = await api.putNotifPrefs(wsId, S.notifPrefs);
+  if (r.ok) {
+    S.notifPrefs = r.data.prefs || S.notifPrefs;
+    return toast(t('toast.notifPrefsSaved'), { ms: 1500 });
+  }
+  if (r.status === 401) {
+    window.dispatchEvent(new CustomEvent('projects:save-error', { detail: { status: 401, error: r.error } }));
+    return;
+  }
+  toast(t('err.notifPrefsSaveFailed'), { kind: 'err', ms: 6000 });
 };
 IN.prefSel = el => {
   const k = el.dataset.k;

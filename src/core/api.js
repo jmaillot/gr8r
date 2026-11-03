@@ -250,6 +250,16 @@ export const api = {
     if (r.ok) applyUser(r.data);
     return r;
   },
+  /* Per-user notification prefs (Phase 34, SETTINGS-02). Unlike the auth-scoped
+     sessions family above, prefs ARE workspace-scoped rows (workspace_id,
+     user_id) — so the workspace id rides the request; the session still
+     supplies the user_id (the server never reads it from the body). */
+  async getNotifPrefs(workspaceId) {
+    return call('GET', `/api/me/notif-prefs?workspace=${encodeURIComponent(workspaceId || '')}`);
+  },
+  async putNotifPrefs(workspaceId, prefs) {
+    return call('PUT', '/api/me/notif-prefs', { workspace: workspaceId, prefs });
+  },
   /* Auth-scoped session management (SESS-01/02): /api/auth/* endpoints take no
      workspace slug, so these follow the login/logout pattern above — no slug guard. */
   async sessions() {
