@@ -12,6 +12,9 @@
 
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
 import { ADMIN, inviteToken, login, startServer, withDb } from './helpers/server.mjs';
@@ -248,6 +251,107 @@ test('an accept whose invite points at a deleted workspace returns 410 workspace
     });
   } finally {
     await server.stop();
+  }
+});
+
+/* ---------- HARD-02 / D-01/D-02: admin link-only invites blocked at both ends + boot sweep ---------- */
+
+/* Seed an email-less admin-role invite row DIRECTLY (the hardened creation
+   route refuses to mint one). FKs off so the row inserts freely; always
+   called AFTER boot, so the D-02 sweep has already run and cannot eat it. */
+function seedLegacyAdminInvite(server, { email = null, role = 'admin' } = {}) {
+  const token = crypto.randomBytes(24).toString('base64url');
+  const db = new DatabaseSync(server.dbPath, { enableForeignKeyConstraints: false });
+  try {
+    const owner = db.prepare('select id from users where email = ?').get(ADMIN.email);
+    const ws = db.prepare('select id from workspaces order by rowid limit 1').get();
+    db.prepare(
+      'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
+    ).run(crypto.createHash('sha256').update(token).digest('hex'), email, role, null, null, ws.id, owner.id, Date.now(), Date.now() + 86400000);
+  } finally {
+    db.close();
+  }
+  return token;
+}
+
+test('HARD-02a: an admin invite with no emails is rejected 400 inviteAdminEmailRequired before any insert; a member link-only invite still succeeds', async () => {
+  const server = await startServer();
+  try {
+    const owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const empty = await owner.post('/api/workspaces/acme/invites', { emails: [], role: 'admin' });
+    assert.equal(empty.status, 400);
+    assert.equal(empty.data.code, 'inviteAdminEmailRequired');
+    const nullOnly = await owner.post('/api/workspaces/acme/invites', { emails: [null], role: 'admin' });
+    assert.equal(nullOnly.status, 400, 'a null-only array normalizes to link-only');
+    assert.equal(nullOnly.data.code, 'inviteAdminEmailRequired');
+    // No over-blocking: a member link-only invite still works.
+    const member = await owner.post('/api/workspaces/acme/invites', { emails: [null], role: 'member' });
+    assert.ok([200, 201].includes(member.status), `member link-only invite must still succeed, got ${member.status}`);
+    assert.equal(member.data.invites.length, 1);
+    // No insert happened for the admin attempts: exactly one invite row exists.
+    withDb(server.dbPath, db => {
+      const n = db.prepare('select count(*) as n from invites where role = ?').get('admin').n;
+      assert.equal(n, 0, 'no admin invite row was inserted');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+test('HARD-02b: accepting a seeded email-less admin-role invite row refuses the grant — no admin membership row', async () => {
+  const server = await startServer();
+  try {
+    const token = seedLegacyAdminInvite(server, { email: null, role: 'admin' });
+    const res = await fetch(`${server.base}/api/invites/${token}/accept`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Climber', email: 'climber@test.local', password: PASSWORD }),
+    });
+    assert.equal(res.status, 403);
+    const data = await res.json();
+    assert.equal(data.code, 'inviteAdminEmailRequired');
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select id from users where email = ?').get('climber@test.local');
+      const rows = user
+        ? db
+            .prepare('select m.role from memberships m where m.user_id = ? and m.role in (?, ?)')
+            .all(user.id, 'admin', 'owner')
+        : [];
+      assert.equal(rows.length, 0, 'no admin/owner membership row was created');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+test('HARD-02c: the boot sweep marks a legacy link-only admin invite used_at = now — the row still EXISTS (update only, never deleted)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hardening-sweep-'));
+  try {
+    const first = await startServer({ dataDir: dir });
+    const token = seedLegacyAdminInvite(first, { email: null, role: 'admin' });
+    await first.stop();
+    // Reboot against the SAME dataDir: the D-02 sweep must fire at boot.
+    const second = await startServer({ dataDir: dir });
+    try {
+      withDb(second.dbPath, db => {
+        const row = db.prepare('select * from invites where token_hash = ?').get(crypto.createHash('sha256').update(token).digest('hex'));
+        assert.ok(row, 'the legacy row still EXISTS — the sweep is an update, never a delete');
+        assert.ok(row.used_at, 'used_at was stamped at boot');
+        assert.equal(row.role, 'admin', 'the row itself is untouched otherwise');
+      });
+      // And the swept link can never grant admin anymore.
+      const res = await fetch(`${second.base}/api/invites/${token}/accept`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'TooLate', email: 'toolate@test.local', password: PASSWORD }),
+      });
+      assert.equal(res.status, 410, 'the swept invite is dead — inviteAlreadyUsed');
+      assert.equal((await res.json()).code, 'inviteAlreadyUsed');
+    } finally {
+      await second.stop();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

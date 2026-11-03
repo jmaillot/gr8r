@@ -1602,6 +1602,7 @@
   "err.enterValidEmail": "Enter a valid email address",
   "err.inviteForOtherEmail": "This invite is for {email}",
   "err.workspaceGone": "This workspace no longer exists",
+  "err.inviteAdminEmailRequired": "Admin invites must be sent to an email address",
   "err.notFound": "Not found",
   "err.lastPrivateMember": "Promote someone before removing the last member of a private project",
   "err.noWorkspaceReady": "No workspace available",

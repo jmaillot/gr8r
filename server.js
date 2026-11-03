@@ -4298,6 +4298,14 @@ async function handleApi(req, res, url) {
     ];
     if (emails.length > 20) return fail(res, 400, 'inviteBatchLimit', 'Create at most 20 invites at a time');
     for (const email of emails) if (!emailOk(email)) return fail(res, 400, 'invalidEmail', `Invalid email: ${email}`, { email });
+    /* HARD-02 (D-01, first enforcement point): an admin/owner invite can
+       never be link-only — one pasteable URL would mint a privilege
+       escalation. The link-only branch below resolves to [null]; a
+       null-only body array normalizes to length 0, so both shapes are
+       caught here BEFORE any insert. */
+    if (ROLE_RANK[role] >= ROLE_RANK.admin && emails.length === 0) {
+      return fail(res, 400, 'inviteAdminEmailRequired', 'Admin invites must be sent to an email address');
+    }
 
     const t = now();
     const expiresAt = t + INVITE_DAYS * 86400 * 1000;
@@ -4413,6 +4421,13 @@ async function handleApi(req, res, url) {
     if (!invite) return fail(res, 404, 'inviteInvalid', 'This invite link is not valid');
     if (invite.used_at) return fail(res, 410, 'inviteAlreadyUsed', 'This invite has already been used');
     if (invite.expires_at <= now()) return fail(res, 410, 'inviteExpired', 'This invite has expired');
+    /* HARD-02 (D-01, second enforcement point): an email-less invite row
+       carrying an admin/owner role never grants that role — the creation
+       route refuses to mint one and the boot sweep neutralizes stored
+       legacy rows; this refusal makes any survivor harmless. */
+    if (ROLE_RANK[invite.role] >= ROLE_RANK.admin && !invite.email) {
+      return fail(res, 403, 'inviteAdminEmailRequired', 'Admin invites must be sent to an email address');
+    }
 
     const body = await readJson(req);
     const session = currentUser(req);
@@ -4963,6 +4978,10 @@ function main() {
   if (args[0] === '--backup') return backupCli(args[1]);
 
   bootstrap();
+  /* HARD-02 (D-02): legacy link-only admin/owner invites are neutralized at
+     boot — UPDATE only (the row is an audit trail, never destroyed), no
+     schema change, no migration. Boot-scoped, NOT the route-scoped cleanup. */
+  db.prepare('update invites set used_at = ? where email is null and role in (?, ?) and used_at is null').run(now(), 'owner', 'admin');
   db.prepare('delete from sessions where expires_at <= ?').run(now());
   setInterval(() => db.prepare('delete from sessions where expires_at <= ?').run(now()), 3600_000).unref();
   /* D-66 lifecycle: expired login challenges are swept at boot and hourly. */

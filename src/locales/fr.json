@@ -1602,6 +1602,7 @@
   "err.enterValidEmail": "Saisissez une adresse e-mail valide",
   "err.inviteForOtherEmail": "Cette invitation est destinée à {email}",
   "err.workspaceGone": "Cet espace de travail n’existe plus",
+  "err.inviteAdminEmailRequired": "Les invitations d’administrateur doivent être envoyées à une adresse e-mail",
   "err.notFound": "Introuvable",
   "err.lastPrivateMember": "Promouvez quelqu’un avant de retirer le dernier membre d’un projet privé",
   "err.noWorkspaceReady": "Aucun espace de travail disponible",
