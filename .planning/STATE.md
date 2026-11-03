@@ -5,16 +5,16 @@ milestone_name: Team Visibility & Hardening
 current_phase: 34
 current_phase_name: Per-User Settings Isolation & Search Leak Closure
 status: executing
-stopped_at: Completed 34-02-PLAN.md; next 34-03
-last_updated: "2026-11-03T10:35:34.766Z"
+stopped_at: Completed 34-04-PLAN.md
+last_updated: "2026-11-03T10:52:54.561Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 34 execution started
-state_head: b0f81d00379973a3e99d57e7ed0e979b8c396df4
+state_head: 47775bea76976427538a8ee0ba522440d60ab06f
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 34 (Per-User Settings Isolation & Search Leak Closure) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 34 execution started
 
@@ -100,6 +100,7 @@ second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant i
 - [Phase 34]: 34-01: consumers map member_id→user_id via memberships before getUserNotifPrefs (accessor keyed by user_id)
 - [Phase 34]: 34-01: due-reminders prefs pins migrated to per-user rows; doc-carried notifPrefs retired + stripped both directions
 - [Phase 34]: migrateUserNotifPrefs guard is JS over stored doc blobs with per-row JSON.parse try/catch; one begin immediate copies prefs to EVERY member (insert or ignore) and deletes the doc field; pre-backup gate = no backup no mutation
+- [Phase 34]: Client prefs: local mode keys localStorage per workspace url (projects.notifPrefs.<id>); npToggle is a single api.enabled branch adopting the server's merged prefs; emitMentions gates on S.notifPrefs — D-01/D-05/D-07/D-08; seed workspaces have url not id; doc field permanently undefined after the strips
 
 ### Pending Todos
 
@@ -132,8 +133,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-03T10:35:20.996Z
-Stopped at: Completed 34-02-PLAN.md; next 34-03
+Last session: 2026-11-03T10:52:46.857Z
+Stopped at: Completed 34-04-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -146,6 +147,7 @@ Resume file: None
 | Phase 34 P01 | 11 min | 2 tasks | 3 files |
 | Phase 34 P02 | 24min | 2 tasks | 5 files |
 | Phase 34 P02 | 24min | 2 tasks | 5 files |
+| Phase 34 P04 | 12min | 2 tasks | 10 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
