@@ -386,6 +386,23 @@ function snapshot() {
       table: withDb(server.dbPath, db => db.prepare("select sql from sqlite_master where type = 'table' and name = 'team_members'").get()?.sql),
       index: withDb(server.dbPath, db => db.prepare("select sql from sqlite_master where type = 'index' and name = 'team_members_user'").get()?.sql),
     },
+    /* PREFS (Phase 34): the backfilled rows and their guarded-create DDL ride
+       the same byte-identity proof across the reboot. */
+    notifPrefs: {
+      rows: withDb(server.dbPath, db =>
+        db
+          .prepare('select workspace_id, user_id, prefs from user_notif_prefs order by workspace_id, user_id')
+          .all()
+          .map(r => ({ ...r })),
+      ),
+      columns: withDb(server.dbPath, db =>
+        db
+          .prepare('pragma table_info(user_notif_prefs)')
+          .all()
+          .map(c => ({ ...c })),
+      ),
+      tableDdl: ddl({ type: 'table', name: 'user_notif_prefs' }),
+    },
     inviteWorkspaceId: invite.workspace_id,
     inviteTeams: withDb(server.dbPath, db => db.prepare('select team, teams from invites').get()),
     users: withDb(server.dbPath, db =>
@@ -449,6 +466,97 @@ test('the second boot leaves team_members byte-identical — no duplicates, no s
     'exactly two rows after the second boot — the backfill never duplicates (Pitfall 4)',
   );
   assert.equal(teamBackups().length, 1, 'no second pre-team-members backup');
+});
+
+/* PREFS (Phase 34, SETTINGS-01, D-09/D-11): the legacy fixture's document
+   carries data.notifPrefs, so the guarded backfill fires on the first boot —
+   one user_notif_prefs row per member, the field deleted from the stored doc
+   in the same transaction, and a pre-migration backup before either. */
+const PREFS_BACKUP_PREFIX = 'projects-pre-notif-prefs-';
+const prefsBackups = () => fs.readdirSync(dataDir).filter(name => name.startsWith(PREFS_BACKUP_PREFIX) && name.endsWith('.db'));
+const prefRows = wsId =>
+  withDb(server.dbPath, db =>
+    db
+      .prepare('select workspace_id, user_id, prefs from user_notif_prefs where workspace_id = ? order by user_id')
+      .all(wsId),
+  );
+
+test('the first boot backfills doc-carried notifPrefs into one row per member and strips the field', () => {
+  const fixturePrefs = {
+    email_mention: true,
+    email_assign: true,
+    email_digest: true,
+    email_comment: false,
+    push_mention: true,
+    push_assign: true,
+    push_comment: true,
+    push_due: true,
+    mention_all: true,
+    assign_self: true,
+  };
+  assert.deepEqual(
+    prefRows('ws_legacy').map(r => [r.user_id, JSON.parse(r.prefs)]),
+    [
+      ['u_alice', fixturePrefs],
+      ['u_bob', fixturePrefs],
+      ['u_cara', fixturePrefs],
+    ],
+    'EVERY member — including the profile-less cara — got the workspace-level prefs object (D-09)',
+  );
+  assert.equal('notifPrefs' in JSON.parse(workspaceRow().doc).data, false, 'data.notifPrefs is deleted from the STORED doc (D-11, same transaction)');
+  assert.equal(prefsBackups().length, 1, 'exactly one projects-pre-notif-prefs-*.db — the no-backup-no-mutation gate fired once');
+});
+
+/* D-11's joiner guarantee: the workspace doc no longer carries prefs, so a
+   member added AFTER the migration reads the accessor defaults — the stale
+   workspace-level object can never leak into a later joiner. */
+const EXPECTED_DEFAULTS = {
+  email_mention: true,
+  email_assign: true,
+  email_digest: true,
+  email_comment: false,
+  email_reminder: true,
+  due_reminder: true,
+  past_due: true,
+  push_mention: true,
+  push_assign: true,
+  push_comment: true,
+  push_due: true,
+  mention_all: true,
+  assign_self: true,
+};
+
+test('a later workspace joiner reads the all-default prefs, never the stale workspace object (D-11)', async () => {
+  withDb(server.dbPath, db => {
+    const hash = db.prepare('select password_hash from users where id = ?').get('u_bob').password_hash;
+    db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(
+      'u_dave',
+      'dave@legacy.local',
+      'Dave Joiner',
+      hash,
+      1_700_000_000_000,
+    );
+    db.prepare('insert into memberships (workspace_id, user_id, role) values (?,?,?)').run('ws_legacy', 'u_dave', 'member');
+  });
+
+  const signedIn = await login(server.base, 'dave@legacy.local', LEGACY_PASSWORD);
+  assert.equal(signedIn.status, 200, 'the joiner signs in');
+  const read = await signedIn.client.get('/api/me/notif-prefs?workspace=ws_legacy');
+  assert.equal(read.status, 200);
+  assert.deepEqual(read.data.prefs, EXPECTED_DEFAULTS, 'the joiner reads accessor defaults — no stale workspace prefs inherited');
+  assert.equal(prefRows('ws_legacy').filter(r => r.user_id === 'u_dave').length, 0, 'the joiner has no row yet — defaults come from absence');
+});
+
+test('the second boot leaves user_notif_prefs byte-identical — no duplicates, no second backup', () => {
+  /* The reboot itself happened in the deepEqual pin above (whose snapshot now
+     includes the rows and the DDL); these assertions pin the PREFS-specific
+     failure modes explicitly. */
+  assert.deepEqual(
+    prefRows('ws_legacy').map(r => r.user_id),
+    ['u_alice', 'u_bob', 'u_cara'],
+    'exactly one row per original member after the second boot — insert or ignore never duplicates',
+  );
+  assert.equal(prefsBackups().length, 1, 'no second pre-notif-prefs backup — the guard is false forever after the first migrating boot');
 });
 
 /* SSO-01 (Phase 30): the oidc_identities additive table rides the same
@@ -823,6 +931,99 @@ test('ENC-01: edge rows — blank and non-base32 values are skipped, never wrapp
     server.output(),
     /TOTP encryption: 1 row\(s\) migrated to the v1: envelope, 0 blank skipped, 1 non-base32 skipped, 0 already encrypted, 1 unrecognized version\(s\) left as-is\./,
     'blank and v1: rows never reach the transaction — the D-83 trigger excludes them; the undecryptable stale v1: envelope is counted unrecognized (D-76/D-K7)',
+  );
+  await server.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/* PREFS (Phase 34, SETTINGS-01, T-34-05/T-34-06): the guard's per-row
+   JSON.parse try/catch and the backup gate proven against a planted database
+   — a corrupt doc blob is skipped, never crashing the boot, while sibling
+   workspaces still migrate; a second boot is a byte-identical no-op. */
+test('PREFS: a two-member workspace backfills per member and a corrupt doc is skipped without crashing the boot (T-34-05)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-prefs-'));
+  const dbPath = path.join(dir, 'projects.db');
+  createLegacyDb(dir);
+  const pinnedPrefs = { email_mention: false, email_comment: true, push_mention: false, assign_self: false };
+  withDb(dbPath, db => {
+    const hash = db.prepare('select password_hash from users where id = ?').get('u_bob').password_hash;
+    const insertUser = db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)');
+    insertUser.run('u_dave', 'dave@prefs.local', 'Dave Prefs', hash, 1_700_000_000_000);
+    insertUser.run('u_eve', 'eve@prefs.local', 'Eve Prefs', hash, 1_700_000_000_000);
+    const insertWs = db.prepare('insert into workspaces (id, name, doc, revision, created_at, updated_at) values (?,?,?,?,?,?)');
+    const t = 1_700_000_000_000;
+    insertWs.run(
+      'ws_pinned',
+      'Pinned Studio',
+      JSON.stringify({ data: { notifPrefs: pinnedPrefs, projects: [], tasks: [] }, prefs: {}, views: {} }),
+      1,
+      t,
+      t,
+    );
+    /* T-34-05: the corrupt row — malformed JSON that would crash an unguarded
+       JSON.parse at boot. */
+    insertWs.run('ws_corrupt', 'Corrupt Studio', '{"data":{"notifPrefs":{"email_mention":false', 1, t, t);
+    const insertMembership = db.prepare('insert into memberships (workspace_id, user_id, role) values (?,?,?)');
+    insertMembership.run('ws_pinned', 'u_dave', 'member');
+    insertMembership.run('ws_pinned', 'u_eve', 'member');
+    insertMembership.run('ws_corrupt', 'u_dave', 'member');
+  });
+
+  const dirPrefsBackups = () => fs.readdirSync(dir).filter(name => name.startsWith('projects-pre-notif-prefs-') && name.endsWith('.db'));
+  const wsRows = () =>
+    withDb(dbPath, db => db.prepare('select id, doc from workspaces order by id').all().map(r => ({ id: r.id, doc: r.doc })));
+  const rows = () => withDb(dbPath, db => db.prepare('select workspace_id, user_id, prefs from user_notif_prefs order by workspace_id, user_id').all());
+
+  const first = await startServer({ dataDir: dir });
+  const afterFirst = { docs: wsRows(), prefs: rows() };
+  assert.deepEqual(
+    afterFirst.prefs.filter(r => r.workspace_id === 'ws_pinned').map(r => [r.user_id, JSON.parse(r.prefs)]),
+    [
+      ['u_dave', pinnedPrefs],
+      ['u_eve', pinnedPrefs],
+    ],
+    'both members of ws_pinned got exactly the workspace-level prefs object (D-09)',
+  );
+  assert.equal(afterFirst.prefs.filter(r => r.workspace_id === 'ws_corrupt').length, 0, 'the corrupt-doc workspace migrated zero rows — skipped, not crashed');
+  assert.equal(afterFirst.docs.find(r => r.id === 'ws_corrupt').doc, '{"data":{"notifPrefs":{"email_mention":false', 'the corrupt blob is byte-identical on disk');
+  assert.equal('notifPrefs' in JSON.parse(afterFirst.docs.find(r => r.id === 'ws_pinned').doc).data, false, 'the ws_pinned doc was stripped in the same transaction (D-11)');
+  assert.equal(dirPrefsBackups().length, 1, 'exactly one pre-migration backup for the migrating boot (T-34-06)');
+  await first.stop();
+
+  const second = await startServer({ dataDir: dir });
+  assert.deepEqual({ docs: wsRows(), prefs: rows() }, afterFirst, 'the second boot is byte-identical — no drift, no duplicates (T-34-06)');
+  assert.equal(dirPrefsBackups().length, 1, 'no second pre-notif-prefs backup on the reboot');
+  await second.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+/* SETTINGS-03 (Phase 34): the formalized invoices pin — the write-path delete
+   at mergeClientDoc holds with NO migration involved: a legacy doc carrying
+   invoices hydrates, and after a client write the field reads back undefined
+   (the D-30 retire-on-write discipline, same shape as the plan/invoices pin
+   on the shared fixture above). */
+test('SETTINGS-03: a doc carrying invoices hydrates and the field is gone after a write — the write-path delete holds with no migration', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-invoices-'));
+  createLegacyDb(dir);
+
+  const server = await startServer({ dataDir: dir });
+  const signedIn = await login(server.base, 'alice@legacy.local', LEGACY_PASSWORD);
+  assert.equal(signedIn.status, 200);
+
+  const read = await signedIn.client.get('/api/workspaces/legacy-studio');
+  assert.equal(read.status, 200, 'a document carrying invoices hydrates (normalizeDoc leaves it for the client)');
+
+  const doc = structuredClone(read.data.doc);
+  doc.data.invoices = [{ id: 'i_inv', total: 42 }];
+  const saved = await signedIn.client.put('/api/workspaces/legacy-studio', { revision: read.data.revision, doc });
+  assert.equal(saved.status, 200, 'the document saves');
+
+  const after = await signedIn.client.get('/api/workspaces/legacy-studio');
+  assert.equal(after.data.doc.data.invoices, undefined, 'the invoices field is gone after a write — mergeClientDoc deletes it');
+  assert.equal(
+    /"invoices"/.test(withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get('ws_legacy').doc)),
+    false,
+    'the STORED doc JSON contains no invoices key',
   );
   await server.stop();
   fs.rmSync(dir, { recursive: true, force: true });
