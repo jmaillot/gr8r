@@ -25,7 +25,7 @@ severity: major
 ### 3. API-mode pre-toggle hydration gap (product acceptance)
 expected: KNOWN LIMITATION (Plan 04, ApiModeUX, human_judgment): in API mode, opening settings BEFORE toggling anything shows all-ON defaults, not the user's stored row, until the first PUT of the session adopts the server merge. Confirm this is acceptable or schedule a fetch-on-workspace-open.
 result: pass
-reason: "User accepted the all-ON-until-first-toggle display as product behavior (the G-34-4 hydration FIX is still planned as a gap-closure; this row records the acceptance of the default display itself, distinct from the reload regression). The earlier ERR_MODULE_NOT_FOUND report on this row was reclassified to G-34-3 (Dockerfile), not a hydration issue.
+reason: "User accepted the all-ON-until-first-toggle display as product behavior (the G-34-4 hydration FIX is still planned as a gap-closure; this row records the acceptance of the default display itself, distinct from the reload regression). The earlier ERR_MODULE_NOT_FOUND report on this row was reclassified to G-34-3 (Dockerfile), not a hydration issue."
 
 ### 4. Settings toggle persistence branch (live UI)
 expected: Toggling a notification pref persists through exactly one branch: API mode → PUT /api/me/notif-prefs; local mode → per-workspace localStorage. The toggle state survives and never writes into the shared workspace document.
@@ -52,8 +52,8 @@ reason: "Agent-verified: migration.test.mjs 37/37 incl. backups.length === 1 aft
 ## Summary
 
 total: 7
-passed: 5
-issues: 2
+passed: 4
+issues: 3
 pending: 0
 skipped: 0
 blocked: 0
