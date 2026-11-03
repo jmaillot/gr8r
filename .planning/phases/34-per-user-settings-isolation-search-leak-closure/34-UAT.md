@@ -62,7 +62,9 @@ blocked: 0
 
 - gap_id: G-34-2
   truth: "Two users of one workspace see independent notification prefs after their first toggle (no shared state)"
-  status: failed
+  status: resolved
+  resolved_by: "agent-playwright-run: two isolated browser contexts proved server rows independent; observation was the G-34-4 display bug + stale build"
+  resolved_at: 2026-11-03
   reason: "User reported: false, it changed for everyone (for example in notifications) but i didnt rebuild yet so push it in case it was changed in last phases"
   severity: major
   test: 2
@@ -88,7 +90,9 @@ blocked: 0
 
 - gap_id: G-34-5
   truth: "In local mode, notification prefs survive F5 reload (per-workspace localStorage)"
-  status: failed
+  status: resolved
+  resolved_by: "agent-playwright-run (vite preview): toggle OFF survives F5 in local mode; user's failure was API-mode G-34-4"
+  resolved_at: 2026-11-03
   reason: "User reported: the pref doesnt survive a F5"
   severity: major
   test: 5
@@ -99,7 +103,9 @@ blocked: 0
 
 - gap_id: G-34-3
   truth: "Deployed server boots: server.js imports src/lib/redaction.js and the runtime image resolves it"
-  status: failed
+  status: resolved
+  resolved_by: "commit 4af1d9b — Dockerfile runtime stage now COPYs /app/src (user to confirm on rebuild)"
+  resolved_at: 2026-11-03
   reason: "User reported: Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/app/src/lib/redaction.js' imported from /app/server.js"
   severity: blocker
   test: 3
