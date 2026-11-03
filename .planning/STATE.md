@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: v1.7
 milestone_name: Team Visibility & Hardening
 current_phase: 34
-current_phase_name: per-user-settings-isolation-search-leak-closure
+current_phase_name: Per-User Settings Isolation & Search Leak Closure
 status: executing
-stopped_at: Phase 34 context gathered
-last_updated: "2026-11-03T09:47:16.384Z"
+stopped_at: Completed 34-01-PLAN.md
+last_updated: "2026-11-03T10:09:33.457Z"
 last_activity: 2026-11-03
-last_activity_desc: Phase 33 complete, transitioned to Phase 34
-state_head: 75ed9f98a04a4587ab0a94821d0560c923f9c7df
+last_activity_desc: Phase 34 execution started
+state_head: 5f280a82c97eb32145dd09b6576260e477e599c0
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 7
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 50
 ---
 
 # STATE.md
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 34 (per-user-settings-isolation-search-leak-closure) — READY TO EXECUTE
-Plan: Not started
+Phase: 34 (Per-User Settings Isolation & Search Leak Closure) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-11-03 — Phase 33 complete, transitioned to Phase 34
+Last activity: 2026-11-03 — Phase 34 execution started
 
 ## v1.7 Phase Order (research-validated build order)
 
@@ -97,6 +97,8 @@ second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant i
 - [Phase 33]: 33-01: firstForwardedValue() shared helper unifies proto/clientIp/sameOrigin; multi-value x-forwarded-host now first-value in sameOrigin (D-07)
 - [Phase 33]: 33-02: both firstWorkspace() invite twins fail closed in one commit — accept 410 workspaceGone, SSO twin consumes the dead invite and lands the generic /login?sso=error (D-03/D-04/D-05)
 - [Phase 33]: 33-02: link-only admin/owner invites blocked at creation (400), refused at accept (403), swept update-only at boot (D-01/D-02); err.inviteAdminEmailRequired catalogued EN+FR
+- [Phase 34]: 34-01: consumers map member_id→user_id via memberships before getUserNotifPrefs (accessor keyed by user_id)
+- [Phase 34]: 34-01: due-reminders prefs pins migrated to per-user rows; doc-carried notifPrefs retired + stripped both directions
 
 ### Pending Todos
 
@@ -129,9 +131,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-03T09:03:04.218Z
-Stopped at: Phase 34 context gathered
-Resume file: .planning/phases/34-per-user-settings-isolation-search-leak-closure/34-CONTEXT.md
+Last session: 2026-11-03T10:09:24.773Z
+Stopped at: Completed 34-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -140,6 +142,7 @@ Resume file: .planning/phases/34-per-user-settings-isolation-search-leak-closure
 | *(v1.7 — no plans executed yet)* | | | |
 | Phase 33 P01 | 25m | 3 tasks | 2 files |
 | Phase 33 P02 | 22m | 2 tasks | 6 files |
+| Phase 34 P01 | 11 min | 2 tasks | 3 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
