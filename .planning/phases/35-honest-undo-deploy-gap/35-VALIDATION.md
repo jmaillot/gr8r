@@ -42,7 +42,8 @@ created: "2026-11-03"
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 35-01-01 | 01 | 1 | UNDO-01 | T-35-01 / — | Undo restores only the deleted team's membership rows (union replay, no clobber) | unit/integration | `node --test test/undo-membership.test.mjs` | ❌ W0 | ⬜ pending |
 | 35-01-02 | 01 | 1 | UNDO-02 | — | Newer independent team changes to other teams survive undo replay | unit/integration | `node --test test/undo-membership.test.mjs` | ❌ W0 | ⬜ pending |
-| 35-02-01 | 02 | 1 | DEPLOY-01 | — | compose forwards `MASTER_KEY_PREVIOUS` via `:-` optional form; boots with and without the var | config test | `node --test test/compose-config.test.mjs` | ❌ W0 | ⬜ pending |
+| 35-02-01 | 02 | 1 | DEPLOY-01 | T-35-03 / T-35-05 | compose forwards `MASTER_KEY_PREVIOUS` via `:-` optional form; boots with and without the var | config test | `node --test test/compose-config.test.mjs` | ❌ W0 | ⬜ pending |
+| 35-02-02 | 02 | 1 | DEPLOY-01 | T-35-04 | DEPLOY.md §14 compose rotation walkthrough present (env-only key discipline) | docs grep + regression | `grep -c 'MASTER_KEY_PREVIOUS' DEPLOY.md && node --test test/compose-config.test.mjs` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
