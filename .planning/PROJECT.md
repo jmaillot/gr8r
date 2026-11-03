@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-02 — milestone v1.7 started*
+*Last updated: 2026-11-03 after Phase 33 (HARD shipped & verified)*
 
 ## Current Milestone: v1.7 Team Visibility & Hardening
 
