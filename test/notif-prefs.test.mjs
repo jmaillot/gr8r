@@ -5,6 +5,7 @@
    directions, and getUserNotifPrefs is the only reader. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
@@ -189,4 +190,137 @@ test('two users with exactly equal prefs remain two distinct rows, accessor outp
   assert.deepEqual(bPrefs, aPrefs, 'accessor output is per-key equal regardless of stored key order');
   assert.equal(aPrefs.email_reminder, false);
   assert.equal(aPrefs.email_mention, false);
+});
+
+/* ------------------- (j) per-recipient consumers (Task 2, Pitfall 1) ------------------- */
+
+/* Minimal SMTP sink (due-reminders REM-05 pattern): captures DATA payloads. */
+function fakeSmtp() {
+  const messages = [];
+  const srv = net.createServer(sock => {
+    sock.write('220 test ESMTP\r\n');
+    let buffer = '';
+    let inData = false;
+    let current = null;
+    sock.on('data', chunk => {
+      buffer += chunk.toString();
+      let idx;
+      while ((idx = buffer.indexOf('\r\n')) !== -1) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (inData) {
+          if (line === '.') {
+            inData = false;
+            messages.push(current.join('\n'));
+            current = null;
+            sock.write('250 OK\r\n');
+          } else if (current) {
+            current.push(line.startsWith('..') ? line.slice(1) : line);
+          }
+        } else if (/^EHLO/i.test(line)) {
+          sock.write('250-test\r\n250 OK\r\n');
+        } else if (/^DATA/i.test(line)) {
+          inData = true;
+          current = [];
+          sock.write('354 go\r\n');
+        } else if (/^QUIT/i.test(line)) {
+          sock.write('221 bye\r\n');
+          sock.end();
+        } else {
+          sock.write('250 OK\r\n');
+        }
+      }
+    });
+  });
+  return new Promise(resolve => {
+    srv.listen(0, '127.0.0.1', () => resolve({ srv, port: srv.address().port, messages }));
+  });
+}
+
+/* Decode the base64 text/plain part of a captured message (REM-05 pattern). */
+function textPart(raw) {
+  const lines = raw.split('\n');
+  const i = lines.indexOf('Content-Type: text/plain; charset=UTF-8');
+  assert.ok(i !== -1, 'message has a text/plain part');
+  const body = [];
+  for (let j = i + 2; j < lines.length && !lines[j].startsWith('--'); j++) body.push(lines[j]);
+  return Buffer.from(body.join(''), 'base64').toString('utf8');
+}
+
+test('two users with different rows get different outcomes — the reminder gate and email dispatch resolve per recipient', async t => {
+  const smtp = await fakeSmtp();
+  const mailDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-prefs-mail-'));
+  const mail = await startServer({
+    dataDir: mailDir,
+    env: {
+      MASTER_KEY: 'projects-prefs-mail-key',
+      REMINDER_TEST_TOKEN: 'prefs-reminder-token',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(smtp.port),
+      SMTP_REQUIRE_TLS: 'false',
+      MAIL_FROM: 'noreply@test.local',
+      APP_URL: 'http://app.test',
+    },
+  });
+  try {
+    const TOKEN = 'prefs-reminder-token';
+    const TZ = '(GMT+00:00) London';
+    const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
+    const trigger = nowIso =>
+      fetch(`${mail.base}/api/internal/reminder-pass`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-reminder-token': TOKEN },
+        body: JSON.stringify({ now: nowIso }),
+      }).then(async r => {
+        assert.equal(r.status, 200);
+        return (await r.json()).emitted;
+      });
+
+    const ownerA = (await signup(mail.base, { name: 'A', email: 'mail-a@test.local', password: PASSWORD })).client;
+    await ownerA.post('/api/workspaces', { name: 'MailWs', slug: 'mail-ws' });
+    const mailWs = withDb(mail.dbPath, db => db.prepare('select id, slug from workspaces where slug = ?').get('mail-ws'));
+
+    const userB = (await signup(mail.base, { name: 'B', email: 'mail-b@test.local', password: PASSWORD })).client;
+    const inv = await ownerA.post('/api/workspaces/mail-ws/invites', { emails: ['mail-b@test.local'], role: 'member' });
+    assert.equal(inv.status, 201);
+    const joined = await userB.post(`/api/invites/${inviteToken(inv.data.invites[0].url)}/accept`);
+    assert.equal(joined.status, 200);
+
+    // User A opts OUT of reminders; user B keeps the all-ON defaults.
+    const off = await ownerA.put('/api/me/notif-prefs', { workspace: mailWs.id, prefs: { email_reminder: false } });
+    assert.equal(off.status, 200, `A opts out ${off.status}`);
+
+    // Both tasks are due; the pass must resolve prefs per assignee (Pitfall 1).
+    const emails = withDb(
+      mail.dbPath,
+      db => db.prepare('select m.member_id, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?').all(mailWs.id),
+    );
+    const memberA = emails.find(r => r.email === 'mail-a@test.local').member_id;
+    const memberB = emails.find(r => r.email === 'mail-b@test.local').member_id;
+    const raw = withDb(mail.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(mailWs.id).doc);
+    const doc = JSON.parse(raw);
+    doc.data.tasks = [
+      { id: 'ptA', key: 'PW-A', title: 'A task', status: 'todo', assignee: memberA, project: 'p1', due: '2026-01-15' },
+      { id: 'ptB', key: 'PW-B', title: 'B task', status: 'todo', assignee: memberB, project: 'p1', due: '2026-01-15' },
+    ];
+    doc.data.members = emails.map(r => ({ id: r.member_id, name: r.email, email: r.email, userId: null, tz: TZ }));
+    doc.data.projects = [{ id: 'p1', name: 'P1' }];
+    withDb(mail.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), mailWs.id));
+
+    const emitted = await trigger(at9('2026-01-15'));
+    const mine = emitted.filter(n => n.task === 'ptA' || n.task === 'ptB');
+    assert.ok(mine.some(n => n.task === 'ptB'), 'B (defaults) still gets reminder rows');
+
+    await new Promise(r => setTimeout(r, 300));
+    // Reminder emails carry the task deep link; the invite email to B does not.
+    const reminderMails = smtp.messages.filter(raw => textPart(raw).includes('http://app.test/w/'));
+    assert.equal(reminderMails.filter(raw => textPart(raw).includes('http://app.test/w/mail-ws/') && textPart(raw).match(/task\/PW-A/)).length, 0, 'no reminder email to A (email_reminder=false)');
+    const bRows = mine.filter(n => n.task === 'ptB').length;
+    assert.equal(reminderMails.length, bRows, 'one email per B reminder row — A is skipped');
+    assert.ok(bRows >= 1, 'B got at least one reminder row');
+  } finally {
+    await mail.stop();
+    smtp.srv.close();
+    fs.rmSync(mailDir, { recursive: true, force: true });
+  }
 });

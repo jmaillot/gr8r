@@ -70,10 +70,19 @@ async function makeWorkspace(tasks, prefs = {}, tz = TZ, srv = server) {
       activity: [],
       notifs: [],
       files: [],
-      notifPrefs: prefs,
     },
   };
   withDb(srv.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id));
+  /* Phase 34: prefs are per-user rows, never doc fields — a fixture's prefs
+     land in user_notif_prefs keyed by the owner's user_id (the gate resolves
+     the fixture assignee's member_id back to this account). */
+  if (Object.keys(prefs).length) {
+    withDb(srv.dbPath, db => {
+      const uid = db.prepare('select user_id from memberships where workspace_id = ? order by rowid limit 1').get(ws.id).user_id;
+      assert.ok(uid, 'membership carries a user_id');
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, uid, JSON.stringify(prefs));
+    });
+  }
   const ids = new Set(fixtureTasks.map(t => t.id));
   return { ws, memberId: mem.member_id, email: owner.email, own: emitted => emitted.filter(n => ids.has(n.task)) };
 }
@@ -285,31 +294,36 @@ test('D-27-5: due_reminder/past_due prefs === false gate in-app rows; missing ke
   assert.ok(gated.every(n => n.type === 'due_reminder'), 'due reminders unaffected by past_due: false');
 });
 
-/* --------------------- D-27-5: defaults ON, plan 02 --------------------- */
+/* --------------------- D-27-5: defaults ON, phase 34 --------------------- */
 
-test('D-27-5: a new workspace seeds email_reminder/due_reminder/past_due as true', async () => {
+test('D-27-5: a user with no prefs row reads email_reminder/due_reminder/past_due as true', async () => {
   const owner = owners.get(server.base);
   const created = await owner.c.post('/api/workspaces', { name: `Ws${++seq}`, slug: `ws-${seq}` });
   assert.equal(created.status, 201, 'workspace created');
-  const res = await owner.c.get(`/api/workspaces/ws-${seq}`);
-  assert.equal(res.status, 200, 'workspace fetched');
-  const np = res.data.doc.data.notifPrefs;
-  assert.equal(np.email_reminder, true, 'email_reminder seeds ON');
-  assert.equal(np.due_reminder, true, 'due_reminder seeds ON');
-  assert.equal(np.past_due, true, 'past_due seeds ON');
+  const ws = withDb(server.dbPath, db => db.prepare('select id from workspaces where slug = ?').get(`ws-${seq}`));
+  const res = await owner.c.get(`/api/me/notif-prefs?workspace=${ws.id}`);
+  assert.equal(res.status, 200, 'prefs fetched');
+  assert.equal(res.data.prefs.email_reminder, true, 'email_reminder defaults ON');
+  assert.equal(res.data.prefs.due_reminder, true, 'due_reminder defaults ON');
+  assert.equal(res.data.prefs.past_due, true, 'past_due defaults ON');
+  /* The doc field itself is retired — a document never carries prefs again. */
+  const doc = await owner.c.get(`/api/workspaces/ws-${seq}`);
+  assert.equal(doc.data.doc.data.notifPrefs, undefined, 'notifPrefs left the document (Phase 34)');
 });
 
-test('D-27-5: a legacy doc whose notifPrefs lack the keys reads all-ON via docForClient', async () => {
-  const { ws, own } = await makeWorkspace(m => [task(m, { id: 'tLegacy', key: 'P1-L', due: '2026-01-15' })], {});
+test('D-27-5: a legacy doc carrying notifPrefs reads all-ON defaults — the field is stripped, the scheduler still reminds', async () => {
+  const { ws, own } = await makeWorkspace(m => [task(m, { id: 'tLegacy', key: 'P1-L', due: '2026-01-15' })]);
+  /* Plant a stale legacy doc field: Phase 34 strips it on every read. */
+  const raw = withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
+  const legacy = JSON.parse(raw);
+  legacy.data.notifPrefs = { email_reminder: false, past_due: false };
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(legacy), ws.id));
   const res = await owners.get(server.base).c.get(`/api/workspaces/${ws.slug}`);
   assert.equal(res.status, 200, 'workspace fetched');
-  const np = res.data.doc.data.notifPrefs;
-  assert.equal(np.email_reminder, true, 'legacy doc reads email_reminder ON');
-  assert.equal(np.due_reminder, true, 'legacy doc reads due_reminder ON');
-  assert.equal(np.past_due, true, 'legacy doc reads past_due ON');
-  /* The behavior half of the same coin: the scheduler treats the missing keys
-     as ON through the real pass. */
-  assert.equal(own(await trigger(at9('2026-01-15'))).length, 2, 'legacy doc still reminds');
+  assert.equal(res.data.doc.data.notifPrefs, undefined, 'the doc field is stripped, never merged (Phase 34)');
+  /* The behavior half: with no per-user row, the accessor reads all-ON — the
+     real pass still reminds. */
+  assert.equal(own(await trigger(at9('2026-01-15'))).length, 2, 'no row reads as all-ON — still reminds');
 });
 
 /* --------------------- REM-02: DST + label allow-list --------------------- */

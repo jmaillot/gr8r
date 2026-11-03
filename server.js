@@ -1098,8 +1098,9 @@ function mergeClientDoc(incoming, stored, membership, wsId) {
   return next;
 }
 
-/* P4-f: notification emails. Gated by the workspace notifPrefs (email_mention,
-   email_assign, email_comment — the same toggles the settings page renders).
+/* P4-f: notification emails. Gated by the per-recipient notifPrefs (email_mention,
+   email_assign, email_comment — the same toggles the settings page renders),
+   resolved per recipient through getUserNotifPrefs (Phase 34, D-04).
    The `update` type has no email toggle and stays in-app only. Each recipient
    gets at most one email per new notification row; senders never block the
    HTTP response and their failures are logged, not surfaced. */
@@ -1179,7 +1180,6 @@ const NOTIF_EMAIL_KIND = {
 
 function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const wsName = wsRow.name || 'Projects Studio';
-  const prefs = nextDoc?.data?.notifPrefs || {};
   const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
   const emailByUserId = new Map(
     db
@@ -1219,7 +1219,13 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   for (const n of newNotifs) {
     if (n.by === n.to) continue; // never email the author about their own action
     const prefKey = NOTIF_EMAIL_KIND[n.type];
-    if (!prefKey || prefs[prefKey] === false) continue;
+    if (!prefKey) continue;
+    /* PREFS (Phase 34, D-04): prefs resolve PER RECIPIENT through the
+       accessor — n.to is a member_id, mapped to the account row (user_id)
+       via the memberships-derived authority map; doc-only recipients carry
+       no row and read defaults. */
+    const prefs = getUserNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id);
+    if (prefs[prefKey] === false) continue;
     const profile = profiles.get(n.to);
     const to = authority.get(n.to)?.email || (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;
@@ -1351,7 +1357,6 @@ function runReminderPass({ now: at = new Date() } = {}) {
       const { date: localDate, hour } = localParts(workspaceTzLabel(doc, ws.id), at);
       /* D-27-1 hour gate: idle outside 09:00 → pure read, zero writes. */
       if (hour !== 9) continue;
-      const prefs = doc?.data?.notifPrefs || {};
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
       for (const t of tasks) {
@@ -1362,8 +1367,12 @@ function runReminderPass({ now: at = new Date() } = {}) {
            read funnel uses. No membership row (doc-only assignee) reads
            workspace-wide, matching projectScope's defensive default. */
         const assigneeMembership = db
-          .prepare('select role, scope from memberships where workspace_id = ? and member_id = ?')
+          .prepare('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?')
           .get(ws.id, t.assignee);
+        /* PREFS (Phase 34, D-04): reminder prefs resolve per assignee through
+           the accessor — the membership row maps the member_id to the account
+           (user_id); a doc-only assignee carries no row and reads defaults. */
+        const prefs = getUserNotifPrefs(assigneeMembership?.user_id || t.assignee, ws.id);
         if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
         /* Phase 32 (VIS-04/D-04): a null-scope assignee's reach now includes
            team intersection — skip when the project is team-hidden from them
@@ -1721,21 +1730,6 @@ function emptyDoc(meta) {
         projOrder: [],
         savedViews: [],
         recentSearches: [],
-        notifPrefs: {
-          email_mention: true,
-          email_assign: true,
-          email_digest: true,
-          email_comment: false,
-          email_reminder: true,
-          due_reminder: true,
-          past_due: true,
-          push_mention: true,
-          push_assign: true,
-          push_comment: true,
-          push_due: true,
-          mention_all: true,
-          assign_self: true,
-        },
       },
     },
     meta,
