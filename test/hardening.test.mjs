@@ -73,3 +73,75 @@ test('the guard runs BEFORE the throttle: hostile probes consume no invite|ip bu
     await server.stop();
   }
 });
+
+/* ---------- HARD-05 / D-07: shared firstForwardedValue() first-value discipline ---------- */
+
+/* TRUST_PROXY=true (Pitfall 7): without it the readers ignore x-forwarded-* entirely. */
+async function trustProxyServer() {
+  return startServer({ env: { TRUST_PROXY: 'true' } });
+}
+
+test('multi-value x-forwarded-host behaves by its FIRST value in sameOrigin: "a.com, evil.com" matches origin https://a.com (HARD-05)', async () => {
+  const server = await trustProxyServer();
+  try {
+    const owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const token = await linkOnlyInvite(owner);
+    const res = await fetch(`${server.base}/api/invites/${token}/accept`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'a.com, evil.com',
+        origin: 'https://a.com',
+      },
+      body: JSON.stringify({ name: 'First', email: 'first@test.local', password: PASSWORD }),
+    });
+    assert.ok([200, 201].includes(res.status), `first forwarded value must win the guard, got ${res.status} ${JSON.stringify(await res.json())}`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('multi-value x-forwarded-host: the SECOND value is never consulted — origin https://evil.com is rejected (HARD-05)', async () => {
+  const server = await trustProxyServer();
+  try {
+    const owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const token = await linkOnlyInvite(owner);
+    const res = await fetch(`${server.base}/api/invites/${token}/accept`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'a.com, evil.com',
+        origin: 'https://evil.com',
+      },
+      body: JSON.stringify({ name: 'Evil', email: 'evil2@test.local', password: PASSWORD }),
+    });
+    assert.equal(res.status, 403);
+    const data = await res.json();
+    assert.equal(data.code, 'crossOriginRejected');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('regression: a single-value x-forwarded-host behaves exactly as before the helper refactor (HARD-05)', async () => {
+  const server = await trustProxyServer();
+  try {
+    const owner = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const token = await linkOnlyInvite(owner);
+    const good = await fetch(`${server.base}/api/invites/${token}/accept`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'a.com',
+        origin: 'https://a.com',
+      },
+      body: JSON.stringify({ name: 'Single', email: 'single@test.local', password: PASSWORD }),
+    });
+    assert.ok([200, 201].includes(good.status), `single-value match must still pass, got ${good.status}`);
+  } finally {
+    await server.stop();
+  }
+});

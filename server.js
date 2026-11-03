@@ -2423,8 +2423,16 @@ function fail(res, status, code, message, extra) {
   return json(res, status, { error: message, code, ...extra });
 }
 
+/* HARD-05 (D-07): one first-value discipline for every trusted proxy header —
+   multi-value x-forwarded-* collapses to its first value. An absent header
+   yields '' so each caller's existing truthiness gate behaves unchanged. */
+function firstForwardedValue(req, header) {
+  const raw = req.headers[header];
+  return raw ? String(raw).split(',')[0].trim() : '';
+}
+
 function proto(req) {
-  if (TRUST_PROXY && req.headers['x-forwarded-proto']) return String(req.headers['x-forwarded-proto']).split(',')[0].trim();
+  if (TRUST_PROXY && firstForwardedValue(req, 'x-forwarded-proto')) return firstForwardedValue(req, 'x-forwarded-proto');
   return req.socket.encrypted ? 'https' : 'http';
 }
 
@@ -2451,14 +2459,14 @@ function inviteRole(value) {
 }
 
 function clientIp(req) {
-  if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim();
+  if (TRUST_PROXY && firstForwardedValue(req, 'x-forwarded-for')) return firstForwardedValue(req, 'x-forwarded-for');
   return req.socket.remoteAddress || 'unknown';
 }
 
 function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true; // curl / non-browser clients; CSRF needs a browser
-  const host = (TRUST_PROXY && req.headers['x-forwarded-host']) || req.headers.host;
+  const host = (TRUST_PROXY && firstForwardedValue(req, 'x-forwarded-host')) || req.headers.host;
   return origin === `${proto(req)}://${host}`;
 }
 
