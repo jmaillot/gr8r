@@ -152,6 +152,30 @@ async function push() {
   }
 }
 
+/* Phase 35 honest undo: an awaitable one-shot doc push for the delTeam undo
+   onAction. Same guards as push(), but it RESOLVES with the server result so
+   the caller can sequence authority PUTs behind a confirmed doc write (the
+   server whitelists team ids against the stored doc — a premature membership
+   PUT 400s unknownTeam). Clears the pending debounce timers (a debounced push
+   must not double-PUT behind this one), writes the localStorage snapshot the
+   same way save()'s inner timeout does, then awaits the wire. */
+export async function pushNow() {
+  if (!api.enabled || !api.user || S.ui.conflict) return { ok: false, status: 0 };
+  /* A debounced push already in flight must settle first — racing it would
+     send two concurrent PUTs of the same document. */
+  while (pushing) await new Promise(r => setTimeout(r, 25));
+  clearTimeout(_saveT);
+  clearTimeout(_pushT);
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(docSnapshot()));
+  } catch {
+    /* storage full or blocked: the server copy is authoritative */
+  }
+  const res = await api.putWorkspace(docSnapshot());
+  if (!res.ok && (res.status === 409 || res.status === 401 || res.status === 403)) S.ui.conflict = true;
+  return res;
+}
+
 export function save() {
   changeSeq++;
   if (api.enabled && api.user && !S.ui.conflict) dirty = true;

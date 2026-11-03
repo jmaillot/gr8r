@@ -4,7 +4,7 @@
 import { $, uid } from '../core/utils.js';
 import { t, t as tMsg } from '../core/i18n.js';
 import { PCOLORS } from '../core/constants.js';
-import { D, S, mem, memberTeams, projInTeam, projTeams, team, teamsList } from '../core/store.js';
+import { D, S, mem, memberTeams, projInTeam, projTeams, pushNow, team, teamsList } from '../core/store.js';
 import { api } from '../core/api.js';
 import { mutate, toast } from '../ui/toast.js';
 import { go, render } from '../shell/render.js';
@@ -128,6 +128,12 @@ A.delTeam = el => {
     danger: true,
     icon: 'users',
     run: async () => {
+      /* Phase 35 undo capture (D-01/D-05): the before-map is taken ABOVE the
+         purge block, before any PUT fires — it is the confirm closure's
+         record of each affected member's team set at deletion time. The Map
+         keys by doc member id (x.id); the undo PUT needs the account id
+         (x.userId) — the closure also carries tm.id and snap. */
+      const before = new Map(D().members.map(x => [x.id, memberTeams(x)]));
       /* T-28-05: purge the authority rows for the deleted team BEFORE the doc
          team definition disappears — every affected member is re-PUT with the
          team filtered out of their set (transactional delete+insert on the
@@ -161,7 +167,37 @@ A.delTeam = el => {
         })
       ) {
         if (S.ui.route === 'team') go('teams');
-        toast(t('toast.deleted', { name: tm.name }), { action: t('toast.undo'), onAction: () => restore(snap) });
+        /* Phase 35 honest undo (D-05/D-06): restore runs unconditionally —
+           local mode (api.enabled false) stops there, exactly as before. In
+           API mode the restored doc MUST land server-side BEFORE any
+           authority PUT: the membership route whitelists team ids against
+           the stored doc, so a premature PUT 400s unknownTeam. The ≤25
+           tooManyTeams cap is unreachable inside the ~5s toast window. */
+        toast(t('toast.deleted', { name: tm.name }), {
+          action: t('toast.undo'),
+          onAction: async () => {
+            restore(snap);
+            if (!api.enabled) return;
+            const pushed = await pushNow();
+            const results = await Promise.all(
+              affected.map(x => {
+                const live = D().members.find(m => m.id === x.id);
+                if (!live) return { ok: false, status: 0 };
+                /* Additive union (D-03): the captured before-map set ∪ the
+                   member's current set ∪ the deleted team id — newer
+                   independent changes are never erased. Full-set replace is
+                   why the union shape is load-bearing (D-04). */
+                const union = Array.from(new Set([...(before.get(x.id) || []), ...memberTeams(live), tm.id]));
+                return api.setMemberTeams(live.userId, union);
+              }),
+            );
+            /* D-02: failure = honest error toast, no compensating rollback. */
+            if (pushed.ok === false || results.some(r => !r?.ok)) {
+              toast(t('err.changeTeam'), { kind: 'err' });
+              return;
+            }
+          },
+        });
       }
     },
   });
