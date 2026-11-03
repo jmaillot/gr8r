@@ -5,16 +5,16 @@ milestone_name: Team Visibility & Hardening
 current_phase: 33
 current_phase_name: Membership-Surface Hardening
 status: executing
-stopped_at: Phase 33 context gathered
-last_updated: "2026-11-03T07:00:06.039Z"
+stopped_at: Completed 33-01-PLAN.md
+last_updated: "2026-11-03T07:08:47.305Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 33 execution started
-state_head: 256a6c3427e7ff5437e6bb764fed01371cab2ffb
+state_head: 35284202cdfbff810c34dca56196e364c2f54fae
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 25
 ---
 
@@ -29,8 +29,8 @@ progress:
 ## Current Position
 
 Phase: 33 (Membership-Surface Hardening) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 33
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-11-03 — Phase 33 execution started
 
 ## v1.7 Phase Order (research-validated build order)
@@ -93,6 +93,8 @@ second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant i
   endpoint families must extend (VIS-05 extends it with team-derivation cells)
 - [Phase 29]: 29-03: send-time-only enforcement — reminder pass, email mirror and assignee
   write-guard are the authority (VIS-04 adopts the same team-intersect helper there)
+- [Phase 33]: 33-01: accept route adopts Pitfall-22 order (sameOrigin before throttle/body); unknown accept-body keys silently discarded, never 400'd (D-06)
+- [Phase 33]: 33-01: firstForwardedValue() shared helper unifies proto/clientIp/sameOrigin; multi-value x-forwarded-host now first-value in sameOrigin (D-07)
 
 ### Pending Todos
 
@@ -125,15 +127,16 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-02T21:16:58.431Z
-Stopped at: Phase 33 context gathered
-Resume file: .planning/phases/33-membership-surface-hardening/33-CONTEXT.md
+Last session: 2026-11-03T07:08:47.270Z
+Stopped at: Completed 33-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | *(v1.7 — no plans executed yet)* | | | |
+| Phase 33 P01 | 25m | 3 tasks | 2 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

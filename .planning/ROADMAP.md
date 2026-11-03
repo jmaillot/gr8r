@@ -84,9 +84,9 @@ adjacent routes.
      whitelist is pinned by test.
   5. `sameOrigin()` and the proxy-header readers agree on multi-value `x-forwarded-*`
      handling (first-value discipline), pinned by test.
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 Plans:
-- [ ] 33-01-PLAN.md — accept-route sameOrigin guard + first-value header helper + silent body whitelist (HARD-01/04/05)
+- [x] 33-01-PLAN.md — accept-route sameOrigin guard + first-value header helper + silent body whitelist (HARD-01/04/05)
 - [ ] 33-02-PLAN.md — both twins fail closed in one commit + link-only admin invite block at both ends + boot sweep (HARD-02/03)
 
 ### Phase 34: Per-User Settings Isolation & Search Leak Closure
@@ -149,7 +149,7 @@ final VIS semantics)
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 32. Team-Derived Project Visibility | 1/1 | Complete    | 2026-11-02 |
-| 33. Membership-Surface Hardening | 0/? | Not started | - |
+| 33. Membership-Surface Hardening | 1/2 | In Progress|  |
 | 34. Per-User Settings Isolation & Search Leak Closure | 0/? | Not started | - |
 | 35. Honest Undo & Deploy Gap | 0/? | Not started | - |
 
