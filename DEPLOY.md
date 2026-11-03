@@ -974,6 +974,24 @@ instead a `TOTP re-wrap:` line ran and warned that a row `decrypts under
 neither keyring key`, that row needs the manual recovery path described in
 *Running a rotation* step 3 — rebooting will not recover it.
 
+### Compose users: no extra step
+
+`docker-compose.yml` already forwards `MASTER_KEY_PREVIOUS` from `.env` to the
+container (the `MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-}` line next to
+`MASTER_KEY` — this is where the forwarding happens). Compose users need no
+extra step beyond setting the variable: the walkthrough above is the whole
+procedure, in the same `.env` idiom. The file's empty `:-` default means fresh
+installs without the variable boot unchanged — only set it when rotating.
+
+In the walkthrough's terms: (a) add `MASTER_KEY_PREVIOUS=<old key>` to
+`/opt/projects/.env`; (b) recreate the container with `docker compose up -d`
+(the same step as *Running a rotation* step 2); (c) verify the boot log's
+`TOTP re-wrap:` line and the stamped key ids exactly as the runbook prescribes
+— the two pre-rotation checks and the zero-stale-envelopes query apply
+verbatim; (d) retire per *Completing rotation*: remove the old key line from
+`.env` and reboot. The image-currency precondition governs as before — an
+image predating the re-wrap pass still means STOP (see *Running a rotation*
+check 1).
 
 ### Verifying zero stale envelopes
 
