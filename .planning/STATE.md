@@ -4,17 +4,17 @@ milestone: v1.7
 milestone_name: Team Visibility & Hardening
 current_phase: 33
 current_phase_name: Membership-Surface Hardening
-status: executing
-stopped_at: Completed 33-01-PLAN.md
-last_updated: "2026-11-03T07:08:47.305Z"
+status: verifying
+stopped_at: Completed 33-02-PLAN.md
+last_updated: "2026-11-03T07:22:05.234Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 33 execution started
-state_head: 35284202cdfbff810c34dca56196e364c2f54fae
+state_head: 7258b2ec40de02ac123a80aa9fecf7ad9cabf392
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 25
 ---
 
@@ -30,7 +30,7 @@ progress:
 
 Phase: 33 (Membership-Surface Hardening) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-03 — Phase 33 execution started
 
 ## v1.7 Phase Order (research-validated build order)
@@ -95,6 +95,8 @@ second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant i
   write-guard are the authority (VIS-04 adopts the same team-intersect helper there)
 - [Phase 33]: 33-01: accept route adopts Pitfall-22 order (sameOrigin before throttle/body); unknown accept-body keys silently discarded, never 400'd (D-06)
 - [Phase 33]: 33-01: firstForwardedValue() shared helper unifies proto/clientIp/sameOrigin; multi-value x-forwarded-host now first-value in sameOrigin (D-07)
+- [Phase 33]: 33-02: both firstWorkspace() invite twins fail closed in one commit — accept 410 workspaceGone, SSO twin consumes the dead invite and lands the generic /login?sso=error (D-03/D-04/D-05)
+- [Phase 33]: 33-02: link-only admin/owner invites blocked at creation (400), refused at accept (403), swept update-only at boot (D-01/D-02); err.inviteAdminEmailRequired catalogued EN+FR
 
 ### Pending Todos
 
@@ -127,8 +129,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-03T07:08:47.270Z
-Stopped at: Completed 33-01-PLAN.md
+Last session: 2026-11-03T07:22:05.194Z
+Stopped at: Completed 33-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -137,6 +139,7 @@ Resume file: None
 |------|----------|-------|-------|
 | *(v1.7 — no plans executed yet)* | | | |
 | Phase 33 P01 | 25m | 3 tasks | 2 files |
+| Phase 33 P02 | 22m | 2 tasks | 6 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

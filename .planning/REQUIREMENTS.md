@@ -51,9 +51,9 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 - [x] **HARD-01**: The invite-accept route is guarded by the existing `sameOrigin()` check —
   same discipline as the ~35 routes already guarded.
-- [ ] **HARD-02**: Link-only admin invites are impossible: an admin-created invite cannot
+- [x] **HARD-02**: Link-only admin invites are impossible: an admin-created invite cannot
   carry the admin role through the link-only path (enforced server-side, test-pinned).
-- [ ] **HARD-03**: The `firstWorkspace()` fallback is removed from the invite-accept route and
+- [x] **HARD-03**: The `firstWorkspace()` fallback is removed from the invite-accept route and
   its verbatim SSO-reconcile twin in the same commit — both resolve the workspace explicitly
   or fail closed (the seed-boot call site is legitimate and untouched).
 - [x] **HARD-04**: Guest-profile spoof is closed: the accept body whitelist is pinned by a
@@ -96,8 +96,8 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 | VIS-04 | Phase 32 | Complete |
 | VIS-05 | Phase 32 | Complete |
 | HARD-01 | Phase 33 | Complete |
-| HARD-02 | Phase 33 | Pending |
-| HARD-03 | Phase 33 | Pending |
+| HARD-02 | Phase 33 | Complete |
+| HARD-03 | Phase 33 | Complete |
 | HARD-04 | Phase 33 | Complete |
 | HARD-05 | Phase 33 | Complete |
 | SETTINGS-01 | Phase 34 | Pending |
