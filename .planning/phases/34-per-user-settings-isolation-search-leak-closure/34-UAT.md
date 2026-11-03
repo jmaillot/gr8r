@@ -8,7 +8,7 @@ updated: 2026-11-03T15:00:00Z
 
 ## Current Test
 
-[testing complete]
+[diagnosed G-34-6 — awaiting gap-closure plan]
 
 ## Tests
 
@@ -51,18 +51,36 @@ reason: "Agent-verified: migration.test.mjs 37/37 incl. backups.length === 1 aft
 
 ### 8. Re-run Test 4 after gap closure G-34-4 (live UI, rebuilt client)
 expected: In API mode with the rebuilt client, toggle a notification pref OFF and press F5 — the pref stays OFF. hydrateNotifPrefs fetches the stored row at workspace open and adopts it before the next render (fixed by commits cf72c1d/f88ec88/353f156).
-result: [pending]
+result: issue
+reported: "faux, apres rebuild ca remet sur ON"
+severity: major
 
 ## Summary
 
 total: 8
 passed: 4
-issues: 3
-pending: 1
+issues: 4
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+- gap_id: G-34-6
+  truth: "In API mode, an unchecked notification pref stays unchecked after F5 reload (re-run of Test 4 after G-34-4 closure)"
+  status: open
+  resolved_by: ""
+  resolved_at: ""
+  reason: "User reported (Test 8): faux, apres rebuild ca remet sur ON"
+  severity: major
+  test: 8
+  root_cause: "AGENT-PLAYWRIGHT-DIAGNOSED (real browser, API-backed e2e server): the G-34-4 fix wired hydrateNotifPrefs at 5 hydrateFromServer call sites in src/actions/actions.js, but there is a 6th call site — src/main.js ~line 328 (boot for /w/<slug> URLs) — which is exactly the path F5 uses. Network trace after page.reload(): PUT 200 stored email_mention:false correctly (server row NOT clobbered), but NO GET /api/me/notif-prefs fires on reload; S.notifPrefs stays at all-ON defaults. Hydration fires only on the login path. Secondary factor: dist/ was stale (built 14:44, fix commits 15:48+); even a fresh build still fails on the reload path because of the missing main.js call."
+  artifacts:
+    - path: "src/main.js"
+      issue: "boot path hydrates the doc via hydrateFromServer(slug) but never calls hydrateNotifPrefs — the F5/reload route renders defaults"
+  missing:
+    - "Await hydrateNotifPrefs() after the successful hydrateFromServer(slug) in src/main.js (~line 328), mirroring the actions.js pattern"
+  debug_session: ""
 
 - gap_id: G-34-2
   truth: "Two users of one workspace see independent notification prefs after their first toggle (no shared state)"
