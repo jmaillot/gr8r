@@ -179,6 +179,16 @@ A.delTeam = el => {
             restore(snap);
             if (!api.enabled) return;
             const pushed = await pushNow();
+            /* WR-01 (Gap 1): a failed doc push (network loss, 401, 403, 409)
+               stops the undo BEFORE any authority PUT — the membership route
+               whitelists team ids against the stored doc, so a PUT now is a
+               guaranteed 400 unknownTeam (and a divergent-state corner if the
+               server doc still carries the team id). Unconditional: even with
+               an empty affected roster, the restore was never persisted. */
+            if (pushed.ok === false) {
+              toast(t('err.changeTeam'), { kind: 'err' });
+              return;
+            }
             const results = await Promise.all(
               affected.map(x => {
                 const live = D().members.find(m => m.id === x.id);

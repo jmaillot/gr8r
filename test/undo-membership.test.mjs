@@ -235,6 +235,36 @@ test('D-06: the local-mode undo stays a plain restore(snap) with zero API calls'
   );
 });
 
+/* WR-01 (Gap 1) source-scan pin: the undo onAction early-returns on
+   pushed.ok === false BEFORE the Promise.all setMemberTeams block — zero
+   authority PUTs can fire after a failed doc push — and the D-06 invariants
+   still hold in the same slice (the gate cannot silently regress them). */
+test('WR-01: the undo onAction stops before any membership PUT when the doc push failed', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/actions/teams.js', import.meta.url), 'utf8');
+
+  const actionStart = src.indexOf('onAction: async () => {');
+  assert.ok(actionStart > -1, 'the undo onAction closure exists');
+  const body = src.slice(actionStart);
+
+  const idxPush = body.indexOf('const pushed = await pushNow();');
+  const idxGate = body.indexOf('pushed.ok === false');
+  const idxAll = body.indexOf('Promise.all(');
+  assert.ok(idxPush > -1 && idxGate > -1 && idxAll > -1, 'pushNow, the gate, and the PUT block all exist');
+  assert.ok(idxGate > idxPush && idxGate < idxAll, 'the pushed.ok gate sits between pushNow() and the Promise.all PUTs');
+
+  const gateSlice = body.slice(body.indexOf('{', idxGate), body.indexOf('return;', idxGate));
+  assert.match(gateSlice, /err\.changeTeam/, 'the gate toasts the existing err.changeTeam error');
+
+  // D-06 invariants, re-asserted from the same slice.
+  assert.match(body, /^onAction: async \(\) => \{\s*restore\(snap\);/, 'the onAction body still opens with an unguarded restore(snap)');
+  assert.ok(body.includes('if (!api.enabled) return;'), 'the api.enabled gate is still present');
+  assert.equal([...body.matchAll(/setMemberTeams/g)].length, 1, 'exactly one membership-write call site remains');
+
+  // The post-loop partial-failure check (D-02) is preserved.
+  assert.match(body, /pushed\.ok === false \|\| results\.some\(r => !r\?\.ok\)/, 'the post-loop combined failure check is preserved');
+});
+
 /* WR-02 (Gap 2) source-scan pin: pushNow() holds the shared `pushing` mutex
    around its own PUT — `pushing = true` before the api.putWorkspace call and
    `pushing = false` in a finally — so a save()-scheduled push() defers into
