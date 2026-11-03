@@ -96,6 +96,21 @@ test('every accepted value is coerced to boolean', async () => {
   await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_due: false, email_mention: true, due_reminder: true } });
 });
 
+/* ------------------- (c2) partial PUT merges into the stored row (WR-01) ------------------- */
+
+test('a partial PUT merges into the existing row instead of erasing omitted keys (WR-01)', async () => {
+  // Stored state at this point (from (a)+(c)): email_reminder=false, push_due=false,
+  // email_mention=true, due_reminder=true. A single-key body must not erase the rest.
+  const put = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false } });
+  assert.equal(put.status, 200, `partial PUT ${put.status}`);
+  const got = await owner.get(`/api/me/notif-prefs?workspace=${ws.id}`);
+  assert.equal(got.data.prefs.email_reminder, false, 'the sent key is applied');
+  assert.equal(got.data.prefs.push_due, false, 'a previously stored false survives a partial PUT (no silent revert to the ON default)');
+  assert.equal(got.data.prefs.email_mention, true, 'other stored keys survive too');
+  // restore the (a) state for later tests
+  await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_due: false, email_mention: true, due_reminder: true } });
+});
+
 /* ------------------- (d) doc GET: notifPrefs stripped on read ------------------- */
 
 test('a document GET never carries notifPrefs — a planted legacy field is stripped', async () => {
@@ -168,9 +183,12 @@ test('two users with exactly equal prefs remain two distinct rows, accessor outp
   const joined = await bob.post(`/api/invites/${inviteToken(inv.data.invites[0].url)}/accept`);
   assert.equal(joined.status, 200, `bob accepts ${joined.status}`);
 
-  // Same prefs, deliberately different key insertion order.
-  const a = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, email_mention: false } });
-  const b = await bob.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_mention: false, email_reminder: false } });
+  // Same prefs, deliberately different key insertion order. Under WR-01 merge
+  // semantics both rows carry every earlier stored key, so both users write
+  // the same FULL 13-key object — equality is then well-defined per key.
+  const full = { ...DEFAULTS, email_reminder: false, email_mention: false };
+  const a = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, email_mention: false, ...full } });
+  const b = await bob.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_mention: false, email_reminder: false, ...full } });
   assert.equal(a.status, 200);
   assert.equal(b.status, 200);
 

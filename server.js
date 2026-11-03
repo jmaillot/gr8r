@@ -3213,7 +3213,22 @@ async function handleApi(req, res, url) {
     const ws = wsId ? db.prepare('select id from workspaces where id = ?').get(wsId) : null;
     const member = ws ? db.prepare('select 1 from memberships where workspace_id = ? and user_id = ?').get(ws.id, user.id) : null;
     if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
-    const prefs = {};
+    // Merge into the existing row instead of replacing it: a partial body must
+    // never erase keys the caller omits (e.g. after a silent hydration failure
+    // the client falls back to local defaults and would otherwise revert a
+    // stored `false` to the ON default). Whitelist + boolean coercion still
+    // apply to every incoming key.
+    const existingRow = db
+      .prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?')
+      .get(ws.id, user.id);
+    let existing = {};
+    try {
+      const parsed = JSON.parse(existingRow?.prefs ?? '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed;
+    } catch {
+      /* corrupt stored blob: start from a clean object rather than crash */
+    }
+    const prefs = { ...existing };
     for (const key of Object.keys(incoming)) prefs[key] = Boolean(incoming[key]);
     db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, user.id, JSON.stringify(prefs));
     return json(res, 200, { prefs: getUserNotifPrefs(user.id, ws.id) });
