@@ -117,10 +117,12 @@ before the leak tests are written)
      collisions: no hidden project name leaks through substring matching, verified by
      table-driven tests; the residual free-text limitation is documented in
      `CHANGELOG.md`.
-**Plans**: 4/4 plans executed
+**Plans**: 5/5 plans executed
 **UI hint**: yes
 
 Plans:
+- [x] 34-05-PLAN.md
+
 **Wave 1**
 - [x] 34-01-PLAN.md — Server prefs core: user_notif_prefs table, one accessor, GET/PUT routes, double doc strip, per-recipient consumers (SETTINGS-01/02)
 
@@ -161,7 +163,7 @@ final VIS semantics)
 |-------|----------------|--------|-----------|
 | 32. Team-Derived Project Visibility | 1/1 | Complete    | 2026-11-02 |
 | 33. Membership-Surface Hardening | 2/2 | Complete    | 2026-11-03 |
-| 34. Per-User Settings Isolation & Search Leak Closure | 4/4 | In Progress|  |
+| 34. Per-User Settings Isolation & Search Leak Closure | 5/5 | In Progress|  |
 | 35. Honest Undo & Deploy Gap | 0/? | Not started | - |
 
 ## Backlog
