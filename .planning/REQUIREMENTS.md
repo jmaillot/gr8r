@@ -70,14 +70,14 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 ### SETTINGS — Per-user settings isolation
 
-- [ ] **SETTINGS-01**: `notifPrefs` moves out of the shared workspace document into real
+- [x] **SETTINGS-01**: `notifPrefs` moves out of the shared workspace document into real
   per-user rows (dedicated table following the `migrateTeamMembership` pattern): additive
   migration with pre-migration backup, byte-identical second boot, row-level eligibility
   guard; the workspace document stops carrying `notifPrefs`.
 - [ ] **SETTINGS-02**: Notification preference reads/writes resolve from the per-user rows
   for every consumer (reminder gate, email dispatch, prefs UI) — legacy doc-carried values
   backfill once; stale clients writing the old document field are stripped, not merged.
-- [ ] **SETTINGS-03**: `invoices` stays out (already purged-on-write legacy data) — no
+- [x] **SETTINGS-03**: `invoices` stays out (already purged-on-write legacy data) — no
   migration; a test pins its absence from the workspace document write path.
 
 ### DEPLOY — Key-rotation env forwarding (CR-01)
@@ -100,9 +100,9 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 | HARD-03 | Phase 33 | Complete |
 | HARD-04 | Phase 33 | Complete |
 | HARD-05 | Phase 33 | Complete |
-| SETTINGS-01 | Phase 34 | Pending |
+| SETTINGS-01 | Phase 34 | Complete |
 | SETTINGS-02 | Phase 34 | Pending |
-| SETTINGS-03 | Phase 34 | Pending |
+| SETTINGS-03 | Phase 34 | Complete |
 | SEARCH-01 | Phase 34 | Pending |
 | UNDO-01 | Phase 35 | Pending |
 | UNDO-02 | Phase 35 | Pending |

@@ -5,16 +5,16 @@ milestone_name: Team Visibility & Hardening
 current_phase: 34
 current_phase_name: Per-User Settings Isolation & Search Leak Closure
 status: executing
-stopped_at: Completed 34-01-PLAN.md
-last_updated: "2026-11-03T10:09:33.457Z"
+stopped_at: Completed 34-02-PLAN.md; next 34-03
+last_updated: "2026-11-03T10:35:34.766Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 34 execution started
-state_head: 5f280a82c97eb32145dd09b6576260e477e599c0
+state_head: b0f81d00379973a3e99d57e7ed0e979b8c396df4
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 34 (Per-User Settings Isolation & Search Leak Closure) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-11-03 — Phase 34 execution started
 
@@ -99,6 +99,7 @@ second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant i
 - [Phase 33]: 33-02: link-only admin/owner invites blocked at creation (400), refused at accept (403), swept update-only at boot (D-01/D-02); err.inviteAdminEmailRequired catalogued EN+FR
 - [Phase 34]: 34-01: consumers map member_id→user_id via memberships before getUserNotifPrefs (accessor keyed by user_id)
 - [Phase 34]: 34-01: due-reminders prefs pins migrated to per-user rows; doc-carried notifPrefs retired + stripped both directions
+- [Phase 34]: migrateUserNotifPrefs guard is JS over stored doc blobs with per-row JSON.parse try/catch; one begin immediate copies prefs to EVERY member (insert or ignore) and deletes the doc field; pre-backup gate = no backup no mutation
 
 ### Pending Todos
 
@@ -131,8 +132,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-03T10:09:24.773Z
-Stopped at: Completed 34-01-PLAN.md
+Last session: 2026-11-03T10:35:20.996Z
+Stopped at: Completed 34-02-PLAN.md; next 34-03
 Resume file: None
 
 ## Performance Metrics
@@ -143,6 +144,8 @@ Resume file: None
 | Phase 33 P01 | 25m | 3 tasks | 2 files |
 | Phase 33 P02 | 22m | 2 tasks | 6 files |
 | Phase 34 P01 | 11 min | 2 tasks | 3 files |
+| Phase 34 P02 | 24min | 2 tasks | 5 files |
+| Phase 34 P02 | 24min | 2 tasks | 5 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
