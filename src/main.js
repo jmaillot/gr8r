@@ -57,7 +57,7 @@ import './actions/subtasks.js';
 import './actions/archive.js';
 import { S, D, hydrateFromServer, save, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee } from './core/store.js';
 import { api } from './core/api.js';
-import { A, refreshMembers } from './actions/actions.js';
+import { A, hydrateNotifPrefs, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
 import { $ } from './core/utils.js';
@@ -335,7 +335,7 @@ async function seedLegacyLocale() {
       return;
     }
     if (!ws.ok) toast(tk('err.wsLoadFailed'), { kind: 'err', ms: 8000 });
-    else await seedLegacyLocale();
+    else { await seedLegacyLocale(); await hydrateNotifPrefs(); } // G-34-6: adopt the stored prefs before the first render
     deepLink = restFromPath;
   }
 

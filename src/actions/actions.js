@@ -3206,7 +3206,7 @@ export const EMAIL_RE = /^\S+@\S+\.\S+$/;
    401 rides the session-expired path; any other failure is silent and
    non-blocking — workspace entry never waits on or fails because of a pref
    read (T-34-12). */
-async function hydrateNotifPrefs() {
+export async function hydrateNotifPrefs() {
   const wsId = api.enabled ? api.workspace?.id : D().ws.url;
   if (!api.enabled) return;
   const r = await api.getNotifPrefs(wsId);
