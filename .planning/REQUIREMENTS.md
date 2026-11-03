@@ -63,7 +63,7 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 ### SEARCH — Recent-search leak
 
-- [ ] **SEARCH-01**: The recent-search redaction leak is closed: search history rows are
+- [x] **SEARCH-01**: The recent-search redaction leak is closed: search history rows are
   filtered per the post-VIS visibility rules (no substring false-positives, no hidden-name
   leakage through `includes()` matching) — verified by table-driven tests covering
   normalization variants and hidden/visible name collisions.
@@ -103,7 +103,7 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 | SETTINGS-01 | Phase 34 | Complete |
 | SETTINGS-02 | Phase 34 | Complete |
 | SETTINGS-03 | Phase 34 | Complete |
-| SEARCH-01 | Phase 34 | Pending |
+| SEARCH-01 | Phase 34 | Complete |
 | UNDO-01 | Phase 35 | Pending |
 | UNDO-02 | Phase 35 | Pending |
 | DEPLOY-01 | Phase 35 | Pending |
