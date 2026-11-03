@@ -25,6 +25,18 @@ The 1.2.0 tag is cut at milestone close; these are the release notes text.
   language.
 - **Zero runtime dependencies, still.** The app continues to ship with none.
 
+### Changed
+
+- **Recent-search redaction is token-boundary exact (SEARCH-01).** A recent-search term is now
+  hidden from a member only when it shares a full token with a hidden project name (after NFC
+  normalization and lowercasing on both sides), instead of a raw substring match: "Sara Corp" no
+  longer leaks a hidden "Sarah", while "sarah smith" is still redacted. Names are compared
+  without diacritic folding ("Café" and "cafe" stay distinct). Residual limitation, accepted:
+  matching stays workspace-list-level and full-token based, so per-user free-text search
+  remains out of scope — a term sharing any single full token with a hidden name (including a
+  shared generic word such as "scope") is still dropped, which can over-redact, and free-text
+  search results themselves are out of scope for this change.
+
 ## [1.1.1] - 2026-10-22
 
 A patch release found by the v1.1 milestone audit.
