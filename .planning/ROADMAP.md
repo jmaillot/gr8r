@@ -19,7 +19,7 @@ hardening, the recent-search leak, per-user settings isolation, and the compose 
 ## Phases
 
 - [x] **Phase 32: Team-Derived Project Visibility** - A project is readable iff a member's teams intersect the project's teams; no-team projects stay workspace-wide; rides the single `hiddenFor` funnel. (Backlog 999.1) (completed 2026-11-02)
-- [ ] **Phase 33: Membership-Surface Hardening** - Invite-accept gets sameOrigin, explicit workspace resolution (SSO twin in the same commit), no link-only admin invites, spoof closed. (v1.1 audit)
+- [x] **Phase 33: Membership-Surface Hardening** - Invite-accept gets sameOrigin, explicit workspace resolution (SSO twin in the same commit), no link-only admin invites, spoof closed. (v1.1 audit) (completed 2026-11-03)
 - [ ] **Phase 34: Per-User Settings Isolation & Search Leak Closure** - `notifPrefs` move to real per-user rows via additive migration; the substring recent-search leak closes against post-VIS visibility.
 - [ ] **Phase 35: Honest Undo & Deploy Gap** - delTeam undo restores purged memberships without clobbering newer changes; docker-compose forwards `MASTER_KEY_PREVIOUS`.
 
@@ -84,7 +84,7 @@ adjacent routes.
      whitelist is pinned by test.
   5. `sameOrigin()` and the proxy-header readers agree on multi-value `x-forwarded-*`
      handling (first-value discipline), pinned by test.
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 Plans:
 - [x] 33-01-PLAN.md — accept-route sameOrigin guard + first-value header helper + silent body whitelist (HARD-01/04/05)
 - [x] 33-02-PLAN.md — both twins fail closed in one commit + link-only admin invite block at both ends + boot sweep (HARD-02/03)
@@ -149,7 +149,7 @@ final VIS semantics)
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 32. Team-Derived Project Visibility | 1/1 | Complete    | 2026-11-02 |
-| 33. Membership-Surface Hardening | 2/2 | In Progress|  |
+| 33. Membership-Surface Hardening | 2/2 | Complete    | 2026-11-03 |
 | 34. Per-User Settings Isolation & Search Leak Closure | 0/? | Not started | - |
 | 35. Honest Undo & Deploy Gap | 0/? | Not started | - |
 
