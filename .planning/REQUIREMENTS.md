@@ -82,7 +82,7 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 ### DEPLOY — Key-rotation env forwarding (CR-01)
 
-- [ ] **DEPLOY-01**: docker-compose forwards `MASTER_KEY_PREVIOUS` using the
+- [x] **DEPLOY-01**: docker-compose forwards `MASTER_KEY_PREVIOUS` using the
   `${MASTER_KEY_PREVIOUS:-}` optional form (never `:?` — fresh installs must keep booting);
   DEPLOY.md §14 key-custody runbook updated to note compose users need no extra step.
 
@@ -106,7 +106,7 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 | SEARCH-01 | Phase 34 | Complete |
 | UNDO-01 | Phase 35 | Complete |
 | UNDO-02 | Phase 35 | Complete |
-| DEPLOY-01 | Phase 35 | Pending |
+| DEPLOY-01 | Phase 35 | Complete |
 
 Coverage: 17/17 requirement rows mapped (16 REQ-ID groups: VIS-01..05, UNDO-01..02,
 HARD-01..05, SEARCH-01, SETTINGS-01..03, DEPLOY-01) — no orphans, no duplicates.
