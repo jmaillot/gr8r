@@ -1,7 +1,7 @@
 ---
 phase: 34-per-user-settings-isolation-search-leak-closure
 verified: 2026-11-03T20:30:00Z
-status: human_needed
+status: passed
 score: 16/16 must-haves verified
 behavior_unverified: 1
 covered_files:
@@ -57,7 +57,7 @@ stale_re_verification:
 
 **Phase Goal:** Notification preferences stop living in the shared workspace document and become real per-user rows (`user_notif_prefs`, additive guarded migration, byte-identical second boot) with one accessor for every consumer; `invoices` pinned out; the substring recent-search leak closed by tokenized `referencesHidden`.
 **Verified:** 2026-11-03T20:30:00Z
-**Status:** human_needed (one live-browser UAT item remains — all code truths verified, no regressions)
+**Status:** passed (all code truths verified, no regressions; live-browser UAT Test 8 confirmed PASS by the user on the rebuilt deployment — 34-UAT.md complete, 8/8)
 **Re-verification:** Yes — stale re-verification after gap-closure plan 34-06
 
 ## Stale Re-Verification Scope
