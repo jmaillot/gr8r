@@ -1,8 +1,20 @@
 ---
 phase: 35-honest-undo-deploy-gap
-verified: 2026-11-03
-verdict: gaps_found
+verified: 2026-11-03T20:05:00Z
+status: gaps_found
 score: 12/14 must-haves verified
+behavior_unverified: 1
+covered_files:
+  - .planning/phases/35-honest-undo-deploy-gap/35-01-PLAN.md
+  - .planning/phases/35-honest-undo-deploy-gap/35-01-SUMMARY.md
+  - .planning/phases/35-honest-undo-deploy-gap/35-02-PLAN.md
+  - .planning/phases/35-honest-undo-deploy-gap/35-02-SUMMARY.md
+  - src/actions/teams.js
+  - src/core/store.js
+  - test/undo-membership.test.mjs
+  - test/compose-config.test.mjs
+  - docker-compose.yml
+  - DEPLOY.md
 gaps: 2
 ---
 
