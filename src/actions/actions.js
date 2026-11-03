@@ -5,7 +5,7 @@ import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { PR, PSTAT } from '../core/constants.js';
 import { seed } from '../data/seed.js';
-import { setLocalNotifPrefs } from '../core/notifPrefs.js';
+import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
   D,
   DEFAULT_PREFS,
@@ -2680,7 +2680,7 @@ IN.prefToggle = el => {
    write lands on the per-user prefs object in store state — never the document
    (D-01). Local mode stores per-workspace localStorage (D-08); API mode PUTs
    the row and adopts the canonical merged prefs the server returns. 401 rides
-   the session-expired path like IN.langSel; any other failure is an error
+   the session-expired path (the langSel shape); any other failure is an error
    toast and the toggle stays where the user left it for the session. */
 IN.npToggle = async el => {
   S.notifPrefs[el.dataset.k] = el.checked;
@@ -3199,11 +3199,32 @@ A.toggleShowPw = () => {
 };
 export const EMAIL_RE = /^\S+@\S+\.\S+$/;
 /* Load a workspace by slug and land on the default route for it. */
+/* G-34-4: API-mode hydration of the signed-in user's stored notif prefs at
+   every workspace entry, so an unchecked pref survives F5 (S.notifPrefs
+   previously only ever adopted the PUT response). Store-only (D-01); local
+   mode keeps its synchronous localStorage hydration and issues no GET (D-08).
+   401 rides the session-expired path; any other failure is silent and
+   non-blocking — workspace entry never waits on or fails because of a pref
+   read (T-34-12). */
+async function hydrateNotifPrefs() {
+  const wsId = api.enabled ? api.workspace?.id : D().ws.url;
+  if (!api.enabled) return;
+  const r = await api.getNotifPrefs(wsId);
+  if (r.ok) {
+    S.notifPrefs = mergeNotifPrefs(S.notifPrefs, r.data?.prefs);
+    return;
+  }
+  if (r.status === 401) {
+    window.dispatchEvent(new CustomEvent('projects:save-error', { detail: { status: 401, error: r.error } }));
+  }
+}
+
 export async function openWorkspace(slug) {
   if (!slug) return { ok: false, status: 0, error: t('err.noWorkspace') };
   await flushPending();
   const res = await hydrateFromServer(slug);
   if (!res.ok) return res;
+  await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
   history.replaceState(null, '', `/w/${slug}`);
   S.ui.route = 'home';
   S.ui.params = {};
@@ -3263,6 +3284,7 @@ async function finishLogin(em, done) {
     if (joinSlug) {
       const joined = await hydrateFromServer(joinSlug);
       if (joined.ok) {
+        await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
         history.replaceState(null, '', `/w/${joinSlug}`);
         enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
         reportRecoveryBurn();
@@ -3284,6 +3306,7 @@ async function finishLogin(em, done) {
     render();
     return;
   }
+  await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
   history.replaceState(null, '', `/w/${slug}`);
   S.ui.wantedSlug = null;
   enterApp(t('toast.signedInAs', { name: api.user?.name || em }));
@@ -3474,6 +3497,7 @@ A.doJoin = () => {
       render();
       return;
     }
+    await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
     S.ui.pwNew = '';
     history.replaceState(null, '', `/w/${slug}`);
     enterApp(t('toast.welcomeUser', { name: nm }));
@@ -3535,6 +3559,7 @@ A.doSignup = () => {
       render();
       return;
     }
+    await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
     history.replaceState(null, '', `/w/${slug}`);
     S.ui.af.pw = '';
     enterApp(t('toast.welcomeUser', { name: nm }));
