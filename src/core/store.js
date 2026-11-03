@@ -171,9 +171,18 @@ export async function pushNow() {
   } catch {
     /* storage full or blocked: the server copy is authoritative */
   }
-  const res = await api.putWorkspace(docSnapshot());
-  if (!res.ok && (res.status === 409 || res.status === 401 || res.status === 403)) S.ui.conflict = true;
-  return res;
+  /* WR-02 (Gap 2): hold the same shared `pushing` mutex push() uses while this
+     PUT is in flight — a save() scheduled during this window must defer into
+     pushQueued, not fire a second concurrent PUT of the same doc (a false
+     positive 409 would set S.ui.conflict and lock the app mid-undo). */
+  pushing = true;
+  try {
+    const res = await api.putWorkspace(docSnapshot());
+    if (!res.ok && (res.status === 409 || res.status === 401 || res.status === 403)) S.ui.conflict = true;
+    return res;
+  } finally {
+    pushing = false;
+  }
 }
 
 export function save() {

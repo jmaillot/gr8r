@@ -235,3 +235,35 @@ test('D-06: the local-mode undo stays a plain restore(snap) with zero API calls'
   );
 });
 
+/* WR-02 (Gap 2) source-scan pin: pushNow() holds the shared `pushing` mutex
+   around its own PUT — `pushing = true` before the api.putWorkspace call and
+   `pushing = false` in a finally — so a save()-scheduled push() defers into
+   pushQueued instead of firing a concurrent PUT (false-positive 409 →
+   S.ui.conflict mid-undo). The wait loop and clearTimeout calls must survive. */
+test('WR-02: pushNow() takes and releases the shared pushing mutex around its PUT', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/core/store.js', import.meta.url), 'utf8');
+
+  const start = src.indexOf('export async function pushNow()');
+  assert.ok(start > -1, 'pushNow() exists');
+  // Slice to the next top-level export to capture the whole function body.
+  const next = src.indexOf('export ', start + 10);
+  const body = src.slice(start, next > -1 ? next : undefined);
+
+  const idxPut = body.indexOf('api.putWorkspace');
+  assert.ok(idxPut > -1, 'pushNow() performs its own wire call');
+  const idxTake = body.indexOf('pushing = true');
+  assert.ok(idxTake > -1 && idxTake < idxPut, 'pushing = true is set before the putWorkspace call');
+
+  const idxFinally = body.indexOf('finally');
+  const idxRelease = body.indexOf('pushing = false', idxFinally);
+  assert.ok(idxFinally > -1 && idxRelease > -1, 'the mutex releases inside a finally block');
+
+  assert.match(body, /while \(pushing\)/, 'the wait-for-in-flight-push loop is preserved');
+  assert.match(body, /clearTimeout\(_saveT\)/, 'the save debounce timer is still cleared');
+  assert.match(body, /clearTimeout\(_pushT\)/, 'the push debounce timer is still cleared');
+
+  const pushBody = src.slice(src.indexOf('async function push()'), start);
+  assert.match(pushBody, /pushing = true/, 'push() retains its own take of the same shared mutex');
+});
+
