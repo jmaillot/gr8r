@@ -117,8 +117,14 @@ before the leak tests are written)
      collisions: no hidden project name leaks through substring matching, verified by
      table-driven tests; the residual free-text limitation is documented in
      `CHANGELOG.md`.
-**Plans**: TBD
+**Plans**: 4 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 34-01-PLAN.md — Server prefs core: user_notif_prefs table, one accessor, GET/PUT routes, double doc strip, per-recipient consumers (SETTINGS-01/02)
+- [ ] 34-02-PLAN.md — migrateUserNotifPrefs guarded backfill + byte-identical second-boot pins + invoices pin (SETTINGS-01/03)
+- [ ] 34-04-PLAN.md — Client prefs isolation: one branching persistence adapter, per-workspace localStorage, seed removal, no-resurrect strip (SETTINGS-02) [wave 2, parallel with 02]
+- [ ] 34-03-PLAN.md — Tokenized redaction matcher extraction + table-driven SEARCH-01 suite + CHANGELOG note (SEARCH-01) [wave 3, after 01's server.js edits]
 
 ### Phase 35: Honest Undo & Deploy Gap
 
