@@ -40,10 +40,10 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 
 ### UNDO — delTeam undo restores memberships
 
-- [ ] **UNDO-01**: Undoing a team deletion restores the purged `team_members` authority rows:
+- [x] **UNDO-01**: Undoing a team deletion restores the purged `team_members` authority rows:
   the client replays the membership set captured before deletion (before-map pattern) through
   the existing membership PUT route, so rosters, mentions and visibility are honest after undo.
-- [ ] **UNDO-02**: Members who joined or changed teams between deletion and undo are not
+- [x] **UNDO-02**: Members who joined or changed teams between deletion and undo are not
   clobbered by the replay — the reconciling PUT restores the deleted team's rows without
   erasing newer independent changes to other teams; a regression test pins the interaction.
 
@@ -104,8 +104,8 @@ recent-search leak, per-user settings isolation, and the compose key-rotation ga
 | SETTINGS-02 | Phase 34 | Complete |
 | SETTINGS-03 | Phase 34 | Complete |
 | SEARCH-01 | Phase 34 | Complete |
-| UNDO-01 | Phase 35 | Pending |
-| UNDO-02 | Phase 35 | Pending |
+| UNDO-01 | Phase 35 | Complete |
+| UNDO-02 | Phase 35 | Complete |
 | DEPLOY-01 | Phase 35 | Pending |
 
 Coverage: 17/17 requirement rows mapped (16 REQ-ID groups: VIS-01..05, UNDO-01..02,

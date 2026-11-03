@@ -5,16 +5,16 @@ milestone_name: Team Visibility & Hardening
 current_phase: 35
 current_phase_name: Honest Undo & Deploy Gap
 status: executing
-stopped_at: Phase 35 context gathered
-last_updated: "2026-11-03T18:49:19.556Z"
+stopped_at: Completed 35-03-PLAN.md
+last_updated: "2026-11-03T18:54:15.095Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 35 execution resumed (wave continue)
-state_head: 936b492d01e6d422a463d0ebe53346fab3398f15
+state_head: 616d92a91da44f5b6febb356af0abb26bf881b14
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 75
 ---
 
@@ -29,8 +29,8 @@ progress:
 ## Current Position
 
 Phase: 35 (Honest Undo & Deploy Gap) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 35
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-11-03 — Phase 35 execution resumed (wave continue)
 
 ## v1.7 Phase Order (research-validated build order)
@@ -103,6 +103,7 @@ second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant i
 - [Phase 34]: Client prefs: local mode keys localStorage per workspace url (projects.notifPrefs.<id>); npToggle is a single api.enabled branch adopting the server's merged prefs; emitMentions gates on S.notifPrefs — D-01/D-05/D-07/D-08; seed workspaces have url not id; doc field permanently undefined after the strips
 - [Phase 34]: G-34-4 closed: GET-on-open notif-prefs hydration via pure mergeNotifPrefs (server row canonical, mirrors PUT adoption); wired at all 5 API-mode workspace entries, local mode untouched
 - [Phase 34]: G-34-4 closed: GET-on-open notif-prefs hydration via pure mergeNotifPrefs (server row canonical, mirrors PUT adoption); wired at all 5 API-mode workspace entries, local mode untouched
+- [Phase 35]: 35-03: WR-01 undo gate unconditional (err.changeTeam before any authority PUT on failed doc push); WR-02 pushNow() shares the pushing mutex released in finally
 
 ### Pending Todos
 
@@ -135,9 +136,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-03T16:36:56.073Z
-Stopped at: Phase 35 context gathered
-Resume file: .planning/phases/35-honest-undo-deploy-gap/35-CONTEXT.md
+Last session: 2026-11-03T18:54:15.036Z
+Stopped at: Completed 35-03-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -153,6 +154,7 @@ Resume file: .planning/phases/35-honest-undo-deploy-gap/35-CONTEXT.md
 | Phase 34 P03 | 14min | 2 tasks | 5 files |
 | Phase 34 P05 | 25m | 2 tasks | 3 files |
 | Phase 34 P05 | 25m | 2 tasks | 3 files |
+| Phase 35 P03 | 6m | 2 tasks | 3 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
