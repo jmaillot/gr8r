@@ -4384,6 +4384,8 @@ async function handleApi(req, res, url) {
 
   const acceptMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})\/accept$/);
   if (acceptMatch && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     if (tooMany(`invite|${clientIp(req)}`, 5, 60 * 60 * 1000)) {
       return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     }
