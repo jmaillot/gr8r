@@ -1911,8 +1911,12 @@ function migrateTeamMembership(conn) {
  */
 function migrateUserNotifPrefs(conn) {
   /* Guard, evaluated in JS: a workspace is eligible iff its stored doc carries
-     data.notifPrefs AND at least one member (from the memberships authority
-     table) lacks a user_notif_prefs row for (workspace_id, user_id). */
+     data.notifPrefs. The strip is the trigger (not "some member lacks a row"):
+     if every member already has a row, waiting for a missing row would leave
+     the stale doc field in place forever and re-fire this guard on every
+     boot, violating the byte-identical-second-boot guarantee. Row backfill
+     stays inside the same transaction and relies on insert or ignore to keep
+     any per-user row the user already set. */
   const eligible = [];
   for (const row of conn.prepare('select id, doc from workspaces').all()) {
     let doc = {};
@@ -1924,11 +1928,7 @@ function migrateUserNotifPrefs(conn) {
     }
     const prefs = doc?.data?.notifPrefs;
     if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) continue;
-    const missing = conn
-      .prepare('select user_id from memberships where workspace_id = ?')
-      .all(row.id)
-      .some(m => !conn.prepare('select 1 from user_notif_prefs where workspace_id = ? and user_id = ?').get(row.id, m.user_id));
-    if (missing) eligible.push({ id: row.id, doc, prefs });
+    eligible.push({ id: row.id, doc, prefs });
   }
   if (eligible.length === 0) return;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');

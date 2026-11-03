@@ -210,6 +210,44 @@ test('two users with exactly equal prefs remain two distinct rows, accessor outp
   assert.equal(aPrefs.email_mention, false);
 });
 
+/* ------------------- (i2) boot strip fires on doc-carries-field alone (WR-02) ------------------- */
+
+test('a doc still carrying notifPrefs is stripped at boot even when every member already has a row (WR-02)', async () => {
+  const migDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-prefs-mig-'));
+  const first = await startServer({ dataDir: migDir, env: { MASTER_KEY: 'projects-prefs-mig-key' } });
+  try {
+    const u = (await signup(first.base, { name: 'M', email: 'mig@test.local', password: PASSWORD })).client;
+    await u.post('/api/workspaces', { name: 'MigWs', slug: 'mig-ws' });
+    const migWs = withDb(first.dbPath, db => db.prepare('select id from workspaces where slug = ?').get('mig-ws'));
+    // The user already has a row — the exact state that made the old guard skip
+    // the workspace forever, leaving the legacy doc field in place.
+    const put = await u.put('/api/me/notif-prefs', { workspace: migWs.id, prefs: { email_reminder: false } });
+    assert.equal(put.status, 200, `row PUT ${put.status}`);
+    // Plant the legacy doc field.
+    const raw = withDb(first.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(migWs.id).doc);
+    const legacy = JSON.parse(raw);
+    legacy.data.notifPrefs = { email_reminder: true, past_due: false };
+    withDb(first.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(legacy), migWs.id));
+    await first.stop();
+
+    // Second boot: the doc-carries-field trigger must strip the field even
+    // though zero members are missing rows, and `insert or ignore` must keep
+    // the per-user row instead of overwriting it with the legacy blob.
+    const second = await startServer({ dataDir: migDir, env: { MASTER_KEY: 'projects-prefs-mig-key' } });
+    try {
+      const doc = JSON.parse(withDb(second.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(migWs.id).doc));
+      assert.equal(doc.data.notifPrefs, undefined, 'the legacy doc field is stripped at boot despite no missing rows');
+      const row = withDb(second.dbPath, db => db.prepare('select prefs from user_notif_prefs where workspace_id = ?').get(migWs.id));
+      assert.ok(row, 'the per-user row still exists');
+      assert.equal(JSON.parse(row.prefs).email_reminder, false, 'insert or ignore keeps the per-user row (no legacy overwrite)');
+    } finally {
+      await second.stop();
+    }
+  } finally {
+    fs.rmSync(migDir, { recursive: true, force: true });
+  }
+});
+
 /* ------------------- (j) per-recipient consumers (Task 2, Pitfall 1) ------------------- */
 
 /* Minimal SMTP sink (due-reminders REM-05 pattern): captures DATA payloads. */
