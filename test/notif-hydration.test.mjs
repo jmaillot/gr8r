@@ -20,6 +20,72 @@ globalThis.document = { querySelectorAll: () => [] };
 
 const { NOTIF_PREF_DEFAULTS, NOTIF_PREF_KEYS, mergeNotifPrefs } = await import('../src/core/notifPrefs.js');
 
+/* ---- G-34-6 wiring pin (static analysis of the call graph) ------------------
+   G-34-4 wired hydrateNotifPrefs at 5 hydrateFromServer success sites, but the
+   6th — the /w/<slug> boot routine in src/main.js (the F5 path) — was missed.
+   These pins read both source files as text and assert that EVERY
+   hydrateFromServer success site, in either file, hydrates prefs nearby — so a
+   future 7th call site is caught by the test, not by UAT. */
+
+import { readFileSync } from 'node:fs';
+
+const actionsSrc = readFileSync(new URL('../src/actions/actions.js', import.meta.url), 'utf8');
+const mainSrc = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+
+/* Each hydrateFromServer call must be followed by a hydrateNotifPrefs call
+   within this many lines (the success-path pattern: early-return/401/!ok
+   branches sit between them). */
+const HYDRATE_WINDOW = 12;
+
+function checkSites(src, file) {
+  const lines = src.split('\n');
+  const misses = [];
+  lines.forEach((line, i) => {
+    if (!line.includes('hydrateFromServer(') || line.includes('import') || line.includes('function hydrateFromServer')) return;
+    const window = lines.slice(i + 1, i + 1 + HYDRATE_WINDOW).join('\n');
+    if (!window.includes('hydrateNotifPrefs(')) {
+      misses.push(`${file}:${i + 1} — hydrateFromServer success site with no hydrateNotifPrefs within ${HYDRATE_WINDOW} lines`);
+    }
+  });
+  return misses;
+}
+
+test('(f) G-34-6: hydrateNotifPrefs is exported from actions.js', () => {
+  assert.ok(
+    actionsSrc.includes('export async function hydrateNotifPrefs()'),
+    'actions.js must export hydrateNotifPrefs so main.js boot can call it'
+  );
+});
+
+test('(g) G-34-6: main.js imports hydrateNotifPrefs from ./actions/actions.js', () => {
+  assert.ok(
+    /import\s*{[^}]*hydrateNotifPrefs[^}]*}\s*from\s*'\.\/actions\/actions\.js'/.test(mainSrc),
+    "main.js must import hydrateNotifPrefs from './actions/actions.js'"
+  );
+});
+
+test('(h) G-34-6: every hydrateFromServer success site hydrates prefs — actions.js and the main.js boot path', () => {
+  /* pollNotifs (main.js ~line 80) is the one intentional exception — it must
+     NOT hydrate (pin (i) enforces that). Strip its region before the sweep. */
+  const pStart = mainSrc.indexOf('const pollNotifs');
+  const pEnd = mainSrc.indexOf('setInterval(pollNotifs', pStart);
+  const mainBootSrc = pStart === -1 ? mainSrc : mainSrc.slice(0, pStart) + mainSrc.slice(pEnd);
+  const misses = [...checkSites(actionsSrc, 'src/actions/actions.js'), ...checkSites(mainBootSrc, 'src/main.js')];
+  assert.deepEqual(misses, [], `missed hydration site(s):\n  ${misses.join('\n  ')}`);
+});
+
+test('(i) G-34-6: pollNotifs does NOT hydrate prefs (boot-time concern, not a 30s GET cadence)', () => {
+  const start = mainSrc.indexOf('const pollNotifs');
+  const end = mainSrc.indexOf('setInterval(pollNotifs', start);
+  assert.ok(start !== -1 && end !== -1, 'pollNotifs not found in main.js');
+  const pollBody = mainSrc.slice(start, end);
+  assert.equal(
+    pollBody.includes('hydrateNotifPrefs'),
+    false,
+    'pollNotifs must not call hydrateNotifPrefs — prefs hydrate at boot/entry, not on a 30s poll'
+  );
+});
+
 test('(a) merge(undefined, undefined) returns the D-27-5 all-ON defaults (13 keys, email_comment the only false)', () => {
   const prefs = mergeNotifPrefs(undefined, undefined);
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
