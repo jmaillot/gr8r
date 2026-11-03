@@ -53,6 +53,18 @@ function sanitize(stored) {
   return out;
 }
 
+/* Merge a sanitized client store and a sanitized server row into one prefs
+   object (Phase 34, G-34-4). Start from the D-27-5 defaults, apply the client
+   object, then the server object — the server row is canonical, mirroring the
+   PUT adoption in actions.js. Both sides pass through the same whitelist +
+   boolean-only filter the local path uses, so a tampered GET response cannot
+   inject free-form keys or non-boolean values into app state (T-34-11). Pure:
+   no store, no DOM, no api import; inputs are never mutated (D-01: the result
+   is a flat whitelisted object — never a doc-shaped notifPrefs carrier). */
+export function mergeNotifPrefs(clientPrefs, serverPrefs) {
+  return { ...NOTIF_PREF_DEFAULTS, ...sanitize(clientPrefs), ...sanitize(serverPrefs) };
+}
+
 export function getLocalNotifPrefs(workspaceId) {
   try {
     return { ...NOTIF_PREF_DEFAULTS, ...sanitize(JSON.parse(localStorage.getItem(notifPrefsKey(workspaceId)))) };
