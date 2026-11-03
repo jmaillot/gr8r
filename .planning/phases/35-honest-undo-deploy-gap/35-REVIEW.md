@@ -1,116 +1,93 @@
 ---
 phase: 35-honest-undo-deploy-gap
-reviewed: 2026-11-03T19:20:00Z
-depth: standard
+reviewed: 2026-11-03T00:00:00Z
+depth: deep
 files_reviewed: 6
 files_reviewed_list:
-  - src/actions/teams.js
   - src/core/store.js
+  - src/actions/teams.js
   - test/undo-membership.test.mjs
-  - test/compose-config.test.mjs
   - docker-compose.yml
   - DEPLOY.md
+  - test/compose-config.test.mjs
 findings:
   critical: 0
-  warning: 2
+  warning: 3
   info: 3
-  total: 5
+  total: 6
 status: issues_found
 ---
 
 # Phase 35: Code Review Report
 
-**Reviewed:** 2026-11-03T19:20:00Z
-**Depth:** standard
+**Reviewed:** 2026-11-03 (post 35-03 gap-closure)
+**Depth:** deep (cross-file: teams.js → store.js → api.js → server contract; compose → server.js env)
 **Files Reviewed:** 6
-**Status:** issues_found
+**Status:** issues_found (no blockers)
 
 ## Summary
 
-Phase 35 lands the honest delTeam undo (awaited `pushNow()` doc push, then per-member union replay through the admin-gated membership route) and the compose `MASTER_KEY_PREVIOUS` forwarding with a two-layer config test and a DEPLOY.md §14 walkthrough.
+Reviewed the Phase 35 honest-undo implementation (35-01), the MASTER_KEY_PREVIOUS compose forwarding (35-02), and the 35-03 gap-closure fixes (WR-01 early-return gate, WR-02 pushing mutex). Both gap-closure fixes are correctly implemented: the `pushed.ok === false` gate sits lexically between `pushNow()` and the `Promise.all` setMemberTeams block (teams.js:188-191), and `pushNow()` holds the shared `pushing` mutex with a `finally` release (store.js:178-185). Cross-file verification confirmed the load-bearing invariants: `api.call()` (api.js:59-95) never throws — every path returns `{ok, status}` — so the `Promise.all` blocks in both the purge and the undo cannot reject, and the gate's strict shape is honored by `putWorkspace` (api.js:356-362). The `run` closure correctly captures `before`/`affected` before the purge, `restore(snap)` re-replaces `S.data` wholesale, and the undo re-resolves live members by id (`teams.js:194`) so stale object references from the deleted doc cannot leak into the PUTs. The compose line uses the optional `:-` form immediately after `MASTER_KEY` (docker-compose.yml:40), never `:?`, and DEPLOY.md §14's "Compose users: no extra step" section documents the four-step rotation cycle with the env-only key discipline. All 7 undo-membership pins and both compose-config tests pass (verified this session: 10 pass / 0 fail).
 
-The core design is sound: the before-map capture is correctly hoisted above the purge block (teams.js:136), `restore(snap)` is unconditionally first in `onAction` (local mode preserved per D-06), and the union shape is genuinely load-bearing against the server's full-set-replace PUT — pinned by tests. The compose line uses the safe `:-` optional form, and server.js:88 normalization (`String(... || '')`) makes the empty default a no-op, verified against source. No critical issues.
-
-Two warnings: the undo path fires membership PUTs before checking whether the doc push succeeded (guaranteed-doomed `unknownTeam` 400s on push failure), and `pushNow()` does not take the module's `pushing` flag, so a user edit during the undo window can race it into a false 409 conflict lock.
-
-Out of scope per instructions: pre-existing lint failure in `test/notif-prefs.test.mjs:306` (pre-dates this phase).
+No critical issues found. Three warnings and three info items below.
 
 ## Warnings
 
-### WR-01: Union membership PUTs fire before `pushed.ok` is checked
+### WR-01: pushNow() wait loop is unbounded polling with no failure exit or user feedback
 
-**File:** `src/actions/teams.js:181-198`
+**File:** `src/core/store.js:166`
+**Issue:** `while (pushing) await new Promise(r => setTimeout(r, 25));` has no upper bound and no abort. If an in-flight `push()` PUT hangs (browser fetch has no default timeout for a stalled-but-open connection), the undo's `onAction` awaits forever: no membership PUTs fire (good), but also no error toast, no timeout, and the toast's undo button may already be gone — the user sees nothing while the click handler is parked. Unlike the 409/401/403 paths, this stall path has no honest feedback.
+**Fix:** Bound the wait, e.g.:
+```js
+const deadline = Date.now() + 5000;
+while (pushing) {
+  if (Date.now() > deadline) return { ok: false, status: 0 };
+  await new Promise(r => setTimeout(r, 25));
+}
+```
+(consistent with the ~5s toast window the plan already cites).
 
-**Issue:** `onAction` awaits `pushNow()` and then unconditionally launches `Promise.all(...)` of `setMemberTeams` PUTs; the `pushed.ok === false` check happens only afterwards, at line 195. If the doc push fails (409 conflict, 401/403, network error), the server doc does not contain the restored team, so every membership PUT is guaranteed to 400 `unknownTeam` — the exact premature-PUT failure the phase's own sequencing invariant exists to prevent (proven by UNDO-01's negative case). Worse, in a multi-admin workspace a 409 means the server doc is *newer*: if that newer doc happens to contain a team with `tm.id` (e.g. another admin re-created one), the PUT succeeds and writes authority rows while the client still shows the error toast — divergent state presented as failure. The fix preserves D-02 honest failure but stops firing known-doomed requests.
+### WR-02: the undo gate uses `pushed.ok === false`, which misses an ok-less result shape
 
+**File:** `src/actions/teams.js:188`
+**Issue:** The WR-01 gap gate tests strict equality: `if (pushed.ok === false)`. Today every `api.call()` path returns a well-formed `{ok: boolean}`, so this is safe — but the gate is the last line of defense against the guaranteed-400 unknownTeam cascade, and it silently disarms if `pushNow()` ever resolves with a result lacking `ok` (a future refactor of `putWorkspace`'s no-slug guard, a wrapper, a mock). The post-loop check at line 205 has the same shape. Defense-in-depth says the guard should not depend on the presence of the field, not just its exact value.
 **Fix:**
 ```js
-const pushed = await pushNow();
-if (pushed.ok === false) {
-  toast(t('err.changeTeam'), { kind: 'err' });
-  return;
-}
-const results = await Promise.all(/* ... unchanged ... */);
-if (results.some(r => !r?.ok)) {
+if (!pushed.ok) {
   toast(t('err.changeTeam'), { kind: 'err' });
   return;
 }
 ```
+and update the WR-01 source-scan pin's `body.indexOf('pushed.ok === false')` accordingly (or match both forms).
 
-### WR-02: `pushNow()` does not take the `pushing` flag — concurrent PUT race can false-409 the whole app into conflict lock
+### WR-03: source-scan pins slice to end-of-file, over-scoping their assertions
 
-**File:** `src/core/store.js:162-177`
-
-**Issue:** `push()` serializes itself with the module-level `pushing` flag (lines 135-139). `pushNow()` only *waits out* an in-flight push (the 25 ms poll loop) and then runs its own `api.putWorkspace(docSnapshot())` **without setting `pushing = true`**. Any `save()` call that lands after `pushNow()` clears the timers but during its in-flight PUT (a user edit in the undo window; `restore()`/render side effects) schedules `_pushT = setTimeout(push, 450)`, and that `push()` runs concurrently with `pushNow()`'s PUT — the exact "two concurrent PUTs of the same document" the comment at line 164-165 says it exists to prevent. Two concurrent PUTs of the same revision → one gets 409 → `S.ui.conflict = true` (line 175) → the entire workspace is conflict-locked from a false positive, requiring a reload. Narrow window (needs RTT > ~600 ms), but the consequence is a full app lock.
-
-**Fix:**
-```js
-export async function pushNow() {
-  if (!api.enabled || !api.user || S.ui.conflict) return { ok: false, status: 0 };
-  while (pushing) await new Promise(r => setTimeout(r, 25));
-  clearTimeout(_saveT);
-  clearTimeout(_pushT);
-  pushing = true;                      // take the same mutex push() uses
-  try {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(docSnapshot()));
-    } catch { /* server copy is authoritative */ }
-    return await api.putWorkspace(docSnapshot());
-  } finally {
-    pushing = false;
-  }
-} // conflict-flag handling unchanged; `dirty`/`pushQueued` bookkeeping can stay push()-owned
-```
-(The 25 ms poll loop is also an unbounded wait if a push hangs; with the mutex taken, a deadline or single-check would be tighter, but the mutex is the correctness fix.)
+**File:** `test/undo-membership.test.mjs:217, 248`
+**Issue:** Both the D-06 and WR-01 pins compute `const body = src.slice(actionStart)` with no end bound, so "exactly one `setMemberTeams` call site" (lines 232-235, 262) and the ordering assertions count matches across the entire file remainder, not the `onAction` closure. A future `setMemberTeams` call appended anywhere after the closure (a new teams action) breaks the count assertion spuriously, and conversely the pin can pass while asserting less than intended. The WR-02 pin in store.js has the same shape but correctly bounds with `src.indexOf('export ', start + 10)` — the teams.js pins should mirror that discipline.
+**Fix:** Bound the slice at the closure's end, e.g. slice from `onAction: async () => {` to the next top-level `A.` assignment or a balanced-brace scan, then run the existing assertions against that slice.
 
 ## Info
 
-### IN-01: Inconsistent result-check idioms in the same condition
+### IN-01: pushQueued set during pushNow()'s PUT is not drained by pushNow()
 
-**File:** `src/actions/teams.js:195`
+**File:** `src/core/store.js:178-185`
+**Issue:** If a debounced `push()` fires during `pushNow()`'s in-flight PUT, it sets `pushQueued = true` and returns (store.js:135-138). `pushNow()` never reads `pushQueued`, so the flag lingers until the next real `push()` drains it. This is benign — `pushNow()`'s own PUT carries the same (or newer) `docSnapshot()`, and any post-pushNow change re-arms `save()`'s timers — but the interaction is non-obvious.
+**Fix:** A one-line comment on the mutex block noting that a `pushQueued` left set by a deferred `push()` is intentionally subsumed by `pushNow()`'s own wire call.
 
-**Issue:** `pushed.ok === false` (strict — treats a missing `ok` as success) vs `results.some(r => !r?.ok)` (falsy — treats a missing `ok` as failure) two tokens apart. Both API results carry `ok` today, so no live bug, but the asymmetry invites regressions if one call site starts returning bare responses.
+### IN-02: the union replay also re-adds pre-delete rows for other teams, overriding mid-window removals
 
-**Fix:** Pick one idiom — prefer `if (!pushed.ok || results.some(r => !r?.ok))` — which also matches WR-01's early-return shape.
+**File:** `src/actions/teams.js:200`
+**Issue:** `union = before ∪ current ∪ tm.id` means a membership an admin *deliberately removed from another team* during the delete→undo window is silently re-added (it was in `before`). This is the planned D-03 design ("union never erases"), and the locked semantics only guaranteed "restores the deleted team's rows without erasing newer additions" — but the re-add side of the union is not called out in the code comment, which only advertises the additive guarantee.
+**Fix:** Extend the comment at teams.js:196-199 to state both directions of the union (additions preserved, mid-window removals of pre-delete memberships are reverted), so a future reader does not mistake it for a deleted-team-only replay.
 
-### IN-02: The undo tests never execute the actual `onAction` closure — WR-01 is invisible to them
+### IN-03: before-map captured unconditionally in local mode where it is unused
 
-**File:** `test/undo-membership.test.mjs:52-99, 211-236`
-
-**Issue:** UNDO-01/02 replay the HTTP sequence manually via the admin client, and the D-06 "local-mode pin" is a source-regex scan. Both are reasonable given there is no DOM/browser harness, and the summaries say so honestly — but the consequence is that the *client-side* logic of `onAction` (the `pushed.ok` gating, the union construction, the `before.get(x.id) || []` fallback) has zero executable coverage. WR-01 exists precisely in that blind spot: the test's negative case proves a premature PUT 400s, yet the production code can still emit one and no test would notice.
-
-**Fix:** When a client-harness exists, drive `onAction` directly. Until then, a cheap partial pin is possible: a source-scan test asserting the `pushNow()` await is followed by an `if (pushed.ok === false) return;` guard *before* the first `setMemberTeams` occurrence — same file-scan style as the existing D-06 test.
-
-### IN-03: `restore(snap)` clobbers edits made during the toast window — now server-persisted, not just local
-
-**File:** `src/actions/teams.js:179-181`
-
-**Issue:** `snap` was taken before the delete `mutate()`; `restore(snap)` rewinds the *entire* local doc to that moment, discarding any project/task edits the user made between the delete and the undo click (~5 s toast window). This was pre-existing behavior in local mode; what Phase 35 adds is `pushNow()` — so the rewound stale doc is now **awaited onto the server**, making the clobber durable for API-mode workspaces too. The union replay protects `team_members` authority rows only; doc-level edits in the window are lost in both modes. This is the documented D-05/D-06 design tradeoff (unconditional restore, honest failure), not a coding error — flagged so the tradeoff is a conscious record rather than an accident.
-
-**Fix:** None required for this phase (design decision). If revisited: capture a second snapshot at undo-click time and re-apply only the team-restoration delta instead of wholesale `restore(snap)`.
+**File:** `src/actions/teams.js:136`
+**Issue:** The `before` Map is built on every `delTeam` even when `api.enabled` is false, where the undo never reads it (the undo's `restore(snap)` path stops at line 180). Allocation is trivial and the capture-above-the-purge placement is deliberate (D-01), so this is cosmetic only.
+**Fix:** Optional — no change needed; note the local-mode non-use in the existing capture comment if touched again.
 
 ---
 
-_Reviewed: 2026-11-03T19:20:00Z_
+_Reviewed: 2026-11-03_
 _Reviewer: the agent (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: deep_
