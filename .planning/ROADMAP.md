@@ -20,7 +20,7 @@ hardening, the recent-search leak, per-user settings isolation, and the compose 
 
 - [x] **Phase 32: Team-Derived Project Visibility** - A project is readable iff a member's teams intersect the project's teams; no-team projects stay workspace-wide; rides the single `hiddenFor` funnel. (Backlog 999.1) (completed 2026-11-02)
 - [x] **Phase 33: Membership-Surface Hardening** - Invite-accept gets sameOrigin, explicit workspace resolution (SSO twin in the same commit), no link-only admin invites, spoof closed. (v1.1 audit) (completed 2026-11-03)
-- [ ] **Phase 34: Per-User Settings Isolation & Search Leak Closure** - `notifPrefs` move to real per-user rows via additive migration; the substring recent-search leak closes against post-VIS visibility.
+- [x] **Phase 34: Per-User Settings Isolation & Search Leak Closure** - `notifPrefs` move to real per-user rows via additive migration; the substring recent-search leak closes against post-VIS visibility. (completed 2026-11-03)
 - [ ] **Phase 35: Honest Undo & Deploy Gap** - delTeam undo restores purged memberships without clobbering newer changes; docker-compose forwards `MASTER_KEY_PREVIOUS`.
 
 ## Phase Details
@@ -117,7 +117,7 @@ before the leak tests are written)
      collisions: no hidden project name leaks through substring matching, verified by
      table-driven tests; the residual free-text limitation is documented in
      `CHANGELOG.md`.
-**Plans**: 5/5 plans executed
+**Plans**: 6/6 plans complete
 **UI hint**: yes
 
 Plans:
@@ -163,7 +163,7 @@ final VIS semantics)
 |-------|----------------|--------|-----------|
 | 32. Team-Derived Project Visibility | 1/1 | Complete    | 2026-11-02 |
 | 33. Membership-Surface Hardening | 2/2 | Complete    | 2026-11-03 |
-| 34. Per-User Settings Isolation & Search Leak Closure | 5/5 | In Progress|  |
+| 34. Per-User Settings Isolation & Search Leak Closure | 6/6 | Complete    | 2026-11-03 |
 | 35. Honest Undo & Deploy Gap | 0/? | Not started | - |
 
 ## Backlog
