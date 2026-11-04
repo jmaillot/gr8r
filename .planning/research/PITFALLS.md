@@ -1,267 +1,156 @@
-# Pitfalls Research — v1.7 Team Visibility & Hardening
+# Domain Pitfalls — v1.8 "Notification Sanity"
 
-**Domain:** Self-hosted PM workspace — debt-closure milestone on an existing 803-test suite
-**Researched:** 2026-11-02
-**Confidence:** HIGH (every pitfall verified against `server.js` at HEAD unless labeled general-practice)
-
-**Verification method:** all code claims below were read from the current tree (`server.js` ~4.9k lines, `src/actions/teams.js`, `test/scope.test.mjs`, `test/migration.test.mjs`, `test/totp-encryption.test.mjs`, `docker-compose.yml`). Line numbers are per-archived-head; they will drift — trust the quoted identifiers.
+**Domain:** Reminder-cadence rework, server-side i18n, daily digest, defaults migration on an existing zero-dependency Node app (`server.js`, hand-rolled scheduler, `reminders_sent` dedup ledger, per-user `user_notif_prefs` rows, client-side JSON catalogues with a build-gate scan).
+**Researched:** 2026-11-04
+**Overall confidence:** HIGH (code-read of server.js:1100–1432, PROJECT.md v1.8 scope, test/ inventory) — pitfalls 1–3 are derived from the live dedup-key format, prefs merge and hour gate, not from general lore.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall VIS-1: Team-derived visibility bypassing the Phase-29 scope funnel (double-visibility OR)
+### Pitfall 1: Removing `day_before` while its dedup rows and prefs semantics change → the new cadence is silently suppressed or fires stale
 
-**What goes wrong:**
-Team-derived visibility (`project.teams ∩ member.teams ≠ ∅`) is implemented as a *new* predicate bolted beside `hiddenFor()` instead of *inside* it. The result is two code paths that disagree: a route that redacts via the funnel hides a project, while another route (file serve, mentions, reminders, client-emit pre-filter — the Phase-29 send-time surfaces) still uses the old predicate, or vice versa. The Phase-29 contract is that **every** project-touching surface goes through one shared funnel (`projectScope()` server.js:671, `hiddenFor()` server.js:730, `redactDoc()` server.js:861). A second visibility source silently forks that invariant.
+**What goes wrong:** The dedup key is `${ws.id}:${t.id}:${t.assignee}:${offset}:${due}` (server.js:1410). Two traps:
+1. **Orphaned dedup rows** — deleting the `day_before` offset means old rows like `...:day_before:2026-11-01` are never matched again. That's harmless for `day_before` itself, but the *stale-row cleanup habit* ("just delete rows where offset='day_before'") is the mistake: a data-touching migration violates the additive-only constraint and risks a non-byte-identical second boot. Leave dead rows alone; they are inert.
+2. **Prefs whose meaning changes** — `due_reminder` today gates *both* `day_before` and `morning_of` (server.js:1386–1389). If the new "due today" toggle reuses the key `due_reminder` but drops `day_before`, an existing user who explicitly set `due_reminder: true` keeps its meaning — fine. But the whitelist/17-key shape and the PUT route validation must stay coherent: a key removed from the client settings UI but still validated server-side (or vice versa) causes a silent mismatch. The `undefined-falsy` merge in `getUserNotifPrefs` (server.js:1152–1164) means *any* key you stop writing defaults for silently flips to "on" — if you repurpose or retire a key, users who never touched it get a different behavior than users whose stored row has it explicitly.
 
-**Why it happens:**
-`hiddenFor()` currently computes hidden = private-hidden ∪ out-of-scope. The natural-but-wrong edit is to compute team visibility at *call sites* ("can this member see project X?") rather than changing what the funnel counts as hidden.
+**Why it happens:** The scheduler's exactly-once design makes rows look like "state to clean up" when they are actually an append-only ledger. And prefs keys look renameable when they are a public API (stored JSON per user).
 
-**How to avoid:**
-Extend `hiddenFor()` itself: a project is hidden iff (not workspace-wide-open) ∧ (not team-visible) ∧ (not scope-granted). Respect the **D-03 grant inversion** — scope *opens* private projects, so a scoped grant must still win even when the team intersection is empty; team visibility must never *close* something scope granted. Then re-run the named 404-matrix (test/scope.test.mjs:512 "the named 404-matrix (SCOPE-03)") with new rows for the team-visible combinations.
+**Consequences:** Either users get double reminders for one task (new key + old pref key both firing) or zero reminders (old rows interpreted as claims for the new offset), or a migration test fails the byte-identical-second-boot gate at the last minute.
 
-**Warning signs:**
-A test where a project disappears from doc GET but is still assignable, or an out-of-scope by-id request that returns 403 instead of the byte-identical 404 `fileNotFound` (scope.test.mjs:478).
+**Prevention:**
+- Keep `due_reminder` as the "due today" gate (its stored meaning narrows, never inverts); do NOT add a parallel `due_today` key that reads as a second gate.
+- Touch no `reminders_sent` rows: orphaned `day_before` keys are dead weight, harmless. The additive-only rule wins.
+- Because dedup includes `:due` (the due-date string), moving a task's due date *after* morning-of fired legitimately re-fires at the next 09:00 — verify the new cadence preserves this and the tests cover it.
+- Put the pref-whitelist diff in the same phase as the scheduler change, with a test asserting `getUserNotifPrefs` output for: no row, row with `due_reminder: true`, row with `due_reminder: false`, row with the *retired* key shape.
 
-**Phase to address:** VIS phase. Regression surfaces that must stay green: `test/scope.test.mjs` (full 404-matrix, D-03 inversion cases), `test/membership.test.mjs`, `test/due-reminders.test.mjs` (send-time scope filtering).
+**Detection:** A test that seeds a `reminders_sent` row with a `day_before` key and a task due today, runs one pass, and asserts exactly one `morning_of` notification exists. If it fires zero or two, the migration touched the wrong thing.
 
----
-
-### Pitfall VIS-2: The 404 no-oracle property broken by distinguishable errors
-
-**What goes wrong:**
-Team-visibility changes touch the by-id guard path. Two classic breaks: (a) a project that is *known* but team-invisible now answers 403/400 with a descriptive code instead of the identical 404 body — an existence oracle for a non-member probing ids; (b) the file-serve side door returns a *different* 404 (different body or timing) than the unknown-id 404.
-
-**Why it happens:**
-The visibility predicate becomes multi-factor (private ∧ teams ∧ scope), and each new `if` branch is a chance to emit a specific error message ("you are not in this project's team").
-
-**How to avoid:**
-Keep the invariant "out-of-scope ⇒ exact same 404 as unknown, byte-identical, on every endpoint family." Pin it per family in the 404-matrix, and add the file-serve byte-identical assertion (scope.test.mjs:443, 478) for team-hidden projects specifically.
-
-**Warning signs:** `grep`-ing the diff for any new `fail(res, 403` inside project-touching routes.
-
-**Phase to address:** VIS phase. Regression surfaces: `test/scope.test.mjs`, `test/file-route-ordering.test.mjs`.
+**Phase:** REM (cadence rework).
 
 ---
 
-### Pitfall VIS-3: No-team projects accidentally becoming team-restricted
+### Pitfall 2: Server-side i18n per recipient drifts from the client catalogue — the drift is invisible to the build gate
 
-**What goes wrong:**
-The spec: a project with an empty `teams[]` stays **workspace-wide**. A naive `project.teams ∩ member.teams ≠ ∅` check hides every teamless project from everyone except… nobody, breaking every existing workspace where most projects have no team. The inverse bug also exists: a member with **zero** `team_members` rows (e.g. a fresh JIT/SSO account, or the profile-seed "teamless" start — server.js:2207 comment) would see nothing.
+**What goes wrong:** The i18n gate (`scripts/i18n-scan.mjs`) scans **client** literals; the server image historically ships **no catalogue** (PROJECT.md "Out of scope" until now — the invitation email was explicitly deferred for this reason). Localizing `MAILER.sendNotif` subjects/bodies, reminder snippets (`reminderSnippet()`, server.js:1336) and push/inbox text per recipient introduces four classic failures:
 
-**Why it happens:** the intersection predicate is correct only when conditioned on `teams.length > 0` on the project side.
+1. **Catalogue copy-paste drift.** Two copies of the catalogue (one bundled for the browser, one importable by plain Node on the server) diverge: a key added client-side never gets a server counterpart, or the FR server copy is edited while the FR client copy isn't. Nothing fails — the server falls back to English silently.
+2. **Plural forms chosen by the wrong locale.** The existing plural layer is `{name}` + `{count, plural, …}` via `Intl.PluralRules` (v1.2 decision 6). French has `one`/`many`/`other`; a server `t()` that hard-codes English plural logic (`count === 1 ? … : …`) produces "1 fichiers". Use the same `Intl.PluralRules` selection with the **recipient's** locale, not the workspace's.
+3. **Date formatting with the wrong locale or wrong tz.** A reminder email saying "due 11/04/2026" is ambiguous; server-side dates must use the recipient's locale **and** the workspace-shared tz via `Intl.DateTimeFormat` with an explicit `timeZone`. Node's ICU is full in Node 24, but the Docker image must actually contain the full-icu data (the default Node image does since v13, but *verify* the pinned base image — a small-icu image silently formats with `en-US`).
+4. **Fallback locale leaking English.** Missing key → English fallback is correct behavior, but *which English* and *when*: if the recipient locale is `fr` and only the subject is catalogued while the body isn't, you get mixed-language emails — worse than all-English.
 
-**How to avoid:**
-Encode "empty teams ⇒ visible to all members" as the first branch of the predicate, and test it with the SSO JIT account and the pre-migration single-team backfill path (server.js:1693 `TEAM-01` backfill — its guard "inserts only where the user has NO team_members row yet" interacts directly with derived visibility).
+**Why it happens:** The client `t()` and a new server `t()` are two implementations of one contract; only a shared module + a shared gate can keep them honest.
 
-**Warning signs:** an upgraded legacy workspace where a long-standing member suddenly sees zero projects.
+**Consequences:** Mixed-language or mistranslated emails to real users; silent English fallback for weeks; i18n-scan green while the server is wrong.
 
-**Phase to address:** VIS phase. Regression surfaces: `test/scope.test.mjs`, `test/migration.test.mjs` (team_members backfill pins at lines 126/439), SSO tests.
+**Prevention:**
+- **One catalogue, two importers.** The catalogues are already "importable by plain Node" (v1.2 decision 12/17) — import the *same JSON files* server-side; never fork a server copy. Make `server.js` fail at boot (or a test fail) if a server-needed key is missing from the FR catalogue.
+- Extend `scripts/i18n-scan.mjs` (or add a phase gate test) to enumerate the *server-used key set* and assert EN+FR presence — the gate only protects what it is told about.
+- Ship the catalogue in the Docker image: this is a real Dockerfile change (COPY of the catalogue dir) — remember `test/dependencies.test.mjs` has a COPY-pin allowlist that already needs updating (STATE.md deferred item); fold that in.
+- Store `locale` on the user (it exists — per-user since v1.2) and resolve recipient locale via the authority map the email pipeline already builds (`authority` in `queueNotifEmails`), falling back: recipient locale → workspace default → EN.
 
----
+**Detection:** A table-driven test rendering every server-emitted notification kind × {en, fr} and snapshotting subject/body; plus a grep-test asserting no server string literal (`'Due today: '`, `'Past due: '`) remains outside the catalogue.
 
-### Pitfall UNDO-1: delTeam undo restoring the doc but not the purged `team_members` rows (verified)
-
-**What goes wrong:**
-This is the known v1.6 deferred item, verified in `src/actions/teams.js:145-164`: the delete path first purges authority rows server-side (`api.setMemberTeams(x.userId, …filter(id => id !== tm.id))` per affected member), *then* snapshots and mutates the doc. The Undo toast calls `restore(snap)`, which resurrects `doc.teams`, `project.teams` and the client-side `member.teams` arrays — but the server-side `team_members` authority rows are **gone**. The UI then *lies*: rosters, mention fan-out, @team dedup and (post-VIS) project visibility all read the authority rows (server.js:1474 "the team_members join table is the authority"). Every subsequent doc PUT also strips doc-carried membership (server.js:1345 area, TEAM-05/D-02), so the lie self-heals into data loss on the next save.
-
-**Why it happens:** the undo mechanism is a generic client-side `snapshot()/restore()` of the document; authority rows live outside the document and outside the snapshot.
-
-**How to avoid (two honest options — pick one in requirements):**
-1. **Make undo real:** server-side delete captures the removed `(workspace_id, team_id, member_id, user_id)` rows; undo issues a compensating batch of `setMemberTeams` re-PUTs. Then guard the classic undo trap: a member who was removed, left the workspace, or was re-invited with a *different* team set between delete and undo must not get stale rows resurrected — reconcile against current `memberships` before re-inserting (`insert or ignore` against live membership ids, never a blind restore of captured rows).
-2. **Remove the Undo offer for teams** (`toast.deleted` without the `onAction` in `src/actions/teams.js:164`). Cheaper and honest; matches the PROJECT.md alternative "or removes the misleading Undo offer".
-
-If option 1: also reconcile the **doc snapshot restore** with what the server round-trips — `restore(snap)` must go through the normal PUT so `docFromClient` normalization and revision bumping stay intact, otherwise the next concurrent save 409s.
-
-**Warning signs:** after delete→undo, `select count(*) from team_members where team_id = ?` is 0 while the team page shows members.
-
-**Phase to address:** UNDO phase. Regression surfaces: `test/membership.test.mjs` (teams routes), the TEAM-05 born-green pin, e2e teams flows; add a dedicated "undo restores rows / or no undo offered" test either way.
+**Phase:** I18N — but the shared-importer decision must be made in this phase's spec, because the DIGEST phase (which emits its own email) depends on it.
 
 ---
 
-### Pitfall HARD-1: `sameOrigin` on invite-accept breaking legitimate emailed links
+### Pitfall 3: The digest is not idempotent across restarts, or its window slices the day wrong
 
-**What goes wrong:**
-Adding `sameOrigin()` (server.js:2389: passes when no `Origin` header, rejects cross-origin browser POSTs) to `POST /api/invites/:token/accept` can break the *email* journey: a user clicks an invite link in Gmail/Outlook, lands on `/join`, fills the form — the POST carries the app's own origin and is fine. The real break is subtler: (a) behind a proxy with `TRUST_PROXY`, `origin === proto(req)://host` fails when `X-Forwarded-Host`/proto are mis-detected, rejecting every real user (verified pattern: `sameOrigin` already guards ~17 routes and this exact misconfig is the known production failure mode); (b) if the guard is added to the GET of `/join` instead of only the POST, email links opened from webmail send `Origin: https://mail.example.com`… (GETs don't send Origin on navigation, but any fetch/XHR from a *prefetched* or service-worker context might) — an over-broad guard turns "invite link" into "invite 403 with `crossOriginRejected`", leaking to attackers that the token exists.
+**What goes wrong:** The reminder pass is exactly-once because it writes a dedup claim **in the same transaction** as the effect, and its hour gate (`hour !== 9` → pure read, server.js:1357) makes replays harmless. A digest has *none* of this for free:
 
-**Why it happens:** the invite accept route is pre-auth, so it cannot lean on cookies for CSRF and must rely on Origin — but it is also the one route whose entry point is off-site by design.
+1. **Double-send after restart.** Digest at 09:00 crashes after sending but before recording → next pass (or boot catch-up, which the pass contractually supports, D-27-2) resends the whole digest. Or crashes *before* send but *after* recording → digest never arrives. Sending email cannot be transactional with SQLite; you must pick the resend-vs-never side deliberately (resend is the correct side — duplicate digest is an annoyance, missing digest is a lost day).
+2. **Idempotence marker without a ledger.** "Send digest if hour===9 and last-sent != today" breaks when the process restarts at 09:01 with a clock now reading 09:01 — actually fine — but breaks again if the server was down the whole 09:00 hour: the boot catch-up logic must define *when* a missed digest is still worth sending (e.g. any pass on the same local date, like the reminder window predicate) and when the day is conceded.
+3. **Partial-day / boundary bugs.** "Tasks due today + overdue" must be evaluated **at send time** in the workspace tz (`localParts`), not from a snapshot taken at 00:00; and "overdue" must reuse `remindable()`-equivalent semantics (`due < localDate`, not-done, not archived) — a second, slightly different predicate here is the classic drift the codebase already guards against ("never a second pipeline", server.js:1243).
+4. **DST.** `addDaysIso` deliberately avoids local-midnight Date math (server.js:1310). A digest that computes "yesterday" via `Date(now - 86400e3)` is wrong twice a year. Compare ISO date strings derived from `localParts`.
+5. **Digest suppressing individual emails without a recorded suppression.** If `email_digest: true` means "no individual reminder emails", the suppression must be applied where reminders enqueue email (`queueNotifEmails` / the `email_reminder` gate) — **not** by skipping notification rows (inbox/push must stay identical, per milestone scope). Forgetting this means digest users see nothing in the inbox either, or push users get emails.
+6. **Urgent notifications swallowed by the digest.** The milestone only says digest replaces *reminder* emails — but if the implementation flips any generic "don't email if digest on" flag, mentions and assigns (often urgent) vanish until 09:00. Suppression must be type-scoped: reminders only, never mention/assign/comment.
 
-**How to avoid:**
-Guard only the POST (the state-changing step), keep the GET/navigation unguarded, and follow the established "Pitfall 22 order" precedent (server.js:3402 comment: sameOrigin FIRST, before any body read or throttle) so a cross-origin probe gets the same response shape as anything else and never reads the body. Add an e2e test that emulates "click email link → render /join → POST accept" and asserts success, plus a cross-origin POST test asserting rejection. Verify the Traefik deployment forwards Host/proto (DEPLOY.md) or the guard must consult `X-Forwarded-Proto` the same way `proto(req)` does.
+**Why it happens:** Digest *looks* like the reminder pass reusing the scheduler, but it has a different delivery transactionality (one email covering many events) and a different failure recovery.
 
-**Warning signs:** UAT report "invite link says cross-origin rejected" from behind the production proxy only.
+**Consequences:** Duplicated or missing digests; timezone-off digests; urgent notifications silently eaten; scope creep of suppression into other email types.
 
-**Phase to address:** HARD phase. Regression surfaces: new invite-accept tests; `test/oidc-sso.test.mjs` (the accept route's sibling invite-reconciliation at server.js:2765-2780 shares the acceptance recipe verbatim — if the guard wraps a shared helper, SSO reconcile must not inherit a browser-only assumption).
+**Prevention:**
+- Give the digest its own ledger table (additive migration: e.g. `digest_sent(workspace_id, user_id, local_date)`) claimed in the same transaction pattern as `reminders_sent` — one prepared `insert or ignore`, claim-then-send, accept the duplicate-on-crash side.
+- Compute the window from `localParts` ISO strings only; never timestamp arithmetic.
+- Type-scoped suppression: in the reminder email path only, `if (prefs.email_digest === true) continue;` — with a test asserting mention/assign emails still flow when digest is on.
+- Injectable clock test: two `runReminderPass`-style calls at the same local 09:00 → one digest; a call at 08:59 → zero; a boot with no 09:00 ever seen that local date → one (catch-up), matching the reminder catch-up philosophy.
+- Fail-loud that `email_digest`'s existing default (`true` in `NOTIF_PREF_DEFAULTS`, server.js:1135) is the stub value — when it becomes real, users who never opted in suddenly get digests. That default flip is exactly the next pitfall.
 
----
-
-### Pitfall HARD-2: Removing `firstWorkspace()` fallback strands legacy invites / or keeping it as a tenant-confusion hole
-
-**What goes wrong:**
-`firstWorkspace()` (server.js:594: `select * from workspaces order by created_at … limit 1`) is used as a silent fallback in three live places: seed-owner membership (1647), invite backfill (2166, legitimate — pre-tenancy rows), and **invite acceptance** (2773) plus the SSO invite-reconcile (2773/2765 area): `… where id = ?).get(invite.workspace_id) || firstWorkspace()`. The fallback means an invite whose workspace was deleted silently joins the *oldest* workspace — a cross-tenant privilege grant in a multi-workspace install. But naive removal breaks the documented legacy path ("invites created before workspaces were addressable" — server.js:2160 comment): `backfillInvites()` fixes `workspace_id is null` rows, so acceptance of a *backfilled* invite is fine, but any legacy row that somehow skipped backfill would 410 — acceptable — while the SSO reconcile path must not strand a JIT user with a consumed invite either (SSO-07: "never silently stranded").
-
-**Why it happens:** the fallback was written when exactly one workspace existed and survived the v1.1 multi-tenancy sweep.
-
-**How to avoid:**
-Acceptance/reconcile: resolve `invite.workspace_id` strictly; on miss return the existing honest `410 workspaceGone` (already the code at 2776 when no workspace at all). Keep `firstWorkspace()` only in `backfillInvites()` and seeding. Audit every remaining call site with `grep -n firstWorkspace server.js` and delete or justify each. Pin with a test: invite → delete workspace → accept ⇒ 410, and *no* membership row anywhere.
-
-**Warning signs:** a user whose membership points at a workspace they were never invited to.
-
-**Phase to address:** HARD phase. Regression surfaces: `test/oidc-sso.test.mjs` (SSO-07 invite reconciliation suite), invite/join e2e, `test/membership.test.mjs`.
+**Phase:** DIGEST — with a hard dependency on I18N's shared catalogue (the digest email is fully server-rendered) and on REM's pref semantics.
 
 ---
 
-### Pitfall HARD-3: Guest-profile spoof via client-carried role/profile fields
+### Pitfall 4: Changing notification defaults for existing users without an explicit, visible migration
 
-**What goes wrong:**
-The guest model (viewer + exactly one project, server.js:4196 `guestSingleProject`, role clamp at 2380 `if (role === 'guest') return 'viewer'`) is enforced on the membership write path. The spoof risk is the *profile/doc* path: a client PUT whose `data.members[]` or profile payload carries a richer `role`/`perms`/`projects` shape for a guest than the server granted. Phase-29 mitigations already exist (`docFromClient` restores access fields server.js:1330-1338 area; write path strips doc-carried membership per TEAM-05; scope on accept comes only from the invite row per T-29-14 comment at 4348) — the pitfall is *regressing* one of these while touching the accept/profile code for sameOrigin or firstWorkspace, e.g. letting the signup-name/profile payload at accept (4330-4346) also carry role/teams/scope.
+**What goes wrong:** `getUserNotifPrefs` merges stored JSON over defaults with `=== false` disables and `undefined-falsy` = on (server.js:1148–1164). Two failure modes when defaults change:
 
-**Why it happens:** the accept route reads a free-form JSON body for account creation; any extra field honored there is attacker-controlled.
+1. **The silent flip.** `email_digest: true` is *already* a default in the shipped defaults layer (it was a stub). Making digest real doesn't need a migration to take effect — every existing user is opted in the moment the code ships. If the product intent is opt-in (the milestone says "opt-in daily digest"), the default **must flip to `false`** — but that change itself is silent: users with stored rows containing `email_digest: true` (written by an early PUT) keep `true` forever, while users with no row get `false`. Behavior now depends on whether a user ever touched settings. This asymmetry is invisible in a defaults-only code review.
+2. **The migration you can't do.** A boot sweep rewriting `user_notif_prefs` rows (e.g. `email_digest: true → remove key` or normalizing retired `day_before`-era keys) violates the "migrations additive-only, byte-identical second boot" constraint unless it is strictly guarded like `migrateTotpReWrap` was. Editing JSON-prefs rows in place is a *data* migration the constraint machinery wasn't designed for — it will be attempted "just this once" and it will break idempotence (second boot not byte-identical) or run before the backup.
 
-**How to avoid:**
-On the accept route, whitelist exactly `name`, `email`, `password` from the body (it already does — pin it with a test that posts a body containing `role:'owner'`, `teams:[…]`, `scope:{…}` and asserts they are ignored). Keep the scope/role source-of-truth comments (T-29-14) intact when editing.
+**Why it happens:** The defaults layer looks like configuration; it is actually the effective state of every user who never opened settings.
 
-**Warning signs:** any new `body?.role` / `body?.scope` in the accept or profile path.
+**Consequences:** Every existing user gets a 09:00 digest email the morning after deploy (support noise, opt-out stampede), or an unguarded boot sweep makes the second boot diverge and fails the phase's byte-identical gate.
 
-**Phase to address:** HARD phase. Regression surfaces: `test/scope.test.mjs` (guest model cases), `test/oidc-sso.test.mjs` (guest-shape rejection, G-30-1).
+**Prevention:**
+- Decide the semantics first and write them down: "opt-in" = default `false` + stored `true` respected; or "auto-on for reminder-suppression only" = keep `true` but scope it. Do not let the code decide implicitly.
+- Prefer **reading-time normalization** over a boot sweep: since the only reader is `getUserNotifPrefs`, retire/reshape keys by changing what the merge produces, not what rows contain. No migration, no boot risk.
+- If a sweep is truly required, follow the established pattern exactly: pre-backup (`vacuum into`), guarded trigger, transactional, second-boot byte-identical — and extend `test/migration.test.mjs`, don't hope.
+- Add a defaults-diff test: assert `getUserNotifPrefs` for a no-row user vs a user whose stored row predates the change; both outcomes must match the documented intent, not accidentally differ.
 
----
+**Detection:** The morning-after support test — a test asserting a no-row user with `email_digest` at its new default produces **zero** digest sends on a normal pass. Plus the migration test asserting second-boot byte identity if any sweep exists.
 
-### Pitfall SEARCH-1: The substring redaction leak cuts both ways (verified)
-
-**What goes wrong:**
-Verified at server.js:825-854: `hiddenProjectTerms()` collects hidden project **names and keys**; `referencesHidden(term, hiddenTerms)` = hidden-term is a *substring* of the searched term. The leak: a recent search like `"Q4 roadmap Planning"` passes the filter (it *contains* the hidden name as substring — wait, contains ⇒ blocked) — the actual verified leak direction is the *reverse composition*: a term that embeds a hidden project name in a **case/whitespace variant** (`.trim().toLowerCase()` normalizes edges only — internal double spaces, accents, unicode confusable variants) slips through `includes()`; and conversely a legit search for a *visible* project whose name contains a hidden project's name as a substring (e.g. hidden "Atlas", visible "Atlas Backup") is wrongly redacted from the user's own history. Both directions are live because the filter runs on the **workspace-shared** `recentSearches` array (server.js:607, 882, 985).
-
-**Why it happens:** string-contains matching over free text can never be both complete (no leak) and precise (no false positives); the current code is the best-effort `includes()` compromise.
-
-**How to avoid:**
-1. Keep the conservative `includes()` for the **leak** direction (never let a hidden-name-containing term in or out) — the false-positive cost is acceptable and must be **documented** (PROJECT.md already says "document the free-text limitation"). 2. Tighten normalization (NFC + accent-fold via the same `Intl` normalization used elsewhere) so case/spacing variants don't bypass. 3. Consider the structural fix if UAT flags it again: make recent searches **per-user** (same treatment as SETTINGS — which removes the shared-surface problem entirely and makes redaction unnecessary). If SETTINGS lands first, evaluate folding SEARCH into it.
-
-**Warning signs:** a UAT where a guest types a hidden project's exact name in search and the term *appears* in history after a second search; or an owner's history losing entries about a visible "Atlas Backup".
-
-**Phase to address:** SEARCH phase (or SETTINGS phase if folded). Regression surfaces: the recent-search redaction tests in `test/scope.test.mjs` (server.js:882/988 behaviors), i18n-search tests for client side.
+**Phase:** DIGEST (the `email_digest` default) and REM (any pref reshaping) — the defaults decision belongs in the *discuss/spec* step of whichever phase lands first, before any code.
 
 ---
 
-### Pitfall SETTINGS-1: Per-user migration breaking the byte-identical second boot (verified pattern)
+## Moderate Pitfalls
 
-**What goes wrong:**
-Moving `notifPrefs`/`invoices` out of the shared workspace doc into per-user rows repeats the v1.1 `locale`-column migration (PROJECT.md decision 3-4: "nullable column + client-side PATCH; the server never writes at boot"). Failure modes: (a) the boot backfill *writes* something unconditionally → second boot diverges → `test/migration.test.mjs:418` "a second boot is a no-op" fails; (b) the backfill creates rows for users who never had prefs, or resurrects defaults (all-ON) for legacy docs whose `notifPrefs` lack keys — pinned today by `test/due-reminders.test.mjs:302` "legacy doc whose notifPrefs lack the keys reads all-ON via docForClient"; (c) rows are keyed per-workspace but the doc is shared — a second workspace for the same user must get independent prefs (membership-scoped rows, not user-scoped), otherwise the doc's current workspace-shared semantics silently leak across tenants.
+### Pitfall 5: `email_digest` default flip interacts with the 17-key whitelist and PUT validation
+**What goes wrong:** The PUT route validates against `NOTIF_PREF_KEYS`. Adding a key (e.g. per-channel digest options) or repurposing one touches three places: whitelist, defaults layer, settings UI render — and a fourth the client catalogue. Miss one and the UI shows a toggle that does nothing, or a key PUT accepts but nothing reads.
+**Prevention:** One test iterating `NOTIF_PREF_KEYS` asserting: default defined, PUT round-trips it, `getUserNotifPrefs` reads it, and an i18n key exists EN+FR for its label. This file is the cheapest regression net in the milestone.
 
-**Why it happens:** `notifPrefs` is read in at least four server places (email gate 1062, reminders gate 1226, normalizeDoc default 633, seed 1585) — missing one read site produces split-brain prefs.
+### Pitfall 6: Reminder pass hour gate is 09:00 everywhere — the digest scheduled "at 09:00 workspace time" collides with the reminder pass
+**What goes wrong:** Digest users at 09:00 get the digest *and* their reminder emails race it in the same minute window: if digest suppression is checked per-email at enqueue time and the two passes interleave, ordering decides whether a task appears both in the digest and as an individual email, or in neither (suppressed after the digest snapshot was taken, before the individual send).
+**Prevention:** Define the suppression boundary at *content-snapshot* time: the digest lists tasks due today/overdue as of its pass; individual reminder emails for the same local date are suppressed unconditionally by pref, so a task can be in the digest while its row still fired — decide and document which way (digest listing is sufficient; the reminder notif row still lands in the inbox, which is correct per scope "push unchanged, inbox unchanged"). Test both orderings.
 
-**How to avoid:**
-Follow the proven recipe: additive table + guarded one-time backfill with pre-backup + eligible-row guard that makes boot #2 byte-identical (the exact pattern of the team_members backfill, pinned at test/migration.test.mjs:126/439). Route **all four** read sites through one accessor. Keep the legacy all-ON read for docs missing keys. Existing clients that still PUT `data.notifPrefs` in the doc must be handled the way `invoices` is today (server.js:1341 `delete next.data.invoices` — write-path strip) once the field migrates, or a stale client resurrects the doc field and split-brain returns. Decide explicitly: strip-on-write + stop reading, or tolerate-and-ignore.
+### Pitfall 7: Localized emails need the recipient's locale where the email is *built*, but `queueNotifEmails` resolves authority maps lazily
+**What goes wrong:** The email builder already joins `memberships × users` for emails/names; locale adds another column. A second query per notification (N+1 per reminder pass over many tasks) is the easy path; forgetting doc-only members (no account row → no locale) yields "undefined" locale and a thrown `RangeError` from `Intl` with an invalid locale tag.
+**Prevention:** One query `select … , u.locale from memberships m join users u …` folding into the existing `authority` map; guard every locale with a known-locale check and fall back to EN. The existing per-pass try/catch (server.js:1427) masks a throw as a silent per-workspace skip — a locale crash would silently stop *all* reminders for a workspace. That masking is itself the pitfall: the catch logs `err.message` and moves on; watch for it in digest/reminder tests.
 
-**Warning signs:** `assert.deepEqual(secondBoot, firstBoot)` failing; a reminder email honoring old prefs after the user changed them.
+### Pitfall 8: The i18n build gate can regress the server scan silently
+**What goes wrong:** `scripts/i18n-scan.mjs` fails builds on uncatalogued *client* literals. Server strings live in `server.js` and `oidc.js` — out of the scan's current corpus. Adding server catalogue support without extending the scan corpus means the next server-side string added is unchecked forever.
+**Prevention:** In the I18N phase, make the scan (or a dedicated node test) walk `server.js` for the notification-template functions and require every interpolated template to come from the catalogue — e.g. forbid the literal patterns `Due today: `, `Past due: `, `Due tomorrow: ` outside the catalogue, as a regression guard.
 
-**Phase to address:** SETTINGS phase. Regression surfaces: `test/migration.test.mjs` (add a notifPrefs/invoices pin), `test/due-reminders.test.mjs`, `test/membership.test.mjs` (notifPrefs flows at lines 633/648/737), i18n-prefs tests.
+## Minor Pitfalls
 
----
+### Pitfall 9: DST-transition days make "due today" ambiguous for a task due the transition day
+**What goes wrong:** ISO-date string compare (the codebase's approach) handles this correctly, but any "digest covers the last 24h" shortcut doesn't.
+**Prevention:** Keep everything ISO-string based (`localParts` + `addDaysIso`); add one DST-boundary test with a timezone like `America/New_York` crossing the shift.
 
-### Pitfall DEPLOY-1: Compose forwarding `MASTER_KEY_PREVIOUS` breaking first boot when unset (verified)
+### Pitfall 10: Test suites asserting on English server text will break en masse during I18N
+**What goes wrong:** `due-reminders.test.mjs`, `notif-email-link.test.mjs` and the source-extraction tests (which the code comments say evaluate specific lines standalone, server.js:1176) assert English snippets. Replacing literals with `t()` calls breaks source-extraction tests in ways that look unrelated.
+**Prevention:** Budget for a test-migration subtask in the I18N phase: update the source-extraction regexes and render both locales in assertions instead of hard-coded English.
 
-**What goes wrong:**
-Verified: `docker-compose.yml:39` forwards only `MASTER_KEY` with `${MASTER_KEY:?…}` (mandatory). Adding `MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS}` naively injects the **empty string** when unset. Two verified-code consequences: (1) `MASTER_KEY_PREVIOUS = String(process.env.MASTER_KEY_PREVIOUS || '')` (server.js:88) — empty is falsy so the keyring is fine, *but* (2) any compose expression like `${MASTER_KEY_PREVIOUS:-}` vs `${MASTER_KEY_PREVIOUS-}` matters: with `:-` compose substitutes empty (ok), but if the line instead uses a default value or the env-file exports it empty-quoted in a way Docker passes as a literal empty var, boot-time re-wrap (`migrateTotpReWrap`, server.js:2059 `if (!MASTER_KEY || !MASTER_KEY_PREVIOUS) return;`) is a no-op — harmless — while the *danger* direction is a compose mis-edit that makes `MASTER_KEY_PREVIOUS` **required** (`:?`) for every fresh install, breaking first boot of new instances that have no previous key. The verified loud-fail guard (server.js:92-94: PREVIOUS set without MASTER throws, pinned at test/totp-encryption.test.mjs:374) protects the inverse case only.
+### Pitfall 11: The audit (AUDIT item) changing thresholds after features ship re-triggers dedup/re-fires
+**What goes wrong:** The audit phase may recommend changing *which* offsets fire. Because dedup keys include the offset, re-introducing or renaming an offset later re-fires for tasks whose `due` is still current — a burst of "Due today" emails on deploy day for every currently-due task is actually expected catch-up behavior, but a surprise if unplanned.
+**Prevention:** Document catch-up behavior in the phase plan; announce that the first pass after a cadence change may notify for tasks already due (the window-open predicate makes this correct, not a bug).
 
-**Why it happens:** compose `:?` vs `-` substitution semantics; copy-paste of the MASTER_KEY line.
+## Phase-Specific Warnings
 
-**How to avoid:**
-Use the optional form `MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-}` so unset → absent/empty, never `:?`. Add a compose/config test asserting `docker compose config` renders both with and without the var in `.env` (there are doc-parsing parity-test precedents from Phase 26 — DEPLOY.md §14 is pinned by "doc-parsing parity tests"; extend the same harness to the compose file, and update DEPLOY.md §14 which documents the two-env rotation and would otherwise drift).
-
-**Warning signs:** a fresh `docker compose up` failing with "set MASTER_KEY_PREVIOUS in .env".
-
-**Phase to address:** DEPLOY phase. Regression surfaces: `test/totp-encryption.test.mjs` (D-K2 loud-fail pin at 374, rotation idempotence at 390-401), the DEPLOY.md parity tests, `test/server-boot.test.mjs`, `test/dependencies.test.mjs` (zero-runtime-deps gate untouched).
-
----
-
-## Technical Debt Patterns
-
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Client-side snapshot/undo for server-authority data (UNDO) | One generic undo mechanism for everything | Authority rows diverge from doc; UI lies until next PUT | Never — remove the offer or make undo server-aware |
-| Second visibility predicate beside the funnel (VIS) | Quick feature, no funnel surgery | Every new surface must remember both; 404-matrix rot | Never — extend `hiddenFor()` |
-| `firstWorkspace()` as safety-net fallback (HARD) | Legacy rows never 410 | Silent cross-tenant join | Only in `backfillInvites()`/seed, pinned by test |
-| Free-text `includes()` redaction (SEARCH) | No schema change | Documented false-positives; leak depends on normalization quality | Acceptable **if documented** (PROJECT.md already commits to that) or removed by per-user storage |
-| Compose var without explicit `:-` guard (DEPLOY) | One-line change | Fresh-install boot breakage | Never |
-| Migration that writes defaults at boot (SETTINGS) | Simpler read path | Byte-identical second-boot guarantee dies | Never — nullable/absent-until-touched pattern |
-
-## Integration Gotchas
-
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Traefik + `sameOrigin` | Guard trusts `req.headers.host` while the proxy rewrites Host | `TRUST_PROXY` + `X-Forwarded-Host` path (server.js:2392) must be exercised in the e2e invite test |
-| Email → `/join` flow | Guarding the link *landing* instead of only the POST | Navigation GET unguarded; sameOrigin only on the state-changing POST, before body read/throttle (server.js:3402 precedent) |
-| SSO invite reconciliation | Adding sameOrigin/strictness to a helper shared with the SSO-07 reconcile (server.js:2765) and breaking the server-side (no-Origin) path | `sameOrigin` passes on missing Origin (curl/server calls) — verify the shared helper keeps that |
-| docker-compose + keyring | Making `MASTER_KEY_PREVIOUS` required | `${VAR:-}` optional form; D-K2 loud-fail test stays green |
-| Doc-PUT normalization vs new per-user rows | Stale clients PUTting `notifPrefs`/`invoices` back into the doc | Write-path strip (server.js:1341 pattern) + accessor consolidation |
-
-## Security Mistakes
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| 403-with-message where 404 is contract | Existence oracle for out-of-scope ids | Byte-identical 404 everywhere; 404-matrix re-run with team-visibility rows |
-| Blind undo of captured rows | Re-grants membership to someone removed/re-invited meanwhile | Reconcile captured rows against live `memberships` before re-insert |
-| Accept-route body carrying privilege fields | Guest/profile spoof — self-elevated role/teams/scope at signup | Whitelist name/email/password; pin with spoof-payload test |
-| Shared `recentSearches` as oracle | Hidden project names inferred from history manipulation | Conservative `includes()` filter; better: per-user rows |
-| `firstWorkspace()` fallback on accept | Invite to deleted workspace joins another tenant | Strict `410 workspaceGone`; fallback only in backfill/seed |
-
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Undo that half-restores (doc yes, memberships no) | Admin believes the team is back; mentions/visibility silently dead | Either real undo (server reconcile) or no undo offer |
-| Team-visibility surprising existing installs | Long-time members suddenly lose projects | Empty-`teams[]` ⇒ workspace-wide is the migration-safe default; communicate in changelog |
-| Invite accept failing behind proxy | "Cross-origin rejected" for legit email recipients | Test through the real Traefik topology before ship |
-| Recent-search history losing legit entries | Users think search is broken | Document the limitation; prefer per-user rows |
-
-## "Looks Done But Isn't" Checklist
-
-- [ ] **VIS:** every project-touching endpoint family re-covered by the named 404-matrix with team-visible/out-of-scope combos — verify `test/scope.test.mjs` matrix block (line 512+) extended, not just old rows green.
-- [ ] **VIS:** D-03 inversion still wins over empty team intersection — verify scoped-guest-sees-private-project test.
-- [ ] **VIS:** no-team project visible to a zero-team member (SSO JIT account) — verify with a JIT-shaped fixture.
-- [ ] **UNDO:** whatever ships, the post-undo `team_members` state equals the post-undo doc state — verify with a direct SQL count in the test.
-- [ ] **UNDO:** undo after member-removal/re-invite doesn't resurrect stale rows.
-- [ ] **HARD:** email→click→accept e2e passes behind proxy headers; cross-origin POST fails *before* body read.
-- [ ] **HARD:** invite→delete workspace→accept ⇒ 410 and zero memberships created.
-- [ ] **HARD:** spoof payload (role/teams/scope in accept body) ignored.
-- [ ] **SEARCH:** leak test with case/whitespace/accent variants of hidden names.
-- [ ] **SETTINGS:** second-boot byte-identical pin extended to the new table; legacy all-ON read preserved (due-reminders.test.mjs:302).
-- [ ] **DEPLOY:** `docker compose config` valid with and without `MASTER_KEY_PREVIOUS`; DEPLOY.md §14 parity tests updated.
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Team-visibility regression leaks data | HIGH | Revert to funnel-only predicate; re-run full 404-matrix; audit logs for 403-on-known-id |
-| Undo resurrected wrong memberships | MEDIUM | Delete resurrected `team_members` rows by captured timestamp; activity log has the audit trail |
-| sameOrigin locked out email recipients | LOW | Fix proto/host detection; the invite rows are unused (single-use not consumed by rejected POSTs if guard precedes body read) |
-| Migration diverges on second boot | HIGH | Restore the pre-migration backup (`vacuum into`, test/migration.test.mjs pattern); fix guard; re-migrate |
-| Compose breaks fresh installs | LOW | Fix substitution form; no data impact |
-| MASTER_KEY_PREVIOUS lost mid-rotation | HIGH | DEPLOY.md §14 no-data-loss note + keyring-miss signature; 2FA re-enrollment is the documented fallback |
-
-## Pitfall-to-Phase Mapping
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| VIS-1/2/3 (funnel bypass, 404 oracle, teamless breakage) | VIS | Extended 404-matrix + D-03 inversion tests + teamless/zero-team cases in `test/scope.test.mjs` |
-| UNDO-1 (doc-only undo) | UNDO | SQL-level row-count assertion + stale-restore guard test in `test/membership.test.mjs` |
-| HARD-1/2/3 (sameOrigin, firstWorkspace, spoof) | HARD | Email-click e2e, deleted-workspace 410 test, spoof-payload test; `test/oidc-sso.test.mjs` stays green |
-| SEARCH-1 (substring leak) | SEARCH (or folded into SETTINGS) | Variant-normalization leak tests; scope redaction tests |
-| SETTINGS-1 (second-boot drift, split-brain reads) | SETTINGS | Extended `test/migration.test.mjs` pin; `test/due-reminders.test.mjs` legacy all-ON read |
-| DEPLOY-1 (compose var) | DEPLOY | Compose-config parity test + `test/totp-encryption.test.mjs` D-K2/rotation pins |
-
-**Suites that must stay green throughout:** `test/scope.test.mjs`, `test/migration.test.mjs`, `test/oidc-sso.test.mjs`, `test/membership.test.mjs`, `test/due-reminders.test.mjs`, `test/totp-encryption.test.mjs`, `test/server-boot.test.mjs`, `test/dependencies.test.mjs` — the full 803-test suite plus the i18n-scan build gate (EN+FR) per milestone invariants.
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| REM (cadence) | Pref key semantics change / dedup-row temptation | Keep `due_reminder` meaning; never touch `reminders_sent` rows; no-row vs stored-row tests |
+| I18N (server emails) | Catalogue drift, plural/date locale, fallback | One shared JSON import; scan-extended server key gate; locale guard with EN fallback; Dockerfile COPY-pin test update |
+| I18N | Silent per-workspace catch masking locale crashes | Locale validation before `Intl` use; explicit tests for unknown locale |
+| DIGEST | Non-idempotent send across restart | Claim-ledger in same transaction as record; accept duplicate-on-crash |
+| DIGEST | Suppression leaks to non-reminder emails | Type-scoped suppression; test mention/assign flow with digest on |
+| DIGEST | `email_digest` stub default is `true` | Explicit default-flip decision in spec; no-row user test |
+| DIGEST × REM | 09:00 collision between two passes | Snapshot-at-pass semantics; both-orderings test |
+| AUDIT | Threshold changes re-fire via window predicates | Document catch-up; time the audit before REM if offsets may change again |
 
 ## Sources
 
-- Code-verified: `server.js` (lines as cited: 83-101, 594-600, 633, 671, 730, 825-854, 861-882, 985-988, 1028, 1062, 1226-1239, 1330-1345, 1474, 1530-1536, 1647, 1693-1740, 2059-2101, 2160-2166, 2207, 2380, 2389-2394, 2765-2790, 3800-3818, 3902-4025, 4180-4196, 4316-4390)
-- Code-verified: `src/actions/teams.js:121-164` (delTeam purge-then-snapshot undo trap)
-- Code-verified: `docker-compose.yml:39` (only MASTER_KEY forwarded — the CR-01/DEPLOY gap)
-- Code-verified: `test/migration.test.mjs:126,418-449` (byte-identical second-boot pins), `test/totp-encryption.test.mjs:374-401` (D-K2 + rotation), `test/scope.test.mjs:443-613` (404-matrix), `test/due-reminders.test.mjs:302` (legacy notifPrefs all-ON)
-- General-practice (labeled): proxy/`Origin` misconfiguration failure modes for `sameOrigin`; undo-reconciliation stale-row trap (informed by the code's structure, standard CSRF/undo patterns)
-
----
-*Pitfalls research for: Projects Studio v1.7 Team Visibility & Hardening*
-*Researched: 2026-11-02*
+- Code-read (HIGH): `server.js:1100–1432` — `NOTIF_PREF_KEYS`/`NOTIF_PREF_DEFAULTS`, `getUserNotifPrefs`, `queueNotifEmails`, `runReminderPass`, dedup-key format, hour gate, `localParts`/`addDaysIso`, per-pass try/catch masking.
+- `.planning/PROJECT.md` v1.8 milestone scope, v1.2 i18n decisions (plurals via `Intl.PluralRules`, catalogues importable by plain Node, server-ships-no-catalogue out-of-scope item being reversed), v1.5 REM-01..05 record.
+- `test/` inventory: `due-reminders.test.mjs`, `notif-prefs.test.mjs`, `notif-email-link.test.mjs`, 16 `i18n-*.test.mjs` files, `local-prefs.test.mjs`, `migration.test.mjs` (referenced from PROJECT.md).
