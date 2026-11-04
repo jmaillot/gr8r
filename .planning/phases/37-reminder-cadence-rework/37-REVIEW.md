@@ -1,90 +1,68 @@
 ---
 phase: 37-reminder-cadence-rework
-reviewed: 2026-11-04T00:00:00Z
+reviewed: 2026-11-04T16:45:00Z
 depth: standard
-files_reviewed: 7
+files_reviewed: 15
 files_reviewed_list:
   - server.js
+  - src/pages/settings.js
   - src/locales/en.json
   - src/locales/fr.json
+  - src/core/notifPrefs.js
+  - CHANGELOG.md
   - test/due-reminders.test.mjs
   - test/notif-i18n.test.mjs
   - test/i18n-core-features.test.mjs
-  - CHANGELOG.md
+  - test/i18n-pages.test.mjs
+  - test/notif-prefs.test.mjs
+  - test/notif-hydration.test.mjs
+  - test/local-prefs.test.mjs
+  - test/migration.test.mjs
+  - test/helpers/legacy-fixture.mjs
 findings:
   critical: 0
-  warning: 1
-  info: 2
-  total: 3
+  warning: 0
+  info: 1
+  total: 1
 status: issues_found
 ---
 
 # Phase 37: Code Review Report
 
-**Reviewed:** 2026-11-04 (standard depth)
+**Reviewed:** 2026-11-04 (standard depth, fresh review covering all phase-37 plans incl. gap-closure 37-03)
 **Depth:** standard
-**Files Reviewed:** 7
-**Status:** issues_found
+**Files Reviewed:** 15
+**Status:** issues_found (info only)
 
 ## Summary
 
-Reviewed the Phase 37 diff (base `36d30bbc^..HEAD`): deletion of the `day_before` reminder offset across producer (`server.js`), both locale catalogues, the settings copy update in EN+FR, the rewritten test pins, and the CHANGELOG release-notes entry.
+Fresh review of the full phase-37 scope, superseding the 2026-11-04 earlier review (its findings are dispositioned in 37-REVIEW-DISPOSITION.md). This pass focuses on the plan 37-03 gap-closure commits (0162837, 43dff9f, 6e79784) — removal of the legacy `push_due` settings row, its i18n keys, and the pref from every whitelist/defaults surface — merged with the already-reviewed 37-01/37-02 scope.
 
-The deletion is executed correctly and completely:
-- All three server arms removed (offset push, snippet branch, key-ternary arm) — no `day_before`/`dayBefore` references remain in `server.js` or either catalogue.
-- The `localDate >= due` catch-up predicate, prefs gates, scope predicates, and dedup-key shape are byte-identical to before (D-01/D-02 honored).
-- Settings copy updated consistently in EN and FR; the old "day before + morning" wording is gone everywhere consumer-facing.
-- The legacy-`dayBefore`-row i18n test was rewritten honestly: it now pins the D-06 snippet fallback (never blank, never raw-key) instead of the pre-deletion FR localization, plus a new guard that the raw key string never leaks into the render.
-- Catalogue-count pin updated correctly (1674 → 1673, matching the single key deletion).
-- I ran `node --test test/due-reminders.test.mjs test/notif-i18n.test.mjs test/i18n-core-features.test.mjs` — **47/47 pass**.
-- CHANGELOG entry accurately describes the one-time boot catch-up burst and the inert-rows guarantee; it matches the actual code semantics (`>=` predicate + absent dedup key).
+Verification performed:
 
-No critical issues found. One warning (dead helper) and two info items.
+- **Row removal (0162837):** the `notif-push` case in `src/pages/settings.js:378-386` now renders exactly `push_mention` / `push_assign` / `push_comment` / `due_reminder` / `past_due` — the stale `push_due` srow is gone. `settings.notif.dueReminders`/`settings.notif.dueDesc` deleted from BOTH catalogues atomically; key-set diff EN↔FR yields only the two intentional `contract.*` keys; both catalogues at 1671 keys.
+- **Pref retirement (43dff9f):** `push_due` appears NOWHERE in `server.js`, `src/`, `mailer.js`, or `public/` (grep: zero matches). Server `NOTIF_PREF_KEYS` has exactly 16 entries, `NOTIF_PREF_DEFAULTS` exactly 12; client mirror in `src/core/notifPrefs.js:16-40` matches (12 defaults, `NOTIF_PREF_KEYS` derives to 16 = 12 + the 4 undefined-falsy extras). Server PUT whitelist (`server.js:3230`) rejects a `push_due` key with 400 `unknownPrefKey` before any workspace/membership work, and the test at `test/notif-prefs.test.mjs:77-82` proves the rejected PUT writes nothing. Whitelist parity server ≡ client holds.
+- **Inert-rows guarantee:** `getUserNotifPrefs` (server.js:1165-1180) spreads stored rows over defaults; `mergeNotifPrefs`/`sanitize`/`getLocalNotifPrefs` all whitelist-filter, so a historical `push_due` value can never reach app state. Zero emission-time consumers confirmed — the reminder producer gates only on `due_reminder`/`past_due`, and `NOTIF_EMAIL_KIND` maps to `email_reminder`.
+- **Test pins:** all flipped assertions verified by reading the diff — passthrough cases now use `push_comment`; each sanitizer (mergeNotifPrefs ×2, getLocalNotifPrefs ×2 via setLocalNotifPrefs and direct-blob paths) gained a dropped-key assertion; `migration.test.mjs` `EXPECTED_DEFAULTS` loses the key while `fixturePrefs`/`legacy-fixture.mjs` keep the historical doc shape. Remaining `push_due` occurrences in `test/` are exclusively the dropped-key assertions and historical fixtures — correct.
+- **Catalogue pin:** `test/i18n-core-features.test.mjs:218` at 1671 with the G-37-2 comment.
+- **dist (6e79784):** rebuilt assets (`dist/assets/*`, mtime after the last commit) contain zero matches for 'Due date reminders', 'Rappels d', 'jour avant l'. dist/ is gitignored per SUMMARY — rebuild verified on disk.
+- **Lint-blocker cleanup in 6e79784:** dead `addDaysIso` deleted (this resolves the prior review's WR-01); unused imports/params removed. The replacement comment at server.js:1331-1332 is accurate.
+- **Tests run:** `node --test test/i18n-core-features.test.mjs test/i18n-pages.test.mjs test/notif-prefs.test.mjs test/notif-hydration.test.mjs test/local-prefs.test.mjs test/migration.test.mjs` → **97 pass / 0 fail / 0 skipped**.
 
-## Warnings
+No critical issues, no warnings. The removal is complete, consistent on both sides of the API boundary, and the inert-rows story is real (no gate reads the retired key). One info item below.
 
-### WR-01: `addDaysIso` is now dead code in server.js
-
-**File:** `server.js:1331-1335`
-**Issue:** The only runtime caller of `addDaysIso` was the deleted `day_before` arm (`localDate >= addDaysIso(due, -1)`). After Phase 37 it has zero references in server.js — it compiles and ships but is never invoked. The planning docs indicate the upcoming digest phase will reuse it, but shipping a dead helper now means the "unused" signal is live in production source until then (lint/death-audit tools will flag it, and it can silently drift from correctness before its next consumer appears).
-**Fix:** Either delete the helper with the offset (restore it in the digest phase when actually needed), or add a one-line comment tying it to its planned consumer:
-```js
-/* Pure YYYY-MM-DD string arithmetic via Date.UTC — never local-midnight Date
-   math, which is DST-fragile. Currently unused after Phase 37 removed the
-   day_before arm; the digest phase (next) is its planned consumer. */
-```
+Prior-review carry-over: WR-01 (`addDaysIso` dead code) is **resolved** by commit 6e79784. IN-01 (implicit "Past due" fall-through) and IN-02 (duplicated offset→suffix mapping) were dispositioned as accepted in 37-REVIEW-DISPOSITION.md and are not re-reported — 37-03 does not worsen either.
 
 ## Info
 
-### IN-01: `reminderSnippet` fall-through returns "Past due" copy for any non-`morning_of` offset
+### IN-01: GET echoes historical `push_due` from stored rows as an inert extra key
 
-**File:** `server.js:1355-1359`
-**Issue:** With `day_before` gone, the function is only ever called with `morning_of` or `past_due`, so the unguarded `return \`Past due: ${title}\`` is fine today. But it is an implicit catch-all: a future offset value (or a typo at a call site) would silently render "Past due" copy. Harmless now, a small trap later.
-**Fix (optional):** Make the mapping exhaustive:
-```js
-function reminderSnippet(offset, task) {
-  const title = task?.title || 'a task';
-  return offset === 'morning_of' ? `Due today: ${title}` : `Past due: ${title}`;
-}
-```
-(equivalent semantics, same shape as the key ternary at line 1419 — consistency).
-
-### IN-02: Key-mapping ternary at the producer duplicates the offset→camelCase mapping logic
-
-**File:** `server.js:1419`
-**Issue:** `offset === 'morning_of' ? 'morningOf' : 'pastDue'` is correct, but the offset→catalogue-suffix mapping now exists independently in two places (the key ternary and, implicitly, `reminderSnippet`'s branch). Adding a third offset later requires touching both, and missing one yields either a raw-key render (caught by the i18n gate) or wrong snippet copy (not caught). Purely a maintainability note — no current defect.
-**Fix (optional):** Hoist a single constant, e.g. `const REMINDER_OFFSETS = { morning_of: 'morningOf', past_due: 'pastDue' };` and derive both `key` and `snippet` from it.
-
-## Verification performed
-
-- Full read of the phase diff across all 7 files.
-- `grep day_before|dayBefore` over tracked source: zero hits in `server.js`, both catalogues; remaining hits confined to planning docs and the intentional legacy-row test fixture (`test/notif-i18n.test.mjs:455`, exactly one reference as required by Plan 01).
-- `test/i18n-pages.test.mjs:452` references `settings.notif.dueReminders` (plural — a different, pre-existing allow-listed undefined key with inline fallback), NOT the updated `settings.notif.dueReminder`; unaffected by the copy change.
-- `node --test test/due-reminders.test.mjs test/notif-i18n.test.mjs test/i18n-core-features.test.mjs` → 47 pass, 0 fail.
-- Cross-checked the catch-up semantics claim in CHANGELOG against `runReminderPass` (server.js:1366-1455): accurate.
+**File:** `server.js:3213` (and `getUserNotifPrefs`, server.js:1179)
+**Issue:** `getUserNotifPrefs` returns `{ ...NOTIF_PREF_DEFAULTS, ...stored }` without whitelist-filtering, so a user with a historical `user_notif_prefs` row containing `push_due` gets that key echoed in the `/api/me/notif-prefs` GET payload until the row is rewritten. This is safe — no server or client code reads the key, the client sanitizes it out before app state (T-34-11), and the plan's PREFS DECISION explicitly accepted this inert-extra-property semantics in exchange for zero migration. It is also self-healing: the next PUT (which never includes the key, since the client whitelist dropped it) rewrites the row without it. Noted only so nobody mistakes the echoed key for a supported pref.
+**Fix (optional, phase 38+):** if the echoed key ever bothers an audit, filter the stored object through `NOTIF_PREF_KEYS` in `getUserNotifPrefs` (mirroring the client `sanitize`), which also makes the GET shape exactly 12 keys always. Not required for correctness.
 
 ---
 
-_Reviewed: 2026-11-04T00:00:00Z_
+_Reviewed: 2026-11-04T16:45:00Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
