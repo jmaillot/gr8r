@@ -135,3 +135,9 @@ None - no external service configuration required.
 ---
 *Phase: 38-daily-digest-reminder-suppression*
 *Completed: 2026-11-04*
+
+## Self-Check: PASSED
+
+- server.js, test/digest.test.mjs, 38-03-SUMMARY.md exist on disk
+- 5 commits measured from plan base 3ec88af: 119f0b3, 8d9da8b, 0f9c487, 6eda97e, bba98be
+- Full verification re-run green: digest suite 11/11, due-reminders 17/17, WR-02 greps 0, gate present at server.js:1500, i18n:scan clean
