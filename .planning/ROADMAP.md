@@ -70,8 +70,12 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 37-01-PLAN.md — delete day_before offset (producer + catalogues) and rewrite/add reminder test pins (REM-01, REM-03, REM-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 37-02-PLAN.md — due_reminder settings copy EN+FR + CHANGELOG catch-up burst note (REM-02, SC-5)
+
 **UI hint**: yes
 
 ### Phase 38: Daily Digest & Reminder Suppression
