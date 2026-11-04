@@ -92,7 +92,11 @@ Plans:
   3. With the digest enabled, individual reminder emails stop but mention, assignment and comment emails still arrive immediately; push and inbox notifications are never suppressed.
   4. No user receives a digest without explicitly enabling it: the `email_digest` pref is undefined-falsy by default, the settings toggle works, and its "digest replaces reminder emails" copy is catalogued in EN+FR.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 38-01-PLAN.md — Digest send path: 09:00 digest loop in runReminderPass, buildDigestMessage/sendDigest, notif.digest.* EN+FR, idempotence/catch-up/empty-digest pins (DIGEST-01, DIGEST-02 send half)
+- [ ] 38-02-PLAN.md — Reminder-email suppression gate in queueNotifEmails, email_digest default-layer inversion + D-13 settings copy, suppression matrix pins (DIGEST-02 suppression half, DIGEST-03)
 **UI hint**: yes
 
 ### Phase 39: Notification Audit (doc-only)
