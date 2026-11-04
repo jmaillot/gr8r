@@ -4,17 +4,17 @@ milestone: v1.8
 milestone_name: Notification Sanity
 current_phase: 36
 current_phase_name: Server Notification i18n
-status: planning
-stopped_at: Phase 36 context gathered
-last_updated: "2026-11-04T09:43:53.993Z"
+status: executing
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-11-04T10:55:09.286Z"
 last_activity: 2026-11-04
-last_activity_desc: v1.8 roadmap written (4 phases, 13/13 requirements mapped)
-state_head: bc5e998d3d9923a0d492259e4745f3bb9a4a76af
+last_activity_desc: Phase 36 execution started
+state_head: e529ebdb7b1d204df4fa31a0826ac450f18afa8e
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 36 — Server Notification i18n (not started)
-Plan: —
-Status: Roadmap created 2026-11-04; next step /gsd-discuss-phase 36 or /gsd-plan-phase 36
-Last activity: 2026-11-04 — v1.8 roadmap written (4 phases, 13/13 requirements mapped)
+Phase: 36 (Server Notification i18n) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-11-04 — Phase 36 execution started
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -115,6 +115,7 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 34]: G-34-4 closed: GET-on-open notif-prefs hydration via pure mergeNotifPrefs (server row canonical, mirrors PUT adoption); wired at all 5 API-mode workspace entries, local mode untouched
 - [Phase 34]: G-34-4 closed: GET-on-open notif-prefs hydration via pure mergeNotifPrefs (server row canonical, mirrors PUT adoption); wired at all 5 API-mode workspace entries, local mode untouched
 - [Phase 35]: 35-03: WR-01 undo gate unconditional (err.changeTeam before any authority PUT on failed doc push); WR-02 pushNow() shares the pushing mutex released in finally
+- [Phase 36]: 36-01: tFor locale-parameterized core (camelCase keys dayBefore/morningOf/pastDue per KEY_SHAPE gate; 15 notif.* server keys EN+FR)
 
 ### Pending Todos
 
@@ -148,9 +149,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T09:43:53.963Z
-Stopped at: Phase 36 context gathered
-Resume file: .planning/phases/36-server-notification-i18n/36-CONTEXT.md
+Last session: 2026-11-04T10:55:09.254Z
+Stopped at: Completed 36-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -167,6 +168,7 @@ Resume file: .planning/phases/36-server-notification-i18n/36-CONTEXT.md
 | Phase 34 P05 | 25m | 2 tasks | 3 files |
 | Phase 34 P05 | 25m | 2 tasks | 3 files |
 | Phase 35 P03 | 6m | 2 tasks | 3 files |
+| Phase 36 P01 | 5m | 2 tasks | 4 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

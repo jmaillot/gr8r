@@ -27,7 +27,7 @@
   text, inbox snippets — is rendered in the recipient's account locale (EN or FR), with English
   fallback; the locale comes from the user record through the existing authority/membership
   queries.
-- [ ] **I18N-02**: The server renders text through an additive locale-parameterized translation
+- [x] **I18N-02**: The server renders text through an additive locale-parameterized translation
   function in the shared i18n module (no per-send global locale mutation); the client and server
   share the same EN/FR catalogue files (no forked server copy, no Dockerfile change).
 - [ ] **I18N-03**: Reminder notification rows store a machine key, not English prose; the client
@@ -84,7 +84,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | I18N-01 | Phase 36 | Pending |
-| I18N-02 | Phase 36 | Pending |
+| I18N-02 | Phase 36 | Complete |
 | I18N-03 | Phase 36 | Pending |
 | I18N-04 | Phase 36 | Pending |
 | REM-01 | Phase 37 | Pending |

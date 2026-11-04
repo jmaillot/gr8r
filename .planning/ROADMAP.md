@@ -36,6 +36,7 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 ## Phase Details
 
 ### Phase 36: Server Notification i18n
+
 **Goal**: Every server-emitted notification text — email subjects and bodies, push text, inbox snippets — is rendered in the recipient's account locale (EN or FR) with English fallback, through a shared translation layer that cannot drift.
 **Depends on**: Nothing (first phase; leaf infrastructure for Phases 37-38)
 **Requirements**: I18N-01, I18N-02, I18N-03, I18N-04
@@ -45,15 +46,17 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   3. New reminder notification rows store machine keys; the inbox renders them localized per the viewing user's locale, and legacy prose rows still render unchanged.
   4. A missing FR key or a drifted English literal in server notification text fails the build (scan or regression test covering the server-used key set).
   5. A locale render that would throw (malformed locale, `Intl` failure) falls back to English instead of killing the notification.
-**Plans**: 4 plans
+
+**Plans**: 1/4 plans executed
 
 Plans:
-- [ ] 36-01-PLAN.md — `tFor()` shared core + `notif.*` catalogue keys (I18N-02)
+- [x] 36-01-PLAN.md — `tFor()` shared core + `notif.*` catalogue keys (I18N-02)
 - [ ] 36-02-PLAN.md — per-recipient locale email rendering (I18N-01, I18N-02)
 - [ ] 36-03-PLAN.md — keyed reminder rows + inbox localization (I18N-03)
 - [ ] 36-04-PLAN.md — scanner server family + parity build gate (I18N-04)
 
 ### Phase 37: Reminder Cadence Rework
+
 **Goal**: Due-date reminders drop to their honest minimum — at most two per task per assignee ("due today" morning-of, "past due" once the following morning) — with the `day_before` offset removed deploy-safely.
 **Depends on**: Phase 36 (reminder notif rows store machine keys rendered through the i18n layer)
 **Requirements**: REM-01, REM-02, REM-03, REM-04
@@ -63,10 +66,12 @@ Plans:
   3. The `due_reminder` preference toggles only the "due today" reminder; the `past_due` preference is unchanged; settings copy is updated in EN+FR.
   4. Deploying the change requires no migration and no dedup-row sweep: existing `reminders_sent` rows stay untouched (orphaned `day_before` keys go inert), and the second boot is byte-identical.
   5. Release notes document the one-time "due today" catch-up burst at first deploy.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 38: Daily Digest & Reminder Suppression
+
 **Goal**: Users can opt into a single daily digest email (09:00 workspace-local) listing tasks due today and overdue, which replaces individual reminder emails when enabled — mentions, assignments and comment emails flow unchanged.
 **Depends on**: Phases 36-37 (localized frames; digest lists the post-REM surviving offsets)
 **Requirements**: DIGEST-01, DIGEST-02, DIGEST-03
@@ -75,10 +80,12 @@ Plans:
   2. A digest send is idempotent across restarts (transactional claim in the dedup ledger) — a server restart never loses the day's digest or double-sends it.
   3. With the digest enabled, individual reminder emails stop but mention, assignment and comment emails still arrive immediately; push and inbox notifications are never suppressed.
   4. No user receives a digest without explicitly enabling it: the `email_digest` pref is undefined-falsy by default, the settings toggle works, and its "digest replaces reminder emails" copy is catalogued in EN+FR.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 39: Notification Audit (doc-only)
+
 **Goal**: The owner receives a complete notification audit — every type × channel × default with trim recommendations — and every threshold/default change it recommends is validated by the owner BEFORE any code implements it. The audit itself changes no behavior.
 **Depends on**: Phases 36-38 (audits the post-rework reality; runs as a doc that gates further edits)
 **Requirements**: AUDIT-01, AUDIT-02
@@ -86,13 +93,14 @@ Plans:
   1. An audit document exists covering every notification type (mention, assign, comment, reminder, digest) × channel (email, push/inbox) × default, with a trim recommendation per row.
   2. The audit records an explicit decision on RFC 8058 `List-Unsubscribe` for the digest email.
   3. No threshold or default change from the audit is coded in this milestone without recorded owner validation; the audit ships as documentation only.
+
 **Plans**: TBD
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 36. Server Notification i18n | 0/? | Not started | - |
+| 36. Server Notification i18n | 1/4 | In Progress|  |
 | 37. Reminder Cadence Rework | 0/? | Not started | - |
 | 38. Daily Digest & Reminder Suppression | 0/? | Not started | - |
 | 39. Notification Audit (doc-only) | 0/? | Not started | - |
