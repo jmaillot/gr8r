@@ -26,7 +26,7 @@ covered_files:
   - test/local-prefs.test.mjs
   - test/migration.test.mjs
   - test/helpers/legacy-fixture.mjs
-covered_digest: "v2:sha256:5b8e59b0ea4474c9188caf4ff2bd4e862d21c3eee3f0aa3835687f82546b5391"
+covered_digest: "v2:sha256:4a803c84fa03054a6d278e5d0095b6c6e2754b62771ff9998b5fa47bb03a7391"
 behavior_unverified: 0
 overrides_applied: 0
 gaps: []
