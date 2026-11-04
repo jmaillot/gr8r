@@ -16,7 +16,7 @@ covered_files:
   - src/locales/en.json
   - src/locales/fr.json
   - test/digest.test.mjs
-covered_digest: "v2:394720c1a08d6a5f029b9afb96f8cc531944126b54ac72ff89dcfb074406dd11" # recomputed at HEAD 9611fec1ee79 (gsd_run unavailable in this session): sha256 over sorted "path:sha256" lines of covered_files
+covered_digest: "v2:sha256:c216f8e8b6323dbdde0b0dfe2d392607b96953b90707a6f77ee88e598bfd928a"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

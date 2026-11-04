@@ -30,7 +30,7 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 
 - [x] **Phase 36: Server Notification i18n** - Every server-emitted notification renders in the recipient's locale through a shared EN/FR catalogue, with a build gate against drift (completed 2026-11-04)
 - [ ] **Phase 37: Reminder Cadence Rework** - Due-date reminders capped at two per task ("due today" + one "past due"); `day_before` removed deploy-safely
-- [ ] **Phase 38: Daily Digest & Reminder Suppression** - Opt-in 09:00 digest email replaces individual reminder emails when enabled; silent when nothing is due
+- [x] **Phase 38: Daily Digest & Reminder Suppression** - Opt-in 09:00 digest email replaces individual reminder emails when enabled; silent when nothing is due (completed 2026-11-04)
 - [ ] **Phase 39: Notification Audit (doc-only)** - Full notification type × channel × default audit with trim recommendations, owner-validated before any coding
 
 ## Phase Details
@@ -92,7 +92,7 @@ Plans:
   3. With the digest enabled, individual reminder emails stop but mention, assignment and comment emails still arrive immediately; push and inbox notifications are never suppressed.
   4. No user receives a digest without explicitly enabling it: the `email_digest` pref is undefined-falsy by default, the settings toggle works, and its "digest replaces reminder emails" copy is catalogued in EN+FR.
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 - [x] 38-03-PLAN.md
@@ -123,7 +123,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 36. Server Notification i18n | 4/4 | Complete    | 2026-11-04 |
 | 37. Reminder Cadence Rework | 3/3 | In Progress|  |
-| 38. Daily Digest & Reminder Suppression | 3/3 | In Progress|  |
+| 38. Daily Digest & Reminder Suppression | 3/3 | Complete    | 2026-11-04 |
 | 39. Notification Audit (doc-only) | 0/? | Not started | - |
 
 ## Backlog
