@@ -1,58 +1,41 @@
 ---
 phase: 38-daily-digest-reminder-suppression
-verified: 2026-11-04T12:00:00Z
-status: gaps_found
-score: 6/7 must-haves verified
+verified: 2026-11-04T20:55:00Z
+status: passed
+score: 7/7 must-haves verified
 covered_files:
   - .planning/phases/38-daily-digest-reminder-suppression/38-01-PLAN.md
   - .planning/phases/38-daily-digest-reminder-suppression/38-02-PLAN.md
+  - .planning/phases/38-daily-digest-reminder-suppression/38-03-PLAN.md
   - .planning/phases/38-daily-digest-reminder-suppression/38-01-SUMMARY.md
   - .planning/phases/38-daily-digest-reminder-suppression/38-02-SUMMARY.md
+  - .planning/phases/38-daily-digest-reminder-suppression/38-03-SUMMARY.md
   - server.js
   - mailer.js
   - src/core/notifPrefs.js
   - src/locales/en.json
   - src/locales/fr.json
   - test/digest.test.mjs
-covered_digest: "v2:39a3b49db0fa60dc2be0fadcfbfd10c87c44a1469f820249227fb8972dbfe4cd" # computed manually (gsd_run unavailable in this session): sha256 over sorted "path:sha256" lines of covered_files
+covered_digest: "v2:394720c1a08d6a5f029b9afb96f8cc531944126b54ac72ff89dcfb074406dd11" # recomputed at HEAD 9611fec1ee79 (gsd_run unavailable in this session): sha256 over sorted "path:sha256" lines of covered_files
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "An opted-in member receives ONE localized email listing THEIR due-today and overdue tasks (DIGEST-01: 'lists the recipient's tasks'; 38-01 must-have: filter copies the reminder loop's visibility pipeline — recipient-scoped)"
-    status: failed
-    reason: |
-      CR-01 (38-REVIEW.md) independently confirmed at server.js:1495-1511. The
-      digest loop iterates the workspace-wide `tasks` array and filters each
-      task by the ASSIGNEE's membership (projectScope(assigneeMembership),
-      memberCanReadProject(project, ws.id, t.assignee), and remindable()'s
-      canSeeProject(project, task.assignee)). There is NO filter tying the
-      task to the recipient (no `t.assignee === r.member_id` / user_id check)
-      and NO recipient-visibility check. Consequences:
-        1. DIGEST-01 content violation — the digest lists every workspace
-           member's due/overdue tasks, not "the recipient's tasks".
-        2. Confidentiality leak — a recipient receives titles + deep links
-           for tasks in private/scoped projects they cannot read, because the
-           scope checks are evaluated against the assignee, never the
-           recipient.
-      The test suite cannot catch this: every fixture is single-member
-      (WR-01), and the planned recipient-scope test was never written.
-    artifacts:
-      - path: server.js
-        issue: "Digest task filter (1495-1511) keys scope on t.assignee's membership; recipient r is never intersected with the task."
-      - path: test/digest.test.mjs
-        issue: "All fixtures single-member (WR-01) — no multi-member visibility/scope pin exists."
-    missing:
-      - "Filter digest tasks to the recipient: t.assignee maps to the recipient's member_id (or run the recipient's user_id → membership row and apply projectScope/inScopeProject/memberCanReadProject/canSeeProject against the RECIPIENT)."
-      - "Add a multi-member test pin: scoped recipient must NOT receive out-of-scope tasks; non-assignee tasks must not appear in the digest."
-      - "Close WR-02 vacuous assertions (test/digest.test.mjs:246,248,279,351) while touching the suite."
+re_verification:
+  previous_status: gaps_found
+  previous_score: 6/7
+  gaps_closed:
+    - "CR-01 closed: digest task filter gated on t.assignee === r.member_id (server.js:1500, first filter); SCOPE-04 checks now evaluate against the RECIPIENT's membership — confirmed at current HEAD and pinned by the multi-member test"
+    - "WR-01 closed: multi-member recipient-scope pin added (addPeerMember helper, test/digest.test.mjs:189, 288+) — M2 payload excludes K-A1/K-A2, includes K-B1; M1 payload includes K-A1/K-A2, excludes K-B1; 11/11 suite green at HEAD"
+    - "WR-02 closed: zero `|| true` / `? 0 : 1` tautologies remain in test/digest.test.mjs (grep exit 1 at HEAD); the four sites carry falsifiable assertions (e.g. K-F1 exclusion pin at line 353)"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 38: Daily Digest & Reminder Suppression — Verification Report
 
 **Phase Goal:** Users can opt into a single daily digest email (09:00 workspace-local) listing tasks due today and overdue, which replaces individual reminder emails when enabled — mentions, assignments and comment emails flow unchanged.
-**Verified:** 2026-11-04T12:00:00Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-11-04T20:55:00Z
+**Status:** passed
+**Re-verification:** Yes — stale-digest regeneration at current HEAD 9611fec1ee79; full goal-backward re-run, all previously-closed gaps (CR-01, WR-01, WR-02) confirmed still closed.
 
 ## Goal Achievement
 
@@ -60,72 +43,84 @@ gaps:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Opted-in member receives ONE localized digest at 09:00 workspace-local with due-today + overdue tasks, deep-linked | ⚠️ → ✗ FAILED (content, not delivery) | Delivery path works (test pass #1), but the content is NOT "the recipient's tasks" — see Gap CR-01 below |
-| 2 | Empty digest → no email, no ledger claim (D-12) | ✓ VERIFIED | server.js:1513-1514; test "D-12" passes |
-| 3 | Idempotent across restarts — one `ws:{userId}:digest:{localDate}` claim, post-commit send | ✓ VERIFIED | server.js:1515-1533 transaction insert-or-ignore; test "SC-2" passes |
-| 4 | Catch-up after missed 09:00 delivers late with content at send instant | ✓ VERIFIED | `hour >= 9` gate (server.js:1492); test "D-01/D-02" passes |
-| 5 | Digest user loses reminder emails; notif rows + revision intact; push/inbox never suppressed (DIGEST-02) | ✓ VERIFIED | server.js:1247 suppression branch after `=== false` gate; rows appended before fan-out; tests "DIGEST-02", "D-11", "D-08" pass |
-| 6 | Mention/assignment/comment emails unchanged for digest users | ✓ VERIFIED | Suppression branch keys on `prefKey === 'email_reminder'` only; test "SC-3" passes |
-| 7 | `email_digest` undefined-falsy default; settings toggle + "digest replaces reminder emails" copy EN+FR (DIGEST-03) | ✓ VERIFIED | `email_digest` in whitelist only (server.js:1128, src/core/notifPrefs.js:36 with "NOT defaulted" comment); copy at locales:1245-1246 EN+FR; test "DIGEST-03" passes |
+| 1 | Opted-in member receives ONE localized digest at 09:00 workspace-local listing THEIR due-today + overdue tasks, deep-linked (DIGEST-01) | ✓ VERIFIED | server.js:1500 `if (t.assignee !== r.member_id) continue;` is the FIRST filter in the digest task loop (exactly one match at HEAD); SCOPE-04 checks run against the recipient (comment cites D-06); multi-member pin proves M2 sees only K-B1 (no K-A1/K-A2) and M1 sees only K-A1/K-A2 (no K-B1) — test passes at HEAD in `node --test test/digest.test.mjs` (11/11) |
+| 2 | Empty digest → no email, no ledger claim (D-12) | ✓ VERIFIED | server.js:1519-1520 empty-list gate before transaction; D-12 pin green at HEAD |
+| 3 | Idempotent across restarts — one `ws:{userId}:digest:{localDate}` claim, post-commit send | ✓ VERIFIED | server.js insert-or-ignore transaction, post-commit `MAILER.sendDigest`; SC-2 pin green at HEAD |
+| 4 | Catch-up after missed 09:00 delivers late with content at send instant | ✓ VERIFIED | `hour >= 9` gate; D-01/D-02 pins green at HEAD |
+| 5 | Digest user loses reminder emails; notif rows + revision intact; push/inbox never suppressed (DIGEST-02) | ✓ VERIFIED | Suppression branch keys on `email_reminder` only (unchanged at HEAD); D-11/D-08 pins green — regression check: due-reminders suite 17/17 at HEAD |
+| 6 | Mention/assignment/comment emails unchanged for digest users | ✓ VERIFIED | Suppression branch untouched by 38-03 (diff confined to digest block + test file); SC-3 pin green at HEAD |
+| 7 | `email_digest` undefined-falsy default; settings toggle + copy EN+FR (DIGEST-03) | ✓ VERIFIED | Whitelist-only key, notifPrefs default comment, locales EN+FR — untouched by 38-03; DIGEST-03 pin green; full suite 942 pass / 0 fail / 3 skipped at HEAD |
 
-**Score:** 6/7 truths verified (0 present-behavior-unverified)
-
-Note: SC-1 ("listing their due-today and overdue tasks") is the failing truth — delivery mechanics verified, content correctness failed. Truth #1 above records it as FAILED; the codebase-side delivery invariant is proven by the integration suite.
+**Score:** 7/7 truths verified (0 present-behavior-unverified)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | -------- | -------- | ------ | ------- |
-| `test/digest.test.mjs` | Integration suite | ✓ VERIFIED (partial coverage) | 10/10 tests pass; but single-member fixtures structurally miss the scope bug (WR-01) and 4 vacuous assertions (WR-02) |
-| `server.js` digest loop | runReminderPass digest block | ✓ VERIFIED (with gap) | present, wired, claimed transactionally — but recipient-scope filter wrong (CR-01) |
-| `mailer.js` buildDigestMessage/sendDigest | Sibling methods | ✓ VERIFIED | mailer.js:525, 848-852 |
-| `src/locales/*.json` notif.digest.* | 4 keys EN+FR | ✓ VERIFIED | en.json/fr.json:1687-1690 |
+| `server.js` digest loop | Recipient-scoped filter | ✓ VERIFIED | Gate at :1500, one match exactly at HEAD; stale "sees exactly what the assignee sees" comment absent (grep 0 matches); reminder loop byte-identical |
+| `test/digest.test.mjs` | 11 pins incl. multi-member leak detector | ✓ VERIFIED | addPeerMember helper (:189); CR-01 pin asserts falsifiable M2/M1 payload conditions; zero tautologies (`grep -nE '\|\| true\|\? 0 : 1'` → exit 1 at HEAD) |
+| `mailer.js` buildDigestMessage/sendDigest | Sibling methods | ✓ VERIFIED | Unchanged from initial verification |
+| `src/locales/*.json` notif.digest.* | 4 keys EN+FR | ✓ VERIFIED | Unchanged; i18n scan at HEAD: 0 literals, 0 pending, 0 unresolved |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 | ---- | --- | --- | ------ | ------- |
-| Digest loop | reminders_sent ledger | transaction insert-or-ignore `ws:{userId}:digest:{localDate}` | ✓ WIRED | server.js:1515-1521 |
-| Digest loop | MAILER.sendDigest | post-commit fire-and-forget | ✓ WIRED | server.js:1528-1535 |
-| buildDigestMessage | tFor notif.digest.* + deep link | literal keys; `${APP_URL}/w/{slug}/task/{key}` | ✓ WIRED | mailer.js:525+, locales present |
-| queueNotifEmails | suppression gate | `prefKey==='email_reminder' && stored email_digest===true` | ✓ WIRED | server.js:1247, distinct branch after `=== false` check |
-| Digest task filter | recipient visibility pipeline | assignee-scope checks "copied verbatim" | ✗ MISWIRED | Filter evaluates the ASSIGNEE's scope, never the recipient's — the very link D-06 promised ("recipient sees exactly what the assignee sees" is wrong; the recipient should see only their own visible tasks) |
+| Digest task filter | recipient membership row | `t.assignee !== r.member_id` gate from the memberships⋈users recipient loop | ✓ WIRED | server.js:1500 at HEAD, exactly one occurrence, inside the digest task loop |
+| Digest loop | reminders_sent ledger | transaction insert-or-ignore `ws:{userId}:digest:{localDate}` | ✓ WIRED | server.js (unchanged from initial verification) |
+| Digest loop | MAILER.sendDigest | post-commit fire-and-forget | ✓ WIRED | Unchanged |
+| buildDigestMessage | tFor notif.digest.* + deep link | literal keys; `${APP_URL}/w/{slug}/task/{key}` | ✓ WIRED | Unchanged; multi-member pin asserts real deep links in payloads |
+| queueNotifEmails | suppression gate | `prefKey==='email_reminder' && stored email_digest===true` | ✓ WIRED | Unchanged by 38-03 |
+| Multi-member pin | SMTP capture | out-of-scope titles absent from M2's decoded payload | ✓ WIRED | `digestFor(msgs, peer.email, ws.slug)` — asserts `!includes('K-A1')`, `!includes('K-A2')`, `includes('K-B1')` |
+
+### Data-Flow Trace (Level 4)
+
+| Artifact | Data Variable | Source | Produces Real Data | Status |
+| -------- | ------------- | ------ | ------------------ | ------ |
+| Digest payload | tasks due today / overdue | server.js digest loop queries workspace tasks filtered by recipient assignee + due date | Yes (SMTP-captured payloads assert real task keys) | ✓ FLOWING |
+| Settings toggle copy | notif.digest.* | src/locales/en.json + fr.json via tFor | Yes | ✓ FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
-| Digest suite (10 pins) | `node --test test/digest.test.mjs` | 10 pass, 0 fail | ✓ PASS |
+| Digest suite (11 pins incl. CR-01 multi-member pin) | `node --test test/digest.test.mjs` | 11 pass, 0 fail (at HEAD) | ✓ PASS |
+| Phase 37 reminder regression | `node --test test/due-reminders.test.mjs` | 17 pass, 0 fail (at HEAD) | ✓ PASS |
+| Full suite | `npm test` | 942 pass, 0 fail, 3 skipped (at HEAD) | ✓ PASS |
+| WR-02 tautology scan | `grep -nE '\|\| true\|\? 0 : 1' test/digest.test.mjs` | no matches (exit 1) | ✓ PASS |
+| Gate presence + uniqueness | `grep -n "t.assignee !== r.member_id" server.js` | exactly one match at :1500 | ✓ PASS |
+| Stale comment removed | `grep -n "sees exactly what the assignee sees" server.js` | no matches (exit 1) | ✓ PASS |
+| i18n gate | `npm run i18n:scan` | 0 literals, 0 pending, 0 unresolved (at HEAD) | ✓ PASS |
+
+### Probe Execution
+
+No phase-declared or conventional probes (`scripts/*/tests/probe-*.sh`) found for this phase; the integration suites above serve as the behavioral evidence.
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 | ----------- | ---------- | ----------- | ------ | -------- |
-| DIGEST-01 | 38-01 | Opt-in 09:00 digest lists THE RECIPIENT'S due-today + overdue tasks, deep-linked, localized; silent when nothing due | ✗ BLOCKED | Delivery + i18n + deep links verified; content filter does not scope to the recipient (CR-01) — a digest of everyone's tasks violates the "recipient's tasks" clause and leaks unseen private/scoped tasks |
-| DIGEST-02 | 38-01, 38-02 | Reads tasks directly; transactional claim (idempotent); type-scoped suppression; push/inbox untouched | ✓ SATISFIED | Ledger claim, catch-up window, suppression branch; rows/revision intact; mention/assign/comment verified |
-| DIGEST-03 | 38-02 | email_digest removed from default layer (opt-in); settings toggle + copy EN+FR | ✓ SATISFIED | Whitelist-only key, notifPrefs comment, locales:1245-1246 |
+| DIGEST-01 | 38-01, 38-03 | Opt-in 09:00 digest lists THE RECIPIENT'S due-today + overdue tasks, deep-linked, localized; silent when nothing due | ✓ SATISFIED | CR-01 closed and confirmed at HEAD: assignee===recipient gate + recipient-evaluated SCOPE-04 checks; multi-member pin proves no cross-member leakage and no out-of-scope titles/deep links |
+| DIGEST-02 | 38-01, 38-02 | Reads tasks directly; transactional claim (idempotent); type-scoped suppression; push/inbox untouched | ✓ SATISFIED | Unchanged from initial verification; regression-confirmed at HEAD (due-reminders 17/17) |
+| DIGEST-03 | 38-02 | email_digest removed from default layer (opt-in); settings toggle + copy EN+FR | ✓ SATISFIED | Unchanged from initial verification; i18n scan green at HEAD |
 
-No orphaned requirements — REQUIREMENTS.md maps exactly DIGEST-01/02/03 to Phase 38 and every plan claims them.
+No orphaned requirements — REQUIREMENTS.md maps exactly DIGEST-01/02/03 to Phase 38; 38-03's frontmatter claims DIGEST-01 (the previously BLOCKED one); DIGEST-02/03 remain claimed by 38-01/38-02.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 | ---- | ---- | ------- | -------- | ------ |
-| server.js | 1495-1511 | Scope checks keyed on assignee, never recipient; no assignee===recipient filter | 🛑 Blocker | Digest content wrong + confidentiality leak (CR-01) |
-| test/digest.test.mjs | (all) | Single-member fixtures — suite cannot observe cross-member leakage | ⚠️ Warning | WR-01; the blocker is invisible to CI |
-| test/digest.test.mjs | 246,248,279,351 | Vacuous `\|\| true` / tautological assertions | ⚠️ Warning | WR-02; pins assert nothing |
+| (none) | — | — | — | All previous findings resolved at HEAD: server.js:1500 gate present; test/digest.test.mjs has zero tautologies; multi-member fixtures cover the cross-member surface |
 
 ### Human Verification Required
 
-None beyond the gap — no UI/visual/real-time items outstanding. (Settings toggle rendering is covered by the DIGEST-03 test pin.)
+None. All delivery, content-scope, suppression, idempotence, and opt-in mechanics are exercised by the integration suite; no UI/visual/real-time items outstanding (settings toggle covered by the DIGEST-03 pin).
 
 ### Gaps Summary
 
-One blocking gap, confirmed independently and matching 38-REVIEW.md CR-01: the digest loop reuses the reminder loop's SCOPE-04 checks but keys them on each task's ASSIGNEE, never on the digest recipient. Result: an opted-in member's digest lists every member's due-today and overdue tasks, including tasks in private/scoped projects the recipient cannot read — violating DIGEST-01's "recipient's tasks" clause and D-06's "one visibility pipeline" intent. All delivery, idempotence, suppression, and opt-in mechanics are verified working (10/10 integration pins pass). The fix is scoped to the digest task filter in server.js (filter by recipient membership / assignee===recipient) plus a multi-member test pin (also closes WR-01/WR-02 while in the file).
-
-This looks like a genuine implementation error, not an intentional deviation — no override suggested. Structured gaps in VERIFICATION.md frontmatter for `/gsd-plan-phase --gaps`.
+None. The single blocking gap CR-01 remains closed at current HEAD (server.js:1500 — `t.assignee !== r.member_id` as the first filter in the digest task loop, with the SCOPE-04 comment corrected to state that the checks now evaluate against the recipient, per D-06's one-visibility-pipeline rule) and observable in CI (the multi-member pin exercises the transition: M2's payload excludes K-A1/K-A2 and includes K-B1; M1's includes both own tasks and excludes K-B1 — a real falsifiable behavioral pin, not symbol presence). WR-01 and WR-02 confirmed closed at HEAD; the 10 pre-existing pins were not restructured and remain green. Reminder behavior (Phase 37 surface) regression-checked green; full 945-test suite green. Phase goal achieved.
 
 ---
 
-_Verified: 2026-11-04T12:00:00Z_
+_Verified: 2026-11-04T20:55:00Z_
 _Verifier: the agent (gsd-verifier)_
