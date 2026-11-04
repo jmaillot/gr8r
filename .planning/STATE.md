@@ -5,16 +5,16 @@ milestone_name: Notification Sanity
 current_phase: 37
 current_phase_name: Reminder Cadence Rework
 status: verifying
-stopped_at: Completed 37-02-PLAN.md
-last_updated: "2026-11-04T14:18:21.386Z"
+stopped_at: Completed 37-03-PLAN.md
+last_updated: "2026-11-04T15:39:30.026Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 37 execution started
-state_head: d943b052949fcf9ce8b1510dd7e453a7bd03d141
+state_head: e0aa1a997071ed03fa057dbff355cbc52bb4837b
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 7
+  completed_plans: 7
   percent: 25
 ---
 
@@ -129,6 +129,9 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 37]: 37-01: legacy dayBefore-keyed inbox rows degrade to their stored EN snippet in BOTH locales (catalogue entry deleted) — the honest REM-04 inert-rows pin, not the pre-deletion FR sentence
 - [Phase 37]: 37-01: two-offset cadence shipped — morning_of on due date + past_due next morning; dedup key keeps :due component (D-02), no migration/sweep (REM-04)
 - [Phase 37]: Plural push_due pair (dueReminders/dueDesc) left untouched despite conflicting acceptance-criterion grep — plan prohibition (Pitfall 3) takes precedence
+- [Phase 37]: 37-03: push_due removed end-to-end (G-37-2) — server+client whitelists 16/12 keys, retired-key PUT rejected 400 unknownPrefKey, historical rows inert via spread-then-sanitize, no migration
+- [Phase 37]: 37-03: dist/ is gitignored — rebuilt + grep-verified locally, not committed
+- [Phase 37]: 37-03: push_due removed end-to-end (G-37-2) - server+client whitelists 16/12 keys, retired-key PUT rejected 400 unknownPrefKey, historical rows inert, no migration
 
 ### Pending Todos
 
@@ -162,8 +165,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T14:18:21.340Z
-Stopped at: Completed 37-02-PLAN.md
+Last session: 2026-11-04T15:39:29.976Z
+Stopped at: Completed 37-03-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -188,6 +191,7 @@ Resume file: None
 | Phase 36 P04 | ~14m | 2 tasks | 2 files |
 | Phase 37 P01 | ~25 min | 2 tasks | 6 files |
 | Phase 37 P02 | 12 min | 2 tasks | 3 files |
+| Phase 37 P03 | 11 min | 3 tasks | 12 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
