@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.8
 milestone_name: Notification Sanity
 current_phase: 38
-current_phase_name: daily-digest-reminder-suppression
+current_phase_name: Daily Digest & Reminder Suppression
 status: executing
-stopped_at: Completed 38-02-PLAN.md
-last_updated: "2026-11-04T19:37:51.135Z"
+stopped_at: Completed 38-03-PLAN.md
+last_updated: "2026-11-04T20:06:01.854Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 38 execution started
-state_head: 0c568b7a02fde8fc00d830966a64b6996a13fc8c
+state_head: 6eda97e12a4a725c18056d0f6def68d0834a82e4
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 25
 ---
 
@@ -28,8 +28,8 @@ progress:
 
 ## Current Position
 
-Phase: 38 (daily-digest-reminder-suppression) — READY TO EXECUTE
-Plan: 2 of 2
+Phase: 38 (Daily Digest & Reminder Suppression) — EXECUTING
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-11-04 — Phase 38 execution started
 
@@ -137,6 +137,8 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 38]: 38-02: suppression gate reads STORED email_digest via getStoredNotifPrefs — merged default true would suppress digest-OFF members pre-inversion (D-08)
 - [Phase 38]: 38-02: Pitfall-1 checkpoint resolved by documented default — D-14 literal ruling accepted (stored true = opted in), release-note announcement
 - [Phase 38]: 38-02: client NOTIF_PREF_KEYS lists email_digest explicitly — defaults-spread lost it at inversion; whitelist 16 keys both sides
+- [Phase 38]: 38-03: CR-01 fix is a one-line recipient gate (t.assignee === r.member_id) + corrected SCOPE-04 comment; scope checks now evaluate against the recipient via D-06, no second pipeline
+- [Phase 38]: 38-03: Task-3 deviation — plan's proposed resB.digests===0 falsified by correct overdue catch-up (ws digests again on the 01-16 pass); pinned to ===1 with wsB-contributes-zero proven by its own ledger/no-email assertions
 
 ### Pending Todos
 
@@ -170,8 +172,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T19:14:50.003Z
-Stopped at: Completed 38-02-PLAN.md
+Last session: 2026-11-04T20:05:52.632Z
+Stopped at: Completed 38-03-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -199,6 +201,7 @@ Resume file: None
 | Phase 37 P03 | 11 min | 3 tasks | 12 files |
 | Phase 38 P01 | 11 min | 2 tasks | 6 files |
 | Phase 38 P02 | 35m | 3 tasks | 10 files |
+| Phase 38 P03 | 4min | 3 tasks | 2 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
