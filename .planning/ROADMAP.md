@@ -53,7 +53,7 @@ Plans:
 - [x] 36-01-PLAN.md — `tFor()` shared core + `notif.*` catalogue keys (I18N-02)
 - [x] 36-02-PLAN.md — per-recipient locale email rendering (I18N-01, I18N-02)
 - [x] 36-03-PLAN.md — keyed reminder rows + inbox localization (I18N-03)
-- [ ] 36-04-PLAN.md — scanner server family + parity build gate (I18N-04)
+- [x] 36-04-PLAN.md — scanner server family + parity build gate (I18N-04)
 
 ### Phase 37: Reminder Cadence Rework
 

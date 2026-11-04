@@ -33,7 +33,7 @@
 - [x] **I18N-03**: Reminder notification rows store a machine key, not English prose; the client
   localizes keyed rows at render time and still renders legacy prose rows (additive, no
   migration).
-- [ ] **I18N-04**: The i18n build gate (scan or regression test) covers the server-used key set,
+- [x] **I18N-04**: The i18n build gate (scan or regression test) covers the server-used key set,
   so a missing FR key or a drifted English literal in server notification text fails the build;
   every locale render is guarded against `Intl` failures with English fallback.
 
@@ -86,7 +86,7 @@
 | I18N-01 | Phase 36 | Complete |
 | I18N-02 | Phase 36 | Complete |
 | I18N-03 | Phase 36 | Complete |
-| I18N-04 | Phase 36 | Pending |
+| I18N-04 | Phase 36 | Complete |
 | REM-01 | Phase 37 | Pending |
 | REM-02 | Phase 37 | Pending |
 | REM-03 | Phase 37 | Pending |
