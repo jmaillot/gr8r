@@ -101,8 +101,7 @@
 .nrow:hover {
   background: var(--surface-2);
 }
-/* Inbox list works as a secondary sidebar: no visible scrollbar (it narrowed the rows), and the
-   tab labels start on the gutter with tighter spacing so all five categories fit without clipping. */
+/* Inbox list works as a secondary sidebar: no visible scrollbar (it narrowed the rows). */
 .inbox-list {
   overflow-y: auto;
   flex: 1;
@@ -111,10 +110,16 @@
 .inbox-list::-webkit-scrollbar {
   display: none;
 }
+/* The seven category tabs carry full sentence-like labels: French needs 703px of content inside
+   this 419px column, English 602px. The shared `.tabs` scrolls horizontally with its scrollbar
+   hidden, so the overflow read as truncated labels with no way to reach the tail. Wrap instead —
+   every category stays visible and clickable, in both locales, at any column width. */
 .inbox-tabs {
   margin-top: 8px;
   padding: 0 var(--gutter);
-  gap: 16px;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  overflow-x: visible;
 }
 .inbox-tabs .tab {
   padding: 0;
@@ -122,4 +127,5 @@
 .inbox-tabs .tab.on::after {
   left: 0;
   right: 0;
+  bottom: 0;
 }

@@ -665,3 +665,61 @@ test('the 21-route French sweep: every route proves a French marker, then zero E
     await context.close();
   }
 });
+
+/* The inbox category tab bar carries seven full sentence-like labels — French
+   "Rappel le jour d'échéance" / "Alertes de retard" / "Mises à jour" being the
+   worst case. The shared .tabs base scrolls horizontally with its scrollbar
+   hidden, so when the row overflowed the inbox column (703 px of content in a
+   419 px sidebar) the tail categories were unreachable, not merely tight: the
+   UAT reported them as truncated. The fix wraps the row inside .inbox-tabs.
+   This pins the outcome for BOTH viewports: every category is fully inside the
+   bar's own box, and the bar itself does not scroll horizontally. */
+for (const vp of VIEWPORTS) {
+  test(`the inbox category tabs stay fully visible in French at ${vp.width}×${vp.height}`, async ({ browser }) => {
+    /* The sweep account boots French from creation (locale 'fr'), so this
+       measurement never depends on the locale-switch test having run first. */
+    const { context, page } = await signIn(browser, sweep.account, vp);
+    try {
+      await page.goto(`/w/${sweep.account.slug}/inbox`);
+      await frenchShell(page);
+
+      const bar = page.getByRole('tablist');
+      await expect(bar).toBeVisible();
+
+      /* The seven categories, read from the catalogue — never transcribed. */
+      const labels = [
+        fmt('page.activity.filterAll'),
+        fmt('settings.notif.mentions'),
+        fmt('settings.notif.assignments'),
+        fmt('settings.notif.comments'),
+        fmt('settings.notif.dueReminder'),
+        fmt('settings.notif.pastDue'),
+        fmt('page.inbox.cat.updates'),
+      ];
+      for (const label of labels) await expect(page.getByRole('tab', { name: label, exact: true })).toBeVisible();
+
+      const measured = await bar.evaluate(el => {
+        const box = el.getBoundingClientRect();
+        return {
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          overflow: [...el.querySelectorAll('[role="tab"]')]
+            .filter(t => {
+              const r = t.getBoundingClientRect();
+              return r.left < box.left - 0.5 || r.right > box.right + 0.5 || r.width === 0;
+            })
+            .map(t => t.textContent.trim()),
+        };
+      });
+      expect(measured.overflow, `inbox tabs clipped at ${vp.width}px: ${measured.overflow.join(', ')}`).toEqual([]);
+      expect(measured.scrollWidth, `the inbox tab bar scrolls horizontally at ${vp.width}px`).toBeLessThanOrEqual(measured.clientWidth);
+
+      /* The tab is still operable after the layout change: selecting the
+         second-row due-reminder category filters the list. */
+      await page.getByRole('tab', { name: fmt('settings.notif.dueReminder'), exact: true }).click();
+      await expect(page.getByRole('tab', { name: fmt('settings.notif.dueReminder'), exact: true })).toHaveAttribute('aria-selected', 'true');
+    } finally {
+      await context.close();
+    }
+  });
+}

@@ -32,7 +32,7 @@ export function pageInbox() {
         <div style="padding:18px var(--gutter) 0" class="row"><h1 style="font-size:var(--fs-xl);margin:0;font-weight:600;letter-spacing:-.015em">${t('nav.route.inbox')}</h1><span class="sp"></span>
           <label class="row" style="font-size:12px;color:var(--text-2);gap:6px;cursor:pointer"><input type="checkbox" class="toggle" data-a="toggleUnreadOnly" ${S.ui.inboxUnread ? 'checked' : ''}>${t('page.inbox.unread')}</label>
           <button class="ibtn ibtn-sm" data-a="markAllRead" data-tip="${t('page.inbox.markAllRead')}" aria-label="${t('page.inbox.markAllRead')}">${ic('check-check', 15)}</button></div>
-        <div class="tabs inbox-tabs" role="tablist">${cats.map(([k, n]) => `<button role="tab" class="tab ${cat === k ? 'on' : ''}" data-a="set" data-k="inboxCat" data-v="${k}">${n}${count(k) ? `<span class="cnt">${count(k)}</span>` : ''}</button>`).join('')}</div>
+        <div class="tabs inbox-tabs" role="tablist">${cats.map(([k, n]) => `<button role="tab" aria-selected="${cat === k}" class="tab ${cat === k ? 'on' : ''}" data-a="set" data-k="inboxCat" data-v="${k}">${n}${count(k) ? `<span class="cnt">${count(k)}</span>` : ''}</button>`).join('')}</div>
         <div class="inbox-list" data-keep="inbox-list">
           ${ns.length ? ns.map(n => inboxItem(n, sel && sel.id === n.id)).join('') : empty('inbox', t('page.states.caughtUp'), S.ui.inboxUnread ? t('page.inbox.emptyUnread') : t('page.inbox.emptyBody'), '', 'sm')}
         </div>
