@@ -202,6 +202,26 @@ test('UNDO-01 empty roster: a memberless team undo restores the definition and w
   }
 });
 
+/* Bound the onAction slice to the closure itself (WR-03 review fix): a naive
+   slice-to-end-of-file would count setMemberTeams call sites anywhere after
+   the undo closure, over-scoping the "exactly one" assertions. Balanced-brace
+   scan from the closure's opening brace; no braces appear inside string
+   literals or comments in this body, so naive counting is sound here. */
+function onActionSlice(src) {
+  const start = src.indexOf('onAction: async () => {');
+  assert.ok(start > -1, 'the undo onAction closure exists');
+  const open = src.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  return src.slice(start);
+}
+
 /* D-06 local-mode pin (source-level, mirroring the i18n-actions-modules.test.mjs
    file-scan style): the undo onAction's restore(snap) sits OUTSIDE any
    api.enabled conditional — local mode runs the plain restore and stops — and
@@ -211,10 +231,7 @@ test('UNDO-01 empty roster: a memberless team undo restores the definition and w
 test('D-06: the local-mode undo stays a plain restore(snap) with zero API calls', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../src/actions/teams.js', import.meta.url), 'utf8');
-
-  const actionStart = src.indexOf('onAction: async () => {');
-  assert.ok(actionStart > -1, 'the undo onAction closure exists');
-  const body = src.slice(actionStart);
+  const body = onActionSlice(src);
 
   assert.match(body, /^onAction: async \(\) => \{\s*restore\(snap\);/, 'the onAction body opens with an unguarded restore(snap)');
   const idxRestore = body.indexOf('restore(snap);');
@@ -242,10 +259,7 @@ test('D-06: the local-mode undo stays a plain restore(snap) with zero API calls'
 test('WR-01: the undo onAction stops before any membership PUT when the doc push failed', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../src/actions/teams.js', import.meta.url), 'utf8');
-
-  const actionStart = src.indexOf('onAction: async () => {');
-  assert.ok(actionStart > -1, 'the undo onAction closure exists');
-  const body = src.slice(actionStart);
+  const body = onActionSlice(src);
 
   const idxPush = body.indexOf('const pushed = await pushNow();');
   /* Accept either gate form: `!pushed.ok` (defense-in-depth, WR-02 fix) or
