@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.8
 milestone_name: Notification Sanity
-current_phase: 36
-current_phase_name: Server Notification i18n
-status: executing
-stopped_at: Completed-36-04
-last_updated: "2026-11-04T11:58:00.000Z"
+current_phase: 37
+current_phase_name: Reminder Cadence Rework
+status: planning
+stopped_at: Phase 36 complete, ready to plan Phase 37
+last_updated: "2026-11-04T12:17:33.801Z"
 last_activity: 2026-11-04
-last_activity_desc: Phase 36 plan 04 executed (server gate + parity)
-state_head: 14c24a9
+last_activity_desc: Phase 36 complete, transitioned to Phase 37
+state_head: 5c9b1999c47f0c1862b0f579d637ae428a7a542e
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 4
-  percent: 0
+  percent: 25
 ---
 
 # STATE.md
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 36 (Server Notification i18n) — EXECUTING
-Plan: 4 of 4 — COMPLETE
-Status: Phase 36 plans complete; ready for verification
-Last activity: 2026-11-04 — 36-04 executed (server notif.* gate + EN↔FR parity)
+Phase: 37 — Reminder Cadence Rework
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-04 — Phase 36 complete, transitioned to Phase 37
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -160,7 +160,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-04T11:58:00.000Z
-Stopped at: Completed-36-04
+Stopped at: Phase 36 complete, ready to plan Phase 37
 Resume file: None
 
 ## Performance Metrics

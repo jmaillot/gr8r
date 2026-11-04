@@ -28,7 +28,7 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 
 ### v1.8 Notification Sanity (Phases 36-39)
 
-- [ ] **Phase 36: Server Notification i18n** - Every server-emitted notification renders in the recipient's locale through a shared EN/FR catalogue, with a build gate against drift
+- [x] **Phase 36: Server Notification i18n** - Every server-emitted notification renders in the recipient's locale through a shared EN/FR catalogue, with a build gate against drift (completed 2026-11-04)
 - [ ] **Phase 37: Reminder Cadence Rework** - Due-date reminders capped at two per task ("due today" + one "past due"); `day_before` removed deploy-safely
 - [ ] **Phase 38: Daily Digest & Reminder Suppression** - Opt-in 09:00 digest email replaces individual reminder emails when enabled; silent when nothing is due
 - [ ] **Phase 39: Notification Audit (doc-only)** - Full notification type × channel × default audit with trim recommendations, owner-validated before any coding
@@ -47,7 +47,7 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   4. A missing FR key or a drifted English literal in server notification text fails the build (scan or regression test covering the server-used key set).
   5. A locale render that would throw (malformed locale, `Intl` failure) falls back to English instead of killing the notification.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 - [x] 36-01-PLAN.md — `tFor()` shared core + `notif.*` catalogue keys (I18N-02)
@@ -100,7 +100,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 36. Server Notification i18n | 3/4 | In Progress|  |
+| 36. Server Notification i18n | 4/4 | Complete    | 2026-11-04 |
 | 37. Reminder Cadence Rework | 0/? | Not started | - |
 | 38. Daily Digest & Reminder Suppression | 0/? | Not started | - |
 | 39. Notification Audit (doc-only) | 0/? | Not started | - |
