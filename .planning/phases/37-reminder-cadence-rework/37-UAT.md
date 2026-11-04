@@ -1,5 +1,5 @@
 ---
-status: partial
+status: diagnosed
 phase: 37-reminder-cadence-rework
 source: [37-VERIFICATION.md]
 started: 2026-11-04T14:36:22Z
@@ -41,5 +41,21 @@ blocked: 1
   reason: "User reported: EN copy reads 'Due date reminders' / 'A reminder the day before and the morning a task is due.' — does not match the phase spec; FR copy matches. Follow-up detail: in the EN Push section BOTH entries appear — new 'Due-day reminder' / 'Get a reminder on the morning a task is due.' AND stale 'Due date reminders' / 'One day before a task is due.' — duplicate/stale toggle not removed in EN; FR shows only the new entries. Email section is consistent in both languages ('Reminder emails' / 'E-mails de rappel')."
   severity: major
   test: 2
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  artifacts:
+    - path: "src/pages/settings.js"
+      issue: "Line 384: stale push_due row (settings.notif.dueReminders/dueDesc) still rendered unconditionally in the notif-push case, above the new due_reminder row"
+    - path: "src/locales/en.json"
+      issue: "Lines 1254-1255: stale keys settings.notif.dueReminders ('Due date reminders') + settings.notif.dueDesc ('One day before a task is due.')"
+    - path: "src/locales/fr.json"
+      issue: "Lines 1254-1255: same stale keys in FR ('Rappels d'échéance' / 'Un jour avant l'échéance d'une tâche.') — stale row renders in BOTH locales, EN-only appearance was user oversight"
+    - path: "src/core/notifPrefs.js"
+      issue: "Line 25: legacy push_due pref still registered"
+    - path: "server.js"
+      issue: "Lines 1130, 1152: legacy push_due pref still allowed/defaulted"
+  missing:
+    - "Remove the push_due row (settings.js:384) from the notif-push case"
+    - "Delete settings.notif.dueReminders + settings.notif.dueDesc from both en.json and fr.json atomically (i18n parity gate)"
+    - "Decide push_due pref fate: remove from notifPrefs.js defaults and server.js allowed/defaults lists, or keep-and-ignore if historical rows reference it — plan must state which"
+    - "Update catalogue-size i18n pins (test/i18n-core-features.test.mjs keys.length 1673 → 1671) and any settings-page oracle test"
+    - "Rebuild dist (dist/assets/index-C_YYwZK-.js contains the stale string)"
+  debug_session: ".planning/debug/stale-en-push-toggle.md"
