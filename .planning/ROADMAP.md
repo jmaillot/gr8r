@@ -95,8 +95,12 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 38-01-PLAN.md — Digest send path: 09:00 digest loop in runReminderPass, buildDigestMessage/sendDigest, notif.digest.* EN+FR, idempotence/catch-up/empty-digest pins (DIGEST-01, DIGEST-02 send half)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 38-02-PLAN.md — Reminder-email suppression gate in queueNotifEmails, email_digest default-layer inversion + D-13 settings copy, suppression matrix pins (DIGEST-02 suppression half, DIGEST-03)
+
 **UI hint**: yes
 
 ### Phase 39: Notification Audit (doc-only)
