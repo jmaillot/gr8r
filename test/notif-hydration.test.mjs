@@ -86,10 +86,10 @@ test('(i) G-34-6: pollNotifs does NOT hydrate prefs (boot-time concern, not a 30
   );
 });
 
-test('(a) merge(undefined, undefined) returns the D-27-5 all-ON defaults (13 keys, email_comment the only false)', () => {
+test('(a) merge(undefined, undefined) returns the D-27-5 all-ON defaults (12 keys, email_comment the only false)', () => {
   const prefs = mergeNotifPrefs(undefined, undefined);
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
-  assert.equal(Object.keys(prefs).length, 13);
+  assert.equal(Object.keys(prefs).length, 12);
   assert.equal(prefs.email_comment, false);
   for (const [k, v] of Object.entries(prefs)) {
     if (k !== 'email_comment') assert.equal(v, true, `${k} defaults ON`);
@@ -101,15 +101,16 @@ test('(b) a stored client row wins over defaults; unknown keys are dropped', () 
   assert.equal(prefs.email_reminder, false, 'stored row wins over the default');
   assert.equal(prefs.evil_key, undefined, 'whitelist-external key dropped');
   assert.equal(prefs.email_mention, true, 'untouched keys stay at defaults');
-  assert.equal(Object.keys(prefs).length, 13, 'output stays on the defaults shape');
+  assert.equal(Object.keys(prefs).length, 12, 'output stays on the defaults shape');
 });
 
 test('(c) a server row fills the client empty store — the F5 case (G-34-4)', () => {
-  const prefs = mergeNotifPrefs(undefined, { push_due: false, push_comment: false });
-  assert.equal(prefs.push_due, false, 'server OFF survives reload hydration');
-  assert.equal(prefs.push_comment, false);
+  const prefs = mergeNotifPrefs(undefined, { push_comment: false });
+  assert.equal(prefs.push_comment, false, 'server OFF survives reload hydration');
   assert.equal(prefs.email_mention, true, 'untouched keys stay at defaults');
-  assert.equal(Object.keys(prefs).length, 13);
+  assert.equal(Object.keys(prefs).length, 12);
+  const dropped = mergeNotifPrefs(undefined, { push_due: false });
+  assert.equal('push_due' in dropped, false, 'the legacy push toggle pref is DROPPED — removed from the whitelist with G-37-2, never a default');
 });
 
 test('(d) the server row is canonical, and non-boolean server values are rejected', () => {
@@ -119,7 +120,7 @@ test('(d) the server row is canonical, and non-boolean server values are rejecte
 
   const dirty = mergeNotifPrefs({ email_mention: false }, { email_mention: 1, push_due: 'yes', evil_key: true });
   assert.equal(dirty.email_mention, false, 'non-boolean server value dropped → client value stands');
-  assert.equal(dirty.push_due, true, 'non-boolean server value dropped → default');
+  assert.equal('push_due' in dirty, false, 'the legacy push toggle pref is no longer whitelisted — dropped outright (G-37-2)');
   assert.equal(dirty.evil_key, undefined, 'unknown key dropped');
 });
 

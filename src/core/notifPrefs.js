@@ -6,8 +6,10 @@
    precedent, D-05): the workspace document is never a prefs carrier again (D-01). */
 export const NOTIF_PREFS_KEY_PREFIX = 'projects.notifPrefs.';
 
-/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 13 keys, email_comment
-   the ONLY false. Four more toggle keys exist in the UI (mention_team,
+/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 12 keys, email_comment
+   the ONLY false. The legacy push toggle for due dates was removed with gap
+   G-37-2 on BOTH sides (whitelist parity preserved). Four more toggle keys
+   exist in the UI (mention_team,
    mention_ws, assign_status, assign_over) and read undefined-falsy, which the
    settings coercions (x !== false / !!x) render as ON — the same shape the
    server accessor produces for a user with no row. */
@@ -22,12 +24,11 @@ export const NOTIF_PREF_DEFAULTS = {
   push_mention: true,
   push_assign: true,
   push_comment: true,
-  push_due: true,
   mention_all: true,
   assign_self: true,
 };
 
-/* The 17 keys the settings UI can toggle — the server PUT whitelist plus the
+/* The 16 keys the settings UI can toggle — the server PUT whitelist plus the
    four undefined-falsy extras. Read-side validation drops anything else, so a
    tampered or stale blob cannot inject arbitrary keys into app state. */
 export const NOTIF_PREF_KEYS = [

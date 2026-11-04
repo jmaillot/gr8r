@@ -20,7 +20,7 @@ let ws; // { id, slug }
 let stranger; // signed up, never a member
 let bob; // invited member (test i)
 
-/* The 13-key default layer the accessor must reproduce (email_comment the ONLY false). */
+/* The 12-key default layer the accessor must reproduce (email_comment the ONLY false). */
 const DEFAULTS = {
   email_mention: true,
   email_assign: true,
@@ -32,7 +32,6 @@ const DEFAULTS = {
   push_mention: true,
   push_assign: true,
   push_comment: true,
-  push_due: true,
   mention_all: true,
   assign_self: true,
 };
@@ -64,15 +63,22 @@ after(async () => {
 /* ------------------- (a) PUT stores rows, GET merges over defaults ------------------- */
 
 test('PUT whitelisted prefs then GET returns them merged over defaults', async () => {
-  const put = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_due: false } });
+  const put = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_comment: false } });
   assert.equal(put.status, 200, `PUT prefs ${put.status}`);
   assert.equal(put.data.prefs.email_reminder, false);
-  assert.equal(put.data.prefs.push_due, false);
+  assert.equal(put.data.prefs.push_comment, false);
 
   const got = await owner.get(`/api/me/notif-prefs?workspace=${ws.id}`);
   assert.equal(got.status, 200, `GET prefs ${got.status}`);
-  assert.deepEqual(got.data.prefs, { ...DEFAULTS, email_reminder: false, push_due: false }, 'stored row merged over defaults');
+  assert.deepEqual(got.data.prefs, { ...DEFAULTS, email_reminder: false, push_comment: false }, 'stored row merged over defaults');
   assert.equal(prefsRows().length, 1, 'exactly one row stored');
+});
+
+test('PUT carrying the retired push toggle key is rejected 400 (G-37-2 — removed from the whitelist, never echoed back)', async () => {
+  const res = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { push_due: false } });
+  assert.equal(res.status, 400, `retired key rejected ${res.status}`);
+  assert.equal(res.data.code, 'unknownPrefKey');
+  assert.equal(prefsRows().length, 1, 'the rejected PUT wrote nothing');
 });
 
 /* ------------------- (b) unknown key → 400 (D-03 whitelist) ------------------- */
@@ -93,22 +99,22 @@ test('every accepted value is coerced to boolean', async () => {
   assert.equal(got.data.prefs.email_mention, true, 'truthy string coerces to true');
   assert.equal(got.data.prefs.due_reminder, false, '0 coerces to false');
   // restore the (a) state for later tests
-  await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_due: false, email_mention: true, due_reminder: true } });
+  await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_comment: false, email_mention: true, due_reminder: true } });
 });
 
 /* ------------------- (c2) partial PUT merges into the stored row (WR-01) ------------------- */
 
 test('a partial PUT merges into the existing row instead of erasing omitted keys (WR-01)', async () => {
-  // Stored state at this point (from (a)+(c)): email_reminder=false, push_due=false,
+  // Stored state at this point (from (a)+(c)): email_reminder=false, push_comment=false,
   // email_mention=true, due_reminder=true. A single-key body must not erase the rest.
   const put = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false } });
   assert.equal(put.status, 200, `partial PUT ${put.status}`);
   const got = await owner.get(`/api/me/notif-prefs?workspace=${ws.id}`);
   assert.equal(got.data.prefs.email_reminder, false, 'the sent key is applied');
-  assert.equal(got.data.prefs.push_due, false, 'a previously stored false survives a partial PUT (no silent revert to the ON default)');
+  assert.equal(got.data.prefs.push_comment, false, 'a previously stored false survives a partial PUT (no silent revert to the ON default)');
   assert.equal(got.data.prefs.email_mention, true, 'other stored keys survive too');
   // restore the (a) state for later tests
-  await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_due: false, email_mention: true, due_reminder: true } });
+  await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, push_comment: false, email_mention: true, due_reminder: true } });
 });
 
 /* ------------------- (d) doc GET: notifPrefs stripped on read ------------------- */
@@ -166,7 +172,7 @@ test('a user with no row reads the all-ON defaults — empty stored prefs read a
   const freshWs = withDb(server.dbPath, db => db.prepare('select id from workspaces where slug = ?').get('defaults-ws'));
   const got = await owner.get(`/api/me/notif-prefs?workspace=${freshWs.id}`);
   assert.equal(got.status, 200);
-  assert.deepEqual(got.data.prefs, DEFAULTS, 'no row → the exact 13-key default set');
+  assert.deepEqual(got.data.prefs, DEFAULTS, 'no row → the exact 12-key default set');
 
   // An empty stored prefs object reads as defaults too.
   await owner.put('/api/me/notif-prefs', { workspace: freshWs.id, prefs: {} });
@@ -185,7 +191,7 @@ test('two users with exactly equal prefs remain two distinct rows, accessor outp
 
   // Same prefs, deliberately different key insertion order. Under WR-01 merge
   // semantics both rows carry every earlier stored key, so both users write
-  // the same FULL 13-key object — equality is then well-defined per key.
+  // the same FULL 12-key object — equality is then well-defined per key.
   const full = { ...DEFAULTS, email_reminder: false, email_mention: false };
   const a = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, email_mention: false, ...full } });
   const b = await bob.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_mention: false, email_reminder: false, ...full } });

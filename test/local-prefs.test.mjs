@@ -25,7 +25,7 @@ test('(a) an absent key reads the all-ON defaults (email_comment the only false)
   backing.clear();
   const prefs = getLocalNotifPrefs('ws-a');
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
-  assert.equal(Object.keys(prefs).length, 13);
+  assert.equal(Object.keys(prefs).length, 12);
   assert.equal(prefs.email_comment, false);
   for (const [k, v] of Object.entries(prefs)) {
     if (k !== 'email_comment') assert.equal(v, true, `${k} defaults ON`);
@@ -34,24 +34,27 @@ test('(a) an absent key reads the all-ON defaults (email_comment the only false)
 
 test('(b) write then read-back survives a simulated reload (fresh module state)', async () => {
   backing.clear();
-  setLocalNotifPrefs('ws-a', { email_reminder: false, push_due: false });
+  setLocalNotifPrefs('ws-a', { email_reminder: false, push_comment: false });
   // Fresh module graph — the same thing a page reload produces. The stub's
   // backing Map persists, exactly like localStorage across a reload.
   const fresh = await import('../src/core/notifPrefs.js?reload=1');
   const prefs = fresh.getLocalNotifPrefs('ws-a');
   assert.equal(prefs.email_reminder, false);
-  assert.equal(prefs.push_due, false);
+  assert.equal(prefs.push_comment, false);
   assert.equal(prefs.email_mention, true, 'untoggled keys stay at defaults');
 });
 
 test('(c) two workspace ids produce two isolated keys — no bleed (D-08)', () => {
   backing.clear();
   setLocalNotifPrefs('ws-a', { email_reminder: false });
-  setLocalNotifPrefs('ws-b', { push_due: false });
+  setLocalNotifPrefs('ws-b', { push_comment: false });
   assert.notEqual(notifPrefsKey('ws-a'), notifPrefsKey('ws-b'));
   assert.equal(getLocalNotifPrefs('ws-a').email_reminder, false);
-  assert.equal(getLocalNotifPrefs('ws-a').push_due, true, 'ws-b write did not bleed into ws-a');
+  assert.equal(getLocalNotifPrefs('ws-a').push_comment, true, 'ws-b write did not bleed into ws-a');
   assert.equal(getLocalNotifPrefs('ws-b').email_reminder, true, 'ws-a write did not bleed into ws-b');
+  // G-37-2: the legacy push toggle pref is off the whitelist — a stored value is dropped outright
+  setLocalNotifPrefs('ws-b', { push_due: false });
+  assert.equal('push_due' in getLocalNotifPrefs('ws-b'), false, 'a stored push toggle value is DROPPED, never defaulted');
 });
 
 test('(d) non-whitelisted keys and non-boolean values are rejected on read', () => {
@@ -62,7 +65,7 @@ test('(d) non-whitelisted keys and non-boolean values are rejected on read', () 
   );
   const prefs = getLocalNotifPrefs('ws-a');
   assert.equal(prefs.evil_key, undefined, 'unknown key dropped');
-  assert.equal(prefs.push_due, true, 'non-boolean value dropped → default');
+  assert.equal('push_due' in prefs, false, 'the legacy push toggle pref dropped outright — not whitelisted, no default (G-37-2)');
   assert.equal(prefs.email_mention, true, 'non-boolean value dropped → default');
   assert.equal(prefs.mention_team, false, 'whitelisted extra key with a boolean survives');
   assert.equal(prefs.email_reminder, false, 'legitimate stored value survives');
@@ -90,9 +93,10 @@ test('(e) storage exceptions are swallowed in both directions', async () => {
   }
 });
 
-/* The 17-key whitelist surface the read-side sanitizer enforces. */
-test('whitelist is the 13 defaults plus the 4 undefined-falsy extras', () => {
-  assert.equal(NOTIF_PREF_KEYS.length, 17);
+/* The 16-key whitelist surface the read-side sanitizer enforces (12 defaults +
+   the 4 undefined-falsy extras — the legacy push toggle pref left with G-37-2). */
+test('whitelist is the 12 defaults plus the 4 undefined-falsy extras', () => {
+  assert.equal(NOTIF_PREF_KEYS.length, 16);
   for (const k of ['mention_team', 'mention_ws', 'assign_status', 'assign_over']) {
     assert.ok(NOTIF_PREF_KEYS.includes(k), `${k} whitelisted`);
   }
