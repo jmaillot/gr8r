@@ -3,13 +3,13 @@ gsd_state_version: "1.0"
 milestone: v1.8
 milestone_name: Notification Sanity
 current_phase: 37
-current_phase_name: reminder-cadence-rework
+current_phase_name: Reminder Cadence Rework
 status: executing
-stopped_at: Phase 37 context gathered
-last_updated: "2026-11-04T13:36:22.283Z"
+stopped_at: Completed 37-01-PLAN.md
+last_updated: "2026-11-04T14:10:18Z"
 last_activity: 2026-11-04
-last_activity_desc: Phase 36 complete, transitioned to Phase 37
-state_head: d245b34fa2dc0397497ab788753c42f2bcba1537
+last_activity_desc: Phase 37 execution started
+state_head: 48410971379fcd9b20190ebae7ca5f602996c490
 progress:
   total_phases: 4
   completed_phases: 1
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 37 (reminder-cadence-rework) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-04 — Phase 36 complete, transitioned to Phase 37
+Phase: 37 (Reminder Cadence Rework) — EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 37 — 37-01 complete
+Last activity: 2026-11-04 — Completed 37-01-PLAN.md (day_before offset removed, suite 930/0/3)
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -126,6 +126,8 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 36]: Keyed inbox rows render the full catalogue sentence as one muted span (bold split would duplicate the title via vars)
 - [Phase 36]: 36-04: i18n gate covers server.js/mailer.js — t/tFor notif.* keys resolve in EN AND FR; notif.* namespace parity-checked both directions (D-07/D-09, SC-4)
 - [Phase 36]: 36-04: server key resolution = first STRING arg of t/tFor (covers t(key) and tFor(locale,key)); callVars placeholder check NOT reused (runtime snapshot vars, Pitfall 3)
+- [Phase 37]: 37-01: legacy dayBefore-keyed inbox rows degrade to their stored EN snippet in BOTH locales (catalogue entry deleted) — the honest REM-04 inert-rows pin, not the pre-deletion FR sentence
+- [Phase 37]: 37-01: two-offset cadence shipped — morning_of on due date + past_due next morning; dedup key keeps :due component (D-02), no migration/sweep (REM-04)
 
 ### Pending Todos
 
@@ -159,9 +161,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T13:12:09.787Z
-Stopped at: Phase 37 context gathered
-Resume file: .planning/phases/37-reminder-cadence-rework/37-CONTEXT.md
+Last session: 2026-11-04T14:10:18Z
+Stopped at: Completed 37-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -183,6 +185,7 @@ Resume file: .planning/phases/37-reminder-cadence-rework/37-CONTEXT.md
 | Phase 36 P02 | ~50m | 2 tasks | 5 files |
 | Phase 36 P03 | ~10m | 2 tasks | 3 files |
 | Phase 36 P04 | ~14m | 2 tasks | 2 files |
+| Phase 37 P01 | ~25 min | 2 tasks | 6 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

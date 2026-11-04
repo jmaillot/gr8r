@@ -71,7 +71,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 37-01-PLAN.md — delete day_before offset (producer + catalogues) and rewrite/add reminder test pins (REM-01, REM-03, REM-04)
+- [x] 37-01-PLAN.md — delete day_before offset (producer + catalogues) and rewrite/add reminder test pins (REM-01, REM-03, REM-04)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 37-02-PLAN.md — due_reminder settings copy EN+FR + CHANGELOG catch-up burst note (REM-02, SC-5)
@@ -109,7 +109,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 36. Server Notification i18n | 4/4 | Complete    | 2026-11-04 |
-| 37. Reminder Cadence Rework | 0/? | Not started | - |
+| 37. Reminder Cadence Rework | 1/2 | In Progress | 2026-11-04 |
 | 38. Daily Digest & Reminder Suppression | 0/? | Not started | - |
 | 39. Notification Audit (doc-only) | 0/? | Not started | - |
 

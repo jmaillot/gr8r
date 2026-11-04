@@ -9,15 +9,15 @@
 
 ### Reminder Cadence (REM)
 
-- [ ] **REM-01**: When a task reaches its due date, its assignee receives at most two due-date
+- [x] **REM-01**: When a task reaches its due date, its assignee receives at most two due-date
   notifications total: one "due today" reminder (the morning of the due date) and one "past due"
   alert (the following morning) — the day-before reminder no longer fires, on any channel
   (email, push, inbox).
 - [ ] **REM-02**: The `due_reminder` preference governs only the "due today" reminder (its key
   and settings toggle stay, copy updated in EN+FR); the `past_due` preference is unchanged.
-- [ ] **REM-03**: A past-due task never re-fires "past due" on later days — exactly one past-due
+- [x] **REM-03**: A past-due task never re-fires "past due" on later days — exactly one past-due
   notification per task per assignee, protected by a regression pin.
-- [ ] **REM-04**: Removing `day_before` is deploy-safe: no dedup-row sweep or data migration;
+- [x] **REM-04**: Removing `day_before` is deploy-safe: no dedup-row sweep or data migration;
   existing `reminders_sent` rows remain untouched (orphaned keys go inert); release notes
   announce the one-time "due today" catch-up burst at first deploy.
 
@@ -87,10 +87,10 @@
 | I18N-02 | Phase 36 | Complete |
 | I18N-03 | Phase 36 | Complete |
 | I18N-04 | Phase 36 | Complete |
-| REM-01 | Phase 37 | Pending |
+| REM-01 | Phase 37 | Complete |
 | REM-02 | Phase 37 | Pending |
-| REM-03 | Phase 37 | Pending |
-| REM-04 | Phase 37 | Pending |
+| REM-03 | Phase 37 | Complete |
+| REM-04 | Phase 37 | Complete |
 | DIGEST-01 | Phase 38 | Pending |
 | DIGEST-02 | Phase 38 | Pending |
 | DIGEST-03 | Phase 38 | Pending |
