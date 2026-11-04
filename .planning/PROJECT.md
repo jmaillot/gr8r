@@ -1,12 +1,27 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-04 after v1.7 milestone (Team Visibility & Hardening shipped)*
+*Last updated: 2026-11-04 after v1.8 milestone start (Notification Sanity)*
 
-## Next Milestone: TBD
+## Current Milestone: v1.8 Notification Sanity
 
-No milestone is currently scheduled. Start the next one with `/gsd-new-milestone`
-(questioning → research → requirements → roadmap); the Backlog is empty, so the
-next milestone's scope is fully open.
+**Goal:** cut due-date notifications to their honest minimum, translate every
+server-emitted notification, and offer a daily digest — the client-facing fix for
+the "too many notifications" feedback (Kanzo #6).
+
+**Target features:**
+- REM — Due-date reminder cadence: "due today" (morning-of) + "past due" (next
+  morning) only; the `day_before` offset is removed (max 2 notifications per task,
+  email and push alike)
+- I18N — All server-emitted notification text (email subjects + bodies, push text,
+  inbox snippets) localized per recipient locale from the existing catalogues
+- DIGEST — Opt-in daily digest at 09:00 workspace time: one email listing tasks due
+  today + overdue; replaces individual reminder emails when enabled (push unchanged);
+  the stub `email_digest` pref takes its real role
+- AUDIT — Review of every notification type (mention, assign, comment, reminder…)
+  with trim recommendations; threshold changes validated by the owner before coding
+
+**Constraints (standing):** zero runtime dependencies held; migrations additive-only
+with byte-identical second boot; full suite green; EN+FR i18n gate.
 
 <details>
 <summary>Milestone v1.7 Team Visibility & Hardening (shipped 2026-11-04)</summary>

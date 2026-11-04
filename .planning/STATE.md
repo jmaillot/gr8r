@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.7
-milestone_name: Team Visibility & Hardening
-status: Awaiting next milestone
-stopped_at: Phase 35 complete — all phases complete
-last_updated: "2026-11-04T06:19:18.874Z"
+milestone: v1.8
+milestone_name: Notification Sanity
+status: planning
+last_updated: "2026-11-04T06:31:38.087Z"
 last_activity: 2026-11-04
-last_activity_desc: Milestone v1.7 completed and archived
-state_head: 5aa0989cb8215878cb46b30a940a67f87028825a
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
-current_phase: 35
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -27,10 +23,10 @@ current_phase: 35
 
 ## Current Position
 
-Phase: Milestone v1.7 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-04 — Milestone v1.7 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-04 — Milestone v1.8 started
 
 ## v1.7 Phase Order (research-validated build order)
 
