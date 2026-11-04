@@ -1155,22 +1155,22 @@ const NOTIF_PREF_DEFAULTS = {
   assign_self: true,
 };
 
+function getStoredNotifPrefs(userId, workspaceId) {
+  const row = db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(workspaceId, userId);
+  try {
+    const stored = row ? JSON.parse(row.prefs) : {};
+    return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+  } catch {
+    return {};
+  }
+}
+
 /* PREFS (Phase 34, D-04): the ONLY reader of per-user notification prefs —
    one prepared SELECT, JSON.parse with a try/catch backstop (malformed or
    unreadable rows read as {}), merged over the defaults. `=== false` disables;
    everything else (including the 4 undefined-falsy keys) stays on. */
 function getUserNotifPrefs(userId, workspaceId) {
-  const row = db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(workspaceId, userId);
-  let stored = {};
-  if (row) {
-    try {
-      stored = JSON.parse(row.prefs);
-    } catch {
-      stored = {};
-    }
-    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
-  }
-  return { ...NOTIF_PREF_DEFAULTS, ...stored };
+  return { ...NOTIF_PREF_DEFAULTS, ...getStoredNotifPrefs(userId, workspaceId) };
 }
 
 const NOTIF_EMAIL_KIND = {
@@ -1234,6 +1234,18 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
        no row and read defaults. */
     const prefs = getUserNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id);
     if (prefs[prefKey] === false) continue;
+    /* Phase 38 (DIGEST-02, D-09/D-10/D-11): digest users lose individual
+       reminder EMAILS at the fan-out — inbox rows and push are never
+       suppressed (rows are appended + claimed by runReminderPass BEFORE
+       this gate, so suppression cannot lose notification state; D-10).
+       email_digest === true wins over email_reminder regardless of its
+       value, so this is a DISTINCT gate from the === false check above —
+       a recipient with email_reminder: true AND email_digest: true still
+       loses the reminder email (D-11). The opt-in reads the STORED
+       email_digest (strict === true, D-05/D-14) — never the merged
+       default, which still carries true until the default layer is
+       inverted. Mention/assign/comment kinds never reach this branch. */
+    if (prefKey === 'email_reminder' && getStoredNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id).email_digest === true) continue;
     const profile = profiles.get(n.to);
     const to = authority.get(n.to)?.email || (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;

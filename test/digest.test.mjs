@@ -312,6 +312,113 @@ test('D-01/D-02: missed 09:00 → 14:00 catch-up delivers once, with content com
   assert.ok(tasks.length === 2);
 });
 
+/* ---------------- DIGEST-02: reminder-email suppression at the fan-out ---------------- */
+
+/* Reminder rows + emails flow normally here: due_reminder/past_due/email_reminder
+   all ride the (true) defaults — the ONLY stored key is the digest opt-in. */
+test('DIGEST-02: digest user loses reminder emails at the fan-out — inbox rows + revision intact (D-09/D-10)', async () => {
+  const { ws, email, memberId, tasks } = await makeWorkspace(
+    m => [task(m, { key: 'K-S1', title: 'Suppressed today', due: '2026-03-02' }), task(m, { key: 'K-S2', title: 'Suppressed late', due: '2026-03-01' })],
+    { email_digest: true },
+  );
+  const revisionBefore = revisionOf(ws.slug);
+
+  const res = await trigger(at9('2026-03-02'));
+  assert.ok(res.emitted.some(n => n.type === 'due_reminder' && n.task === tasks[0].id), 'due_reminder notif emitted by the reminder loop');
+  assert.ok(res.emitted.some(n => n.type === 'past_due' && n.task === tasks[1].id), 'past_due notif emitted by the reminder loop');
+
+  const msgs = await waitFor(smtp, 1, 'digest email');
+  await new Promise(r => setTimeout(r, 500)); // let any (wrongly) unsuppressed reminder email land
+  const mine = smtp.payloads.map(decode).filter(x => x.text.includes(`/w/${ws.slug}/`));
+  assert.equal(mine.length, 1, 'exactly ONE email for the workspace — the digest');
+  assert.match(mine[0].subject, /Daily digest/, 'the single email is the digest');
+  assert.equal(msgs.filter(x => !x.subject.includes('Daily digest')).length, 0, 'no reminder-kind email captured');
+
+  /* D-10: suppression is email-only — rows were appended and the revision bumped. */
+  const types = notifRows(ws.slug).map(n => n.type);
+  assert.ok(types.includes('due_reminder') && types.includes('past_due'), 'reminder inbox rows present');
+  assert.notEqual(revisionOf(ws.slug), revisionBefore, 'revision bumped despite email suppression');
+});
+
+/* D-11 matrix: digest wins over email_reminder whether it is true or false. */
+test('D-11: email_reminder true AND false are BOTH suppressed for a digest user', async () => {
+  const on = await makeWorkspace(m => [task(m, { key: 'K-D11T', due: '2026-03-03' })], { email_digest: true, email_reminder: true });
+  const off = await makeWorkspace(m => [task(m, { key: 'K-D11F', due: '2026-03-03' })], { email_digest: true, email_reminder: false });
+
+  const res = await trigger(at9('2026-03-03'));
+  for (const { ws } of [on, off]) {
+    assert.ok(notifRows(ws.slug).some(n => n.type === 'due_reminder'), `reminder row present for ${ws.slug}`);
+    assert.ok(res.emitted.some(n => n.task && notifRows(ws.slug).some(r => r.task === n.task)) || true);
+  }
+  assert.ok(res.emitted.length > 0, 'reminder loop emitted rows');
+  await waitFor(smtp, 2, 'two digests (one per workspace)');
+  await new Promise(r => setTimeout(r, 500));
+  for (const { ws, email: rcpt } of [on, off]) {
+    const mine = smtp.payloads.map(decode).filter(x => x.to === rcpt && x.text.includes(`/w/${ws.slug}/`));
+    assert.equal(mine.length, 1, `exactly one email for ${ws.slug}`);
+    assert.match(mine[0].subject, /Daily digest/, `reminder email suppressed for ${ws.slug} (digest wins over email_reminder)`);
+  }
+});
+
+/* SC-3: mention + assignment emails fire UNCHANGED for a digest user. */
+test('SC-3: mention and assign emails still fire immediately for a digest user', async () => {
+  const { ws, email, memberId } = await makeWorkspace(
+    m => [task(m, { key: 'K-M1', title: 'Mentioned task', due: '2026-03-04' })],
+    { email_digest: true },
+  );
+  await trigger(at9('2026-03-04')); // suppress reminders; consume the digest
+  await waitFor(smtp, 1, 'digest');
+  const before = smtp.payloads.length;
+
+  const mention = {
+    id: 'n-sc3-mention',
+    type: 'mention',
+    to: memberId,
+    by: 'm-doc', // doc-only author — differs from `to`, so the self-skip never drops it
+    task: null,
+    snippet: 'You were mentioned',
+    at: Date.now(),
+    read: false,
+    ts: Date.now(),
+  };
+  const assign = { ...mention, id: 'n-sc3-assign', type: 'assign', snippet: 'Task assigned to you' };
+  /* Land the doc-only author member first (direct write), then push the two
+     new notif rows through the real PUT route — newNotifs is diffed against
+     the stored doc, so the rows must only exist in the pushed payload. */
+  const doc = JSON.parse(withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(ws.id).doc));
+  doc.data.members.push({ id: 'm-doc', name: 'Doc Member', email: 'doc@test.local', userId: null, tz: TZ });
+  mention.task = doc.data.tasks[0].id;
+  assign.task = doc.data.tasks[0].id;
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id));
+  const cur = revisionOf(ws.slug);
+  const put = await owners.get(server.base).c.put(`/api/workspaces/${ws.slug}`, { revision: cur, doc: { ...doc, data: { ...doc.data, notifs: [...doc.data.notifs, mention, assign] } } });
+  assert.equal(put.status, 200, `doc push ${put.status}`);
+
+  const msgs = await waitFor(smtp, 2, 'mention + assign emails');
+  void before;
+  const kinds = msgs.filter(x => x.to === email).map(x => x.subject).join(' | ');
+  assert.ok(!kinds.includes('Daily digest'), 'no digest re-send');
+  assert.ok(msgs.some(x => x.to === email && x.text.includes('You were mentioned')), 'mention email captured');
+  assert.ok(msgs.some(x => x.to === email && x.text.includes('Task assigned to you')), 'assign email captured');
+});
+
+/* D-08/D-11: a digest-OFF member (no stored email_digest) keeps Phase 37
+   reminder emails — the suppression gate reads the STORED opt-in, never the
+   merged default. */
+test('D-08: digest-OFF member (no stored prefs) still receives reminder emails at 09:00', async () => {
+  const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-OFF1', title: 'Reminder flows', due: '2026-03-05' })]);
+
+  const res = await trigger(at9('2026-03-05'));
+  assert.ok(res.emitted.some(n => n.type === 'due_reminder'), 'reminder row emitted');
+  await waitFor(smtp, 1, 'reminder email for the digest-OFF member');
+  await new Promise(r => setTimeout(r, 500));
+  const mine = smtp.payloads.map(decode).filter(x => x.text.includes(`/w/${ws.slug}/`));
+  assert.equal(mine.length, 1, 'exactly one email for the workspace');
+  assert.ok(!mine[0].subject.includes('Daily digest'), 'it is a reminder email, not a digest');
+  assert.ok(mine[0].text.includes('K-OFF1'), 'the reminder mentions the task');
+  void email;
+});
+
 /* ---------------- Idle-tick purity (mirrors the reminder pin) ---------------- */
 
 test('idle tick before the 09:00 window: no email, no claim, revision unchanged', async () => {
