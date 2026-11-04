@@ -23,7 +23,7 @@
 
 ### Notification Localization (I18N)
 
-- [ ] **I18N-01**: Every server-emitted notification text — email subjects and bodies, push
+- [x] **I18N-01**: Every server-emitted notification text — email subjects and bodies, push
   text, inbox snippets — is rendered in the recipient's account locale (EN or FR), with English
   fallback; the locale comes from the user record through the existing authority/membership
   queries.
@@ -83,7 +83,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| I18N-01 | Phase 36 | Pending |
+| I18N-01 | Phase 36 | Complete |
 | I18N-02 | Phase 36 | Complete |
 | I18N-03 | Phase 36 | Pending |
 | I18N-04 | Phase 36 | Pending |

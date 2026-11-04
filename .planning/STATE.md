@@ -5,16 +5,16 @@ milestone_name: Notification Sanity
 current_phase: 36
 current_phase_name: Server Notification i18n
 status: executing
-stopped_at: Completed 36-01-PLAN.md
-last_updated: "2026-11-04T10:55:09.286Z"
+stopped_at: Completed-36-02
+last_updated: "2026-11-04T11:33:34.949Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 36 execution started
-state_head: e529ebdb7b1d204df4fa31a0826ac450f18afa8e
+state_head: ce807d770c04577d7180d7d78ab3fc71a0e34736
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 36 (Server Notification i18n) — EXECUTING
-Plan: 2 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-11-04 — Phase 36 execution started
 
@@ -116,6 +116,10 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 34]: G-34-4 closed: GET-on-open notif-prefs hydration via pure mergeNotifPrefs (server row canonical, mirrors PUT adoption); wired at all 5 API-mode workspace entries, local mode untouched
 - [Phase 35]: 35-03: WR-01 undo gate unconditional (err.changeTeam before any authority PUT on failed doc push); WR-02 pushNow() shares the pushing mutex released in finally
 - [Phase 36]: 36-01: tFor locale-parameterized core (camelCase keys dayBefore/morningOf/pastDue per KEY_SHAPE gate; 15 notif.* server keys EN+FR)
+- [Phase 36]: Boundary pin 36-02: no server push-emission surface exists; server-emitted text = emails (mailer, tFor) + inbox rows (client-rendered, plan 03)
+- [Phase 36]: Email locale rides the memberships⋈users authority row (msg.locale), render inside buildNotifMessage via tFor — all notif.email.* call sites in one file
+- [Phase 36]: Boundary-pin-36-02-no-push-emission-surface
+- [Phase 36]: 36-02: email locale rides the memberships-users authority row (msg.locale); render inside buildNotifMessage via tFor - all notif.email call sites in one file
 
 ### Pending Todos
 
@@ -149,8 +153,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T10:55:09.254Z
-Stopped at: Completed 36-01-PLAN.md
+Last session: 2026-11-04T11:33:23.453Z
+Stopped at: Completed-36-02
 Resume file: None
 
 ## Performance Metrics
@@ -169,6 +173,8 @@ Resume file: None
 | Phase 34 P05 | 25m | 2 tasks | 3 files |
 | Phase 35 P03 | 6m | 2 tasks | 3 files |
 | Phase 36 P01 | 5m | 2 tasks | 4 files |
+| Phase 36 P02 | ~50m | 2 tasks | 5 files |
+| Phase 36 P02 | ~50m | 2 tasks | 5 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

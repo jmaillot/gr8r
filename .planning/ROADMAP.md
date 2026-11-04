@@ -47,11 +47,11 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
   4. A missing FR key or a drifted English literal in server notification text fails the build (scan or regression test covering the server-used key set).
   5. A locale render that would throw (malformed locale, `Intl` failure) falls back to English instead of killing the notification.
 
-**Plans**: 1/4 plans executed
+**Plans**: 2/4 plans executed
 
 Plans:
 - [x] 36-01-PLAN.md — `tFor()` shared core + `notif.*` catalogue keys (I18N-02)
-- [ ] 36-02-PLAN.md — per-recipient locale email rendering (I18N-01, I18N-02)
+- [x] 36-02-PLAN.md — per-recipient locale email rendering (I18N-01, I18N-02)
 - [ ] 36-03-PLAN.md — keyed reminder rows + inbox localization (I18N-03)
 - [ ] 36-04-PLAN.md — scanner server family + parity build gate (I18N-04)
 
@@ -100,7 +100,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 36. Server Notification i18n | 1/4 | In Progress|  |
+| 36. Server Notification i18n | 2/4 | In Progress|  |
 | 37. Reminder Cadence Rework | 0/? | Not started | - |
 | 38. Daily Digest & Reminder Suppression | 0/? | Not started | - |
 | 39. Notification Audit (doc-only) | 0/? | Not started | - |
