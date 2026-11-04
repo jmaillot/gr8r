@@ -24,7 +24,7 @@ progress:
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** v1.8 Notification Sanity — roadmap written, Phase 36 ready to plan
+- **Current focus:** v1.8 Notification Sanity — Phase 37 Reminder Cadence Rework ready to plan
 
 ## Current Position
 

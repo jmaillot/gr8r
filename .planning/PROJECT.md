@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-04 after v1.8 milestone start (Notification Sanity)*
+*Last updated: 2026-11-04 after Phase 36*
 
 ## Current Milestone: v1.8 Notification Sanity
 
@@ -446,6 +446,11 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   toast, union replay of purged memberships — Phase 35 (UNDO-01/02; verification 16/16)
 - ✓ docker-compose forwards `MASTER_KEY_PREVIOUS` (compose-config pin) — Phase 35
   (DEPLOY-01; verification 16/16)
+- ✓ Every server-emitted notification renders in the recipient's locale through a shared
+  EN/FR catalogue: per-recipient emails via `tFor`, machine-keyed reminder rows + localized
+  inbox render (legacy prose rows pinned byte-identical), and a build gate against catalogue
+  drift (server notif.* key resolution + EN↔FR parity, live exit 0) — Phase 36 (I18N-01..04;
+  verification 12/12)
 
 ### Active
 
