@@ -1672,7 +1672,6 @@
   "notif.taskDueToday": "is due today",
   "notif.dueReminder": "is coming due",
   "notif.pastDue": "is overdue",
-  "notif.reminder.dayBefore": "Due tomorrow: {title}",
   "notif.reminder.morningOf": "Due today: {title}",
   "notif.reminder.pastDue": "Past due: {title}",
   "notif.email.byReminders": "Reminders",

@@ -1354,7 +1354,6 @@ function remindable(task, project) {
 
 function reminderSnippet(offset, task) {
   const title = task?.title || 'a task';
-  if (offset === 'day_before') return `Due tomorrow: ${title}`;
   if (offset === 'morning_of') return `Due today: ${title}`;
   return `Past due: ${title}`;
 }
@@ -1403,7 +1402,6 @@ function runReminderPass({ now: at = new Date() } = {}) {
            open window plus an absent dedup key IS the boot catch-up. */
         const offsets = [];
         if (prefs.due_reminder !== false) {
-          if (localDate >= addDaysIso(due, -1)) offsets.push('day_before');
           if (localDate >= due) offsets.push('morning_of');
         }
         if (prefs.past_due !== false && localDate > due) offsets.push('past_due');
@@ -1418,7 +1416,7 @@ function runReminderPass({ now: at = new Date() } = {}) {
                VALUES — the inbox localizes per viewer locale without joins,
                so historical text survives task rename/deletion. Additive:
                the English snippet stays (D-06 dual store). */
-            key: `notif.reminder.${offset === 'day_before' ? 'dayBefore' : offset === 'morning_of' ? 'morningOf' : 'pastDue'}`,
+            key: `notif.reminder.${offset === 'morning_of' ? 'morningOf' : 'pastDue'}`,
             vars: { title: t.title || 'a task' },
             snippet: reminderSnippet(offset, t),
             /* Client notif contract is `at` + `read` (store.js notifyMembers) —

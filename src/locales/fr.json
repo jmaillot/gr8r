@@ -1672,7 +1672,6 @@
   "notif.taskDueToday": "est à échéance aujourd’hui",
   "notif.dueReminder": "arrive à échéance",
   "notif.pastDue": "est en retard",
-  "notif.reminder.dayBefore": "À échéance demain : {title}",
   "notif.reminder.morningOf": "À échéance aujourd’hui : {title}",
   "notif.reminder.pastDue": "En retard : {title}",
   "notif.email.byReminders": "Rappels",
