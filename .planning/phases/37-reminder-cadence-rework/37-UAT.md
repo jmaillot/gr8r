@@ -8,7 +8,7 @@ updated: 2026-11-04T17:20:00Z
 
 ## Current Test
 
-number: 1
+number: 2
 name: Live scheduling cadence end-to-end (real clock)
 expected: |
   On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value).
@@ -16,23 +16,27 @@ awaiting: user response
 
 ## Tests
 
-### 1. Live scheduling cadence end-to-end (real clock)
+### 1. Cold Start Smoke Test
+expected: Kill any running server/service. Clear ephemeral state (temp DBs, caches, lock files). Start the application from scratch. Server boots without errors, any seed/migration completes, and a primary query (health check, homepage load, or basic API call) returns live data.
+result: [pending]
+
+### 2. Live scheduling cadence end-to-end (real clock)
 expected: On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value).
 result: blocked
 blocked_by: other
 reason: "I will add a new task, but I cannot verify today"
 
-### 2. Settings page rendering of the new copy (EN + FR)
+### 3. Settings page rendering of the new copy (EN + FR)
 expected: Open Settings → notifications in EN and FR. Push section shows only the new rows — EN "Due-day reminder" / "Get a reminder on the morning a task is due." and FR "Rappel le jour d’échéance" / "Recevez un rappel le matin de l’échéance d’une tâche." — with the legacy "Due date reminders" / "One day before a task is due." row GONE from both languages. Toggle still functional. (Re-test after G-37-2 gap closure; closes the previously reported stale-row issue.)
 result: pass
 source: automated
 
 ## Summary
 
-total: 2
+total: 3
 passed: 1
 issues: 0
-pending: 0
+pending: 1
 skipped: 0
 blocked: 1
 
