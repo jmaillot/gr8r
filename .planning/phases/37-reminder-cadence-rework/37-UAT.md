@@ -3,16 +3,12 @@ status: testing
 phase: 37-reminder-cadence-rework
 source: [37-01-SUMMARY.md, 37-02-SUMMARY.md, 37-03-SUMMARY.md]
 started: 2026-11-04T14:36:22Z
-updated: 2026-11-04T17:20:00Z
+updated: 2026-11-04T17:35:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Live scheduling cadence end-to-end (real clock)
-expected: |
-  On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value).
-awaiting: user response
+[testing paused — 1 item outstanding]
 
 ## Tests
 
