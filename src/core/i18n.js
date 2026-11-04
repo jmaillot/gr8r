@@ -162,26 +162,51 @@ function rulesFor(code) {
 
 /* A plural value is an object keyed by CLDR category. The selected member falls back to other;
    when other is missing too the value is unresolvable and t() returns the key. A missing count
-   resolves to one when there is one, else to other, and never throws. */
-function resolvePlural(value, vars) {
+   resolves to one when there is one, else to other, and never throws. The locale is threaded
+   in by the caller — the plural rules come from the REQUESTED locale, never from the
+   singleton, so a server-side tFor('fr', …) cannot leak a client's active language. */
+function resolvePlural(target, value, vars) {
   const raw = vars ? vars.n : undefined;
   const count = raw === undefined || raw === null ? NaN : Number(raw);
-  const category = Number.isFinite(count) ? rulesFor(locale).select(count) : 'one';
+  let category = 'one';
+  if (Number.isFinite(count)) {
+    try {
+      category = rulesFor(target).select(count);
+    } catch {
+      /* An Intl failure (missing ICU, a synthetic break) degrades to the English-shaped
+         one/other pair rather than propagating: a malformed locale must never crash a
+         render or a server notify loop (SC-5). */
+      category = count === 1 ? 'one' : 'other';
+    }
+  }
   const chosen = Object.hasOwn(value, category) ? value[category] : value.other;
   if (typeof chosen !== 'string') return undefined;
   return interpolate(chosen, vars);
 }
 
-export function t(key, vars) {
-  const active = catalogues.get(locale);
+/* The locale-parameterized lookup core (I18N-02, D-01): ONE lookup/plural/fallback
+   implementation for client and server. The requested code clamps against the registry —
+   unknown, malformed or null resolves to the base locale, mirroring activateLocale — so a
+   bad locale never throws and never serves an unintended catalogue. Pure: it reads the
+   catalogue map and never touches the singleton, so parallel server sends cannot race.
+   It never escapes HTML: the caller interpolates user data through escHtml at the call
+   site. */
+export function tFor(code, key, vars) {
+  const known = LOCALES.some(l => l.code === code);
+  const target = known ? code : BASE_LOCALE;
+  const active = catalogues.get(target);
   let value = active && Object.hasOwn(active, key) ? active[key] : undefined;
   if (value === undefined) {
     const base = catalogues.get(BASE_LOCALE);
     value = base && Object.hasOwn(base, key) ? base[key] : undefined;
   }
   if (typeof value === 'string') return interpolate(value, vars);
-  if (value && typeof value === 'object') return resolvePlural(value, vars) ?? key;
+  if (value && typeof value === 'object') return resolvePlural(target, value, vars) ?? key;
   return key;
+}
+
+export function t(key, vars) {
+  return tFor(locale, key, vars);
 }
 
 /* The key gate: true only when the catalogue actually resolves the key, so a caller can
