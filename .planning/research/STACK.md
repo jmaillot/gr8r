@@ -1,102 +1,118 @@
-# Technology Stack
+# Technology Stack — v1.8 "Notification Sanity" additions
 
-**Project:** Projects Studio — v1.7 "Team Visibility & Hardening"
-**Researched:** 2026-11-02
-**Mode:** Ecosystem (platform-capability research for six debt-closure items)
-**Hard constraint:** zero runtime dependencies (held since v1.1; verified in PROJECT.md and `Dockerfile`)
+**Project:** Projects Studio (gr8r)
+**Researched:** 2026-11-04
+**Scope:** stack additions/changes for server-side notification i18n, the daily digest email, and the reminder-offset removal — under the HARD zero-runtime-dependency rule.
 
-## Runtime Ground Truth
+## Headline verdict
 
-**Node version: 24.** Both Dockerfile stages are `node:24-alpine` (build stage line 2, runtime stage line 12) — no Node upgrade is needed or desired for v1.7. Local dev matches: `node -v` → **v24.21.0**. All APIs below are verified against Node 24 docs/codebase reality.
+**Zero new packages. Zero new dev dependencies. Zero vendored code.**
 
-## Recommended Stack (what v1.7 uses — all already in the codebase or in Node 24 built-ins)
+Every capability this milestone needs already exists in the repo or in Node 24's built-ins:
 
-### Core Runtime
+| New capability | Stack answer | Where it lives |
+|---|---|---|
+| `t()` outside the browser | Reuse `src/core/i18n.js` from the server (it is deliberately leaf, plain-Node testable) + a small locale-parameterized variant | `src/core/i18n.js` (extend) |
+| FR catalogue server-side | Static ESM import of `src/locales/fr.json` + `registerCatalogue('fr', …)` | new import in server.js / i18n.js |
+| Per-recipient locale | Already stored: per-account `locale` column (v1.2), `users.locale` — a JOIN, no migration | existing schema |
+| Daily digest composition | Plain JS grouping over `doc.data.tasks` using the existing `localParts` / `addDaysIso` helpers | `server.js` |
+| Digest email transport | Extend the hand-rolled SMTP client with one `sendDigest` builder — the MIME/boundary/UTF-8 machinery is proven (`buildNotifMessage`) | `mailer.js` |
+| Digest dedup | Existing `reminders_sent` ledger with a new key shape (`…:digest:<due-date>`) — additive, no schema change | `server.js` |
+| Remove `day_before` offset | Pure logic deletion in `runReminderPass` + `reminderSnippet`; zero stack | `server.js` |
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Node.js | 24 (node:24-alpine, Dockerfile) | Server runtime | Already the shipped image; Alpine SQLite build is fine for the DB sizes involved |
-| `node:sqlite` (`DatabaseSync`) | introduced 22.5; unflagged since 22.13/23.4; release-candidate from 24.15/25.7 | All persistence, incl. the new per-user settings rows | Already used (`server.js:54`); in Node 24 the class is now `Database` with `DatabaseSync` kept as a documented deprecated alias (DEP0210) — existing imports keep working, do NOT churn them for v1.7 |
-| `node:crypto` | Node 24 | Nothing new needed | scrypt, `timingSafeEqual`, `randomBytes`, `createHash` (sha256 `keyIdFor`), AES-256-GCM keyring all exist (`server.js:83–101`); v1.7 adds no cryptography |
-| `node:http` | Node 24 | `req.headers` origin/host handling for HARD | Already parsed by hand throughout; no HTTP framework anywhere |
+## What IS new (in-repo, hand-rolled)
 
-### Per-Item Capability Map
+### 1. Server-side `t()` — extend `src/core/i18n.js`, don't fork it
 
-| Item | Node capability used | Codebase reuse |
-|------|---------------------|----------------|
-| VIS | `node:sqlite` prepared statements (`prepare().all()` on `team_members` + project doc `teams[]`) | `team_members` table + `team_members_user` index already exist (`server.js:227–234`); the Phase-29 `projectScope`/`hiddenFor` redaction funnel (`server.js:~700–880`) is the single choke point to extend with the team-intersection rule — no new machinery |
-| UNDO | Client-side only: existing `restore(snap)` toast pattern + `setMemberTeams` PUT | `A.delTeam` in `src/actions/teams.js:119` already captures a doc snapshot; the fix is capturing per-member `before` team sets and re-PUTting them (or suppressing the undo offer) — zero server capability required |
-| HARD | `req.headers.origin`, `x-forwarded-host`, `x-forwarded-proto` | `sameOrigin()` already exists (`server.js:2389–2394`) and is already applied to ~35 routes — HARD item 1 is adding one call to the invite-accept route, which verifiably lacks it (`server.js:4316–4320` has throttle + token lookup, no `sameOrigin`) |
-| SEARCH | `String.toLowerCase().includes` + existing redaction | `referencesHidden()` (`server.js:837`), `mergeRecentSearches()` (`server.js:844`), `hiddenProjectTerms()` already do substring redaction; SEARCH is closing their gaps (empty-term edge, free-text limitation doc) — no new API |
-| SETTINGS | `node:sqlite` `CREATE TABLE` / `ALTER TABLE` additive migration + `prepare().run()` | Migration machinery proven: `vacuum into` backup (`server.js:1727` et al.), guarded one-time backfill precedent (team_members, `server.js:1693–1741`), byte-identical second boot pinned by `test/migration.test.mjs`; per-user precedent exists — `locale` column (v1.2) and `notifications` per-recipient rows (v1.4) |
-| DEPLOY | docker-compose `environment:` passthrough | Server already reads `MASTER_KEY_PREVIOUS` (`server.js:88–101`); only the compose file line is missing (verified: `docker-compose.yml:8–45` has no `MASTER_KEY_PREVIOUS`) |
+`src/core/i18n.js` was designed for exactly this moment: it imports only the catalogues ("the renderer never enters this module"), guards `import.meta.glob` behind a try/catch that no-ops in plain Node, and skips the `document` mutation when absent. It is importable by `server.js` (both are ESM; server.js already does `import { createMailer } from './mailer.js'`).
 
-## Platform API Details & Pitfalls (verified)
+The one genuine mismatch: the current `t()` reads a **module-level locale singleton** (`getLocale()`), correct for a browser where there is one user per page — wrong for a server sending concurrent emails to recipients with different locales. A per-request or per-recipient loop that calls `setLocale()` between sends works (catalogue loading is async, translation is sync, sends are fire-and-forget), but it is a latent interleaving bug: two queued sends awaited out of order would translate with the wrong locale.
 
-### `node:sqlite` (Node 24)
+**Recommendation: add a locale-parameterized pure function alongside the singleton — do not replace it.**
 
-- **Type conversion table (doc-verified):** booleans bind as INTEGER 1/0; `undefined` binds as NULL; integers outside safe range throw unless `readBigInts` is on. The codebase already binds 1/0 explicitly — keep that style; do not rely on boolean binding, which only landed in 24.21 (too new to assume on any 24.x patch).
-- **JSON columns:** there is no native JS↔JSON column type. Follow the established `workspaces.doc` pattern: `JSON.stringify` into a TEXT column, `JSON.parse` on read. For per-user settings, one row per `(workspace_id, user_id)` with a small TEXT JSON payload (or flat columns for `notifPrefs` toggles) — flat columns are preferred because each toggle becomes an updatable column with a default, matching the `notifPrefs`-default-ON semantics (`D-27-5` in `test/due-reminders.test.mjs`).
-- **Transactions:** no `.transaction()` helper — the codebase's existing `db.exec('BEGIN')/COMMIT` inline pattern is correct. `db.isTransaction` (added 24.0/22.16) exists if a guard is wanted. Additive migration must stay inside the existing backup-then-transaction boot flow.
-- **`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`** are the additive-migration primitives already used at boot (`server.js:160–234`) — no `ALTER TABLE` needed if the new settings table is new-shaped.
-- **`DatabaseSync` deprecation nuance:** `DatabaseSync`/`StatementSync` are deprecated *aliases* (DEP0210/DEP0211) as of late Node 24.x. Not a v1.7 concern (renaming touches every call site for zero behavior change), but note it in STATE.md deferred items.
+```js
+// src/core/i18n.js — additive; the browser t() stays untouched
+export function tIn(localeCode, key, vars) {
+  const active = catalogues.get(localeCode) || catalogues.get(BASE_LOCALE);
+  // …same resolution/plural/interpolate logic as t(), parameterized.
+}
+```
 
-### Origin / Referer parsing for the `sameOrigin` check (HARD)
+Refactor `t()` to `tIn(locale, key, vars)` internally so there is exactly one resolution path (one escape hatch = one place to fix). Server call sites pass the recipient's locale resolved from `users.locale` via the existing memberships/users JOIN (`queueNotifEmails` already builds that `authority` map — add `u.locale` to its SELECT). Unknown/null locale falls back to `en` — the same clamping `activateLocale` already does.
 
-- The existing `sameOrigin()` compares the raw `Origin` header string against `` `${proto(req)}://${host}` `` — an exact string compare, **no URL parsing**. This is the right design to extend: `new URL(origin)` would normalize the default port away (`https://x:443` → `https://x`) and make the comparison *stricter than needed* or introduce case/port surprises. Keep the string compare.
-- **Pitfall 1 — proxy headers:** `proto()` and the host both honor `x-forwarded-*` but take `.split(',')[0].trim()` of proto (`server.js:2357–2360`) while `sameOrigin` uses `x-forwarded-host` *without* the first-value split (`server.js:2392`). A multi-hop `X-Forwarded-Host: real, internal` makes the origin comparison fail (closed proxy setups) — and a spoofable chain header makes it *pass* for an attacker if TRUST_PROXY is on and Traefik doesn't strip inbound `X-Forwarded-Host`. Any HARD work here should mirror the first-value discipline used by `proto()`/`clientIp()` (`server.js:2384–2387`).
-- **Pitfall 2 — missing Origin:** `sameOrigin` returns `true` when Origin is absent (non-browser clients; `server.js:2391`). Correct for CSRF but means "sameOrigin on invite accept" is not a fix for non-browser abuse — the route keeps its per-IP throttle (`tooMany`, `server.js:4318`) as the real control. Do not tighten this to Origin-required: same-site navigations from older browsers and the `/join` GET legitimately omit Origin.
-- **Pitfall 3 — Referer:** do NOT add Referer-based fallback. Referer parsing needs `new URL(referer)` and a `.origin` comparison, which reintroduces URL-normalization pitfalls (port, case, punycode) for marginal benefit; the Origin check plus `SameSite=Lax` cookie (already set, `server.js:2415`) covers the CSRF window.
-- **Pitfall 4 — Origin `null`:** sandboxed iframes and redirects send `Origin: null`; the exact string compare rejects it correctly, which is the desired outcome. No special case.
+**Node-side catalogue loading:** `import.meta.glob` is Vite-only, so the FR catalogue must be statically imported in the i18n module (or read with `node:fs` + `registerCatalogue`). Static import is better: it is parsed once at boot, it ships in the Docker image automatically (this is also the moment the v1.2 deferral "the server image ships no catalogue" gets retired — no Dockerfile change needed since `src/` is copied into the runtime stage), and it keeps the i18n-scan gate authoritative. The EN catalogue is already statically imported (`import en from '../locales/en.json' with { type: 'json' }`) — plain Node ≥22 supports import attributes.
 
-### Search redaction (SEARCH)
+**Plurals and dates:** already solved with zero dependencies. `Intl.PluralRules` (cached per locale in i18n.js) handles FR's `one/many/other`; `Intl.DateTimeFormat` with `timeZone` already powers `localParts()`. `Intl.MessageFormat` does **not** exist in Node 24 (verified: `typeof Intl.MessageFormat === 'undefined'` on v24.21.0) — so no richer ICU syntax; the existing `{name}` + `{n, plural}` subset is the ceiling. Same subset, same house style (no-break space before `:` in FR, curly apostrophe) applies to the new email keys.
 
-- `referencesHidden` does `term.toLowerCase().includes(name)` (server.js:837). Known residual leak classes: (a) a hidden term that is itself empty/whitespace matches everything — guard `hiddenTerms.some(name => name && ...)`; (b) free-text search hitting task titles/comments is *not* redacted and cannot be, without indexing — that limitation is what the milestone says to **document**, not fix. No platform API beyond `toLowerCase`/`includes`/`Intl.Collator` (already used for accent-insensitive matching elsewhere per PROJECT.md).
+**i18n-scan gate:** the new server keys (`notif.digest.subject`, `notif.digest.body`, `notif.reminder.dueToday`, …) land in the same flat `src/locales/{en,fr}.json` catalogues, so `scripts/i18n-scan.mjs` coverage and the EN+FR milestone gate apply unchanged. New keys are EN+FR complete at commit time.
 
-### HTTP/misc
+### 2. Digest email — one new builder in `mailer.js`
 
-- `fetch` (global, used in the healthcheck, Dockerfile:36) — unaffected by v1.7.
-- `crypto.randomUUID()` for row ids — already the house pattern for authority rows (`team_members.id`-style text PKs); reuse for per-user settings rows.
-- `Date.now()` epoch-ms integers for `created_at` — house pattern in every table (`server.js:161–233`).
+The SMTP client (`mailer.js`, ~700 lines, `node:net`/`node:tls`/`node:crypto` only) already does the hard parts: EHLO/STARTTLS/AUTH, RFC 2047 header encoding (`encodeWord`), UTF-8 base64 bodies, `multipart/alternative` with boundary + dot-stuffing, `Auto-Submitted: auto-generated`. A digest is not a new transport — it is a **new message builder** following the `buildNotifMessage` pattern:
 
-## Alternatives Considered
+- `buildDigestMessage(config, { to, locale, workspace, dueToday[], overdue[], url })` — same table-layout HTML + plain-text alternative, a `<ul>` of task links instead of one sentence, subject via `tIn(locale, 'notif.digest.subject', { workspace })`.
+- Add `sendDigest(msg)` next to `sendNotif` in the `createMailer` return object (and a throwing stub in the disabled branch, same as `sendSecurityAlert`).
+- One SMTP session per digest (already the pattern — `new SmtpSession(config)` per send, `destroy()` in `finally`). Digest is fire-and-forget like every other send: failures logged, never surfaced.
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Per-user settings storage | New table, one row per (workspace_id, user_id) | Keep in workspace doc under per-user keys | Defeats the point: the doc is shared, redacted and merged on every read/write — the milestone explicitly moves settings OUT of it |
-| Settings columns | Flat columns with defaults | One JSON TEXT blob | Defaults + `D-27-5` all-ON semantics are expressible in SQL; JSON blob re-creates the doc-merge problem at row scale |
-| Invite-accept origin guard | Reuse existing `sameOrigin()` | New `parseOrigin`/Referer check | URL-normalization pitfalls (see above); the existing guard is battle-tested across ~35 routes |
-| delTeam undo | Capture per-member `before` team sets, re-PUT on undo | New server-side undo log table | Massive overbuild for a client-side optimistic action; re-PUT reuses the `PUT /members/:uid/teams` route unchanged |
-| VIS enforcement | Extend the single `projectScope`/`hiddenFor` funnel | Per-route visibility checks | Per-route checks are exactly the drift the v1.6 funnel was built to prevent (PROJECT.md Phase 29) |
-| Node upgrade | None | node:25-alpine | No v1.7 item needs it; bumps `node:sqlite` from experimental-adjacent to RC but risks behavioral churn mid-debt-milestone |
+No templating library. No `nodemailer`. No `mjml`/`handlebars`. The existing inline-styled HTML template approach (boring, table-based, email-client-proof) is the right one and is already battle-tested in this codebase.
+
+### 3. Digest composition & scheduling — reuse the reminder pass skeleton
+
+The digest runs in the same 09:00 workspace-local window as reminders, so it rides `runReminderPass`'s existing scaffolding: injectable clock, per-workspace `localParts()` hour gate, `TZ_BY_LABEL`, `addDaysIso` string arithmetic, boot catch-up, `reminders_sent` dedup. Grouping is a plain `for` over `doc.data.tasks` filtered by `remindable()` (due === localDate → today; due < localDate → overdue), bucketed per recipient (assignee), gated on the now-real `email_digest` pref.
+
+Dedup key: `${ws.id}:${userId}:digest:${dueDate}` — one digest per user per local day, exactly-once, using the same `insert or ignore` transactional claim. The stub pref needs no migration: it is already in `NOTIF_PREF_KEYS`/`NOTIF_PREF_DEFAULTS` (default `true`; the roadmap may want to flip the default to `false` for opt-in — that is a one-line defaults change, not a stack item).
+
+### 4. `day_before` removal — delete, don't deprecate
+
+No stack. Remove the `localDate >= addDaysIso(due, -1)` branch and the `day_before` string from `reminderSnippet`. Historical `reminders_sent` rows with `:day_before:` keys simply never match again (the key shape includes the offset, so no collision, no migration, no cleanup pass needed — the ledger is append-only history). The `NOTIF_PREF_DEFAULTS.due_reminder` toggle continues to govern "due today" alone.
+
+## Alternatives considered (and rejected under the zero-dep rule)
+
+| Category | Recommended | Alternative | Why not |
+|---|---|---|---|
+| Server i18n | Extend `src/core/i18n.js` with `tIn()` | `i18next` (~40 kB, full framework) | Massively larger than the layer it replaces; the v1.2 decision already measured this: "every candidate library measured is bigger than the layer it would replace." Also `import.meta`-bundled, awkward under plain Node ESM. |
+| Server i18n (2) | `tIn()` pure function | Reusing the singleton `t()` with `setLocale()` per send | Interleaving bug across concurrent fire-and-forget sends; two pipelines to keep in sync. |
+| Message formatting | Existing `{name}` + `Intl.PluralRules` subset | `@formatjs/intl-messageformat`, `ICU4X` | Needs a parser for richer ICU syntax; `Intl.MessageFormat` doesn't exist in Node 24; the subset covers every planned email string. |
+| Email composition | Hand-rolled `buildDigestMessage` in `mailer.js` | `nodemailer`, `email-templates`, `handlebars` | All violate the hard rule; `nodemailer` alone would be the project's first runtime dependency. The SMTP session layer already works and is tested. |
+| Digest scheduling | Inside `runReminderPass` (same tick) | Separate `setInterval` / `node-cron` | `node-cron` is a dependency; a second timer duplicates the clock-injection, boot-catch-up and DST handling the reminder pass already solved. Same 09:00 gate = one window, one set of DST semantics. |
+| Template engine | String building + existing `escapeHtml` | Template libs | The three existing builders show the pattern scales to a fourth; escapeHtml + table HTML is enough for a two-section list email. |
+
+## Versions / platform anchors
+
+| Anchor | Version | Verified |
+|---|---|---|
+| Node runtime | `node:24-alpine` (Dockerfile), `node >= 24` (package.json), local v24.21.0 | ✅ read from repo |
+| `Intl.PluralRules` / `Intl.DateTimeFormat` with `timeZone` | full-icu built into Node since v13 | ✅ used in production code paths today |
+| `Intl.MessageFormat` | does not exist in Node 24 | ✅ `typeof Intl.MessageFormat === 'undefined'` |
+| Import attributes (`import … with { type: 'json' }`) | stable in Node ≥ 22 | ✅ already imported by `src/core/i18n.js` |
+| Runtime npm dependencies | **0** (dev: `@playwright/test` only) | ✅ unchanged by this milestone |
+
+No third-party library is proposed, so no Context7 version pin applies — the honest stack statement is *nothing to install*.
+
+## What NOT to add (zero-dep rule, explicit)
+
+- **No i18n/npm library** — even a "tiny" one. The catalogue files + `tIn()` are smaller than any candidate's install size.
+- **No nodemailer / SMTP library** — `mailer.js` speaks enough SMTP and is proven against the operator's relay.
+- **No scheduler/cron package** — the unref'd 1-minute tick + hour gate + ledger dedup is the scheduler.
+- **No HTML email framework** — one static inline-styled table template, same as the three existing builders.
+- **No database migration** — the digest dedup rides `reminders_sent` with a new key shape; the `email_digest` pref row already exists; `users.locale` already exists. (If the roadmap adds a *per-workspace digest send time*, that would need an additive column — current scope says fixed 09:00, so nothing.)
+- **No Dockerfile change** — `src/` is already copied into the runtime image; the FR catalogue ships automatically. This formally retires the v1.2 out-of-scope note "the server image ships no catalogue."
 
 ## Installation
 
 ```bash
-# Nothing. Zero runtime dependencies held.
-# Dev dependency remains @playwright/test only (package.json).
+# Nothing. Zero new packages — the milestone's stack work is all in-repo:
+#   - extend src/core/i18n.js with tIn() + server-side catalogue registration
+#   - extend mailer.js with buildDigestMessage / sendDigest
+#   - extend server.js: locale JOIN in queueNotifEmails, digest pass, offset removal
+npm ci   # unchanged; suite still runs on the same deps
 ```
-
-## Reusable Codebase Inventory (checked, do not rebuild)
-
-| Existing piece | Location | Reused by |
-|----------------|----------|-----------|
-| `sameOrigin(req)` | server.js:2389 | HARD (one new call site) |
-| `proto(req)` / `clientIp(req)` first-value proxy discipline | server.js:2357, 2384 | HARD (make `x-forwarded-host` consistent) |
-| `team_members` table + index | server.js:227–234 | VIS |
-| `projectScope`/`hiddenFor` read funnel | server.js:~700–880 | VIS |
-| `referencesHidden` / `mergeRecentSearches` / `hiddenProjectTerms` | server.js:837/844/868 | SEARCH |
-| `vacuum into` backup + guarded one-time backfill migration pattern | server.js:1693–1741, 1727 | SETTINGS |
-| `setMemberTeams` PUT route | server.js:3990+ | UNDO |
-| Keyring reading `MASTER_KEY_PREVIOUS` | server.js:88–101 | DEPLOY (compose line only) |
-| `restore(snap)` toast-undo client pattern | src/actions/actions.js:699+ | UNDO |
-| Per-user `locale` column precedent (per-user state outside doc) | v1.2, PROJECT.md | SETTINGS |
 
 ## Sources
 
-- `Dockerfile` (lines 2, 12) — node:24-alpine, both stages [HIGH]
-- `docker-compose.yml` lines 8–45 — no `MASTER_KEY_PREVIOUS` today [HIGH, file-verified]
-- `server.js` — all line references above, read directly [HIGH]
-- `.planning/PROJECT.md`, `STATE.md`, `milestones/v1.6-phases/28-multi-team-membership/28-REVIEW.md` — UNDO root cause (WR-02/WR-03, deferred-item 28-02) [HIGH]
-- Node.js official `sqlite.md` docs (pinned to main, introduced_in v22.5; changes log verified for 24.x) [HIGH]
-- Local runtime check: `node -v` → v24.21.0 [HIGH]
+- `server.js` — NOTIF_PREF_KEYS/PREFS (l.1107–1164), queueNotifEmails (l.1179–1268), reminder pass + localParts/addDaysIso/reminderSnippet (l.1270–1429) — read directly, HIGH confidence
+- `mailer.js` — full SMTP client, buildNotifMessage/buildSecurityAlertMessage/buildInviteMessage pattern — read directly, HIGH confidence
+- `src/core/i18n.js` — leaf-module design, singleton locale, PluralRules caching, Node-safe loader no-op — read directly, HIGH confidence
+- `src/locales/en.json` — flat key → string | plural-object shape — read directly, HIGH confidence
+- `.planning/PROJECT.md` — zero-dep standing constraint, v1.2 decision #12 (server catalogue deferral), Node 24 platform — HIGH confidence
+- Node 24 runtime probes (`node -e`, Dockerfile) — HIGH confidence
