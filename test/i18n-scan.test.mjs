@@ -16,7 +16,7 @@ import path from 'node:path';
 import url from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-import { scanSource, scanTree, compare, EXCLUDED_FILES, main, sweepDisplayLabels } from '../scripts/i18n-scan.mjs';
+import { scanSource, scanTree, compare, EXCLUDED_FILES, main, sweepDisplayLabels, scanServerNotifKeys, notifParity } from '../scripts/i18n-scan.mjs';
 import en from '../src/locales/en.json' with { type: 'json' };
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
@@ -412,6 +412,110 @@ test('the scanner exits 0 on the live tree today (D-07)', () => {
   // tree regressed and the CI build job (`npm run build` → prebuild) fails.
   const code = main([], { root: path.join(REPO_ROOT, 'src') });
   assert.equal(code, 0, 'the i18n scan no longer exits 0 on the live tree — the build gate would fail CI');
+});
+
+/* ---------- the server notification family (I18N-04) ----------
+   t/tFor notif.* keys in server.js and mailer.js must resolve in BOTH
+   catalogues, and the notif.* namespace itself must be EN↔FR parity-clean.
+   Fixtures are hermetic: serverFiles/frCatalogue point into the fixture
+   tree, never at the live repo files. */
+
+function serverFixture(files) {
+  const dir = fixtureTree({
+    ...files,
+    'src/x.js': 'const machine = 1;\n',
+    'test/fixtures/i18n-pending.json': JSON.stringify([]),
+  });
+  return {
+    root: path.join(dir, 'src'),
+    allowList: path.join(dir, 'test/fixtures/i18n-pending.json'),
+    catalogue: path.join(dir, 'src/locales/en.json'),
+    frCatalogue: path.join(dir, 'src/locales/fr.json'),
+    serverFiles: files['server.js'] ? [path.join(dir, 'server.js')] : [],
+  };
+}
+
+test('a tFor notif.* key missing from fr.json is a server-family violation and fails main()', () => {
+  const options = serverFixture({
+    'server.js': "import { tFor } from './src/core/i18n.js';\nconst greeting = tFor(locale, 'notif.email.greeting');\n",
+    'src/locales/en.json': JSON.stringify({ 'notif.email.greeting': 'Hello' }),
+    'src/locales/fr.json': JSON.stringify({}),
+  });
+  assert.equal(main([], options), 1, 'a missing FR key must fail the build (D-07, SC-4)');
+});
+
+test('a tFor notif.* key present in BOTH catalogues passes main()', () => {
+  const options = serverFixture({
+    'server.js': "import { tFor } from './src/core/i18n.js';\nconst greeting = tFor(locale, 'notif.email.greeting');\n",
+    'src/locales/en.json': JSON.stringify({ 'notif.email.greeting': 'Hello' }),
+    'src/locales/fr.json': JSON.stringify({ 'notif.email.greeting': 'Bonjour' }),
+  });
+  assert.equal(main([], options), 0);
+});
+
+test('a t() notif.* key in a server file is covered by the same family', () => {
+  const options = serverFixture({
+    'server.js': "const label = t(locale, 'notif.email.greeting');\n",
+    'src/locales/en.json': JSON.stringify({ 'notif.email.greeting': 'Hello' }),
+    'src/locales/fr.json': JSON.stringify({}),
+  });
+  assert.equal(main([], options), 1, 'the family is tFor AND t call sites');
+});
+
+test('notif.* EN↔FR parity drift fails main() with no call site at all (D-09)', () => {
+  const options = serverFixture({
+    'src/locales/en.json': JSON.stringify({ 'notif.drift.key': 'Drifted' }),
+    'src/locales/fr.json': JSON.stringify({}),
+  });
+  assert.equal(main([], options), 1, 'an added key without its translation must fail the build');
+});
+
+test('composed notif.* keys are skipped by the server family', () => {
+  const options = serverFixture({
+    'server.js': "const label = tFor(locale, 'notif.email.' + suffix);\n",
+    'src/locales/en.json': JSON.stringify({}),
+    'src/locales/fr.json': JSON.stringify({}),
+  });
+  assert.equal(main([], options), 0, 'a composed key is not a literal key');
+});
+
+test('non-notif tFor call sites in a server file are outside the family (D-08 width pin)', () => {
+  const options = serverFixture({
+    'server.js': "const label = tFor(locale, 'settings.someKey');\nconst prose = tFor(locale, 'plain.prose', { name });\n",
+    'src/locales/en.json': JSON.stringify({}),
+    'src/locales/fr.json': JSON.stringify({}),
+  });
+  assert.equal(main([], options), 0, 'the server family is bounded to notif.* literals');
+});
+
+test('an empty notif.* namespace is a legal empty input, not an error', () => {
+  const options = serverFixture({
+    'src/locales/en.json': JSON.stringify({ 'a11y.dismiss': 'Dismiss' }),
+    'src/locales/fr.json': JSON.stringify({ 'a11y.dismiss': 'Rejeter' }),
+  });
+  assert.equal(main([], options), 0);
+});
+
+test('the server family reports zero violations over the live server.js and mailer.js', () => {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/en.json'), 'utf8'));
+  const fr = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/fr.json'), 'utf8'));
+  for (const file of ['server.js', 'mailer.js']) {
+    const text = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+    const findings = scanServerNotifKeys(text, file, { en: catalogue, fr });
+    assert.deepEqual(
+      findings.map(f => `${file} ${f.text}`),
+      [],
+      `a server notif.* key does not resolve in both catalogues (${file})`,
+    );
+  }
+});
+
+test('the live tree is notif.* parity-clean (EN↔FR)', () => {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/en.json'), 'utf8'));
+  const fr = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/fr.json'), 'utf8'));
+  const parity = notifParity(catalogue, fr);
+  assert.deepEqual(parity.missingInFr, [], 'a notif.* key is missing from fr.json');
+  assert.deepEqual(parity.missingInEn, [], 'a notif.* key is missing from en.json');
 });
 
 test('src/data/seed.js is never scanned', () => {

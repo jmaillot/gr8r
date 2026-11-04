@@ -1179,6 +1179,79 @@ function scanCatalogueKeys(tokens, file, findings, lineAt, catalogue) {
   }
 }
 
+/* ---------- the server notification family (I18N-04) ---------- */
+
+/* The t/tFor notif.* call sites of server.js and mailer.js: the key must
+   resolve in BOTH catalogues (en AND fr) — a missing FR key fails the build
+   (D-07). The key is the first STRING argument of the call (tFor's first
+   argument is the locale, so the literal key is the first string among the
+   arguments). A template or composed key is skipped, like the composed keys
+   of the catalogue-key family. The family is BOUNDED to notif.* literals —
+   no whole-server prose sweep (D-08) — and the callVars placeholder check is
+   deliberately NOT applied here: the server vars are runtime snapshots, not
+   literals (Pitfall 3); static placeholder discipline is covered by unit
+   tests, not by the gate. Returns the findings it emitted. */
+export function scanServerNotifKeys(text, file, catalogues) {
+  const findings = [];
+  if (!catalogues || !catalogues.en || !catalogues.fr) return findings;
+  const starts = lineStarts(text);
+  const at = offset => lineAt(starts, offset);
+  const { tokens } = lex(text);
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.type !== 'ident' || (t.value !== 't' && t.value !== 'tFor')) continue;
+    const open = tokens[i + 1];
+    if (!open || open.type !== 'punc' || open.value !== '(') continue;
+    let depth = 0;
+    let key = null;
+    let keyIndex = -1;
+    for (let j = i + 2; j < tokens.length && key === null; j++) {
+      const a = tokens[j];
+      if (a.type === 'punc') {
+        if (a.value === '(' || a.value === '[' || a.value === '{') {
+          depth++;
+          continue;
+        }
+        if (a.value === ')' && depth === 0) break; // the call is over, no key
+        if (a.value === ')' || a.value === ']' || a.value === '}') {
+          depth--;
+          continue;
+        }
+      }
+      if (depth === 0 && (a.type === 'str' || a.type === 'template')) {
+        key = a;
+        keyIndex = j;
+      }
+    }
+    if (!key || key.type !== 'str') continue; // a dynamic or template key is not checked here
+    const after = tokens[keyIndex + 1];
+    if (after && after.type === 'punc' && (after.value === '+' || after.value === '.')) continue; // a composed key
+    const name = key.value;
+    if (!name.startsWith('notif.')) continue; // the family is bounded to the notif.* namespace (D-08)
+    if (!Object.hasOwn(catalogues.en, name) || !Object.hasOwn(catalogues.fr, name)) {
+      emit(findings, file, at, key.start, 'unresolved', name);
+    }
+  }
+  return findings;
+}
+
+/* The EN↔FR parity of the notif.* namespace (D-09): the key sets must be
+   identical in both directions. Empty catalogues and empty notif.* sets are
+   legal empty inputs — no drift is reported, no error raised. Key equality
+   is exact string match (hasOwn semantics) — no case, whitespace or Unicode
+   normalisation. */
+export function notifParity(en, fr) {
+  const enCat = en || {};
+  const frCat = fr || {};
+  const missingInFr = Object.keys(enCat)
+    .filter(k => k.startsWith('notif.'))
+    .filter(k => !Object.hasOwn(frCat, k));
+  const missingInEn = Object.keys(frCat)
+    .filter(k => k.startsWith('notif.'))
+    .filter(k => !Object.hasOwn(enCat, k));
+  return { missingInFr, missingInEn };
+}
+
 /* ---------- the public API ---------- */
 
 function lineStarts(src) {
@@ -1423,7 +1496,36 @@ export function main(argv = process.argv.slice(2), options = {}) {
   const allowListFile = options.allowList || path.join(REPO_ROOT, ALLOW_LIST);
   const catalogueFile = options.catalogue || path.join(REPO_ROOT, 'src/locales/en.json');
   const catalogue = readCatalogue(catalogueFile) || {};
+  const frCatalogueFile = options.frCatalogue || path.join(REPO_ROOT, 'src/locales/fr.json');
+  const frCatalogue = readCatalogue(frCatalogueFile) || {};
   const findings = scanTree(root, { catalogue });
+
+  /* The server notification family (I18N-04): the t/tFor notif.* keys of
+     server.js and mailer.js must resolve in BOTH catalogues (D-07, D-08).
+     The files are scanned directly — they live outside src/ — and the
+     findings join the same stream, so the exit-code contract below holds. */
+  const serverFiles = options.serverFiles ?? [path.join(REPO_ROOT, 'server.js'), path.join(REPO_ROOT, 'mailer.js')];
+  for (const serverFile of serverFiles) {
+    let text = null;
+    try {
+      text = fs.readFileSync(serverFile, 'utf8');
+    } catch {
+      text = null;
+    }
+    if (text === null) continue;
+    for (const f of scanServerNotifKeys(text, serverFile, { en: catalogue, fr: frCatalogue })) findings.push(f);
+  }
+
+  /* The notif.* EN↔FR parity gate (D-09): a key added to one catalogue
+     without its translation in the other fails the build. */
+  const parity = notifParity(catalogue, frCatalogue);
+  for (const key of parity.missingInFr) {
+    findings.push({ file: 'src/locales/fr.json', line: 1, col: 0, kind: 'unresolved', text: `${key} (parity: missing from fr.json)` });
+  }
+  for (const key of parity.missingInEn) {
+    findings.push({ file: 'src/locales/en.json', line: 1, col: 0, kind: 'unresolved', text: `${key} (parity: missing from en.json)` });
+  }
+
   const allowList = readAllowList(allowListFile);
   const verdict = compare(findings, allowList);
 
