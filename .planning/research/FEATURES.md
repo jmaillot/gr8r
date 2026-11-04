@@ -1,147 +1,117 @@
-# Feature Research — v1.7 Team Visibility & Hardening
+# Feature Landscape — v1.8 "Notification Sanity"
 
-**Domain:** Self-hosted PM workspace — debt-closure milestone (no new surface area)
-**Researched:** 2026-11-02
-**Confidence:** HIGH on all codebase claims (read directly); MEDIUM-HIGH on competitor comparisons (official docs; Wekan/Focalboard details partly community sources)
-**Comparison set:** Plane (Teamspaces), Wekan, Focalboard, Taiga — plus generic undo/CSRF UX standards
+**Domain:** Project-management tool notifications (reminder cadence, daily digest, notification i18n)
+**Researched:** 2026-11-04
+**Overall confidence:** HIGH for cadence and digest behavior patterns (grounded in Todoist/Asana/Workfront docs), MEDIUM for i18n norms (enterprise-tool docs + Trello behavior, less formal specification exists)
 
----
+Scope note: covers ONLY the three new v1.8 feature areas (REM rework, DIGEST, I18N server-side) plus what the AUDIT needs to evaluate them. Existing gr8r baseline (3-offset scheduler, 17-key notifPrefs whitelist, per-account locale, EN/FR catalogues) is treated as given.
 
-## Feature Landscape
+## How the PM ecosystem actually does it
 
-### Table Stakes (for this milestone's six items)
+### Reminder cadence (how many notifications per task?)
+
+| Tool | Model |
+|------|-------|
+| **Todoist** | Reminders are *separate* from due dates: 1 automatic reminder (at due time, configurable default) + optional custom reminders. Users who complain about noise are told to disable automatic reminders, not to tolerate more. (HIGH — todoist.com/help) |
+| **Asana** | No per-task reminder emails by default; noise control comes from a *choice between individual emails, daily digest, or both*. (HIGH — help.asana.com) |
+| **Adobe Workfront** | Overdue emails go as **one digest email per recipient per day, not separate emails per item**. (HIGH — experienceleague.adobe.com) |
+| **Trello / Linear / Jira** | Due-date nudges live in the in-app inbox/notifications; email is a mirror or an opt-in digest. Jira's due-date "notification schemes" are admin-configured, rarely email-first. (MEDIUM) |
+
+**Consensus pattern:** 1–2 notifications per task maximum, with the "at due time / due today" one being the near-universal anchor. The "day before" offset exists in some tools (ClickUp due-date reminders, Todoist custom reminders) but as an **opt-in per-task or per-user setting, never a default that fires 3 emails per task**. A "past due" follow-up fired *once, the next morning* (not repeatedly each day) is the Workfront-style pattern and matches gr8r's planned REM rework exactly.
+
+**Expected behavior for gr8r (validated):** max 2 per task — "due today" at 09:00 + "past due" the next morning, then silence. This is not a downgrade vs competitors; it is the aggressive end of the norm and directly answers the "too many notifications" feedback.
+
+### Daily digest — what it contains and how it interacts with individual reminders
+
+**Content (what every digest that works contains):**
+- Two sections, clearly separated: **due today** and **overdue** (gr8r's planned scope matches).
+- Each item: task title (linked via the existing `/w/:slug/task/:key` deep-link + `?next=` carry), project name, and due date (with days-overdue count for the overdue section).
+- Absence handling: if nothing is due/overdue, either **send nothing** (majority pattern — silence is a feature) or a minimal "nothing due today" note. Recommended: send nothing; an empty daily email becomes noise within a week.
+- A header noting the digest replaces individual reminders, so the user understands why the per-task emails stopped. (MEDIUM — inferred from Asana's "individual vs digest vs both" copy)
+
+**Digest vs individual reminder interaction — the industry-standard decision table:**
+
+| Digest enabled? | Due-today/past-due email | Push/inbox |
+|---|---|---|
+| Off (default for existing users already receiving reminders) | per-task email as today | unchanged |
+| On | **suppressed entirely** — one email per day per recipient replaces per-task email | unchanged |
+
+This "digest replaces reminders, push stays real-time" split is exactly Asana's model (digest is an *email-channel* choice; inbox/push notifications are governed separately) and Workfront's implementation. gr8r's plan (digest replaces reminder emails only, push unchanged, stub `email_digest` pref takes its real role) matches the ecosystem norm precisely — the pref already exists in the 17-key whitelist, so no migration is needed.
+
+**Timing:** 09:00 in the recipient's timezone is the standard slot (gr8r has a workspace-shared timezone and the reminder pass already scans a 09:00 window — the digest should ride the same pass). (HIGH)
+
+### Notification language — do tools localize per recipient?
+
+**Yes, and it is the enterprise expectation, not a nice-to-have:**
+- **Trello** detects the account language and localizes all notification emails per user. (MEDIUM — idalko guide)
+- **ServiceNow** documents "multilingual email notifications: send email notifications in the **recipient's preferred language**" as a platform feature. (HIGH — docs.servicenow.com)
+- **Artala** (a newer PM tool) markets "per-user language preferences, localized emails" as a differentiator. (MEDIUM)
+- No major tool localizes emails by *workspace* language or *sender* language. Per-**recipient** locale is the invariant everywhere. (HIGH — convergence)
+
+**Implication for gr8r:** the server must render email subjects/bodies, push text and inbox snippets from the recipient's account locale using the existing EN/FR catalogues. Two known constraints from v1.2 decisions resurface:
+1. The server image ships no catalogue today (v1.2 deferred the invitation email for exactly this reason — Dockerfile change needed). I18N therefore requires making the JSON catalogues available server-side (they are already "importable by plain Node" by design, so this is a build/copy concern, not a rewrite).
+2. Fallback rule: unknown key or missing locale → English, mirroring the client's behavior (ERR-02 pattern).
+
+## Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **VIS — Team-derived project visibility** | Every tool in the comparison set derives project access from team membership (see Competitor table). gr8r already has 80% of the machinery: `project.teams[]` exists on every project (migrated in P3), `team_members` scope columns exist (Phase 28), and `scopeGrants()` (server.js:722-728) already implements the union read "a team's reach opens private team-linked projects". The v1.7 change is one predicate widened from "scoped members" to "all members": readable ⟺ `p.teams ∩ member.teams ≠ ∅` ∨ existing rules; no-team projects stay workspace-wide. | LOW-MEDIUM | **Must ride the ONE funnel.** The code comment at server.js:705-711 is explicit: redactDoc AND mergeClientDoc both consume `hiddenFor()` — never a second pipeline. Add the team-intersection term inside `scopeGrants`/`inScopeProject` so writes are protected by the same predicate. Phase-29 scope stays as an optional admin restriction layered on top (it already composes as a pre-filter). |
-| **UNDO — delTeam undo honesty** | The undo-toast standard (vocab.design, Marigold: "Honest — never promise a recovery the system cannot deliver") makes a lying Undo offer worse than no offer. Current code (src/actions/teams.js:130-165) purges `team_members` rows server-side via `api.setMemberTeams` BEFORE `mutate()`/`snapshot()`, then offers `restore(snap)` which restores only the local document — the memberships stay deleted. Two standard exits: (a) make undo real, or (b) drop the offer. | LOW (b) / MEDIUM (a) | **Recommendation: (a) make undo real, client-side only.** Defer the server purge: keep the "re-PUT with team filtered out" as the *commit* path but capture `affected` teams first and restore via the same `api.setMemberTeams` calls on undo. This matches the existing undo idiom everywhere else in the app (task delete, project delete, member removal all use `snapshot()/restore()`). Simpler honest fallback: keep the confirm dialog (it already exists and is bulk-aware) and remove the Undo button for teams only. |
-| **HARD — sameOrigin on invite accept** | CSRF on state-changing, cookie-authenticated routes is table stakes. gr8r already enforces `sameOrigin()` on ~20+ POST routes (server.js:2630-3780, "Pitfall 22 order: sameOrigin FIRST, before any body read or throttle"). The invite-accept route is the known gap (v1.1 audit). Fix is a one-line guard matching the established idiom. | LOW | Note the subtlety: invite-accept is often hit by a *logged-out* browser arriving from an email link (cross-site navigation then form POST). The existing `?next=` carry pattern (v1.5 LINK-01..04) means the accept flow renders a page first; the POST from that page is same-origin. Verify the accept POST's referrer/origin expectations for anonymous visitors — SameSite=Lax cookies (server.js:2415) already block the cross-site POST payload from carrying a session, so the guard is defense-in-depth, not a behavior change. |
-| **HARD — no admin link-only invites / no firstWorkspace() fallback** | Invites must resolve to their workspace row; a fallback to "the first workspace ever created" is a tenant-confusion bug (`firstWorkspace()` at server.js:2773 in the SSO reconcile path, 2166, 1647). Competitors (Plane) never guess: invite → workspace_id is a hard relation; a missing workspace = dead invite. | LOW | Replace `|| firstWorkspace()` at 2773 with "workspace gone → skip reconcile (invite is dead)". The 1647 call is the seed-owner bootstrap (legitimate — the workspace was just created); leave it. |
-| **HARD — no guest-profile spoof** | gr8r's guest model (viewer + exactly one project scope, server.js:4180-4196) is enforced on writes; the spoof risk is the client trusting a self-reported profile shape. Plane gates guests server-side everywhere ("Workspace guests can't browse or join projects"). gr8r's `docForClient` redaction funnel is the right place — guest-visible member payloads should carry only what redaction already allows. | LOW-MEDIUM | Scope this item tightly: derive guest member projections server-side from the existing `hiddenFor`/redaction output rather than adding a new "spoof" concept. Flag anything beyond that as over-engineering. |
-| **SEARCH — close the substring recent-search leak** | Recent searches live in the *shared* workspace document (`out.data.recentSearches`, server.js:607) and are filtered by `referencesHidden(term, hiddenTerms)` (server.js:882) — an exact/substring match against hidden terms. The leak: a redacted project name is a substring of a saved term (e.g. searching "Acme Confidential Q3" matches hidden project "Acme Confidential"), so the *existence* of the hidden name leaks through a term the searcher can already see. Competitors store search history per user (Plane workspace views are per-user; Wekan filters are per-board-member). | LOW | Two-part fix per the milestone brief: (1) close the leak — cheapest correct rule is to redact any stored term that *contains* a hidden name as a substring (invert the current containment direction — verify current code and pick the direction that hides more), or move `recentSearches` into SETTINGS' per-user rows (kills two birds); (2) document the residual free-text limitation (users can still type hidden names into search; results are redacted, only the *query text* is user-visible). Documenting is explicitly sanctioned by the milestone. |
-| **SETTINGS — per-user settings isolation** | v1.2 already tracked this as WS-01 ("Per-user isolation of notifPrefs, invoices"). Every competitor has per-user notification prefs (Wekan: per-user watch/track/mute per board; Plane: per-user notification preferences; Focalboard: per-user via Mattermost). gr8r has the proven migration pattern: the per-user `locale` column (v1.2 Phase 8) — nullable column, server never writes at boot, byte-identical second boot, `PATCH` route. | MEDIUM | `notifPrefs` is workspace-shared today (server.js:633-638 normalize-on-read merge defaults ON; email gates read `doc.data.notifPrefs` at 1062, 1226). Moving to per-user rows changes the *email gate* read path (per-recipient lookup, which Phase 27's per-recipient notification rows already anticipate). `invoices` is legacy display data being purged anyway (server.js:1341 deletes it on write; migration.test.mjs:196 proves the pattern) — for invoices, "delete like plan/invoices precedent" is simpler than "migrate per user". Verify owner intent: invoices likely needs purge, not migration. |
-| **DEPLOY — MASTER_KEY_PREVIOUS in compose** | The v1.5 rotation runbook (DEPLOY.md §14, KEY-03/04) requires two env vars during rotation; docker-compose.yml forwards `MASTER_KEY` but not `MASTER_KEY_PREVIOUS` (verified — full env block read). Operators doing the documented rotation through compose silently lose the old key. | LOW | One line: `MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-}`. Pin a doc-parity test if DEPLOY.md references compose (the codebase already has doc-parsing parity tests for DEPLOY.md §14 — extend, don't invent a new mechanism). |
+| Cap due-date reminders at 2 per task (due-today + one past-due, no repeats) | Industry max is 1–2; 3+ emails per task is the complaint being fixed (Kanzo #6) | **Low** | Remove `day_before` offset from `runReminderPass()`; existing `reminders_sent` dedup handles the rest. Migration concern: existing pref rows/keys for day_before must degrade gracefully |
+| Per-recipient locale for ALL server-emitted text (email subject/body, push, inbox snippets) | Trello/ServiceNow norm; gr8r already has per-account locale + EN/FR catalogues — only the server lacks them | **Medium** | Server-side `t()` over the same JSON catalogues; English fallback; Dockerfile/build change to ship catalogues (the exact thing v1.2 deferred) |
+| Daily digest email with two sections: due today + overdue, deep-linked items | Asana/Workfront digest shape; matches planned scope exactly | **Medium** | Rides the existing 09:00 reminder pass; per-recipient grouping query + localized digest template |
+| Digest ON ⇒ individual reminder emails suppressed (per user, emails only) | Asana's model; without suppression the digest ADDS email instead of reducing it | **Low** | Gate in the reminder pass on `email_digest` pref (stub already in the 17-key whitelist) |
+| Silent digest (no email when nothing due/overdue) | An empty daily email becomes noise; most digests send nothing | **Low** | One `if (rows.length === 0) return` |
+| All new user-facing strings catalogued EN+FR, i18n-scan green | Standing constraint (EN+FR i18n gate) | **Low** | Existing build gate |
 
-### Differentiators (none needed — this is a debt milestone)
+## Differentiators
 
-Nothing here. v1.7's brief explicitly forbids new features; flag any roadmap suggestion of new surface area as out of scope. The only "differentiator-flavored" outcome is trust: honest undo + airtight redaction are the qualities self-hosted admins audit for.
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Digest localized per recipient (not per workspace) | Rarer among self-hosted tools; multi-locale teams get one consistent experience | Low | Falls out of the server i18n layer for free once it exists |
+| "Digest replaces reminders" explained in the digest header + settings copy | Users understand the behavior change without filing "where did my reminders go" | Low | 2–3 catalogue keys |
+| Past-due fires exactly once (next morning), never daily | Workfront-style; repeated overdue nagging is the #1 residual noise source even in tools that fixed cadence | Low | Already the planned REM behavior; protect it in tests against "daily overdue re-fire" regressions |
+| Notification audit doc (every type × channel × default, trim recommendations) | No mainstream tool publishes its notification surface; forces the "honest minimum" review the milestone name promises | **Low** | Doc-only; threshold changes validated by owner before coding (per milestone context) |
 
-### Anti-Features (over-engineering traps for this scale)
+## Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Plane-style Teamspaces as a first-class entity (dashboards, views, pages per team) | "Plane does it" | Plane's Teamspaces are a separate resource with lead/members/link relations — a whole new feature. gr8r's `team_members` + `project.teams[]` already model the access semantics. | Keep visibility as a *derived predicate* over existing rows. Zero new tables. |
-| Server-side undo/soft-delete trash for teams (30-day retention, trash view) | "Undo should survive navigation" | A trash is first-class UI plus retention policy — a feature, not a fix. Team deletion is rare and already confirm-dialog'd with impact counts (teams.js:124-126 counts affected members and projects). | Client snapshot + deferred server commit, within the existing toast window. |
-| CSRF tokens (synchronizer-token pattern) on all routes | "Stronger than Origin checking" | Requires per-session token plumbing and template injection across a no-framework vanilla-JS frontend. Origin/Referer validation is what same-origin frameworks (and gr8r's 20+ existing routes) already do; SameSite=Lax cookies close the cross-site POST gap. | Extend the existing `sameOrigin()` guard to the two missing routes. |
-| Full ACL UI (per-project member pickers duplicating Plane's project-membership model) | "Visibility needs management UI" | Team-derived visibility is *implicit* — it needs no new UI beyond maybe surfacing "visible because of team X". Adding per-project membership editing recreates Phase 29's scope model for everyone. | Display-only: show team chips on projects (they already render) and let the intersection rule do the work. |
-| Per-user `invoices` migration | "WS-01 lists it with notifPrefs" | Invoices are already purged-on-write legacy display data (server.js:1341, migration tests prove the precedent). Migrating shared rows into per-user rows is work with no user asking for it. | Delete `invoices` from the doc like `plan`; if any consumer needs it, that's a separate question. Verify with owner. |
-| Moving ALL recent-search history per-user in the same change as the leak fix | "It's the thorough fix" | Recent searches are in the shared doc; moving them is a migration + new route + client change. It can ride SETTINGS' per-user infra but shouldn't gate the leak fix. | Close the leak with the containment rule now; optionally move `recentSearches` per-user as a follow-up inside SETTINGS if the infra makes it trivial. |
-
----
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Per-task configurable reminder offsets (Todoist-style custom reminders) | Direct contradiction of the milestone goal; per-task reminder settings were the *cause* of noise in Todoist-like setups | Fixed 2-notification cadence, workspace-wide |
+| Digest content beyond due-today + overdue (activity, mentions, comments) | Scope creep; mixed-content digests get ignored, and mention/comment have their own real-time channels | Keep the digest strictly about dates |
+| "Digest AND individual emails" option (Asana's "both") | More email, not less — inverts the milestone premise | One boolean: `email_digest` on = reminders off |
+| Snooze/re-remind loops for overdue tasks (daily overdue re-fire) | Nag spiral; the honest minimum is one past-due ping | Past-due fires once, next morning only |
+| Machine-translation pipeline or new languages (DE/ES/JA) | Explicitly out of scope since v1.2; selector only offers what exists | EN+FR catalogues only, extend the existing files |
+| Localizing by workspace locale or Accept-Language | Wrong axis — per-recipient account locale is the industry invariant and what gr8r already stores | Read recipient's `locale` column |
 
 ## Feature Dependencies
 
 ```
-[SETTINGS per-user rows] ──provides-pattern──> [SEARCH recentSearches per-user (optional)]
-                                                     │
-[VIS team-derived visibility]                        └──> [SEARCH substring leak fix] (independent, ship first)
-        └──requires──> [team_members rows (Phase 28) — shipped]
-        └──requires──> [hiddenFor single funnel (Phase 29) — shipped]
-        └──modifies──> [redactDoc + mergeClientDoc] (both consumers of the funnel)
-
-[UNDO delTeam] ──independent──> everything else
-[HARD sameOrigin] ──independent (server.js, ~2 routes)
-[DEPLOY compose] ──independent (1 line + doc parity test)
+I18N server-side t() layer → REM (localized reminder text on new cadence)
+I18N server-side t() layer → DIGEST (localized digest subject/body/items)
+DIGEST → REM (digest suppression gate lives inside the reminder pass)
+Catalogue shipping to server image → all of the above (Dockerfile/build change)
+Existing: reminders_sent dedup + 09:00 pass + notifPrefs rows → all of the above
+AUDIT depends on nothing; its trim recommendations must land BEFORE coding threshold changes
 ```
 
-### Dependency Notes
+**Suggested order:** I18N first (pure additive infrastructure, de-risks both other features), then REM cadence (smallest), then DIGEST (composes both). AUDIT runs in parallel from day one and gates the REM threshold coding.
 
-- **VIS is the only structural change.** Everything else is a localized fix. VIS must not ship as a second redaction pipeline — the code comment at server.js:705-711 makes the single-funnel rule explicit and testable (the 404-matrix proof pattern from Phase 29 exists and should be extended with team-intersection cells).
-- **SETTINGS provides the per-user row pattern** that SEARCH can optionally reuse; they are naturally adjacent phases.
-- **UNDO and VIS interact conceptually:** if a team is deleted and members' team sets change, team-derived visibility changes with it. The undo restore path must re-run through `api.setMemberTeams` so the server and doc agree — do not restore the doc alone.
+## MVP Recommendation
 
----
+Prioritize:
+1. **Server-side notification i18n** (table stakes, medium, unblocks everything else)
+2. **Cadence rework to 2-per-task** (low complexity, direct fix for the feedback that named the milestone)
+3. **Daily digest replacing reminder emails** (the one differentiator users actually asked for)
 
-## MVP Definition (v1.7 scope)
-
-### Launch With (all six — they are the milestone)
-
-- [ ] VIS — team-intersection visibility inside the single `hiddenFor` funnel, no-team projects workspace-wide, Phase-29 scope composes on top — the headline item; needs the 404-matrix test extension
-- [ ] SEARCH — substring-leak containment fix + documented free-text limitation (CHANGELOG/docs) — smallest item, independent
-- [ ] HARD — `sameOrigin` on invite accept; `firstWorkspace()` fallback removed from invite reconcile (2773); guest projection derived from redaction — three small server.js fixes, one phase
-- [ ] UNDO — real delTeam undo via deferred purge/restore, or honest removal of the offer (decide with owner) — small, isolated
-- [ ] SETTINGS — per-user `notifPrefs` rows via the `locale`-column migration pattern; `invoices` purged not migrated (confirm with owner) — the only additive-migration item, so it carries the byte-identical-second-boot test burden
-- [ ] DEPLOY — `MASTER_KEY_PREVIOUS` in compose + doc-parity test — trivial, bundle anywhere
-
-### Add After Validation (v1.x)
-
-- [ ] Move `recentSearches` per-user — only if SETTINGS' per-user infra makes it near-free
-- [ ] "Visible via team X" affordance in project headers — only if UAT shows confusion about why a project appeared
-
-### Future Consideration (v2+)
-
-- [ ] Per-project explicit membership management UI (Plane model) — explicitly out of scope; Phase 29 scope remains the admin restriction mechanism
-- [ ] Teamspaces-style team dashboards — new feature, violates the no-new-features brief
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| VIS team-derived visibility | HIGH (closes deferred Backlog 999.1; makes teams mean something for access) | MEDIUM | P1 |
-| SEARCH leak fix | MEDIUM (privacy correctness) | LOW | P1 |
-| HARD membership-surface hardening | MEDIUM-HIGH (audit closure, tenant correctness) | LOW | P1 |
-| SETTINGS per-user isolation | MEDIUM (correctness; one admin's prefs stop controlling everyone's emails) | MEDIUM | P2 |
-| UNDO delTeam honesty | MEDIUM (trust; small blast radius) | LOW | P2 |
-| DEPLOY compose var | LOW-MEDIUM (operator runbook correctness) | LOW | P3 (but trivially cheap — do it) |
-
----
-
-## Competitor Feature Analysis
-
-| Feature | Plane | Wekan | Focalboard | Taiga | gr8r v1.7 plan |
-|---------|-------|-------|------------|-------|----------------|
-| Team-derived project access | Teamspaces: linking a teamspace to a project grants every teamspace member Contributor; direct and derived access evaluated together, higher role wins; unlink removes only derived access | No teams at board level — boards are public/private with explicit members | No real teams (Mattermost channels play the role externally) | Teams exist but visibility is per-project member lists; no team-derived read | Intersection predicate over existing `project.teams[]`/`team_members` — no new membership rows created, access always derived (like Plane's "Plane does not add them to the member list") ✓ matches Plane semantics without its entity model |
-| Guest handling | Guests can't browse/join public projects; explicit invite only | Board-level member roles | N/A (Mattermost roles) | Member roles per project | Guests keep viewer + exactly-one-project scope; guest projections derived from redaction funnel |
-| Per-user notification settings | Per-user notification preferences in account settings | Per-user watch/track/mute per board/list/card | Per-user (via Mattermost) | Per-user "config change default subscription" | `notifPrefs` moves from shared doc to per-user rows; per-recipient notification rows (P4) already make the read path per-recipient — settings finally match it |
-| Invite CSRF protection | Server-side session + standard framework protections; invite links are single-use tokens | Meteor accounts framework (DDP origin checks) | Mattermost session model | Django CSRF on all forms (framework default) | Extend existing `sameOrigin()` guard to invite accept — same idiom as 20+ existing routes; SameSite=Lax already blocks cross-site session use |
-| Destructive-action UX | Private→public visibility change warns "cannot undo"; deletes confirm | Deletes confirm; archive recoverable | Deletes confirm | Deletes confirm | gr8r's undo-toast idiom is *ahead* of all four competitors — the fix is making the one lying offer honest, not adding dialogs |
-
-### UX expectations for team-based auto-visibility (from the comparison)
-
-1. **Implicit membership is the norm, display-only.** Plane's rule is the standard: derived access never rewrites stored membership rows ("Plane does not add them to the member list and does not change the role stored on a direct membership"). gr8r's derived predicate matches exactly — no `team_members` churn, no migration of memberships when visibility rules change.
-2. **No opt-out in any competitor.** Nobody offers "project teams grant access, but let me disable that per project." Access follows membership unconditionally; the only control is *which teams the project belongs to*. gr8r should not invent a per-project opt-out flag — an admin who wants a project invisible to a team simply removes that team from `project.teams[]` (or keeps it private with explicit members, which the existing `private`+`members` path already handles).
-3. **Removal is symmetric and immediate.** Removing a user from a team removes team-derived access on the next read (Plane: "Unlinking a project removes only the access that came through the teamspace"). No grace period, no caching layer to worry about — gr8r reads are computed per-request, so this is free.
-4. **Admins keep wildcard access.** Plane: workspace admins access all projects via inheritance. gr8r's existing owner/admin role behavior should be preserved through the funnel (verify `scopeGrants` handles the no-scope admin case — the "not an admin" branches in redaction already special-case admins).
-
-### UX expectations for undo of destructive actions (standards summary)
-
-- **Undo (5–10s toast) for reversible; confirm dialog for irreversible** — gr8r already follows the hybrid (confirm dialog *plus* undo toast on teams), which the "asking twice is not twice as safe" guidance flags as one safety net too many. Either real undo or confirm, not both — the current delTeam code has both, and the undo half is the dishonest one.
-- **Never offer undo you can't deliver.** This is the exact delTeam bug: the server write (team_members purge) committed immediately, the client "restore" only rewinds the document. The Marigold rule — "Honest. Never promise a recovery the system cannot deliver" — is the acceptance criterion.
-- **Bulk actions must be restorable in one move** — the fix path (re-PUT the captured `affected` team sets) is inherently bulk-shaped, matching the existing `api.setMemberTeams` per-member loop.
-- **If undo can't be made real, the confirm dialog with impact counts is the honest fallback** — teams.js:124-126 already names the counts ("N members will have no team"), which is the standard's "the body says what is lost".
-
----
+Defer: digest scheduling preferences (custom hour/timezone per user) — workspace-shared 09:00 matches every competitor and the existing scheduler; digest for other notification types (mentions/activity) — different milestone.
 
 ## Sources
 
-**Codebase (HIGH confidence — read directly):**
-- `server.js:594-596` `firstWorkspace()`, `:607` recentSearches in shared doc, `:633-638` shared notifPrefs normalize, `:705-728` single-funnel comment + `scopeGrants` union read, `:730-739` `hiddenFor`, `:1341` invoices purge, `:2389+` `sameOrigin` + ~20 guarded routes, `:2773` invite-reconcile `firstWorkspace()` fallback, `:4180-4196` guest single-project gate
-- `src/actions/teams.js:119-168` delTeam: server purge before snapshot, dishonest undo offer
-- `src/actions/actions.js` undo-toast idiom throughout (snapshot/restore)
-- `docker-compose.yml` — `MASTER_KEY` forwarded, `MASTER_KEY_PREVIOUS` absent
-- `.planning/milestones/v1.2-REQUIREMENTS.md` WS-01 (per-user settings debt origin), `v1.3-REQUIREMENTS.md` (notifPrefs/invoices explicitly deferred)
-- `test/migration.test.mjs:196` plan/invoices purge precedent; `test/scope.test.mjs` Phase-29 404-matrix test pattern
-
-**Competitor docs (MEDIUM-HIGH confidence — official documentation unless noted):**
-- Plane docs: core-concepts/projects/overview, roles-and-permissions/overview, core-concepts/workspaces/teamspaces, manage-project-members
-- Wekan docs (GitHub): Features/Boards, Admin-Panel/Settings/Visibility
-- Focalboard/Taiga positioning via Pi Stack (2026-04) and TechRepublic (2026-03) comparisons — community sources, treated as directional only
-
-**UX standards (MEDIUM-HIGH):**
-- vocab.design "Undo" pattern; Marigold UI "Destructive Actions"; DEV Community undo-window vs soft-delete sizing (2026-06); envydesign undo-toast catalog (2026-10)
-
----
-*Feature research for: gr8r v1.7 Team Visibility & Hardening (debt closure)*
-*Researched: 2026-11-02*
+- Todoist Help — Introduction to reminders (todoist.com/help) — HIGH
+- Asana Help — Email notifications: manage what you receive (help.asana.com) — HIGH
+- Asana Forum — "Email digest?" / "More options for Email Notifications" — MEDIUM
+- Adobe Workfront — Set Up Automatic Reminders: overdue digest per recipient per day (experienceleague.adobe.com) — HIGH
+- ServiceNow Docs — Multilingual email notifications, recipient's preferred language (servicenow.com) — HIGH
+- Idalko — Trello guide: account-language detection/localized notifications (MEDIUM)
+- Ziflow Help — daily digest scheduled 09:00 (MEDIUM)
+- gr8r .planning/PROJECT.md (v1.2 i18n decisions, v1.5 REM-01..05, v1.7 SETTINGS-01..03) — HIGH (local ground truth)
