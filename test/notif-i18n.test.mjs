@@ -237,7 +237,7 @@ test('reminder emails render the localized by-label and their own verb/subject p
   });
   assert.equal(trigger.status, 200, `reminder pass ${trigger.status}`);
 
-  const msgs = await waitFor(smtp, 4, 'reminder pair');
+  const msgs = await waitFor(smtp, 2, 'reminder pair');
 
   const fr = payloadFor(msgs, 'zoe@test.local');
   assert.equal(squeeze(fr.subject), 'Rappel : Rapport naïf', `FR reminder subject: ${fr.subject}`);
@@ -362,21 +362,20 @@ test('I18N-03: emitted reminder rows carry key + vars snapshot + the English sni
   });
   assert.equal(trigger.status, 200, `reminder pass ${trigger.status}`);
 
-  /* Drain the fan-out (day_before + morning_of for the keyed task — the PUT
-     replaces the task list, so the older Jan-15 tasks are gone) so the count
-     stays deterministic for later tests. */
-  await waitFor(smtp, 2, 'keyed reminder fan-out');
+  /* Drain the fan-out (morning_of for the keyed task — the PUT replaces the
+     task list, so the older Jan-15 tasks are gone) so the count stays
+     deterministic for later tests. */
+  await waitFor(smtp, 1, 'keyed reminder fan-out');
 
   const after = await owner.get(`/api/workspaces/${ws.slug}`);
   const rows = after.data.doc.data.notifs.filter(n => n.task === 't-keyed');
-  assert.ok(rows.length >= 2, `at least the day_before + morning_of rows (got ${rows.length})`);
+  assert.ok(rows.length >= 1, `at least the morning_of row (got ${rows.length})`);
   const keys = new Set(rows.map(r => r.key));
-  assert.ok(keys.has('notif.reminder.dayBefore'), `dayBefore key present: ${[...keys].join(', ')}`);
   assert.ok(keys.has('notif.reminder.morningOf'), `morningOf key present: ${[...keys].join(', ')}`);
   for (const r of rows) {
     assert.equal(r.by, null, 'system actor');
     assert.ok(r.vars && r.vars.title === 'Clé à molette', `vars snapshot VALUES: ${JSON.stringify(r.vars)}`);
-    assert.match(r.snippet, /Due (today|tomorrow): Clé à molette/, 'EN snippet prose kept alongside the key (D-06 dual store)');
+    assert.match(r.snippet, /Due today: Clé à molette/, 'EN snippet prose kept alongside the key (D-06 dual store)');
   }
 });
 
@@ -445,13 +444,22 @@ test('I18N-03: a keyed row localizes in both the list sentence AND the snippet p
   }
 });
 
-test('I18N-03: the day_before key renders despite its producer going inert in Phase 37 (coverage continuity)', async () => {
+test('I18N-03: a legacy dayBefore-keyed row still renders after its producer AND catalogue entry went inert in Phase 37 (coverage continuity)', async () => {
+  /* The ledger keeps orphaned :day_before: rows (REM-04, no sweep, no
+     migration). With the dayBefore catalogue entry deleted (Phase 37),
+     has(key) is false in every locale — the row degrades to its STORED
+     English snippet prose (the D-06 unknown-key fallback), never blank,
+     never the raw key. The inline fixture below does not depend on the
+     deleted catalogue entries. */
   const { notifText } = compileInbox({ task: fixtureTask });
+  const legacyRow = keyedRow({ key: 'notif.reminder.dayBefore', snippet: 'Due tomorrow: Rapport naïf' });
   await primeLocale('fr');
   try {
-    assert.ok(squeeze(notifText(keyedRow({ key: 'notif.reminder.dayBefore', snippet: 'Due tomorrow: Rapport naïf' }))).includes('À échéance demain : Rapport naïf'));
+    const fr = squeeze(notifText(legacyRow));
+    assert.ok(fr.includes('Due tomorrow: Rapport naïf'), `FR falls back to the stored snippet: ${fr}`);
+    assert.ok(!fr.includes('notif.reminder'), 'raw key string never leaks into the render');
   } finally {
     await primeLocale('en');
   }
-  assert.ok(notifText(keyedRow({ key: 'notif.reminder.dayBefore', snippet: 'Due tomorrow: Rapport naïf' })).includes('Due tomorrow: Rapport naïf'));
+  assert.ok(notifText(legacyRow).includes('Due tomorrow: Rapport naïf'));
 });

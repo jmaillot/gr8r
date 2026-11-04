@@ -130,36 +130,35 @@ test('REM-01: a run outside the 09:00 hour writes nothing — revision unchanged
 
 /* ------------- REM-02/REM-03: due-day morning end-to-end + exactly-once ------------- */
 
-test('REM-02/03: due-day morning fires (both open windows) once; second run is a no-op; due-date edit re-arms', async () => {
+test('REM-02/03: due-day morning fires once; second run is a no-op; due-date edit re-arms', async () => {
   const { ws, memberId, own } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })]);
   const revisionBefore = revisionOf(ws.slug);
 
-  /* Window-open semantics: on the due date both day_before (window opened
-     yesterday, never claimed) and morning_of are open — each fires once. */
+  /* On the due-date morning only morning_of is open (the day-before offset was
+     removed in Phase 37) — exactly one notification per task per assignee (REM-01). */
   const emitted = own(await trigger(at9('2026-01-15')));
-  assert.equal(emitted.length, 2, 'day_before + morning_of both fire on the due-date morning');
+  assert.equal(emitted.length, 1, 'morning_of alone fires on the due-date morning');
   for (const n of emitted) {
     assert.equal(n.type, 'due_reminder');
     assert.equal(n.to, memberId);
     assert.equal(n.by, null, 'system actor — by:null so the email self-skip never drops reminders');
-    assert.match(n.snippet, /Due (today|tomorrow): Ship it/, 'distinguishing copy per offset');
+    assert.match(n.snippet, /Due today: Ship it/, 'due-day copy');
   }
-  assert.equal(notifRows(ws.slug).length, 2, 'both notifs appended to the doc');
+  assert.equal(notifRows(ws.slug).length, 1, 'one notif appended to the doc');
   const keys = reminderKeys(ws.id);
-  assert.equal(keys.length, 2);
+  assert.equal(keys.length, 1);
   const tId = emitted[0].task;
   assert.ok(
-    keys.includes(`${ws.id}:${tId}:${memberId}:day_before:2026-01-15`) &&
-      keys.includes(`${ws.id}:${tId}:${memberId}:morning_of:2026-01-15`),
-    'dedup keys carry ws, task, assignee, offset and due date',
+    keys.includes(`${ws.id}:${tId}:${memberId}:morning_of:2026-01-15`),
+    'dedup key carries ws, task, assignee, offset and due date',
   );
-  assert.equal(revisionOf(ws.slug), revisionBefore + 2, 'two emits → exactly two revision bumps');
+  assert.equal(revisionOf(ws.slug), revisionBefore + 1, 'one emit → exactly one revision bump');
 
   /* Simulated restart: a fresh pass invocation (no shared memo) re-scans. */
   const again = own(await trigger(at9('2026-01-15')));
   assert.equal(again.length, 0, 'second pass emits nothing — transactional dedup (REM-03)');
-  assert.equal(notifRows(ws.slug).length, 2);
-  assert.equal(revisionOf(ws.slug), revisionBefore + 2);
+  assert.equal(notifRows(ws.slug).length, 1);
+  assert.equal(revisionOf(ws.slug), revisionBefore + 1);
 
   /* REM-03: editing the due date re-arms — the key carries the due date. */
   withDb(server.dbPath, db => {
@@ -169,7 +168,7 @@ test('REM-02/03: due-day morning fires (both open windows) once; second run is a
     db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id);
   });
   const reArmed = own(await trigger(at9('2026-01-16')));
-  assert.equal(reArmed.length, 2, 'new due date → new keys → reminders re-arm');
+  assert.equal(reArmed.length, 1, 'new due date → new keys → reminders re-arm');
   assert.ok(reArmed.every(n => !emitted.some(e => e.id === n.id)), 'fresh notification rows');
 });
 
@@ -189,44 +188,35 @@ test('CR-01: emitted rows match the client notif contract (at + read)', async ()
   assert.ok(rows.every(r => typeof r.at === 'number' && r.read === false), 'doc-persisted rows match the contract');
 });
 
-/* ----------------- Task 2: window matrix — day_before ----------------- */
-test('REM-02: day_before opens the day before; month rollover is pure string math', async () => {
-  const { ws, memberId: memberIdOf, own } = await makeWorkspace(m => [task(m, { due: '2026-02-01' })]);
-  /* Jan 30: window not yet open (day_before = Jan 31). */
-  assert.equal(own(await trigger(at9('2026-01-30'))).length, 0, 'day before the day-before: silent');
-  const first = own(await trigger(at9('2026-01-31')));
-  assert.deepEqual(first.map(n => n.snippet), ['Due tomorrow: Ship it'], 'day_before fires on Jan 31 for a Feb 1 due date');
-  assert.ok(reminderKeys(ws.id).some(k => k.endsWith(':day_before:2026-02-01')));
-  /* Due-date morning: day_before stays claimed, morning_of fires. */
-  const second = own(await trigger(at9('2026-02-01')));
-  assert.deepEqual(second.map(n => n.snippet), ['Due today: Ship it']);
-  assert.deepEqual(
-    reminderKeys(ws.id).sort(),
-    [
-      `${ws.id}:${first[0].task}:${memberIdOf}:day_before:2026-02-01`,
-      `${ws.id}:${first[0].task}:${memberIdOf}:morning_of:2026-02-01`,
-    ].sort(),
-    'two ledger keys: one per offset',
-  );
-  /* Month boundary (and the DST-jump month): due Mar 1 → day_before = Feb 28. */
+/* ---------------- Task 2: window matrix — morning_of only ---------------- */
+test('REM-02: morning_of opens on the due date; nothing fires before it (day-before offset removed)', async () => {
+  const { own } = await makeWorkspace(m => [task(m, { due: '2026-02-01' })]);
+  /* Jan 30/31: no window open — the day-before offset is gone (Phase 37). */
+  assert.equal(own(await trigger(at9('2026-01-30'))).length, 0, 'two days out: silent');
+  assert.equal(own(await trigger(at9('2026-01-31'))).length, 0, 'day before the due date: silent');
+  const first = own(await trigger(at9('2026-02-01')));
+  assert.deepEqual(first.map(n => n.snippet), ['Due today: Ship it'], 'morning_of fires on the due-date morning');
+  /* Month boundary (and the DST-jump month): due Mar 1 — Feb 28 (the old
+     day-before morning) stays silent, Mar 1 fires. */
   const { own: own2 } = await makeWorkspace(m => [task(m, { due: '2026-03-01' })]);
-  const feb = own2(await trigger(at9('2026-02-28')));
-  assert.deepEqual(feb.map(n => n.snippet), ['Due tomorrow: Ship it'], 'day_before of Mar 1 is Feb 28');
+  assert.equal(own2(await trigger(at9('2026-02-28'))).length, 0, 'month rollover: nothing fires the morning before');
+  assert.deepEqual(own2(await trigger(at9('2026-03-01'))).map(n => n.snippet), ['Due today: Ship it']);
 });
 
-test('REM-02: both offsets in one pass — task due today AND task due tomorrow', async () => {
+test('REM-02: both offsets across a due-date boundary in one pass — due today + due yesterday', async () => {
   const { own } = await makeWorkspace(m => [
     task(m, { id: 'tToday', key: 'P1-T', title: 'Today', due: '2026-01-20' }),
-    task(m, { id: 'tTomorrow', key: 'P1-M', title: 'Tomorrow', due: '2026-01-21' }),
+    task(m, { id: 'tYesterday', key: 'P1-M', title: 'Yesterday', due: '2026-01-19' }),
   ]);
   const emitted = own(await trigger(at9('2026-01-20')));
-  /* tToday: day_before (window open, unclaimed) + morning_of. tTomorrow: day_before. */
+  /* tToday: morning_of. tYesterday: morning_of (open catch-up window) +
+     past_due — the open window plus an absent dedup key IS the catch-up. */
   assert.equal(emitted.length, 3);
+  assert.deepEqual(emitted.filter(n => n.task === 'tToday').map(n => n.snippet), ['Due today: Today']);
   assert.deepEqual(
-    emitted.filter(n => n.task === 'tToday').map(n => n.snippet).sort(),
-    ['Due today: Today', 'Due tomorrow: Today'],
+    emitted.filter(n => n.task === 'tYesterday').map(n => n.snippet).sort(),
+    ['Due today: Yesterday', 'Past due: Yesterday'],
   );
-  assert.deepEqual(emitted.filter(n => n.task === 'tTomorrow').map(n => n.snippet), ['Due tomorrow: Tomorrow']);
 });
 
 /* ------------------- REM-04: gating on task/project state ------------------- */
@@ -256,8 +246,8 @@ test('REM-04: done, archived, project-archived, private-hidden and due-less task
   const emitted = own(await trigger(at9('2026-01-15')));
   assert.deepEqual(
     emitted.map(n => n.task).sort(),
-    ['tOk', 'tOk'],
-    'only the plain remindable task fires (both open offsets)',
+    ['tOk'],
+    'only the plain remindable task fires (morning_of only)',
   );
 });
 
@@ -278,6 +268,19 @@ test('REM-04: past_due fires exactly once at the first 09:00 after the due date'
   assert.equal(notifRows(ws.slug).filter(n => n.type === 'past_due').length, 1);
 });
 
+/* --------------- REM-03: multi-morning replay pin (D-06) --------------- */
+
+test('REM-03: multi-morning replay — exactly one morning_of + one past_due, then silence (regression pin)', async () => {
+  const { own } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })]);
+  const onDue = own(await trigger(at9('2026-01-15')));
+  assert.equal(onDue.filter(n => n.type === 'due_reminder').length, 1, 'exactly one morning_of');
+  const after = own(await trigger(at9('2026-01-16')));
+  assert.equal(after.filter(n => n.type === 'past_due').length, 1, 'exactly one past_due');
+  for (const day of ['2026-01-17', '2026-01-20']) {
+    assert.equal(own(await trigger(at9(day))).length, 0, `nothing re-fires on ${day}`);
+  }
+});
+
 /* --------------------- D-27-5: prefs gates (default ON) --------------------- */
 
 test('D-27-5: due_reminder/past_due prefs === false gate in-app rows; missing keys stay ON', async () => {
@@ -287,7 +290,7 @@ test('D-27-5: due_reminder/past_due prefs === false gate in-app rows; missing ke
 
   /* Missing keys are ON (=== false disables — matches queueNotifEmails). */
   const { own: ownOn } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {});
-  assert.equal(ownOn(await trigger(at9('2026-01-15'))).length, 2, 'undefined prefs default to ON (both offsets)');
+  assert.equal(ownOn(await trigger(at9('2026-01-15'))).length, 1, 'undefined prefs default to ON (morning_of)');
   const { own: ownPast } = await makeWorkspace(m => [task(m, { due: '2026-01-14' })], { past_due: false });
   const gated = ownPast(await trigger(at9('2026-01-15')));
   assert.equal(gated.filter(n => n.type === 'past_due').length, 0, 'past_due: false gates the overdue nudge even with due_reminder on');
@@ -323,7 +326,7 @@ test('D-27-5: a legacy doc carrying notifPrefs reads all-ON defaults — the fie
   assert.equal(res.data.doc.data.notifPrefs, undefined, 'the doc field is stripped, never merged (Phase 34)');
   /* The behavior half: with no per-user row, the accessor reads all-ON — the
      real pass still reminds. */
-  assert.equal(own(await trigger(at9('2026-01-15'))).length, 2, 'no row reads as all-ON — still reminds');
+  assert.equal(own(await trigger(at9('2026-01-15'))).length, 1, 'no row reads as all-ON — still reminds');
 });
 
 /* --------------------- REM-02: DST + label allow-list --------------------- */
@@ -334,7 +337,7 @@ test('REM-02: Pacific label maps through DST — the local date, not the UTC dat
   assert.ok(fire.some(n => n.snippet === 'Due today: Ship it'), '09:00 America/Los_Angeles on Mar 9 (PDT) opens the morning_of window');
   const { own: ownE } = await makeWorkspace(m => [task(m, { due: '2026-03-09' })], {}, '(GMT-08:00) Pacific Time');
   const notYet = ownE(await trigger('2026-03-08T16:00:00Z'));
-  assert.deepEqual(notYet.map(n => n.snippet), ['Due tomorrow: Ship it'], 'Mar 8 local: only day_before is open for a Mar 9 due');
+  assert.equal(notYet.length, 0, 'Mar 8 local: no window open for a Mar 9 due (day-before offset removed in Phase 37)');
   /* Unknown/empty label → UTC fallback (legacy docs seed tz: ''). */
   const { own: ownU } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {}, '');
   assert.ok(ownU(await trigger(at9('2026-01-15'))).some(n => n.snippet === 'Due today: Ship it'), 'empty tz label falls back to UTC');
@@ -415,9 +418,9 @@ test('REM-05: email gate, deep link, by:null never self-skipped, failure isolati
   await t.test('email on: one email per reminder row with the exact deep link (LINK-01)', async () => {
     const { ws, email, own } = await makeWorkspace(m => [task(m, { id: 'tMail', key: 'K-M1', due: '2026-01-15' })], {}, TZ, mail);
     const emitted = own(await trigger(at9('2026-01-15'), mail));
-    assert.equal(emitted.length, 2, 'in-app rows present');
+    assert.equal(emitted.length, 1, 'in-app row present');
     await new Promise(r => setTimeout(r, 300));
-    assert.equal(smtp.messages.length, 2, 'one email per reminder row');
+    assert.equal(smtp.messages.length, 1, 'one email per reminder row');
     for (const raw of smtp.messages) {
       assert.ok(raw.includes(`To: <${email}>`), 'by:null reminder rows are never self-skipped — owner emailed');
       assert.ok(textPart(raw).includes(`http://app.test/w/${ws.slug}/task/`), 'deep link shape');
@@ -439,8 +442,8 @@ test('REM-05: email gate, deep link, by:null never self-skipped, failure isolati
        the pass scans every workspace, so only this fixture's emits differ. */
     const { ws, own } = await makeWorkspace(m => [task(m, { id: 'tGate', key: 'K-M2', due: '2026-01-20' })], { email_reminder: false }, TZ, mail);
     const emitted = own(await trigger(at9('2026-01-20'), mail));
-    assert.equal(emitted.length, 2, 'in-app rows still generated');
-    assert.equal(notifRows(ws.slug, mail).length, 2);
+    assert.equal(emitted.length, 1, 'in-app row still generated');
+    assert.equal(notifRows(ws.slug, mail).length, 1);
     const countBefore = smtp.messages.length;
     await new Promise(r => setTimeout(r, 200));
     assert.equal(smtp.messages.length, countBefore, 'no email queued while email_reminder is false');
@@ -479,7 +482,7 @@ test('REM-05: MAILER rejection is isolated — logged, never rethrown, process s
   });
   const { own } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {}, TZ, deadSrv);
   const emitted = own(await trigger(at9('2026-01-15'), deadSrv));
-  assert.equal(emitted.length, 2, 'in-app rows written regardless of SMTP health');
+  assert.equal(emitted.length, 1, 'in-app row written regardless of SMTP health');
   await new Promise(r => setTimeout(r, 300));
   const health = await fetch(`${deadSrv.base}/api/health`);
   assert.equal(health.status, 200, 'process survived the MAILER rejection');
