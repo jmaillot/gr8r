@@ -67,7 +67,7 @@ Plans:
   4. Deploying the change requires no migration and no dedup-row sweep: existing `reminders_sent` rows stay untouched (orphaned `day_before` keys go inert), and the second boot is byte-identical.
   5. Release notes document the one-time "due today" catch-up burst at first deploy.
 
-**Plans**: 2/2 plans executed
+**Plans**: 3 plans (2/2 executed + gap-closure 03)
 
 Plans:
 **Wave 1**
@@ -75,6 +75,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 37-02-PLAN.md — due_reminder settings copy EN+FR + CHANGELOG catch-up burst note (REM-02, SC-5)
+
+**Gap closure (Wave 1)** *(from G-37-2 / UAT test 2)*
+- [ ] 37-03-PLAN.md — remove legacy push_due row + i18n keys + pref whitelists, rebuild dist (REM-02, REM-04)
 
 **UI hint**: yes
 
