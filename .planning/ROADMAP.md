@@ -67,7 +67,11 @@ Plans:
   4. Deploying the change requires no migration and no dedup-row sweep: existing `reminders_sent` rows stay untouched (orphaned `day_before` keys go inert), and the second boot is byte-identical.
   5. Release notes document the one-time "due today" catch-up burst at first deploy.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 37-01-PLAN.md — delete day_before offset (producer + catalogues) and rewrite/add reminder test pins (REM-01, REM-03, REM-04)
+- [ ] 37-02-PLAN.md — due_reminder settings copy EN+FR + CHANGELOG catch-up burst note (REM-02, SC-5)
 **UI hint**: yes
 
 ### Phase 38: Daily Digest & Reminder Suppression
