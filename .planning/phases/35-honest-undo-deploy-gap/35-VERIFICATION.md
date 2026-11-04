@@ -18,7 +18,7 @@ covered_files:
   - test/compose-config.test.mjs
   - docker-compose.yml
   - DEPLOY.md
-covered_digest: "v2:sha256:3889b6fc2cb3d58eb618ea105af7d9bee97f82f60c7c0f1e6abfadae09d5e55d"
+covered_digest: "v2:sha256:031f012007ab166744d2a90d3074ed16f3718105991a1efe7421b5bd1b695c5a"
 re_verification:
   previous_status: passed
   previous_score: 16/16
