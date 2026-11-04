@@ -46,7 +46,7 @@
   its send transactionally (dedup ledger) so it is idempotent across restarts; a digest send is
   type-scoped to replace reminder emails only — mentions, assignments and comment emails flow
   unchanged while the digest is enabled; push and inbox notifications are never suppressed.
-- [ ] **DIGEST-03**: The `email_digest` preference becomes a real opt-in: it is removed from the
+- [x] **DIGEST-03**: The `email_digest` preference becomes a real opt-in: it is removed from the
   default layer (undefined-falsy = off), so no user receives digests without explicitly enabling
   it; settings UI gains the toggle with "digest replaces reminder emails" copy in EN+FR.
 
@@ -93,7 +93,7 @@
 | REM-04 | Phase 37 | Complete |
 | DIGEST-01 | Phase 38 | Complete |
 | DIGEST-02 | Phase 38 | Complete |
-| DIGEST-03 | Phase 38 | Pending |
+| DIGEST-03 | Phase 38 | Complete |
 | AUDIT-01 | Phase 39 | Pending |
 | AUDIT-02 | Phase 39 | Pending |
 
