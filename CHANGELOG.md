@@ -27,6 +27,17 @@ The 1.2.0 tag is cut at milestone close; these are the release notes text.
 
 ### Changed
 
+- **Due-date reminders now fire at most twice per task per assignee.** Each task gets a
+  "Due today" notification on the morning of its due date (09:00, workspace timezone) and,
+  where applicable, a "Past due" nudge the next morning — the day-before reminder is removed,
+  and the `due_reminder` setting now governs only the due-today reminder. **One-time catch-up
+  burst at first deploy:** the next 09:00 pass after the server starts emits one "Due today"
+  notification (and one "Past due" where applicable) for every currently-due task whose
+  reminder was never sent — this is the boot catch-up mechanism working as designed, not a
+  bug. Orphaned day-before ledger rows and legacy inbox rows are left untouched: they are
+  inert, and legacy rows fall back to their stored English snippet. No new notification
+  types and no digest messaging (planned for the next phase).
+
 - **Recent-search redaction is token-boundary exact (SEARCH-01).** A recent-search term is now
   hidden from a member only when it shares a full token with a hidden project name (after NFC
   normalization and lowercasing on both sides), instead of a raw substring match: "Sara Corp" no
