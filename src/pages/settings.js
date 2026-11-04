@@ -381,7 +381,6 @@ export function settingsBody(sec, title) {
         srow(t('settings.notif.mentions'), '', tog('push_mention', np.push_mention, 'np')) +
         srow(t('settings.notif.assignments'), '', tog('push_assign', np.push_assign, 'np')) +
         srow(t('settings.notif.comments'), '', tog('push_comment', np.push_comment, 'np')) +
-        srow(t('settings.notif.dueReminders'), t('settings.notif.dueDesc'), tog('push_due', np.push_due, 'np')) +
         srow(t('settings.notif.dueReminder'), t('settings.notif.dueReminderDesc'), tog('due_reminder', np.due_reminder, 'np')) +
         srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np'))
       );

@@ -449,8 +449,6 @@ const TABLES = [
     ['settings.notif.digest', undefined, 'Daily digest'],
     ['settings.notif.digestDesc', undefined, 'A summary of what changed, every weekday at 8:00.'],
     ['settings.notif.pushLead', undefined, 'Notifications on desktop and mobile.'],
-    ['settings.notif.dueReminders', undefined, 'Due date reminders'],
-    ['settings.notif.dueDesc', undefined, 'One day before a task is due.'],
     ['settings.notif.mentionsLead', undefined, 'Decide which mentions reach you.'],
     ['settings.notif.atAll', undefined, '@mentions in comments and descriptions'],
     ['settings.notif.atTeam', undefined, '@team mentions'],
