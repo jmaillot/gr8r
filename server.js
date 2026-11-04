@@ -1143,7 +1143,6 @@ const NOTIF_PREF_KEYS = [
 const NOTIF_PREF_DEFAULTS = {
   email_mention: true,
   email_assign: true,
-  email_digest: true,
   email_comment: false,
   email_reminder: true,
   due_reminder: true,
@@ -1486,17 +1485,11 @@ function runReminderPass({ now: at = new Date() } = {}) {
         .all(ws.id)) {
         if (!r.user_id || !r.email) continue;
         /* D-14: the opt-in is the STORED value — stored true IS the opt-in;
-           undefined (no row, unparseable row, missing key) is off. The merged
-           accessor still carries the pre-38-02 default `email_digest: true`,
-           so the gate reads the stored row directly; plan 38-02's default-layer
-           deletion collapses this back to getUserNotifPrefs(...).email_digest. */
-        let storedDigest;
-        try {
-          storedDigest = JSON.parse(db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(ws.id, r.user_id)?.prefs || '{}')?.email_digest;
-        } catch {
-          storedDigest = undefined;
-        }
-        if (storedDigest !== true) continue;
+           undefined (no row, unparseable row, missing key) is off. Plan 38-02
+           deleted the pre-38 default `email_digest: true` from the merged
+           defaults, so the accessor reads falsy here; the stored read via
+           getStoredNotifPrefs keeps ONE parse path for the opt-in. */
+        if (getStoredNotifPrefs(r.user_id, ws.id).email_digest !== true) continue;
         const dueToday = [];
         const overdue = [];
         for (const t of tasks) {

@@ -419,6 +419,33 @@ test('D-08: digest-OFF member (no stored prefs) still receives reminder emails a
   void email;
 });
 
+/* ---------------- DIGEST-03: default-layer inversion pins ---------------- */
+
+test('DIGEST-03: undefined-falsy and stored-false are OFF, stored true still opts in (D-14)', async () => {
+  const offU = await makeWorkspace(m => [task(m, { key: 'K-INV1', due: '2026-03-06' })]); // NO stored prefs row
+  const offF = await makeWorkspace(m => [task(m, { key: 'K-INV2', due: '2026-03-06' })], { email_digest: false });
+  const onT = await makeWorkspace(m => [task(m, { key: 'K-INV3', due: '2026-03-06' })], { email_digest: true });
+
+  const res = await trigger(at9('2026-03-06'));
+  assert.equal(digestKeys(offU.ws.id).length, 0, 'undefined-falsy default → no digest claim');
+  assert.equal(digestKeys(offF.ws.id).length, 0, 'stored email_digest: false → no digest claim');
+  assert.deepEqual(digestKeys(onT.ws.id), [`${onT.ws.id}:${onT.userId}:digest:2026-03-06`], 'stored email_digest: true still opts in through the same accessor');
+  assert.ok(res.digests >= 1);
+
+  /* Post-inversion the merged accessor no longer carries email_digest: true,
+     so the suppression gate reads the same falsy default — the OFF members
+     keep reminder emails, the opted-in member loses them. */
+  await waitFor(smtp, 3, 'two reminder emails + one digest');
+  await new Promise(r => setTimeout(r, 500));
+  const mine = slug => smtp.payloads.map(decode).filter(x => x.text.includes(`/w/${slug}/`));
+  assert.equal(mine(offU.ws.slug).length, 1, 'undefined user: exactly one email');
+  assert.ok(!mine(offU.ws.slug)[0].subject.includes('Daily digest'), 'undefined user: reminder email still flows');
+  assert.equal(mine(offF.ws.slug).length, 1, 'stored-false user: exactly one email');
+  assert.ok(!mine(offF.ws.slug)[0].subject.includes('Daily digest'), 'stored-false user: reminder email still flows');
+  assert.equal(mine(onT.ws.slug).length, 1, 'opted-in user: exactly one email');
+  assert.match(mine(onT.ws.slug)[0].subject, /Daily digest/, 'opted-in user: digest, reminders suppressed');
+});
+
 /* ---------------- Idle-tick purity (mirrors the reminder pin) ---------------- */
 
 test('idle tick before the 09:00 window: no email, no claim, revision unchanged', async () => {

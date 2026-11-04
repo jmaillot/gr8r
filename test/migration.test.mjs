@@ -513,7 +513,6 @@ test('the first boot backfills doc-carried notifPrefs into one row per member an
 const EXPECTED_DEFAULTS = {
   email_mention: true,
   email_assign: true,
-  email_digest: true,
   email_comment: false,
   email_reminder: true,
   due_reminder: true,

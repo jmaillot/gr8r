@@ -86,11 +86,12 @@ test('(i) G-34-6: pollNotifs does NOT hydrate prefs (boot-time concern, not a 30
   );
 });
 
-test('(a) merge(undefined, undefined) returns the D-27-5 all-ON defaults (12 keys, email_comment the only false)', () => {
+test('(a) merge(undefined, undefined) returns the D-27-5 all-ON defaults (11 keys, email_comment the only false)', () => {
   const prefs = mergeNotifPrefs(undefined, undefined);
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
-  assert.equal(Object.keys(prefs).length, 12);
+  assert.equal(Object.keys(prefs).length, 11);
   assert.equal(prefs.email_comment, false);
+  assert.equal('email_digest' in prefs, false, 'email_digest is an opt-in — absent from the defaults (Phase 38, D-14)');
   for (const [k, v] of Object.entries(prefs)) {
     if (k !== 'email_comment') assert.equal(v, true, `${k} defaults ON`);
   }
@@ -101,14 +102,14 @@ test('(b) a stored client row wins over defaults; unknown keys are dropped', () 
   assert.equal(prefs.email_reminder, false, 'stored row wins over the default');
   assert.equal(prefs.evil_key, undefined, 'whitelist-external key dropped');
   assert.equal(prefs.email_mention, true, 'untouched keys stay at defaults');
-  assert.equal(Object.keys(prefs).length, 12, 'output stays on the defaults shape');
+  assert.equal(Object.keys(prefs).length, 11, 'output stays on the defaults shape');
 });
 
 test('(c) a server row fills the client empty store — the F5 case (G-34-4)', () => {
   const prefs = mergeNotifPrefs(undefined, { push_comment: false });
   assert.equal(prefs.push_comment, false, 'server OFF survives reload hydration');
   assert.equal(prefs.email_mention, true, 'untouched keys stay at defaults');
-  assert.equal(Object.keys(prefs).length, 12);
+  assert.equal(Object.keys(prefs).length, 11);
   const dropped = mergeNotifPrefs(undefined, { push_due: false });
   assert.equal('push_due' in dropped, false, 'the legacy push toggle pref is DROPPED — removed from the whitelist with G-37-2, never a default');
 });

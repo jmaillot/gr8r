@@ -25,7 +25,7 @@ test('(a) an absent key reads the all-ON defaults (email_comment the only false)
   backing.clear();
   const prefs = getLocalNotifPrefs('ws-a');
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
-  assert.equal(Object.keys(prefs).length, 12);
+  assert.equal(Object.keys(prefs).length, 11);
   assert.equal(prefs.email_comment, false);
   for (const [k, v] of Object.entries(prefs)) {
     if (k !== 'email_comment') assert.equal(v, true, `${k} defaults ON`);
@@ -93,10 +93,12 @@ test('(e) storage exceptions are swallowed in both directions', async () => {
   }
 });
 
-/* The 16-key whitelist surface the read-side sanitizer enforces (12 defaults +
-   the 4 undefined-falsy extras — the legacy push toggle pref left with G-37-2). */
-test('whitelist is the 12 defaults plus the 4 undefined-falsy extras', () => {
+/* The 16-key whitelist surface the read-side sanitizer enforces (11 defaults +
+   email_digest (opt-in, D-14) + the 4 undefined-falsy extras — the legacy push
+   toggle pref left with G-37-2). */
+test('whitelist is the 11 defaults plus the 4 undefined-falsy extras', () => {
   assert.equal(NOTIF_PREF_KEYS.length, 16);
+  assert.ok(NOTIF_PREF_KEYS.includes('email_digest'), 'email_digest stays whitelisted (opt-in, D-14)');
   for (const k of ['mention_team', 'mention_ws', 'assign_status', 'assign_over']) {
     assert.ok(NOTIF_PREF_KEYS.includes(k), `${k} whitelisted`);
   }

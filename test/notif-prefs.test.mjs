@@ -20,11 +20,11 @@ let ws; // { id, slug }
 let stranger; // signed up, never a member
 let bob; // invited member (test i)
 
-/* The 12-key default layer the accessor must reproduce (email_comment the ONLY false). */
+/* The 11-key default layer the accessor must reproduce (email_comment the ONLY false;
+   email_digest is an opt-in — undefined-falsy since Phase 38's default inversion, D-14). */
 const DEFAULTS = {
   email_mention: true,
   email_assign: true,
-  email_digest: true,
   email_comment: false,
   email_reminder: true,
   due_reminder: true,

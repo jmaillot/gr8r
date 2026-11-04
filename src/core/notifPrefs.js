@@ -6,17 +6,17 @@
    precedent, D-05): the workspace document is never a prefs carrier again (D-01). */
 export const NOTIF_PREFS_KEY_PREFIX = 'projects.notifPrefs.';
 
-/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 12 keys, email_comment
+/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 11 keys, email_comment
    the ONLY false. The legacy push toggle for due dates was removed with gap
-   G-37-2 on BOTH sides (whitelist parity preserved). Four more toggle keys
-   exist in the UI (mention_team,
-   mention_ws, assign_status, assign_over) and read undefined-falsy, which the
-   settings coercions (x !== false / !!x) render as ON — the same shape the
-   server accessor produces for a user with no row. */
+   G-37-2 on BOTH sides (whitelist parity preserved). Five more toggle keys
+   exist in the UI (email_digest,
+   mention_team, mention_ws, assign_status, assign_over) and read undefined-falsy —
+   email_digest is a real OPT-IN as of Phase 38 (D-14: stored true = on,
+   undefined/false = off; the digest replaces individual reminder emails) — the
+   same shape the server accessor produces for a user with no row. */
 export const NOTIF_PREF_DEFAULTS = {
   email_mention: true,
   email_assign: true,
-  email_digest: true,
   email_comment: false,
   email_reminder: true,
   due_reminder: true,
@@ -33,6 +33,7 @@ export const NOTIF_PREF_DEFAULTS = {
    tampered or stale blob cannot inject arbitrary keys into app state. */
 export const NOTIF_PREF_KEYS = [
   ...Object.keys(NOTIF_PREF_DEFAULTS),
+  'email_digest', // opt-in key (Phase 38, D-14): toggleable but NOT defaulted — undefined-falsy
   'mention_team',
   'mention_ws',
   'assign_status',
