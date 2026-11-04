@@ -344,16 +344,16 @@ const trigger = (nowIso) => fetch(`${server.base}/api/internal/reminder-pass`, {
 | Reminder suppression as a DoS on visibility (gate drops rows) | Denial of Service | Gate is email-only; rows always appended + claimed first (D-10) — suppression cannot lose notification state |
 | Prompt-injection-style content in task titles reaching email HTML | Tampering | Existing escape-after-interpolation discipline in the new `buildDigestMessage` |
 
-## Open Questions
+## Open Questions — RESOLVED (at planning, 2026-11-04)
 
-1. **Historical `email_digest: true` rows (Pitfall 1) — is "stored true = opted in" acceptable for SC-4?**
+1. **Historical `email_digest: true` rows (Pitfall 1) — is "stored true = opted in" acceptable for SC-4?** **(RESOLVED — 38-02 Task 1 checkpoint:human-verify)**
    - What we know: D-14's parenthetical asked exactly this question; verified this session that the client PUT echoes defaults, so historical rows CAN carry explicit true without a user choice. D-14's ruling is "stored true = opted in".
    - What's unclear: whether the owner accepts that deploy-day behavior (some users silently switch from reminder emails to digests) or wants SC-4 read strictly.
-   - Recommendation: planner adds a `checkpoint:human-verify` before the suppression task; default to D-14's literal ruling (accept stored true) with a release-note announcement, mirroring the Phase 37 deploy-note precedent (STATE.md blocker: deploy-day catch-up burst announcement).
+   - Resolution: an explicit `checkpoint:human-verify` (38-02 Task 1) presents the deploy-day behavior to the owner and gates the default-layer inversion (38-02 Task 2); default position is D-14's literal ruling (stored true = opted in) with a release-note announcement, mirroring the Phase 37 deploy-note precedent. The owner's answer is recorded in the 38-02 SUMMARY. This checkpoint mechanism implements D-14's "verify against Phase 34 upsert semantics" clause — no locked decision is overridden.
 
-2. **Does the digest pass need to appear in the `/api/internal/reminder-pass` response?**
+2. **Does the digest pass need to appear in the `/api/internal/reminder-pass` response?** **(RESOLVED — 38-01 Task 2, additive response shape)**
    - What we know: the route returns `{ emitted }` (notification rows). Digest sends produce no rows.
-   - Recommendation: either return `{ emitted, digests: n }` (additive, helpful for tests) or have tests assert via SMTP captures + ledger queries only. Planner's discretion; the additive shape is cheaper to assert.
+   - Resolution: planner discretion was exercised for the additive shape — 38-01 returns `{ emitted, digests }` from the token-gated test-only route, per Assumption A1. Tests assert `digests` counts directly (e.g. `digests === 0` on double-trigger) alongside SMTP captures and ledger queries.
 
 ## Assumptions Log
 
