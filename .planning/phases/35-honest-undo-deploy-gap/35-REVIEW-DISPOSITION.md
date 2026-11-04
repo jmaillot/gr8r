@@ -5,15 +5,15 @@ titles: json
 findings:
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "pushNow() wait loop is unbounded polling with no failure exit or user feedback"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "the undo gate uses `pushed.ok === false`, which misses an ok-less result shape"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "source-scan pins slice to end-of-file, over-scoping their assertions"
   - id: IN-01
     severity: info
@@ -27,7 +27,7 @@ findings:
     severity: info
     disposition: open
     title: "before-map captured unconditionally in local mode where it is unused"
-open: 6
+open: 3
 total: 6
 recorded: 2026-11-03T00:00:00Z
 ---
@@ -36,9 +36,9 @@ recorded: 2026-11-03T00:00:00Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
+| WR-01 | warning | fixed | 35-REVIEW-FIX.md |
+| WR-02 | warning | fixed | 35-REVIEW-FIX.md |
+| WR-03 | warning | fixed | 35-REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
