@@ -43,7 +43,7 @@ created: "2026-11-04"
 | 36-01-T1 | 01 | 1 | I18N-02 | T-36-04 | locale clamp never throws | unit | `node --test test/i18n-tfor.test.mjs` | ❌ W0 | ⬜ pending |
 | 36-01-T2 | 01 | 1 | I18N-02 | — | catalogue parity (manual node -e) | unit | `node --test test/catalogue.test.mjs test/french-typography.test.mjs` | ✅ | ⬜ pending |
 | 36-02-T1 | 02 | 2 | I18N-01, I18N-02 | T-36-01, T-36-02 | FR/EN per-recipient email, escaping after tFor | integration | `node --test test/notif-i18n.test.mjs` | ❌ W0 | ⬜ pending |
-| 36-02-T2 | 02 | 2 | I18N-01 | T-36-04 | by-label + reminder verb/subject, EN fallback edges | integration | `node --test test/notif-i18n.test.mjs` | ❌ W0 | ⬜ pending |
+| 36-02-T2 | 02 | 2 | I18N-01 | T-36-07 | by-label + reminder verb/subject, EN fallback edges | integration | `node --test test/notif-i18n.test.mjs` | ❌ W0 | ⬜ pending |
 | 36-03-T1 | 03 | 3 | I18N-03 | — | keyed rows + localized inbox render | integration+unit | `node --test test/notif-i18n.test.mjs` | ❌ W0 | ⬜ pending |
 | 36-03-T2 | 03 | 3 | I18N-03 | T-36-03 | D-06 fallback edges + client-row purity pin | unit | `node --test test/notif-i18n.test.mjs` | ❌ W0 | ⬜ pending |
 | 36-04-T1 | 04 | 4 | I18N-04 | T-36-05 | server-family + parity gate fixtures | unit | `node --test test/i18n-scan.test.mjs` | ✅ (extend) | ⬜ pending |
