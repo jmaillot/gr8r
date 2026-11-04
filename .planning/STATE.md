@@ -5,16 +5,16 @@ milestone_name: Notification Sanity
 current_phase: 36
 current_phase_name: Server Notification i18n
 status: executing
-stopped_at: Completed-36-02
-last_updated: "2026-11-04T11:33:34.949Z"
+stopped_at: Completed-36-03
+last_updated: "2026-11-04T11:47:08.541Z"
 last_activity: 2026-11-04
 last_activity_desc: Phase 36 execution started
-state_head: ce807d770c04577d7180d7d78ab3fc71a0e34736
+state_head: 8fd58836206fd999337059f748a3dac294775a9a
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -120,6 +120,9 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 36]: Email locale rides the memberships⋈users authority row (msg.locale), render inside buildNotifMessage via tFor — all notif.email.* call sites in one file
 - [Phase 36]: Boundary-pin-36-02-no-push-emission-surface
 - [Phase 36]: 36-02: email locale rides the memberships-users authority row (msg.locale); render inside buildNotifMessage via tFor - all notif.email call sites in one file
+- [Phase 36]: Per-recipient locale rides the workspace-scoped authority query; malformed/NULL locale clamps to EN
+- [Phase 36]: 36-03: reminder rows store key+vars snapshot alongside the EN snippet (D-05/D-06 dual store); inbox localizes keyed rows via the viewer-locale singleton, unknown key degrades to the snippet
+- [Phase 36]: 36-03: client rows proven key-free (T-36-03 purity pins); keyed-branch renders the full catalogue sentence as one muted span
 
 ### Pending Todos
 
@@ -153,8 +156,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T11:33:23.453Z
-Stopped at: Completed-36-02
+Last session: 2026-11-04T11:47:08.507Z
+Stopped at: Completed-36-03
 Resume file: None
 
 ## Performance Metrics
@@ -175,6 +178,7 @@ Resume file: None
 | Phase 36 P01 | 5m | 2 tasks | 4 files |
 | Phase 36 P02 | ~50m | 2 tasks | 5 files |
 | Phase 36 P02 | ~50m | 2 tasks | 5 files |
+| Phase 36 P03 | ~10m | 2 tasks | 3 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

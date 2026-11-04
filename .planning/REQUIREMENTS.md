@@ -30,7 +30,7 @@
 - [x] **I18N-02**: The server renders text through an additive locale-parameterized translation
   function in the shared i18n module (no per-send global locale mutation); the client and server
   share the same EN/FR catalogue files (no forked server copy, no Dockerfile change).
-- [ ] **I18N-03**: Reminder notification rows store a machine key, not English prose; the client
+- [x] **I18N-03**: Reminder notification rows store a machine key, not English prose; the client
   localizes keyed rows at render time and still renders legacy prose rows (additive, no
   migration).
 - [ ] **I18N-04**: The i18n build gate (scan or regression test) covers the server-used key set,
@@ -85,7 +85,7 @@
 |-------------|-------|--------|
 | I18N-01 | Phase 36 | Complete |
 | I18N-02 | Phase 36 | Complete |
-| I18N-03 | Phase 36 | Pending |
+| I18N-03 | Phase 36 | Complete |
 | I18N-04 | Phase 36 | Pending |
 | REM-01 | Phase 37 | Pending |
 | REM-02 | Phase 37 | Pending |
