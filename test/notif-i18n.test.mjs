@@ -379,3 +379,79 @@ test('I18N-03: emitted reminder rows carry key + vars snapshot + the English sni
     assert.match(r.snippet, /Due (today|tomorrow): Clé à molette/, 'EN snippet prose kept alongside the key (D-06 dual store)');
   }
 });
+
+/* ---------------- Task 2: fallback edges + client-row purity ---------------- */
+
+test('D-06: an unknown catalogue key degrades to the stored snippet prose — never blank, never the raw key', async () => {
+  const { notifText } = compileInbox({ task: fixtureTask });
+  const html = notifText(keyedRow({ key: 'notif.reminder.unknownKey' }));
+  assert.ok(html.includes('Due today: Rapport naïf'), `snippet fallback: ${html}`);
+  assert.ok(!html.includes('notif.reminder.unknownKey'), 'raw key must never leak');
+  assert.ok(html.trim().length > 0, 'render must never blank');
+});
+
+test('SC-3: a pre-upgrade reminder row (no key) renders byte-identically to today', async () => {
+  const { notifText } = compileInbox({ task: fixtureTask });
+  const html = notifText({ id: 'n-old', type: 'due_reminder', to: 'm1', by: null, task: 't-key', snippet: 'Due today: Rapport naïf', at: 1, read: false });
+  assert.equal(html, '<b style="font-weight:600">Rapport naïf</b> <span class="muted">is coming due</span>', `legacy pin: ${html}`);
+});
+
+test('SC-3: a legacy prose row (n.text) renders byte-identically', async () => {
+  const { notifText } = compileInbox({ task: fixtureTask, mem: () => ({ name: 'Zoé' }) });
+  const html = notifText({ id: 'n-old2', type: 'mention', to: 'm1', by: 'm2', task: 't-key', text: 'pinged you', at: 1, read: false });
+  assert.equal(html, '<b style="font-weight:600">Zoé</b> <span class="muted">pinged you</span> <b style="font-weight:500">Rapport naïf</b>', `prose pin: ${html}`);
+});
+
+test('D-04: client-composed rows (notifyMembers) never carry a key/vars pair — even when a caller supplies one', () => {
+  /* Static pin: the row literal notifyMembers pushes holds the fixed client
+     contract fields only — no keyed fields on the client doc-merge path
+     (threat T-36-03: keyed rows are written ONLY by runReminderPass). */
+  const storeSource = fs.readFileSync(new URL('../src/core/store.js', import.meta.url), 'utf8');
+  const start = storeSource.indexOf('export function notifyMembers');
+  assert.ok(start !== -1, 'notifyMembers moved — update this extraction');
+  const end = storeSource.indexOf('\nexport const commentsOf', start);
+  assert.ok(end !== -1, 'notifyMembers tail moved — update this extraction');
+  const fnSource = storeSource.slice(start, end).replace(/^export /gm, '');
+  const pushLit = fnSource.slice(fnSource.indexOf('d.notifs.push({'), fnSource.indexOf('});', fnSource.indexOf('d.notifs.push({')));
+  assert.ok(!/\bkey\b/.test(pushLit) && !/\bvars\b/.test(pushLit), `client row literal must stay key/vars-free: ${pushLit}`);
+
+  /* Runtime pin: a caller-supplied key/vars is not copied into the row. */
+  const d = { members: [{ id: 'm1' }], notifs: [] };
+  const D = () => d;
+  const realNotify = new Function('D', 'uid', 'NOTIF_CAP', 'save', `${fnSource}; return notifyMembers;`)(D, () => 'n1', 100, () => {});
+  realNotify(['m1'], { type: 'mention', by: null, task: 't1', snippet: 'x', key: 'notif.reminder.morningOf', vars: { title: 'X' } });
+  const row = d.notifs[0];
+  assert.ok(row, 'row emitted');
+  assert.ok(!('key' in row) && !('vars' in row), `client row must never gain keyed fields: ${JSON.stringify(row)}`);
+  assert.equal(row.snippet, 'x');
+});
+
+test('D-04: the inbox never trusts a client-supplied key beyond catalogue lookup — unknown key → snippet', () => {
+  const { inboxItem } = compileInbox({ task: fixtureTask });
+  const html = inboxItem(keyedRow({ key: 'notif.reminder.tamperedKey', id: 'n-tamper' }));
+  assert.ok(html.includes('Due today: Rapport naïf'), `preview falls back to the snippet: ${html}`);
+  assert.ok(!html.includes('tamperedKey'), 'tampered key never leaks through the preview');
+});
+
+test('I18N-03: a keyed row localizes in both the list sentence AND the snippet preview', async () => {
+  await primeLocale('fr');
+  try {
+    const { inboxItem } = compileInbox({ task: fixtureTask });
+    const html = squeeze(inboxItem(keyedRow({ id: 'n-prev' })));
+    const hits = html.split('À échéance aujourd’hui : Rapport naïf').length - 1;
+    assert.ok(hits >= 2, `sentence + preview both localized (got ${hits} hits): ${html}`);
+  } finally {
+    await primeLocale('en');
+  }
+});
+
+test('I18N-03: the day_before key renders despite its producer going inert in Phase 37 (coverage continuity)', async () => {
+  const { notifText } = compileInbox({ task: fixtureTask });
+  await primeLocale('fr');
+  try {
+    assert.ok(squeeze(notifText(keyedRow({ key: 'notif.reminder.dayBefore', snippet: 'Due tomorrow: Rapport naïf' }))).includes('À échéance demain : Rapport naïf'));
+  } finally {
+    await primeLocale('en');
+  }
+  assert.ok(notifText(keyedRow({ key: 'notif.reminder.dayBefore', snippet: 'Due tomorrow: Rapport naïf' })).includes('Due tomorrow: Rapport naïf'));
+});
