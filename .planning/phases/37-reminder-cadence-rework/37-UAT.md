@@ -36,9 +36,9 @@ blocked: 1
 ## Gaps
 
 - gap_id: G-37-2
-  truth: "EN settings shows 'Due-day reminder' / 'Get a reminder on the morning a task is due.'"
+  truth: "Settings shows exactly the new phase-37 toggle copy per language, with no stale pre-phase entries"
   status: failed
-  reason: "User reported: EN copy reads 'Due date reminders' / 'A reminder the day before and the morning a task is due.' — does not match the phase spec; FR copy matches"
+  reason: "User reported: EN copy reads 'Due date reminders' / 'A reminder the day before and the morning a task is due.' — does not match the phase spec; FR copy matches. Follow-up detail: in the EN Push section BOTH entries appear — new 'Due-day reminder' / 'Get a reminder on the morning a task is due.' AND stale 'Due date reminders' / 'One day before a task is due.' — duplicate/stale toggle not removed in EN; FR shows only the new entries. Email section is consistent in both languages ('Reminder emails' / 'E-mails de rappel')."
   severity: major
   test: 2
   artifacts: []  # Filled by diagnosis
