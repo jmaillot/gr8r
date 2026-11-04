@@ -510,6 +510,119 @@ function buildNotifMessage(config, msg) {
   };
 }
 
+/* Phase 38 (DIGEST-01): the daily digest email — a sibling of
+   buildNotifMessage with the same MIME bones (research anti-pattern: never
+   shoehorn a list digest into the single-notification builder).
+
+   I18N: the frame renders through tFor(msg.locale, 'notif.digest.*') with
+   the same SC-5 English-literal try/catch fallback; escapeHtml/encodeWord
+   are applied AFTER interpolation (T-36-01) and the FR subject carries
+   accents, so the Subject goes through encodeWord (Pitfall 7).
+   Deep links are workspace-root fallback for a missing task key, matching
+   the server.js:1276 pattern. The app base arrives as msg.appUrl — the
+   mailer module itself has no APP_URL (the boot guard guarantees it is set
+   whenever SMTP is enabled). */
+function buildDigestMessage(config, msg) {
+  const to = bareAddress(msg.to);
+  if (!addressOk(to)) throw new Error('Digest email address is invalid');
+
+  const locale = msg.locale === 'fr' ? 'fr' : 'en';
+  const workspace = text(msg.workspace) || 'Projects Studio';
+  const slug = text(msg.wsSlug);
+  const appUrl = text(msg.appUrl).replace(/\/+$/, '');
+  const taskUrl = t => (t?.key ? `${appUrl}/w/${slug}/task/${encodeURIComponent(t.key)}` : `${appUrl}/w/${slug}/`);
+  const dueToday = Array.isArray(msg.dueToday) ? msg.dueToday : [];
+  const overdue = Array.isArray(msg.overdue) ? msg.overdue : [];
+  const count = dueToday.length + overdue.length;
+
+  let frame;
+  try {
+    frame = {
+      greeting: tFor(locale, 'notif.email.greeting'),
+      subject: tFor(locale, 'notif.digest.subject', { count }),
+      dueToday: tFor(locale, 'notif.digest.dueToday'),
+      overdue: tFor(locale, 'notif.digest.overdue'),
+      footer: tFor(locale, 'notif.digest.footer'),
+    };
+  } catch {
+    /* SC-5 boundary guard: any render failure degrades to English literals. */
+    frame = {
+      greeting: 'Hi,',
+      subject: `Daily digest: ${count} task(s)`,
+      dueToday: 'Due today',
+      overdue: 'Overdue',
+      footer: "You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.",
+    };
+  }
+  const { greeting, subject, dueToday: dueLabel, overdue: overdueLabel, footer } = frame;
+
+  const section = (label, items) => (items.length ? [`${label}:`, ...items.map(t => `- ${t.title}\r\n  ${taskUrl(t)}`)] : []);
+  const textBody = [greeting, '', ...section(dueLabel, dueToday), ...section(overdueLabel, overdue), '', footer].join('\r\n');
+
+  const htmlItems = items =>
+    items
+      .map(
+        t =>
+          `<li style="margin:0 0 8px"><a href="${escapeHtml(taskUrl(t))}" style="color:#3b5bdb;text-decoration:none">${escapeHtml(t.title)}</a></li>`,
+      )
+      .join('');
+  const htmlSection = (label, items) =>
+    items.length
+      ? `<p style="margin:14px 0 6px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:#6b665c">${escapeHtml(label)}</p><ul style="margin:0;padding-left:18px;list-style:disc">${htmlItems(items)}</ul>`
+      : '';
+  const htmlBody = `<!doctype html>
+<html lang="${locale}">
+<body style="margin:0;padding:0;background:#f6f5f2;color:#26241f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f2;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
+        <tr><td>
+          <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(greeting)}</p>
+          ${htmlSection(dueLabel, dueToday)}
+          ${htmlSection(overdueLabel, overdue)}
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(footer)}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const boundary = `projects_${crypto.randomBytes(12).toString('hex')}`;
+  const headers = [
+    `From: ${formatAddress(config.fromName || workspace, config.from)}`,
+    `To: <${to}>`,
+    ...(config.replyTo ? [`Reply-To: <${config.replyTo}>`] : []),
+    `Subject: ${encodeWord(subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <${crypto.randomUUID()}@${domainOf(config.from)}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    'Auto-Submitted: auto-generated',
+    'X-Mailer: Projects Studio',
+  ];
+
+  const body = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(textBody),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(htmlBody),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+
+  return {
+    to,
+    data: [...headers, '', body].join('\r\n') + '\r\n',
+  };
+}
+
 /* TFA-MAIL: security alert — a 2FA factor was added or removed on the
    account. Unlike notification emails this is NOT gated by workspace prefs:
    security alerts always reach the account address. */
@@ -700,6 +813,9 @@ export function createMailer(env = process.env) {
       async sendSecurityAlert() {
         throw new Error(error || 'Email delivery is not configured');
       },
+      async sendDigest() {
+        throw new Error(error || 'Email delivery is not configured');
+      },
     };
   }
 
@@ -723,6 +839,16 @@ export function createMailer(env = process.env) {
       const session = new SmtpSession(config);
       try {
         await session.send(buildNotifMessage(config, msg));
+      } finally {
+        session.destroy();
+      }
+    },
+    /* Phase 38 (DIGEST-01): one opted-in member, one localized digest email.
+       Fire-and-forget from the caller — same failure discipline as sendNotif. */
+    async sendDigest(msg) {
+      const session = new SmtpSession(config);
+      try {
+        await session.send(buildDigestMessage(config, msg));
       } finally {
         session.destroy();
       }

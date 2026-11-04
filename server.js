@@ -1362,17 +1362,19 @@ function reminderSnippet(offset, task) {
  */
 function runReminderPass({ now: at = new Date() } = {}) {
   const emitted = [];
+  let digests = 0;
   for (const ws of db.prepare('select * from workspaces').all()) {
     try {
       const doc = JSON.parse(ws.doc);
       /* Per-workspace localDate/hour — never cached across workspaces or
          ticks (RESEARCH Pitfall 6). */
       const { date: localDate, hour } = localParts(workspaceTzLabel(doc, ws.id), at);
-      /* D-27-1 hour gate: idle outside 09:00 → pure read, zero writes. */
-      if (hour !== 9) continue;
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
-      for (const t of tasks) {
+      /* D-27-1 hour gate: reminder emission only at the 09:00 local tick —
+         idle hours stay pure reads (no claim, no doc write, no revision
+         bump; REM-01 / SC-5). */
+      if (hour === 9) for (const t of tasks) {
         const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
         /* SCOPE-04: a scoped member is never reminded about content outside
@@ -1444,11 +1446,94 @@ function runReminderPass({ now: at = new Date() } = {}) {
           }
         }
       }
+
+      /* =====================================================================
+         Phase 38 (DIGEST-01): daily digest — AFTER the per-task reminder
+         loop, inside the same per-workspace block (D-04/D-08). Reuses the
+         in-scope `tasks` array, `projects` map and `localDate` computed
+         above — the doc is NEVER re-parsed here (one snapshot per tick).
+         Recipients come from the memberships⋈users authority join (D-05,
+         never doc.data.members); opt-in is a STRICT stored `email_digest ===
+         true` (D-05/D-14 — undefined-falsy is off). Task filtering copies
+         the reminder loop's SCOPE-04 checks verbatim (D-06 — one visibility
+         pipeline, no digest-specific filter). No notif row, no revision
+         bump: the claim is a bare insert-or-ignore and the send is strictly
+         post-commit so a hung SMTP cannot hold the SQLite write lock
+         (Pattern 1 / T-38-03).
+
+         Window (D-01/D-02, plan Task 2 pin 3): the digest fires at the
+         FIRST tick at-or-after 09:00 local and stays catch-up-eligible for
+         the rest of the day — a missed 09:00 (downtime, restart) delivers
+         late at the next tick, with content computed at the send instant.
+         Exactly-once per (workspace, user, localDate) comes from the claim,
+         so the wider window cannot double-send. The REMINDER loop above
+         keeps its strict hour === 9 gate untouched.
+         ===================================================================== */
+      if (hour >= 9) for (const r of db
+        .prepare('select m.member_id, m.user_id, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
+        .all(ws.id)) {
+        if (!r.user_id || !r.email) continue;
+        /* D-14: the opt-in is the STORED value — stored true IS the opt-in;
+           undefined (no row, unparseable row, missing key) is off. The merged
+           accessor still carries the pre-38-02 default `email_digest: true`,
+           so the gate reads the stored row directly; plan 38-02's default-layer
+           deletion collapses this back to getUserNotifPrefs(...).email_digest. */
+        let storedDigest;
+        try {
+          storedDigest = JSON.parse(db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(ws.id, r.user_id)?.prefs || '{}')?.email_digest;
+        } catch {
+          storedDigest = undefined;
+        }
+        if (storedDigest !== true) continue;
+        const dueToday = [];
+        const overdue = [];
+        for (const t of tasks) {
+          const project = projects.get(t?.project);
+          if (!remindable(t, project)) continue;
+          /* SCOPE-04 per (recipient, task) — same three checks as the
+             reminder loop, keyed on the TASK's assignee (the recipient sees
+             exactly what the assignee sees). */
+          const assigneeMembership = db
+            .prepare('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?')
+            .get(ws.id, t.assignee);
+          if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
+          if (!projectScope(assigneeMembership) && !memberCanReadProject(project, ws.id, t.assignee)) continue;
+          /* Same string compares as the reminder window predicates, split
+             disjointly: due-today is the morning_of window's due-date edge,
+             overdue is past_due's strictly-after edge. Future-dated tasks
+             never appear. */
+          if (localDate === t.due) dueToday.push(t);
+          else if (localDate > t.due) overdue.push(t);
+        }
+        /* D-12 ledger honesty: an empty digest claims nothing and sends nothing. */
+        if (!dueToday.length && !overdue.length) continue;
+        let claimed = false;
+        transaction(() => {
+          const res = db
+            .prepare('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)')
+            .run(`${ws.id}:${r.user_id}:digest:${localDate}`, ws.id, now());
+          claimed = res.changes !== 0; // D-03: user_id id space, exactly-once
+        });
+        if (!claimed) continue;
+        digests++;
+        /* Post-commit fire-and-forget — NEVER inside the transaction. */
+        if (MAILER.enabled) {
+          MAILER.sendDigest({
+            to: r.email,
+            locale: r.locale === 'fr' ? 'fr' : 'en',
+            workspace: ws.name || 'Projects Studio',
+            wsSlug: ws.slug,
+            appUrl: APP_URL,
+            dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task' })),
+            overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task' })),
+          }).catch(err => console.warn(`digest email → ${r.email}: ${err.message}`));
+        }
+      }
     } catch (err) {
       console.warn(`reminder pass ${ws.id}: ${err.message}`);
     }
   }
-  return emitted;
+  return { emitted, digests };
 }
 
 /* TEAM-01: team assignment for account-backed members lives in the
@@ -2846,8 +2931,8 @@ async function handleApi(req, res, url) {
       return fail(res, 404, 'notFound', 'Not found');
     }
     const body = await readJson(req).catch(() => ({}));
-    const emitted = runReminderPass({ now: body?.now ? new Date(body.now) : undefined });
-    return json(res, 200, { emitted });
+    const { emitted, digests } = runReminderPass({ now: body?.now ? new Date(body.now) : undefined });
+    return json(res, 200, { emitted, digests });
   }
 
   if (pathname === '/api/config' && method === 'GET') {
