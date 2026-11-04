@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.7
 milestone_name: Team Visibility & Hardening
-current_phase: 35
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 35 complete — all phases complete
-last_updated: "2026-11-03T19:01:26.968Z"
-last_activity: 2026-11-03
-last_activity_desc: Phase 35 complete
-state_head: 184d46314475b887a3136bbf77936cd2f65523c2
+last_updated: "2026-11-04T06:19:18.874Z"
+last_activity: 2026-11-04
+last_activity_desc: Milestone v1.7 completed and archived
+state_head: 5aa0989cb8215878cb46b30a940a67f87028825a
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 12
   completed_plans: 12
   percent: 100
+current_phase: 35
 ---
 
 # STATE.md
@@ -27,10 +27,10 @@ progress:
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-03 — Phase 35 complete
+Phase: Milestone v1.7 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-04 — Milestone v1.7 completed and archived
 
 ## v1.7 Phase Order (research-validated build order)
 
@@ -130,6 +130,7 @@ None yet.
 | uat_gaps | 26/26-UAT.md | diagnosed (0 pending scenarios) | 2026-11-01 | v1.5 |
 | deferred_items | 28-02 TEAM-05 pin born green | acknowledged (intentional no-RED per TDD rules) | 2026-11-02 | v1.6 |
 | deferred_items | DatabaseSync DEP0210 alias | noted (not a v1.7 concern) | 2026-11-02 | — |
+| uat_gaps | test/dependencies.test.mjs Dockerfile COPY-pin (D-12) | out-of-scope, pre-existing (reproduced at 34-05 base 3116272) — allowlist needs the new repo-root listing | 2026-11-03 | v1.7 |
 
 *(28-02 delTeam undo deferred item is now scheduled — Phase 35 UNDO-01/02.)*
 
@@ -159,5 +160,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Review `.planning/ROADMAP.md`, then start Phase 32 with `/gsd-plan-phase 32`
-  (consider `/gsd-discuss-phase 32` or research first — VIS composition semantics)
+- Start the next milestone with /gsd-new-milestone

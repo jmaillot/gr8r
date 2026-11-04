@@ -8,7 +8,7 @@ covered_files:
   - ".planning/phases/32-team-derived-project-visibility/32-01-SUMMARY.md"
   - "server.js"
   - "test/scope.test.mjs"
-covered_digest: "v2:sha256:eeedbe7f6e41756b1b8afae3436bf908ab951b41a59dc7ee92266a177400e846"
+covered_digest: "v2:sha256:548e16d71a5eb04b1cd392648874b7ef990f89daf4f58c5c876a2020feb8132f"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

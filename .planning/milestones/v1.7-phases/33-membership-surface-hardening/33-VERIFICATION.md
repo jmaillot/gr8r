@@ -13,7 +13,7 @@ covered_files:
   - test/oidc-sso.test.mjs
   - src/locales/en.json
   - src/locales/fr.json
-covered_digest: "v2:sha256:8d7ffe5d259d0ae28318cceaf3d10f424cb675f63e53a0e8372e9df2233191e4"
+covered_digest: "v2:sha256:bc4f0aee27ae735e6756bed5888d5fa29f05bae7bde39eab5f8f5ca1cc0d1fc6"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

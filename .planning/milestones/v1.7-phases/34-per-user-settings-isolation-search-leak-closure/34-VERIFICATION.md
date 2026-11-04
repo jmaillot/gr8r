@@ -33,7 +33,7 @@ covered_files:
   - test/local-prefs.test.mjs
   - test/scope.test.mjs
   - CHANGELOG.md
-covered_digest: "v2:sha256:7ecfa81cb18e989e6e2fd684bc95b257ed48e01be3af96df9746910523ac5e56"
+covered_digest: "v2:sha256:b9809200cbb33d87a05f7b0ce99702370d881d759d24152fef70ace2acf3c006"
 behavior_unverified_items:
   - truth: "In API mode, an unchecked notification pref stays unchecked after F5 reload (G-34-4 + G-34-6 fix, live browser)"
     test: "Re-run UAT Test 8 in 34-UAT.md: in API mode (rebuilt client), toggle a notification pref OFF, press F5 on /w/<slug>"

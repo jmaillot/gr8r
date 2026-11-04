@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.7 Team Visibility & Hardening (Shipped: 2026-11-04)
+
+**Phases completed:** 4 phases, 12 plans, 13 tasks
+
+**Key accomplishments:**
+- Team intersection (`project.teams ∩ member.teams ≠ ∅`) now opens projects through the single `hiddenFor()` funnel via one shared `memberCanReadProject` helper also adopted by the reminder pass and email mirror — purely additive reach, byte-identical 404s preserved, MATRIX extended with team cells across doc-get/file/reminder/fanout/doc-put families.
+- sameOrigin guard ordered FIRST on the invite-accept route (HARD-01/D-08), a shared `firstForwardedValue()` helper closing the multi-value x-forwarded-host gap (HARD-05/D-07), and a structural silent `{name,email,password}` whitelist with spoof pins (HARD-04/D-06) — 7 new tests, full 824-test suite green.
+- both `firstWorkspace()` invite twins fail closed in one commit (accept 410 `workspaceGone`, SSO twin consumes the dead invite and lands the generic `/login?sso=error`), and link-only admin/owner invites are now impossible at creation (400 `inviteAdminEmailRequired`), harmless at accept (403 refusal), and extinct in stored data (update-only boot sweep) — with the code catalogued EN+FR and 5 new pins.
+- Per-user notification preferences as SQLite rows keyed (workspace_id, user_id): single getUserNotifPrefs accessor, GET/PUT /api/me/notif-prefs with a 17-key whitelist, notifPrefs stripped from documents both directions, and reminder/email consumers resolving prefs per recipient.
+- One-time guarded backfill `migrateUserNotifPrefs` — a structural clone of the migrateTeamMembership recipe that copies workspace-doc `notifPrefs` into a user_notif_prefs row for EVERY member (D-09) and deletes the doc field in the same `begin immediate` transaction (D-11), gated on a pre-migration backup — plus byte-identical-second-boot, later-joiner, corrupt-doc and SETTINGS-03 invoices pins.
+- Recent-search redaction rebuilt on a tokenized matcher (src/lib/redaction.js): full-token NFC+lowercase intersection replaces substring includes, pinned by a 22-test table suite, the D-13 end-to-end scope pin, the D-15 workspace-wide pin, and the CHANGELOG SEARCH-01 limitation note.
+- One branching persistence adapter for per-user notif prefs — per-workspace localStorage in local mode, PUT /api/me/notif-prefs in API mode — with the seed block removed and legacy client snapshots stripped so the doc field can never resurrect.
+- GET-on-open hydration of stored notification prefs via a pure mergeNotifPrefs helper, wired at all five API-mode workspace-entry paths so an unchecked pref survives F5.
+- Closed the F5-reload gap — the /w/<slug> boot routine in main.js now awaits hydrateNotifPrefs after hydrateFromServer succeeds, so an unchecked pref stays unchecked after reload in API mode, pinned by a static sweep test.
+- delTeam's toast undo now awaits one doc push (new exported `pushNow()` in store.js) then replays each affected member's union team set through `api.setMemberTeams`, re-creating purged `team_members` rows without erasing newer changes.
+- Forward MASTER_KEY_PREVIOUS through docker-compose.yml via the optional `${MASTER_KEY_PREVIOUS:-}` form, proven by a parse + two-case `docker compose config` test, with a DEPLOY.md §14 compose rotation walkthrough.
+
+---
+
 ## v1.6 Team Access & Federation (Shipped: 2026-11-02)
 
 **Phases completed:** 4 phases, 17 plans, 13 tasks

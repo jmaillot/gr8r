@@ -1,27 +1,37 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-03 after Phase 33 (HARD shipped & verified)*
+*Last updated: 2026-11-04 after v1.7 milestone (Team Visibility & Hardening shipped)*
 
-## Current Milestone: v1.7 Team Visibility & Hardening
+## Next Milestone: TBD
+
+No milestone is currently scheduled. Start the next one with `/gsd-new-milestone`
+(questioning → research → requirements → roadmap); the Backlog is empty, so the
+next milestone's scope is fully open.
+
+<details>
+<summary>Milestone v1.7 Team Visibility & Hardening (shipped 2026-11-04)</summary>
 
 **Goal:** close every open thread from previous milestones — no new features, all debt:
 team-derived project visibility, the delTeam undo trap, membership-surface hardening,
 the recent-search leak, per-user settings isolation, and the compose key-rotation gap.
 
-**Target features:**
-- VIS — Team-derived project visibility for ALL members: `project.teams ∩ member.teams ≠ ∅`;
-  no-team projects stay workspace-wide; Phase-29 scope remains an optional admin restriction
-  (Backlog 999.1, deferred from the v1.6 Phase 29 UAT session)
-- UNDO — delTeam undo restores the purged memberships (or removes the misleading Undo offer)
-- HARD — Membership-surface hardening (v1.1 audit): `sameOrigin` on invite accept, no admin
-  link-only invites, no `firstWorkspace()` fallback, no guest-profile spoof
-- SEARCH — Close the substring-based recent-search leak; document the free-text limitation
-- SETTINGS — Per-user settings isolation: `notifPrefs`/`invoices` out of the shared workspace
-  document into real per-user rows (additive migration + routes)
-- DEPLOY — docker-compose forwards `MASTER_KEY_PREVIOUS` (CR-01, Phase 30 review)
+**Shipped:** team-derived project visibility through the single `hiddenFor()` funnel with
+the shared `memberCanReadProject` helper (VIS-01..03); invite-accept hardening — sameOrigin
+first, shared `firstForwardedValue()`, silent body whitelist, fail-closed `firstWorkspace()`
+twins, no admin link-only invites (HARD-01..05); per-user notification preferences as real
+SQLite rows with additive migration (SETTINGS-01..03); tokenized NFC+lowercase
+recent-search matcher closing the substring leak (SEARCH-01); honest delTeam undo with
+awaited `pushNow()`, shared mutex and fail-closed gate (UNDO-01/02); `MASTER_KEY_PREVIOUS`
+forwarded in docker-compose (DEPLOY-01). 4 phases, 12 plans, 116 commits, 17/17
+requirements. All four phase verifications passed 2026-11-04 (32: 7/7, 33: 5/5, 34: 16/16,
+35: 16/16); full suite 896 pass / 0 fail / 3 skips. Full record:
+`milestones/v1.7-ROADMAP.md`, `milestones/v1.7-REQUIREMENTS.md`,
+`milestones/v1.7-MILESTONE-AUDIT.md`, `milestones/v1.7-phases/`.
 
-**Constraints:** zero runtime dependencies held; migrations additive-only with byte-identical
-second boot; full suite green; EN+FR i18n gate.
+</details>
+
+**Constraints (standing):** zero runtime dependencies held; migrations additive-only with
+byte-identical second boot; full suite green; EN+FR i18n gate.
 
 ## What it is
 
@@ -397,11 +407,35 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   secret, per-factor baseline), remove (survivor-code guard), last-factor teardown runs the
   existing disable transaction, localized factor list + staged wizard + remove confirm —
   Phase 31 (TOTP2-01..05; re-verified 9/9, UAT 3/3)
+- ✓ Team-derived project visibility: `project.teams ∩ member.teams ≠ ∅` opens projects
+  through the single `hiddenFor()` funnel via one shared `memberCanReadProject` helper also
+  adopted by the reminder pass and email mirror; no-team projects stay workspace-wide;
+  Phase-29 explicit scope remains an optional admin restriction (D-03 grant inversion
+  survives, byte-identical 404s preserved) — Phase 32 (VIS-01..03; verification 7/7)
+- ✓ Membership-surface hardening: sameOrigin guard ordered FIRST on the invite-accept route,
+  shared `firstForwardedValue()` closing the multi-value x-forwarded-host gap, structural
+  silent `{name,email,password}` body whitelist with spoof pins, both `firstWorkspace()`
+  invite twins fail closed in one commit (accept 410, SSO twin lands generic ssoError), and
+  link-only admin/owner invites impossible at creation, harmless at accept, extinct in
+  stored data (update-only boot sweep) — Phase 33 (HARD-01..05; verification 5/5)
+- ✓ Per-user notification preferences as SQLite rows keyed (workspace_id, user_id): single
+  `getUserNotifPrefs` accessor, GET/PUT `/api/me/notif-prefs` with a 17-key whitelist,
+  notifPrefs stripped from the workspace document (dual strip + boot sweep), additive
+  migration with pre-backup and byte-identical second boot — Phase 34 (SETTINGS-01..03;
+  verification 16/16, UAT 8/8)
+- ✓ Recent-search leak closure: tokenized NFC+lowercase matcher in `src/lib/redaction.js`
+  replaces the substring `includes`, with table-driven tests; free-text search limitation
+  documented — Phase 34 (SEARCH-01; verification 16/16)
+- ✓ Honest delTeam undo: before-map captured at confirm, doc push awaited via `pushNow()`
+  (shared pushing mutex, 5s deadline), fail-closed `!pushed.ok` gate with err.changeTeam
+  toast, union replay of purged memberships — Phase 35 (UNDO-01/02; verification 16/16)
+- ✓ docker-compose forwards `MASTER_KEY_PREVIOUS` (compose-config pin) — Phase 35
+  (DEPLOY-01; verification 16/16)
 
 ### Active
 
-All v1.1-audit and v1.6-deferred items are scoped into v1.7 (see Current Milestone).
-New requirements will land here as the milestone evolves.
+*(Empty — no milestone is scheduled. New requirements will land here after
+`/gsd-new-milestone`.)*
 
 ### Out of scope
 
@@ -427,15 +461,16 @@ New requirements will land here as the milestone evolves.
 
 ## Context
 
-- Shipped v1.6 (2026-11-02) with 4 phases, 17 plans, 13 tasks across the v1.5 → v1.6 range
-  (2026-11-01 → 2026-11-02); full suite 803 tests (800 pass, 3 env-gated skips), lint clean.
+- Shipped v1.7 (2026-11-04) with 4 phases, 12 plans, 13 tasks across the v1.6 → v1.7 range
+  (2026-11-02 → 2026-11-04, 116 commits, 96 files, +11 390/−162); full suite 896 pass /
+  0 fail / 3 skips, all four phase verifications passed.
 - ~19k lines of JavaScript across `server.js`, `oidc.js`, `test/`, `public/` and `src/`; still
   zero runtime dependencies (one dev dependency: `@playwright/test`).
 - Auth ground truth: `sessions` / `login_challenges` / `recovery_codes` / `totp_factors`
   tables, `v2:` keyring envelopes, `team_members` authority rows with scope columns,
-  `oidc_identities` + `oidc.js` (raw OIDC, `node:crypto` only).
-- Known deferred items: delTeam undo doesn't restore memberships + TEAM-05 born-green pin
-  acknowledged at close; eslint debt and D-12 resolved (see STATE.md Deferred Items).
+  `oidc_identities` + `oidc.js` (raw OIDC, `node:crypto` only), per-user `notif_prefs` rows.
+- Known deferred item: the `test/dependencies.test.mjs` Dockerfile COPY-pin allowlist (D-12)
+  needs updating for the new repo-root listing — documented in STATE.md Deferred Items.
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
 
 ## Evolution
