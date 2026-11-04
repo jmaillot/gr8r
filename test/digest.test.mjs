@@ -182,6 +182,28 @@ const digestFor = (msgs, email, slug) => {
   return m[0];
 };
 
+/* 38-03 (CR-01): add a SECOND account-backed member to an existing workspace —
+   a users row, a memberships row (with an optional restricted project scope)
+   and the matching doc roster entry. Kept local so makeWorkspace's
+   single-member signature is untouched. member_id is the literal 'm-peer'. */
+function addPeerMember(ws, docPatch = null, scope = null, srv = server) {
+  const peerUserId = `u-peer-${++seq}`;
+  const peerEmail = `peer-${seq}@test.local`;
+  withDb(srv.dbPath, db => {
+    db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(
+      peerUserId, peerEmail, 'Peer', 'not-a-real-hash', Date.now(),
+    );
+    db.prepare('insert into memberships (workspace_id, user_id, role, member_id, scope) values (?,?,?,?,?)').run(
+      ws.id, peerUserId, 'member', 'm-peer', scope,
+    );
+    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
+    doc.data.members.push({ id: 'm-peer', name: 'Peer', email: peerEmail, userId: null, tz: TZ });
+    if (docPatch) docPatch(doc);
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id);
+  });
+  return { memberId: 'm-peer', userId: peerUserId, email: peerEmail };
+}
+
 let smtp;
 
 before(async () => {
@@ -246,6 +268,58 @@ test('DIGEST-01: opted-in member gets ONE localized digest at 09:00 — due-toda
   assert.equal(uidB ? 0 : 1, 0);
   assert.ok(!smtp.payloads.some(raw => raw.includes(`/w/${wsB.slug}/`)), 'no digest email for the opted-out workspace');
   assert.ok(resB.digests >= 0);
+});
+
+/* ---------------- CR-01 recipient-scope pin (38-03, multi-member) ---------------- */
+
+test('CR-01: a digest recipient receives ONLY their own, in-scope tasks — never another member\'s tasks or out-of-scope titles', async () => {
+  const DUE = '2026-04-20'; // fresh date — the pass scans every workspace
+  const { ws, userId: m1UserId, email: m1Email, memberId: m1MemberId } = await makeWorkspace(
+    m => [
+      task(m, { key: 'K-A1', title: 'Ordinary task', due: DUE }),
+      task(m, { key: 'K-A2', title: 'Private task', due: DUE, project: 'p-private' }),
+      task('m-peer', { key: 'K-B1', title: 'Peer task', due: DUE }),
+    ],
+    DIGEST_ONLY,
+  );
+
+  /* M2 joins with a restricted scope (only p1 in reach) so the SCOPE-04
+     checks — correctly evaluated against the RECIPIENT — must deny p-private. */
+  const peer = addPeerMember(
+    ws,
+    doc => doc.data.projects.push({ id: 'p-private', name: 'Private', private: true, members: [m1MemberId] }),
+    JSON.stringify({ teams: [], projects: ['p1'] }),
+  );
+  withDb(server.dbPath, db =>
+    db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(
+      ws.id, peer.userId, JSON.stringify(DIGEST_ONLY),
+    ),
+  );
+
+  const res = await trigger(at9(DUE));
+  void res;
+  const msgs = await waitFor(smtp, 2, 'two digests (one per opted-in member)');
+  const digestM1 = digestFor(msgs, m1Email, ws.slug);
+  const digestM2 = digestFor(msgs, peer.email, ws.slug);
+
+  /* M2 (the leak detector, first-class): their own task appears; the owner's
+     non-assignee task and the out-of-scope private task NEVER do. */
+  assert.ok(digestM2.text.includes(`/w/${ws.slug}/task/K-B1`), 'M2 digest lists their own task K-B1');
+  assert.ok(!digestM2.text.includes('K-A1'), 'M2 digest does NOT list the non-assignee task K-A1 (CR-01)');
+  assert.ok(!digestM2.text.includes('K-A2'), 'M2 digest does NOT leak the out-of-scope private task K-A2 (CR-01)');
+
+  /* M1 (owner, workspace-wide): the assignee===recipient gate must NOT
+     over-suppress — both of M1's own tasks appear, the peer's does not. */
+  assert.ok(digestM1.text.includes(`/w/${ws.slug}/task/K-A1`), 'M1 digest lists K-A1');
+  assert.ok(digestM1.text.includes(`/w/${ws.slug}/task/K-A2`), 'M1 digest lists K-A2 (M1 can read the private project)');
+  assert.ok(!digestM1.text.includes('K-B1'), 'M1 digest does NOT list the peer\'s task K-B1');
+
+  /* Exactly one digest claim per opted-in member. */
+  assert.deepEqual(
+    digestKeys(ws.id).sort(),
+    [`${ws.id}:${m1UserId}:digest:${DUE}`, `${ws.id}:${peer.userId}:digest:${DUE}`].sort(),
+    'one digest ledger key per member',
+  );
 });
 
 /* ---------------- SC-2 no-double-send: simulated restart ---------------- */
