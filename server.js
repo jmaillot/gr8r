@@ -1493,11 +1493,18 @@ function runReminderPass({ now: at = new Date() } = {}) {
         const dueToday = [];
         const overdue = [];
         for (const t of tasks) {
+          /* CR-01 (38-03): the digest lists THE RECIPIENT'S tasks — a task
+             assigned to someone else never enters this recipient's digest,
+             no matter its project or visibility. First filter, before any
+             content is computed (T-38-07). */
+          if (t.assignee !== r.member_id) continue;
           const project = projects.get(t?.project);
           if (!remindable(t, project)) continue;
           /* SCOPE-04 per (recipient, task) — same three checks as the
-             reminder loop, keyed on the TASK's assignee (the recipient sees
-             exactly what the assignee sees). */
+             reminder loop. With the assignee gate above, assignee ===
+             recipient, so these are evaluated against the RECIPIENT's own
+             membership: one visibility pipeline, per D-06 (no digest-specific
+             second filter). */
           const assigneeMembership = db
             .prepare('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?')
             .get(ws.id, t.assignee);
