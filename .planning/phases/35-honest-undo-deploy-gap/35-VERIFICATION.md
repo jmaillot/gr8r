@@ -1,6 +1,6 @@
 ---
 phase: 35-honest-undo-deploy-gap
-verified: 2026-11-03T20:40:00Z
+verified: 2026-11-04T00:00:00Z
 status: passed
 score: 16/16 must-haves verified
 behavior_unverified: 0
@@ -18,88 +18,101 @@ covered_files:
   - test/compose-config.test.mjs
   - docker-compose.yml
   - DEPLOY.md
-covered_digest: "v2:sha256:04b5fbd20dbaf0c004f4c2122b425a67c3f06bc9474486eb44f024f67fbb027c"
+covered_digest: "v2:sha256:3889b6fc2cb3d58eb618ea105af7d9bee97f82f60c7c0f1e6abfadae09d5e55d"
 re_verification:
-  previous_status: gaps_found
-  previous_score: 12/14
-  gaps_closed:
-    - "WR-01: undo onAction early-returns on pushed.ok === false before any setMemberTeams PUT (src/actions/teams.js, commit 616d92a)"
-    - "WR-02: pushNow() holds the shared pushing mutex around its PUT, released in finally (src/core/store.js, commit 519b25f)"
+  previous_status: passed
+  previous_score: 16/16
+  note: >-
+    Stale-refresh re-verification after code-review fix commits 9f16914 (WR-01),
+    4d5fab5 (WR-02), 8553ab6 (WR-03) — all touching this phase's covered files
+    (src/core/store.js, src/actions/teams.js, test/undo-membership.test.mjs)
+    after the prior passed verification of 2026-11-03. Must-haves reused from
+    the prior report; no check weakened.
+  gaps_closed: []
   gaps_remaining: []
   regressions: []
 ---
 
-# Phase 35 Verification — Honest Undo & Deploy Gap (Re-verification)
+# Phase 35 Verification — Honest Undo & Deploy Gap (Post-Fix Re-verification)
 
 **Phase Goal:** Honest Undo & Deploy Gap — delTeam's undo toast honest in API mode (before-map captured in confirm), Phase-30 compose gap closed (MASTER_KEY_PREVIOUS forwarded through docker-compose.yml), plus the two verification gaps (WR-01 failed-doc-push gate, WR-02 pushNow/push mutex) closed by gap plan 35-03.
 
-**Status:** passed — re-verification after 35-03 gap closure.
+**Status:** passed — stale-refresh after code-review fixes 9f16914 / 4d5fab5 / 8553ab6 (all three verified in git log, touching exactly this phase's covered files).
 
-## Gap Closure Verification (both prior gaps)
+## Post-Fix Verification (the three commits)
 
-### Gap 1 / WR-01 — VERIFIED CLOSED
+### Fix 1 / 9f16914 — WR-01: pushNow() wait loop bounded with 5s deadline — VERIFIED
 
-Direct inspection of `src/actions/teams.js` (undo `onAction`, lines ~179–205): immediately after `const pushed = await pushNow();`, an unconditional `if (pushed.ok === false) { toast(t('err.changeTeam'), { kind: 'err' }); return; }` gate sits **lexically before** the `Promise.all(affected.map(...))` setMemberTeams block. Zero authority PUTs can fire after a failed doc push (network loss, 401, 403, 409). The gate is unconditional (fires even with an empty `affected` roster). The post-loop combined check (`pushed.ok === false || results.some(r => !r?.ok)`), the additive union shape `Set([...before, current, tm.id])` (D-03/D-04), the unguarded `restore(snap)` first-call order, and the `if (!api.enabled) return;` gate (D-06) are all preserved. Commit 616d92a verified in git log. Source-scan pin added in `test/undo-membership.test.mjs` asserting gate-before-Promise.all ordering, `err.changeTeam` in the gate, and the D-06 invariants from the same slice.
+`src/core/store.js` `pushNow()`: the previously unbounded `while (pushing) await sleep(25)` loop is now `const deadline = Date.now() + 5000; while (pushing) { if (Date.now() > deadline) return { ok: false, status: 0 }; ... }`. The timeout return uses the **same `{ ok: false, status: 0 }` shape** as the enabled/conflict guard — so the caller's truthy `!pushed.ok` gate fires the honest `err.changeTeam` toast for a hung in-flight PUT exactly as it does for network loss / 401 / 403 / 409. The WR-01 contract (doc PUT failure → ZERO setMemberTeams PUTs + err.changeTeam toast) therefore holds **including** the new timeout shape.
 
-### Gap 2 / WR-02 — VERIFIED CLOSED
+### Fix 2 / 4d5fab5 — WR-02: truthy `!pushed.ok` gates in undo onAction — VERIFIED
 
-Direct inspection of `src/core/store.js` `pushNow()` (~lines 146–172): after the `while (pushing)` wait loop and both `clearTimeout` calls, `pushNow()` sets `pushing = true` immediately before `await api.putWorkspace(docSnapshot())` and releases it in a `finally { pushing = false; }`. The module-scoped `pushing` flag is the **same shared mutex** `push()` uses (`push()` byte-identical: takes it, defers via `pushQueued` when held) — so a `save()`-scheduled debounced `push()` during the undo's in-flight doc PUT now defers instead of firing a concurrent PUT and triggering a false-positive `409` → `S.ui.conflict` lock. The 409/401/403 conflict handling, localStorage snapshot write, and `{ ok: false, status: 0 }` guard return are unchanged. Commit 519b25f verified in git log. Source-scan pin asserts take-before-PUT, release-in-finally, wait loop, both clearTimeouts, and `push()`'s own take of the shared flag.
+`src/actions/teams.js` undo `onAction`: both gates (`pushed.ok === false` → `!pushed.ok`) now fail closed on any falsy `ok` — a result shape missing `ok` can no longer slip past the gate. Verified the gate sits lexically between `const pushed = await pushNow();` and the `Promise.all(affected.map(...))` setMemberTeams block, is unconditional (fires on empty roster), and toasts `err.changeTeam`. The post-loop combined check is now `!pushed.ok || results.some(r => !r?.ok)` — equivalent logic, same honest-failure behavior (D-02 preserved).
 
-## 35-03 Must-Haves (all 8 truths + artifacts + key_links)
+### Fix 3 / 8553ab6 — WR-03: source-scan slices bounded — VERIFIED
+
+`test/undo-membership.test.mjs`: the naive `src.slice(actionStart)` (slice-to-end-of-file) is replaced by a balanced-brace `onActionSlice()` helper bounding both the D-06 and WR-01 pins to the undo closure itself — the "exactly one setMemberTeams call site" assertion now cannot be over- or under-scoped by code after the closure. The WR-01 pin was updated to accept either gate form (`!pushed\.ok|pushed\.ok === false`) — correct: it pins the ordering contract, not the operator spelling.
+
+### Critical Check 2 — WR-02 mutex not displaced by the deadline
+
+Direct inspection of `pushNow()` post-fix: the deadline check lives **inside the wait loop, before mutex take**. Timeout returns `{ ok: false, status: 0 }` **without ever setting `pushing = true`** — no mutex leak on the timeout path. On the normal path the sequence is unchanged: wait loop → both `clearTimeout`s → localStorage snapshot → `pushing = true` → `await api.putWorkspace(...)` → `finally { pushing = false }`. Same shared module-scoped `pushing` flag `push()` uses; a save()-scheduled debounced push during the undo's in-flight PUT still defers into `pushQueued` (no false-positive 409 → `S.ui.conflict` lock mid-undo).
+
+### Critical Check 3 — Happy path unchanged
+
+Verified in source: `onAction` opens with unguarded `restore(snap)`, then `if (!api.enabled) return;` (D-06), then the awaited `pushNow()`, then the additive union `Set([...before, current, tm.id])` (D-03/D-04) full-set-replace PUTs, then the D-02 honest-failure toast. 409/401/403 conflict handling and revision logic (UNDO-02) untouched in store.js.
+
+## Must-Haves (reused from prior 16/16 report — all regression-confirmed post-fix)
 
 | # | Must-have | Status | Evidence |
 |---|-----------|--------|----------|
-| 1 | WR-01: failed pushNow() → zero authority PUTs + err.changeTeam toast | ✓ VERIFIED | teams.js gate precedes Promise.all; source-scan pin passes |
-| 2 | WR-02: pushing mutex serializes pushNow's PUT vs save()→push() | ✓ VERIFIED | store.js `pushing = true` + `finally` release; shared flag with push(); pin passes |
-| 3 | Happy-path sequence unchanged (restore → awaited pushNow → union PUTs; D-02/D-03/D-06 untouched) | ✓ VERIFIED | post-loop check, union shape, restore order, api.enabled gate all preserved in source |
-| 4 | UNDO-01 adjacency (probe): deduped union PUT, idempotent same-set PUT | ✓ VERIFIED | union shape unchanged in source; existing pin (undo-membership.test.mjs) passes |
-| 5 | UNDO-01 empty (probe): zero PUTs on empty roster even when push fails; gate unconditional | ✓ VERIFIED | gate returns before the map regardless of `affected` length |
-| 6 | UNDO-01 ordering (probe): insertion-order Set + server team_id ordering pinned | ✓ VERIFIED | existing ordering pin passes |
-| 7 | UNDO-02 boundary (probe): exactly 409/401/403 set S.ui.conflict; 400/500 do not | ✓ VERIFIED | unchanged conflict handling in both push() and pushNow(); compose/undo pins pass |
-| 8 | UNDO-02 precision (probe): revision small JSON-safe int, no arithmetic | ✓ VERIFIED | inspection of store.js: revision compared by `changeSeq !== seq` only |
+| 1 | WR-01: failed pushNow() → zero authority PUTs + err.changeTeam toast (incl. new timeout shape `{ok:false,status:0}`) | ✓ VERIFIED | teams.js truthy gate precedes Promise.all; store.js timeout returns same shape; pin passes |
+| 2 | WR-02: pushing mutex serializes pushNow's PUT vs save()→push(); take/release not moved by deadline fix | ✓ VERIFIED | store.js `pushing = true` + `finally` release unchanged; timeout exits pre-take; pin passes |
+| 3 | Happy-path sequence unchanged (restore → awaited pushNow → union PUTs; D-02/D-03/D-06 untouched) | ✓ VERIFIED | source inspection + pins |
+| 4 | UNDO-01 adjacency: deduped union PUT, idempotent same-set PUT | ✓ VERIFIED | union shape unchanged; pin passes |
+| 5 | UNDO-01 empty: zero PUTs on empty roster even when push fails; gate unconditional | ✓ VERIFIED | gate returns before the map regardless of `affected` |
+| 6 | UNDO-01 ordering: insertion-order Set + server team_id ordering pinned | ✓ VERIFIED | ordering pin passes |
+| 7 | UNDO-02 boundary: exactly 409/401/403 set S.ui.conflict; 400/500 do not | ✓ VERIFIED | conflict handling unchanged; pins pass |
+| 8 | UNDO-02 precision: revision small JSON-safe int, no arithmetic | ✓ VERIFIED | store.js `changeSeq !== seq` only |
+| 9 | UNDO-01 — restore + union replay + awaited pushNow sequencing | ✓ VERIFIED | teams.js onAction, store.js pushNow |
+| 10 | UNDO-02 — no-clobber regression | ✓ VERIFIED | undo-membership.test.mjs passes |
+| 11 | D-06 — local-mode restore-unconditional pin | ✓ VERIFIED | bounded-slice pin passes |
+| 12 | DEPLOY-01 — compose `:-` form for MASTER_KEY_PREVIOUS | ✓ VERIFIED | docker-compose.yml; compose-config.test.mjs 3/3 pass (unchanged by fixes) |
+| 13 | DEPLOY-01 — DEPLOY.md §14 key-custody walkthrough | ✓ VERIFIED | untouched by fix commits |
+| 14 | Regression gate — full suite | ✓ VERIFIED | `npm test` 896 pass / 0 fail / 3 skips = baseline |
+| 15 | WR-01 source-scan pin bounded to closure (WR-03) | ✓ VERIFIED | `onActionSlice()` balanced-brace helper; pin passes |
+| 16 | WR-02 source-scan pin (take-before-PUT, release-in-finally, wait loop, shared flag) | ✓ VERIFIED | pin passes post-deadline-fix |
 
-## Full Phase Must-Haves (35-01, 35-02 — regression-confirmed)
-
-| # | Must-have | Status | Evidence |
-|---|-----------|--------|----------|
-| 9 | UNDO-01 — restore + union replay + awaited pushNow sequencing | ✓ VERIFIED | teams.js:179–205, store.js pushNow |
-| 10 | UNDO-02 — no-clobber regression (newer team_c survives) | ✓ VERIFIED | test-pinned in undo-membership.test.mjs (7/7 pass) |
-| 11 | D-06 — local-mode restore-unconditional pin | ✓ VERIFIED | source-scan pin re-asserted by the new WR-01 pin |
-| 12 | DEPLOY-01 — compose `:-` form for MASTER_KEY_PREVIOUS | ✓ VERIFIED | docker-compose.yml:40; compose-config.test.mjs 3/3 pass |
-| 13 | DEPLOY-01 — DEPLOY.md §14 key-custody walkthrough | ✓ VERIFIED | present, consistent with D-08 |
-| 14 | Regression gate — prior-phase test files | ✓ VERIFIED | full suite green (below) |
+**Score:** 16/16 truths verified (0 present, behavior-unverified)
 
 ## Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
-| Undo membership pins + WR-01/WR-02 pins | `node --test test/undo-membership.test.mjs` | 7 pass / 0 fail (5 + 2 new) | ✓ PASS |
+| Undo membership pins (incl. bounded WR-01/WR-02/D-06 source scans) | `node --test test/undo-membership.test.mjs` | 7 pass / 0 fail | ✓ PASS |
 | Compose config both cases | `node --test test/compose-config.test.mjs` | 3 pass / 0 fail | ✓ PASS |
-| Full suite | `npm test` | 896 pass / 0 fail / 3 skips (baseline 894 → 896) | ✓ PASS |
+| Full suite (single run) | `npm test` | 896 pass / 0 fail / 3 skips (baseline match) | ✓ PASS |
 
 ## Requirements Coverage
 
 | Requirement | Source Plan | Status | Evidence |
 | ----------- | ----------- | ------ | -------- |
-| UNDO-01 | 35-01, 35-03 | ✓ SATISFIED | honest undo on both success and failure paths; REQUIREMENTS.md line 43 `[x]` |
-| UNDO-02 | 35-01 | ✓ SATISFIED | no-clobber test pin; REQUIREMENTS.md line 46 `[x]` |
-| DEPLOY-01 | 35-02 | ✓ SATISFIED | compose `:-` forwarding + config test + DEPLOY.md §14; code and tests verified |
-
-No orphaned requirements — all three phase IDs are claimed by plans and satisfied. Note (advisory, non-blocking): `.planning/REQUIREMENTS.md` line 85 still shows DEPLOY-01 as `[ ]` / "Pending" in the phase-coverage table (lines 107–109) — stale bookkeeping; the deliverable is code- and test-verified.
+| UNDO-01 | 35-01, 35-03 | ✓ SATISFIED | honest undo on success and failure paths, now fail-closed on any falsy `ok` |
+| UNDO-02 | 35-01 | ✓ SATISFIED | no-clobber + boundary pins pass |
+| DEPLOY-01 | 35-02 | ✓ SATISFIED | compose forwarding + config test + DEPLOY.md §14 unchanged by fixes |
 
 ## Anti-Patterns Found
 
-None. Zero TBD/FIXME/XXX markers in `src/core/store.js`, `src/actions/teams.js`, `test/undo-membership.test.mjs`. No stub patterns in the touched files.
+None. `grep -rnE "TBD|FIXME|XXX"` across `src/core/store.js`, `src/actions/teams.js`, `test/undo-membership.test.mjs` returns zero matches. No stub patterns.
 
 ## Human Verification Required
 
-None. Both gaps were closed with deterministic source and test evidence; no behavior-dependent truth is left unexercised (the WR-01/WR-02 invariants are pinned by the two new source-scan regression tests plus full-suite green).
+None. The fix commits narrow to already-pinned invariants; the timeout path reuses the established `{ok:false,status:0}` shape and the truthy gate is exercised by the WR-01 source-scan pin. Full suite green.
 
 ## Gaps Summary
 
-None. Both prior gaps (WR-01, WR-02) are closed with verified code, dedicated regression pins, and a green full suite. 16/16 must-haves verified.
+None. All three fix commits verified in git log and in source; contract invariants preserved or strengthened; 16/16 must-haves verified post-fix.
 
 ---
 
-_Verified: 2026-11-03T20:40:00Z_
+_Verified: 2026-11-04T00:00:00Z_
 _Verifier: the agent (gsd-verifier)_
