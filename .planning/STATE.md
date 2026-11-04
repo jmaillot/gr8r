@@ -5,16 +5,16 @@ milestone_name: Notification Sanity
 current_phase: 38
 current_phase_name: Daily Digest & Reminder Suppression
 status: executing
-stopped_at: Phase 38 context gathered
-last_updated: "2026-11-04T18:40:45.382Z"
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-11-04T18:56:01.787Z"
 last_activity: 2026-11-04
-last_activity_desc: Phase 37 execution started
-state_head: 6fc21174afd1e38c1ff548b92855630aa3ff658d
+last_activity_desc: Phase 38 execution started
+state_head: 2a6ab0d0588c306b0db5784d44f7261307160b07
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 38 (Daily Digest & Reminder Suppression) — READY TO EXECUTE
+Phase: 38 (Daily Digest & Reminder Suppression) — EXECUTING
 Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-11-04 — Completed 37-01-PLAN.md (day_before offset removed, suite 930/0/3)
+Last activity: 2026-11-04 — Phase 38 execution started
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -132,6 +132,8 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 37]: 37-03: push_due removed end-to-end (G-37-2) — server+client whitelists 16/12 keys, retired-key PUT rejected 400 unknownPrefKey, historical rows inert via spread-then-sanitize, no migration
 - [Phase 37]: 37-03: dist/ is gitignored — rebuilt + grep-verified locally, not committed
 - [Phase 37]: 37-03: push_due removed end-to-end (G-37-2) - server+client whitelists 16/12 keys, retired-key PUT rejected 400 unknownPrefKey, historical rows inert, no migration
+- [Phase 38]: 38-01: digest window is hour >= 9 (catch-up-eligible all day, D-01/D-02); reminder loop keeps strict hour === 9 byte-identical
+- [Phase 38]: 38-01: digest opt-in reads the STORED email_digest value (strict === true) until 38-02 deletes the pre-38 default true from NOTIF_PREF_DEFAULTS
 
 ### Pending Todos
 
@@ -165,9 +167,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T18:07:13.944Z
-Stopped at: Phase 38 context gathered
-Resume file: .planning/phases/38-daily-digest-reminder-suppression/38-CONTEXT.md
+Last session: 2026-11-04T18:56:01.732Z
+Stopped at: Completed 38-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -192,6 +194,7 @@ Resume file: .planning/phases/38-daily-digest-reminder-suppression/38-CONTEXT.md
 | Phase 37 P01 | ~25 min | 2 tasks | 6 files |
 | Phase 37 P02 | 12 min | 2 tasks | 3 files |
 | Phase 37 P03 | 11 min | 3 tasks | 12 files |
+| Phase 38 P01 | 11 min | 2 tasks | 6 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 

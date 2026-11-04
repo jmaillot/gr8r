@@ -39,10 +39,10 @@
 
 ### Daily Digest (DIGEST)
 
-- [ ] **DIGEST-01**: An opt-in daily digest email, sent at 09:00 workspace-local time, lists the
+- [x] **DIGEST-01**: An opt-in daily digest email, sent at 09:00 workspace-local time, lists the
   recipient's tasks due today and overdue tasks (each deep-linked), localized per recipient;
   when there is nothing due or overdue, no email is sent.
-- [ ] **DIGEST-02**: The digest reads tasks directly (not reminder notification rows) and claims
+- [x] **DIGEST-02**: The digest reads tasks directly (not reminder notification rows) and claims
   its send transactionally (dedup ledger) so it is idempotent across restarts; a digest send is
   type-scoped to replace reminder emails only — mentions, assignments and comment emails flow
   unchanged while the digest is enabled; push and inbox notifications are never suppressed.
@@ -91,8 +91,8 @@
 | REM-02 | Phase 37 | Complete |
 | REM-03 | Phase 37 | Complete |
 | REM-04 | Phase 37 | Complete |
-| DIGEST-01 | Phase 38 | Pending |
-| DIGEST-02 | Phase 38 | Pending |
+| DIGEST-01 | Phase 38 | Complete |
+| DIGEST-02 | Phase 38 | Complete |
 | DIGEST-03 | Phase 38 | Pending |
 | AUDIT-01 | Phase 39 | Pending |
 | AUDIT-02 | Phase 39 | Pending |
