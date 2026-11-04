@@ -185,7 +185,10 @@ A.delTeam = el => {
                guaranteed 400 unknownTeam (and a divergent-state corner if the
                server doc still carries the team id). Unconditional: even with
                an empty affected roster, the restore was never persisted. */
-            if (pushed.ok === false) {
+            /* Defense-in-depth: truthiness, not strict === false — a result
+               shape missing `ok` must fail closed (the gate is the last line
+               of defense against the guaranteed-400 unknownTeam cascade). */
+            if (!pushed.ok) {
               toast(t('err.changeTeam'), { kind: 'err' });
               return;
             }
@@ -202,7 +205,7 @@ A.delTeam = el => {
               }),
             );
             /* D-02: failure = honest error toast, no compensating rollback. */
-            if (pushed.ok === false || results.some(r => !r?.ok)) {
+            if (!pushed.ok || results.some(r => !r?.ok)) {
               toast(t('err.changeTeam'), { kind: 'err' });
               return;
             }

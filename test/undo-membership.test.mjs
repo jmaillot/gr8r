@@ -248,7 +248,9 @@ test('WR-01: the undo onAction stops before any membership PUT when the doc push
   const body = src.slice(actionStart);
 
   const idxPush = body.indexOf('const pushed = await pushNow();');
-  const idxGate = body.indexOf('pushed.ok === false');
+  /* Accept either gate form: `!pushed.ok` (defense-in-depth, WR-02 fix) or
+     the legacy strict `pushed.ok === false`. */
+  const idxGate = body.search(/!pushed\.ok|pushed\.ok === false/);
   const idxAll = body.indexOf('Promise.all(');
   assert.ok(idxPush > -1 && idxGate > -1 && idxAll > -1, 'pushNow, the gate, and the PUT block all exist');
   assert.ok(idxGate > idxPush && idxGate < idxAll, 'the pushed.ok gate sits between pushNow() and the Promise.all PUTs');
@@ -262,7 +264,7 @@ test('WR-01: the undo onAction stops before any membership PUT when the doc push
   assert.equal([...body.matchAll(/setMemberTeams/g)].length, 1, 'exactly one membership-write call site remains');
 
   // The post-loop partial-failure check (D-02) is preserved.
-  assert.match(body, /pushed\.ok === false \|\| results\.some\(r => !r\?\.ok\)/, 'the post-loop combined failure check is preserved');
+  assert.match(body, /!pushed\.ok \|\| results\.some\(r => !r\?\.ok\)/, 'the post-loop combined failure check is preserved');
 });
 
 /* WR-02 (Gap 2) source-scan pin: pushNow() holds the shared `pushing` mutex
