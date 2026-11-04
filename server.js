@@ -1328,12 +1328,8 @@ function localParts(tzLabel, date = new Date()) {
 }
 
 /* Pure YYYY-MM-DD string arithmetic via Date.UTC — never local-midnight Date
-   math, which is DST-fragile. */
-function addDaysIso(iso, n) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return null;
-  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n)).toISOString().slice(0, 10);
-}
+   math, which is DST-fragile. (addDaysIso retired with the day_before offset,
+   phase 37 — only the localDate string compare remains.) */
 
 function workspaceTzLabel(doc, wsId) {
   const first = db.prepare('select member_id from memberships where workspace_id = ? order by rowid limit 1').get(wsId);

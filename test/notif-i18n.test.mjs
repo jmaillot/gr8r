@@ -18,9 +18,8 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { startServer, signup, login, client, withDb } from './helpers/server.mjs';
+import { startServer, signup, login, withDb } from './helpers/server.mjs';
 import { escHtml as esc, getLocale, has, primeLocale, registerCatalogue, t } from '../src/core/i18n.js';
-import enLocale from '../src/locales/en.json' with { type: 'json' };
 import frLocale from '../src/locales/fr.json' with { type: 'json' };
 
 const GOOD = 'correct-horse-9';

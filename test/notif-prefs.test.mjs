@@ -309,7 +309,7 @@ function textPart(raw) {
   return Buffer.from(body.join(''), 'base64').toString('utf8');
 }
 
-test('two users with different rows get different outcomes — the reminder gate and email dispatch resolve per recipient', async t => {
+test('two users with different rows get different outcomes — the reminder gate and email dispatch resolve per recipient', async () => {
   const smtp = await fakeSmtp();
   const mailDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-prefs-mail-'));
   const mail = await startServer({
