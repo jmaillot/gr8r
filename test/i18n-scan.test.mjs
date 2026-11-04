@@ -496,6 +496,50 @@ test('an empty notif.* namespace is a legal empty input, not an error', () => {
   assert.equal(main([], options), 0);
 });
 
+test('the src-side scan output is byte-compatible — no server or parity findings leak into scanTree (Pitfall 8)', () => {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/en.json'), 'utf8'));
+  const findings = scanTree(path.join(REPO_ROOT, 'src'), { catalogue });
+  const leaked = findings.filter(f => f.text.includes('parity:') || f.text.startsWith('notif.'));
+  assert.deepEqual(
+    leaked.map(f => `${f.file}:${f.line} ${f.text}`),
+    [],
+    'a server-family or parity finding reached the src-side scan output',
+  );
+  const list = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'test/fixtures/i18n-pending.json'), 'utf8'));
+  assert.deepEqual(list, [], 'the allow-list fixture is no longer []');
+});
+
+test('the build gate exits 1 through a real subprocess when a server file carries an unresolvable notif.* key', () => {
+  /* A pure fixture driven through a real subprocess exit path: the live
+     server.js is NEVER touched — parallel test files boot it, and a probe
+     write would crash their boots. */
+  const dir = fixtureTree({
+    'server.js': "const probe = tFor(locale, 'notif.probe.neverAdded');\n",
+    'src/x.js': 'const machine = 1;\n',
+    'src/locales/en.json': JSON.stringify({ 'a11y.dismiss': 'Dismiss' }),
+    'src/locales/fr.json': JSON.stringify({ 'a11y.dismiss': 'Rejeter' }),
+    'test/fixtures/i18n-pending.json': JSON.stringify([]),
+  });
+  const driver = [
+    "import { main } from " + JSON.stringify(path.join(REPO_ROOT, 'scripts/i18n-scan.mjs')) + ';',
+    'const options = ' + JSON.stringify({
+      root: path.join(dir, 'src'),
+      allowList: path.join(dir, 'test/fixtures/i18n-pending.json'),
+      catalogue: path.join(dir, 'src/locales/en.json'),
+      frCatalogue: path.join(dir, 'src/locales/fr.json'),
+      serverFiles: [path.join(dir, 'server.js')],
+    }) + ';',
+    'process.exit(main([], options));',
+  ].join('\n');
+  let code = 0;
+  try {
+    execFileSync(process.execPath, ['--input-type=module', '-e', driver], { stdio: 'pipe' });
+  } catch (e) {
+    code = e.status;
+  }
+  assert.equal(code, 1, 'the scanner accepted an unresolvable server notif.* key — the gate is vacuous');
+});
+
 test('the server family reports zero violations over the live server.js and mailer.js', () => {
   const catalogue = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/en.json'), 'utf8'));
   const fr = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/fr.json'), 'utf8'));
