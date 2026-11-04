@@ -186,12 +186,13 @@ test('SC-1: a FR-locale recipient gets a French mention email; EN recipients of 
   const msgs = await waitFor(smtp, 2, 'fr/en pair');
 
   const fr = payloadFor(msgs, 'zoe@test.local');
+  const squeeze = s => s.replace(/\u00a0/g, ' ');
   assert.match(fr.subject, /vous a mentionné/, `FR subject: ${fr.subject}`);
   assert.ok(fr.subject.includes('Rapport naïf'), `FR subject carries the title: ${fr.subject}`);
   assert.ok(fr.text.includes('Bonjour,'), `FR greeting: ${fr.text.split('\r\n')[0]}`);
-  assert.ok(fr.text.includes('« Rapport naïf »'), `FR sentence uses the guillemets: ${fr.text}`);
+  assert.match(squeeze(fr.text), /« Rapport naïf »/, `FR sentence uses the guillemets: ${fr.text}`);
   assert.ok(fr.text.includes('dans I18n Ws.'), `FR sentence tail: ${fr.text}`);
-  assert.ok(fr.text.includes('Ouvrez la tâche :'), `FR open-task line: ${fr.text}`);
+  assert.match(squeeze(fr.text), /Ouvrez la tâche :/, `FR open-task line: ${fr.text}`);
   assert.ok(fr.text.includes('Vous recevez cet e-mail'), `FR footer: ${fr.text}`);
   assert.ok(fr.html.includes('Ouvrir la tâche'), `FR button: ${fr.html}`);
 

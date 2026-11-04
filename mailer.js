@@ -24,6 +24,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { tFor } from './src/core/i18n.js';
 
 const CRLF = '\r\n';
 const DEFAULT_TIMEOUT = 15_000;
@@ -389,49 +390,83 @@ class SmtpSession {
 }
 
 /* P4-f: the notification email — shorter than the invite, same layout bones.
-   Types map to one sentence each; the body links straight to the task. */
+   Types map to one sentence each; the body links straight to the task.
+
+   I18N-01 (Phase 36): the frame renders through tFor(msg.locale, 'notif.email.*')
+   — all notif.email call sites live in THIS file only. tFor is pure (no
+   singleton mutation), clamps unknown locales to EN and never throws; the
+   try/catch backstop additionally degrades to the previous English literals
+   on any throw, so a catalogue problem can never kill the fan-out (SC-5).
+   escapeHtml/encodeWord are applied AFTER interpolation — the catalogue
+   renders raw (T-36-01). */
 function buildNotifMessage(config, msg) {
   const to = bareAddress(msg.to);
   if (!addressOk(to)) throw new Error('Notification email address is invalid');
 
+  const locale = msg.locale === 'fr' ? 'fr' : 'en';
   const workspace = text(msg.workspace) || 'Projects Studio';
   const actor = text(msg.by) || 'Someone';
   const taskTitle = text(msg.task) || 'a task';
   const snippet = text(msg.snippet);
   const url = text(msg.url);
 
-  const verbs = {
-    mention: 'mentioned you in',
-    assign: 'assigned you to',
-    comment: 'commented on',
-    update: 'updated',
-  };
-  const verb = verbs[msg.kind] || 'updated';
+  let frame;
+  try {
+    const verbKeys = {
+      mention: 'notif.email.verb.mention',
+      assign: 'notif.email.verb.assign',
+      comment: 'notif.email.verb.comment',
+      update: 'notif.email.verb.update',
+      due_reminder: 'notif.email.verb.reminder',
+      past_due: 'notif.email.verb.reminder',
+    };
+    const verb = tFor(locale, verbKeys[msg.kind] || 'notif.email.verb.update');
+    frame = {
+      greeting: tFor(locale, 'notif.email.greeting'),
+      subject: `${actor} ${verb} ${taskTitle}`,
+      sentence: tFor(locale, 'notif.email.body.sentence', { actor, verb, title: taskTitle, workspace }),
+      openTask: tFor(locale, 'notif.email.body.openTask'),
+      button: tFor(locale, 'notif.email.body.button'),
+      footer: tFor(locale, 'notif.email.body.footer'),
+    };
+  } catch {
+    /* SC-5 boundary guard: any render failure degrades to the pre-Phase-36
+       English literals — a broken catalogue blanks nothing, kills nothing. */
+    const verb = ({ mention: 'mentioned you in', assign: 'assigned you to', comment: 'commented on' })[msg.kind] || 'updated';
+    frame = {
+      greeting: 'Hi,',
+      subject: `${actor} ${verb} ${taskTitle}`,
+      sentence: `${actor} ${verb} "${taskTitle}" on ${workspace}.`,
+      openTask: 'Open the task:',
+      button: 'Open the task',
+      footer: "You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.",
+    };
+  }
+  const { greeting, subject, sentence, openTask, button, footer } = frame;
 
-  const subject = `${actor} ${verb} ${taskTitle}`;
   const textBody = [
-    'Hi,',
+    greeting,
     '',
-    `${actor} ${verb} "${taskTitle}" on ${workspace}.`,
+    sentence,
     ...(snippet ? ['', `“${snippet}”`] : []),
     '',
-    'Open the task:',
+    openTask,
     url,
     '',
-    "You receive this because of your notification settings on Projects Studio. If you weren't expecting it, you can ignore this email.",
+    footer,
   ].join('\r\n');
 
   const htmlBody = `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
 <body style="margin:0;padding:0;background:#f6f5f2;color:#26241f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f2;padding:32px 16px">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
         <tr><td>
-          <p style="margin:0 0 14px;font-size:16px;line-height:1.55"><strong>${escapeHtml(actor)}</strong> ${escapeHtml(verb)} <strong>${escapeHtml(taskTitle)}</strong> on ${escapeHtml(workspace)}.</p>
+          <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(sentence)}</p>
           ${snippet ? `<p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:#6b665c;border-left:3px solid #e7e3da;padding-left:12px">“${escapeHtml(snippet)}”</p>` : ''}
-          <p style="margin:24px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:#26241f;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">Open the task</a></p>
-          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.</p>
+          <p style="margin:24px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:#26241f;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">${escapeHtml(button)}</a></p>
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(footer)}</p>
         </td></tr>
       </table>
     </td></tr>

@@ -56,6 +56,15 @@ import { createMailer } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
+import { registerCatalogue } from './src/core/i18n.js';
+import frLocale from './src/locales/fr.json' with { type: 'json' };
+
+/* I18N-01/02 (Phase 36): the server renders notification emails per recipient
+   through tFor, so the FR catalogue must be registered at boot from the SAME
+   src/locales/*.json the client ships (no forked copy, no Dockerfile change).
+   One static import + one registration — no lazy loading, no file I/O
+   mid-send. The EN base catalogue is registered by src/core/i18n.js itself. */
+registerCatalogue('fr', frLocale);
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
@@ -1210,7 +1219,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
      — keeping the doc profiles as the fallback for doc-only members. */
   const authority = new Map(
     db
-      .prepare('select m.member_id, m.user_id, u.name, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
+      .prepare('select m.member_id, m.user_id, u.name, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
       .all(wsRow.id)
       .map(r => [r.member_id, r]),
   );
@@ -1227,6 +1236,12 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
     const profile = profiles.get(n.to);
     const to = authority.get(n.to)?.email || (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;
+    /* I18N-01 (Phase 36): the render locale rides the authority row — the
+       SAME workspace-scoped users read already used for name/email (T-36-02,
+       no new join). Anything but an exact 'fr' clamps to EN, so doc-only
+       members (no row), NULL locales and malformed stored values ('fr-FR')
+       all degrade to the base locale (Pitfalls 4/5, SC-5). */
+    const recipientLocale = authority.get(n.to)?.locale === 'fr' ? 'fr' : 'en';
     const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
     /* SCOPE-04: skip recipients whose scope excludes the notification's
        project (null scope = workspace-wide, D-04). The project rides the row
@@ -1263,6 +1278,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
       snippet: n.snippet || '',
       kind: n.type,
       url,
+      locale: recipientLocale,
     }).catch(err => console.warn(`notif email ${n.id} → ${to}: ${err.message}`));
   }
 }
