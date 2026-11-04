@@ -231,6 +231,42 @@
 
 ---
 
+## Milestone: v1.7 — Team Visibility & Hardening
+
+**Shipped:** 2026-11-04
+**Phases:** 4 | **Plans:** 12
+
+### What Was Built
+- Team-derived project visibility: `project.teams ∩ member.teams ≠ ∅` rides the single `hiddenFor()` funnel through one shared `memberCanReadProject` helper, adopted by the reminder pass and email mirror — D-03 grant inversion and byte-identical 404s survive (VIS-01..03)
+- Membership-surface hardening: sameOrigin first on invite-accept, shared `firstForwardedValue()`, silent `{name,email,password}` whitelist with spoof pins, fail-closed `firstWorkspace()` twins, link-only admin invites extinct (HARD-01..05)
+- Per-user notification preferences as real SQLite rows: single accessor, 17-key whitelist GET/PUT, dual strip + boot sweep, guarded one-time backfill in a pre-backup-transaction (SETTINGS-01..03)
+- Recent-search redaction rebuilt on a tokenized NFC+lowercase matcher replacing substring `includes` (SEARCH-01)
+- Honest delTeam undo: awaited `pushNow()` with shared mutex + 5s deadline, fail-closed `!pushed.ok` gate, union replay of purged memberships (UNDO-01/02); `MASTER_KEY_PREVIOUS` forwarded in compose (DEPLOY-01)
+
+### What Worked
+- The v1.3/v1.5 lesson finally paid: the close re-ran the verifier on all four phases (parallel subagents) and realigned digests mechanically instead of debating overrides — the refresh was honest (each verdict re-checked must-haves against current code) and fast.
+- Reusing proven recipes beat inventing: the notif-prefs migration cloned the `migrateTeamMembership` recipe; the undo path reused the D-68 challenge/step-up discipline. Zero migration surprises.
+- Code-review fixes (WR-01..03 on phase 35) landed as small single-purpose commits, which made the post-fix re-verification a 10-minute check instead of an audit.
+
+### What Was Inefficient
+- The covered_digest mechanics bit again: a verifier-computed digest over a file list can disagree with a locally recomputed one (source-only vs full-list), and `verification status` gives no diff detail — 5 tool round-trips per phase to realign. The digest workflow needs a single canonical command.
+- The milestone audit was run mid-milestone (status `in_progress`) and archived as-is; a final-tree audit would have been cleaner, though every fact it needed was already covered by per-phase verifications.
+
+### Patterns Established
+- "One helper, one funnel": send-time and read-time visibility surfaces must consume the same predicate (`memberCanReadProject`/`hiddenFor`) — never a second pipeline.
+- Bounded wait loops around shared mutexes (`pushNow()` 5s deadline returning `{ok:false,status:0}`) as the standard for client-initiated pushes with fail-closed gates.
+- Per-user prefs as rows keyed (workspace_id, user_id) with a single accessor — doc fields are never the store for per-user state.
+
+### Key Lessons
+1. The v1.3 lesson inverted: with disciplined single-purpose fixes and parallel verifier subagents, digest refresh at close is now cheap — but only because fixes never strayed outside covered files.
+2. Recipe cloning (Team membership migration → notif-prefs migration) is the project's most reliable quality lever; new mechanisms should always ask "what shipped recipe is closest?"
+
+### Cost Observations
+- 2 days elapsed (2026-11-02 → 2026-11-04), 116 commits, 96 files, +11 390/−162.
+- Notable: full suite grew 803 → 896 across the milestone; zero new runtime dependencies throughout.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -241,6 +277,7 @@
 | v1.2 Localization | 2 days | 8 | Every phase verified before close (50/50 plans); the close still re-verified all 8 after close-out commits staled the digests. Next milestone: finish close-out edits BEFORE running verifiers, and never hand-write a covered digest. |
 | v1.3 Auth Hardening | 2 days | 6 | All 6 phases verified before close, but shared-file edits across phases staled 4 of 6 digests anyway; the close accepted overrides with final-tree evidence (Phase 18 + integration check). Lesson refined: with a shared server.js, per-phase digests cannot all stay fresh — verify the last phase and audit the final tree instead. |
 | v1.5 Reliability & Rotation | 2 days | 5 | The v1.3 lesson applied as-is: digests for 23–26 staled (shared server.js) and the close accepted overrides with Phase 27 final-tree evidence + milestone audit, without debate. Research-derived build order eliminated cross-phase rework; VALIDATION.md drafts remain the standing gap. |
+| v1.7 Team Visibility & Hardening | 2 days | 4 | The v1.3 lesson finally inverted: parallel verifier subagents + mechanical digest realignment refreshed all 4 verifications honestly at close, no overrides. Recipe cloning (membership migration → notif-prefs migration) eliminated migration risk. Digest fingerprinting remains tool-clunky (no canonical recompute command). |
 
 ### Cumulative Quality
 
@@ -250,6 +287,7 @@
 | v1.2 Localization | 446 node:test + 45 Chromium e2e | catalogue contract (23 pins), locale selector, 21-route fr sweep + build gate, uploads/previews byte-serving | 0 (runtime) / 1 (dev only: `@playwright/test`) |
 | v1.3 Auth Hardening | 526 node:test + 55 Chromium e2e | TOTP fixtures (RFC 4226/6238), migration second-boot parity, 401 anonymity matrix, honest-copy guards, i18n-scan build gate | 0 (runtime; vendored qrcode-generator source, no package) |
 | v1.5 Reliability & Rotation | 649 node:test (e2e extended in v1.4 window) | deep-link resolver + redirect-guard pins, audit same-transaction rollback tests, envelope seed matrix + rotation idempotence, scheduler dedup/caught-up/off-hour tests, doc-parsing parity for DEPLOY.md §14 | 0 (runtime) |
+| v1.7 Team Visibility & Hardening | 896 node:test | team-intersect visibility matrix (doc-get/file/reminder/fanout/doc-put), hardening pins (sameOrigin order, spoof whitelist, fail-closed twins), 17-key prefs whitelist + migration second-boot parity, 22-row tokenized-matcher table suite, undo mutex/deadline pins, compose-config parse test | 0 (runtime) |
 
 ### Top Lessons (Verified Across Milestones)
 
