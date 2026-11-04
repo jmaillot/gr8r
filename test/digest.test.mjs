@@ -265,9 +265,9 @@ test('DIGEST-01: opted-in member gets ONE localized digest at 09:00 — due-toda
   const { ws: wsB, userId: uidB } = await makeWorkspace(m => [task(m, { key: 'K-B1', due: '2026-01-15' })]);
   const resB = await trigger(at9('2026-01-16'));
   assert.equal(digestKeys(wsB.id).length, 0, 'no digest claim without a stored email_digest === true row');
-  assert.equal(uidB ? 0 : 1, 0);
+  assert.ok(uidB, 'membership carries a user_id');
   assert.ok(!smtp.payloads.some(raw => raw.includes(`/w/${wsB.slug}/`)), 'no digest email for the opted-out workspace');
-  assert.ok(resB.digests >= 0);
+  assert.equal(resB.digests, 1, 'only ws\'s overdue catch-up digest fires — wsB (no stored opt-in row) contributes zero sends');
 });
 
 /* ---------------- CR-01 recipient-scope pin (38-03, multi-member) ---------------- */
@@ -350,7 +350,7 @@ test('D-12: nothing due or overdue → no email, no ledger claim, no revision bu
   assert.equal(notifRows(ws.slug).length, 0);
   assert.equal(revisionOf(ws.slug), revisionBefore);
   assert.ok(!smtp.payloads.some(raw => raw.includes(`/w/${ws.slug}/`)), 'no digest email for the empty workspace');
-  assert.ok(res.emitted.filter(n => n.task === 'K-F1').length === 0 || true);
+  assert.ok(!res.emitted.some(n => String(n.task || '').includes('K-F1')), 'no reminder row emitted for the future-dated task');
   void email;
 });
 
@@ -422,7 +422,8 @@ test('D-11: email_reminder true AND false are BOTH suppressed for a digest user'
   const res = await trigger(at9('2026-03-03'));
   for (const { ws } of [on, off]) {
     assert.ok(notifRows(ws.slug).some(n => n.type === 'due_reminder'), `reminder row present for ${ws.slug}`);
-    assert.ok(res.emitted.some(n => n.task && notifRows(ws.slug).some(r => r.task === n.task)) || true);
+    const wsRows = notifRows(ws.slug).map(n => n.task);
+    assert.ok(res.emitted.filter(n => n.task && wsRows.includes(n.task)).length > 0, `emitted rows correspond to doc notif rows for ${ws.slug}`);
   }
   assert.ok(res.emitted.length > 0, 'reminder loop emitted rows');
   await waitFor(smtp, 2, 'two digests (one per workspace)');
