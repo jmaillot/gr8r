@@ -162,8 +162,15 @@ async function push() {
 export async function pushNow() {
   if (!api.enabled || !api.user || S.ui.conflict) return { ok: false, status: 0 };
   /* A debounced push already in flight must settle first — racing it would
-     send two concurrent PUTs of the same document. */
-  while (pushing) await new Promise(r => setTimeout(r, 25));
+     send two concurrent PUTs of the same document. Bounded (~5s, the toast
+     window): a hung in-flight PUT must not park the undo click handler
+     forever with no feedback — time out with the same ok:false shape as the
+     guard above, so the caller's error toast fires honestly. */
+  const deadline = Date.now() + 5000;
+  while (pushing) {
+    if (Date.now() > deadline) return { ok: false, status: 0 };
+    await new Promise(r => setTimeout(r, 25));
+  }
   clearTimeout(_saveT);
   clearTimeout(_pushT);
   try {
