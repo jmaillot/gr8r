@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.8
 milestone_name: Notification Sanity
 status: planning
-last_updated: "2026-11-04T06:31:38.087Z"
+last_updated: "2026-11-04T07:00:00.000Z"
 last_activity: 2026-11-04
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,34 +19,45 @@ progress:
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** v1.7 Team Visibility & Hardening — Phase 34 ready to plan
+- **Current focus:** v1.8 Notification Sanity — roadmap written, Phase 36 ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 36 — Server Notification i18n (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-11-04 — Milestone v1.8 started
+Status: Roadmap created 2026-11-04; next step /gsd-discuss-phase 36 or /gsd-plan-phase 36
+Last activity: 2026-11-04 — v1.8 roadmap written (4 phases, 13/13 requirements mapped)
 
-## v1.7 Phase Order (research-validated build order)
+## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
-1. Phase 32 — Team-derived project visibility (VIS-01..05; structural item — lands FIRST
-   because send-time filters, search filter and undo semantics all derive from it; recommend
-   discuss-phase or research-phase for the composition semantics VIS × scope × admin × guest)
-2. Phase 33 — Membership-surface hardening (HARD-01..05; independent, pinned one-line edits;
-   `firstWorkspace()` twins at :4354 and :2773 must change in ONE commit)
-3. Phase 34 — Per-user settings isolation & search leak closure (SETTINGS-01..03, SEARCH-01;
-   the ONLY additive-migration item — byte-identical-second-boot burden; SEARCH folds here
-   because it tunes for free once VIS landed)
-4. Phase 35 — Honest undo & deploy gap (UNDO-01..02, DEPLOY-01; light closer — undo tests
-   written after VIS semantics are final, exercised as admin; compose rider is trivial)
+1. Phase 36 — Server Notification i18n (I18N-01..04; leaf infrastructure — REM and DIGEST
+   both render localized text through it; decide the shared-catalogue contract + server-key
+   build gate here; verify whether scripts/i18n-scan.mjs scans server files)
+2. Phase 37 — Reminder Cadence Rework (REM-01..04; pure logic deletion over verified paths,
+   smallest risk, directly fixes the Kanzo #6 feedback; no external research needed)
+3. Phase 38 — Daily Digest & Reminder Suppression (DIGEST-01..03; composes 36+37; the
+   idempotence/catch-up window and 09:00-pass-collision snapshot semantics deserve an
+   explicit spec decision — resend-vs-never trade-off)
+4. Phase 39 — Notification Audit (AUDIT-01..02; doc-only, owner-gated: threshold changes
+   validated by the owner BEFORE any coding; can start in parallel but audits the post-38
+   reality)
 
-Milestone-wide invariants: zero runtime dependencies, additive migrations with byte-identical
-second boot, full suite green (803-test baseline), EN+FR i18n gate, D-03 grant inversion +
-404 no-oracle + single `hiddenFor` funnel preserved.
+Milestone-wide invariants: zero runtime dependencies, zero migrations (day_before removal is
+deploy-safe with orphaned dedup keys going inert), full suite green, EN+FR i18n gate extended
+to server notification keys, `email_digest` default inversion decided in spec not code.
 
 ## Recent Decisions
 
+- [v1.8 roadmap] Phase numbering continues from v1.7 (Phase 35) — v1.8 is Phases 36-39, no reset
+- [v1.8 roadmap] 4 phases following research build order: I18N → REM → DIGEST → AUDIT.
+  I18N first is forced (REM and DIGEST both render localized text through it); REM before
+  DIGEST (digest lists post-REM offsets, suppression gate interacts with REM pref semantics);
+  AUDIT last as doc-only owner gate
+- [v1.8 roadmap] Research's 4-phase structure adopted unchanged — requirements already
+  cluster 1:1 with the suggested phases (I18N→36, REM→37, DIGEST→38, AUDIT→39); no folding
+  needed (each is 2-4 requirements with a distinct delivery boundary)
+- [v1.8 roadmap] `email_digest` default inversion (undefined-falsy opt-in) is an explicit
+  spec decision for Phase 38, never decided implicitly by code
 - [v1.7 roadmap] Phase structure: 4 phases — VIS first (data-flow-forced), HARD second
   (independent, settles security surface early), SETTINGS+SEARCH third (migration burden +
   post-VIS search tuning in one phase), UNDO+DEPLOY last (light closer)
@@ -106,16 +117,16 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 32 composition semantics (VIS × scope × admin × guest) are genuine design decisions —
-  recommend discuss-phase or research-phase before planning.
-- Phase 34 migration-order placement in `bootstrap()` is load-bearing; stale-client handling
-  (write-path strip vs tolerate-and-ignore) is an explicit decision, not a default.
-- UNDO direction (Phase 35) is an owner decision at plan time: Option A (compensating
-  client-side replay, snapshot moved above the purge) vs Option C (drop the Undo offer).
-  Research recommends A; the client capture MUST move before the purge either way.
-- v1.5 deferred items carry forward (2 unknown debug sessions, phase 26 WR-01/WR-02) — see
+- [v1.8] Phase 36: verify whether `scripts/i18n-scan.mjs` scans `server.js`/`mailer.js` —
+  pick the server-key gate mechanism (scan extension vs dedicated regression test); confirm
+  `users.locale` population on real rows and exercise the EN fallback path regardless.
+- [v1.8] Phase 38: digest idempotence/catch-up window and 09:00-pass-collision snapshot
+  semantics need an explicit spec decision (resend-vs-never trade-off).
+- [v1.8] Deploy-day catch-up burst after `day_before` removal (one-time "due today" emails)
+  must be announced in release notes — scheduled as Phase 37 success criterion 5.
+- [v1.7] (carried) v1.5 deferred items (2 unknown debug sessions, phase 26 WR-01/WR-02) — see
   Deferred Items.
-- `DatabaseSync` deprecation alias (DEP0210) noted as deferred, not a v1.7 concern.
+- [v1.7] (carried) `DatabaseSync` deprecation alias (DEP0210) noted as deferred, not a v1.8 concern.
 
 ### Deferred Items
 
@@ -133,7 +144,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-03T18:54:15.036Z
-Stopped at: Phase 35 complete — all phases complete
+Stopped at: v1.8 roadmap written — Phases 36-39 defined, Phase 36 next
 Resume file: None
 
 ## Performance Metrics
@@ -156,4 +167,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 36: /gsd-discuss-phase 36 (i18n-scan corpus question) then /gsd-plan-phase 36

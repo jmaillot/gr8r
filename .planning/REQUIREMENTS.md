@@ -81,4 +81,20 @@
 
 ## Traceability
 
-*(To be filled by the roadmap: REQ-IDs → phases.)*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| I18N-01 | Phase 36 | Pending |
+| I18N-02 | Phase 36 | Pending |
+| I18N-03 | Phase 36 | Pending |
+| I18N-04 | Phase 36 | Pending |
+| REM-01 | Phase 37 | Pending |
+| REM-02 | Phase 37 | Pending |
+| REM-03 | Phase 37 | Pending |
+| REM-04 | Phase 37 | Pending |
+| DIGEST-01 | Phase 38 | Pending |
+| DIGEST-02 | Phase 38 | Pending |
+| DIGEST-03 | Phase 38 | Pending |
+| AUDIT-01 | Phase 39 | Pending |
+| AUDIT-02 | Phase 39 | Pending |
+
+Coverage: 13/13 v1.8 requirements mapped — no orphans, no duplicates.
