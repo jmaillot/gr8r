@@ -421,7 +421,7 @@ test('REM-05: email gate, deep link, by:null never self-skipped, failure isolati
     for (const raw of smtp.messages) {
       assert.ok(raw.includes(`To: <${email}>`), 'by:null reminder rows are never self-skipped — owner emailed');
       assert.ok(textPart(raw).includes(`http://app.test/w/${ws.slug}/task/`), 'deep link shape');
-      assert.ok(raw.includes('Reminders'), 'by-label is the system "Reminders", not "Un membre"');
+      assert.ok(textPart(raw).includes('Reminders'), 'by-label is the system "Reminders", not "Un membre"');
     }
     // Exact deep link resolves the task key.
     assert.ok(smtp.messages.every(raw => textPart(raw).includes(`http://app.test/w/${ws.slug}/task/`)));

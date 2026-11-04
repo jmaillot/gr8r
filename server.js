@@ -56,7 +56,7 @@ import { createMailer } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
-import { registerCatalogue } from './src/core/i18n.js';
+import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
@@ -1262,7 +1262,10 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
       if (projectId && !memberCanReadProject(projectById.get(projectId), wsRow.id, n.to)) continue;
     }
     const taskTitle = task?.title || 'a task';
-    const by = ['due_reminder', 'past_due'].includes(n.type) ? 'Reminders' : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
+    /* I18N-01 (Phase 36): the reminder by-label renders per recipient locale
+       through tFor — still inlined in the by-resolution so the notif-email-link
+       source-extraction tests keep evaluating this line standalone. */
+    const by = ['due_reminder', 'past_due'].includes(n.type) ? tFor(recipientLocale, 'notif.email.byReminders') : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
     /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
        key is resolved at email-build time (it is mutable on project move) and
        the absolute base is APP_URL unconditionally — the boot guard exits when

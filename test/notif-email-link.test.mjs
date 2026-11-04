@@ -95,8 +95,12 @@ function authorityMapBuilder() {
 function bylineResolver() {
   const m = queueSource.match(/const by =([\s\S]*?);\n/);
   assert.ok(m, 'queueNotifEmails no longer resolves the byline');
-  return new Function('authority', 'profiles', 'n', `return (${m[1].trim()});`);
+  /* I18N-01 (Phase 36): the reminder by-label renders through tFor — the
+     extraction injects a stub so the line stays standalone-evaluable. */
+  return new Function('tFor', 'authority', 'profiles', 'n', `return (${m[1].trim()});`);
 }
+
+const byTFor = (locale, key) => (key === 'notif.email.byReminders' ? 'Reminders' : key);
 
 function recipientResolver() {
   const m = queueSource.match(/const to =([\s\S]*?);\n/);
@@ -117,18 +121,18 @@ test('the authority map is keyed by member_id and built from the workspace-scope
 });
 
 test('byline: an account-backed author resolves to their account name even with an empty doc roster', () => {
-  assert.equal(bylineResolver()(mkAuthority(AUTH_ROWS), new Map(), { by: 'm_acc' }), 'Alice');
+  assert.equal(bylineResolver()(byTFor, mkAuthority(AUTH_ROWS), new Map(), { by: 'm_acc' }), 'Alice');
 });
 
 test('byline: a doc-only member still resolves from the doc profile', () => {
   const profiles = new Map([['m_doc', { id: 'm_doc', name: 'Bob Doc' }]]);
-  assert.equal(bylineResolver()(new Map(), profiles, { by: 'm_doc' }), 'Bob Doc');
+  assert.equal(bylineResolver()(byTFor, new Map(), profiles, { by: 'm_doc' }), 'Bob Doc');
 });
 
 test('byline: authority wins over the doc profile; neither → the Un membre fallback', () => {
   const profiles = new Map([['m_acc', { id: 'm_acc', name: 'Stale Doc Name' }]]);
-  assert.equal(bylineResolver()(mkAuthority(AUTH_ROWS), profiles, { by: 'm_acc' }), 'Alice');
-  assert.equal(bylineResolver()(new Map(), new Map(), { by: 'm_ghost' }), 'Un membre');
+  assert.equal(bylineResolver()(byTFor, mkAuthority(AUTH_ROWS), profiles, { by: 'm_acc' }), 'Alice');
+  assert.equal(bylineResolver()(byTFor, new Map(), new Map(), { by: 'm_ghost' }), 'Un membre');
 });
 
 test('recipient: an account-backed recipient gets their email even when the doc profile is absent', () => {

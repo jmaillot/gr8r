@@ -421,9 +421,10 @@ function buildNotifMessage(config, msg) {
       past_due: 'notif.email.verb.reminder',
     };
     const verb = tFor(locale, verbKeys[msg.kind] || 'notif.email.verb.update');
+    const isReminder = msg.kind === 'due_reminder' || msg.kind === 'past_due';
     frame = {
       greeting: tFor(locale, 'notif.email.greeting'),
-      subject: `${actor} ${verb} ${taskTitle}`,
+      subject: isReminder ? tFor(locale, 'notif.email.subject.reminder', { title: taskTitle }) : `${actor} ${verb} ${taskTitle}`,
       sentence: tFor(locale, 'notif.email.body.sentence', { actor, verb, title: taskTitle, workspace }),
       openTask: tFor(locale, 'notif.email.body.openTask'),
       button: tFor(locale, 'notif.email.body.button'),
