@@ -1414,6 +1414,12 @@ function runReminderPass({ now: at = new Date() } = {}) {
             to: t.assignee,
             by: null, // system actor — queueNotifEmails' self-skip must never drop a reminder
             task: t.id,
+            /* I18N-03 (D-04/D-05): machine key + send-time vars snapshot
+               VALUES — the inbox localizes per viewer locale without joins,
+               so historical text survives task rename/deletion. Additive:
+               the English snippet stays (D-06 dual store). */
+            key: `notif.reminder.${offset === 'day_before' ? 'dayBefore' : offset === 'morning_of' ? 'morningOf' : 'pastDue'}`,
+            vars: { title: t.title || 'a task' },
             snippet: reminderSnippet(offset, t),
             /* Client notif contract is `at` + `read` (store.js notifyMembers) —
                `ts` kept only for existing test assertions. */

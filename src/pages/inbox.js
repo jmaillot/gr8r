@@ -2,7 +2,7 @@
 import { ago, esc, modKey } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { S, commentsOf, mem, myNotifs, pColor, proj, task } from '../core/store.js';
-import { t } from '../core/i18n.js';
+import { t, has } from '../core/i18n.js';
 import { av, empty, fmtComment } from '../ui/helpers.js';
 import { cellAssignee, cellDue, cellPrio, cellStatus } from '../components/task-list.js';
 import { commentHtml } from '../overlays/drawer.js';
@@ -51,6 +51,15 @@ export function notifText(n) {
     if (!n.by && tgt) return `<b style="font-weight:600">${esc(tgt.title)}</b> <span class="muted">${esc(n.text)}</span>`;
     return `${who} <span class="muted">${esc(n.text)}</span> ${tgt ? `<b style="font-weight:500">${esc(tgt.title)}</b>` : ''}`;
   }
+  /* Keyed rows (I18N-03, D-04/D-05): server-pass reminder rows carry a machine
+     key + a send-time vars snapshot — localize through the viewer-locale t()
+     singleton (the catalogue sentence embeds the title). Unknown catalogue key
+     degrades to the stored English snippet prose — never blank, never the raw
+     key string (D-06). Legacy prose rows above are untouched (SC-3). */
+  if (n.key) {
+    const sentence = has(n.key) ? t(n.key, n.vars) : n.snippet || '';
+    return `<span class="muted">${esc(sentence)}</span>`;
+  }
   /* Structured rows compose the sentence through the notif.* catalogue keys in the active locale. */
   /* D-27-4: reminder rows are system-actor (by:null) — guard them BEFORE the
      generic !n.by branch (which would render taskDueToday for every reminder)
@@ -77,7 +86,7 @@ export function inboxItem(n, on) {
     ${notifIcon(n)}
     <div class="grow" style="font-size:13px;line-height:1.45">
       <div>${notifText(n)}</div>
-      <div class="trunc muted" style="font-size:12.5px;margin-top:2px">${fmtComment(n.snippet)}</div>
+      <div class="trunc muted" style="font-size:12.5px;margin-top:2px">${fmtComment(n.key && has(n.key) ? t(n.key, n.vars) : n.snippet)}</div>
       <div class="row" style="gap:6px;margin-top:5px;font-size:11.5px;color:var(--text-3)">${ic(typeIc, 11)}${p ? `<span class="pdot" style="--c:${pColor(p)};width:6px;height:6px"></span>${esc(p.name)}` : ''}<span>·</span><span>${ago(n.at)}</span></div>
     </div>
     <button class="ibtn ibtn-xs" data-a="toggleRead" data-id="${n.id}" data-tip="${n.read ? t('page.inbox.markUnread') : t('page.inbox.markRead')}" aria-label="${n.read ? t('page.inbox.markUnread') : t('page.inbox.markRead')}">${ic(n.read ? 'mail' : 'mail-open', 13)}</button>

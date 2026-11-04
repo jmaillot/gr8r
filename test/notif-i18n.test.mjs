@@ -19,7 +19,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { startServer, signup, login, client, withDb } from './helpers/server.mjs';
-import { getLocale } from '../src/core/i18n.js';
+import { escHtml as esc, getLocale, has, primeLocale, registerCatalogue, t } from '../src/core/i18n.js';
+import enLocale from '../src/locales/en.json' with { type: 'json' };
+import frLocale from '../src/locales/fr.json' with { type: 'json' };
 
 const GOOD = 'correct-horse-9';
 
@@ -277,4 +279,103 @@ test('a malformed stored locale (fr-FR) clamps to EN instead of blanking the ema
   assert.match(en.subject, /mentioned you in/, `malformed-locale subject must be EN: ${en.subject}`);
   assert.ok(en.text.includes('Bonjour,') === false, 'malformed locale must not render French');
   withDb(server.dbPath, db => db.prepare('update users set locale = ? where email = ?').run('fr', 'zoe@test.local'));
+});
+
+/* =====================================================================
+   Phase 36 plan 03 — keyed reminder rows (I18N-03). New reminder rows
+   carry a machine key + a send-time vars snapshot ALONGSIDE the stored
+   English snippet (D-06 dual store); the inbox localizes keyed rows
+   through the viewer-locale t() singleton, and legacy rows render
+   unchanged (SC-3).
+   ===================================================================== */
+registerCatalogue('fr', frLocale);
+
+/* The house static-extraction pattern (cf. notif-email-link.test.mjs):
+   inbox.js imports `virtual:icons` — unresolvable under node --test — so
+   the notifText/notifIcon/inboxItem block is sliced from the source and
+   compiled with the REAL i18n t()/has()/esc() injected (viewer-locale
+   singleton) plus stubs for the DOM-side helpers. */
+const inboxSource = fs.readFileSync(new URL('../src/pages/inbox.js', import.meta.url), 'utf8');
+const NF_START = inboxSource.indexOf('export function notifText');
+assert.ok(NF_START !== -1, 'notifText moved — update this extraction');
+const BLOCK_END = inboxSource.indexOf('\nexport function inboxPreview');
+assert.ok(BLOCK_END !== -1, 'inboxPreview moved — update this extraction');
+const INBOX_BLOCK = inboxSource.slice(NF_START, BLOCK_END).replace(/^export /gm, '');
+
+function compileInbox({ task = () => null, proj = () => null, mem = () => null, fmtComment = s => s } = {}) {
+  return new Function(
+    't', 'has', 'esc', 'task', 'proj', 'mem', 'av', 'pColor', 'ago', 'ic', 'fmtComment',
+    `${INBOX_BLOCK}; return { notifText, notifIcon, inboxItem };`,
+  )(t, has, esc, task, proj, mem, () => '', () => 'p', () => 'ago', () => '', fmtComment);
+}
+
+const fixtureTask = () => ({ id: 't-key', title: 'Rapport naïf', project: 'p1' });
+
+const keyedRow = (overrides = {}) => ({
+  id: 'n-key-1',
+  type: 'due_reminder',
+  to: 'm1',
+  by: null,
+  task: 't-key',
+  snippet: 'Due today: Rapport naïf',
+  key: 'notif.reminder.morningOf',
+  vars: { title: 'Rapport naïf' },
+  at: 1767229200000,
+  read: false,
+  ...overrides,
+});
+
+/* ---------------- Task 1: the keyed render path ---------------- */
+
+test('I18N-03: notifText renders a keyed reminder row in the viewer locale (fr)', async () => {
+  await primeLocale('fr');
+  try {
+    const { notifText } = compileInbox({ task: fixtureTask });
+    const html = squeeze(notifText(keyedRow()));
+    assert.ok(html.includes('À échéance aujourd’hui : Rapport naïf'), `FR sentence: ${html}`);
+    assert.ok(!html.includes('notif.reminder'), 'raw key string never leaks into the render');
+  } finally {
+    await primeLocale('en');
+  }
+});
+
+test('I18N-03: the same keyed row renders the English equivalent under the en locale', async () => {
+  const { notifText } = compileInbox({ task: fixtureTask });
+  const html = notifText(keyedRow());
+  assert.ok(html.includes('Due today: Rapport naïf'), `EN sentence: ${html}`);
+});
+
+test('I18N-03: emitted reminder rows carry key + vars snapshot + the English snippet', async () => {
+  const read = await owner.get(`/api/workspaces/${ws.slug}`);
+  assert.equal(read.status, 200);
+  const next = read.data.doc;
+  next.data.members = doc.data.members.map(m => ({ ...m, tz: REMINDER_TZ }));
+  next.data.tasks = [
+    { id: 't-keyed', key: 'P1-9', title: 'Clé à molette', status: 'todo', assignee: ownerMemberId, project: 'p1', due: '2026-03-10' },
+  ];
+  const saved = await owner.put(`/api/workspaces/${ws.slug}`, { revision: read.data.revision, doc: next });
+  assert.equal(saved.status, 200, `doc PUT ${saved.status}`);
+  const trigger = await fetch(`${server.base}/api/internal/reminder-pass`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-reminder-token': 'notif-i18n-token' },
+    body: JSON.stringify({ now: '2026-03-10T09:00:00Z' }),
+  });
+  assert.equal(trigger.status, 200, `reminder pass ${trigger.status}`);
+
+  /* Drain the fan-out (day_before + morning_of for the keyed task — the PUT
+     replaces the task list, so the older Jan-15 tasks are gone) so the count
+     stays deterministic for later tests. */
+  await waitFor(smtp, 2, 'keyed reminder fan-out');
+
+  const after = await owner.get(`/api/workspaces/${ws.slug}`);
+  const rows = after.data.doc.data.notifs.filter(n => n.task === 't-keyed');
+  assert.ok(rows.length >= 2, `at least the day_before + morning_of rows (got ${rows.length})`);
+  const keys = new Set(rows.map(r => r.key));
+  assert.ok(keys.has('notif.reminder.dayBefore'), `dayBefore key present: ${[...keys].join(', ')}`);
+  assert.ok(keys.has('notif.reminder.morningOf'), `morningOf key present: ${[...keys].join(', ')}`);
+  for (const r of rows) {
+    assert.equal(r.by, null, 'system actor');
+    assert.ok(r.vars && r.vars.title === 'Clé à molette', `vars snapshot VALUES: ${JSON.stringify(r.vars)}`);
+    assert.match(r.snippet, /Due (today|tomorrow): Clé à molette/, 'EN snippet prose kept alongside the key (D-06 dual store)');
+  }
 });
