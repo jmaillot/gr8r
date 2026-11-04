@@ -18,7 +18,9 @@ awaiting: user response
 
 ### 1. Cold Start Smoke Test
 expected: Kill any running server/service. Clear ephemeral state (temp DBs, caches, lock files). Start the application from scratch. Server boots without errors, any seed/migration completes, and a primary query (health check, homepage load, or basic API call) returns live data.
-result: [pending]
+result: pass
+source: automated
+note: "Executed by the agent on a scratch copy of data/ (PORT=8124): fresh boot clean, pre-migration notif-prefs backup created, /api/health → {ok:true}, /api/config returns live config, clean SIGTERM shutdown (exit 0)."
 
 ### 2. Live scheduling cadence end-to-end (real clock)
 expected: On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value).
@@ -34,9 +36,9 @@ source: automated
 ## Summary
 
 total: 3
-passed: 1
+passed: 2
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 1
 
