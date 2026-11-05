@@ -12,6 +12,7 @@
 - ✅ **v1.7 Team Visibility & Hardening** — Phases 32-35 (shipped 2026-11-04)
 - ✅ **v1.8 Notification Sanity** — Phases 36-39 (shipped 2026-11-05)
 - 🚧 **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-42
+- 📋 **v1.10 Workspace Polish** — Phases 43-44 (planned — sourced from Kanzo tasks #16/#14)
 
 <details>
 <summary>✅ v1.8 Notification Sanity (Phases 36-39) — SHIPPED 2026-11-05</summary>
@@ -30,6 +31,8 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 - [x] **Phase 40: Digest Subject & Task Lines** - Workspace name in the digest subject, "Project — Task" lines, and a hardened RFC 2047 subject builder (SUBJ-01..03) (completed 2026-11-05)
 - [ ] **Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers** - Stateless HMAC unsubscribe token, List-Unsubscribe/-Post headers on digest mail, footer link preserved, DEPLOY.md DKIM caveat (UNSUB-01, UNSUB-03)
 - [ ] **Phase 42: One-Click Unsubscribe Endpoint** - The codebase's first anonymous mutating route: `POST /unsubscribe/:token` with a security contract first (UNSUB-02)
+- [ ] **Phase 43: Workspace Logo** - Per-workspace logo upload with favicon.svg fallback, stored server-side, surfaced in the UI (Kanzo #16)
+- [ ] **Phase 44: Per-Member Timezones** - Multiple configurable timezones with Paris default, replacing the single workspace-TZ model (Kanzo #14)
 
 ## Phase Details
 
@@ -83,6 +86,34 @@ Plans:
 
 **Plans**: TBD
 
+### Phase 43: Workspace Logo *(v1.10)*
+
+**Goal**: A workspace can carry its own logo — uploaded by an admin, stored server-side, rendered wherever the workspace identity appears — with a clean fallback to `favicon.svg` when none is set
+**Depends on**: Nothing (first phase of v1.10)
+**Requirements**: LOGO-01 (to be added to REQUIREMENTS.md at milestone start — Kanzo task #16)
+**Success Criteria** (what must be TRUE):
+  1. An admin can upload an image (png/jpg/svg, size-capped) from Workspace > General > Workspace settings; the upload is stored server-side (documented location, documented serving route) and survives restart
+  2. When no logo is set, every surface that shows the workspace identity falls back to `favicon.svg` byte-identically — no broken image, no layout shift on load
+  3. Only Owner/Admin roles can upload or remove the logo (role gate pinned by test); any member sees it read-only
+  4. Upload validation rejects non-images and oversized files with a localized error message (EN+FR catalogued, `npm run i18n:scan` green)
+  5. Full suite green; no new runtime dependencies
+
+**Plans**: TBD
+
+### Phase 44: Per-Member Timezones *(v1.10)*
+
+**Goal**: Each member's reminders and digest fire at their own 09:00 — multiple timezones supported, Paris as the default — replacing the single workspace-timezone model built on five hard-coded `TZ_BY_LABEL` labels
+**Depends on**: Nothing structurally (parallel-safe with Phase 43); touches the reminder/digest scheduler window predicates
+**Requirements**: TZ-01 (to be added at milestone start — Kanzo task #14)
+**Success Criteria** (what must be TRUE):
+  1. A member's reminder/digest 09:00 window resolves from THEIR timezone (Paris default when unset), not the first-membership workspace label — members in different timezones in the same workspace fire at their own local 09:00
+  2. Arbitrary IANA timezone names are accepted (not just the five `TZ_BY_LABEL` labels); an unknown/empty value falls back to Paris (`Europe/Paris`) deterministically, pinned by test
+  3. The exactly-once ledger keys remain correct under timezone change: changing a member's tz never re-fires an already-claimed reminder for the same local date (dedup key semantics documented and tested)
+  4. Workspace Settings > Date & time exposes the timezone picker with common IANA zones (Paris preselected by default); existing stored tz labels migrate or degrade without loss
+  5. All existing Phase 27/37/38 scheduler tests (window-open predicates, no-double-send, boot catch-up) pass unmodified or are deliberately re-pinned with rationale; full suite green
+
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -90,6 +121,8 @@ Plans:
 | 40. Digest Subject & Task Lines | 2/2 | Complete    | 2026-11-05 |
 | 41. Unsubscribe Tokens & Headers | 2/2 | In Progress|  |
 | 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
+| 43. Workspace Logo | 0/? | Not started | - |
+| 44. Per-Member Timezones | 0/? | Not started | - |
 
 ## Backlog
 
