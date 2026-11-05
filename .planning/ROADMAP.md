@@ -97,3 +97,12 @@ Plans:
 project name on task lines) is consumed by v1.9 SUBJ-01/02, mapped to Phase 40. Remaining
 Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings and join only
 when validated.)*
+
+### Phase 999.2: Follow-up — Phase 41 email-notification audit decision: real browser push + toasts (BACKLOG)
+
+**Goal:** Implement real browser push notifications and toast notifications, replacing the inert `push_mention`/`push_assign`/`push_comment` toggles (currently visible with a "coming soon" badge) and adding toast feedback for mentions/assignments.
+**Source phase:** 41 (email-notification audit, Kanzo task projectsstudio#6)
+**Deferred at:** 2026-11-05 during /gsd-verify-work 41 session (audit decisions)
+**Follow-ups:**
+- [ ] Test 1: Real web push (service worker + browser Notification) wired to the existing push_* pref keys, with a "coming soon" badge added to the Push section in Settings in the meantime (deferred 2026-11-05)
+- [ ] Test 3: Toast notifications for mention/assign events (deferred 2026-11-05)
