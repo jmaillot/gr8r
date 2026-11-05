@@ -533,3 +533,144 @@ test('idle tick before the 09:00 window: no email, no claim, revision unchanged'
   assert.equal(revisionOf(ws.slug), revisionBefore, 'revision unchanged');
   assert.ok(!smtp.payloads.some(raw => raw.includes(`/w/${ws.slug}/`)), 'no email before the window opens');
 });
+
+/* =====================================================================
+   Phase 40 plan 02 — bracketed subjects + Project — Task lines
+   (SUBJ-01/SUBJ-02). Additive cases on top of the Phase 38 suite: the
+   per-workspace `[WS]` subject prefix, the `Project Name — Task Name`
+   label in both MIME parts, the silent title-only degrade (D-06), the
+   no-leak pin for invisible private projects (T-40-06), and the SC-5
+   English-literal fallback exercised through the now-exported
+   buildDigestMessage with a poisoned catalogue (restored in finally).
+   ===================================================================== */
+
+test('SUBJ-01: a member of two workspaces gets two same-morning digests, each subject bracketed with its own workspace name', async () => {
+  const a = await makeWorkspace(m => [task(m, { key: 'K-WSA', title: 'Due in A', due: '2026-05-10' })], DIGEST_ONLY);
+  const b = await makeWorkspace(m => [task(m, { key: 'K-WSB', title: 'Due in B', due: '2026-05-10' })], DIGEST_ONLY);
+
+  const res = await trigger(at9('2026-05-10'));
+  assert.ok(res.digests >= 2, `both workspaces contribute a digest (got ${res.digests})`);
+  const msgs = await waitFor(smtp, 2, 'two same-morning digests');
+
+  for (const { ws, email } of [a, b]) {
+    const digest = digestFor(msgs, email, ws.slug);
+    assert.ok(digest.subject.startsWith(`[${ws.name}] `), `bracket prefix with the workspace name for ${ws.slug}: ${digest.subject}`);
+    assert.match(digest.subject, /Daily digest: 1 task\(s\)/, 'localized subject still renders behind the bracket');
+  }
+  /* The two digests must NOT share one subject — each workspace owns its bracket. */
+  const subjects = [a, b].map(({ ws, email }) => digestFor(msgs, email, ws.slug).subject);
+  assert.notEqual(subjects[0], subjects[1], 'per-workspace subjects differ');
+});
+
+test('SUBJ-02: task lines read "Project Name — Task Name" in the text part and ONE whole-label <a> in the HTML part', async () => {
+  const DUE = '2026-05-11';
+  const { ws, email } = await makeWorkspace(
+    m => [task(m, { key: 'K-PT1', title: 'Due one', due: DUE }), task(m, { key: 'K-PT2', title: 'Late one', due: '2026-05-10' })],
+    DIGEST_ONLY,
+  );
+
+  const res = await trigger(at9(DUE));
+  assert.ok(res.digests >= 1, 'digest fires');
+  const digest = digestFor(await waitFor(smtp, 1, 'digest email'), email, ws.slug);
+
+  assert.ok(digest.text.includes('Due today:\r\n- P1 — Due one'), 'due-today text line joins project and title with the em dash');
+  assert.ok(digest.text.includes('Overdue:\r\n- P1 — Late one'), 'overdue text line carries the SAME join (Pitfall 5: both sections)');
+  assert.ok(!digest.text.includes('&amp;'), 'text part is plain — no HTML entities leaked into it');
+  assert.ok(
+    digest.html.includes(`<a href="http://app.test/w/${ws.slug}/task/K-PT1" style="color:#3b5bdb;text-decoration:none">P1 — Due one</a>`),
+    'HTML part: one anchor whose inner text is the FULL Project — Task label',
+  );
+  assert.ok(digest.html.includes('P1 — Late one'), 'HTML part: overdue label rendered too');
+});
+
+test('SUBJ-02/D-06: a task whose project row has no name degrades to title-only — no placeholder, both parts', async () => {
+  const DUE = '2026-05-12';
+  const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-NN1', title: 'Mystery task', due: DUE, project: 'p-noname' })], DIGEST_ONLY);
+  /* Snapshot-defense fixture: the project row exists but carries NO name —
+     projects.get(...).name is undefined → `|| ''` → title-only label. */
+  withDb(server.dbPath, db => {
+    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
+    doc.data.projects.push({ id: 'p-noname' });
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id);
+  });
+
+  await trigger(at9(DUE));
+  const digest = digestFor(await waitFor(smtp, 1, 'digest email'), email, ws.slug);
+
+  assert.ok(digest.text.includes('- Mystery task'), 'title-only line in the text part');
+  assert.ok(!digest.text.includes(' — '), 'no em-dash join when the project name is missing');
+  assert.ok(!digest.text.includes('Unknown project') && !digest.text.includes('Private project'), 'no placeholder text (D-06)');
+  assert.ok(digest.html.includes('>Mystery task</a>'), 'title-only degrades in the HTML part too');
+});
+
+test('T-40-06: an invisible private project name appears NOWHERE in a non-member digest payload', async () => {
+  const DUE = '2026-05-13';
+  const { ws, email: m1Email, memberId: m1MemberId } = await makeWorkspace(
+    m => [
+      task(m, { key: 'K-V1', title: 'Visible task', due: DUE }),
+      task(m, { key: 'K-H1', title: 'Hidden task', due: DUE, project: 'p-private' }),
+      task('m-peer', { key: 'K-PV1', title: 'Peer visible', due: DUE }),
+    ],
+    DIGEST_ONLY,
+  );
+  const peer = addPeerMember(
+    ws,
+    doc => doc.data.projects.push({ id: 'p-private', name: 'Zebra Hidden Project', private: true, members: [m1MemberId] }),
+    JSON.stringify({ teams: [], projects: ['p1'] }),
+  );
+  withDb(server.dbPath, db =>
+    db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(
+      ws.id, peer.userId, JSON.stringify(DIGEST_ONLY),
+    ),
+  );
+
+  await trigger(at9(DUE));
+  const msgs = await waitFor(smtp, 2, 'two digests (one per opted-in member)');
+  const m1 = digestFor(msgs, m1Email, ws.slug);
+  const m2 = digestFor(msgs, peer.email, ws.slug);
+
+  assert.ok(m1.text.includes('Zebra Hidden Project — Hidden task'), 'positive control: M1 can read the private project, full label rendered');
+  assert.ok(!m2.text.includes('Zebra Hidden Project'), 'M2 text part carries no invisible project name');
+  assert.ok(!m2.html.includes('Zebra Hidden Project'), 'M2 HTML part carries no invisible project name');
+  const raw = smtp.payloads.map(decode).find(x => x.to === peer.email && x.text.includes(`/w/${ws.slug}/`));
+  assert.ok(raw && !`${raw.text}${raw.html}`.includes('Zebra'), 'raw decoded payload is clean end to end');
+});
+
+test('SUBJ-01/SC-5: subjectWs renders per-locale and the English-literal fallback survives a poisoned catalogue', async () => {
+  const { buildDigestMessage } = await import('../mailer.js');
+  const { registerCatalogue } = await import('../src/core/i18n.js');
+  const enJson = JSON.parse(fs.readFileSync(new URL('../src/locales/en.json', import.meta.url), 'utf8'));
+  const frJson = JSON.parse(fs.readFileSync(new URL('../src/locales/fr.json', import.meta.url), 'utf8'));
+  const mk = (locale, ws) =>
+    buildDigestMessage(
+      { from: 'noreply@test.local' },
+      {
+        to: 'x@test.local',
+        locale,
+        workspace: ws,
+        wsSlug: 'ws-unit',
+        appUrl: 'http://app.test',
+        dueToday: [{ key: 'K1', title: 'T1', project: 'P1' }],
+        overdue: [],
+      },
+    );
+
+  /* SC-5: a catalogue render throw degrades to the catch-frame English
+     literal — subject keeps the [ws] prefix and the count. */
+  const broken = { ...enJson, get 'notif.digest.subjectWs'() { throw new Error('catalogue exploded'); } };
+  registerCatalogue('en', broken);
+  try {
+    const d = decode(mk('en', 'Poison WS').data);
+    assert.equal(d.subject, '[Poison WS] Daily digest: 1 task(s)', 'SC-5 fallback literal renders with the truncated [ws] prefix');
+    assert.ok(d.text.includes('- P1 — T1'), 'task lines still render in the fallback frame');
+  } finally {
+    registerCatalogue('en', enJson);
+    registerCatalogue('fr', frJson);
+  }
+
+  /* Happy paths, both locales, rendered directly through the builder. */
+  assert.equal(decode(mk('en', 'Fresh WS').data).subject, '[Fresh WS] Daily digest: 1 task(s)', 'EN subjectWs render');
+  assert.equal(decode(mk('fr', 'Atelier').data).subject, '[Atelier] Résumé quotidien\u00a0: 1 tâche(s)', 'FR subjectWs render (NBSP typography + accents ride encodeWord)');
+  const long = decode(mk('en', 'W'.repeat(80)).data);
+  assert.ok(long.subject.startsWith(`[${'W'.repeat(64)}…]`), 'ws name capped at 64 chars by mailer-side truncate (D-11)');
+});

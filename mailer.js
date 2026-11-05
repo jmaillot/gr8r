@@ -841,8 +841,9 @@ function buildInviteMessage(config, invite) {
 }
 
 /* SUBJ-03 (Phase 40): exported for unit tests — the send API shape above is
-   unchanged. */
-export { encodeWord, truncate };
+   unchanged; buildDigestMessage joins them so the SC-5 digest fallback is
+   unit-testable without a live SMTP round-trip. */
+export { encodeWord, truncate, buildDigestMessage };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);
