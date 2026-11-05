@@ -1,7 +1,7 @@
 ---
 phase: 37-reminder-cadence-rework
 verified: 2026-11-05T09:55:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 covered_files:
   - .planning/REQUIREMENTS.md
@@ -28,6 +28,7 @@ covered_files:
   - test/local-prefs.test.mjs
   - test/migration.test.mjs
   - test/helpers/legacy-fixture.mjs
+
 covered_digest: "v2:sha256:ffd83997e83c2ff749df5273e82b409d1746793191eeacb94937ba31f95b5882"
 behavior_unverified: 0
 overrides_applied: 0
