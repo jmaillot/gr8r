@@ -1,156 +1,285 @@
-# Domain Pitfalls — v1.8 "Notification Sanity"
+# Pitfalls Research — Digest Subject/Workspace Splitting + RFC 8058 One-Click Unsubscribe
 
-**Domain:** Reminder-cadence rework, server-side i18n, daily digest, defaults migration on an existing zero-dependency Node app (`server.js`, hand-rolled scheduler, `reminders_sent` dedup ledger, per-user `user_notif_prefs` rows, client-side JSON catalogues with a build-gate scan).
-**Researched:** 2026-11-04
-**Overall confidence:** HIGH (code-read of server.js:1100–1432, PROJECT.md v1.8 scope, test/ inventory) — pitfalls 1–3 are derived from the live dedup-key format, prefs merge and hour gate, not from general lore.
+**Domain:** Adding features to an existing self-hosted Node/SQLite PM app (Projects Studio) with an in-process reminder scheduler and hand-rolled SMTP mailer — zero runtime dependencies held.
+**Researched:** 2026-11-05
+**Confidence:** HIGH (RFC 8058 spec text, documented Gmail/Microsoft bulk-sender requirements, and project-local evidence from Phases 27/29/32/37/38/39)
+
+**Context from PROJECT.md that shapes every pitfall below:**
+- The digest ships from Phase 38: single email at 09:00 workspace-local, transactional send claim (the `reminders_sent` exactly-once pattern), strict `email_digest` opt-in, individual reminders suppressed for digest users.
+- Phase 39 deferred RFC 8058 one-click explicitly to a future milestone, proposing a plain `List-Unsubscribe` header meanwhile.
+- v1.8's whole thesis is "Notification Sanity" — trim, not grow. Phase 29 already fixed send-time scope filtering; Phase 32 routed the reminder pass and email mirror through `memberCanReadProject`; v1.8 CR-01 was a digest-content project-name leak of exactly the private-project class.
+- Standing constraints: zero runtime dependencies, additive-only migrations with byte-identical second boot, EN+FR i18n gate.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Removing `day_before` while its dedup rows and prefs semantics change → the new cadence is silently suppressed or fires stale
+### Pitfall 1: `List-Unsubscribe-Post` with a non-https URL — providers silently reject one-click
 
-**What goes wrong:** The dedup key is `${ws.id}:${t.id}:${t.assignee}:${offset}:${due}` (server.js:1410). Two traps:
-1. **Orphaned dedup rows** — deleting the `day_before` offset means old rows like `...:day_before:2026-11-01` are never matched again. That's harmless for `day_before` itself, but the *stale-row cleanup habit* ("just delete rows where offset='day_before'") is the mistake: a data-touching migration violates the additive-only constraint and risks a non-byte-identical second boot. Leave dead rows alone; they are inert.
-2. **Prefs whose meaning changes** — `due_reminder` today gates *both* `day_before` and `morning_of` (server.js:1386–1389). If the new "due today" toggle reuses the key `due_reminder` but drops `day_before`, an existing user who explicitly set `due_reminder: true` keeps its meaning — fine. But the whitelist/17-key shape and the PUT route validation must stay coherent: a key removed from the client settings UI but still validated server-side (or vice versa) causes a silent mismatch. The `undefined-falsy` merge in `getUserNotifPrefs` (server.js:1152–1164) means *any* key you stop writing defaults for silently flips to "on" — if you repurpose or retire a key, users who never touched it get a different behavior than users whose stored row has it explicitly.
+**What goes wrong:**
+The unsubscribe works locally, but Gmail/Microsoft ignore or penalize the message. RFC 8058 §4 requires the URI in `List-Unsubscribe` that the one-click POST targets to be `https://`; an `http://` URL (or a `mailto:` paired with a `List-Unsubscribe-Post` header) means the mailbox provider will not honor (and Gmail will not count as compliant) the one-click mechanism. Self-hosted installs behind Traefik are often reached over `http://` internally — if the URL is built from an internal base (`http://localhost:3000`, a container name, or `APP_URL` unset) instead of the public origin, the header advertises a non-https URL. Worse, an `http://` or private-IP URL in the header is itself an information disclosure about the deployment topology.
 
-**Why it happens:** The scheduler's exactly-once design makes rows look like "state to clean up" when they are actually an append-only ledger. And prefs keys look renameable when they are a public API (stored JSON per user).
+**Why it happens:**
+The hand-rolled mailer already builds deep links from `APP_URL` (`/w/:slug/task/:key` since Phase 23), so it is tempting to reuse the same base blindly. But the digest runs in the scheduler context, not a request context, and there is exactly one place that should know the public origin.
 
-**Consequences:** Either users get double reminders for one task (new key + old pref key both firing) or zero reminders (old rows interpreted as claims for the new offset), or a migration test fails the byte-identical-second-boot gate at the last minute.
+**How to avoid:**
+- Derive the unsubscribe URL from the same single `APP_URL`-rooted helper the deep links use; assert at send time that it starts with `https://` (fail loud in a test, degrade to plain `List-Unsubscribe` mailto-only if not — never emit `http://`).
+- Emit BOTH headers together on the digest only: `List-Unsubscribe: <https://…/api/…>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. RFC 8058 requires the `-Post` header value to be exactly `List-Unsubscribe=One-Click`.
+- Do not add one-click to other notification emails in the same milestone — scope creep against the "trim" goal; other types keep their existing pref-based suppression.
 
-**Prevention:**
-- Keep `due_reminder` as the "due today" gate (its stored meaning narrows, never inverts); do NOT add a parallel `due_today` key that reads as a second gate.
-- Touch no `reminders_sent` rows: orphaned `day_before` keys are dead weight, harmless. The additive-only rule wins.
-- Because dedup includes `:due` (the due-date string), moving a task's due date *after* morning-of fired legitimately re-fires at the next 09:00 — verify the new cadence preserves this and the tests cover it.
-- Put the pref-whitelist diff in the same phase as the scheduler change, with a test asserting `getUserNotifPrefs` output for: no row, row with `due_reminder: true`, row with `due_reminder: false`, row with the *retired* key shape.
+**Warning signs:**
+Header dumps in tests show `http://`; the mailer has its own URL-building code instead of reusing the Phase 23 helper; Postmaster Tools / Microsoft SNDS show no one-click compliance after deploy.
 
-**Detection:** A test that seeds a `reminders_sent` row with a `day_before` key and a task due today, runs one pass, and asserts exactly one `morning_of` notification exists. If it fires zero or two, the migration touched the wrong thing.
-
-**Phase:** REM (cadence rework).
+**Phase to address:** The UNSUB phase (header emission + URL construction) — first plan task, pinned by a unit test on the raw SMTP message headers.
 
 ---
 
-### Pitfall 2: Server-side i18n per recipient drifts from the client catalogue — the drift is invisible to the build gate
+### Pitfall 2: The one-click POST has no cookies, no CSRF token, no browser — and email scanners may fire it for you
 
-**What goes wrong:** The i18n gate (`scripts/i18n-scan.mjs`) scans **client** literals; the server image historically ships **no catalogue** (PROJECT.md "Out of scope" until now — the invitation email was explicitly deferred for this reason). Localizing `MAILER.sendNotif` subjects/bodies, reminder snippets (`reminderSnippet()`, server.js:1336) and push/inbox text per recipient introduces four classic failures:
+**What goes wrong:**
+The unsubscribe endpoint is designed like every other API route: cookie session, sameOrigin guard, CSRF protection. A real one-click POST from Gmail's servers carries none of that — it is a bare `POST` with body `List-Unsubscribe=One-Click`, no `Referer` guarantee, no cookie. If the route requires a session it 401s and unsubscribe silently never works. The opposite mistake is worse: an unauthenticated route keyed only by an ID or email → anyone (or a security scanner, or Outlook's SafeLinks, or any recipient-forward) can unsubscribe other users, and a non-secret enumerable URL becomes a vandalism endpoint.
 
-1. **Catalogue copy-paste drift.** Two copies of the catalogue (one bundled for the browser, one importable by plain Node on the server) diverge: a key added client-side never gets a server counterpart, or the FR server copy is edited while the FR client copy isn't. Nothing fails — the server falls back to English silently.
-2. **Plural forms chosen by the wrong locale.** The existing plural layer is `{name}` + `{count, plural, …}` via `Intl.PluralRules` (v1.2 decision 6). French has `one`/`many`/`other`; a server `t()` that hard-codes English plural logic (`count === 1 ? … : …`) produces "1 fichiers". Use the same `Intl.PluralRules` selection with the **recipient's** locale, not the workspace's.
-3. **Date formatting with the wrong locale or wrong tz.** A reminder email saying "due 11/04/2026" is ambiguous; server-side dates must use the recipient's locale **and** the workspace-shared tz via `Intl.DateTimeFormat` with an explicit `timeZone`. Node's ICU is full in Node 24, but the Docker image must actually contain the full-icu data (the default Node image does since v13, but *verify* the pinned base image — a small-icu image silently formats with `en-US`).
-4. **Fallback locale leaking English.** Missing key → English fallback is correct behavior, but *which English* and *when*: if the recipient locale is `fr` and only the subject is catalogued while the body isn't, you get mixed-language emails — worse than all-English.
+A second trap: **link prefetching**. Google/Proxy/Microsoft scanners *GET* links in emails. If the unsubscribe is implemented as a GET that mutates state (the "one-click" URL is fetched by a crawler), the user is unsubscribed without ever clicking. RFC 8058 one-click must be POST-only; the GET on that URL must be a no-op (or the human-friendly landing page only).
 
-**Why it happens:** The client `t()` and a new server `t()` are two implementations of one contract; only a shared module + a shared gate can keep them honest.
+**Why it happens:**
+The codebase's two existing unauthenticated send-state routes (invite accept, login challenge) were each hardened in dedicated phases (HARD-01..05, Phase 17). This route looks "small" and skips that scrutiny.
 
-**Consequences:** Mixed-language or mistranslated emails to real users; silent English fallback for weeks; i18n-scan green while the server is wrong.
+**How to avoid:**
+- Capability-token URL: `POST /api/unsubscribe/:token` where `token` is a random 256-bit per-(user, workspace) value, generated at digest-send time (or persisted per user), stored hashed server-side — same pattern as `recovery_codes`. No user ID, no email in the URL, no enumeration.
+- POST-only mutation. A `GET` to the token URL returns the localized confirmation page and changes nothing.
+- Idempotency by construction: unsubscribing an already-unsubscribed user returns the same 200 confirmation, not an error (see Pitfall 3 for the replay dimension).
+- Log the token **never** (Pitfall 8).
+- Consider the middle ground explicitly and decide with the owner: instant-unsub on POST (what RFC 8058 consumers expect — providers require the POST to actually unsubscribe, no confirmation page in between) vs. a confirmation interstitial. **For the one-click POST itself there is no interstitial: RFC 8058 semantics require the opt-out to happen on receipt of the POST.** The confirmation page belongs only to the GET fallback path in the email footer.
 
-**Prevention:**
-- **One catalogue, two importers.** The catalogues are already "importable by plain Node" (v1.2 decision 12/17) — import the *same JSON files* server-side; never fork a server copy. Make `server.js` fail at boot (or a test fail) if a server-needed key is missing from the FR catalogue.
-- Extend `scripts/i18n-scan.mjs` (or add a phase gate test) to enumerate the *server-used key set* and assert EN+FR presence — the gate only protects what it is told about.
-- Ship the catalogue in the Docker image: this is a real Dockerfile change (COPY of the catalogue dir) — remember `test/dependencies.test.mjs` has a COPY-pin allowlist that already needs updating (STATE.md deferred item); fold that in.
-- Store `locale` on the user (it exists — per-user since v1.2) and resolve recipient locale via the authority map the email pipeline already builds (`authority` in `queueNotifEmails`), falling back: recipient locale → workspace default → EN.
+**Warning signs:**
+Route reads `req.session`; route is GET; token contains a user id or email; tests never cover an unauthenticated POST.
 
-**Detection:** A table-driven test rendering every server-emitted notification kind × {en, fr} and snapshotting subject/body; plus a grep-test asserting no server string literal (`'Due today: '`, `'Past due: '`) remains outside the catalogue.
-
-**Phase:** I18N — but the shared-importer decision must be made in this phase's spec, because the DIGEST phase (which emits its own email) depends on it.
-
----
-
-### Pitfall 3: The digest is not idempotent across restarts, or its window slices the day wrong
-
-**What goes wrong:** The reminder pass is exactly-once because it writes a dedup claim **in the same transaction** as the effect, and its hour gate (`hour !== 9` → pure read, server.js:1357) makes replays harmless. A digest has *none* of this for free:
-
-1. **Double-send after restart.** Digest at 09:00 crashes after sending but before recording → next pass (or boot catch-up, which the pass contractually supports, D-27-2) resends the whole digest. Or crashes *before* send but *after* recording → digest never arrives. Sending email cannot be transactional with SQLite; you must pick the resend-vs-never side deliberately (resend is the correct side — duplicate digest is an annoyance, missing digest is a lost day).
-2. **Idempotence marker without a ledger.** "Send digest if hour===9 and last-sent != today" breaks when the process restarts at 09:01 with a clock now reading 09:01 — actually fine — but breaks again if the server was down the whole 09:00 hour: the boot catch-up logic must define *when* a missed digest is still worth sending (e.g. any pass on the same local date, like the reminder window predicate) and when the day is conceded.
-3. **Partial-day / boundary bugs.** "Tasks due today + overdue" must be evaluated **at send time** in the workspace tz (`localParts`), not from a snapshot taken at 00:00; and "overdue" must reuse `remindable()`-equivalent semantics (`due < localDate`, not-done, not archived) — a second, slightly different predicate here is the classic drift the codebase already guards against ("never a second pipeline", server.js:1243).
-4. **DST.** `addDaysIso` deliberately avoids local-midnight Date math (server.js:1310). A digest that computes "yesterday" via `Date(now - 86400e3)` is wrong twice a year. Compare ISO date strings derived from `localParts`.
-5. **Digest suppressing individual emails without a recorded suppression.** If `email_digest: true` means "no individual reminder emails", the suppression must be applied where reminders enqueue email (`queueNotifEmails` / the `email_reminder` gate) — **not** by skipping notification rows (inbox/push must stay identical, per milestone scope). Forgetting this means digest users see nothing in the inbox either, or push users get emails.
-6. **Urgent notifications swallowed by the digest.** The milestone only says digest replaces *reminder* emails — but if the implementation flips any generic "don't email if digest on" flag, mentions and assigns (often urgent) vanish until 09:00. Suppression must be type-scoped: reminders only, never mention/assign/comment.
-
-**Why it happens:** Digest *looks* like the reminder pass reusing the scheduler, but it has a different delivery transactionality (one email covering many events) and a different failure recovery.
-
-**Consequences:** Duplicated or missing digests; timezone-off digests; urgent notifications silently eaten; scope creep of suppression into other email types.
-
-**Prevention:**
-- Give the digest its own ledger table (additive migration: e.g. `digest_sent(workspace_id, user_id, local_date)`) claimed in the same transaction pattern as `reminders_sent` — one prepared `insert or ignore`, claim-then-send, accept the duplicate-on-crash side.
-- Compute the window from `localParts` ISO strings only; never timestamp arithmetic.
-- Type-scoped suppression: in the reminder email path only, `if (prefs.email_digest === true) continue;` — with a test asserting mention/assign emails still flow when digest is on.
-- Injectable clock test: two `runReminderPass`-style calls at the same local 09:00 → one digest; a call at 08:59 → zero; a boot with no 09:00 ever seen that local date → one (catch-up), matching the reminder catch-up philosophy.
-- Fail-loud that `email_digest`'s existing default (`true` in `NOTIF_PREF_DEFAULTS`, server.js:1135) is the stub value — when it becomes real, users who never opted in suddenly get digests. That default flip is exactly the next pitfall.
-
-**Phase:** DIGEST — with a hard dependency on I18N's shared catalogue (the digest email is fully server-rendered) and on REM's pref semantics.
+**Phase to address:** UNSUB phase — security contract first (token model, method allow-list, replay posture), route code second. This is Phase-30-class security surface and deserves the same threat-model treatment.
 
 ---
 
-### Pitfall 4: Changing notification defaults for existing users without an explicit, visible migration
+### Pitfall 3: Scanner prefetch / replay treats "unsubscribe" as idempotent-by-luck — but replay plus the digest claim can interact badly
 
-**What goes wrong:** `getUserNotifPrefs` merges stored JSON over defaults with `=== false` disables and `undefined-falsy` = on (server.js:1148–1164). Two failure modes when defaults change:
+**What goes wrong:**
+Two distinct failure modes share one root: the POST endpoint is *stateful in both directions*.
+1. **Accidental unsubscribe:** a scanner (or the user's own mail client pre-fetching) POSTs the token once → user silently opted out with zero signal. If the token is single-use and replay returns 410 (the `firstWorkspace()` invite-accept twin behavior), a *retry by the provider* after a transient failure turns a delivered unsubscribe into an error the provider may log as a bad one-click URL.
+2. **Replay confusion:** if unsubscribing *deletes* the token, a second provider retry 410s; if it doesn't delete it, the token remains valid forever for a user who already left.
 
-1. **The silent flip.** `email_digest: true` is *already* a default in the shipped defaults layer (it was a stub). Making digest real doesn't need a migration to take effect — every existing user is opted in the moment the code ships. If the product intent is opt-in (the milestone says "opt-in daily digest"), the default **must flip to `false`** — but that change itself is silent: users with stored rows containing `email_digest: true` (written by an early PUT) keep `true` forever, while users with no row get `false`. Behavior now depends on whether a user ever touched settings. This asymmetry is invisible in a defaults-only code review.
-2. **The migration you can't do.** A boot sweep rewriting `user_notif_prefs` rows (e.g. `email_digest: true → remove key` or normalizing retired `day_before`-era keys) violates the "migrations additive-only, byte-identical second boot" constraint unless it is strictly guarded like `migrateTotpReWrap` was. Editing JSON-prefs rows in place is a *data* migration the constraint machinery wasn't designed for — it will be attempted "just this once" and it will break idempotence (second boot not byte-identical) or run before the backup.
+**Why it happens:**
+The codebase's exactly-once instincts (`reminders_sent`, TOTP replay guards) push toward "single-use token," which is the wrong semantics for unsubscribe. Unsubscribe is a **convergent** operation, not a **consumed** operation: the target state is "email_digest off," and repeating it must be a no-op success.
 
-**Why it happens:** The defaults layer looks like configuration; it is actually the effective state of every user who never opened settings.
+**How to avoid:**
+- Design the endpoint as idempotent-state, not token-burn: `UPDATE ... SET email_digest=0 WHERE token matches` — success whether or not it was already 0. Do not delete the token row on use; instead give tokens an expiry (e.g. valid while the user is a member; reject with the same generic response for a stale/expired token).
+- Return the **same response body and status** for success, already-unsubscribed, and expired-token (mirror the Phase 1 404-no-oracle and Phase 30 generic-`ssoError` discipline) — the response must never distinguish "token valid" from "token stale" to an unauthenticated caller.
+- One-click POST also toggles the right pref key only (`email_digest`) — not a blanket "unsubscribe from everything," which would fight the per-type prefs model from Phase 34 and the suppression logic from Phase 38.
 
-**Consequences:** Every existing user gets a 09:00 digest email the morning after deploy (support noise, opt-out stampede), or an unguarded boot sweep makes the second boot diverge and fails the phase's byte-identical gate.
+**Warning signs:** any `DELETE`/`burn` of the token on use; any 4xx other than the generic stale-token response; a test asserting "second POST fails."
 
-**Prevention:**
-- Decide the semantics first and write them down: "opt-in" = default `false` + stored `true` respected; or "auto-on for reminder-suppression only" = keep `true` but scope it. Do not let the code decide implicitly.
-- Prefer **reading-time normalization** over a boot sweep: since the only reader is `getUserNotifPrefs`, retire/reshape keys by changing what the merge produces, not what rows contain. No migration, no boot risk.
-- If a sweep is truly required, follow the established pattern exactly: pre-backup (`vacuum into`), guarded trigger, transactional, second-boot byte-identical — and extend `test/migration.test.mjs`, don't hope.
-- Add a defaults-diff test: assert `getUserNotifPrefs` for a no-row user vs a user whose stored row predates the change; both outcomes must match the documented intent, not accidentally differ.
-
-**Detection:** The morning-after support test — a test asserting a no-row user with `email_digest` at its new default produces **zero** digest sends on a normal pass. Plus the migration test asserting second-boot byte identity if any sweep exists.
-
-**Phase:** DIGEST (the `email_digest` default) and REM (any pref reshaping) — the defaults decision belongs in the *discuss/spec* step of whichever phase lands first, before any code.
+**Phase to address:** UNSUB phase — idempotency test (POST ×3, same result) in the plan's verification list.
 
 ---
 
-## Moderate Pitfalls
+### Pitfall 4: Per-workspace splitting multiplies email volume — colliding head-on with the v1.8 anti-goal
 
-### Pitfall 5: `email_digest` default flip interacts with the 17-key whitelist and PUT validation
-**What goes wrong:** The PUT route validates against `NOTIF_PREF_KEYS`. Adding a key (e.g. per-channel digest options) or repurposing one touches three places: whitelist, defaults layer, settings UI render — and a fourth the client catalogue. Miss one and the UI shows a toggle that does nothing, or a key PUT accepts but nothing reads.
-**Prevention:** One test iterating `NOTIF_PREF_KEYS` asserting: default defined, PUT round-trips it, `getUserNotifPrefs` reads it, and an i18n key exists EN+FR for its label. This file is the cheapest regression net in the milestone.
+**What goes wrong:**
+Naively, "one digest per workspace" means: user in 5 workspaces → 5 emails per morning. v1.8 exists because users complained about *too many* notifications (Kanzo #6); the digest was the *fix*, and the AUDIT phase (39) exists to trim. A split that turns 1 email into N undoes the milestone's own thesis. The subtle version is worse: a user with the digest on in one workspace and individual reminders still on in another now gets digest(s) **and** reminder emails — the Phase 38 suppression rule ("individual reminders suppressed for digest users") was written per-user, and splitting per-workspace can accidentally un-suppress or double-suppress depending on where the flag is read.
 
-### Pitfall 6: Reminder pass hour gate is 09:00 everywhere — the digest scheduled "at 09:00 workspace time" collides with the reminder pass
-**What goes wrong:** Digest users at 09:00 get the digest *and* their reminder emails race it in the same minute window: if digest suppression is checked per-email at enqueue time and the two passes interleave, ordering decides whether a task appears both in the digest and as an individual email, or in neither (suppressed after the digest snapshot was taken, before the individual send).
-**Prevention:** Define the suppression boundary at *content-snapshot* time: the digest lists tasks due today/overdue as of its pass; individual reminder emails for the same local date are suppressed unconditionally by pref, so a task can be in the digest while its row still fired — decide and document which way (digest listing is sufficient; the reminder notif row still lands in the inbox, which is correct per scope "push unchanged, inbox unchanged"). Test both orderings.
+**Why it happens:**
+`email_digest` lives in per-(workspace, user) `notif_prefs` rows (Phase 34), so "per-workspace digest" is the *natural* reading of the data model — and the reminder pass iterates workspaces, so emitting one email per workspace inside the loop is the path of least resistance.
 
-### Pitfall 7: Localized emails need the recipient's locale where the email is *built*, but `queueNotifEmails` resolves authority maps lazily
-**What goes wrong:** The email builder already joins `memberships × users` for emails/names; locale adds another column. A second query per notification (N+1 per reminder pass over many tasks) is the easy path; forgetting doc-only members (no account row → no locale) yields "undefined" locale and a thrown `RangeError` from `Intl` with an invalid locale tag.
-**Prevention:** One query `select … , u.locale from memberships m join users u …` folding into the existing `authority` map; guard every locale with a known-locale check and fall back to EN. The existing per-pass try/catch (server.js:1427) masks a throw as a silent per-workspace skip — a locale crash would silently stop *all* reminders for a workspace. That masking is itself the pitfall: the catch logs `err.message` and moves on; watch for it in digest/reminder tests.
+**How to avoid:**
+- Decide the aggregation policy **before** coding, owner-validated like D-05: recommended policy is **one email per user per day, sections per workspace** — workspace name as section heading, tasks grouped underneath — *unless* the owner explicitly wants N emails. The SUBJ requirement ("subject carries the Workspace name") only forces workspace context into the subject when there is exactly one workspace's worth of content; a multi-workspace single email gets a localized generic subject with sections. Make this an explicit D-decision, not an implementation accident.
+- Check the exact workspaces-with-content set, not the membership set: a user in 5 workspaces who only has due tasks in 1 gets exactly the single-workspace email — no empty sections, no email when all sections are empty (already implied by Phase 38's "only when tasks exist" but must survive the refactor).
+- Re-verify the suppression invariant after splitting: for a digest user, *no workspace* in the pass sends individual reminder emails, even when that workspace's digest section is empty or the user's digest is on in only some workspaces. This is the highest-value regression test in the whole milestone.
+- The unsubscribe from one workspace digest must not unsubscribe the others (per-workspace pref), and the email must make it clear which workspace(s) it covers.
 
-### Pitfall 8: The i18n build gate can regress the server scan silently
-**What goes wrong:** `scripts/i18n-scan.mjs` fails builds on uncatalogued *client* literals. Server strings live in `server.js` and `oidc.js` — out of the scan's current corpus. Adding server catalogue support without extending the scan corpus means the next server-side string added is unchecked forever.
-**Prevention:** In the I18N phase, make the scan (or a dedicated node test) walk `server.js` for the notification-template functions and require every interpolated template to come from the catalogue — e.g. forbid the literal patterns `Due today: `, `Past due: `, `Due tomorrow: ` outside the catalogue, as a regression guard.
+**Warning signs:** any loop that calls `sendMail` per workspace without a per-user aggregation decision recorded in the phase plan; a test suite with no "user in 3 workspaces, tasks in 2" case.
 
-## Minor Pitfalls
+**Phase to address:** SUBJ phase (splitting/aggregation decision is intrinsic to the subject-line work) — decide in discuss-phase, pin in plan.
 
-### Pitfall 9: DST-transition days make "due today" ambiguous for a task due the transition day
-**What goes wrong:** ISO-date string compare (the codebase's approach) handles this correctly, but any "digest covers the last 24h" shortcut doesn't.
-**Prevention:** Keep everything ISO-string based (`localParts` + `addDaysIso`); add one DST-boundary test with a timezone like `America/New_York` crossing the shift.
+---
 
-### Pitfall 10: Test suites asserting on English server text will break en masse during I18N
-**What goes wrong:** `due-reminders.test.mjs`, `notif-email-link.test.mjs` and the source-extraction tests (which the code comments say evaluate specific lines standalone, server.js:1176) assert English snippets. Replacing literals with `t()` calls breaks source-extraction tests in ways that look unrelated.
-**Prevention:** Budget for a test-migration subtask in the I18N phase: update the source-extraction regexes and render both locales in assertions instead of hard-coded English.
+### Pitfall 5: Changing the ledger-claim key breaks exactly-once on deploy day — duplicate digests
 
-### Pitfall 11: The audit (AUDIT item) changing thresholds after features ship re-triggers dedup/re-fires
-**What goes wrong:** The audit phase may recommend changing *which* offsets fire. Because dedup keys include the offset, re-introducing or renaming an offset later re-fires for tasks whose `due` is still current — a burst of "Due today" emails on deploy day for every currently-due task is actually expected catch-up behavior, but a surprise if unplanned.
-**Prevention:** Document catch-up behavior in the phase plan; announce that the first pass after a cadence change may notify for tasks already due (the window-open predicate makes this correct, not a bug).
+**What goes wrong:**
+Phase 38's digest claim lives in `reminders_sent` (or its sibling) keyed by some composite — likely (workspace, user, date, type) or similar. The per-workspace split and subject change both tempt a key change: adding workspace to the key, adding a "digest v2" type, or keying on (user, date) to support aggregation. Get this wrong on deploy morning and one of two things happens: **every digest user gets a duplicate email** (old key rows don't match the new lookup → the pass re-sends for the same date), or worse, the catch-up logic (Phase 37's `hour >= 9` post-09:00 boot window) re-sends for *yesterday* because the old rows are invisible under the new key shape. Since the scheduler runs in-process on boot, the duplicate fires *immediately* at first deploy — a bad morning for trust in the notification system.
 
-## Phase-Specific Warnings
+**Why it happens:**
+The claim table is the project's exactly-once anchor (REM-01..05, Phase 38 DIGEST claims), but its key was designed for one email shape. Schema-key evolution is invisible to the feature diff.
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| REM (cadence) | Pref key semantics change / dedup-row temptation | Keep `due_reminder` meaning; never touch `reminders_sent` rows; no-row vs stored-row tests |
-| I18N (server emails) | Catalogue drift, plural/date locale, fallback | One shared JSON import; scan-extended server key gate; locale guard with EN fallback; Dockerfile COPY-pin test update |
-| I18N | Silent per-workspace catch masking locale crashes | Locale validation before `Intl` use; explicit tests for unknown locale |
-| DIGEST | Non-idempotent send across restart | Claim-ledger in same transaction as record; accept duplicate-on-crash |
-| DIGEST | Suppression leaks to non-reminder emails | Type-scoped suppression; test mention/assign flow with digest on |
-| DIGEST | `email_digest` stub default is `true` | Explicit default-flip decision in spec; no-row user test |
-| DIGEST × REM | 09:00 collision between two passes | Snapshot-at-pass semantics; both-orderings test |
-| AUDIT | Threshold changes re-fire via window predicates | Document catch-up; time the audit before REM if offsets may change again |
+**How to avoid:**
+- **Never mutate the meaning of existing claim rows.** If the key must change, additive-only: new column or new row shape with a migration (standing constraint: additive-only, byte-identical second boot), and a boot-time or send-time guard that treats *either* old-key or new-key presence as "already sent" for the transition day.
+- Cleanest option: keep the claim key's *identity* dimension unchanged (whatever identifies "the 09:00 digest for this recipient/date") and treat the split/aggregation purely as *content* changes — if the owner accepts per-user aggregation (Pitfall 4), the claim becomes (user, date, 'digest') for the *new* rows, and the migration backfills today's already-claimed (workspace, user) rows into the new shape, or simply: deploy before 09:00 or accept that deploy day may double-send once, documented in DEPLOY.md.
+- Test the transition explicitly: a fixture DB with rows in the old shape, run the pass, assert zero emails. This is a migration-test-shaped test — the repo already has the pattern (`test/migration.test.mjs`).
+- Also verify the second-boot guarantee: a boot immediately after a digest send must send nothing (this test likely exists from Phase 38 — it must survive the key change *unmodified*, or be consciously updated).
+
+**Warning signs:** a PR that touches the claim insert *and* the claim lookup in different shapes; no migration test with pre-existing claim rows; deploy notes say nothing about "when to deploy relative to 09:00."
+
+**Phase to address:** SUBJ phase — but flag it in the roadmap as the phase's *riskiest* task, with the transition test as an explicit plan deliverable.
+
+---
+
+### Pitfall 6: Subject-line i18n — RFC 2047 encoding, workspace-name injection, and the wrong-language name
+
+**What goes wrong:**
+Three stacked mistakes:
+1. **Non-ASCII workspace names break the subject.** `Subject: Acme — Tâches du jour` must be RFC 2047 MIME encoded-word (`=?UTF-8?B?…?=`) or raw UTF-8 with 8BITMIME-aware headers; a hand-rolled SMTP mailer that wrote ASCII subjects so far will happily emit mojibake or a header that some clients render as `???`. The codebase has FR locales and workspace names are user data — non-ASCII is the *common* case, not the edge.
+2. **Header injection via workspace name.** A workspace named `Foo\r\nBcc: victim@x` must never reach a header unescaped. The mailer presumably escapes task text in bodies, but subject interpolation of *user-controlled workspace names* is a new sink. Strip CRLF (and long-line fold per RFC 5322's 78-char soft limit) at the single subject-building function.
+3. **Localization order.** The subject is per-recipient locale (Phase 36 `tFor` catalogue) — the pattern "Project Name — Task Name" and "Workspace — Digest" must be built through the catalogue so FR gets its punctuation house style (v1.2 decision 11: no-break space before `:`, etc.), and the *workspace name itself* is data, not a catalogue key. Interpolating user data into `t()` templates must go through the existing escape-at-call-site discipline (v1.2 decision 5) adapted to headers.
+
+**Why it happens:**
+Subjects have been static/localized-only strings until now ("Due today" etc. via `tFor`); interpolating dynamic user data into a *header* (not a body) is genuinely new for this mailer.
+
+**How to avoid:**
+- One `buildDigestSubject(workspaceName, locale)` (or multi-workspace variant) function: `tFor` template + name interpolation + CRLF strip + RFC 2047 encode + fold. Unit-test it with an emoji workspace name, a 200-char name, a name containing `é` and `—`, and a name with embedded `\r\n`.
+- Encode-words only when needed (pure-ASCII names stay readable) — cosmetic, but keeps Gmail's subject snippets clean.
+- The "Project Name — Task Name" task line is *body* content, so it escapes HTML but needs no RFC 2047 — but the same CRLF discipline applies to any future header it migrates into (e.g. per-project List-ID).
+
+**Warning signs:** `subject:` built by string concatenation at the send call site; no test with non-ASCII workspace names; the mailer has no encode-word helper.
+
+**Phase to address:** SUBJ phase — the encoding helper + tests are its first plan task; localization keys ride the existing i18n gate (i18n-scan).
+
+---
+
+### Pitfall 7: Task-line "Project Name — Task Name" leaks private / scope-restricted project names to digest recipients
+
+**What goes wrong:**
+The digest task lines currently show task names only. Adding the project name re-introduces exactly the class of leak v1.8 CR-01 fixed: a recipient who cannot read a project (private project, team-scoped project they're not in — the `hiddenFor()` / `memberCanReadProject` funnel from Phases 29/32) now sees the project's *name* in their own email. Wait — if they can't read it, how are they getting the task line at all? Because the digest grouping query may be built from the *send-time scope filter* (correct) or from a cached/precomputed list (leaky), and because the *assignment* itself can outlive the restriction: a user assigned to a task in a project that later goes private (or gets moved to a team they leave) should not just lose the project name — they arguably shouldn't be listed as still-on-the-hook in a project they can no longer see. The name leak is the visible symptom; the deeper question is whether the task line should appear at all.
+
+Also note the inverse leak direction: with per-workspace splitting, a **guest collaborator** (viewer + exactly one project, Phase 29) whose digest covers only their one project must not receive a subject/email hinting at other projects' existence.
+
+**Why it happens:**
+The reminder pass already filters sends through `memberCanReadProject` (Phase 32), so the temptation is "we're already scoped." But scoping was proven for *send/no-send* decisions, not for *per-line content enrichment*, and the new aggregation query is new code that must re-enter the same funnel rather than read the doc directly.
+
+**How to avoid:**
+- Every task line's project name is resolved *through* `memberCanReadProject`/`hiddenFor` at line-build time — same funnel, same helper, zero new authorization logic. If the member can't read the project, either omit the line or render without the project name — pick one policy and owner-validate it (recommended: omit the project prefix; the task is still the user's).
+- Add the "task became invisible since last pass" case to tests: assignment survives, project goes private/team-scoped → line drops or degrades; never a crash, never a leak.
+- Reuse, don't fork: if the digest aggregation query can't express the funnel, fetch the candidate lines broadly then filter lines through the shared helper — keep one authorization funnel (the project's own architecture decision from v1.7 VIS work).
+
+**Warning signs:** a new SQL join fetching `projects.name` without a subsequent funnel check; tests only cover "member can read everything" fixtures; no guest-collaborator digest test.
+
+**Phase to address:** SUBJ phase — but this deserves a named security check in the phase (CR-class), verified with a private-project + guest fixture.
+
+---
+
+### Pitfall 8: Unsubscribe URL (bearer token) leaking into logs, error trackers, and referrer-free-but-shared places
+
+**What goes wrong:**
+The one-click capability URL is a bearer credential. Common leak paths in this codebase's shape:
+- **Request logging:** the server logs paths (likely for debugging); `POST /api/unsubscribe/<token>` puts the token in every log line, which then lands in `docker logs`, Traefik access logs, and any copy-pasted support output.
+- **Error reporting / assertion messages:** an idempotency bug logged with the full URL persists the token.
+- **The email body itself** is fine (that's its purpose), but the *GET fallback landing page* renders the URL in the address bar where a user might copy it into a bug report — acceptable, but don't *also* print it in page text/toasts.
+- Token in the **activity log**: the app has an audited operator trail (Phase 24) — an "unsubscribed via one-click" audit row must record user + workspace, never the token.
+
+**Why it happens:**
+Existing routes take IDs in paths and are logged uniformly; the token route gets the same treatment.
+
+**How to avoid:**
+- Scrub the unsubscribe path pattern from request logging (replace token with `[redacted]`), same as session-cookie discipline.
+- Tokens stored **hashed** (scrypt/sha-256 like recovery codes) so a DB read or backup leak doesn't yield live unsubscribe capability.
+- Rotate per send (recompute token at each digest, replacing the old) so a leaked token from an old email dies at the next 09:00.
+- Log only the outcome: `digest_unsub one-click user=… ws=…` verb, consistent with the Phase 24 machine-verb activity model.
+
+**Warning signs:** grep the log helper for the unsubscribe route prefix and find no scrub; tokens stored plaintext.
+
+**Phase to address:** UNSUB phase — security contract item, pinned by a test that triggers the route and asserts no raw token in captured logs.
+
+---
+
+## Technical Debt Patterns
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Reuse `reminders_sent` with a reshaped key, no migration test | Fast implementation | Duplicate digests on deploy day; erodes the exactly-once guarantee everywhere | Never — the transition test is cheap |
+| GET-based unsubscribe "for simplicity" | No POST handling in the hand-rolled server | Scanner prefetch unsubscribes users; RFC 8058 non-compliant; providers penalize | Never |
+| Token = user id + email + shared secret (deterministic) | No DB table for tokens | Secret rotation un-burns old tokens; timing-safe comparison easy to get wrong | Only if persisted per-user with rotation — but random hashed tokens are strictly better |
+| Per-workspace email loop inside the pass, no aggregation decision | One commit | N emails/user/day; contradicts the milestone thesis; users disable digests entirely | Never without an owner-validated D-decision |
+| RFC 2047 encoding only "when the name has accents" via naive regex | Small code | Emoji/CJK names mojibake; hand-rolled regex misses combined cases | Never — use `Buffer`-based base64 encode-words unconditionally for non-pure-ASCII |
+| One-click added to all email types "while we're at it" | Feels complete | Each type needs its own token/pref semantics; scope explosion against the trim goal | Never in this milestone; digest only |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Gmail / Microsoft bulk-sender rules | Assuming one-click is optional decoration; or omitting the https requirement | `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` with an https URL on the digest; providers honor POSTs to it server-to-server |
+| Hand-rolled SMTP mailer | Writing headers without folding/encoding; CRLF injection via interpolated names | Single subject-builder with RFC 2047 encode + CRLF strip + line-length fold; test with hostile names |
+| In-process scheduler + boot catch-up | Deploying mid-morning → catch-up window (`hour >= 9`) re-runs against a changed claim key → dupes | Ship the claim transition test; document deploy-before-09:00 in DEPLOY.md if the transition can't be made airtight |
+| Per-(workspace,user) `notif_prefs` | Reading `email_digest` once per user and applying globally (or vice versa) | Pref stays per-workspace; suppression of individual reminders stays "digest on in ANY of the user's workspaces ⇒ no individual reminder for that user's tasks" — assert it in tests |
+| Mailbox-provider retries | Token burn + 410 on replay | Convergent idempotent unsubscribe; identical generic responses for every state |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| N+1 funnel checks per digest line (per-line `memberCanReadProject` re-querying the doc) | 09:00 pass slows; event-loop blocked on a workspace with many digest users | Resolve visibility per (user, project) pair once per pass into a small Map; the funnel helper stays the source of truth | ~50+ users/workspace — early for this app's scale, but the pass is also handling reminders |
+| Per-workspace-per-user emails inside a single synchronous tick | Mailer SMTP latency serializes; the unref'd tick overruns its window | Keep sends fire-and-forget per existing mailer pattern; aggregate first, send second | Multiple workspaces × digest users |
+| Recomputing RFC 2047 encode per line | Trivial CPU waste but no risk | Encode once per email | Cosmetic |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Unauthenticated unsubscribe keyed by user id / email | Anyone unsubscribes anyone; enumeration | Random 256-bit per-user-workspace token, stored hashed, no PII in URL |
+| GET mutates state on the token URL | Scanner prefetch = silent opt-out | POST-only mutation; GET = localized no-op confirmation page |
+| Workspace name into subject header unescaped | Header injection (Bcc smuggling), mojibake | CRLF strip + RFC 2047 encode at one function |
+| Token in request logs / activity rows | Bearer credential in docker logs, backups | Log-path scrubbing + hashed storage + rotate-on-send |
+| Project names enriched into lines outside `hiddenFor()` | Private/team-scoped project name leak (CR-01 class) | Route every line's name through `memberCanReadProject`; guest fixture test |
+| Response distinguishes valid vs stale token | Existence oracle on unsubscribe capability | Identical generic response body/status for all outcomes |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Unsubscribe = nuclear (kills all notification prefs) | User wanted fewer emails, loses inbox rows too | One-click toggles `email_digest` only; other channels untouched per Phase 38 model |
+| Multi-workspace split: identical-looking emails with different content | User can't tell which workspace an email is about; mass-delete everything | Subject carries workspace name; footer states which workspace(s) the email covers and which unsubscribe it performs |
+| No visible unsubscribe except the RFC header | Users in clients that hide headers can't leave | Plain-text footer link (GET confirmation page) alongside the one-click header — the Phase 39 "plain header" baseline already implies this; keep the footer link |
+| Digest arrives after user already worked (post-09:00 catch-up) | Duplicate-feeling email | Already handled by the claim; don't let the refactor break it |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **One-click headers:** both headers present, https URL, exact `List-Unsubscribe=One-Click` value, on the digest email only — verify by asserting on the raw RFC 822 output in a test
+- [ ] **Unsubscribe endpoint:** unauthenticated POST works, GET is a no-op, replay is a no-op success, stale token indistinguishable from fresh — 4-case test matrix
+- [ ] **Suppression invariant:** digest-on-in-one-workspace suppresses individual reminders across *all* the user's workspaces — regression test from Phase 38 must pass unmodified
+- [ ] **Deploy-day exactly-once:** fixture DB with pre-existing old-shape claim rows → pass sends zero emails
+- [ ] **Subject encoding:** emoji / accented / CRLF / 200-char workspace names — 4 subject unit tests
+- [ ] **FR house style in subject:** no-break spaces and catalogue-driven word order verified by the i18n gate
+- [ ] **Project-name scoping:** private-project, team-scoped, and guest-collaborator fixtures — line omission (or degradation) proven
+- [ ] **Token hygiene:** hashed at rest, redacted in logs, rotated per send
+- [ ] **Multi-workspace aggregation:** user in 3 workspaces with tasks in 2 → exactly the owner-validated email count (1 or 2 per D-decision), never 3, never 0
+- [ ] **Second boot byte-identical:** migration test green with the new claim/unsub tables
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Duplicate digests on deploy day | LOW | The claim table says who got one; suppress the immediate re-send, post a CHANGELOG known-issue, fix key before next 09:00 |
+| Silent mass unsubscriptions (scanner/GET bug) | MEDIUM | Affected users identified from the unsub audit rows; re-enable `email_digest` via a one-off script + notify; fix mutation-method bug first |
+| Non-https / malformed one-click URL in the wild | LOW | Old emails already sent carry the bad URL; fix the builder; old tokens expire on rotation |
+| Project-name leak in sent digests | MEDIUM | Can't unsend; audit scope (which users, which projects), owner notification, fix funnel usage; add the fixture test |
+| Mojibake subjects | LOW | Fix encoder; emails are ephemeral — no data damage |
+| Token leak into logs | LOW | Rotation-on-send kills old tokens at next pass; scrub logs; hash storage before next deploy |
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| 1 — https one-click URL | UNSUB | Raw-header unit test: https + exact `-Post` value |
+| 2 — No-cookie POST, scanner prefetch | UNSUB (security contract first) | Unauthenticated-POST + GET-noop tests; threat list like Phase 30's |
+| 3 — Replay/idempotency semantics | UNSUB | POST×3 identical result; generic stale-token response |
+| 4 — Email multiplication vs Notification Sanity | SUBJ (discuss-phase D-decision) | "3 workspaces, 2 with tasks" fixture asserting validated count |
+| 5 — Claim-key transition dupes | SUBJ (flagged riskiest task) | Old-shape-rows fixture → zero sends; Phase 38 second-boot test unmodified |
+| 6 — Subject RFC 2047 / injection / i18n order | SUBJ | 4 hostile-name subject tests; i18n-scan gate |
+| 7 — Project-name leak (CR-01 class) | SUBJ | Private + team-scoped + guest fixtures; funnel used, not forked |
+| 8 — Token leak in logs | UNSUB | Captured-log assertion shows redacted token; hashed-at-rest check |
 
 ## Sources
 
-- Code-read (HIGH): `server.js:1100–1432` — `NOTIF_PREF_KEYS`/`NOTIF_PREF_DEFAULTS`, `getUserNotifPrefs`, `queueNotifEmails`, `runReminderPass`, dedup-key format, hour gate, `localParts`/`addDaysIso`, per-pass try/catch masking.
-- `.planning/PROJECT.md` v1.8 milestone scope, v1.2 i18n decisions (plurals via `Intl.PluralRules`, catalogues importable by plain Node, server-ships-no-catalogue out-of-scope item being reversed), v1.5 REM-01..05 record.
-- `test/` inventory: `due-reminders.test.mjs`, `notif-prefs.test.mjs`, `notif-email-link.test.mjs`, 16 `i18n-*.test.mjs` files, `local-prefs.test.mjs`, `migration.test.mjs` (referenced from PROJECT.md).
+- RFC 8058 (One-Click Unsubscribe): https URI requirement, POST semantics, `List-Unsubscribe-Post: List-Unsubscribe=One-Click` header value, opt-out-on-receipt — HIGH
+- Gmail Email Sender Guidelines / Postmaster Tools (bulk sender one-click compliance requirements) and Microsoft Outlook junk-mail reporting interop — HIGH
+- RFC 2047 (MIME encoded-words) and RFC 5322 (header folding, 78-char lines) — HIGH
+- Project-local evidence: Phase 27/37/38 reminder & digest claim architecture, Phase 29/32 `hiddenFor`/`memberCanReadProject` funnel and send-time scope filtering, Phase 39 notification-audit RFC 8058 deferral decision, v1.8 CR-01 leak class, Phase 34 per-(workspace,user) prefs model — HIGH
+- Scanner/link-prefetch behavior (SafeLinks, Google image/link proxying) — MEDIUM (documented vendor behaviors, exact prefetch-of-POST semantics vary)
+
+---
+*Pitfalls research for: digest workspace-splitting + RFC 8058 one-click unsubscribe in Projects Studio*
+*Researched: 2026-11-05*

@@ -1,157 +1,145 @@
 # Project Research Summary
 
-**Project:** Projects Studio (gr8r) — v1.8 "Notification Sanity"
-**Domain:** Notification system rework on an existing zero-dependency Node 24 application (reminder cadence, server-side i18n, daily digest email)
-**Researched:** 2026-11-04
+**Project:** Projects Studio — milestone v1.9 (SUBJ: workspace-named digest subjects + UNSUB: RFC 8058 one-click unsubscribe)
+**Domain:** Notification email enhancements for a zero-runtime-dependency self-hosted PM app
+**Researched:** 2026-11-05
 **Confidence:** HIGH
 
 ## Executive Summary
 
-v1.8 reworks gr8r's notification behavior along three axes validated against how Todoist, Asana, Workfront, and ServiceNow actually build this: (1) cap due-date reminders at 2 per task ("due today" + one past-due, then silence) by dropping the `day_before` offset — this is the aggressive end of the industry norm, not a downgrade; (2) localize all server-emitted text (email subject/body, push, inbox snippets) per **recipient** account locale — the per-recipient axis is the universal industry invariant, with English fallback; (3) ship an opt-in daily digest at 09:00 workspace-local time that **replaces** individual reminder emails (Asana's model: digest is an email-channel choice; push/inbox stay real-time), and runs a notification audit whose threshold changes are owner-validated before coding.
+Both features are additive surface work on shipped infrastructure (Phase 38 digest loop, Phase 34 `notif_prefs`, Phase 23 `APP_URL` deep links, existing hand-rolled SMTP mailer). Research is unanimous on the headline: **zero new runtime or dev dependencies.** SUBJ is a rendering-only change — the per-workspace digest split already exists (the send loop iterates workspaces and the claim key `${ws.id}:${user_id}:digest:${localDate}` is already workspace-scoped), so it reduces to a new localized subject key, "Project — Task" line format, and one real piece of new code: RFC 2047 subject encoding + CRLF stripping for user-controlled workspace names in a header (the mailer has only ever written static subjects). UNSUB is the larger surface: two SMTP headers (`List-Unsubscribe` HTTPS + `List-Unsubscribe-Post: List-Unsubscribe=One-Click`), a stateless HMAC token, and the codebase's **first anonymous mutating route** — `POST /unsubscribe/:token` with no cookies, no sameOrigin guard (RFC 8058 forbids that context; the token IS the auth), idempotent convergent semantics (never token-burn/410), and a bare 2xx response.
 
-The recommended approach is remarkable for its smallness: **zero new packages, zero new dev dependencies, zero migrations**. Every capability already exists in the repo — the client catalogues are plain-Node-importable by design (v1.2 decision), `users.locale` and the `email_digest` pref key already exist, the `reminders_sent` dedup ledger accepts new key shapes, and the hand-rolled SMTP client just needs a fourth message builder. The server work is: extend `src/core/i18n.js` with a locale-parameterized `tIn()` (never the module-level locale singleton — that's an interleaving bug in a concurrent server), add `runDigestPass()` as a sibling of `runReminderPass()` in the same 60s tick, and gate suppression in `queueNotifEmails` (the single email choke point), type-scoped to reminder emails only.
+The recommended approach per research: SUBJ first (independent, shippable alone, zero interaction with UNSUB), then UNSUB in two steps (token + headers, then route). HMAC tokens derived from a domain-separated `MASTER_KEY` beat a token table — no migration, no cleanup, old links keep working (correct for a convergent operation), and the token only flips one boolean off. The codebase's exactly-once instincts are the main hazard: unsubscribe is **convergent, not consumed** — repeat POSTs must be identical 200s, and responses must never distinguish valid from stale tokens (404-no-oracle discipline).
 
-The key risks are all in the seams with existing state, and all are code-verified: the `email_digest` stub currently defaults to `true` and must be flipped to explicit opt-in (undefined-falsy, removed from `NOTIF_PREF_DEFAULTS`) or every existing user gets digests on deploy morning; the deploy-day boot catch-up will legitimately fire one-time "due today" bursts that must be announced in release notes; and the i18n build gate only protects what it's told about — server-referenced keys need scan-corpus extension or a regression test, or server strings drift to English silently. None require migrations; all require explicit decisions written down in the phase specs before code.
+Key risks, ranked: (1) **DKIM gap** — RFC 8058 §4 expects one-click only on DKIM-signed mail and the mailer signs nothing; Phase 39 already deferred DKIM to its own milestone, so this milestone ships headers + endpoint with a documented DEPLOY.md caveat (self-hosted instances behind a signing relay get DKIM for free). Do not hand-roll DKIM here. (2) **Header injection via workspace names** (`Foo\r\nBcc: victim@x`) — a CR-class security surface, mitigated by one hardened subject-builder with hostile-name tests. (3) **Project-name leak (CR-01 class)** — task lines enriched with project names must route through the existing `memberCanReadProject` funnel, with private-project and guest-collaborator fixtures. (4) **Token hygiene** — bearer credential in URL paths: redact in logs, never in audit rows, fail-open honestly (omit headers if `MASTER_KEY` unset rather than send a broken link).
+
+One scoping note: PITFALLS.md raises an aggregation-policy D-decision (N emails vs one multi-section email per user). Per the milestone context, **the owner has already decided per-workspace emails** — so the anti-feature ruling stands: one email per workspace, empty digest = no email, per-workspace unsubscribe token. The remaining invariant to protect is Phase 38's suppression rule (digest-on suppresses individual reminders) verified unmodified after the refactor.
 
 ## Key Findings
 
 ### Recommended Stack
 
-**Zero additions.** Nothing to install, nothing to vendor, no Dockerfile change (the Dockerfile already copies `src/` — the v1.2 "server image ships no catalogue" deferral retires itself). All new capability is in-repo logic. Full detail in [STACK.md](./STACK.md).
+Nothing to install — both features ship on Node ≥ 24 built-ins and existing plumbing. Full detail in `.planning/research/STACK.md`.
 
-- **`src/core/i18n.js` + `tIn(locale, key, vars)`** — additive pure function alongside the browser singleton; refactor `t()` onto `tIn()` internally so there's one resolution path. Statically import `src/locales/fr.json` at boot (import attributes, Node ≥ 22 stable).
-- **`Intl.PluralRules` + `Intl.DateTimeFormat` with `timeZone`** — already power plurals and `localParts()`; full-icu built into Node 24. `Intl.MessageFormat` does **not** exist in Node 24 (verified) — the existing `{name}` + plural subset is the ceiling.
-- **`mailer.js` fourth builder (`buildDigestMessage` / `sendDigest`)** — same MIME/boundary/UTF-8 scaffolding as `buildNotifMessage`; keep the mailer a dumb builder with pre-localized strings passed in.
-- **`reminders_sent` ledger with new key namespaces** — `digest:ws:user:localDate` for digests; orphaned `:day_before:` rows go inert (never touch them).
-- **No nodemailer / i18next / node-cron / template engine / DB migration** — all explicitly rejected under the zero-dep rule.
+**Core technologies:**
+- `node:crypto` HMAC — stateless unsubscribe token `HMAC-SHA256(derived(MASTER_KEY), "unsub:" + wsId + ":" + userId)`, base64url; satisfies RFC 8058 §6 opaque/hard-to-forge requirement with **no table and no migration**
+- `crypto.timingSafeEqual` — token validation; prevents forged-unsubscribe vandalism (RFC explicitly calls this attack out)
+- `node:http` existing router — the one structural anomaly: `POST /unsubscribe/:token` authenticates **solely by token**, bypassing `requireWorkspace`, session, sameOrigin, and CSRF (intentionally cross-context; invite-accept route family minus sameOrigin is the template)
+- `node:sqlite` existing accessor — POST upserts `notif_prefs.email_digest=false` for that one (workspace_id, user_id) row (rows are sparse; must create a minimal row when absent)
+- Existing SMTP mailer — two additional headers + RFC 2047 encode-word helper (~15 lines; new capability, not a dependency)
+
+**Explicitly rejected:** npm mail/DKIM libs (breaks the standing zero-dep constraint), `http://` URLs (RFC §3.1 requires HTTPS), 3xx redirects on the POST, per-message nonce tokens (force a write per send and break old links).
 
 ### Expected Features
 
-Full landscape in [FEATURES.md](./FEATURES.md). Ecosystem consensus: 1–2 notifications per task max; digest as a channel choice; per-recipient localization (Trello, ServiceNow).
+Full detail in `.planning/research/FEATURES.md`.
 
 **Must have (table stakes):**
-- Cadence capped at 2 per task: "due today" + past-due **once** the next morning, then silence
-- Per-recipient locale for ALL server-emitted text, EN fallback, EN+FR catalogues complete at commit (i18n gate)
-- Digest email: two sections (due today + overdue), deep-linked items, 09:00 workspace-local
-- Digest ON ⇒ individual reminder emails suppressed (emails only; inbox/push unchanged)
-- Silent digest — send nothing when there's nothing due/overdue
-- Notification audit doc; threshold changes owner-validated BEFORE coding
+- Workspace name in digest subject, localized via new `tFor` key with `{workspace}` slot (EN+FR parity gate) — indistinguishable subjects collide in Gmail threads
+- "Project — Task" task lines (em dash, body-HTML-escaped) — matches Linear/GitHub/GitHub norms of parent context on notification lines
+- `List-Unsubscribe` (HTTPS) + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers on digest emails only
+- Anonymous idempotent POST endpoint; immediate effect (pref read at send time — no scheduler change)
+- `List-Id: <digest.<slug>.<host>>` per workspace (RFC 2919) — list identity + filtering
+- Works while logged out (POST comes from Gmail infrastructure, not the user's browser)
 
 **Should have (differentiators):**
-- "Digest replaces reminders" explained in digest header + settings copy (prevents "where did my reminders go" tickets)
-- Past-due fires exactly once — protect in tests against daily re-fire regressions
+- Token scoped to (workspace, user) with a purpose tag — per-workspace opt-out granularity; can't be replayed against future unsubscribe surfaces
+- Footer note naming which workspace(s) the email covers and which unsubscribe it performs
+- Re-subscribe is the existing Settings toggle — no confirmation flows either direction
 
-**Defer (anti-features):**
-- Per-task custom reminder offsets (the cause of the noise being fixed)
-- Digest content beyond due-today/overdue (mentions, activity, comments)
-- "Digest AND individual emails" (Asana's "both" — more email, not less)
-- New languages / machine translation (out of scope since v1.2)
-- Workspace-locale or Accept-Language localization (wrong axis)
+**Defer (v2+):**
+- DKIM signing — milestone-sized, Phase 39 already deferred it; document the caveat, revisit only if a provider enforces it
+- One-click for other notification types — needs its own audit ruling (D-05 class)
 
 ### Architecture Approach
 
-All server-side changes integrate at verified points in `server.js` / `mailer.js` (full detail in [ARCHITECTURE.md](./ARCHITECTURE.md)). The critical structural insight: **do not compose the digest from reminder notif rows** — the digest reads tasks directly (`remindable()` predicate verbatim, reusing the Phase-29/32 scope chain), because digest users receive no reminder emails and there are no rows to summarize. Suppression lives in `queueNotifEmails` (the single choke point covering boot catch-up, tick, and test route), type-scoped to `due_reminder`/`past_due` only.
+Zero new files, zero migration. The digest loop payload gains additive keys only (`project` on items, `unsubUrl` on the message) — old mailer contract preserved. The claim key stays **byte-identical** (changing it risks duplicate digests on deploy morning via the Phase 37 catch-up window). New components: a ~10-line token helper in server.js and one throttled anonymous POST route. Full detail in `.planning/research/ARCHITECTURE.md`.
 
 **Major components:**
-1. **Server i18n layer** (`tIn()` + boot catalogue import + locale in the existing `authority` JOIN) — leaf, no deps, unblocks everything
-2. **`runReminderPass` (modified)** — drop `day_before`; notif rows store a machine key (`reminderKey(offset)`), inbox snippet localized client-side at render for keyed rows
-3. **`runDigestPass` (new)** — same 09:00 gate via `localParts()`, per-user aggregate, transactional `reminders_sent` claim, one localized email per user
-4. **`queueNotifEmails` (modified)** — recipient locale resolution + type-scoped digest suppression gate
-5. **`NOTIF_PREF_DEFAULTS` (modified)** — `email_digest` removed (undefined-falsy = opt-in); settings copy updated only
+1. Digest loop (server.js:1416) — payload enrichment only; claim/ledger untouched
+2. `buildDigestMessage` (mailer.js:525) — subjectWs key, "Project — Task" lines, header pair, RFC 2047 encode
+3. Unsub token helper — domain-separated HMAC derivation (`sha256(MASTER_KEY + "unsub")`, not the raw AES key); digest sender omits headers entirely if `MASTER_KEY` is unset (honest degradation, never a broken link)
+4. `POST /unsubscribe/:token` — throttle (login-family budget), timing-safe verify, per-workspace prefs upsert, bare 2xx / generic 404-no-oracle
 
 ### Critical Pitfalls
 
-Full list in [PITFALLS.md](./PITFALLS.md) — all code-verified, HIGH confidence.
+Top five; all eight in `.planning/research/PITFALLS.md` with phase mapping.
 
-1. **`email_digest` stub default is `true`** — making the digest real without flipping the default opts in every existing user overnight. Remove the key from `NOTIF_PREF_DEFAULTS` entirely (undefined-falsy = off per the D-09 pattern); test no-row user vs stored-row user produce the same documented outcome.
-2. **The digest must be idempotent across restarts** — email cannot be transactional with SQLite. Claim `reminders_sent` in a transaction first, accept duplicate-on-crash (an annoyance beats a lost day). Boot catch-up: any pass on the same local date may still send the digest.
-3. **Deploy-day catch-up burst** — after removing `day_before`, the next 09:00 pass fires `morning_of` for every currently-due task missing its key. Correct REM-01 behavior, but announce it; digest opt-in partially shields it.
-4. **Never touch `reminders_sent` rows** — orphaned `day_before` keys are inert ballast; a cleanup sweep violates additive-only/byte-identical-boot and risks failing the migration gate.
-5. **i18n drift is invisible to the gate** — the scan covers client literals only. Extend the scan (or add a test) for the server-used key set; grep-guard `Due today: `/`Past due: ` literals; guard every locale against `Intl` RangeError with EN fallback (the per-pass try/catch would otherwise silently kill all reminders for a workspace).
-6. **Type-scoped suppression** — a generic "don't email if digest on" flag would eat mentions/assigns until 09:00. Suppression is reminders-only; test that mention/assign emails still flow with digest on.
+1. **DKIM gap masquerading as compliance** — ship headers + endpoint, but document in DEPLOY.md that Gmail/Yahoo honor one-click only on DKIM-authenticated mail; never claim full RFC 8058 compliance silently
+2. **Header injection / mojibake via workspace names** — one `buildDigestSubject()` with CRLF strip + RFC 2047 encode + folding; hostile-name tests (emoji, `é`, embedded `\r\n`, 200 chars)
+3. **CR-01-class project-name leak** — every line's project name resolved through `memberCanReadProject` at line-build time; private/team-scoped/guest fixtures; policy: omit the prefix rather than invent a placeholder
+4. **Convergent, not consumed** — no token burn, no 410 on replay, identical generic responses for all states; a provider retry after transient failure must not error
+5. **Token hygiene** — bearer credential: redact path in request logs, never in activity-log rows, watch for the old-token rotation question (with HMAC, `MASTER_KEY` rotation invalidates old links — acceptable and must be documented)
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure (dependency-ordered; ARCHITECTURE.md §build order):
+Based on research, suggested phase structure:
 
-### Phase 1: Server Notification i18n
-**Rationale:** Pure additive infrastructure that both other features render through; leaf with no dependencies. Must decide the shared-catalogue contract here — DIGEST depends on it.
-**Delivers:** `tIn()` in `src/core/i18n.js`, boot-time EN+FR catalogue import, recipient locale in the `authority` JOIN, ~15 new EN+FR catalogue keys, server-key scan/regression gate.
-**Addresses:** I18N table stakes (per-recipient locale, EN fallback).
-**Avoids:** Pitfalls 5 (drift) and locale-crash masking; includes the test-migration subtask (source-extraction tests asserting English text).
+### Phase 1: Digest subject — workspace name + Project—Task lines (SUBJ)
+**Rationale:** Fully independent of UNSUB, smallest risk surface, and the user-visible fix for the backlog defect; shippable alone.
+**Delivers:** Localized `subjectWs` catalogue key, "Project — Task" task lines, hardened RFC 2047 subject-builder, EN+FR keys passing the i18n gate.
+**Addresses:** SUBJ table-stakes items 1–2.
+**Avoids:** Pitfalls 6 (encoding/injection) and 7 (name leak — funnel fixtures required); claim key stays byte-identical (Pitfall 5's anti-pattern).
 
-### Phase 2: Reminder Cadence Rework (REM)
-**Rationale:** Smallest risk, directly fixes the feedback that named the milestone; depends on Phase 1 for reminder keys.
-**Delivers:** `day_before` removed, machine-key notif rows with client-side render, `due_reminder` narrowed to "due today" (pref key and toggle unchanged, copy updated), deploy-safe via unchanged dedup keys, release-note copy for the catch-up burst.
-**Addresses:** Cadence table stakes.
-**Avoids:** Pitfall 1/3 (dedup-row temptation, pref semantics).
+### Phase 2: Unsubscribe tokens + List-Unsubscribe headers (UNSUB part 1)
+**Rationale:** Token format must be frozen (test pins) before the route exists; headers are inert without the route but the plumbing is coherent alone.
+**Delivers:** HMAC token helper (domain-separated, purpose-tagged), `unsubUrl` plumbing, both headers in `buildDigestMessage` (omitted when `MASTER_KEY` absent), List-Id header, DEPLOY.md DKIM caveat.
+**Avoids:** Pitfall 1 (https-only URL asserted by raw-header unit test), Pitfall 8 (token hygiene contract written here).
 
-### Phase 3: Daily Digest + Reminder Suppression
-**Rationale:** Composes Phases 1+2 (localized frames, mailer scaffolding; digest lists exactly the surviving offsets). Largest new component.
-**Delivers:** `runDigestPass()` (09:00 gate, per-user aggregate over tasks, transactional claim), `buildDigestMessage`/`sendDigest`, type-scoped suppression in `queueNotifEmails`, `email_digest` default inversion (removed from defaults), settings copy.
-**Addresses:** Digest table stakes + differentiators.
-**Avoids:** Pitfalls 2, 4, 6 (idempotence, default flip, suppression leak, 09:00 collision — snapshot-at-pass semantics, both-orderings test).
-
-### Phase 4: Notification Audit
-**Rationale:** Read-only analysis that must gate any threshold coding (milestone constraint: owner validates thresholds before changes). Runs in parallel from day one as a doc; any code changes it triggers land after Phases 1–3 so they audit the new reality.
-**Delivers:** Audit doc — every notification type × channel × default, trim recommendations, explicit decision on RFC 8058 `List-Unsubscribe` for the digest.
-**Avoids:** Pitfall 11 (post-ship threshold changes re-firing).
+### Phase 3: One-click POST endpoint (UNSUB part 2)
+**Rationale:** Depends on Phase 2's frozen token format; this is the milestone's Phase-30-class security surface and deserves the security-contract-first treatment.
+**Delivers:** Throttled anonymous `POST /unsubscribe/:token` — timing-safe verify, per-workspace `notif_prefs` upsert (creates missing rows), idempotent/convergent, no-oracle responses, GET no-op.
+**Avoids:** Pitfalls 2 and 3 (no-cookie contract, replay semantics); sameOrigin explicitly exempted and documented at the route.
 
 ### Phase Ordering Rationale
 
-- I18N first is forced: REM and DIGEST both render localized text through it.
-- REM before DIGEST: the digest lists the post-REM offsets and its suppression gate interacts with REM's pref semantics; getting cadence stable first makes the digest's content definition unambiguous.
-- The `email_digest` default flip decision belongs in the **spec of whichever phase lands first with pref semantics** — do not let code decide it implicitly.
-- Phases 1 and 2 are independently shippable; Phase 3 must follow both; audit findings gate further threshold edits.
+- SUBJ has zero dependency on UNSUB (confirmed independently by FEATURES and ARCHITECTURE dependency maps) — landing it first delivers user value immediately.
+- UNSUB's natural internal order is token → headers → route: token format is the shared contract; headers are trivial once `unsubUrl` exists; the route is the only genuinely new attack surface and goes last with its own test matrix.
+- If a 2-phase shape is preferred, Phases 2+3 merge cleanly into one UNSUB phase (total surface is still small — ~150 lines + tests).
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3 (Digest):** the idempotence/catch-up window semantics and the 09:00-pass-collision snapshot semantics deserve a deliberate design decision in discuss/spec — research exists but the resend-vs-never trade-off should be explicitly confirmed.
-- **Phase 1 (i18n):** verify whether `scripts/i18n-scan.mjs` scans `server.js`/`mailer.js` (probably not) and pick the server-key gate mechanism; confirm `users.locale` population on real rows.
+- **Phase 3 (POST route):** only because it's the first anonymous mutating route — the security contract (token model, method allow-list, replay posture, response matrix) should be pinned in plan-phase, ideally after a discuss-phase. No external research needed; RFC 8058 is fully covered here.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (REM):** pure logic deletion over verified code paths; the architecture doc already specifies the exact lines. No external research needed.
-- **Phase 4 (Audit):** doc-only, no research beyond the existing code inventory.
+- **Phase 1 (SUBJ):** pure rendering + catalogue work on documented internal patterns (`tFor`, i18n gate, mailer templates).
+- **Phase 2 (token + headers):** HMAC and header emission are long-stable primitives; ARCHITECTURE.md already specifies derivation and fail-open behavior.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Everything read directly from the repo; zero dependencies proposed, so no version risk; Node 24 behavior verified by probes |
-| Features | HIGH | Cadence/digest patterns grounded in Todoist/Asana/Workfront docs; matches gr8r's planned scope |
-| Architecture | HIGH | Every integration point verified against live code (line numbers cited); no assumptions |
-| Pitfalls | HIGH | Derived from live dedup-key format, prefs merge, hour gate — not general lore |
+| Stack | HIGH | RFC 8058 read in full from primary source; everything else is Node built-ins already in the image |
+| Features | HIGH | RFC verified + Gmail/Yahoo bulk-sender rules corroborated across 2024–2026 sources; competitor norms (Linear/GitHub/GitLab) checked |
+| Architecture | HIGH | Every integration claim verified against live code with line numbers (server.js, mailer.js, notification-audit.md) |
+| Pitfalls | HIGH | RFC + vendor requirements + project-local evidence from Phases 27/29/32/34/37/38/39 |
 
-**Overall confidence:** HIGH — this milestone touches well-understood, previously designed (v1.5 REM-01..05) machinery with cited line numbers.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **`i18n-scan.mjs` corpus scope:** unverified whether server files are scanned. Handle: check in Phase 1 planning; extend scan or add a dedicated regression test.
-- **`users.locale` data quality:** unverified that all real rows have non-null locales. Handle: exercise the EN fallback path in tests regardless.
-- **Resend-vs-never digest trade-off:** research recommends claim-then-send with duplicate-on-crash; confirm explicitly in the Phase 3 spec.
-- **`List-Unsubscribe` (RFC 8058) for the digest:** likely deferrable, but the audit must decide and record it.
-- **Catch-up burst communication:** release-notes task for Phase 2 — schedule it deliberately so it isn't dropped.
+- **DKIM posture for this instance's relay:** research recommends ship-with-caveat over in-repo signing; confirm during requirements that the owner accepts the documented DEPLOY.md caveat (and consider whether `List-Unsubscribe-Post` should be env-gated — research favors the caveat, owner rules)
+- **MASTER_KEY rotation semantics:** rotation invalidates previously emailed unsubscribe links — acceptable, but state it in DEPLOY.md and confirm no other consumer depends on old links surviving
+- **Suppression invariant after refactor:** the Phase 38 test asserting "digest-on suppresses individual reminders" must pass **unmodified** — treat as the milestone's highest-value regression test
+- **Deploy timing relative to 09:00:** with the claim key untouched this should be moot, but the transition test (old-shape claim rows fixture → zero sends) is cheap insurance regardless
+- **Subject format choice:** `"{workspace} — {digest}"` vs `"[{workspace}] {digest}"` — research offers both; pick via catalogue frame in discuss-phase, FR house style applies
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct code reads: `server.js` (1100–1432, 5200–5212), `mailer.js`, `src/core/i18n.js`, `src/locales/*.json`, `src/pages/settings.js`, `Dockerfile`, `vite.config.js`
-- `.planning/PROJECT.md` — v1.2 i18n decisions, v1.5 REM-01..05, v1.7 SETTINGS-01..03, v1.8 scope
-- Todoist Help — reminder model (reminders separate from due dates)
-- Asana Help — email notification choices (individual / digest / both)
-- Adobe Workfront — overdue digest per recipient per day
-- ServiceNow Docs — multilingual email notifications in recipient's preferred language
-- Node 24 runtime probes (`Intl.MessageFormat` absent, import attributes stable, full-icu)
+- RFC 8058 (rfc-editor.org) — read in full: §3.1 HTTPS/no-redirect/no-cookies, §3.2 receiver POST semantics, §4 DKIM, §5 headers, §6 opaque-token security, §8 examples
+- Live code: server.js:1416-1601 (digest loop, claim key), server.js:157/414 (timing-safe, keyring), mailer.js:513-624/816-848 (buildDigestMessage, sendDigest), docs/notification-audit.md:89-90 (Phase 39 DKIM deferral)
+- PROJECT.md phases 23/25/29/32/33/34/36/37/38/39, v1.8 CR-01, v1.2 decisions 5/11
 
-### Secondary (MEDIUM confidence)
-- Idalko Trello guide — per-user language detection
-- Ziflow Help — 09:00 digest slot
-- Asana Forum threads — digest expectations
+### Secondary (MEDIUM–HIGH confidence)
+- Gmail Email Sender Guidelines + Yahoo/Microsoft bulk-sender requirements (one-click for bulk senders, honored within two days)
+- RFC 2919 List-Id convention; GitLab per-project List-Id precedent
+- RFC 2369 (legacy mailto remains valid; mixed-URI header allowed), RFC 2047/5322 (encode-words, folding)
 
-### Tertiary (LOW confidence)
-- Artala marketing copy — per-user localized emails (corroborates convergence only)
+### Tertiary (MEDIUM confidence)
+- Scanner/link-prefetch behaviors (SafeLinks, Google proxy) — vendor-documented, exact POST-prefetch semantics vary
 
 ---
-*Research completed: 2026-11-04*
+*Research completed: 2026-11-05*
 *Ready for roadmap: yes*

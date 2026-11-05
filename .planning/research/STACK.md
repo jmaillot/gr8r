@@ -1,118 +1,104 @@
-# Technology Stack — v1.8 "Notification Sanity" additions
+# Stack Research
 
-**Project:** Projects Studio (gr8r)
-**Researched:** 2026-11-04
-**Scope:** stack additions/changes for server-side notification i18n, the daily digest email, and the reminder-offset removal — under the HARD zero-runtime-dependency rule.
+**Domain:** Digest email enhancements — RFC 8058 one-click unsubscribe + per-workspace subject rendering (Projects Studio, zero-runtime-dependency constraint)
+**Researched:** 2026-11-05
+**Confidence:** HIGH (RFC verified from primary source; all recommendations are Node built-ins already in the image)
 
-## Headline verdict
+## Headline Answer
 
-**Zero new packages. Zero new dev dependencies. Zero vendored code.**
+**Zero new runtime dependencies. Zero new dev dependencies.** Both features are pure `node:crypto` + `node:sqlite` + existing mailer/header plumbing. The only genuine stack question RFC 8058 raises is **DKIM signing** — see the decision point below — and even that is implementable with `node:crypto` if the owner chooses in-repo signing.
 
-Every capability this milestone needs already exists in the repo or in Node 24's built-ins:
+---
 
-| New capability | Stack answer | Where it lives |
-|---|---|---|
-| `t()` outside the browser | Reuse `src/core/i18n.js` from the server (it is deliberately leaf, plain-Node testable) + a small locale-parameterized variant | `src/core/i18n.js` (extend) |
-| FR catalogue server-side | Static ESM import of `src/locales/fr.json` + `registerCatalogue('fr', …)` | new import in server.js / i18n.js |
-| Per-recipient locale | Already stored: per-account `locale` column (v1.2), `users.locale` — a JOIN, no migration | existing schema |
-| Daily digest composition | Plain JS grouping over `doc.data.tasks` using the existing `localParts` / `addDaysIso` helpers | `server.js` |
-| Digest email transport | Extend the hand-rolled SMTP client with one `sendDigest` builder — the MIME/boundary/UTF-8 machinery is proven (`buildNotifMessage`) | `mailer.js` |
-| Digest dedup | Existing `reminders_sent` ledger with a new key shape (`…:digest:<due-date>`) — additive, no schema change | `server.js` |
-| Remove `day_before` offset | Pure logic deletion in `runReminderPass` + `reminderSnippet`; zero stack | `server.js` |
+## Recommended Stack
 
-## What IS new (in-repo, hand-rolled)
+### Core Technologies (all already in the image)
 
-### 1. Server-side `t()` — extend `src/core/i18n.js`, don't fork it
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Node.js built-ins | ≥ 24 (current Docker base) | Everything: header emission, HMAC tokens, POST route, sqlite claims | The zero-dep constraint is a standing project decision; nothing here needs more. RFC 8058 needs exactly one HTTPS POST route and two SMTP headers — adding a mail library for this would be net-negative. |
+| `node:crypto` — HMAC | stable | Unsubscribe token: `HMAC-SHA256(APP_SECRET, "unsub:" + workspace_id + ":" + user_id)` → hex/base64url segment in the URL | RFC 8058 §6/§3.1: "The URI SHOULD include an opaque identifier or another hard-to-forge component." A stateless HMAC token satisfies this with **no new table and no migration** — the server recomputes and compares. Alternative (a `unsubscribe_tokens` SQLite table) is also zero-dep but adds a migration and cleanup logic for no gain. |
+| `node:crypto` — timing-safe compare | stable | `crypto.timingSafeEqual()` for token validation | Prevents trivially forged unsubscribe POSTs (an attacker can POST to a victim's unsubscribe URL to unsubscribe them — RFC explicitly calls this out). |
+| `node:http` (existing server.js router) | stable | `POST /w/:slug/unsubscribe` (or a top-level `/unsubscribe/:token` route) | The endpoint must be reachable **without cookies or authorization** (RFC §3.1: "The POST request MUST NOT include cookies, HTTP authorization, or any other context information"). This is the one structural difference from every existing route: it bypasses `requireWorkspace` and authenticates solely by token. |
+| `node:sqlite` | stable | The POST handler flips the existing `notif_prefs.email_digest` row to 0 (same accessor from Phase 34) | Idempotent, additive-only (no schema change at all if tokens are HMAC). Also reuse the transactional-claim pattern if you want exactly-once unsubscribe confirmation. |
+| Hand-rolled SMTP mailer (existing) | — | Emit two additional headers on the digest message | `List-Unsubscribe: <https://APP_URL/unsubscribe/<token>>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. Header injection into the existing fire-and-forget SMTP writer is a one-line addition per header. |
 
-`src/core/i18n.js` was designed for exactly this moment: it imports only the catalogues ("the renderer never enters this module"), guards `import.meta.glob` behind a try/catch that no-ops in plain Node, and skips the `document` mutation when absent. It is importable by `server.js` (both are ESM; server.js already does `import { createMailer } from './mailer.js'`).
+### Supporting Libraries
 
-The one genuine mismatch: the current `t()` reads a **module-level locale singleton** (`getLocale()`), correct for a browser where there is one user per page — wrong for a server sending concurrent emails to recipients with different locales. A per-request or per-recipient loop that calls `setLocale()` between sends works (catalogue loading is async, translation is sync, sends are fire-and-forget), but it is a latent interleaving bug: two queued sends awaited out of order would translate with the wrong locale.
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| *(none)* | — | — | Nothing. RFC 8058 is header syntax + one form-POST endpoint; `List-Unsubscribe=One-Click` is a fixed string. |
 
-**Recommendation: add a locale-parameterized pure function alongside the singleton — do not replace it.**
+### Development Tools
 
-```js
-// src/core/i18n.js — additive; the browser t() stays untouched
-export function tIn(localeCode, key, vars) {
-  const active = catalogues.get(localeCode) || catalogues.get(BASE_LOCALE);
-  // …same resolution/plural/interpolate logic as t(), parameterized.
-}
-```
-
-Refactor `t()` to `tIn(locale, key, vars)` internally so there is exactly one resolution path (one escape hatch = one place to fix). Server call sites pass the recipient's locale resolved from `users.locale` via the existing memberships/users JOIN (`queueNotifEmails` already builds that `authority` map — add `u.locale` to its SELECT). Unknown/null locale falls back to `en` — the same clamping `activateLocale` already does.
-
-**Node-side catalogue loading:** `import.meta.glob` is Vite-only, so the FR catalogue must be statically imported in the i18n module (or read with `node:fs` + `registerCatalogue`). Static import is better: it is parsed once at boot, it ships in the Docker image automatically (this is also the moment the v1.2 deferral "the server image ships no catalogue" gets retired — no Dockerfile change needed since `src/` is copied into the runtime stage), and it keeps the i18n-scan gate authoritative. The EN catalogue is already statically imported (`import en from '../locales/en.json' with { type: 'json' }`) — plain Node ≥22 supports import attributes.
-
-**Plurals and dates:** already solved with zero dependencies. `Intl.PluralRules` (cached per locale in i18n.js) handles FR's `one/many/other`; `Intl.DateTimeFormat` with `timeZone` already powers `localParts()`. `Intl.MessageFormat` does **not** exist in Node 24 (verified: `typeof Intl.MessageFormat === 'undefined'` on v24.21.0) — so no richer ICU syntax; the existing `{name}` + `{n, plural}` subset is the ceiling. Same subset, same house style (no-break space before `:` in FR, curly apostrophe) applies to the new email keys.
-
-**i18n-scan gate:** the new server keys (`notif.digest.subject`, `notif.digest.body`, `notif.reminder.dueToday`, …) land in the same flat `src/locales/{en,fr}.json` catalogues, so `scripts/i18n-scan.mjs` coverage and the EN+FR milestone gate apply unchanged. New keys are EN+FR complete at commit time.
-
-### 2. Digest email — one new builder in `mailer.js`
-
-The SMTP client (`mailer.js`, ~700 lines, `node:net`/`node:tls`/`node:crypto` only) already does the hard parts: EHLO/STARTTLS/AUTH, RFC 2047 header encoding (`encodeWord`), UTF-8 base64 bodies, `multipart/alternative` with boundary + dot-stuffing, `Auto-Submitted: auto-generated`. A digest is not a new transport — it is a **new message builder** following the `buildNotifMessage` pattern:
-
-- `buildDigestMessage(config, { to, locale, workspace, dueToday[], overdue[], url })` — same table-layout HTML + plain-text alternative, a `<ul>` of task links instead of one sentence, subject via `tIn(locale, 'notif.digest.subject', { workspace })`.
-- Add `sendDigest(msg)` next to `sendNotif` in the `createMailer` return object (and a throwing stub in the disabled branch, same as `sendSecurityAlert`).
-- One SMTP session per digest (already the pattern — `new SmtpSession(config)` per send, `destroy()` in `finally`). Digest is fire-and-forget like every other send: failures logged, never surfaced.
-
-No templating library. No `nodemailer`. No `mjml`/`handlebars`. The existing inline-styled HTML template approach (boring, table-based, email-client-proof) is the right one and is already battle-tested in this codebase.
-
-### 3. Digest composition & scheduling — reuse the reminder pass skeleton
-
-The digest runs in the same 09:00 workspace-local window as reminders, so it rides `runReminderPass`'s existing scaffolding: injectable clock, per-workspace `localParts()` hour gate, `TZ_BY_LABEL`, `addDaysIso` string arithmetic, boot catch-up, `reminders_sent` dedup. Grouping is a plain `for` over `doc.data.tasks` filtered by `remindable()` (due === localDate → today; due < localDate → overdue), bucketed per recipient (assignee), gated on the now-real `email_digest` pref.
-
-Dedup key: `${ws.id}:${userId}:digest:${dueDate}` — one digest per user per local day, exactly-once, using the same `insert or ignore` transactional claim. The stub pref needs no migration: it is already in `NOTIF_PREF_KEYS`/`NOTIF_PREF_DEFAULTS` (default `true`; the roadmap may want to flip the default to `false` for opt-in — that is a one-line defaults change, not a stack item).
-
-### 4. `day_before` removal — delete, don't deprecate
-
-No stack. Remove the `localDate >= addDaysIso(due, -1)` branch and the `day_before` string from `reminderSnippet`. Historical `reminders_sent` rows with `:day_before:` keys simply never match again (the key shape includes the offset, so no collision, no migration, no cleanup pass needed — the ledger is append-only history). The `NOTIF_PREF_DEFAULTS.due_reminder` toggle continues to govern "due today" alone.
-
-## Alternatives considered (and rejected under the zero-dep rule)
-
-| Category | Recommended | Alternative | Why not |
-|---|---|---|---|
-| Server i18n | Extend `src/core/i18n.js` with `tIn()` | `i18next` (~40 kB, full framework) | Massively larger than the layer it replaces; the v1.2 decision already measured this: "every candidate library measured is bigger than the layer it would replace." Also `import.meta`-bundled, awkward under plain Node ESM. |
-| Server i18n (2) | `tIn()` pure function | Reusing the singleton `t()` with `setLocale()` per send | Interleaving bug across concurrent fire-and-forget sends; two pipelines to keep in sync. |
-| Message formatting | Existing `{name}` + `Intl.PluralRules` subset | `@formatjs/intl-messageformat`, `ICU4X` | Needs a parser for richer ICU syntax; `Intl.MessageFormat` doesn't exist in Node 24; the subset covers every planned email string. |
-| Email composition | Hand-rolled `buildDigestMessage` in `mailer.js` | `nodemailer`, `email-templates`, `handlebars` | All violate the hard rule; `nodemailer` alone would be the project's first runtime dependency. The SMTP session layer already works and is tested. |
-| Digest scheduling | Inside `runReminderPass` (same tick) | Separate `setInterval` / `node-cron` | `node-cron` is a dependency; a second timer duplicates the clock-injection, boot-catch-up and DST handling the reminder pass already solved. Same 09:00 gate = one window, one set of DST semantics. |
-| Template engine | String building + existing `escapeHtml` | Template libs | The three existing builders show the pattern scales to a fourth; escapeHtml + table HTML is enough for a two-section list email. |
-
-## Versions / platform anchors
-
-| Anchor | Version | Verified |
-|---|---|---|
-| Node runtime | `node:24-alpine` (Dockerfile), `node >= 24` (package.json), local v24.21.0 | ✅ read from repo |
-| `Intl.PluralRules` / `Intl.DateTimeFormat` with `timeZone` | full-icu built into Node since v13 | ✅ used in production code paths today |
-| `Intl.MessageFormat` | does not exist in Node 24 | ✅ `typeof Intl.MessageFormat === 'undefined'` |
-| Import attributes (`import … with { type: 'json' }`) | stable in Node ≥ 22 | ✅ already imported by `src/core/i18n.js` |
-| Runtime npm dependencies | **0** (dev: `@playwright/test` only) | ✅ unchanged by this milestone |
-
-No third-party library is proposed, so no Context7 version pin applies — the honest stack statement is *nothing to install*.
-
-## What NOT to add (zero-dep rule, explicit)
-
-- **No i18n/npm library** — even a "tiny" one. The catalogue files + `tIn()` are smaller than any candidate's install size.
-- **No nodemailer / SMTP library** — `mailer.js` speaks enough SMTP and is proven against the operator's relay.
-- **No scheduler/cron package** — the unref'd 1-minute tick + hour gate + ledger dedup is the scheduler.
-- **No HTML email framework** — one static inline-styled table template, same as the three existing builders.
-- **No database migration** — the digest dedup rides `reminders_sent` with a new key shape; the `email_digest` pref row already exists; `users.locale` already exists. (If the roadmap adds a *per-workspace digest send time*, that would need an additive column — current scope says fixed 09:00, so nothing.)
-- **No Dockerfile change** — `src/` is already copied into the runtime image; the FR catalogue ships automatically. This formally retires the v1.2 out-of-scope note "the server image ships no catalogue."
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `@playwright/test` (existing dev dep) | E2E: click unsubscribe link in a rendered digest | Only for the GET landing-page variant if you add one; the RFC POST path is better covered by a node unit test that fires an `http.request` POST against a test server with a 200/410 expectation. |
+| node:test (existing) | Unit tests: token sign/verify roundtrip, timing-safe mismatch, header emission snapshot | Follows the project's established test conventions. |
 
 ## Installation
 
 ```bash
-# Nothing. Zero new packages — the milestone's stack work is all in-repo:
-#   - extend src/core/i18n.js with tIn() + server-side catalogue registration
-#   - extend mailer.js with buildDigestMessage / sendDigest
-#   - extend server.js: locale JOIN in queueNotifEmails, digest pass, offset removal
-npm ci   # unchanged; suite still runs on the same deps
+# Nothing to install. Both features ship on existing infrastructure.
+npm install    # no-op — package.json unchanged
 ```
+
+## Alternatives Considered
+
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Stateless HMAC token in URL (no migration) | Opaque token stored in a new SQLite table | Only if tokens must be revocable or single-use. For a digest toggle, revocation matters little (the token only flips one boolean to `off`), so HMAC wins on simplicity. |
+| Top-level route `/unsubscribe/<token>` (token encodes workspace+user, route ignores slugs) | Workspace-scoped `POST /w/:slug/unsubscribe?u=<user>&sig=<sig>` | The top-level token route is simpler and matches how one-click POSTs arrive (mail clients POST the URL verbatim, RFC example §8.1). Prefer it — no slug parsing, no workspace-name-in-URL privacy leak. |
+| Hand-rolled DKIM signing in `dkim.js` via `node:crypto.createSign('RSA-SHA256')` over relaxed/relaxed canonicalization | Delegate DKIM to the instance's outbound SMTP relay (common for self-hosted installs: postfix/opendkim, or a transactional relay) | Sign in-repo only if instances send straight from the container without a signing relay. If the deployment already runs postfix or a relay, sign there and keep `dkim.js` out of scope. **Do not buy a dependency (e.g. `mailauth`, `dkim-signer`) — but honestly, hand-rolling DKIM is ~150 lines of canonicalization-fiddly code and the relay route is operationally safer for a self-hosted product.** |
+| `List-Unsubscribe-Post: List-Unsubscribe=One-Click` on digest only | Also on every per-type notification email | Digest first (it's the bulk-mail-shaped message); rolling to all notification email is a trivial follow-up but touches more templates/tests. |
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| Any npm mail/DKIM library (`nodemailer`, `mailauth`, `dkim-signer`, `mailparser`) | Breaks the zero-runtime-dependency standing constraint; the existing hand-rolled SMTP writer already sends headers fine; these libs pull transitive dep trees | Built-in header emission + `node:crypto` for any signing |
+| `http://` unsubscribe URL | RFC 8058 §3.1: "The List-Unsubscribe header field MUST contain one HTTPS URI." Gmail/Outlook additionally require the whole domain be TLS-served | `APP_URL` behind Traefik already terminates TLS — verify `APP_URL` is the public https URL (it must be, since email deep links from Phase 23 use it) |
+| HTTP 3xx redirect on the unsubscribe POST | RFC 8058 §3.1: "MUST NOT return an HTTPS redirect, since redirected POST actions have historically not worked reliably" | Answer `200` (text/plain or tiny HTML) directly |
+| Cookie/session-based auth on the unsubscribe route | RFC forbids cookies/authorization context on the POST; Gmail's POST arrives with zero browser state | HMAC token as the sole authenticator |
+| A per-message (nonce) token | Digests fire daily per user; nonces force a table write per send and stale-token 410s when users click an old email | Stable per-(workspace,user) HMAC — an old digest's link keeps working, which is correct behavior |
+
+## Stack Patterns by Variant
+
+**If the instance sends via a signing SMTP relay (postfix+opendkim, Mailgun, etc.):**
+- Emit the two headers from the hand-rolled mailer and stop there.
+- DKIM coverage of `List-Unsubscribe`/`List-Unsubscribe-Post` happens at the relay; nothing in-repo.
+- This is the recommended v1 of the feature.
+
+**If the instance must sign DKIM in-repo (container sends raw SMTP, no relay):**
+- New hand-rolled `dkim.js`: relaxed/relaxed canonicalization, `rsa-sha256`, `crypto.createSign('RSA-SHA256')` with a PEM key from env (`DKIM_PRIVATE_KEY`, `DKIM_DOMAIN`, `DKIM_SELECTOR`), `h=` covering `from:to:subject:date:message-id:list-unsubscribe:list-unsubscribe-post`.
+- All primitives exist in `node:crypto`; the risk is canonicalization corner cases (header folding, CRLF normalization), mitigated by a fixture test against a known-good signed message.
+- Note: Phase 39's audit already recorded the honest deferral — "one-click deferred to a DKIM milestone" — so the owner is aware DKIM is the real prerequisite, not the headers.
+
+**TLS/APP_URL interaction:** one-click POSTs go to the public `APP_URL` domain, so no server-side TLS code is needed — Traefik terminates HTTPS exactly as for existing deep links (`/w/:slug/task/:key`). The only checks: `APP_URL` must be `https://`, and Traefik must not strip or reject the unauthenticated POST (no sameOrigin/csrf middleware on this route — it is intentionally cross-context).
+
+## Version Compatibility
+
+| Component | Compatible With | Notes |
+|-----------|-----------------|-------|
+| Node ≥ 18 `crypto.timingSafeEqual`, `createHmac` | All | Stable for years; Node 24 base has them. |
+| `node:sqlite` | Node ≥ 22.5 | Already in use since v1.5-era scheduler work. |
+| RFC 8058 | RFC 2369 (List-Unsubscribe), RFC 6376 (DKIM), RFC 7578 (form encoding) | POST body arrives as `application/x-www-form-urlencoded` or `multipart/form-data` — parse defensively but treat the body as opaque (the fixed value is in the header, not the body). |
+| Gmail/Yahoo/Microsoft bulk-sender rules (2024+) | — | Gmail requires one-click support + DKIM/SPF for bulk senders; emitting the headers is what unlocks the "Unsubscribe" button. |
+
+## Feature-Specific Notes (SUBJ — per-workspace subject)
+
+No stack additions at all. The digest send loop already iterates per user and resolves workspace via `tFor()` locale catalogues:
+1. New catalogue keys, e.g. `digest.subject` = `"{workspace} — Digest"` / `"« {workspace} » — Résumé quotidien"` (EN↔FR parity gate applies).
+2. Subject line = workspace `name` interpolated + each task line rendered as `"{projectName} — {taskName}"` — both strings are already in scope in the reminder-pass harness; the em dash is a literal in the template, not a catalogue value.
+3. **Header safety:** workspace/project/task names are user-controlled. The mailer must RFC 2047-encode non-ASCII subjects (`=?UTF-8?B?<base64>?=`) and strip CR/LF from interpolated names to prevent SMTP header injection — a small hardening the existing mailer may not yet do for dynamic subjects (static subjects never exercised it). This is the only real new code in SUBJ, and it's ~15 lines in the mailer.
 
 ## Sources
 
-- `server.js` — NOTIF_PREF_KEYS/PREFS (l.1107–1164), queueNotifEmails (l.1179–1268), reminder pass + localParts/addDaysIso/reminderSnippet (l.1270–1429) — read directly, HIGH confidence
-- `mailer.js` — full SMTP client, buildNotifMessage/buildSecurityAlertMessage/buildInviteMessage pattern — read directly, HIGH confidence
-- `src/core/i18n.js` — leaf-module design, singleton locale, PluralRules caching, Node-safe loader no-op — read directly, HIGH confidence
-- `src/locales/en.json` — flat key → string | plural-object shape — read directly, HIGH confidence
-- `.planning/PROJECT.md` — zero-dep standing constraint, v1.2 decision #12 (server catalogue deferral), Node 24 platform — HIGH confidence
-- Node 24 runtime probes (`node -e`, Dockerfile) — HIGH confidence
+- RFC 8058 (rfc-editor.org, primary text fetched and read in full 2026-11-05) — sender requirements §3.1, header syntax §5, security §6, examples §8 — **HIGH**
+- Gmail Email Sender Guidelines (bulk-sender one-click expectations) — **MEDIUM** (widely known, not re-fetched this session)
+- `.planning/PROJECT.md` — Phase 34 notif_prefs accessor, Phase 23 APP_URL deep links, Phase 39 audit decision record — **HIGH**
+- Node.js `crypto`/`http`/`sqlite` API stability — **HIGH** (long-stable built-ins)
+
+---
+*Stack research for: Projects Studio digest email — RFC 8058 one-click unsubscribe + per-workspace subject*
+*Researched: 2026-11-05*
