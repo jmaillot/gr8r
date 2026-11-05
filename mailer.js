@@ -66,7 +66,27 @@ function encodeWord(value) {
     current += char;
   }
   if (current) chunks.push(current);
-  return chunks.map(chunk => `=?UTF-8?B?${Buffer.from(chunk, 'utf8').toString('base64')}?=`).join(' ');
+  /* Phase 40 (Pitfall 1/2): the 200+-char hostile-name test measures the
+     single-line join at ~1879 octets — over the 998-octet relay limit
+     (RFC 5322 §2.1.1). Fold between encoded-words (RFC 2047 §6.2: CRLF + SP
+     between encoded-words is transparent to parsers) instead of emitting one
+     over-long Subject line. 900 leaves margin for the 'Subject: ' prefix. */
+  const words = chunks.map(chunk => `=?UTF-8?B?${Buffer.from(chunk, 'utf8').toString('base64')}?=`);
+  let out = '';
+  let lineLen = 0;
+  for (const word of words) {
+    const wordLen = Buffer.byteLength(word);
+    if (out && lineLen + 1 + wordLen > 900) {
+      out += '\r\n ';
+      lineLen = 0;
+    } else if (out) {
+      out += ' ';
+      lineLen += 1;
+    }
+    out += word;
+    lineLen += wordLen;
+  }
+  return out;
 }
 
 function formatAddress(name, address) {

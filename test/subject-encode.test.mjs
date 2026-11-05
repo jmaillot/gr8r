@@ -141,14 +141,24 @@ test('D-09: FR accents encode as RFC 2047 =?UTF-8?B? encoded-words (no mojibake)
   assert.equal(decoded, 'Résumé', 'round-trip preserves the accents');
 });
 
-test('D-09: 200+ char emoji-heavy name — no C0 survives, round-trip preserves full input', () => {
+test('D-09: 200+ char emoji-heavy name — no stray C0, round-trip preserves full input', () => {
   const name = 'A'.repeat(200) + '😀'.repeat(200);
   const out = encodeWord(name);
-  assert.ok(!/[\x00-\x1F]/.test(out), 'no C0 control char in output');
+  /* Folding inserts legitimate \r\n SP between encoded-words — exclude it. */
+  assert.ok(!/[\x00-\x1F]/.test(out.replace(/\r\n /g, '')), 'no stray C0 control char in output');
   const decoded = [...out.matchAll(/=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/g)]
     .map(m => Buffer.from(m[1], 'base64').toString('utf8'))
     .join('');
   assert.equal(decoded, name, 'full 400-char name preserved through the encoded-word round-trip');
+});
+
+test('D-09/Pitfall 1: long encoded Subjects fold — no line exceeds 998 octets', () => {
+  const name = 'A'.repeat(200) + '😀'.repeat(200);
+  const out = encodeWord(name);
+  assert.ok(out.includes('\r\n '), 'long name adopts RFC 2047 folding');
+  for (const line of out.split('\r\n ')) {
+    assert.ok(Buffer.byteLength(line) <= 998, `no folded line exceeds 998 octets (got ${Buffer.byteLength(line)})`);
+  }
 });
 
 test('D-09: tab and DEL are stripped BEFORE the encode decision — pure printable ASCII stays unencoded', () => {
