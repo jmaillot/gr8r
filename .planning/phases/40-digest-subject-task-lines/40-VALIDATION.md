@@ -3,9 +3,9 @@ phase: "40"
 slug: "digest-subject-task-lines"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-05"
 ---
 
@@ -40,10 +40,10 @@ created: "2026-11-05"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD at planning | 01 | 1 | SUBJ-01 | T-40-* | claim key `${ws.id}:${user_id}:digest:${localDate}` byte-identical; no double-send | integration | `node --test test/digest.test.mjs` | ✅ / ❌ W0 | ⬜ pending |
-| TBD at planning | 01 | 1 | SUBJ-02 | T-40-02 | invisible project name never appears in text or HTML part (no leak) | integration | `node --test test/digest.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD at planning | 01 | 1 | SUBJ-03 | T-40-01 | CRLF/emoji/accents/200+ names ⇒ one well-formed RFC 2047 Subject, no header injection, no mojibake | unit + integration | `node --test test/subject-encode.test.mjs` | ❌ W0 | ⬜ pending |
-| TBD at planning | 01 | 1 | SC-4 | — | `notif.digest.subjectWs` catalogued EN+FR, i18n scan green | gate | `npm run i18n:scan` | ✅ gate | ⬜ pending |
+| 01-T1/T2 | 01 | 1 | SUBJ-03 | T-40-01 | CRLF/emoji/accents/200+ names ⇒ one well-formed RFC 2047 Subject, no header injection, no mojibake | unit + integration | `node --test test/subject-encode.test.mjs` | ✅ | ✅ green (10/10) |
+| 02-T1 | 02 | 1 | SUBJ-01 | T-40-05 | claim key `${ws.id}:${user_id}:digest:${localDate}` byte-identical; no double-send | integration | `node --test test/digest.test.mjs` | ✅ | ✅ green (16/16 suite) |
+| 02-T2/T3 | 02 | 1 | SUBJ-02 | T-40-06 | invisible project name never appears in text or HTML part (no leak) | integration | `node --test test/digest.test.mjs` | ✅ | ✅ green (no-leak assertion pinned) |
+| gate | 02 | 1 | SC-4 | — | `notif.digest.subjectWs` catalogued EN+FR, i18n scan green | gate | `npm run i18n:scan` | ✅ gate | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,9 +51,17 @@ created: "2026-11-05"
 
 ## Wave 0 Requirements
 
-- [ ] `test/subject-encode.test.mjs` (or equivalent) — hostile-name unit tests for SUBJ-03 (CRLF, emoji, FR accents, 200+ chars)
-- [ ] Two-workspace subject test + `Project — Task` line tests (text & HTML) — SUBJ-01/02
-- [ ] Decide whether `encodeWord` needs exporting for unit tests (A2)
+- [x] `test/subject-encode.test.mjs` — hostile-name unit tests for SUBJ-03 (CRLF, emoji, FR accents, 200+ chars) — created by Plan 01
+- [x] Two-workspace subject test + `Project — Task` line tests (text & HTML) — delivered by Plan 02 (incl. SC-5 fallback + no-leak degrade)
+- [x] A2 decision: `encodeWord` + `truncate` exported as named module exports (Plan 01)
+
+## Validation Audit 2026-11-05
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
 
 ---
 
@@ -67,11 +75,11 @@ created: "2026-11-05"
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-11-05 (execute-phase post-gate audit; full suite 958 pass / 0 fail)
