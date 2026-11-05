@@ -27,7 +27,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 ## Phases
 
-- [ ] **Phase 40: Digest Subject & Task Lines** - Workspace name in the digest subject, "Project — Task" lines, and a hardened RFC 2047 subject builder (SUBJ-01..03)
+- [x] **Phase 40: Digest Subject & Task Lines** - Workspace name in the digest subject, "Project — Task" lines, and a hardened RFC 2047 subject builder (SUBJ-01..03) (completed 2026-11-05)
 - [ ] **Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers** - Stateless HMAC unsubscribe token, List-Unsubscribe/-Post headers on digest mail, footer link preserved, DEPLOY.md DKIM caveat (UNSUB-01, UNSUB-03)
 - [ ] **Phase 42: One-Click Unsubscribe Endpoint** - The codebase's first anonymous mutating route: `POST /unsubscribe/:token` with a security contract first (UNSUB-02)
 
@@ -44,7 +44,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
   3. A workspace name containing CRLF, emoji, accents or 200+ characters produces exactly one well-formed RFC 2047-encoded Subject header through the single tested subject builder — hostile-name tests prove no header injection and no mojibake in FR
   4. All new user-facing/subject strings are catalogued EN+FR and `npm run i18n:scan` stays green (server `notif.*` keys included)
 
-**Plans:** 2/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 40-01-PLAN.md — Hardened `encodeWord` (C0 strip), `truncate` helper, hostile-name tests (SUBJ-03)
@@ -82,7 +82,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Digest Subject & Task Lines | 2/2 | In Progress|  |
+| 40. Digest Subject & Task Lines | 2/2 | Complete    | 2026-11-05 |
 | 41. Unsubscribe Tokens & Headers | 0/? | Not started | - |
 | 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
 

@@ -2,19 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
-current_phase: 40
-current_phase_name: Digest Subject & Task Lines
-status: verifying
-stopped_at: Completed 40-02-PLAN.md
-last_updated: "2026-11-05T13:37:49.734Z"
+current_phase: 41
+current_phase_name: Unsubscribe Tokens & List-Unsubscribe Headers
+status: planning
+stopped_at: Phase 40 complete, ready to plan Phase 41
+last_updated: "2026-11-05T13:58:53.571Z"
 last_activity: 2026-11-05
-last_activity_desc: Phase 40 execution started
-state_head: 80b50df08378bbe00a0ced292d46da538aacf1f5
+last_activity_desc: Phase 40 complete, transitioned to Phase 41
+state_head: dc718a99f69de81e01fcdcf054e4d52aeaa5229f
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
   completed_plans: 2
+  percent: 33
 ---
 
 # STATE.md
@@ -27,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 40 (Digest Subject & Task Lines) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-11-05 — Plan 40-02 executed (bracketed digest subjects + Project — Task lines)
+Phase: 41 — Unsubscribe Tokens & List-Unsubscribe Headers
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-05 — Phase 40 complete, transitioned to Phase 41
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -125,7 +126,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-05T13:37:49.595Z
-Stopped at: Completed 40-02-PLAN.md
+Stopped at: Phase 40 complete, ready to plan Phase 41
 Resume file: None
 
 ## Performance Metrics
