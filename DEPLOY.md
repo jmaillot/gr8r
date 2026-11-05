@@ -827,6 +827,34 @@ If `MASTER_KEY` is unset and users already have 2FA secrets, the server logs a
 deferral line at boot and leaves the plaintext rows untouched; configure the key
 and reboot — the migration retries on its own.
 
+### One-click unsubscribe (RFC 8058)
+
+`MASTER_KEY` has a second duty: when it is set **and** `APP_URL` is `https`,
+digest emails carry `List-Unsubscribe` and `List-Unsubscribe-Post:
+List-Unsubscribe=One-Click` headers built on an HMAC token derived from the
+key. If either condition is missing, both headers are omitted entirely and the
+emails fall back to the plain footer settings link — which renders in every
+digest regardless of the gates. There is no knob to force the headers on: they
+render exactly when the two conditions above hold, and never otherwise.
+
+**DKIM caveat (RFC 8058 §4).** Receiving mail clients honor the one-click
+header only on DKIM-authenticated mail, and DKIM signing does not happen in
+this application — it stays at your instance's SMTP relay. Verify that your
+relay signs outgoing mail (and that the signature covers the
+`List-Unsubscribe` headers); if it does not, mail clients may silently ignore
+the one-click header and show only the plain footer link. That is a degraded
+deliverability experience, not a security failure — ship only once you have
+confirmed your relay signs.
+
+**Rotation invalidates emailed links.** Rotating `MASTER_KEY` (per *Running a
+rotation*) invalidates every previously emailed unsubscribe token: old
+one-click links stop verifying and the email's footer link becomes the only
+working unsubscribe path for older digests. This is expected behavior, not
+data loss — unsubscribe tokens are stateless (no table, no migration), so
+there is nothing to re-wrap. Recipients who click a stale link should use the
+footer settings link instead. (The Phase 42 unsubscribe endpoint will answer
+one-click POSTs without redirecting, per RFC 8058 §3.1.)
+
 ### Discover a key's id
 
 Envelopes in the database are stamped with a key id: the first 8 hex chars of
