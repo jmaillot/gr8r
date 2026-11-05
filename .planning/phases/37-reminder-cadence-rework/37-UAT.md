@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 37-reminder-cadence-rework
 source: [37-01-SUMMARY.md, 37-02-SUMMARY.md, 37-03-SUMMARY.md]
 started: 2026-11-04T14:36:22Z
@@ -46,8 +46,22 @@ blocked: 0
   reason: "User reported: i had the assignment email, but even after a restart and all push/email notifications on, i dont receive anything"
   severity: major
   test: 2
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  root_cause: "Strict hour === 9 emission gate (server.js:1388) defeats the boot catch-up — runReminderPass() at boot (server.js:5324) and the 60s tick only emit during the 09:00 local hour, so a restart after 09:00 emits nothing. Phase 38's digest loop got hour >= 9 catch-up (server.js:1483); the reminder loop was left strict (comment server.js:1481). Tests inject 09:00 only (test/due-reminders.test.mjs:40,121), so the post-09:00 path is untested."
+  artifacts:
+    - path: "server.js"
+      issue: "Line 1388: `if (hour === 9)` gate — only emission path for morning_of/past_due, inert outside 09:00-09:59 local"
+    - path: "server.js"
+      issue: "Lines 5319-5331: boot catch-up + 60s tick call runReminderPass() — inherit the hour gate, catch-up only works if booting during hour 9"
+    - path: "server.js"
+      issue: "Lines 1305-1310, 1411-1412: comments claim 'open window + absent dedup key IS the boot catch-up' — contradicted by the hour gate"
+    - path: "test/due-reminders.test.mjs"
+      issue: "Line 40 (at9), line 121 (REM-01 pins non-09:00 writes nothing): no test exercises a post-09:00 boot"
+  missing:
+    - "Change server.js:1388 to `hour >= 9` — the reminders_sent dedup ledger guarantees exactly-once per (ws, task, assignee, offset, due), so the wider window cannot double-send"
+    - "Update stale comments (server.js:1305-1310, 1411-1412) to describe the catch-up window semantics"
+    - "Update the REM-01 test (test/due-reminders.test.mjs:121) that pins non-09:00 runs write nothing"
+    - "Add a regression test injecting a post-09:00 boot instant (e.g. T14:30:00Z) asserting exactly one late 'Due today' fires"
+  debug_session: ".planning/debug/due-today-reminder-silent-after-restart.md"
 
 - gap_id: G-37-2
   truth: "Settings shows exactly the new phase-37 toggle copy per language, with no stale pre-phase entries"
