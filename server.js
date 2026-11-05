@@ -1586,8 +1586,8 @@ function runReminderPass({ now: at = new Date() } = {}) {
             workspace: ws.name || 'Projects Studio',
             wsSlug: ws.slug,
             appUrl: APP_URL,
-            dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task' })),
-            overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task' })),
+            dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
+            overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
           }).catch(err => logWarn(`digest email → ${r.email}: ${err.message}`));
         }
       }

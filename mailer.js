@@ -585,14 +585,27 @@ function buildDigestMessage(config, msg) {
   }
   const { greeting, subject, dueToday: dueLabel, overdue: overdueLabel, footer } = frame;
 
-  const section = (label, items) => (items.length ? [`${label}:`, ...items.map(t => `- ${t.title}\r\n  ${taskUrl(t)}`)] : []);
+  /* Phase 40 (SUBJ-02): each task line names its parent project —
+     `Project Name — Task Name` (em dash U+2014, D-04). Caps are applied
+     independently BEFORE the join (D-12: truncate(project, 80) +
+     truncate(title, 80)); a falsy project degrades silently to
+     title-only with no 'Unknown project' placeholder (D-06/T-40-06 —
+     server.js resolves names only after inScopeProject +
+     memberCanReadProject, so names arriving here are pre-cleared for
+     THIS recipient and `|| ''` is snapshot defense, not a second
+     visibility path; D-05). The text part is plain text — never
+     escapeHtml'd; the HTML part escapes both href and label AFTER
+     interpolation (T-36-01). A project name containing an em dash
+     renders `A—B — Task` — cosmetic, accepted (D-07). */
+  const taskLabel = t => (t.project ? `${truncate(t.project, 80)} — ${truncate(t.title, 80)}` : truncate(t.title, 80));
+  const section = (label, items) => (items.length ? [`${label}:`, ...items.map(t => `- ${taskLabel(t)}\r\n  ${taskUrl(t)}`)] : []);
   const textBody = [greeting, '', ...section(dueLabel, dueToday), ...section(overdueLabel, overdue), '', footer].join('\r\n');
 
   const htmlItems = items =>
     items
       .map(
         t =>
-          `<li style="margin:0 0 8px"><a href="${escapeHtml(taskUrl(t))}" style="color:#3b5bdb;text-decoration:none">${escapeHtml(t.title)}</a></li>`,
+          `<li style="margin:0 0 8px"><a href="${escapeHtml(taskUrl(t))}" style="color:#3b5bdb;text-decoration:none">${escapeHtml(taskLabel(t))}</a></li>`,
       )
       .join('');
   const htmlSection = (label, items) =>
