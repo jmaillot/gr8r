@@ -169,6 +169,7 @@ None yet.
 | deferred_items | 28-02 TEAM-05 pin born green | acknowledged (intentional no-RED per TDD rules) | 2026-11-02 | v1.6 |
 | deferred_items | DatabaseSync DEP0210 alias | noted (not a v1.7 concern) | 2026-11-02 | — |
 | uat_gaps | test/dependencies.test.mjs Dockerfile COPY-pin (D-12) | out-of-scope, pre-existing (reproduced at 34-05 base 3116272) — allowlist needs the new repo-root listing | 2026-11-03 | v1.7 |
+| deferred_items | 34/deferred-items.md: D-12 COPY-pin allowlist resolved (src/ added, both D-12 tests pass at current tree) | acknowledged | 2026-11-05 | v1.8 |
 
 *(28-02 delTeam undo deferred item is now scheduled — Phase 35 UNDO-01/02.)*
 
