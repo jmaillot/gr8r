@@ -23,7 +23,7 @@ progress:
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** v1.8 Notification Sanity — Phase 39 Notification Audit (doc-only) ready to plan
+- **Current focus:** v1.8 Notification Sanity — complete (all 4 phases done)
 
 ## Current Position
 
@@ -174,8 +174,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-05T10:11:21.000Z
-Stopped at: Phase 39 complete — all phases complete
+Last session: 2026-11-05
+Stopped at: Phase 39 complete, v1.8 milestone ready to close
 Resume file: None
 
 ## Performance Metrics

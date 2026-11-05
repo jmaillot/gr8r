@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-05 after Phase 37*
+*Last updated: 2026-11-05 after Phase 39*
 
 ## Current Milestone: v1.8 Notification Sanity
 
@@ -456,6 +456,15 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   transactional `reminders_sent` claim, `day_before` removed deploy-safely, push_due pref
   removed end-to-end, and a post-09:00 boot catch-up window (`hour >= 9`, REM-06 regression
   pin) — Phase 37 (UAT re-passed live 2026-11-05)
+- ✓ Daily digest email at 09:00 workspace-local with today's + overdue tasks, transactional
+  send claim, strict opt-in (`email_digest`), and individual reminder emails suppressed for
+  digest users while inbox/push rows stay untouched — Phase 38 (DIGEST-01..03; verification
+  7/7, UAT passed)
+- ✓ AUDIT-01/02 — Full notification audit doc (`docs/notification-audit.md`): every type ×
+  channel × default with file:line citations, trim recommendation per row, RFC 8058
+  List-Unsubscribe decision for the digest (plain header proposed; one-click deferred to a
+  DKIM milestone), D-05 owner-validation status column (all rows `proposed` until the owner
+  rules) — Phase 39 (doc-only; verification 5/5, UAT 1/1)
 
 ### Active
 
