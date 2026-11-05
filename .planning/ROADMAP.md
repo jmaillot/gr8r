@@ -116,7 +116,6 @@ Plans:
   3. No threshold or default change from the audit is coded in this milestone without recorded owner validation; the audit ships as documentation only.
 
 **Plans:** 1 plan
-
 - [ ] 39-01-PLAN.md — Create docs/notification-audit.md: per-type audit sections with file:line citations, trim recommendations + D-05 status gate, RFC 8058 decision section; STATE.md mirror line
 
 ## Progress
