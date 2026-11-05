@@ -21,22 +21,55 @@ const SIZES = {
   '200+': 'page.auth.size.xlarge',
 };
 
+/* One theme toggle for both shells, so the entry screens and the rest of the
+   auth family share a single control (and a single data-a site). */
+const themeToggle = () =>
+  `<button class="ibtn" data-a="toggleDark" data-tip="${t('a11y.auth.toggleTheme')}" aria-label="${t('a11y.auth.toggleTheme')}">${ic(effectiveDark() ? 'sun' : 'moon', 16)}</button>`;
 export function authShell(inner, topRight = '') {
-  return `<div class="auth"><div class="auth-top"><div class="row">${topRight}<button class="ibtn" data-a="toggleDark" data-tip="${t('a11y.auth.toggleTheme')}" aria-label="${t('a11y.auth.toggleTheme')}">${ic(effectiveDark() ? 'sun' : 'moon', 16)}</button></div></div>
+  return `<div class="auth"><div class="auth-top"><div class="row">${topRight}${themeToggle()}</div></div>
     <div class="auth-c">${inner}</div>
     <div class="auth-foot" style="padding:18px;font-size:12px" ><span class="faint">${t('page.auth.legal')}</span></div></div>`;
 }
-export const socialBtns = () => `<div class="social">
-  <button class="btn btn-secondary btn-lg" data-a="socialAuth" data-v="Google"><svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>${t('page.auth.continueGoogle')}</button>
-  <button class="btn btn-secondary btn-lg" data-a="socialAuth" data-v="Microsoft"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect width="6.4" height="6.4" fill="#F25022"/><rect x="7.6" width="6.4" height="6.4" fill="#7FBA00"/><rect y="7.6" width="6.4" height="6.4" fill="#00A4EF"/><rect x="7.6" y="7.6" width="6.4" height="6.4" fill="#FFB900"/></svg>${t('page.auth.continueMicrosoft')}</button>
-  <button class="btn btn-secondary btn-lg" data-a="socialAuth" data-v="Apple">${ic('apple', 15)}${t('page.auth.continueApple')}</button></div>`;
+/* ---------- the landing shell: split layout for the two entry screens ---------- */
+/* Left: the brand panel — a fixed dark surface carrying the wordmark and an
+   abstract board built from glass cards. It is decorative by construction:
+   skeleton bars and status dots, no copy, so it needs no catalogue entry and
+   reads the same in both themes. Right: the form column, which scrolls on its
+   own so the panel never moves under the pointer. */
+const abCard = (w1, w2, pill, av = false) =>
+  `<div class="ab-card"><i class="ab-line" style="width:${w1}%"></i><i class="ab-line" style="width:${w2}%"></i><div class="ab-meta"><i class="ab-pill" style="--c:${pill}"></i>${av ? '<i class="ab-av"></i>' : ''}</div></div>`;
+const abCol = (dot, cards) =>
+  `<div class="ab-col"><div class="ab-h"><i class="ab-dot" style="--c:${dot}"></i><i class="ab-line" style="width:54px"></i></div>${cards}</div>`;
+export const brandPanel = () => `<aside class="auth-panel">
+    <div class="auth-panel-body">
+      <p class="auth-panel-line">${t('page.auth.panelLine')}</p>
+      <div class="ab-board" aria-hidden="true">
+        ${abCol('var(--st-todo)', abCard(84, 58, 'var(--violet)', true) + abCard(70, 44, 'var(--amber)') + abCard(62, 38, 'var(--blue)'))}
+        ${abCol('var(--st-progress)', abCard(76, 52, 'var(--teal)', true) + abCard(88, 40, 'var(--rose)') + abCard(66, 46, 'var(--violet)'))}
+        ${abCol('var(--st-done)', abCard(68, 48, 'var(--green)', true) + abCard(52, 34, 'var(--blue)') + abCard(74, 42, 'var(--teal)'))}
+      </div>
+    </div>
+  </aside>`;
+/* The wordmark sits on top of the entry card, at the width the card allows: the
+   lockup is 591×208, so it scales instead of being pinned to a fixed height. */
+const cardLogo = () =>
+  `<img class="auth-card-logo" src="/logo-${effectiveDark() ? 'dark' : 'light'}.svg" alt="${t('a11y.brand')}" width="591" height="208" />`;
+/* `topRight` keeps its old meaning (the header's action), so the data-a / data-v
+   contract of every entry screen is untouched. */
+export function landingShell(inner, topRight = '') {
+  return `<div class="auth auth-split">${brandPanel()}<main class="auth-main">
+    <div class="auth-top"><span class="sp"></span><div class="row">${topRight}${themeToggle()}</div></div>
+    <div class="auth-c">${inner}</div>
+    <div class="auth-foot" style="padding:0 24px 20px;font-size:12px"><span class="faint">${t('page.auth.legal')}</span></div>
+  </main></div>`;
+}
 export const ferr = k => (S.ui.errors[k] ? `<span class="err" id="${k}-err">${ic('circle-alert', 12)}${S.ui.errors[k]}</span>` : '');
 export const icls = k => (S.ui.errors[k] ? 'is-error' : '');
 /* Phase 30 (D-09/D-10): the Microsoft SSO entry renders ONLY when the server's
    /api/config ground truth says OIDC is enabled — never a client-side guess,
    and the false defaults keep it hidden until the config resolves. A real
-   link (browser navigation) — the flow starts with a 302, not XHR. Same
-   socialBtns styling + the four-square Microsoft glyph (brand fills kept). */
+   link (browser navigation) — the flow starts with a 302, not XHR. It is the
+   only third-party sign-in: there is no Google/Apple button. */
 export const ssoBtn = () =>
   api.oidcEnabled
     ? `<div class="social"><a class="btn btn-secondary btn-lg" href="/api/auth/oidc/start"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect width="6.4" height="6.4" fill="#F25022"/><rect x="7.6" width="6.4" height="6.4" fill="#7FBA00"/><rect y="7.6" width="6.4" height="6.4" fill="#00A4EF"/><rect x="7.6" y="7.6" width="6.4" height="6.4" fill="#FFB900"/></svg>${t('page.auth.continueMicrosoft')}</a></div>`
@@ -50,16 +83,15 @@ export function renderAuth() {
     /* D-07 client side: under SSO-only (server ground truth) the password
        form vanishes ENTIRELY — no disabled form, no explanatory message. */
     const ssoOnly = api.oidcSsoOnly;
-    return authShell(
-      `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate style="max-width:560px">
-    <div style="display:flex;justify-content:center">${brandLogo(192)}</div>
+    return landingShell(
+      `<form class="auth-card auth-entry${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate>
+    ${cardLogo()}
     ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.login)}</span></div>` : ''}
-    ${ssoOnly ? '' : `<div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
+    ${ssoOnly ? '' : `<div class="auth-fields"><div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
     <div class="field"><div class="row"><label class="label" for="l-pw">${t('common.password')}</label><span class="sp"></span>${api.enabled ? '' : `<button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">${t('page.auth.forgotPassword')}</button>`}</div>
-      <div class="inwrap"><input class="input input-lg ${icls('pw')}" id="l-pw" type="${S.ui.showPw ? 'text' : 'password'}" autocomplete="current-password" style="padding-right:38px" aria-invalid="${!!e.pw}"><button type="button" class="ibtn ibtn-sm" style="position:absolute;right:5px" data-a="toggleShowPw" aria-label="${S.ui.showPw ? t('page.auth.hidePw') : t('page.auth.showPw')}">${ic(S.ui.showPw ? 'eye-off' : 'eye', 15)}</button></div>${ferr('pw')}</div>
+      <div class="inwrap"><input class="input input-lg ${icls('pw')}" id="l-pw" type="${S.ui.showPw ? 'text' : 'password'}" autocomplete="current-password" style="padding-right:38px" aria-invalid="${!!e.pw}"><button type="button" class="ibtn ibtn-sm" style="position:absolute;right:5px" data-a="toggleShowPw" aria-label="${S.ui.showPw ? t('page.auth.hidePw') : t('page.auth.showPw')}">${ic(S.ui.showPw ? 'eye-off' : 'eye', 15)}</button></div>${ferr('pw')}</div></div>
     <label class="row" style="font-size:13px;gap:8px;cursor:pointer"><input type="checkbox" class="check" id="l-rem" checked>${t('page.auth.rememberMe')}</label>
     <button class="btn btn-primary btn-lg btn-block" data-a="doLogin" id="login-btn">${t('page.auth.signIn')}</button>`}
-    ${api.enabled ? '' : `<div class="or">${t('page.auth.or')}</div>${socialBtns()}`}
     ${api.oidcEnabled ? `${ssoOnly ? '' : `<div class="or">${t('page.auth.or')}</div>`}${ssoBtn()}` : ''}
     ${api.enabled ? (api.allowSignup ? `<p class="auth-foot">${t('page.auth.noAccount')} <button type="button" class="link" data-a="auth" data-v="signup">${t('page.auth.signUp')}</button></p>` : `<p class="auth-foot">${t('page.auth.adminCreates')}</p>`) : `<p class="auth-foot">${t('page.auth.noAccount')} <button type="button" class="link" data-a="auth" data-v="signup">${t('page.auth.signUp')}</button></p>`}</form>`,
       api.enabled ? '' : `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="signup">${t('page.auth.signUp')}</button>`,
@@ -100,16 +132,21 @@ export function renderAuth() {
     <button class="btn btn-secondary btn-lg btn-block" data-a="signOut">${t('palette.signOut')}</button></div>`,
     );
   if (s === 'signup')
-    return authShell(
-      `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doSignup" novalidate>
-    <div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.createYourAccount')}</h1><p class="sub">${api.enabled ? t('page.auth.signupCloud') : t('page.auth.signupFree')}</p>
-    ${api.enabled ? '' : `${socialBtns()}<div class="or">${t('page.auth.orSignupEmail')}</div>`}
-    <div class="field"><label class="label" for="s-name">${t('common.fullName')}</label><input class="input input-lg ${icls('name')}" id="s-name" value="${esc(f.name)}" autocomplete="name" placeholder="Tanjim Islam">${ferr('name')}</div>
-    <div class="field"><label class="label" for="s-email">${t('page.auth.workEmail')}</label><input class="input input-lg ${icls('email')}" id="s-email" type="email" value="" autocomplete="email" placeholder="you@company.com">${ferr('email')}</div>
-    <div class="field"><label class="label" for="s-pw">${t('common.password')}</label><input class="input input-lg ${icls('pw')}" id="s-pw" type="password" data-in="pwStrength" value="${esc(S.ui.pwNew || '')}" autocomplete="new-password">${strengthMeter(S.ui.pwNew || '')}${ferr('pw') || `<span class="hint">${t('common.pwHint')}</span>`}</div>
+    return landingShell(
+      `<form class="auth-card auth-entry${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doSignup" novalidate>
+    <header class="auth-head">
+      ${cardLogo()}
+      <h1>${t('page.auth.createYourAccount')}</h1>
+      ${api.enabled ? `<p class="sub">${t('page.auth.signupCloud')}</p>` : ''}
+    </header>
+    <div class="auth-fields">
+      <div class="field"><label class="label" for="s-name">${t('common.fullName')}</label><input class="input input-lg ${icls('name')}" id="s-name" value="${esc(f.name)}" autocomplete="name" placeholder="Tanjim Islam">${ferr('name')}</div>
+      <div class="field"><label class="label" for="s-email">${t('page.auth.workEmail')}</label><input class="input input-lg ${icls('email')}" id="s-email" type="email" value="" autocomplete="email" placeholder="you@company.com">${ferr('email')}</div>
+      <div class="field"><label class="label" for="s-pw">${t('common.password')}</label><input class="input input-lg ${icls('pw')}" id="s-pw" type="password" data-in="pwStrength" value="${esc(S.ui.pwNew || '')}" autocomplete="new-password">${strengthMeter(S.ui.pwNew || '')}${ferr('pw') || `<span class="hint">${t('common.pwHint')}</span>`}</div>
+    </div>
     <button class="btn btn-primary btn-lg btn-block" data-a="doSignup" id="signup-btn">${t('page.auth.createAccount')}</button>
-    <p class="hint" style="text-align:center">${t('page.auth.termsNote')}</p>
-    <p class="auth-foot">${t('page.auth.haveAccount')} <button type="button" class="link" data-a="auth" data-v="login">${t('page.auth.signIn')}</button></p></form>`,
+    ${api.oidcEnabled ? `<div class="or">${t('page.auth.or')}</div>${ssoBtn()}` : ''}
+    <p class="hint auth-terms">${t('page.auth.termsNote')}</p>    <p class="auth-foot">${t('page.auth.haveAccount')} <button type="button" class="link" data-a="auth" data-v="login">${t('page.auth.signIn')}</button></p></form>`,
       `<button class="btn btn-ghost btn-sm" data-a="auth" data-v="login">${t('page.auth.logIn')}</button>`,
     );
   if (s === '2fa')

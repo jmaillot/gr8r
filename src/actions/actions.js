@@ -3439,11 +3439,6 @@ A.tfaBackToSignIn = async () => {
   S.ui.errors = {};
   render();
 };
-A.socialAuth = el => {
-  if (api.enabled) return toast(t('toast.socialNotConfigured'), { kind: 'info' });
-  el.classList.add('is-loading');
-  setTimeout(() => enterApp(t('toast.signedInWith', { provider: el.dataset.v })), 800);
-};
 A.doJoin = () => {
   const j = S.ui.join;
   if (!j?.token) return;
