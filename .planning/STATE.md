@@ -4,16 +4,16 @@ milestone: v1.8
 milestone_name: Notification Sanity
 current_phase: 37
 current_phase_name: Reminder Cadence Rework
-status: planning
+status: executing
 stopped_at: Phase 38 complete, ready to plan Phase 37
-last_updated: "2026-11-04T20:12:51.994Z"
-last_activity: 2026-11-04
-last_activity_desc: Phase 38 complete, transitioned to Phase 37
-state_head: 7121b667cd56d485600a159147522bbf190776e0
+last_updated: "2026-11-05T08:26:05.294Z"
+last_activity: 2026-11-05
+last_activity_desc: Phase 37 execution started
+state_head: 88b9e19e3b48faccf51720c986e2ea489ecf470e
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 10
+  total_plans: 11
   completed_plans: 10
   percent: 50
 ---
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 37 — Reminder Cadence Rework
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-04 — Phase 38 complete, transitioned to Phase 37
+Phase: 37 (Reminder Cadence Rework) — EXECUTING
+Plan: 4 of 4 (37-04 executed — G-37-3 gap closure; awaiting phase verification)
+Status: Executing Phase 37
+Last activity: 2026-11-05 — 37-04 executed (post-09:00 reminder catch-up, UAT test 2 closed)
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -139,6 +139,8 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - [Phase 38]: 38-02: client NOTIF_PREF_KEYS lists email_digest explicitly — defaults-spread lost it at inversion; whitelist 16 keys both sides
 - [Phase 38]: 38-03: CR-01 fix is a one-line recipient gate (t.assignee === r.member_id) + corrected SCOPE-04 comment; scope checks now evaluate against the recipient via D-06, no second pipeline
 - [Phase 38]: 38-03: Task-3 deviation — plan's proposed resB.digests===0 falsified by correct overdue catch-up (ws digests again on the 01-16 pass); pinned to ===1 with wsB-contributes-zero proven by its own ledger/no-email assertions
+- [Phase 37]: 37-04: reminder emission window widened to hour >= 9 (G-37-3, mirrors the phase-38 digest loop); exactly-once carried by the transactional reminders_sent claim
+- [Phase 37]: 37-04: REM-01 re-scoped to pre-09:00 idle; REM-06 pins the post-09:00 late catch-up (14:30 emit exactly once, 18:00 repeat no-op) — UAT test 2 closed via 3-boot restart scenario
 
 ### Pending Todos
 
@@ -172,8 +174,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-04T20:05:52.632Z
-Stopped at: Phase 38 complete, ready to plan Phase 37
+Last session: 2026-11-05T08:45:00.000Z
+Stopped at: Completed 37-04-PLAN.md (G-37-3 closed; UAT test 2 re-verified)
 Resume file: None
 
 ## Performance Metrics
@@ -202,6 +204,7 @@ Resume file: None
 | Phase 38 P01 | 11 min | 2 tasks | 6 files |
 | Phase 38 P02 | 35m | 3 tasks | 10 files |
 | Phase 38 P03 | 4min | 3 tasks | 2 files |
+| Phase 37 P04 | ~15 min | 2 tasks | 2 files |
 
 *(v1.6 metrics archived with the milestone record.)*
 
