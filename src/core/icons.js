@@ -2,6 +2,7 @@
 import { ICONS } from 'virtual:icons';
 import { esc } from './utils.js';
 import { t } from './i18n.js';
+import { effectiveDark } from './theme.js';
 
 export const _icCache = {};
 export function ic(name, size = 16, cls = '') {
@@ -18,6 +19,12 @@ export const LOGO = (h = 22) =>
   `<svg class="logo" height="${h}" width="${Math.round((h * 1412) / 188)}" viewBox="0 0 1412 188" role="img" aria-label="${t('a11y.brand')}"><path d="${LOGO_D}" fill="currentColor"/></svg>`;
 export const MARK = (px = 22) =>
   `<svg width="${px}" height="${px}" viewBox="0 0 332 332" aria-hidden="true"><rect width="332" height="332" fill="#000"/><path transform="translate(20 146.5) scale(0.2068)" d="${LOGO_D}" fill="#fff"/></svg>`;
+/* The full brand lockup on the landing (auth) page: the themed wordmark files in public/,
+   picked at render time — the auth view re-renders on toggleDark, so the src follows the theme. */
+export const BRAND_W = 591,
+  BRAND_H = 208;
+export const brandLogo = (h = 30) =>
+  `<img class="logo" src="/logo-${effectiveDark() ? 'dark' : 'light'}.svg" alt="${t('a11y.brand')}" height="${h}" width="${Math.round((h * BRAND_W) / BRAND_H)}">`;
 export function wsLogo(w, px = 22) {
   return w && w.brand
     ? `<span class="ws-logo brand" style="width:${px}px;height:${px}px">${MARK(px)}</span>`
