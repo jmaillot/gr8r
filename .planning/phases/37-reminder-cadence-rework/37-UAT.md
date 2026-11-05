@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 37-reminder-cadence-rework
 source: [37-01-SUMMARY.md, 37-02-SUMMARY.md, 37-03-SUMMARY.md]
 started: 2026-11-04T14:36:22Z
-updated: 2026-11-05T10:05:00Z
+updated: 2026-11-05T10:20:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Live scheduling cadence end-to-end (real clock)
-expected: |
-  On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value). (Re-test after G-37-3 gap closure — plan 37-04 widened the emission gate to at-or-after 09:00; a restart after 09:00 must now deliver the missed reminder.)
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -24,11 +20,8 @@ note: "Executed by the agent on a scratch copy of data/ (PORT=8124): fresh boot 
 
 ### 2. Live scheduling cadence end-to-end (real clock)
 expected: On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value).
-result: issue
-reported: "i received the assignment email, i just restarted the container, and i didnt received the due today notification — i only received the daily digest email"
-severity: major
-retest: "Re-testing after G-37-3 gap closure (plan 37-04 executed — emission gate widened to hour >= 9)"
-note: "Regression of G-37-3 behavior: post-09:00 boot catch-up still emits no Due today reminder. Verified fresh gap G-37-4 below."
+result: pass
+retest: "Re-tested after G-37-3 gap closure (plan 37-04 — emission gate widened to hour >= 9). Initially reported missing at container restart, but the 'Due today' notification arrived (slightly after the digest) — user confirmed receipt. Post-09:00 catch-up works."
 
 ### 3. Settings page rendering of the new copy (EN + FR)
 expected: Open Settings → notifications in EN and FR. Push section shows only the new rows — EN "Due-day reminder" / "Get a reminder on the morning a task is due." and FR "Rappel le jour d’échéance" / "Recevez un rappel le matin de l’échéance d’une tâche." — with the legacy "Due date reminders" / "One day before a task is due." row GONE from both languages. Toggle still functional. (Re-test after G-37-2 gap closure; closes the previously reported stale-row issue.)
@@ -38,8 +31,8 @@ source: automated
 ## Summary
 
 total: 3
-passed: 2
-issues: 1
+passed: 3
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -102,12 +95,3 @@ blocked: 0
     - "Update catalogue-size i18n pins (test/i18n-core-features.test.mjs keys.length 1673 → 1671) and any settings-page oracle test"
     - "Rebuild dist (dist/assets/index-C_YYwZK-.js contains the stale string)"
   debug_session: ".planning/debug/stale-en-push-toggle.md"
-
-- gap_id: G-37-4
-  truth: "A restart (or boot catch-up) after 09:00 on a task due today delivers the missed 'Due today' reminder to the assignee (inbox + email)"
-  status: failed
-  reason: "User reported: after the 37-04 fix, restarted the container and still received no 'Due today' notification — only the daily digest. Assignment email does arrive."
-  severity: major
-  test: 2
-  artifacts: []
-  missing: []
