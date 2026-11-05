@@ -39,6 +39,8 @@ const trigger = (nowIso, srv = server) =>
    (valid for the UTC-equivalent London winter label). */
 const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
 const at8 = iso => new Date(`${iso}T08:00:00Z`).toISOString();
+/* Post-09:00 local instant (G-37-3 late catch-up) — 14:30 London winter = 14:30 UTC. */
+const at1430 = iso => new Date(`${iso}T14:30:00Z`).toISOString();
 
 const owners = new Map(); // one shared account PER SERVER — signup is throttled to 5/hour/IP
 
@@ -116,14 +118,14 @@ after(async () => {
   if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-/* ------------------- REM-01: idle tick is a pure read ------------------- */
+/* ------------- REM-01: pre-09:00 ticks are pure reads (G-37-3) ------------- */
 
-test('REM-01: a run outside the 09:00 hour writes nothing — revision unchanged, zero rows', async () => {
+test('REM-01: a run before the 09:00 window opens writes nothing — revision unchanged, zero rows', async () => {
   const { ws, own } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })]);
   const before = revisionOf(ws.slug);
   const emitted = await trigger(at8('2026-01-15'));
-  assert.equal(own(emitted).length, 0, 'no rows emitted off-hour');
-  assert.equal(revisionOf(ws.slug), before, 'idle tick must never bump the workspace revision (SC-5)');
+  assert.equal(own(emitted).length, 0, 'no rows emitted before 09:00 local');
+  assert.equal(revisionOf(ws.slug), before, 'pre-09:00 tick must never bump the workspace revision (SC-5)');
   assert.equal(notifRows(ws.slug).length, 0);
   assert.equal(reminderKeys(ws.id).length, 0);
 });
@@ -170,6 +172,36 @@ test('REM-02/03: due-day morning fires once; second run is a no-op; due-date edi
   const reArmed = own(await trigger(at9('2026-01-16')));
   assert.equal(reArmed.length, 1, 'new due date → new keys → reminders re-arm');
   assert.ok(reArmed.every(n => !emitted.some(e => e.id === n.id)), 'fresh notification rows');
+});
+
+/* ---------- REM-06: post-09:00 late catch-up — restart after 09:00 (G-37-3) ---------- */
+
+test('REM-06: a pass at 14:30 local on the due date emits EXACTLY ONE Due today; repeat tick is a no-op', async () => {
+  const { ws, memberId, own } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })]);
+  const revisionBefore = revisionOf(ws.slug);
+
+  /* Missed the 09:00 hour (server was down / restarted after it): the first
+     tick at-or-after 09:00 delivers the missed reminder late — exactly once
+     via the reminders_sent claim (G-37-3). */
+  const emitted = own(await trigger(at1430('2026-01-15')));
+  assert.equal(emitted.length, 1, 'late catch-up fires exactly one Due today');
+  assert.equal(emitted[0].type, 'due_reminder');
+  assert.equal(emitted[0].to, memberId);
+  assert.match(emitted[0].snippet, /Due today: Ship it/);
+  const keys = reminderKeys(ws.id);
+  assert.equal(keys.length, 1);
+  assert.ok(
+    keys.includes(`${ws.id}:${emitted[0].task}:${memberId}:morning_of:2026-01-15`),
+    'dedup key carries ws, task, assignee, offset and due date',
+  );
+  assert.equal(notifRows(ws.slug).length, 1, 'one notif appended to the doc');
+  assert.equal(revisionOf(ws.slug), revisionBefore + 1, 'one emit → exactly one revision bump');
+
+  /* Repeat tick the same day (18:00): the ledger holds — nothing re-fires. */
+  const repeat = own(await trigger(new Date('2026-01-15T18:00:00Z').toISOString()));
+  assert.equal(repeat.length, 0, 'second post-09:00 pass emits nothing — exactly-once under the widened window (REM-03)');
+  assert.equal(notifRows(ws.slug).length, 1);
+  assert.equal(revisionOf(ws.slug), revisionBefore + 1);
 });
 
 /* CR-01 contract drift: reminder rows must carry the client notif contract —
