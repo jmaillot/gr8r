@@ -267,6 +267,43 @@
 
 ---
 
+## Milestone: v1.8 — Notification Sanity
+
+**Shipped:** 2026-11-05
+**Phases:** 4 | **Plans:** 12
+
+### What Was Built
+- Server notification i18n: locale-parameterized `tFor()` over the shared EN/FR catalogue, per-recipient `u.locale` on the authority query, fully rendered `buildNotifMessage` frame, keyed reminder rows (`key` + send-time `vars`) localized per viewer in the inbox — with the build gate extended to the server `notif.*` namespace and EN⇄FR parity (I18N-01..04)
+- Reminder cadence rework: at most two due-date notifications per task ("due today" morning-of + "past due" the next morning), `day_before` removed deploy-safely (orphaned dedup rows inert, no migration), `push_due` pref retired end-to-end with PUT → 400 (REM-01..04)
+- Opt-in daily digest: localized 09:00 workspace-local email listing due-today + overdue tasks, exactly-once via a disjoint claim ledger, recipient-scoped task filter closing the CR-01 confidentiality leak (proven red-before/green-after), type-scoped suppression of reminder emails only (DIGEST-01..03)
+- Full notification audit doc (`docs/notification-audit.md`, 25 cited rows, RFC 8058 decision with the DKIM one-click split) shipping doc-only under the D-05 owner gate — every trim recommendation `proposed` (AUDIT-01/02)
+
+### What Worked
+- The research-derived build order held: i18n as leaf infrastructure first meant the cadence and digest phases never touched a rendering path twice — zero cross-phase rework for the third milestone running.
+- Red-before/green-after discipline caught a real confidentiality leak (WR-01 multi-member digest pin failed at the base commit before the CR-01 gate landed), the strongest possible evidence shape for a security-adjacent fix.
+- The doc-only phase worked exactly as designed: the audit shipped with zero behavior change, the D-05 gate kept all 25 rows `proposed`, and the epigraph turned inevitable line-number drift into a designed code-drift signal instead of a defect.
+
+### What Was Inefficient
+- The v1.7 lesson regressed on one axis: an out-of-phase commit (Kanzo #9 LOG_LEVEL, `7a7a423`) landed mid-milestone, staling the 36–38 verification digests AND introducing a `logLine`→`logInfo` recursion that took 441 test failures to red territory before being fixed. Out-of-phase work should either re-run the affected verifiers immediately or wait for a milestone boundary.
+- The Phase 37 UAT checkpoint (digest subject workspace/project naming) was deferred to a backlog phase (999.1) mid-close again — small, but it is now the second milestone carrying a deferred UAT follow-up across a close.
+- Nyquist VALIDATION.md files were seeded as `draft` for 3 of 4 phases and never reconciled — the standing gap noted in v1.5 persists.
+
+### Patterns Established
+- "One catalogue, two renderers": emails (`buildNotifMessage`, `buildDigestMessage`) and inbox rows must resolve through the same `tFor` + locale JSON the client ships — a forked server catalogue is a build-gate failure, not a style choice.
+- Disjoint claim-key namespaces in a shared ledger (`ws:task:member:offset:due` vs `ws:user:digest:date`) as the standard for exactly-once scheduling that must not double-send or suppress each other.
+- Suppression gates are type-scoped and email-only: a digest suppresses `email_reminder` fan-out AFTER the row claim commits, so inbox/push state is never lost to an email preference.
+- Owner-gated docs: behavior-changing recommendations ship as documentation with an explicit validation-status column (`proposed`/`validated`/`rejected`) — no code moves against an unruled row.
+
+### Key Lessons
+1. Out-of-phase work is the residual verification risk: shared-file drift from a same-day side commit cost a 441-failure regression and three stale digests. Land out-of-phase changes at milestone boundaries or re-verify immediately.
+2. The digest fingerprint lesson from v1.7 holds, with a caveat: parallel verifier re-runs remain cheap, but they only help when the drift is intra-milestone. External drift (side commits) needs the same immediate response.
+
+### Cost Observations
+- 2 days elapsed (2026-11-04 → 2026-11-05), 147 commits, 106 files, +11 768/−951.
+- Notable: full suite grew 896 → 943 across the milestone; zero new runtime dependencies throughout.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -278,6 +315,7 @@
 | v1.3 Auth Hardening | 2 days | 6 | All 6 phases verified before close, but shared-file edits across phases staled 4 of 6 digests anyway; the close accepted overrides with final-tree evidence (Phase 18 + integration check). Lesson refined: with a shared server.js, per-phase digests cannot all stay fresh — verify the last phase and audit the final tree instead. |
 | v1.5 Reliability & Rotation | 2 days | 5 | The v1.3 lesson applied as-is: digests for 23–26 staled (shared server.js) and the close accepted overrides with Phase 27 final-tree evidence + milestone audit, without debate. Research-derived build order eliminated cross-phase rework; VALIDATION.md drafts remain the standing gap. |
 | v1.7 Team Visibility & Hardening | 2 days | 4 | The v1.3 lesson finally inverted: parallel verifier subagents + mechanical digest realignment refreshed all 4 verifications honestly at close, no overrides. Recipe cloning (membership migration → notif-prefs migration) eliminated migration risk. Digest fingerprinting remains tool-clunky (no canonical recompute command). |
+| v1.8 Notification Sanity | 2 days | 4 | Research-derived build order (i18n leaf first) produced zero cross-phase rework. One out-of-phase side commit (Kanzo #9) staled 3 digests + caused a 441-failure recursion regression; close ran as override_closeout with 1 newly acknowledged + 9 carried-forward deferred items, backed by a passed milestone audit (13/13 requirements, 11/11 wiring, 4/4 flows re-verified at HEAD). |
 
 ### Cumulative Quality
 
@@ -288,6 +326,7 @@
 | v1.3 Auth Hardening | 526 node:test + 55 Chromium e2e | TOTP fixtures (RFC 4226/6238), migration second-boot parity, 401 anonymity matrix, honest-copy guards, i18n-scan build gate | 0 (runtime; vendored qrcode-generator source, no package) |
 | v1.5 Reliability & Rotation | 649 node:test (e2e extended in v1.4 window) | deep-link resolver + redirect-guard pins, audit same-transaction rollback tests, envelope seed matrix + rotation idempotence, scheduler dedup/caught-up/off-hour tests, doc-parsing parity for DEPLOY.md §14 | 0 (runtime) |
 | v1.7 Team Visibility & Hardening | 896 node:test | team-intersect visibility matrix (doc-get/file/reminder/fanout/doc-put), hardening pins (sameOrigin order, spoof whitelist, fail-closed twins), 17-key prefs whitelist + migration second-boot parity, 22-row tokenized-matcher table suite, undo mutex/deadline pins, compose-config parse test | 0 (runtime) |
+| v1.8 Notification Sanity | 943 node:test | server-side i18n build gate (server notif.* key set + EN⇄FR parity), two-offset cadence suite (21 due-reminder tests incl. pre-09:00 purity + catch-up), digest integration suite (send idempotence, suppression matrix, CR-01 multi-member leak pin), prefs round-trip pins (retired push_due → 400) | 0 (runtime) |
 
 ### Top Lessons (Verified Across Milestones)
 

@@ -23,7 +23,7 @@ current_phase: 39
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 - **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** v1.8 Notification Sanity — complete (all 4 phases done)
+- **Current focus:** Awaiting next milestone (v1.8 archived 2026-11-05; backlog holds 999.1 digest-subject follow-up + Phase 39 audit recommendations pending D-05 owner rulings)
 
 ## Current Position
 
@@ -32,7 +32,7 @@ Plan: —
 Status: Awaiting next milestone
 Last activity: 2026-11-05 — Milestone v1.8 completed and archived
 
-## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
+## v1.8 Phase Order (archived 2026-11-05 — all phases complete; see milestones/v1.8-ROADMAP.md)
 
 1. Phase 36 — Server Notification i18n (I18N-01..04; leaf infrastructure — REM and DIGEST
    both render localized text through it; decide the shared-catalogue contract + server-key
@@ -87,6 +87,9 @@ to server notification keys, `email_digest` default inversion decided in spec no
 - ✅ v1.5 Reliability & Rotation — shipped 2026-11-01, archived (audit tech_debt; 16/16 REQs)
 - ✅ v1.6 Team Access & Federation — shipped 2026-11-02 (4 phases, 17 plans, 24/24 REQs,
   803 tests, security audit 17/17 threats closed)
+- ✅ v1.7 Team Visibility & Hardening — shipped 2026-11-04 (4 phases, 12 plans, archived)
+- ✅ v1.8 Notification Sanity — shipped 2026-11-05 (4 phases, 12 plans, 13/13 REQs,
+  archived; audit passed — 1 newly acknowledged + 9 carried-forward deferred items)
 
 ## Accumulated Context
 
@@ -176,7 +179,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-05
-Stopped at: Phase 39 complete, v1.8 milestone ready to close
+Stopped at: v1.8 milestone closed and archived (tag pending)
 Resume file: None
 
 ## Performance Metrics
