@@ -1,8 +1,9 @@
 ---
-status: investigating
+status: resolved
 trigger: "assignment email received, but no due-today reminder (inbox/push/email) even after restart with all notification prefs on"
 created: 2026-11-05T00:00:00Z
-updated: 2026-11-05T00:00:00Z
+updated: 2026-11-05T10:25:00Z
+resolution: "Confirmed: strict hour === 9 gate defeated boot catch-up. Fixed by gap-closure plan 37-04 (emission gate widened to hour >= 9 + REM-06 regression pin). UAT test 2 re-passed on live instance 2026-11-05 — human confirmed the 'Due today' notification after a post-09:00 restart."
 ---
 
 ## Current Focus
