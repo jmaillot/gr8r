@@ -1301,13 +1301,17 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
 /* =======================================================================
    Due-date reminder scheduler (phase 27, REM-01..REM-05).
 
-   D-27-1: both reminder offsets fire at 09:00 in the workspace's shared
-   timezone. D-27-2: the pass runs at boot (restart catch-up — window-open
-   predicates + the reminders_sent ledger make a replay pass harmless) and
-   every minute from an unref'd interval. D-27-3: the past-due nudge fires at
-   the first 09:00 after the due date passes, exactly once. Idle ticks (hour
-   !== 9) are pure reads: no claim, no doc write, no revision bump (REM-01 /
-   SC-5 — this gate MUST precede any write).
+   D-27-1: both reminder offsets target 09:00 in the workspace's shared
+   timezone. D-27-2: the pass runs at boot (restart catch-up) and every
+   minute from an unref'd interval. D-27-3: the past-due nudge fires at the
+   first 09:00 after the due date passes, exactly once. The emission window
+   is AT-OR-AFTER 09:00 local (Phase 37/38 — mirrors the digest loop): the
+   pass is a pure read only BEFORE 09:00 local; from the first tick at-or-
+   after 09:00 the window-open predicates plus the reminders_sent ledger
+   deliver any missed emission late (boot restart, downtime, delayed boot),
+   exactly once per (workspace, task, assignee, offset, due) — the claim
+   commits in the same transaction as the notif append (REM-03 / SC-5:
+   no claim, no doc write, no revision bump on any idle tick before 09:00).
    ======================================================================= */
 
 /* A1 resolved (plan 27-01 task 1): `tz` is a per-member profile field — the
@@ -1382,10 +1386,14 @@ function runReminderPass({ now: at = new Date() } = {}) {
       const { date: localDate, hour } = localParts(workspaceTzLabel(doc, ws.id), at);
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
-      /* D-27-1 hour gate: reminder emission only at the 09:00 local tick —
-         idle hours stay pure reads (no claim, no doc write, no revision
-         bump; REM-01 / SC-5). */
-      if (hour === 9) for (const t of tasks) {
+      /* D-27-1 window gate: reminder emission opens AT the 09:00 local tick
+         and stays catch-up-eligible for the rest of the day (Phase 37/38,
+         mirroring the digest loop below). The reminders_sent ledger — its
+         claim commits in the same transaction as the notif append — makes
+         the wider window exactly-once per (workspace, task, assignee,
+         offset, due); ticks before 09:00 stay pure reads (REM-01 / SC-5:
+         no claim, no doc write, no revision bump). */
+      if (hour >= 9) for (const t of tasks) {
         const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
         /* SCOPE-04: a scoped member is never reminded about content outside
@@ -1409,7 +1417,9 @@ function runReminderPass({ now: at = new Date() } = {}) {
         if (!projectScope(assigneeMembership) && !memberCanReadProject(project, ws.id, t.assignee)) continue;
         const due = t.due;
         /* Window-open predicates on plain YYYY-MM-DD string compare — the
-           open window plus an absent dedup key IS the boot catch-up. */
+           open window plus an absent dedup key is the late-delivery
+           catch-up for ANY tick at-or-after 09:00 local (restart, downtime,
+           delayed boot), not only during the 09:00 hour. */
         const offsets = [];
         if (prefs.due_reminder !== false) {
           if (localDate >= due) offsets.push('morning_of');
@@ -1477,8 +1487,10 @@ function runReminderPass({ now: at = new Date() } = {}) {
          the rest of the day — a missed 09:00 (downtime, restart) delivers
          late at the next tick, with content computed at the send instant.
          Exactly-once per (workspace, user, localDate) comes from the claim,
-         so the wider window cannot double-send. The REMINDER loop above
-         keeps its strict hour === 9 gate untouched.
+         so the wider window cannot double-send. Both loops share the same
+         at-or-after-09:00 catch-up window (Phase 37 alignment), each
+         exactly-once via its own claim (reminders_sent for reminders /
+         digest claim for digests).
          ===================================================================== */
       if (hour >= 9) for (const r of db
         .prepare('select m.member_id, m.user_id, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
