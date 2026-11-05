@@ -5,17 +5,16 @@ milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 41
 current_phase_name: Unsubscribe Tokens & List-Unsubscribe Headers
 status: planning
-stopped_at: Phase 40 complete, ready to plan Phase 41
-last_updated: "2026-11-05T13:58:53.571Z"
+stopped_at: Phase 41 context gathered
+last_updated: "2026-11-05T14:30:45.940Z"
 last_activity: 2026-11-05
 last_activity_desc: Phase 40 complete, transitioned to Phase 41
-state_head: dc718a99f69de81e01fcdcf054e4d52aeaa5229f
+state_head: 8807cab3888578e5a18001ecb9887a1d1c1de6d5
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 2
   completed_plans: 2
-  percent: 33
 ---
 
 # STATE.md
@@ -25,6 +24,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-05)
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
+
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
 **Current focus:** Phase 41 — Unsubscribe Tokens & List-Unsubscribe Headers
 
@@ -127,9 +127,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-05T13:37:49.595Z
-Stopped at: Phase 40 complete, ready to plan Phase 41
-Resume file: None
+Last session: 2026-11-05T14:30:45.702Z
+Stopped at: Phase 41 context gathered
+Resume file: .planning/phases/41-unsubscribe-tokens-list-unsubscribe-headers/41-CONTEXT.md
 
 ## Performance Metrics
 
