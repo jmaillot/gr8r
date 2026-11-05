@@ -44,11 +44,11 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
   3. A workspace name containing CRLF, emoji, accents or 200+ characters produces exactly one well-formed RFC 2047-encoded Subject header through the single tested subject builder — hostile-name tests prove no header injection and no mojibake in FR
   4. All new user-facing/subject strings are catalogued EN+FR and `npm run i18n:scan` stays green (server `notif.*` keys included)
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans executed
 
 Plans:
 - [x] 40-01-PLAN.md — Hardened `encodeWord` (C0 strip), `truncate` helper, hostile-name tests (SUBJ-03)
-- [ ] 40-02-PLAN.md — `[WS]` subject via `subjectWs` key, server-side project resolution, `Project — Task` lines, digest test extensions (SUBJ-01/02)
+- [x] 40-02-PLAN.md — `[WS]` subject via `subjectWs` key, server-side project resolution, `Project — Task` lines, digest test extensions (SUBJ-01/02)
 
 ### Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers
 
@@ -82,7 +82,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Digest Subject & Task Lines | 1/2 | In Progress|  |
+| 40. Digest Subject & Task Lines | 2/2 | In Progress|  |
 | 41. Unsubscribe Tokens & Headers | 0/? | Not started | - |
 | 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
 

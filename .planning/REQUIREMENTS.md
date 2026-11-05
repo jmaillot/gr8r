@@ -8,10 +8,10 @@
 
 ### SUBJ — Digest context (Backlog 999.1, deferred from Phase 37 UAT Test 2)
 
-- [ ] **SUBJ-01**: A digest user receives one digest email per workspace, with the Workspace
+- [x] **SUBJ-01**: A digest user receives one digest email per workspace, with the Workspace
   name in the subject (2 emails if in two workspaces); the existing per-(workspace, user)
   ledger claim key stays byte-identical — no double sends on deploy day
-- [ ] **SUBJ-02**: Each task line in the digest reads "Project Name — Task Name"; degrades to
+- [x] **SUBJ-02**: Each task line in the digest reads "Project Name — Task Name"; degrades to
   task-name-only when the project is unknown or invisible to the recipient (names resolved
   through the single `hiddenFor`/`memberCanReadProject` funnel — no CR-01-class leak)
 - [x] **SUBJ-03**: User-controlled names in email headers (Subject) are CRLF-stripped and
@@ -60,8 +60,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUBJ-01 | Phase 40 | Pending |
-| SUBJ-02 | Phase 40 | Pending |
+| SUBJ-01 | Phase 40 | Complete |
+| SUBJ-02 | Phase 40 | Complete |
 | SUBJ-03 | Phase 40 | Complete |
 | UNSUB-01 | Phase 41 | Pending |
 | UNSUB-02 | Phase 42 | Pending |

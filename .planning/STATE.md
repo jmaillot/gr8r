@@ -4,17 +4,17 @@ milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 40
 current_phase_name: Digest Subject & Task Lines
-status: executing
-stopped_at: Completed 40-01-PLAN.md
-last_updated: "2026-11-05T13:16:48.665Z"
+status: verifying
+stopped_at: Completed 40-02-PLAN.md
+last_updated: "2026-11-05T13:37:49.734Z"
 last_activity: 2026-11-05
 last_activity_desc: Phase 40 execution started
-state_head: c2d8a7ce58eefaccc687115899edfff1191b62f3
+state_head: 80b50df08378bbe00a0ced292d46da538aacf1f5
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # STATE.md
@@ -29,8 +29,8 @@ progress:
 
 Phase: 40 (Digest Subject & Task Lines) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-11-05 — Phase 40 execution started
+Status: Phase complete — ready for verification
+Last activity: 2026-11-05 — Plan 40-02 executed (bracketed digest subjects + Project — Task lines)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -92,6 +92,7 @@ runtime dependencies, zero migrations, full suite green.
   the first anonymous MUTATING route — invite-accept family minus sameOrigin is the shape
 - [Phase 40]: 40-01: RFC 2047 folding adopted for encodeWord (Pitfall 1/2 fired — 1879 octets single-line); folded at 900 octets/line
 - [Phase 40]: 40-01: encodeWord + truncate exported as named exports for tests (A2); send API unchanged
+- [Phase 40]: 40-02: SC-5 digest fallback tested via poisoned catalogue on exported buildDigestMessage (Plan 01 A2 precedent); FR digest subjects use NBSP before ':' (pre-existing typography breach fixed)
 
 ### Pending Todos
 
@@ -123,8 +124,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-05T13:16:41.971Z
-Stopped at: Completed 40-01-PLAN.md
+Last session: 2026-11-05T13:37:49.595Z
+Stopped at: Completed 40-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -133,6 +134,7 @@ Resume file: None
 |------|----------|-------|-------|
 | *(v1.9 — no plans executed yet)* | | | |
 | Phase 40 P01 | 14m | 3 tasks | 2 files |
+| Phase 40 P02 | 35m | 3 tasks | 6 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
