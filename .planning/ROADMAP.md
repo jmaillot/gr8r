@@ -42,7 +42,11 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
   2. Each digest task line reads "Project Name — Task Name" (em dash, HTML-escaped); when the project is unknown or invisible to the recipient (private/team-scoped, resolved through the single `memberCanReadProject` funnel), the line degrades to task-name-only — no name leak
   3. A workspace name containing CRLF, emoji, accents or 200+ characters produces exactly one well-formed RFC 2047-encoded Subject header through the single tested subject builder — hostile-name tests prove no header injection and no mojibake in FR
   4. All new user-facing/subject strings are catalogued EN+FR and `npm run i18n:scan` stays green (server `notif.*` keys included)
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 40-01-PLAN.md — Hardened `encodeWord` (C0 strip), `truncate` helper, hostile-name tests (SUBJ-03)
+- [ ] 40-02-PLAN.md — `[WS]` subject via `subjectWs` key, server-side project resolution, `Project — Task` lines, digest test extensions (SUBJ-01/02)
 
 ### Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers
 **Goal**: Digest emails carry RFC 8058 one-click unsubscribe headers built on a stateless, test-pinned HMAC token — the frozen contract the endpoint will consume
@@ -72,7 +76,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Digest Subject & Task Lines | 0/? | Not started | - |
+| 40. Digest Subject & Task Lines | 0/2 | Not started | - |
 | 41. Unsubscribe Tokens & Headers | 0/? | Not started | - |
 | 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
 
