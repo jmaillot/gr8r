@@ -128,4 +128,12 @@ Plans:
 
 ## Backlog
 
-*(Empty — candidates from the Phase 39 audit (per-task offsets, digest content beyond due-today/overdue, RFC 8058 unsubscribe headers) land here only if the owner validates them.)*
+### Phase 999.1: Follow-up — Phase 37 deferred UAT follow-up: Test 2 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 37 verification
+**Source phase:** 37
+**Deferred at:** 2026-11-05 during /gsd-verify-work 37 session completion
+**Follow-ups:**
+- [ ] Test 2: Add the Workspace name in the digest email subject (2 notifications if in two workspaces), and for each task, the Project Name just before the TaskName (deferred 2026-11-05)
+
+*(Other candidates from the Phase 39 audit (per-task offsets, digest content beyond due-today/overdue, RFC 8058 unsubscribe headers) land here only if the owner validates them.)*
