@@ -52,7 +52,7 @@ export function renderAuth() {
     const ssoOnly = api.oidcSsoOnly;
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate>
-    <div style="display:flex;justify-content:center">${brandLogo(44)}</div><h1>${t('page.auth.welcomeBack')}</h1><p class="sub">${t('page.auth.signInTo')} ${esc(D().ws.name)}</p>
+    <div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.welcomeBack')}</h1><p class="sub">${t('page.auth.signInTo')} ${esc(D().ws.name)}</p>
     ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.login)}</span></div>` : ''}
     ${ssoOnly ? '' : `<div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
     <div class="field"><div class="row"><label class="label" for="l-pw">${t('common.password')}</label><span class="sp"></span>${api.enabled ? '' : `<button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">${t('page.auth.forgotPassword')}</button>`}</div>
@@ -74,7 +74,7 @@ export function renderAuth() {
     // The address already has an account: joining means signing in, not signing up.
     if (j.existing)
       return authShell(
-        `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${brandLogo(44)}</div><h1>${t('page.auth.joinTitle', { name: esc(j.workspace?.name || D().ws.name) })}</h1><p class="sub">${t('page.auth.existingBody', { email: esc(j.email || t('page.auth.thisAddress')) })}</p>
+        `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.joinTitle', { name: esc(j.workspace?.name || D().ws.name) })}</h1><p class="sub">${t('page.auth.existingBody', { email: esc(j.email || t('page.auth.thisAddress')) })}</p>
     ${S.ui.errors.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(S.ui.errors.login)}</span></div>` : ''}
     <button class="btn btn-primary btn-lg btn-block" data-a="auth" data-v="login">${ic('log-in', 15)}${t('page.auth.signInAndJoin')}</button>
     ${api.oidcEnabled ? `<div class="or">${t('page.auth.or')}</div>${ssoBtn()}` : ''}
@@ -83,7 +83,7 @@ export function renderAuth() {
     const email = j.email || S.ui.af.email;
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doJoin" novalidate>
-    <div style="display:flex;justify-content:center">${brandLogo(44)}</div><h1>${t('page.auth.joinTitle', { name: esc(j.workspace?.name || D().ws.name) })}</h1><p class="sub">${t('page.auth.joinSubtitle')}</p>
+    <div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.joinTitle', { name: esc(j.workspace?.name || D().ws.name) })}</h1><p class="sub">${t('page.auth.joinSubtitle')}</p>
     ${e.join ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.join)}</span></div>` : ''}
     <div class="field"><label class="label" for="j-name">${t('common.fullName')}</label><input class="input input-lg ${icls('name')}" id="j-name" value="${esc(S.ui.af.name || '')}" autocomplete="name" autofocus placeholder="${t('a11y.auth.yourName')}">${ferr('name')}</div>
     <div class="field"><label class="label" for="j-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="j-email" type="email" value="${esc(email)}" autocomplete="email" ${j.email ? 'readonly' : ''}>${ferr('email') || (j.email ? `<span class="hint">${t('page.auth.inviteForAddress')}</span>` : '')}</div>
@@ -94,7 +94,7 @@ export function renderAuth() {
   }
   if (s === 'no-workspace')
     return authShell(
-      `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${brandLogo(44)}</div>
+      `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${brandLogo(96)}</div>
     <h1>${t('page.auth.noWorkspaceTitle')}</h1><p class="sub">${t('page.auth.noWorkspaceBody')}</p>
     <div class="panel" style="padding:12px 14px;display:flex;gap:10px;align-items:center">${ic('mail', 15)}<span class="muted" style="font-size:13px">${t('page.auth.signedInAs')} ${esc(api.user?.email || S.ui.af.email || t('page.auth.you'))}</span></div>
     <button class="btn btn-secondary btn-lg btn-block" data-a="signOut">${t('palette.signOut')}</button></div>`,
@@ -102,7 +102,7 @@ export function renderAuth() {
   if (s === 'signup')
     return authShell(
       `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doSignup" novalidate>
-    <div style="display:flex;justify-content:center">${brandLogo(44)}</div><h1>${t('page.auth.createYourAccount')}</h1><p class="sub">${api.enabled ? t('page.auth.signupCloud') : t('page.auth.signupFree')}</p>
+    <div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.createYourAccount')}</h1><p class="sub">${api.enabled ? t('page.auth.signupCloud') : t('page.auth.signupFree')}</p>
     ${api.enabled ? '' : `${socialBtns()}<div class="or">${t('page.auth.orSignupEmail')}</div>`}
     <div class="field"><label class="label" for="s-name">${t('common.fullName')}</label><input class="input input-lg ${icls('name')}" id="s-name" value="${esc(f.name)}" autocomplete="name" placeholder="Tanjim Islam">${ferr('name')}</div>
     <div class="field"><label class="label" for="s-email">${t('page.auth.workEmail')}</label><input class="input input-lg ${icls('email')}" id="s-email" type="email" value="" autocomplete="email" placeholder="you@company.com">${ferr('email')}</div>
@@ -138,7 +138,7 @@ export function renderAuth() {
     <button class="btn btn-primary btn-lg btn-block" data-a="auth" data-v="reset">${t('page.auth.openResetLink')}</button><div class="alert info">${ic('info', 14)}<span>${t('page.auth.prototypeNote')}</span></div>
     <p class="auth-foot">${t('page.auth.noEmail')} <button class="link" data-a="resend" data-v="reset">${t('page.auth.resendEmail')}</button></p><p class="auth-foot"><button class="link row" style="display:inline-flex;gap:6px" data-a="auth" data-v="login">${ic('arrow-left', 14)}${t('page.auth.backToSignIn')}</button></p></div>`);
   if (s === 'reset')
-    return authShell(`<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doReset" novalidate><div style="display:flex;justify-content:center">${brandLogo(44)}</div><h1>${t('page.auth.chooseNewPw')}</h1><p class="sub">${t('page.auth.for')} ${esc(f.email)}</p>
+    return authShell(`<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doReset" novalidate><div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.chooseNewPw')}</h1><p class="sub">${t('page.auth.for')} ${esc(f.email)}</p>
     <div class="field"><label class="label" for="r-pw">${t('page.auth.newPassword')}</label><input class="input input-lg ${icls('pw')}" id="r-pw" type="password" data-in="pwStrength" value="${esc(S.ui.pwNew || '')}" autocomplete="new-password">${strengthMeter(S.ui.pwNew || '')}${ferr('pw')}</div>
     <div class="field"><label class="label" for="r-pw2">${t('page.auth.confirmPassword')}</label><input class="input input-lg ${icls('pw2')}" id="r-pw2" type="password" autocomplete="new-password">${ferr('pw2')}</div>
     <button class="btn btn-primary btn-lg btn-block" data-a="doReset" id="reset-btn">${t('page.auth.resetPassword')}</button></form>`);
