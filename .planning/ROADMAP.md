@@ -64,7 +64,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 41-01-PLAN.md — Token helpers + gated RFC 8058 headers + footer link, end-to-end (tracer) + format-freeze tests
+- [x] 41-01-PLAN.md — Token helpers + gated RFC 8058 headers + footer link, end-to-end (tracer) + format-freeze tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 41-02-PLAN.md — Gate-negative integration tests (D-05) + DEPLOY.md DKIM/rotation subsection
@@ -88,7 +88,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 40. Digest Subject & Task Lines | 2/2 | Complete    | 2026-11-05 |
-| 41. Unsubscribe Tokens & Headers | 0/? | Not started | - |
+| 41. Unsubscribe Tokens & Headers | 1/2 | In Progress|  |
 | 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
 
 ## Backlog
