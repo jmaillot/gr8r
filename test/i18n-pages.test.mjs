@@ -40,9 +40,7 @@ const TABLES = [
     // the shell
     ['a11y.auth.toggleTheme', undefined, 'Toggle theme'],
     ['page.auth.legal', undefined, '© 2026 Projects Studio · Terms · Privacy'],
-    ['page.auth.continueGoogle', undefined, 'Continue with Google'],
     ['page.auth.continueMicrosoft', undefined, 'Continue with Microsoft'],
-    ['page.auth.continueApple', undefined, 'Continue with Apple'],
     // sign in
     ['page.auth.welcomeBack', undefined, 'Welcome back'],
     ['page.auth.signInTo', undefined, 'Sign in to'],
@@ -79,7 +77,6 @@ const TABLES = [
     ['page.auth.you', undefined, 'you'],
     ['page.auth.createYourAccount', undefined, 'Create your account'],
     ['page.auth.signupCloud', undefined, 'You can create or join a workspace next.'],
-    ['page.auth.signupFree', undefined, 'Free for up to 3 members. No credit card required.'],
     ['page.auth.workEmail', undefined, 'Work email'],
     ['page.auth.createAccount', undefined, 'Create account'],
     ['page.auth.termsNote', undefined, 'By creating an account you agree to the Terms and Privacy Policy.'],
@@ -541,10 +538,9 @@ test('the allow-list lost every entry of the three page files and stays sorted',
 test('the auth page data-a and data-v sites are byte-identical', () => {
   const src = read('src/pages/auth.js');
   const a = [...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]);
-  assert.equal(a.length, 39, a.join(',')); // +2 for the 2FA login card (17-02): doTfaLogin / tfaBackToSignIn; +1: the invitations card signOut (30-04)
+  assert.equal(a.length, 36, a.join(',')); // +2 for the 2FA login card (17-02): doTfaLogin / tfaBackToSignIn; +1: the invitations card signOut (30-04); −3: the Google/Microsoft/Apple demo buttons retired (Microsoft SSO keeps its own link)
   for (const key of [
     'toggleDark',
-    'socialAuth',
     'auth',
     'toggleShowPw',
     'doLogin',
@@ -566,7 +562,7 @@ test('the auth page data-a and data-v sites are byte-identical', () => {
     assert.ok(a.includes(key), `data-a=${key} lost`);
   }
   const v = [...src.matchAll(/data-v="([^"]*)"/g)].map(m => m[1]);
-  for (const key of ['Google', 'Microsoft', 'Apple', 'forgot', 'signup', 'login', 'reset', 'verify']) {
+  for (const key of ['forgot', 'signup', 'login', 'reset', 'verify']) {
     assert.ok(v.includes(key), `data-v=${key} lost`);
   }
 });

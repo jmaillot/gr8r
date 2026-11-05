@@ -126,7 +126,6 @@ const ORACLE = [
   ['toast.signedOutOthers', undefined, 'Signed out of other sessions'],
   ['toast.twoFaEnabled', undefined, 'Two-factor authentication enabled'],
   ['toast.twoFaDisabled', undefined, 'Two-factor authentication turned off'],
-  ['toast.socialNotConfigured', undefined, 'Social sign-in is not configured on this server.'],
   ['toast.verificationSent', { email: 'a@b.co' }, 'Verification email sent to a@b.co'],
   ['toast.resetSent', { email: 'a@b.co' }, 'Reset link sent to a@b.co'],
   ['err.projectName', undefined, 'Give your project a name'],
@@ -135,7 +134,6 @@ const ORACLE = [
   ['err.sendInvites', undefined, 'Could not send the invites'],
   ['toast.welcomeTo', { name: 'Acme' }, 'Welcome to Acme'],
   ['toast.signedInAs', { name: 'Bob' }, 'Signed in as Bob'],
-  ['toast.signedInWith', { provider: 'Google' }, 'Signed in with Google'],
   ['toast.welcomeUser', { name: 'Bob' }, 'Welcome, Bob'],
   ['toast.recurringNext', { title: 'T', date: 'Jul 24' }, 'Next “T” scheduled for Jul 24'],
   // Task 2: the toast options' action-button labels (the display-named
@@ -304,8 +302,8 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 469, 'data-a sites'); // +3: member-teams modal (mteamToggle/submitMemberTeams) + context-menu editMemberTeams (28-02); +1: invite multi-select invTeamToggle (28-03); +10: the add-factor wizard + remove-confirm controls (31-03); +2: the invite-form and member-modal scope pickers (29-04); +1: the invitations card signOut (30-04)
-  assert.equal(v, 81, 'data-v sites'); // +1: member-teams modal toggle button (28-02); +1: invite multi-select toggle (28-03); +2: the scope pickers (29-04)
+  assert.equal(a, 466, 'data-a sites'); // +3: member-teams modal (mteamToggle/submitMemberTeams) + context-menu editMemberTeams (28-02); +1: invite multi-select invTeamToggle (28-03); +10: the add-factor wizard + remove-confirm controls (31-03); +2: the invite-form and member-modal scope pickers (29-04); +1: the invitations card signOut (30-04)
+  assert.equal(v, 78, 'data-v sites'); // +1: member-teams modal toggle button (28-02); +1: invite multi-select toggle (28-03); +2: the scope pickers (29-04)
   assert.equal(r, 57, 'data-r sites');
 
 });
