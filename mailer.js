@@ -50,7 +50,11 @@ function domainOf(address) {
 }
 
 function encodeWord(value) {
-  const input = text(value);
+  /* Phase 40 (SUBJ-03, T-40-01): strip ALL C0 control chars and DEL BEFORE
+     the encode decision — user-controlled workspace/project/task names must
+     never break SMTP header framing. text() only collapses CR/LF runs; tabs,
+     NULs and DEL would otherwise survive the pure-ASCII fast path. */
+  const input = text(value).replace(/[\x00-\x1F\x7F]/g, '');
   if (!/[^\x20-\x7E]/.test(input)) return input;
   const chunks = [];
   let current = '';
@@ -797,6 +801,10 @@ function buildInviteMessage(config, invite) {
     data: headers.join(CRLF) + CRLF + CRLF + body + CRLF,
   };
 }
+
+/* SUBJ-03 (Phase 40): exported for hostile-name unit tests — the send API
+   shape above is unchanged. */
+export { encodeWord };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);
