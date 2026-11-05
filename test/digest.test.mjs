@@ -11,6 +11,7 @@
    uses unique dates/slugs and per-workspace ledger filters.
    ===================================================================== */
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -673,4 +674,112 @@ test('SUBJ-01/SC-5: subjectWs renders per-locale and the English-literal fallbac
   assert.equal(decode(mk('fr', 'Atelier').data).subject, '[Atelier] Résumé quotidien\u00a0: 1 tâche(s)', 'FR subjectWs render (NBSP typography + accents ride encodeWord)');
   const long = decode(mk('en', 'W'.repeat(80)).data);
   assert.ok(long.subject.startsWith(`[${'W'.repeat(64)}…]`), 'ws name capped at 64 chars by mailer-side truncate (D-11)');
+});
+
+/* =====================================================================
+   Phase 41 plan 01 — RFC 8058 one-click unsubscribe headers (UNSUB-01)
+   + footer settings link (UNSUB-03). Additive only: a SECOND server
+   fixture with APP_URL=https://app.test (its own SMTP capture) — the
+   existing http://app.test fixture above stays byte-identical, so its
+   digests omit both headers (D-05/D-06 second-gate proof comes from
+   Plan 02's negative-gate tests; the raw no-header pin for the http
+   fixture lives in the UNSUB-01 test below).
+   ===================================================================== */
+
+let smtpHttps;
+let httpsServer;
+let httpsTempDir;
+
+before(async () => {
+  smtpHttps = fakeSmtp();
+  await smtpHttps.listen();
+  httpsTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-digest-https-'));
+  httpsServer = await startServer({
+    dataDir: httpsTempDir,
+    env: {
+      MASTER_KEY: 'projects-digest-key',
+      REMINDER_TEST_TOKEN: TOKEN,
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(smtpHttps.port()),
+      SMTP_REQUIRE_TLS: 'false',
+      MAIL_FROM: 'noreply@test.local',
+      APP_URL: 'https://app.test',
+    },
+  });
+});
+
+after(async () => {
+  await httpsServer?.stop();
+  smtpHttps?.close();
+  if (httpsTempDir) fs.rmSync(httpsTempDir, { recursive: true, force: true });
+});
+
+test('UNSUB-01: an https-APP_URL digest carries List-Unsubscribe/-Post headers and the footer settings link in BOTH MIME parts', async () => {
+  const { ws, userId, email } = await makeWorkspace(
+    m => [task(m, { key: 'K-U1', title: 'Unsub task', due: '2026-06-01' })],
+    DIGEST_ONLY,
+    TZ,
+    httpsServer,
+  );
+
+  const res = await trigger(at9('2026-06-01'), httpsServer);
+  assert.ok(res.digests >= 1, 'digest fires on the https fixture');
+  const digest = digestFor(await waitFor(smtpHttps, 1, 'https digest email'), email, ws.slug);
+
+  /* Raw payload: headers live above the MIME parts — decode() drops them. */
+  const raw = smtpHttps.payloads.find(p => p.includes(`/unsubscribe/`));
+  assert.ok(raw && raw.includes(`To: <${email}>`), 'the captured raw payload is the https digest');
+
+  /* Both header strings, verbatim, with the https URL (D-05). */
+  const headerLine = raw.match(/^List-Unsubscribe: <(https:\/\/app\.test\/unsubscribe\/[^>]+)>$/m);
+  assert.ok(headerLine, 'List-Unsubscribe header present verbatim with the https URL');
+  assert.ok(raw.includes('List-Unsubscribe: <https://app.test/unsubscribe/'), 'List-Unsubscribe literal prefix asserted verbatim');
+  assert.ok(raw.includes('List-Unsubscribe-Post: List-Unsubscribe=One-Click'), 'List-Unsubscribe-Post header present verbatim');
+
+  /* Ordering probe (RFC 8058 §3.1 resolution): Subject → List-Unsubscribe →
+     List-Unsubscribe-Post → Date. */
+  const idx = name => raw.indexOf(`${name}: `);
+  assert.ok(idx('Subject') < raw.indexOf('List-Unsubscribe') && raw.indexOf('List-Unsubscribe') < idx('List-Unsubscribe-Post') && idx('List-Unsubscribe-Post') < idx('Date'), 'header order Subject → List-Unsubscribe → List-Unsubscribe-Post → Date');
+
+  /* Token shape: opaque single path segment, base64url, no padding, no CR/LF. */
+  const token = headerLine[1].split('/unsubscribe/')[1];
+  assert.match(token, /^[A-Za-z0-9_-]+$/, 'base64url alphabet only');
+  assert.ok(!token.includes('=') && !/[\r\n]/.test(token), 'no padding, no CR/LF inside the token');
+
+  /* Token decodes to version ‖ wsId(36B) ‖ userId(36B) ‖ MAC(32B) and verifies
+     against the server-side derivation shape (sha256(MASTER_KEY ‖ purpose)). */
+  const decoded = Buffer.from(token, 'base64url');
+  assert.equal(decoded.length, 1 + 36 + 36 + 32, 'fixed 105-byte framing');
+  assert.equal(decoded[0], 0x01, 'version byte first');
+  assert.equal(decoded.subarray(1, 37).toString('utf8'), ws.id, 'bytes 1-36 are the workspace id');
+  assert.equal(decoded.subarray(37, 73).toString('utf8'), userId, 'bytes 37-72 are the user id');
+  const { verifyUnsubscribeToken } = await import('../mailer.js');
+  const key = crypto.createHash('sha256').update('projects-digest-key').update('unsubscribe-tokens:v1').digest();
+  assert.equal(verifyUnsubscribeToken(key, token), true, 'token verifies against the purpose-tagged derivation');
+
+  /* Footer settings link (UNSUB-03, D-01/D-03): inline after the footer
+     sentence in BOTH parts — and it renders even though headers rendered too
+     (adjacency: footer and headers coexist independently). */
+  const settingsUrl = `https://app.test/w/${ws.slug}/settings#notif-email`;
+  for (const [part, name] of [[digest.text, 'text'], [digest.html, 'html']]) {
+    assert.ok(part.includes(settingsUrl), `${name} part carries the settings anchor link`);
+  }
+  assert.ok(digest.text.includes('notification settings. If you weren\'t expecting it, you can ignore this email. https://app.test/'), 'text link is INLINE after the footer sentence');
+  assert.ok(digest.html.includes(`Unsubscribe from these emails</a>`), 'HTML part renders the localized link label');
+});
+
+test('UNSUB-01/D-05: the http://app.test fixture digest carries NO List-Unsubscribe headers (gate negative, footer still renders)', async () => {
+  const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-U2', title: 'Http task', due: '2026-06-02' })], DIGEST_ONLY);
+  const payloadsBefore = smtp.payloads.length;
+  const res = await trigger(at9('2026-06-02'));
+  assert.ok(res.digests >= 1, 'digest fires on the http fixture');
+  const digest = digestFor(await waitFor(smtp, 1, 'http digest email'), email, ws.slug);
+  /* Raw payloads carry base64 bodies — scope by recipient over THIS test's
+     slice (the owner account is shared across the file's main-server tests). */
+  const raw = smtp.payloads.slice(payloadsBefore).find(p => p.includes(`To: <${email}>`));
+  assert.ok(raw, 'captured raw http digest');
+  assert.ok(!raw.includes('List-Unsubscribe'), 'no List-Unsubscribe header, no http:// downgrade');
+  assert.ok(!raw.includes('List-Unsubscribe-Post'), 'no List-Unsubscribe-Post header');
+  assert.ok(digest.text.includes(`http://app.test/w/${ws.slug}/settings#notif-email`), 'footer settings link still renders in the text part');
+  assert.ok(digest.html.includes('Unsubscribe from these emails'), 'footer settings link still renders in the HTML part');
 });

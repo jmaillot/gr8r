@@ -111,6 +111,56 @@ function base64Body(value) {
     .replace(/(.{76})/g, `$1${CRLF}`);
 }
 
+/* =====================================================================
+   Phase 41 (UNSUB-01): RFC 8058 one-click unsubscribe token helpers —
+   exported pure functions (D-11, Phase 40 named-export pattern). The
+   mailer stays key-free: keys are ALWAYS passed as arguments, so the
+   unit tests pin the format without any MASTER_KEY scope.
+
+   Frozen format (D-09/D-10/D-12):
+     payload = 0x01 ‖ wsId(36B) ‖ userId(36B)     — internal UUIDs
+       (server.js uid() = crypto.randomUUID(), fixed 36-byte width, so
+       delimiter-free framing is unambiguous)
+     token   = payload ‖ HMAC-SHA256(key, payload)
+     url     = appUrl + '/unsubscribe/' + base64url(token)
+   base64url (RFC 4648 §5) emits no padding and no +/= — the alphabet
+   cannot carry CR/LF, so the header-injection surface is empty.
+   ===================================================================== */
+const UNSUB_TOKEN_VERSION = 0x01;
+const UNSUB_ID_BYTES = 36; // internal ids are UUIDs — pinned by the freeze tests
+const UNSUB_MAC_BYTES = 32; // HMAC-SHA256
+const UNSUB_PAYLOAD_BYTES = 1 + 2 * UNSUB_ID_BYTES;
+
+function makeUnsubscribeToken(key, wsId, userId) {
+  const payload = Buffer.concat([
+    Buffer.from([UNSUB_TOKEN_VERSION]),
+    Buffer.from(String(wsId), 'utf8'),
+    Buffer.from(String(userId), 'utf8'),
+  ]);
+  const mac = crypto.createHmac('sha256', key).update(payload).digest();
+  return Buffer.concat([payload, mac]).toString('base64url');
+}
+
+function unsubscribeUrl(key, appUrl, wsId, userId) {
+  return `${String(appUrl).replace(/\/+$/, '')}/unsubscribe/${makeUnsubscribeToken(key, wsId, userId)}`;
+}
+
+/* Length-guard-then-timingSafeEqual — the server.js timingSafeHex form
+   (L414). Phase 42's route consumes this exact verification path. */
+function verifyUnsubscribeToken(key, tokenB64url) {
+  try {
+    const raw = Buffer.from(String(tokenB64url), 'base64url');
+    if (raw.length !== UNSUB_PAYLOAD_BYTES + UNSUB_MAC_BYTES) return false;
+    if (raw[0] !== UNSUB_TOKEN_VERSION) return false;
+    const payload = raw.subarray(0, UNSUB_PAYLOAD_BYTES);
+    const mac = raw.subarray(UNSUB_PAYLOAD_BYTES);
+    const want = crypto.createHmac('sha256', key).update(payload).digest();
+    return mac.length === want.length && crypto.timingSafeEqual(mac, want);
+  } catch {
+    return false;
+  }
+}
+
 function dotStuff(message) {
   const normalized = message.replace(/\r?\n/g, CRLF);
   return normalized
@@ -564,6 +614,12 @@ function buildDigestMessage(config, msg) {
   const overdue = Array.isArray(msg.overdue) ? msg.overdue : [];
   const count = dueToday.length + overdue.length;
 
+  /* Phase 41 (UNSUB-03, D-01/D-04): the footer link targets the Settings
+     email-notifications surface (`#notif-email` anchor) — never the token
+     URL, never 404s. It renders UNCONDITIONALLY (D-05 scope is headers
+     only): it is appUrl-based and needs no key. */
+  const settingsUrl = `${appUrl}/w/${slug}/settings#notif-email`;
+
   let frame;
   try {
     frame = {
@@ -572,6 +628,7 @@ function buildDigestMessage(config, msg) {
       dueToday: tFor(locale, 'notif.digest.dueToday'),
       overdue: tFor(locale, 'notif.digest.overdue'),
       footer: tFor(locale, 'notif.digest.footer'),
+      unsubscribe: tFor(locale, 'notif.digest.unsubscribe'),
     };
   } catch {
     /* SC-5 boundary guard: any render failure degrades to English literals. */
@@ -581,9 +638,10 @@ function buildDigestMessage(config, msg) {
       dueToday: 'Due today',
       overdue: 'Overdue',
       footer: "You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.",
+      unsubscribe: 'Unsubscribe from these emails',
     };
   }
-  const { greeting, subject, dueToday: dueLabel, overdue: overdueLabel, footer } = frame;
+  const { greeting, subject, dueToday: dueLabel, overdue: overdueLabel, footer, unsubscribe } = frame;
 
   /* Phase 40 (SUBJ-02): each task line names its parent project —
      `Project Name — Task Name` (em dash U+2014, D-04). Caps are applied
@@ -599,7 +657,10 @@ function buildDigestMessage(config, msg) {
      renders `A—B — Task` — cosmetic, accepted (D-07). */
   const taskLabel = t => (t.project ? `${truncate(t.project, 80)} — ${truncate(t.title, 80)}` : truncate(t.title, 80));
   const section = (label, items) => (items.length ? [`${label}:`, ...items.map(t => `- ${taskLabel(t)}\r\n  ${taskUrl(t)}`)] : []);
-  const textBody = [greeting, '', ...section(dueLabel, dueToday), ...section(overdueLabel, overdue), '', footer].join('\r\n');
+  /* Phase 41 (UNSUB-03, D-03): the unsubscribe link rides INLINE after the
+     footer sentence in BOTH parts — a space-separated plain URL in the text
+     part, an <a> in the HTML paragraph. */
+  const textBody = [greeting, '', ...section(dueLabel, dueToday), ...section(overdueLabel, overdue), '', `${footer} ${settingsUrl}`].join('\r\n');
 
   const htmlItems = items =>
     items
@@ -622,7 +683,7 @@ function buildDigestMessage(config, msg) {
           <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(greeting)}</p>
           ${htmlSection(dueLabel, dueToday)}
           ${htmlSection(overdueLabel, overdue)}
-          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(footer)}</p>
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(footer)} <a href="${escapeHtml(settingsUrl)}" style="color:#3b5bdb;text-decoration:none">${escapeHtml(unsubscribe)}</a></p>
         </td></tr>
       </table>
     </td></tr>
@@ -636,6 +697,16 @@ function buildDigestMessage(config, msg) {
     `To: <${to}>`,
     ...(config.replyTo ? [`Reply-To: <${config.replyTo}>`] : []),
     `Subject: ${encodeWord(subject)}`,
+    /* Phase 41 (UNSUB-01, D-05/D-06): RFC 8058 one-click — both headers
+       render ONLY when the server pre-built an https unsubscribeUrl into
+       msg (MASTER_KEY + https APP_URL gates live server-side; this second
+       layer refuses any non-https URL). No http:// downgrade — omit
+       entirely. The URL is wholly server-built (APP_URL + literal path +
+       base64url whose alphabet cannot contain CR/LF) — no other input is
+       ever interpolated here. */
+    ...(msg.unsubscribeUrl && msg.unsubscribeUrl.startsWith('https://')
+      ? [`List-Unsubscribe: <${msg.unsubscribeUrl}>`, 'List-Unsubscribe-Post: List-Unsubscribe=One-Click']
+      : []),
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${crypto.randomUUID()}@${domainOf(config.from)}>`,
     'MIME-Version: 1.0',
@@ -843,7 +914,11 @@ function buildInviteMessage(config, invite) {
 /* SUBJ-03 (Phase 40): exported for unit tests — the send API shape above is
    unchanged; buildDigestMessage joins them so the SC-5 digest fallback is
    unit-testable without a live SMTP round-trip. */
-export { encodeWord, truncate, buildDigestMessage };
+/* Phase 41 (UNSUB-01, D-11): makeUnsubscribeToken / unsubscribeUrl /
+   verifyUnsubscribeToken exported pure — the token contract Phase 42's
+   endpoint consumes, frozen by test/unsubscribe-token.test.mjs. Keys are
+   arguments; the mailer module itself never touches MASTER_KEY. */
+export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);

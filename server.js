@@ -52,7 +52,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { createMailer } from './mailer.js';
+import { createMailer, unsubscribeUrl } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
@@ -135,6 +135,15 @@ if (MASTER_KEY_PREVIOUS) {
 if (MASTER_KEY && MASTER_KEY_PREVIOUS && keyIdFor(MASTER_KEY) === keyIdFor(MASTER_KEY_PREVIOUS)) {
   logWarn('TOTP encryption: MASTER_KEY_PREVIOUS hashes to the same key id as MASTER_KEY — identical key material?');
 }
+/* Phase 41 (UNSUB-01, D-10): purpose-tagged HMAC key for unsubscribe tokens —
+   sha256(MASTER_KEY ‖ 'unsubscribe-tokens:v1') via ONE createHash with two
+   chained updates (encryptTotpSecret precedent, L432-437). Domain-separated:
+   never raw MASTER_KEY, never the AES/TOTP envelope path — the purpose tag is
+   the domain separator (frozen by the token-freeze tests). Fail-open-null:
+   no MASTER_KEY → null → no token → no unsubscribeUrl → headers omitted. */
+const UNSUB_TOKENS_PURPOSE = 'unsubscribe-tokens:v1';
+const unsubscribeHmacKey = () =>
+  MASTER_KEY ? crypto.createHash('sha256').update(MASTER_KEY).update(UNSUB_TOKENS_PURPOSE).digest() : null;
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
@@ -1586,6 +1595,13 @@ function runReminderPass({ now: at = new Date() } = {}) {
             workspace: ws.name || 'Projects Studio',
             wsSlug: ws.slug,
             appUrl: APP_URL,
+            /* Phase 41 (UNSUB-01, D-05): first gate layer — the URL is only
+               built when MASTER_KEY is set AND APP_URL is https; the mailer's
+               https check is the second layer. Existing fields untouched
+               (Pitfall 6: byte-identical claim key above). */
+            ...(unsubscribeHmacKey() && APP_URL.startsWith('https://')
+              ? { unsubscribeUrl: unsubscribeUrl(unsubscribeHmacKey(), APP_URL, ws.id, r.user_id) }
+              : {}),
             dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
             overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
           }).catch(err => logWarn(`digest email → ${r.email}: ${err.message}`));
