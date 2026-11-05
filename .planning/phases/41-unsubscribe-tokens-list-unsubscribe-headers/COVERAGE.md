@@ -7,5 +7,5 @@ No coverage matrix required. The phase has no external service surface; every co
 | capability | decision | reason |
 |------------|----------|--------|
 | email-deliverability (RFC 8058 one-click) | INTEGRATE | native `node:crypto` HMAC tokens + List-Unsubscribe headers — no third-party API, zero new packages |
-| unsubscribe-management-service (external SaaS e.g. Mailgun/SendGrid suppression lists) | OPT-OUT | not needed — stateless local tokens satisfy UNSUB-01/03; external suppression sync tracked for a future phase |
+| unsubscribe-management-service (external SaaS suppression list) | OPT-OUT | not needed — stateless local tokens satisfy UNSUB-01/03; external suppression sync tracked for a future phase |
 | webhook-provider (one-click callback integration) | OPT-OUT | not needed — RFC 8058 POST is handled by Phase 42's own endpoint, no provider involved |
