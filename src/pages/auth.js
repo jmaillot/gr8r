@@ -51,8 +51,8 @@ export function renderAuth() {
        form vanishes ENTIRELY — no disabled form, no explanatory message. */
     const ssoOnly = api.oidcSsoOnly;
     return authShell(
-      `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate>
-    <div style="display:flex;justify-content:center">${brandLogo(96)}</div><h1>${t('page.auth.welcomeBack')}</h1><p class="sub">${t('page.auth.signInTo')} ${esc(D().ws.name)}</p>
+      `<form class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}" data-submit="doLogin" novalidate style="max-width:560px">
+    <div style="display:flex;justify-content:center">${brandLogo(192)}</div>
     ${e.login ? `<div class="alert danger" role="alert">${ic('circle-alert', 15)}<span>${esc(e.login)}</span></div>` : ''}
     ${ssoOnly ? '' : `<div class="field"><label class="label" for="l-email">${t('common.email')}</label><input class="input input-lg ${icls('email')}" id="l-email" type="email" value="${esc(f.email)}" autocomplete="email" aria-invalid="${!!e.email}" aria-describedby="email-err">${ferr('email')}</div>
     <div class="field"><div class="row"><label class="label" for="l-pw">${t('common.password')}</label><span class="sp"></span>${api.enabled ? '' : `<button type="button" class="link" style="font-size:12.5px" data-a="auth" data-v="forgot">${t('page.auth.forgotPassword')}</button>`}</div>
