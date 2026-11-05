@@ -317,17 +317,15 @@ List-Unsubscribe-Post: List-Unsubscribe=One-Click
 
 All other claims carry inline `[VERIFIED: file:line]` tags with verbatim quotes above.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should the audit doc's "live?" column cite grep evidence or silence?**
+1. **Should the audit doc's "live?" column cite grep evidence or silence?** — **RESOLVED (in-plan, planner's discretion per D-03):** dead-key rows cite the toggle line + "(no reader found; grep 2026-11-05)". Implemented in 39-01 task actions.
    - What we know: D-03 requires a file:line per row; dead-key rows have no reader line to cite.
-   - What's unclear: exact wording convention for absence-of-reader rows.
-   - Recommendation: cite the toggle line + "(no reader found; grep 2026-11-05)" — settled in-plan, planner's discretion.
+   - Answer: cite the toggle line + "(no reader found; grep 2026-11-05)" — settled in-plan, planner's discretion.
 
-2. **Does the owner want the audit to propose whitelist *key removal* (breaking PUT for retired keys) or only default/UX trims?**
+2. **Does the owner want the audit to propose whitelist *key removal* (breaking PUT for retired keys) or only default/UX trims?** — **RESOLVED (planner's discretion, consistent with Phase 37 precedent):** each dead-key row presents both severities (trim-to-default vs full removal) in the status column; the audit is doc-only and the owner chooses per row. Implemented in 39-01 task actions.
    - What we know: Phase 37 precedent retired `push_due` end-to-end with 400 on retired-key PUT (STATE.md 37-03).
-   - What's unclear: whether trim recommendations should go that far or stop at defaults/UI.
-   - Recommendation: the audit presents both severities per row (trim-to-default vs full removal) and lets the owner pick — that is exactly what the status column is for.
+   - Answer: the audit presents both severities per row (trim-to-default vs full removal) and lets the owner pick — that is exactly what the status column is for.
 
 ## Environment Availability
 
