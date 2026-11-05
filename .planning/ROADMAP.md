@@ -115,8 +115,8 @@ Plans:
   2. The audit records an explicit decision on RFC 8058 `List-Unsubscribe` for the digest email.
   3. No threshold or default change from the audit is coded in this milestone without recorded owner validation; the audit ships as documentation only.
 
-**Plans:** 1 plan
-- [ ] 39-01-PLAN.md — Create docs/notification-audit.md: per-type audit sections with file:line citations, trim recommendations + D-05 status gate, RFC 8058 decision section; STATE.md mirror line
+**Plans:** 1/1 plans executed
+- [x] 39-01-PLAN.md — Create docs/notification-audit.md: per-type audit sections with file:line citations, trim recommendations + D-05 status gate, RFC 8058 decision section; STATE.md mirror line
 
 ## Progress
 
@@ -125,7 +125,7 @@ Plans:
 | 36. Server Notification i18n | 4/4 | Complete    | 2026-11-04 |
 | 37. Reminder Cadence Rework | 4/4 | Complete    | 2026-11-05 |
 | 38. Daily Digest & Reminder Suppression | 3/3 | Complete    | 2026-11-04 |
-| 39. Notification Audit (doc-only) | 0/? | Not started | - |
+| 39. Notification Audit (doc-only) | 1/1 | In Progress|  |
 
 ## Backlog
 
