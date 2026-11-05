@@ -100,6 +100,11 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }
 
+function truncate(name, cap) {
+  const s = text(name);
+  return s.length > cap ? s.slice(0, cap) + '…' : s;
+}
+
 function base64Body(value) {
   return Buffer.from(value, 'utf8')
     .toString('base64')
@@ -822,9 +827,9 @@ function buildInviteMessage(config, invite) {
   };
 }
 
-/* SUBJ-03 (Phase 40): exported for hostile-name unit tests — the send API
-   shape above is unchanged. */
-export { encodeWord };
+/* SUBJ-03 (Phase 40): exported for unit tests — the send API shape above is
+   unchanged. */
+export { encodeWord, truncate };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);

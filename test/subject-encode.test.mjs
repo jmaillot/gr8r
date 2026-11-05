@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import { test } from 'node:test';
-import { createMailer, encodeWord } from '../mailer.js';
+import { createMailer, encodeWord, truncate } from '../mailer.js';
 
 /* ------------------------ throwaway SMTP capture ------------------------ */
 
@@ -171,4 +171,23 @@ test('D-09: empty input returns empty string without throwing', () => {
   assert.equal(encodeWord(''), '');
   assert.equal(encodeWord(null), '');
   assert.equal(encodeWord(undefined), '');
+});
+
+/* ---------------------- Task 3: truncate (D-11..D-14) ---------------------- */
+
+test('D-13/D-14: truncate at cap returns the name unchanged (no ellipsis)', () => {
+  assert.equal(truncate('exactly-15-chrs', 15), 'exactly-15-chrs');
+});
+
+test('D-13/D-14: truncate over cap returns cap chars + single U+2026', () => {
+  const name = 'a'.repeat(80) + 'b';
+  const out = truncate(name, 80);
+  assert.equal(out, 'a'.repeat(80) + '…', 'capped at 80 chars with one ellipsis');
+  assert.equal([...out].filter(c => c === '…').length, 1, 'exactly one U+2026');
+});
+
+test('D-13: truncate normalizes CR/LF via text() before capping', () => {
+  const out = truncate('bad\r\nname', 80);
+  assert.equal(out, 'bad name', 'CRLF collapsed to spaces by text()');
+  assert.ok(!/[\x00-\x1F]/.test(out), 'no control chars survive');
 });
