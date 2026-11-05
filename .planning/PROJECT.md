@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-05 at milestone v1.9 start*
+*Last updated: 2026-11-05 after Phase 40 (v1.9)*
 
 ## Current Milestone: v1.9 Digest Context & One-Click Unsubscribe
 
@@ -218,6 +218,14 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   wide modal, login-redirect for anonymous file navigations.
 
 ## Decisions for the multitenant milestone (validated by the owner)
+
+### Milestone v1.9 phase decisions (Phase 40)
+
+- [Phase 40]: RFC 2047 §6.2 folding adopted in `encodeWord` at 900 octets/line — a 400-char hostile
+  name measures 1879 octets single-line; existing digest decoder passes unmodified
+- [Phase 40]: `encodeWord` + `truncate` exported as named module exports (research A2) — send API unchanged
+- [Phase 40]: digest task lines resolve project names strictly AFTER `inScopeProject` +
+  `memberCanReadProject` per recipient; `|| ''` is snapshot defense only (D-05/D-06)
 
 1. **Many workspaces per user.** An account can be a member of N workspaces with a different
    role in each; the sidebar switcher lists the account's real workspaces. — shipped
@@ -480,9 +488,10 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-- **SUBJ-01..03** — Digest subject carries the Workspace name (one email per workspace);
+- ✓ **SUBJ-01..03** — Digest subject carries the Workspace name (one email per workspace);
   task lines read "Project Name — Task Name" with hiddenFor-safe degradation; subject
-  headers CRLF-stripped + RFC 2047-encoded through one tested builder — Phases 40
+  headers CRLF-stripped + RFC 2047-encoded through one tested builder — Phase 40
+  (verification 9/9 must-haves; hostile-name suite 10/10; digest suite 16/16)
 - **UNSUB-01, UNSUB-03** — List-Unsubscribe/-Post headers on a stateless HMAC token under
   MASTER_KEY (headers omitted when absent); footer unsubscribe link retained; DEPLOY.md
   DKIM caveat — Phase 41

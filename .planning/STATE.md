@@ -22,9 +22,11 @@ progress:
 
 ## Project Reference
 
+See: .planning/PROJECT.md (updated 2026-11-05)
+
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
-- **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-- **Current focus:** v1.9 Digest Context & One-Click Unsubscribe — roadmap created; next step `/gsd-plan-phase 40`
+**Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
+**Current focus:** Phase 41 — Unsubscribe Tokens & List-Unsubscribe Headers
 
 ## Current Position
 
