@@ -2,19 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
-status: Roadmap created — awaiting approval
-stopped_at: Roadmap for v1.9 written (Phases 40-42)
-last_updated: "2026-11-05"
+status: planning
+last_updated: "2026-11-05T11:43:06.713Z"
 last_activity: 2026-11-05
-last_activity_desc: v1.9 roadmap created (3 phases, 6/6 requirements mapped)
-state_head: 02e908414c2af43427d37d769d90b555a936e90a
 progress:
-  total_phases: 3
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-current_phase: 40
 ---
 
 # STATE.md
@@ -27,10 +23,10 @@ current_phase: 40
 
 ## Current Position
 
-Phase: 40 (first of v1.9) — not yet planned
+Phase: Not started (defining requirements)
 Plan: —
-Status: Roadmap created, awaiting orchestrator approval
-Last activity: 2026-11-05 — v1.9 roadmap created (Phases 40-42)
+Status: Defining requirements
+Last activity: 2026-11-05 — Milestone v1.9 started
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 

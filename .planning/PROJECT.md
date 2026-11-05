@@ -1,27 +1,42 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-05 after Phase 39*
+*Last updated: 2026-11-05 at milestone v1.9 start*
 
-## Current Milestone: v1.8 Notification Sanity
+## Current Milestone: v1.9 Digest Context & One-Click Unsubscribe
 
-**Goal:** cut due-date notifications to their honest minimum, translate every
-server-emitted notification, and offer a daily digest — the client-facing fix for
-the "too many notifications" feedback (Kanzo #6).
+**Goal:** digest emails become self-identifying and honestly unsubscribable — one email
+per workspace with its name in the subject, "Project — Task" task lines, and RFC 8058
+one-click List-Unsubscribe; closes Backlog 999.1 and the Phase 39 unsubscribe decision.
 
 **Target features:**
-- REM — Due-date reminder cadence: "due today" (morning-of) + "past due" (next
-  morning) only; the `day_before` offset is removed (max 2 notifications per task,
-  email and push alike)
-- I18N — All server-emitted notification text (email subjects + bodies, push text,
-  inbox snippets) localized per recipient locale from the existing catalogues
-- DIGEST — Opt-in daily digest at 09:00 workspace time: one email listing tasks due
-  today + overdue; replaces individual reminder emails when enabled (push unchanged);
-  the stub `email_digest` pref takes its real role
-- AUDIT — Review of every notification type (mention, assign, comment, reminder…)
-  with trim recommendations; threshold changes validated by the owner before coding
+- SUBJ — Digest subject carries the Workspace name (one email per workspace, per the
+  owner's "2 notifications if in two workspaces" ruling); each task line reads
+  "Project Name — Task Name" with hiddenFor-funnel-safe degradation (Backlog 999.1)
+- SUBJ — Subject-header hardening: CRLF-strip + RFC 2047 encode of user-controlled names
+  through one tested builder (no SMTP header injection, no FR mojibake)
+- UNSUB — RFC 8058 one-click: List-Unsubscribe/-Post headers on a stateless HMAC token
+  under MASTER_KEY (no migration), anonymous convergent `POST /unsubscribe/:token`
+  flipping `email_digest=false` per (workspace, user); footer link retained; DKIM caveat
+  documented (signing stays at the instance's relay — Phase 39 deferral holds)
 
-**Constraints (standing):** zero runtime dependencies held; migrations additive-only
-with byte-identical second boot; full suite green; EN+FR i18n gate.
+<details>
+<summary>Milestone v1.8 Notification Sanity (shipped 2026-11-05)</summary>
+
+**Shipped:** recipient-locale server notification emails + keyed inbox rows through the
+shared `tFor()` core with the server-side i18n gate (I18N-01..04); honest two-offset
+reminder cadence with `day_before` removed and `push_due` pref retired (REM-01..06);
+opt-in 09:00 daily digest replacing individual reminder emails with a recipient-scoped
+filter (DIGEST-01..03); full cited notification audit with all trim recommendations
+`proposed` pending D-05 owner rulings (AUDIT-01/02). 4 phases, 12 plans, 13/13 REQs,
+943-test suite green. Full record: `milestones/v1.8-ROADMAP.md`,
+`milestones/v1.8-REQUIREMENTS.md`, `milestones/v1.8-MILESTONE-AUDIT.md`,
+`milestones/v1.8-phases/`.
+
+</details>
+
+**Constraints (standing):** zero runtime dependencies; zero migrations; full suite green;
+EN+FR i18n gate (server keys included); Phase 38 suppression + no-double-send invariants
+pass unmodified.
 
 <details>
 <summary>Milestone v1.7 Team Visibility & Hardening (shipped 2026-11-04)</summary>
@@ -44,9 +59,6 @@ requirements. All four phase verifications passed 2026-11-04 (32: 7/7, 33: 5/5, 
 `milestones/v1.7-MILESTONE-AUDIT.md`, `milestones/v1.7-phases/`.
 
 </details>
-
-**Constraints (standing):** zero runtime dependencies held; migrations additive-only with
-byte-identical second boot; full suite green; EN+FR i18n gate.
 
 ## What it is
 
@@ -468,8 +480,14 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-*(Empty — no milestone is scheduled. New requirements will land here after
-`/gsd-new-milestone`.)*
+- **SUBJ-01..03** — Digest subject carries the Workspace name (one email per workspace);
+  task lines read "Project Name — Task Name" with hiddenFor-safe degradation; subject
+  headers CRLF-stripped + RFC 2047-encoded through one tested builder — Phases 40
+- **UNSUB-01, UNSUB-03** — List-Unsubscribe/-Post headers on a stateless HMAC token under
+  MASTER_KEY (headers omitted when absent); footer unsubscribe link retained; DEPLOY.md
+  DKIM caveat — Phase 41
+- **UNSUB-02** — Anonymous convergent `POST /unsubscribe/:token` (throttled, sameOrigin-
+  exempt, no existence oracle) flips `email_digest=false` per (workspace, user) — Phase 42
 
 ### Out of scope
 
