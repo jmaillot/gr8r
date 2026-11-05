@@ -34,6 +34,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 ## Phase Details
 
 ### Phase 40: Digest Subject & Task Lines
+
 **Goal**: A digest email is instantly identifiable per workspace and each task line names its parent project — with user-controlled names safe in SMTP headers
 **Depends on**: Nothing (first phase of v1.9; independent of Phases 41-42)
 **Requirements**: SUBJ-01, SUBJ-02, SUBJ-03
@@ -42,13 +43,15 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
   2. Each digest task line reads "Project Name — Task Name" (em dash, HTML-escaped); when the project is unknown or invisible to the recipient (private/team-scoped, resolved through the single `memberCanReadProject` funnel), the line degrades to task-name-only — no name leak
   3. A workspace name containing CRLF, emoji, accents or 200+ characters produces exactly one well-formed RFC 2047-encoded Subject header through the single tested subject builder — hostile-name tests prove no header injection and no mojibake in FR
   4. All new user-facing/subject strings are catalogued EN+FR and `npm run i18n:scan` stays green (server `notif.*` keys included)
-**Plans:** 2 plans
+
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 40-01-PLAN.md — Hardened `encodeWord` (C0 strip), `truncate` helper, hostile-name tests (SUBJ-03)
+- [x] 40-01-PLAN.md — Hardened `encodeWord` (C0 strip), `truncate` helper, hostile-name tests (SUBJ-03)
 - [ ] 40-02-PLAN.md — `[WS]` subject via `subjectWs` key, server-side project resolution, `Project — Task` lines, digest test extensions (SUBJ-01/02)
 
 ### Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers
+
 **Goal**: Digest emails carry RFC 8058 one-click unsubscribe headers built on a stateless, test-pinned HMAC token — the frozen contract the endpoint will consume
 **Depends on**: Nothing structurally (parallel-safe with Phase 40; mailer-only); must precede Phase 42
 **Requirements**: UNSUB-01, UNSUB-03
@@ -58,9 +61,11 @@ Plans:
   3. The existing plain footer unsubscribe link still renders alongside the one-click header, and the Settings digest toggle remains the re-subscribe path (re-enabling `email_digest` makes the next morning's digest arrive again)
   4. DEPLOY.md documents the DKIM caveat (RFC 8058 §4 — one-click is honored on DKIM-authenticated mail; instances get it at their signing relay) and the MASTER_KEY-rotation-invalidates-old-links semantics
   5. Phase 38 suppression invariant and the second-boot/no-duplicate digest tests pass unmodified; zero runtime dependencies, zero migrations
+
 **Plans**: TBD
 
 ### Phase 42: One-Click Unsubscribe Endpoint
+
 **Goal**: A mail-client one-click POST actually turns the digest off for that (workspace, user) — the milestone's Phase-30-class security surface, contract first
 **Depends on**: Phase 41 (frozen token format)
 **Requirements**: UNSUB-02
@@ -70,13 +75,14 @@ Plans:
   3. The response matrix has no existence oracle: valid, stale, rotated-out and forged tokens all receive the same generic response; token verification is timing-safe and the token path is redacted from request logs and never written to activity rows
   4. The route ships with a written security contract (token model, method allow-list, replay posture, response matrix, throttle on the login-family budget) pinned by tests before/with the route implementation — sameOrigin exemption documented at the route
   5. Phase 38 suppression invariant and second-boot/no-duplicate digest tests pass unmodified; full suite green, zero runtime dependencies
+
 **Plans**: TBD
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 40. Digest Subject & Task Lines | 0/2 | Not started | - |
+| 40. Digest Subject & Task Lines | 1/2 | In Progress|  |
 | 41. Unsubscribe Tokens & Headers | 0/? | Not started | - |
 | 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
 

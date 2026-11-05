@@ -14,7 +14,7 @@
 - [ ] **SUBJ-02**: Each task line in the digest reads "Project Name — Task Name"; degrades to
   task-name-only when the project is unknown or invisible to the recipient (names resolved
   through the single `hiddenFor`/`memberCanReadProject` funnel — no CR-01-class leak)
-- [ ] **SUBJ-03**: User-controlled names in email headers (Subject) are CRLF-stripped and
+- [x] **SUBJ-03**: User-controlled names in email headers (Subject) are CRLF-stripped and
   RFC 2047-encoded through one tested builder — no SMTP header injection, no mojibake in FR
 
 ### UNSUB — RFC 8058 one-click unsubscribe (Phase 39 audit decision)
@@ -62,7 +62,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SUBJ-01 | Phase 40 | Pending |
 | SUBJ-02 | Phase 40 | Pending |
-| SUBJ-03 | Phase 40 | Pending |
+| SUBJ-03 | Phase 40 | Complete |
 | UNSUB-01 | Phase 41 | Pending |
 | UNSUB-02 | Phase 42 | Pending |
 | UNSUB-03 | Phase 41 | Pending |

@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 40
-current_phase_name: digest-subject-task-lines
+current_phase_name: Digest Subject & Task Lines
 status: executing
-stopped_at: Phase 40 context gathered
-last_updated: "2026-11-05T12:23:36.812Z"
+stopped_at: Completed 40-01-PLAN.md
+last_updated: "2026-11-05T13:16:48.665Z"
 last_activity: 2026-11-05
-last_activity_desc: Milestone v1.9 started
-state_head: 2fa9313b8d484b6b130a68fd599ee1be3782158d
+last_activity_desc: Phase 40 execution started
+state_head: c2d8a7ce58eefaccc687115899edfff1191b62f3
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # STATE.md
@@ -27,10 +27,10 @@ progress:
 
 ## Current Position
 
-Phase: 40 (digest-subject-task-lines) — READY TO EXECUTE
-Plan: —
+Phase: 40 (Digest Subject & Task Lines) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-11-05 — Milestone v1.9 started
+Last activity: 2026-11-05 — Phase 40 execution started
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -90,6 +90,8 @@ runtime dependencies, zero migrations, full suite green.
   read STORED values via getStoredNotifPrefs — the unsubscribe upsert creates missing rows
 - [v1.6 Phase 30]: the SSO routes are the no-oracle/404 template; the unsubscribe route is
   the first anonymous MUTATING route — invite-accept family minus sameOrigin is the shape
+- [Phase 40]: 40-01: RFC 2047 folding adopted for encodeWord (Pitfall 1/2 fired — 1879 octets single-line); folded at 900 octets/line
+- [Phase 40]: 40-01: encodeWord + truncate exported as named exports for tests (A2); send API unchanged
 
 ### Pending Todos
 
@@ -121,15 +123,16 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-05T12:01:30.036Z
-Stopped at: Phase 40 context gathered
-Resume file: .planning/phases/40-digest-subject-task-lines/40-CONTEXT.md
+Last session: 2026-11-05T13:16:41.971Z
+Stopped at: Completed 40-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | *(v1.9 — no plans executed yet)* | | | |
+| Phase 40 P01 | 14m | 3 tasks | 2 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
