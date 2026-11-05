@@ -1158,7 +1158,20 @@ function getStoredNotifPrefs(userId, workspaceId) {
   const row = db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(workspaceId, userId);
   try {
     const stored = row ? JSON.parse(row.prefs) : {};
-    return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+    /* Whitelist-filter the STORED blob too (K-10): rows written before the key
+       whitelist existed (or carried by a pre-notif-prefs import) can hold keys
+       that are no longer accepted. getUserNotifPrefs feeds them straight into
+       every response, the client adopts the object verbatim and sends it back
+       on the next PUT — which the whitelist then rejects (400 unknownPrefKey):
+       the first toggle after load saved, every subsequent one failed until F5
+       re-sanitized client-side. Filter at the single read point so GET, the
+       PUT merge and the email gate never see a legacy key. */
+    const out = {};
+    for (const key of NOTIF_PREF_KEYS) {
+      if (typeof stored[key] === 'boolean') out[key] = stored[key];
+    }
+    return out;
   } catch {
     return {};
   }
