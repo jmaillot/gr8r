@@ -29,7 +29,7 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 ### v1.8 Notification Sanity (Phases 36-39)
 
 - [x] **Phase 36: Server Notification i18n** - Every server-emitted notification renders in the recipient's locale through a shared EN/FR catalogue, with a build gate against drift (completed 2026-11-04)
-- [ ] **Phase 37: Reminder Cadence Rework** - Due-date reminders capped at two per task ("due today" + one "past due"); `day_before` removed deploy-safely
+- [x] **Phase 37: Reminder Cadence Rework** - Due-date reminders capped at two per task ("due today" + one "past due"); `day_before` removed deploy-safely (completed 2026-11-05)
 - [x] **Phase 38: Daily Digest & Reminder Suppression** - Opt-in 09:00 digest email replaces individual reminder emails when enabled; silent when nothing is due (completed 2026-11-04)
 - [ ] **Phase 39: Notification Audit (doc-only)** - Full notification type × channel × default audit with trim recommendations, owner-validated before any coding
 
@@ -67,7 +67,7 @@ Plans:
   4. Deploying the change requires no migration and no dedup-row sweep: existing `reminders_sent` rows stay untouched (orphaned `day_before` keys go inert), and the second boot is byte-identical.
   5. Release notes document the one-time "due today" catch-up burst at first deploy.
 
-**Plans**: 3/3 plans executed (2/2 executed + gap-closure 03)
+**Plans**: 4/4 plans complete (2/2 executed + gap-closure 03)
 
 Plans:
 **Wave 1**
@@ -122,7 +122,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 36. Server Notification i18n | 4/4 | Complete    | 2026-11-04 |
-| 37. Reminder Cadence Rework | 3/3 | In Progress|  |
+| 37. Reminder Cadence Rework | 4/4 | Complete    | 2026-11-05 |
 | 38. Daily Digest & Reminder Suppression | 3/3 | Complete    | 2026-11-04 |
 | 39. Notification Audit (doc-only) | 0/? | Not started | - |
 
