@@ -63,7 +63,10 @@ Plans:
   5. Phase 38 suppression invariant and the second-boot/no-duplicate digest tests pass unmodified; zero runtime dependencies, zero migrations
 
 Plans:
+**Wave 1**
 - [ ] 41-01-PLAN.md — Token helpers + gated RFC 8058 headers + footer link, end-to-end (tracer) + format-freeze tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 41-02-PLAN.md — Gate-negative integration tests (D-05) + DEPLOY.md DKIM/rotation subsection
 
 ### Phase 42: One-Click Unsubscribe Endpoint

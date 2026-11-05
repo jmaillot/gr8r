@@ -297,16 +297,13 @@ return got.length === want.length && crypto.timingSafeEqual(got, want);
 | A2 | `Buffer.toString('base64url')` emits RFC 4648 §5 alphabet without padding | Pattern 2 | Minor: token alphabet differs from assumed; tests freeze whatever is actual — harmless |
 | A3 | `crypto.hkdfSync` is available on Node v24.21.0 | Alternatives Considered | None (sha256 variant chosen anyway) |
 
-## Open Questions
+## Open Questions (RESOLVED — by planning, 2026-11-05)
 
-1. **wsId/userId byte format (drives payload framing)**
+1. **wsId/userId byte format (drives payload framing)** — RESOLVED: `crypto.randomUUID()` confirmed at server.js:394 (fixed 36-byte UUIDs); delimiter-free framing `version‖wsId‖userId` is unambiguous; pinned by the token-freeze unit tests in 41-01 Task 2.
    - What we know: D-10/D-12 fix payload = version byte + wsId + userId, "same id space as the digest claim key"; claim key format `${ws.id}:${r.user_id}:digest:${localDate}` verified at server.js:1580.
-   - What's unclear: whether `ws.id`/`user_id` are fixed-length — determines delimiter-free vs length-prefixed framing inside the signed payload.
-   - Recommendation: planner reads the id-generation code (workspace/user row creation) and pins framing in the token-freeze tests. Length-prefixed framing is safe in both worlds and costs 2 bytes — default to it if uncertain.
-2. **Settings anchor id (D-04 discretion)**
+   - Resolution basis: planner read of the id-generation code; length-prefixed framing not needed.
+2. **Settings anchor id (D-04 discretion)** — RESOLVED per D-04 discretion: plans target the existing `#notif-email` section surface; no Settings DOM restructuring.
    - What we know: `settings.notif.digest` i18n key exists (en.json:1245) so a digest toggle surface exists in Settings.
-   - What's unclear: whether a `#notifications` anchor id exists in the Settings DOM today.
-   - Recommendation: planner greps the settings page component; if no anchor exists, point at the closest existing surface (e.g. the notifications section header) without restructuring — per D-04.
 
 ## Environment Availability
 
