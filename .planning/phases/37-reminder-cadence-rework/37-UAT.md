@@ -1,14 +1,14 @@
 ---
-status: partial
+status: complete
 phase: 37-reminder-cadence-rework
 source: [37-01-SUMMARY.md, 37-02-SUMMARY.md, 37-03-SUMMARY.md]
 started: 2026-11-04T14:36:22Z
-updated: 2026-11-05T00:00:00Z
+updated: 2026-11-05T09:00:00Z
 ---
 
 ## Current Test
 
-[testing paused — 1 item outstanding]
+[testing complete]
 
 ## Tests
 
@@ -20,9 +20,9 @@ note: "Executed by the agent on a scratch copy of data/ (PORT=8124): fresh boot 
 
 ### 2. Live scheduling cadence end-to-end (real clock)
 expected: On a running instance with a real workspace, set a task due today; wait for the 09:00 scheduled pass (or the boot catch-up). Confirm the assignee's inbox and email each receive exactly one "Due today" notification, then one "Past due" the next morning, and nothing on subsequent days. Exactly 2 notifications total per task per assignee across the task's lifetime (per due-date value).
-result: blocked
-blocked_by: other
-reason: "I will add a new task, but I cannot verify today (waiting for the 09:00 real scheduled pass — user will verify manually after 9 AM)"
+result: issue
+reported: "i had the assignment email, but even after a restart and all push/email notifications on, i dont receive anything"
+severity: major
 
 ### 3. Settings page rendering of the new copy (EN + FR)
 expected: Open Settings → notifications in EN and FR. Push section shows only the new rows — EN "Due-day reminder" / "Get a reminder on the morning a task is due." and FR "Rappel le jour d’échéance" / "Recevez un rappel le matin de l’échéance d’une tâche." — with the legacy "Due date reminders" / "One day before a task is due." row GONE from both languages. Toggle still functional. (Re-test after G-37-2 gap closure; closes the previously reported stale-row issue.)
@@ -33,12 +33,21 @@ source: automated
 
 total: 3
 passed: 2
-issues: 0
+issues: 1
 pending: 0
 skipped: 0
-blocked: 1
+blocked: 0
 
 ## Gaps
+
+- gap_id: G-37-3
+  truth: "Task due today triggers exactly one 'Due today' notification (inbox/push + email) to the assignee on the 09:00 pass or boot catch-up"
+  status: failed
+  reason: "User reported: i had the assignment email, but even after a restart and all push/email notifications on, i dont receive anything"
+  severity: major
+  test: 2
+  artifacts: []  # Filled by diagnosis
+  missing: []    # Filled by diagnosis
 
 - gap_id: G-37-2
   truth: "Settings shows exactly the new phase-37 toggle copy per language, with no stale pre-phase entries"
