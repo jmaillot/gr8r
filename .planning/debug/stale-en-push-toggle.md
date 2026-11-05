@@ -1,8 +1,8 @@
 ---
-status: investigating
+status: resolved
 trigger: "Stale EN push notification entry 'Due date reminders' / 'One day before a task is due.' still renders in Settings, EN-only; FR is clean (G-37-2)"
 created: 2026-11-04
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 ## Current Focus
@@ -40,3 +40,4 @@ files_changed: []
 root_cause: Legacy push_due settings row (settings.notif.dueReminders/settings.notif.dueDesc) was never removed — settings.js:384 still renders it above the new due_reminder row, and both locale catalogs still carry the pair; 37-02 explicitly decided to leave it ("Pitfall 3 respected"), contradicting the phase's zero-stale-copy goal.
 fix: Remove settings.js:384 row + delete settings.notif.dueReminders/dueDesc from en.json & fr.json + decide fate of push_due pref (server.js:1130,1152, notifPrefs.js:25) — likely remove toggle & pref or repurpose.
 files_changed: []
+verified: 2026-11-05 — gap G-37-2 resolved by plan 37-03 (stale row removed, i18n keys deleted atomically); re-tested via automated UI verification, settings page (EN + FR) shows only the new phase-37 copy (UAT test 3: pass).
