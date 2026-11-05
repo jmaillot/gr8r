@@ -568,7 +568,7 @@ function buildDigestMessage(config, msg) {
   try {
     frame = {
       greeting: tFor(locale, 'notif.email.greeting'),
-      subject: tFor(locale, 'notif.digest.subject', { count }),
+      subject: tFor(locale, 'notif.digest.subjectWs', { ws: truncate(workspace, 64), count }),
       dueToday: tFor(locale, 'notif.digest.dueToday'),
       overdue: tFor(locale, 'notif.digest.overdue'),
       footer: tFor(locale, 'notif.digest.footer'),
@@ -577,7 +577,7 @@ function buildDigestMessage(config, msg) {
     /* SC-5 boundary guard: any render failure degrades to English literals. */
     frame = {
       greeting: 'Hi,',
-      subject: `Daily digest: ${count} task(s)`,
+      subject: `[${truncate(workspace, 64)}] Daily digest: ${count} task(s)`,
       dueToday: 'Due today',
       overdue: 'Overdue',
       footer: "You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.",
