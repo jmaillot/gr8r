@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.8
 milestone_name: Notification Sanity
-current_phase: 39
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 39 complete — all phases complete
-last_updated: "2026-11-05T10:48:07.436Z"
+last_updated: "2026-11-05T11:10:14.308Z"
 last_activity: 2026-11-05
-last_activity_desc: Phase 39 complete
-state_head: 7e21f3e96256fa7d6b799a10a855011f1938e951
+last_activity_desc: Milestone v1.8 completed and archived
+state_head: 02e908414c2af43427d37d769d90b555a936e90a
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 12
   completed_plans: 12
   percent: 100
+current_phase: 39
 ---
 
 # STATE.md
@@ -27,10 +27,10 @@ progress:
 
 ## Current Position
 
-Phase: 39
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-05 — Phase 39 complete
+Phase: Milestone v1.8 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-05 — Milestone v1.8 completed and archived
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -212,4 +212,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 36: /gsd-discuss-phase 36 (i18n-scan corpus question) then /gsd-plan-phase 36
+- Start the next milestone with /gsd-new-milestone

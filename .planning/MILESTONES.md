@@ -1,5 +1,33 @@
 # Milestones
 
+## v1.8 Notification Sanity (Shipped: 2026-11-05)
+
+**Delivered:** Every server-emitted notification renders in the recipient's locale, due-date reminders are capped at two per task, an opt-in 09:00 digest email replaces individual reminder emails, and a full cited notification audit (all rows `proposed`) gates any future trim work behind owner validation.
+
+**Phases completed:** 36-39 (4 phases, 12 plans, 28 tasks)
+
+**Stats:**
+- 147 commits, 106 files changed (+11,768 / −951 lines)
+- 4 phases, 12 plans, 28 tasks
+- 2 days from milestone start to ship (2026-11-04 → 2026-11-05)
+- Suite at close: 943 pass / 0 fail / 3 skipped; `npm run i18n:scan` clean
+
+**Git range:** `4ed4c17` (docs: start milestone v1.8) → `02e9084` (docs: acknowledge D-12)
+
+**Known verification overrides:** 1 newly acknowledged, 9 carried forward from a prior close (see STATE.md Deferred Items) — `override_closeout`; verification digests for Phases 36–38 were stale from intra-milestone source drift (incl. out-of-phase commit 7a7a423), all VERIFICATION.md files read `passed`, and the milestone audit re-verified 13/13 requirements, 11/11 cross-phase wiring and 4/4 E2E flows at HEAD (`v1.8-MILESTONE-AUDIT.md`).
+
+**Key accomplishments:**
+- Locale-parameterized `tFor()` translation core with t() delegation, Intl-failure degradation and locale clamping, plus 15 `notif.reminder.*` / `notif.email.*` server keys landed in identical EN+FR flat catalogues.
+- Recipient-locale notification emails — server.js boot-registers the shared FR catalogue, resolves `u.locale` on the authority query and passes `msg.locale` into a fully tFor-rendered `buildNotifMessage` frame (greeting/verb/sentence/openTask/button/footer), with reminders getting their own keyed by-label, verb and subject; FR and EN recipients of the same workspace notification get their own language in one run.
+- Reminder rows now store `key` + send-time `vars` snapshot alongside the unchanged English snippet, and the inbox localizes keyed rows per viewer locale (sentence AND preview) with byte-identical legacy rendering and snippet fallback for unknown keys.
+- The i18n build gate now covers the server side — every t/tFor notif.* literal in server.js/mailer.js must resolve in en.json AND fr.json, and the notif.* namespace is parity-checked both directions, so a missing FR key or drifted catalogue entry fails `npm run i18n:scan` (SC-4) while the src-side scan output stays byte-identical.
+- Opt-in daily digest — one localized 09:00-window email per member listing due-today + overdue tasks with deep links, exactly-once via a `ws:{userId}:digest:{localDate}` ledger claim, proven by a 5-test integration suite on the reminder-pass harness.
+- Digest users lose individual reminder emails at the fan-out (email-only — rows/push/mentions intact) while `email_digest` becomes a real undefined-falsy opt-in with D-13 replace-framing settings copy in EN+FR.
+- Recipient-scoped digest filter (`t.assignee === r.member_id` gate) closing the CR-01 confidentiality leak, proven red-before/green-after by a multi-member CI pin, plus WR-02 tautology cleanup
+- docs/notification-audit.md — full cited notification audit (six type sections, RFC 8058 decision with DKIM split), every trim recommendation `proposed` pending owner validation
+
+---
+
 ## v1.7 Team Visibility & Hardening (Shipped: 2026-11-04)
 
 **Phases completed:** 4 phases, 12 plans, 13 tasks
