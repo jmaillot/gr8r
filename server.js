@@ -86,6 +86,31 @@ const APP_URL = String(process.env.APP_URL || '')
   .trim()
   .replace(/\/+$/, '');
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+
+/* ------------------------------ LOG_LEVEL ------------------------------- */
+/* Zero-dependency leveled logging (Kanzo #9): one ladder — debug < info
+   (default) < warn < error — selected by the LOG_LEVEL env variable. Every
+   line is stamped `ISO-timestamp LEVEL message`. Structured enough for
+   `docker logs`, plain enough to read. */
+const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+const LOG_LEVEL_RAW = String(process.env.LOG_LEVEL || '')
+  .trim()
+  .toLowerCase();
+const LOG_LEVEL = LOG_LEVEL_RAW in LOG_LEVELS ? LOG_LEVEL_RAW : 'info';
+if (LOG_LEVEL_RAW && !(LOG_LEVEL_RAW in LOG_LEVELS)) {
+  console['warn'](`LOG_LEVEL: unknown value "${LOG_LEVEL_RAW}" — falling back to "info" (valid: debug, info, warn, error)`);
+}
+function logLine(level, msg) {
+  if (LOG_LEVELS[level] < LOG_LEVELS[LOG_LEVEL]) return;
+  const line = `${new Date().toISOString()} ${level.toUpperCase()} ${msg}`;
+  if (level === 'error') console['error'](line);
+  else if (level === 'warn') console['warn'](line);
+  else console['log'](line);
+}
+const logDebug = msg => logLine('debug', msg);
+const logInfo = msg => logLine('info', msg);
+const logWarn = msg => logLine('warn', msg);
+const logError = msg => logLine('error', msg);
 /* D-05: the AES-256 master key material comes from the environment. Missing or
    unusable on the enable path → fail-closed 503 naming MASTER_KEY (D-06/D-58). */
 const MASTER_KEY = String(process.env.MASTER_KEY || '');
@@ -108,7 +133,7 @@ if (MASTER_KEY_PREVIOUS) {
 /* A1 (Pitfall 2): identical key material collapses both ids — harmless for
    decrypt, but Phase 26 rotation would re-wrap zero rows. Warn, never fail. */
 if (MASTER_KEY && MASTER_KEY_PREVIOUS && keyIdFor(MASTER_KEY) === keyIdFor(MASTER_KEY_PREVIOUS)) {
-  console.warn('TOTP encryption: MASTER_KEY_PREVIOUS hashes to the same key id as MASTER_KEY — identical key material?');
+  logWarn('TOTP encryption: MASTER_KEY_PREVIOUS hashes to the same key id as MASTER_KEY — identical key material?');
 }
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
@@ -731,7 +756,7 @@ function projectScope(membership) {
          from "scope cleared" without spamming the log. */
       if (!CORRUPT_SCOPE_WARNED.has(membership.scope)) {
         CORRUPT_SCOPE_WARNED.add(membership.scope);
-        console.warn(`membership ${membership.member_id || '?'} in workspace context has an unparseable scope column — treating as workspace-wide (D-04 fail-open)`);
+        logWarn(`membership ${membership.member_id || '?'} in workspace context has an unparseable scope column — treating as workspace-wide (D-04 fail-open)`);
       }
       return null;
     }
@@ -1307,7 +1332,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
       kind: n.type,
       url,
       locale: recipientLocale,
-    }).catch(err => console.warn(`notif email ${n.id} → ${to}: ${err.message}`));
+    }).catch(err => logWarn(`notif email ${n.id} → ${to}: ${err.message}`));
   }
 }
 
@@ -1563,13 +1588,15 @@ function runReminderPass({ now: at = new Date() } = {}) {
             appUrl: APP_URL,
             dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task' })),
             overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task' })),
-          }).catch(err => console.warn(`digest email → ${r.email}: ${err.message}`));
+          }).catch(err => logWarn(`digest email → ${r.email}: ${err.message}`));
         }
       }
     } catch (err) {
-      console.warn(`reminder pass ${ws.id}: ${err.message}`);
+      logWarn(`reminder pass ${ws.id}: ${err.message}`);
     }
   }
+  if (emitted.length || digests) logInfo(`reminder pass: ${emitted.length} reminder notification(s), ${digests} digest email(s)`);
+  else logDebug('reminder pass: nothing to send');
   return { emitted, digests };
 }
 
@@ -1587,6 +1614,44 @@ function docForClient(doc, ws, membership) {
     out.data.notifs = out.data.notifs.filter(n => memberIds.has(n.to));
   }
   return membership ? redactDoc(out, membership) : out;
+}
+
+/* Kanzo #9 (docker logs): one INFO line per user-visible task change carried
+   by a doc PUT. Diffed against the stored doc, so a no-op sync logs nothing.
+   Best-effort and exception-proof — logging must never fail a push. */
+function logDocChanges(ws, storedDoc, next, actorName) {
+  try {
+    const slug = ws?.slug || 'ws';
+    const beforeTasks = new Map((Array.isArray(storedDoc?.data?.tasks) ? storedDoc.data.tasks : []).filter(t => t?.id).map(t => [t.id, t]));
+    const afterTasks = (Array.isArray(next?.data?.tasks) ? next.data.tasks : []).filter(t => t?.id);
+    const afterIds = new Set(afterTasks.map(t => t.id));
+    const commentsByTask = doc => {
+      const map = new Map();
+      for (const c of (Array.isArray(doc?.data?.comments) ? doc.data.comments : [])) {
+        if (c?.task) map.set(c.task, (map.get(c.task) || 0) + 1);
+      }
+      return map;
+    };
+    const beforeComments = commentsByTask(storedDoc);
+    const afterComments = commentsByTask(next);
+    const memberName = id => (Array.isArray(next?.data?.members) ? next.data.members : []).find(m => m?.id === id)?.name || 'unassigned';
+    for (const t of afterTasks) {
+      const prev = beforeTasks.get(t.id);
+      if (!prev) {
+        logInfo(`task added "${t.title || 'untitled'}" by ${actorName} [${slug}]`);
+        continue;
+      }
+      const title = t.title || prev.title || 'untitled';
+      if (prev.assignee !== t.assignee) logInfo(`task "${title}" assigned to ${memberName(t.assignee)} by ${actorName} [${slug}]`);
+      if (prev.title !== t.title && prev.title) logInfo(`task renamed "${prev.title}" → "${title}" by ${actorName} [${slug}]`);
+      if ((afterComments.get(t.id) || 0) > (beforeComments.get(t.id) || 0)) logInfo(`task "${title}" commented by ${actorName} [${slug}]`);
+    }
+    for (const [id, t] of beforeTasks) {
+      if (!afterIds.has(id)) logInfo(`task removed "${t.title || 'untitled'}" by ${actorName} [${slug}]`);
+    }
+  } catch {
+    /* never fail a doc push over logging */
+  }
 }
 
 function docFromClient(incoming, stored, ws, role, membership) {
@@ -1919,8 +1984,8 @@ function ensureAdmin({ quiet = false } = {}) {
   const user = createUser(email, name, password);
   addMembership(firstWorkspace(), user, 'owner');
   if (!quiet) {
-    console.log(`  bootstrap account: ${email}`);
-    if (generated) console.log(`  generated password: ${password}\n  (set ADMIN_PASSWORD and recreate the volume to choose your own)`);
+    logInfo(`  bootstrap account: ${email}`);
+    if (generated) logInfo(`  generated password: ${password}\n  (set ADMIN_PASSWORD and recreate the volume to choose your own)`);
   }
 }
 
@@ -1936,7 +2001,7 @@ function stampInstanceAdmin() {
   const email = (process.env.ADMIN_EMAIL || 'admin@example.com').trim();
   const res = db.prepare('update users set is_instance_admin = 1 where email = ? collate nocase').run(email);
   if (res.changes === 0) {
-    console.warn(`  [bootstrap] no operator flagged: no users row matches ADMIN_EMAIL (${email}); set is_instance_admin=1 manually (D-114)`);
+    logWarn(`  [bootstrap] no operator flagged: no users row matches ADMIN_EMAIL (${email}); set is_instance_admin=1 manually (D-114)`);
   }
 }
 
@@ -2003,9 +2068,9 @@ function migrateTeamMembership(conn) {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     conn.exec('pragma wal_checkpoint(truncate)');
     conn.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
-    console.log(`  pre-migration backup: ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
-    console.error(`  pre-migration backup failed: ${err.message}`);
+    logError(`  pre-migration backup failed: ${err.message}`);
     return;
   }
   conn.exec('begin immediate');
@@ -2079,9 +2144,9 @@ function migrateUserNotifPrefs(conn) {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     conn.exec('pragma wal_checkpoint(truncate)');
     conn.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
-    console.log(`  pre-migration backup: ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
-    console.error(`  pre-migration backup failed: ${err.message}`);
+    logError(`  pre-migration backup failed: ${err.message}`);
     return;
   }
   conn.exec('begin immediate');
@@ -2122,9 +2187,9 @@ function migrateTenancy() {
       fs.mkdirSync(path.dirname(backup), { recursive: true });
       db.exec('pragma wal_checkpoint(truncate)');
       db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
-      console.log(`  pre-migration backup: ${backup}`);
+      logInfo(`  pre-migration backup: ${backup}`);
     } catch (err) {
-      console.error(`  pre-migration backup failed: ${err.message}`);
+      logError(`  pre-migration backup failed: ${err.message}`);
     }
     for (const row of rows) {
       if (row.slug) continue;
@@ -2203,7 +2268,7 @@ function prunePreenvelopeBackups(currentBackup) {
     }
   } catch (err) {
     // Pruning is best-effort housekeeping; a failure never blocks the migration.
-    console.warn(`  pre-migration backup pruning failed: ${err.message}`);
+    logWarn(`  pre-migration backup pruning failed: ${err.message}`);
   }
 }
 
@@ -2238,7 +2303,7 @@ function migrateTotpEncryption() {
     }
   }
   if (unrecognizedVersion > 0) {
-    console.warn(
+    logWarn(
       `  TOTP encryption: ${unrecognizedVersion} row(s) carry unrecognized secret envelope version(s) (${[...unrecognizedTags].join(', ')}) — left as-is; decryption attempts fail closed (D-K7).`,
     );
   }
@@ -2263,7 +2328,7 @@ function migrateTotpEncryption() {
   // migration (loud warning, rows untouched, boot proceeds); decrypt fails
   // closed at runtime (D-06) meanwhile. Retries on the next boot.
   if (!MASTER_KEY) {
-    console.warn(
+    logWarn(
       `  TOTP encryption deferred: MASTER_KEY is not configured — ${rows.length} plaintext two_fa_secret row(s) left unencrypted; migration retries on the next boot.`,
     );
     return;
@@ -2277,10 +2342,10 @@ function migrateTotpEncryption() {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     db.exec('pragma wal_checkpoint(truncate)');
     db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
-    console.log(`  pre-migration backup: ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
     prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
   } catch (err) {
-    console.error(`  TOTP encryption skipped: pre-migration backup failed: ${err.message}`);
+    logError(`  TOTP encryption skipped: pre-migration backup failed: ${err.message}`);
     return;
   }
 
@@ -2308,7 +2373,7 @@ function migrateTotpEncryption() {
       }
       if (!/^[A-Z2-7]{32}$/.test(value)) {
         skippedGarbage++;
-        console.warn(`  TOTP encryption: user ${row.id} has a non-base32 two_fa_secret — left as-is; decrypt fails closed (D-75)`);
+        logWarn(`  TOTP encryption: user ${row.id} has a non-base32 two_fa_secret — left as-is; decrypt fails closed (D-75)`);
         continue;
       }
       const envelope = encryptTotpSecret(value);
@@ -2322,7 +2387,7 @@ function migrateTotpEncryption() {
   });
   // D-76: outcomes on console only — no admin UI surface. The unrecognized
   // count (D-K7) is part of the same summary so every outcome is represented.
-  console.log(
+  logInfo(
     `  TOTP encryption: ${migrated} row(s) migrated to the v1: envelope, ${skippedBlank} blank skipped, ${skippedGarbage} non-base32 skipped, ${alreadyEncrypted} already encrypted, ${unrecognizedVersion} unrecognized version(s) left as-is.`,
   );
 }
@@ -2362,9 +2427,9 @@ function migrateTotpFactors() {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     db.exec('pragma wal_checkpoint(truncate)');
     db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
-    console.log(`  pre-migration backup: ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
-    console.error(`  TOTP factor copy skipped: pre-migration backup failed: ${err.message}`);
+    logError(`  TOTP factor copy skipped: pre-migration backup failed: ${err.message}`);
     return;
   }
 
@@ -2380,7 +2445,7 @@ function migrateTotpFactors() {
     }
   });
   // D-76: outcomes on console only — counts + user ids, never secrets.
-  if (copied > 0) console.log(`  TOTP factors: copied ${copied} primary factor row(s) into totp_factors (D-06/D-09).`);
+  if (copied > 0) logInfo(`  TOTP factors: copied ${copied} primary factor row(s) into totp_factors (D-06/D-09).`);
 }
 
 /*
@@ -2453,7 +2518,7 @@ function migrateTotpReWrap() {
       return false;
     });
     if (!resolvesPrevious) {
-      console.warn('  TOTP re-wrap: rotation appears complete — MASTER_KEY_PREVIOUS resolves no envelopes and can be removed (D-K12).');
+      logWarn('  TOTP re-wrap: rotation appears complete — MASTER_KEY_PREVIOUS resolves no envelopes and can be removed (D-K12).');
     }
     return;
   }
@@ -2466,10 +2531,10 @@ function migrateTotpReWrap() {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
     db.exec('pragma wal_checkpoint(truncate)');
     db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
-    console.log(`  pre-migration backup: ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
     prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
   } catch (err) {
-    console.error(`  TOTP re-wrap skipped: pre-migration backup failed: ${err.message}`);
+    logError(`  TOTP re-wrap skipped: pre-migration backup failed: ${err.message}`);
     return;
   }
 
@@ -2493,7 +2558,7 @@ function migrateTotpReWrap() {
             : null;
       if (plaintext === null) {
         undecryptable++;
-        console.warn(`  TOTP re-wrap: ${row.table === 'users' ? 'user' : 'factor row'} ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`);
+        logWarn(`  TOTP re-wrap: ${row.table === 'users' ? 'user' : 'factor row'} ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`);
         continue; // byte-identical, never deleted (D-K9)
       }
       // D-K10: the ONLY writer is encryptTotpSecret(…, 'v2') — never re-key as v1.
@@ -2508,7 +2573,7 @@ function migrateTotpReWrap() {
     }
   });
   // D-76: outcomes on console only — counts, version tags, ids; no key material.
-  console.log(
+  logInfo(
     `  TOTP re-wrap: ${rewrapped} row(s) re-sealed to v2:<current-key-id>, ${undecryptable} undecryptable left as-is, ${sealFailed} seal failure(s).`,
   );
 }
@@ -2916,7 +2981,7 @@ function sendTfaSecurityAlert(user, action, factorName, req) {
     action,
     factor,
     ip: clientIp(req),
-  }).catch(err => console.warn(`tfa security alert ${action} → ${user.email}: ${err.message}`));
+  }).catch(err => logWarn(`tfa security alert ${action} → ${user.email}: ${err.message}`));
 }
 
 function readJson(req) {
@@ -3250,6 +3315,7 @@ async function handleApi(req, res, url) {
     const password = String(body?.password || '');
     if (!emailOk(email) || !password) return fail(res, 400, 'emailAndPasswordRequired', 'Email and password are required');
     if (tooMany(`${clientIp(req)}|${email}`)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    logWarn(`login failed: ${email} from ${clientIp(req)}`);
 
     const row = db.prepare('select * from users where email = ?').get(email);
     const valid = verifyPassword(password, row?.password_hash || DUMMY_HASH) && !!row;
@@ -3267,6 +3333,7 @@ async function handleApi(req, res, url) {
         now() + CHALLENGE_TTL_MS,
       );
       setChallengeCookie(req, res, challengeToken);
+      logInfo(`2fa challenge issued: ${email} from ${clientIp(req)}`);
       return json(res, 200, { pending2fa: true, maskedEmail: maskEmail(row.email) });
     }
 
@@ -3286,12 +3353,20 @@ async function handleApi(req, res, url) {
     );
     db.prepare('update users set last_login_at = ? where id = ?').run(t, row.id);
     setSessionCookie(req, res, token);
+    logInfo(`login: ${email} from ${clientIp(req)}`);
     return json(res, 200, { user: userPayload(row) });
   }
 
   if (pathname === '/api/auth/logout' && method === 'POST') {
     const token = parseCookies(req.headers.cookie)[COOKIE];
-    if (token) db.prepare('delete from sessions where token_hash = ?').run(sha256(token));
+    if (token) {
+      const sess = db.prepare('select user_id from sessions where token_hash = ?').get(sha256(token));
+      if (sess) {
+        const u = db.prepare('select email from users where id = ?').get(sess.user_id);
+        if (u) logInfo(`logout: ${u.email}`);
+      }
+      db.prepare('delete from sessions where token_hash = ?').run(sha256(token));
+    }
     // D-61/D-71: logout also works from the pending state — kill any live challenge.
     const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
     if (challengeToken) db.prepare('delete from login_challenges where challenge_token_hash = ?').run(sha256(challengeToken));
@@ -4159,6 +4234,7 @@ async function handleApi(req, res, url) {
       t, // a just-created session was seen at creation
     );
     setSessionCookie(req, res, token);
+    logInfo(`signup: ${user.email} (${user.name}) from ${ip}`);
     return json(res, 201, { user: userPayload(user) });
   }
 
@@ -4188,6 +4264,7 @@ async function handleApi(req, res, url) {
       if (wsBySlug(slug)) return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: uniqueSlug(slug) });
     }
     const ws = createWorkspace(name, slug, user);
+    logInfo(`workspace created "${name}" (slug: ${ws.slug}) by ${user.email}`);
     return json(res, 201, { workspace: workspacePayload(ws, membershipOf(ws.id, user.id)) });
   }
 
@@ -4245,6 +4322,7 @@ async function handleApi(req, res, url) {
       const t = now();
       db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
       db.exec('commit');
+      logDocChanges(row, storedDoc, next, ctx.user?.name || ctx.user?.email || 'unknown');
       /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
          server delays nothing: errors logged, response already flushed. */
       if (MAILER.enabled && newNotifs.length) queueNotifEmails(row, next, newNotifs);
@@ -4254,7 +4332,7 @@ async function handleApi(req, res, url) {
       for (const fileId of storedFileIds) {
         if (keptFileIds.has(fileId) || !/^[A-Za-z0-9_-]+$/.test(fileId)) continue;
         fs.unlink(path.join(FILES_DIR, fileId), err => {
-          if (err && err.code !== 'ENOENT') console.warn(`file unlink ${fileId}: ${err.message}`);
+          if (err && err.code !== 'ENOENT') logWarn(`file unlink ${fileId}: ${err.message}`);
         });
       }
       return json(res, 200, { revision: revision + 1, updatedAt: t });
@@ -4290,6 +4368,7 @@ async function handleApi(req, res, url) {
     }
     db.prepare('update workspaces set name = ?, slug = ?, color = ?, updated_at = ? where id = ?').run(name, slug, color, now(), ctx.ws.id);
     const ws = db.prepare('select * from workspaces where id = ?').get(ctx.ws.id);
+    logInfo(`workspace updated "${name}" (slug: ${ws.slug}) by ${ctx.user.email}`);
     return json(res, 200, { workspace: workspacePayload(ws, membershipOf(ws.id, ctx.user.id)) });
   }
 
@@ -4302,6 +4381,7 @@ async function handleApi(req, res, url) {
       db.prepare('delete from invites where workspace_id = ?').run(ctx.ws.id);
       db.prepare('delete from workspaces where id = ?').run(ctx.ws.id);
     });
+    logInfo(`workspace deleted "${ctx.ws.name}" (slug: ${ctx.ws.slug}) by ${ctx.user.email}`);
     return json(res, 200, { deleted: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
   }
 
@@ -4332,6 +4412,7 @@ async function handleApi(req, res, url) {
       db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
       updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
     });
+    logInfo(`member left workspace "${ctx.ws.slug}": ${ctx.user.email}`);
     return json(res, 200, { left: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
   }
 
@@ -4357,6 +4438,7 @@ async function handleApi(req, res, url) {
         db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
         updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
       });
+      logInfo(`member removed "${target.email}" from "${ctx.ws.slug}" by ${ctx.user.email}`);
       return json(res, 200, { removed: true, userId: target.id, revision: wsRevision(ctx.ws.id) });
     }
 
@@ -4392,6 +4474,7 @@ async function handleApi(req, res, url) {
       });
     });
     const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
+    if (nextRole !== row.role) logInfo(`member role ${row.role} → ${nextRole} for "${target.email}" in "${ctx.ws.slug}" by ${ctx.user.email}`);
     return json(res, 200, {
       revision: wsRevision(ctx.ws.id),
       member: memberPayload(
@@ -4683,6 +4766,7 @@ async function handleApi(req, res, url) {
       db.exec('rollback');
       throw err;
     }
+    logInfo(`invite(s) created: role ${role}, ${rows.length} link(s) for "${ctx.ws.slug}" by ${ctx.user.email}`);
 
     // Email delivery happens after the invites are committed, so a temporary
     // SMTP failure never loses the links. The client also receives the URL.
@@ -4705,7 +4789,7 @@ async function handleApi(req, res, url) {
             });
             row.sent = true;
           } catch (err) {
-            console.error(`invite email to ${row.email} failed: ${err.message}`);
+            logError(`invite email to ${row.email} failed: ${err.message}`);
             row.sent = false;
             row.error = 'Email could not be sent. Copy the link instead.';
             row.code = 'emailSendFailed';
@@ -5242,14 +5326,14 @@ const server = http.createServer(async (req, res) => {
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {
-        if (url.pathname !== '/api/health') console.log(`${req.method} ${url.pathname} ${res.statusCode} ${now() - started}ms`);
+        if (url.pathname !== '/api/health') logDebug(`${req.method} ${url.pathname} ${res.statusCode} ${now() - started}ms`);
       });
     } else {
       serveStatic(req, res, url);
     }
   } catch (err) {
     const status = err.status || 500;
-    if (status >= 500) console.error(err);
+    if (status >= 500) logError(err);
     if (!res.headersSent) json(res, status, { error: status >= 500 ? 'Internal server error' : err.message, code: err.code });
     else res.end();
   }
@@ -5260,7 +5344,7 @@ function backupCli(target) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   db.exec('pragma wal_checkpoint(truncate)');
   db.exec(`vacuum into '${dest.replaceAll("'", "''")}'`);
-  console.log(dest);
+  logInfo(dest);
   db.close();
 }
 
@@ -5269,23 +5353,23 @@ function addUserCli(args) {
   const name = args[1];
   const slug = args[2];
   if (!email) {
-    console.error('usage: node server.js --add-user <email> [name] [workspace-slug]');
+    logError('usage: node server.js --add-user <email> [name] [workspace-slug]');
     process.exit(1);
   }
   ensureWorkspace();
   const ws = slug ? wsBySlug(slug) : firstWorkspace();
   if (!ws) {
-    console.error(slug ? `no workspace with slug ${slug}` : 'no workspace available');
+    logError(slug ? `no workspace with slug ${slug}` : 'no workspace available');
     process.exit(1);
   }
   const password = process.env.USER_PASSWORD || crypto.randomBytes(9).toString('base64url');
   try {
     const user = createUser(email, name, password);
     addMembership(ws, user, 'member');
-    console.log(`created ${user.email} in ${ws.slug}`);
-    if (!process.env.USER_PASSWORD) console.log(`password: ${password}`);
+    logInfo(`created ${user.email} in ${ws.slug}`);
+    if (!process.env.USER_PASSWORD) logInfo(`password: ${password}`);
   } catch (err) {
-    console.error(err.message);
+    logError(err.message);
     process.exitCode = 1;
   }
   db.close();
@@ -5296,19 +5380,19 @@ function setPasswordCli(args) {
     .trim()
     .toLowerCase();
   if (!email) {
-    console.error('usage: node server.js --set-password <email>');
+    logError('usage: node server.js --set-password <email>');
     process.exit(1);
   }
   const row = db.prepare('select id from users where email = ?').get(email);
   if (!row) {
-    console.error(`no account for ${email}`);
+    logError(`no account for ${email}`);
     process.exit(1);
   }
   const password = process.env.USER_PASSWORD || crypto.randomBytes(9).toString('base64url');
   db.prepare('update users set password_hash = ? where id = ?').run(hashPassword(password), row.id);
   db.prepare('delete from sessions where user_id = ?').run(row.id);
-  console.log(`password updated for ${email} (existing sessions revoked)`);
-  if (!process.env.USER_PASSWORD) console.log(`password: ${password}`);
+  logInfo(`password updated for ${email} (existing sessions revoked)`);
+  if (!process.env.USER_PASSWORD) logInfo(`password: ${password}`);
   db.close();
 }
 
@@ -5317,8 +5401,10 @@ function main() {
   if (args[0] === '--add-user') return addUserCli(args.slice(1));
   if (args[0] === '--set-password') return setPasswordCli(args.slice(1));
   if (args[0] === '--backup') return backupCli(args[1]);
+  const BOOT_STARTED = Date.now();
 
   bootstrap();
+  logInfo(`boot complete in ${Date.now() - BOOT_STARTED}ms (schema migrations + sweeps)`);
   /* HARD-02 (D-02): legacy link-only admin/owner invites are neutralized at
      boot — UPDATE only (the row is an audit trail, never destroyed), no
      schema change, no migration. Boot-scoped, NOT the route-scoped cleanup. */
@@ -5334,8 +5420,8 @@ function main() {
      invitation or notification links pointing at the attacker's domain. Fail loudly
      at boot instead of at the first email. */
   if (MAILER.enabled && !APP_URL) {
-    console.error('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
-    console.error(
+    logError('invite email: refusing to start — SMTP_HOST is set but APP_URL is empty.');
+    logError(
       "Invitation and notification links are built from APP_URL; without it a request host header could point those emails at an attacker's domain. Set APP_URL (e.g. https://projects.example.com) or unset SMTP_HOST to disable email invitations.",
     );
     process.exit(1);
@@ -5351,20 +5437,26 @@ function main() {
     try {
       runReminderPass();
     } catch (err) {
-      console.warn(`reminder tick: ${err.message}`);
+      logWarn(`reminder tick: ${err.message}`);
     }
   }, 60_000).unref();
 
   server.listen(PORT, HOST, () => {
-    console.log(`Projects Studio listening on http://${HOST}:${PORT}`);
-    console.log(`database: ${DB_PATH}`);
-    if (MAILER.enabled) console.log(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
-    else if (MAILER.error) console.warn(`invite email: disabled — ${MAILER.error}`);
-    else console.log('invite email: disabled (set SMTP_HOST to email invitations)');
+    logInfo(`Projects Studio listening on http://${HOST}:${PORT}`);
+    logInfo(`database: ${DB_PATH}`);
+    if (MAILER.enabled) logInfo(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
+    else if (MAILER.error) logWarn(`invite email: disabled — ${MAILER.error}`);
+    else logInfo('invite email: disabled (set SMTP_HOST to email invitations)');
+    /* Config summary at startup (Kanzo #9): the flags that change runtime
+       behavior, one line each, so `docker logs` answers "how is this deployed". */
+    logInfo(`log level: ${LOG_LEVEL} (LOG_LEVEL env: debug | info | warn | error)`);
+    logInfo(`sessions: ${SESSION_DAYS}d ttl · sign-ups: ${ALLOW_SIGNUP ? 'open' : 'closed'} · secure cookie: ${SECURE_COOKIE} · trust proxy: ${TRUST_PROXY}`);
+    logInfo(`sso: ${OIDC.enabled ? `enabled via ${OIDC.config?.issuer || 'configured issuer'}${OIDC.ssoOnly ? ' (sso-only)' : ''}` : 'disabled'}`);
+    logInfo(`due reminders: from 09:00 workspace-local, catch-up window all day · daily digest: opt-in, 09:00`);
   });
 
   const shutdown = signal => {
-    console.log(`${signal} received, shutting down`);
+    logInfo(`${signal} received, shutting down`);
     server.close(() => {
       db.close();
       process.exit(0);

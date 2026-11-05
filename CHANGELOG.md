@@ -11,6 +11,12 @@ The 1.2.0 tag is cut at milestone close; these are the release notes text.
 
 ### Added
 
+- **Leveled docker logs with `LOG_LEVEL`.** New env variable selecting debug, info (default),
+  warn or error. Every log line is stamped with an ISO timestamp and level. At info, docker
+  logs show the startup config summary (sessions, sign-ups, SSO, reminders), boot migration
+  timing, task lifecycle events (added, renamed, assigned, commented, removed), logins and
+  failed logins, sign-ups, 2FA challenges, workspace and membership changes, invites, and the
+  reminder/digest pass summaries. HTTP request lines moved to debug. No new dependencies.
 - **A full French interface.** Every user-visible interface string is translated: the interface,
   error messages, activity entries, dates, numbers and plurals render per locale, and each
   account's language choice persists across sessions.
