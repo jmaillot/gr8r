@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-04 after Phase 36*
+*Last updated: 2026-11-05 after Phase 37*
 
 ## Current Milestone: v1.8 Notification Sanity
 
@@ -451,6 +451,11 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   inbox render (legacy prose rows pinned byte-identical), and a build gate against catalogue
   drift (server notif.* key resolution + EN↔FR parity, live exit 0) — Phase 36 (I18N-01..04;
   verification 12/12)
+- ✓ REM-01..04 — Honest reminder cadence: at most two due-date notifications per task per
+  assignee ("Due today" morning-of, "Past due" the following morning), exactly-once via a
+  transactional `reminders_sent` claim, `day_before` removed deploy-safely, push_due pref
+  removed end-to-end, and a post-09:00 boot catch-up window (`hour >= 9`, REM-06 regression
+  pin) — Phase 37 (UAT re-passed live 2026-11-05)
 
 ### Active
 
