@@ -52,10 +52,10 @@
 
 ### Notification Audit (AUDIT)
 
-- [ ] **AUDIT-01**: An audit document reviews every notification type × channel × default
+- [x] **AUDIT-01**: An audit document reviews every notification type × channel × default
   (mentions, assignments, comments, reminders, digest) with trim recommendations and an explicit
   RFC 8058 `List-Unsubscribe` decision for the digest.
-- [ ] **AUDIT-02**: Every threshold/default change recommended by the audit is validated by the
+- [x] **AUDIT-02**: Every threshold/default change recommended by the audit is validated by the
   owner BEFORE any code implements it; the audit itself ships as documentation only (no behavior
   change in this milestone without validation).
 
@@ -94,7 +94,7 @@
 | DIGEST-01 | Phase 38 | Complete |
 | DIGEST-02 | Phase 38 | Complete |
 | DIGEST-03 | Phase 38 | Complete |
-| AUDIT-01 | Phase 39 | Pending |
-| AUDIT-02 | Phase 39 | Pending |
+| AUDIT-01 | Phase 39 | Complete |
+| AUDIT-02 | Phase 39 | Complete |
 
 Coverage: 13/13 v1.8 requirements mapped — no orphans, no duplicates.

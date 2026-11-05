@@ -31,7 +31,7 @@ Details: [.planning/milestones/v1.7-ROADMAP.md](milestones/v1.7-ROADMAP.md)
 - [x] **Phase 36: Server Notification i18n** - Every server-emitted notification renders in the recipient's locale through a shared EN/FR catalogue, with a build gate against drift (completed 2026-11-04)
 - [x] **Phase 37: Reminder Cadence Rework** - Due-date reminders capped at two per task ("due today" + one "past due"); `day_before` removed deploy-safely (completed 2026-11-05)
 - [x] **Phase 38: Daily Digest & Reminder Suppression** - Opt-in 09:00 digest email replaces individual reminder emails when enabled; silent when nothing is due (completed 2026-11-04)
-- [ ] **Phase 39: Notification Audit (doc-only)** - Full notification type × channel × default audit with trim recommendations, owner-validated before any coding
+- [x] **Phase 39: Notification Audit (doc-only)** - Full notification type × channel × default audit with trim recommendations, owner-validated before any coding (completed 2026-11-05)
 
 ## Phase Details
 
@@ -115,7 +115,7 @@ Plans:
   2. The audit records an explicit decision on RFC 8058 `List-Unsubscribe` for the digest email.
   3. No threshold or default change from the audit is coded in this milestone without recorded owner validation; the audit ships as documentation only.
 
-**Plans:** 1/1 plans executed
+**Plans:** 1/1 plans complete
 - [x] 39-01-PLAN.md — Create docs/notification-audit.md: per-type audit sections with file:line citations, trim recommendations + D-05 status gate, RFC 8058 decision section; STATE.md mirror line
 
 ## Progress
@@ -125,7 +125,7 @@ Plans:
 | 36. Server Notification i18n | 4/4 | Complete    | 2026-11-04 |
 | 37. Reminder Cadence Rework | 4/4 | Complete    | 2026-11-05 |
 | 38. Daily Digest & Reminder Suppression | 3/3 | Complete    | 2026-11-04 |
-| 39. Notification Audit (doc-only) | 1/1 | In Progress|  |
+| 39. Notification Audit (doc-only) | 1/1 | Complete    | 2026-11-05 |
 
 ## Backlog
 
