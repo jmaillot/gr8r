@@ -783,3 +783,91 @@ test('UNSUB-01/D-05: the http://app.test fixture digest carries NO List-Unsubscr
   assert.ok(digest.text.includes(`http://app.test/w/${ws.slug}/settings#notif-email`), 'footer settings link still renders in the text part');
   assert.ok(digest.html.includes('Unsubscribe from these emails'), 'footer settings link still renders in the HTML part');
 });
+
+/* =====================================================================
+   Phase 41 plan 02 — D-05 gate-negative integration tests, one per
+   gate. Append-only: neither the 41-01 fixtures/tests nor the helpers
+   are touched. GATE 1 boots a THIRD server with NO MASTER_KEY but
+   APP_URL=https (https — not the http fixture's URL — so the zero-
+   header outcome is attributable to the missing key alone: key absent
+   → unsubscribeHmacKey() null → no unsubscribeUrl in msg → mailer
+   renders zero headers). GATE 2 reuses the EXISTING http://app.test
+   main fixture so the mailer-side URL-shape gate is pinned with the
+   server-side https gate layered in front (both refuse http).
+   ===================================================================== */
+
+let smtpGate1;
+let gate1Server;
+let gate1TempDir;
+
+before(async () => {
+  smtpGate1 = fakeSmtp();
+  await smtpGate1.listen();
+  gate1TempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-digest-gate1-'));
+  gate1Server = await startServer({
+    dataDir: gate1TempDir,
+    env: {
+      MASTER_KEY: '', // explicit: defeats any process.env leakage into the child
+      REMINDER_TEST_TOKEN: TOKEN,
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(smtpGate1.port()),
+      SMTP_REQUIRE_TLS: 'false',
+      MAIL_FROM: 'noreply@test.local',
+      APP_URL: 'https://app.test',
+    },
+  });
+});
+
+after(async () => {
+  await gate1Server?.stop();
+  smtpGate1?.close();
+  if (gate1TempDir) fs.rmSync(gate1TempDir, { recursive: true, force: true });
+});
+
+test('UNSUB-01/D-05 gate 1: a digest from a server booted WITHOUT MASTER_KEY carries NO List-Unsubscribe headers (footer still renders in BOTH parts)', async () => {
+  const { ws, email } = await makeWorkspace(
+    m => [task(m, { key: 'K-NOKEY', title: 'No-key task', due: '2026-06-03' })],
+    DIGEST_ONLY,
+    TZ,
+    gate1Server,
+  );
+
+  const res = await trigger(at9('2026-06-03'), gate1Server);
+  assert.ok(res.digests >= 1, 'digest fires on the no-MASTER_KEY server (keyring absence is fail-open, not fatal)');
+  const digest = digestFor(await waitFor(smtpGate1, 1, 'no-key digest email'), email, ws.slug);
+
+  /* Raw payload: headers live above the MIME parts — decode() drops them. */
+  const raw = smtpGate1.payloads.find(p => p.includes(`To: <${email}>`));
+  assert.ok(raw, 'captured raw no-key digest');
+
+  /* Zero header occurrences of EITHER kind (D-05 gate 1). */
+  assert.ok(!raw.includes('List-Unsubscribe'), 'no List-Unsubscribe header without MASTER_KEY');
+  assert.ok(!raw.includes('List-Unsubscribe-Post'), 'no List-Unsubscribe-Post header without MASTER_KEY');
+
+  /* The plain footer unsubscribe path survives the gate failure — D-05 scope
+     is headers only. APP_URL is https here, so the settings URL is https. */
+  const settingsUrl = `https://app.test/w/${ws.slug}/settings#notif-email`;
+  assert.ok(digest.text.includes(settingsUrl), 'footer settings link still renders in the text part');
+  assert.ok(digest.html.includes(settingsUrl), 'footer settings link still renders in the HTML part');
+});
+
+test('UNSUB-01/D-05 gate 2: an http://APP_URL digest carries NO List-Unsubscribe headers (footer still renders in BOTH decoded parts)', async () => {
+  const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-HTTP2', title: 'Http gate task', due: '2026-06-04' })], DIGEST_ONLY);
+  const payloadsBefore = smtp.payloads.length;
+  const res = await trigger(at9('2026-06-04'));
+  assert.ok(res.digests >= 1, 'digest fires on the http fixture');
+  const digest = digestFor(await waitFor(smtp, 1, 'http gate-2 digest email'), email, ws.slug);
+  const raw = smtp.payloads.slice(payloadsBefore).find(p => p.includes(`To: <${email}>`));
+  assert.ok(raw, 'captured raw http gate-2 digest');
+
+  /* Zero header occurrences of EITHER kind — the server-side https gate and
+     the mailer-side URL-shape gate BOTH refuse http (layered defense). */
+  assert.ok(!raw.includes('List-Unsubscribe'), 'no List-Unsubscribe header for an http APP_URL');
+  assert.ok(!raw.includes('List-Unsubscribe-Post'), 'no List-Unsubscribe-Post header for an http APP_URL');
+
+  /* Footer survives: the settings URL (http, matching the fixture's APP_URL)
+     renders in BOTH decoded parts — header omission never suppresses it. */
+  const settingsUrl = `http://app.test/w/${ws.slug}/settings#notif-email`;
+  assert.ok(digest.text.includes(settingsUrl), 'footer settings link still renders in the decoded text part');
+  assert.ok(digest.html.includes(settingsUrl), 'footer settings link still renders in the decoded HTML part');
+});
