@@ -3,13 +3,13 @@ gsd_state_version: "1.0"
 milestone: v1.8
 milestone_name: Notification Sanity
 current_phase: 39
-current_phase_name: notification-audit-doc-only
+current_phase_name: Notification Audit (doc-only)
 status: executing
 stopped_at: Phase 39 context gathered
-last_updated: "2026-11-05T10:01:09.719Z"
+last_updated: "2026-11-05T10:05:17.853Z"
 last_activity: 2026-11-05
-last_activity_desc: Phase 37 complete, transitioned to Phase 39
-state_head: 6cc6a21b208eab988cd005ef09a792f82aeea7e0
+last_activity_desc: Phase 39 execution started
+state_head: 0e64d67ba71729842bcb4336f18dcf5b3dd046c5
 progress:
   total_phases: 4
   completed_phases: 3
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 39 (notification-audit-doc-only) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-05 — Phase 37 complete, transitioned to Phase 39
+Phase: 39 (Notification Audit (doc-only)) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 39
+Last activity: 2026-11-05 — Phase 39 execution started
 
 ## v1.8 Phase Order (research-validated build order; numbering continues from v1.7's Phase 35)
 
@@ -53,6 +53,7 @@ to server notification keys, `email_digest` default inversion decided in spec no
 
 ## Recent Decisions
 
+- [Phase 39]: 39-01: docs/notification-audit.md delivered doc-only — every trim recommendation and the RFC 8058 List-Unsubscribe recommendation ship as `proposed` pending owner validation (D-05); no threshold/default change is codeable until a row reads `validated` with recorded sign-off
 - [v1.8 roadmap] Phase numbering continues from v1.7 (Phase 35) — v1.8 is Phases 36-39, no reset
 - [v1.8 roadmap] 4 phases following research build order: I18N → REM → DIGEST → AUDIT.
   I18N first is forced (REM and DIGEST both render localized text through it); REM before
