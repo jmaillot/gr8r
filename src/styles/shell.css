@@ -130,29 +130,30 @@ svg.logo {
   color: var(--text);
 }
 .sitem.on {
-  background: var(--surface);
+  background: var(--accent-soft);
   color: var(--text);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.05),
-    0 0 0 1px var(--border);
+  box-shadow: 0 0 0 1px var(--accent-line);
   font-weight: 500;
 }
 :root[data-theme='dark'] .sitem.on {
-  background: var(--surface-3);
-  box-shadow: none;
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
+  box-shadow: 0 0 0 1px var(--accent-line);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .sitem.on {
-    background: var(--surface-3);
-    box-shadow: none;
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
+    box-shadow: 0 0 0 1px var(--accent-line);
   }
 }
 .sitem .i {
   color: var(--text-4);
 }
-.sitem.on .i,
 .sitem:hover .i {
   color: var(--text-2);
+}
+/* the active row is the one place the accent is always on screen */
+.sitem.on .i {
+  color: var(--accent);
 }
 .sitem .ct {
   margin-left: auto;

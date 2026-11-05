@@ -96,7 +96,7 @@
   border-top: 1px solid var(--divider);
 }
 .nrow.unread {
-  background: color-mix(in srgb, var(--accent) 3.5%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .nrow:hover {
   background: var(--surface-2);

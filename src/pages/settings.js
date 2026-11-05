@@ -229,7 +229,20 @@ export function settingsBody(sec, title) {
               `<button class="sw ${P.accent === k ? 'on' : ''}" style="--c:${c}" role="radio" aria-checked="${P.accent === k}" data-a="setPref" data-k="accent" data-v="${k}" aria-label="${k}" data-tip="${t(ACCENT_TIPS[k])}">${P.accent === k ? ic('check', 13) : ''}</button>`,
           )
           .join('')}</div>`,
-      )}</div>
+      )}
+        <div class="accent-preview" aria-hidden="true">
+          <div class="ap-side">
+            <div class="ap-item on">${ic('home', 12)}${t('nav.route.home')}</div>
+            <div class="ap-item">${ic('inbox', 12)}${t('nav.route.inbox')}<span class="ct">3</span></div>
+            <div class="ap-item">${ic('list', 12)}${t('nav.tab.list')}</div>
+          </div>
+          <div class="ap-main">
+            <div class="ap-tabs"><span class="on">${t('nav.tab.board')}</span><span>${t('nav.tab.list')}</span></div>
+            <div class="ap-row"><span class="ap-btn">${t('act.newTask')}</span><span class="ap-check">${ic('check', 9)}</span><span class="ap-toggle"></span></div>
+            <div class="ap-prog"><i style="width:62%"></i></div>
+            <div class="ap-foot"><span class="ap-link">@mention</span><span class="ap-unread">${t('nav.route.notifications')}</span></div>
+          </div>
+        </div></div>
       <div class="sblock"><h2>${t('settings.appearance.density')}</h2>
         ${srow(t('settings.density.sidebarTitle'), t('settings.density.sidebarDesc'), `<div class="seg">${['comfortable', 'compact'].map(k => `<button class="${P.side === k ? 'on' : ''}" data-a="setPref" data-k="side" data-v="${k}">${t(DENSITY_LABELS[k])}</button>`).join('')}</div>`)}
         ${srow(t('settings.density.taskTitle'), t('settings.density.taskDesc'), `<div class="seg">${['comfortable', 'compact'].map(k => `<button class="${P.density === k ? 'on' : ''}" data-a="setPref" data-k="density" data-v="${k}">${t(DENSITY_LABELS[k])}</button>`).join('')}</div>`)}

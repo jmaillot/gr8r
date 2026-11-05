@@ -1180,7 +1180,7 @@
   "settings.appearance.lead": "Customize how Projects Studio looks on this device.",
   "settings.appearance.accentTitle": "Accent color",
   "settings.appearance.accent": "Accent",
-  "settings.appearance.accentDesc": "Used for primary buttons, focus rings, and selection.",
+  "settings.appearance.accentDesc": "Used for the active menu item, tabs, primary buttons, checkboxes, focus rings, and selection.",
   "a11y.settings.accentColor": "Accent color",
   "settings.accent.indigo": "Indigo",
   "settings.accent.blue": "Blue",

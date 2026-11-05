@@ -471,7 +471,7 @@
   bottom: -1px;
   height: 2px;
   border-radius: 2px;
-  background: var(--text);
+  background: var(--accent);
 }
 .fx-tabs .tab.on::after {
   animation: tabIn 0.26s var(--ease);

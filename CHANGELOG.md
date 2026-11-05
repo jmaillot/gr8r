@@ -11,6 +11,11 @@ The 1.2.0 tag is cut at milestone close; these are the release notes text.
 
 ### Added
 
+- **The accent color is now visible.** It previously painted only interaction states (buttons, focus
+  rings, selection), so all six accents looked identical at rest. It now also tints the active
+  sidebar item, the active tab underline, count badges and unread rows, and Settings → Appearance
+  gains a live preview card showing every surface the accent drives. Light and dark palettes both
+  adapt; contrast stays on `--on-accent`.
 - **Leveled docker logs with `LOG_LEVEL`.** New env variable selecting debug, info (default),
   warn or error. Every log line is stamped with an ISO timestamp and level. At info, docker
   logs show the startup config summary (sessions, sign-ups, SSO, reminders), boot migration

@@ -380,7 +380,7 @@ const TABLES = [
     ['settings.appearance.lead', undefined, 'Customize how Projects Studio looks on this device.'],
     ['settings.appearance.accentTitle', undefined, 'Accent color'],
     ['settings.appearance.accent', undefined, 'Accent'],
-    ['settings.appearance.accentDesc', undefined, 'Used for primary buttons, focus rings, and selection.'],
+    ['settings.appearance.accentDesc', undefined, 'Used for the active menu item, tabs, primary buttons, checkboxes, focus rings, and selection.'],
     ['a11y.settings.accentColor', undefined, 'Accent color'],
     ['settings.accent.indigo', undefined, 'Indigo'],
     ['settings.accent.blue', undefined, 'Blue'],

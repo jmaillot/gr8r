@@ -153,6 +153,158 @@
     0 0 0 2px var(--surface),
     0 0 0 4px var(--c);
 }
+/* Live accent preview: a miniature of the surfaces the accent actually paints.
+   Every value is a token, so the card repaints the instant a swatch is picked. */
+.accent-preview {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--surface);
+  margin-top: 12px;
+  font-size: 11px;
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ap-side {
+  background: var(--sunken);
+  border-right: 1px solid var(--border);
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ap-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ap-item.on {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--accent-line);
+  font-weight: 500;
+}
+.ap-item.on .i {
+  color: var(--accent);
+}
+.ap-item .ct {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.ap-item.on .ct {
+  color: var(--accent);
+  font-weight: 600;
+}
+.ap-main {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.ap-tabs {
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid var(--divider);
+  padding-bottom: 6px;
+}
+.ap-tabs span {
+  position: relative;
+  color: var(--text-2);
+}
+.ap-tabs span.on {
+  color: var(--text);
+  font-weight: 500;
+}
+.ap-tabs span.on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.ap-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.ap-btn {
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 4px 9px;
+  border-radius: 5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ap-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.ap-toggle {
+  width: 24px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--accent);
+  position: relative;
+  flex-shrink: 0;
+}
+.ap-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--on-accent);
+}
+.ap-prog {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.ap-prog i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ap-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ap-link {
+  color: var(--accent);
+  font-weight: 500;
+}
+.ap-unread {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-2);
+}
 .perm-t {
   width: 100%;
   border-collapse: collapse;
