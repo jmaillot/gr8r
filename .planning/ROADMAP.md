@@ -84,9 +84,11 @@ Plans:
   4. The route ships with a written security contract (token model, method allow-list, replay posture, response matrix, throttle on the login-family budget) pinned by tests before/with the route implementation — sameOrigin exemption documented at the route
   5. Phase 38 suppression invariant and second-boot/no-duplicate digest tests pass unmodified; full suite green, zero runtime dependencies
 
-**Plans**: TBD
+**Plans**: 2 plans
 
-### Phase 43: Workspace Logo *(v1.10)*
+Plans:
+- [ ] 42-01-PLAN.md — One-click route end-to-end: helpers, contract comment, security-contract test matrix (UNSUB-02, D-01..D-10/D-13)
+- [ ] 42-02-PLAN.md — Push "coming soon" badge on the three inert toggles (D-11/D-12) *(v1.10)*
 
 **Goal**: A workspace can carry its own logo — uploaded by an admin, stored server-side, rendered wherever the workspace identity appears — with a clean fallback to `favicon.svg` when none is set
 **Depends on**: Nothing (first phase of v1.10)
@@ -120,7 +122,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 40. Digest Subject & Task Lines | 2/2 | Complete    | 2026-11-05 |
 | 41. Unsubscribe Tokens & Headers | 2/2 | In Progress|  |
-| 42. One-Click Unsubscribe Endpoint | 0/? | Not started | - |
+| 42. One-Click Unsubscribe Endpoint | 0/2 | Not started | - |
 | 43. Workspace Logo | 0/? | Not started | - |
 | 44. Per-Member Timezones | 0/? | Not started | - |
 
