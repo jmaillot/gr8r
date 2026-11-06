@@ -608,10 +608,10 @@ test('the design-system token names, state keys, theme keys and demo values are 
 
 test('the settings stored preference values are byte-identical', () => {
   const src = read('src/pages/settings.js');
-  assert.ok(
-    src.includes("['(GMT-08:00) Pacific Time', '(GMT-05:00) Eastern Time', '(GMT+00:00) London', '(GMT+01:00) Berlin', '(GMT+08:00) Singapore']"),
-    'the stored time-zone labels moved',
-  );
+  /* Phase 44 (D-01): the five-label tz select is gone — the picker is the
+     searchable combobox over the committed IANA list (Plan 44-03). */
+  assert.ok(!src.includes("sel('tz'"), 'the five-label tz select came back');
+  assert.ok(src.includes('tzCombobox()') && src.includes('data-in="tzSel"'), 'the tz combobox is not wired into case datetime');
   assert.ok(!src.includes("'English (US)'"), 'the six-label language array is gone');
   for (const id of [
     'workspace',
@@ -683,7 +683,7 @@ test('registry codes, locale catalogue files and the selector agree one-to-one (
 test('the language handler writes only the account locale (T-8-07)', () => {
   const src = read('src/actions/actions.js');
   const start = src.indexOf('IN.langSel');
-  const body = src.slice(start, src.indexOf('A.wsColor', start));
+  const body = src.slice(start, src.indexOf('TZ PICKER', start)); // the language handler ends where the Phase 44 tz picker comment begins
   assert.ok(body.includes('setLocale(code)') && body.includes('api.patchMe({ locale: code })') && body.includes('storeLocale(code)'));
   assert.ok(!/S\.prefs|save\(|prefValue|setPref/.test(body), 'no document write path is reachable from the language handler');
 });

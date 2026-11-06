@@ -2750,9 +2750,10 @@ IN.langSel = async el => {
 /* =====================================================================
    TZ PICKER (Phase 44, D-01/D-04/D-09) — one handler serving both dispatch
    namespaces (the 43-03 alias precedent: one code path, two entry points).
-   - Typing: the combobox input (data-in="tzSel") updates the filter query
-     and re-renders; it never saves (D-04 — nothing auto-saves on render).
-   - Selection: an option (data-a="tzSel", aliased below) writes the CURRENT
+   - Typing: the combobox input (the tzSel data-in hook) updates the filter
+     query and re-renders; it never saves (D-04 — nothing auto-saves on render).
+   - Selection: an option (the tzSel data-a hook, aliased below) writes the
+     CURRENT
      member's tz on S.data.members — NEVER S.prefs (blob prefs.tz is the
      disconnected store this phase replaces, D-09) — then persists through
      the real doc save(). The PUT lands in docFromClient's self-tz-only
