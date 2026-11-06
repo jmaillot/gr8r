@@ -5,16 +5,16 @@ milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 43
 current_phase_name: Workspace Logo
 status: verifying
-stopped_at: Completed 43-02-PLAN.md
-last_updated: "2026-11-06T12:36:39.994Z"
+stopped_at: Completed 43-03-PLAN.md (gap closure G-43-3/G-43-4)
+last_updated: "2026-11-06T14:23:19.168Z"
 last_activity: 2026-11-06
 last_activity_desc: Phase 43 execution started
-state_head: e44a430707f01e00fb60ab83b2b5d6e0273660f7
+state_head: 482f0b5d35692d689a653a5ccfad3a95bb101c46
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # STATE.md
@@ -99,6 +99,8 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 43]: 43-01: svg magic-byte sniff tightened to <?xml / <svg prefixes (plan's bare leading-< would admit html masquerading as images); logo files are bare uids under DATA_DIR/logos, ext lives in doc.data.logo; replace unlinks the old file only after updateDoc succeeds (D-09)
 - [Phase 43]: Plan 43-02: logo lives on api.workspace (payload state), never on the doc's ws object — avoids echoing a redundant/staleable field into the server doc
 - [Phase 43]: Plan 43-02: digest logoUrl composed server-side at sendDigest with no https gate (img URL ≠ security-header contract, unlike 41 unsubscribe)
+- [Phase 43]: G-43-3 fixed via click-namespace alias A.removeLogo (RED→GREEN wiring regression test)
+- [Phase 43]: G-43-4 closed as deployment staleness — /w/:slug/logo must bypass forward-auth (public route D-02); Traefik router exclusion added on deployment host; no source change
 
 ### Pending Todos
 
@@ -136,8 +138,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T12:36:32.038Z
-Stopped at: Completed 43-02-PLAN.md
+Last session: 2026-11-06T14:23:18.927Z
+Stopped at: Completed 43-03-PLAN.md (gap closure G-43-3/G-43-4)
 Resume file: None
 
 ## Performance Metrics
@@ -150,6 +152,7 @@ Resume file: None
 | Phase 40 P02 | 35m | 3 tasks | 6 files |
 | Phase 43 P01 | 24m | 2 tasks | 5 files |
 | Phase 43 P02 | 47m | 3 tasks | 14 files |
+| Phase 43 P03 | resumed-session | 2 tasks | 2 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 

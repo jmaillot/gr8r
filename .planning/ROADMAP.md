@@ -102,9 +102,11 @@ Plans:
   4. Upload validation rejects non-images and oversized files with a localized error message (EN+FR catalogued, `npm run i18n:scan` green)
   5. Full suite green; no new runtime dependencies
 
-**Plans**: 2/2 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
+- [x] 43-03-PLAN.md
+
 **Wave 1**
 - [x] 43-01-PLAN.md — Server-side logo routes: POST/DELETE/GET /w/:slug/logo, doc reference, magic-byte validation, workspacePayload.logo, lifecycle tests (D-01..D-04, D-08..D-11)
 
@@ -132,7 +134,7 @@ Plans:
 | 40. Digest Subject & Task Lines | 2/2 | Complete    | 2026-11-05 |
 | 41. Unsubscribe Tokens & Headers | 2/2 | In Progress|  |
 | 42. One-Click Unsubscribe Endpoint | 0/2 | Not started | - |
-| 43. Workspace Logo | 2/2 | In Progress|  |
+| 43. Workspace Logo | 3/3 | In Progress|  |
 | 44. Per-Member Timezones | 0/? | Not started | - |
 
 ## Backlog
