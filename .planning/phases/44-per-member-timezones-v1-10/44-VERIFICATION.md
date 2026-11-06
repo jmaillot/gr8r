@@ -1,11 +1,17 @@
 ---
 phase: 44-per-member-timezones-v1-10
-verified: 2026-11-06T12:00:00Z
+verified: 2026-11-06T17:57:00Z
 status: human_needed
 score: 14/15 must-haves verified
 behavior_unverified: 1
 overrides_applied: 0
 covered_files:
+  - .planning/phases/44-per-member-timezones-v1-10/44-01-PLAN.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-02-PLAN.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-03-PLAN.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-01-SUMMARY.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-02-SUMMARY.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-03-SUMMARY.md
   - tz.js
   - server.js
   - src/lib/timezones.js
@@ -19,7 +25,7 @@ covered_files:
   - test/tz-dedup.test.mjs
   - test/settings-tz.test.mjs
   - test/settings-tz-combobox.test.mjs
-covered_digest: "v2:sha256:445506a031429a125eb2c7540d6a3931851ee9bb31ca4208846f26ab3ba2feee"
+covered_digest: "v2:sha256:3a2c3398dda2765253fe17bebf75884c5b548ab25fcf40f72fe050bacd003824"
 behavior_unverified_items:
   - truth: "Settings > Date & time shows a searchable combobox over the full bundled IANA zone list (44-03 truth 1)"
     test: "Open Settings > Date & time in a browser as a member; type in the combobox; arrow/enter select a zone; reload and confirm the selection persisted"
