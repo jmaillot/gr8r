@@ -1682,6 +1682,13 @@ function docFromClient(incoming, stored, ws, role, membership) {
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
   // Membership edits stay with the roles that are allowed to make them.
   const storedMembers = stored?.data?.members || [];
+  /* D-09/D-10 (Phase 44): a member may write exactly one field — their OWN tz.
+     Capture it from the incoming snapshot before the role gates below; both
+     the non-admin replacement and the admin pinning then let the carve-out
+     re-apply it, same "access fields belong to the membership" family as the
+     pinned-field block above. */
+  const incomingSelfTz = (Array.isArray(incoming?.data?.members) ? incoming.data.members : [])
+    .find(m => m?.id === membership?.member_id && 'tz' in m)?.tz;
   if (ROLE_RANK[role] < ROLE_RANK.admin) {
     next.data.members = storedMembers;
   } else {
@@ -1702,6 +1709,15 @@ function docFromClient(incoming, stored, ws, role, membership) {
     for (const m of storedMembers) {
       if (m?.userId && !kept.has(m.userId)) next.data.members.push(m);
     }
+  }
+  /* D-09/D-10: apply the self-tz carve-out AFTER the role gates, for both
+     paths. Exactly one field on exactly one member — the requester's own.
+     Empty submits store '' (D-07: resolves to Europe/Paris on read);
+     anything else goes through the resolveTz funnel (invalid → Europe/Paris,
+     never stored raw). No other field is ever taken from the incoming array. */
+  if (incomingSelfTz !== undefined) {
+    const storedSelf = (Array.isArray(next.data.members) ? next.data.members : []).find(m => m?.id === membership?.member_id);
+    if (storedSelf) storedSelf.tz = (typeof incomingSelfTz === 'string' && incomingSelfTz.trim() === '') ? '' : resolveTz(incomingSelfTz);
   }
   // The plan, invoices, sessions and tfa fields are gone; a stale client's copy
   // must never resurrect them. Both the read path (normalizeDoc) and this write
