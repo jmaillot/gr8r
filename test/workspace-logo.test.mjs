@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { ADMIN, ROOT, client, inviteToken, login, startServer } from './helpers/server.mjs';
+import { ADMIN, client, inviteToken, login, startServer } from './helpers/server.mjs';
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 const SVG_BYTES = Buffer.from('<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>');
@@ -177,6 +177,76 @@ test('workspace delete with no logo still works — cleanup is a no-op', async (
     const res = await admin.client.del('/api/workspaces/acme');
     assert.equal(res.status, 200);
     assert.deepEqual(fs.readdirSync(path.join(server.dataDir, 'logos')), []);
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ------------------------- D-09 lifecycle (task 2) ------------------------ */
+
+test('replacing the logo unlinks the previous file — exactly one file remains (D-09)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    const a = await postLogo(server.base, admin.client.cookie(), PNG_BYTES);
+    assert.equal(a.status, 200);
+    const b = await postLogo(server.base, admin.client.cookie(), SVG_BYTES);
+    assert.equal(b.status, 200);
+
+    const logos = path.join(server.dataDir, 'logos');
+    assert.equal(fs.readdirSync(logos).length, 1, `expected a single stored logo, got ${fs.readdirSync(logos).join(', ')}`);
+    const res = await fetch(`${server.base}/w/acme/logo`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/svg+xml', 'the GET serves the replacement');
+    /* the payload URL version-bumped (D-11) */
+    const ws = await admin.client.get('/api/workspaces/acme');
+    assert.notEqual(ws.data.logo.url, (await a.json()).logo.url);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('DELETE removes the stored file and the GET falls back to 404; response carries the revision', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    const up = await postLogo(server.base, admin.client.cookie(), PNG_BYTES);
+    assert.equal(up.status, 200);
+
+    const logos = path.join(server.dataDir, 'logos');
+    assert.equal(fs.readdirSync(logos).length, 1);
+
+    const del = await fetch(`${server.base}/w/acme/logo`, { method: 'DELETE', headers: { cookie: admin.client.cookie() } });
+    assert.equal(del.status, 200);
+    const delBody = await del.json();
+    assert.equal(delBody.ok, true);
+    assert.ok(delBody.revision !== undefined, 'DELETE response carries the fresh revision (Pitfall 2)');
+
+    assert.deepEqual(fs.readdirSync(logos), [], 'the stored file is unlinked from disk (D-09)');
+    const res = await fetch(`${server.base}/w/acme/logo`);
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).code, 'logoNotFound');
+
+    /* DELETE when no logo is set → 404, not a silent 200. */
+    const again = await fetch(`${server.base}/w/acme/logo`, { method: 'DELETE', headers: { cookie: admin.client.cookie() } });
+    assert.equal(again.status, 404);
+    assert.equal((await again.json()).code, 'logoNotFound');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('deleting the workspace unlinks its logo file — no orphan (D-09/A4)', async () => {
+  const server = await startServer({});
+  try {
+    const admin = await login(server.base, ADMIN.email, ADMIN.password);
+    const up = await postLogo(server.base, admin.client.cookie(), PNG_BYTES);
+    assert.equal(up.status, 200);
+    assert.equal(fs.readdirSync(path.join(server.dataDir, 'logos')).length, 1);
+
+    const del = await admin.client.del('/api/workspaces/acme');
+    assert.equal(del.status, 200);
+    assert.deepEqual(fs.readdirSync(path.join(server.dataDir, 'logos')), [], 'workspace delete leaves zero logo files behind');
   } finally {
     await server.stop();
   }

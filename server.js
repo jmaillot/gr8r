@@ -4401,11 +4401,15 @@ async function handleApi(req, res, url) {
     const ctx = requireWorkspace(req, res, wsMatch[1], 'owner');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    /* Phase 43 (D-09): the workspace doc may carry a logo reference — unlink
+       the stored bytes alongside the row purge, no orphaned files (A4). */
+    const deletedLogo = docLogo(ctx.ws)?.file || null;
     transaction(() => {
       db.prepare('delete from memberships where workspace_id = ?').run(ctx.ws.id);
       db.prepare('delete from invites where workspace_id = ?').run(ctx.ws.id);
       db.prepare('delete from workspaces where id = ?').run(ctx.ws.id);
     });
+    if (deletedLogo) fs.unlink(path.join(LOGOS_DIR, deletedLogo), () => {});
     logInfo(`workspace deleted "${ctx.ws.name}" (slug: ${ctx.ws.slug}) by ${ctx.user.email}`);
     return json(res, 200, { deleted: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
   }
@@ -5258,6 +5262,22 @@ async function handleLogoGet(req, res, slug) {
   stream.pipe(res);
 }
 
+/* DELETE /w/:slug/logo — same gate order as the upload (D-01); D-09: unlink the
+   stored file and clear the doc fields. Removing when unset answers the same
+   404 logoNotFound as the GET-unset fallback (no separate oracle). */
+async function handleLogoDelete(req, res, slug) {
+  if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+  const ctx = requireWorkspace(req, res, slug, 'admin');
+  if (!ctx) return; // response already sent (404 workspaceNotFound / 403 adminOnly)
+  const logo = docLogo(ctx.ws);
+  if (!logo?.file) return fail(res, 404, 'logoNotFound', 'Logo not found');
+  updateDoc(ctx.ws.id, doc => {
+    if (doc.data) delete doc.data.logo;
+  });
+  fs.unlink(path.join(LOGOS_DIR, logo.file), () => {});
+  json(res, 200, { ok: true, revision: wsRevision(ctx.ws.id) });
+}
+
 /* ----------------------------- file serving ----------------------------- */
 
 /* D-06: the fixed inline/attachment policy. Only the known-safe renderable
@@ -5564,9 +5584,10 @@ const server = http.createServer(async (req, res) => {
       const logoMatch = url.pathname.match(LOGO_RE);
       const logoMethod = req.method.toUpperCase();
       if (logoMethod === 'POST') await handleLogoUpload(req, res, logoMatch[1]);
+      else if (logoMethod === 'DELETE') await handleLogoDelete(req, res, logoMatch[1]);
       else if (logoMethod === 'GET' || logoMethod === 'HEAD') await handleLogoGet(req, res, logoMatch[1]);
       else {
-        res.setHeader('Allow', 'GET, HEAD, POST');
+        res.setHeader('Allow', 'GET, HEAD, POST, DELETE');
         fail(res, 405, 'methodNotAllowed', 'Method not allowed');
       }
     } else if (url.pathname.startsWith('/api/')) {
