@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 43
-current_phase_name: workspace-logo
+current_phase_name: Workspace Logo
 status: executing
-stopped_at: Phase 43 context gathered
-last_updated: "2026-11-06T11:44:11.661Z"
+stopped_at: Completed 43-01-PLAN.md
+last_updated: "2026-11-06T12:10:34.042Z"
 last_activity: 2026-11-06
-last_activity_desc: Phase 42 executed (2/2 plans), verified, marked complete
-state_head: ea8b96365b0ffc37ace89f2cd5cbc8a747844da2
+last_activity_desc: Phase 43 execution started
+state_head: 0cfa89f546c5a1f7b711cd2940637505194f4e77
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # STATE.md
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-05)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 41 — Unsubscribe Tokens & List-Unsubscribe Headers
+**Current focus:** Phase 43 — Workspace Logo
 
 ## Current Position
 
-Phase: 43 (workspace-logo) — READY TO EXECUTE
-Plan: 2/2 plans complete, verification passed
+Phase: 43 (Workspace Logo) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-11-06 - Phase 42 executed and verified
+Last activity: 2026-11-06 — Phase 43 execution started
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -96,6 +96,7 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 40]: 40-01: RFC 2047 folding adopted for encodeWord (Pitfall 1/2 fired — 1879 octets single-line); folded at 900 octets/line
 - [Phase 40]: 40-01: encodeWord + truncate exported as named exports for tests (A2); send API unchanged
 - [Phase 40]: 40-02: SC-5 digest fallback tested via poisoned catalogue on exported buildDigestMessage (Plan 01 A2 precedent); FR digest subjects use NBSP before ':' (pre-existing typography breach fixed)
+- [Phase 43]: 43-01: svg magic-byte sniff tightened to <?xml / <svg prefixes (plan's bare leading-< would admit html masquerading as images); logo files are bare uids under DATA_DIR/logos, ext lives in doc.data.logo; replace unlinks the old file only after updateDoc succeeds (D-09)
 
 ### Pending Todos
 
@@ -133,9 +134,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T11:24:59.110Z
-Stopped at: Phase 43 context gathered
-Resume file: .planning/phases/43-workspace-logo/43-CONTEXT.md
+Last session: 2026-11-06T12:10:33.649Z
+Stopped at: Completed 43-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -145,6 +146,7 @@ Resume file: .planning/phases/43-workspace-logo/43-CONTEXT.md
 | Phase 42 P02 | 8m | 2 tasks | 5 files |
 | Phase 40 P01 | 14m | 3 tasks | 2 files |
 | Phase 40 P02 | 35m | 3 tasks | 6 files |
+| Phase 43 P01 | 24m | 2 tasks | 5 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
