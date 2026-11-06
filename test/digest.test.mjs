@@ -39,8 +39,8 @@ const trigger = (nowIso, srv = server) =>
     return r.json();
   });
 
-const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
 const at8 = iso => new Date(`${iso}T08:00:00Z`).toISOString();
+const at7 = iso => new Date(`${iso}T07:00:00Z`).toISOString();
 const at14 = iso => new Date(`${iso}T14:00:00Z`).toISOString();
 
 const owners = new Map(); // one shared account PER SERVER — signup is throttled to 5/hour/IP
@@ -231,16 +231,18 @@ after(async () => {
   if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-/* ---------------- DIGEST-01: the 09:00 happy path ---------------- */
+/* ---------------- DIGEST-01: the 08:00 happy path ---------------- */
+/* Window pin: at8 IS the window-open instant (moved from 09:00, D-27-1) —
+   this pass delivering the digest proves the window opens at 08:00 local. */
 
-test('DIGEST-01: opted-in member gets ONE localized digest at 09:00 — due-today + overdue, deep links, one ledger claim', async () => {
+test('DIGEST-01: opted-in member gets ONE localized digest at 08:00 — due-today + overdue, deep links, one ledger claim', async () => {
   const { ws, userId, email, tasks } = await makeWorkspace(
     m => [task(m, { key: 'K-TODAY', title: 'Due today task', due: '2026-01-15' }), task(m, { key: 'K-LATE', title: 'Overdue task', due: '2026-01-14' })],
     DIGEST_ONLY,
   );
   const revisionBefore = revisionOf(ws.slug);
 
-  const res = await trigger(at9('2026-01-15'));
+  const res = await trigger(at8('2026-01-15'));
   assert.ok(res.digests >= 1, `digests counted on the response (got ${res.digests})`);
   assert.equal(res.emitted.filter(n => tasks.some(t => t.id === n.task)).length, 0, 'reminder loop stays silent (email_reminder/due/past all off)');
 
@@ -264,7 +266,7 @@ test('DIGEST-01: opted-in member gets ONE localized digest at 09:00 — due-toda
      workspace of the same account with a due-today task but no prefs row
      sends nothing. */
   const { ws: wsB, userId: uidB } = await makeWorkspace(m => [task(m, { key: 'K-B1', due: '2026-01-15' })]);
-  const resB = await trigger(at9('2026-01-16'));
+  const resB = await trigger(at8('2026-01-16'));
   assert.equal(digestKeys(wsB.id).length, 0, 'no digest claim without a stored email_digest === true row');
   assert.ok(uidB, 'membership carries a user_id');
   assert.ok(!smtp.payloads.some(raw => raw.includes(`/w/${wsB.slug}/`)), 'no digest email for the opted-out workspace');
@@ -297,7 +299,7 @@ test('CR-01: a digest recipient receives ONLY their own, in-scope tasks — neve
     ),
   );
 
-  const res = await trigger(at9(DUE));
+  const res = await trigger(at8(DUE));
   void res;
   const msgs = await waitFor(smtp, 2, 'two digests (one per opted-in member)');
   const digestM1 = digestFor(msgs, m1Email, ws.slug);
@@ -325,15 +327,15 @@ test('CR-01: a digest recipient receives ONLY their own, in-scope tasks — neve
 
 /* ---------------- SC-2 no-double-send: simulated restart ---------------- */
 
-test('SC-2: a second 09:00 pass (simulated restart) sends nothing and the ledger keeps exactly one claim', async () => {
+test('SC-2: a second 08:00 pass (simulated restart) sends nothing and the ledger keeps exactly one claim', async () => {
   const { ws, userId, email } = await makeWorkspace(m => [task(m, { key: 'K-R1', due: '2026-02-01' })], DIGEST_ONLY);
 
-  const first = await trigger(at9('2026-02-01'));
+  const first = await trigger(at8('2026-02-01'));
   assert.ok(first.digests >= 1, 'first pass sends the digest');
   await waitFor(smtp, 1, 'first digest');
   assert.deepEqual(digestKeys(ws.id), [`${ws.id}:${userId}:digest:2026-02-01`]);
 
-  const second = await trigger(at9('2026-02-01'));
+  const second = await trigger(at8('2026-02-01'));
   assert.equal(digestKeys(ws.id).length, 1, 'exactly one digest ledger key after the replay pass');
   const replayed = smtp.payloads.slice().map(decode).filter(x => x.to === email && x.text.includes(`/w/${ws.slug}/`));
   assert.equal(replayed.length, 1, 'no second SMTP payload for the same day');
@@ -346,7 +348,7 @@ test('D-12: nothing due or overdue → no email, no ledger claim, no revision bu
   const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-F1', due: '2026-03-01' })], DIGEST_ONLY);
   const revisionBefore = revisionOf(ws.slug);
 
-  const res = await trigger(at9('2026-02-02'));
+  const res = await trigger(at8('2026-02-02'));
   assert.equal(digestKeys(ws.id).length, 0, 'the per-day key is never consumed on an empty digest');
   assert.equal(notifRows(ws.slug).length, 0);
   assert.equal(revisionOf(ws.slug), revisionBefore);
@@ -357,15 +359,15 @@ test('D-12: nothing due or overdue → no email, no ledger claim, no revision bu
 
 /* ---------------- D-01/D-02: late catch-up, content at send instant ---------------- */
 
-test('D-01/D-02: missed 09:00 → 14:00 catch-up delivers once, with content computed at 14:00', async () => {
+test('D-01/D-02: missed 08:00 → 14:00 catch-up delivers once, with content computed at 14:00', async () => {
   const { ws, userId, email, tasks } = await makeWorkspace(
     m => [task(m, { id: 'tEarly', key: 'K-C1', title: 'Early task', due: '2026-01-30' }), task(m, { id: 'tLate', key: 'K-C2', title: 'Rescheduled task', due: '2026-02-05' })],
     DIGEST_ONLY,
   );
 
-  /* 08:00 pass: before the window — pure read. */
-  const early = await trigger(at8('2026-01-30'));
-  assert.equal(digestKeys(ws.id).length, 0, '08:00 claims nothing (window not yet open)');
+  /* 07:00 pass: before the window — pure read. */
+  const early = await trigger(at7('2026-01-30'));
+  assert.equal(digestKeys(ws.id).length, 0, '07:00 claims nothing (window not yet open)');
   void early;
 
   /* Reschedule the second task to be due-today as of the 14:00 instant. */
@@ -398,7 +400,7 @@ test('DIGEST-02: digest user loses reminder emails at the fan-out — inbox rows
   );
   const revisionBefore = revisionOf(ws.slug);
 
-  const res = await trigger(at9('2026-03-02'));
+  const res = await trigger(at8('2026-03-02'));
   assert.ok(res.emitted.some(n => n.type === 'due_reminder' && n.task === tasks[0].id), 'due_reminder notif emitted by the reminder loop');
   assert.ok(res.emitted.some(n => n.type === 'past_due' && n.task === tasks[1].id), 'past_due notif emitted by the reminder loop');
 
@@ -420,7 +422,7 @@ test('D-11: email_reminder true AND false are BOTH suppressed for a digest user'
   const on = await makeWorkspace(m => [task(m, { key: 'K-D11T', due: '2026-03-03' })], { email_digest: true, email_reminder: true });
   const off = await makeWorkspace(m => [task(m, { key: 'K-D11F', due: '2026-03-03' })], { email_digest: true, email_reminder: false });
 
-  const res = await trigger(at9('2026-03-03'));
+  const res = await trigger(at8('2026-03-03'));
   for (const { ws } of [on, off]) {
     assert.ok(notifRows(ws.slug).some(n => n.type === 'due_reminder'), `reminder row present for ${ws.slug}`);
     const wsRows = notifRows(ws.slug).map(n => n.task);
@@ -442,7 +444,7 @@ test('SC-3: mention and assign emails still fire immediately for a digest user',
     m => [task(m, { key: 'K-M1', title: 'Mentioned task', due: '2026-03-04' })],
     { email_digest: true },
   );
-  await trigger(at9('2026-03-04')); // suppress reminders; consume the digest
+  await trigger(at8('2026-03-04')); // suppress reminders; consume the digest
   await waitFor(smtp, 1, 'digest');
   const before = smtp.payloads.length;
 
@@ -481,10 +483,10 @@ test('SC-3: mention and assign emails still fire immediately for a digest user',
 /* D-08/D-11: a digest-OFF member (no stored email_digest) keeps Phase 37
    reminder emails — the suppression gate reads the STORED opt-in, never the
    merged default. */
-test('D-08: digest-OFF member (no stored prefs) still receives reminder emails at 09:00', async () => {
+test('D-08: digest-OFF member (no stored prefs) still receives reminder emails at 08:00', async () => {
   const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-OFF1', title: 'Reminder flows', due: '2026-03-05' })]);
 
-  const res = await trigger(at9('2026-03-05'));
+  const res = await trigger(at8('2026-03-05'));
   assert.ok(res.emitted.some(n => n.type === 'due_reminder'), 'reminder row emitted');
   await waitFor(smtp, 1, 'reminder email for the digest-OFF member');
   await new Promise(r => setTimeout(r, 500));
@@ -502,7 +504,7 @@ test('DIGEST-03: undefined-falsy and stored-false are OFF, stored true still opt
   const offF = await makeWorkspace(m => [task(m, { key: 'K-INV2', due: '2026-03-06' })], { email_digest: false });
   const onT = await makeWorkspace(m => [task(m, { key: 'K-INV3', due: '2026-03-06' })], { email_digest: true });
 
-  const res = await trigger(at9('2026-03-06'));
+  const res = await trigger(at8('2026-03-06'));
   assert.equal(digestKeys(offU.ws.id).length, 0, 'undefined-falsy default → no digest claim');
   assert.equal(digestKeys(offF.ws.id).length, 0, 'stored email_digest: false → no digest claim');
   assert.deepEqual(digestKeys(onT.ws.id), [`${onT.ws.id}:${onT.userId}:digest:2026-03-06`], 'stored email_digest: true still opts in through the same accessor');
@@ -524,11 +526,11 @@ test('DIGEST-03: undefined-falsy and stored-false are OFF, stored true still opt
 
 /* ---------------- Idle-tick purity (mirrors the reminder pin) ---------------- */
 
-test('idle tick before the 09:00 window: no email, no claim, revision unchanged', async () => {
+test('idle tick before the 08:00 window: no email, no claim, revision unchanged', async () => {
   const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-I1', due: '2026-02-10' })], DIGEST_ONLY);
   const revisionBefore = revisionOf(ws.slug);
 
-  await trigger(at8('2026-02-10'));
+  await trigger(at7('2026-02-10'));
   assert.equal(digestKeys(ws.id).length, 0, 'no claim before the window opens');
   assert.equal(notifRows(ws.slug).length, 0, 'no inbox row');
   assert.equal(revisionOf(ws.slug), revisionBefore, 'revision unchanged');
@@ -549,7 +551,7 @@ test('SUBJ-01: a member of two workspaces gets two same-morning digests, each su
   const a = await makeWorkspace(m => [task(m, { key: 'K-WSA', title: 'Due in A', due: '2026-05-10' })], DIGEST_ONLY);
   const b = await makeWorkspace(m => [task(m, { key: 'K-WSB', title: 'Due in B', due: '2026-05-10' })], DIGEST_ONLY);
 
-  const res = await trigger(at9('2026-05-10'));
+  const res = await trigger(at8('2026-05-10'));
   assert.ok(res.digests >= 2, `both workspaces contribute a digest (got ${res.digests})`);
   const msgs = await waitFor(smtp, 2, 'two same-morning digests');
 
@@ -570,7 +572,7 @@ test('SUBJ-02: task lines read "Project Name — Task Name" in the text part and
     DIGEST_ONLY,
   );
 
-  const res = await trigger(at9(DUE));
+  const res = await trigger(at8(DUE));
   assert.ok(res.digests >= 1, 'digest fires');
   const digest = digestFor(await waitFor(smtp, 1, 'digest email'), email, ws.slug);
 
@@ -595,7 +597,7 @@ test('SUBJ-02/D-06: a task whose project row has no name degrades to title-only 
     db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id);
   });
 
-  await trigger(at9(DUE));
+  await trigger(at8(DUE));
   const digest = digestFor(await waitFor(smtp, 1, 'digest email'), email, ws.slug);
 
   assert.ok(digest.text.includes('- Mystery task'), 'title-only line in the text part');
@@ -625,7 +627,7 @@ test('T-40-06: an invisible private project name appears NOWHERE in a non-member
     ),
   );
 
-  await trigger(at9(DUE));
+  await trigger(at8(DUE));
   const msgs = await waitFor(smtp, 2, 'two digests (one per opted-in member)');
   const m1 = digestFor(msgs, m1Email, ws.slug);
   const m2 = digestFor(msgs, peer.email, ws.slug);
@@ -722,7 +724,7 @@ test('UNSUB-01: an https-APP_URL digest carries List-Unsubscribe/-Post headers a
     httpsServer,
   );
 
-  const res = await trigger(at9('2026-06-01'), httpsServer);
+  const res = await trigger(at8('2026-06-01'), httpsServer);
   assert.ok(res.digests >= 1, 'digest fires on the https fixture');
   const digest = digestFor(await waitFor(smtpHttps, 1, 'https digest email'), email, ws.slug);
 
@@ -771,7 +773,7 @@ test('UNSUB-01: an https-APP_URL digest carries List-Unsubscribe/-Post headers a
 test('UNSUB-01/D-05: the http://app.test fixture digest carries NO List-Unsubscribe headers (gate negative, footer still renders)', async () => {
   const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-U2', title: 'Http task', due: '2026-06-02' })], DIGEST_ONLY);
   const payloadsBefore = smtp.payloads.length;
-  const res = await trigger(at9('2026-06-02'));
+  const res = await trigger(at8('2026-06-02'));
   assert.ok(res.digests >= 1, 'digest fires on the http fixture');
   const digest = digestFor(await waitFor(smtp, 1, 'http digest email'), email, ws.slug);
   /* Raw payloads carry base64 bodies — scope by recipient over THIS test's
@@ -832,7 +834,7 @@ test('UNSUB-01/D-05 gate 1: a digest from a server booted WITHOUT MASTER_KEY car
     gate1Server,
   );
 
-  const res = await trigger(at9('2026-06-03'), gate1Server);
+  const res = await trigger(at8('2026-06-03'), gate1Server);
   assert.ok(res.digests >= 1, 'digest fires on the no-MASTER_KEY server (keyring absence is fail-open, not fatal)');
   const digest = digestFor(await waitFor(smtpGate1, 1, 'no-key digest email'), email, ws.slug);
 
@@ -854,7 +856,7 @@ test('UNSUB-01/D-05 gate 1: a digest from a server booted WITHOUT MASTER_KEY car
 test('UNSUB-01/D-05 gate 2: an http://APP_URL digest carries NO List-Unsubscribe headers (footer still renders in BOTH decoded parts)', async () => {
   const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-HTTP2', title: 'Http gate task', due: '2026-06-04' })], DIGEST_ONLY);
   const payloadsBefore = smtp.payloads.length;
-  const res = await trigger(at9('2026-06-04'));
+  const res = await trigger(at8('2026-06-04'));
   assert.ok(res.digests >= 1, 'digest fires on the http fixture');
   const digest = digestFor(await waitFor(smtp, 1, 'http gate-2 digest email'), email, ws.slug);
   const raw = smtp.payloads.slice(payloadsBefore).find(p => p.includes(`To: <${email}>`));

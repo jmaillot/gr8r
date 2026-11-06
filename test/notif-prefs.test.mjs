@@ -327,7 +327,7 @@ test('two users with different rows get different outcomes — the reminder gate
   try {
     const TOKEN = 'prefs-reminder-token';
     const TZ = '(GMT+00:00) London';
-    const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
+    const at8 = iso => new Date(`${iso}T08:00:00Z`).toISOString();
     const trigger = nowIso =>
       fetch(`${mail.base}/api/internal/reminder-pass`, {
         method: 'POST',
@@ -369,7 +369,7 @@ test('two users with different rows get different outcomes — the reminder gate
     doc.data.projects = [{ id: 'p1', name: 'P1' }];
     withDb(mail.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), mailWs.id));
 
-    const emitted = await trigger(at9('2026-01-15'));
+    const emitted = await trigger(at8('2026-01-15'));
     const mine = emitted.filter(n => n.task === 'ptA' || n.task === 'ptB');
     assert.ok(mine.some(n => n.task === 'ptB'), 'B (defaults) still gets reminder rows');
 

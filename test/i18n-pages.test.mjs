@@ -444,7 +444,7 @@ const TABLES = [
     ['settings.notif.comments', undefined, 'Comments'],
     ['settings.notif.commentsDesc', undefined, 'On tasks you created or are assigned.'],
     ['settings.notif.digest', undefined, 'Daily digest'],
-    ['settings.notif.digestDesc', undefined, 'Get one email at 09:00 with tasks due today and overdue — replaces individual reminder emails'],
+    ['settings.notif.digestDesc', undefined, 'Get one email at 08:00 with tasks due today and overdue — replaces individual reminder emails'],
     ['settings.notif.pushLead', undefined, 'Notifications on desktop and mobile.'],
     ['settings.notif.mentionsLead', undefined, 'Decide which mentions reach you.'],
     ['settings.notif.atAll', undefined, '@mentions in comments and descriptions'],

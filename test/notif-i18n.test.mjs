@@ -232,7 +232,7 @@ test('reminder emails render the localized by-label and their own verb/subject p
   const trigger = await fetch(`${server.base}/api/internal/reminder-pass`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-reminder-token': 'notif-i18n-token' },
-    body: JSON.stringify({ now: '2026-01-15T09:00:00Z' }),
+    body: JSON.stringify({ now: '2026-01-15T08:00:00Z' }),
   });
   assert.equal(trigger.status, 200, `reminder pass ${trigger.status}`);
 
@@ -357,7 +357,7 @@ test('I18N-03: emitted reminder rows carry key + vars snapshot + the English sni
   const trigger = await fetch(`${server.base}/api/internal/reminder-pass`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-reminder-token': 'notif-i18n-token' },
-    body: JSON.stringify({ now: '2026-03-10T09:00:00Z' }),
+    body: JSON.stringify({ now: '2026-03-10T08:00:00Z' }),
   });
   assert.equal(trigger.status, 200, `reminder pass ${trigger.status}`);
 

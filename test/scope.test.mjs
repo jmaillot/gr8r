@@ -602,7 +602,7 @@ const matrixProbe = {
   reminder: async probe => {
     if (probe === 'unknown') return null;
     plantReminderProbes();
-    const emitted = await triggerReminders(server, at9('2027-04-20'));
+    const emitted = await triggerReminders(server, at8('2027-04-20'));
     const rows = emitted.filter(n => n.type === 'due_reminder');
     const tid = probe === 'inScope' ? 't_m_rem_in' : 't_m_rem_out';
     return rows.some(n => n.task === tid) ? 'reminded' : 'skipped';
@@ -766,7 +766,7 @@ test('team cell [reminder]: the on-team assignee is reminded, the zero-team assi
     { id: 't_team_rem_off', key: 'TMX-2', title: 'Team reminder off-team', status: 'todo', assignee: zeroteamMid, project: 'p_teamX', due: '2027-05-18', labels: [], subtasks: [] },
   );
   withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
-  const emitted = await triggerReminders(server, at9('2027-05-18'));
+  const emitted = await triggerReminders(server, at8('2027-05-18'));
   const rows = emitted.filter(n => n.type === 'due_reminder');
   assert.ok(rows.some(n => n.task === 't_team_rem_on' && n.to === teamOnMid), 'on-team assignee reminded');
   assert.ok(!rows.some(n => n.task === 't_team_rem_off'), 'zero-team assignee never reminded (empty-teams branch, Pitfall 3)');
@@ -834,7 +834,7 @@ function plantReminderProbes() {
    the email mirror is exercised for real (the same fakeSmtp pattern as
    test/due-reminders.test.mjs). */
 
-const at9 = iso => new Date(`${iso}T09:00:00Z`).toISOString();
+const at8 = iso => new Date(`${iso}T08:00:00Z`).toISOString();
 
 function fakeSmtp() {
   const messages = [];
@@ -936,7 +936,7 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
     ).userId;
 
     // Shape the workspace: two public projects, all due inside the same
-    // injected 09:00 window. The reminder tasks are planted later, AFTER the
+    // injected 08:00 window. The reminder tasks are planted later, AFTER the
     // write-guard probes — t_s_out carries an out-of-scope assignment the
     // SCOPE-04 write-guard correctly refuses to round-trip (direct DB plant).
     const doc = {
@@ -996,7 +996,7 @@ test('SCOPE-04: the send-time server guards never reach an out-of-scope member',
     });
 
     await t.test('the reminder pass skips an out-of-scope assignee, delivers the in-scope one', async () => {
-      const emitted = await triggerReminders(mail, at9('2027-03-15'));
+      const emitted = await triggerReminders(mail, at8('2027-03-15'));
       const reminders = emitted.filter(n => n.type === 'due_reminder');
       assert.ok(reminders.some(n => n.task === 't_s_in' && n.to === scopedMid), 'in-scope reminder delivered');
       assert.ok(!reminders.some(n => n.task === 't_s_out'), 'no reminder row for the out-of-scope task');
