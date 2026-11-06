@@ -1247,6 +1247,7 @@
   "settings.notif.pastDue": "Alertes de retard",
   "settings.notif.pastDueDesc": "Une seule alerte, le matin qui suit l’échéance d’une tâche.",
   "settings.notif.pushLead": "Notifications sur ordinateur et mobile.",
+  "settings.notif.pushComingSoon": "Bientôt disponible",
   "settings.notif.mentionsLead": "Choisissez les mentions qui vous parviennent.",
   "settings.notif.atAll": "@mentions dans les commentaires et les descriptions",
   "settings.notif.atTeam": "Mentions @team",

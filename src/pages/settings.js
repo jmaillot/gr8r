@@ -391,9 +391,9 @@ export function settingsBody(sec, title) {
     case 'notif-push':
       return (
         H(t('settings.notif.pushLead')) +
-        srow(t('settings.notif.mentions'), '', tog('push_mention', np.push_mention, 'np')) +
-        srow(t('settings.notif.assignments'), '', tog('push_assign', np.push_assign, 'np')) +
-        srow(t('settings.notif.comments'), '', tog('push_comment', np.push_comment, 'np')) +
+        srow(t('settings.notif.mentions'), `<span class="badge faint">${t('settings.notif.pushComingSoon')}</span>`, tog('push_mention', np.push_mention, 'np')) +
+        srow(t('settings.notif.assignments'), `<span class="badge faint">${t('settings.notif.pushComingSoon')}</span>`, tog('push_assign', np.push_assign, 'np')) +
+        srow(t('settings.notif.comments'), `<span class="badge faint">${t('settings.notif.pushComingSoon')}</span>`, tog('push_comment', np.push_comment, 'np')) +
         srow(t('settings.notif.dueReminder'), t('settings.notif.dueReminderDesc'), tog('due_reminder', np.due_reminder, 'np')) +
         srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np'))
       );
