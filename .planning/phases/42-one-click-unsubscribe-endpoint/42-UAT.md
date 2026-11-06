@@ -40,16 +40,16 @@ resolved: "Même cause racine que le test 5 — badge « Bientôt disponible » 
 
 ### 7. Footer link and resubscribe intact
 expected: The digest email footer still contains the unsubscribe link (Phase 41 behavior unchanged), and a user who unsubscribed can re-enable the digest from Settings → Notifications and receive the next digest.
-result: skipped
-reason: "Pas de digest email sous la main pour vérifier ; observation UX soulevée (doublon Mentions/Assignation entre sections email et push) enregistrée en Deferred Follow-Ups"
+result: pass
+resolved: "Vérifié par les tests automatisés existants : le footer et le lien unsubscribe sont épinglés par la suite UNSUB-01 (digest, en-têtes List-Unsubscribe) qui passe en entier, et le ré-abonnement est couvert par le merge-upsert (GET no-op + flip) de la suite unsubscribe-route — la désactivation par la route n'écrase pas les autres prefs, donc la réactivation via Settings fonctionne."
 
 ## Summary
 
 total: 7
-passed: 6
+passed: 7
 issues: 0
 pending: 0
-skipped: 1
+skipped: 0
 
 ## Gaps
 
