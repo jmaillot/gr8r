@@ -128,8 +128,13 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 44-01-PLAN.md — resolveTz funnel + per-member scheduler refactor (reminder/digest loops), legacy-map & fallback pins, dedup-under-tz-change edge tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 44-02-PLAN.md — self-tz-only save-path carve-out in docFromClient (D-10 validation) + save-path regression suite
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 44-03-PLAN.md — static IANA zone list + searchable combobox in member Settings > Date & time + honest save handler + wiring regression test
 
 ## Progress
