@@ -3,7 +3,7 @@ status: complete
 phase: 42-one-click-unsubscribe-endpoint
 source: [42-01-SUMMARY.md, 42-02-SUMMARY.md]
 started: 2026-11-06T10:30:00Z
-updated: 2026-11-06T11:00:00Z
+updated: 2026-11-06T11:05:00Z
 ---
 
 ## Current Test
@@ -43,7 +43,7 @@ severity: major
 ### 7. Footer link and resubscribe intact
 expected: The digest email footer still contains the unsubscribe link (Phase 41 behavior unchanged), and a user who unsubscribed can re-enable the digest from Settings → Notifications and receive the next digest.
 result: skipped
-reason: "Deferred follow-up: utilisateur n'a pas de digest email sous la main ; a aussi soulevé un doublon UX (sections Mentions / Assignation des tâches vs toggles push) à traiter plus tard"
+reason: "Pas de digest email sous la main pour vérifier ; observation UX soulevée (doublon Mentions/Assignation entre sections email et push) enregistrée en Deferred Follow-Ups"
 
 ## Summary
 
