@@ -2,38 +2,39 @@
 gsd_state_version: "1.0"
 milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
-current_phase: 43
-current_phase_name: Workspace Logo
-status: verifying
-stopped_at: Completed 43-03-PLAN.md (gap closure G-43-3/G-43-4)
-last_updated: "2026-11-06T14:23:19.168Z"
+current_phase: 44
+current_phase_name: Per-Member Timezones *(v1.10)*
+status: planning
+stopped_at: Phase 41 complete, ready to plan Phase 44
+last_updated: "2026-11-06T14:40:54.930Z"
 last_activity: 2026-11-06
-last_activity_desc: Phase 43 execution started
-state_head: 482f0b5d35692d689a653a5ccfad3a95bb101c46
+last_activity_desc: Phase 41 complete, transitioned to Phase 44
+state_head: b261fe1ef2468daf52357758993800a023b8877a
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 3
   total_plans: 9
   completed_plans: 9
+  percent: 60
 ---
 
 # STATE.md
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-05)
+See: .planning/PROJECT.md (updated 2026-11-06)
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 43 — Workspace Logo
+**Current focus:** Phase 44 — Per-Member Timezones
 
 ## Current Position
 
-Phase: 43 (Workspace Logo) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-11-06 — Phase 43 execution started
+Phase: 44 — Per-Member Timezones *(v1.10)*
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-06 — Phase 41 complete, transitioned to Phase 44
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -96,6 +97,10 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 40]: 40-01: RFC 2047 folding adopted for encodeWord (Pitfall 1/2 fired — 1879 octets single-line); folded at 900 octets/line
 - [Phase 40]: 40-01: encodeWord + truncate exported as named exports for tests (A2); send API unchanged
 - [Phase 40]: 40-02: SC-5 digest fallback tested via poisoned catalogue on exported buildDigestMessage (Plan 01 A2 precedent); FR digest subjects use NBSP before ':' (pre-existing typography breach fixed)
+- [Phase 43]: 43-01: svg sniff tightened to `<?xml`/`<svg` prefixes (bare `<` would admit HTML as svg); served mime always derives from the server-verified stored ext (Pitfall 7)
+- [Phase 43]: 43-02: digest logoUrl composed server-side from APP_URL at the sendDigest call site with NO https gate (an <img> URL is not a security-header contract, unlike the Phase 41 unsubscribe gating)
+- [Phase 43]: 43-03: G-43-3 fixed as a namespace alias (A.removeLogo = IN.removeLogo) — one code path serves both dispatch namespaces; wiring regression test pins every data-a in settings.js
+- [Phase 43]: G-43-4 closed as deployment staleness — the public /w/:slug/logo route (D-02) must bypass forward-auth; resolved by a Traefik router exclusion on the deployment host, no source change
 - [Phase 43]: 43-01: svg magic-byte sniff tightened to <?xml / <svg prefixes (plan's bare leading-< would admit html masquerading as images); logo files are bare uids under DATA_DIR/logos, ext lives in doc.data.logo; replace unlinks the old file only after updateDoc succeeds (D-09)
 - [Phase 43]: Plan 43-02: logo lives on api.workspace (payload state), never on the doc's ws object — avoids echoing a redundant/staleable field into the server doc
 - [Phase 43]: Plan 43-02: digest logoUrl composed server-side at sendDigest with no https gate (img URL ≠ security-header contract, unlike 41 unsubscribe)
@@ -138,14 +143,15 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T14:23:18.927Z
-Stopped at: Completed 43-03-PLAN.md (gap closure G-43-3/G-43-4)
+Last session: 2026-11-06T15:45:00Z
+Stopped at: Phase 43 complete (verified 8/8, UAT 4/4), Phase 41 backfill verification passed — ready to plan Phase 44
 Resume file: None
 
 ## Performance Metrics
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
+| Phase 43 P03 | 3m | 2 tasks | 2 files |
 | Phase 42 P01 | 17m | 3 tasks | 7 files |
 | Phase 42 P02 | 8m | 2 tasks | 5 files |
 | Phase 40 P01 | 14m | 3 tasks | 2 files |

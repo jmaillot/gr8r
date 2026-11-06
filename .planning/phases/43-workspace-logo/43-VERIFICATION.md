@@ -1,19 +1,20 @@
 ---
 phase: 43-workspace-logo
-verified: 2026-11-06T12:40:12Z
-status: human_needed
-score: 7/7 must-haves verified
-covered_files: [server.js, src/core/icons.js, src/shell/layout.js, src/core/api.js, src/pages/settings.js, src/actions/actions.js, mailer.js, src/locales/en.json, src/locales/fr.json, test/workspace-logo.test.mjs, test/digest-logo.test.mjs, scripts/i18n-scan.mjs, src/styles/shell.css, test/i18n-core-features.test.mjs, test/i18n-shell.test.mjs, test/i18n-toast.test.mjs]
-covered_digest: "v2:sha256:7a515e9550cd0b853c24d7506893493e239b2cbeb43f82cd261721a281799eaa"
+verified: 2026-11-06T14:30:37Z
+status: passed
+score: 8/8 must-haves verified
+covered_files: [.planning/phases/43-workspace-logo/43-01-PLAN.md, .planning/phases/43-workspace-logo/43-01-SUMMARY.md, .planning/phases/43-workspace-logo/43-02-PLAN.md, .planning/phases/43-workspace-logo/43-02-SUMMARY.md, .planning/phases/43-workspace-logo/43-03-PLAN.md, .planning/phases/43-workspace-logo/43-03-SUMMARY.md, server.js, src/core/icons.js, src/shell/layout.js, src/core/api.js, src/pages/settings.js, src/actions/actions.js, mailer.js, src/locales/en.json, src/locales/fr.json, test/workspace-logo.test.mjs, test/digest-logo.test.mjs, scripts/i18n-scan.mjs, src/styles/shell.css, test/i18n-core-features.test.mjs, test/i18n-shell.test.mjs, test/i18n-toast.test.mjs]
+covered_digest: "v2:sha256:da863acf91ec1b132b861a32d730bb2e7f7dfa6a7274d0e024ee9fe4ce89a498"
 behavior_unverified: 0
 overrides_applied: 0
-human_verification:
-  - test: "Upload a png as admin from Settings > General > Workspace; check sidebar/topbar avatar (~22px), browser-tab favicon, and the 52px settings header"
-    expected: "Logo renders in all three DOM surfaces, rounded/avatar-sized, no layout shift; Remove logo button appears; after remove, letter-mark and /favicon.svg fall back byte-identically"
-    why_human: "Visual rendering, CSS-fit and favicon display are DOM/browser behaviors no test observes"
-  - test: "Send a digest for a workspace with a logo set, open the email"
-    expected: "Header shows the logo <img> capped at 48px with alt = workspace name, absolute URL; unset-logo workspaces show the unchanged text-only header"
-    why_human: "Email client rendering of the MIME part can't be verified programmatically"
+re_verification:
+  previous_status: human_needed
+  previous_score: 7/7
+  gaps_closed:
+    - "G-43-3: Remove-logo click is a no-op — fixed by 60e1b76 (A.removeLogo alias of IN.removeLogo in src/actions/actions.js) + wiring regression tests in test/workspace-logo.test.mjs; human-confirmed live (UAT test 3 pass)"
+    - "G-43-4: digest email shows no workspace logo — deployment staleness (projects-studio:1.1.1 predates e893ae9); resolved by image rebuild + Traefik router excluding /w/:slug/logo from Authentik forward-auth; no source change; human-confirmed live (UAT test 4 pass)"
+  gaps_remaining: []
+  regressions: []
 advisory:
   - finding: "LOGO-01 has no row in REQUIREMENTS.md (roadmap notes 'to be added at milestone start — Kanzo #16')"
     category: other
@@ -24,9 +25,9 @@ advisory:
 # Phase 43: Workspace Logo Verification Report
 
 **Phase Goal:** A workspace can carry its own logo — uploaded by an admin, stored server-side, rendered wherever the workspace identity appears — with a clean fallback to `favicon.svg` when none is set
-**Verified:** 2026-11-06T12:40:12Z
-**Status:** human_needed (visual/email surfaces only; all code truths verified)
-**Re-verification:** No — initial verification
+**Verified:** 2026-11-06T14:30:37Z
+**Status:** passed
+**Re-verification:** Yes — after gap closure (stale re-verification #4682: 60e1b76 changed covered source after the prior run; prior human-needed items resolved by the human in 43-UAT.md, 4/4 pass)
 
 ## Goal Achievement
 
@@ -34,73 +35,67 @@ advisory:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Owner/Admin POST /w/:slug/logo → { logo, revision }; file in DATA_DIR/logos, doc carries logo { ext, uploaded_at } | ✓ VERIFIED | server.js:5210 handleLogoUpload, LOGOS_DIR:77, mkdir:363; pinned by workspace-logo.test.mjs (upload/revision/replace tests) |
-| 2 | Public session-free GET with fixed mime from stored ext, never text/html | ✓ VERIFIED | handleLogoGet server.js:5243 (no requireWorkspace call); test "GET with NO cookie → 200 image/png" PASS |
-| 3 | Unknown slug OR unset logo → identical 404, never 302 | ✓ VERIFIED | server.js:5248 identical fail(404,'logoNotFound'); test "both 404 — never a 3xx" PASS |
-| 4 | Non-image → 400 invalidLogo (EN+FR); oversized → 413 via uploadBinary | ✓ VERIFIED | sniffLogoExt:5169; locales en/fr.json:1611; error-codes.test 24/24 PASS |
-| 5 | GET headers: nosniff, immutable cache, sandbox CSP on svg | ✓ VERIFIED | server.js:5260+; tests "nosniff+immutable" and "svg sandbox CSP" PASS |
-| 6 | Replace unlinks previous file; DELETE/workspace-delete leave no orphans | ✓ VERIFIED | server.js:5230, 5287, 4422; tests "exactly one file remains", "no orphan" PASS |
-| 7 | workspacePayload exposes versioned logo URL (?v=); digest renders absolute capped img; sidebar/favicon/settings consume payload URL | ✓ VERIFIED | logoShape:5202, server.js:642; icons.js:32, layout.js:86, settings.js:176-182, api.js:222/259/277; mailer.js:727 + server.js:1616; digest-logo.test 3/3 PASS |
+| 1 | Owner/Admin POST /w/:slug/logo → { logo, revision }; file in DATA_DIR/logos, doc carries logo { ext, uploaded_at } | ✓ VERIFIED | server.js:5210 handleLogoUpload, LOGOS_DIR:77, mkdir:363; pinned by workspace-logo.test.mjs (16/16 pass at HEAD) |
+| 2 | Public session-free GET with fixed mime from stored ext, never text/html | ✓ VERIFIED | handleLogoGet server.js:5243 (no requireWorkspace call); test "GET with NO cookie → 200 image/png" PASS (re-run) |
+| 3 | Unknown slug OR unset logo → identical 404, never 302 | ✓ VERIFIED | server.js:5248 identical fail(404,'logoNotFound'); test "both 404 — never a 3xx" PASS (re-run) |
+| 4 | Non-image → 400 invalidLogo (EN+FR); oversized → 413 via uploadBinary | ✓ VERIFIED | sniffLogoExt:5169; locales en/fr.json:1611; error-codes.test 24/24 PASS (prior run; file unchanged since — digest covered) |
+| 5 | GET headers: nosniff, immutable cache, sandbox CSP on svg | ✓ VERIFIED | server.js:5260+; tests "nosniff+immutable" and "svg sandbox CSP" PASS (re-run within workspace-logo suite) |
+| 6 | Replace unlinks previous file; DELETE/workspace-delete leave no orphans | ✓ VERIFIED | server.js:5230, 5287, 4422; tests "exactly one file remains", "no orphan", "restart survival" PASS (re-run) |
+| 7 | workspacePayload exposes versioned logo URL (?v=); digest renders absolute capped img; sidebar/favicon/settings consume payload URL | ✓ VERIFIED | logoShape:5202, server.js:642; icons.js:32, layout.js:86, settings.js:176-182, api.js:222/259/277; mailer.js:727 + server.js:1616; digest-logo tests PASS (re-run) |
+| 8 | Remove-logo click wiring: every data-a in settings.js resolves under A (click) or IN (change/input); A.removeLogo exists as an alias of IN.removeLogo | ✓ VERIFIED | actions.js:1092 `A.removeLogo = IN.removeLogo` (60e1b76, one code path — no copy); events.js:35 dispatches `A[el.dataset.a]`; regression tests "A.removeLogo is registered" and "every data-a action resolves" PASS (re-run) |
 
-All behavior-dependent truths (state transitions: replace-unlink, delete cleanup, restart survival, 404-not-302) are exercised by passing tests — no PRESENT_BEHAVIOR_UNVERIFIED items.
+**Score:** 8/8 truths verified (0 present, behavior-unverified)
 
-**Score:** 7/7 truths verified (0 present, behavior-unverified)
+### Gap Closure Verification (new since last run — 60e1b76)
+
+- **A.removeLogo alias:** `src/actions/actions.js:1092` — alias, not a copy; the click-delegation handler and the IN (change/input) path share one implementation. Verified present and exercised by the new regression test (RED-verified per commit message before the alias was added).
+- **No dispatch breakage for other data-a actions:** the change is purely additive (one new property on `A`). The second regression test statically proves every `data-a` value in settings.js (go, wsColor, uploadLogo, saveWorkspace, leaveWorkspace, deleteWorkspace, operatorRevoke*, auditVerb*, etc.) resolves in A or IN — and it passes. Full suite (1003/1007) shows no dispatch regressions anywhere else.
+- **Wiring regression tests live in test/workspace-logo.test.mjs** and run as part of the standard suite (they passed in this re-run).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 | -------- | -------- | ------ | ------- |
-| server.js routes + helpers | POST/DELETE/GET intercepts, LOGO_MIME, sniff, logoShape | ✓ VERIFIED | All symbols present; intercept sits BEFORE serveStatic and /api/ (server.js:5589) |
-| test/workspace-logo.test.mjs | Pin full contract | ✓ VERIFIED | 14 logo+route tests pass (with file-route-ordering) |
-| test/digest-logo.test.mjs | Digest img contract | ✓ VERIFIED | 3/3 pass |
-| src/locales/{en,fr}.json | err.invalidLogo, err.logoNotFound | ✓ VERIFIED | Both keys in both locales |
+| server.js routes + helpers | POST/DELETE/GET intercepts, LOGO_MIME, sniff, logoShape | ✓ VERIFIED | Unchanged since prior verification (digest-covered) |
+| test/workspace-logo.test.mjs | Pin full contract + wiring regression | ✓ VERIFIED | 16/16 pass at HEAD (14 logo/route + 2 wiring) |
+| test/digest-logo.test.mjs | Digest img contract | ✓ VERIFIED | Pass (re-run with workspace-logo suite) |
+| src/locales/{en,fr}.json | err.invalidLogo, err.logoNotFound | ✓ VERIFIED | Both keys in both locales; i18n gate exit 0 |
 | icons.js / layout.js / settings.js / actions.js / api.js / mailer.js | Render surfaces | ✓ VERIFIED | All wired to api.workspace.logo / payload URL |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 | ---- | -- | --- | ------ | ------- |
-| logo intercept chain | before serveStatic / /api/ | if/else order server.js:5589 | WIRED | file-route-ordering.test 3/3 PASS (no SPA fallback) |
-| POST/DELETE responses | wsRevision | revision field | WIRED | pinned by tests |
-| served mime | stored ext (doc) | LOGO_MIME[logo.ext]:5260 | WIRED | never req Content-Type |
-| client upload | raw body POST | api.js:259 fetch(file) | WIRED | no query params, no transform |
-| revision adoption | api adoptRevision before next write | api.js:270/279 | WIRED | grep-verifiable |
-| digest img | APP_URL + versioned URL | server.js:1616 | WIRED | absolute, escapeHtml'd (mailer.js:727) |
-| sidebar/favicon/settings | workspacePayload.logo | api.workspace?.logo?.url | WIRED | single source, never hand-built |
+| settings.js removeLogo button | actions.js handler | `data-a="removeLogo"` → events.js `A[el.dataset.a]` → `A.removeLogo` | ✓ WIRED | Fixed by 60e1b76; regression test pins it |
+| settings.js upload input | actions.js | `data-in="uploadLogo"` → IN.uploadLogo → api.uploadLogo | ✓ WIRED | Unchanged; test-covered |
+| actions.js | server routes | api.removeLogo/api.uploadLogo → POST·DELETE /w/:slug/logo | ✓ WIRED | HTTP tests pass |
+| icons.js / layout.js / settings.js | payload logo URL | api.workspace.logo → logoShape `?v=` | ✓ WIRED | Unchanged; test-covered |
+| server.js sendDigest | mailer.js buildDigestMessage | logoUrl → `<img max-height:48px alt>` | ✓ WIRED | digest-logo tests pass; live render confirmed by human (UAT 4) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
-| Logo + route + digest + error-code tests | node --test (4 files) | 41 pass / 0 fail | ✓ PASS |
-| i18n gate | npm run i18n:scan | 0 literals/pending/unlisted/stale | ✓ PASS |
-| Build (prebuild i18n) | npm run build | built in 2.51s | ✓ PASS |
-| Full suite | npm test | 1001 pass / 1 fail / 3 skip | ✓ PASS (fail = pre-existing totp-rewrap D-74) |
-
-### Requirements Coverage
-
-| Requirement | Source Plan | Description | Status | Evidence |
-| ----------- | ---------- | ----------- | ------ | -------- |
-| LOGO-01 | 43-01, 43-02 | Per-workspace logo upload, storage, render surfaces, favicon fallback | ✓ SATISFIED (against ROADMAP SCs 1-5) | All 5 roadmap success criteria verified above |
-| LOGO-01 (REQUIREMENTS.md row) | — | Missing row | ⚠️ Documentation gap | Advisory — add at milestone bookkeeping |
-
-### Anti-Patterns Found
-
-| File | Line | Pattern | Severity | Impact |
-| ---- | ---- | ------- | -------- | ------ |
-| (none in phase files) | — | — | — | — |
-
-Pre-existing (deferred-items.md, confirmed at HEAD): totp-rewrap D-74 EACCES test failure; 9 lint errors in mailer/digest test files — neither caused by this phase.
+| Logo + wiring suite at HEAD | `node --test test/workspace-logo.test.mjs test/digest-logo.test.mjs` | 16/16 pass (incl. both wiring regression tests) | ✓ PASS |
+| Full suite | `npm test` | 1003 pass / 1 fail / 3 skipped | ✓ PASS (known pre-existing only) |
+| i18n gate | `node scripts/i18n-scan.mjs` | 0 literals, 0 pending, 0 stale, exit 0 | ✓ PASS |
+| Known pre-existing failure | totp-rewrap D-74 | EACCES mkdir in /tmp (environmental, documented in deferred-items.md) | ✗ FAIL (pre-existing, not phase scope) |
 
 ### Human Verification Required
 
-See frontmatter `human_verification`: (1) DOM render of sidebar avatar + favicon + settings header with fallback; (2) digest email header img in a real email client.
+None. The two prior human-needed items were resolved by the human and recorded in 43-UAT.md (status complete, 4/4 pass):
+
+- Upload/render surfaces (UAT test 2): pass — sidebar/topbar avatar, favicon, settings header all render the logo.
+- Digest email header (UAT test 4): pass — resolved by deployment fix (image rebuild + Traefik router excluding /w/:slug/logo from Authentik forward-auth). Infra-only, no source change; source wiring verified by digest-logo tests.
+- Remove logo (UAT test 3): pass — resolved by 43-03 (G-43-3 alias fix, human-confirmed live).
+
+No regression surfaced in this re-run.
 
 ### Gaps Summary
 
-No code gaps. All 7 must-have truths verified with passing behavioral tests; full suite green (single pre-existing failure documented before this phase); zero new runtime dependencies (package.json deps: 0); i18n gate green. Status is human_needed solely for visual/email-client rendering. LOGO-01's missing REQUIREMENTS.md row recorded as advisory documentation debt.
+No gaps. The gap-closure commit (60e1b76) fixed the only source defect (removeLogo click dispatch) and added regression coverage; the digest issue was deployment staleness, resolved in infrastructure. Full suite, logo suite, and i18n gate re-run clean at HEAD. The lone suite failure is the documented pre-existing environmental totp-rewrap EACCES, and ~9 lint errors are likewise documented in deferred-items.md — neither is a phase regression.
 
 ---
 
-_Verified: 2026-11-06T12:40:12Z_
+_Verified: 2026-11-06T14:30:37Z_
 _Verifier: the agent (gsd-verifier)_

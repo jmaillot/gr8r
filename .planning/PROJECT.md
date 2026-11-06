@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-05 after Phase 40 (v1.9)*
+*Last updated: 2026-11-06 after Phase 43 (v1.9)*
 
 ## Current Milestone: v1.9 Digest Context & One-Click Unsubscribe
 
@@ -494,9 +494,15 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   (verification 9/9 must-haves; hostile-name suite 10/10; digest suite 16/16)
 - **UNSUB-01, UNSUB-03** — List-Unsubscribe/-Post headers on a stateless HMAC token under
   MASTER_KEY (headers omitted when absent); footer unsubscribe link retained; DEPLOY.md
-  DKIM caveat — Phase 41
+  DKIM caveat — Phase 41 (verification 5/5 must-haves; token suite 10/10, digest suite 20/20)
 - **UNSUB-02** — Anonymous convergent `POST /unsubscribe/:token` (throttled, sameOrigin-
   exempt, no existence oracle) flips `email_digest=false` per (workspace, user) — Phase 42
+  (verification passed; UAT complete)
+- **LOGO-01** — Per-workspace logo: upload/serve/delete trio (magic-byte validated, size-
+  capped, public serving with fixed mime + immutable cache + sandbox CSP), rendered in the
+  sidebar/topbar avatar, tab favicon, Settings header and digest email header with
+  per-surface fallbacks — Phase 43 (verification 8/8 must-haves; UAT 4/4 after gap closure:
+  remove-logo wiring fix + deployment forward-auth exclusion of the public logo route)
 
 ### Out of scope
 

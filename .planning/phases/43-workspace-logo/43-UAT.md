@@ -1,9 +1,9 @@
 ---
 status: complete
 phase: 43-workspace-logo
-source: [43-01-SUMMARY.md, 43-02-SUMMARY.md]
+source: [43-01-SUMMARY.md, 43-02-SUMMARY.md, 43-03-SUMMARY.md]
 started: 2026-11-06T12:30:00Z
-updated: 2026-11-06T13:00:00Z
+updated: 2026-11-06T14:45:00Z
 ---
 
 ## Current Test
@@ -22,21 +22,19 @@ result: pass
 
 ### 3. Remove Logo — Fallbacks Return
 expected: Click "Remove logo" in Settings. The sidebar/topbar falls back to the letter-mark, the tab favicon returns to /favicon.svg, and the "Remove logo" control disappears.
-result: issue
-reported: "when i click remove logo, nothing happens"
-severity: major
+result: pass
+resolved_by: 43-03 (G-43-3 — A.removeLogo alias, commit 60e1b76; human-confirmed live)
 
 ### 4. Digest Email Header
 expected: In a digest email for a workspace WITH a logo, a workspace logo image (max 48px tall) appears above the greeting with the workspace name as alt text. For a workspace WITHOUT a logo, the digest header is unchanged. Next saves in the app after upload/remove do not 409.
-result: issue
-reported: "je n'ai pas le logo dans le digest"
-severity: major
+result: pass
+resolved_by: 43-03 (G-43-4 — deployment staleness; image rebuild + Traefik router exclusion of /w/:slug/logo from Authentik forward-auth; human-verified logo renders in digest email. No source change.)
 
 ## Summary
 
 total: 4
-passed: 2
-issues: 2
+passed: 4
+issues: 0
 pending: 0
 skipped: 0
 
@@ -44,7 +42,9 @@ skipped: 0
 
 - gap_id: G-43-3
   truth: "Click 'Remove logo' in Settings. The sidebar/topbar falls back to the letter-mark, the tab favicon returns to /favicon.svg, and the 'Remove logo' control disappears."
-  status: failed
+  status: resolved
+  resolved_by: 43-03
+  resolved_at: 2026-11-06
   reason: "User reported: when i click remove logo, nothing happens"
   severity: major
   test: 3
@@ -57,7 +57,9 @@ skipped: 0
     - client-side test covering the data-a→A dispatch wiring for removeLogo (test/workspace-logo.test.mjs covers only the HTTP route)
 - gap_id: G-43-4
   truth: "In a digest email for a workspace WITH a logo, a workspace logo image (max 48px tall) appears above the greeting with the workspace name as alt text."
-  status: failed
+  status: resolved
+  resolved_by: 43-03
+  resolved_at: 2026-11-06
   reason: "User reported: je n'ai pas le logo dans le digest"
   severity: major
   test: 4

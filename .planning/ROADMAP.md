@@ -29,9 +29,9 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 ## Phases
 
 - [x] **Phase 40: Digest Subject & Task Lines** - Workspace name in the digest subject, "Project — Task" lines, and a hardened RFC 2047 subject builder (SUBJ-01..03) (completed 2026-11-05)
-- [ ] **Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers** - Stateless HMAC unsubscribe token, List-Unsubscribe/-Post headers on digest mail, footer link preserved, DEPLOY.md DKIM caveat (UNSUB-01, UNSUB-03)
+- [x] **Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers** - Stateless HMAC unsubscribe token, List-Unsubscribe/-Post headers on digest mail, footer link preserved, DEPLOY.md DKIM caveat (UNSUB-01, UNSUB-03) (completed 2026-11-06)
 - [x] **Phase 42: One-Click Unsubscribe Endpoint** - The codebase's first anonymous mutating route: `POST /unsubscribe/:token` with a security contract first (UNSUB-02) (completed 2026-11-06)
-- [ ] **Phase 43: Workspace Logo** - Per-workspace logo upload with favicon.svg fallback, stored server-side, surfaced in the UI (Kanzo #16)
+- [x] **Phase 43: Workspace Logo** - Per-workspace logo upload with favicon.svg fallback, stored server-side, surfaced in the UI (Kanzo #16) (completed 2026-11-06)
 - [ ] **Phase 44: Per-Member Timezones** - Multiple configurable timezones with Paris default, replacing the single workspace-TZ model (Kanzo #14)
 
 ## Phase Details
@@ -102,7 +102,7 @@ Plans:
   4. Upload validation rejects non-images and oversized files with a localized error message (EN+FR catalogued, `npm run i18n:scan` green)
   5. Full suite green; no new runtime dependencies
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 - [x] 43-03-PLAN.md
@@ -132,9 +132,9 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 40. Digest Subject & Task Lines | 2/2 | Complete    | 2026-11-05 |
-| 41. Unsubscribe Tokens & Headers | 2/2 | In Progress|  |
+| 41. Unsubscribe Tokens & Headers | 2/2 | Complete    | 2026-11-06 |
 | 42. One-Click Unsubscribe Endpoint | 0/2 | Not started | - |
-| 43. Workspace Logo | 3/3 | In Progress|  |
+| 43. Workspace Logo | 3/3 | Complete    | 2026-11-06 |
 | 44. Per-Member Timezones | 0/? | Not started | - |
 
 ## Backlog
