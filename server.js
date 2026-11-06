@@ -1348,17 +1348,17 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
 /* =======================================================================
    Due-date reminder scheduler (phase 27, REM-01..REM-05).
 
-   D-27-1: both reminder offsets target 09:00 in the workspace's shared
+   D-27-1: both reminder offsets target 08:00 in the workspace's shared
    timezone. D-27-2: the pass runs at boot (restart catch-up) and every
    minute from an unref'd interval. D-27-3: the past-due nudge fires at the
-   first 09:00 after the due date passes, exactly once. The emission window
-   is AT-OR-AFTER 09:00 local (Phase 37/38 — mirrors the digest loop): the
-   pass is a pure read only BEFORE 09:00 local; from the first tick at-or-
-   after 09:00 the window-open predicates plus the reminders_sent ledger
+   first 08:00 after the due date passes, exactly once. The emission window
+   is AT-OR-AFTER 08:00 local (Phase 37/38 — mirrors the digest loop): the
+   pass is a pure read only BEFORE 08:00 local; from the first tick at-or-
+   after 08:00 the window-open predicates plus the reminders_sent ledger
    deliver any missed emission late (boot restart, downtime, delayed boot),
    exactly once per (workspace, task, assignee, offset, due) — the claim
    commits in the same transaction as the notif append (REM-03 / SC-5:
-   no claim, no doc write, no revision bump on any idle tick before 09:00).
+   no claim, no doc write, no revision bump on any idle tick before 08:00).
    ======================================================================= */
 
 /* A1 resolved (plan 27-01 task 1): `tz` is a per-member profile field — the
@@ -1419,7 +1419,7 @@ function reminderSnippet(offset, task) {
 
 /*
  * One scheduler pass over every workspace. Injectable clock (`now`, a Date)
- * so tests drive 09:00-local instants without sleeping or fake timers.
+ * so tests drive 08:00-local instants without sleeping or fake timers.
  * Returns the notification rows emitted this pass (dedup claims included).
  */
 function runReminderPass({ now: at = new Date() } = {}) {
@@ -1433,14 +1433,14 @@ function runReminderPass({ now: at = new Date() } = {}) {
       const { date: localDate, hour } = localParts(workspaceTzLabel(doc, ws.id), at);
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
-      /* D-27-1 window gate: reminder emission opens AT the 09:00 local tick
+      /* D-27-1 window gate: reminder emission opens AT the 08:00 local tick
          and stays catch-up-eligible for the rest of the day (Phase 37/38,
          mirroring the digest loop below). The reminders_sent ledger — its
          claim commits in the same transaction as the notif append — makes
          the wider window exactly-once per (workspace, task, assignee,
-         offset, due); ticks before 09:00 stay pure reads (REM-01 / SC-5:
+         offset, due); ticks before 08:00 stay pure reads (REM-01 / SC-5:
          no claim, no doc write, no revision bump). */
-      if (hour >= 9) for (const t of tasks) {
+      if (hour >= 8) for (const t of tasks) {
         const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
         /* SCOPE-04: a scoped member is never reminded about content outside
@@ -1465,8 +1465,8 @@ function runReminderPass({ now: at = new Date() } = {}) {
         const due = t.due;
         /* Window-open predicates on plain YYYY-MM-DD string compare — the
            open window plus an absent dedup key is the late-delivery
-           catch-up for ANY tick at-or-after 09:00 local (restart, downtime,
-           delayed boot), not only during the 09:00 hour. */
+           catch-up for ANY tick at-or-after 08:00 local (restart, downtime,
+           delayed boot), not only during the 08:00 hour. */
         const offsets = [];
         if (prefs.due_reminder !== false) {
           if (localDate >= due) offsets.push('morning_of');
@@ -1530,16 +1530,16 @@ function runReminderPass({ now: at = new Date() } = {}) {
          (Pattern 1 / T-38-03).
 
          Window (D-01/D-02, plan Task 2 pin 3): the digest fires at the
-         FIRST tick at-or-after 09:00 local and stays catch-up-eligible for
-         the rest of the day — a missed 09:00 (downtime, restart) delivers
+         FIRST tick at-or-after 08:00 local and stays catch-up-eligible for
+         the rest of the day — a missed 08:00 (downtime, restart) delivers
          late at the next tick, with content computed at the send instant.
          Exactly-once per (workspace, user, localDate) comes from the claim,
          so the wider window cannot double-send. Both loops share the same
-         at-or-after-09:00 catch-up window (Phase 37 alignment), each
+         at-or-after-08:00 catch-up window (Phase 37 alignment), each
          exactly-once via its own claim (reminders_sent for reminders /
          digest claim for digests).
          ===================================================================== */
-      if (hour >= 9) for (const r of db
+      if (hour >= 8) for (const r of db
         .prepare('select m.member_id, m.user_id, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
         .all(ws.id)) {
         if (!r.user_id || !r.email) continue;
@@ -5468,7 +5468,7 @@ function main() {
     logInfo(`log level: ${LOG_LEVEL} (LOG_LEVEL env: debug | info | warn | error)`);
     logInfo(`sessions: ${SESSION_DAYS}d ttl · sign-ups: ${ALLOW_SIGNUP ? 'open' : 'closed'} · secure cookie: ${SECURE_COOKIE} · trust proxy: ${TRUST_PROXY}`);
     logInfo(`sso: ${OIDC.enabled ? `enabled via ${OIDC.config?.issuer || 'configured issuer'}${OIDC.ssoOnly ? ' (sso-only)' : ''}` : 'disabled'}`);
-    logInfo(`due reminders: from 09:00 workspace-local, catch-up window all day · daily digest: opt-in, 09:00`);
+    logInfo(`due reminders: from 08:00 workspace-local, catch-up window all day · daily digest: opt-in, 08:00`);
   });
 
   const shutdown = signal => {

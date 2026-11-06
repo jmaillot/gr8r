@@ -1238,7 +1238,7 @@
   "settings.notif.comments": "Comments",
   "settings.notif.commentsDesc": "On tasks you created or are assigned.",
   "settings.notif.digest": "Daily digest",
-  "settings.notif.digestDesc": "Get one email at 09:00 with tasks due today and overdue — replaces individual reminder emails",
+  "settings.notif.digestDesc": "Get one email at 08:00 with tasks due today and overdue — replaces individual reminder emails",
   "settings.notif.emailReminder": "Reminder emails",
   "settings.notif.emailReminderDesc": "Due-date and overdue reminders, by email.",
   "settings.notif.dueReminder": "Due-day reminder",
