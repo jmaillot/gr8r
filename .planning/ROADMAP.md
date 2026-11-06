@@ -125,7 +125,12 @@ Plans:
   4. Workspace Settings > Date & time exposes the timezone picker with common IANA zones (Paris preselected by default); existing stored tz labels migrate or degrade without loss
   5. All existing Phase 27/37/38 scheduler tests (window-open predicates, no-double-send, boot catch-up) pass unmodified or are deliberately re-pinned with rationale; full suite green
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 44-01-PLAN.md — resolveTz funnel + per-member scheduler refactor (reminder/digest loops), legacy-map & fallback pins, dedup-under-tz-change edge tests
+- [ ] 44-02-PLAN.md — self-tz-only save-path carve-out in docFromClient (D-10 validation) + save-path regression suite
+- [ ] 44-03-PLAN.md — static IANA zone list + searchable combobox in member Settings > Date & time + honest save handler + wiring regression test
 
 ## Progress
 
