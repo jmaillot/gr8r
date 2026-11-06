@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 42-one-click-unsubscribe-endpoint
 source: [42-01-SUMMARY.md, 42-02-SUMMARY.md]
 started: 2026-11-06T10:30:00Z
-updated: 2026-11-06T11:20:00Z
+updated: 2026-11-06T11:35:00Z
 ---
 
 ## Current Test
@@ -30,15 +30,13 @@ result: pass
 
 ### 5. "Coming soon" badge on push toggles (EN)
 expected: In Settings → Notifications, the three push toggles (mentions, assignments, comments) each show a small "Coming soon" badge; the daily-digest and past-due-reminder toggles do NOT show it, and all five toggles still toggle normally.
-result: issue
-reported: "Le badge « Coming soon » n'apparaît pas sur les trois toggles push (Mentions, Assignments, Comments) dans la section Push de Settings — même après rebuild du serveur et rechargement de la page."
-severity: major
+result: pass
+resolved: "Écart initial (badge absent) causé par des commits non poussés — résolu après git push + redeploy serveur. Vérifié en live le 2026-11-06."
 
 ### 6. Badge in French
 expected: With the interface in French, the badge reads "Bientôt disponible" and everything else in the section renders as before.
-result: issue
-reported: "Aucun badge « Bientôt disponible » sur les trois toggles push dans la section Notifications push — même constat qu'en anglais, donc le badge ne se rend pas du tout."
-severity: major
+result: pass
+resolved: "Même cause racine que le test 5 — badge « Bientôt disponible » visible après redeploy. Vérifié en live le 2026-11-06."
 
 ### 7. Footer link and resubscribe intact
 expected: The digest email footer still contains the unsubscribe link (Phase 41 behavior unchanged), and a user who unsubscribed can re-enable the digest from Settings → Notifications and receive the next digest.
@@ -48,8 +46,8 @@ reason: "Pas de digest email sous la main pour vérifier ; observation UX soulev
 ## Summary
 
 total: 7
-passed: 4
-issues: 2
+passed: 6
+issues: 0
 pending: 0
 skipped: 1
 
@@ -57,7 +55,9 @@ skipped: 1
 
 - gap_id: G-42-5
   truth: "The three inert push toggles (push_mention, push_assign, push_comment) each render a 'Coming soon' badge in the Settings Notifications panel"
-  status: failed
+  status: resolved
+  resolved_by: "deploy fix — git push of phase-42 commits + server rebuild (no code change; verified live by user 2026-11-06)"
+  resolved_at: 2026-11-06
   reason: "User reported: badge absent de la section Push (Mentions, Assignments, Comments) même après rebuild serveur + rechargement cache"
   severity: major
   test: 5
@@ -71,7 +71,9 @@ skipped: 1
 
 - gap_id: G-42-6
   truth: "In the French UI, the badge on the three push toggles reads 'Bientôt disponible'"
-  status: failed
+  status: resolved
+  resolved_by: "deploy fix — same as G-42-5 (verified live by user 2026-11-06)"
+  resolved_at: 2026-11-06
   reason: "User reported: aucun badge dans la section Notifications push en français — le badge ne se rend pas (même racine que G-42-5)"
   severity: major
   test: 6
