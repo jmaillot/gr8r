@@ -246,6 +246,41 @@ export const api = {
     }
     return r;
   },
+  /* Phase 43 (D-01/D-13): the logo POSTs the RAW file body — no query params, no
+     client-side transformation or Content-Type-derived hints; the server sniffs
+     magic bytes and owns every validation. On 2xx the returned { logo, revision }
+     is adopted BEFORE any subsequent doc write — the upload bumped the revision
+     server-side, and a stale one would 409 the next save (Pitfall 2). */
+  async uploadLogo(file) {
+    const slug = state.workspace?.slug;
+    if (!slug || !file) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    let res;
+    try {
+      res = await fetch(`/w/${encodeURIComponent(slug)}/logo`, { method: 'POST', credentials: 'same-origin', body: file });
+    } catch {
+      return { ok: false, status: 0, error: t('err.serverUnreachable') };
+    }
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      /* non-JSON response */
+    }
+    if (!res.ok) return { ok: false, status: res.status, error: data?.code ? tErr(data.code, data, data?.error) : data?.error };
+    state.workspace = { ...state.workspace, logo: data?.logo || null };
+    adoptRevision(data);
+    return { ok: true, status: res.status, data };
+  },
+  async removeLogo() {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    const r = await call('DELETE', `/w/${encodeURIComponent(slug)}/logo`);
+    if (r.ok) {
+      state.workspace = { ...state.workspace, logo: null };
+      adoptRevision(r.data);
+    }
+    return r;
+  },
   /* Update the signed-in account's own fields (today: locale). The returned payload is
      adopted so state.user stays fresh without another me() round-trip. */
   async patchMe(patch) {

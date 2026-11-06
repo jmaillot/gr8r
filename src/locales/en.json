@@ -1167,6 +1167,8 @@
   "settings.ws.urlWarning": "Changing the URL will break existing links.",
   "settings.ws.urlReadonly": "Only workspace admins can change these settings.",
   "settings.ws.saveChanges": "Save changes",
+  "settings.ws.uploadLogo": "Upload logo",
+  "settings.ws.removeLogo": "Remove logo",
   "settings.ws.dangerZone": "Danger zone",
   "settings.ws.leaveTitle": "Leave workspace",
   "settings.ws.leaveBody": "You lose access to this workspace until someone invites you back.",

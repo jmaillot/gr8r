@@ -1167,6 +1167,8 @@
   "settings.ws.urlWarning": "La modification de l’URL invalidera les liens existants.",
   "settings.ws.urlReadonly": "Seuls les admins de l’espace de travail peuvent modifier ces réglages.",
   "settings.ws.saveChanges": "Enregistrer les modifications",
+  "settings.ws.uploadLogo": "Téléverser un logo",
+  "settings.ws.removeLogo": "Retirer le logo",
   "settings.ws.dangerZone": "Zone de danger",
   "settings.ws.leaveTitle": "Quitter l’espace de travail",
   "settings.ws.leaveBody": "Vous perdez l’accès à cet espace de travail jusqu’à ce que quelqu’un vous y réinvite.",

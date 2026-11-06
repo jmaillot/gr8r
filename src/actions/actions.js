@@ -1068,6 +1068,24 @@ IN.uploadFiles = el => {
   el.value = '';
 };
 
+/* Phase 43: workspace logo upload/remove from Settings > General > Workspace.
+   The api methods POST the raw file body (D-13) and adopt the returned revision
+   before any subsequent doc write (Pitfall 2); a re-render repaints the sidebar
+   avatar, favicon and settings header from the single payload source. */
+IN.uploadLogo = async el => {
+  const file = el.files?.[0];
+  el.value = '';
+  if (!file) return;
+  const r = await api.uploadLogo(file);
+  if (!r.ok) return toast(r.error || t('err.serverUnreachable'), { kind: 'err' });
+  render();
+};
+IN.removeLogo = async () => {
+  const r = await api.removeLogo();
+  if (!r.ok && r.status !== 404) return toast(r.error || t('err.serverUnreachable'), { kind: 'err' });
+  render();
+};
+
 /* comments */
 IN.draft = el => {
   const id = el.dataset.id;
