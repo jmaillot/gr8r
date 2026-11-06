@@ -24,7 +24,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { tFor } from './src/core/i18n.js';
+import { tFor, escHtml } from './src/core/i18n.js';
 
 const CRLF = '\r\n';
 const DEFAULT_TIMEOUT = 15_000;
@@ -159,6 +159,46 @@ function verifyUnsubscribeToken(key, tokenB64url) {
   } catch {
     return false;
   }
+}
+
+/* Phase 42 (UNSUB-02): decode-after-verify — verification (above) covers the
+   MAC over the whole framing, so decoding the payload AFTER a successful
+   verify is safe. Pure: returns { wsId, userId } or null on any framing
+   anomaly (length, version byte, undecodable input). Never verifies — the
+   route must call verifyUnsubscribeToken FIRST. */
+function decodeUnsubscribePayload(tokenB64url) {
+  try {
+    const raw = Buffer.from(String(tokenB64url), 'base64url');
+    if (raw.length !== UNSUB_PAYLOAD_BYTES + UNSUB_MAC_BYTES) return null;
+    if (raw[0] !== UNSUB_TOKEN_VERSION) return null;
+    const wsId = raw.subarray(1, 1 + UNSUB_ID_BYTES).toString('utf8');
+    const userId = raw.subarray(1 + UNSUB_ID_BYTES, UNSUB_PAYLOAD_BYTES).toString('utf8');
+    return { wsId, userId };
+  } catch {
+    return null;
+  }
+}
+
+/* Phase 42 (UNSUB-02, D-01/D-04): the ONE self-contained unsubscribe landing
+   page. One template, ONE parameter (the localized message string, escHtml'd
+   here — tFor never escapes), inline styles, zero external assets, safe in a
+   mail client's webview. The verified and neutral variants differ ONLY by the
+   message text — nothing else in the byte stream may vary (D-04). */
+function buildUnsubscribePage(message) {
+  const body = escHtml(message);
+  return [
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>gr8r</title></head>',
+    '<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:48px 16px;">',
+    '<div style="max-width:420px;background:#ffffff;border-radius:8px;padding:32px;text-align:center;">',
+    `<p class="msg" style="margin:0;font-size:15px;line-height:1.5;color:#24292f;">${body}</p>`,
+    '</div>',
+    '</td></tr></table>',
+    '</body></html>',
+  ].join('');
 }
 
 function dotStuff(message) {
@@ -918,7 +958,7 @@ function buildInviteMessage(config, invite) {
    verifyUnsubscribeToken exported pure — the token contract Phase 42's
    endpoint consumes, frozen by test/unsubscribe-token.test.mjs. Keys are
    arguments; the mailer module itself never touches MASTER_KEY. */
-export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken };
+export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);

@@ -1685,6 +1685,8 @@
   "notif.digest.overdue": "Overdue",
   "notif.digest.footer": "You receive this daily digest because of your notification settings. If you weren't expecting it, you can ignore this email.",
   "notif.digest.unsubscribe": "Unsubscribe from these emails",
+  "notif.unsubscribe.verified": "You will no longer receive these digest emails.",
+  "notif.unsubscribe.neutral": "Your request has been processed.",
   "estimate.minutes": "min",
   "estimate.hours": "h",
   "estimate.days": "j",

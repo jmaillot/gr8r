@@ -52,7 +52,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { createMailer, unsubscribeUrl } from './mailer.js';
+import { createMailer, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
@@ -5287,6 +5287,87 @@ async function serveFileBinary(req, res, slug, id) {
   stream.pipe(res);
 }
 
+/* Phase 42 (UNSUB-02): the RFC 8058 one-click unsubscribe landing handler.
+   SECURITY CONTRACT (D-01..D-10, SC-1..SC-4) — pinned by test/unsubscribe-route.test.mjs
+   in the same plan as this route (D-13):
+
+   Token model: the :token is the Phase 41 FROZEN contract (0x01 ‖ wsId(36B) ‖
+   userId(36B) ‖ HMAC-SHA256), verified verify-then-decode through the existing
+   timing-safe helpers (verifyUnsubscribeToken → decodeUnsubscribePayload).
+   unsubscribeHmacKey() is null without MASTER_KEY — a null key IS a
+   verification failure → neutral page, never 500.
+
+   Method allow-list: exactly {GET, POST}; every other method (incl. HEAD —
+   conflicts with serveStatic's GET/HEAD habit) → 405 methodNotAllowed with an
+   `Allow: GET, POST` response header and the generic JSON error envelope.
+
+   Replay posture (D-09): no token burn, no 410, no claim key — repeated POSTs
+   re-merge email_digest=false (idempotent convergent upsert creating the row
+   if sparse) and receive the byte-identical response. The upsert is
+   unconditional for valid tokens (orphan rows for deleted users are harmless —
+   the digest gate joins memberships), keeping the response a pure function of
+   token validity. Merge source is getStoredNotifPrefs (whitelist-filtered,
+   K-10) — NEVER blind-replace the row.
+
+   Response matrix (D-03/D-04): every token outcome (valid, forged, stale,
+   rotated-out, garbage) answers 200 text/html with the SAME one-template page
+   and identical status/headers — only the localized body text differs
+   (verified vs neutral). GET is a stateless no-op: same neutral page, zero
+   mutation (D-05). The 429 throttle is token-blind and orthogonal to this
+   matrix: it keys on the client IP ONLY (never the token — a token key would
+   burn budgets and open a 429-vs-200 existence oracle) and fires BEFORE
+   verification. Budget: `unsub|<ip>`, 10 attempts / 15 min (login-family).
+
+   sameOrigin exemption (D-07): the unguessable token IS the CSRF defence — no
+   cookies and no Sec-Fetch headers arrive from a mail client, so the
+   Fetch-Metadata navigation guard (which lives inside the file-route branch)
+   is structurally bypassed by this separate branch. No session is read.
+
+   Logging (SC-3): this branch sits OUTSIDE the /api/ chain — the finish
+   handler logs only /api/ pathnames, so the token never reaches request logs.
+   NEVER call logSecurity/logAct/logDebug with the token, and never write it to
+   an activity row. The POST body is never read (Node discards unread bodies
+   when the response ends). The page needs no <meta noindex>/robots tags — the
+   URL is per-recipient, unguessable and never crawled.
+
+   Ordering: intercepted BEFORE serveStatic (which 405s non-GET with
+   Allow: GET, HEAD and SPA-fallbacks GET — both wrong here). */
+async function handleUnsubscribe(req, res, token) {
+  const method = req.method.toUpperCase();
+  if (method !== 'GET' && method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST');
+    return fail(res, 405, 'methodNotAllowed', 'Method not allowed');
+  }
+  /* Token-blind, IP-keyed throttle BEFORE verification (D-08; login-family). */
+  if (tooMany(`unsub|${clientIp(req)}`, 10, 15 * 60 * 1000)) {
+    return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+  }
+  const key = unsubscribeHmacKey();
+  const valid = !!key && verifyUnsubscribeToken(key, token);
+  const payload = valid ? decodeUnsubscribePayload(token) : null;
+  if (payload && method === 'POST') {
+    /* D-10: merge-upsert the stored prefs row (convergent, replay-safe,
+       creates the row if sparse), scope exactly (token.wsId, token.userId). */
+    const merged = { ...getStoredNotifPrefs(payload.userId, payload.wsId), email_digest: false };
+    db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(
+      payload.wsId,
+      payload.userId,
+      JSON.stringify(merged),
+    );
+  }
+  /* D-02 (post-verification only): the page locale rides the token user's
+     users.locale row, clamped exactly like the I18N-01 pattern — NULL,
+     missing-row and malformed values degrade to 'en'. */
+  let locale = 'en';
+  if (payload) {
+    const row = db.prepare('select locale from users where id = ?').get(payload.userId);
+    locale = row?.locale === 'fr' ? 'fr' : 'en';
+  }
+  const message = tFor(locale, valid && method === 'POST' ? 'notif.unsubscribe.verified' : 'notif.unsubscribe.neutral');
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(buildUnsubscribePage(message));
+}
+
 /* ------------------------------- server -------------------------------- */
 const server = http.createServer(async (req, res) => {
   const started = now();
@@ -5339,6 +5420,13 @@ const server = http.createServer(async (req, res) => {
         }
       }
       await serveFileBinary(req, res, fileMatch[1], fileMatch[2]);
+    } else if (/^\/unsubscribe\/([A-Za-z0-9_-]+)$/.test(url.pathname)) {
+      /* The unsubscribe route is intercepted BEFORE the /api/ branch (whose
+         finish handler logs pathnames — the token must never be logged) and
+         BEFORE serveStatic (which 405s non-GET and SPA-fallbacks GET).
+         See the contract block above handleUnsubscribe. */
+      const unsubMatch = url.pathname.match(/^\/unsubscribe\/([A-Za-z0-9_-]+)$/);
+      await handleUnsubscribe(req, res, unsubMatch[1]);
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {

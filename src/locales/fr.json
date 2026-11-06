@@ -1685,6 +1685,8 @@
   "notif.digest.overdue": "En retard",
   "notif.digest.footer": "Vous recevez ce résumé quotidien en raison de vos paramètres de notification. Si vous ne l’attendiez pas, vous pouvez l’ignorer.",
   "notif.digest.unsubscribe": "Se désabonner de ces e-mails",
+  "notif.unsubscribe.verified": "Vous ne recevrez plus ces e-mails de synthèse.",
+  "notif.unsubscribe.neutral": "Votre demande a été prise en compte.",
   "estimate.minutes": "min",
   "estimate.hours": "h",
   "estimate.days": "j",
