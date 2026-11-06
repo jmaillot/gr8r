@@ -105,7 +105,10 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 43-01-PLAN.md — Server-side logo routes: POST/DELETE/GET /w/:slug/logo, doc reference, magic-byte validation, workspacePayload.logo, lifecycle tests (D-01..D-04, D-08..D-11)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 43-02-PLAN.md — Render surfaces: sidebar avatar, favicon swap, settings upload/remove UI, digest header logo (D-05..D-07, D-12)
 
 ### Phase 44: Per-Member Timezones *(v1.10)*
