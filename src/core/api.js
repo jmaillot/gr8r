@@ -217,6 +217,9 @@ export const api = {
         slug: r.data.slug,
         color: r.data.color,
         role: r.data.role,
+        /* Phase 43 (D-11): the versioned logo URL rides workspacePayload — adopted here so
+           the sidebar avatar, favicon swap and settings page all read the same source. */
+        logo: r.data.logo || null,
       };
       state.memberId = r.data.memberId || null;
       this.revision = r.data.revision;

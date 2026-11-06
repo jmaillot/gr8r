@@ -51,6 +51,7 @@
   color: #fff;
   background: var(--c, #3a3934);
   flex-shrink: 0;
+  object-fit: cover; /* Phase 43 (D-12): when the slot is an <img> (ws logo), CSS-fit, no crop */
 }
 .ws-logo.brand {
   background: #000;

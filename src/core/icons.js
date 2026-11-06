@@ -25,7 +25,11 @@ export const BRAND_W = 591,
   BRAND_H = 208;
 export const brandLogo = (h = 30) =>
   `<img class="logo" src="/logo-${effectiveDark() ? 'dark' : 'light'}.svg" alt="${t('a11y.brand')}" height="${h}" width="${Math.round((h * BRAND_W) / BRAND_H)}">`;
+/* Phase 43 (D-12/D-13): when a logo is set the payload URL renders as-is —
+   CSS-fit only, no re-encoding; empty alt (the adjacent ws-name span names it).
+   URL comes solely from workspacePayload.logo (D-11) — never hand-built here. */
 export function wsLogo(w, px = 22) {
+  if (w && w.logo && w.logo.url) return `<img class="ws-logo" src="${esc(w.logo.url)}" style="width:${px}px;height:${px}px" alt="">`;
   return w && w.brand
     ? `<span class="ws-logo brand" style="width:${px}px;height:${px}px">${MARK(px)}</span>`
     : `<span class="ws-logo" style="--c:${w.c};width:${px}px;height:${px}px;font-size:${Math.max(9, Math.round(px * 0.46))}px">${esc(w.name[0])}</span>`;

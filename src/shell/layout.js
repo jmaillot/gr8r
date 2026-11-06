@@ -3,6 +3,7 @@ import { TODAY, diffD, esc, modKey, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
 import { D, S, allTasks, mem, myNotifs, pColor, proj, team, teamsList, visibleProjects } from '../core/store.js';
+import { api } from '../core/api.js';
 import { av } from '../ui/helpers.js';
 import { t } from '../core/i18n.js';
 import { ROUTE_IDS, routeName } from './render.js';
@@ -76,9 +77,18 @@ export function sItem(route, label, icon, opt = {}) {
   const on = S.ui.route === route && (!opt.id || S.ui.params.id === opt.id);
   return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${opt.id}"` : ''} ${S.ui.collapsed ? `data-tip="${esc(label)}" data-tip-pos="right"` : ''} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;
 }
+/* Phase 43 (D-06/D-10): the browser tab follows the workspace logo client-side.
+   Runs on every sidebar render (i.e. whenever a workspace context is live) and is
+   idempotent; the per-surface fallback is /favicon.svg. URL comes solely from
+   workspacePayload.logo (D-11) — never hand-built. No service-worker/manifest involvement. */
+export function applyWsFavicon() {
+  const link = document.querySelector('link[rel="icon"]');
+  if (link) link.href = api.workspace?.logo?.url || '/favicon.svg';
+}
 export function renderSidebar() {
   const u = S.ui,
     d = D();
+  applyWsFavicon();
   const unreadInbox = myNotifs().filter(n => !n.read && n.type !== 'update').length;
   const unreadAll = myNotifs().filter(n => !n.read).length;
   const myOpen = allTasks().filter(tk => tk.assignee === d.me && tk.status !== 'done' && tk.due && diffD(parse(tk.due), TODAY) <= 0).length;
@@ -88,7 +98,7 @@ export function renderSidebar() {
     <div class="side-top">
       <div class="row" style="gap:2px">
         <button class="ws grow" data-a="pop" data-pop="ws" aria-haspopup="menu" aria-label="${t('a11y.switchWorkspace')}">
-          ${wsLogo(d.ws, 22)}
+          ${wsLogo({ ...d.ws, logo: api.workspace?.logo || null }, 22)}
           <span class="ws-name trunc">${esc(d.ws.name)}</span>
           <span class="chev-d faint">${ic('chevrons-up-down', 13)}</span>
         </button>
