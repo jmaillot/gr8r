@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 42-one-click-unsubscribe-endpoint
 source: [42-01-SUMMARY.md, 42-02-SUMMARY.md]
 started: 2026-11-06T10:30:00Z
-updated: 2026-11-06T11:05:00Z
+updated: 2026-11-06T11:20:00Z
 ---
 
 ## Current Test
@@ -61,10 +61,13 @@ skipped: 1
   reason: "User reported: badge absent de la section Push (Mentions, Assignments, Comments) même après rebuild serveur + rechargement cache"
   severity: major
   test: 5
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Deploy gap, not code: the phase-42 commits (incl. badge commit 17180da) were never pushed — local main is 15 commits ahead of origin/main; the server rebuild rebuilt pre-42 code. No code change needed: push + redeploy."
+  artifacts:
+    - path: "git state (main ahead of origin/main by 15)"
+      issue: "phase-42 commits unpushed; deployed bundle dist/assets/*.js lacks pushComingSoon"
+  missing:
+    - "git push, then on the server: git pull && docker compose build && docker compose up -d"
+  debug_session: ".planning/debug/push-badge-not-rendering.md"
 
 - gap_id: G-42-6
   truth: "In the French UI, the badge on the three push toggles reads 'Bientôt disponible'"
@@ -72,10 +75,13 @@ skipped: 1
   reason: "User reported: aucun badge dans la section Notifications push en français — le badge ne se rend pas (même racine que G-42-5)"
   severity: major
   test: 6
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Same as G-42-5: unpushed phase-42 commits; deployed bundle predates the badge feature. FR key is correct in src/locales/fr.json (inlined into the Vite bundle at build time)."
+  artifacts:
+    - path: "git state (main ahead of origin/main by 15)"
+      issue: "same deploy gap as G-42-5"
+  missing:
+    - "git push, then on the server: git pull && docker compose build && docker compose up -d"
+  debug_session: ".planning/debug/push-badge-not-rendering.md"
 
 ## Deferred Follow-Ups
 
