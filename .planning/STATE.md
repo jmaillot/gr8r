@@ -5,16 +5,16 @@ milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 44
 current_phase_name: Per-Member Timezones
 status: executing
-stopped_at: Completed 44-01-PLAN.md
-last_updated: "2026-11-06T16:45:39.710Z"
+stopped_at: Completed 44-02-PLAN.md
+last_updated: "2026-11-06T17:07:22.719Z"
 last_activity: 2026-11-06
 last_activity_desc: Phase 41 complete, transitioned to Phase 44
-state_head: e344e74db63479f82a87922d32671d9f033c5ab4
+state_head: 94be8ab3092ff58b20747b4a6f2966784701bd7c
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # STATE.md
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 ## Current Position
 
 Phase: 44 (Per-Member Timezones) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Total Plans in Phase: 3
 Status: 44-01 complete — 44-02 next
 Last activity: 2026-11-06 — 44-01 executed (per-member tz windows, resolveTz funnel)
@@ -107,6 +107,8 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 43]: G-43-3 fixed via click-namespace alias A.removeLogo (RED→GREEN wiring regression test)
 - [Phase 43]: G-43-4 closed as deployment staleness — /w/:slug/logo must bypass forward-auth (public route D-02); Traefik router exclusion added on deployment host; no source change
 - [Phase 44]: 44-01: resolveTz funnel lives in tz.js (server.js unimportable — boots+opens DB); labels resolve on read, Paris fallback (D-07) replaces legacy UTC fallback
+- [Phase 44]: Coerce-to-Paris on invalid tz saves (D-10) — no new error strings; empty submits store '' (Paris on read, D-07)
+- [Phase 44]: Self-tz carve-out applies after BOTH docFromClient role gates; test fixture seeds stored roster via withDb (backfillMemberships is boot-only)
 
 ### Pending Todos
 
@@ -144,8 +146,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T16:45:39.465Z
-Stopped at: Completed 44-01-PLAN.md
+Last session: 2026-11-06T17:07:22.472Z
+Stopped at: Completed 44-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -161,6 +163,7 @@ Resume file: None
 | Phase 43 P02 | 47m | 3 tasks | 14 files |
 | Phase 43 P03 | resumed-session | 2 tasks | 2 files |
 | Phase 44 P01 | 35m | 4 tasks | 5 files |
+| Phase 44 P02 | 25m | 2 tasks | 2 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
