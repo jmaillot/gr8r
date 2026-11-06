@@ -242,7 +242,7 @@ res.end(buildUnsubscribePage(valid ? tFor(locale, 'notif.unsubscribe.verified') 
 | A2 | The neutral page does not need `noindex`/`X-Robots-Tag` — decide in plan; low stakes either way | Discretion | Cosmetic; document in contract comment |
 | A3 | Unread POST request bodies are safely discarded by Node when the response ends without reading | Code Examples | Theoretical socket edge; a `req.resume()` drain is a cheap belt-and-braces if the planner prefers |
 
-## Open Questions
+## Open Questions (RESOLVED — pinned in 42-01 `<decisions_pinned>`)
 
 1. **D-02 language source (blocking for the plan):**
    - What we know: No workspace-language column exists; `users.locale` is the only per-person signal (nullable, malformed values possible — the clamp pattern at server.js:1298-1302 handles all of it).
