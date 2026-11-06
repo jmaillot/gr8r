@@ -90,6 +90,8 @@ Plans:
 - [ ] 42-01-PLAN.md — One-click route end-to-end: helpers, contract comment, security-contract test matrix (UNSUB-02, D-01..D-10/D-13)
 - [ ] 42-02-PLAN.md — Push "coming soon" badge on the three inert toggles (D-11/D-12) *(v1.10)*
 
+### Phase 43: Workspace Logo
+
 **Goal**: A workspace can carry its own logo — uploaded by an admin, stored server-side, rendered wherever the workspace identity appears — with a clean fallback to `favicon.svg` when none is set
 **Depends on**: Nothing (first phase of v1.10)
 **Requirements**: LOGO-01 (to be added to REQUIREMENTS.md at milestone start — Kanzo task #16)
@@ -100,7 +102,11 @@ Plans:
   4. Upload validation rejects non-images and oversized files with a localized error message (EN+FR catalogued, `npm run i18n:scan` green)
   5. Full suite green; no new runtime dependencies
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 43-01-PLAN.md — Server-side logo routes: POST/DELETE/GET /w/:slug/logo, doc reference, magic-byte validation, workspacePayload.logo, lifecycle tests (D-01..D-04, D-08..D-11)
+- [ ] 43-02-PLAN.md — Render surfaces: sidebar avatar, favicon swap, settings upload/remove UI, digest header logo (D-05..D-07, D-12)
 
 ### Phase 44: Per-Member Timezones *(v1.10)*
 
