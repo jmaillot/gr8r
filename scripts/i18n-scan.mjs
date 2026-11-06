@@ -1433,6 +1433,10 @@ function machineCategory(occ) {
      is a machine value (foldForSearch's 'NFD'), never interface text. */
   if (slot.call && slot.call.callee === 'normalize') return 'NORMALIZATION_FORM';
   if (slot.object && slot.object.propIsKey) return 'OBJECT_KEY';
+  /* Phase 43: `fetch(url, { method: 'POST' })` — an object property NAMED method
+     whose value is an HTTP verb is a machine value, exactly like call()'s first
+     argument (the raw-body logo upload cannot ride the JSON call() helper). */
+  if (slot.object && slot.object.propName === 'method' && HTTP_VERBS.has(occ.text)) return 'HTTP_VERBS';
   if (slot.object && slot.object.propName === 'role') return 'ROLE_IDS';
   if (inDemoConst(slot)) return 'DEMO_CONTENT';
   if (slot.array) {
