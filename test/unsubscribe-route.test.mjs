@@ -351,3 +351,29 @@ test('reminder resume (Phase 38 semantics): the flip merges into the stored row 
     await fx.server.stop();
   }
 });
+
+test('badge-placement pin (D-11/D-12): the pushComingSoon badge decorates exactly the three inert push rows — functional rows untouched', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/pages/settings.js', import.meta.url), 'utf8');
+  const pushCase = src.match(/case 'notif-push':[\s\S]*?(?=\n    case )/);
+  assert.ok(pushCase, "the 'notif-push' case exists in settings.js");
+  const block = pushCase[0];
+  const badgeRefs = block.match(/settings\.notif\.pushComingSoon/g) || [];
+  assert.equal(badgeRefs.length, 3, 'the badge key is referenced exactly 3 times — once per inert push row');
+  for (const row of ['push_mention', 'push_assign', 'push_comment']) {
+    const re = new RegExp(`srow\\([^\\n]*pushComingSoon[^\\n]*tog\\('${row}'`);
+    assert.match(block, re, `the ${row} row carries the badge in its description slot`);
+  }
+  for (const [row, key] of [['due_reminder', 'settings.notif.dueReminderDesc'], ['past_due', 'settings.notif.pastDueDesc']]) {
+    const re = new RegExp(`srow\\([^\\n]*${key.replace(/\./g, '\\.')}[^\\n]*tog\\('${row}'`);
+    assert.match(block, re, `the functional ${row} row keeps its real description`);
+    assert.doesNotMatch(
+      block,
+      new RegExp(`srow\\([^\\n]*${key.replace(/\./g, '\\.')}[^\\n]*pushComingSoon`),
+      `the functional ${row} row is badge-free (D-11)`,
+    );
+  }
+  // D-12: the toggles stay rendered and clickable — data-in="np" handler wiring unchanged, no disabled attribute
+  assert.equal((block.match(/tog\('push_/g) || []).length, 3, 'the three push toggles are still rendered via tog()');
+  assert.ok(!block.includes('disabled'), 'no toggle is disabled (D-12)');
+});
