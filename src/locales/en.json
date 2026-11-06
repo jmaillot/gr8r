@@ -223,6 +223,7 @@
   "toast.loaded": "Loaded",
   "toast.notifPrefsSaved": "Notification preferences saved",
   "err.notifPrefsSaveFailed": "Could not save your notification preferences",
+  "err.methodNotAllowed": "Method not allowed",
   "toast.localeSaveFailed": "Language not saved — it applies to this session only",
   "toast.prefSaved": "Preference saved",
   "toast.wsSettingsSaved": "Workspace settings saved",

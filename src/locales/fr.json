@@ -224,6 +224,7 @@
   "toast.loaded": "Chargé",
   "toast.notifPrefsSaved": "Préférences de notification enregistrées",
   "err.notifPrefsSaveFailed": "Impossible d’enregistrer vos préférences de notification",
+  "err.methodNotAllowed": "Méthode non autorisée",
   "toast.localeSaveFailed": "Langue non enregistrée : elle ne s’applique qu’à cette session",
   "toast.prefSaved": "Préférence enregistrée",
   "toast.wsSettingsSaved": "Paramètres de l’espace de travail enregistrés",
