@@ -649,6 +649,10 @@ function buildDigestMessage(config, msg) {
   const workspace = text(msg.workspace) || 'Projects Studio';
   const slug = text(msg.wsSlug);
   const appUrl = text(msg.appUrl).replace(/\/+$/, '');
+  /* Phase 43 (D-07/D-10): the workspace logo rides as a pre-built ABSOLUTE
+     versioned URL (server.js composes it from APP_URL exactly like the deep
+     links, Pitfall 8). Absent → the header stays text-only, no placeholder. */
+  const logoUrl = text(msg.logoUrl);
   const taskUrl = t => (t?.key ? `${appUrl}/w/${slug}/task/${encodeURIComponent(t.key)}` : `${appUrl}/w/${slug}/`);
   const dueToday = Array.isArray(msg.dueToday) ? msg.dueToday : [];
   const overdue = Array.isArray(msg.overdue) ? msg.overdue : [];
@@ -720,6 +724,7 @@ function buildDigestMessage(config, msg) {
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
         <tr><td>
+          ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(workspace)}" style="max-height:48px;display:block" />` : ''}
           <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(greeting)}</p>
           ${htmlSection(dueLabel, dueToday)}
           ${htmlSection(overdueLabel, overdue)}

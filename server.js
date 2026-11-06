@@ -1598,12 +1598,22 @@ function runReminderPass({ now: at = new Date() } = {}) {
         digests++;
         /* Post-commit fire-and-forget — NEVER inside the transaction. */
         if (MAILER.enabled) {
+          /* Phase 43 (D-07/D-10/D-11): the digest header embeds the workspace
+             logo as an ABSOLUTE versioned URL — composed exactly like the
+             taskUrl deep links (Pitfall 8, never relative). Omitted entirely
+             when no logo is set (D-10 — the template renders no img, no
+             placeholder URL probing). An <img> URL is not a security-header
+             contract, so unlike the Phase 41 unsubscribe gating there is no
+             https-only condition (RESEARCH open question 1). */
+          const logo = logoShape(ws, docLogo(ws));
           MAILER.sendDigest({
             to: r.email,
             locale: r.locale === 'fr' ? 'fr' : 'en',
             workspace: ws.name || 'Projects Studio',
             wsSlug: ws.slug,
             appUrl: APP_URL,
+            /* Phase 43 (D-07): absolute versioned logo URL — omitted when unset (D-10). */
+            ...(logo ? { logoUrl: `${APP_URL}${logo.url}` } : {}),
             /* Phase 41 (UNSUB-01, D-05): first gate layer — the URL is only
                built when MASTER_KEY is set AND APP_URL is https; the mailer's
                https check is the second layer. Existing fields untouched
