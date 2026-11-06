@@ -1357,8 +1357,11 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
 /* =======================================================================
    Due-date reminder scheduler (phase 27, REM-01..REM-05).
 
-   D-27-1: both reminder offsets target 08:00 in the workspace's shared
-   timezone. D-27-2: the pass runs at boot (restart catch-up) and every
+   D-27-1 (rewritten Phase 44, D-09/D-11): both reminder offsets and the
+   digest target 08:00 in EACH MEMBER'S OWN timezone — the shared
+   workspace-tz model (first-membership lookup) is deleted; per-member
+   resolution through the resolveTz funnel (tz.js) is the only semantics.
+   D-27-2: the pass runs at boot (restart catch-up) and every
    minute from an unref'd interval. D-27-3: the past-due nudge fires at the
    first 08:00 after the due date passes, exactly once. The emission window
    is AT-OR-AFTER 08:00 local (Phase 37/38 — mirrors the digest loop): the
@@ -1370,44 +1373,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
    no claim, no doc write, no revision bump on any idle tick before 08:00).
    ======================================================================= */
 
-/* A1 resolved (plan 27-01 task 1): `tz` is a per-member profile field — the
-   settings page saves sel('tz') into the member profile the client renders as
-   P, i.e. doc.data.members[*].tz (seeded '' in memberProfile). CONTEXT.md
-   D-27-1 gives the workspace ONE shared timezone, so the first membership row
-   (insert order) provides it; an unknown or empty label falls back to UTC. */
-const TZ_BY_LABEL = {
-  '(GMT-08:00) Pacific Time': 'America/Los_Angeles',
-  '(GMT-05:00) Eastern Time': 'America/New_York',
-  '(GMT+00:00) London': 'Europe/London',
-  '(GMT+01:00) Berlin': 'Europe/Berlin',
-  '(GMT+08:00) Singapore': 'Asia/Singapore',
-};
-
-function localParts(tzLabel, date = new Date()) {
-  const zone = TZ_BY_LABEL[tzLabel] || 'UTC';
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: zone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-  const get = t => parts.find(p => p.type === t)?.value;
-  return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) % 24 };
-}
-
-/* Pure YYYY-MM-DD string arithmetic via Date.UTC — never local-midnight Date
-   math, which is DST-fragile. (addDaysIso retired with the day_before offset,
-   phase 37 — only the localDate string compare remains.) */
-
-function workspaceTzLabel(doc, wsId) {
-  const first = db.prepare('select member_id from memberships where workspace_id = ? order by rowid limit 1').get(wsId);
-  const members = Array.isArray(doc?.data?.members) ? doc.data.members : [];
-  const member = members.find(x => x?.id && x.id === first?.member_id);
-  return member?.tz || '';
-}
+import { localParts, resolveTz, TZ_BY_LABEL } from './tz.js';
 
 /* REM-04 + RESEARCH Pitfall 4: one predicate for every offset. Mirrors the
    client's isOver (t.due && status !== 'done') plus archived-task and
@@ -1437,11 +1403,12 @@ function runReminderPass({ now: at = new Date() } = {}) {
   for (const ws of db.prepare('select * from workspaces').all()) {
     try {
       const doc = JSON.parse(ws.doc);
-      /* Per-workspace localDate/hour — never cached across workspaces or
-         ticks (RESEARCH Pitfall 6). */
-      const { date: localDate, hour } = localParts(workspaceTzLabel(doc, ws.id), at);
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
+      /* D-09/D-14 per-member window: (localDate, hour) is computed per
+         assignee/recipient INSIDE each loop below — never hoisted to the
+         workspace level, never cached across members or ticks (Pitfall 3,
+         DST is real). */
       /* D-27-1 window gate: reminder emission opens AT the 08:00 local tick
          and stays catch-up-eligible for the rest of the day (Phase 37/38,
          mirroring the digest loop below). The reminders_sent ledger — its
@@ -1449,7 +1416,13 @@ function runReminderPass({ now: at = new Date() } = {}) {
          the wider window exactly-once per (workspace, task, assignee,
          offset, due); ticks before 08:00 stay pure reads (REM-01 / SC-5:
          no claim, no doc write, no revision bump). */
-      if (hour >= 8) for (const t of tasks) {
+      for (const t of tasks) {
+        /* Per-assignee resolution (D-09): the window comes from THE
+           ASSIGNEE's own stored tz (doc.data.members[*].tz) through the
+           resolveTz funnel — never from a shared workspace tz. */
+        const assigneeTz = resolveTz((doc?.data?.members || []).find(m => m?.id === t.assignee)?.tz);
+        const { date: localDate, hour } = localParts(assigneeTz, at);
+        if (hour < 8) continue;
         const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
         /* SCOPE-04: a scoped member is never reminded about content outside
@@ -1527,8 +1500,9 @@ function runReminderPass({ now: at = new Date() } = {}) {
       /* =====================================================================
          Phase 38 (DIGEST-01): daily digest — AFTER the per-task reminder
          loop, inside the same per-workspace block (D-04/D-08). Reuses the
-         in-scope `tasks` array, `projects` map and `localDate` computed
-         above — the doc is NEVER re-parsed here (one snapshot per tick).
+         in-scope `tasks` array and `projects` map computed above, plus the
+         per-recipient `localDate` resolved inside this loop (D-09 — the
+         window is each recipient's own tz, never a shared workspace date).
          Recipients come from the memberships⋈users authority join (D-05,
          never doc.data.members); opt-in is a STRICT stored `email_digest ===
          true` (D-05/D-14 — undefined-falsy is off). Task filtering copies
@@ -1548,10 +1522,17 @@ function runReminderPass({ now: at = new Date() } = {}) {
          exactly-once via its own claim (reminders_sent for reminders /
          digest claim for digests).
          ===================================================================== */
-      if (hour >= 8) for (const r of db
+      for (const r of db
         .prepare('select m.member_id, m.user_id, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
         .all(ws.id)) {
         if (!r.user_id || !r.email) continue;
+        /* Per-recipient resolution (D-09/D-14): the window comes from THE
+           RECIPIENT's own doc member tz through resolveTz — computed inside
+           the loop, before any opt-in gate or claim (Pitfall 3: never
+           hoisted, never cached). */
+        const recipientTz = resolveTz((doc?.data?.members || []).find(m => m?.id === r.member_id)?.tz);
+        const { date: localDate, hour } = localParts(recipientTz, at);
+        if (hour < 8) continue;
         /* D-14: the opt-in is the STORED value — stored true IS the opt-in;
            undefined (no row, unparseable row, missing key) is off. Plan 38-02
            deleted the pre-38 default `email_digest: true` from the merged
@@ -1591,6 +1572,11 @@ function runReminderPass({ now: at = new Date() } = {}) {
         transaction(() => {
           const res = db
             .prepare('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)')
+          /* D-11/D-12: claims keyed on (user, localDate-of-emission-time).
+             Changing a member's tz never re-fires an already-claimed reminder
+             for the same localDate; a tz change yielding a different localDate
+             fires exactly one new legitimate claim (re-window allowed). No
+             ledger reset on tz change. */
             .run(`${ws.id}:${r.user_id}:digest:${localDate}`, ws.id, now());
           claimed = res.changes !== 0; // D-03: user_id id space, exactly-once
         });

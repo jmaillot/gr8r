@@ -377,9 +377,10 @@ test('REM-02: Pacific label maps through DST — the local date, not the UTC dat
   const { own: ownE } = await makeWorkspace(m => [task(m, { due: '2026-03-09' })], {}, '(GMT-08:00) Pacific Time');
   const notYet = ownE(await trigger('2026-03-08T16:00:00Z'));
   assert.equal(notYet.length, 0, 'Mar 8 local: no window open for a Mar 9 due (day-before offset removed in Phase 37)');
-  /* Unknown/empty label → UTC fallback (legacy docs seed tz: ''). */
+  /* Unknown/empty label → Paris fallback (D-07 — deliberately replaces the
+     legacy UTC fallback). Inject 07:00Z = 08:00 Europe/Paris (CET, winter). */
   const { own: ownU } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {}, '');
-  assert.ok(ownU(await trigger(at8('2026-01-15'))).some(n => n.snippet === 'Due today: Ship it'), 'empty tz label falls back to UTC');
+  assert.ok(ownU(await trigger('2026-01-15T07:00:00Z')).some(n => n.snippet === 'Due today: Ship it'), 'empty tz label falls back to Europe/Paris (D-07)');
 });
 
 /* ==================== REM-05: reminder email path (Task 3) ==================== */
