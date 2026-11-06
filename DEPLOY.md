@@ -855,6 +855,14 @@ there is nothing to re-wrap. Recipients who click a stale link should use the
 footer settings link instead. (The Phase 42 unsubscribe endpoint will answer
 one-click POSTs without redirecting, per RFC 8058 §3.1.)
 
+The instance now serves `GET`/`POST /unsubscribe/:token`: mail clients'
+one-click POSTs are honored server-side whenever the List-Unsubscribe-Post
+header is present on digest mail (that is, whenever `MASTER_KEY` is set —
+without it, no headers are emitted and the route answers every token with a
+generic neutral page). Rotating `MASTER_KEY` invalidates old tokens — stale
+links get the same neutral page, never an error. The route consumes the same
+IP throttle budget as `/api/auth/*` (10 attempts / 15 minutes).
+
 ### Discover a key's id
 
 Envelopes in the database are stamped with a key id: the first 8 hex chars of
