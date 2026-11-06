@@ -32,7 +32,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 - [x] **Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers** - Stateless HMAC unsubscribe token, List-Unsubscribe/-Post headers on digest mail, footer link preserved, DEPLOY.md DKIM caveat (UNSUB-01, UNSUB-03) (completed 2026-11-06)
 - [x] **Phase 42: One-Click Unsubscribe Endpoint** - The codebase's first anonymous mutating route: `POST /unsubscribe/:token` with a security contract first (UNSUB-02) (completed 2026-11-06)
 - [x] **Phase 43: Workspace Logo** - Per-workspace logo upload with favicon.svg fallback, stored server-side, surfaced in the UI (Kanzo #16) (completed 2026-11-06)
-- [ ] **Phase 44: Per-Member Timezones** - Multiple configurable timezones with Paris default, replacing the single workspace-TZ model (Kanzo #14)
+- [x] **Phase 44: Per-Member Timezones** - Multiple configurable timezones with Paris default, replacing the single workspace-TZ model (Kanzo #14)
 
 ## Phase Details
 
@@ -125,7 +125,7 @@ Plans:
   4. Workspace Settings > Date & time exposes the timezone picker with common IANA zones (Paris preselected by default); existing stored tz labels migrate or degrade without loss
   5. All existing Phase 27/37/38 scheduler tests (window-open predicates, no-double-send, boot catch-up) pass unmodified or are deliberately re-pinned with rationale; full suite green
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -135,7 +135,7 @@ Plans:
 - [x] 44-02-PLAN.md — self-tz-only save-path carve-out in docFromClient (D-10 validation) + save-path regression suite
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 44-03-PLAN.md — static IANA zone list + searchable combobox in member Settings > Date & time + honest save handler + wiring regression test
+- [x] 44-03-PLAN.md — static IANA zone list + searchable combobox in member Settings > Date & time + honest save handler + wiring regression test
 
 ## Progress
 

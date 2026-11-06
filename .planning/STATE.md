@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 
 ## Current Position
 
-Phase: 44 (Per-Member Timezones) — EXECUTING
+Phase: 44 (Per-Member Timezones) — COMPLETE (3/3 plans)
 Plan: 3 of 3
 Total Plans in Phase: 3
-Status: 44-01 complete — 44-02 next
-Last activity: 2026-11-06 — 44-01 executed (per-member tz windows, resolveTz funnel)
+Status: 44-01, 44-02, 44-03 complete — phase ready for verify
+Last activity: 2026-11-06 — 44-03 executed (searchable IANA tz combobox, member-profile save path)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -109,6 +109,9 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 44]: 44-01: resolveTz funnel lives in tz.js (server.js unimportable — boots+opens DB); labels resolve on read, Paris fallback (D-07) replaces legacy UTC fallback
 - [Phase 44]: Coerce-to-Paris on invalid tz saves (D-10) — no new error strings; empty submits store '' (Paris on read, D-07)
 - [Phase 44]: Self-tz carve-out applies after BOTH docFromClient role gates; test fixture seeds stored roster via withDb (backfillMemberships is boot-only)
+- [Phase 44]: 44-03: the client imports tz.js's resolveTz as the single legacy-label funnel (no second client mapping); picker writes me().tz on S.data.members via the 43-03 alias A.tzSel = IN.tzSel — never S.prefs (D-09)
+- [Phase 44]: 44-03: src/lib/timezones.js exempted from i18n-scan (EXCLUDED_FILES — generated machine data, seed.js family); generator is the only supportedValuesOf site
+- [Phase 44]: 44-03: IANA ids keep underscores (58 valid zones); only display names normalize `_` → space — plan's "no underscore ids" assertion was wrong (Rule 1)
 
 ### Pending Todos
 
@@ -146,8 +149,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T17:07:22.472Z
-Stopped at: Completed 44-02-PLAN.md
+Last session: 2026-11-06
+Stopped at: Completed 44-03-PLAN.md — Phase 44 complete (3/3 plans)
 Resume file: None
 
 ## Performance Metrics
@@ -164,6 +167,7 @@ Resume file: None
 | Phase 43 P03 | resumed-session | 2 tasks | 2 files |
 | Phase 44 P01 | 35m | 4 tasks | 5 files |
 | Phase 44 P02 | 25m | 2 tasks | 2 files |
+| Phase 44 P03 | 19m | 3 tasks | 14 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
