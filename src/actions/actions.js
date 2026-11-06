@@ -1085,6 +1085,11 @@ IN.removeLogo = async () => {
   if (!r.ok && r.status !== 404) return toast(r.error || t('err.serverUnreachable'), { kind: 'err' });
   render();
 };
+/* G-43-3: the Settings "Remove logo" button carries the removeLogo action
+   name, so the click delegation in events.js dispatches A[el.dataset.a] —
+   the handler must be reachable under A, not only IN. Alias, not a copy:
+   one code path. */
+A.removeLogo = IN.removeLogo;
 
 /* comments */
 IN.draft = el => {

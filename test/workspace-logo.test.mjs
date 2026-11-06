@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { ADMIN, client, inviteToken, login, startServer } from './helpers/server.mjs';
 
@@ -250,4 +251,46 @@ test('deleting the workspace unlinks its logo file — no orphan (D-09/A4)', asy
   } finally {
     await server.stop();
   }
+});
+
+/* =====================================================================
+   Client wiring regression (G-43-3): the click delegation in
+   src/actions/events.js dispatches A[el.dataset.a], while file inputs go
+   through IN via data-in. The Settings "Remove logo" button renders with
+   data-a="removeLogo", so its handler MUST be reachable under A — a
+   missing A registration is a silent no-op in the shipped UI. Static
+   source checks (no DOM), same style as test/auth-revoked.test.mjs.
+   ===================================================================== */
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+test('removeLogo wiring: A.removeLogo is registered for the click delegation', () => {
+  const actions = fs.readFileSync(path.join(ROOT, 'src/actions/actions.js'), 'utf8');
+
+  assert.match(actions, /A\.removeLogo\s*=\s*IN\.removeLogo/, 'actions.js registers A.removeLogo as an alias of IN.removeLogo (shared code path)');
+});
+
+test('removeLogo wiring: every data-a action in settings.js resolves in A or IN', () => {
+  const actions = fs.readFileSync(path.join(ROOT, 'src/actions/actions.js'), 'utf8');
+  const settings = fs.readFileSync(path.join(ROOT, 'src/pages/settings.js'), 'utf8');
+
+  // Collect property names assigned on the A and IN namespaces in actions.js
+  const collect = ns => {
+    const names = new Set();
+    const re = new RegExp(`\\b${ns}\\.(\\w+)\\s*=`, 'g');
+    let m;
+    while ((m = re.exec(actions)) !== null) names.add(m[1]);
+    return names;
+  };
+  const A = collect('A');
+  const IN = collect('IN');
+
+  // Extract every data-a="…" value used in the settings page markup
+  const dataA = new Set();
+  const reDataA = /data-a="([\w-]+)"/g;
+  let m;
+  while ((m = reDataA.exec(settings)) !== null) dataA.add(m[1]);
+
+  assert.ok(dataA.has('removeLogo'), 'sanity: settings.js uses data-a="removeLogo" (the button under test)');
+  const unresolved = [...dataA].filter(name => !A.has(name) && !IN.has(name));
+  assert.deepEqual(unresolved, [], `every data-a action in settings.js must resolve to a function in A (click) or IN (change/input); unresolved: ${unresolved.join(', ')}`);
 });
