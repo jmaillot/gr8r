@@ -4,17 +4,17 @@ milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 43
 current_phase_name: Workspace Logo
-status: executing
-stopped_at: Completed 43-01-PLAN.md
-last_updated: "2026-11-06T12:10:34.042Z"
+status: verifying
+stopped_at: Completed 43-02-PLAN.md
+last_updated: "2026-11-06T12:36:39.994Z"
 last_activity: 2026-11-06
 last_activity_desc: Phase 43 execution started
-state_head: 0cfa89f546c5a1f7b711cd2940637505194f4e77
+state_head: e44a430707f01e00fb60ab83b2b5d6e0273660f7
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # STATE.md
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-11-05)
 
 Phase: 43 (Workspace Logo) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-06 — Phase 43 execution started
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
@@ -97,6 +97,8 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 40]: 40-01: encodeWord + truncate exported as named exports for tests (A2); send API unchanged
 - [Phase 40]: 40-02: SC-5 digest fallback tested via poisoned catalogue on exported buildDigestMessage (Plan 01 A2 precedent); FR digest subjects use NBSP before ':' (pre-existing typography breach fixed)
 - [Phase 43]: 43-01: svg magic-byte sniff tightened to <?xml / <svg prefixes (plan's bare leading-< would admit html masquerading as images); logo files are bare uids under DATA_DIR/logos, ext lives in doc.data.logo; replace unlinks the old file only after updateDoc succeeds (D-09)
+- [Phase 43]: Plan 43-02: logo lives on api.workspace (payload state), never on the doc's ws object — avoids echoing a redundant/staleable field into the server doc
+- [Phase 43]: Plan 43-02: digest logoUrl composed server-side at sendDigest with no https gate (img URL ≠ security-header contract, unlike 41 unsubscribe)
 
 ### Pending Todos
 
@@ -134,8 +136,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T12:10:33.649Z
-Stopped at: Completed 43-01-PLAN.md
+Last session: 2026-11-06T12:36:32.038Z
+Stopped at: Completed 43-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -147,6 +149,7 @@ Resume file: None
 | Phase 40 P01 | 14m | 3 tasks | 2 files |
 | Phase 40 P02 | 35m | 3 tasks | 6 files |
 | Phase 43 P01 | 24m | 2 tasks | 5 files |
+| Phase 43 P02 | 47m | 3 tasks | 14 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
