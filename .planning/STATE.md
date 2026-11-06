@@ -5,16 +5,16 @@ milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 44
 current_phase_name: Per-Member Timezones
 status: executing
-stopped_at: Phase 44 context gathered
-last_updated: "2026-11-06T16:28:43.737Z"
+stopped_at: Completed 44-01-PLAN.md
+last_updated: "2026-11-06T16:45:39.710Z"
 last_activity: 2026-11-06
 last_activity_desc: Phase 41 complete, transitioned to Phase 44
-state_head: a5c518055d525d032a70414c54309995956deb22
+state_head: e344e74db63479f82a87922d32671d9f033c5ab4
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # STATE.md
@@ -30,10 +30,11 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 
 ## Current Position
 
-Phase: 44 (Per-Member Timezones) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-06 — Phase 41 complete, transitioned to Phase 44
+Phase: 44 (Per-Member Timezones) — EXECUTING
+Plan: 2 of 3
+Total Plans in Phase: 3
+Status: 44-01 complete — 44-02 next
+Last activity: 2026-11-06 — 44-01 executed (per-member tz windows, resolveTz funnel)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -105,6 +106,7 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 43]: Plan 43-02: digest logoUrl composed server-side at sendDigest with no https gate (img URL ≠ security-header contract, unlike 41 unsubscribe)
 - [Phase 43]: G-43-3 fixed via click-namespace alias A.removeLogo (RED→GREEN wiring regression test)
 - [Phase 43]: G-43-4 closed as deployment staleness — /w/:slug/logo must bypass forward-auth (public route D-02); Traefik router exclusion added on deployment host; no source change
+- [Phase 44]: 44-01: resolveTz funnel lives in tz.js (server.js unimportable — boots+opens DB); labels resolve on read, Paris fallback (D-07) replaces legacy UTC fallback
 
 ### Pending Todos
 
@@ -142,9 +144,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06T15:58:59.295Z
-Stopped at: Phase 44 context gathered
-Resume file: .planning/phases/44-per-member-timezones-v1-10/44-CONTEXT.md
+Last session: 2026-11-06T16:45:39.465Z
+Stopped at: Completed 44-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -158,6 +160,7 @@ Resume file: .planning/phases/44-per-member-timezones-v1-10/44-CONTEXT.md
 | Phase 43 P01 | 24m | 2 tasks | 5 files |
 | Phase 43 P02 | 47m | 3 tasks | 14 files |
 | Phase 43 P03 | resumed-session | 2 tasks | 2 files |
+| Phase 44 P01 | 35m | 4 tasks | 5 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 

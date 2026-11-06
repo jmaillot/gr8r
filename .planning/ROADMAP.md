@@ -125,11 +125,11 @@ Plans:
   4. Workspace Settings > Date & time exposes the timezone picker with common IANA zones (Paris preselected by default); existing stored tz labels migrate or degrade without loss
   5. All existing Phase 27/37/38 scheduler tests (window-open predicates, no-double-send, boot catch-up) pass unmodified or are deliberately re-pinned with rationale; full suite green
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 44-01-PLAN.md — resolveTz funnel + per-member scheduler refactor (reminder/digest loops), legacy-map & fallback pins, dedup-under-tz-change edge tests
+- [x] 44-01-PLAN.md — resolveTz funnel + per-member scheduler refactor (reminder/digest loops), legacy-map & fallback pins, dedup-under-tz-change edge tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 44-02-PLAN.md — self-tz-only save-path carve-out in docFromClient (D-10 validation) + save-path regression suite
@@ -145,7 +145,7 @@ Plans:
 | 41. Unsubscribe Tokens & Headers | 2/2 | Complete    | 2026-11-06 |
 | 42. One-Click Unsubscribe Endpoint | 0/2 | Not started | - |
 | 43. Workspace Logo | 3/3 | Complete    | 2026-11-06 |
-| 44. Per-Member Timezones | 0/? | Not started | - |
+| 44. Per-Member Timezones | 1/3 | In Progress|  |
 
 ## Backlog
 
