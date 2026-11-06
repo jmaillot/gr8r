@@ -1,3 +1,9 @@
+---
+status: passed
+verdict: VERIFICATION_PASSED
+verified_at: 2026-11-06
+---
+
 # Phase 42 Verification Report
 
 **Phase Goal:** A mail-client one-click POST actually turns the digest off for that (workspace, user) — contract first (UNSUB-02)
