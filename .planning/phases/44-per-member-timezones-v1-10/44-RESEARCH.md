@@ -315,14 +315,11 @@ const offsetLabel = zone => new Intl.DateTimeFormat(undefined, { timeZone: zone,
 | A2 | `Intl.DateTimeFormat` construction is an acceptable IANA validator (accepts aliases like `US/Pacific`) | Pattern 1 | If aliases should be rejected as canonical-only, intersect with the static list instead — planner decision |
 | A3 | Static canonical zone list is acceptable to generate from Node's `Intl.supportedValuesOf('timeZone')` at build time (D-03 bans *runtime* enumeration only) | Standard Stack | If the owner wants a hand-curated list, only the generation step changes |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Where exactly does the save write land (Option A vs B)?**
-   - What we know: the current pref flow is disconnected (Critical Finding); CONTEXT's integration point says "the member-profile update the page already uses", suggesting Option A (doc PUT with a self-tz exception).
-   - What's unclear: whether the owner prefers the dedicated route's cleaner validation story.
-   - Recommendation: Option A (minimal surface, matches the integration-point wording) with a targeted merge-regression test; D-10's reject-vs-coerce can reuse the funnel (coerce) and skip new error strings.
-2. **Does the doc-only member path need tz write support?** Doc-only members (no account) can't log in, so they can't save a tz — they only need read-side resolution (Paris default). No action expected.
-3. **Reject or coerce on invalid save (D-10)?** Coerce keeps the catalogue untouched; reject is more honest. Planner's call per the discretion grant.
+1. **Where exactly does the save write land (Option A vs B)?** — RESOLVED: Option A (self-tz carve-out in `docFromClient`), implemented by 44-02 Task 1, per CONTEXT.md's integration-point wording and the research recommendation.
+2. **Does the doc-only member path need tz write support?** Doc-only members (no account) can't log in, so they can't save a tz — they only need read-side resolution (Paris default). No action expected. — RESOLVED: no action; confirmed non-blocking by planner.
+3. **Reject or coerce on invalid save (D-10)?** Coerce keeps the catalogue untouched; reject is more honest. Planner's call per the discretion grant. — RESOLVED: coerce to Paris, implemented by 44-02 Task 1.
 
 ## Environment Availability
 
