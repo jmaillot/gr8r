@@ -1606,6 +1606,8 @@
   "err.bodyTooLarge": "Request body too large",
   "err.uploadTooLarge": "File too large",
   "err.fileNotFound": "File not found",
+  "err.invalidLogo": "Upload a png, jpg or svg image",
+  "err.logoNotFound": "Logo not found",
   "err.invalidJson": "Invalid JSON body",
   "err.passwordTooShort": "Use at least 10 characters",
   "err.accountExists": "An account with that email already exists",

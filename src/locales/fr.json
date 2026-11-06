@@ -1606,6 +1606,8 @@
   "err.bodyTooLarge": "Corps de la requête trop volumineux",
   "err.uploadTooLarge": "Fichier trop volumineux",
   "err.fileNotFound": "Fichier introuvable",
+  "err.invalidLogo": "Chargez une image png, jpg ou svg",
+  "err.logoNotFound": "Logo introuvable",
   "err.invalidJson": "Corps JSON invalide",
   "err.passwordTooShort": "Utilisez au moins 10 caractères",
   "err.accountExists": "Un compte avec cet e-mail existe déjà",

@@ -71,6 +71,10 @@ const ROOT = path.resolve(process.env.STATIC_DIR || path.join(HERE, 'dist'));
 const SEED_FILE = path.join(HERE, 'seed.json');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(HERE, 'data'));
 const FILES_DIR = path.join(DATA_DIR, 'files');
+/* Phase 43 (D-01): workspace logos get their own storage directory — deliberately
+   NOT the files/ attachment system; a dedicated route serves them publicly with
+   a route-private mime map (LOGO_MIME below). */
+const LOGOS_DIR = path.join(DATA_DIR, 'logos');
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'projects.db'));
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -356,6 +360,7 @@ function ensureColumn(conn, table, name, def) {
 function openDb() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   fs.mkdirSync(FILES_DIR, { recursive: true });
+  fs.mkdirSync(LOGOS_DIR, { recursive: true }); // Phase 43 (D-01): logos dir sibling of files/
   const db = new DatabaseSync(DB_PATH);
   db.exec('pragma journal_mode = wal');
   db.exec('pragma foreign_keys = on');
@@ -631,6 +636,10 @@ function workspacePayload(row, membership = null) {
     c: color,
     role: membership?.role || null,
     memberId: membership?.member_id || null,
+    /* Phase 43 (D-08/D-11): the logo reference rides the workspace document;
+       null when unset — every consumer falls back per-surface (D-10). The
+       versioned URL comes from the single logoShape builder. */
+    logo: logoShape(row, docLogo(row)),
   };
 }
 
@@ -5128,6 +5137,127 @@ async function handleUpload(req, res, slug) {
   json(res, 200, { id }); // metadata record flows through the existing doc channel
 }
 
+/* --------------------------- workspace logos ---------------------------- */
+
+/* Phase 43 (D-01/D-03): per-workspace logo upload/serve. Dedicated storage dir
+   (DATA_DIR/logos), NOT the files/ attachment system. Route-private mime map:
+   D-03 deliberately serves svg inline here (same trust class as the app's own
+   logo-light.svg assets; the upload is Owner/Admin role-gated) — NEVER add svg
+   to FILE_INLINE_MIME, which stays attachment-only for scriptable types. */
+const LOGO_MIME = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg' }; // D-03
+const LOGO_RE = /^\/w\/([a-z0-9-]{2,40})\/logo$/;
+
+/* T-43-01 (Pitfall 7): image identity is decided by server-side magic bytes,
+   never the client's claimed Content-Type or extension. D-13: ~15 lines of
+   prefix checks instead of an image library. SVG accepts only `<?xml` or
+   `<svg` prefixes — a bare leading `<` would admit `<!DOCTYPE html>` bodies
+   masquerading as images. */
+function sniffLogoExt(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length === 0) return null;
+  const head = buf.toString('latin1', 0, Math.min(buf.length, 64)).replace(/^\s+/, '');
+  if (head.startsWith('<?xml') || head.startsWith('<svg')) return 'svg';
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buf.length >= 3 && buf.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return 'jpg';
+  return null;
+}
+
+/* First bytes of the freshly written file — sniff AFTER uploadBinary's
+   streaming completes (matches its resolve-with-size contract). */
+function readLogoHead(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(64);
+    const read = fs.readSync(fd, buf, 0, 64, 0);
+    return buf.subarray(0, read);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function docLogo(ws) {
+  try {
+    return JSON.parse(ws?.doc || 'null')?.data?.logo || null;
+  } catch {
+    return null;
+  }
+}
+
+/* D-11 (Pitfall 6): THE single versioned-URL builder — every consumer
+   (workspacePayload, digest, favicon swap) reuses this shape; the GET route
+   ignores the ?v= param for lookup. Null when unset/malformed (D-10). */
+function logoShape(row, logo) {
+  if (!logo?.file || !LOGO_MIME[logo.ext]) return null;
+  return { url: `/w/${row.slug}/logo?v=${logo.uploaded_at}`, ext: logo.ext, uploaded_at: logo.uploaded_at };
+}
+
+/* POST /w/:slug/logo — guard order per the login-handler contract (copied from
+   handleUpload, role tightened member→admin per D-01): cross-origin rejected
+   before the body read, then the workspace/role gate, then the stream. */
+async function handleLogoUpload(req, res, slug) {
+  if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+  const ctx = requireWorkspace(req, res, slug, 'admin');
+  if (!ctx) return; // response already sent (404 workspaceNotFound / 403 adminOnly)
+  const id = uid();
+  const file = path.join(LOGOS_DIR, id);
+  await uploadBinary(req, file); // D-04: MAX_UPLOAD cap + mid-stream 413 via uploadBinary, unchanged
+  const ext = sniffLogoExt(readLogoHead(file));
+  if (!ext) {
+    fs.unlink(file, () => {});
+    return fail(res, 400, 'invalidLogo', 'Upload a png, jpg or svg image');
+  }
+  /* D-09: capture the replaced file BEFORE the doc update, unlink AFTER it
+     succeeds — no orphaned bytes on either path (fire-and-forget idiom). */
+  const previous = docLogo(ctx.ws)?.file || null;
+  const uploadedAt = Date.now();
+  updateDoc(ctx.ws.id, doc => {
+    doc.data = doc.data || {};
+    doc.data.logo = { ext, file: id, uploaded_at: uploadedAt };
+  });
+  if (previous) fs.unlink(path.join(LOGOS_DIR, previous), () => {});
+  json(res, 200, {
+    logo: logoShape({ slug: ctx.ws.slug }, { ext, file: id, uploaded_at: uploadedAt }),
+    revision: wsRevision(ctx.ws.id), // Pitfall 2: the doc write bumped the revision
+  });
+}
+
+/* GET /w/:slug/logo — public, session-free (D-02): the workspace-scoped path
+   IS the access model. No requireWorkspace, no redirect: unknown slug AND
+   logo-unset answer the IDENTICAL 404 (D-10, no existence oracle, never a 302
+   to the favicon). Own header set, NOT securityHeaders() — same reasoning as
+   serveFileBinary (5164). Served mime derives ONLY from the server-verified
+   stored ext (T-43-01); the ?v= cache-bust param is ignored for lookup (D-11). */
+async function handleLogoGet(req, res, slug) {
+  const ws = wsBySlug(slug);
+  const logo = ws ? docLogo(ws) : null;
+  /* T-43-06: the stored id never builds a path outside LOGOS_DIR. */
+  const file = logo?.file ? path.join(LOGOS_DIR, logo.file) : null;
+  if (!ws || !logo || !LOGO_MIME[logo.ext] || !file || path.dirname(file) !== LOGOS_DIR) {
+    return fail(res, 404, 'logoNotFound', 'Logo not found');
+  }
+  let stat = null;
+  try {
+    stat = fs.statSync(file);
+  } catch {
+    /* fall through to the 404 */
+  }
+  if (!stat?.isFile()) return fail(res, 404, 'logoNotFound', 'Logo not found');
+  const headers = {
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Type': LOGO_MIME[logo.ext],
+    'Content-Length': stat.size,
+    /* D-11: immutable is safe ONLY because every consumer URL carries ?v=<uploaded_at>. */
+    'Cache-Control': 'public, max-age=31536000, immutable',
+  };
+  /* T-43-02 (Pitfall 4): inline svg is inert in <img> but scripts execute on
+     direct top-level navigation — GitHub's svg-serving posture, sandboxed. */
+  if (logo.ext === 'svg') headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') return res.end();
+  const stream = fs.createReadStream(file);
+  stream.on('error', () => res.destroy());
+  stream.pipe(res);
+}
+
 /* ----------------------------- file serving ----------------------------- */
 
 /* D-06: the fixed inline/attachment policy. Only the known-safe renderable
@@ -5427,6 +5557,18 @@ const server = http.createServer(async (req, res) => {
          See the contract block above handleUnsubscribe. */
       const unsubMatch = url.pathname.match(/^\/unsubscribe\/([A-Za-z0-9_-]+)$/);
       await handleUnsubscribe(req, res, unsubMatch[1]);
+    } else if (LOGO_RE.test(url.pathname)) {
+      /* Phase 43 (D-01/D-02): logo POST/GET intercepted BEFORE serveStatic
+         (which 405s non-GET and SPA-fallbacks the extensionless GET — Pitfall 1)
+         and before the /api/ branch. */
+      const logoMatch = url.pathname.match(LOGO_RE);
+      const logoMethod = req.method.toUpperCase();
+      if (logoMethod === 'POST') await handleLogoUpload(req, res, logoMatch[1]);
+      else if (logoMethod === 'GET' || logoMethod === 'HEAD') await handleLogoGet(req, res, logoMatch[1]);
+      else {
+        res.setHeader('Allow', 'GET, HEAD, POST');
+        fail(res, 405, 'methodNotAllowed', 'Method not allowed');
+      }
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {
