@@ -35,8 +35,11 @@ const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)),
 /* The files that are never scanned. src/data/seed.js is demo CONTENT, not
    interface: its strings are data the interface shows, not interface text.
    src/lib/vendor/qrcode.js is a verbatim copy of qrcode-generator@2.0.4
-   (D-15) — third-party library source, never interface copy. */
-export const EXCLUDED_FILES = new Set(['src/data/seed.js', 'src/lib/vendor/qrcode.js']);
+   (D-15) — third-party library source, never interface copy.
+   src/lib/timezones.js is GENERATED static data (scripts/gen-timezones.mjs,
+   Phase 44 D-03): 418 machine city labels derived from IANA ids — same
+   family as seed.js, never interface copy. */
+export const EXCLUDED_FILES = new Set(['src/data/seed.js', 'src/lib/vendor/qrcode.js', 'src/lib/timezones.js']);
 
 /* ---------- the documented display helpers ----------
    A helper added to the interface must be added to this list: the argument

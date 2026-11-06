@@ -2747,6 +2747,35 @@ IN.langSel = async el => {
   }
   toast(t('toast.localeSaveFailed'), { kind: 'err', ms: 6000 });
 };
+/* =====================================================================
+   TZ PICKER (Phase 44, D-01/D-04/D-09) — one handler serving both dispatch
+   namespaces (the 43-03 alias precedent: one code path, two entry points).
+   - Typing: the combobox input (data-in="tzSel") updates the filter query
+     and re-renders; it never saves (D-04 — nothing auto-saves on render).
+   - Selection: an option (data-a="tzSel", aliased below) writes the CURRENT
+     member's tz on S.data.members — NEVER S.prefs (blob prefs.tz is the
+     disconnected store this phase replaces, D-09) — then persists through
+     the real doc save(). The PUT lands in docFromClient's self-tz-only
+     carve-out (Plan 44-02), which re-validates through resolveTz (D-10);
+     client-side checks are advisory only (T-44-06).
+   ===================================================================== */
+IN.tzSel = el => {
+  if (el.dataset.v) {
+    const m = me();
+    if (!m || !S.data.members.some(x => x.id === m.id)) return;
+    m.tz = el.dataset.v;
+    S.ui.tzPick = { q: '', hl: 0, v: el.dataset.v };
+    save();
+    render();
+    toast(t('toast.prefSaved'), { ms: 1500 });
+    return;
+  }
+  const pk = S.ui.tzPick || (S.ui.tzPick = { q: '', hl: 0 });
+  pk.q = el.value;
+  pk.hl = 0;
+  render();
+};
+A.tzSel = IN.tzSel;
 A.wsColor = el => {
   const c = el.dataset.v;
   D().ws.c = c;

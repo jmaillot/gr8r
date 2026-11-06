@@ -23,6 +23,31 @@ document.addEventListener('keydown', e => {
     A.toggleDark();
     return;
   }
+  // Phase 44 D-01: the settings tz combobox owns arrows/enter/escape while its
+  // input has focus (palette.js keyboard discipline over S.ui.tzPick._flat).
+  if (t.matches?.('[data-in="tzSel"]')) {
+    const pk = S.ui.tzPick;
+    const flat = pk?._flat || [];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (flat.length) pk.hl = (pk.hl + (e.key === 'ArrowDown' ? 1 : -1) + flat.length) % flat.length;
+      render();
+      $('.pi.hl')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const hit = flat[pk?.hl];
+      if (hit) A.tzSel({ dataset: { v: hit.id } });
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (pk) pk.q = '';
+      render();
+      return;
+    }
+  }
   // Keep Tab inside whichever surface is modal right now.
   if (e.key === 'Tab') {
     const box = pl ? $('.palette') : S.ui.modals.length ? $$('.modal').pop() : S.ui.drawer && S.ui.drawerFull ? $('.drawer') : null;
