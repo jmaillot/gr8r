@@ -30,7 +30,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 - [x] **Phase 40: Digest Subject & Task Lines** - Workspace name in the digest subject, "Project — Task" lines, and a hardened RFC 2047 subject builder (SUBJ-01..03) (completed 2026-11-05)
 - [ ] **Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers** - Stateless HMAC unsubscribe token, List-Unsubscribe/-Post headers on digest mail, footer link preserved, DEPLOY.md DKIM caveat (UNSUB-01, UNSUB-03)
-- [ ] **Phase 42: One-Click Unsubscribe Endpoint** - The codebase's first anonymous mutating route: `POST /unsubscribe/:token` with a security contract first (UNSUB-02)
+- [x] **Phase 42: One-Click Unsubscribe Endpoint** - The codebase's first anonymous mutating route: `POST /unsubscribe/:token` with a security contract first (UNSUB-02) (completed 2026-11-06)
 - [ ] **Phase 43: Workspace Logo** - Per-workspace logo upload with favicon.svg fallback, stored server-side, surfaced in the UI (Kanzo #16)
 - [ ] **Phase 44: Per-Member Timezones** - Multiple configurable timezones with Paris default, replacing the single workspace-TZ model (Kanzo #14)
 
