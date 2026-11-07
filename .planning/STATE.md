@@ -4,10 +4,10 @@ milestone: v1.9
 current_phase: 45
 current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
 status: executing
-stopped_at: Completed 45-05-PLAN.md
-last_updated: "2026-11-07T11:36:31Z"
+stopped_at: Completed 45-06-PLAN.md
+last_updated: "2026-11-07T14:42:00Z"
 last_activity: 2026-11-07
-last_activity_desc: Phase 45 plan 01 executed (database adapter facade)
+last_activity_desc: Phase 45 plan 06 executed (one-shot SQLite→pg copy script + DEPLOY.md runbook)
 state_head: e7be348e12a44d0f0ec1566ba9d171cf22f0ebfd
 progress:
   total_phases: 1
@@ -31,14 +31,13 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 ## Current Position
 
 Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Total Plans in Phase: 7
 Status: Executing Phase 45
-Last activity: 2026-11-07 — Completed 45-05 (schema/migrations/seed dialect-owned:
-pgSchemaVariant complete — bigint epoch columns, functional lower(email) unique
-index, doc stays text per the user-approved D-11 checkpoint; SCHEMA routed through
-adapter runSchema(); invites rowid backfill sqliteOnly-gated; pg-safe whitelist
-lint + seed determinism pinned)
+Last activity: 2026-11-07 — Completed 45-06 (one-shot SQLite→pg copy script: read-only
+source, pgSchemaVariant-owned target schema, refuse-non-empty, single-transaction
+count-verified transfer, DSN-free output; 4 POSTGRES_TEST_URL-gated contract tests;
+DEPLOY.md §15 operator runbook)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -95,6 +94,12 @@ runtime dependencies, zero migrations, full suite green.
   comparisons are preserved verbatim
 - [Phase 45] 45-05: pg execution proof deferred to the Plan 07 matrix — this plan pins
   the SQL text (whitelist lint, seed determinism on SQLite, runSchema idempotency)
+- [Phase 45] 45-06: copy script reads the source via DatabaseSync({ readOnly: true }) —
+  D-14 immutability enforced at the driver; the copy uses the source∩target column
+  intersection so legacy boot-migration columns (memberships.team/scope) absent from
+  the pg variant are skipped
+- [Phase 45] 45-06: pg client MUST be released before pool.end() — end() waits on
+  checked-out clients; discovered as a child-hang in the contract tests
 
 ## Milestone History
 
@@ -186,8 +191,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T13:30:00.000Z
-Stopped at: Completed 45-04-PLAN.md (callsite conversion finished; facade = get/all/run/tx, shim deleted, static gates pinned — 2 code commits + summary commit)
+Last session: 2026-11-07T14:42:00.000Z
+Stopped at: Completed 45-06-PLAN.md (one-shot SQLite→pg copy script + 4 pg-gated
+contract tests + DEPLOY.md §15 runbook — 2 code commits + summary commit)
 Resume file: None
 
 ## Performance Metrics
@@ -207,6 +213,7 @@ Resume file: None
 | Phase 45 P03 | ~2h | 4 tasks | 3 files |
 | Phase 44 P03 | 19m | 3 tasks | 14 files |
 | Phase 45 P02 | ~15m | 2 tasks | 4 files |
+| Phase 45 P06 | ~21m | 2 tasks | 4 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
