@@ -21,3 +21,4 @@
    Harmless today: a fresh pg boot creates all columns via pgSchemaVariant (bigint),
    so ensureColumn no-ops; no legacy pg databases exist. If a pg DB is ever restored
    from a partial schema, epoch defs would need the same name→bigint mapping.
+  status: acknowledged
