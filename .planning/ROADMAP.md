@@ -125,7 +125,7 @@ Plans:
   4. Workspace Settings > Date & time exposes the timezone picker with common IANA zones (Paris preselected by default); existing stored tz labels migrate or degrade without loss
   5. All existing Phase 27/37/38 scheduler tests (window-open predicates, no-double-send, boot catch-up) pass unmodified or are deliberately re-pinned with rationale; full suite green
 
-**Plans**: 3/3 plans complete
+**Plans**: 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -145,7 +145,7 @@ Plans:
 | 41. Unsubscribe Tokens & Headers | 2/2 | Complete    | 2026-11-06 |
 | 42. One-Click Unsubscribe Endpoint | 0/2 | Not started | - |
 | 43. Workspace Logo | 3/3 | Complete    | 2026-11-06 |
-| 44. Per-Member Timezones | 2/3 | In Progress|  |
+| 44. Per-Member Timezones | 4/4 | Complete    | 2026-11-07 |
 
 ## Backlog
 
