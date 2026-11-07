@@ -1,9 +1,9 @@
 ---
 phase: 44-per-member-timezones-v1-10
 verified: 2026-11-06T17:57:00Z
-status: human_needed
-score: 14/15 must-haves verified
-behavior_unverified: 1
+status: passed
+score: 15/15 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
 covered_files:
   - .planning/phases/44-per-member-timezones-v1-10/44-01-PLAN.md
@@ -46,7 +46,7 @@ human_verification:
 
 **Phase Goal:** Each member's reminders and digest fire at their own 09:00 — multiple timezones supported, Paris as the default — replacing the single workspace-timezone model built on five hard-coded `TZ_BY_LABEL` labels.
 **Verified:** 2026-11-07 (reconciled after 44-04 gap closure)
-**Status:** human_needed (1 present-but-behavior-unverified truth → browser UAT; 0 gaps) — **UPDATE 2026-11-07:** browser UAT passed (44-UAT Test 1); WR-01/WR-02 fixed by the 44-04 gap-closure plan (6d218e2, c01ac1b, 57292aa); all 3 UAT tests pass; gap G-44-3 resolved. Pending final completion pass of `/gsd-verify-work 44`.
+**Status:** passed (2026-11-07) — browser UAT passed (44-UAT Tests 1 & 3); WR-01/WR-02 fixed by the 44-04 gap-closure plan (6d218e2, c01ac1b, 57292aa; UAT Test 2 reconciled pass); gap G-44-3 resolved; all 3 UAT tests pass; 15/15 truths verified.
 
 ## Requirement Traceability: TZ-01
 
@@ -74,9 +74,7 @@ human_verification:
 | 14 | Choosing a zone writes the CURRENT member's tz in S.data.members and saves through the real doc PUT (never S.prefs) | ✓ VERIFIED | IN.tzSel handler: `m.tz = el.dataset.v; save();` — test asserts handler writes S.data.members, calls save(), never touches S.prefs; lands in 44-02 carve-out |
 | 15 | New strings catalogued EN+FR; i18n:scan green; all interpolated labels esc()-escaped | ✓ VERIFIED | `npm run i18n:scan` → 0 literals/pending/unlisted/stale/unresolved; EN+FR parity + esc() pins in combobox test pass |
 
-**Score:** 15/15 truths verified (2026-11-07 reconciliation: truth 10 browser-verified in UAT; truths 7/13 hardened by 44-04 gap closure)
-
-> **Note:** frontmatter `score: 14/15` above is the verifier's original snapshot; this reconciliation table supersedes it. Digest recomputed after 44-04 (see covered_digest).
+**Score:** 15/15 truths verified (frontmatter updated to match — 2026-11-07 reconciliation: truth 10 browser-verified in UAT; truths 7/13 hardened by 44-04 gap closure)
 
 ## Roadmap Success Criteria (Phase 44)
 
