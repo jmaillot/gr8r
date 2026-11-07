@@ -94,10 +94,11 @@ Plans:
   3. Zero new runtime dependencies (D-12) — service worker + Notification API are browser built-ins
   4. Full suite green; i18n EN+FR for all new strings
 
-**Plans**: 0 plans
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-discuss-phase 48 then /gsd-plan-phase 48)
+- [ ] 48-01-PLAN.md — Tracer + core: sw.js, src/core/push.js (seen-set, toast-vs-notification), poll hook, i18n keys, test harness
+- [ ] 48-02-PLAN.md — Settings permission UX: blocked badge swap, requestPermission pre-step, pushComingSoon removal, final pin 1709
 
 ## Backlog
 
