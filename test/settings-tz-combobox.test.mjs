@@ -28,6 +28,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { TIMEZONES } from '../src/lib/timezones.js';
+import { resolveTz } from '../tz.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => fs.readFileSync(path.join(REPO, rel), 'utf8');
@@ -127,4 +128,24 @@ test('the zone list is sorted ascending, duplicate-free, and covers the funnel t
     assert.ok(ids.includes(must), `${must} missing — a resolveTz target would render unselectable`);
   }
   assert.ok(TIMEZONES.every(z => !z.name.includes('_')), 'display names must not leak raw underscores');
+});
+
+/* G-44-3, WR-02: a stored valid tz always preselects itself — never Paris.
+   settings.js uses Vite virtual: imports and cannot load in Node, so this
+   pins the exact contract tzPreselect implements (resolveTz(stored) must be
+   a member of TIMEZONES); the structural test above pins that tzPreselect
+   exact-matches the same list with the same funnel. */
+test('WR-02: stored aliases and UTC resolve into the selectable list — preselect is not Paris', () => {
+  const ids = new Set(TIMEZONES.map(z => z.id));
+  for (const stored of ['US/Pacific', 'UTC', 'america/new_york']) {
+    const zone = resolveTz(stored);
+    assert.ok(ids.has(zone), `${stored} → ${zone} missing from the list (would preselect Paris)`);
+    assert.notEqual(zone, 'Europe/Paris', `${stored} must not degrade to Paris`);
+  }
+  assert.equal(resolveTz('US/Pacific'), 'America/Los_Angeles');
+  assert.equal(resolveTz('UTC'), 'UTC');
+  /* The '' case defers to the browser zone (D-04) — here: the Node process
+     zone, which must be in the list for tzPreselect to return it. */
+  const browser = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  assert.ok(ids.has(browser) || browser === '', `browser zone ${browser} not in list`);
 });

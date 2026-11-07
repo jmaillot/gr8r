@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { startServer, withDb, signup, client } from './helpers/server.mjs';
+import { localParts } from '../tz.js';
 
 const GOOD = 'correct-horse-9';
 const TOKEN = 'reminder-test-token';
@@ -194,4 +195,21 @@ test('D-09 ordering: Paris and LA assignees resolve their own windows in one pas
   assert.equal(late[0].to, 'm_la');
   const repeat = own(await trigger('2026-01-15T17:00:00Z'));
   assert.equal(repeat.length, 0, 'repeated passes are idempotent — no double-claim');
+});
+
+/* G-44-3 (Risk 3 pin): alias input and its canonical target are the same
+   zone — localParts (which feeds digest localDate and reminder offset/due
+   keys) must be byte-identical for both, proving D-11/D-12 claim keys are
+   unaffected by the canonicalization change. */
+test('D-11/D-12 equivalence: localParts for US/Pacific === America/Los_Angeles across a DST boundary', () => {
+  const instants = [
+    '2026-03-07T12:00:00Z', // PST (-8), day before the spring transition
+    '2026-03-08T12:00:00Z', // PDT (-7), day after
+    '2026-11-01T09:00:00Z', // the fall-back transition day itself
+    '2026-11-02T09:00:00Z', // standard time
+  ];
+  for (const iso of instants) {
+    const d = new Date(iso);
+    assert.deepEqual(localParts('US/Pacific', d), localParts('America/Los_Angeles', d), `alias vs canonical at ${iso}`);
+  }
 });
