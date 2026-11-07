@@ -194,6 +194,29 @@ test('a read row never dispatches', async () => {
   push.setToastSink(null);
 });
 
+/* ---------- the deriveCandidates seam: per-type gating, unit-level ---------- */
+
+test('deriveCandidates maps mention/assign/comment to their push_* prefs and excludes update/reminder rows and seen/read rows', () => {
+  const rows = [
+    { id: 'a', type: 'mention', read: false },
+    { id: 'b', type: 'assign', read: false },
+    { id: 'c', type: 'comment', read: false },
+    { id: 'd', type: 'update', read: false },
+    { id: 'e', type: 'due_reminder', read: false },
+    { id: 'f', type: 'past_due', read: false },
+    { id: 'g', type: 'mention', read: true },
+    { id: 'a', type: 'mention', read: false }, // seen duplicate
+  ];
+  const prefs = { push_mention: true, push_assign: false, push_comment: true };
+  assert.deepEqual(push.deriveCandidates(rows, prefs, ['a']).map(n => n.id), ['c']);
+  assert.deepEqual(push.deriveCandidates(rows, { push_mention: true, push_assign: true, push_comment: true }, ['a']).map(n => n.id), [
+    'b',
+    'c',
+  ], 'a seen id never re-derives, even duplicated in the list');
+  assert.deepEqual(push.deriveCandidates(rows, {}, []), [], 'all prefs off gates everything');
+  assert.deepEqual(push.deriveCandidates(null, prefs, []), [], 'a missing notif list yields no candidates');
+});
+
 test("a missing Notification API degrades to a silent no-op — no throw", async () => {
   const Cls = globalThis.Notification;
   delete globalThis.Notification;
