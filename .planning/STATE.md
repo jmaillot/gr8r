@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.10
 milestone_name: Extensions & Adapters
-current_phase: 45
-current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
-status: verifying
-stopped_at: Phase 45 executed (7/7 plans) and merged to main — UAT pending (2 deployment-level tests)
-last_updated: "2026-11-07T16:40:00Z"
+current_phase: 48
+current_phase_name: real-browser-push-toasts-from-backlog-999-2
+status: All phases complete
+stopped_at: Phases 45-48 complete — v1.10 milestone ready to close
+last_updated: "2026-11-07T18:10:00Z"
 last_activity: 2026-11-07
-last_activity_desc: feat/sql (Phase 45, 7/7 plans + verification 8/8 must-haves) merged to main; UAT deferred until after merge
-state_head: fef67acb7ffe6052da19f82cc1f173112e89ca7d
+last_activity_desc: feat/sql (Phase 45) merged to main; UAT 2/2 recorded; DBA-01..04 and MCP-01..04 marked complete
+state_head: a1fb9de
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
-  percent: 80
+  total_plans: 20
+  completed_plans: 20
+  percent: 100
 ---
 
 # STATE.md
@@ -27,15 +27,15 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 45 — Database adapter (executed on feat/sql, merged to main; UAT pending)
+**Current focus:** v1.10 milestone complete — all phases (44-48) done, ready to close
 
 ## Current Position
 
-Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — VERIFYING
-Plan: 7 of 7 (complete — merged to main; UAT: 2 deployment-level tests pending)
-Total Plans in Phase: 7
-Status: Phase 45 executed and merged — awaiting human UAT
-Last activity: 2026-11-07 — feat/sql merged to main (Phase 45 complete: adapter facade,
+Phase: 48 — real browser push & toasts (complete; all v1.10 phases 44-48 done)
+Plan: All plans executed
+Total Plans in Phase: 2
+Status: All phases complete
+Last activity: 2026-11-07 — Phase 45 merged, DBA-01..04 verified complete
 full async conversion, pg schema/migrations/seed, copy script + runbook, pg matrix)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
@@ -197,7 +197,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-07T16:40:00.000Z
-Stopped at: feat/sql merged to main — Phase 45 executed (7/7), verified 8/8 must-haves,
+Stopped at: Phase 45 complete, ready to plan Phase 46
 boot-log fix committed; UAT (2 deployment-level tests) deferred until after merge
 Resume file: None
 
