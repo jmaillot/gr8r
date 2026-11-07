@@ -53,20 +53,20 @@ export const SET_NAV = [
     ],
   ],
   [
+    'settings.group.personal',
+    [
+      ['profile', 'settings.nav.profile', 'user'],
+      ['preferences', 'settings.nav.preferences', 'sliders-horizontal'],
+      ['shortcuts', 'settings.nav.shortcuts', 'keyboard'],
+    ],
+  ],
+  [
     'nav.route.notifications',
     [
       ['notif-email', 'settings.nav.email', 'mail'],
       ['notif-push', 'settings.nav.push', 'smartphone'],
       ['notif-mentions', 'settings.nav.mentions', 'at-sign'],
       ['notif-assign', 'settings.nav.assignments', 'user-check'],
-    ],
-  ],
-  [
-    'settings.group.personal',
-    [
-      ['profile', 'settings.nav.profile', 'user'],
-      ['preferences', 'settings.nav.preferences', 'sliders-horizontal'],
-      ['shortcuts', 'settings.nav.shortcuts', 'keyboard'],
     ],
   ],
   [
