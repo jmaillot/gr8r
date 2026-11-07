@@ -90,9 +90,22 @@ export function toPgSql(sql) {
     // begin immediate → begin
     out = out.replace(/\bbegin\s+immediate\b/gi, 'begin');
 
+    // SQLite null-safe `is not ?` → pg `is distinct from ?` (pg refuses
+    // `is not $n`; IS [NOT] DISTINCT FROM is the exact null-safe semantics).
+    out = out.replace(/\bis\s+not\s+\?/gi, 'is distinct from ?');
+    out = out.replace(/\bis\s+\?/gi, 'is not distinct from ?');
+
     // col collate nocase = ?  →  lower(col) = lower(?)
     out = out.replace(/([A-Za-z_][\w.]*)\s+collate\s+nocase(\s*=\s*)\?/gi, (_m, col, op) => `lower(${col})${op}lower(?)`);
-    // remaining col collate nocase → lower(col)
+    // col = ? collate nocase → lower(col) = lower(?) — SQLite's post-parameter
+    // collation form (uniqueSlug/wsBySlug/instance-admin stamp/pending invites).
+    // Must run before the bare-nocase rule, and the ? → $n pass below runs
+    // after so lower(?) keeps its parameter.
+    out = out.replace(
+      /([A-Za-z_][\w.]*)\s*=\s*\?\s+collate\s+nocase/gi,
+      (_m, col) => `lower(${col}) = lower(?)`,
+    );
+    // remaining col collate nocase → lower(col) (order by / bare references)
     out = out.replace(/([A-Za-z_][\w.]*)\s+collate\s+nocase/gi, (_m, col) => `lower(${col})`);
 
     // ? → $1..$n in order

@@ -160,6 +160,30 @@ test('toPgSql: collate nocase → lower(col) = lower(?)', () => {
   );
 });
 
+test('toPgSql: post-parameter `col = ? collate nocase` → lower(col) = lower(?)', () => {
+  // SQLite's collation-after-placeholder form (uniqueSlug / wsBySlug /
+  // instance-admin stamp / pending invites) — pg parses neither the
+  // placeholder-collation nor the bare nocase.
+  assert.equal(
+    adapter.toPgSql('select 1 from workspaces where slug = ? collate nocase and id is not ?'),
+    'select 1 from workspaces where lower(slug) = lower($1) and id is distinct from $2',
+  );
+  assert.equal(
+    adapter.toPgSql('update users set is_instance_admin = 1 where email = ? collate nocase'),
+    'update users set is_instance_admin = 1 where lower(email) = lower($1)',
+  );
+});
+
+test('toPgSql: null-safe `is not ?` / `is ?` → IS [NOT] DISTINCT FROM', () => {
+  // pg refuses `is not $n`; IS [NOT] DISTINCT FROM carries the identical
+  // null-safe comparison semantics (uniqueSlug / ownerCount).
+  assert.equal(
+    adapter.toPgSql('select count(*) as n from memberships where workspace_id = ? and user_id is not ?'),
+    'select count(*) as n from memberships where workspace_id = $1 and user_id is distinct from $2',
+  );
+  assert.equal(adapter.toPgSql('select 1 from t where x is ?'), 'select 1 from t where x is not distinct from $1');
+});
+
 test('toPgSql never sees parameter values (pure SQL-text transform, T-45-01)', () => {
   // The function signature takes only SQL text; assert it is string-in/string-out.
   assert.equal(adapter.toPgSql.length, 1);
