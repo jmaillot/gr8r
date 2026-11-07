@@ -176,25 +176,32 @@ export function tzCombobox() {
      the legacy blob pref (P.tz) as a degrade-without-loss fallback. */
   const stored = me()?.tz || S.prefs.tz || '';
   const sel = tzPreselect(stored);
-  const pk = S.ui.tzPick || (S.ui.tzPick = { q: '', hl: 0, v: sel });
+  /* The option list only exists while the picker is open (UAT follow-up:
+     after a validated selection the list stays closed, so the page below it
+     never shifts). Open = the user typed into the input or pressed ArrowDown;
+     closed = a selection was made or Escape was pressed. */
+  const pk = S.ui.tzPick || (S.ui.tzPick = { q: '', hl: 0, v: sel, open: false });
+  if (pk.open === undefined) pk.open = false;
   if (pk.q === '') pk.v = sel; // no query in flight: the input mirrors the resolved selection
-  const list = tzFilter(pk.q);
+  const list = pk.open ? tzFilter(pk.q) : [];
   pk.hl = clamp(pk.hl, 0, Math.max(list.length - 1, 0));
   pk._flat = list; // keyboard.js picks the highlighted entry from here
   const q = pk.q !== '' ? pk.q : pk.v;
   return `<div style="min-width:260px;max-width:340px">
-    <input id="tz-q" class="input" style="width:100%" data-in="tzSel" value="${esc(q)}" placeholder="${t('settings.tz.placeholder')}" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="tz-list" aria-activedescendant="tz-opt-${pk.hl}" aria-label="${t('settings.tz.searchLabel')}">
-    <div id="tz-list" role="listbox" aria-label="${t('settings.tz.searchLabel')}" style="max-height:240px;overflow:auto;margin-top:6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface)">${
-      list.length
-        ? list
-            .map((z, i) => {
-              const off = tzOffsetLabel(z.id);
-              return `<div class="pi ${i === pk.hl ? 'hl' : ''}" id="tz-opt-${i}" role="option" aria-selected="${i === pk.hl}" data-a="tzSel" data-v="${esc(z.id)}" data-i="${i}" data-hover-i="${i}"><span class="trunc">${esc(z.name)}</span><span class="sub" style="flex-shrink:0"><span class="mono">${esc(z.id)}</span>${off ? ` · ${esc(off)}` : ''}</span></div>`;
-            })
-            .join('')
-        : `<div class="hint" style="padding:8px 10px">${t('settings.tz.noResults')}</div>`
-    }</div>
-  </div>`;
+    <input id="tz-q" class="input" style="width:100%" data-in="tzSel" value="${esc(q)}" placeholder="${t('settings.tz.placeholder')}" autocomplete="off" role="combobox" aria-expanded="${pk.open}" aria-controls="tz-list" aria-activedescendant="${pk.open ? `tz-opt-${pk.hl}` : ''}" aria-label="${t('settings.tz.searchLabel')}">${
+      pk.open
+        ? `<div id="tz-list" role="listbox" aria-label="${t('settings.tz.searchLabel')}" style="max-height:240px;overflow:auto;margin-top:6px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface)">${
+            list.length
+              ? list
+                  .map((z, i) => {
+                    const off = tzOffsetLabel(z.id);
+                    return `<div class="pi ${i === pk.hl ? 'hl' : ''}" id="tz-opt-${i}" role="option" aria-selected="${i === pk.hl}" data-a="tzSel" data-v="${esc(z.id)}" data-i="${i}" data-hover-i="${i}"><span class="trunc">${esc(z.name)}</span><span class="sub" style="flex-shrink:0"><span class="mono">${esc(z.id)}</span>${off ? ` · ${esc(off)}` : ''}</span></div>`;
+                  })
+                  .join('')
+              : `<div class="hint" style="padding:8px 10px">${t('settings.tz.noResults')}</div>`
+          }</div>`
+        : ''
+    }</div>`;
 }
 
 /* The operator console (OPREV-02, phase 22): rendered ONLY for a viewer whose

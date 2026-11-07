@@ -2765,15 +2765,18 @@ IN.tzSel = el => {
     const m = me();
     if (!m || !S.data.members.some(x => x.id === m.id)) return;
     m.tz = el.dataset.v;
-    S.ui.tzPick = { q: '', hl: 0, v: el.dataset.v };
+    /* Selection closes the picker (UAT follow-up): the list unmounts, the
+       input mirrors the chosen zone, and the page below never shifts. */
+    S.ui.tzPick = { q: '', hl: 0, v: el.dataset.v, open: false };
     save();
     render();
     toast(t('toast.prefSaved'), { ms: 1500 });
     return;
   }
-  const pk = S.ui.tzPick || (S.ui.tzPick = { q: '', hl: 0 });
+  const pk = S.ui.tzPick || (S.ui.tzPick = { q: '', hl: 0, open: false });
   pk.q = el.value;
   pk.hl = 0;
+  pk.open = true; // typing opens the option list
   render();
 };
 A.tzSel = IN.tzSel;

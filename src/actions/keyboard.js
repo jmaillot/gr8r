@@ -30,6 +30,8 @@ document.addEventListener('keydown', e => {
     const flat = pk?._flat || [];
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
+      if (!pk) return;
+      if (!pk.open) { pk.open = true; render(); $('.pi.hl')?.scrollIntoView({ block: 'nearest' }); return; } // arrows open the closed list
       if (flat.length) pk.hl = (pk.hl + (e.key === 'ArrowDown' ? 1 : -1) + flat.length) % flat.length;
       render();
       $('.pi.hl')?.scrollIntoView({ block: 'nearest' });
@@ -43,7 +45,7 @@ document.addEventListener('keydown', e => {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (pk) pk.q = '';
+      if (pk) { pk.q = ''; pk.open = false; }
       render();
       return;
     }
