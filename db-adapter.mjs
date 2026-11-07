@@ -119,8 +119,8 @@ export function toPgSql(sql) {
 }
 
 /* ---- pg schema variant (D-10): nocase stripped + functional unique index.
-   TRANSITIONAL (Phase 45): this constant mirrors server.js SCHEMA verbatim;
-   Plan 05 finalizes the full pg schema body and its single source. ------- */
+   This constant mirrors server.js SCHEMA verbatim; Plan 05 finalizes the
+   full pg schema body and its single source. --------------------------- */
 const SQLITE_SCHEMA = `
   create table if not exists users (
     id            text primary key,
@@ -426,18 +426,6 @@ export async function connectDb(opts = {}) {
   backendKind = 'sqlite';
 }
 
-/* TRANSITIONAL (Phase 45): removed when the last db.prepare callsite
-   converts (Plan 04). SQLite-only passthrough to the raw DatabaseSync
-   handle so Plans 03–04 can convert callsites in waves without a broken
-   intermediate boot. Not part of the facade (D-06). */
-export function prepare(sql) {
-  if (backendKind !== 'sqlite') throw new Error('[db] prepare() is a transitional SQLite-only shim');
-  return sqlite.prepare(sql);
-}
-export function exec(sql) {
-  if (backendKind !== 'sqlite') throw new Error('[db] exec() is a transitional SQLite-only shim');
-  return sqlite.exec(sql);
-}
 /* ---- ensureColumn (D-10): one branch site per incompatibility. The pragma
    table_info probe is SQLite-only; pg asks information_schema. Defs are
    byte-identical to the SCHEMA declarations on both backends (Pitfall P-B). */

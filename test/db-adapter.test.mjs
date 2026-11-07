@@ -33,9 +33,10 @@ test('facade exposes exactly the async get/all/run/tx surface (D-06)', () => {
     assert.equal(typeof adapter[name], 'function', `facade must expose ${name}`);
     assert.equal(adapter[name].constructor, AsyncFunction, `facade ${name} must be async (D-05)`);
   }
-  // prepare/exec are NOT facade methods — separate transitional exports only (D-06).
+  // The transitional prepare/exec passthrough is GONE (Plan 04, D-06) —
+  // the facade surface is exactly get/all/run/tx.
   for (const name of ['prepare', 'exec']) {
-    assert.equal(typeof adapter[name], 'function'); // transitional shim exists…
+    assert.equal(adapter[name], undefined, `no ${name} on the facade (D-06)`);
   }
   // …but the support helpers for gates are exported separately, not methods:
   for (const name of ['connectDb', 'sqliteOnly', 'toPgSql', 'pgSchemaVariant', 'backendKind']) {
@@ -48,7 +49,7 @@ test('SQLite backend: get/all/run round-trip on a temp file DB; run returns { ch
   await adapter.connectDb({ dbPath });
   assert.equal(adapter.backendKind, 'sqlite');
 
-  await adapter.exec('create table t (id text primary key, n integer)');
+  await adapter.run('create table t (id text primary key, n integer)');
   const r = await adapter.run('insert into t (id, n) values (?, ?)', ['a', 1]);
   assert.deepEqual(Object.keys(r).sort(), ['changes'], 'run returns { changes } on SQLite (Pitfall 2)');
   assert.equal(r.changes, 1);
@@ -62,7 +63,7 @@ test('SQLite backend: get/all/run round-trip on a temp file DB; run returns { ch
 test('run() { changes } supports exactly-once claim style insert-or-ignore through the facade', async () => {
   const dbPath = tmpDbPath();
   await adapter.connectDb({ dbPath });
-  await adapter.exec('create table claims (dedup_key text primary key)');
+  await adapter.run('create table claims (dedup_key text primary key)');
   const sql = 'insert or ignore into claims (dedup_key) values (?)';
   const first = await adapter.run(sql, ['k']);
   assert.equal(first.changes, 1);
@@ -74,7 +75,7 @@ test('run() { changes } supports exactly-once claim style insert-or-ignore throu
 test('SQLite tx serializes two concurrent tx bodies (Pitfall 10 promise-queue mutex)', async () => {
   const dbPath = tmpDbPath();
   await adapter.connectDb({ dbPath });
-  await adapter.exec('create table c (v integer)');
+  await adapter.run('create table c (v integer)');
   await adapter.run('insert into c (v) values (0)');
 
   let inside = 0;
@@ -99,7 +100,7 @@ test('SQLite tx serializes two concurrent tx bodies (Pitfall 10 promise-queue mu
 test('tx returns fn value and rolls back on throw', async () => {
   const dbPath = tmpDbPath();
   await adapter.connectDb({ dbPath });
-  await adapter.exec('create table r (id text primary key)');
+  await adapter.run('create table r (id text primary key)');
   const out = await adapter.tx(async () => {
     await adapter.run('insert into r (id) values (?)', ['keep']);
     return 'value';

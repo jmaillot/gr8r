@@ -61,7 +61,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
-import { connectDb, close as dbClose, prepare as dbPrepare, exec as dbExec, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn } from './db-adapter.mjs';
+import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn } from './db-adapter.mjs';
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
    through tFor, so the FR catalogue must be registered at boot from the SAME
@@ -372,21 +372,20 @@ async function initDb() {
   fs.mkdirSync(FILES_DIR, { recursive: true });
   fs.mkdirSync(LOGOS_DIR, { recursive: true }); // Phase 43 (D-01): logos dir sibling of files/
   await connectDb({ dbPath: DB_PATH, dbUrl: DB_URL });
-  // TRANSITIONAL (Phase 45, retired in Plan 04): the sync prepare/exec/close
-  // shims keep every not-yet-converted db.* callsite working unchanged while
-  // converted regions call the async facade (await db.get/all/run).
+  // The facade is complete (D-06): every db.* callsite is async now —
+  // get/all/run/tx plus the close() handle. No sync passthrough remains.
   db = {
-    // transitional sync passthrough (Plan 04 retires it)
-    prepare: dbPrepare,
-    exec: dbExec,
     close: dbClose,
-    // async facade (D-06): converted regions call db.get/all/run/tx
+    // async facade (D-06): every region calls db.get/all/run/tx
     get: dbGet,
     all: dbAll,
     run: dbRun,
     tx: dbTx,
   };
-  db.exec(SCHEMA);
+  /* D-06: one facade call per statement — the SCHEMA DDL is split on its
+     statement terminators and executed individually (node:sqlite prepare is
+     single-statement; pg goes through the same run() rewrite). */
+  for (const stmt of SCHEMA.split(/;\s*\n/).map(s => s.trim()).filter(Boolean)) await db.run(stmt);
   // Additive migration for databases created before multi-workspace support.
   // (D-10): the pragma table_info probe is SQLite-only; the adapter branches
   // to information_schema on pg — one branch site, pinned in the adapter.
@@ -418,7 +417,7 @@ async function initDb() {
   // Phase 22 D-112: instance-operator privilege flag — def byte-identical to
   // the SCHEMA declaration (Pitfall P-B).
   await adapterEnsureColumn('users', 'is_instance_admin', 'integer not null default 0');
-  db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
+  await db.run('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
 }
 
 /* Module-level handle: assigned by initDb() inside the async boot below.
@@ -620,34 +619,33 @@ function sanitizeSlug(value) {
 }
 
 /* Readable slug for a new workspace; appends -2, -3… when taken. */
-function uniqueSlug(base, excludeId = null) {
+async function uniqueSlug(base, excludeId = null) {
   let root = sanitizeSlug(base) || 'workspace';
   root = root.slice(0, 32).replace(/-+$/g, '');
   let slug = root;
   let n = 2;
-  while (db.prepare('select 1 from workspaces where slug = ? collate nocase and id is not ?').get(slug, excludeId)) {
+  while (await db.get('select 1 from workspaces where slug = ? collate nocase and id is not ?', [slug, excludeId])) {
     slug = `${root}-${n++}`;
   }
   return slug;
 }
 
-function wsBySlug(slug) {
-  return db.prepare('select * from workspaces where slug = ? collate nocase').get(String(slug || '')) || null;
+async function wsBySlug(slug) {
+  return (await db.get('select * from workspaces where slug = ? collate nocase', [String(slug || '')])) || null;
 }
 
-function membershipOf(workspaceId, userId) {
-  return db.prepare('select * from memberships where workspace_id = ? and user_id = ?').get(workspaceId, userId) || null;
+async function membershipOf(workspaceId, userId) {
+  return (await db.get('select * from memberships where workspace_id = ? and user_id = ?', [workspaceId, userId])) || null;
 }
 
-function membershipsOf(userId) {
-  return db
-    .prepare(
-      `select w.*, m.role, m.member_id
-         from memberships m join workspaces w on w.id = m.workspace_id
-        where m.user_id = ?
-        order by w.created_at, w.name collate nocase`,
-    )
-    .all(userId);
+async function membershipsOf(userId) {
+  return await db.all(
+    `select w.*, m.role, m.member_id
+       from memberships m join workspaces w on w.id = m.workspace_id
+      where m.user_id = ?
+      order by w.created_at, w.name collate nocase`,
+    [userId],
+  );
 }
 
 function workspacePayload(row, membership = null) {
@@ -667,7 +665,7 @@ function workspacePayload(row, membership = null) {
   };
 }
 
-function userPayload(user) {
+async function userPayload(user) {
   return {
     id: user.id,
     email: user.email,
@@ -675,7 +673,7 @@ function userPayload(user) {
     locale: user.locale ?? null,
     twoFa: !!user.two_fa_enabled, // server ground truth for the settings 2FA card (16-03, T-16-13)
     isInstanceAdmin: !!user.is_instance_admin, // server ground truth for the operator card (D-112: DB flag only)
-    workspaces: membershipsOf(user.id).map(row => workspacePayload(row, row)),
+    workspaces: (await membershipsOf(user.id)).map(row => workspacePayload(row, row)),
   };
 }
 
@@ -758,12 +756,12 @@ function teamIntersects(p, teamSet) {
  * the membership row is resolved first (Pitfall 2). `liveTeams` lets
  * high-frequency callers (hiddenFor) resolve the set once per document.
  */
-function memberCanReadProject(p, wsId, memberId, liveTeams = null) {
+async function memberCanReadProject(p, wsId, memberId, liveTeams = null) {
   if (canSeeProject(p, memberId)) return true;
   if (!p || !wsId || !memberId) return false;
   if (!liveTeams) {
-    const row = db.prepare('select user_id from memberships where workspace_id = ? and member_id = ?').get(wsId, memberId);
-    liveTeams = row?.user_id ? teamsOfUser(wsId, row.user_id) : [];
+    const row = await db.get('select user_id from memberships where workspace_id = ? and member_id = ?', [wsId, memberId]);
+    liveTeams = row?.user_id ? await teamsOfUser(wsId, row.user_id) : [];
   }
   return teamIntersects(p, liveTeams);
 }
@@ -844,7 +842,7 @@ function scopeGrants(p, scope, memberId) {
   return !!memberId && Array.isArray(p.members) && p.members.includes(memberId);
 }
 
-function hiddenFor(doc, membership) {
+async function hiddenFor(doc, membership) {
   const scope = projectScope(membership);
   if (!scope) {
     /* Phase 32 (VIS-01/D-03/D-06): the team term lands in the null-scope
@@ -857,12 +855,12 @@ function hiddenFor(doc, membership) {
     if (membership?.workspace_id && ROLE_RANK[membership.role] < ROLE_RANK.admin) {
       const memberId = membership.member_id || null;
       const mRow = memberId
-        ? db.prepare('select user_id from memberships where workspace_id = ? and member_id = ?').get(membership.workspace_id, memberId)
+        ? await db.get('select user_id from memberships where workspace_id = ? and member_id = ?', [membership.workspace_id, memberId])
         : null;
-      const liveTeams = mRow?.user_id ? teamsOfUser(membership.workspace_id, mRow.user_id) : [];
+      const liveTeams = mRow?.user_id ? await teamsOfUser(membership.workspace_id, mRow.user_id) : [];
       const seen = new Set();
       for (const p of doc?.data?.projects || []) {
-        if (p?.id && !memberCanReadProject(p, membership.workspace_id, memberId, liveTeams)) seen.add(p.id);
+        if (p?.id && !(await memberCanReadProject(p, membership.workspace_id, memberId, liveTeams))) seen.add(p.id);
       }
       return seen;
     }
@@ -992,11 +990,11 @@ function mergeRecentSearches(storedList, incomingList, hiddenTerms, keepStored) 
   return out.slice(0, 5);
 }
 
-function redactDoc(doc, membership) {
+async function redactDoc(doc, membership) {
   const data = doc?.data;
   if (!data) return doc;
   // Phase 29: the single scope-aware funnel — private-hidden ∪ out-of-scope.
-  const hiddenProjects = hiddenFor(doc, membership);
+  const hiddenProjects = await hiddenFor(doc, membership);
   if (!hiddenProjects.size) return doc;
   const hiddenTasks = hiddenTaskIds(doc, hiddenProjects);
   const hiddenViews = new Set((data.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
@@ -1054,7 +1052,7 @@ function mergeIds(storedList, incomingList, reserved) {
   return out;
 }
 
-function mergeClientDoc(incoming, stored, membership, wsId) {
+async function mergeClientDoc(incoming, stored, membership, wsId) {
   const next = incoming && typeof incoming === 'object' ? JSON.parse(JSON.stringify(incoming)) : {};
   next.data = next.data && typeof next.data === 'object' ? next.data : {};
   normalizeProjects(stored);
@@ -1063,7 +1061,7 @@ function mergeClientDoc(incoming, stored, membership, wsId) {
   const role = membership?.role || 'member';
   // Phase 29: same single scope-aware funnel as the read side — reserved
   // out-of-scope rows can never be resurrected by a stale client doc PUT.
-  const hiddenProjects = hiddenFor(stored, membership);
+  const hiddenProjects = await hiddenFor(stored, membership);
   const storedData = stored?.data || {};
   const nextData = next.data;
 
@@ -1153,10 +1151,7 @@ function mergeClientDoc(incoming, stored, membership, wsId) {
       [...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]),
     );
     const scopeByMember = new Map(
-      db
-        .prepare('select member_id, role, scope from memberships where workspace_id = ?')
-        .all(wsId)
-        .map(r => [r.member_id, r]),
+      (await db.all('select member_id, role, scope from memberships where workspace_id = ?', [wsId])).map(r => [r.member_id, r]),
     );
     for (const t of nextData.tasks || []) {
       if (!t?.id || !t.assignee || !t.project) continue;
@@ -1290,10 +1285,12 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
      workspace-scoped so a name is only ever revealed to co-members (T-23-06)
      — keeping the doc profiles as the fallback for doc-only members. */
   const authority = new Map(
-    db
-      .prepare('select m.member_id, m.user_id, u.name, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
-      .all(wsRow.id)
-      .map(r => [r.member_id, r]),
+    (
+      await db.all(
+        'select m.member_id, m.user_id, u.name, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?',
+        [wsRow.id],
+      )
+    ).map(r => [r.member_id, r]),
   );
   for (const n of newNotifs) {
     if (n.by === n.to) continue; // never email the author about their own action
@@ -1343,7 +1340,7 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
          second pipeline). Scoped recipients keep the exact inScopeProject
          semantics above: the D-03 grant short-circuit is not re-tightened. */
       const projectId = n.project || task?.project || null;
-      if (projectId && !memberCanReadProject(projectById.get(projectId), wsRow.id, n.to)) continue;
+      if (projectId && !(await memberCanReadProject(projectById.get(projectId), wsRow.id, n.to))) continue;
     }
     const taskTitle = task?.title || 'a task';
     /* I18N-01 (Phase 36): the reminder by-label renders per recipient locale
@@ -1460,7 +1457,7 @@ async function runReminderPass({ now: at = new Date() } = {}) {
            second pipeline). Scoped assignees keep the exact inScopeProject
            semantics above; ids are passed explicitly (ws.id + t.assignee, the
            member_id) because this row carries only {role, scope} — Pitfall 2. */
-        if (!projectScope(assigneeMembership) && !memberCanReadProject(project, ws.id, t.assignee)) continue;
+        if (!projectScope(assigneeMembership) && !(await memberCanReadProject(project, ws.id, t.assignee))) continue;
         const due = t.due;
         /* Window-open predicates on plain YYYY-MM-DD string compare — the
            open window plus an absent dedup key is the late-delivery
@@ -1579,7 +1576,7 @@ async function runReminderPass({ now: at = new Date() } = {}) {
             t.assignee,
           ]);
           if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
-          if (!projectScope(assigneeMembership) && !memberCanReadProject(project, ws.id, t.assignee)) continue;
+          if (!projectScope(assigneeMembership) && !(await memberCanReadProject(project, ws.id, t.assignee))) continue;
           /* Same string compares as the reminder window predicates, split
              disjointly: due-today is the morning_of window's due-date edge,
              overdue is past_due's strictly-after edge. Future-dated tasks
@@ -1648,16 +1645,16 @@ async function runReminderPass({ now: at = new Date() } = {}) {
    team_members authority rows, edited only through the dedicated
    PUT /members/:uid/teams route (D-01) — the document never carries it. */
 
-function docForClient(doc, ws, membership) {
+async function docForClient(doc, ws, membership) {
   const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
-  syncProfiles(out, ws.id);
+  await syncProfiles(out, ws.id);
   // P4-a: with the roster rebuilt, drop notifications addressed to removed members.
   if (Array.isArray(out.data.notifs)) {
     const memberIds = new Set((Array.isArray(out.data.members) ? out.data.members : []).map(m => m?.id).filter(Boolean));
     out.data.notifs = out.data.notifs.filter(n => memberIds.has(n.to));
   }
-  return membership ? redactDoc(out, membership) : out;
+  return membership ? await redactDoc(out, membership) : out;
 }
 
 /* Kanzo #9 (docker logs): one INFO line per user-visible task change carried
@@ -1698,8 +1695,8 @@ function logDocChanges(ws, storedDoc, next, actorName) {
   }
 }
 
-function docFromClient(incoming, stored, ws, role, membership) {
-  const next = mergeClientDoc(incoming, stored, membership, ws.id);
+async function docFromClient(incoming, stored, ws, role, membership) {
+  const next = await mergeClientDoc(incoming, stored, membership, ws.id);
   delete next.data.workspaces;
   next.data.me = null;
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
@@ -1791,29 +1788,27 @@ function roleRank(role) {
 }
 
 /* Memberships joined with the account, in the order people joined. */
-function membersOf(workspaceId) {
-  return db
-    .prepare(
-      `select m.role, m.member_id, u.id as user_id, u.email, u.name, u.last_login_at, u.created_at
-         from memberships m join users u on u.id = m.user_id
-        where m.workspace_id = ?
-        order by u.created_at, u.email collate nocase`,
-    )
-    .all(workspaceId);
+async function membersOf(workspaceId) {
+  return await db.all(
+    `select m.role, m.member_id, u.id as user_id, u.email, u.name, u.last_login_at, u.created_at
+       from memberships m join users u on u.id = m.user_id
+      where m.workspace_id = ?
+      order by u.created_at, u.email collate nocase`,
+    [workspaceId],
+  );
 }
 
 /* TEAM-01: the team set of one member, read from the join-table authority. */
-function teamsOfUser(workspaceId, userId) {
-  return db
-    .prepare('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id')
-    .all(workspaceId, userId)
-    .map(r => r.team_id);
+async function teamsOfUser(workspaceId, userId) {
+  return (
+    await db.all('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id', [workspaceId, userId])
+  ).map(r => r.team_id);
 }
 
 /* TEAM-01: bulk form for syncProfiles — Map<user_id, string[]> over the workspace. */
-function teamsByUser(workspaceId) {
+async function teamsByUser(workspaceId) {
   const map = new Map();
-  for (const r of db.prepare('select user_id, team_id from team_members where workspace_id = ? order by team_id').all(workspaceId)) {
+  for (const r of await db.all('select user_id, team_id from team_members where workspace_id = ? order by team_id', [workspaceId])) {
     if (!map.has(r.user_id)) map.set(r.user_id, []);
     map.get(r.user_id).push(r.team_id);
   }
@@ -1842,16 +1837,16 @@ function memberPayload(row, doc, selfId) {
 }
 
 /* Pending invites; the hash is a safe identifier because the token is not derivable from it. */
-function invitesOf(workspaceId) {
-  return db
-    .prepare(
+async function invitesOf(workspaceId) {
+  return (
+    await db.all(
       `select token_hash, email, role, teams, scope, created_at, expires_at
          from invites
         where workspace_id = ? and used_at is null and expires_at > ?
         order by created_at desc`,
+      [workspaceId, now()],
     )
-    .all(workspaceId, now())
-    .map(r => {
+  ).map(r => {
       let teams = [];
       try {
         teams = JSON.parse(r.teams || '[]');
@@ -1882,28 +1877,32 @@ function invitesOf(workspaceId) {
     });
 }
 
-function ownerCount(workspaceId, excludeUserId = null) {
-  return db.prepare("select count(*) as n from memberships where workspace_id = ? and role = 'owner' and user_id is not ?").get(workspaceId, excludeUserId).n;
+async function ownerCount(workspaceId, excludeUserId = null) {
+  return (
+    await db.get("select count(*) as n from memberships where workspace_id = ? and role = 'owner' and user_id is not ?", [
+      workspaceId,
+      excludeUserId,
+    ])
+  ).n;
 }
 
 /* Overlay the authority fields of every profile that belongs to an account,
    and add the profile of a member that has none yet. The membership table is
    the source of truth: a member who joined in another session is repaired
    here, so joining never has to invalidate that session's revision. */
-function syncProfiles(doc, workspaceId) {
+async function syncProfiles(doc, workspaceId) {
   if (!doc?.data || !Array.isArray(doc.data.members)) return;
-  const rows = db
-    .prepare(
-      `select m.user_id, m.role, m.member_id, u.name, u.email
-         from memberships m join users u on u.id = m.user_id
-        where m.workspace_id = ?`,
-    )
-    .all(workspaceId);
+  const rows = await db.all(
+    `select m.user_id, m.role, m.member_id, u.name, u.email
+       from memberships m join users u on u.id = m.user_id
+      where m.workspace_id = ?`,
+    [workspaceId],
+  );
   const byUser = new Map(rows.map(r => [r.user_id, r]));
   /* TEAM-01/D-04: the team_members join table is the authority; the projection
      is a sorted teams[] array per account-backed profile. The scalar
      memberships.team column stays on disk but is never read (D-04). */
-  const teamMap = teamsByUser(workspaceId);
+  const teamMap = await teamsByUser(workspaceId);
   for (const profile of doc.data.members) {
     if (!profile?.userId) continue;
     const row = byUser.get(profile.userId);
@@ -1983,8 +1982,8 @@ async function updateDoc(workspaceId, edit) {
 /* The workspace revision after a server-side document change. Every endpoint
    that edits the document must return it, or the client keeps a stale
    revision and its next write is rejected with 409. */
-function wsRevision(workspaceId) {
-  const row = db.prepare('select revision from workspaces where id = ?').get(workspaceId);
+async function wsRevision(workspaceId) {
+  const row = await db.get('select revision from workspaces where id = ?', [workspaceId]);
   return row ? row.revision : 0;
 }
 
@@ -2022,7 +2021,7 @@ function seedDoc() {
 async function ensureWorkspace() {
   if ((await db.get('select count(*) as n from workspaces')).n > 0) return;
   const name = WORKSPACE_NAME;
-  const slug = uniqueSlug(WORKSPACE_SLUG || name);
+  const slug = await uniqueSlug(WORKSPACE_SLUG || name);
   const color = '#1D1C1A';
   const meta = { name, slug, color };
   const doc = normalizeDoc(seedDoc() || emptyDoc(meta), meta);
@@ -2134,9 +2133,9 @@ async function migrateTeamMembership() {
   const backup = path.join(DATA_DIR, `projects-pre-team-members-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    await sqliteOnly(() => {
-      db.exec('pragma wal_checkpoint(truncate)');
-      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
     }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
@@ -2205,9 +2204,9 @@ async function migrateUserNotifPrefs() {
   const backup = path.join(DATA_DIR, `projects-pre-notif-prefs-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    await sqliteOnly(() => {
-      db.exec('pragma wal_checkpoint(truncate)');
-      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
     }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
@@ -2247,9 +2246,9 @@ async function migrateTenancy() {
     const backup = path.join(DATA_DIR, `projects-premultitenant-${stamp}.db`);
     try {
       fs.mkdirSync(path.dirname(backup), { recursive: true });
-      await sqliteOnly(() => {
-        db.exec('pragma wal_checkpoint(truncate)');
-        db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+      await sqliteOnly(async () => {
+        await db.run('pragma wal_checkpoint(truncate)');
+        await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
       }, `pre-migration backup ${backup}`);
       logInfo(`  pre-migration backup: ${backup}`);
     } catch (err) {
@@ -2265,7 +2264,7 @@ async function migrateTenancy() {
       }
       const meta = doc?.data?.ws || {};
       const name = String(meta.name || row.name || '').trim() || 'Workspace';
-      const slug = uniqueSlug(meta.url || name, row.id);
+      const slug = await uniqueSlug(meta.url || name, row.id);
       const color = /^#[0-9a-f]{6}$/i.test(meta.c || '') ? meta.c : '#1D1C1A';
       await db.run('update workspaces set slug = ?, name = ?, color = ? where id = ?', [slug, name, color, row.id]);
     }
@@ -2405,9 +2404,9 @@ async function migrateTotpEncryption() {
   const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    await sqliteOnly(() => {
-      db.exec('pragma wal_checkpoint(truncate)');
-      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
     }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
     prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
@@ -2500,9 +2499,9 @@ async function migrateTotpFactors() {
   const backup = path.join(DATA_DIR, `projects-prefactors-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    await sqliteOnly(() => {
-      db.exec('pragma wal_checkpoint(truncate)');
-      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
     }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
@@ -2614,9 +2613,9 @@ async function migrateTotpReWrap() {
   const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    await sqliteOnly(() => {
-      db.exec('pragma wal_checkpoint(truncate)');
-      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
     }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
     prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
@@ -2824,7 +2823,7 @@ async function createUser(email, name, password) {
 
 /* Create a workspace and make its creator the owner. */
 async function createWorkspace(name, slugBase, user) {
-  const slug = uniqueSlug(slugBase || name);
+  const slug = await uniqueSlug(slugBase || name);
   const color = ['#1D1C1A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'][(await db.get('select count(*) as n from workspaces')).n % 6];
   const id = uid();
   const doc = emptyDoc({ name, slug, color });
@@ -2841,7 +2840,7 @@ async function createWorkspace(name, slugBase, user) {
   ]);
   const ws = await db.get('select * from workspaces where id = ?', [id]);
   await addMembership(ws, user, 'owner');
-  return wsBySlug(slug);
+  return await wsBySlug(slug);
 }
 
 function httpError(status, message, code) {
@@ -3008,8 +3007,8 @@ function isInstanceAdmin(user) {
 async function requireWorkspace(req, res, slug, minRole = 'viewer') {
   const user = await requireUser(req, res);
   if (!user) return null;
-  const ws = wsBySlug(slug);
-  const membership = ws ? membershipOf(ws.id, user.id) : null;
+  const ws = await wsBySlug(slug);
+  const membership = ws ? await membershipOf(ws.id, user.id) : null;
   if (!ws || !membership) {
     fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     return null;
@@ -3449,7 +3448,7 @@ async function handleApi(req, res, url) {
     await db.run('update users set last_login_at = ? where id = ?', [t, row.id]);
     setSessionCookie(req, res, token);
     logInfo(`login: ${email} from ${clientIp(req)}`);
-    return json(res, 200, { user: userPayload(row) });
+    return json(res, 200, { user: await userPayload(row) });
   }
 
   if (pathname === '/api/auth/logout' && method === 'POST') {
@@ -3475,7 +3474,7 @@ async function handleApi(req, res, url) {
     // boot doesn't log a console error in every browser.
     const user = await currentUser(req);
     if (!user) return json(res, 200, { user: null });
-    return json(res, 200, { user: userPayload(user) });
+    return json(res, 200, { user: await userPayload(user) });
   }
 
   if (pathname === '/api/auth/me' && method === 'PATCH') {
@@ -3488,7 +3487,7 @@ async function handleApi(req, res, url) {
     if (!LOCALE_CODES.includes(locale)) return fail(res, 400, 'unknownLocale', 'Unknown locale');
     await db.run('update users set locale = ? where id = ?', [locale, user.id]);
     const fresh = await db.get('select * from users where id = ?', [user.id]);
-    return json(res, 200, { user: userPayload(fresh) });
+    return json(res, 200, { user: await userPayload(fresh) });
   }
 
   /* ------------------- per-user notif prefs (Phase 34, SETTINGS-01/02) ------------------- */
@@ -4107,7 +4106,7 @@ async function handleApi(req, res, url) {
     // password budget and this challenge's code budget. The pending branch
     // never reaches here, so the budget carries across the two steps.
     for (const key of [`${clientIp(req)}|${challenge.email}`, `2fa-login|${clientIp(req)}|${challenge.email}`]) attempts.delete(key);
-    const payload = { user: userPayload(outcome.user) };
+    const payload = { user: await userPayload(outcome.user) };
     if (outcome.recoveryRemaining !== undefined) payload.recoveryRemaining = outcome.recoveryRemaining;
     return json(res, 200, payload);
   }
@@ -4136,12 +4135,11 @@ async function handleApi(req, res, url) {
     const user = await requireUser(req, res);
     if (!user) return;
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
-    const rows = db
-      .prepare(
-        `select token_hash, created_at, last_seen_at, ip, user_agent
-           from sessions where user_id = ? and expires_at > ? order by created_at desc`,
-      )
-      .all(user.id, now());
+    const rows = await db.all(
+      `select token_hash, created_at, last_seen_at, ip, user_agent
+         from sessions where user_id = ? and expires_at > ? order by created_at desc`,
+      [user.id, now()],
+    );
     return json(res, 200, {
       sessions: rows.map(r => ({
         id: r.token_hash.slice(0, 12), // D-27: opaque 12-char prefix — the full hash never leaves the server
@@ -4173,7 +4171,7 @@ async function handleApi(req, res, url) {
     const user = await requireUser(req, res);
     if (!user) return;
     // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.
-    db.prepare('delete from sessions where user_id = ? and token_hash like ?').run(user.id, `${sessionMatch[1]}%`);
+    await db.run('delete from sessions where user_id = ? and token_hash like ?', [user.id, `${sessionMatch[1]}%`]);
     return json(res, 204); // idempotent: an already-dead or foreign id is not an error (OQ4)
   }
 
@@ -4210,7 +4208,7 @@ async function handleApi(req, res, url) {
     if (isInstanceAdmin(user)) {
       // Operators see the whole trail — workspace-less operator-tier rows included.
     } else {
-      const adminWsIds = membershipsOf(user.id)
+      const adminWsIds = (await membershipsOf(user.id))
         .filter(m => ROLE_RANK[m.role] >= ROLE_RANK.admin)
         .map(m => m.id);
       if (!adminWsIds.length) return fail(res, 403, 'adminOnly', 'Only workspace admins can do that');
@@ -4229,7 +4227,7 @@ async function handleApi(req, res, url) {
 
     const clause = where.length ? `where ${where.join(' and ')}` : '';
     // 101st row = cursor for the next page; only 100 are served.
-    const rows = db.prepare(`select * from audit_log ${clause} order by created_at desc, id desc limit 101`).all(...args);
+    const rows = await db.all(`select * from audit_log ${clause} order by created_at desc, id desc limit 101`, args);
     const nextBefore = rows.length > 100 ? { created_at: rows[100].created_at, id: rows[100].id } : null;
     return json(res, 200, { rows: rows.slice(0, 100), nextBefore });
   }
@@ -4244,7 +4242,7 @@ async function handleApi(req, res, url) {
     const operator = await requireUser(req, res);
     if (!operator) return;
     if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
-    const rows = db.prepare('select id, name, email, is_instance_admin, last_login_at from users order by created_at').all();
+    const rows = await db.all('select id, name, email, is_instance_admin, last_login_at from users order by created_at');
     return json(res, 200, {
       users: rows.map(r => ({
         id: r.id,
@@ -4267,7 +4265,7 @@ async function handleApi(req, res, url) {
     if (tooMany(`operator-revoke|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     // D-112: the gate reads the DB flag only — never env matching, never workspace role.
     if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
-    const target = db.prepare('select id, name, email, is_instance_admin from users where id = ?').get(operatorRevokeMatch[1]);
+    const target = await db.get('select id, name, email, is_instance_admin from users where id = ?', [operatorRevokeMatch[1]]);
     if (!target) return fail(res, 404, 'notFound', 'Not found');
     // D-119: owner immunity BEFORE any session lookup — other flagged owners are
     // untouchable. A self-target is allowed (D-118): it is exactly revoke-others.
@@ -4284,21 +4282,22 @@ async function handleApi(req, res, url) {
       const remaining = await db.get('select count(*) as n from sessions where user_id = ? and expires_at > ?', [target.id, now()]);
       if (del.changes > 0) {
         await logSecurity(target.id, 'sessions_revoked_by_operator');
-        db.prepare(
+        await db.run(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-        ).run(
-          uid(),
-          operator.id,
-          target.id,
-          'sessions_revoked_by_operator',
-          del.changes,
-          clientIp(req),
-          null,
-          operator.name,
-          operator.email,
-          target.name,
-          target.email,
-          now(),
+          [
+            uid(),
+            operator.id,
+            target.id,
+            'sessions_revoked_by_operator',
+            del.changes,
+            clientIp(req),
+            null,
+            operator.name,
+            operator.email,
+            target.name,
+            target.email,
+            now(),
+          ],
         );
       }
       return { revoked: del.changes, remaining: remaining.n };
@@ -4332,7 +4331,7 @@ async function handleApi(req, res, url) {
     const t = now();
     const ua = String(req.headers['user-agent'] || '');
     const ip = clientIp(req);
-    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+    await db.run('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)', [
       sha256(token),
       user.id,
       t,
@@ -4340,17 +4339,17 @@ async function handleApi(req, res, url) {
       ip,
       ua,
       t, // a just-created session was seen at creation
-    );
+    ]);
     setSessionCookie(req, res, token);
     logInfo(`signup: ${user.email} (${user.name}) from ${ip}`);
-    return json(res, 201, { user: userPayload(user) });
+    return json(res, 201, { user: await userPayload(user) });
   }
 
   /* ------------------------------ workspaces ----------------------------- */
   if (pathname === '/api/workspaces' && method === 'GET') {
     const user = await requireUser(req, res);
     if (!user) return;
-    return json(res, 200, { workspaces: userPayload(user).workspaces });
+    return json(res, 200, { workspaces: (await userPayload(user)).workspaces });
   }
 
   if (pathname === '/api/workspaces' && method === 'POST') {
@@ -4369,11 +4368,11 @@ async function handleApi(req, res, url) {
     if (body?.slug) {
       slug = sanitizeSlug(body.slug);
       if (!slug) return fail(res, 400, 'invalidSlug', 'Use 2–40 lowercase letters, numbers, or hyphens');
-      if (wsBySlug(slug)) return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: uniqueSlug(slug) });
+      if (await wsBySlug(slug)) return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: await uniqueSlug(slug) });
     }
     const ws = await createWorkspace(name, slug, user);
     logInfo(`workspace created "${name}" (slug: ${ws.slug}) by ${user.email}`);
-    return json(res, 201, { workspace: workspacePayload(ws, membershipOf(ws.id, user.id)) });
+    return json(res, 201, { workspace: workspacePayload(ws, await membershipOf(ws.id, user.id)) });
   }
 
   const wsMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})$/);
@@ -4384,7 +4383,7 @@ async function handleApi(req, res, url) {
       ...workspacePayload(ctx.ws, ctx.membership),
       revision: ctx.ws.revision,
       updatedAt: ctx.ws.updated_at,
-      doc: docForClient(JSON.parse(ctx.ws.doc), ctx.ws, ctx.membership),
+      doc: await docForClient(JSON.parse(ctx.ws.doc), ctx.ws, ctx.membership),
     });
   }
 
@@ -4400,19 +4399,25 @@ async function handleApi(req, res, url) {
     if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return fail(res, 400, 'missingDocument', 'Missing workspace document');
     if (JSON.stringify(doc).length > MAX_BODY) return fail(res, 413, 'documentTooLarge', 'Workspace document is too large');
 
-    db.exec('begin immediate');
+    /* D-R3 (Plan 45): the optimistic-concurrency doc write runs in one db.tx() —
+       rollback on any throw, and early refusals exit via the sentinel below so
+       the transaction commits harmlessly with no write. */
+    const refusal = {};
+    let outcome = null;
     try {
-      const row = db.prepare('select * from workspaces where id = ?').get(ctx.ws.id);
+      outcome = await db.tx(async () => {
+      const row = await db.get('select * from workspaces where id = ?', [ctx.ws.id]);
       if (!row) {
-        db.exec('rollback');
-        return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+        refusal.code = 'workspaceNotFound';
+        return null;
       }
       if (row.revision !== revision) {
-        db.exec('rollback');
-        return fail(res, 409, 'workspaceChanged', 'Workspace changed elsewhere', { revision: row.revision });
+        refusal.code = 'workspaceChanged';
+        refusal.revision = row.revision;
+        return null;
       }
       const storedDoc = JSON.parse(row.doc);
-      const next = docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership);
+      const next = await docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership);
       /* D-04: the same server mutation that drops a file record unlinks its
          binary. Strict same-PUT diff only — no broader orphan sweep. */
       const storedFileIds = new Set((Array.isArray(storedDoc?.data?.files) ? storedDoc.data.files : []).map(f => f?.id).filter(Boolean));
@@ -4428,8 +4433,20 @@ async function handleApi(req, res, url) {
          /members/:uid/teams route, inside its own transaction. Doc writes can
          neither carry nor clobber membership. */
       const t = now();
-      db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(next), t, row.id);
-      db.exec('commit');
+      await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(next), t, row.id]);
+      return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t };
+    });
+    } catch (err) {
+      // SCOPE-04: the assignee write-guard rejects with an explicit 400 —
+      // db.tx has already rolled the transaction back.
+      if (err?.code === 'assigneeOutOfScope') return fail(res, 400, 'assigneeOutOfScope', 'Assignee is out of scope for this project');
+      throw err;
+    }
+    if (refusal.code === 'workspaceNotFound') return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    if (refusal.code === 'workspaceChanged') return fail(res, 409, 'workspaceChanged', 'Workspace changed elsewhere', { revision: refusal.revision });
+    if (!outcome) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    {
+      const { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t } = outcome;
       logDocChanges(row, storedDoc, next, ctx.user?.name || ctx.user?.email || 'unknown');
       /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
          server delays nothing: errors logged, response already flushed. */
@@ -4444,11 +4461,6 @@ async function handleApi(req, res, url) {
         });
       }
       return json(res, 200, { revision: revision + 1, updatedAt: t });
-    } catch (err) {
-      db.exec('rollback');
-      // SCOPE-04: the assignee write-guard rejects with an explicit 400.
-      if (err?.code === 'assigneeOutOfScope') return fail(res, 400, 'assigneeOutOfScope', 'Assignee is out of scope for this project');
-      throw err;
     }
   }
 
@@ -4467,17 +4479,17 @@ async function handleApi(req, res, url) {
     if (body?.slug !== undefined && body.slug !== slug) {
       const next = sanitizeSlug(body.slug);
       if (!next) return fail(res, 400, 'invalidSlug', 'Use 2–40 lowercase letters, numbers, or hyphens');
-      if (wsBySlug(next)) return fail(res, 409, 'slugTaken', 'That URL is already taken');
+      if (await wsBySlug(next)) return fail(res, 409, 'slugTaken', 'That URL is already taken');
       slug = next;
     }
     if (body?.color !== undefined) {
       if (!/^#[0-9a-f]{6}$/i.test(String(body.color))) return fail(res, 400, 'invalidColor', 'Use a hex color like #1D1C1A');
       color = String(body.color);
     }
-    db.prepare('update workspaces set name = ?, slug = ?, color = ?, updated_at = ? where id = ?').run(name, slug, color, now(), ctx.ws.id);
-    const ws = db.prepare('select * from workspaces where id = ?').get(ctx.ws.id);
+    await db.run('update workspaces set name = ?, slug = ?, color = ?, updated_at = ? where id = ?', [name, slug, color, now(), ctx.ws.id]);
+    const ws = await db.get('select * from workspaces where id = ?', [ctx.ws.id]);
     logInfo(`workspace updated "${name}" (slug: ${ws.slug}) by ${ctx.user.email}`);
-    return json(res, 200, { workspace: workspacePayload(ws, membershipOf(ws.id, ctx.user.id)) });
+    return json(res, 200, { workspace: workspacePayload(ws, await membershipOf(ws.id, ctx.user.id)) });
   }
 
   if (wsMatch && method === 'DELETE') {
@@ -4487,14 +4499,14 @@ async function handleApi(req, res, url) {
     /* Phase 43 (D-09): the workspace doc may carry a logo reference — unlink
        the stored bytes alongside the row purge, no orphaned files (A4). */
     const deletedLogo = docLogo(ctx.ws)?.file || null;
-    await db.tx(() => {
-      db.prepare('delete from memberships where workspace_id = ?').run(ctx.ws.id);
-      db.prepare('delete from invites where workspace_id = ?').run(ctx.ws.id);
-      db.prepare('delete from workspaces where id = ?').run(ctx.ws.id);
+    await db.tx(async () => {
+      await db.run('delete from memberships where workspace_id = ?', [ctx.ws.id]);
+      await db.run('delete from invites where workspace_id = ?', [ctx.ws.id]);
+      await db.run('delete from workspaces where id = ?', [ctx.ws.id]);
     });
     if (deletedLogo) fs.unlink(path.join(LOGOS_DIR, deletedLogo), () => {});
     logInfo(`workspace deleted "${ctx.ws.name}" (slug: ${ctx.ws.slug}) by ${ctx.user.email}`);
-    return json(res, 200, { deleted: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
+    return json(res, 200, { deleted: true, nextSlug: (await membershipsOf(ctx.user.id))[0]?.slug || null });
   }
 
   /* ------------------------------- members ------------------------------- */
@@ -4503,10 +4515,10 @@ async function handleApi(req, res, url) {
     const ctx = await requireWorkspace(req, res, wsMembersMatch[1]);
     if (!ctx) return;
     const doc = JSON.parse(ctx.ws.doc);
-    syncProfiles(doc, ctx.ws.id); // TEAM-01: project the team_members authority into teams[]
+    await syncProfiles(doc, ctx.ws.id); // TEAM-01: project the team_members authority into teams[]
     return json(res, 200, {
-      members: membersOf(ctx.ws.id).map(row => memberPayload(row, doc, ctx.user.id)),
-      invites: roleRank(ctx.membership.role) >= ROLE_RANK.admin ? invitesOf(ctx.ws.id) : [],
+      members: (await membersOf(ctx.ws.id)).map(row => memberPayload(row, doc, ctx.user.id)),
+      invites: roleRank(ctx.membership.role) >= ROLE_RANK.admin ? await invitesOf(ctx.ws.id) : [],
     });
   }
 
@@ -4515,17 +4527,17 @@ async function handleApi(req, res, url) {
     const ctx = await requireWorkspace(req, res, wsLeaveMatch[1]);
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    if (ctx.membership.role === 'owner' && ownerCount(ctx.ws.id, ctx.user.id) === 0) {
+    if (ctx.membership.role === 'owner' && (await ownerCount(ctx.ws.id, ctx.user.id)) === 0) {
       return fail(res, 409, 'lastOwnerLeaves', 'Promote someone else to owner before you leave');
     }
     await db.tx(async () => {
-      db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
+      await db.run('delete from memberships where workspace_id = ? and user_id = ?', [ctx.ws.id, ctx.user.id]);
       // TEAM-01: leaving purges the team_members authority rows too.
-      db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
+      await db.run('delete from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, ctx.user.id]);
       await updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
     });
     logInfo(`member left workspace "${ctx.ws.slug}": ${ctx.user.email}`);
-    return json(res, 200, { left: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
+    return json(res, 200, { left: true, nextSlug: (await membershipsOf(ctx.user.id))[0]?.slug || null });
   }
 
   const wsMemberMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})$/);
@@ -4533,8 +4545,8 @@ async function handleApi(req, res, url) {
     const ctx = await requireWorkspace(req, res, wsMemberMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const target = db.prepare('select * from users where id = ?').get(wsMemberMatch[2]);
-    const row = target ? membershipOf(ctx.ws.id, target.id) : null;
+    const target = await db.get('select * from users where id = ?', [wsMemberMatch[2]]);
+    const row = target ? await membershipOf(ctx.ws.id, target.id) : null;
     if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
     if (target.id === ctx.user.id) return fail(res, 409, 'removeSelfViaLeave', 'Use “Leave workspace” to remove yourself');
     const actorRank = roleRank(ctx.membership.role);
@@ -4543,15 +4555,15 @@ async function handleApi(req, res, url) {
     }
 
     if (method === 'DELETE') {
-      if (row.role === 'owner' && ownerCount(ctx.ws.id, target.id) === 0) return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
+      if (row.role === 'owner' && (await ownerCount(ctx.ws.id, target.id)) === 0) return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
       await db.tx(async () => {
-        db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+        await db.run('delete from memberships where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
         // TEAM-01: membership is authority rows — removal purges the team set too.
-        db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+        await db.run('delete from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
         await updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
       });
       logInfo(`member removed "${target.email}" from "${ctx.ws.slug}" by ${ctx.user.email}`);
-      return json(res, 200, { removed: true, userId: target.id, revision: wsRevision(ctx.ws.id) });
+      return json(res, 200, { removed: true, userId: target.id, revision: await wsRevision(ctx.ws.id) });
     }
 
     const body = await readJson(req);
@@ -4560,7 +4572,7 @@ async function handleApi(req, res, url) {
     if (nextRole !== row.role && nextRole === 'owner' && actorRank < ROLE_RANK.owner) {
       return fail(res, 403, 'ownerTransferOnly', 'Only an owner can transfer ownership');
     }
-    if (row.role === 'owner' && nextRole !== 'owner' && ownerCount(ctx.ws.id, target.id) === 0) {
+    if (row.role === 'owner' && nextRole !== 'owner' && (await ownerCount(ctx.ws.id, target.id)) === 0) {
       return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
     }
     const title = body?.title === undefined ? undefined : String(body.title).slice(0, 60);
@@ -4568,13 +4580,13 @@ async function handleApi(req, res, url) {
        edited only through PUT /members/:uid/teams against the authority rows. */
     await db.tx(async () => {
       if (nextRole !== row.role) {
-        db.prepare('update memberships set role = ? where workspace_id = ? and user_id = ?').run(nextRole, ctx.ws.id, target.id);
+        await db.run('update memberships set role = ? where workspace_id = ? and user_id = ?', [nextRole, ctx.ws.id, target.id]);
         // SCOPE-01/D-04 (Phase 29): promotion always clears scope — admin and
         // owner memberships are workspace-wide by definition, cleared in the
         // same transaction as the role change so no window exists where an
         // admin carries a stored scope.
         if (ROLE_RANK[nextRole] >= ROLE_RANK.admin) {
-          db.prepare('update memberships set scope = null where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
+          await db.run('update memberships set scope = null where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
         }
       }
       await updateDoc(ctx.ws.id, async doc => {
@@ -4586,10 +4598,10 @@ async function handleApi(req, res, url) {
         if (title !== undefined) profile.title = title;
       });
     });
-    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
+    const doc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ctx.ws.id])).doc);
     if (nextRole !== row.role) logInfo(`member role ${row.role} → ${nextRole} for "${target.email}" in "${ctx.ws.slug}" by ${ctx.user.email}`);
     return json(res, 200, {
-      revision: wsRevision(ctx.ws.id),
+      revision: await wsRevision(ctx.ws.id),
       member: memberPayload(
         {
           role: nextRole,
@@ -4618,8 +4630,8 @@ async function handleApi(req, res, url) {
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
-    const target = db.prepare('select * from users where id = ?').get(wsMemberTeamsMatch[2]);
-    const row = target ? membershipOf(ctx.ws.id, target.id) : null;
+    const target = await db.get('select * from users where id = ?', [wsMemberTeamsMatch[2]]);
+    const row = target ? await membershipOf(ctx.ws.id, target.id) : null;
     if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
     if (!Array.isArray(body?.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
     if (body.teams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
@@ -4627,13 +4639,12 @@ async function handleApi(req, res, url) {
     const known = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
     const teams = [...new Set(body.teams.map(t => String(t).slice(0, 40)))];
     if (teams.some(t => !known.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
-    await db.tx(() => {
-      db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
-      const insert = db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)');
-      for (const t of teams) insert.run(ctx.ws.id, t, row.member_id, target.id);
+    await db.tx(async () => {
+      await db.run('delete from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
+      for (const t of teams) await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [ctx.ws.id, t, row.member_id, target.id]);
     });
-    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
-    syncProfiles(doc, ctx.ws.id); // the response projects the fresh teams[] set
+    const doc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ctx.ws.id])).doc);
+    await syncProfiles(doc, ctx.ws.id); // the response projects the fresh teams[] set
     const member = memberPayload(
       {
         role: row.role,
@@ -4647,7 +4658,7 @@ async function handleApi(req, res, url) {
       doc,
       ctx.user.id,
     );
-    member.teams = teamsOfUser(ctx.ws.id, target.id); // read back from the authority, not the request
+    member.teams = await teamsOfUser(ctx.ws.id, target.id); // read back from the authority, not the request
     return json(res, 200, { member });
   }
 
@@ -4666,8 +4677,8 @@ async function handleApi(req, res, url) {
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
-    const target = db.prepare('select * from users where id = ?').get(wsMemberScopeMatch[2]);
-    const row = target ? membershipOf(ctx.ws.id, target.id) : null;
+    const target = await db.get('select * from users where id = ?', [wsMemberScopeMatch[2]]);
+    const row = target ? await membershipOf(ctx.ws.id, target.id) : null;
     if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
     if (ROLE_RANK[row.role] >= ROLE_RANK.admin) return fail(res, 400, 'scopeNotAllowed', 'Admin and owner memberships are always workspace-wide');
     // Scope-explicit route: an absent scope field is a 400, an explicit null
@@ -4692,10 +4703,10 @@ async function handleApi(req, res, url) {
       // D-01: an empty scope is workspace-wide — stored as null.
       if (teams.length || projects.length) scope = { teams, projects };
     }
-    await db.tx(() => {
-      db.prepare('update memberships set scope = ? where workspace_id = ? and user_id = ?').run(scope ? JSON.stringify(scope) : null, ctx.ws.id, target.id);
+    await db.tx(async () => {
+      await db.run('update memberships set scope = ? where workspace_id = ? and user_id = ?', [scope ? JSON.stringify(scope) : null, ctx.ws.id, target.id]);
     });
-    const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
+    const doc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ctx.ws.id])).doc);
     const member = memberPayload(
       {
         role: row.role,
@@ -4726,8 +4737,8 @@ async function handleApi(req, res, url) {
     if (tooMany(`admin-revoke|${actor.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     const ctx = await requireWorkspace(req, res, adminRevokeMatch[1], 'admin');
     if (!ctx) return;
-    const target = db.prepare('select id, name, email, is_instance_admin from users where id = ?').get(adminRevokeMatch[2]);
-    const membership = target ? membershipOf(ctx.ws.id, target.id) : null;
+    const target = await db.get('select id, name, email, is_instance_admin from users where id = ?', [adminRevokeMatch[2]]);
+    const membership = target ? await membershipOf(ctx.ws.id, target.id) : null;
     if (!target || !membership) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
     // D-R2 tier refusals, in D-119 order: the instance operator first (honest
     // error copy, defense in depth), then the rank rule — strictly-below-admin
@@ -4747,21 +4758,22 @@ async function handleApi(req, res, url) {
       const remaining = await db.get('select count(*) as n from sessions where user_id = ? and expires_at > ?', [target.id, now()]);
       if (del.changes > 0) {
         await logSecurity(target.id, 'sessions_revoked_by_workspace_admin');
-        db.prepare(
+        await db.run(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-        ).run(
-          uid(),
-          actor.id,
-          target.id,
-          'sessions_revoked_by_workspace_admin',
-          del.changes,
-          clientIp(req),
-          ctx.ws.id,
-          actor.name,
-          actor.email,
-          target.name,
-          target.email,
-          now(),
+          [
+            uid(),
+            actor.id,
+            target.id,
+            'sessions_revoked_by_workspace_admin',
+            del.changes,
+            clientIp(req),
+            ctx.ws.id,
+            actor.name,
+            actor.email,
+            target.name,
+            target.email,
+            now(),
+          ],
         );
       }
       return { revoked: del.changes, remaining: remaining.n };
@@ -4847,44 +4859,53 @@ async function handleApi(req, res, url) {
     const t = now();
     const expiresAt = t + INVITE_DAYS * 86400 * 1000;
     const rows = [];
-    db.exec('begin immediate');
+    /* D-R3: the invite batch runs in one db.tx() — rollback on any throw. The
+       alreadyMember refusal exits via the sentinel below so the transaction
+       rolls back nothing-but-nothing and the 409 ships after. */
+    const alreadyMember = { email: null };
     try {
-      db.prepare('delete from invites where expires_at < ?').run(t);
-      for (const email of emails.length ? emails : [null]) {
-        if (email) {
-          const account = db.prepare('select * from users where email = ?').get(email);
-          if (account && membershipOf(ctx.ws.id, account.id)) {
-            db.exec('rollback');
-            return fail(res, 409, 'alreadyMember', `${email} is already a member of ${ctx.ws.name}`, { email, name: ctx.ws.name });
+      await db.tx(async () => {
+        await db.run('delete from invites where expires_at < ?', [t]);
+        for (const email of emails.length ? emails : [null]) {
+          if (email) {
+            const account = await db.get('select * from users where email = ?', [email]);
+            if (account && (await membershipOf(ctx.ws.id, account.id))) {
+              alreadyMember.email = email;
+              throw new Error('alreadyMember');
+            }
+            // One live invite per address: a fresh link replaces the previous one.
+            await db.run('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null', [t, ctx.ws.id, email]);
           }
-          // One live invite per address: a fresh link replaces the previous one.
-          db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(t, ctx.ws.id, email);
+          const token = crypto.randomBytes(24).toString('base64url');
+          await db.run(
+            'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
+            [
+              sha256(token),
+              email,
+              role,
+              JSON.stringify(teams),
+              scope ? JSON.stringify(scope) : null,
+              ctx.ws.id,
+              ctx.user.id,
+              t,
+              expiresAt,
+            ],
+          );
+          rows.push({ id: sha256(token), email, role, teams, scope, url: `${appBase(req)}/join/${token}`, expiresAt });
         }
-        const token = crypto.randomBytes(24).toString('base64url');
-        db.prepare('insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)').run(
-          sha256(token),
-          email,
-          role,
-          JSON.stringify(teams),
-          scope ? JSON.stringify(scope) : null,
-          ctx.ws.id,
-          ctx.user.id,
-          t,
-          expiresAt,
-        );
-        rows.push({ id: sha256(token), email, role, teams, scope, url: `${appBase(req)}/join/${token}`, expiresAt });
-      }
-      db.exec('commit');
+      });
     } catch (err) {
-      db.exec('rollback');
-      throw err;
+      if (!alreadyMember.email) throw err; // genuine failure rethrows; sentinel carries the 409 refusal
+    }
+    if (alreadyMember.email) {
+      return fail(res, 409, 'alreadyMember', `${alreadyMember.email} is already a member of ${ctx.ws.name}`, { email: alreadyMember.email, name: ctx.ws.name });
     }
     logInfo(`invite(s) created: role ${role}, ${rows.length} link(s) for "${ctx.ws.slug}" by ${ctx.user.email}`);
 
     // Email delivery happens after the invites are committed, so a temporary
     // SMTP failure never loses the links. The client also receives the URL.
     const workspace = ctx.ws;
-    const inviter = db.prepare('select name from users where id = ?').get(ctx.user.id);
+    const inviter = await db.get('select name from users where id = ?', [ctx.user.id]);
     const emailRows = rows.filter(row => row.email);
     if (emailRows.length && MAILER.enabled) {
       let cursor = 0;
@@ -4917,7 +4938,7 @@ async function handleApi(req, res, url) {
   if (wsInviteMatch && method === 'GET') {
     const ctx = await requireWorkspace(req, res, wsInviteMatch[1], 'admin');
     if (!ctx) return;
-    return json(res, 200, { invites: invitesOf(ctx.ws.id) });
+    return json(res, 200, { invites: await invitesOf(ctx.ws.id) });
   }
 
   const wsInviteIdMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites\/([0-9a-f]{64})$/);
@@ -4925,25 +4946,25 @@ async function handleApi(req, res, url) {
     const ctx = await requireWorkspace(req, res, wsInviteIdMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const row = db.prepare('select token_hash from invites where token_hash = ? and workspace_id = ?').get(wsInviteIdMatch[2], ctx.ws.id);
+    const row = await db.get('select token_hash from invites where token_hash = ? and workspace_id = ?', [wsInviteIdMatch[2], ctx.ws.id]);
     if (!row) return fail(res, 404, 'inviteNotPending', 'That invite is no longer pending');
-    db.prepare('delete from invites where token_hash = ?').run(row.token_hash);
+    await db.run('delete from invites where token_hash = ?', [row.token_hash]);
     return json(res, 200, { revoked: true });
   }
 
   const inviteMatch = pathname.match(/^\/api\/invites\/([A-Za-z0-9_-]{16,128})$/);
   if (inviteMatch && method === 'GET') {
-    const row = db.prepare('select * from invites where token_hash = ?').get(sha256(inviteMatch[1]));
+    const row = await db.get('select * from invites where token_hash = ?', [sha256(inviteMatch[1])]);
     if (!row) return fail(res, 404, 'inviteInvalid', 'This invite link is not valid');
     if (row.used_at) return fail(res, 410, 'inviteAlreadyUsed', 'This invite has already been used');
     if (row.expires_at <= now()) return fail(res, 410, 'inviteExpired', 'This invite has expired');
-    const ws = row.workspace_id ? db.prepare('select name, slug from workspaces where id = ?').get(row.workspace_id) : null;
+    const ws = row.workspace_id ? await db.get('select name, slug from workspaces where id = ?', [row.workspace_id]) : null;
     return json(res, 200, {
       workspace: ws ? { name: ws.name, slug: ws.slug } : null,
       email: row.email,
       role: row.role,
       expiresAt: row.expires_at,
-      existing: !!(row.email && db.prepare('select 1 from users where email = ?').get(row.email)),
+      existing: !!(row.email && (await db.get('select 1 from users where email = ?', [row.email]))),
     });
   }
 
@@ -4955,7 +4976,7 @@ async function handleApi(req, res, url) {
       return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     }
     const tokenHash = sha256(acceptMatch[1]);
-    const invite = db.prepare('select * from invites where token_hash = ?').get(tokenHash);
+    const invite = await db.get('select * from invites where token_hash = ?', [tokenHash]);
     if (!invite) return fail(res, 404, 'inviteInvalid', 'This invite link is not valid');
     if (invite.used_at) return fail(res, 410, 'inviteAlreadyUsed', 'This invite has already been used');
     if (invite.expires_at <= now()) return fail(res, 410, 'inviteExpired', 'This invite has expired');
@@ -4969,7 +4990,7 @@ async function handleApi(req, res, url) {
 
     const body = await readJson(req);
     const session = await currentUser(req);
-    const account = invite.email ? db.prepare('select * from users where email = ?').get(invite.email) : null;
+    const account = invite.email ? await db.get('select * from users where email = ?', [invite.email]) : null;
     let user = session && (!invite.email || session.email === invite.email) ? session : null;
     if (!user && account) {
       return fail(res, 409, 'accountExistsSignIn', 'An account with this email already exists. Sign in to accept the invite.', { needsSignIn: true });
@@ -5002,9 +5023,9 @@ async function handleApi(req, res, url) {
 
     /* HARD-03 (D-05): resolve explicitly — no firstWorkspace() fallback. A
        missing row fails closed to the 410 below; never a cross-tenant join. */
-    const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id);
+    const ws = await db.get('select * from workspaces where id = ?', [invite.workspace_id]);
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
-    if (!membershipOf(ws.id, user.id))
+    if (!(await membershipOf(ws.id, user.id)))
       await addMembership(
         ws,
         user,
@@ -5029,8 +5050,8 @@ async function handleApi(req, res, url) {
       );
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {
-      db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), user.id, tokenHash);
-      db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(now(), ws.id, invite.email);
+      await db.run('update invites set used_at = ?, used_by = ? where token_hash = ?', [now(), user.id, tokenHash]);
+      await db.run('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null', [now(), ws.id, invite.email]);
     }
 
     const t = now();
@@ -5038,7 +5059,7 @@ async function handleApi(req, res, url) {
       const token = crypto.randomBytes(32).toString('base64url');
       const ua = String(req.headers['user-agent'] || '');
       const ip = clientIp(req);
-      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+      await db.run('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)', [
         sha256(token),
         user.id,
         t,
@@ -5046,12 +5067,12 @@ async function handleApi(req, res, url) {
         ip,
         ua,
         t, // a just-created session was seen at creation
-      );
+      ]);
       setSessionCookie(req, res, token);
     }
-    db.prepare('update users set last_login_at = ? where id = ?').run(t, user.id);
+    await db.run('update users set last_login_at = ? where id = ?', [t, user.id]);
     return json(res, session ? 200 : 201, {
-      user: userPayload(user),
+      user: await userPayload(user),
       workspace: { id: ws.id, name: ws.name, slug: ws.slug },
     });
   }
@@ -5304,7 +5325,7 @@ async function handleLogoUpload(req, res, slug) {
   if (previous) fs.unlink(path.join(LOGOS_DIR, previous), () => {});
   json(res, 200, {
     logo: logoShape({ slug: ctx.ws.slug }, { ext, file: id, uploaded_at: uploadedAt }),
-    revision: wsRevision(ctx.ws.id), // Pitfall 2: the doc write bumped the revision
+    revision: await wsRevision(ctx.ws.id), // Pitfall 2: the doc write bumped the revision
   });
 }
 
@@ -5315,7 +5336,7 @@ async function handleLogoUpload(req, res, slug) {
    serveFileBinary (5164). Served mime derives ONLY from the server-verified
    stored ext (T-43-01); the ?v= cache-bust param is ignored for lookup (D-11). */
 async function handleLogoGet(req, res, slug) {
-  const ws = wsBySlug(slug);
+  const ws = await wsBySlug(slug);
   const logo = ws ? docLogo(ws) : null;
   /* T-43-06: the stored id never builds a path outside LOGOS_DIR. */
   const file = logo?.file ? path.join(LOGOS_DIR, logo.file) : null;
@@ -5359,7 +5380,7 @@ async function handleLogoDelete(req, res, slug) {
     if (doc.data) delete doc.data.logo;
   });
   fs.unlink(path.join(LOGOS_DIR, logo.file), () => {});
-  json(res, 200, { ok: true, revision: wsRevision(ctx.ws.id) });
+  json(res, 200, { ok: true, revision: await wsRevision(ctx.ws.id) });
 }
 
 /* ----------------------------- file serving ----------------------------- */
@@ -5427,7 +5448,7 @@ async function serveFileBinary(req, res, slug, id) {
      project is a workspace-level attachment (uploads outside a project
      context serialize without the key) and stays member-visible — the
      pre-phase contract; only project-bound records are scope-checked. */
-  if (record.project && hiddenFor({ data }, ctx.membership).has(record.project)) {
+  if (record.project && (await hiddenFor({ data }, ctx.membership)).has(record.project)) {
     return fail(res, 404, 'fileNotFound', 'File not found');
   }
   let stat = null;
@@ -5583,18 +5604,18 @@ async function handleUnsubscribe(req, res, token) {
     /* D-10: merge-upsert the stored prefs row (convergent, replay-safe,
        creates the row if sparse), scope exactly (token.wsId, token.userId). */
     const merged = { ...(await getStoredNotifPrefs(payload.userId, payload.wsId)), email_digest: false };
-    db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(
+    await db.run('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [
       payload.wsId,
       payload.userId,
       JSON.stringify(merged),
-    );
+    ]);
   }
   /* D-02 (post-verification only): the page locale rides the token user's
      users.locale row, clamped exactly like the I18N-01 pattern — NULL,
      missing-row and malformed values degrade to 'en'. */
   let locale = 'en';
   if (payload) {
-    const row = db.prepare('select locale from users where id = ?').get(payload.userId);
+    const row = await db.get('select locale from users where id = ?', [payload.userId]);
     locale = row?.locale === 'fr' ? 'fr' : 'en';
   }
   const message = tFor(locale, valid && method === 'POST' ? 'notif.unsubscribe.verified' : 'notif.unsubscribe.neutral');
@@ -5694,9 +5715,9 @@ async function backupCli(target) {
   const dest = path.resolve(target || path.join(DATA_DIR, `projects-${new Date().toISOString().replace(/[:.]/g, '-')}.db`));
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   // D-09: wal_checkpoint + vacuum into are SQLite-only — on pg this CLI no-ops.
-  await sqliteOnly(() => {
-    db.exec('pragma wal_checkpoint(truncate)');
-    db.exec(`vacuum into '${dest.replaceAll("'", "''")}'`);
+  await sqliteOnly(async () => {
+    await db.run('pragma wal_checkpoint(truncate)');
+    await db.run(`vacuum into '${dest.replaceAll("'", "''")}'`);
   }, 'cli backup');
   logInfo(dest);
   await db.close();
@@ -5711,7 +5732,7 @@ async function addUserCli(args) {
     process.exit(1);
   }
   await ensureWorkspace();
-  const ws = slug ? wsBySlug(slug) : await firstWorkspace();
+  const ws = slug ? await wsBySlug(slug) : await firstWorkspace();
   if (!ws) {
     logError(slug ? `no workspace with slug ${slug}` : 'no workspace available');
     process.exit(1);
@@ -5726,10 +5747,10 @@ async function addUserCli(args) {
     logError(err.message);
     process.exitCode = 1;
   }
-  db.close();
+  await db.close();
 }
 
-function setPasswordCli(args) {
+async function setPasswordCli(args) {
   const email = String(args[0] || '')
     .trim()
     .toLowerCase();
@@ -5737,17 +5758,17 @@ function setPasswordCli(args) {
     logError('usage: node server.js --set-password <email>');
     process.exit(1);
   }
-  const row = db.prepare('select id from users where email = ?').get(email);
+  const row = await db.get('select id from users where email = ?', [email]);
   if (!row) {
     logError(`no account for ${email}`);
     process.exit(1);
   }
   const password = process.env.USER_PASSWORD || crypto.randomBytes(9).toString('base64url');
-  db.prepare('update users set password_hash = ? where id = ?').run(hashPassword(password), row.id);
-  db.prepare('delete from sessions where user_id = ?').run(row.id);
+  await db.run('update users set password_hash = ? where id = ?', [hashPassword(password), row.id]);
+  await db.run('delete from sessions where user_id = ?', [row.id]);
   logInfo(`password updated for ${email} (existing sessions revoked)`);
   if (!process.env.USER_PASSWORD) logInfo(`password: ${password}`);
-  db.close();
+  await db.close();
 }
 
 async function main() {
