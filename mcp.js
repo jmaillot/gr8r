@@ -71,7 +71,7 @@ export const validKeyScope = s => (API_KEY_SCOPES.includes(s) ? s : null);
    circular deps). server.js passes its primitives once at boot; everything
    doc-shaped is done here against the same stored-document discipline. */
 export function createMcp(deps) {
-  const { db, now, uid, clientIp, logWarn, tooMany, maxBody, ROLE_RANK } = deps;
+  const { db, now, uid, clientIp, logInfo, logWarn, tooMany, maxBody, ROLE_RANK } = deps;
 
   /* Session registry: mcp-session-id → { ctx, scope }. The session is
      bound to the key that created it — a request presenting session X with a
@@ -1447,6 +1447,7 @@ export function createMcp(deps) {
       try {
         const out = await tool.run(ctx, args);
         audit(ctx, ip, `mcp.${name}`, `mcp:${name}`);
+        logInfo(`mcp ${name} user=${ctx.user.email} ws=${ctx.ws.slug}${tool.write ? ' [write]' : ''}`);
         return { status: 200, body: jsonRpcResult(id, { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }] }) };
       } catch (err) {
         if (err?.mcpToolError) {
