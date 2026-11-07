@@ -1155,3 +1155,51 @@ Notes:
 - The Docker socket is powerful even read-only; only trusted containers should reach it.
 - If another service already binds 80/443, stop it or integrate with that proxy instead.
 - `tlschallenge` needs port 443 reachable. Use `httpchallenge` if that is not possible.
+
+## 15. MCP server deployment (Phase 46)
+
+The MCP endpoint lives at `/mcp` (streamable HTTP, JSON-RPC 2.0, hand-rolled on Node
+built-ins — no SDK, D-12 respected). Clients authenticate with a **personal API key**
+(`psk_live_…`) generated from **Settings → API keys** after a full login + 2FA browser
+session; only the key's sha256 hash is stored. One key = one user + one workspace.
+Full tool manual: [`MCP.md`](MCP.md).
+
+### Image requirement
+
+`server.js` imports `mcp.js` at runtime, so the runtime stage of the Dockerfile ships it —
+this is pinned by `test/dependencies.test.mjs` (D-12). If the image boots with
+`ERR_MODULE_NOT_FOUND … /app/mcp.js`, the image predates Phase 46 or the COPY list was
+edited; rebuild from a commit ≥ `b5fb128`.
+
+### Reverse-proxy requirement: exclude /mcp from forward-auth
+
+If the instance sits behind Authentik (or any forward-auth middleware), the proxy must
+**bypass authentication for the `/mcp` path** — the Bearer key IS the authentication, and
+a forward-auth chain answers the programmatic client with a 302 to the SSO login page
+before the request ever reaches the app. Symptom: every `POST /mcp` returns `302` with a
+`location` header pointing at the provider's authorize endpoint.
+
+Fix (same shape as the Phase 43 logo exclusion G-43-4): give `/mcp` its own Traefik router
+without the forward-auth middleware, e.g. on the app container's labels:
+
+```yaml
+labels:
+  - traefik.enable=true
+  # main router (forward-auth protected)
+  - traefik.http.routers.projects.rule=Host(`projects.example.com`) && !PathPrefix(`/mcp`)
+  - traefik.http.routers.projects.middlewares=authentik@file
+  # MCP router — bypasses forward-auth; auth is the psk_live_ Bearer key
+  - traefik.http.routers.projects-mcp.rule=Host(`projects.example.com`) && PathPrefix(`/mcp`)
+```
+
+Verify after reload:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://projects.example.com/mcp \
+  -H "Authorization: Bearer psk_live_…" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1.0"}}}'
+# expect: 200 (not 302)
+```
+
+When MCP is not configured (no API key issued) the endpoint still exists but rejects every
+request with 401 — there is no env flag to disable it; not issuing keys is the off switch.
