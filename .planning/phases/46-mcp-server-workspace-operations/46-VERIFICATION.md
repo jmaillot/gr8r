@@ -12,7 +12,7 @@ covered_files:
   - MCP.md
   - DEPLOY.md
   - MCP-IDEAS.md
-covered_digest: "v2:c9786188bad1c722631fd7dbe47f38f7f21195db3b6e5f8efb5cb257a7cf2110"
+covered_digest: "v2:sha256:8a1e96a477ced8fbf95f7a2e138d43b0fe6047bb2367c48ad146c1877407a7d8"
 behavior_unverified: 0
 overrides_applied: 0
 ---

@@ -14,7 +14,7 @@ covered_files:
   - test/i18n-actions-modules.test.mjs
   - .planning/REQUIREMENTS.md
   - .planning/ROADMAP.md
-covered_digest: "v2:sha256:9e329db522c9b1e05179a281c058b104252b506e248910aa2088356e02f1fef2"
+covered_digest: "v2:sha256:1fcf8aaad95e29a12378008dc4b7d9d3658ea0269d32d3174917e78ae93790a8"
 re_verification:
   previous_status: gaps_found
   previous_score: 1/2
