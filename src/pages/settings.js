@@ -142,8 +142,8 @@ export const tzOffsetLabel = zone => {
    cheap. Sorted order is the generator's — stable for search and keyboard
    navigation. Exported for the wiring test. */
 export function tzFilter(q) {
-  const f = foldForSearch(String(q ?? '').trim());
-  const base = f ? TIMEZONES.filter(z => foldForSearch(z.id).includes(f) || foldForSearch(z.name).includes(f)) : TIMEZONES;
+  const f = foldForSearch(String(q ?? '').trim()).text;
+  const base = f ? TIMEZONES.filter(z => foldForSearch(z.id).text.includes(f) || foldForSearch(z.name).text.includes(f)) : TIMEZONES;
   return base.slice(0, 80);
 }
 
