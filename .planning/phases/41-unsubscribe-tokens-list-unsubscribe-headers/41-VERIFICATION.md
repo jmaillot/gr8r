@@ -17,7 +17,7 @@ covered_files:
   - test/digest.test.mjs
   - test/helpers/server.mjs
   - test/unsubscribe-token.test.mjs
-covered_digest: "v2:sha256:61844c06dd5ccdcde0d7307c44a8c5a90c1e469568ad1f651a5f44f37ba43b8a"
+covered_digest: "v2:sha256:8fae8cb018b3fd238080bdc86a46ad6eec39bb46966e9e338200cd6e7e8e8fec"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

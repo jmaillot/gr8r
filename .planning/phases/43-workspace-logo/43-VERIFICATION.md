@@ -4,7 +4,7 @@ verified: 2026-11-06T14:30:37Z
 status: passed
 score: 8/8 must-haves verified
 covered_files: [.planning/phases/43-workspace-logo/43-01-PLAN.md, .planning/phases/43-workspace-logo/43-01-SUMMARY.md, .planning/phases/43-workspace-logo/43-02-PLAN.md, .planning/phases/43-workspace-logo/43-02-SUMMARY.md, .planning/phases/43-workspace-logo/43-03-PLAN.md, .planning/phases/43-workspace-logo/43-03-SUMMARY.md, server.js, src/core/icons.js, src/shell/layout.js, src/core/api.js, src/pages/settings.js, src/actions/actions.js, mailer.js, src/locales/en.json, src/locales/fr.json, test/workspace-logo.test.mjs, test/digest-logo.test.mjs, scripts/i18n-scan.mjs, src/styles/shell.css, test/i18n-core-features.test.mjs, test/i18n-shell.test.mjs, test/i18n-toast.test.mjs]
-covered_digest: "v2:sha256:da863acf91ec1b132b861a32d730bb2e7f7dfa6a7274d0e024ee9fe4ce89a498"
+covered_digest: "v2:sha256:549eb48fbb91c33d48cde53ce7b7007ac5a0ff5eff6a59ac576c72b649a5a320"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
