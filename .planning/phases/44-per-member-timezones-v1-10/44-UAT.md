@@ -45,7 +45,11 @@ blocked: 0
   reason: "User chose to fix both review warnings: WR-01 — server.js admin doc-PUT path writes other members' tz verbatim, bypassing the D-10 funnel (never-stored-raw invariant broken); WR-02 — tz.js resolveTz returns alias/case input raw, so a valid alias schedules fine but tzPreselect fails the canonical-list match and shows Paris, and saving silently rewrites the value."
   severity: major
   test: 2
-  artifacts: []
+  artifacts:
+    - path: server.js
+      issue: "admin doc-PUT branch (~1697-1706) copies incoming tz verbatim for every member — only the self carve-out funnels; fix: funnel-validate each member's tz preserving undefined→keep and ''→clears semantics"
+    - path: tz.js
+      issue: "resolveTz returns validated input raw (A2 pin) — canonicalize via Intl resolvedOptions() (per-zone resolution, not enumeration; D-03 intact); supplement gen-timezones.mjs with UTC; update A2 pin consciously"
   missing: []
 
 ## Gaps
