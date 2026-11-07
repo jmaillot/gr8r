@@ -23,6 +23,14 @@
 .set-nav .gh:first-child {
   padding-top: 0;
 }
+/* Divider between the workspace-level groups and the personal ones
+   (projectsstudio#18): the gh headers already carry spacing, the rule
+   itself is pure separation, no padding of its own. */
+.set-nav .gsep {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 14px 8px 0;
+}
 .set-body {
   overflow-y: auto;
 }

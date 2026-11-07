@@ -53,20 +53,19 @@ export const SET_NAV = [
     ],
   ],
   [
-    'nav.route.notifications',
-    [
-      ['notif-email', 'settings.nav.email', 'mail'],
-      ['notif-push', 'settings.nav.push', 'smartphone'],
-      ['notif-mentions', 'settings.nav.mentions', 'at-sign'],
-      ['notif-assign', 'settings.nav.assignments', 'user-check'],
-    ],
-  ],
-  [
     'settings.group.personal',
     [
       ['profile', 'settings.nav.profile', 'user'],
       ['preferences', 'settings.nav.preferences', 'sliders-horizontal'],
       ['shortcuts', 'settings.nav.shortcuts', 'keyboard'],
+    ],
+  ],
+  [
+    'nav.route.notifications',
+    [
+      ['notif-email', 'settings.nav.email', 'mail'],
+      ['notif-push', 'settings.nav.push', 'smartphone'],
+      ['notif-mentions', 'settings.nav.mentions', 'at-sign'],
     ],
   ],
   [
@@ -266,7 +265,7 @@ export function pageSettings() {
   const sec = S.ui.params.sec || S.ui.settings || 'appearance';
   const title = SET_NAV.flatMap(g => g[1]).find(x => x[0] === sec) || ['appearance', 'settings.nav.appearance'];
   return `<div class="set">
-    <nav class="set-nav" aria-label="${t('nav.route.settings')}">${SET_NAV.map(([g, items]) => `<div class="gh">${t(g)}</div>${items.map(([k, n, i]) => `<button class="sitem ${sec === k ? 'on' : ''}" data-a="go" data-r="settings" data-sec="${k}">${ic(i, 15)}<span>${t(n)}</span></button>`).join('')}`).join('')}</nav>
+    <nav class="set-nav" aria-label="${t('nav.route.settings')}">${SET_NAV.map(([g, items]) => `${g === 'settings.group.personal' ? '<hr class="gsep" aria-hidden="true">' : ''}<div class="gh">${t(g)}</div>${items.map(([k, n, i]) => `<button class="sitem ${sec === k ? 'on' : ''}" data-a="go" data-r="settings" data-sec="${k}">${ic(i, 15)}<span>${t(n)}</span></button>`).join('')}`).join('')}</nav>
     <div class="set-body" data-keep="set:${sec}"><div class="set-in">${settingsBody(sec, title[1])}</div></div>
   </div>`;
 }
@@ -514,15 +513,7 @@ export function settingsBody(sec, title) {
       return (
         H(t('settings.notif.mentionsLead')) +
         srow(t('settings.notif.atAll'), '', tog('mention_all', np.mention_all, 'np')) +
-        srow(t('settings.notif.atTeam'), t('settings.notif.atTeamDesc'), tog('mention_team', np.mention_team !== false, 'np')) +
-        srow(t('settings.notif.atWorkspace'), t('settings.notif.atWorkspaceDesc'), tog('mention_ws', !!np.mention_ws, 'np'))
-      );
-    case 'notif-assign':
-      return (
-        H(t('settings.notif.assignLead')) +
-        srow(t('settings.notif.assignedMe'), '', tog('assign_self', np.assign_self, 'np')) +
-        srow(t('settings.notif.statusChange'), '', tog('assign_status', np.assign_status !== false, 'np')) +
-        srow(t('settings.notif.overdue'), '', tog('assign_over', np.assign_over !== false, 'np'))
+        srow(t('settings.notif.atTeam'), t('settings.notif.atTeamDesc'), tog('mention_team', np.mention_team !== false, 'np'))
       );
     case 'profile': {
       const err = S.ui.errors.pname2;
