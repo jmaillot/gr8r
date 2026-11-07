@@ -178,7 +178,13 @@ export function withDb(dbPath, fn) {
    dynamic import so the SQLite-default suite never touches the module.
    Pair with dropPgSchema to guarantee a clean database per test. */
 export async function withPg(url, fn) {
-  const { Pool } = await import('pg');
+  const { Pool, types } = await import('pg');
+  // Pitfall 1 (mirror of the db-adapter.mjs boot override — separate process,
+  // separate pg module instance): int8 (bigint) decodes as a JS string by
+  // default. Epoch-ms values sit far below Number.MAX_SAFE_INTEGER, so
+  // coercing to numbers keeps matrix assertions on the same shapes the
+  // server's API boundary produces.
+  types.setTypeParser(20, v => (v === null || v === undefined ? v : Number(v)));
   const pool = new Pool({ connectionString: url, max: 2 });
   try {
     return await fn(pool);

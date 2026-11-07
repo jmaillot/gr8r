@@ -439,6 +439,14 @@ export async function connectDb(opts = {}) {
     let mod;
     try {
       mod = await import('pg'); // conditional load — D-02: SQLite path never touches pg
+      /* Pitfall 1: pg decodes int8 (bigint) columns as JS strings to avoid
+         precision loss. Every epoch-ms column is bigint in the pg variant,
+         and the app contract carries epoch-ms as JS numbers (SQLite parity —
+         client math and JSON payloads break on strings). Coerce in the
+         adapter (one branch site, D-10): epoch values (Date.now() ≈ 1.7e12)
+         sit far below Number.MAX_SAFE_INTEGER, so Number() is lossless. */
+      const pgModule = mod.default ?? mod;
+      pgModule.types.setTypeParser(20, v => (v === null || v === undefined ? v : Number(v)));
     } catch (err) {
       console.error(`[db] Postgres unreachable (code=${err.code ?? 'NOSQLSTATE'}): ${err.message}`);
       process.exit(1); // fail-closed: no SQLite fallback (D-04)

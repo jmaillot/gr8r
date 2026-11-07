@@ -165,4 +165,127 @@ maybe('pg matrix: fail-closed boot — unreachable Postgres refuses startup, DSN
   assert.ok(!output.includes('postgres://'), 'DSN never printed (T-45-11/D-04)');
 });
 
-/* T2 critical-path tests land in the next commit (Plan 45-07 Task 2). */
+/* ==================== T2a: reminders_sent exactly-once (REM-03 on pg) ==================== */
+
+maybe('pg matrix: reminders_sent exactly-once — the {changes: 0} branch suppresses the duplicate (REM-03)', async () => {
+  const srv = await bootPg();
+  try {
+    const owner = await makeOwner(srv, 'claim-owner@test.local');
+    const ws = await makeWorkspace(srv, owner, 'pg-claims');
+    const doc = {
+      data: {
+        members: [{ id: ws.memberId, name: 'Claim', email: owner.email, userId: null, tz: TZ }],
+        projects: [{ id: 'p1', name: 'P1' }],
+        tasks: [{ id: 't1', key: 'P1-1', title: 'Ship it', status: 'todo', assignee: ws.memberId, project: 'p1', due: '2026-01-15' }],
+        comments: [],
+        activity: [],
+        notifs: [],
+        files: [],
+      },
+    };
+    await withPg(url, pool => pool.query('update workspaces set doc = $1 where id = $2', [JSON.stringify(doc), ws.wsId]));
+
+    const first = (await trigger(srv, at8('2026-01-15'))).filter(n => n.task === 't1');
+    assert.equal(first.length, 1, 'morning_of fires exactly once on pg');
+    const again = (await trigger(srv, at8('2026-01-15'))).filter(n => n.task === 't1');
+    assert.equal(again.length, 0, 'second pass suppressed — claim row exists, {changes: 0} branch (REM-03 on pg)');
+
+    const { rows } = await withPg(url, pool =>
+      pool.query('select count(*)::int as n from reminders_sent where workspace_id = $1', [ws.wsId]),
+    );
+    assert.equal(rows[0].n, 1, 'exactly one claim row on pg');
+  } finally {
+    await srv.stop();
+  }
+});
+
+/* ==================== T2b: case-variant email login (Pitfall 4) ==================== */
+
+maybe('pg matrix: case-variant email login — collate nocase rewrite end-to-end (Pitfall 4)', async () => {
+  const srv = await bootPg();
+  try {
+    await signup(srv.base, { name: 'Case', email: 'casevariant@test.local', password: GOOD });
+    const { status, data } = await login(srv.base, 'CaseVariant@Test.LOCAL', GOOD);
+    assert.equal(status, 200, `upper-case login resolves the lower-case pg account (got ${status} ${JSON.stringify(data)})`);
+  } finally {
+    await srv.stop();
+  }
+});
+
+/* ==================== T2c: bigint epoch typing (Pitfall 1) ==================== */
+
+maybe('pg matrix: bigint epoch columns decode as NUMBERS at the API boundary (Pitfall 1)', async () => {
+  const srv = await bootPg();
+  try {
+    const owner = await makeOwner(srv, 'epoch-owner@test.local');
+    await makeWorkspace(srv, owner, 'pg-epoch');
+
+    const inv = await owner.c.post('/api/workspaces/pg-epoch/invites', { emails: ['epoch-invitee@test.local'], role: 'member' });
+    assert.equal(inv.status, 201, 'invite created');
+    const listed = await owner.c.get('/api/workspaces/pg-epoch/invites');
+    assert.equal(listed.status, 200);
+    const row = listed.data.invites[0];
+    assert.equal(typeof row.createdAt, 'number', `invites.created_at decodes as a number (got ${typeof row.createdAt})`);
+    assert.equal(typeof row.expiresAt, 'number', `invites.expires_at decodes as a number (got ${typeof row.expiresAt})`);
+
+    const sessions = await owner.c.get('/api/auth/sessions');
+    assert.equal(sessions.status, 200);
+    const s = sessions.data.sessions[0];
+    assert.equal(typeof s.createdAt, 'number', `sessions.created_at decodes as a number (got ${typeof s.createdAt})`);
+    assert.equal(typeof s.lastSeenAt, 'number', `sessions.last_seen_at decodes as a number (got ${typeof s.lastSeenAt})`);
+  } finally {
+    await srv.stop();
+  }
+});
+
+/* ==================== T2d: user_notif_prefs upsert drift (Pitfall 3) ==================== */
+
+maybe('pg matrix: user_notif_prefs upsert keeps ONE row with the last write (Pitfall 3)', async () => {
+  const srv = await bootPg();
+  try {
+    const owner = await makeOwner(srv, 'prefs-owner@test.local');
+    const ws = await makeWorkspace(srv, owner, 'pg-prefs');
+
+    const p1 = await owner.c.put('/api/me/notif-prefs', { workspace: ws.wsId, prefs: { email_reminder: false } });
+    assert.equal(p1.status, 200, 'first prefs PUT');
+    const p2 = await owner.c.put('/api/me/notif-prefs', { workspace: ws.wsId, prefs: { email_reminder: true, past_due: false } });
+    assert.equal(p2.status, 200, 'second prefs PUT');
+
+    const { rows } = await withPg(url, pool =>
+      pool.query('select workspace_id, user_id, prefs from user_notif_prefs where workspace_id = $1', [ws.wsId]),
+    );
+    assert.equal(rows.length, 1, 'upsert never deletes-and-reinserts — still exactly one row');
+    const stored = JSON.parse(rows[0].prefs);
+    assert.equal(stored.email_reminder, true, 'last write wins');
+    assert.equal(stored.past_due, false, 'merged keys survive');
+    assert.equal(p2.data.prefs.email_reminder, true, 'API echoes the last write');
+  } finally {
+    await srv.stop();
+  }
+});
+
+/* ==================== T2e: login_challenges round-trip (no IdP) ==================== */
+
+maybe('pg matrix: login_challenges round-trip — facade-level insert/read, no external IdP', async () => {
+  const srv = await bootPg();
+  try {
+    const owner = await makeOwner(srv, 'challenge-owner@test.local');
+    const ws = await makeWorkspace(srv, owner, 'pg-challenges');
+    await withPg(url, async pool => {
+      const expires = Date.now() + 60_000;
+      await pool.query(
+        'insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values ($1,$2,$3,$4)',
+        ['a'.repeat(64), ws.userId, expires, 0],
+      );
+      const { rows } = await pool.query(
+        'select challenge_token_hash, user_id, expires_at, attempts from login_challenges where user_id = $1',
+        [ws.userId],
+      );
+      assert.equal(rows.length, 1, 'challenge row round-trips on pg');
+      assert.equal(typeof rows[0].expires_at, 'number', `bigint expires_at decodes as a number (got ${typeof rows[0].expires_at})`);
+      assert.equal(rows[0].attempts, 0, 'integer counter stays integer');
+    });
+  } finally {
+    await srv.stop();
+  }
+});
