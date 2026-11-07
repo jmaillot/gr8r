@@ -1256,8 +1256,6 @@
   "settings.notif.atAll": "@mentions dans les commentaires et les descriptions",
   "settings.notif.atTeam": "Mentions @team",
   "settings.notif.atTeamDesc": "Quand votre équipe est mentionnée, p. ex. @Product.",
-  "settings.notif.atWorkspace": "Mentions @workspace",
-  "settings.notif.atWorkspaceDesc": "Annonces à tout le monde.",
   "settings.profile.lead": "Votre apparence aux yeux des autres membres de l’espace de travail.",
   "settings.profile.avatarColor": "Couleur d’avatar",
   "settings.profile.title": "Fonction",

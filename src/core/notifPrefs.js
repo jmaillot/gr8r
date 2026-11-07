@@ -8,12 +8,14 @@ export const NOTIF_PREFS_KEY_PREFIX = 'projects.notifPrefs.';
 
 /* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 11 keys, email_comment
    the ONLY false. The legacy push toggle for due dates was removed with gap
-   G-37-2 on BOTH sides (whitelist parity preserved). Five more toggle keys
-   exist in the UI (email_digest,
-   mention_team, mention_ws, assign_status, assign_over) and read undefined-falsy —
+   G-37-2 on BOTH sides (whitelist parity preserved). email_digest,
+   mention_team, mention_ws, assign_status, assign_over read undefined-falsy —
    email_digest is a real OPT-IN as of Phase 38 (D-14: stored true = on,
    undefined/false = off; the digest replaces individual reminder emails) — the
-   same shape the server accessor produces for a user with no row. */
+   same shape the server accessor produces for a user with no row. Since
+   projectsstudio#18 the mention_ws and assign_* toggles no longer RENDER in
+   the settings UI (no emission-code reader — notification-audit), but the
+   keys stay whitelisted on both sides so legacy stored rows round-trip. */
 export const NOTIF_PREF_DEFAULTS = {
   email_mention: true,
   email_assign: true,

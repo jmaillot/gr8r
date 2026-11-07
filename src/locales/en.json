@@ -1256,8 +1256,6 @@
   "settings.notif.atAll": "@mentions in comments and descriptions",
   "settings.notif.atTeam": "@team mentions",
   "settings.notif.atTeamDesc": "When your team is mentioned, e.g. @Product.",
-  "settings.notif.atWorkspace": "@workspace mentions",
-  "settings.notif.atWorkspaceDesc": "Announcements to everyone.",
   "settings.profile.lead": "How you appear to others in the workspace.",
   "settings.profile.avatarColor": "Avatar color",
   "settings.profile.title": "Title",

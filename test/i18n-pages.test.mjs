@@ -449,8 +449,6 @@ const TABLES = [
     ['settings.notif.atAll', undefined, '@mentions in comments and descriptions'],
     ['settings.notif.atTeam', undefined, '@team mentions'],
     ['settings.notif.atTeamDesc', undefined, 'When your team is mentioned, e.g. @Product.'],
-    ['settings.notif.atWorkspace', undefined, '@workspace mentions'],
-    ['settings.notif.atWorkspaceDesc', undefined, 'Announcements to everyone.'],
     // profile
     ['settings.profile.lead', undefined, 'How you appear to others in the workspace.'],
     ['settings.profile.avatarColor', undefined, 'Avatar color'],

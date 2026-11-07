@@ -513,8 +513,7 @@ export function settingsBody(sec, title) {
       return (
         H(t('settings.notif.mentionsLead')) +
         srow(t('settings.notif.atAll'), '', tog('mention_all', np.mention_all, 'np')) +
-        srow(t('settings.notif.atTeam'), t('settings.notif.atTeamDesc'), tog('mention_team', np.mention_team !== false, 'np')) +
-        srow(t('settings.notif.atWorkspace'), t('settings.notif.atWorkspaceDesc'), tog('mention_ws', !!np.mention_ws, 'np'))
+        srow(t('settings.notif.atTeam'), t('settings.notif.atTeamDesc'), tog('mention_team', np.mention_team !== false, 'np'))
       );
     case 'profile': {
       const err = S.ui.errors.pname2;
