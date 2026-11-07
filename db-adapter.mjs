@@ -270,6 +270,23 @@ export const SQLITE_SCHEMA = `
     prefs        text not null,
     primary key (workspace_id, user_id)
   );
+  /* Phase 46 (MCP): API keys for external clients. Mirrors server.js SCHEMA —
+     hash-at-rest, prefix for display, mandatory expiry, read/write scope. */
+  create table if not exists api_keys (
+    id           text primary key,
+    user_id      text not null references users(id) on delete cascade,
+    workspace_id text not null references workspaces(id) on delete cascade,
+    label        text not null,
+    key_hash     text not null unique,
+    prefix       text not null,
+    scope        text not null check (scope in ('read','write')),
+    created_at   integer not null,
+    expires_at   integer not null,
+    last_used_at integer,
+    revoked_at   integer
+  );
+  create index if not exists api_keys_user on api_keys(user_id);
+  create index if not exists api_keys_ws on api_keys(workspace_id);
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);

@@ -79,20 +79,20 @@ export function createMcp(deps) {
   const sessions = new Map();
 
   /* ----------------------------- auth ---------------------------------- */
-  function authenticate(req) {
+  async function authenticate(req) {
     const m = /^Bearer\s+(.+)$/i.exec(String(req.headers['authorization'] || ''));
     if (!m) return { status: 401, code: 'mcpUnauthorized', message: 'Missing bearer token' };
-    const row = db.prepare('select * from api_keys where key_hash = ?').get(sha256hex(m[1].trim()));
+    const row = await db.get('select * from api_keys where key_hash = ?', [sha256hex(m[1].trim())]);
     if (!row || row.revoked_at) return { status: 401, code: 'mcpUnauthorized', message: 'Invalid or revoked API key' };
     if (row.expires_at <= now()) return { status: 401, code: 'mcpUnauthorized', message: 'API key expired' };
-    const user = db.prepare('select * from users where id = ?').get(row.user_id);
-    const ws = db.prepare('select * from workspaces where id = ?').get(row.workspace_id);
-    const membership = db.prepare('select * from memberships where workspace_id = ? and user_id = ?').get(row.workspace_id, row.user_id);
+    const user = await db.get('select * from users where id = ?', [row.user_id]);
+    const ws = await db.get('select * from workspaces where id = ?', [row.workspace_id]);
+    const membership = await db.get('select * from memberships where workspace_id = ? and user_id = ?', [row.workspace_id, row.user_id]);
     if (!user || !ws || !membership) return { status: 401, code: 'mcpUnauthorized', message: 'API key no longer valid' };
     /* Throttled last-used stamp: one write per minute at most, never per
        request — the settings card shows "last used" without a write storm. */
     if (!row.last_used_at || row.last_used_at < now() - 60_000) {
-      db.prepare('update api_keys set last_used_at = ? where id = ?').run(now(), row.id);
+      await db.run('update api_keys set last_used_at = ? where id = ?', [now(), row.id]);
     }
     return { key: row, user, ws, membership, scope: validKeyScope(row.scope) || 'read' };
   }
@@ -136,43 +136,35 @@ export function createMcp(deps) {
   /* Every tool call lands in the append-only audit_log in the same
      discipline as the session-revocation writers (snapshot columns, no
      FKs). Reads AND writes both — the point is "what did the agent do". */
-  function audit(ctx, ip, action, targetName) {
+  async function audit(ctx, ip, action, targetName) {
     try {
-      db.prepare(
+      await db.run(
         'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-      ).run(uid(), ctx.user.id, ctx.key.id, action, 0, ip, ctx.ws.id, ctx.user.name, ctx.user.email, targetName || 'mcp', 'api-key', now());
+        [uid(), ctx.user.id, ctx.key.id, action, 0, ip, ctx.ws.id, ctx.user.name, ctx.user.email, targetName || 'mcp', 'api-key', now()],
+      );
     } catch (err) {
       logWarn(`mcp audit ${action}: ${err.message}`);
     }
   }
 
   /* ------------------------- document access ----------------------------- */
-  function loadDoc(ws) {
-    const row = db.prepare('select doc from workspaces where id = ?').get(ws.id);
+  async function loadDoc(ws) {
+    const row = await db.get('select doc from workspaces where id = ?', [ws.id]);
     return row ? JSON.parse(row.doc) : null;
   }
 
   /* The same shape as server.js's PUT path: one immediate transaction,
      one JSON parse of the CURRENT row, one revision bump. Never a blind
      overwrite of a row read outside the transaction. */
-  function writeDoc(ws, edit) {
-    db.exec('begin immediate');
-    try {
-      const row = db.prepare('select doc from workspaces where id = ?').get(ws.id);
+  async function writeDoc(ws, edit) {
+    return await db.tx(async () => {
+      const row = await db.get('select doc from workspaces where id = ?', [ws.id]);
       if (!row) throw new Error('Workspace not found');
       const doc = JSON.parse(row.doc);
-      edit(doc);
-      db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
-      db.exec('commit');
+      await edit(doc);
+      await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(doc), now(), ws.id]);
       return doc;
-    } catch (err) {
-      try {
-        db.exec('rollback');
-      } catch {
-        /* no tx open */
-      }
-      throw err;
-    }
+    });
   }
 
   function toolError(message) {
@@ -185,37 +177,45 @@ export function createMcp(deps) {
   /* Mirror of memberCanReadProject (server.js) without the server import:
      public ∨ access list ∨ live team intersection; admins/owners see all.
      Computed per call — never cached across requests. */
-  function canReadProject(ctx, p) {
+  async function canReadProject(ctx, p) {
     if (!p || typeof p !== 'object') return false;
     if ((ROLE_RANK[ctx.membership.role] || 0) >= ROLE_RANK.admin) return true;
     const priv = typeof p.private === 'boolean' ? p.private : p.access === 'private';
     if (!priv) return true;
     const mid = ctx.membership.member_id;
     if (mid && Array.isArray(p.members) && p.members.includes(mid)) return true;
-    const teams = db.prepare('select team_id from team_members where workspace_id = ? and user_id = ?').all(ctx.ws.id, ctx.user.id).map(r => r.team_id);
+    const teams = (await db.all('select team_id from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, ctx.user.id])).map(r => r.team_id);
     return Array.isArray(p.teams) && p.teams.length > 0 && teams.length > 0 && p.teams.some(t => teams.includes(t));
   }
 
   const tasksOf = doc => (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).filter(t => t?.id);
   const projectsOf = doc => (Array.isArray(doc?.data?.projects) ? doc.data.projects : []).filter(p => p?.id);
 
-  function visibleProjects(ctx, doc) {
-    return projectsOf(doc).filter(p => !p.archived && canReadProject(ctx, p));
+  async function visibleProjects(ctx, doc) {
+    const out = [];
+    for (const p of projectsOf(doc)) {
+      if (!p.archived && (await canReadProject(ctx, p))) out.push(p);
+    }
+    return out;
   }
 
   /* A task is readable iff its project is (every task belongs to a project;
      a project-less task is treated as invisible rather than leaked). */
-  function readableProjectIds(ctx, doc) {
-    return new Set(projectsOf(doc).filter(p => !p.archived && canReadProject(ctx, p)).map(p => p.id));
+  async function readableProjectIds(ctx, doc) {
+    const ok = new Set();
+    for (const p of projectsOf(doc)) {
+      if (!p.archived && (await canReadProject(ctx, p))) ok.add(p.id);
+    }
+    return ok;
   }
 
-  function visibleTasks(ctx, doc) {
-    const ok = readableProjectIds(ctx, doc);
+  async function visibleTasks(ctx, doc) {
+    const ok = await readableProjectIds(ctx, doc);
     return tasksOf(doc).filter(t => !t.archived && ok.has(t.project));
   }
 
-  function findVisibleTask(ctx, id, doc) {
-    const ok = readableProjectIds(ctx, doc);
+  async function findVisibleTask(ctx, id, doc) {
+    const ok = await readableProjectIds(ctx, doc);
     const t = tasksOf(doc).find(t => t.id === id);
     if (!t || t.archived || !ok.has(t.project)) throw toolError(`Task not found: ${id}`);
     return t;
@@ -224,17 +224,17 @@ export function createMcp(deps) {
   /* A project reference may be the internal id OR the human key prefix
      (TEST, KAN…) — the stable, human-readable name an agent can carry in
      its own context (repo AGENTS.md) without a lookup round-trip. */
-  function findVisibleProjectRef(ctx, ref, doc) {
+  async function findVisibleProjectRef(ctx, ref, doc) {
     const p = projectsOf(doc).find(p => p.id === ref) || projectsOf(doc).find(p => p.key && p.key.toUpperCase() === String(ref).toUpperCase());
-    if (!p || p.archived || !canReadProject(ctx, p)) throw toolError(`Project not found: ${ref}`);
+    if (!p || p.archived || !(await canReadProject(ctx, p))) throw toolError(`Project not found: ${ref}`);
     return p;
   }
 
   /* Assignee resolution: member id first, then name, then email — so an
      agent can write "assignee": "marie@example.com" without a list_members
      round-trip. Exact id matches always win; names compare folded. */
-  function resolveAssignee(ctx, ref) {
-    const members = roster(ctx);
+  async function resolveAssignee(ctx, ref) {
+    const members = await roster(ctx);
     const exact = members.find(m => m.id === ref);
     if (exact) return exact.id;
     const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -248,12 +248,13 @@ export function createMcp(deps) {
   /* The roster projection (syncProfiles shape): membership rows are the
      authority; doc profiles only decorate. id is member_id space when the
      membership carries one. */
-  function roster(ctx) {
-    const doc = loadDoc(ctx.ws);
+  async function roster(ctx) {
+    const doc = await loadDoc(ctx.ws);
     const profiles = Array.isArray(doc?.data?.members) ? doc.data.members : [];
-    const rows = db
-      .prepare('select m.user_id, m.role, m.member_id, u.name, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
-      .all(ctx.ws.id);
+    const rows = await db.all(
+      'select m.user_id, m.role, m.member_id, u.name, u.email from memberships m join users u on u.id = m.user_id where m.workspace_id = ?',
+      [ctx.ws.id],
+    );
     const byUser = new Map(rows.map(r => [r.user_id, r]));
     const out = [];
     const seen = new Set();
@@ -270,10 +271,10 @@ export function createMcp(deps) {
     return out;
   }
 
-  const memberName = (ctx, id) => roster(ctx).find(m => m.id === id)?.name || null;
+  const memberName = async (ctx, id) => (await roster(ctx)).find(m => m.id === id)?.name || null;
 
   /* --------------------------- projections ------------------------------- */
-  function taskOut(ctx, t, doc) {
+  async function taskOut(ctx, t, doc) {
     return {
       id: t.id,
       key: t.key || null,
@@ -282,7 +283,7 @@ export function createMcp(deps) {
       project: t.project || null,
       projectKey: projectsOf(doc).find(p => p.id === t.project)?.key || null,
       assignee: t.assignee || null,
-      assigneeName: t.assignee ? memberName(ctx, t.assignee) : null,
+      assigneeName: t.assignee ? await memberName(ctx, t.assignee) : null,
       priority: t.priority || 'none',
       due: t.due || null,
       recur: t.recur || null,
@@ -377,7 +378,7 @@ export function createMcp(deps) {
       description: 'List the projects of the workspace with open/total task counts.',
       schema: {},
       run: async ctx => {
-        const doc = loadDoc(ctx.ws);
+        const doc = await loadDoc(ctx.ws);
         const counts = new Map();
         for (const t of tasksOf(doc)) {
           const c = counts.get(t.project) || { total: 0, open: 0 };
@@ -388,7 +389,7 @@ export function createMcp(deps) {
         return {
           workspace: { id: ctx.ws.id, name: ctx.ws.name, slug: ctx.ws.slug },
           statuses: MCP_STATUSES,
-          projects: visibleProjects(ctx, doc).map(p => ({
+          projects: (await visibleProjects(ctx, doc)).map(p => ({
             id: p.id,
             key: p.key || null,
             name: p.name || '',
@@ -404,7 +405,7 @@ export function createMcp(deps) {
       description: 'Identify the API key: workspace, your role, scope, expiry, and a compact project map (id + key prefix + name) usable as a stable project reference.',
       schema: {},
       run: async ctx => {
-        const doc = loadDoc(ctx.ws);
+        const doc = await loadDoc(ctx.ws);
         return {
           workspace: { id: ctx.ws.id, name: ctx.ws.name, slug: ctx.ws.slug },
           user: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email },
@@ -413,7 +414,7 @@ export function createMcp(deps) {
           keyPrefix: ctx.key.prefix,
           expiresAt: ctx.key.expires_at,
           statuses: MCP_STATUSES,
-          projects: visibleProjects(ctx, doc).map(p => ({ id: p.id, key: p.key || null, name: p.name || '' })),
+          projects: (await visibleProjects(ctx, doc)).map(p => ({ id: p.id, key: p.key || null, name: p.name || '' })),
         };
       },
     },
@@ -421,9 +422,9 @@ export function createMcp(deps) {
       description: 'Get one project in full: description, status, lead, members, milestones.',
       schema: { project: { t: 's', req: true } },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
-        const p = findVisibleProjectRef(ctx, a.project, doc);
-        const members = roster(ctx);
+        const doc = await loadDoc(ctx.ws);
+        const p = await findVisibleProjectRef(ctx, a.project, doc);
+        const members = await roster(ctx);
         const counts = {};
         for (const s of MCP_STATUSES) counts[s] = 0;
         for (const t of tasksOf(doc)) if (t.project === p.id && !t.archived) counts[t.status || 'todo'] = (counts[t.status || 'todo'] || 0) + 1;
@@ -454,7 +455,7 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
+        const doc = await loadDoc(ctx.ws);
         const used = new Set(projectsOf(doc).map(p => p.key).filter(Boolean));
         let key = a.key || null;
         if (!key) {
@@ -471,7 +472,7 @@ export function createMcp(deps) {
         } else if (used.has(key)) {
           throw toolError(`Project key "${key}" is already taken`);
         }
-        const me = roster(ctx).find(m => m.id === ctx.membership.member_id);
+        const me = (await roster(ctx)).find(m => m.id === ctx.membership.member_id);
         const project = {
           id: uid(),
           key,
@@ -486,7 +487,7 @@ export function createMcp(deps) {
           fav: false,
           archived: false,
         };
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           d.data.projects = Array.isArray(d.data.projects) ? d.data.projects : [];
           d.data.projects.push(project);
           logActivity(d, ctx, 'createdProject', null, {}, project.id);
@@ -506,7 +507,7 @@ export function createMcp(deps) {
       run: async (ctx, a) => {
         canWrite(ctx);
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const p = projectsOf(d).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project).toUpperCase()));
           if (!p || p.archived) throw toolError(`Project not found: ${a.project}`);
           if (a.name !== undefined && a.name.trim() !== p.name) {
@@ -533,10 +534,10 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const p = findVisibleProjectRef(ctx, a.project, doc);
+        const doc = await loadDoc(ctx.ws);
+        const p = await findVisibleProjectRef(ctx, a.project, doc);
         const ms = { name: a.name.trim(), date: a.date };
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = projectsOf(d).find(x => x.id === p.id);
           live.milestones = Array.isArray(live.milestones) ? live.milestones : [];
           live.milestones.push(ms);
@@ -554,10 +555,10 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const p = findVisibleProjectRef(ctx, a.project, doc);
+        const doc = await loadDoc(ctx.ws);
+        const p = await findVisibleProjectRef(ctx, a.project, doc);
         let removed = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = projectsOf(d).find(x => x.id === p.id);
           const list = Array.isArray(live.milestones) ? live.milestones : [];
           const i = a.name ? list.findIndex(m => m?.name === a.name) : a.index;
@@ -577,16 +578,16 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const p = findVisibleProjectRef(ctx, a.project, doc);
+        const doc = await loadDoc(ctx.ws);
+        const p = await findVisibleProjectRef(ctx, a.project, doc);
         requireProjectManager(ctx, p);
-        const id = resolveAssignee(ctx, a.member);
-        writeDoc(ctx.ws, d => {
+        const id = await resolveAssignee(ctx, a.member);
+        await writeDoc(ctx.ws, async d => {
           const live = projectsOf(d).find(x => x.id === p.id);
           live.members = Array.isArray(live.members) ? live.members : [];
           if (!live.members.includes(id)) live.members.push(id);
         });
-        const m = roster(ctx).find(m => m.id === id);
+        const m = (await roster(ctx)).find(m => m.id === id);
         return { added: true, member: { id, name: m?.name || id } };
       },
     },
@@ -599,11 +600,11 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const p = findVisibleProjectRef(ctx, a.project, doc);
+        const doc = await loadDoc(ctx.ws);
+        const p = await findVisibleProjectRef(ctx, a.project, doc);
         requireProjectManager(ctx, p);
-        const id = resolveAssignee(ctx, a.member);
-        writeDoc(ctx.ws, d => {
+        const id = await resolveAssignee(ctx, a.member);
+        await writeDoc(ctx.ws, async d => {
           const live = projectsOf(d).find(x => x.id === p.id);
           live.members = (Array.isArray(live.members) ? live.members : []).filter(x => x !== id);
         });
@@ -616,7 +617,7 @@ export function createMcp(deps) {
       schema: { project: { t: 's', req: true } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const p = projectsOf(d).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project).toUpperCase()));
           if (!p) throw toolError(`Project not found: ${a.project}`);
           if (!p.archived) {
@@ -633,7 +634,7 @@ export function createMcp(deps) {
       schema: { project: { t: 's', req: true } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const p = projectsOf(d).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project).toUpperCase()));
           if (!p) throw toolError(`Project not found: ${a.project}`);
           if (p.archived) {
@@ -653,10 +654,10 @@ export function createMcp(deps) {
         limit: { t: 'n', min: 1, max: 200, def: 50 },
       },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
-        let rows = visibleTasks(ctx, doc);
+        const doc = await loadDoc(ctx.ws);
+        let rows = await visibleTasks(ctx, doc);
         if (a.project) {
-          findVisibleProjectRef(ctx, a.project, doc);
+          await findVisibleProjectRef(ctx, a.project, doc);
           rows = rows.filter(t => t.project === a.project || t.project === (projectsOf(doc).find(p => p.key && p.key.toUpperCase() === String(a.project).toUpperCase()) || {}).id);
         }
         if (a.status) rows = rows.filter(t => t.status === a.status);
@@ -665,19 +666,19 @@ export function createMcp(deps) {
           .slice()
           .sort((x, y) => (y.updated || 0) - (x.updated || 0))
           .slice(0, a.limit ?? 50);
-        return { total: rows.length, tasks: rows.map(t => taskOut(ctx, t, doc)) };
+        return { total: rows.length, tasks: await Promise.all(rows.map(t => taskOut(ctx, t, doc))) };
       },
     },
     get_task: {
       description: 'Get one task in full: description, subtasks, dependencies, comment count.',
       schema: { id: { t: 's', req: true } },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.id, doc);
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.id, doc);
         const comments = (doc?.data?.comments || []).filter(c => c?.task === t.id);
         const proj = projectsOf(doc).find(p => p.id === t.project) || {};
         return {
-          ...taskOut(ctx, t, doc),
+          ...(await taskOut(ctx, t, doc)),
           description: t.desc || '',
           start: t.start || null,
           estimate: t.estimate || null,
@@ -692,32 +693,32 @@ export function createMcp(deps) {
       description: 'Search task titles, descriptions and task keys in the workspace (accent-folded, case-insensitive).',
       schema: { query: { t: 's', req: true }, limit: { t: 'n', min: 1, max: 50, def: 20 } },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
+        const doc = await loadDoc(ctx.ws);
         const fold = s =>
           String(s || '')
             .toLowerCase()
             .normalize('NFD')
             .replace(/[\u0300-\u036f]/g, '');
         const q = fold(a.query);
-        const rows = visibleTasks(ctx, doc)
+        const rows = (await visibleTasks(ctx, doc))
           .filter(t => fold(t.title).includes(q) || fold(t.desc).includes(q) || fold(t.key).includes(q))
           .slice(0, a.limit ?? 20);
-        return { query: a.query, total: rows.length, tasks: rows.map(t => taskOut(ctx, t, doc)) };
+        return { query: a.query, total: rows.length, tasks: await Promise.all(await Promise.all(rows.map(t => taskOut(ctx, t, doc)))) };
       },
     },
     list_members: {
       description: 'List the members of the workspace (member ids for assignee parameters).',
       schema: {},
-      run: async ctx => ({ members: roster(ctx) }),
+      run: async ctx => ({ members: await roster(ctx) }),
     },
     list_teams: {
       description: 'The teams of the workspace (definitions + member names). Membership lives in the team_members table.',
       schema: {},
       run: async ctx => {
-        const doc = loadDoc(ctx.ws);
+        const doc = await loadDoc(ctx.ws);
         const defs = Array.isArray(doc?.data?.teams) ? doc.data.teams : [];
-        const members = roster(ctx);
-        const rows = db.prepare('select team_id, member_id from team_members where workspace_id = ?').all(ctx.ws.id);
+        const members = await roster(ctx);
+        const rows = await db.all('select team_id, member_id from team_members where workspace_id = ?', [ctx.ws.id]);
         return {
           teams: defs.map(t => ({
             id: t?.id || null,
@@ -737,7 +738,7 @@ export function createMcp(deps) {
       description: 'The workspace label catalog with per-label task counts. Tasks store these ids in their labels[] array.',
       schema: {},
       run: async ctx => {
-        const doc = loadDoc(ctx.ws);
+        const doc = await loadDoc(ctx.ws);
         const counts = Object.fromEntries(MCP_LABELS.map(l => [l, 0]));
         let other = 0;
         for (const t of tasksOf(doc)) {
@@ -766,9 +767,9 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const proj = findVisibleProjectRef(ctx, a.project, doc);
-        if (a.assignee) a.assignee = resolveAssignee(ctx, a.assignee);
+        const doc = await loadDoc(ctx.ws);
+        const proj = await findVisibleProjectRef(ctx, a.project, doc);
+        if (a.assignee) a.assignee = await resolveAssignee(ctx, a.assignee);
         const tasks = tasksOf(doc);
         const n = tasks.reduce((max, x) => Math.max(max, Number(x.order) || 0), 0) + 1;
         const usedKeys = new Set(tasks.map(x => x.key).filter(Boolean));
@@ -801,12 +802,12 @@ export function createMcp(deps) {
           fav: false,
           recur: a.recur || null,
         };
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           d.data.tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
           d.data.tasks.push(task);
           logActivity(d, ctx, 'created', task, {});
         });
-        return { created: true, task: taskOut(ctx, task, doc) };
+        return { created: true, task: await taskOut(ctx, task, doc) };
       },
     },
     update_task: {
@@ -827,11 +828,11 @@ export function createMcp(deps) {
       run: async (ctx, a) => {
         canWrite(ctx);
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
           const t = tasks.find(x => x?.id === a.id);
           if (!t || t.archived) throw toolError(`Task not found: ${a.id}`);
-          if (!readableProjectIds(ctx, d).has(t.project)) throw toolError(`Task not found: ${a.id}`);
+          if (!(await readableProjectIds(ctx, d)).has(t.project)) throw toolError(`Task not found: ${a.id}`);
           if (a.title !== undefined && a.title.trim() !== t.title) {
             logActivity(d, ctx, 'renamed', t, { kind: 'renamedTo', value: a.title.trim() });
             t.title = a.title.trim();
@@ -863,13 +864,13 @@ export function createMcp(deps) {
             t.recur = a.recur || null;
           }
           if (a.assignee !== undefined && a.assignee !== t.assignee) {
-            if (a.assignee) a.assignee = resolveAssignee(ctx, a.assignee);
-            const members = roster(ctx);
+            if (a.assignee) a.assignee = await resolveAssignee(ctx, a.assignee);
+            const members = await roster(ctx);
             logActivity(d, ctx, 'assigned', t, a.assignee ? { kind: 'assignedTo', value: members.find(m => m.id === a.assignee)?.name || a.assignee } : { kind: 'unassigned' });
             t.assignee = a.assignee || null;
           }
           t.updated = now();
-          result = taskOut(ctx, t, d);
+          result = await taskOut(ctx, t, d);
         });
         return { updated: true, task: result };
       },
@@ -881,18 +882,18 @@ export function createMcp(deps) {
       run: async (ctx, a) => {
         canWrite(ctx);
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
           const t = tasks.find(x => x?.id === a.id);
           if (!t || t.archived) throw toolError(`Task not found: ${a.id}`);
-          if (!readableProjectIds(ctx, d).has(t.project)) throw toolError(`Task not found: ${a.id}`);
+          if (!(await readableProjectIds(ctx, d)).has(t.project)) throw toolError(`Task not found: ${a.id}`);
           const from = t.status || 'todo';
           if (from !== a.status) {
             logActivity(d, ctx, a.status === 'done' ? 'completed' : 'moved', t, { kind: 'statusMoved', from, to: a.status });
             t.status = a.status;
             t.updated = now();
           }
-          result = taskOut(ctx, t, d);
+          result = await taskOut(ctx, t, d);
         });
         return { moved: true, task: result };
       },
@@ -903,10 +904,10 @@ export function createMcp(deps) {
       schema: { task: { t: 's', req: true }, text: { t: 's', req: true, max: 4000 } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
         const comment = { id: uid('c'), task: t.id, by: ctx.membership.member_id || null, at: now(), text: a.text.trim(), re: {} };
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           d.data.comments = Array.isArray(d.data.comments) ? d.data.comments : [];
           d.data.comments.push(comment);
           logActivity(d, ctx, 'commentedOn', tasksOf(d).find(x => x.id === t.id) || t, {});
@@ -920,10 +921,10 @@ export function createMcp(deps) {
       schema: { task: { t: 's', req: true }, title: { t: 's', req: true, max: 200 } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
         const sub = { id: uid(), title: a.title.trim(), done: false };
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === t.id);
           live.subtasks = Array.isArray(live.subtasks) ? live.subtasks : [];
           live.subtasks.push(sub);
@@ -943,10 +944,10 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === t.id);
           const list = Array.isArray(live.subtasks) ? live.subtasks : [];
           const s = a.subtask ? list.find(x => x.id === a.subtask) : list[a.index];
@@ -968,14 +969,14 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
         const ids = new Set(tasksOf(doc).map(x => x.id));
         for (const dep of a.deps) {
           if (!ids.has(dep)) throw toolError(`Unknown task id in deps: ${dep}`);
           if (dep === t.id) throw toolError('A task cannot depend on itself');
         }
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === t.id);
           live.deps = a.deps;
           live.updated = now();
@@ -994,14 +995,14 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.id, doc);
-        const leadId = a.assignee ? resolveAssignee(ctx, a.assignee) : null;
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.id, doc);
+        const leadId = a.assignee ? await resolveAssignee(ctx, a.assignee) : null;
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === t.id);
           if (live.archived) throw toolError(`Task not found: ${a.id}`);
-          const members = roster(ctx);
+          const members = await roster(ctx);
           if (leadId && leadId !== live.assignee) {
             logActivity(d, ctx, 'assigned', live, { kind: 'assignedTo', value: members.find(m => m.id === leadId)?.name || leadId });
             live.assignee = leadId;
@@ -1020,7 +1021,7 @@ export function createMcp(deps) {
           }
           live.updated = now();
         });
-        return { handedOff: true, task: taskOut(ctx, tasksOf(loadDoc(ctx.ws)).find(x => x.id === t.id), doc), ...result };
+        return { handedOff: true, task: await taskOut(ctx, tasksOf(await loadDoc(ctx.ws)).find(x => x.id === t.id), doc), ...result };
       },
     },
     archive_task: {
@@ -1029,10 +1030,10 @@ export function createMcp(deps) {
       schema: { id: { t: 's', req: true } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const t = tasksOf(d).find(x => x?.id === a.id);
           if (!t) throw toolError(`Task not found: ${a.id}`);
-          if (!readableProjectIds(ctx, d).has(t.project)) throw toolError(`Task not found: ${a.id}`);
+          if (!(await readableProjectIds(ctx, d)).has(t.project)) throw toolError(`Task not found: ${a.id}`);
           if (!t.archived) {
             t.archived = true;
             t.archivedAt = now();
@@ -1048,11 +1049,11 @@ export function createMcp(deps) {
       schema: { id: { t: 's', req: true } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
           const t = tasks.find(x => x?.id === a.id && x.archived);
           if (!t) throw toolError(`Archived task not found: ${a.id}`);
-          if (!readableProjectIds(ctx, d).has(t.project)) throw toolError(`Task not found: ${a.id}`);
+          if (!(await readableProjectIds(ctx, d)).has(t.project)) throw toolError(`Task not found: ${a.id}`);
           t.archived = false;
           t.archivedAt = null;
           logActivity(d, ctx, 'restored', t, {});
@@ -1064,8 +1065,8 @@ export function createMcp(deps) {
       description: 'The workspace inbox: notifications (mentions, assignments, moves), newest first, names resolved.',
       schema: { unreadOnly: { t: 'b' }, limit: { t: 'n', min: 1, max: 100, def: 30 } },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
-        const members = roster(ctx);
+        const doc = await loadDoc(ctx.ws);
+        const members = await roster(ctx);
         const tasks = new Map(tasksOf(doc).map(t => [t.id, t]));
         const projects = new Map(projectsOf(doc).map(p => [p.id, p]));
         const rows = (Array.isArray(doc?.data?.notifs) ? doc.data.notifs : [])
@@ -1094,8 +1095,8 @@ export function createMcp(deps) {
       description: 'Recent workspace activity, newest first (machine verbs + human names resolved).',
       schema: { limit: { t: 'n', min: 1, max: 100, def: 30 } },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
-        const members = roster(ctx);
+        const doc = await loadDoc(ctx.ws);
+        const members = await roster(ctx);
         const tasks = new Map(tasksOf(doc).map(t => [t.id, t]));
         const projects = new Map(projectsOf(doc).map(p => [p.id, p]));
         const rows = (Array.isArray(doc?.data?.activity) ? doc.data.activity : [])
@@ -1124,10 +1125,10 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === t.id);
           const list = Array.isArray(live.subtasks) ? live.subtasks : [];
           const i = a.subtask ? list.findIndex(x => x.id === a.subtask) : a.index;
@@ -1149,9 +1150,9 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
-        writeDoc(ctx.ws, d => {
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === t.id);
           const s = (Array.isArray(live.subtasks) ? live.subtasks : []).find(x => x.id === a.subtask);
           if (!s) throw toolError(`Subtask not found on ${t.id}`);
@@ -1176,10 +1177,10 @@ export function createMcp(deps) {
         const hints = [a.top, a.bottom, a.before, a.after].filter(x => x !== undefined).length;
         if (hints !== 1) throw toolError('Provide exactly one of: top, bottom, before, after');
         let result = null;
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const live = tasksOf(d).find(x => x.id === a.id);
           if (!live) throw toolError(`Task not found: ${a.id}`);
-          if (!readableProjectIds(ctx, d).has(live.project)) throw toolError(`Task not found: ${a.id}`);
+          if (!(await readableProjectIds(ctx, d)).has(live.project)) throw toolError(`Task not found: ${a.id}`);
           const column = tasksOf(d)
             .filter(x => !x.archived && x.project === live.project && (x.status || 'todo') === (live.status || 'todo') && x.id !== live.id)
             .sort((x, y) => (Number(x.order) || 0) - (Number(y.order) || 0));
@@ -1210,7 +1211,7 @@ export function createMcp(deps) {
       schema: { comment: { t: 's', req: true } },
       run: async (ctx, a) => {
         canWrite(ctx);
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const comments = Array.isArray(d.data.comments) ? d.data.comments : [];
           const c = comments.find(x => x?.id === a.comment);
           if (!c) throw toolError(`Comment not found: ${a.comment}`);
@@ -1229,8 +1230,8 @@ export function createMcp(deps) {
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const doc = loadDoc(ctx.ws);
-        const proj = findVisibleProjectRef(ctx, a.project, doc);
+        const doc = await loadDoc(ctx.ws);
+        const proj = await findVisibleProjectRef(ctx, a.project, doc);
         /* Each item carries the create_task fields minus `project`. */
         const items = (Array.isArray(a.tasks) ? a.tasks : []).map(t => {
           if (!t || typeof t !== 'object' || typeof t.title !== 'string' || !t.title.trim()) {
@@ -1249,10 +1250,10 @@ export function createMcp(deps) {
         if (!items.length) throw toolError('tasks[] must not be empty');
         const assignees = new Map();
         for (const it of items) {
-          if (it.assignee && !assignees.has(it.assignee)) assignees.set(it.assignee, resolveAssignee(ctx, it.assignee));
+          if (it.assignee && !assignees.has(it.assignee)) assignees.set(it.assignee, await resolveAssignee(ctx, it.assignee));
         }
         const created = [];
-        writeDoc(ctx.ws, d => {
+        await writeDoc(ctx.ws, async d => {
           const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
           let n = tasks.reduce((max, x) => Math.max(max, Number(x.order) || 0), 0);
           const usedKeys = new Set(tasks.map(x => x.key).filter(Boolean));
@@ -1294,19 +1295,21 @@ export function createMcp(deps) {
           }
           d.data.tasks = tasks;
         });
-        return { created: created.length, tasks: created.map(t => taskOut(ctx, t, doc)) };
+        return { created: created.length, tasks: await Promise.all(created.map(t => taskOut(ctx, t, doc))) };
       },
     },
     list_comments: {
       description: 'List the comments on a task, oldest first.',
       schema: { task: { t: 's', req: true } },
       run: async (ctx, a) => {
-        const doc = loadDoc(ctx.ws);
-        const t = findVisibleTask(ctx, a.task, doc);
-        const rows = (doc?.data?.comments || [])
-          .filter(c => c?.task === t.id)
-          .sort((x, y) => (x.at || 0) - (y.at || 0))
-          .map(c => ({ id: c.id, by: c.by, authorName: c.by ? memberName(ctx, c.by) : null, at: c.at, text: c.text }));
+        const doc = await loadDoc(ctx.ws);
+        const t = await findVisibleTask(ctx, a.task, doc);
+        const rows = await Promise.all(
+          (doc?.data?.comments || [])
+            .filter(c => c?.task === t.id)
+            .sort((x, y) => (x.at || 0) - (y.at || 0))
+            .map(c => memberName(ctx, c.by).then(authorName => ({ id: c.id, by: c.by, authorName: c.by ? authorName : null, at: c.at, text: c.text }))),
+        );
         return { task: t.id, total: rows.length, comments: rows };
       },
     },
@@ -1446,12 +1449,12 @@ export function createMcp(deps) {
       }
       try {
         const out = await tool.run(ctx, args);
-        audit(ctx, ip, `mcp.${name}`, `mcp:${name}`);
+        await audit(ctx, ip, `mcp.${name}`, `mcp:${name}`);
         logInfo(`mcp ${name} user=${ctx.user.email} ws=${ctx.ws.slug}${tool.write ? ' [write]' : ''}`);
         return { status: 200, body: jsonRpcResult(id, { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }] }) };
       } catch (err) {
         if (err?.mcpToolError) {
-          audit(ctx, ip, `mcp.${name}.error`, `mcp:${name}`);
+          await audit(ctx, ip, `mcp.${name}.error`, `mcp:${name}`);
           return { status: 200, body: jsonRpcResult(id, { content: [{ type: 'text', text: err.message }], isError: true }) };
         }
         logWarn(`mcp tool ${name}: ${err.message}`);
@@ -1465,7 +1468,7 @@ export function createMcp(deps) {
   async function handle(req, res) {
     /* Auth BEFORE any protocol work: no credential, no MCP handshake, no
        session oracle. Rate limit right after the key is known. */
-    const auth = authenticate(req);
+    const auth = await authenticate(req);
     if (auth.status) return fail(res, auth.status, auth.code, auth.message);
     const ctx = auth;
     const ip = clientIp(req);

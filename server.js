@@ -4206,31 +4206,31 @@ async function handleApi(req, res, url) {
      then only its prefix is ever readable. A key is pinned to ONE
      workspace the user belongs to and carries a MANDATORY expiry. */
   if (pathname === '/api/keys' && method === 'GET') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
-    const rows = db.prepare('select * from api_keys where user_id = ? order by created_at desc').all(user.id);
-    const wsName = id => db.prepare('select name from workspaces where id = ?').get(id)?.name || null;
+    const rows = await db.all('select * from api_keys where user_id = ? order by created_at desc', [user.id]);
+    const wsName = async id => (await db.get('select name from workspaces where id = ?', [id]))?.name || null;
     return json(res, 200, {
-      keys: rows.map(r => ({
+      keys: await Promise.all(rows.map(async r => ({
         id: r.id,
         label: r.label,
         prefix: r.prefix,
         scope: r.scope,
         workspaceId: r.workspace_id,
-        workspaceName: wsName(r.workspace_id),
+        workspaceName: await wsName(r.workspace_id),
         createdAt: r.created_at,
         expiresAt: r.expires_at,
         lastUsedAt: r.last_used_at,
         revokedAt: r.revoked_at,
         expired: r.expires_at <= now(),
-      })),
+      }))),
       days: API_KEY_DAYS,
     });
   }
 
   if (pathname === '/api/keys' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     const body = await readJson(req);
     const label = String(body?.label || '')
@@ -4242,18 +4242,20 @@ async function handleApi(req, res, url) {
     const days = validKeyDays(body?.days);
     if (!days) return fail(res, 400, 'invalidExpiry', `Expiry must be one of: ${API_KEY_DAYS.join(', ')} days`);
     const wsId = String(body?.workspaceId || '');
-    const membership = membershipOf(wsId, user.id);
+    const membership = await membershipOf(wsId, user.id);
     if (!membership) return fail(res, 403, 'notAMember', 'You are not a member of that workspace');
     const { key, prefix, hash } = generateApiKey();
     const id = uid();
-    db.prepare(
+    await db.run(
       'insert into api_keys (id, user_id, workspace_id, label, key_hash, prefix, scope, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
-    ).run(id, user.id, wsId, label, hash, prefix, scope, now(), now() + days * 24 * 60 * 60 * 1000);
+      [id, user.id, wsId, label, hash, prefix, scope, now(), now() + days * 24 * 60 * 60 * 1000],
+    );
     logSecurity(user.id, 'api_key_created');
     logInfo(`api key "${label}" (${scope}, ${days}d) created by ${user.email} for workspace ${membership.workspace_id}`);
-    db.prepare(
+    await db.run(
       'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-    ).run(uid(), user.id, id, 'api_key_created', 0, clientIp(req), wsId, user.name, user.email, label, 'api-key', now());
+      [uid(), user.id, id, 'api_key_created', 0, clientIp(req), wsId, user.name, user.email, label, 'api-key', now()],
+    );
     /* The raw key rides THIS response only — never stored, never logged. */
     return json(res, 201, { id, key, prefix, scope, days });
   }
@@ -4261,17 +4263,18 @@ async function handleApi(req, res, url) {
   const keyMatch = pathname.match(/^\/api\/keys\/([A-Za-z0-9_-]+)$/);
   if (keyMatch && method === 'DELETE') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     /* Soft revoke: the row stays for the audit trail and last-used metadata. */
-    const row = db.prepare('select * from api_keys where id = ? and user_id = ?').get(keyMatch[1], user.id);
+    const row = await db.get('select * from api_keys where id = ? and user_id = ?', [keyMatch[1], user.id]);
     if (!row) return fail(res, 404, 'keyNotFound', 'API key not found');
     if (!row.revoked_at) {
-      db.prepare('update api_keys set revoked_at = ? where id = ?').run(now(), row.id);
+      await db.run('update api_keys set revoked_at = ? where id = ?', [now(), row.id]);
       logSecurity(user.id, 'api_key_revoked');
-      db.prepare(
+      await db.run(
         'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-      ).run(uid(), user.id, row.id, 'api_key_revoked', 0, clientIp(req), row.workspace_id, user.name, user.email, row.label, 'api-key', now());
+        [uid(), user.id, row.id, 'api_key_revoked', 0, clientIp(req), row.workspace_id, user.name, user.email, row.label, 'api-key', now()],
+      );
     }
     return json(res, 200, { revoked: true });
   }
@@ -5739,7 +5742,24 @@ async function handleUnsubscribe(req, res, token) {
    BEFORE the /api/ chain. Auth is a bearer API key (api_keys table), never a
    session cookie, so the sameOrigin CSRF gate structurally never applies.
    See mcp.js for the full contract. */
-const MCP = createMcp({ db, now, uid, clientIp, logInfo, logWarn, tooMany, maxBody: MAX_BODY, ROLE_RANK });
+/* `db` is assigned inside connectDb() at boot — after this module-level
+   createMcp() call — so MCP gets a forwarding stub that resolves the live
+   facade at call time instead of a captured null (merge of Phase 45 × 46). */
+const mcpDb = {
+  get: async (...args) => {
+    return db.get(...args);
+  },
+  all: async (...args) => {
+    return db.all(...args);
+  },
+  run: async (...args) => {
+    return db.run(...args);
+  },
+  tx: async (...args) => {
+    return db.tx(...args);
+  },
+};
+const MCP = createMcp({ db: mcpDb, now, uid, clientIp, logInfo, logWarn, tooMany, maxBody: MAX_BODY, ROLE_RANK });
 
 /* ------------------------------- server -------------------------------- */
 const server = http.createServer(async (req, res) => {
