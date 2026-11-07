@@ -20,7 +20,7 @@ covered_files:
   - test/static-db-audit.test.mjs
   - test/dependencies.test.mjs
   - test/helpers/server.mjs
-covered_digest: "manual:sha256:aa0b32a6413ad7db37c932bc1e43608d75842e64d3dac2655f6e323f7417e2b1"
+covered_digest: "v2:sha256:f74aa0f9edae5b770d8ba402a5f3063075ae7721837ba3c3aca4901657c3e79c"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
