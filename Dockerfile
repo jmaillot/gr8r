@@ -17,6 +17,7 @@ ENV NODE_ENV=production \
 
 COPY --from=build /app/server.js ./server.js
 COPY --from=build /app/tz.js ./tz.js
+COPY --from=build /app/mcp.js ./mcp.js
 COPY --from=build /app/src ./src
 COPY --from=build /app/oidc.js ./oidc.js
 COPY --from=build /app/totp.js ./totp.js
