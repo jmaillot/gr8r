@@ -752,8 +752,8 @@ test('parity fixture: server doc-GET sets equal the collapsed-model oracle for e
 
 test('parity: null-scope member/team actors agree across BOTH engines (green under both models)', async () => {
   /* These two shapes are where old-server and old-mirror predicates coincide:
-     member/team semantics (public ∨ access list ∨ teamIntersects) with no
-     scope column. After Plan 03 they remain the parity canaries. */
+     member/team semantics (public ∨ access list ∨ the D-49-retired team term)
+     with no scope column. After Plan 03 they remain the parity canaries. */
   for (const mid of ['m_plain', 'm_team']) {
     const server = await parVisibleDocIds(mid);
     const mirror = await parMirrorIds(mid);

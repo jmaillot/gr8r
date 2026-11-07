@@ -434,7 +434,10 @@ export function createMcp(deps) {
           name: p.name || '',
           description: p.desc || '',
           status: p.status || null,
-          private: typeof p.private === 'boolean' ? p.private : p.access === 'private',
+          /* D-49-4: post-sweep every project carries the boolean; the legacy
+             p.access fallback spelling is retired (the boot sweep normalized
+             it away before any request is served). */
+          private: p.private === true,
           lead: p.lead || null,
           leadName: p.lead ? members.find(m => m.id === p.lead)?.name || p.lead : null,
           members: (Array.isArray(p.members) ? p.members : []).map(id => ({ id, name: members.find(m => m.id === id)?.name || id })),

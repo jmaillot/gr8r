@@ -214,7 +214,7 @@ test('sweep set-equality: every actor’s doc-GET visibility equals the oracle +
 
 test('fail-open scope-parse cell: corrupt scope JSON behaves as workspace-wide (T-49-04)', async () => {
   /* m_corrupt's scope column is unparseable ('not-json{'). Old-model semantics
-     (projectScope :816-829, D-04 fail-open): treated as workspace-wide — the
+     (projectScope :816-829, D-04 fail-open, D-49-retired): treated as workspace-wide — the
      null-scope branch (public ∨ access list ∨ live team intersection). The
      sweep reproduces that exactly: the engA team grant materializes onto
      p_teamshare, nothing else is granted (no elevation), and the member is

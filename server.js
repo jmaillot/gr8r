@@ -763,8 +763,9 @@ function canSeeProject(p, memberId) {
 
 /*
  * [2026-11-07 D-49-2/D-49-3] The ONE member-level readable predicate after
- * the visibility collapse. The Phase 32 team term (teamIntersects) and the
- * Phase 29 scope term are both retired: private ∨ access list is the whole
+ * the visibility collapse. The D-49-retired Phase 32 team term (teamIntersects)
+ * and the D-49-retired Phase 29 scope term (projectScope / inScopeProject /
+ * scopeGrants) are both gone (D-49): private ∨ access list is the whole
  * model. Kept `async` because every consumer already awaits it.
  */
 async function memberCanReadProject(p, wsId, memberId) {
@@ -779,8 +780,9 @@ function canManageProject(p, memberId, role) {
 
 /*
  * [2026-11-07 D-49-1] The ONE hidden-project funnel after the visibility
- * collapse: private-hidden only. The Phase 29 scoped branch (projectScope /
- * inScopeProject / scopeGrants) is retired — membership scope columns were
+ * collapse: private-hidden only. The D-49-retired Phase 29 scoped branch
+ * (projectScope / inScopeProject / scopeGrants) is gone (D-49) — membership scope
+ * columns were
  * materialized into project access lists by the boot sweep and cleared, so
  * the scoped term has no input left to read. Admin/owner keep the plain
  * hiddenProjectIds path (exemption on top, D-06).
@@ -2270,8 +2272,8 @@ async function materializeVisibilityGrants() {
          and is structurally excluded: the old predicate resolved actors
          through memberships too, so materialization loses nothing. */
       const userToMember = new Map(memberships.filter(m => m.member_id).map(m => [m.user_id, m.member_id]));
-      /* Per-member scope state under the OLD predicate (projectScope
-         :813-837): null = workspace-wide (the null-scope branch), object =
+      /* Per-member scope state under the OLD predicate (D-49-retired projectScope —
+         :813-837, retired by D-49 — read here only as sweep input): null = workspace-wide (the null-scope branch), object =
          the scoped branch. Admin/owner memberships are ALWAYS workspace-wide
          (D-04) — their stored scope JSON was never read, so it is never
          materialized either; their post-sweep branch (hiddenProjectIds) is
@@ -2289,7 +2291,7 @@ async function materializeVisibilityGrants() {
               parsed = JSON.parse(parsed);
             } catch {
               /* T-49-04: fail-open — the old model treated an unreadable
-                 scope column as workspace-wide (projectScope :816-829), never
+                 scope column as workspace-wide (projectScope :816-829, D-49-retired), never
                  a lockout. Materialization reproduces that: the member rides
                  the null-scope terms (access list ∨ team intersection ∨
                  public), nothing more, nothing less. */
@@ -2347,7 +2349,7 @@ async function materializeVisibilityGrants() {
         }
         /* Old-hidden stays hidden (RESEARCH §Fixtures row 7): a scoped member
            sitting on an access list OUT of their scope reach was hidden by
-           `!inScopeProject ∨ !scopeGrants` (:899). With the columns cleared
+           `!inScopeProject ∨ !scopeGrants` (:899, retired by D-49). With the columns cleared
            they would ride the null-scope branch and GAIN the project, so the
            out-of-reach entry is dissolved here. */
         p.members = p.members.filter(mid => {
@@ -5522,10 +5524,9 @@ async function serveFileBinary(req, res, slug, id) {
   let data = null;
   try {
     data = JSON.parse(ctx.ws.doc)?.data;
-    /* T-29-06 (WR-02): the scope funnel reads p.teams — normalize first so a
-       legacy scalar-`team` project gets the same reach on the file path as it
-       does on the (normalized) doc read. Parses fresh above, so mutating in
-       place never touches shared state. */
+    /* D-49: normalize first so a legacy scalar-`team` project reads the same
+       on the file path as it does on the (normalized) doc read. Parses fresh
+       above, so mutating in place never touches shared state. */
     if (data) normalizeProjects({ data });
     record = Array.isArray(data?.files) ? data.files.find(f => f?.id === id) : null;
   } catch {

@@ -150,14 +150,14 @@ export function visfixDoc() {
    probe-corrected admin/owner semantics (see module comment).
 
    Reading of the old predicate per actor class:
-   - admin/owner (projectScope null via role): hiddenProjectIds = canSeeProject
+   - admin/owner (projectScope null via role, D-49-retired): hiddenProjectIds = canSeeProject
      ONLY (server.js:894) — access list or public; the served copy has
      normalizeProjects' ownerId injected into private-empty projects
      (server.js:929-936), so those belong to the doc owner alone. No team term,
      no scope term.
    - member without scope (null-scope branch, server.js:882-893): canSeeProject
      OR a live team_members intersection (memberCanReadProject :786-794).
-   - scoped member (server.js:896-901): visible ⟺ inScopeProject ∧ scopeGrants
+   - scoped member (server.js:896-901, D-49-retired): visible ⟺ inScopeProject ∧ scopeGrants
      (:864-870) — scope OPENS its projects/teams (D-03) and SUBTRACTS everything
      else, including public projects.
    - viewer with invite-derived scope: same scoped branch.
