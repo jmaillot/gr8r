@@ -1,62 +1,37 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-07 at v1.9 milestone close*
+*Last updated: 2026-11-07 at v1.10 milestone start*
 
-## Current Milestone: none — v1.9 just shipped (2026-11-07)
+## Current Milestone: v1.10 Extensions & Adapters
 
-The v1.9 milestone "Digest Context & One-Click Unsubscribe" is complete: 5 phases
-(40-44), 13 plans, 6/6 requirements satisfied, milestone audit passed (cross-phase
-integration 12/12, E2E flows 4/4, 0 blockers). Next milestone not yet opened —
-run `/gsd-new-milestone` to define v1.10 (candidates: real browser push + toasts
-replacing the "coming soon" toggles [backlog 999.2], registering TZ-01/LOGO-01 in
-fresh requirements).
+**Goal:** extend Projects Studio outward and upward — an optional Postgres backend chosen
+purely by environment (SQLite default unchanged), an authenticated MCP server exposing real
+workspace operations to external agents (built from the in-flight feat/mcp branch), and an
+intake phase for the fix/commands hardening work. TZ-01 and LOGO-01 are registered
+retroactively for traceability (shipped in v1.9 Phases 44/43).
 
-## Shipped: v1.9 Digest Context & One-Click Unsubscribe (2026-11-07)
+**Target features:**
+- DBA — Database adapter: `DB_*` env selects Postgres (owner-confirmed Postgres-only scope,
+  Kanzo #5); absent config = byte-for-byte SQLite default; both backends pass the same suite;
+  D-12 zero-dependency amendment decided explicitly at plan time; DEPLOY.md env matrix
+  (Kanzo task projectsstudio#5)
+- MCP — Model Context Protocol server: tool surface from the in-flight feat/mcp branch
+  (task CRUD, batch create, subtask edit, reorder, own-comment delete, recurrence,
+  teams/labels, project refs by key prefix, assignee by email/name); authenticated,
+  workspace-scoped, same permission funnel as the UI/API; transport documented and pinned;
+  MCP unconfigured = feature absent with zero overhead
+- FIX — Command/UI hardening intake from the fix/commands worktree (scope finalized when
+  that branch carries content; one traceability bullet + regression test per fix)
+- TZ-01 / LOGO-01 — retroactive registration (already shipped and verified in v1.9)
 
-**Delivered:** digest emails are self-identifying and revocable — one email per
-workspace with its name in the subject, "Project — Task" lines leak-safe through the
-`memberCanReadProject` funnel, hostile-name-proof RFC 2047 subject builder, RFC 8058
-one-click List-Unsubscribe headers on a stateless HMAC token consumed by the codebase's
-first anonymous mutating route (`POST /unsubscribe/:token`, convergent, no existence
-oracle), footer + settings re-subscribe path preserved. Shipped alongside: per-workspace
-logo (upload, magic-byte validation, favicon fallback, digest header) and per-member
-timezones (per-member 09:00 reminders/digest via one canonicalizing resolveTz funnel,
-Paris default, static committed zone list, admin doc-PUT funneled).
+**In-flight coordination:** three agent worktrees (feat/sql → Phase 45, feat/mcp → Phase 46,
+fix/commands → Phase 47) hold work that predates this milestone's roadmap; their branches are
+the source material and must be reconciled (phase-seed commits, plan numbering) before their
+phases are planned. Backlog 999.2 (browser push + toasts) stays out of scope pending owner
+prioritization.
 
-**Phases completed:** 40-44 (5 phases, 13 plans)
-
-**Stats:**
-- 151 commits, 127 files changed (+15,075 / −1,039 lines) from v1.8 archive to close
-- 5 phases, 13 plans; milestone audit: 6/6 REQs, 12/12 wiring, 4/4 flows
-- 2026-11-05 → 2026-11-07 (3 days)
-- Suite at close: 1042 tests, 1038 pass / 1 pre-existing environmental fail (totp-rewrap
-  D-74) / 3 skipped; `npm run i18n:scan` clean
-
-**Git range:** `0022125` (docs: archive milestone v1.8) → `d666a7d` (chore: deferred-items clean)
-
-**Known verification overrides:** 4 newly acknowledged, 12 carried forward from prior
-closes (see STATE.md Deferred Items) — `override_closeout`; verification digests for
-Phases 40/41/43 were stale from intra-milestone source drift and were re-fingerprinted
-(all VERIFICATION.md files read `passed`); the milestone audit re-verified requirements,
-wiring and flows at HEAD (`v1.9-MILESTONE-AUDIT.md`).
-
-**Key accomplishments:**
-- `[WS]` digest subjects via the `subjectWs` key with "Project Name — Task Name" lines
-  resolved server-side and degrading safely for invisible projects; single hardened
-  `encodeWord` (C0 strip + RFC 2047 folding) covers all four Subject call sites.
-- RFC 8058 one-click unsubscribe: HMAC token contract (Phase 41) consumed by the
-  anonymous `POST /unsubscribe/:token` route (Phase 42) — 15-test response-matrix suite,
-  IP throttle, token never logged; `email_digest=false` merge-upsert, digest gate, and
-  settings re-subscribe path verified end-to-end in one E2E flow.
-- Per-workspace logo with `favicon.svg` fallback across sidebar/topbar/settings/favicon
-  plus the digest email header, guarded by magic-byte validation and role gates.
-- Per-member timezones: reminders and digests fire at each member's own 09:00 through
-  the single `resolveTz` funnel (canonicalizing, Paris fallback), with a 418-zone static
-  list, searchable settings combobox (open/close discipline), and byte-identical claim
-  keys under tz change.
-- Gap-closure discipline held: 44-04 closed review warnings WR-01 (admin doc-PUT tz
-  funnel) and WR-02 (alias canonicalization) with hostile-input and equivalence pins.
-
+<details>
+<summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
 <details>
 <summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
 

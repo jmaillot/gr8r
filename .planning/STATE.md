@@ -1,13 +1,13 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.9
-milestone_name: Digest Context & One-Click Unsubscribe
-current_phase: 44
-status: completed
-stopped_at: v1.9 milestone archived — ready for /gsd-new-milestone
+milestone: v1.10
+milestone_name: Extensions & Adapters
+current_phase: 45
+status: executing
+stopped_at: Milestone v1.10 started — phases 45-47 defined (in-flight agent worktrees feat/sql, feat/mcp, fix/commands)
 last_updated: "2026-11-07T09:28:16.255Z"
 last_activity: 2026-11-07
-last_activity_desc: v1.9 milestone archived (2026-11-07)
+last_activity_desc: Milestone v1.10 defined — Phase 45 (DBA) up next (2026-11-07)
 state_head: d11c23c3962fa84454bb82fcda26f4489de3156f
 progress:
   total_phases: 5
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 44 — Per-Member Timezones
+**Current focus:** Phase 45 — Database adapter (in-flight on feat/sql; reconcile before planning)
 
 ## Current Position
 
@@ -34,7 +34,7 @@ Phase: 44
 Plan: Not started
 Total Plans in Phase: 3
 Status: All phases complete
-Last activity: 2026-11-07 — Phase 44 complete
+Last activity: 2026-11-07 — v1.10 milestone defined (45-47)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -153,8 +153,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-06
-Stopped at: Phase 44 complete — all phases complete
+Last session: 2026-11-07
+Stopped at: v1.10 milestone defined — run /gsd-discuss-phase 45 (reconcile feat/sql seed first)
 Resume file: None
 
 ## Performance Metrics

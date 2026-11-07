@@ -12,6 +12,7 @@
 - ✅ **v1.7 Team Visibility & Hardening** — Phases 32-35 (shipped 2026-11-04)
 - ✅ **v1.8 Notification Sanity** — Phases 36-39 (shipped 2026-11-05)
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
+- 🚧 **v1.10 Extensions & Adapters** — Phases 45-47 (in-flight: feat/sql, feat/mcp, fix/commands)
 
 
 <details>
@@ -26,6 +27,60 @@
 Details: [.planning/milestones/v1.9-ROADMAP.md](milestones/v1.9-ROADMAP.md)
 
 </details>
+
+### Phase 45: Database adapter — optional Postgres backend via env, SQLite default *(in-flight: feat/sql)*
+
+**Goal**: A deployer can point Projects Studio at Postgres purely through environment configuration; without that config the app keeps its current embedded-SQLite behavior unchanged
+**Depends on**: Phase 44 (v1.9)
+**Requirements**: DBA-01..04 (Kanzo #5 — Postgres-only scope confirmed by owner 2026-11-07)
+**Success Criteria** (what must be TRUE):
+  1. `DB_*` env selects Postgres; absent config = SQLite default, byte-for-byte behavior
+  2. Every existing suite passes unmodified against both backends (same ledger/claim semantics)
+  3. D-12 constraint amendment (if a driver dependency is needed) explicitly decided + documented + D-12 test updated
+  4. DEPLOY.md documents the env matrix and fail-fast on misconfiguration
+
+**Plans**: 0 plans *(agent worktree feat/sql holds the phase-seed commit 0b8e0a2 — reconcile before planning)*
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 45 to break down)
+
+### Phase 46: MCP server — expose workspace operations to external MCP clients *(in-flight: feat/mcp)*
+
+**Goal**: External MCP clients (Claude Desktop, coding agents) can safely operate on real workspace data through an authenticated, workspace-scoped MCP server built from the in-flight feat/mcp branch
+**Depends on**: Nothing structurally (parallel-safe with Phase 45)
+**Requirements**: MCP-01..04
+**Success Criteria** (what must be TRUE):
+  1. Tool surface covers the shipped commands (task CRUD, batch, subtasks, reorder, own-comment delete, recurrence, teams/labels, project refs by key prefix, assignee by email/name)
+  2. Every tool call resolves to a member identity through the same permission funnel as UI/API — no anonymous access
+  3. Transport + lifecycle documented and test-pinned; MCP unconfigured = feature absent, zero overhead
+  4. D-12 constraint amendment (SDK vs hand-rolled) decided at plan time with owner validation
+
+**Plans**: 0 plans *(agent worktree feat/mcp holds 4 commits / +2 866 lines on feat/mcp — reconcile before planning)*
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 46 to break down)
+
+### Phase 47: Command/UI hardening — fix/commands intake *(in-flight: fix/commands)*
+
+**Goal**: Land and pin the fixes produced by the fix/commands worktree (scope finalized from that branch's content; branch currently at main HEAD with no commits — reserve only)
+**Depends on**: Nothing (intake phase)
+**Requirements**: FIX-01
+**Success Criteria** (what must be TRUE):
+  1. Each landed fix carries a regression test and a REQUIREMENTS traceability bullet
+  2. Full suite green; no new runtime dependencies
+
+**Plans**: 0 plans *(agent worktree fix/commands — no commits yet; plan when content exists)*
+
+Plans:
+- [ ] TBD
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 45. Database adapter | 0/0 | Not started (in-flight feat/sql) | - |
+| 46. MCP server | 0/0 | Not started (in-flight feat/mcp) | - |
+| 47. Command/UI hardening | 0/0 | Not started (in-flight fix/commands) | - |
 
 ## Backlog
 
