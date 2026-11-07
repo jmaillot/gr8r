@@ -51,7 +51,7 @@ by the adapter, one-shot SQLite→pg copy script, opt-in `POSTGRES_TEST_URL` mat
 out of scope.
 **Requirements**: D-01..D-14 (requirement IDs of record = CONTEXT.md decision IDs; see CONTEXT.md `<decisions>` and each plan's `requirements:` frontmatter)
 **Depends on:** Phase 44
-**Plans:** 4/7 plans executed
+**Plans:** 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -65,7 +65,7 @@ Plans:
 - [x] 45-04-PLAN.md — remaining callsite conversion, legacy shim removal, static audit gate
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 45-05-PLAN.md — pg SCHEMA variant, idempotent pg migrations, portable seed (checkpoint:decision — D-11 doc column shape)
+- [x] 45-05-PLAN.md — pg SCHEMA variant, idempotent pg migrations, portable seed (checkpoint:decision — D-11 doc column shape)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 45-06-PLAN.md — scripts/copy-sqlite-to-pg.mjs + contract tests + DEPLOY.md runbook
