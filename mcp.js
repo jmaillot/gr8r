@@ -35,6 +35,11 @@ export const MCP_STATUSES = ['backlog', 'todo', 'progress', 'review', 'done'];
 export const MCP_PRIORITIES = ['urgent', 'high', 'medium', 'low'];
 /* Project lifecycle ids (src/core/constants.js PSTAT). */
 export const MCP_PROJECT_STATUSES = ['planning', 'active', 'risk', 'hold', 'complete'];
+/* The label catalog (src/core/constants.js LABELS ids). Task documents store
+   label ids, never free strings — this is the closed vocabulary. */
+export const MCP_LABELS = ['design', 'frontend', 'backend', 'research', 'content', 'bug', 'qa', 'growth'];
+/* Recurrence values exactly as the client stores them (actions.js RECUR_DAYS). */
+export const MCP_RECUR = ['Daily', 'Weekly', 'Every 2 weeks', 'Monthly'];
 const DUE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PROTOCOL_VERSION = '2025-06-18';
 
@@ -280,6 +285,7 @@ export function createMcp(deps) {
       assigneeName: t.assignee ? memberName(ctx, t.assignee) : null,
       priority: t.priority || null,
       due: t.due || null,
+      recur: t.recur || null,
       labels: Array.isArray(t.labels) ? t.labels : [],
       subtasksTotal: Array.isArray(t.subtasks) ? t.subtasks.length : 0,
       subtasksDone: (t.subtasks || []).filter(s => s?.done).length,
@@ -302,6 +308,65 @@ export function createMcp(deps) {
       extra,
     });
   }
+
+  /* --------------------------- prompt surface ---------------------------- */
+  /* Slash-command style prompts the client lists under prompts/list. Each
+     builds a ready-to-run instruction grounded in the tools we ship. */
+  const PROMPTS = [
+    {
+      name: 'daily-standup',
+      description: 'Standup summary: what moved yesterday, what is in progress, what is blocked.',
+      arguments: [{ name: 'project', description: 'Project id or key prefix (optional — all projects if omitted)', required: false }],
+      build: a => [
+        'Prepare my daily standup from Projects Studio.',
+        a.project ? `Scope: project ${a.project}.` : 'Scope: every project in the workspace.',
+        'Using the Projects Studio MCP tools:',
+        '1. whoami to confirm the workspace and project map.',
+        '2. list_tasks filtered on statuses progress and review to build "in progress" and "waiting on review".',
+        '3. list_activity to summarize what moved since the previous day.',
+        '4. list_tasks with status backlog and a non-null dependency list (get_task) to flag anything blocked.',
+        'Then output: Done since yesterday / In progress / Blocked or needs review — one bullet per task with its key, title, assignee and due date. Be factual: only what the data says.',
+      ].join('\n'),
+    },
+    {
+      name: 'triage-backlog',
+      description: 'Review the backlog of a project: dedupe, prioritize, and propose a To-do ordering.',
+      arguments: [
+        { name: 'project', description: 'Project id or key prefix', required: true },
+        { name: 'limit', description: 'How many backlog tasks to examine (default 50)', required: false },
+      ],
+      build: a => {
+        if (!a.project) throw new Error("Missing required argument: project");
+        return [
+          `Triage the Backlog of project ${a.project} in Projects Studio.`,
+          'Using the Projects Studio MCP tools:',
+          `1. list_tasks { project: ${JSON.stringify(String(a.project))}, status: "backlog", limit: ${Number(a.limit) || 50} }.`,
+          '2. Group the tasks: duplicates or near-duplicates, stale items (no update in a long time), quick wins, and everything else.',
+          '3. Propose an ordering for the To-do column: urgent/high priority first, then due dates, then quick wins.',
+          '4. Report proposed moves as a numbered list, and WAIT for my confirmation before calling move_task or update_task.',
+        ].join('\n');
+      },
+    },
+    {
+      name: 'prepare-review',
+      description: 'Prepare a code-review handoff: move a task to review, post a summary comment.',
+      arguments: [
+        { name: 'task', description: 'Task id', required: true },
+        { name: 'summary', description: 'Short summary of what was done', required: false },
+      ],
+      build: a => {
+        if (!a.task) throw new Error("Missing required argument: task");
+        return [
+          `Prepare the review handoff for task ${a.task}.`,
+          'Using the Projects Studio MCP tools:',
+          `1. get_task { id: ${JSON.stringify(String(a.task))} } and list_comments to gather context.`,
+          a.summary ? `2. The work done: ${String(a.summary).slice(0, 500)}.` : '2. Ask me for a one-paragraph summary of what was done if it is not obvious.',
+          '3. Show me the proposed summary comment for approval.',
+          '4. After my approval: add_comment with the summary, then move_task to status review.',
+        ].join('\n');
+      },
+    },
+  ];
 
   /* --------------------------- tool surface ------------------------------ */
   /* Frozen registry: each tool carries a tiny hand-rolled argument schema
@@ -558,6 +623,46 @@ export function createMcp(deps) {
       schema: {},
       run: async ctx => ({ members: roster(ctx) }),
     },
+    list_teams: {
+      description: 'The teams of the workspace (definitions + member names). Membership lives in the team_members table.',
+      schema: {},
+      run: async ctx => {
+        const doc = loadDoc(ctx.ws);
+        const defs = Array.isArray(doc?.data?.teams) ? doc.data.teams : [];
+        const members = roster(ctx);
+        const rows = db.prepare('select team_id, member_id from team_members where workspace_id = ?').all(ctx.ws.id);
+        return {
+          teams: defs.map(t => ({
+            id: t?.id || null,
+            name: t?.name || '',
+            color: t?.color || t?.c || null,
+            members: rows
+              .filter(r => r.team_id === t?.id)
+              .map(r => {
+                const m = members.find(m => m.id === r.member_id);
+                return { id: r.member_id, name: m?.name || r.member_id };
+              }),
+          })),
+        };
+      },
+    },
+    list_labels: {
+      description: 'The workspace label catalog with per-label task counts. Tasks store these ids in their labels[] array.',
+      schema: {},
+      run: async ctx => {
+        const doc = loadDoc(ctx.ws);
+        const counts = Object.fromEntries(MCP_LABELS.map(l => [l, 0]));
+        let other = 0;
+        for (const t of tasksOf(doc)) {
+          if (t.archived) continue;
+          for (const l of Array.isArray(t.labels) ? t.labels : []) {
+            if (l in counts) counts[l]++;
+            else other++;
+          }
+        }
+        return { labels: MCP_LABELS.map(l => ({ id: l, tasks: counts[l] })), other };
+      },
+    },
     create_task: {
       description: 'Create a task in a project.',
       write: true,
@@ -570,6 +675,7 @@ export function createMcp(deps) {
         priority: { t: 'enum', values: MCP_PRIORITIES },
         due: { t: 's', re: DUE_RE },
         labels: { t: 'arr', maxLen: 10, itemMax: 40 },
+        recur: { t: 'enum', values: MCP_RECUR },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
@@ -606,7 +712,7 @@ export function createMcp(deps) {
           updated: t,
           order: n,
           fav: false,
-          recur: null,
+          recur: a.recur || null,
         };
         writeDoc(ctx.ws, d => {
           d.data.tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
@@ -628,6 +734,7 @@ export function createMcp(deps) {
         estimate: { t: 's', max: 20, nullable: true },
         priority: { t: 'enum', values: MCP_PRIORITIES, nullable: true },
         labels: { t: 'arr', maxLen: 10, itemMax: 40 },
+        recur: { t: 'enum', values: MCP_RECUR, nullable: true },
         assignee: { t: 's', nullable: true },
       },
       run: async (ctx, a) => {
@@ -662,6 +769,10 @@ export function createMcp(deps) {
           if (a.labels !== undefined) {
             logActivity(d, ctx, 'updatedLabelsOn', t, {});
             t.labels = a.labels;
+          }
+          if (a.recur !== undefined && a.recur !== t.recur) {
+            logActivity(d, ctx, 'setRepeatOn', t, a.recur ? { kind: 'repeatSet', id: a.recur.toLowerCase() } : {});
+            t.recur = a.recur || null;
           }
           if (a.assignee !== undefined && a.assignee !== t.assignee) {
             if (a.assignee) a.assignee = resolveAssignee(ctx, a.assignee);
@@ -846,6 +957,189 @@ export function createMcp(deps) {
         return { total: rows.length, activity: rows };
       },
     },
+    remove_subtask: {
+      description: 'Delete a subtask from a task. The id (or 0-based index) comes from get_task.',
+      write: true,
+      schema: {
+        task: { t: 's', req: true },
+        subtask: { t: 's' },
+        index: { t: 'n', min: 0, max: 99 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const t = findVisibleTask(ctx, a.task, doc);
+        let result = null;
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === t.id);
+          const list = Array.isArray(live.subtasks) ? live.subtasks : [];
+          const i = a.subtask ? list.findIndex(x => x.id === a.subtask) : a.index;
+          if (i < 0 || !list[i]) throw toolError(`Subtask not found on ${t.id}`);
+          result = { id: list[i].id, title: list[i].title };
+          live.subtasks = list.filter((_, j) => j !== i);
+          live.updated = now();
+        });
+        return { removed: true, subtask: result };
+      },
+    },
+    rename_subtask: {
+      description: 'Rename a subtask.',
+      write: true,
+      schema: {
+        task: { t: 's', req: true },
+        subtask: { t: 's', req: true },
+        title: { t: 's', req: true, max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const t = findVisibleTask(ctx, a.task, doc);
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === t.id);
+          const s = (Array.isArray(live.subtasks) ? live.subtasks : []).find(x => x.id === a.subtask);
+          if (!s) throw toolError(`Subtask not found on ${t.id}`);
+          s.title = a.title.trim();
+          live.updated = now();
+        });
+        return { renamed: true };
+      },
+    },
+    reorder_task: {
+      description: 'Move a task within its column: top, bottom, or relative to another task (before/after).',
+      write: true,
+      schema: {
+        id: { t: 's', req: true },
+        top: { t: 'b' },
+        bottom: { t: 'b' },
+        before: { t: 's' },
+        after: { t: 's' },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const hints = [a.top, a.bottom, a.before, a.after].filter(x => x !== undefined).length;
+        if (hints !== 1) throw toolError('Provide exactly one of: top, bottom, before, after');
+        let result = null;
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === a.id);
+          if (!live) throw toolError(`Task not found: ${a.id}`);
+          if (!readableProjectIds(ctx, d).has(live.project)) throw toolError(`Task not found: ${a.id}`);
+          const column = tasksOf(d)
+            .filter(x => !x.archived && x.project === live.project && (x.status || 'todo') === (live.status || 'todo') && x.id !== live.id)
+            .sort((x, y) => (Number(x.order) || 0) - (Number(y.order) || 0));
+          let order;
+          if (a.top) order = (Number(column[0]?.order) || 0) - 1;
+          else if (a.bottom) order = (Number(column[column.length - 1]?.order) || 0) + 1;
+          else {
+            const refId = a.before || a.after;
+            const ref = tasksOf(d).find(x => x.id === refId);
+            if (!ref || ref.project !== live.project || (ref.status || 'todo') !== (live.status || 'todo')) {
+              throw toolError(`Reference task must be in the same project and column: ${refId}`);
+            }
+            const i = column.findIndex(x => x.id === refId);
+            const prev = a.before ? column[i - 1] : column[i];
+            const next = a.before ? column[i] : column[i + 1];
+            order = ((Number(prev?.order) || Number(next?.order) || 0) + (Number(next?.order) || Number(prev?.order) || 0)) / 2;
+          }
+          live.order = order;
+          live.updated = now();
+          result = { id: live.id, order: live.order, columnSize: column.length + 1 };
+        });
+        return { reordered: true, task: result };
+      },
+    },
+    delete_comment: {
+      description: "Delete a comment. Only the API key owner's own comments can be deleted.",
+      write: true,
+      schema: { comment: { t: 's', req: true } },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        writeDoc(ctx.ws, d => {
+          const comments = Array.isArray(d.data.comments) ? d.data.comments : [];
+          const c = comments.find(x => x?.id === a.comment);
+          if (!c) throw toolError(`Comment not found: ${a.comment}`);
+          if (c.by !== ctx.membership.member_id) throw toolError('Only your own comments can be deleted');
+          d.data.comments = comments.filter(x => x !== c);
+        });
+        return { deleted: true };
+      },
+    },
+    create_tasks: {
+      description: 'Create several tasks at once in the same project — one transaction, one activity entry per task. Max 20 per call.',
+      write: true,
+      schema: {
+        project: { t: 's', req: true },
+        tasks: { t: 'objs', maxLen: 20 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const proj = findVisibleProjectRef(ctx, a.project, doc);
+        /* Each item carries the create_task fields minus `project`. */
+        const items = (Array.isArray(a.tasks) ? a.tasks : []).map(t => {
+          if (!t || typeof t !== 'object' || typeof t.title !== 'string' || !t.title.trim()) {
+            throw toolError('Every item of tasks[] needs a non-empty "title"');
+          }
+          if (Object.keys(t).some(k => !['title', 'description', 'status', 'assignee', 'priority', 'due', 'labels', 'recur', 'estimate'].includes(k))) {
+            throw toolError(`Unknown key in tasks[] item: ${Object.keys(t).filter(k => !['title', 'description', 'status', 'assignee', 'priority', 'due', 'labels', 'recur', 'estimate'].includes(k)).join(', ')}`);
+          }
+          if (t.status && !MCP_STATUSES.includes(t.status)) throw toolError(`tasks[] item status must be one of: ${MCP_STATUSES.join(', ')}`);
+          if (t.priority && !MCP_PRIORITIES.includes(t.priority)) throw toolError(`tasks[] item priority must be one of: ${MCP_PRIORITIES.join(', ')}`);
+          if (t.due && !DUE_RE.test(t.due)) throw toolError('tasks[] item due must be YYYY-MM-DD');
+          if (t.recur && !MCP_RECUR.includes(t.recur)) throw toolError(`tasks[] item recur must be one of: ${MCP_RECUR.join(', ')}`);
+          if (t.labels && (!Array.isArray(t.labels) || t.labels.length > 10)) throw toolError('tasks[] item labels must be an array of at most 10 strings');
+          return t;
+        });
+        if (!items.length) throw toolError('tasks[] must not be empty');
+        const assignees = new Map();
+        for (const it of items) {
+          if (it.assignee && !assignees.has(it.assignee)) assignees.set(it.assignee, resolveAssignee(ctx, it.assignee));
+        }
+        const created = [];
+        writeDoc(ctx.ws, d => {
+          const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
+          let n = tasks.reduce((max, x) => Math.max(max, Number(x.order) || 0), 0);
+          const usedKeys = new Set(tasks.map(x => x.key).filter(Boolean));
+          for (const it of items) {
+            n++;
+            let key = null;
+            if (proj.key) {
+              let i = 100;
+              while (usedKeys.has(`${proj.key}-${i}`)) i++;
+              key = `${proj.key}-${i}`;
+              usedKeys.add(key);
+            }
+            const t = now();
+            const task = {
+              id: uid(),
+              key,
+              project: proj.id,
+              title: it.title.trim(),
+              status: it.status || 'todo',
+              assignee: it.assignee ? assignees.get(it.assignee) : null,
+              priority: it.priority || null,
+              due: it.due || null,
+              start: null,
+              labels: Array.isArray(it.labels) ? it.labels : [],
+              subtasks: [],
+              attachments: [],
+              deps: [],
+              desc: it.description ? (it.description.includes('<') ? it.description : `<p>${esc(it.description)}</p>`) : '',
+              estimate: it.estimate || null,
+              created: t,
+              updated: t,
+              order: n,
+              fav: false,
+              recur: it.recur || null,
+            };
+            tasks.push(task);
+            logActivity(d, ctx, 'created', task, {});
+            created.push(task);
+          }
+          d.data.tasks = tasks;
+        });
+        return { created: created.length, tasks: created.map(t => taskOut(ctx, t, doc)) };
+      },
+    },
     list_comments: {
       description: 'List the comments on a task, oldest first.',
       schema: { task: { t: 's', req: true } },
@@ -912,6 +1206,11 @@ export function createMcp(deps) {
         if (rule.maxLen && v.length > rule.maxLen) throw toolError(`Argument "${key}" accepts at most ${rule.maxLen} items`);
         if (v.some(x => typeof x !== 'string' || (rule.itemMax && x.length > rule.itemMax))) throw toolError(`Argument "${key}" items must be strings of at most ${rule.itemMax} characters`);
         out[key] = v;
+      } else if (rule.t === 'objs') {
+        if (!Array.isArray(v)) throw toolError(`Argument "${key}" must be an array of objects`);
+        if (rule.maxLen && v.length > rule.maxLen) throw toolError(`Argument "${key}" accepts at most ${rule.maxLen} items`);
+        if (v.some(x => !x || typeof x !== 'object' || Array.isArray(x))) throw toolError(`Argument "${key}" items must be objects`);
+        out[key] = v;
       }
     }
     return out;
@@ -941,7 +1240,7 @@ export function createMcp(deps) {
         session,
         body: jsonRpcResult(id, {
           protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: { listChanged: false } },
+          capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
           serverInfo: { name: 'projects-studio', version: '1.1.1' },
         }),
       };
@@ -949,6 +1248,27 @@ export function createMcp(deps) {
     if (method === 'notifications/initialized') return { status: 202, body: null }; // notification: no reply body
     if (!sid || !sessions.has(sid)) return { status: 400, body: jsonRpcError(id, -32000, 'Bad Request: Server not initialized') };
     if (method === 'tools/list') return { status: 200, body: jsonRpcResult(id, { tools: toolDefs() }) };
+    if (method === 'prompts/list') {
+      return {
+        status: 200,
+        body: jsonRpcResult(id, {
+          prompts: PROMPTS.map(p => ({ name: p.name, description: p.description, arguments: p.arguments || [] })),
+        }),
+      };
+    }
+    if (method === 'prompts/get') {
+      const name = String(params?.name || '');
+      const prompt = PROMPTS.find(p => p.name === name);
+      if (!prompt) return { status: 200, body: jsonRpcError(id, -32602, `Unknown prompt: ${name}`) };
+      const args = params?.arguments || {};
+      let text;
+      try {
+        text = prompt.build(args);
+      } catch (err) {
+        return { status: 200, body: jsonRpcError(id, -32602, err.message) };
+      }
+      return { status: 200, body: jsonRpcResult(id, { description: prompt.description, messages: [{ role: 'user', content: { type: 'text', text } }] }) };
+    }
     if (method === 'tools/call') {
       const name = String(params?.name || '');
       const tool = TOOLS[name];

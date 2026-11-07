@@ -166,14 +166,21 @@ test('handshake, tools/list exposes the full surface', async () => {
     'archive_task',
     'create_project',
     'create_task',
+    'create_tasks',
+    'delete_comment',
     'get_project',
     'get_task',
     'list_activity',
     'list_comments',
+    'list_labels',
     'list_members',
     'list_projects',
     'list_tasks',
+    'list_teams',
     'move_task',
+    'remove_subtask',
+    'rename_subtask',
+    'reorder_task',
     'restore_project',
     'restore_task',
     'search_tasks',
@@ -409,4 +416,131 @@ test('projects: create by key ref, subtasks, deps, archive, activity', async () 
   assert.equal(act.isError, false);
   assert.ok(act.data.activity.length > 0);
   assert.ok(act.data.activity.some(e => e.verb === 'projectStatusChanged'));
+});
+
+test('subtask edit suite: rename, remove (by id and index), unknown ids rejected', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+  const t = await call('create_task', { project: 'TEST', title: 'Subtask suite' });
+  const id = t.data.task.id;
+  const s1 = await call('add_subtask', { task: id, title: 'Alpha' });
+  await call('add_subtask', { task: id, title: 'Beta' });
+  const ren = await call('rename_subtask', { task: id, subtask: s1.data.subtask.id, title: 'Alpha v2' });
+  assert.equal(ren.isError, false);
+  const got = await call('get_task', { id });
+  assert.equal(got.data.subtasks[0].title, 'Alpha v2');
+  const rm = await call('remove_subtask', { task: id, index: 1 });
+  assert.equal(rm.data.subtask.title, 'Beta');
+  assert.equal((await call('remove_subtask', { task: id, subtask: 's_ghost' })).isError, true);
+  const got2 = await call('get_task', { id });
+  assert.equal(got2.data.subtasks.length, 1);
+});
+
+test('reorder_task: top/bottom and before/after validation', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+  const mk = title => call('create_task', { project: 'TEST', title });
+  const a = (await mk('Reorder A')).data.task;
+  const b = (await mk('Reorder B')).data.task;
+  const c = (await mk('Reorder C')).data.task;
+  /* two hints at once → rejected */
+  assert.equal((await call('reorder_task', { id: a.id, top: true, bottom: true })).isError, true);
+  /* no hint → rejected */
+  assert.equal((await call('reorder_task', { id: a.id })).isError, true);
+  const top = await call('reorder_task', { id: c.id, top: true });
+  assert.equal(top.isError, false);
+  const after = await call('reorder_task', { id: a.id, after: b.id });
+  assert.equal(after.isError, false);
+  assert.ok(top.data.task.order < after.data.task.order, 'top lands before after');
+  assert.equal((await call('reorder_task', { id: a.id, before: 't_ghost' })).isError, true);
+});
+
+test('delete_comment: own comments only, silent in activity', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+  const t = await call('create_task', { project: 'TEST', title: 'Comment suite' });
+  const id = t.data.task.id;
+  const c1 = await call('add_comment', { task: id, text: 'To delete' });
+  /* Fabricating a foreign comment directly in the document */
+  const doc = withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(wsId));
+  const parsed = JSON.parse(doc.doc);
+  parsed.data.comments.push({ id: 'c_foreign', by: 'm_other', at: Date.now(), text: 'Not mine' });
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ?, revision = revision + 1 where id = ?').run(JSON.stringify(parsed), wsId));
+  assert.equal((await call('delete_comment', { comment: 'c_foreign' })).isError, true);
+  const del = await call('delete_comment', { comment: c1.data.comment.id });
+  assert.equal(del.isError, false);
+});
+
+test('recur on create and update, with setRepeatOn activity verb', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+  const t = await call('create_task', { project: 'TEST', title: 'Recurring chore', recur: 'Weekly' });
+  assert.equal(t.isError, false);
+  assert.equal((await call('get_task', { id: t.data.task.id })).data.recur, 'Weekly');
+  assert.equal((await call('create_task', { project: 'TEST', title: 'Bad recur', recur: 'Hourly' })).isError, true);
+  const upd = await call('update_task', { id: t.data.task.id, recur: 'Monthly' });
+  assert.equal(upd.isError, false);
+  const act = await call('list_activity', { limit: 10 });
+  assert.ok(act.data.activity.some(e => e.verb === 'setRepeatOn'));
+  const clear = await call('update_task', { id: t.data.task.id, recur: null });
+  assert.equal(clear.isError, false);
+});
+
+test('create_tasks batch: one transaction, per-item validation, key sequencing', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+  const bad = await call('create_tasks', { project: 'TEST', tasks: [{ title: 'No title ok' }, { description: 'missing title' }] });
+  assert.equal(bad.isError, true);
+  const badStatus = await call('create_tasks', { project: 'TEST', tasks: [{ title: 'x', status: 'nope' }] });
+  assert.equal(badStatus.isError, true);
+  const res = await call('create_tasks', {
+    project: 'TEST',
+    tasks: [
+      { title: 'Batch 1', priority: 'high', assignee: 'owner@test.local' },
+      { title: 'Batch 2', status: 'backlog', recur: 'Daily' },
+    ],
+  });
+  assert.equal(res.isError, false);
+  assert.equal(res.data.created, 2);
+  const keys = res.data.tasks.map(t => t.key);
+  assert.ok(keys[0] && keys[1] && keys[0] !== keys[1], 'unique sequenced keys');
+  const listed = await call('list_tasks', { project: 'TEST', limit: 200 });
+  assert.ok(listed.data.tasks.some(t => t.title === 'Batch 1' && t.assigneeName));
+});
+
+test('list_teams and list_labels return catalog shapes', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+  const teams = await call('list_teams');
+  assert.equal(teams.isError, false);
+  assert.ok(Array.isArray(teams.data.teams));
+  const labels = await call('list_labels');
+  assert.equal(labels.isError, false);
+  assert.ok(labels.data.labels.some(l => l.id === 'bug'));
+  assert.equal(typeof labels.data.other, 'number');
+});
+
+test('prompts: list and get round-trip; unknown prompt rejected', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const list = await rpc(writeKey, 'prompts/list', {}, session);
+  assert.equal(list.status, 200);
+  const names = list.data.result.prompts.map(p => p.name);
+  assert.deepEqual(names.sort(), ['daily-standup', 'prepare-review', 'triage-backlog']);
+  const got = await rpc(writeKey, 'prompts/get', { name: 'triage-backlog', arguments: { project: 'TEST' } }, session);
+  assert.equal(got.status, 200);
+  const text = got.data.result.messages[0].content.text;
+  assert.match(text, /"TEST"/);
+  assert.match(text, /list_tasks/);
+  const missing = await rpc(writeKey, 'prompts/get', { name: 'nope' }, session);
+  assert.equal(missing.status, 200);
+  assert.equal(missing.data.error?.code, -32602);
+  const reqd = await rpc(writeKey, 'prompts/get', { name: 'prepare-review', arguments: {} }, session);
+  assert.equal(reqd.data.error?.code, -32602);
 });

@@ -2,7 +2,7 @@
 
 Guide complet du serveur MCP (Model Context Protocol) de Projects Studio :
 installation, connexion d'un agent (OpenCode, Claude Desktop, Cursor…), et
-**le manuel d'utilisation de chacune des 22 commandes**, avec paramètres et
+**le manuel d'utilisation de chacune des 29 commandes**, avec paramètres et
 exemples d'appels/réponses.
 
 - Transport : streamable HTTP, endpoint `https://<domaine>/mcp`
@@ -20,12 +20,13 @@ exemples d'appels/réponses.
 3. [Lier un dossier local à un projet](#3-lier-un-dossier-local-à-un-projet)
 4. [Concepts](#4-concepts)
 5. [Manuel des commandes](#5-manuel-des-commandes)
-   - [Contexte](#contexte) — `whoami`, `list_projects`, `get_project`, `list_members`, `list_activity`
+   - [Contexte](#contexte) — `whoami`, `list_projects`, `get_project`, `list_members`, `list_teams`, `list_labels`, `list_activity`
    - [Tâches — lecture](#tâches--lecture) — `list_tasks`, `get_task`, `search_tasks`, `list_comments`
-   - [Tâches — écriture](#tâches--écriture) — `create_task`, `update_task`, `move_task`, `archive_task`, `restore_task`
-   - [Sous-tâches & dépendances](#sous-tâches--dépendances) — `add_subtask`, `toggle_subtask`, `set_dependencies`
-   - [Commentaires](#commentaires) — `add_comment`
+   - [Tâches — écriture](#tâches--écriture) — `create_task`, `create_tasks`, `update_task`, `move_task`, `reorder_task`, `archive_task`, `restore_task`
+   - [Sous-tâches & dépendances](#sous-tâches--dépendances) — `add_subtask`, `toggle_subtask`, `rename_subtask`, `remove_subtask`, `set_dependencies`
+   - [Commentaires](#commentaires) — `add_comment`, `delete_comment`
    - [Projets — écriture](#projets--écriture) — `create_project`, `update_project`, `archive_project`, `restore_project`
+   - [Prompts](#prompts) — `daily-standup`, `triage-backlog`, `prepare-review`
 6. [Erreurs](#6-erreurs)
 7. [Notes d'implémentation](#7-notes-dimplémentation)
 
@@ -38,7 +39,7 @@ exemples d'appels/réponses.
 3. Renseignez :
    - **Libellé** — ex. « OpenCode — portable » (affiché dans la liste des clés) ;
    - **Espace de travail** — la clé n'accédera **qu'à celui-ci**, pour toujours ;
-   - **Permissions** — `Lecture seule` (les 9 outils de lecture) ou `Lecture + écriture` (les 22) ;
+   - **Permissions** — `Lecture seule` (les 11 outils de lecture) ou `Lecture + écriture` (les 29) ;
    - **Expiration** — 30, 90 ou 365 jours (obligatoire, pas de clé permanente).
 4. **Copiez la clé immédiatement** : elle n'est affichée qu'une seule fois. Le
    serveur ne stocke que son hash SHA-256 ; une clé perdue se remplace.
@@ -212,6 +213,26 @@ Les membres de l'espace — la source des `assignee`. Paramètres : aucun.
 { "members": [ { "id": "m1", "name": "Marie", "email": "marie@example.com", "role": "Owner" } ] }
 ```
 
+#### `list_teams`
+
+Les équipes de l'espace (définitions + membres résolus). Paramètres : aucun.
+
+```json
+{
+  "teams": [ { "id": "dev", "name": "Dév", "color": "#5B8DEF",
+               "members": [ { "id": "m1", "name": "Marie" }, { "id": "m2", "name": "Karim" } ] } ]
+}
+```
+
+#### `list_labels`
+
+Le catalogue fermé des labels du workspace, avec compteurs de tâches non
+archivées. Les tâches ne stockent que ces ids dans `labels[]`.
+
+```json
+{ "labels": [ { "id": "design", "tasks": 4 }, { "id": "bug", "tasks": 9 } ], "other": 0 }
+```
+
 #### `list_activity`
 
 Le fil d'activité récent de l'espace, du plus récent au plus ancien, avec les
@@ -332,7 +353,8 @@ Toutes ces commandes exigent une clé `write` **et** un rôle au moins membre.
 | `assignee` | string | id, **email** ou **nom exact** |
 | `priority` | enum | `urgent`/`high`/`medium`/`low` |
 | `due` | string | `YYYY-MM-DD` |
-| `labels` | string[] ≤ 10 | ≤ 40 caractères chacun |
+| `labels` | string[] ≤ 10 | ids du catalogue (`list_labels`) |
+| `recur` | enum | `Daily` / `Weekly` / `Every 2 weeks` / `Monthly` — à l'accomplissement, l'échéance glisse automatiquement |
 
 ```json
 { "project": "KAN", "title": "Ajouter le mode sombre", "status": "backlog",
@@ -360,6 +382,7 @@ modifiés. Champs date/`priority`/`assignee` acceptent `null` pour effacer.
 | `estimate` | string \| null | ex. `2d`, `4h` |
 | `priority` | enum \| null | |
 | `labels` | string[] ≤ 10 | remplace la liste |
+| `recur` | enum \| null | `Daily`/`Weekly`/`Every 2 weeks`/`Monthly`, ou `null` pour arrêter la récurrence |
 | `assignee` | string \| null | id, email, nom exact — ou `null` pour désattribuer |
 
 ```json
@@ -384,6 +407,53 @@ Déplace une tâche dans une colonne — toute transition est permise.
 
 Aller vers `done` produit le verbe `completed` avec `extra.statusMoved` ;
 les autres transitions produisent `moved`.
+
+#### `reorder_task`
+
+Change la position d'une tâche **dans sa colonne** (projet + statut inchangés).
+Fournir exactement un des quatre indicateurs de position.
+
+| Param | Type | Notes |
+|---|---|---|
+| `id` ★ | string | tâche à déplacer |
+| `top` | booléen | place en tête de colonne |
+| `bottom` | booléen | place en fin de colonne |
+| `before` | string | id de la tâche devant laquelle s'insérer (même colonne) |
+| `after` | string | id de la tâche derrière laquelle s'insérer (même colonne) |
+
+```json
+{ "id": "t42", "top": true }
+```
+
+```json
+{ "reordered": true, "task": { "id": "t42", "order": 41.5, "columnSize": 7 } }
+```
+
+#### `create_tasks`
+
+Crée plusieurs tâches **en une transaction** (max 20) — idéal quand un agent
+découpe un ticket en sous-livrables : un seul aller-retour, atomicité garantie,
+clés de tâche séquencées sans collision. Chaque élément de `tasks[]` porte les
+champs de `create_task` **moins** `project`.
+
+| Param | Type | Notes |
+|---|---|---|
+| `project` ★ | string | id ou préfixe de clé — commun à toutes les tâches |
+| `tasks` ★ | object[] ≤ 20 | `{title ★, description, status, assignee, priority, due, labels, recur}` |
+
+```json
+{
+  "project": "KAN",
+  "tasks": [
+    { "title": "Écrire les tests du tri", "priority": "high", "assignee": "marie@example.com" },
+    { "title": "Mettre à jour la doc", "status": "backlog" }
+  ]
+}
+```
+
+```json
+{ "created": 2, "tasks": [ { "id": "t51", "key": "KAN-108", "title": "Écrire les tests du tri", … }, { "id": "t52", "key": "KAN-109", … } ] }
+```
 
 #### `archive_task` / `restore_task`
 
@@ -430,6 +500,28 @@ Coche/décoche une sous-tâche. L'`id` vient de `get_task` (`subtasks[].id`) ;
 { "toggled": true, "subtask": { "id": "b7c1…", "title": "Choisir les tokens de couleur", "done": true, "total": 4, "doneCount": 2 } }
 ```
 
+#### `rename_subtask` / `remove_subtask`
+
+Renommer ou supprimer une sous-tâche. Ces deux actions n'écrivent pas
+d'entrée d'activité (cohérent avec le client web).
+
+| Param | Type | Notes |
+|---|---|---|
+| `task` ★ | string | |
+| `subtask` | string | id — obligatoire pour `rename_subtask` |
+| `index` | entier ≥ 0 | accepté par `remove_subtask` si l'id n'est pas fourni |
+| `title` | string ≤ 200 | obligatoire pour `rename_subtask` |
+
+```json
+{ "task": "t42", "subtask": "b7c1…", "title": "Choisir les tokens (v2)" }
+{ "task": "t42", "index": 1 }
+```
+
+```json
+{ "renamed": true }
+{ "removed": true, "subtask": { "id": "b8d2…", "title": "Ancienne sous-tâche" } }
+```
+
 #### `set_dependencies`
 
 Remplace **toute** la liste des dépendances blocked-by d'une tâche.
@@ -459,6 +551,42 @@ Remplace **toute** la liste des dépendances blocked-by d'une tâche.
 ```json
 { "posted": true, "comment": { "id": "c8", "at": 1762400000000 } }
 ```
+
+#### `delete_comment`
+
+Supprime un commentaire — **uniquement les vôtres** (ceux postés par la clé
+API). N'écrit pas d'entrée d'activité.
+
+| Param | Type | Notes |
+|---|---|---|
+| `comment` ★ | string | id du commentaire (`list_comments`) |
+
+```json
+{ "comment": "c8" }
+```
+
+```json
+{ "deleted": true }
+```
+
+### Prompts
+
+Le serveur expose aussi trois **prompts** MCP (commands slash des clients),
+disponibles via `prompts/list` et `prompts/get` :
+
+| Prompt | Arguments | Usage |
+|---|---|---|
+| `daily-standup` | `project` ? | Prépare le standup : en cours, en review, bloqué — à partir des données réelles. |
+| `triage-backlog` | `project` ★, `limit` ? | Analyse le Backlog, propose un ordre pour To-do, **attend confirmation** avant de déplacer. |
+| `prepare-review` | `task` ★, `summary` ? | Prépare le handoff review : résumé proposé, puis (après accord) commentaire + `move_task` vers `review`. |
+
+```json
+{ "method": "prompts/get", "params": { "name": "triage-backlog", "arguments": { "project": "KAN" } } }
+```
+
+La réponse est un message `role: "user"` prêt à injecter dans la conversation
+de l'agent. Les prompts à deux temps (`triage-backlog`, `prepare-review`)
+demandent explicitement une confirmation humaine avant toute écriture.
 
 ### Projets — écriture
 
