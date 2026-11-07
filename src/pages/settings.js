@@ -66,7 +66,6 @@ export const SET_NAV = [
       ['notif-email', 'settings.nav.email', 'mail'],
       ['notif-push', 'settings.nav.push', 'smartphone'],
       ['notif-mentions', 'settings.nav.mentions', 'at-sign'],
-      ['notif-assign', 'settings.nav.assignments', 'user-check'],
     ],
   ],
   [
@@ -516,13 +515,6 @@ export function settingsBody(sec, title) {
         srow(t('settings.notif.atAll'), '', tog('mention_all', np.mention_all, 'np')) +
         srow(t('settings.notif.atTeam'), t('settings.notif.atTeamDesc'), tog('mention_team', np.mention_team !== false, 'np')) +
         srow(t('settings.notif.atWorkspace'), t('settings.notif.atWorkspaceDesc'), tog('mention_ws', !!np.mention_ws, 'np'))
-      );
-    case 'notif-assign':
-      return (
-        H(t('settings.notif.assignLead')) +
-        srow(t('settings.notif.assignedMe'), '', tog('assign_self', np.assign_self, 'np')) +
-        srow(t('settings.notif.statusChange'), '', tog('assign_status', np.assign_status !== false, 'np')) +
-        srow(t('settings.notif.overdue'), '', tog('assign_over', np.assign_over !== false, 'np'))
       );
     case 'profile': {
       const err = S.ui.errors.pname2;
