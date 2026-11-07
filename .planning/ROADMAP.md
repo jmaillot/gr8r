@@ -51,7 +51,7 @@ by the adapter, one-shot SQLite→pg copy script, opt-in `POSTGRES_TEST_URL` mat
 out of scope.
 **Requirements**: D-01..D-14 (requirement IDs of record = CONTEXT.md decision IDs; see CONTEXT.md `<decisions>` and each plan's `requirements:` frontmatter)
 **Depends on:** Phase 44
-**Plans:** 2/7 plans executed
+**Plans:** 4/7 plans executed
 
 Plans:
 **Wave 1**
@@ -59,10 +59,10 @@ Plans:
 - [x] 45-03-PLAN.md — server.js boot-path swap, sqliteOnly gating, tx + auth/claims/scheduler conversion (checkpoint:decision — D-05 one-way async conversion)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 45-02-PLAN.md — Docker image node_modules/db-adapter COPY + dependency/COPY pins + DB_URL env surface
+- [x] 45-02-PLAN.md — Docker image node_modules/db-adapter COPY + dependency/COPY pins + DB_URL env surface
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 45-04-PLAN.md — remaining callsite conversion, legacy shim removal, static audit gate
+- [x] 45-04-PLAN.md — remaining callsite conversion, legacy shim removal, static audit gate
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 45-05-PLAN.md — pg SCHEMA variant, idempotent pg migrations, portable seed (checkpoint:decision — D-11 doc column shape)
