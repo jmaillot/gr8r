@@ -32,6 +32,19 @@ export function foldForSearch(s) {
   }
   return { text, map };
 }
+/* ---------- palette filter ---------- */
+/* The command palette matches two-letter initials spread across words ("gh" →
+   "Go to Home"): fold both sides, compact the whitespace out, then accept a
+   plain substring OR an in-order subsequence (Phase 47, FIX-01). */
+export const compactQuery = s => s.replace(/\s+/g, '');
+export function isSubseq(needle, hay) {
+  let i = 0;
+  for (const c of hay) {
+    if (c === needle[i]) i++;
+    if (i === needle.length) return true;
+  }
+  return i === needle.length;
+}
 /* The random half draws 6 cryptographic bytes; each becomes two base36 digits
    (a byte is always < 36², so the length is deterministic), giving 12 characters
    of crypto.getRandomValues entropy over the ids the document references across

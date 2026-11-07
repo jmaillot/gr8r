@@ -1,5 +1,5 @@
 /* ---------------- COMMAND PALETTE ---------------- */
-import { clamp, esc, foldForSearch, modKey } from '../core/utils.js';
+import { clamp, compactQuery, esc, foldForSearch, isSubseq, modKey } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { LOGO, ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
@@ -86,20 +86,12 @@ export function paletteItems() {
     /* Two-letter initials ("gh" for "Go to Home") must match: compare with the
        spaces folded out of both sides, on top of the plain substring match.
        The subsequence pass covers initials spread across words ("g t" →
-       "gotomytasks"). */
-    const compact = s => s.replace(/\s+/g, '');
-    const qn = compact(ql);
-    const isSubseq = (needle, hay) => {
-      let i = 0;
-      for (const c of hay) {
-        if (c === needle[i]) i++;
-        if (i === needle.length) return true;
-      }
-      return i === needle.length;
-    };
+       "gotomytasks"). The helpers live in core/utils.js — they are the tested
+       contract (test/palette-filter.test.mjs). */
+    const qn = compactQuery(ql);
     const cmds = commands().filter(c => {
       if (!q) return true;
-      const n = compact(foldForSearch(c.name).text);
+      const n = compactQuery(foldForSearch(c.name).text);
       return n.includes(qn) || isSubseq(qn, n);
     });
     if (!q) {
