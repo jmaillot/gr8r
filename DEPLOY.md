@@ -1104,6 +1104,103 @@ plaintext. The honest response is:
 `MASTER_KEY_PREVIOUS` and rotation exist for *planned* key hygiene, never for
 incident response.
 
+## 15. Postgres backend (optional)
+
+By default the app stores everything in SQLite on the `/data` volume. As of Phase 45 the
+server can also run on **Postgres**: when the `DB_URL` environment variable holds a
+`postgres://` URL, the process connects through the `pg` driver at boot; when `DB_URL` is
+unset or empty, behavior is byte-identical to before — pure `node:sqlite`, zero runtime
+dependencies. `docker-compose.yml` already forwards `DB_URL` from `.env`, so switching is
+a `.env` edit plus a recreate, nothing else.
+
+Choose Postgres when a managed instance, a database you can snapshot independently of the
+container, or stronger concurrency is worth one npm dependency (`pg`, loaded only when
+`DB_URL` is set). Stay on SQLite otherwise — it remains the default and the
+zero-dependency path.
+
+Boot is **fail-closed**: if `DB_URL` is set but Postgres is unreachable (bad credentials,
+host down), the server refuses to start with a clear error. It never silently falls back
+to SQLite, and never prints the connection string in the error output.
+
+### The connection string is a secret
+
+`DB_URL` embeds the database password. Treat it like `MASTER_KEY`:
+
+- keep it in `/opt/projects/.env` only (mode `600`, never committed);
+- never put it on a command line (arguments are visible via `ps`) and never echo it;
+- the server and the copy script never log it — if you ever see a DSN in output, that is
+  a bug worth reporting.
+
+### TLS to Postgres (`sslmode`)
+
+For a Postgres on another host or a managed provider, require TLS by appending the sslmode
+parameter to `DB_URL`:
+
+```
+DB_URL=postgres://user:pass@db-host:5432/projects?sslmode=require
+```
+
+- `sslmode=require` — encrypt, but accept any server certificate (fine on a private network).
+- `sslmode=verify-full` with `sslrootcert` — verify the server certificate against your
+  provider's CA; use this on public networks. See your provider's docs for the CA file.
+- Never weaken TLS verification in code; the adapter ships no insecure default.
+
+### Moving an existing install to Postgres
+
+Switching is a **one-shot copy**, never an automatic migration. The copy script transfers
+every table, verifies per-table row counts before committing, and refuses a target that is
+not empty. The SQLite file is only ever read — it stays on disk as your rollback backup.
+
+Runbook:
+
+1. **Stop the server.** The SQLite WAL must be checkpointed before the copy:
+
+   ```sh
+   docker compose stop projects
+   ```
+
+2. **Create the target database** (empty — the script creates the schema itself) and run
+   the copy from a checkout on a machine that can reach both the SQLite file and Postgres:
+
+   ```sh
+   export DB_URL='postgres://user:pass@db-host:5432/projects?sslmode=require'
+   node scripts/copy-sqlite-to-pg.mjs /path/to/projects.db
+   ```
+
+   The script prints one line per table with the transferred row count. It exits non-zero
+   without writing anything if the target already holds rows, and rolls everything back if
+   any per-table count fails to match after the transfer.
+
+3. **Boot on Postgres.** Add `DB_URL` to `/opt/projects/.env` and recreate:
+
+   ```sh
+   docker compose up -d
+   docker compose logs --tail=20 projects
+   ```
+
+   Sign in once and check your data before going further.
+
+4. **Keep the SQLite file.** `projects.db` remains on the old volume untouched — it is the
+   rollback artifact. To roll back: remove `DB_URL` from `.env`, keep `DB_PATH`/`DATA_DIR`
+   pointing at the old volume, and `docker compose up -d`. The server boots on SQLite again
+   from exactly the file you copied from. pg mode never touches that file, and never falls
+   back to it on a pg outage (fail-closed boot).
+
+### Backups under Postgres
+
+The `server.js --backup` command (SQLite `vacuum into`) and the automatic pre-migration
+backups are **SQLite-only** — they do not run under Postgres. Backups become an operator
+task on the database side:
+
+```sh
+pg_dump --format=custom --file=/var/backups/projects/pg-$(date +%F-%H%M).dump "$DB_URL"
+```
+
+Schedule `pg_dump` the way section 9 schedules `--backup` (same retention and off-server
+copy advice applies; the dump contains password hashes and session tokens — encrypt or
+restrict access). Restores use `pg_restore` against an empty target. Uploaded files still
+live under `DATA_DIR/files/` regardless of backend — keep backing that directory up.
+
 ## Appendix: minimal Traefik
 
 If you do not already run Traefik, use `/opt/traefik/docker-compose.yml`, replace the email,

@@ -134,11 +134,29 @@ if (occupied.length) {
 }
 
 const client = await pool.connect();
+let failure = null;
 try {
   await client.query('begin');
   const counts = {};
+  /* The source may carry legacy columns added by boot migrations (e.g.
+     memberships.team/scope) that the pg variant does not create — copy the
+     INTERSECTION of source and target columns so the insert always matches
+     the target table. */
+  const { rows: pgColRows } = await pool.query(
+    `select table_name, column_name from information_schema.columns where table_schema = current_schema()`,
+  );
+  const pgCols = new Map();
+  for (const { table_name, column_name } of pgColRows) {
+    if (!pgCols.has(table_name)) pgCols.set(table_name, new Set());
+    pgCols.get(table_name).add(column_name);
+  }
   for (const table of TABLES) {
-    const cols = src.prepare(`pragma table_info(${table})`).all().map(c => c.name);
+    const cols = src
+      .prepare(`pragma table_info(${table})`)
+      .all()
+      .map(c => c.name)
+      .filter(name => pgCols.get(table)?.has(name));
+    if (!cols.length) throw new Error(`no shared columns found for ${table} — schema mismatch`);
     const rows = src.prepare(`select * from ${table}`).all();
     const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
     const insert = `insert into ${table} (${cols.join(', ')}) values (${placeholders})`;
@@ -154,41 +172,38 @@ try {
   const mismatches = [];
   for (const table of TABLES) {
     const { rows } = await client.query(`select count(*)::bigint as n from ${table}`);
-    if (Number(rows[0].n) !== counts[table]) mismatches.push(`  ${table}: pg=${rows[0].n} sqlite=${counts[table]}`);
+    if (Number(rows[0].n) !== counts[table]) mismatches.push(`${table}: pg=${rows[0].n} sqlite=${counts[table]}`);
   }
   if (mismatches.length) {
     await client.query('rollback');
-    for (const line of mismatches) console.error(line);
-    console.error('copy-sqlite-to-pg: count verification failed — ROLLED BACK, nothing committed');
-    await pool.end();
-    src.close();
-    process.exit(1);
-  }
+    failure = `count verification failed — ROLLED BACK, nothing committed\n  ${mismatches.join('\n  ')}`;
+  } else {
+    await client.query('commit');
 
-  await client.query('commit');
-
-  /* (6) Completion summary — table names and counts only. NEVER print
-     DB_URL or any connection detail (T-45-09). */
-  console.log('copy-sqlite-to-pg: committed. rows per table:');
-  let total = 0;
-  for (const table of TABLES) {
-    console.log(`  ${table}: ${counts[table]}`);
-    total += counts[table];
+    /* (6) Completion summary — table names and counts only. NEVER print
+       DB_URL or any connection detail (T-45-09). */
+    console.log('copy-sqlite-to-pg: committed. rows per table:');
+    let total = 0;
+    for (const table of TABLES) {
+      console.log(`  ${table}: ${counts[table]}`);
+      total += counts[table];
+    }
+    console.log(`copy-sqlite-to-pg: ${total} row(s) across ${TABLES.length} tables. Keep the SQLite file on disk as the rollback backup (D-14).`);
   }
-  console.log(`copy-sqlite-to-pg: ${total} row(s) across ${TABLES.length} tables. Keep the SQLite file on disk as the rollback backup (D-14).`);
 } catch (err) {
   try {
     await client.query('rollback');
   } catch {
     /* the transaction may already be aborted by pg — nothing left to undo */
   }
-  console.error(`copy-sqlite-to-pg: failed, ROLLED BACK, nothing committed — ${err.message}`);
-  await pool.end();
-  src.close();
-  process.exit(1);
+  failure = `failed, ROLLED BACK, nothing committed — ${err.message}`;
 } finally {
-  client.release();
+  client.release(); // release BEFORE pool.end() — end() waits on checked-out clients
 }
 await pool.end();
 src.close();
+if (failure) {
+  console.error(`copy-sqlite-to-pg: ${failure}`);
+  process.exit(1);
+}
 process.exit(0);
