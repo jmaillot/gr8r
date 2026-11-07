@@ -123,6 +123,10 @@ test('public/sw.js is the minimal click router: notificationclick, same-origin U
     sw.includes("new URL(e.notification.data?.url || '/', self.location.origin)"),
     'the click URL must resolve against self.location.origin (T-48-03)',
   );
+  assert.ok(
+    sw.includes('u.origin === self.location.origin'),
+    'an absolute URL must be constrained to the worker origin (CR-01)',
+  );
   assert.ok(!/\b(fetch|install|activate|import)\b/.test(sw), 'sw.js must carry no fetch/install/activate/import token (T-48-02)');
   assert.ok(sw.includes('openWindow'), 'the no-window fallback must open a new window');
 });
