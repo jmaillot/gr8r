@@ -55,7 +55,13 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
   3. A non-invitee requesting a private project through any door — doc API, file serve, MCP read/list tools — receives a byte-identical 404 (404-matrix extended with the new actor × project shapes before implementation)
   4. The reminder pass, email mirror, digest and the MCP permission mirror agree with the UI predicate through the same `memberCanReadProject` helper (parity test green; `mcp.js` edited in the same phase — no over-permissive window)
   5. Second boot is a byte-identical no-op on both SQLite and pg; Phase 37/38 scheduler suppression + no-double-send invariants pass unmodified
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 49-01-PLAN.md — Test scaffolding first: 13-cell legacy fixture builder + set-equality oracle, byte-identity harness, MCP parity harness, 404 body-equality matrix rows (MIG-01, MIG-03, VIS-03)
+- [ ] 49-02-PLAN.md — One-boot grant-materialization sweep: materialize old-predicate grants into p.members, normalize p.access, delete p.teams, clear scope columns; guarded/backup/transactional/byte-identical (MIG-01, MIG-02)
+- [ ] 49-03-PLAN.md — Predicate collapse + lockstep: memberCanReadProject/hiddenFor reduce to private+p.members, scope machinery and writers deleted, MCP mirror rewritten, suites moved to the collapsed model (MIG-02, MIG-03, VIS-02, VIS-03)
+- [ ] 49-04-PLAN.md — Phase close: repo-wide residual grep gates, docs/ProjectPermissions.md rewrite, five success criteria individually evidenced (all REQs)
 **Research note**: discuss-phase flagged — call-site census, fixture design, and D-xx rulings (scope-column disposition, `p.private` vs enum) land before planning. Deepest test investment of the milestone.
 
 ### Phase 50: Invite hierarchy & per-project toggles (server)
