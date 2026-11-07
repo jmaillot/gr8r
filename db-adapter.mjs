@@ -438,6 +438,22 @@ export function exec(sql) {
   if (backendKind !== 'sqlite') throw new Error('[db] exec() is a transitional SQLite-only shim');
   return sqlite.exec(sql);
 }
+/* ---- ensureColumn (D-10): one branch site per incompatibility. The pragma
+   table_info probe is SQLite-only; pg asks information_schema. Defs are
+   byte-identical to the SCHEMA declarations on both backends (Pitfall P-B). */
+export async function ensureColumn(table, name, def) {
+  if (backendKind === 'pg') {
+    const { rows } = await pool.query(
+      `select column_name from information_schema.columns
+       where table_schema = current_schema() and table_name = $1 and column_name = $2`,
+      [table, name],
+    );
+    if (!rows.length) await pool.query(`alter table ${table} add column ${name} ${def}`);
+    return;
+  }
+  const cols = sqlite.prepare(`pragma table_info(${table})`).all();
+  if (!cols.some(c => c.name === name)) sqlite.exec(`alter table ${table} add column ${name} ${def}`);
+}
 /* Rule 3 deviation (Plan 03 Task 1): server.js shutdown + CLI paths call
    db.close(); the adapter owns the handle, so it owns close(). pg branch
    ends the pool; sqlite closes synchronously. */

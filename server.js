@@ -61,7 +61,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
-import { connectDb, close as dbClose, prepare as dbPrepare, exec as dbExec } from './db-adapter.mjs';
+import { connectDb, close as dbClose, prepare as dbPrepare, exec as dbExec, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn } from './db-adapter.mjs';
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
    through tFor, so the FR catalogue must be registered at boot from the SAME
@@ -367,16 +367,6 @@ const SCHEMA = `
   );
 `;
 
-function ensureColumn(conn, table, name, def) {
-  const cols = conn.prepare(`pragma table_info(${table})`).all();
-  if (!cols.some(c => c.name === name)) conn.exec(`alter table ${table} add column ${name} ${def}`);
-}
-
-/* Phase 45 (D-05): boot now runs through db-adapter.mjs. connectDb picks the
-   backend (node:sqlite by default; Postgres when DB_URL is a postgres:// URL)
-   and fail-closed refuses an unreachable pg (D-04). The four pragmas moved
-   into the adapter's SQLite constructor. SCHEMA + additive ensureColumn
-   migrations stay here for now (Plan 05 makes them dialect-aware). */
 async function initDb() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   fs.mkdirSync(FILES_DIR, { recursive: true });
@@ -386,40 +376,48 @@ async function initDb() {
   // shims keep every not-yet-converted db.* callsite working unchanged while
   // converted regions call the async facade (await db.get/all/run).
   db = {
+    // transitional sync passthrough (Plan 04 retires it)
     prepare: dbPrepare,
     exec: dbExec,
     close: dbClose,
+    // async facade (D-06): converted regions call db.get/all/run/tx
+    get: dbGet,
+    all: dbAll,
+    run: dbRun,
+    tx: dbTx,
   };
   db.exec(SCHEMA);
   // Additive migration for databases created before multi-workspace support.
-  ensureColumn(db, 'workspaces', 'slug', 'text');
-  ensureColumn(db, 'workspaces', 'color', 'text');
-  ensureColumn(db, 'memberships', 'member_id', 'text');
+  // (D-10): the pragma table_info probe is SQLite-only; the adapter branches
+  // to information_schema on pg — one branch site, pinned in the adapter.
+  await adapterEnsureColumn('workspaces', 'slug', 'text');
+  await adapterEnsureColumn('workspaces', 'color', 'text');
+  await adapterEnsureColumn('memberships', 'member_id', 'text');
   // P4-c fix: the team picked at invite time must survive into the profile seed.
-  ensureColumn(db, 'memberships', 'team', 'text');
-  ensureColumn(db, 'invites', 'workspace_id', 'text');
+  await adapterEnsureColumn('memberships', 'team', 'text');
+  await adapterEnsureColumn('invites', 'workspace_id', 'text');
   // Phase 28 D-07: invites carry a JSON array of teams. The scalar `team`
   // column above stays on disk as backfill-only legacy (D-04) — never read.
-  ensureColumn(db, 'invites', 'teams', 'text');
+  await adapterEnsureColumn('invites', 'teams', 'text');
   // Phase 29 D-02: a membership or invite can carry a JSON scope
   // ({teams:[],projects:[]}). null = workspace-wide is the correct legacy
   // state — no backfill. Additive-only: second boot is a no-op by
   // construction and pinned byte-identical in test/migration.test.mjs.
-  ensureColumn(db, 'memberships', 'scope', 'text');
-  ensureColumn(db, 'invites', 'scope', 'text');
-  ensureColumn(db, 'users', 'locale', 'text');
+  await adapterEnsureColumn('memberships', 'scope', 'text');
+  await adapterEnsureColumn('invites', 'scope', 'text');
+  await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
-  ensureColumn(db, 'sessions', 'label', 'text');
-  ensureColumn(db, 'sessions', 'ip', 'text');
-  ensureColumn(db, 'sessions', 'last_seen_at', 'integer');
-  ensureColumn(db, 'sessions', 'user_agent', 'text');
-  ensureColumn(db, 'users', 'two_fa_enabled', 'integer not null default 0');
-  ensureColumn(db, 'users', 'two_fa_secret', 'text');
-  ensureColumn(db, 'users', 'two_fa_last_step', 'integer not null default 0');
+  await adapterEnsureColumn('sessions', 'label', 'text');
+  await adapterEnsureColumn('sessions', 'ip', 'text');
+  await adapterEnsureColumn('sessions', 'last_seen_at', 'integer');
+  await adapterEnsureColumn('sessions', 'user_agent', 'text');
+  await adapterEnsureColumn('users', 'two_fa_enabled', 'integer not null default 0');
+  await adapterEnsureColumn('users', 'two_fa_secret', 'text');
+  await adapterEnsureColumn('users', 'two_fa_last_step', 'integer not null default 0');
   // Phase 22 D-112: instance-operator privilege flag — def byte-identical to
   // the SCHEMA declaration (Pitfall P-B).
-  ensureColumn(db, 'users', 'is_instance_admin', 'integer not null default 0');
+  await adapterEnsureColumn('users', 'is_instance_admin', 'integer not null default 0');
   db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
 }
 
@@ -589,11 +587,10 @@ function stashPendingTfa(userId, secret, otpauth, stagedId = null, label = null)
    excludeFactorId (Plan 02, D-15/D-16): removes ONE factor from the
    candidate set — the remove route requires a code from a factor that is
    NOT the removed one, so self-lockout is structurally impossible. */
-function verifyTotpAgainstFactors(userId, code, nowSec, excludeFactorId = null) {
-  const rows = db
-    .prepare('select id, secret, last_step from totp_factors where user_id = ? order by created_at')
-    .all(userId)
-    .filter(row => row.id !== excludeFactorId);
+async function verifyTotpAgainstFactors(userId, code, nowSec, excludeFactorId = null) {
+  const rows = (await db.all('select id, secret, last_step from totp_factors where user_id = ? order by created_at', [userId])).filter(
+    row => row.id !== excludeFactorId,
+  );
   let decrypted = 0;
   for (const row of rows) {
     const wrapped = requireTotpSecret(row.secret);
@@ -682,12 +679,12 @@ function userPayload(user) {
   };
 }
 
-function firstWorkspace() {
-  return db.prepare('select * from workspaces order by created_at, name collate nocase limit 1').get() || null;
+async function firstWorkspace() {
+  return (await db.get('select * from workspaces order by created_at, name collate nocase limit 1')) || null;
 }
 
-function hasAdminRole(userId) {
-  return !!db.prepare("select 1 from memberships where user_id = ? and role in ('owner','admin') limit 1").get(userId);
+async function hasAdminRole(userId) {
+  return !!(await db.get("select 1 from memberships where user_id = ? and role in ('owner','admin') limit 1", [userId]));
 }
 
 /* Tenancy metadata is owned by the columns; the document never overrides it. */
@@ -1224,8 +1221,8 @@ const NOTIF_PREF_DEFAULTS = {
   assign_self: true,
 };
 
-function getStoredNotifPrefs(userId, workspaceId) {
-  const row = db.prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?').get(workspaceId, userId);
+async function getStoredNotifPrefs(userId, workspaceId) {
+  const row = await db.get('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?', [workspaceId, userId]);
   try {
     const stored = row ? JSON.parse(row.prefs) : {};
     if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
@@ -1251,8 +1248,8 @@ function getStoredNotifPrefs(userId, workspaceId) {
    one prepared SELECT, JSON.parse with a try/catch backstop (malformed or
    unreadable rows read as {}), merged over the defaults. `=== false` disables;
    everything else (including the 4 undefined-falsy keys) stays on. */
-function getUserNotifPrefs(userId, workspaceId) {
-  return { ...NOTIF_PREF_DEFAULTS, ...getStoredNotifPrefs(userId, workspaceId) };
+async function getUserNotifPrefs(userId, workspaceId) {
+  return { ...NOTIF_PREF_DEFAULTS, ...(await getStoredNotifPrefs(userId, workspaceId)) };
 }
 
 const NOTIF_EMAIL_KIND = {
@@ -1268,15 +1265,10 @@ const NOTIF_EMAIL_KIND = {
    check is inlined in the by-resolution (not a module constant) so the
    notif-email-link source-extraction tests keep evaluating that line standalone. */
 
-function queueNotifEmails(wsRow, nextDoc, newNotifs) {
+async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const wsName = wsRow.name || 'Projects Studio';
   const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
-  const emailByUserId = new Map(
-    db
-      .prepare('select id, email from users')
-      .all()
-      .map(u => [u.id, u.email]),
-  );
+  const emailByUserId = new Map((await db.all('select id, email from users')).map(u => [u.id, u.email]));
   const emailByMemberEmail = new Map();
   for (const m of profiles.values()) if (m?.email && m.id) emailByMemberEmail.set(m.id, m.email);
   /* SCOPE-04 (defense in depth, T-29-09): the email mirror re-checks each
@@ -1284,10 +1276,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
      Workspace-level rows (no project) keep flowing — send-time enforcement
      only, never a notifications-list filter (D-07). */
   const scopeByMember = new Map(
-    db
-      .prepare('select member_id, role, scope from memberships where workspace_id = ?')
-      .all(wsRow.id)
-      .map(r => [r.member_id, r]),
+    (await db.all('select member_id, role, scope from memberships where workspace_id = ?', [wsRow.id])).map(r => [r.member_id, r]),
   );
   const projectById = new Map(
     (Array.isArray(nextDoc?.data?.projects) ? nextDoc.data.projects : [])
@@ -1314,7 +1303,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
        accessor — n.to is a member_id, mapped to the account row (user_id)
        via the memberships-derived authority map; doc-only recipients carry
        no row and read defaults. */
-    const prefs = getUserNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id);
+    const prefs = await getUserNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id);
     if (prefs[prefKey] === false) continue;
     /* Phase 38 (DIGEST-02, D-09/D-10/D-11): digest users lose individual
        reminder EMAILS at the fan-out — inbox rows and push are never
@@ -1327,7 +1316,7 @@ function queueNotifEmails(wsRow, nextDoc, newNotifs) {
        email_digest (strict === true, D-05/D-14) — never the merged
        default, which still carries true until the default layer is
        inverted. Mention/assign/comment kinds never reach this branch. */
-    if (prefKey === 'email_reminder' && getStoredNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id).email_digest === true) continue;
+    if (prefKey === 'email_reminder' && (await getStoredNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id)).email_digest === true) continue;
     const profile = profiles.get(n.to);
     const to = authority.get(n.to)?.email || (profile && emailByUserId.get(profile.userId)) || emailByMemberEmail.get(n.to);
     if (!to) continue;
@@ -1424,10 +1413,10 @@ function reminderSnippet(offset, task) {
  * so tests drive 08:00-local instants without sleeping or fake timers.
  * Returns the notification rows emitted this pass (dedup claims included).
  */
-function runReminderPass({ now: at = new Date() } = {}) {
+async function runReminderPass({ now: at = new Date() } = {}) {
   const emitted = [];
   let digests = 0;
-  for (const ws of db.prepare('select * from workspaces').all()) {
+  for (const ws of await db.all('select * from workspaces')) {
     try {
       const doc = JSON.parse(ws.doc);
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
@@ -1456,13 +1445,14 @@ function runReminderPass({ now: at = new Date() } = {}) {
            their scope — the same projectScope/inScopeProject predicate the
            read funnel uses. No membership row (doc-only assignee) reads
            workspace-wide, matching projectScope's defensive default. */
-        const assigneeMembership = db
-          .prepare('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?')
-          .get(ws.id, t.assignee);
+        const assigneeMembership = await db.get('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?', [
+          ws.id,
+          t.assignee,
+        ]);
         /* PREFS (Phase 34, D-04): reminder prefs resolve per assignee through
            the accessor — the membership row maps the member_id to the account
            (user_id); a doc-only assignee carries no row and reads defaults. */
-        const prefs = getUserNotifPrefs(assigneeMembership?.user_id || t.assignee, ws.id);
+        const prefs = await getUserNotifPrefs(assigneeMembership?.user_id || t.assignee, ws.id);
         if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
         /* Phase 32 (VIS-04/D-04): a null-scope assignee's reach now includes
            team intersection — skip when the project is team-hidden from them
@@ -1503,12 +1493,14 @@ function runReminderPass({ now: at = new Date() } = {}) {
           };
           /* T-27-03: claim + append commit together or not at all. */
           let claimed = false;
-          transaction(() => {
-            const r = db
-              .prepare('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)')
-              .run(`${ws.id}:${t.id}:${t.assignee}:${offset}:${due}`, ws.id, now());
+          await db.tx(async () => {
+            const r = await db.run('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)', [
+              `${ws.id}:${t.id}:${t.assignee}:${offset}:${due}`,
+              ws.id,
+              now(),
+            ]);
             if (r.changes === 0) return; // already sent — exactly-once (REM-03)
-            updateDoc(ws.id, d => {
+            await updateDoc(ws.id, d => {
               d.data.notifs.push(notif);
             });
             claimed = true;
@@ -1518,8 +1510,8 @@ function runReminderPass({ now: at = new Date() } = {}) {
           /* Post-commit fan-out — NEVER inside the transaction (a hung SMTP
              server would hold the SQLite write lock). Uses the post-write doc. */
           if (MAILER.enabled) {
-            const nextDoc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
-            queueNotifEmails(ws, nextDoc, [notif]);
+            const nextDoc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ws.id])).doc);
+            await queueNotifEmails(ws, nextDoc, [notif]);
           }
         }
       }
@@ -1549,9 +1541,10 @@ function runReminderPass({ now: at = new Date() } = {}) {
          exactly-once via its own claim (reminders_sent for reminders /
          digest claim for digests).
          ===================================================================== */
-      for (const r of db
-        .prepare('select m.member_id, m.user_id, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?')
-        .all(ws.id)) {
+      for (const r of await db.all(
+        'select m.member_id, m.user_id, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?',
+        [ws.id],
+      )) {
         if (!r.user_id || !r.email) continue;
         /* Per-recipient resolution (D-09/D-14): the window comes from THE
            RECIPIENT's own doc member tz through resolveTz — computed inside
@@ -1565,7 +1558,7 @@ function runReminderPass({ now: at = new Date() } = {}) {
            deleted the pre-38 default `email_digest: true` from the merged
            defaults, so the accessor reads falsy here; the stored read via
            getStoredNotifPrefs keeps ONE parse path for the opt-in. */
-        if (getStoredNotifPrefs(r.user_id, ws.id).email_digest !== true) continue;
+        if ((await getStoredNotifPrefs(r.user_id, ws.id)).email_digest !== true) continue;
         const dueToday = [];
         const overdue = [];
         for (const t of tasks) {
@@ -1581,9 +1574,10 @@ function runReminderPass({ now: at = new Date() } = {}) {
              recipient, so these are evaluated against the RECIPIENT's own
              membership: one visibility pipeline, per D-06 (no digest-specific
              second filter). */
-          const assigneeMembership = db
-            .prepare('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?')
-            .get(ws.id, t.assignee);
+          const assigneeMembership = await db.get('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?', [
+            ws.id,
+            t.assignee,
+          ]);
           if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
           if (!projectScope(assigneeMembership) && !memberCanReadProject(project, ws.id, t.assignee)) continue;
           /* Same string compares as the reminder window predicates, split
@@ -1596,15 +1590,17 @@ function runReminderPass({ now: at = new Date() } = {}) {
         /* D-12 ledger honesty: an empty digest claims nothing and sends nothing. */
         if (!dueToday.length && !overdue.length) continue;
         let claimed = false;
-        transaction(() => {
-          const res = db
-            .prepare('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)')
+        await db.tx(async () => {
+          const res = await db.run('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)', [
+            `${ws.id}:${r.user_id}:digest:${localDate}`,
+            ws.id,
+            now(),
+          ]);
           /* D-11/D-12: claims keyed on (user, localDate-of-emission-time).
              Changing a member's tz never re-fires an already-claimed reminder
              for the same localDate; a tz change yielding a different localDate
              fires exactly one new legitimate claim (re-window allowed). No
              ledger reset on tz change. */
-            .run(`${ws.id}:${r.user_id}:digest:${localDate}`, ws.id, now());
           claimed = res.changes !== 0; // D-03: user_id id space, exactly-once
         });
         if (!claimed) continue;
@@ -1971,12 +1967,16 @@ function stripMember(doc, memberId, userId = null) {
 }
 
 /* Read-modify-write the workspace document inside the caller's transaction. */
-function updateDoc(workspaceId, edit) {
-  const row = db.prepare('select doc from workspaces where id = ?').get(workspaceId);
+async function updateDoc(workspaceId, edit) {
+  const row = await db.get('select doc from workspaces where id = ?', [workspaceId]);
   if (!row) throw httpError(404, 'Workspace not found', 'workspaceNotFound');
   const doc = JSON.parse(row.doc);
-  edit(doc);
-  db.prepare('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), workspaceId);
+  await edit(doc); // D-05 ripple: callbacks may be async (ensureMember facade await)
+  await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [
+    JSON.stringify(doc),
+    now(),
+    workspaceId,
+  ]);
   return doc;
 }
 
@@ -1986,18 +1986,6 @@ function updateDoc(workspaceId, edit) {
 function wsRevision(workspaceId) {
   const row = db.prepare('select revision from workspaces where id = ?').get(workspaceId);
   return row ? row.revision : 0;
-}
-
-function transaction(fn) {
-  db.exec('begin immediate');
-  try {
-    const out = fn();
-    db.exec('commit');
-    return out;
-  } catch (err) {
-    db.exec('rollback');
-    throw err;
-  }
 }
 
 function emptyDoc(meta) {
@@ -2031,15 +2019,15 @@ function seedDoc() {
 }
 
 /* Create the default workspace and, when the database is empty, the first admin. */
-function ensureWorkspace() {
-  if (db.prepare('select count(*) as n from workspaces').get().n > 0) return;
+async function ensureWorkspace() {
+  if ((await db.get('select count(*) as n from workspaces')).n > 0) return;
   const name = WORKSPACE_NAME;
   const slug = uniqueSlug(WORKSPACE_SLUG || name);
   const color = '#1D1C1A';
   const meta = { name, slug, color };
   const doc = normalizeDoc(seedDoc() || emptyDoc(meta), meta);
   const t = now();
-  db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+  await db.run('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)', [
     DEFAULT_WS_ID,
     slug,
     name,
@@ -2048,11 +2036,11 @@ function ensureWorkspace() {
     1,
     t,
     t,
-  );
+  ]);
 }
 
-function ensureAdmin({ quiet = false } = {}) {
-  if (db.prepare('select count(*) as n from users').get().n > 0) return;
+async function ensureAdmin({ quiet = false } = {}) {
+  if ((await db.get('select count(*) as n from users')).n > 0) return;
   const email = (process.env.ADMIN_EMAIL || 'admin@example.com').trim();
   const name = process.env.ADMIN_NAME || 'Admin';
   let password = process.env.ADMIN_PASSWORD;
@@ -2061,8 +2049,8 @@ function ensureAdmin({ quiet = false } = {}) {
     password = crypto.randomBytes(12).toString('base64url');
     generated = true;
   }
-  const user = createUser(email, name, password);
-  addMembership(firstWorkspace(), user, 'owner');
+  const user = await createUser(email, name, password);
+  await addMembership(await firstWorkspace(), user, 'owner');
   if (!quiet) {
     logInfo(`  bootstrap account: ${email}`);
     if (generated) logInfo(`  generated password: ${password}\n  (set ADMIN_PASSWORD and recreate the volume to choose your own)`);
@@ -2076,18 +2064,18 @@ function ensureAdmin({ quiet = false } = {}) {
    Lives in bootstrap(), NOT inside ensureAdmin: ensureAdmin early-returns on
    any existing user (Pitfall 1), so a stamp there would never fire on
    existing databases. */
-function stampInstanceAdmin() {
-  if (db.prepare('select count(*) as n from users where is_instance_admin = 1').get().n > 0) return;
+async function stampInstanceAdmin() {
+  if ((await db.get('select count(*) as n from users where is_instance_admin = 1')).n > 0) return;
   const email = (process.env.ADMIN_EMAIL || 'admin@example.com').trim();
-  const res = db.prepare('update users set is_instance_admin = 1 where email = ? collate nocase').run(email);
+  const res = await db.run('update users set is_instance_admin = 1 where email = ? collate nocase', [email]);
   if (res.changes === 0) {
     logWarn(`  [bootstrap] no operator flagged: no users row matches ADMIN_EMAIL (${email}); set is_instance_admin=1 manually (D-114)`);
   }
 }
 
-function bootstrap(opts) {
-  ensureWorkspace();
-  migrateTenancy();
+async function bootstrap(opts) {
+  await ensureWorkspace();
+  await migrateTenancy();
   /* TEAM-01: one-time backfill of the team_members join table from the scalar
      memberships.team column (D-03). Runs AFTER migrateTenancy — not inside
      openDb() — because the backfill carries member_id, and on a cold legacy
@@ -2095,21 +2083,21 @@ function bootstrap(opts) {
      (Pitfall 4: migration order is load-bearing). The ensureColumn for
      memberships.team has long since run inside openDb(), so the source column
      always exists here. */
-  migrateTeamMembership(db);
+  await migrateTeamMembership();
   /* PREFS (Phase 34, SETTINGS-01, D-09): one-time notifPrefs doc→rows backfill.
      AFTER migrateTeamMembership — same recipe, same load-bearing-order
      discipline: it reads the memberships authority rows that earlier
      migrations guarantee (Pitfall 2). */
-  migrateUserNotifPrefs(db);
-  migrateTotpEncryption();
+  await migrateUserNotifPrefs();
+  await migrateTotpEncryption();
   /* TOTP2 (Phase 31): one-time primary-factor copy into totp_factors (D-06).
      AFTER migrateTotpEncryption — a legacy plaintext secret is already sealed
      before the copy carries the envelope over (migration order is
      load-bearing, Pitfall 2 discipline). */
-  migrateTotpFactors();
-  migrateTotpReWrap();
-  ensureAdmin(opts);
-  stampInstanceAdmin();
+  await migrateTotpFactors();
+  await migrateTotpReWrap();
+  await ensureAdmin(opts);
+  await stampInstanceAdmin();
 }
 
 /*
@@ -2126,54 +2114,49 @@ function bootstrap(opts) {
  * No backup = no mutation (deliberately stricter than migrateTenancy, same
  * policy as the TOTP envelope migration, D-74).
  */
-function migrateTeamMembership(conn) {
-  const eligible = () =>
-    conn
-      .prepare(
+async function migrateTeamMembership() {
+  const eligible = async () =>
+    (
+      await db.get(
         `select count(*) as n from memberships m
           where m.team is not null
             and not exists (select 1 from team_members tm
                              where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
       )
-      .get().n;
+    ).n;
   /* TEAM-01/D-07: the invites scalar→array backfill shares this guard, this
      backup and this transaction — one pre-migration snapshot covers both
      mutations, and a boot where only invites need backfilling still backs up
      before writing. */
-  const invitesEligible = () => conn.prepare('select count(*) as n from invites where team is not null and teams is null').get().n;
-  if (!eligible() && !invitesEligible()) return;
+  const invitesEligible = async () => (await db.get('select count(*) as n from invites where team is not null and teams is null')).n;
+  if (!(await eligible()) && !(await invitesEligible())) return;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backup = path.join(DATA_DIR, `projects-pre-team-members-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    conn.exec('pragma wal_checkpoint(truncate)');
-    conn.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(() => {
+      db.exec('pragma wal_checkpoint(truncate)');
+      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
     logError(`  pre-migration backup failed: ${err.message}`);
     return;
   }
-  conn.exec('begin immediate');
-  try {
-    conn
-      .prepare(
-        `insert or ignore into team_members (workspace_id, team_id, member_id, user_id)
+  await db.tx(async () => {
+    await db.run(
+      `insert or ignore into team_members (workspace_id, team_id, member_id, user_id)
        select m.workspace_id, m.team, m.member_id, m.user_id from memberships m
         where m.team is not null
           and not exists (select 1 from team_members tm
                            where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
-      )
-      .run();
+    );
     /* D-07: scalar invites.team becomes a one-element JSON array in invites.teams.
        The scalar column is never read again — this is its last reader (D-04). */
-    for (const row of conn.prepare('select rowid, team from invites where team is not null and teams is null').all()) {
-      conn.prepare('update invites set teams = ? where rowid = ?').run(JSON.stringify([row.team]), row.rowid);
+    for (const row of await db.all('select rowid, team from invites where team is not null and teams is null')) {
+      await db.run('update invites set teams = ? where rowid = ?', [JSON.stringify([row.team]), row.rowid]);
     }
-    conn.exec('commit');
-  } catch (err) {
-    conn.exec('rollback');
-    throw err;
-  }
+  });
 }
 
 /*
@@ -2196,7 +2179,7 @@ function migrateTeamMembership(conn) {
  * No backup = no mutation (deliberately stricter than migrateTenancy, same
  * policy as migrateTeamMembership and the TOTP envelope migration, D-74).
  */
-function migrateUserNotifPrefs(conn) {
+async function migrateUserNotifPrefs() {
   /* Guard, evaluated in JS: a workspace is eligible iff its stored doc carries
      data.notifPrefs. The strip is the trigger (not "some member lacks a row"):
      if every member already has a row, waiting for a missing row would leave
@@ -2205,7 +2188,7 @@ function migrateUserNotifPrefs(conn) {
      stays inside the same transaction and relies on insert or ignore to keep
      any per-user row the user already set. */
   const eligible = [];
-  for (const row of conn.prepare('select id, doc from workspaces').all()) {
+  for (const row of await db.all('select id, doc from workspaces')) {
     let doc = {};
     try {
       doc = JSON.parse(row.doc);
@@ -2222,35 +2205,34 @@ function migrateUserNotifPrefs(conn) {
   const backup = path.join(DATA_DIR, `projects-pre-notif-prefs-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    conn.exec('pragma wal_checkpoint(truncate)');
-    conn.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(() => {
+      db.exec('pragma wal_checkpoint(truncate)');
+      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
     logError(`  pre-migration backup failed: ${err.message}`);
     return;
   }
-  conn.exec('begin immediate');
-  try {
-    const insert = conn.prepare('insert or ignore into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)');
-    const updateDoc = conn.prepare('update workspaces set doc = ? where id = ?');
+  await db.tx(async () => {
     for (const ws of eligible) {
       /* D-09: EVERY member of the workspace gets the workspace-level prefs —
          not just members who "already have a row" (insert or ignore keeps any
          pre-existing per-user row the user set after the accessor shipped). */
-      for (const m of conn.prepare('select user_id from memberships where workspace_id = ?').all(ws.id)) {
-        insert.run(ws.id, m.user_id, JSON.stringify(ws.prefs));
+      for (const m of await db.all('select user_id from memberships where workspace_id = ?', [ws.id])) {
+        await db.run('insert or ignore into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [
+          ws.id,
+          m.user_id,
+          JSON.stringify(ws.prefs),
+        ]);
       }
       /* D-11: the doc-field delete lives in the SAME transaction as the row
          copies, so a crashed boot can never leave rows and doc disagreeing. */
       const stripped = { ...ws.doc, data: { ...ws.doc.data } };
       delete stripped.data.notifPrefs;
-      updateDoc.run(JSON.stringify(stripped), ws.id);
+      await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(stripped), ws.id]);
     }
-    conn.exec('commit');
-  } catch (err) {
-    conn.exec('rollback');
-    throw err;
-  }
+  });
 }
 
 /*
@@ -2258,15 +2240,17 @@ function migrateUserNotifPrefs(conn) {
  * backfills slugs/colors, scopes legacy invites, links member profiles to
  * accounts, and drops the demo-only `data.workspaces` switcher from the document.
  */
-function migrateTenancy() {
-  const rows = db.prepare('select * from workspaces').all();
+async function migrateTenancy() {
+  const rows = await db.all('select * from workspaces');
   if (rows.some(row => !row.slug)) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backup = path.join(DATA_DIR, `projects-premultitenant-${stamp}.db`);
     try {
       fs.mkdirSync(path.dirname(backup), { recursive: true });
-      db.exec('pragma wal_checkpoint(truncate)');
-      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+      await sqliteOnly(() => {
+        db.exec('pragma wal_checkpoint(truncate)');
+        db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+      }, `pre-migration backup ${backup}`);
       logInfo(`  pre-migration backup: ${backup}`);
     } catch (err) {
       logError(`  pre-migration backup failed: ${err.message}`);
@@ -2283,11 +2267,11 @@ function migrateTenancy() {
       const name = String(meta.name || row.name || '').trim() || 'Workspace';
       const slug = uniqueSlug(meta.url || name, row.id);
       const color = /^#[0-9a-f]{6}$/i.test(meta.c || '') ? meta.c : '#1D1C1A';
-      db.prepare('update workspaces set slug = ?, name = ?, color = ? where id = ?').run(slug, name, color, row.id);
+      await db.run('update workspaces set slug = ?, name = ?, color = ? where id = ?', [slug, name, color, row.id]);
     }
   }
-  backfillInvites();
-  backfillMemberships();
+  await backfillInvites();
+  await backfillMemberships();
 }
 
 /*
@@ -2361,7 +2345,7 @@ function prunePreenvelopeBackups(currentBackup) {
  * empty boot never leaves a stray backup file; second boot after a
  * completed migration is a byte-identical no-op.
  */
-function migrateTotpEncryption() {
+async function migrateTotpEncryption() {
   // D-K7: unrecognized-version envelope rows are counted and warned about —
   // skip-silently is never an option. Decryptability is the authoritative
   // test (research A2): an envelope this server cannot decrypt today counts
@@ -2372,9 +2356,9 @@ function migrateTotpEncryption() {
   let unrecognizedVersion = 0;
   const unrecognizedTags = new Set();
   if (MASTER_KEY) {
-    const envelopeCandidates = db
-      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
-      .all();
+    const envelopeCandidates = await db.all(
+      "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
+    );
     for (const row of envelopeCandidates) {
       const value = String(row.two_fa_secret || '').trim();
       if (!isEnvelopeVersion(value) || decryptTotpSecret(value) !== null) continue;
@@ -2396,12 +2380,13 @@ function migrateTotpEncryption() {
   // below (WR-02): the JS filter — not the SQL prefilter — is what keeps an
   // envelope-shaped row out of the pending set, so SQL/JS drift can never put
   // a permanently-undecryptable envelope back on the backup-every-boot churn.
-  const pendingRows = () =>
-    db
-      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'")
-      .all()
-      .filter(row => !isEnvelopeVersion(row.two_fa_secret));
-  let rows = pendingRows();
+  const pendingRows = async () =>
+    (
+      await db.all(
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'",
+      )
+    ).filter(row => !isEnvelopeVersion(row.two_fa_secret));
+  let rows = await pendingRows();
   if (rows.length === 0) return;
 
   // D-73: MASTER_KEY missing with eligible plaintext rows → defer the whole
@@ -2420,8 +2405,10 @@ function migrateTotpEncryption() {
   const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    db.exec('pragma wal_checkpoint(truncate)');
-    db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(() => {
+      db.exec('pragma wal_checkpoint(truncate)');
+      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
     prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
   } catch (err) {
@@ -2433,11 +2420,11 @@ function migrateTotpEncryption() {
   let skippedBlank = 0;
   let skippedGarbage = 0;
   let alreadyEncrypted = 0;
-  transaction(() => {
+  await db.tx(async () => {
     // D-75: per-row re-check inside the transaction — defense in depth
     // against double-encryption (research Pitfall 5). Skip, never wrap
     // blanks or non-base32 garbage into an envelope.
-    rows = pendingRows();
+    rows = await pendingRows();
     for (const row of rows) {
       const value = String(row.two_fa_secret || '').trim();
       if (!value) {
@@ -2461,7 +2448,7 @@ function migrateTotpEncryption() {
         skippedGarbage++;
         continue;
       }
-      db.prepare('update users set two_fa_secret = ? where id = ?').run(envelope, row.id);
+      await db.run('update users set two_fa_secret = ? where id = ?', [envelope, row.id]);
       migrated++;
     }
   });
@@ -2491,13 +2478,21 @@ function migrateTotpEncryption() {
  * D-06 reversibility: one-way — the copy IS the migration, pinned by
  * test/migration.test.mjs + test/tfa-multi-factor.test.mjs.
  */
-function migrateTotpFactors() {
-  const eligibleRows = () =>
-    db
-      .prepare("select id, two_fa_secret, two_fa_last_step from users where two_fa_enabled = 1 and two_fa_secret is not null and two_fa_secret != ''")
-      .all()
-      .filter(row => !db.prepare('select 1 from totp_factors where user_id = ?').get(row.id));
-  let rows = eligibleRows();
+async function migrateTotpFactors() {
+  const eligibleRows = async () => {
+    // Anti-join resolved with awaited reads — Array.filter with an async
+    // predicate would keep every row (all promises are truthy) and re-copy
+    // on the second boot (Pitfall 2, byte-identical second boot).
+    const rows = await db.all(
+      "select id, two_fa_secret, two_fa_last_step from users where two_fa_enabled = 1 and two_fa_secret is not null and two_fa_secret != ''",
+    );
+    const out = [];
+    for (const row of rows) {
+      if (!(await db.get('select 1 from totp_factors where user_id = ?', [row.id]))) out.push(row);
+    }
+    return out;
+  };
+  let rows = await eligibleRows();
   if (rows.length === 0) return;
 
   // D-74: backup first — failure skips the copy entirely this boot, no mutation.
@@ -2505,8 +2500,10 @@ function migrateTotpFactors() {
   const backup = path.join(DATA_DIR, `projects-prefactors-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    db.exec('pragma wal_checkpoint(truncate)');
-    db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(() => {
+      db.exec('pragma wal_checkpoint(truncate)');
+      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
   } catch (err) {
     logError(`  TOTP factor copy skipped: pre-migration backup failed: ${err.message}`);
@@ -2514,13 +2511,19 @@ function migrateTotpFactors() {
   }
 
   let copied = 0;
-  transaction(() => {
+  await db.tx(async () => {
     // D-75: per-row re-check inside the transaction — defense in depth
     // against double-copy (anti-pattern: candidate filter drifting apart).
-    rows = eligibleRows();
-    const insert = db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)');
+    rows = await eligibleRows();
     for (const row of rows) {
-      insert.run(uid(), row.id, 'settings.tfa.factor.primary', row.two_fa_secret, row.two_fa_last_step || 0, now());
+      await db.run('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)', [
+        uid(),
+        row.id,
+        'settings.tfa.factor.primary',
+        row.two_fa_secret,
+        row.two_fa_last_step || 0,
+        now(),
+      ]);
       copied++;
     }
   });
@@ -2554,7 +2557,7 @@ function migrateTotpFactors() {
  *   - D-76/D-K7 tone: console lines carry counts, version tags and user ids
  *     only — never key material, ciphertext, or plaintext (T-26-01).
  */
-function migrateTotpReWrap() {
+async function migrateTotpReWrap() {
   // D-K14 gate: the pass exists for rotation only.
   if (!MASTER_KEY || !MASTER_KEY_PREVIOUS) return;
   const currentId = keyIdFor(MASTER_KEY);
@@ -2564,19 +2567,21 @@ function migrateTotpReWrap() {
   // TOTP2 (Phase 31, D-06): totp_factors rows ride the SAME rotation pass —
   // a factor row left under the old key would brick TOTP login after the
   // users column converges. One pass, one backup, one summary.
-  const staleCandidates = () => [
-    ...db
-      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
-      .all()
+  const staleCandidates = async () => [
+    ...(
+      await db.all(
+        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
+      )
+    )
       .filter(row => isStaleEnvelope(row.two_fa_secret, currentId))
       .map(row => ({ table: 'users', id: row.id, value: row.two_fa_secret })),
-    ...db
-      .prepare("select id, secret from totp_factors where secret is not null and secret != '' and secret like 'v_:%'")
-      .all()
+    ...(
+      await db.all("select id, secret from totp_factors where secret is not null and secret != '' and secret like 'v_:%'")
+    )
       .filter(row => isStaleEnvelope(row.secret, currentId))
       .map(row => ({ table: 'totp_factors', id: row.id, value: row.secret })),
   ];
-  const rows = staleCandidates();
+  const rows = await staleCandidates();
   if (rows.length === 0) {
     // Zero stale candidates: byte-identical no-op — no backup, no writes.
     // D-K12: when PREVIOUS is configured AND resolves no envelope anywhere in
@@ -2586,9 +2591,9 @@ function migrateTotpReWrap() {
     // set is empty, so nothing here is stale). The nudge is the ONLY output
     // of this boot: no backup, no mutation.
     const previousId = keyIdFor(MASTER_KEY_PREVIOUS);
-    const envelopeRows = db
-      .prepare("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'")
-      .all();
+    const envelopeRows = await db.all(
+      "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
+    );
     const resolvesPrevious = envelopeRows.some(row => {
       const value = String(row.two_fa_secret || '').trim();
       const parts = value.split(':');
@@ -2609,8 +2614,10 @@ function migrateTotpReWrap() {
   const backup = path.join(DATA_DIR, `projects-preenvelope-${stamp}.db`);
   try {
     fs.mkdirSync(path.dirname(backup), { recursive: true });
-    db.exec('pragma wal_checkpoint(truncate)');
-    db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    await sqliteOnly(() => {
+      db.exec('pragma wal_checkpoint(truncate)');
+      db.exec(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
     logInfo(`  pre-migration backup: ${backup}`);
     prunePreenvelopeBackups(backup); // WR-02: bound backup accumulation
   } catch (err) {
@@ -2621,10 +2628,10 @@ function migrateTotpReWrap() {
   let rewrapped = 0;
   let undecryptable = 0;
   let sealFailed = 0;
-  transaction(() => {
+  await db.tx(async () => {
     // D-75 re-check — the SAME shared isStaleEnvelope predicate as the scan
     // (anti-pattern: filter and re-check drifting apart, T-26-04).
-    const txnRows = staleCandidates();
+    const txnRows = await staleCandidates();
     for (const row of txnRows) {
       const value = String(row.value || '').trim();
       const tag = (value.split(':', 1)[0] || '').toLowerCase();
@@ -2647,8 +2654,8 @@ function migrateTotpReWrap() {
         sealFailed++;
         continue;
       }
-      if (row.table === 'users') db.prepare('update users set two_fa_secret = ? where id = ?').run(envelope, row.id);
-      else db.prepare('update totp_factors set secret = ? where id = ?').run(envelope, row.id);
+      if (row.table === 'users') await db.run('update users set two_fa_secret = ? where id = ?', [envelope, row.id]);
+      else await db.run('update totp_factors set secret = ? where id = ?', [envelope, row.id]);
       rewrapped++;
     }
   });
@@ -2662,14 +2669,14 @@ function migrateTotpReWrap() {
  * Invites created before workspaces were addressable belong to the workspace that
  * existed then. Scoped invites always carry an id, so later boots change nothing.
  */
-function backfillInvites() {
-  const ws = firstWorkspace();
+async function backfillInvites() {
+  const ws = await firstWorkspace();
   if (!ws) return;
-  db.prepare('update invites set workspace_id = ? where workspace_id is null').run(ws.id);
+  await db.run('update invites set workspace_id = ? where workspace_id is null', [ws.id]);
 }
 
-function backfillMemberships() {
-  for (const ws of db.prepare('select * from workspaces').all()) {
+async function backfillMemberships() {
+  for (const ws of await db.all('select * from workspaces')) {
     let doc;
     try {
       doc = JSON.parse(ws.doc);
@@ -2678,10 +2685,10 @@ function backfillMemberships() {
     }
     if (!doc?.data) continue;
     const before = JSON.stringify(doc);
-    for (const m of db.prepare('select m.*, u.email, u.name from memberships m join users u on u.id = m.user_id where m.workspace_id = ?').all(ws.id)) {
-      const memberId = ensureMember(doc, { id: m.user_id, email: m.email, name: m.name }, m.role, ws.id);
+    for (const m of await db.all('select m.*, u.email, u.name from memberships m join users u on u.id = m.user_id where m.workspace_id = ?', [ws.id])) {
+      const memberId = await ensureMember(doc, { id: m.user_id, email: m.email, name: m.name }, m.role, ws.id);
       if (memberId && memberId !== m.member_id) {
-        db.prepare('update memberships set member_id = ? where workspace_id = ? and user_id = ?').run(memberId, ws.id, m.user_id);
+        await db.run('update memberships set member_id = ? where workspace_id = ? and user_id = ?', [memberId, ws.id, m.user_id]);
       }
     }
     delete doc.data.workspaces;
@@ -2690,7 +2697,7 @@ function backfillMemberships() {
       /* The backfill only repairs server-owned state — the legacy profile
          links and the demo switcher — so it must not move the revision: a
          session that is open across the restart would lose its next write. */
-      db.prepare('update workspaces set doc = ?, updated_at = ? where id = ?').run(JSON.stringify(doc), now(), ws.id);
+      await db.run('update workspaces set doc = ?, updated_at = ? where id = ?', [JSON.stringify(doc), now(), ws.id]);
     }
   }
 }
@@ -2716,15 +2723,15 @@ function memberProfile(row, index = 0) {
 
 /* The document id of an account-backed member. The membership table holds the
    ids that are already taken, so a new member never collides with one. */
-function memberIdFor(workspaceId, user) {
-  const row = db.prepare('select member_id from memberships where workspace_id = ? and user_id = ?').get(workspaceId, user.id);
+async function memberIdFor(workspaceId, user) {
+  const row = await db.get('select member_id from memberships where workspace_id = ? and user_id = ?', [workspaceId, user.id]);
   if (row?.member_id) return row.member_id;
   const base = `m_${user.id.slice(0, 8)}`;
-  const taken = db.prepare('select 1 from memberships where workspace_id = ? and member_id = ?').get(workspaceId, base);
+  const taken = await db.get('select 1 from memberships where workspace_id = ? and member_id = ?', [workspaceId, base]);
   return taken ? `m_${user.id}` : base;
 }
 
-function ensureMember(doc, user, role = 'member', workspaceId = null) {
+async function ensureMember(doc, user, role = 'member', workspaceId = null) {
   const members = doc?.data?.members;
   if (!Array.isArray(members)) return null;
   const email = (user.email || '').toLowerCase();
@@ -2737,17 +2744,17 @@ function ensureMember(doc, user, role = 'member', workspaceId = null) {
     match.role = ROLE_LABEL[role] || match.role;
     return match.id;
   }
-  const id = workspaceId ? memberIdFor(workspaceId, user) : `m_${user.id.slice(0, 8)}`;
+  const id = workspaceId ? await memberIdFor(workspaceId, user) : `m_${user.id.slice(0, 8)}`;
   members.push(memberProfile({ user_id: user.id, member_id: id, role, name: user.name, email: user.email }, members.length));
   return id;
 }
 
-function addMembership(ws, user, role, teams = [], scope = null) {
+async function addMembership(ws, user, role, teams = [], scope = null) {
   if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
      document's revision and never invalidates another session's write. */
-  const memberId = memberIdFor(ws.id, user);
+  const memberId = await memberIdFor(ws.id, user);
   /* D-07: the invited team set lands as one authority row per team inside the
      same transaction — an invite accepted between boots must not wait for the
      next backfill to appear in rosters. Scalar-tolerant only for the sake of
@@ -2764,37 +2771,45 @@ function addMembership(ws, user, role, teams = [], scope = null) {
      the same transaction. The coalesce keeps the legacy internal callers
      (which pass nothing at all) from ever erasing a scope a re-run finds. */
   const scopeJson = scope && typeof scope === 'object' && (Array.isArray(scope.teams) || Array.isArray(scope.projects)) ? JSON.stringify(scope) : null;
-  db.exec('begin immediate');
-  try {
-    db.prepare(
+  await db.tx(async () => {
+    await db.run(
       `insert into memberships (workspace_id, user_id, role, member_id, team, scope) values (?,?,?,?,?,?)
        on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id,
        scope = coalesce(excluded.scope, memberships.scope)`,
-    ).run(ws.id, user.id, role, memberId, null, scopeJson);
+      [ws.id, user.id, role, memberId, null, scopeJson],
+    );
     /* TEAM-01: the teams picked at invite time land in the authority rows too —
        the scalar column is backfill-only legacy (D-04). */
     if (teamList.length) {
-      const insert = db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)');
-      for (const team of teamList) insert.run(ws.id, team, memberId, user.id);
+      for (const team of teamList) {
+        await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [
+          ws.id,
+          team,
+          memberId,
+          user.id,
+        ]);
+      }
     }
-    db.exec('commit');
-  } catch (err) {
-    db.exec('rollback');
-    throw err;
-  }
+  });
   return memberId;
 }
 
-function createUser(email, name, password) {
+async function createUser(email, name, password) {
   const clean = email.trim().toLowerCase();
   if (!emailOk(clean)) throw httpError(400, 'Enter a valid email address', 'enterValidEmail');
   if (String(password).length < 10) throw httpError(400, 'Use at least 10 characters', 'passwordTooShort');
-  if (db.prepare('select 1 from users where email = ?').get(clean)) throw httpError(409, 'An account with that email already exists', 'accountExists');
+  if (await db.get('select 1 from users where email = ?', [clean])) throw httpError(409, 'An account with that email already exists', 'accountExists');
 
   const id = uid();
   const cleanName = (name || '').trim() || clean.split('@')[0];
   try {
-    db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(id, clean, cleanName, hashPassword(password), now());
+    await db.run('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)', [
+      id,
+      clean,
+      cleanName,
+      hashPassword(password),
+      now(),
+    ]);
   } catch (err) {
     /* WR-06: a signup race can pass the pre-check and hit the UNIQUE constraint.
        Map it to the same 409 accountExists as the pre-check; any other SQL error
@@ -2808,13 +2823,13 @@ function createUser(email, name, password) {
 }
 
 /* Create a workspace and make its creator the owner. */
-function createWorkspace(name, slugBase, user) {
+async function createWorkspace(name, slugBase, user) {
   const slug = uniqueSlug(slugBase || name);
-  const color = ['#1D1C1A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'][db.prepare('select count(*) as n from workspaces').get().n % 6];
+  const color = ['#1D1C1A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'][(await db.get('select count(*) as n from workspaces')).n % 6];
   const id = uid();
   const doc = emptyDoc({ name, slug, color });
   const t = now();
-  db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+  await db.run('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)', [
     id,
     slug,
     name,
@@ -2823,9 +2838,9 @@ function createWorkspace(name, slugBase, user) {
     1,
     t,
     t,
-  );
-  const ws = db.prepare('select * from workspaces where id = ?').get(id);
-  addMembership(ws, user, 'owner');
+  ]);
+  const ws = await db.get('select * from workspaces where id = ?', [id]);
+  await addMembership(ws, user, 'owner');
   return wsBySlug(slug);
 }
 
@@ -2959,23 +2974,22 @@ function maskEmail(email) {
   return `${String(email).slice(0, at)[0]}***@${String(email).slice(at + 1)[0] || ''}***`;
 }
 
-function currentUser(req) {
+async function currentUser(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE];
   if (!token) return null;
   const tokenHash = sha256(token);
-  const row = db
-    .prepare(
-      `select u.*, s.last_seen_at as last_seen_at from sessions s join users u on u.id = s.user_id
+  const row = await db.get(
+    `select u.*, s.last_seen_at as last_seen_at from sessions s join users u on u.id = s.user_id
        where s.token_hash = ? and s.expires_at > ?`,
-    )
-    .get(tokenHash, now());
+    [tokenHash, now()],
+  );
   if (!row) return null;
-  touchLastSeen(tokenHash, row.last_seen_at, now());
+  await touchLastSeen(tokenHash, row.last_seen_at, now());
   return row;
 }
 
-function requireUser(req, res) {
-  const user = currentUser(req);
+async function requireUser(req, res) {
+  const user = await currentUser(req);
   if (!user) {
     fail(res, 401, 'signInRequired', 'Sign in to continue');
     return null;
@@ -2991,8 +3005,8 @@ function isInstanceAdmin(user) {
 }
 
 /* Resolve a workspace by slug and enforce a minimum role. Unknown slugs 404. */
-function requireWorkspace(req, res, slug, minRole = 'viewer') {
-  const user = requireUser(req, res);
+async function requireWorkspace(req, res, slug, minRole = 'viewer') {
+  const user = await requireUser(req, res);
   if (!user) return null;
   const ws = wsBySlug(slug);
   const membership = ws ? membershipOf(ws.id, user.id) : null;
@@ -3027,14 +3041,14 @@ function tooMany(key, max = 10, windowMs = 15 * 60 * 1000) {
    eligible epoch; it is lost on restart (T-14-07: one harmless extra write). */
 const lastSeenNext = new Map();
 const LAST_SEEN_BAND = 60 * 1000; // D-22: one write per minute per session
-function touchLastSeen(tokenHash, storedLastSeen, nowTs) {
+async function touchLastSeen(tokenHash, storedLastSeen, nowTs) {
   const next = lastSeenNext.get(tokenHash);
   if (next && nowTs < next) return;
   if (storedLastSeen && nowTs - storedLastSeen < LAST_SEEN_BAND) {
     lastSeenNext.set(tokenHash, storedLastSeen + LAST_SEEN_BAND);
     return;
   }
-  db.prepare('update sessions set last_seen_at = ? where token_hash = ?').run(nowTs, tokenHash);
+  await db.run('update sessions set last_seen_at = ? where token_hash = ?', [nowTs, tokenHash]);
   lastSeenNext.set(tokenHash, nowTs + LAST_SEEN_BAND);
   if (lastSeenNext.size > 5000) for (const [k, v] of lastSeenNext) if (nowTs > v) lastSeenNext.delete(k);
 }
@@ -3042,8 +3056,8 @@ function touchLastSeen(tokenHash, storedLastSeen, nowTs) {
 /* D-99: minimal account-security event store (Phase 20) — a per-user, verb-keyed
    log deliberately NOT the task-scoped logAct (src/core/store.js). Phase 21's
    DIS-01 reuses this table and this helper verbatim. Never logs secrets or codes. */
-function logSecurity(userId, verb) {
-  db.prepare('insert into security_log (id, user_id, verb, created_at) values (?,?,?,?)').run(uid(), userId, verb, now());
+async function logSecurity(userId, verb) {
+  await db.run('insert into security_log (id, user_id, verb, created_at) values (?,?,?,?)', [uid(), userId, verb, now()]);
 }
 
 /* TFA-MAIL: fire-and-forget security alert on 2FA factor changes. Account-level
@@ -3113,7 +3127,7 @@ async function handleApi(req, res, url) {
       return fail(res, 404, 'notFound', 'Not found');
     }
     const body = await readJson(req).catch(() => ({}));
-    const { emitted, digests } = runReminderPass({ now: body?.now ? new Date(body.now) : undefined });
+    const { emitted, digests } = await runReminderPass({ now: body?.now ? new Date(body.now) : undefined });
     return json(res, 200, { emitted, digests });
   }
 
@@ -3225,9 +3239,9 @@ async function handleApi(req, res, url) {
         String(claims.acct ?? '') === '1';
       const canLink = isPinnedTenant && !guestShape;
       const verifiedEmail = claims.email_verified === true;
-      let row = db.prepare('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?').get(OIDC.config.issuer, subject);
+      let row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [OIDC.config.issuer, subject]);
       if (!row) {
-        const existing = db.prepare('select * from users where email = ?').get(email);
+        const existing = await db.get('select * from users where email = ?', [email]);
         if (existing && !(canLink && verifiedEmail)) return errorRedirect();
         if (existing) {
           row = existing;
@@ -3239,24 +3253,24 @@ async function handleApi(req, res, url) {
           /* Pitfall 5: JIT accounts get a RANDOM unusable scrypt hash — never
              a constant — into the password_hash NOT NULL column. Bare account,
              no workspace (D-05); the onboarding flow lands them next. */
-          const created = createUser(email, String(claims.name || ''), crypto.randomBytes(24).toString('base64url'));
-          row = db.prepare('select * from users where id = ?').get(created.id);
+          const created = await createUser(email, String(claims.name || ''), crypto.randomBytes(24).toString('base64url'));
+          row = await db.get('select * from users where id = ?', [created.id]);
         }
         try {
-          db.prepare('insert into oidc_identities (id, user_id, issuer, subject, created_at, last_login_at) values (?,?,?,?,?,?)').run(
+          await db.run('insert into oidc_identities (id, user_id, issuer, subject, created_at, last_login_at) values (?,?,?,?,?,?)', [
             uid(),
             row.id,
             OIDC.config.issuer,
             subject,
             now(),
             now(),
-          );
+          ]);
         } catch (err) {
           /* Concurrency backstop (SSO-03): a parallel first-login for the same
              (issuer, subject) won the unique index — resolve to ITS row instead
              of failing the login. Any other SQL error rethrows (fail closed). */
           if (!/UNIQUE|oidc_identities_subject/i.test(String(err?.message || ''))) throw err;
-          row = db.prepare('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?').get(OIDC.config.issuer, subject);
+          row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [OIDC.config.issuer, subject]);
         }
       }
 
@@ -3268,10 +3282,11 @@ async function handleApi(req, res, url) {
          Expired invites are filtered out here — they neither block nor
          auto-accept. */
       let ssoRedirect = '/';
-      if (!db.prepare('select 1 from memberships where user_id = ?').get(row.id)) {
-        const pendingInvites = db
-          .prepare('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?')
-          .all(row.email, now());
+      if (!(await db.get('select 1 from memberships where user_id = ?', [row.id]))) {
+        const pendingInvites = await db.all('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?', [
+          row.email,
+          now(),
+        ]);
         if (pendingInvites.length === 1) {
           /* Exactly one pending invite: auto-accept with the acceptance
              recipe VERBATIM from the accept route — addMembership with the
@@ -3280,9 +3295,9 @@ async function handleApi(req, res, url) {
           const invite = pendingInvites[0];
           /* HARD-03 (D-03/D-05): resolve explicitly — no firstWorkspace()
              fallback, no cross-tenant join. */
-          const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id);
+          const ws = await db.get('select * from workspaces where id = ?', [invite.workspace_id]);
           if (ws) {
-            addMembership(
+            await addMembership(
               ws,
               row,
               invite.role,
@@ -3306,9 +3321,9 @@ async function handleApi(req, res, url) {
             );
             /* Same single-use clearing as the accept route: the consumed
                token plus every other pending link for that address. */
-            db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), row.id, invite.token_hash);
-            db.prepare('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null').run(now(), ws.id, invite.email);
-            logSecurity(row.id, 'sso_invite_accepted');
+            await db.run('update invites set used_at = ?, used_by = ? where token_hash = ?', [now(), row.id, invite.token_hash]);
+            await db.run('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null', [now(), ws.id, invite.email]);
+            await logSecurity(row.id, 'sso_invite_accepted');
           } else {
             /* HARD-03 (D-03/D-04): fail closed — the invite's workspace is
                gone. Consume the ONE invite with the same :2868-shaped write so
@@ -3316,7 +3331,7 @@ async function handleApi(req, res, url) {
                the address-wide clearing write is skipped (no ws.id to scope it
                to), no success security verb fires (that would log a lie), and
                the login lands on the ONE generic ssoError surface. */
-            db.prepare('update invites set used_at = ?, used_by = ? where token_hash = ?').run(now(), row.id, invite.token_hash);
+            await db.run('update invites set used_at = ?, used_by = ? where token_hash = ?', [now(), row.id, invite.token_hash]);
             ssoRedirect = '/login?sso=error';
           }
         } else if (pendingInvites.length > 1) {
@@ -3339,11 +3354,11 @@ async function handleApi(req, res, url) {
          user-scoped. */
       if (row.two_fa_enabled) {
         const challengeToken = crypto.randomBytes(32).toString('base64url');
-        db.prepare('insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)').run(
+        await db.run('insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)', [
           sha256(challengeToken),
           row.id,
           now() + CHALLENGE_TTL_MS,
-        );
+        ]);
         setChallengeCookie(req, res, challengeToken);
         res.writeHead(302, { Location: '/#tfa' });
         return res.end();
@@ -3355,7 +3370,7 @@ async function handleApi(req, res, url) {
       const t = now();
       const ua = String(req.headers['user-agent'] || '');
       const ip = clientIp(req);
-      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+      await db.run('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)', [
         sha256(token),
         row.id,
         t,
@@ -3363,11 +3378,11 @@ async function handleApi(req, res, url) {
         ip,
         ua,
         t, // a just-created session was seen at creation (D-25 need not apply to new rows)
-      );
-      db.prepare('update users set last_login_at = ? where id = ?').run(t, row.id);
-      db.prepare('update oidc_identities set last_login_at = ? where issuer = ? and subject = ?').run(t, OIDC.config.issuer, subject);
+      ]);
+      await db.run('update users set last_login_at = ? where id = ?', [t, row.id]);
+      await db.run('update oidc_identities set last_login_at = ? where issuer = ? and subject = ?', [t, OIDC.config.issuer, subject]);
       setSessionCookie(req, res, token);
-      logSecurity(row.id, 'sso_login');
+      await logSecurity(row.id, 'sso_login');
       res.writeHead(302, { Location: ssoRedirect });
       return res.end();
     } catch {
@@ -3397,7 +3412,7 @@ async function handleApi(req, res, url) {
     if (tooMany(`${clientIp(req)}|${email}`)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     logWarn(`login failed: ${email} from ${clientIp(req)}`);
 
-    const row = db.prepare('select * from users where email = ?').get(email);
+    const row = await db.get('select * from users where email = ?', [email]);
     const valid = verifyPassword(password, row?.password_hash || DUMMY_HASH) && !!row;
     if (!valid) return fail(res, 401, 'invalidCredentials', 'Email or password is incorrect');
 
@@ -3407,11 +3422,11 @@ async function handleApi(req, res, url) {
        steps share ONE budget (D-03/Pitfall 18: no success-clear between steps). */
     if (row.two_fa_enabled) {
       const challengeToken = crypto.randomBytes(32).toString('base64url');
-      db.prepare('insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)').run(
+      await db.run('insert into login_challenges (challenge_token_hash, user_id, expires_at, attempts) values (?,?,?,0)', [
         sha256(challengeToken),
         row.id,
         now() + CHALLENGE_TTL_MS,
-      );
+      ]);
       setChallengeCookie(req, res, challengeToken);
       logInfo(`2fa challenge issued: ${email} from ${clientIp(req)}`);
       return json(res, 200, { pending2fa: true, maskedEmail: maskEmail(row.email) });
@@ -3422,7 +3437,7 @@ async function handleApi(req, res, url) {
     const t = now();
     const ua = String(req.headers['user-agent'] || '');
     const ip = clientIp(req);
-    db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+    await db.run('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)', [
       sha256(token),
       row.id,
       t,
@@ -3430,8 +3445,8 @@ async function handleApi(req, res, url) {
       ip,
       ua,
       t, // a just-created session was seen at creation (D-25 need not apply to new rows)
-    );
-    db.prepare('update users set last_login_at = ? where id = ?').run(t, row.id);
+    ]);
+    await db.run('update users set last_login_at = ? where id = ?', [t, row.id]);
     setSessionCookie(req, res, token);
     logInfo(`login: ${email} from ${clientIp(req)}`);
     return json(res, 200, { user: userPayload(row) });
@@ -3440,16 +3455,16 @@ async function handleApi(req, res, url) {
   if (pathname === '/api/auth/logout' && method === 'POST') {
     const token = parseCookies(req.headers.cookie)[COOKIE];
     if (token) {
-      const sess = db.prepare('select user_id from sessions where token_hash = ?').get(sha256(token));
+      const sess = await db.get('select user_id from sessions where token_hash = ?', [sha256(token)]);
       if (sess) {
-        const u = db.prepare('select email from users where id = ?').get(sess.user_id);
+        const u = await db.get('select email from users where id = ?', [sess.user_id]);
         if (u) logInfo(`logout: ${u.email}`);
       }
-      db.prepare('delete from sessions where token_hash = ?').run(sha256(token));
+      await db.run('delete from sessions where token_hash = ?', [sha256(token)]);
     }
     // D-61/D-71: logout also works from the pending state — kill any live challenge.
     const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
-    if (challengeToken) db.prepare('delete from login_challenges where challenge_token_hash = ?').run(sha256(challengeToken));
+    if (challengeToken) await db.run('delete from login_challenges where challenge_token_hash = ?', [sha256(challengeToken)]);
     clearSessionCookie(req, res);
     clearChallengeCookie(req, res);
     return json(res, 204);
@@ -3458,40 +3473,40 @@ async function handleApi(req, res, url) {
   if (pathname === '/api/auth/me' && method === 'GET') {
     // Probe endpoint: answer 200 with null instead of 401 so a signed-out
     // boot doesn't log a console error in every browser.
-    const user = currentUser(req);
+    const user = await currentUser(req);
     if (!user) return json(res, 200, { user: null });
     return json(res, 200, { user: userPayload(user) });
   }
 
   if (pathname === '/api/auth/me' && method === 'PATCH') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
     // Only body.locale is read; every other field is ignored (mass-assignment guard).
     const locale = String(body?.locale || '');
     if (!LOCALE_CODES.includes(locale)) return fail(res, 400, 'unknownLocale', 'Unknown locale');
-    db.prepare('update users set locale = ? where id = ?').run(locale, user.id);
-    const fresh = db.prepare('select * from users where id = ?').get(user.id);
+    await db.run('update users set locale = ? where id = ?', [locale, user.id]);
+    const fresh = await db.get('select * from users where id = ?', [user.id]);
     return json(res, 200, { user: userPayload(fresh) });
   }
 
   /* ------------------- per-user notif prefs (Phase 34, SETTINGS-01/02) ------------------- */
 
   if (pathname === '/api/me/notif-prefs' && method === 'GET') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const wsId = String(url.searchParams.get('workspace') || '');
-    const ws = wsId ? db.prepare('select id from workspaces where id = ?').get(wsId) : null;
-    const member = ws ? db.prepare('select 1 from memberships where workspace_id = ? and user_id = ?').get(ws.id, user.id) : null;
+    const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
+    const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
     // No-oracle: a workspace the caller is not a member of reads as not-found.
     if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
-    return json(res, 200, { prefs: getUserNotifPrefs(user.id, ws.id) });
+    return json(res, 200, { prefs: await getUserNotifPrefs(user.id, ws.id) });
   }
 
   if (pathname === '/api/me/notif-prefs' && method === 'PUT') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
@@ -3507,17 +3522,15 @@ async function handleApi(req, res, url) {
       if (!NOTIF_PREF_KEYS.includes(key)) return fail(res, 400, 'unknownPrefKey', 'Unknown preference key');
     }
     const wsId = String(body?.workspace || '');
-    const ws = wsId ? db.prepare('select id from workspaces where id = ?').get(wsId) : null;
-    const member = ws ? db.prepare('select 1 from memberships where workspace_id = ? and user_id = ?').get(ws.id, user.id) : null;
+    const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
+    const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
     if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     // Merge into the existing row instead of replacing it: a partial body must
     // never erase keys the caller omits (e.g. after a silent hydration failure
     // the client falls back to local defaults and would otherwise revert a
     // stored `false` to the ON default). Whitelist + boolean coercion still
     // apply to every incoming key.
-    const existingRow = db
-      .prepare('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?')
-      .get(ws.id, user.id);
+    const existingRow = await db.get('select prefs from user_notif_prefs where workspace_id = ? and user_id = ?', [ws.id, user.id]);
     let existing = {};
     try {
       const parsed = JSON.parse(existingRow?.prefs ?? '{}');
@@ -3527,15 +3540,15 @@ async function handleApi(req, res, url) {
     }
     const prefs = { ...existing };
     for (const key of Object.keys(incoming)) prefs[key] = Boolean(incoming[key]);
-    db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, user.id, JSON.stringify(prefs));
-    return json(res, 200, { prefs: getUserNotifPrefs(user.id, ws.id) });
+    await db.run('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [ws.id, user.id, JSON.stringify(prefs)]);
+    return json(res, 200, { prefs: await getUserNotifPrefs(user.id, ws.id) });
   }
 
   /* ----------------------- password change (PASS-01/02) ----------------------- */
 
   if (pathname === '/api/auth/password' && method === 'PATCH') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // D-40/D-41: the caller is cookie-authenticated, so the budget is keyed by
     // user_id — and every attempt below (including a wrong current password)
@@ -3551,13 +3564,13 @@ async function handleApi(req, res, url) {
     // Pitfall 9: hash the caller's own cookie — never a body or param value.
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     // PASS-02: verify, rehash and revoke-others are one atomic unit.
-    const ok = transaction(() => {
+    const ok = await db.tx(async () => {
       // Pitfall 4: re-select the hash fresh inside the transaction.
-      const row = db.prepare('select password_hash from users where id = ?').get(user.id);
+      const row = await db.get('select password_hash from users where id = ?', [user.id]);
       if (!row || !verifyPassword(cur, row.password_hash)) return false;
-      db.prepare('update users set password_hash = ? where id = ?').run(hashPassword(nw), user.id);
+      await db.run('update users set password_hash = ? where id = ?', [hashPassword(nw), user.id]);
       // Keep-current (P-H): the caller's own session is excluded by the != clause.
-      db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
+      await db.run('delete from sessions where user_id = ? and token_hash != ?', [user.id, tokenHash]);
       return true;
     });
     if (!ok) return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
@@ -3568,7 +3581,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/enroll' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // D-49: password step-up before any secret generation. Every attempt —
     // including a wrong current password — consumes one try (D-41 precedent).
@@ -3583,7 +3596,7 @@ async function handleApi(req, res, url) {
     // (factors/enroll) — password-only enrollment here would let a hijacked
     // session QR-bomb itself past TOTP2-05 and stack a duplicate
     // "Primary authenticator" row.
-    const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+    const factorCount = (await db.get('select count(*) as c from totp_factors where user_id = ?', [user.id])).c;
     if (factorCount > 0) return fail(res, 409, 'tfaNotEnabled', 'Additional factors use the add-factor flow');
     const secret = generateTotpSecret();
     const otpauth = buildOtpauthUri(user.email, secret);
@@ -3593,7 +3606,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/enable' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // D-11: this exact budget shape is what Phase 17's login second step reuses.
     if (tooMany(`2fa-verify|${clientIp(req)}|${user.email}`, 5, 15 * 60 * 1000))
@@ -3610,7 +3623,7 @@ async function handleApi(req, res, url) {
     // With factor rows present, the pending entry is dead weight — enabling
     // through here would stack a second verifiable factor with no
     // existing-factor step-up. The add-factor flow owns additional factors.
-    if (db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c > 0)
+    if ((await db.get('select count(*) as c from totp_factors where user_id = ?', [user.id])).c > 0)
       return fail(res, 409, 'tfaNotEnabled', 'Additional factors use the add-factor flow');
     // WR-03 (double-submit race): consume the pending entry ATOMICALLY before
     // verification (WR-03 note on factors/enable). A failed verify re-stashes
@@ -3642,25 +3655,29 @@ async function handleApi(req, res, url) {
     for (let i = 0; i < 10; i++) codes.push(generateRecoveryCode());
     // One atomic unit: flip on, write the D-05 envelope + D-04 baseline,
     // rotate recovery codes (D-53), clear the pending entry.
-    transaction(() => {
-      db.prepare('update users set two_fa_enabled = 1, two_fa_secret = ? where id = ?').run(envelope, user.id);
+    await db.tx(async () => {
+      await db.run('update users set two_fa_enabled = 1, two_fa_secret = ? where id = ?', [envelope, user.id]);
       // TOTP2 (Phase 31, D-06): the factor row is the single source of truth —
       // the first-ever enable inserts it alongside the users columns so the
       // any-factor verify path sees it without a reboot. First-ever semantics
       // (recovery rotation, the enable flip) are unchanged.
-      db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)').run(
+      await db.run('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)', [
         uid(),
         user.id,
         'settings.tfa.factor.primary',
         envelope,
         verified.matchedStep,
         now(),
-      );
-      db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
-      const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
+      ]);
+      await db.run('delete from recovery_codes where user_id = ?', [user.id]);
       for (const code0 of codes) {
         // D-09/D-51: hash of the ONE normalization (Pitfall 6) — plaintext never stored.
-        insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
+        await db.run('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)', [
+          uid(),
+          user.id,
+          recoveryHash(normalizeRecoveryCode(code0)),
+          now(),
+        ]);
       }
       // WR-03: the pending entry was already consumed before verification —
       // nothing left to clear here.
@@ -3671,7 +3688,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/disable' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // T-16-14: a distinct budget from the other tfa routes (D-11 band).
     if (tooMany(`tfa-disable|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
@@ -3689,36 +3706,36 @@ async function handleApi(req, res, url) {
     // One atomic unit (Pitfall 4): re-select fresh INSIDE the transaction,
     // verify password + live TOTP, and tear down on success. No writes happen
     // on any miss, so a failed verify commits nothing.
-    const outcome = transaction(() => {
-      const fresh = db.prepare('select password_hash from users where id = ?').get(user.id);
+    const outcome = await db.tx(async () => {
+      const fresh = await db.get('select password_hash from users where id = ?', [user.id]);
       if (!fresh || !verifyPassword(cur, fresh.password_hash)) return 'password';
       // TOTP2 (Phase 31, D-10): the step-up verifies a code from ANY enrolled
       // factor through the shared helper. D-77: every decrypt runs through
       // requireTotpSecret inside the helper — no plaintext fallback.
       // decrypted === 0 → fail closed 503 (Pitfall 3) with the D-81 route
       // copy unchanged.
-      const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+      const result = await verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
       if (result.decrypted === 0) return 'masterKey';
       if (!result.ok) return 'code';
       // D-04/D-09: the replay guard advances on the MATCHED FACTOR's row —
       // no users.two_fa_last_step write on this path (Pitfall 5/D-08).
-      db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
+      await db.run('update totp_factors set last_step = ? where id = ?', [result.matchedStep, result.factorId]);
       // D-59: complete teardown — a fresh enroll afterwards is indistinguishable
       // from a first one. two_fa_last_step resets to its NOT NULL default 0
       // (the no-baseline sentinel from Phase 14).
-      db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?").run(user.id);
+      await db.run("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?", [user.id]);
       // TOTP2 (Phase 31, D-06/D-18): the factor rows die with 2FA — the
       // no-half-state guarantee (a fresh enroll afterwards is indistinguishable
       // from a first one, and the boot copy's anti-join never resurrects rows).
-      db.prepare('delete from totp_factors where user_id = ?').run(user.id);
-      db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
+      await db.run('delete from totp_factors where user_id = ?', [user.id]);
+      await db.run('delete from recovery_codes where user_id = ?', [user.id]);
       // D-103: all pending 2FA login challenges die with 2FA — keyed on
       // user_id ONLY (an unscoped or token-keyed variant either misses rows
       // or breaks other users' in-flight logins).
-      db.prepare('delete from login_challenges where user_id = ?').run(user.id);
+      await db.run('delete from login_challenges where user_id = ?', [user.id]);
       // D-105: revoke-others, keep-current — the caller's own session is
       // excluded by the != clause against its cookie-derived hash.
-      db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
+      await db.run('delete from sessions where user_id = ? and token_hash != ?', [user.id, tokenHash]);
       return 'ok';
     });
     if (outcome === 'password') return fail(res, 403, 'wrongCurrentPassword', 'Current password is incorrect');
@@ -3726,7 +3743,7 @@ async function handleApi(req, res, url) {
     if (outcome === 'code') return fail(res, 400, 'codeRejected', 'That code is not valid');
     // D-107: the security verb records only on committed success — after the
     // transaction, before the response.
-    logSecurity(user.id, 'tfa_disabled');
+    await logSecurity(user.id, 'tfa_disabled');
     sendTfaSecurityAlert(user, 'disabled', '', req);
     return json(res, 200, { ok: true });
   }
@@ -3735,7 +3752,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/recovery' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // T-20-02/D-93: a distinct budget from the other tfa routes (D-11 band).
     // D-94: every attempt below — including a wrong password — has already
@@ -3756,27 +3773,31 @@ async function handleApi(req, res, url) {
     // One atomic unit (Pitfall 4/D-88): re-select fresh INSIDE the transaction,
     // verify both factors (D-86), then update the replay guard, burn-all and
     // insert-new — no writes happen on any miss.
-    const outcome = transaction(() => {
-      const fresh = db.prepare('select password_hash, two_fa_enabled from users where id = ?').get(user.id);
+    const outcome = await db.tx(async () => {
+      const fresh = await db.get('select password_hash, two_fa_enabled from users where id = ?', [user.id]);
       if (!fresh || !fresh.two_fa_enabled) return 'notEnabled'; // D-95: before any factor check
       if (!verifyPassword(cur, fresh.password_hash)) return 'password'; // D-86: password first (D-94: try already consumed)
       // TOTP2 (Phase 31, D-10): the step-up verifies a code from ANY enrolled
       // factor through the shared helper (D-77 boundary inside; decrypted === 0
       // → fail closed 503, Pitfall 3).
-      const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+      const result = await verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
       if (result.decrypted === 0) return 'masterKey';
       if (!result.ok) return 'code';
       // D-87: keep the replay guard current in the SAME transaction — on the
       // MATCHED FACTOR's row (no users.two_fa_last_step write, Pitfall 5/D-08).
-      db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
-      db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
-      const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
+      await db.run('update totp_factors set last_step = ? where id = ?', [result.matchedStep, result.factorId]);
+      await db.run('delete from recovery_codes where user_id = ?', [user.id]);
       for (const code0 of codes) {
         // D-97: hash of the ONE normalization (Pitfall 6) — plaintext never stored.
-        insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
+        await db.run('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)', [
+          uid(),
+          user.id,
+          recoveryHash(normalizeRecoveryCode(code0)),
+          now(),
+        ]);
       }
       // D-99: the security event shares the transaction — success-only rows.
-      logSecurity(user.id, 'tfa_recovery_regenerated');
+      await logSecurity(user.id, 'tfa_recovery_regenerated');
       return 'ok';
     });
     if (outcome === 'notEnabled') return fail(res, 409, 'tfaNotEnabled', 'Enable two-factor authentication first');
@@ -3791,7 +3812,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/factors/enroll' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // Distinct budget band (D-11) from the other tfa routes; every attempt —
     // including a wrong password — has consumed one try before it is processed.
@@ -3811,17 +3832,17 @@ async function handleApi(req, res, url) {
     // Route contract (D-04 consequence): additional factors ONLY — a
     // first-ever enrollment (zero factor rows) rides /api/auth/tfa/enroll,
     // which is password-only and carries no existing-factor step-up by design.
-    const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+    const factorCount = (await db.get('select count(*) as c from totp_factors where user_id = ?', [user.id])).c;
     if (factorCount === 0) return fail(res, 409, 'tfaNotEnabled', 'Enable two-factor authentication first');
     // TOTP2-05/T-31-06: a LIVE code from an EXISTING factor is verified
     // server-side BEFORE the new secret is generated or revealed — the
     // lock-out guard against QR-bombing an hijacked session. D-14: strict
     // 6-digit shape only, no recovery lookup anywhere in this route.
-    const stepUp = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+    const stepUp = await verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
     if (stepUp.decrypted === 0) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be verified until the admin sets it');
     if (!stepUp.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
     // D-04: the step-up code's replay guard advances on its matched factor.
-    db.prepare('update totp_factors set last_step = ? where id = ?').run(stepUp.matchedStep, stepUp.factorId);
+    await db.run('update totp_factors set last_step = ? where id = ?', [stepUp.matchedStep, stepUp.factorId]);
     const secret = generateTotpSecret();
     const otpauth = buildOtpauthUri(user.email, secret);
     const stagedId = uid();
@@ -3832,7 +3853,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/factors/enable' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // D-11 budget shape — the same band the legacy enable route uses.
     if (tooMany(`2fa-verify|${clientIp(req)}|${user.email}`, 5, 15 * 60 * 1000))
@@ -3880,44 +3901,48 @@ async function handleApi(req, res, url) {
     // D-02: the enroll step validated the label; a legacy-keyed pending entry
     // (first-ever re-enable) carries none and stores the primary catalogue key.
     const label = pending.label || 'settings.tfa.factor.primary';
-    const wasFirst = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c === 0;
+    const wasFirst = (await db.get('select count(*) as c from totp_factors where user_id = ?', [user.id])).c === 0;
     // D-50/D-53: the plaintext codes are generated first and returned exactly
     // once — first-ever enable (or first after a disable) rotates recovery.
     const codes = wasFirst ? Array.from({ length: 10 }, () => generateRecoveryCode()) : null;
-    transaction(() => {
+    await db.tx(async () => {
       // D-13/Pitfall 4: the factor insert (with its own baseline) and the
       // first-ever flip are ONE atomic unit — no half-state on failure.
-      db.prepare('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)').run(
+      await db.run('insert into totp_factors (id, user_id, name, secret, last_step, created_at) values (?,?,?,?,?,?)', [
         uid(),
         user.id,
         label,
         envelope,
         verified.matchedStep,
         now(),
-      );
+      ]);
       if (wasFirst) {
         // D-13: two_fa_enabled flips only for the first-ever factor;
         // D-17: the recovery rotation rides the same first-ever semantics.
-        db.prepare('update users set two_fa_enabled = 1 where id = ?').run(user.id);
-        db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
-        const insert = db.prepare('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)');
+        await db.run('update users set two_fa_enabled = 1 where id = ?', [user.id]);
+        await db.run('delete from recovery_codes where user_id = ?', [user.id]);
         for (const code0 of codes) {
           // D-09/D-51: hash of the ONE normalization (Pitfall 6).
-          insert.run(uid(), user.id, recoveryHash(normalizeRecoveryCode(code0)), now());
+          await db.run('insert into recovery_codes (id, user_id, code_hash, used_at, created_at) values (?,?,?,null,?)', [
+            uid(),
+            user.id,
+            recoveryHash(normalizeRecoveryCode(code0)),
+            now(),
+          ]);
         }
       }
       // WR-03: the pending entry was already consumed before verification —
       // nothing left to clear here.
     });
     // Success-only security event (D-107 discipline).
-    logSecurity(user.id, 'tfa_factor_added');
+    await logSecurity(user.id, 'tfa_factor_added');
     sendTfaSecurityAlert(user, 'added', label, req);
     return json(res, 200, codes ? { ok: true, recoveryCodes: codes } : { ok: true });
   }
 
   if (pathname === '/api/auth/tfa/factors/remove' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // Own budget band (D-11) — removal is its own throttle surface.
     if (tooMany(`tfa-factor-remove|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
@@ -3944,36 +3969,36 @@ async function handleApi(req, res, url) {
     // branch decision itself is re-read INSIDE the transaction below — two
     // concurrent removes both observing "2 factors" could otherwise take the
     // single-delete path twice and strand the user at 0 rows with 2FA on.
-    const factorCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
-    const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000), factorCount > 1 ? target.id : null);
+    const factorCount = (await db.get('select count(*) as c from totp_factors where user_id = ?', [user.id])).c;
+    const result = await verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000), factorCount > 1 ? target.id : null);
     if (result.decrypted === 0) return fail(res, 503, 'masterKeyMissing', 'MASTER_KEY is not configured — 2FA cannot be verified until the admin sets it');
     if (!result.ok) return fail(res, 400, 'codeRejected', 'That code is not valid');
     // D-04: the verifying code's replay guard advances on ITS matched factor.
-    db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
+    await db.run('update totp_factors set last_step = ? where id = ?', [result.matchedStep, result.factorId]);
     // Pitfall 9/D-105: hash the caller's own cookie — never a body value.
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
-    transaction(() => {
+    await db.tx(async () => {
       // WR-01: the count is re-read inside the transaction (Pitfall 4) — the
       // branch below can no longer race a concurrent removal into a
       // 0-factors-but-2FA-on half-state.
-      const freshCount = db.prepare('select count(*) as c from totp_factors where user_id = ?').get(user.id).c;
+      const freshCount = (await db.get('select count(*) as c from totp_factors where user_id = ?', [user.id])).c;
       if (freshCount > 1) {
         // D-17: single-factor removal touches NOTHING else — the target row
         // dies alone; recovery codes, sessions and 2FA itself stay.
-        db.prepare('delete from totp_factors where id = ? and user_id = ?').run(factorId, user.id);
+        await db.run('delete from totp_factors where id = ? and user_id = ?', [factorId, user.id]);
       } else {
         // D-18: the LAST factor's removal IS the disable-2FA transaction —
         // the teardown block runs verbatim (users flip, recovery wipe,
         // challenge wipe, revoke-others-keep-current; D-53 rotation rides
         // the next enable). No divergent half-state path exists.
-        db.prepare("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?").run(user.id);
-        db.prepare('delete from totp_factors where user_id = ?').run(user.id);
-        db.prepare('delete from recovery_codes where user_id = ?').run(user.id);
-        db.prepare('delete from login_challenges where user_id = ?').run(user.id);
-        db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
+        await db.run("update users set two_fa_enabled = 0, two_fa_secret = '', two_fa_last_step = 0 where id = ?", [user.id]);
+        await db.run('delete from totp_factors where user_id = ?', [user.id]);
+        await db.run('delete from recovery_codes where user_id = ?', [user.id]);
+        await db.run('delete from login_challenges where user_id = ?', [user.id]);
+        await db.run('delete from sessions where user_id = ? and token_hash != ?', [user.id, tokenHash]);
       }
     });
-    logSecurity(user.id, 'tfa_factor_removed');
+    await logSecurity(user.id, 'tfa_factor_removed');
     sendTfaSecurityAlert(user, 'removed', target.name, req);
     return json(res, 200, { ok: true });
   }
@@ -3989,9 +4014,10 @@ async function handleApi(req, res, url) {
     // an attacker cannot aim the throttle at an arbitrary victim address.
     const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
     const challenge = challengeToken
-      ? db
-          .prepare('select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?')
-          .get(sha256(challengeToken))
+      ? await db.get(
+          'select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?',
+          [sha256(challengeToken)],
+        )
       : null;
     if (!challenge) return fail(res, 401, 'challengeExpired', 'Your sign-in challenge has expired — start again');
     // D-11 budget shape, keyed 2fa-login|ip|email (constants match tfa/enable).
@@ -4003,24 +4029,24 @@ async function handleApi(req, res, url) {
     // consumes neither an attempt nor the challenge.
     if (!code.trim()) return fail(res, 400, 'invalidTfaCode', 'That code is not valid');
 
-    const outcome = transaction(() => {
-      const fresh = db.prepare('select * from login_challenges where challenge_token_hash = ?').get(sha256(challengeToken));
+    const outcome = await db.tx(async () => {
+      const fresh = await db.get('select * from login_challenges where challenge_token_hash = ?', [sha256(challengeToken)]);
       if (!fresh || fresh.expires_at <= now()) {
-        db.prepare('delete from login_challenges where challenge_token_hash = ?').run(sha256(challengeToken));
+        await db.run('delete from login_challenges where challenge_token_hash = ?', [sha256(challengeToken)]);
         return 'dead';
       }
       // D-67 anti-race: the attempt is consumed BEFORE any code comparison, so
       // two concurrent submissions cannot both reach the verify inside budget.
-      db.prepare('update login_challenges set attempts = attempts + 1 where challenge_token_hash = ?').run(fresh.challenge_token_hash);
-      const counted = db.prepare('select attempts from login_challenges where challenge_token_hash = ?').get(fresh.challenge_token_hash);
+      await db.run('update login_challenges set attempts = attempts + 1 where challenge_token_hash = ?', [fresh.challenge_token_hash]);
+      const counted = await db.get('select attempts from login_challenges where challenge_token_hash = ?', [fresh.challenge_token_hash]);
       if (!counted || counted.attempts > 3) {
         // D-66: three wrong codes kill the challenge.
-        db.prepare('delete from login_challenges where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+        await db.run('delete from login_challenges where challenge_token_hash = ?', [fresh.challenge_token_hash]);
         return 'dead';
       }
-      const user = db.prepare('select * from users where id = ?').get(fresh.user_id);
+      const user = await db.get('select * from users where id = ?', [fresh.user_id]);
       if (!user || !user.two_fa_enabled) {
-        db.prepare('delete from login_challenges where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+        await db.run('delete from login_challenges where challenge_token_hash = ?', [fresh.challenge_token_hash]);
         return 'dead';
       }
       let recoveryRemaining;
@@ -4031,20 +4057,22 @@ async function handleApi(req, res, url) {
         // fallback. decrypted === 0 → 503 (Pitfall 3). One attempt per
         // submission regardless of factor count (D-11 — the increment above
         // already consumed it).
-        const result = verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
+        const result = await verifyTotpAgainstFactors(user.id, code, Math.floor(now() / 1000));
         if (result.decrypted === 0) return 'masterKey';
         if (!result.ok) return 'code';
         // D-04/D-09: the replay guard advances on the MATCHED FACTOR's row —
         // no two_fa_last_step writes remain on this path (Pitfall 5).
-        db.prepare('update totp_factors set last_step = ? where id = ?').run(result.matchedStep, result.factorId);
+        await db.run('update totp_factors set last_step = ? where id = ?', [result.matchedStep, result.factorId]);
       } else {
         // D-64/D-72 recovery shape: the race-safe conditional burn — a used
         // (or unknown) code matches zero eligible rows.
-        const burn = db
-          .prepare('update recovery_codes set used_at = ? where user_id = ? and code_hash = ? and used_at is null')
-          .run(now(), user.id, recoveryHash(normalizeRecoveryCode(code)));
+        const burn = await db.run('update recovery_codes set used_at = ? where user_id = ? and code_hash = ? and used_at is null', [
+          now(),
+          user.id,
+          recoveryHash(normalizeRecoveryCode(code)),
+        ]);
         if (burn.changes !== 1) return 'code';
-        recoveryRemaining = db.prepare('select count(*) as c from recovery_codes where user_id = ? and used_at is null').get(user.id).c;
+        recoveryRemaining = (await db.get('select count(*) as c from recovery_codes where user_id = ? and used_at is null', [user.id])).c;
       }
       // Mint the real session verbatim (login-handler recipe) inside the same
       // transaction that deletes the challenge and burns the code (Pitfall 4).
@@ -4052,7 +4080,7 @@ async function handleApi(req, res, url) {
       const t = now();
       const ua = String(req.headers['user-agent'] || '');
       const ip = clientIp(req);
-      db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)').run(
+      await db.run('insert into sessions (token_hash, user_id, created_at, expires_at, ip, user_agent, last_seen_at) values (?,?,?,?,?,?,?)', [
         sha256(token),
         user.id,
         t,
@@ -4060,9 +4088,9 @@ async function handleApi(req, res, url) {
         ip,
         ua,
         t,
-      );
-      db.prepare('update users set last_login_at = ? where id = ?').run(t, user.id);
-      db.prepare('delete from login_challenges where challenge_token_hash = ?').run(fresh.challenge_token_hash);
+      ]);
+      await db.run('update users set last_login_at = ? where id = ?', [t, user.id]);
+      await db.run('delete from login_challenges where challenge_token_hash = ?', [fresh.challenge_token_hash]);
       return { token, user, recoveryRemaining };
     });
 
@@ -4088,7 +4116,7 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/auth/tfa/factors' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     /* WR-02: NO throttle on this read-only GET — the client refreshes it on
        every settings-tab visit and after every mutation, so a 5/15-min budget
@@ -4105,7 +4133,7 @@ async function handleApi(req, res, url) {
   }
 
   if (pathname === '/api/auth/sessions' && method === 'GET') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     const rows = db
@@ -4130,7 +4158,7 @@ async function handleApi(req, res, url) {
     /* Exact-string match BEFORE the :id regex below — 'others' is not hex, but the
        ordering is the auth family convention and defensive against regex loosening. */
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     // Keep-current (P-H): the caller's own session is excluded by the != clause.
@@ -4142,7 +4170,7 @@ async function handleApi(req, res, url) {
   const sessionMatch = pathname.match(/^\/api\/auth\/sessions\/([0-9a-f]{12})$/);
   if (sessionMatch && method === 'DELETE') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.
     db.prepare('delete from sessions where user_id = ? and token_hash like ?').run(user.id, `${sessionMatch[1]}%`);
@@ -4160,7 +4188,7 @@ async function handleApi(req, res, url) {
        - anyone else: 403 adminOnly (honest gate, D-V1). */
   if (pathname === '/api/audit-log' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
 
     const where = [];
@@ -4213,7 +4241,7 @@ async function handleApi(req, res, url) {
     // D-121: read route — sameOrigin → requireUser → operator gate. NO throttle
     // (read-only, no oracle: the payload exposes only the five D-121 fields).
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const operator = requireUser(req, res);
+    const operator = await requireUser(req, res);
     if (!operator) return;
     if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
     const rows = db.prepare('select id, name, email, is_instance_admin, last_login_at from users order by created_at').all();
@@ -4232,7 +4260,7 @@ async function handleApi(req, res, url) {
   if (operatorRevokeMatch && method === 'POST') {
     // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const operator = requireUser(req, res);
+    const operator = await requireUser(req, res);
     if (!operator) return;
     // D-116: keyed on the caller, and every attempt — including 403 refusals —
     // consumes a try, because tooMany increments before any gate decision.
@@ -4251,11 +4279,11 @@ async function handleApi(req, res, url) {
     // AUD-01: the audit row must be written in the SAME transaction as the
     // session DELETE (D-R3 — the shared transaction() helper, never hand-rolled
     // BEGIN/COMMIT). A forced audit failure rolls back the entire revocation.
-    const out = transaction(() => {
-      const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, operatorTokenHash);
-      const remaining = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
+    const out = await db.tx(async () => {
+      const del = await db.run('delete from sessions where user_id = ? and token_hash != ?', [target.id, operatorTokenHash]);
+      const remaining = await db.get('select count(*) as n from sessions where user_id = ? and expires_at > ?', [target.id, now()]);
       if (del.changes > 0) {
-        logSecurity(target.id, 'sessions_revoked_by_operator');
+        await logSecurity(target.id, 'sessions_revoked_by_operator');
         db.prepare(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
         ).run(
@@ -4296,7 +4324,7 @@ async function handleApi(req, res, url) {
     }
     let user;
     try {
-      user = createUser(email, name, password);
+      user = await createUser(email, name, password);
     } catch (err) {
       return json(res, err.status || 500, { error: err.message, code: err.code });
     }
@@ -4320,16 +4348,16 @@ async function handleApi(req, res, url) {
 
   /* ------------------------------ workspaces ----------------------------- */
   if (pathname === '/api/workspaces' && method === 'GET') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     return json(res, 200, { workspaces: userPayload(user).workspaces });
   }
 
   if (pathname === '/api/workspaces' && method === 'POST') {
-    const user = requireUser(req, res);
+    const user = await requireUser(req, res);
     if (!user) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    if (!ALLOW_SIGNUP && !hasAdminRole(user.id)) {
+    if (!ALLOW_SIGNUP && !(await hasAdminRole(user.id))) {
       return fail(res, 403, 'askAdminForWorkspace', 'Ask a workspace administrator to create one for you');
     }
     const body = await readJson(req);
@@ -4343,14 +4371,14 @@ async function handleApi(req, res, url) {
       if (!slug) return fail(res, 400, 'invalidSlug', 'Use 2–40 lowercase letters, numbers, or hyphens');
       if (wsBySlug(slug)) return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: uniqueSlug(slug) });
     }
-    const ws = createWorkspace(name, slug, user);
+    const ws = await createWorkspace(name, slug, user);
     logInfo(`workspace created "${name}" (slug: ${ws.slug}) by ${user.email}`);
     return json(res, 201, { workspace: workspacePayload(ws, membershipOf(ws.id, user.id)) });
   }
 
   const wsMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})$/);
   if (wsMatch && method === 'GET') {
-    const ctx = requireWorkspace(req, res, wsMatch[1]);
+    const ctx = await requireWorkspace(req, res, wsMatch[1]);
     if (!ctx) return;
     return json(res, 200, {
       ...workspacePayload(ctx.ws, ctx.membership),
@@ -4361,7 +4389,7 @@ async function handleApi(req, res, url) {
   }
 
   if (wsMatch && method === 'PUT') {
-    const ctx = requireWorkspace(req, res, wsMatch[1], 'member');
+    const ctx = await requireWorkspace(req, res, wsMatch[1], 'member');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
 
@@ -4405,7 +4433,7 @@ async function handleApi(req, res, url) {
       logDocChanges(row, storedDoc, next, ctx.user?.name || ctx.user?.email || 'unknown');
       /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
          server delays nothing: errors logged, response already flushed. */
-      if (MAILER.enabled && newNotifs.length) queueNotifEmails(row, next, newNotifs);
+      if (MAILER.enabled && newNotifs.length) await queueNotifEmails(row, next, newNotifs);
       /* After the commit succeeds: missing file at unlink time is success
          (idempotent); unlink errors are logged and swallowed — the doc write
          is already committed and must not be failed by a filesystem hiccup. */
@@ -4425,7 +4453,7 @@ async function handleApi(req, res, url) {
   }
 
   if (wsMatch && method === 'PATCH') {
-    const ctx = requireWorkspace(req, res, wsMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
@@ -4453,13 +4481,13 @@ async function handleApi(req, res, url) {
   }
 
   if (wsMatch && method === 'DELETE') {
-    const ctx = requireWorkspace(req, res, wsMatch[1], 'owner');
+    const ctx = await requireWorkspace(req, res, wsMatch[1], 'owner');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     /* Phase 43 (D-09): the workspace doc may carry a logo reference — unlink
        the stored bytes alongside the row purge, no orphaned files (A4). */
     const deletedLogo = docLogo(ctx.ws)?.file || null;
-    transaction(() => {
+    await db.tx(() => {
       db.prepare('delete from memberships where workspace_id = ?').run(ctx.ws.id);
       db.prepare('delete from invites where workspace_id = ?').run(ctx.ws.id);
       db.prepare('delete from workspaces where id = ?').run(ctx.ws.id);
@@ -4472,7 +4500,7 @@ async function handleApi(req, res, url) {
   /* ------------------------------- members ------------------------------- */
   const wsMembersMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members$/);
   if (wsMembersMatch && method === 'GET') {
-    const ctx = requireWorkspace(req, res, wsMembersMatch[1]);
+    const ctx = await requireWorkspace(req, res, wsMembersMatch[1]);
     if (!ctx) return;
     const doc = JSON.parse(ctx.ws.doc);
     syncProfiles(doc, ctx.ws.id); // TEAM-01: project the team_members authority into teams[]
@@ -4484,17 +4512,17 @@ async function handleApi(req, res, url) {
 
   const wsLeaveMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/leave$/);
   if (wsLeaveMatch && method === 'POST') {
-    const ctx = requireWorkspace(req, res, wsLeaveMatch[1]);
+    const ctx = await requireWorkspace(req, res, wsLeaveMatch[1]);
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     if (ctx.membership.role === 'owner' && ownerCount(ctx.ws.id, ctx.user.id) === 0) {
       return fail(res, 409, 'lastOwnerLeaves', 'Promote someone else to owner before you leave');
     }
-    transaction(() => {
+    await db.tx(async () => {
       db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
       // TEAM-01: leaving purges the team_members authority rows too.
       db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, ctx.user.id);
-      updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
+      await updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
     });
     logInfo(`member left workspace "${ctx.ws.slug}": ${ctx.user.email}`);
     return json(res, 200, { left: true, nextSlug: membershipsOf(ctx.user.id)[0]?.slug || null });
@@ -4502,7 +4530,7 @@ async function handleApi(req, res, url) {
 
   const wsMemberMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})$/);
   if (wsMemberMatch && (method === 'PATCH' || method === 'DELETE')) {
-    const ctx = requireWorkspace(req, res, wsMemberMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsMemberMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const target = db.prepare('select * from users where id = ?').get(wsMemberMatch[2]);
@@ -4516,11 +4544,11 @@ async function handleApi(req, res, url) {
 
     if (method === 'DELETE') {
       if (row.role === 'owner' && ownerCount(ctx.ws.id, target.id) === 0) return fail(res, 409, 'needOwner', 'Every workspace needs an owner');
-      transaction(() => {
+      await db.tx(async () => {
         db.prepare('delete from memberships where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
         // TEAM-01: membership is authority rows — removal purges the team set too.
         db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
-        updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
+        await updateDoc(ctx.ws.id, doc => stripMember(doc, row.member_id, target.id));
       });
       logInfo(`member removed "${target.email}" from "${ctx.ws.slug}" by ${ctx.user.email}`);
       return json(res, 200, { removed: true, userId: target.id, revision: wsRevision(ctx.ws.id) });
@@ -4538,7 +4566,7 @@ async function handleApi(req, res, url) {
     const title = body?.title === undefined ? undefined : String(body.title).slice(0, 60);
     /* TEAM-05 (D-02): the PATCH route no longer accepts `team` — membership is
        edited only through PUT /members/:uid/teams against the authority rows. */
-    transaction(() => {
+    await db.tx(async () => {
       if (nextRole !== row.role) {
         db.prepare('update memberships set role = ? where workspace_id = ? and user_id = ?').run(nextRole, ctx.ws.id, target.id);
         // SCOPE-01/D-04 (Phase 29): promotion always clears scope — admin and
@@ -4549,8 +4577,9 @@ async function handleApi(req, res, url) {
           db.prepare('update memberships set scope = null where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
         }
       }
-      updateDoc(ctx.ws.id, doc => {
-        const memberId = ensureMember(doc, target, nextRole) || row.member_id;
+      await updateDoc(ctx.ws.id, async doc => {
+        // D-05 ripple: ensureMember is async now (memberIdFor goes through the facade).
+        const memberId = (await ensureMember(doc, target, nextRole)) || row.member_id;
         const profile = (doc.data.members || []).find(m => m.id === memberId || m.userId === target.id);
         if (!profile) return;
         profile.role = ROLE_LABEL[nextRole] || profile.role;
@@ -4585,7 +4614,7 @@ async function handleApi(req, res, url) {
      session's pending doc write can never be clobbered by a membership change). */
   const wsMemberTeamsMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/teams$/);
   if (wsMemberTeamsMatch && method === 'PUT') {
-    const ctx = requireWorkspace(req, res, wsMemberTeamsMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsMemberTeamsMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
@@ -4598,7 +4627,7 @@ async function handleApi(req, res, url) {
     const known = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
     const teams = [...new Set(body.teams.map(t => String(t).slice(0, 40)))];
     if (teams.some(t => !known.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
-    transaction(() => {
+    await db.tx(() => {
       db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(ctx.ws.id, target.id);
       const insert = db.prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)');
       for (const t of teams) insert.run(ctx.ws.id, t, row.member_id, target.id);
@@ -4633,7 +4662,7 @@ async function handleApi(req, res, url) {
      memberPayload never projects scope details to anyone. */
   const wsMemberScopeMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/scope$/);
   if (wsMemberScopeMatch && method === 'PUT') {
-    const ctx = requireWorkspace(req, res, wsMemberScopeMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsMemberScopeMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const body = await readJson(req);
@@ -4663,7 +4692,7 @@ async function handleApi(req, res, url) {
       // D-01: an empty scope is workspace-wide — stored as null.
       if (teams.length || projects.length) scope = { teams, projects };
     }
-    transaction(() => {
+    await db.tx(() => {
       db.prepare('update memberships set scope = ? where workspace_id = ? and user_id = ?').run(scope ? JSON.stringify(scope) : null, ctx.ws.id, target.id);
     });
     const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ctx.ws.id).doc);
@@ -4691,11 +4720,11 @@ async function handleApi(req, res, url) {
   const adminRevokeMatch = pathname.match(/^\/api\/w\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/revoke-sessions$/);
   if (adminRevokeMatch && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const actor = requireUser(req, res);
+    const actor = await requireUser(req, res);
     if (!actor) return;
     // D-116: keyed on the caller; refusals consume a try too.
     if (tooMany(`admin-revoke|${actor.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
-    const ctx = requireWorkspace(req, res, adminRevokeMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, adminRevokeMatch[1], 'admin');
     if (!ctx) return;
     const target = db.prepare('select id, name, email, is_instance_admin from users where id = ?').get(adminRevokeMatch[2]);
     const membership = target ? membershipOf(ctx.ws.id, target.id) : null;
@@ -4713,11 +4742,11 @@ async function handleApi(req, res, url) {
     // DELETE + security verb + audit row in one transaction(), all three gated on
     // del.changes > 0 (D-117); refusals never reach this point.
     const actorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
-    const out = transaction(() => {
-      const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(target.id, actorTokenHash);
-      const remaining = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(target.id, now());
+    const out = await db.tx(async () => {
+      const del = await db.run('delete from sessions where user_id = ? and token_hash != ?', [target.id, actorTokenHash]);
+      const remaining = await db.get('select count(*) as n from sessions where user_id = ? and expires_at > ?', [target.id, now()]);
       if (del.changes > 0) {
-        logSecurity(target.id, 'sessions_revoked_by_workspace_admin');
+        await logSecurity(target.id, 'sessions_revoked_by_workspace_admin');
         db.prepare(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
         ).run(
@@ -4743,7 +4772,7 @@ async function handleApi(req, res, url) {
   /* ------------------------------- invites ------------------------------- */
   const wsInviteMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites$/);
   if (wsInviteMatch && method === 'POST') {
-    const ctx = requireWorkspace(req, res, wsInviteMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsInviteMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
 
@@ -4886,14 +4915,14 @@ async function handleApi(req, res, url) {
   }
 
   if (wsInviteMatch && method === 'GET') {
-    const ctx = requireWorkspace(req, res, wsInviteMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsInviteMatch[1], 'admin');
     if (!ctx) return;
     return json(res, 200, { invites: invitesOf(ctx.ws.id) });
   }
 
   const wsInviteIdMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites\/([0-9a-f]{64})$/);
   if (wsInviteIdMatch && method === 'DELETE') {
-    const ctx = requireWorkspace(req, res, wsInviteIdMatch[1], 'admin');
+    const ctx = await requireWorkspace(req, res, wsInviteIdMatch[1], 'admin');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const row = db.prepare('select token_hash from invites where token_hash = ? and workspace_id = ?').get(wsInviteIdMatch[2], ctx.ws.id);
@@ -4939,7 +4968,7 @@ async function handleApi(req, res, url) {
     }
 
     const body = await readJson(req);
-    const session = currentUser(req);
+    const session = await currentUser(req);
     const account = invite.email ? db.prepare('select * from users where email = ?').get(invite.email) : null;
     let user = session && (!invite.email || session.email === invite.email) ? session : null;
     if (!user && account) {
@@ -4965,7 +4994,7 @@ async function handleApi(req, res, url) {
         return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
       }
       try {
-        user = createUser(email, name, password);
+        user = await createUser(email, name, password);
       } catch (err) {
         return json(res, err.status || 500, { error: err.message, code: err.code });
       }
@@ -4976,7 +5005,7 @@ async function handleApi(req, res, url) {
     const ws = db.prepare('select * from workspaces where id = ?').get(invite.workspace_id);
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
     if (!membershipOf(ws.id, user.id))
-      addMembership(
+      await addMembership(
         ws,
         user,
         invite.role,
@@ -5189,7 +5218,7 @@ async function handleUpload(req, res, slug) {
   /* Guard order per the login-handler contract: cross-origin rejected before
      the body read, then the workspace/role gate, then the stream. */
   if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-  const ctx = requireWorkspace(req, res, slug, 'member');
+  const ctx = await requireWorkspace(req, res, slug, 'member');
   if (!ctx) return; // response already sent (404 workspaceNotFound / 403 readOnlyAccess)
   const id = uid();
   await uploadBinary(req, path.join(FILES_DIR, id));
@@ -5254,7 +5283,7 @@ function logoShape(row, logo) {
    before the body read, then the workspace/role gate, then the stream. */
 async function handleLogoUpload(req, res, slug) {
   if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-  const ctx = requireWorkspace(req, res, slug, 'admin');
+  const ctx = await requireWorkspace(req, res, slug, 'admin');
   if (!ctx) return; // response already sent (404 workspaceNotFound / 403 adminOnly)
   const id = uid();
   const file = path.join(LOGOS_DIR, id);
@@ -5268,7 +5297,7 @@ async function handleLogoUpload(req, res, slug) {
      succeeds — no orphaned bytes on either path (fire-and-forget idiom). */
   const previous = docLogo(ctx.ws)?.file || null;
   const uploadedAt = Date.now();
-  updateDoc(ctx.ws.id, doc => {
+  await updateDoc(ctx.ws.id, doc => {
     doc.data = doc.data || {};
     doc.data.logo = { ext, file: id, uploaded_at: uploadedAt };
   });
@@ -5322,11 +5351,11 @@ async function handleLogoGet(req, res, slug) {
    404 logoNotFound as the GET-unset fallback (no separate oracle). */
 async function handleLogoDelete(req, res, slug) {
   if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-  const ctx = requireWorkspace(req, res, slug, 'admin');
+  const ctx = await requireWorkspace(req, res, slug, 'admin');
   if (!ctx) return; // response already sent (404 workspaceNotFound / 403 adminOnly)
   const logo = docLogo(ctx.ws);
   if (!logo?.file) return fail(res, 404, 'logoNotFound', 'Logo not found');
-  updateDoc(ctx.ws.id, doc => {
+  await updateDoc(ctx.ws.id, doc => {
     if (doc.data) delete doc.data.logo;
   });
   fs.unlink(path.join(LOGOS_DIR, logo.file), () => {});
@@ -5373,7 +5402,7 @@ async function serveFileBinary(req, res, slug, id) {
   /* D-05: viewer minimum; unknown workspace/unauthorized already get 404/403
      with no oracle. The id must also match a record in the stored doc —
      auth and existence in one check. */
-  const ctx = requireWorkspace(req, res, slug, 'viewer');
+  const ctx = await requireWorkspace(req, res, slug, 'viewer');
   if (!ctx) return;
   let record = null;
   let data = null;
@@ -5553,7 +5582,7 @@ async function handleUnsubscribe(req, res, token) {
   if (payload && method === 'POST') {
     /* D-10: merge-upsert the stored prefs row (convergent, replay-safe,
        creates the row if sparse), scope exactly (token.wsId, token.userId). */
-    const merged = { ...getStoredNotifPrefs(payload.userId, payload.wsId), email_digest: false };
+    const merged = { ...(await getStoredNotifPrefs(payload.userId, payload.wsId)), email_digest: false };
     db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(
       payload.wsId,
       payload.userId,
@@ -5617,7 +5646,7 @@ const server = http.createServer(async (req, res) => {
          JSON 401), securityHeaders, the SPA fallback, or any other route. */
       const fileMatch = url.pathname.match(/^\/w\/([a-z0-9-]{2,40})\/file\/([A-Za-z0-9_-]+)$/);
       const dest = String(req.headers['sec-fetch-dest'] || '').toLowerCase();
-      if (!currentUser(req) && (dest === 'document' || dest === '')) {
+      if (!(await currentUser(req)) && (dest === 'document' || dest === '')) {
         const next = `/login?next=${encodeURIComponent(url.pathname)}`;
         if (next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !next.includes('://')) {
           res.writeHead(302, { Location: next });
@@ -5661,16 +5690,19 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-function backupCli(target) {
+async function backupCli(target) {
   const dest = path.resolve(target || path.join(DATA_DIR, `projects-${new Date().toISOString().replace(/[:.]/g, '-')}.db`));
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  db.exec('pragma wal_checkpoint(truncate)');
-  db.exec(`vacuum into '${dest.replaceAll("'", "''")}'`);
+  // D-09: wal_checkpoint + vacuum into are SQLite-only — on pg this CLI no-ops.
+  await sqliteOnly(() => {
+    db.exec('pragma wal_checkpoint(truncate)');
+    db.exec(`vacuum into '${dest.replaceAll("'", "''")}'`);
+  }, 'cli backup');
   logInfo(dest);
-  db.close();
+  await db.close();
 }
 
-function addUserCli(args) {
+async function addUserCli(args) {
   const email = args[0];
   const name = args[1];
   const slug = args[2];
@@ -5678,16 +5710,16 @@ function addUserCli(args) {
     logError('usage: node server.js --add-user <email> [name] [workspace-slug]');
     process.exit(1);
   }
-  ensureWorkspace();
-  const ws = slug ? wsBySlug(slug) : firstWorkspace();
+  await ensureWorkspace();
+  const ws = slug ? wsBySlug(slug) : await firstWorkspace();
   if (!ws) {
     logError(slug ? `no workspace with slug ${slug}` : 'no workspace available');
     process.exit(1);
   }
   const password = process.env.USER_PASSWORD || crypto.randomBytes(9).toString('base64url');
   try {
-    const user = createUser(email, name, password);
-    addMembership(ws, user, 'member');
+    const user = await createUser(email, name, password);
+    await addMembership(ws, user, 'member');
     logInfo(`created ${user.email} in ${ws.slug}`);
     if (!process.env.USER_PASSWORD) logInfo(`password: ${password}`);
   } catch (err) {
@@ -5727,17 +5759,26 @@ async function main() {
   if (args[0] === '--set-password') return setPasswordCli(args.slice(1));
   if (args[0] === '--backup') return backupCli(args[1]);
 
-  bootstrap();
+  await bootstrap();
   logInfo(`boot complete in ${Date.now() - BOOT_STARTED}ms (schema migrations + sweeps)`);
   /* HARD-02 (D-02): legacy link-only admin/owner invites are neutralized at
      boot — UPDATE only (the row is an audit trail, never destroyed), no
      schema change, no migration. Boot-scoped, NOT the route-scoped cleanup. */
-  db.prepare('update invites set used_at = ? where email is null and role in (?, ?) and used_at is null').run(now(), 'owner', 'admin');
-  db.prepare('delete from sessions where expires_at <= ?').run(now());
-  setInterval(() => db.prepare('delete from sessions where expires_at <= ?').run(now()), 3600_000).unref();
+  await db.run('update invites set used_at = ? where email is null and role in (?, ?) and used_at is null', [now(), 'owner', 'admin']);
+  /* D-05: the hourly sweeps are named async helpers so the facade call stays
+     awaited inside (wave-gate hygiene) and the interval promise is caught —
+     an unhandled rejection in a setInterval callback would kill the process. */
+  const sweepExpiredSessions = async () => {
+    await db.run('delete from sessions where expires_at <= ?', [now()]);
+  };
+  const sweepExpiredChallenges = async () => {
+    await db.run('delete from login_challenges where expires_at <= ?', [now()]);
+  };
+  await sweepExpiredSessions();
+  setInterval(() => sweepExpiredSessions().catch(err => logWarn(`session sweep: ${err.message}`)), 3600_000).unref();
   /* D-66 lifecycle: expired login challenges are swept at boot and hourly. */
-  db.prepare('delete from login_challenges where expires_at <= ?').run(now());
-  setInterval(() => db.prepare('delete from login_challenges where expires_at <= ?').run(now()), 3600_000).unref();
+  await sweepExpiredChallenges();
+  setInterval(() => sweepExpiredChallenges().catch(err => logWarn(`challenge sweep: ${err.message}`)), 3600_000).unref();
 
   /* Invite + notification links are absolute URLs built from APP_URL; without it
      appBase() falls back to the request's Host header, so a hostile Host would email
@@ -5756,13 +5797,12 @@ async function main() {
      D-27-2's 1-minute tick. The try/catch inside the interval callback is
      mandatory — an uncaught throw in a setInterval callback kills the
      process. unref() keeps the timer from holding the event loop open. */
-  runReminderPass();
+  /* Async facade (Phase 45 D-05): the pass is async now; the interval wrapper
+     keeps its try/catch AND a promise catch — an unhandled rejection in a
+     setInterval callback would otherwise kill the process. */
+  await runReminderPass();
   setInterval(() => {
-    try {
-      runReminderPass();
-    } catch (err) {
-      logWarn(`reminder tick: ${err.message}`);
-    }
+    runReminderPass().catch(err => logWarn(`reminder tick: ${err.message}`));
   }, 60_000).unref();
 
   server.listen(PORT, HOST, () => {
