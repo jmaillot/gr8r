@@ -601,3 +601,222 @@ test('prompts: list and get round-trip; unknown prompt rejected', async () => {
   const reqd = await rpc(writeKey, 'prompts/get', { name: 'prepare-review', arguments: {} }, session);
   assert.equal(reqd.data.error?.code, -32602);
 });
+
+/* ---- Phase 49 (49-01) server↔MCP parity harness ----
+
+   One fixture workspace, every actor shape, two engines: the server predicate
+   (doc-GET door) and the mcp.js mirror (list_projects / whoami / get_project /
+   get_task / list_tasks). Expectations come from the hand-derived
+   VISIBILITY_MODEL / MIRROR_MODEL oracles in test/helpers/visibility-fixture.mjs
+   — never from memberCanReadProject or canReadProject (T-49-01).
+
+   Documented divergence (old model, 2026-11-07): for actors with a scope
+   column (m_scoped, m_guest) and for admin/owner (mirror ROLE_RANK bypass vs
+   access-list-gated server doc-GET), mirror ≠ server. The mirror model asserts
+   the mirror's true old semantics; the parity claim is asserted on the actors
+   whose predicates coincide today (null-scope non-admin shapes: m_plain,
+   m_team) and the divergence cells are asserted explicitly with dated
+   comments. Plan 02's sweep + Plan 03's collapse converge the engines; Plan 03
+   flips the divergence assertions to parity in this file. */
+import { createVisibilityFixtureDb, MIRROR_MODEL, VISIBILITY_MODEL, VIS_ACTORS, VIS_PASSWORD, VIS_WS } from './helpers/visibility-fixture.mjs';
+
+const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly');
+const parEmailOf = mid => ({
+  m_admin: 'admin@visfix.local',
+  m_owner: 'owner@visfix.local',
+  m_plain: 'plain@visfix.local',
+  m_team: 'team@visfix.local',
+  m_scoped: 'scoped@visfix.local',
+  m_guest: 'guest@visfix.local',
+}[mid]);
+
+let parServer;
+let parDir;
+const parKeys = {}; // mid → { key, session, client }
+
+const parRpc = async (mid, method, params) => {
+  const { key, session } = parKeys[mid];
+  const res = await fetch(`${parServer.base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${key}`,
+      ...(session ? { 'mcp-session-id': session } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++RPC_ID.n, method, params }),
+  });
+  assert.equal(res.status, 200);
+  const type = res.headers.get('content-type') || '';
+  const id = RPC_ID.n;
+  let data;
+  if (type.includes('text/event-stream')) {
+    const raw = await res.text();
+    data = raw
+      .split('\n')
+      .filter(l => l.startsWith('data:'))
+      .map(l => JSON.parse(l.slice(5).trim()))
+      .find(m => m.id === id);
+  } else {
+    data = await res.json();
+  }
+  return data;
+};
+
+const parCall = async (mid, name, args = {}) => {
+  const res = await parRpc(mid, 'tools/call', { name, arguments: args });
+  const out = res.result;
+  const text = out?.content?.[0]?.text;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  return { isError: !!out?.isError, data };
+};
+
+const parSetup = async () => {
+  parDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-visibility-parity-'));
+  createVisibilityFixtureDb(parDir);
+  parServer = await startServer({ dataDir: parDir });
+  for (const mid of PAR_ACTORS) {
+    const session = await login(parServer.base, parEmailOf(mid), VIS_PASSWORD);
+    assert.equal(session.status, 200, `${mid} signs in`);
+    const keyRes = await session.client.post('/api/keys', { label: `parity-${mid}`, scope: 'read', workspaceId: VIS_WS.id, days: 90 });
+    assert.equal(keyRes.status, 201, `${mid} creates a read key`);
+    const key = keyRes.data.key;
+    const init = await parRpcInit(key);
+    parKeys[mid] = { key, session: init, client: session.client };
+  }
+};
+
+/* One-off handshake helper (separate from the suite's `rpc` — different server). */
+const parRpcInit = async key => {
+  const res = await fetch(`${parServer.base}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${key}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++RPC_ID.n, method: 'initialize', params: INIT_PARAMS }),
+  });
+  assert.equal(res.status, 200);
+  const type = res.headers.get('content-type') || '';
+  const id = RPC_ID.n;
+  let data;
+  if (type.includes('text/event-stream')) {
+    const raw = await res.text();
+    data = raw
+      .split('\n')
+      .filter(l => l.startsWith('data:'))
+      .map(l => JSON.parse(l.slice(5).trim()))
+      .find(m => m.id === id);
+  } else {
+    data = await res.json();
+  }
+  const session = res.headers.get('mcp-session-id');
+  parKeys.__initKey = key;
+  await fetch(`${parServer.base}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${key}`, 'mcp-session-id': session },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+  });
+  return session;
+};
+
+/* parRpc reads the session from parKeys[mid]; the init helper above binds it. */
+const parVisibleDocIds = async mid => {
+  const res = await parKeys[mid].client.get(`/api/workspaces/${VIS_WS.slug}`);
+  return { status: res.status, ids: (res.data?.doc?.data?.projects || []).map(p => p.id).sort() };
+};
+const parMirrorIds = async mid => (await parCall(mid, 'list_projects')).data.projects.map(p => p.id).sort();
+
+before(parSetup);
+
+after(async () => {
+  await parServer?.stop();
+  if (parDir) fs.rmSync(parDir, { recursive: true, force: true });
+});
+
+test('parity fixture: server doc-GET sets equal the VISIBILITY_MODEL oracle for every actor', async () => {
+  for (const mid of PAR_ACTORS) {
+    const { status, ids } = await parVisibleDocIds(mid);
+    assert.equal(status, 200, `${mid} reads the doc`);
+    assert.deepEqual(ids, [...VISIBILITY_MODEL[mid]].sort(), `${mid}: server set matches the oracle`);
+  }
+});
+
+test('parity: null-scope member/team actors agree across BOTH engines (green under both models)', async () => {
+  /* These two shapes are where old-server and old-mirror predicates coincide:
+     member/team semantics (public ∨ access list ∨ teamIntersects) with no
+     scope column. After Plan 03 they remain the parity canaries. */
+  for (const mid of ['m_plain', 'm_team']) {
+    const server = await parVisibleDocIds(mid);
+    const mirror = await parMirrorIds(mid);
+    assert.deepEqual(mirror, server.ids, `${mid}: mirror set === server set`);
+    assert.deepEqual(mirror, [...VISIBILITY_MODEL[mid]].sort(), `${mid}: both engines match the oracle`);
+  }
+});
+
+test('parity: the mirror matches MIRROR_MODEL for every keyed actor (old-mirror semantics pinned)', async () => {
+  for (const mid of PAR_ACTORS) {
+    const mirror = await parMirrorIds(mid);
+    assert.deepEqual(mirror, [...MIRROR_MODEL[mid]].sort(), `${mid}: mirror set matches the hand-derived mirror oracle`);
+  }
+});
+
+test('documented divergence (old model): mirror lacks the scope term mcp.js:180-189 (D-49-7)', async () => {
+  /* 2026-11-07: mcp.js canReadProject implements public ∨ members ∨ teams with
+     NO scope filtering, while the server's scoped branch (hiddenFor :896-901)
+     both opens scope grants and hides out-of-scope rows. Plan 02's sweep
+     clears the scope columns and Plan 03 collapses the predicate; after that,
+     mirror and server converge for these actors — flip these assertions to
+     parity deepEqual then. */
+  const scopedServer = (await parVisibleDocIds('m_scoped')).ids;
+  const scopedMirror = await parMirrorIds('m_scoped');
+  assert.ok(scopedMirror.includes('p_publicgain') && !scopedServer.includes('p_publicgain'), 'mirror shows out-of-scope public; server hides (scope subtraction)');
+  assert.ok(scopedServer.includes('p_scopeproj') && !scopedMirror.includes('p_scopeproj'), 'server grants via scope.projects (D-03); mirror does not');
+  const guestServer = (await parVisibleDocIds('m_guest')).ids;
+  const guestMirror = await parMirrorIds('m_guest');
+  assert.ok(guestServer.includes('p_membershare') && !guestMirror.includes('p_membershare'), 'guest scope grant invisible to the mirror');
+});
+
+test('documented divergence (old model): mirror ROLE_RANK bypass vs access-list-gated server for admins', async () => {
+  /* 2026-11-07: server hiddenFor's admin path is hiddenProjectIds
+     (server.js:894) — access-list gated — while mcp.js:182 grants admins
+     everything. This is PRE-EXISTING drift (not introduced by Phase 49); the
+     parity harness documents it rather than hides it. Plan 03's lockstep edit
+     decides the mirror's admin semantics. */
+  const adminServer = (await parVisibleDocIds('m_admin')).ids;
+  const adminMirror = await parMirrorIds('m_admin');
+  assert.ok(adminMirror.includes('p_sealed') && !adminServer.includes('p_sealed'), 'mirror bypass shows the sealed project; server access-list hides it');
+});
+
+test('parity: doc-only profile is invisible to both engines — no membership, no key, no doc', async () => {
+  const session = await login(parServer.base, 'doconly@visfix.local', VIS_PASSWORD);
+  assert.equal(session.status, 200, 'the account itself exists');
+  assert.equal((await session.client.get(`/api/workspaces/${VIS_WS.slug}`)).status, 404, 'no memberships row → no workspace read');
+  const keyRes = await session.client.post('/api/keys', { label: 'parity-doconly', scope: 'read', workspaceId: VIS_WS.id, days: 90 });
+  assert.equal(keyRes.status, 403, 'no memberships row → no API key (notAMember)');
+});
+
+test('parity: hidden-task cells — get_task/list_tasks hide what the project predicate hides', async () => {
+  /* m_plain: t_open visible, t_hidden (p_hidden) and t_scopeproj (p_scopeproj)
+     hidden through every read/list door. */
+  const ok = await parCall('m_plain', 'get_task', { id: 't_open' });
+  assert.equal(ok.isError, false, 'visible task resolves');
+  for (const hiddenTask of ['t_hidden', 't_scopeproj']) {
+    const res = await parCall('m_plain', 'get_task', { id: hiddenTask });
+    assert.equal(res.isError, true, `${hiddenTask} answers the not-found error`);
+    assert.equal(res.data, `Task not found: ${hiddenTask}`);
+  }
+  const listed = (await parCall('m_plain', 'list_tasks', {})).data;
+  const ids = (listed.tasks || []).map(t => t.id);
+  assert.ok(ids.includes('t_open'));
+  assert.equal(ids.includes('t_hidden'), false, 'list_tasks never leaks a hidden-project task');
+  assert.equal(ids.includes('t_scopeproj'), false, 'list_tasks never leaks a scope-grant task to a null-scope member');
+  const who = await parCall('m_plain', 'whoami');
+  const whoIds = who.data.projects.map(p => p.id);
+  assert.equal(whoIds.includes('p_hidden'), false, 'whoami project map honors the predicate');
+  const proj = await parCall('m_plain', 'get_project', { project: 'p_hidden' });
+  assert.equal(proj.isError, true, 'get_project on a hidden project answers not found');
+  assert.equal(proj.data, 'Project not found: p_hidden');
+});

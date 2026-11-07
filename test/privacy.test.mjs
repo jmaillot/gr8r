@@ -440,3 +440,142 @@ test('a stored lead:null is repaired and stale revisions are rejected', async ()
   const stale = (await owner.get('/api/workspaces/acme')).data;
   assert.equal((await owner.put('/api/workspaces/acme', { revision: stale.revision - 1, doc: stale.doc })).status, 409, 'stale revision is rejected');
 });
+
+/* ---- Phase 49 (49-01) model-neutral 404 body-equality rows ----
+
+   Non-invitee member (Bob) × private project (p_sec): every read door answers
+   the SAME body it would answer for a genuinely nonexistent id — no existence
+   oracle. Bodies are compared as raw strings, not just status codes. These
+   rows hold under the OLD and the NEW visibility model, so Plans 02/03 must
+   keep them green untouched. Expectations are model facts (T-49-01), never
+   memberCanReadProject output. */
+
+/* Minimal MCP client for Bob's read key (same transport shape as mcp.test.mjs). */
+const PRIV_RPC_ID = { n: 0 };
+let privKey = null;
+let privSession = null;
+
+const privRpc = async (method, params) => {
+  const res = await fetch(`${server.base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${privKey}`,
+      ...(privSession ? { 'mcp-session-id': privSession } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++PRIV_RPC_ID.n, method, params }),
+  });
+  assert.equal(res.status, 200, `${method} transport`);
+  const type = res.headers.get('content-type') || '';
+  const id = PRIV_RPC_ID.n;
+  let data;
+  if (type.includes('text/event-stream')) {
+    const raw = await res.text();
+    data = raw
+      .split('\n')
+      .filter(l => l.startsWith('data:'))
+      .map(l => JSON.parse(l.slice(5).trim()))
+      .find(m => m.id === id);
+  } else {
+    data = await res.json();
+  }
+  if (!privSession) privSession = res.headers.get('mcp-session-id');
+  return data;
+};
+
+const privCall = async (name, args = {}) => {
+  const res = await privRpc('tools/call', { name, arguments: args });
+  const out = res.result;
+  const text = out?.content?.[0]?.text;
+  return { isError: !!out?.isError, text };
+};
+
+const privInit = async () => {
+  await privRpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'privacy-404', version: '0.0.0' } });
+  await fetch(`${server.base}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${privKey}`, 'mcp-session-id': privSession },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+  });
+};
+
+/* Raw body of the file-serve door for one file id, as Bob. */
+const privFileBody = async id => {
+  const res = await fetch(`${server.base}/w/acme/file/${id}`, { headers: { cookie: bob.cookie() } });
+  return { status: res.status, body: await res.text() };
+};
+
+test('404 body-equality: file serve answers a byte-identical body for hidden and nonexistent ids', async () => {
+  /* An earlier suite test removed Bob from the workspace; re-join him as a
+     plain member — still NOT on the p_ownerblind access list. (p_sec was
+     flipped workspace-wide mid-suite by its lead, so the still-private
+     p_ownerblind is the non-invitee cell.) */
+  await join(owner, 'acme', bob, 'bob@test.local');
+  const baseDoc = (await owner.get('/api/workspaces/acme')).data;
+  const withFile = structuredClone(baseDoc.doc);
+  withFile.data.files.push({ id: 'f_ob', project: 'p_ownerblind', task: 't_ob', name: 'blind.txt' });
+  assert.equal((await owner.put('/api/workspaces/acme', { revision: baseDoc.revision, doc: withFile })).status, 200, 'owner plants the hidden file');
+  const hidden = await privFileBody('f_ob'); // lives in p_ownerblind; Bob is not on the access list
+  const ghost = await privFileBody('f_ghost'); // genuinely nonexistent file id
+  assert.equal(hidden.status, 404);
+  assert.equal(ghost.status, 404);
+  assert.equal(hidden.body, ghost.body, 'hidden ≡ nonexistent: byte-identical fileNotFound body');
+});
+
+test('404 body-equality: get_task answers the same error shape for hidden-project and nonexistent ids', async () => {
+  const keyRes = await bob.post('/api/keys', { label: 'privacy-404', scope: 'read', workspaceId: (await bob.get('/api/workspaces')).data.workspaces[0].id, days: 90 });
+  assert.equal(keyRes.status, 201, 'Bob creates a read key');
+  privKey = keyRes.data.key;
+  await privInit();
+
+  const hidden = await privCall('get_task', { id: 't_ob' }); // task of p_ownerblind
+  const ghost = await privCall('get_task', { id: 't_ghost' }); // genuinely nonexistent task id
+  assert.equal(hidden.isError, true);
+  assert.equal(ghost.isError, true);
+  /* The echoed id is the one honest difference; with ids normalized the
+     bodies are byte-identical (no shape, code or wording oracle). */
+  assert.equal(hidden.text.replace('t_ob', 'X'), ghost.text.replace('t_ghost', 'X'));
+});
+
+test('404 body-equality: list/read MCP doors carry no trace of the hidden project', async () => {
+  const projects = await privCall('list_projects');
+  assert.equal(projects.isError, false);
+  assert.equal(projects.text.includes('p_ownerblind'), false, 'list_projects never names the hidden project');
+  assert.equal(projects.text.includes('Owner Blind'), false, 'not even its human name leaks');
+  const tasks = await privCall('list_tasks');
+  assert.equal(tasks.text.includes('t_ob'), false, 'list_tasks never leaks a hidden-project task');
+  const searched = await privCall('search_tasks', { query: 'Blind' });
+  assert.equal(searched.text.includes('t_ob'), false, 'search_tasks never returns a hidden-project task');
+});
+
+/* ---- Phase 49 NEW-MODEL cells (Plan 03 un-skips this block) ----
+
+   The only sanctioned skip marker of the phase. Plan 03 flips the predicate:
+   team-derived and scope-derived private access answer 404 unless
+   materialized, and out-of-scope members GAIN public projects. Un-skip and
+   finalize these cells (fixtures: the acme workspace above) in Plan 03. */
+test('NEW MODEL: team-derived access to a private project answers 404', { skip: 'flips with the Phase 49 model swap' }, async () => {
+  /* Give Bob the product team via the authority route; p_sec carries
+     teams:['product'] after normalization. NEW model: 404 — team-derived
+     access dies unless the Phase 49 sweep materialized it. */
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${bobUserId}/teams`, { teams: ['product'] })).status, 200);
+  const view = (await bob.get('/api/workspaces/acme')).data;
+  assert.equal(proj(view.doc, 'p_sec'), undefined, 'team-derived access no longer opens the project');
+});
+
+test('NEW MODEL: scope-derived access to a private project answers 404', { skip: 'flips with the Phase 49 model swap' }, async () => {
+  /* Scope Bob to p_pub via the scope route; p_sec stays out of scope and
+     private without materialization → absent from Bob's doc (the 404-equivalent). */
+  assert.equal((await owner.put(`/api/workspaces/acme/members/${bobUserId}/scope`, { scope: { projects: ['p_pub'], teams: [] } })).status, 200);
+  const view = (await bob.get('/api/workspaces/acme')).data;
+  assert.equal(proj(view.doc, 'p_sec'), undefined, 'scope-derived access no longer opens the project');
+});
+
+test('NEW MODEL: out-of-scope member gains public projects (the one documented gain)', { skip: 'flips with the Phase 49 model swap' }, async () => {
+  /* With a scope column still set, a PUBLIC project becomes visible after the
+     predicate collapse — the D-49-7 gain, asserted here so it is a pin, not a
+     surprise. */
+  const view = (await bob.get('/api/workspaces/acme')).data;
+  assert.equal(proj(view.doc, 'p_pub')?.id, 'p_pub', 'public project visible even while out of scope');
+});
