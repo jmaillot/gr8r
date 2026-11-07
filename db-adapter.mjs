@@ -438,3 +438,16 @@ export function exec(sql) {
   if (backendKind !== 'sqlite') throw new Error('[db] exec() is a transitional SQLite-only shim');
   return sqlite.exec(sql);
 }
+/* Rule 3 deviation (Plan 03 Task 1): server.js shutdown + CLI paths call
+   db.close(); the adapter owns the handle, so it owns close(). pg branch
+   ends the pool; sqlite closes synchronously. */
+export async function close() {
+  if (backendKind === 'pg' && pool) {
+    await pool.end();
+    pool = null;
+  } else if (sqlite) {
+    sqlite.close();
+    sqlite = null;
+  }
+  backendKind = null;
+}

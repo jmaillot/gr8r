@@ -51,13 +51,17 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
+/* Phase 45: the raw node:sqlite import moved out — db-adapter.mjs owns the
+   handle. server.js only ever sees the adapter facade + transitional shims. */
 import { createMailer, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
 import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
+/* Phase 45 (D-05): async dual-backend database facade. Boot, then every
+   converted callsite, goes through this module — see db-adapter.mjs. */
+import { connectDb, close as dbClose, prepare as dbPrepare, exec as dbExec } from './db-adapter.mjs';
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
    through tFor, so the FR catalogue must be registered at boot from the SAME
@@ -76,6 +80,17 @@ const FILES_DIR = path.join(DATA_DIR, 'files');
    a route-private mime map (LOGO_MIME below). */
 const LOGOS_DIR = path.join(DATA_DIR, 'logos');
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(DATA_DIR, 'projects.db'));
+/* Phase 45 (D-05): optional Postgres backend. A postgres:// DB_URL routes
+   boot through db-adapter.mjs; empty/unset keeps the node:sqlite default.
+   Any other scheme is a typo — fail loudly at boot (D-04), never guess. */
+const DB_URL = process.env.DB_URL
+  ? (() => {
+      if (!process.env.DB_URL.startsWith('postgres://')) {
+        throw new Error('[db] unsupported DB_URL scheme — only postgres:// URLs are supported (D-04)');
+      }
+      return process.env.DB_URL;
+    })()
+  : '';
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
@@ -357,15 +372,24 @@ function ensureColumn(conn, table, name, def) {
   if (!cols.some(c => c.name === name)) conn.exec(`alter table ${table} add column ${name} ${def}`);
 }
 
-function openDb() {
+/* Phase 45 (D-05): boot now runs through db-adapter.mjs. connectDb picks the
+   backend (node:sqlite by default; Postgres when DB_URL is a postgres:// URL)
+   and fail-closed refuses an unreachable pg (D-04). The four pragmas moved
+   into the adapter's SQLite constructor. SCHEMA + additive ensureColumn
+   migrations stay here for now (Plan 05 makes them dialect-aware). */
+async function initDb() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   fs.mkdirSync(FILES_DIR, { recursive: true });
   fs.mkdirSync(LOGOS_DIR, { recursive: true }); // Phase 43 (D-01): logos dir sibling of files/
-  const db = new DatabaseSync(DB_PATH);
-  db.exec('pragma journal_mode = wal');
-  db.exec('pragma foreign_keys = on');
-  db.exec('pragma busy_timeout = 5000');
-  db.exec('pragma synchronous = normal');
+  await connectDb({ dbPath: DB_PATH, dbUrl: DB_URL });
+  // TRANSITIONAL (Phase 45, retired in Plan 04): the sync prepare/exec/close
+  // shims keep every not-yet-converted db.* callsite working unchanged while
+  // converted regions call the async facade (await db.get/all/run).
+  db = {
+    prepare: dbPrepare,
+    exec: dbExec,
+    close: dbClose,
+  };
   db.exec(SCHEMA);
   // Additive migration for databases created before multi-workspace support.
   ensureColumn(db, 'workspaces', 'slug', 'text');
@@ -397,10 +421,13 @@ function openDb() {
   // the SCHEMA declaration (Pitfall P-B).
   ensureColumn(db, 'users', 'is_instance_admin', 'integer not null default 0');
   db.exec('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
-  return db;
 }
 
-const db = openDb();
+/* Module-level handle: assigned by initDb() inside the async boot below.
+   Between import time and initDb completion it is null — nothing touches it
+   because all consumers run inside the boot chain or request handlers that
+   only start after server.listen(). */
+let db = null;
 
 /* ------------------------------- helpers ------------------------------- */
 const now = () => Date.now();
@@ -5691,12 +5718,14 @@ function setPasswordCli(args) {
   db.close();
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
+  const BOOT_STARTED = Date.now();
+
+  await initDb();
   if (args[0] === '--add-user') return addUserCli(args.slice(1));
   if (args[0] === '--set-password') return setPasswordCli(args.slice(1));
   if (args[0] === '--backup') return backupCli(args[1]);
-  const BOOT_STARTED = Date.now();
 
   bootstrap();
   logInfo(`boot complete in ${Date.now() - BOOT_STARTED}ms (schema migrations + sweeps)`);
@@ -5752,8 +5781,8 @@ function main() {
 
   const shutdown = signal => {
     logInfo(`${signal} received, shutting down`);
-    server.close(() => {
-      db.close();
+    server.close(async () => {
+      await db.close(); // Phase 45: adapter close (pool.end on pg)
       process.exit(0);
     });
     setTimeout(() => process.exit(1), 5000).unref();
@@ -5762,4 +5791,7 @@ function main() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-main();
+main().catch(err => {
+  logError(err);
+  process.exit(1);
+});
