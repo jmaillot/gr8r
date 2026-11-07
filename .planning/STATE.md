@@ -4,7 +4,7 @@ milestone: v1.9
 current_phase: 45
 current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
 status: executing
-stopped_at: Completed 45-02-PLAN.md
+stopped_at: Completed 45-05-PLAN.md
 last_updated: "2026-11-07T11:36:31Z"
 last_activity: 2026-11-07
 last_activity_desc: Phase 45 plan 01 executed (database adapter facade)
@@ -31,12 +31,14 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 ## Current Position
 
 Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Total Plans in Phase: 7
 Status: Executing Phase 45
-Last activity: 2026-11-07 — Completed 45-04 (callsite conversion finished: zero
-db.prepare/db.exec sites, facade exactly { get, all, run, tx }, TRANSITIONAL shim
-deleted, static gates pinned in test/static-db-audit.test.mjs)
+Last activity: 2026-11-07 — Completed 45-05 (schema/migrations/seed dialect-owned:
+pgSchemaVariant complete — bigint epoch columns, functional lower(email) unique
+index, doc stays text per the user-approved D-11 checkpoint; SCHEMA routed through
+adapter runSchema(); invites rowid backfill sqliteOnly-gated; pg-safe whitelist
+lint + seed determinism pinned)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -85,6 +87,14 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 45] 45-02: DB_URL is the only deployment env added — empty default = SQLite
   (zero-dependency posture documented in .env.example); POSTGRES_TEST_URL deferred to
   Plan 07 files; DEPLOY.md cross-reference lands in Plan 06
+
+- [Phase 45] 45-05: D-11 locked as `text` (user "confirm" recorded before schema work) —
+  workspaces.doc stays a plain text column on pg, jsonb out of scope (one-way)
+- [Phase 45] 45-05: epoch-ms columns widen to bigint in the pg schema variant only
+  (Date.now() overflows pg integer); booleans/counters stay integer so `= 1`
+  comparisons are preserved verbatim
+- [Phase 45] 45-05: pg execution proof deferred to the Plan 07 matrix — this plan pins
+  the SQL text (whitelist lint, seed determinism on SQLite, runSchema idempotency)
 
 ## Milestone History
 
