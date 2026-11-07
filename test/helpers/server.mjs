@@ -48,6 +48,10 @@ export async function startServer({ dataDir = null, env = {} } = {}) {
   const base = `http://127.0.0.1:${port}`;
   let output = '';
   const finalEnv = { ...process.env, ...BASE_ENV, PORT: String(port), DATA_DIR: dir, ...env, DB_PATH: path.join(dir, 'projects.db') };
+  // Phase 45 (D-08): a test overriding DB_URL selects the pg backend — DB_PATH
+  // must be ABSENT so the adapter's SQLite default never shadows it. The
+  // undefined-stripping pass below removes the key cleanly.
+  if ('DB_URL' in env) finalEnv.DB_PATH = undefined;
   // A test passes `undefined` for a variable it wants ABSENT (e.g. ADMIN_EMAIL to
   // exercise the cold-start fallback); strip those keys instead of spawning with
   // the string "undefined" or leaving BASE_ENV's value in place.
@@ -167,6 +171,46 @@ export function withDb(dbPath, fn) {
   } finally {
     db.close();
   }
+}
+
+/* Phase 45 (D-08): pg sibling of withDb — same open → fn → always-close
+   discipline around a pg Pool (max: 2, matrix tests only). pg loads via
+   dynamic import so the SQLite-default suite never touches the module.
+   Pair with dropPgSchema to guarantee a clean database per test. */
+export async function withPg(url, fn) {
+  const { Pool } = await import('pg');
+  const pool = new Pool({ connectionString: url, max: 2 });
+  try {
+    return await fn(pool);
+  } finally {
+    await pool.end();
+  }
+}
+
+/* The 14 server.js SCHEMA tables in REVERSE dependency order — children
+   first, users/workspaces last — so the cascade-free drop sequence never
+   trips an FK. Matrix tests start every scenario from a clean database. */
+const PG_TABLES = Object.freeze([
+  'user_notif_prefs',
+  'reminders_sent',
+  'audit_log',
+  'security_log',
+  'recovery_codes',
+  'invites',
+  'team_members',
+  'memberships',
+  'workspaces',
+  'login_challenges',
+  'sessions',
+  'oidc_identities',
+  'totp_factors',
+  'users',
+]);
+
+export async function dropPgSchema(url) {
+  await withPg(url, async pool => {
+    for (const table of PG_TABLES) await pool.query(`drop table if exists ${table} cascade`);
+  });
 }
 
 /* `/join/<token>` links come back in the invite payload; tests only need the token. */
