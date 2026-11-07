@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-07 at v1.10 milestone start*
+*Last updated: 2026-11-07 after Phase 48 (v1.10 milestone complete)*
 
 ## Current Milestone: v1.10 Extensions & Adapters
 
@@ -511,6 +511,10 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   List-Unsubscribe decision for the digest (plain header proposed; one-click deferred to a
   DKIM milestone), D-05 owner-validation status column (all rows `proposed` until the owner
   rules) — Phase 39 (doc-only; verification 5/5, UAT 1/1)
+- ✓ **PUSH-01..03** — Real browser push + toasts (from backlog 999.2): Web Push subscription
+  with VAPID, service-worker notification click/focus handling, settings-page permission
+  UX with derived "Browser blocked" badge and one-time explanatory toast — Phase 48
+  (verification 6/6 must-haves; UAT 2/2; security threats_open 0)
 
 ### Active
 
