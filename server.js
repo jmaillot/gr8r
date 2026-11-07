@@ -1698,9 +1698,23 @@ function docFromClient(incoming, stored, ws, role, membership) {
     const incomingMembers = Array.isArray(next.data.members) ? next.data.members : storedMembers;
     next.data.members = incomingMembers
       .map(m => {
-        if (!m?.userId) return m;
+        if (!m?.userId) {
+          /* D-10 (G-44-3, WR-01): doc-only members pass through unpinned, but
+             tz still goes through the resolveTz funnel — the wholly-unpinned
+             path cannot smuggle a raw string into the doc. */
+          return { ...m, tz: (typeof m?.tz === 'string' && m.tz.trim() === '') ? '' : resolveTz(m.tz) };
+        }
         const prev = official.get(m.userId);
-        return prev ? { ...m, id: prev.id, userId: prev.userId, email: prev.email, role: prev.role, status: prev.status } : null;
+        return prev ? {
+          ...m,
+          id: prev.id, userId: prev.userId, email: prev.email, role: prev.role, status: prev.status,
+          /* D-10 (G-44-3, WR-01): tz funnels exactly like the self carve-out —
+             undefined keeps the stored value (an admin snapshot omitting tz
+             must not wipe it), '' clears (D-07), anything else funnels. */
+          tz: m.tz === undefined ? prev.tz
+            : (typeof m.tz === 'string' && m.tz.trim() === '') ? ''
+            : resolveTz(m.tz),
+        } : null;
       })
       .filter(Boolean);
     // A member the client's copy does not know about — they joined in another
@@ -1714,7 +1728,9 @@ function docFromClient(incoming, stored, ws, role, membership) {
      paths. Exactly one field on exactly one member — the requester's own.
      Empty submits store '' (D-07: resolves to Europe/Paris on read);
      anything else goes through the resolveTz funnel (invalid → Europe/Paris,
-     never stored raw). No other field is ever taken from the incoming array. */
+     never stored raw — and since G-44-3 every member's tz funnels on the
+     admin path too, so this statement is finally true for all members).
+     No other field is ever taken from the incoming array. */
   if (incomingSelfTz !== undefined) {
     const storedSelf = (Array.isArray(next.data.members) ? next.data.members : []).find(m => m?.id === membership?.member_id);
     if (storedSelf) storedSelf.tz = (typeof incomingSelfTz === 'string' && incomingSelfTz.trim() === '') ? '' : resolveTz(incomingSelfTz);
