@@ -31,14 +31,14 @@ Details: [.planning/milestones/v1.9-ROADMAP.md](milestones/v1.9-ROADMAP.md)
 
 **Goal**: A deployer can point Projects Studio at Postgres purely through environment configuration; without that config the app keeps its current embedded-SQLite behavior unchanged
 **Depends on**: Phase 44 (v1.9)
-**Requirements**: DBA-01..04 (Kanzo #5 — Postgres-only scope confirmed by owner 2026-11-07)
+**Requirements**: DBA-01, DBA-02, DBA-03, DBA-04 (Kanzo #5 — Postgres-only scope confirmed by owner 2026-11-07)
 **Success Criteria** (what must be TRUE):
   1. `DB_*` env selects Postgres; absent config = SQLite default, byte-for-byte behavior
   2. Every existing suite passes unmodified against both backends (same ledger/claim semantics)
   3. D-12 constraint amendment (if a driver dependency is needed) explicitly decided + documented + D-12 test updated
   4. DEPLOY.md documents the env matrix and fail-fast on misconfiguration
 
-**Plans**: 0 plans *(agent worktree feat/sql holds the phase-seed commit 0b8e0a2 — reconcile before planning)*
+**Plans**: 7/7 plans complete *(agent worktree feat/sql holds the phase-seed commit 0b8e0a2 — reconcile before planning)*
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 45 to break down)
@@ -77,7 +77,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 45. Database adapter | 0/0 | Not started (in-flight feat/sql) | - |
+| 45. Database adapter | 7/7 | Complete    | 2026-11-07 |
 | 46. MCP server | merged (e541e45) | UAT passed 2026-11-07 (5/5) — 3 fixes landed during UAT | 2026-11-07 |
 | 47. Command/UI hardening | merged (62b1826) | UAT passed 2026-11-07 (G shortcuts) | 2026-11-07 |
 | 48. Browser push & toasts | 2/2 | Complete    | 2026-11-07 |

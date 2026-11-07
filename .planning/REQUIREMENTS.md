@@ -25,18 +25,18 @@
   header). *Shipped and verified 2026-11-06 (Phase 43, 3/3 plans) — registered here
   retroactively for traceability (Kanzo task projectsstudio#16, done).*
 
-### DBA — Database adapter (Kanzo #5; in-flight on feat/sql)
+### DBA — Database adapter (Kanzo #5 — complete, Phase 45)
 
-- [ ] **DBA-01**: Optional Postgres backend selected purely via environment configuration
+- [x] **DBA-01**: Optional Postgres backend selected purely via environment configuration
   (`DB_*` env, Postgres-only scope confirmed by owner 2026-11-07); absence of the config keeps
   the current SQLite behavior byte-for-byte
-- [ ] **DBA-02**: No functional divergence between backends: every existing suite passes
+- [x] **DBA-02**: No functional divergence between backends: every existing suite passes
   unmodified against both SQLite and Postgres (same ledger/claim semantics, same migration
   posture, same `node:sqlite` fallback when `node:postgres`-equivalent is used)
-- [ ] **DBA-03**: Zero-runtime-dependency constraint (D-12) revisited explicitly: the Postgres
+- [x] **DBA-03**: Zero-runtime-dependency constraint (D-12) revisited explicitly: the Postgres
   driver choice (bundled vs vendored vs `pg` dependency) must be decided and documented at plan
   time — a runtime dependency is acceptable only with an owner-validated constraint amendment
-- [ ] **DBA-04**: Deploy documentation (DEPLOY.md) covers the env matrix: SQLite-only default
+- [x] **DBA-04**: Deploy documentation (DEPLOY.md) covers the env matrix: SQLite-only default
   (no config), Postgres connection (host/creds/pool), and what happens on misconfiguration
   (fail fast at boot, never silently fall back)
 
@@ -100,10 +100,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | TZ-01 | Phase 44 (v1.9, retroactive) | Complete |
 | LOGO-01 | Phase 43 (v1.9, retroactive) | Complete |
-| DBA-01 | Phase 45 | Pending |
-| DBA-02 | Phase 45 | Pending |
-| DBA-03 | Phase 45 | Pending |
-| DBA-04 | Phase 45 | Pending |
+| DBA-01 | Phase 45 | Complete |
+| DBA-02 | Phase 45 | Complete |
+| DBA-03 | Phase 45 | Complete |
+| DBA-04 | Phase 45 | Complete |
 | MCP-01 | Phase 46 (branch feat/mcp) | Complete |
 | MCP-02 | Phase 46 (branch feat/mcp) | Complete |
 | MCP-03 | Phase 46 (branch feat/mcp) | Complete |
