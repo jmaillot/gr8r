@@ -57,14 +57,14 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
   4. The reminder pass, email mirror, digest and the MCP permission mirror agree with the UI predicate through the same `memberCanReadProject` helper (parity test green; `mcp.js` edited in the same phase — no over-permissive window)
   5. Second boot is a byte-identical no-op on both SQLite and pg; Phase 37/38 scheduler suppression + no-double-send invariants pass unmodified
 
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
 - [x] 49-01-PLAN.md — Test scaffolding first: 13-cell legacy fixture builder + set-equality oracle, byte-identity harness, MCP parity harness, 404 body-equality matrix rows (MIG-01, MIG-03, VIS-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 49-02-PLAN.md — One-boot grant-materialization sweep: materialize old-predicate grants into p.members, normalize p.access, delete p.teams, clear scope columns; guarded/backup/transactional/byte-identical (MIG-01, MIG-02)
+- [x] 49-02-PLAN.md — One-boot grant-materialization sweep: materialize old-predicate grants into p.members, normalize p.access, delete p.teams, clear scope columns; guarded/backup/transactional/byte-identical (MIG-01, MIG-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 49-03-PLAN.md — Predicate collapse + lockstep: memberCanReadProject/hiddenFor reduce to private+p.members, scope machinery and writers deleted, MCP mirror rewritten, suites moved to the collapsed model (MIG-02, MIG-03, VIS-02, VIS-03)
@@ -120,7 +120,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Visibility model collapse & grant materialization | 1/4 | In Progress|  |
+| 49. Visibility model collapse & grant materialization | 2/4 | In Progress|  |
 | 50. Invite hierarchy & per-project toggles (server) | 0/? | Not started | - |
 | 51. Client surfaces, Permissions-page removal & project creation | 0/? | Not started | - |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |

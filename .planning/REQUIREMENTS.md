@@ -39,7 +39,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
   project invitations (teams ∩ members, Phase-29 scope grants converted to invites per
   D2.0-2) before deleting `project.teams`; per-member × per-project read-equivalence is
   proven before/after
-- [ ] **MIG-02**: The Phase-29 scope columns (`memberships.scope`, `invites.scope`) and
+- [x] **MIG-02**: The Phase-29 scope columns (`memberships.scope`, `invites.scope`) and
   the D-03 grant inversion are retired — dormant on disk, ignored by code
 - [x] **MIG-03**: All send-time consumers (reminder pass, email mirror, digest) and the
   MCP server's mirrored predicate read the new model through the same
@@ -92,7 +92,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INV-03 | Phase 50 | Pending |
 | INV-04 | Phase 50 | Pending |
 | MIG-01 | Phase 49 | Complete |
-| MIG-02 | Phase 49 | Pending |
+| MIG-02 | Phase 49 | Complete |
 | MIG-03 | Phase 49 | Complete |
 | CRT-01 | Phase 51 | Pending |
 | CRT-02 | Phase 51 | Pending |
