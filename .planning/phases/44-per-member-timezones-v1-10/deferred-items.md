@@ -6,3 +6,4 @@
   (server.js ~363); the D-74 fixture pre-creates only `files/` in the 0o555 DATA_DIR, so boot now dies on
   `mkdir .../logos` EACCES before the backup-failure path is reached. Fix: the D-74 fixture must also pre-create
   `logos/` next to `files/`. Not touched by 44-01 (scope boundary).
+  status: acknowledged
