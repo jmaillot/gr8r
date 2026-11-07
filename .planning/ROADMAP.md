@@ -13,7 +13,6 @@
 - ✅ **v1.8 Notification Sanity** — Phases 36-39 (shipped 2026-11-05)
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
 
-
 <details>
 <summary>✅ v1.9 Digest Context & One-Click Unsubscribe (Phases 40-44) — SHIPPED 2026-11-07</summary>
 
@@ -42,3 +41,13 @@ when validated.)*
 **Follow-ups:**
 - [ ] Test 1: Real web push (service worker + browser Notification) wired to the existing push_* pref keys, with a "coming soon" badge added to the Push section in Settings in the meantime (deferred 2026-11-05)
 - [ ] Test 3: Toast notifications for mention/assign events (deferred 2026-11-05)
+
+### Phase 45: Database adapter — optional Postgres backend via env, SQLite default
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 44
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 45 to break down)

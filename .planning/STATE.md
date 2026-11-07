@@ -113,6 +113,10 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 44]: 44-03: src/lib/timezones.js exempted from i18n-scan (EXCLUDED_FILES — generated machine data, seed.js family); generator is the only supportedValuesOf site
 - [Phase 44]: 44-03: IANA ids keep underscores (58 valid zones); only display names normalize `_` → space — plan's "no underscore ids" assertion was wrong (Rule 1)
 
+### Roadmap Evolution
+
+- Phase 45 added: Database adapter — optional Postgres backend via env, SQLite default (Kanzo projectsstudio#5; Postgres-only scope confirmed by owner 2026-11-07)
+
 ### Pending Todos
 
 None yet.
