@@ -1,11 +1,13 @@
 ---
 phase: 45-database-adapter-optional-postgres-backend-via-env-sqlite-de
-verified: 2026-11-07T15:20:00Z
-status: human_needed
+verified: 2026-11-07T19:10:00Z
+status: passed
+must_haves_hold: true
 score: 8/8 must-haves verified
 covered_files:
   - db-adapter.mjs
   - server.js
+  - mcp.js
   - package.json
   - Dockerfile
   - docker-compose.yml
@@ -18,30 +20,25 @@ covered_files:
   - test/static-db-audit.test.mjs
   - test/dependencies.test.mjs
   - test/helpers/server.mjs
-covered_digest: "manual:sha256:0b3a276c25a01368ab1d168028125ae0a9c84c40b7b5f28e3d7bfdad4616a83b"
+covered_digest: "manual:sha256:aa0b32a6413ad7db37c932bc1e43608d75842e64d3dac2655f6e323f7417e2b1"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: none
-  previous_score: n/a
-  gaps_closed: []
+  previous_status: human_needed
+  previous_score: 8/8
+  gaps_closed:
+    - "Human verification item 1 (real external Postgres deploy) — resolved by UAT Test 1: pass, owner-accepted on local Docker evidence (boot+serve on DB_URL, fail-closed on unreachable DSN with no DSN leak; sslmode guidance documented in DEPLOY.md §15)"
+    - "Human verification item 2 (operator migration of a real install) — resolved by UAT Test 2: pass, production-shaped SQLite db migrated to live pg 17 (15 tables incl. api_keys), pg boot serves traffic, rollback path (SQLite, DB_URL unset) intact"
   gaps_remaining: []
   regressions: []
-human_verification:
-  - test: "Deploy the pg-built Docker image against a REAL external Postgres (managed or TLS endpoint) with DB_URL set, including sslmode=verify-full"
-    expected: "Server boots, serves authenticated traffic on pg; boot refuses with a clear error and no DSN leak if credentials are wrong"
-    why_human: "The matrix proves the code against a local Docker pg; a real managed endpoint exercises TLS/sslmode, network auth and the packaged image itself — not verifiable from this checkout"
-  - test: "Run scripts/copy-sqlite-to-pg.mjs against a production-shaped real install (existing projects.db with legacy ensureColumn columns), then boot the server on pg and keep projects.db as rollback"
-    expected: "Copy commits with per-table counts, server boots on pg with all data, rollback path intact"
-    why_human: "The contract tests use synthetic fixtures; a real operator migration validates legacy-column intersection and data fidelity on genuine data — an operational judgment"
 ---
 
-# Phase 45: Database adapter — optional Postgres backend via env, SQLite default — Verification Report
+# Phase 45: Database adapter — optional Postgres backend via env, SQLite default — Verification Report (re-verification)
 
 **Phase Goal:** A deployer can point Projects Studio at Postgres purely through environment configuration; without that config the app keeps its current embedded-SQLite behavior unchanged.
-**Verified:** 2026-11-07T15:20:00Z
-**Status:** human_needed (deployment-level checks only — all code truths verified, zero gaps)
-**Re-verification:** No — initial verification
+**Verified:** 2026-11-07T19:10:00Z
+**Status:** passed
+**Re-verification:** Yes — after post-merge reconciliation commits `16c6bf4` (async facade reconciliation: mcp.js full async conversion, server.js /api/keys awaits + mcpDb forwarding stub, db-adapter.mjs api_keys SCHEMA mirror) and `67edc7b` (copy script carries 15 tables incl. api_keys), plus UAT closure of the two prior human-verification items (45-UAT.md 2/2 pass).
 
 ## Goal Achievement
 
@@ -49,14 +46,14 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | With DB_URL unset, adapter serves get/all/run/tx against node:sqlite; suite stays green | ✓ VERIFIED | 69/69 pass: db-adapter + dependencies + static-db-audit + migration suites; full suite 1065 pass (SQLite path = default), zero regressions vs documented baseline |
-| 2 | With DB_URL=postgres://…, pg loads via dynamic import only | ✓ VERIFIED | `db-adapter.mjs:441` single `await import('pg')`, 0 static `from 'pg'`; live pg-matrix boot+auth test passed against real Postgres |
-| 3 | run() returns { changes } on both backends; pg rowCount mapped | ✓ VERIFIED | Unit-pinned in test/db-adapter.test.mjs; REM-03 exactly-once claim test passed on live pg |
-| 4 | db.tx serializes on SQLite (mutex), checked-out pool client on pg | ✓ VERIFIED | tx serialize/rollback unit pins pass; matrix exercises tx paths end-to-end on pg |
-| 5 | Fail-closed boot: unreachable pg exits non-zero with err.code, never the DSN | ✓ VERIFIED | `db-adapter.mjs:451-466` (exit(1), code= only); live matrix test: closed-port child, non-zero exit, `postgres://` absent from output — PASSED against real pg |
-| 6 | Zero db.prepare/db.exec in server.js; facade surface exactly get/all/run/tx | ✓ VERIFIED | grep count = 0; static-db-audit.test.mjs permanent pins all pass (4/4) |
-| 7 | Copy script: 14 tables, dependency order, refuses non-empty target, count verification, source immutable | ✓ VERIFIED | All 4 contract tests PASSED against live Postgres (fresh container): happy path with per-table parity + doc verbatim, refusal exit 1 + D-13 string, SHA-256 source immutability, no DSN in output |
-| 8 | Opt-in pg matrix (D-08): green with POSTGRES_TEST_URL, cleanly skipped without | ✓ VERIFIED | 7/7 pass against Docker postgres:17-alpine (~5s); unset → 11 tests skipped, exit 0 (both matrix + copy files) |
+| 1 | With DB_URL unset, adapter serves get/all/run/tx against node:sqlite; suite stays green | ✓ VERIFIED | Full suite on main: 1126 tests, 1112 pass, 0 fail (24 skipped, pg matrix opt-in skips cleanly). SQLite default is byte-identical behavior; zero regressions |
+| 2 | With DB_URL=postgres://…, pg loads via dynamic import only | ✓ VERIFIED | `db-adapter.mjs:458` single `await import('pg')`; 0 static `from 'pg'` in db-adapter.mjs, server.js, mcp.js, scripts/copy-sqlite-to-pg.mjs |
+| 3 | run() returns { changes } on both backends; pg rowCount mapped | ✓ VERIFIED | Unit-pinned in test/db-adapter.test.mjs (26/26 against live pg); REM-03 exactly-once claim semantics pass |
+| 4 | db.tx serializes on SQLite (mutex), checked-out pool client on pg | ✓ VERIFIED | tx serialize/rollback pins pass; matrix exercises tx end-to-end |
+| 5 | Fail-closed boot: unreachable pg exits non-zero with err.code, never the DSN | ✓ VERIFIED | exit(1), code= only in db-adapter.mjs; UAT Test 1 confirmed live (unreachable DSN → fail-closed, DSN never printed) |
+| 6 | Zero db.prepare/db.exec anywhere in the facade surface; every callsite awaited | ✓ VERIFIED post-reconciliation | Re-checked after `16c6bf4`: `grep -c "db\.(prepare|exec)("` = 0 in server.js AND mcp.js (mcp.js fully converted to awaited facade — authenticate, audit, loadDoc, writeDoc, roster/resolve/task paths all awaited; `{ ...await taskOut(...) }` spreads fixed); static-db-audit.test.mjs 4/4 pass |
+| 7 | Copy script: all tables, dependency order, refuses non-empty target, count verification, source immutable | ✓ VERIFIED post-reconciliation | After `67edc7b`: TABLES contract now 15 tables incl. `api_keys` (line 44 block, comment documents Phase 46 drift); script + contract-test mirror both 15; contract tests 4/4 against live pg; UAT Test 2 planted api_keys row migrated with parity |
+| 8 | Opt-in pg matrix (D-08): green with POSTGRES_TEST_URL, cleanly skipped without | ✓ VERIFIED | db-adapter.test.mjs 26/26 pass against container `pg45verify` (127.0.0.1:5432) this run; copy contract 4/4 sequential; unset → skipped, exit 0 |
 
 **Score:** 8/8 truths verified (0 present-but-behavior-unverified)
 
@@ -64,46 +61,44 @@ human_verification:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `db-adapter.mjs` | async facade + rewrite + probe | ✓ VERIFIED | exports get/all/run/tx/sqliteOnly/toPgSql/pgSchemaVariant/connectDb/ensureColumn/runSchema/close/backendKind |
-| `package.json` | pg as sole runtime dep | ✓ VERIFIED | `"pg": "^8.23.1"` at line 37 (dependencies, D-02 amended pin passes) |
-| `test/db-adapter.test.mjs` | Wave-0 contract pins | ✓ VERIFIED | 26 tests pass |
-| `test/dependencies.test.mjs` | amended deps + COPY pins | ✓ VERIFIED | runtime COPY array includes db-adapter.mjs + node_modules (D-03), passes |
-| `Dockerfile` | runtime stage carries pg | ✓ VERIFIED | lines 20–22: dated Phase 45/D-03 comment + COPY node_modules + db-adapter.mjs |
-| `.env.example` | DB_URL documented, empty default | ✓ VERIFIED | lines 111–116: optional Database backend block, empty `DB_URL=`, example commented |
-| `docker-compose.yml` | DB_URL passthrough | ✓ VERIFIED | `DB_URL: ${DB_URL:-}` line 49 |
-| `DEPLOY.md` | §15 pg operator runbook | ✓ VERIFIED | §15 at line 1107: fail-closed, DSN-as-secret, sslmode guidance, stop→copy→boot, projects.db rollback (D-14), pg_dump (D-09) |
-| `scripts/copy-sqlite-to-pg.mjs` | one-shot copy tool | ✓ VERIFIED | exercised end-to-end against live pg; imports pgSchemaVariant (no duplication) |
-| `test/copy-sqlite-to-pg.test.mjs` | contract pins | ✓ VERIFIED | 4/4 pass live; skipped exit 0 unset |
-| `test/pg-matrix.test.mjs` | opt-in critical-path matrix | ✓ VERIFIED | 7/7 pass live (boot+auth+second-boot, fail-closed, claims, case-login, epoch typing, prefs upsert, challenges) |
-| `test/static-db-audit.test.mjs` | permanent D-05/D-10 gates | ✓ VERIFIED | 4 pins pass |
+| `db-adapter.mjs` | async facade + rewrite + probe | ✓ VERIFIED | get/all/run/tx/sqliteOnly/toPgSql/pgSchemaVariant/connectDb/ensureColumn/runSchema/close/backendKind; api_keys table now in SQLITE_SCHEMA mirror (lines 275–289) per `16c6bf4` |
+| `server.js` | async facade callsites + mcp wiring | ✓ VERIFIED post-reconciliation | /api/keys routes awaited; `mcpDb` forwarding stub (line 5748) resolves live db per call — fixes the prior top-level `db: null` bug; `createMcp` wired at line 5762 |
+| `mcp.js` | full async facade (merged Phase 46 code) | ✓ VERIFIED post-reconciliation | Zero sync db.prepare/exec; all db.* calls awaited incl. awaited edit callbacks (no more fire-and-forget stale-doc commits) |
+| `package.json` | pg as sole runtime dep | ✓ VERIFIED | `pg` pinned ^8.x; dependencies.test.mjs pin (D-12 as amended) passes |
+| `Dockerfile` | runtime stage carries pg | ✓ VERIFIED | dated Phase 45/D-03 comment + COPY node_modules + db-adapter.mjs; Dockerfile pin passes |
+| `.env.example` | DB_URL documented, empty default | ✓ VERIFIED | optional Database backend block, empty `DB_URL=` |
+| `docker-compose.yml` | DB_URL passthrough | ✓ VERIFIED | `DB_URL: ${DB_URL:-}` |
+| `DEPLOY.md` | §15 pg operator runbook | ✓ VERIFIED | §15 (line 1107+): fail-closed boot, DSN-as-secret, sslmode guidance, stop→copy→boot, projects.db rollback (D-14), pg_dump (D-09) |
+| `scripts/copy-sqlite-to-pg.mjs` | one-shot copy tool, all tables | ✓ VERIFIED post-reconciliation | 15-table TABLES contract (`67edc7b`); imports pgSchemaVariant (no duplication); exercised live in UAT Test 2 |
+| `test/copy-sqlite-to-pg.test.mjs` | contract pins incl. api_keys | ✓ VERIFIED | mirror updated to 15 tables (`67edc7b`); 4/4 pass live |
+| `test/db-adapter.test.mjs` | Wave-0 contract pins | ✓ VERIFIED | 26/26 against live pg this run |
+| `test/pg-matrix.test.mjs` | opt-in critical-path matrix | ✓ VERIFIED | 7/7 live (prior run + documented); skipped exit 0 unset |
+| `test/static-db-audit.test.mjs` | permanent D-05/D-10 gates | ✓ VERIFIED | 4/4 pass this run — pins the post-reconciliation state |
+| `test/dependencies.test.mjs` | amended deps + COPY pins | ✓ VERIFIED | runtime deps exactly { pg } (D-12 amended), passes |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| server.js boot | db-adapter.mjs | `connectDb({dbPath, dbUrl})` (line 374) | ✓ WIRED | imports at line 64; sqliteOnly gates at 10+ sites |
+| server.js boot | db-adapter.mjs | `connectDb({dbPath, dbUrl})` | ✓ WIRED | import + sqliteOnly gates intact after merge |
+| server.js → MCP | mcp.js | `createMcp({ db: mcpDb, ... })` (line 5762) | ✓ WIRED post-reconciliation | mcpDb forwarding stub defers to live `db` per call; `/mcp` calls no longer crash on sync API |
 | db-adapter selectBackend | DB_URL parse | postgres:// prefix | ✓ WIRED | non-postgres:// refused; pinned |
-| pgSchemaVariant | server.js SCHEMA | mirror-sync pin | ✓ WIRED | test/db-adapter.test.mjs mirror pin passes |
+| pgSchemaVariant | server.js SCHEMA mirror | mirror-sync pin | ✓ WIRED | pin passes incl. api_keys |
 | copy script | pgSchemaVariant export | import (not duplicated) | ✓ WIRED | contract tests pass |
 | Dockerfile runtime COPY | dependencies.test.mjs pin | deepEqual array | ✓ WIRED | pin passes |
 | pg-matrix | helpers/server.mjs | withPg + startServer env | ✓ WIRED | matrix runs through the same harness |
-| run() {changes} | exactly-once claim sites | `r.changes === 0` gates | ✓ WIRED | REM-03 claim test passed on live pg |
-
-### Data-Flow Trace (Level 4)
-
-No rendered-dynamic-data artifacts in this phase (backend-only). Data flow verified at the API boundary instead: matrix asserts real pg-sourced payloads (epoch timestamps as numbers, workspace doc verbatim, counts parity).
+| run() {changes} | exactly-once claim sites | `r.changes === 0` gates | ✓ WIRED | REM-03 claim semantics pass on both backends |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Adapter/audit/migration/dependency pins | `node --test test/db-adapter.test.mjs test/dependencies.test.mjs test/static-db-audit.test.mjs test/migration.test.mjs` | 69 pass / 0 fail | ✓ PASS |
-| pg matrix, live Postgres | `POSTGRES_TEST_URL=… node --test test/pg-matrix.test.mjs` | 7 pass / 0 fail (~5s) | ✓ PASS |
-| Copy script contract, live Postgres | `POSTGRES_TEST_URL=… node --test --test-concurrency=1 test/copy-sqlite-to-pg.test.mjs` | 4 pass / 0 fail | ✓ PASS |
-| Opt-in gates unset | same files without env | 11 skipped, exit 0 | ✓ PASS |
-| Full suite | `npm test` | 1083 tests, 1065 pass, 4 fail, 14 skipped | ✓ PASS (4 fails = pre-existing baseline: i18n catalogue ×3, SPA deep-link — documented in 45-05/45-07 summaries, unrelated to this phase) |
-
-Note: the two pg suite files must not be run in one concurrent `node --test` invocation — they share one Postgres schema and interfere (verified: concurrent run produced spurious cross-file failures; sequential runs are green). This is a test-invocation property, not a code defect; both files pass in isolation and in the documented `POSTGRES_TEST_URL=… node --test` per-file invocation.
+| Full suite (fresh, post-reconciliation) | `npm test` on main | 1126 tests, 1112 pass, 0 fail, 24 skipped | ✓ PASS |
+| Adapter contract pins vs live pg | `POSTGRES_TEST_URL=… node --test test/db-adapter.test.mjs` | 26 pass / 0 fail | ✓ PASS |
+| Copy contract vs live pg | `POSTGRES_TEST_URL=… node --test --test-concurrency=1 test/copy-sqlite-to-pg.test.mjs` | 4 pass / 0 fail | ✓ PASS |
+| Static audit (D-05) | `node --test test/static-db-audit.test.mjs` | 4 pass / 0 fail | ✓ PASS |
+| Static grep | `grep -c "db\.(prepare\|exec)("` on server.js + mcp.js | 0 / 0 | ✓ PASS |
+| pg matrix + copy unset | same files without POSTGRES_TEST_URL | skipped, exit 0 | ✓ PASS |
 
 ### Probe Execution
 
@@ -111,40 +106,33 @@ No `scripts/*/tests/probe-*.sh` declared or conventional — skipped.
 
 ### Requirements Coverage
 
-Requirement IDs of record are the CONTEXT.md decision IDs D-01..D-14 (per ROADMAP.md; no separate REQUIREMENTS.md exists for this milestone — no orphaned IDs possible).
+Requirement IDs of record: **DBA-01..04** (REQUIREMENTS.md) and CONTEXT decision IDs D-01..D-14 (per ROADMAP.md). Every PLAN `requirements:` ID accounted for (45-01: D-01,02,04,05,06,09,10; 45-02: D-02,03; 45-03: D-05,07,09; 45-04: D-05,06,10; 45-05: D-07,09,10,11; 45-06: D-12,13,14; 45-07: D-04,08) — none orphaned.
 
 | Requirement | Source Plan(s) | Decision | Status | Evidence |
 |-------------|----------------|----------|--------|----------|
-| D-01 pg driver | 45-01 | node-postgres | ✓ SATISFIED | pg@^8.23.1 in dependencies; import shape pinned |
-| D-02 conditional load + pin amendment | 45-01, 45-02 | dynamic import only | ✓ SATISFIED | 0 static pg imports; dependencies.test.mjs amended, passes |
-| D-03 single Docker image | 45-02 | node_modules in runtime stage | ✓ SATISFIED | Dockerfile lines 20–22; COPY pin passes |
-| D-04 fail-closed boot | 45-01, 45-07 | exit(1), no DSN | ✓ SATISFIED | code at db-adapter.mjs:451/465; live test passed |
-| D-05 unified async facade | 45-01, 45-03, 45-04 | all callsites awaited | ✓ SATISFIED | grep db.(prepare\|exec) == 0; static audit pin |
-| D-06 minimal facade (4 methods) | 45-01, 45-04 | no shim | ✓ SATISFIED | TRANSITIONAL removed; shim-absence pinned |
-| D-07 portable seed / db.tx | 45-03, 45-05 | common SQL seed | ✓ SATISFIED | seed-determinism pin; matrix second-boot no-op live |
-| D-08 opt-in test matrix | 45-07 | POSTGRES_TEST_URL gate | ✓ SATISFIED | 7/7 live, skipped exit 0 unset |
-| D-09 SQLite-only ops gated | 45-01, 45-03, 45-05 | sqliteOnly, pg_dump docs | ✓ SATISFIED | 10+ gates; whitelist lint; DEPLOY.md §15 |
-| D-10 dialect branch points in adapter | 45-01, 45-04, 45-05 | one branch per incompatibility | ✓ SATISFIED | toPgSql rewrite table unit-pinned (incl. Plan 07's post-param collate + IS DISTINCT FROM fixes) |
-| D-11 doc as text column | 45-05 | no jsonb | ✓ SATISFIED | variant text column pinned; copy test asserts verbatim doc |
-| D-12 one-shot copy script | 45-06 | scripts/, no boot migration | ✓ SATISFIED | script exists, exercised live |
-| D-13 all tables, refuse non-empty, count verify | 45-06 | dependency order | ✓ SATISFIED | refusal + parity tests passed live |
-| D-14 source immutable, rollback docs | 45-06 | readOnly handle | ✓ SATISFIED | SHA-256 test passed; DEPLOY.md runbook |
+| DBA-01 env-selected Postgres backend | 45-01, 45-07 | D-01, D-02, D-04 | ✓ SATISFIED | DB_URL selects pg via dynamic import; fail-closed boot; live matrix green |
+| DBA-02 no divergence between backends | 45-03, 45-04, 45-05 | D-05, D-06, D-07, D-10, D-11 | ✓ SATISFIED | Full suite 1126/0-fail on SQLite default; pg matrix passes same semantics (claims, tx, epochs, prefs) |
+| DBA-03 D-12 constraint amendment decided + documented + test updated | 45-01, 45-02 | D-02 | ✓ SATISFIED | pg is the first (and sole) runtime dependency; test/dependencies.test.mjs pins exactly { pg } ("D-12 as amended by Phase 45 D-02"); DEPLOY.md documents the carve-out |
+| DBA-04 DEPLOY.md env matrix + fail-fast docs | 45-06, 45-07 | D-13, D-14 | ✓ SATISFIED | DEPLOY.md §15: fail-closed, DSN-as-secret, sslmode, stop→copy→boot, rollback |
+| D-01..D-14 (all) | all plans | — | ✓ SATISFIED | See prior report table, re-confirmed post-reconciliation; D-13 now 15-table contract |
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| (none) | — | — | — | No TBD/FIXME/XXX/stub markers in any phase-modified file |
+| (none) | — | — | — | No TBD/FIXME/XXX/TODO/PLACEHOLDER markers in any phase-modified file (re-scanned incl. mcp.js and copy script post-reconciliation) |
 
 ### Human Verification Required
 
-See frontmatter `human_verification`: (1) real external/managed Postgres deployment with TLS via the packaged Docker image; (2) operator migration of a production-shaped real install via the copy script. Both are external-service/operational checks not reproducible from this checkout.
+None. Both prior items were resolved by UAT (45-UAT.md, status: complete, 2/2 pass):
+1. **Real external Postgres deploy** — pass, owner-accepted on local Docker evidence: pg container + DB_URL boots and serves traffic; unreachable DSN fail-closes with clear error, DSN never printed; sslmode choice documented (DEPLOY.md §15 / README).
+2. **Operator migration of a real install** — pass: production-shaped SQLite db (15 tables, planted api_keys row) migrated to live pg 17; pg boot serves traffic with row parity; rollback path (SQLite, DB_URL unset) intact. This test surfaced and fixed the api_keys migration drift (`67edc7b`).
 
 ### Gaps Summary
 
-None. All 8 must-have truths verified with behavioral evidence — the critical paths were exercised against a live Postgres (Docker postgres:17-alpine) during this verification, not just claimed: boot+auth, second-boot idempotency, fail-closed DSN-free boot, exactly-once claims, case-variant login, epoch typing, prefs upsert, and the full copy-script contract (transfer parity, refusal, source immutability, secret hygiene). The SQLite-default path is regression-clean: the full suite's only failures are the 4 documented pre-existing baseline flakes (i18n catalogue ×3, SPA deep-link), byte-identical to the set recorded before this phase's work. Phase goal achieved at the code level; deployment-level confirmation routed to human verification.
+None. The reconciliation commits are fully absorbed: `16c6bf4` converted the merged MCP-era sync code to the awaited async facade (zero db.prepare/exec remain in server.js or mcp.js; static audit pin enforces this permanently) and mirrored api_keys into the adapter SCHEMA; `67edc7b` carried api_keys into the copy-script TABLES contract so a real migration never silently drops API keys. Full suite is green (0 fail). All roadmap success criteria hold: env-selected Postgres (SC1), unmodified suites on both backends (SC2), D-12 amendment decided/documented/test-pinned (SC3), DEPLOY.md env matrix + fail-fast (SC4). Phase goal achieved; both human-verification items closed via UAT.
 
 ---
 
-_Verified: 2026-11-07T15:20:00Z_
+_Verified: 2026-11-07T19:10:00Z_
 _Verifier: the agent (gsd-verifier)_
