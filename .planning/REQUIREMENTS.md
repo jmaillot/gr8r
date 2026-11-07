@@ -69,9 +69,11 @@
 
 ### FIX — Command/UI hardening (in-flight on fix/commands)
 
-- [ ] **FIX-01**: Reserved for the fixes produced by the fix/commands worktree — scope to be
-  finalized from that branch's actual content before its phase plans; requirement kept coarse
-  (one bullet per landed fix, traceability per commit) rather than speculative
+- [x] **FIX-01**: Command/UI hardening landed from the fix/commands worktree — two-letter G
+  shortcuts in the command palette (keyboard.js shared `gPending` G-nav map, palette.js
+  query-typing guard), each fix carried with a regression test
+  (test/i18n-actions-modules.test.mjs 31/31) and full suite green; merged at 62b1826,
+  UAT passed 2026-11-07
 
 ### Cross-cutting invariants (standing constraints, pinned per phase)
 
@@ -87,7 +89,7 @@
 
 | Feature | Reason |
 |---------|--------|
-| Real browser push + toasts (backlog 999.2) | Not selected for v1.10 — stays backlog pending owner prioritization |
+| Real browser push + toasts (backlog 999.2) | *(consumed into v1.10 Phase 48, 2026-11-07 — owner decision; see PUSH-01..03)* |
 | MySQL/MSSQL adapters | Owner confirmed Postgres-only scope (2026-11-07) |
 | Other MCP transports beyond what feat/mcp ships | Scope follows the in-flight branch; extras are follow-ups |
 | Per-task reminder offsets, digest content growth | Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings |
@@ -114,8 +116,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PUSH-03 | Phase 48 | Complete |
 
 **Coverage:**
-- v1.10 requirements: 14 total (2 retroactive-complete, FIX-01 + PUSH-01..03 complete, 11 pending)
-- Mapped to phases: 11 ✓
+- v1.10 requirements: 14 total — 14/14 complete (2 retroactive v1.9, DBA×4, MCP×4, FIX-01, PUSH×3)
+- Mapped to phases: 14 ✓
 - Unmapped: 0
 
 ---
