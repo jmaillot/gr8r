@@ -13,7 +13,7 @@ stay untouched.
 
 ## Decisions
 
-### D-48-1: Delivery mechanism — poll + Notification API (NOT Web Push protocol)
+- **D-48-1:** Delivery mechanism — poll + Notification API (NOT Web Push protocol)
 
 The browser notification path is a **minimal service worker + `Notification` API triggered
 from the existing poll cycle** (`src/core/store.js` poll). Rationale:
@@ -27,7 +27,7 @@ from the existing poll cycle** (`src/core/store.js` poll). Rationale:
 
 `server.js:5181` already sets `no-cache` for `sw.js` — the static serving path anticipates it.
 
-### D-48-2: Foreground toast / background notification — never both, never re-notify read events
+- **D-48-2:** Foreground toast / background notification — never both, never re-notify read events
 
 - Tab **foreground** → in-app toast only (`src/ui/toast.js`).
 - Tab **background/hidden** (`document.hidden`) → browser Notification via the service worker.
@@ -36,14 +36,14 @@ from the existing poll cycle** (`src/core/store.js` poll). Rationale:
 - Respect the per-type pref keys: `push_mention` gates mention events, `push_assign` gates
   assign events, `push_comment` gates comment events.
 
-### D-48-3: Settings UI — keep the 3 granular toggles, no migration
+- **D-48-3:** Settings UI — keep the 3 granular toggles, no migration
 
 The three toggles stay granular and keep their existing server-side keys (already in
 `VALID_PREF_KEYS` at `server.js:1196-1198`, defaults true at :1216-1218 — zero schema change).
 On first activation, request browser permission if not yet granted. The "Coming soon" badge
 (`settings.notif.pushComingSoon`, badge markup at `src/pages/settings.js:507-509`) is removed.
 
-### D-48-4: Denied permission — toggle persists, badge shows blocked state, toast explains
+- **D-48-4:** Denied permission — toggle persists, badge shows blocked state, toast explains
 
 When permission is denied (or becomes denied): the toggle still saves server-side (the
 preference expresses intent), and the row shows a **"browser blocked" badge** (new i18n key,

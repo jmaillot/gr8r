@@ -14,7 +14,6 @@
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
 - 🚧 **v1.10 Extensions & Adapters** — Phases 45-47 (in-flight: feat/sql, feat/mcp, fix/commands)
 
-
 <details>
 <summary>✅ v1.9 Digest Context & One-Click Unsubscribe (Phases 40-44) — SHIPPED 2026-11-07</summary>
 
@@ -97,7 +96,10 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 48-01-PLAN.md — Tracer + core: sw.js, src/core/push.js (seen-set, toast-vs-notification), poll hook, i18n keys, test harness
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 48-02-PLAN.md — Settings permission UX: blocked badge swap, requestPermission pre-step, pushComingSoon removal, final pin 1709
 
 ## Backlog
