@@ -3956,7 +3956,7 @@ async function handleApi(req, res, url) {
     // T-31-09: strict 6-digit-only gate with NO recovery lookup (D-14/D-59/D-72).
     if (!/^\d{6}$/.test(code)) return fail(res, 400, 'codeRejected', 'Enter a 6-digit verification code');
     // Ownership: an unknown or foreign factorId is a 404 before any verify.
-    const target = db.prepare('select id, name from totp_factors where id = ? and user_id = ?').get(factorId, user.id);
+    const target = await db.get('select id, name from totp_factors where id = ? and user_id = ?', [factorId, user.id]);
     if (!target) return fail(res, 404, 'factorNotFound', 'That factor does not exist');
     // D-15/T-31-08: with more than one factor the code must verify against a
     // factor that is NOT the removed one — self-lockout is structurally
@@ -4126,7 +4126,7 @@ async function handleApi(req, res, url) {
     /* T-31 trust boundary: names + steps only — a secret never leaves the
        server. Last-used is derived at display time from the replay guard's
        matched step (RESEARCH A3): step * period seconds; 0 = never used. */
-    const rows = db.prepare('select id, name, last_step, created_at from totp_factors where user_id = ? order by created_at').all(user.id);
+    const rows = await db.all('select id, name, last_step, created_at from totp_factors where user_id = ? order by created_at', [user.id]);
     return json(res, 200, {
       factors: rows.map(r => ({ id: r.id, name: r.name, createdAt: r.created_at, lastStep: r.last_step })),
     });
@@ -4162,8 +4162,8 @@ async function handleApi(req, res, url) {
     if (!user) return;
     const tokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     // Keep-current (P-H): the caller's own session is excluded by the != clause.
-    const del = db.prepare('delete from sessions where user_id = ? and token_hash != ?').run(user.id, tokenHash);
-    const left = db.prepare('select count(*) as n from sessions where user_id = ? and expires_at > ?').get(user.id, now());
+    const del = await db.run('delete from sessions where user_id = ? and token_hash != ?', [user.id, tokenHash]);
+    const left = await db.get('select count(*) as n from sessions where user_id = ? and expires_at > ?', [user.id, now()]);
     return json(res, 200, { revoked: del.changes, remaining: left.n }); // live post-delete counts (Pitfall 10)
   }
 
