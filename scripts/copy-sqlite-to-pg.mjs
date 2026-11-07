@@ -35,14 +35,16 @@ import { DatabaseSync } from 'node:sqlite';
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
-/* The 14 server.js SCHEMA tables in DEPENDENCY order — users and
+/* The 15 server.js SCHEMA tables in DEPENDENCY order — users and
    workspaces first (everything FK-references them), claim tables last.
    This list is the contract D-13 names; test/db-adapter.test.mjs pins
    the SCHEMA table set, and the contract test asserts this list
-   matches it. */
+   matches it. api_keys joined at Phase 46 (MCP) — carried so a real
+   install never silently loses its API keys on migration. */
 const TABLES = Object.freeze([
   'users',
   'workspaces',
+  'api_keys',
   'totp_factors',
   'oidc_identities',
   'sessions',

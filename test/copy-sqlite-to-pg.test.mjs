@@ -30,6 +30,7 @@ const maybe = PG_URL ? test : test.skip;
 const TABLES = Object.freeze([
   'users',
   'workspaces',
+  'api_keys', /* Phase 46 (MCP) — mirrored from scripts/copy-sqlite-to-pg.mjs */
   'totp_factors',
   'oidc_identities',
   'sessions',
