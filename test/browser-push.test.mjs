@@ -12,8 +12,9 @@
        notification storm on login), the seen-set dedupes every later call,
        and read / pref-off / non-mapped rows never dispatch.
 
-   NOT under test: the settings permission UX (plan 48-02), the real
-   browser notification UI, the 30s poll scheduling (main.js guards).
+   NOT under test: the real browser notification UI, the 30s poll scheduling
+   (main.js guards). The settings permission UX IS under test here (48-02):
+   the npToggle requestPermission pre-step and the one-time blocked toast.
 
    The browser modules read document/navigator/localStorage/window while
    they load, so every global is stubbed BEFORE the dynamic imports —
@@ -29,6 +30,20 @@ register(new URL('./helpers/virtual-icons-loader.mjs', import.meta.url));
 
 /* localStorage backed by a Map, so seen-set persistence is observable. */
 const ls = new Map();
+/* Minimal DOM element stand-in: render()/toast() run inside IN.npToggle, and
+   they only ever write into containers — behaviour is asserted via storage and
+   the seams, never via the rendered DOM. */
+const fakeEl = () => ({
+  innerHTML: '',
+  style: {},
+  dataset: {},
+  classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+  appendChild() {}, removeChild() {}, remove() {}, setAttribute() {}, removeAttribute() {},
+  focus() {}, addEventListener() {},
+  scrollTop: 0, scrollLeft: 0,
+  querySelector: () => fakeEl(),
+  querySelectorAll: () => [],
+});
 globalThis.localStorage = {
   getItem: k => (ls.has(k) ? ls.get(k) : null),
   setItem: (k, v) => ls.set(k, String(v)),
@@ -37,12 +52,15 @@ globalThis.localStorage = {
 
 globalThis.document = {
   querySelectorAll: () => [],
-  querySelector: () => null,
-  getElementById: () => null,
+  querySelector: () => fakeEl(),
+  getElementById: () => fakeEl(),
   addEventListener: () => {},
-  body: {},
+  body: fakeEl(),
   title: '',
   hidden: true, /* the tracer's scenario: the tab is hidden */
+  documentElement: fakeEl(),
+  activeElement: null,
+  createElement: fakeEl,
 };
 Object.defineProperty(globalThis, 'navigator', {
   value: { platform: 'Linux', userAgent: 'node' },
@@ -52,6 +70,12 @@ Object.defineProperty(globalThis, 'navigator', {
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, addListener() {} });
 globalThis.addEventListener = () => {};
 globalThis.window = globalThis;
+globalThis.CSS = globalThis.CSS || { escape: s => s };
+globalThis.requestAnimationFrame = () => {};
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, opts) { this.type = type; this.detail = opts?.detail; }
+};
 
 /* The showNotification recorder: every call lands here, at module scope. */
 const showCalls = [];
@@ -77,11 +101,12 @@ const source = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 /* Dynamic imports AFTER the stubs. */
 const store = await import('../src/core/store.js');
 const push = await import('../src/core/push.js');
+const actions = await import('../src/actions/actions.js');
 const { S, D } = store;
 
 /* Seed the workspace doc: one unread mention row for the current member. */
 const d = D();
-d.ws = { url: 'acme' };
+d.ws = { url: 'acme', name: 'Acme', c: '#5A67D8' };
 d.me = 'm-me';
 d.members.push({ id: 'm-me', name: 'Me', role: 'Owner' }, { id: 'm-elo', name: 'Élodie', role: 'Member' });
 d.projects.push({ id: 'p-1', key: 'ELN', name: 'Élan', members: ['m-me'] });
@@ -227,4 +252,68 @@ test("a missing Notification API degrades to a silent no-op — no throw", async
   } finally {
     globalThis.Notification = Cls;
   }
+});
+
+/* ---------- expansion (48-02): the requestPermission pre-step in npToggle (D-48-3/D-48-4) ----------
+   The pre-step is PREPENDED to IN.npToggle — the persistence body below it stays
+   byte-identical (one-branch persistence invariant, D-07 style). Local mode is
+   exercised: api.enabled is false in this harness, so setLocalNotifPrefs is the
+   persistence observable (the localStorage projects.notifPrefs.<ws> key). */
+
+/* reset the module-level session state each expansion run relies on */
+const notifPrefsStored = () => JSON.parse(localStorage.getItem('projects.notifPrefs.acme'));
+const toggle = (k, checked = true) => actions.IN.npToggle({ checked, dataset: { k } });
+
+test('permission default + toggle-ON of a push_* key: requestPermission fires exactly once and the pref still persists (D-48-3)', async () => {
+  Notification.permission = 'default';
+  let rpCalls = 0;
+  Notification.requestPermission = async () => {
+    rpCalls++;
+    return 'granted';
+  };
+  await toggle('push_mention');
+  assert.equal(rpCalls, 1, 'requestPermission runs inside the click (user-gesture context)');
+  assert.equal(notifPrefsStored().push_mention, true, 'the persistence body still runs after the pre-step');
+});
+
+test('permission denied after the request: the blocked toast fires exactly ONCE across two toggles and the pref still persists (D-48-4)', async () => {
+  const toasts = [];
+  push.setToastSink(msg => toasts.push(msg));
+  Notification.permission = 'default';
+  Notification.requestPermission = async () => 'denied';
+  await toggle('push_assign');
+  await toggle('push_comment');
+  assert.equal(toasts.length, 1, 'the explanatory toast is one-time per session');
+  assert.ok(toasts[0].length > 0, 'the toast carries the catalogue line');
+  assert.equal(notifPrefsStored().push_assign, true, 'the pref saves despite denial (fall-through)');
+  assert.equal(notifPrefsStored().push_comment, true);
+  push.setToastSink(null);
+});
+
+test('permission granted: no requestPermission call and no blocked toast', async () => {
+  const toasts = [];
+  push.setToastSink(msg => toasts.push(msg));
+  Notification.permission = 'granted';
+  let rpCalls = 0;
+  Notification.requestPermission = async () => {
+    rpCalls++;
+    return 'granted';
+  };
+  await toggle('push_mention', false);
+  await toggle('push_mention');
+  assert.equal(rpCalls, 0, "only 'default' requests");
+  assert.equal(toasts.length, 0);
+  push.setToastSink(null);
+});
+
+test('toggling a non-push key never touches the permission API', async () => {
+  Notification.permission = 'default';
+  let rpCalls = 0;
+  Notification.requestPermission = async () => {
+    rpCalls++;
+    return 'granted';
+  };
+  await toggle('email_mention');
+  assert.equal(rpCalls, 0);
+  assert.equal(notifPrefsStored().email_mention, true, 'non-push keys persist exactly as before');
 });
