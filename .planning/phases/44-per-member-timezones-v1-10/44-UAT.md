@@ -8,12 +8,13 @@ updated: 2026-11-06T18:00:00Z
 
 ## Current Test
 
-number: 3
-name: Fermer le dropdown du sélecteur de fuseau après une sélection validée
+number: 2
+name: Accepter ou reporter les alertes de revue WR-01 / WR-02
 expected: |
-  Quand l'utilisateur valide une zone (Entrée ou clic), la liste d'options
-  se referme et ne se réaffiche pas ; la mise en page ne bouge pas après la
-  sélection. L'input affiche la zone choisie.
+  Décision humaine : accepter le stockage brut du tz des autres membres par le
+  chemin admin (WR-01, défense en profondeur) et la dégradation de
+  présélection pour les alias/casse (WR-02) comme durcissement différé, ou
+  planifier une phase de correction.
 awaiting: user response
 
 ## Tests
@@ -29,14 +30,15 @@ result: [pending]
 
 ### 3. Fermer le dropdown du sélecteur de fuseau après une sélection validée
 expected: Quand l'utilisateur valide une zone (Entrée ou clic), la liste d'options se referme et ne se réaffiche pas ; la mise en page ne bouge pas après la sélection. L'input affiche la zone choisie.
-result: [pending]
+result: pass
+reported: "Fixed in 1bf1410 (pushed): la liste ne se monte que quand le picker est ouvert — fermée au chargement et après validation ; la saisie ou ArrowDown l'ouvre, Escape la ferme. Vérifié en repro local (Playwright) : après Entrée, listbox absente du DOM, aria-expanded=false, layout stable. Redéployer pour le voir en production."
 
 ## Summary
 
 total: 3
-passed: 1
+passed: 2
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
