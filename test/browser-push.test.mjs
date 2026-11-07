@@ -146,6 +146,34 @@ test('the first notifyNewEvents call of a session primes the seen-set and notifi
   assert.deepEqual(seen, ['n-1'], 'the prime must seed every current unread id');
 });
 
+test('an SPA workspace switch re-primes: the new workspace backlog notifies nothing (WR-01)', async () => {
+  /* Simulate switching to another workspace in place: new seen key, unread backlog. */
+  d.ws = { url: 'beta', name: 'Beta', c: '#63B3ED' };
+  d.notifs.push({ id: 'n-ws', to: 'm-me', type: 'mention', by: 'm-elo', task: 't-1', read: false });
+  await push.notifyNewEvents();
+  assert.equal(showCalls.length, 0, 'the re-prime must be silent');
+  assert.deepEqual(
+    JSON.parse(localStorage.getItem('projects.pushSeen.beta.local')),
+    ['n-1', 'n-ws'],
+    'the new workspace seen key must be primed with its unread ids',
+  );
+  /* The switch back re-primes the original key silently too. */
+  d.ws = { url: 'acme', name: 'Acme', c: '#5A67D8' };
+  d.notifs.push({ id: 'n-ws2', to: 'm-me', type: 'mention', by: 'm-elo', task: 't-1', read: false });
+  await push.notifyNewEvents();
+  assert.equal(showCalls.length, 0, 'returning to a seen-key context re-primes silently');
+  assert.ok(
+    JSON.parse(localStorage.getItem('projects.pushSeen.acme.local')).includes('n-ws2'),
+    'the returned-to workspace seen key absorbed its unread id silently',
+  );
+  /* Restore the exact state the later assertions expect: the beta row is
+     marked read (its seen entry lives under the beta key) and n-ws2 is
+     primed away. */
+  d.notifs.find(n => n.id === 'n-ws').read = true;
+  d.notifs.find(n => n.id === 'n-ws2').read = true;
+  localStorage.setItem('projects.pushSeen.acme.local', JSON.stringify(['n-1']));
+});
+
 test('a hidden-tab mention yields exactly ONE showNotification with the localized body, tag, icon and a same-origin deep-link data.url', async () => {
   d.notifs.push({ id: 'n-2', to: 'm-me', type: 'mention', by: 'm-elo', task: 't-1', read: false });
   await push.notifyNewEvents();

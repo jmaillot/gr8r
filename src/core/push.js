@@ -17,9 +17,11 @@ import { toast } from '../ui/toast.js';
 
 export const PUSH_SEEN_PREFIX = 'projects.pushSeen.';
 
-/* Session prime flag (Pitfall 3): the first notifyNewEvents() call of a session
-   seeds the seen-set and notifies nothing. */
-let _primed = false;
+/* Session prime (Pitfall 3): the seen-set key the last prime covered. The first
+   notifyNewEvents() call for a given user+workspace seeds that seen-set and
+   notifies nothing — and an SPA workspace switch (a new seen key, no reload)
+   re-primes silently, so the target workspace's unread backlog never toasts. */
+let _primedFor = null;
 
 /* Only these row types map to a push_* pref; update / due_reminder / past_due
    never notify (G-37-2 — the push_due toggle stays dead). */
@@ -81,10 +83,11 @@ export function buildNotifUrl(n) {
   return tk?.key && slug ? `/w/${slug}/task/${encodeURIComponent(tk.key)}` : slug ? `/w/${slug}` : '/';
 }
 
-/* The poll entry point. First call of a session primes the seen-set and
-   returns silently (no toast/notification storm on login). Afterwards each
-   candidate is marked seen BEFORE dispatching — the poll is the delivery
-   guarantee, the email channel is the backstop. */
+/* The poll entry point. The first call for a given user+workspace primes the
+   seen-set and returns silently (no toast/notification storm on login — or on
+   an SPA workspace switch, which changes the seen key without a reload).
+   Afterwards each candidate is marked seen BEFORE dispatching — the poll is
+   the delivery guarantee, the email channel is the backstop. */
 
 /* PURE (test seam): the poll permission memo diff (48-02, D-48-4). The settings
    badge derives from Notification.permission, so a flip (denied → granted) must
@@ -96,14 +99,14 @@ export async function notifyNewEvents() {
   /* typeof (not the quoted 'Notification' in-check): the i18n sweep reports any
      quoted capitalised single word as a suspected user-visible literal. */
   if (typeof window === 'undefined' || typeof window.Notification === 'undefined') return;
-  if (!_primed) {
-    _primed = true;
-    const wsId = api.enabled ? api.workspace?.id : D().ws?.url;
-    markSeen(wsId, api.user?.id || 'local', myNotifs().filter(n => !n.read).map(n => n.id));
-    return;
-  }
   const wsId = api.enabled ? api.workspace?.id : D().ws?.url;
   const userId = api.user?.id || 'local';
+  const key = seenKey(wsId, userId);
+  if (_primedFor !== key) {
+    _primedFor = key;
+    markSeen(wsId, userId, myNotifs().filter(n => !n.read).map(n => n.id));
+    return;
+  }
   const seen = getSeen(wsId, userId);
   const candidates = deriveCandidates(myNotifs(), S.notifPrefs, seen);
   if (candidates.length) markSeen(wsId, userId, [...seen, ...candidates.map(n => n.id)]);
