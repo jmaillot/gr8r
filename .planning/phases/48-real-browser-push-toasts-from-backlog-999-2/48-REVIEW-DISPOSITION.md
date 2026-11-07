@@ -5,11 +5,11 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "sw.js click-URL resolution does not enforce same-origin — the T-48-03 mitigation is ineffective as claimed"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Session prime never re-primes after an SPA workspace switch — unread backlog of the target workspace fires a toast/notification storm"
   - id: IN-01
     severity: info
@@ -23,7 +23,7 @@ findings:
     severity: info
     disposition: open
     title: "Fire-and-forget `notifyNewEvents()` without a `.catch` at the poll dispatch site"
-open: 5
+open: 3
 total: 5
 recorded: 2026-11-07T13:31:58.568Z
 ---
@@ -32,8 +32,8 @@ recorded: 2026-11-07T13:31:58.568Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| WR-01 | warning | open | - |
+| CR-01 | critical | fixed | d16e559 — sw.js: origin equality check with fallback to '/' + sw-test assertion |
+| WR-01 | warning | fixed | 5e3e4af — push.js: `_primedFor` seen-key re-prime + SPA-switch regression test |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
