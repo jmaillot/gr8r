@@ -2308,6 +2308,216 @@ async function migrateTenancy() {
 }
 
 /*
+ * Phase 49 (MIG-01, D-49-1..8): the one-boot grant-materialization sweep.
+ * The v2.0 visibility model (Plan 03) is a single funnel — public ∨ p.members —
+ * with no team term, no scope term and no legacy p.access fallback. Every
+ * access path the OLD predicate granted (team intersections, Phase-29 scope
+ * grants incl. the D-03 inversion, legacy p.access:'private') must become an
+ * explicit p.members entry BEFORE the collapsed predicate serves a request
+ * (ARCHITECTURE Pitfall 1: sweep precedes the predicate, same phase, same
+ * boot). Guarded-additive template copied from migrateTenancy / the notif-prefs
+ * backfill (server.js:2236-2308): guard → backup → per-workspace transaction →
+ * second-boot no-op (D-49-6 marker).
+ */
+
+/*
+ * D-49-6 marker: does this workspace still carry any pre-sweep visibility
+ * representation? Any project with a p.teams key, any legacy p.access value,
+ * or any non-NULL scope column on memberships/invites. A fully-swept
+ * workspace matches nothing → the sweep is a zero-write no-op and the second
+ * boot is byte-identical (pinned in test/visibility-migration.test.mjs).
+ */
+function sweepNeeded(docText, scopeRowCount) {
+  let doc;
+  try {
+    doc = JSON.parse(docText);
+  } catch {
+    /* unreadable document: nothing to re-derive from (migrateTenancy :2293-2298
+       fallback posture — the tx body re-checks and skips with a warning) */
+    return false;
+  }
+  const projects = doc?.data?.projects;
+  if (Array.isArray(projects)) {
+    for (const p of projects) {
+      if (!p || typeof p !== 'object') continue;
+      if (Array.isArray(p.teams)) return true; // D-49-5/D-49-6: the marker itself
+      if (p.access !== undefined) return true; // D-49-4: legacy dual representation
+    }
+  }
+  return scopeRowCount > 0; // D-49-1: any non-NULL scope still needs clearing
+}
+
+async function materializeVisibilityGrants() {
+  const rows = await db.all('select id, doc from workspaces');
+  const candidates = [];
+  for (const row of rows) {
+    const scopeRowCount =
+      (await db.get('select count(*) as n from memberships where workspace_id = ? and scope is not null', [row.id])).n +
+      (await db.get('select count(*) as n from invites where workspace_id = ? and scope is not null', [row.id])).n;
+    if (sweepNeeded(row.doc, scopeRowCount)) candidates.push(row.id);
+  }
+  if (candidates.length === 0) return; // D-49-6: fully swept → zero writes, no backup
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-pre-visibility-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    /* T-49-03: "no backup = no mutation". The sweep is one-way (D-49-1 erases
+       the scope JSON at sweep time) — never mutate without a snapshot. */
+    logError(`  pre-migration backup failed: ${err.message}`);
+    return;
+  }
+  /* A6 (2026-11-07): on pg, sqliteOnly no-ops (db-adapter.mjs:434) — no
+     vacuum-into equivalent exists, so the pg lane boots WITHOUT a file
+     backup. Accepted fallback: the pg matrix (test/pg-matrix.test.mjs) boots
+     a fresh fixture database per scenario, so a failed sweep mutation is
+     contained to a disposable database; the byte-identity pin runs on the
+     SQLite lane. */
+  for (const wsId of candidates) {
+    /* One db.tx per workspace: the doc write and both scope-column clears are
+       atomic (D-11 precedent :2262-2266) — a crashed boot can never leave a
+       materialized doc beside uncleared scope columns. */
+    await db.tx(async () => {
+      /* Re-read inside the transaction: the authoritative doc for THIS write. */
+      const row = await db.get('select doc from workspaces where id = ?', [wsId]);
+      let doc;
+      try {
+        doc = JSON.parse(row?.doc);
+      } catch {
+        logWarn(`  visibility sweep: workspace ${wsId} has an unreadable document — skipped (nothing to re-derive from)`);
+        return;
+      }
+      const data = doc?.data;
+      const projects = Array.isArray(data?.projects) ? data.projects : [];
+      const memberships = await db.all('select user_id, member_id, role, scope from memberships where workspace_id = ? order by user_id', [wsId]);
+      const teamMembers = await db.all('select team_id, user_id from team_members where workspace_id = ? order by team_id, user_id', [wsId]);
+      /* team_members is user_id-space; p.members is member_id-space — the
+         inverse of hiddenFor's join (server.js:884-887, Pitfall 3). A user
+         with NO memberships row (the doc-only team profile) has no member_id
+         and is structurally excluded: the old predicate resolved actors
+         through memberships too, so materialization loses nothing. */
+      const userToMember = new Map(memberships.filter(m => m.member_id).map(m => [m.user_id, m.member_id]));
+      /* Per-member scope state under the OLD predicate (projectScope
+         :813-837): null = workspace-wide (the null-scope branch), object =
+         the scoped branch. Admin/owner memberships are ALWAYS workspace-wide
+         (D-04) — their stored scope JSON was never read, so it is never
+         materialized either; their post-sweep branch (hiddenProjectIds) is
+         exactly the old canSeeProject path. */
+      const memberScope = new Map();
+      const scoped = [];
+      const corruptWarned = new Set(); // WR-04: one warn per distinct payload
+      for (const m of memberships) {
+        if (!m.member_id || ROLE_RANK[m.role] >= ROLE_RANK.admin) continue;
+        let scope = null;
+        if (m.scope != null) {
+          let parsed = m.scope;
+          if (typeof parsed === 'string') {
+            try {
+              parsed = JSON.parse(parsed);
+            } catch {
+              /* T-49-04: fail-open — the old model treated an unreadable
+                 scope column as workspace-wide (projectScope :816-829), never
+                 a lockout. Materialization reproduces that: the member rides
+                 the null-scope terms (access list ∨ team intersection ∨
+                 public), nothing more, nothing less. */
+              if (!corruptWarned.has(m.scope)) {
+                corruptWarned.add(m.scope);
+                logWarn(`  visibility sweep: membership ${m.member_id} in workspace ${wsId} has an unparseable scope column — materializing as workspace-wide (D-04 fail-open)`);
+              }
+              parsed = undefined;
+            }
+          }
+          if (parsed !== undefined && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            const teams = Array.isArray(parsed.teams) ? [...new Set(parsed.teams.filter(t => typeof t === 'string' && t))] : [];
+            const projectIds = Array.isArray(parsed.projects) ? [...new Set(parsed.projects.filter(p => typeof p === 'string' && p))] : [];
+            // D-01: an empty scope ({teams:[],projects:[]}) IS workspace-wide.
+            scope = !teams.length && !projectIds.length ? null : { teams, projects: projectIds };
+          } else if (parsed !== undefined) {
+            scope = null; // malformed payload: same fail-open posture
+          }
+        }
+        memberScope.set(m.member_id, scope);
+        if (scope) scoped.push({ memberId: m.member_id, scope });
+      }
+      /* The document-owner profile id (normalizeProjects' ownerId :913). */
+      const ownerId = Array.isArray(data?.members) ? (data.members.find(m => String(m?.role || '').toLowerCase() === 'owner')?.id || null) : null;
+      for (const p of projects) {
+        if (!p || typeof p !== 'object') continue;
+        /* D-49-4: normalize the legacy representation BEFORE the
+           visibility-bearing writes, so old and new representations agree. */
+        if (p.access === 'private') p.private = true;
+        if (p.access !== undefined) delete p.access;
+        const pTeams = Array.isArray(p.teams) ? p.teams.filter(t => typeof t === 'string' && t) : [];
+        if (!projectIsPrivate(p)) {
+          delete p.teams; // D-49-5: from EVERY project, public ones included
+          continue;
+        }
+        const wasEmpty = !Array.isArray(p.members) || p.members.length === 0;
+        if (!Array.isArray(p.members)) p.members = [];
+        /* Team-intersection grants flow ONLY to workspace-wide members: a
+           scoped member's old branch (hiddenFor :896-901) never consulted the
+           team term, so granting one a p.teams intersection would be an
+           elevation beyond the old-visible set (T-49-02). */
+        const grants = new Set();
+        if (pTeams.length) {
+          for (const tm of teamMembers) {
+            if (!pTeams.includes(tm.team_id)) continue;
+            const mid = userToMember.get(tm.user_id);
+            if (mid && memberScope.get(mid) === null) grants.add(mid);
+          }
+        }
+        /* D-03/D-49-7: scope reach OPENS the project (the inversion) — direct
+           scope.projects ids and scope.teams ∩ p.teams reach materialize as
+           explicit access-list entries. */
+        for (const { memberId, scope } of scoped) {
+          if (scope.projects.includes(p.id) || pTeams.some(t => scope.teams.includes(t))) grants.add(memberId);
+        }
+        /* Old-hidden stays hidden (RESEARCH §Fixtures row 7): a scoped member
+           sitting on an access list OUT of their scope reach was hidden by
+           `!inScopeProject ∨ !scopeGrants` (:899). With the columns cleared
+           they would ride the null-scope branch and GAIN the project, so the
+           out-of-reach entry is dissolved here. */
+        p.members = p.members.filter(mid => {
+          if (typeof mid !== 'string') return true;
+          const scope = memberScope.get(mid);
+          if (!scope) return true; // workspace-wide member: the access list governed before and after
+          return scope.projects.includes(p.id) || pTeams.some(t => scope.teams.includes(t));
+        });
+        if (grants.size > 0) {
+          /* The old model served a private-EMPTY project to the document
+             owner alone (normalizeProjects injects ownerId into the served
+             copy, :929-936). A grant that makes the project non-empty
+             switches that injection off, so the owner's old-visible pair is
+             pinned as an explicit entry — D-49-7, no visible pair lost.
+             A project that stays empty (the sealed cell) keeps its exact
+             sealed shape: no entry injected, private not flipped (D-49-8). */
+          if (wasEmpty && ownerId && !p.members.includes(ownerId)) p.members.push(ownerId);
+          for (const mid of grants) if (!p.members.includes(mid)) p.members.push(mid);
+        }
+        delete p.teams; // D-49-5
+      }
+      /* Raw doc write — append-only on p.members, NO normalizeProjects call
+         (D-49-8: normalize un-seals private-empty projects :931-936), no
+         revision/updated_at churn (A5: deterministic write for the
+         byte-identity pin). */
+      await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(doc), wsId]);
+      /* D-49-1: convert-and-clear — both scope columns cleared inside the SAME
+         transaction as the doc write. Schema untouched (ensureColumns
+         :432-433 stay; the columns are dormant-on-disk from here on). */
+      await db.run('update memberships set scope = null where workspace_id = ?', [wsId]);
+      await db.run('update invites set scope = null where workspace_id = ?', [wsId]);
+    });
+  }
+  logInfo(`  visibility sweep: grants materialized in ${candidates.length} workspace(s), scope columns cleared (D-49-1)`);
+}
+
+/*
  * D-K6: generic envelope-version recognition — ANY `v<digits>:` prefix marks a
  * stored value as an envelope, never plaintext. This is a pattern, not a
  * known-versions list, so future envelope versions are never re-wrapped as
