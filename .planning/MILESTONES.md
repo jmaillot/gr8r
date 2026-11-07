@@ -4,6 +4,11 @@
 
 **Phases completed:** 4 phases, 9 plans, 7 tasks
 
+**Known verification overrides:** 1 newly acknowledged (phase 45 full-suite flake — resolved
+non-issue, verified firsthand), 13 carried forward from prior closes (see STATE.md Deferred
+Items). Phases 46/47 were branch-delivered (feat/mcp e541e45, fix/commands 62b1826) and
+verified this session from backfilled retrospective artifacts.
+
 **Key accomplishments:**
 - Async dual-backend `db-adapter.mjs` — node:sqlite default with pg loaded via dynamic import only under `DB_URL=postgres://`, fail-closed boot probe that never leaks the DSN, and a test-pinned literal-aware SQL rewrite table neutralizing every SQLite-ism (D-02/D-04/D-05/D-06/D-09/D-10).
 - Single pg-enabled Docker image (runtime stage now COPYs node_modules + db-adapter.mjs) with the D-12 COPY pin amended to match exactly, and DB_URL documented in .env.example + forwarded via docker-compose with the SQLite-default posture explicit.

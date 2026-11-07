@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** v1.10 milestone complete — all phases (44-48) done, ready to close
+**Current focus:** v1.10 shipped and archived — next milestone not yet defined (/gsd-new-milestone)
 
 ## Current Position
 
@@ -115,7 +115,9 @@ runtime dependencies, zero migrations, full suite green.
 - ✅ v1.7 Team Visibility & Hardening — shipped 2026-11-04 (4 phases, 12 plans, archived)
 - ✅ v1.8 Notification Sanity — shipped 2026-11-05 (4 phases, 12 plans, 13/13 REQs,
   archived; audit passed — 1 newly acknowledged + 9 carried-forward deferred items)
-- 🚧 v1.9 Digest Context & One-Click Unsubscribe — roadmap created 2026-11-05
+- ✅ v1.9 Digest Context & One-Click Unsubscribe — shipped 2026-11-07, archived (audit passed)
+- ✅ v1.10 Extensions & Adapters — shipped 2026-11-07, archived (4 phases: 45-48; audit passed;
+  14/14 REQs; phases 46/47 branch-delivered with retrospective artifacts verified post-hoc)
 
 ## Accumulated Context
 
@@ -179,6 +181,7 @@ None yet.
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
+| deferred_items | 45/deferred-items.md: full-suite i18n-catalogue + SPA deep-link flake | resolved (2 clean full-suite runs on main verified firsthand at close; 1133 tests, 0 fail) | 2026-11-07 | v1.10 |
 | debug_sessions | admin-revoke-only-own-session | unknown | 2026-11-01 | v1.5 |
 | debug_sessions | login-broken-after-rotation | unknown | 2026-11-01 | v1.5 |
 | uat_gaps | 26/26-UAT.md | diagnosed (0 pending scenarios) | 2026-11-01 | v1.5 |

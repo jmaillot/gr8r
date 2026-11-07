@@ -304,6 +304,42 @@
 
 ---
 
+## Milestone: v1.10 — Extensions & Adapters
+
+**Shipped:** 2026-11-07
+**Phases:** 4 (45-48) | **Plans:** 9 + 2 branch deliveries
+
+### What Was Built
+- Database adapter (DBA-01..04): async `db-adapter.mjs` facade, `DB_URL` selects `pg` (first runtime dependency, D-12 amended), SQLite byte-identical default, pg schema/migrations/seed, one-shot copy script, `POSTGRES_TEST_URL` matrix (7 tests, exposed and closed 3 real pg-only bugs)
+- MCP server (MCP-01..04): 35-tool authenticated workspace-scoped surface at `/mcp`, hand-rolled JSON-RPC 2.0, personal `psk_live_` API keys, permission-funnel parity with UI/API, `MCP.md` + `DEPLOY.md` §15 (branch feat/mcp, e541e45)
+- Real browser push & toasts (PUSH-01..03): minimal service worker + per-user/workspace seen-set, exactly-one feedback per gated event, derived blocked-permission UX, zero deps (Phase 48)
+- Two-letter G shortcuts in the command palette (FIX-01): shared `gPending` GO_MAP, query-typing guard, initials-across-words filter behaviorally pinned (branch fix/commands, 62b1826)
+
+### What Worked
+- The POSTGRES_TEST_URL matrix caught three genuine pg-only defects (two SQL rewrites + int8 typing) that the SQLite suite could never see — opt-in matrix tests are how a dual-backend promise stays honest.
+- Branch-delivered phases were reconciled at close with retrospective SUMMARY + fresh verifier runs (2/2, 4/4) instead of being waved through — the audit passed because the evidence was rebuilt, not assumed.
+- The 45-05 flake deferred item was resolved by running the full suite firsthand at close (1133 tests, 0 fail) before acknowledging it — one verification killed the ambiguity.
+
+### What Was Inefficient
+- Phases 46/47 landed without the standard artifact chain (no plans, no SUMMARY, no verification at merge time), so the close backfilled everything: two SUMMARYs, two verifier runs, one inline gap fix (missing palette regression tests + a wrong 31/31 evidence figure). Branch delivery skips the discipline that makes closes cheap.
+- Verification digests staled repeatedly during the close itself (covered-file edits after verification); recomputing covered_digest via `verification.fingerprint` is the correct tool, but it cost several cycles to learn that the list must match covered_files exactly.
+
+### Patterns Established
+- Dual-backend discipline: dialect branches owned by the adapter, `sqliteOnly` gating for SQLite-specific ops, fail-closed pg boot that never leaks the DSN.
+- MCP permission parity: every tool call resolves through the same membership funnel as UI/API — an external surface is never a second permission system.
+- `psk_live_` personal API keys with hash-only storage, revocation and expiry as the credential shape for machine access.
+
+### Key Lessons
+1. If work is delivered on a branch, land its planning artifacts with it — the close-time backfill cost more than writing the SUMMARY at merge time.
+2. A matrix test suite gated on an env var (all-skip when unset) is the cheapest way to keep a second backend provably working without burdening every developer.
+3. Evidence figures in traceability bullets must be measured, not remembered — the "31/31" claim was wrong in two documents before the verifier checked.
+
+### Cost Observations
+- 1 day (2026-11-07), ~160 commits in range, 174 files, +13 898/−1 082.
+- Notable: suite grew 1042 → 1133; first runtime dependency (`pg`) added under the amended D-12.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -316,6 +352,7 @@
 | v1.5 Reliability & Rotation | 2 days | 5 | The v1.3 lesson applied as-is: digests for 23–26 staled (shared server.js) and the close accepted overrides with Phase 27 final-tree evidence + milestone audit, without debate. Research-derived build order eliminated cross-phase rework; VALIDATION.md drafts remain the standing gap. |
 | v1.7 Team Visibility & Hardening | 2 days | 4 | The v1.3 lesson finally inverted: parallel verifier subagents + mechanical digest realignment refreshed all 4 verifications honestly at close, no overrides. Recipe cloning (membership migration → notif-prefs migration) eliminated migration risk. Digest fingerprinting remains tool-clunky (no canonical recompute command). |
 | v1.8 Notification Sanity | 2 days | 4 | Research-derived build order (i18n leaf first) produced zero cross-phase rework. One out-of-phase side commit (Kanzo #9) staled 3 digests + caused a 441-failure recursion regression; close ran as override_closeout with 1 newly acknowledged + 9 carried-forward deferred items, backed by a passed milestone audit (13/13 requirements, 11/11 wiring, 4/4 flows re-verified at HEAD). |
+| v1.10 Extensions & Adapters | 1 day | 4 | Two phases were branch-delivered without artifacts; the close backfilled SUMMARYs and re-verified everything honestly (all 4 passed, no overrides beyond 1 resolved deferred item). Lesson: land planning artifacts WITH the branch. Fingerprint staleness during close resolved via `verification.fingerprint` recompute over the exact covered_files list. |
 
 ### Cumulative Quality
 
@@ -327,6 +364,7 @@
 | v1.5 Reliability & Rotation | 649 node:test (e2e extended in v1.4 window) | deep-link resolver + redirect-guard pins, audit same-transaction rollback tests, envelope seed matrix + rotation idempotence, scheduler dedup/caught-up/off-hour tests, doc-parsing parity for DEPLOY.md §14 | 0 (runtime) |
 | v1.7 Team Visibility & Hardening | 896 node:test | team-intersect visibility matrix (doc-get/file/reminder/fanout/doc-put), hardening pins (sameOrigin order, spoof whitelist, fail-closed twins), 17-key prefs whitelist + migration second-boot parity, 22-row tokenized-matcher table suite, undo mutex/deadline pins, compose-config parse test | 0 (runtime) |
 | v1.8 Notification Sanity | 943 node:test | server-side i18n build gate (server notif.* key set + EN⇄FR parity), two-offset cadence suite (21 due-reminder tests incl. pre-09:00 purity + catch-up), digest integration suite (send idempotence, suppression matrix, CR-01 multi-member leak pin), prefs round-trip pins (retired push_due → 400) | 0 (runtime) |
+| v1.10 Extensions & Adapters | 1133 node:test | dual-backend suite (pg matrix via POSTGRES_TEST_URL, static-audit gate on db callsites), MCP suite (25 tests: surface freeze, auth, scoping, permission parity), palette-filter behavioral contract (7 tests), browser-push suite (18 tests) | 1 (runtime: `pg`, D-12 amended) |
 
 ### Top Lessons (Verified Across Milestones)
 
