@@ -501,15 +501,20 @@ export function settingsBody(sec, title) {
         srow(t('settings.notif.digest'), t('settings.notif.digestDesc'), tog('email_digest', np.email_digest, 'np')) +
         srow(t('settings.notif.emailReminder'), t('settings.notif.emailReminderDesc'), tog('email_reminder', np.email_reminder, 'np'))
       );
-    case 'notif-push':
+    case 'notif-push': {
+      /* D-48-4: the badge is DERIVED per render from a live permission read,
+         never stored — a later grant clears it on the next poll re-render. */
+      const blocked = typeof window.Notification !== 'undefined' && window.Notification.permission === 'denied';
+      const bad = blocked ? `<span class="badge red">${t('settings.notif.pushBrowserBlocked')}</span>` : '';
       return (
         H(t('settings.notif.pushLead')) +
-        srow(t('settings.notif.mentions'), `<span class="badge faint">${t('settings.notif.pushComingSoon')}</span>`, tog('push_mention', np.push_mention, 'np')) +
-        srow(t('settings.notif.assignments'), `<span class="badge faint">${t('settings.notif.pushComingSoon')}</span>`, tog('push_assign', np.push_assign, 'np')) +
-        srow(t('settings.notif.comments'), `<span class="badge faint">${t('settings.notif.pushComingSoon')}</span>`, tog('push_comment', np.push_comment, 'np')) +
+        srow(t('settings.notif.mentions'), bad, tog('push_mention', np.push_mention, 'np')) +
+        srow(t('settings.notif.assignments'), bad, tog('push_assign', np.push_assign, 'np')) +
+        srow(t('settings.notif.comments'), bad, tog('push_comment', np.push_comment, 'np')) +
         srow(t('settings.notif.dueReminder'), t('settings.notif.dueReminderDesc'), tog('due_reminder', np.due_reminder, 'np')) +
         srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np'))
       );
+    }
     case 'notif-mentions':
       return (
         H(t('settings.notif.mentionsLead')) +

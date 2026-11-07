@@ -1255,7 +1255,6 @@
   "settings.notif.pastDue": "Overdue nudges",
   "settings.notif.pastDueDesc": "One nudge the morning after a task is overdue.",
   "settings.notif.pushLead": "Notifications on desktop and mobile.",
-  "settings.notif.pushComingSoon": "Coming soon",
  "settings.notif.pushBrowserBlocked": "Browser blocked",
   "settings.notif.mentionsLead": "Decide which mentions reach you.",
   "settings.notif.atAll": "@mentions in comments and descriptions",
