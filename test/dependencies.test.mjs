@@ -1,10 +1,16 @@
 /* =====================================================================
-   test: dependencies — the zero-runtime-dependency contract (D-12).
+   test: dependencies — the runtime-dependency contract (D-12, as
+   amended by Phase 45 D-02).
 
-   The runtime is one bare Node process: package.json carries no
-   "dependencies" key, and the Dockerfile's runtime stage stays bare
-   node + su-exec copying only server.js/mailer.js/seed.json/dist.
-   A new runtime dependency or a heavier runtime image must fail npm test
+   The runtime is one bare Node process: package.json historically
+   carried no "dependencies" key, and the Dockerfile's runtime stage
+   stays bare node + su-exec. Phase 45 (2026-11-07, D-02) amends the
+   dependency pin: `pg` is the first runtime dependency — required and
+   pinned (plain dependencies, never optionalDependencies: a silently
+   skipped install would defeat D-04 fail-closed boot) but loaded via
+   dynamic import ONLY when DB_URL is a postgres:// URL. Without
+   DB_URL the instance remains 100% Node built-ins. A new runtime
+   dependency or a heavier runtime image must still fail npm test
    before it ships.
    ===================================================================== */
 import { test } from 'node:test';
@@ -17,12 +23,17 @@ import pkg from '../package.json' with { type: 'json' };
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
-test('package.json carries no runtime dependencies (D-12)', () => {
-  assert.equal(
-    'dependencies' in pkg,
-    false,
-    'package.json gained a "dependencies" key — runtime dependencies are forbidden (D-12): the server runs on Node built-ins only; dev-time tooling belongs in devDependencies',
+test('package.json runtime dependencies are exactly { pg } (D-12 as amended by Phase 45 D-02)', () => {
+  assert.ok(
+    pkg.dependencies,
+    'package.json lost the "dependencies" key — pg must be a REQUIRED runtime dependency (Phase 45 D-02): optionalDependencies would let a broken install silently vanish, defeating D-04 fail-closed boot',
   );
+  assert.deepEqual(
+    Object.keys(pkg.dependencies).sort(),
+    ['pg'],
+    `package.json runtime dependencies must be exactly { pg } (Phase 45 D-02) — found: ${Object.keys(pkg.dependencies).join(' | ')}`,
+  );
+  assert.match(pkg.dependencies.pg, /^\^8\./, 'pg must stay on the 8.x line (D-01 pin)');
 });
 
 test('the Dockerfile runtime stage stays bare node + su-exec with exactly the five COPY targets (D-12)', () => {
