@@ -2,19 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v1.10
 milestone_name: Extensions & Adapters
-current_phase: 48
-status: completed
-stopped_at: Phase 48 complete — all phases complete
-last_updated: "2026-11-07T16:13:42.642Z"
+current_phase: 45
+current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
+status: verifying
+stopped_at: Phase 45 executed (7/7 plans) and merged to main — UAT pending (2 deployment-level tests)
+last_updated: "2026-11-07T16:40:00Z"
 last_activity: 2026-11-07
-last_activity_desc: Phase 48 complete
+last_activity_desc: feat/sql (Phase 45, 7/7 plans + verification 8/8 must-haves) merged to main; UAT deferred until after merge
 state_head: fef67acb7ffe6052da19f82cc1f173112e89ca7d
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 2
+  total_plans: 13
   completed_plans: 13
-  percent: 25
+  percent: 80
 ---
 
 # STATE.md
@@ -26,15 +27,16 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 48 — Real browser push & toasts (from backlog 999.2)
+**Current focus:** Phase 45 — Database adapter (executed on feat/sql, merged to main; UAT pending)
 
 ## Current Position
 
-Phase: 48
-Plan: Not started
-Total Plans in Phase: 2
-Status: All phases complete
-Last activity: 2026-11-07 — Phase 48 complete
+Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — VERIFYING
+Plan: 7 of 7 (complete — merged to main; UAT: 2 deployment-level tests pending)
+Total Plans in Phase: 7
+Status: Phase 45 executed and merged — awaiting human UAT
+Last activity: 2026-11-07 — feat/sql merged to main (Phase 45 complete: adapter facade,
+full async conversion, pg schema/migrations/seed, copy script + runbook, pg matrix)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -66,6 +68,43 @@ runtime dependencies, zero migrations, full suite green.
   only the RFC 8058 digest decision graduated into v1.9 (owner-validated)
 - [Phase 38]: 38-02: suppression gate reads STORED email_digest via getStoredNotifPrefs (D-08) —
   Phase 42's unsubscribe upsert must write stored rows, not merged views
+- [Phase 45] 45-01: pg is the first runtime dependency — exactly { pg: ^8.23.1 }, plain
+  dependencies (never optionalDependencies), loaded via dynamic import only under
+  DB_URL=postgres:// (D-02); dependency pins amended in dependencies.test.mjs AND
+  catalogue.test.mjs (duplicate pin found at execute time)
+- [Phase 45] 45-01: adapter normalizes rows to plain objects and run() returns exactly
+  { changes } on both backends — callsite conventions for Plans 03–04
+- [Phase 45] 45-03: module-level `let db` shim { prepare, exec, close, get, all, run, tx }
+  keeps un-converted regions sync while converted regions call the async facade — the
+  one-way conversion D-05 was user-approved at the plan's Task 0 checkpoint
+- [Phase 45] 45-03: adapter gained close() export and ensureColumn (pragma vs
+  information_schema branch); transaction() helper retired in favor of db.tx()
+- [Phase 45] 45-02: single image variant — runtime stage COPYs node_modules +
+  db-adapter.mjs (D-03); D-12 COPY pin amended to the 10-target set; package.json/lock
+  stay out of the runtime stage (pin doesn't demand them)
+- [Phase 45] 45-02: DB_URL is the only deployment env added — empty default = SQLite
+  (zero-dependency posture documented in .env.example); POSTGRES_TEST_URL deferred to
+  Plan 07 files; DEPLOY.md cross-reference lands in Plan 06
+
+- [Phase 45] 45-05: D-11 locked as `text` (user "confirm" recorded before schema work) —
+  workspaces.doc stays a plain text column on pg, jsonb out of scope (one-way)
+- [Phase 45] 45-05: epoch-ms columns widen to bigint in the pg schema variant only
+  (Date.now() overflows pg integer); booleans/counters stay integer so `= 1`
+  comparisons are preserved verbatim
+- [Phase 45] 45-05: pg execution proof deferred to the Plan 07 matrix — this plan pins
+  the SQL text (whitelist lint, seed determinism on SQLite, runSchema idempotency)
+- [Phase 45] 45-06: copy script reads the source via DatabaseSync({ readOnly: true }) —
+  D-14 immutability enforced at the driver; the copy uses the source∩target column
+  intersection so legacy boot-migration columns (memberships.team/scope) absent from
+  the pg variant are skipped
+- [Phase 45] 45-06: pg client MUST be released before pool.end() — end() waits on
+  checked-out clients; discovered as a child-hang in the contract tests
+- [Phase 45] 45-07: toPgSql grew two rewrite rules the matrix forced out — SQLite's
+  post-parameter `col = ? collate nocase` → lower(col) = lower(?), and null-safe
+  `is [not] ?` → IS [NOT] DISTINCT FROM (pg rejects both verbatim); both unit-pinned
+- [Phase 45] 45-07: Pitfall 1 closed in the adapter — int8 type parser coerces
+  bigint → number at pg load (mirrored in withPg); before the fix invites/sessions
+  payloads carried string timestamps on pg
 
 ## Milestone History
 
@@ -113,6 +152,10 @@ runtime dependencies, zero migrations, full suite green.
 - [Phase 44]: 44-03: src/lib/timezones.js exempted from i18n-scan (EXCLUDED_FILES — generated machine data, seed.js family); generator is the only supportedValuesOf site
 - [Phase 44]: 44-03: IANA ids keep underscores (58 valid zones); only display names normalize `_` → space — plan's "no underscore ids" assertion was wrong (Rule 1)
 
+### Roadmap Evolution
+
+- Phase 45 added: Database adapter — optional Postgres backend via env, SQLite default (Kanzo projectsstudio#5; Postgres-only scope confirmed by owner 2026-11-07)
+
 ### Pending Todos
 
 None yet.
@@ -153,8 +196,14 @@ None yet.
 
 ## Session Continuity
 
+<<<<<<< HEAD
 Last session: 2026-11-07T13:22:27.009Z
 Stopped at: Phase 48 complete — all phases complete
+=======
+Last session: 2026-11-07T15:01:00.000Z
+Stopped at: Completed 45-07-PLAN.md (opt-in pg matrix: 7 gated tests + 3 adapter
+bug fixes — 2 code commits + summary commit; phase 45 all 7 plans done)
+>>>>>>> feat/sql
 Resume file: None
 
 ## Performance Metrics
@@ -171,7 +220,11 @@ Resume file: None
 | Phase 43 P03 | resumed-session | 2 tasks | 2 files |
 | Phase 44 P01 | 35m | 4 tasks | 5 files |
 | Phase 44 P02 | 25m | 2 tasks | 2 files |
+| Phase 45 P03 | ~2h | 4 tasks | 3 files |
 | Phase 44 P03 | 19m | 3 tasks | 14 files |
+| Phase 45 P02 | ~15m | 2 tasks | 4 files |
+| Phase 45 P06 | ~21m | 2 tasks | 4 files |
+| Phase 45 P07 | ~13m | 2 tasks | 4 files |
 | Phase 48 P01 | 15 min | 3 tasks | 7 files |
 | Phase 48 P02 | 14 min | 3 tasks | 9 files |
 

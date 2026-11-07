@@ -108,6 +108,66 @@ contract in Chromium.
 For a self-hosted instance — one Node container, accounts and server-side SQLite storage —
 see [DEPLOY.md](DEPLOY.md).
 
+### Postgres backend (optional)
+
+By default the app runs on embedded SQLite. Setting `DB_URL` in `.env` switches it to
+Postgres — nothing else changes (see [DEPLOY.md §15](DEPLOY.md) for the full runbook,
+the one-shot SQLite→Postgres copy script, and backups). Boot is fail-closed: an
+unreachable or misconfigured `DB_URL` stops the server with a clear error, never a
+silent SQLite fallback, and the connection string is never logged.
+
+How much you configure TLS depends on where Postgres runs relative to the app:
+
+| Where Postgres runs | `sslmode` in `DB_URL` | Why |
+|---------------------|----------------------|-----|
+| Same private network / Docker network / VPC | `disable` | Traffic never leaves the trusted network; TLS adds nothing |
+| Distant host with self-signed or provider TLS | `require` | Encrypts the link; server certificate is accepted without verification |
+| Managed endpoint over the public internet (RDS, Neon, Supabase…) | `verify-full` (+ `sslrootcert`) | Encrypts **and** authenticates the server — blocks man-in-the-middle |
+
+`sslmode` is a parameter of `DB_URL` itself (`postgres://user:pass@host:5432/db?sslmode=require`) —
+it is environment configuration, never a code change.
+
+**Running Postgres in Docker — per mode:**
+
+```sh
+# Mode 1 — private network, no TLS (sslmode=disable)
+#   Postgres listens without TLS; both containers share a Docker network.
+docker network create projects-net
+docker run -d --name projects-pg --network projects-net \
+  -e POSTGRES_PASSWORD=secret \
+  -e POSTGRES_DB=projects \
+  -v projects-pgdata:/var/lib/postgresql/data \
+  postgres:17-alpine
+#   App side: DB_URL=postgres://postgres:secret@projects-pg:5432/projects?sslmode=disable
+
+# Mode 2 — TLS enabled, certificate not verified (sslmode=require)
+#   Generate a self-signed cert and start Postgres with TLS on:
+openssl req -new -x509 -days 365 -nodes -subj "/CN=projects-pg" \
+  -keyout server.key -out server.crt
+chmod 600 server.key && chown 999:999 server.key server.crt
+docker run -d --name projects-pg \
+  -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=projects \
+  -v projects-pgdata:/var/lib/postgresql/data \
+  -v "$PWD/server.crt:/var/lib/postgresql/server.crt:ro" \
+  -v "$PWD/server.key:/var/lib/postgresql/server.key:ro" \
+  postgres:17-alpine \
+  -c ssl=on
+#   App side: DB_URL=postgres://postgres:secret@projects-pg:5432/projects?sslmode=require
+
+# Mode 3 — public internet / managed endpoint (sslmode=verify-full)
+#   Download the provider CA certificate and mount it into the APP container:
+DB_URL='postgres://user:pass@db.example.com:5432/projects?sslmode=verify-full&sslrootcert=/certs/ca.crt'
+docker run -d --name projects-app \
+  -v /path/to/ca.crt:/certs/ca.crt:ro \
+  --env-file /opt/projects/.env \
+  -p 8080:8080 projects-studio
+```
+
+With docker-compose, only `.env` changes: add `DB_URL=...` to `/opt/projects/.env`
+(already forwarded by `docker-compose.yml`) and `docker compose up -d`. To roll back to
+SQLite, remove `DB_URL` and recreate — the old `projects.db` file is never touched by
+pg mode.
+
 ## Internationalization
 
 - **The interface is translated into English and French.** Every user-visible interface string

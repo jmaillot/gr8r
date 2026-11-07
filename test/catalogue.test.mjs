@@ -374,12 +374,18 @@ test('both catalogues are importable by bare Node with the json import attribute
   assert.ok(Object.keys(fr).length > 0, 'the French catalogue is not empty');
 });
 
-test('the project declares no runtime dependency', () => {
-  /* The zero-runtime-dependency identity is an invariant, not a convention. The devDependencies
-     are build-time tools and stay: this guard says nothing about them. */
+test('the project declares exactly the Phase-45 runtime dependency { pg }', () => {
+  /* The zero-runtime-dependency identity was an invariant (D-12); Phase 45 (2026-11-07, D-02)
+     amends it: `pg` is the first and only runtime dependency, loaded via dynamic import only
+     when DB_URL is a postgres:// URL. The devDependencies are build-time tools and stay:
+     this guard says nothing about them. */
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const dependencies = manifest.dependencies || {};
-  assert.deepEqual(Object.keys(dependencies), [], `package.json must carry no runtime dependency (found ${Object.keys(dependencies).join(', ')})`);
+  assert.deepEqual(
+    Object.keys(dependencies).sort(),
+    ['pg'],
+    `package.json must carry exactly the pg runtime dependency (found ${Object.keys(dependencies).join(', ')}) (D-02)`,
+  );
 });
 
 /* ---------- the seed catalogues ---------- */

@@ -45,6 +45,8 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_SSO_ONLY: ${OIDC_SSO_ONLY:-false}
       OIDC_SCOPES: ${OIDC_SCOPES:-}
+      # Optional PostgreSQL backend — empty keeps the SQLite default (DEPLOY.md).
+      DB_URL: ${DB_URL:-}
     volumes:
       - projects-studio-data:/data
     # No published port: Traefik reaches the container over the shared network.

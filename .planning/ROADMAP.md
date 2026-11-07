@@ -12,7 +12,7 @@
 - ✅ **v1.7 Team Visibility & Hardening** — Phases 32-35 (shipped 2026-11-04)
 - ✅ **v1.8 Notification Sanity** — Phases 36-39 (shipped 2026-11-05)
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
-- 🚧 **v1.10 Extensions & Adapters** — Phases 45-47 (in-flight: feat/sql, feat/mcp, fix/commands)
+- 🚧 **v1.10 Extensions & Adapters** — Phases 45-47 (Phase 45 executed on feat/sql, merging; Phase 46 MCP merged; Phase 47 shipped via fix/commands)
 
 <details>
 <summary>✅ v1.9 Digest Context & One-Click Unsubscribe (Phases 40-44) — SHIPPED 2026-11-07</summary>
@@ -110,3 +110,32 @@ Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings and jo
 when validated.)*
 
 *(Phase 999.2 consumed into Phase 48, 2026-11-07 — owner decision.)*
+
+### Phase 45: Database adapter — optional Postgres backend via env, SQLite default
+
+**Goal:** Optional Postgres backend selected by env — `DB_URL` postgres:// runs the server on the
+`pg` driver through a minimal async adapter (`db.get/all/run/tx`); unset stays byte-identical
+SQLite (`node:sqlite`), zero-dependency and default. Fail-closed pg boot, dialect branches owned
+by the adapter, one-shot SQLite→pg copy script, opt-in `POSTGRES_TEST_URL` matrix. SQL Server
+out of scope.
+**Requirements**: D-01..D-14 (requirement IDs of record = CONTEXT.md decision IDs; see CONTEXT.md `<decisions>` and each plan's `requirements:` frontmatter)
+**Depends on:** Phase 44
+**Plans:** 7/7 plans executed
+
+Plans:
+**Wave 1**
+- [x] 45-01-PLAN.md — db-adapter.mjs facade + SQL rewrite + fail-closed probe + Wave 0 tests (tracer)
+- [x] 45-03-PLAN.md — server.js boot-path swap, sqliteOnly gating, tx + auth/claims/scheduler conversion (checkpoint:decision — D-05 one-way async conversion)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 45-02-PLAN.md — Docker image node_modules/db-adapter COPY + dependency/COPY pins + DB_URL env surface
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 45-04-PLAN.md — remaining callsite conversion, legacy shim removal, static audit gate
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 45-05-PLAN.md — pg SCHEMA variant, idempotent pg migrations, portable seed (checkpoint:decision — D-11 doc column shape)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 45-06-PLAN.md — scripts/copy-sqlite-to-pg.mjs + contract tests + DEPLOY.md runbook
+- [x] 45-07-PLAN.md — POSTGRES_TEST_URL-gated pg matrix (boot, auth, claims, dialect pins)

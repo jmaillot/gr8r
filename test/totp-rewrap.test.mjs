@@ -211,6 +211,7 @@ test('D-74: a failed pre-migration backup leaves every stale row byte-identical 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-bkfail-'));
   const badDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-rewrap-bkfail-dd-'));
   fs.mkdirSync(path.join(badDataDir, 'files'), { recursive: true }); // boot mints DATA_DIR/files — pre-create it
+  fs.mkdirSync(path.join(badDataDir, 'logos'), { recursive: true }); // Phase 43: logos dir is minted at boot too
   fs.chmodSync(badDataDir, 0o555); // backup `vacuum into` can no longer create a file here
   const email = 'bkfail@test.local';
   const dbPath = path.join(dir, 'projects.db');
