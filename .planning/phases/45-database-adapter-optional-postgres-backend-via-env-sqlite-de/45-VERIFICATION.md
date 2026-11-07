@@ -20,7 +20,21 @@ covered_files:
   - test/static-db-audit.test.mjs
   - test/dependencies.test.mjs
   - test/helpers/server.mjs
-covered_digest: "v2:sha256:f74aa0f9edae5b770d8ba402a5f3063075ae7721837ba3c3aca4901657c3e79c"
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-01-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-01-SUMMARY.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-02-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-02-SUMMARY.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-03-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-03-SUMMARY.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-04-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-04-SUMMARY.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-05-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-05-SUMMARY.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-06-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-06-SUMMARY.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-07-PLAN.md
+  - .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-07-SUMMARY.md
+covered_digest: "v2:sha256:11532886f9c62e59eebdb8f661087eb4d6bc62dcba9566fa85c226822a541b0e"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
