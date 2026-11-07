@@ -63,9 +63,10 @@ test('the Dockerfile runtime stage stays bare node + su-exec with exactly the fi
   // Phase 30: server.js imports oidc.js at runtime (Entra SSO / OIDC), so the image ships it too.
   // Phase 34: server.js imports src/lib/redaction.js at runtime, so the image ships src/ too.
   // Phase 44: server.js imports tz.js at runtime (resolveTz funnel), so the image ships it too.
+  // Phase 45 (2026-11-07, D-03): single pg-enabled image — node_modules + db-adapter.mjs ship in the runtime stage.
   assert.deepEqual(
     copyTargets.sort(),
-    ['dist', 'mailer.js', 'oidc.js', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js'],
-    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, seed.json, src and dist — found: ${copyTargets.join(' | ')} (D-12)`,
+    ['db-adapter.mjs', 'dist', 'mailer.js', 'node_modules', 'oidc.js', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js'],
+    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, db-adapter.mjs, node_modules, seed.json, src and dist — found: ${copyTargets.join(' | ')} (D-12 as amended by Phase 45 D-03)`,
   );
 });
