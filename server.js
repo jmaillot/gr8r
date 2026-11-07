@@ -4277,7 +4277,7 @@ async function handleApi(req, res, url) {
     // every target session goes.
     const operatorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     // AUD-01: the audit row must be written in the SAME transaction as the
-    // session DELETE (D-R3 — the shared transaction() helper, never hand-rolled
+    // session DELETE (D-R3 — db.tx(), never hand-rolled
     // BEGIN/COMMIT). A forced audit failure rolls back the entire revocation.
     const out = await db.tx(async () => {
       const del = await db.run('delete from sessions where user_id = ? and token_hash != ?', [target.id, operatorTokenHash]);
@@ -4739,7 +4739,7 @@ async function handleApi(req, res, url) {
     if (target.id !== actor.id && ROLE_RANK[membership.role] >= ROLE_RANK.admin)
       return fail(res, 403, 'adminOnly', 'Only members below admin rank can be revoked here');
     // Keep-current (P-H) + audited transaction, same shape as the operator route:
-    // DELETE + security verb + audit row in one transaction(), all three gated on
+    // DELETE + security verb + audit row in one db.tx(), all three gated on
     // del.changes > 0 (D-117); refusals never reach this point.
     const actorTokenHash = sha256(parseCookies(req.headers.cookie)[COOKIE]);
     const out = await db.tx(async () => {
