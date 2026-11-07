@@ -7,7 +7,7 @@ status: executing
 stopped_at: Milestone v1.10 started — phases 45-47 defined (in-flight agent worktrees feat/sql, feat/mcp, fix/commands)
 last_updated: "2026-11-07T09:28:16.255Z"
 last_activity: 2026-11-07
-last_activity_desc: feat/mcp (e541e45) + fix/commands (62b1826) merged to main — Phases 46/47 content landed; Phase 45 (DBA) up next (2026-11-07)
+last_activity_desc: UAT 46/47 passed by owner (MCP 5/5 incl. 3 UAT-found fixes; G shortcuts) — only Phase 45 (DBA) remains (2026-11-07)
 state_head: d11c23c3962fa84454bb82fcda26f4489de3156f
 progress:
   total_phases: 5

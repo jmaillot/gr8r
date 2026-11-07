@@ -79,8 +79,8 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 45. Database adapter | 0/0 | Not started (in-flight feat/sql) | - |
-| 46. MCP server | 0/0 | Not started (in-flight feat/mcp) | - |
-| 47. Command/UI hardening | 0/0 | Not started (in-flight fix/commands) | - |
+| 46. MCP server | merged (e541e45) | UAT passed 2026-11-07 (5/5) — 3 fixes landed during UAT | 2026-11-07 |
+| 47. Command/UI hardening | merged (62b1826) | UAT passed 2026-11-07 (G shortcuts) | 2026-11-07 |
 
 ## Backlog
 
