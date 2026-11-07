@@ -3,13 +3,13 @@ gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
 current_phase: 49
-current_phase_name: visibility-model-collapse-grant-materialization
-status: planning
+current_phase_name: Visibility model collapse & grant materialization
+status: executing
 stopped_at: Phase 49 context gathered
-last_updated: "2026-11-07T20:18:49.441Z"
+last_updated: "2026-11-07T20:20:16.188Z"
 last_activity: 2026-11-07
-last_activity_desc: v2.0 roadmap written (Phases 49-52, 14/14 REQs mapped)
-state_head: c61a7e3681c43b0bc4e7a97cf381a9d7f491f8dc
+last_activity_desc: Phase 49 execution started
+state_head: 7fe37e328a4e7b5350d487534e95e34a83d5241b
 progress:
   total_phases: 4
   completed_phases: 0
@@ -27,14 +27,14 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** v2.0 Project-level Permissions & Invitations — roadmap created, Phase 49 next (/gsd-discuss-phase 49 flagged by research)
+**Current focus:** Phase 49 — Visibility model collapse & grant materialization
 
 ## Current Position
 
-Phase: 49 (visibility-model-collapse-grant-materialization) — READY TO EXECUTE
-Plan: —
-Status: Roadmap created 2026-11-07
-Last activity: 2026-11-07 — v2.0 roadmap written (Phases 49-52, 14/14 REQs mapped)
+Phase: 49 (Visibility model collapse & grant materialization) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 49
+Last activity: 2026-11-07 — Phase 49 execution started
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
