@@ -1,5 +1,33 @@
 # Milestones
 
+## v1.9 Digest Context & One-Click Unsubscribe (Shipped: 2026-11-07)
+
+**Delivered:** digest emails are self-identifying and honestly unsubscribable — one email
+per workspace with its name in the subject, "Project — Task" task lines leak-safe through
+the memberCanReadProject funnel, hostile-name-proof RFC 2047 subjects, and RFC 8058
+one-click unsubscribe via the codebase's first anonymous mutating route on a stateless
+HMAC token. Shipped alongside: per-workspace logo and per-member timezones (canonicalizing
+resolveTz funnel, per-member 09:00 windows).
+
+**Phases completed:** 40-44 (5 phases, 13 plans — 40-42 = v1.9 REQs; 43-44 = v1.10 polish pulled forward)
+
+**Stats:**
+- 151 commits, 127 files changed (+15,075 / −1,039 lines)
+- 5 phases, 13 plans; milestone audit: 6/6 requirements, 12/12 cross-phase wiring, 4/4 E2E flows, 0 blockers
+- 3 days from milestone start to ship (2026-11-05 → 2026-11-07)
+- Suite at close: 1042 tests, 1038 pass / 1 pre-existing environmental fail (totp-rewrap D-74) / 3 skipped; `npm run i18n:scan` clean
+
+**Git range:** `0022125` (docs: archive milestone v1.8) → `d666a7d` (chore: deferred-items clean)
+
+**Known verification overrides:** 4 newly acknowledged, 12 carried forward from a prior close (see STATE.md Deferred Items) — `override_closeout`; verification digests for Phases 40/41/43 were stale from intra-milestone source drift and were re-fingerprinted (all VERIFICATION.md files read `passed`); the milestone audit re-verified requirements, wiring and flows at HEAD (`v1.9-MILESTONE-AUDIT.md`).
+
+**Key accomplishments:**
+- `[WS]` digest subjects with "Project Name — Task Name" lines (SUBJ-01/02) — server-side project resolution, hiddenFor-funnel-safe degradation, single hardened `encodeWord` (C0 strip + RFC 2047 folding) across all four Subject call sites (SUBJ-03)
+- RFC 8058 one-click: stateless HMAC token contract (UNSUB-01) consumed by `POST /unsubscribe/:token` (UNSUB-02) — 15-test response matrix, anonymous/sameOrigin-exempt/throttled/convergent, GET no-op, token never logged — with footer + settings re-subscribe preserved (UNSUB-03) and the DKIM caveat documented in DEPLOY.md §14
+- Per-workspace logo: upload (magic-byte validated, role-gated), favicon fallback on every identity surface, digest header `<img>` with versioned absolute URL
+- Per-member timezones: one canonicalizing resolveTz funnel, per-member scheduler windows, 418-zone static list + searchable combobox, dedup keys byte-identical under tz change; gap closure 44-04 funneled the admin doc-PUT path (WR-01) and canonicalized aliases (WR-02, A2 consciously updated)
+
+---
 ## v1.8 Notification Sanity (Shipped: 2026-11-05)
 
 **Delivered:** Every server-emitted notification renders in the recipient's locale, due-date reminders are capped at two per task, an opt-in 09:00 digest email replaces individual reminder emails, and a full cited notification audit (all rows `proposed`) gates any future trim work behind owner validation.

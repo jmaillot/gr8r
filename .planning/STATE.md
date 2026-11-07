@@ -4,10 +4,10 @@ milestone: v1.9
 milestone_name: Digest Context & One-Click Unsubscribe
 current_phase: 44
 status: completed
-stopped_at: Phase 44 complete — all phases complete
+stopped_at: v1.9 milestone archived — ready for /gsd-new-milestone
 last_updated: "2026-11-07T09:28:16.255Z"
 last_activity: 2026-11-07
-last_activity_desc: Phase 44 complete
+last_activity_desc: v1.9 milestone archived (2026-11-07)
 state_head: d11c23c3962fa84454bb82fcda26f4489de3156f
 progress:
   total_phases: 5

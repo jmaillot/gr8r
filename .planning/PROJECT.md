@@ -1,23 +1,74 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-06 after Phase 43 (v1.9)*
+*Last updated: 2026-11-07 at v1.9 milestone close*
 
-## Current Milestone: v1.9 Digest Context & One-Click Unsubscribe
+## Current Milestone: none — v1.9 just shipped (2026-11-07)
 
-**Goal:** digest emails become self-identifying and honestly unsubscribable — one email
-per workspace with its name in the subject, "Project — Task" task lines, and RFC 8058
-one-click List-Unsubscribe; closes Backlog 999.1 and the Phase 39 unsubscribe decision.
+The v1.9 milestone "Digest Context & One-Click Unsubscribe" is complete: 5 phases
+(40-44), 13 plans, 6/6 requirements satisfied, milestone audit passed (cross-phase
+integration 12/12, E2E flows 4/4, 0 blockers). Next milestone not yet opened —
+run `/gsd-new-milestone` to define v1.10 (candidates: real browser push + toasts
+replacing the "coming soon" toggles [backlog 999.2], registering TZ-01/LOGO-01 in
+fresh requirements).
 
-**Target features:**
-- SUBJ — Digest subject carries the Workspace name (one email per workspace, per the
-  owner's "2 notifications if in two workspaces" ruling); each task line reads
-  "Project Name — Task Name" with hiddenFor-funnel-safe degradation (Backlog 999.1)
-- SUBJ — Subject-header hardening: CRLF-strip + RFC 2047 encode of user-controlled names
-  through one tested builder (no SMTP header injection, no FR mojibake)
-- UNSUB — RFC 8058 one-click: List-Unsubscribe/-Post headers on a stateless HMAC token
-  under MASTER_KEY (no migration), anonymous convergent `POST /unsubscribe/:token`
-  flipping `email_digest=false` per (workspace, user); footer link retained; DKIM caveat
-  documented (signing stays at the instance's relay — Phase 39 deferral holds)
+## Shipped: v1.9 Digest Context & One-Click Unsubscribe (2026-11-07)
+
+**Delivered:** digest emails are self-identifying and revocable — one email per
+workspace with its name in the subject, "Project — Task" lines leak-safe through the
+`memberCanReadProject` funnel, hostile-name-proof RFC 2047 subject builder, RFC 8058
+one-click List-Unsubscribe headers on a stateless HMAC token consumed by the codebase's
+first anonymous mutating route (`POST /unsubscribe/:token`, convergent, no existence
+oracle), footer + settings re-subscribe path preserved. Shipped alongside: per-workspace
+logo (upload, magic-byte validation, favicon fallback, digest header) and per-member
+timezones (per-member 09:00 reminders/digest via one canonicalizing resolveTz funnel,
+Paris default, static committed zone list, admin doc-PUT funneled).
+
+**Phases completed:** 40-44 (5 phases, 13 plans)
+
+**Stats:**
+- 151 commits, 127 files changed (+15,075 / −1,039 lines) from v1.8 archive to close
+- 5 phases, 13 plans; milestone audit: 6/6 REQs, 12/12 wiring, 4/4 flows
+- 2026-11-05 → 2026-11-07 (3 days)
+- Suite at close: 1042 tests, 1038 pass / 1 pre-existing environmental fail (totp-rewrap
+  D-74) / 3 skipped; `npm run i18n:scan` clean
+
+**Git range:** `0022125` (docs: archive milestone v1.8) → `d666a7d` (chore: deferred-items clean)
+
+**Known verification overrides:** 4 newly acknowledged, 12 carried forward from prior
+closes (see STATE.md Deferred Items) — `override_closeout`; verification digests for
+Phases 40/41/43 were stale from intra-milestone source drift and were re-fingerprinted
+(all VERIFICATION.md files read `passed`); the milestone audit re-verified requirements,
+wiring and flows at HEAD (`v1.9-MILESTONE-AUDIT.md`).
+
+**Key accomplishments:**
+- `[WS]` digest subjects via the `subjectWs` key with "Project Name — Task Name" lines
+  resolved server-side and degrading safely for invisible projects; single hardened
+  `encodeWord` (C0 strip + RFC 2047 folding) covers all four Subject call sites.
+- RFC 8058 one-click unsubscribe: HMAC token contract (Phase 41) consumed by the
+  anonymous `POST /unsubscribe/:token` route (Phase 42) — 15-test response-matrix suite,
+  IP throttle, token never logged; `email_digest=false` merge-upsert, digest gate, and
+  settings re-subscribe path verified end-to-end in one E2E flow.
+- Per-workspace logo with `favicon.svg` fallback across sidebar/topbar/settings/favicon
+  plus the digest email header, guarded by magic-byte validation and role gates.
+- Per-member timezones: reminders and digests fire at each member's own 09:00 through
+  the single `resolveTz` funnel (canonicalizing, Paris fallback), with a 418-zone static
+  list, searchable settings combobox (open/close discipline), and byte-identical claim
+  keys under tz change.
+- Gap-closure discipline held: 44-04 closed review warnings WR-01 (admin doc-PUT tz
+  funnel) and WR-02 (alias canonicalization) with hostile-input and equivalence pins.
+
+<details>
+<summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
+
+**Shipped:** digest self-identification + revocability (SUBJ-01..03, UNSUB-01..03) via
+subject builder hardening, "Project — Task" lines, HMAC tokens and the anonymous one-click
+route; plus v1.10 polish pulled forward — workspace logo (43) and per-member timezones
+(44) with the canonicalizing resolveTz funnel and gap-closure 44-04. 5 phases, 13 plans,
+6/6 REQs, 1042-test suite (1038 pass, 1 pre-existing environmental). Full record:
+`milestones/v1.9-ROADMAP.md`, `milestones/v1.9-REQUIREMENTS.md`,
+`v1.9-MILESTONE-AUDIT.md`.
+
+</details>
 
 <details>
 <summary>Milestone v1.8 Notification Sanity (shipped 2026-11-05)</summary>
