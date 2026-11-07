@@ -8,6 +8,19 @@ import { closePop } from '../overlays/popovers.js';
 import { A, KEY } from './actions.js';
 
 export let gPending = 0;
+/* Shared "G then <key>" navigation map, used both globally and inside the
+   command palette (whose items advertise these two-key combos as kbd hints). */
+const GO_MAP = {
+  h: 'home',
+  t: 'mytasks',
+  p: 'projects',
+  i: 'inbox',
+  c: 'calendar',
+  s: 'settings',
+  n: 'notifications',
+  a: 'activity',
+  m: 'members',
+};
 document.addEventListener('keydown', e => {
   const mod = e.metaKey || e.ctrlKey;
   const t = e.target;
@@ -88,6 +101,26 @@ document.addEventListener('keydown', e => {
   }
   if (pl) {
     const n = pl._flat?.length || 0;
+    const k = e.key;
+    // The palette advertises "G then <key>" combos; honour them while it is
+    // open, like the global handler does. "g" types into the query as usual —
+    // it is only reverted if the next key completes a combo — so normal
+    // typing ("go home") is never hijacked.
+    if (gPending && Date.now() - gPending < 1200) {
+      gPending = 0;
+      const dest = GO_MAP[k.toLowerCase()];
+      if (dest && pl.q.endsWith('g')) {
+        e.preventDefault();
+        pl.q = pl.q.slice(0, -1);
+        S.ui.palette = null;
+        go(dest);
+      }
+      return;
+    }
+    if (!pl.q && pl.mode === 'cmd' && (k === 'g' || k === 'G')) {
+      gPending = Date.now();
+      return;
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       pl.hl = (pl.hl + 1) % Math.max(n, 1);
@@ -210,10 +243,10 @@ document.addEventListener('keydown', e => {
   const k = e.key;
   if (gPending && Date.now() - gPending < 1200) {
     gPending = 0;
-    const map = { h: 'home', t: 'mytasks', p: 'projects', i: 'inbox', c: 'calendar', s: 'settings', n: 'notifications', a: 'activity', m: 'members' };
-    if (map[k.toLowerCase()]) {
+    const dest = GO_MAP[k.toLowerCase()];
+    if (dest) {
       e.preventDefault();
-      go(map[k.toLowerCase()]);
+      go(dest);
     }
     return;
   }

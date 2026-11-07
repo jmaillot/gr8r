@@ -143,9 +143,18 @@ test('the keyboard map keeps its route keys and its action ids', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/actions/keyboard.js'), 'utf8');
   /* The route map's keys are single-letter shortcuts and its values are
      route ids — machine identifiers (D-08). A byte-stable anchor for the
-     map itself and one action call. */
+     GO_MAP literal and one action call. */
+  assert.ok(src.includes("const GO_MAP = {"), 'the route map moved');
   assert.ok(
-    src.includes("{ h: 'home', t: 'mytasks', p: 'projects', i: 'inbox', c: 'calendar', s: 'settings', n: 'notifications', a: 'activity', m: 'members' }"),
+    src.includes("h: 'home'") &&
+      src.includes("t: 'mytasks'") &&
+      src.includes("p: 'projects'") &&
+      src.includes("i: 'inbox'") &&
+      src.includes("c: 'calendar'") &&
+      src.includes("s: 'settings'") &&
+      src.includes("n: 'notifications'") &&
+      src.includes("a: 'activity'") &&
+      src.includes("m: 'members'"),
     'the route map moved',
   );
   assert.ok(src.includes('A.toggleDark()'), 'an action id moved');

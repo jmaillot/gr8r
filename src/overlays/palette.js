@@ -83,7 +83,25 @@ export function paletteItems() {
     return groups;
   }
   if (pl.mode === 'cmd') {
-    const cmds = commands().filter(c => !q || foldForSearch(c.name).text.includes(ql));
+    /* Two-letter initials ("gh" for "Go to Home") must match: compare with the
+       spaces folded out of both sides, on top of the plain substring match.
+       The subsequence pass covers initials spread across words ("g t" →
+       "gotomytasks"). */
+    const compact = s => s.replace(/\s+/g, '');
+    const qn = compact(ql);
+    const isSubseq = (needle, hay) => {
+      let i = 0;
+      for (const c of hay) {
+        if (c === needle[i]) i++;
+        if (i === needle.length) return true;
+      }
+      return i === needle.length;
+    };
+    const cmds = commands().filter(c => {
+      if (!q) return true;
+      const n = compact(foldForSearch(c.name).text);
+      return n.includes(qn) || isSubseq(qn, n);
+    });
     if (!q) {
       groups.push({ name: t('palette.group.suggestions'), items: cmds.slice(0, 3).concat(cmds.filter(c => c.id === 'c-dark' || c.id === 'c-ws')) });
       const recent = sortTasks(
