@@ -72,7 +72,9 @@
 - [x] **FIX-01**: Command/UI hardening landed from the fix/commands worktree — two-letter G
   shortcuts in the command palette (keyboard.js shared `gPending` G-nav map, palette.js
   query-typing guard), each fix carried with a regression test
-  (test/i18n-actions-modules.test.mjs 31/31) and full suite green; merged at 62b1826,
+  (test/i18n-actions-modules.test.mjs 13/13 counted; palette filter behaviorally pinned by
+  test/palette-filter.test.mjs 7/7, added at v1.10 gap closure; G-combo path UAT-verified,
+  commit 5fe7f67) and full suite green; merged at 62b1826,
   UAT passed 2026-11-07
 
 ### Cross-cutting invariants (standing constraints, pinned per phase)
