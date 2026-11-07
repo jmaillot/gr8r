@@ -61,7 +61,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
-import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn, runSchema as adapterRunSchema } from './db-adapter.mjs';
+import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn, runSchema as adapterRunSchema, backendKind } from './db-adapter.mjs';
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
    through tFor, so the FR catalogue must be registered at boot from the SAME
@@ -5839,7 +5839,9 @@ async function main() {
 
   server.listen(PORT, HOST, () => {
     logInfo(`Projects Studio listening on http://${HOST}:${PORT}`);
-    logInfo(`database: ${DB_PATH}`);
+    logInfo(backendKind === 'pg'
+      ? 'database: Postgres (DB_URL set — path log shows the SQLite rollback file only)'
+      : `database: ${DB_PATH}`);
     if (MAILER.enabled) logInfo(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
     else if (MAILER.error) logWarn(`invite email: disabled — ${MAILER.error}`);
     else logInfo('invite email: disabled (set SMTP_HOST to email invitations)');
