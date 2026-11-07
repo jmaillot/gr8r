@@ -1,6 +1,6 @@
 ---
 phase: 47-command-ui-hardening-g-shortcuts
-verified: 2026-11-07T12:00:00Z
+verified: 2026-11-07T19:35:00Z
 status: passed
 score: 2/2 success criteria verified
 behavior_unverified: 0
@@ -14,7 +14,7 @@ covered_files:
   - test/i18n-actions-modules.test.mjs
   - .planning/REQUIREMENTS.md
   - .planning/ROADMAP.md
-covered_digest: "v2:sha256:1fcf8aaad95e29a12378008dc4b7d9d3658ea0269d32d3174917e78ae93790a8"
+covered_digest: "v2:sha256:296fed29bd88b1e9148fc4784ce37f89392c1e480dfe504583adbbba07624cea"
 re_verification:
   previous_status: gaps_found
   previous_score: 1/2
