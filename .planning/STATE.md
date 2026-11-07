@@ -4,7 +4,7 @@ milestone: v1.9
 current_phase: 45
 current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
 status: executing
-stopped_at: Completed 45-01-PLAN.md
+stopped_at: Completed 45-02-PLAN.md
 last_updated: "2026-11-07T11:36:31Z"
 last_activity: 2026-11-07
 last_activity_desc: Phase 45 plan 01 executed (database adapter facade)
@@ -34,9 +34,9 @@ Phase: 45 (Database adapter — optional Postgres backend via env, SQLite defaul
 Plan: 3 of 7
 Total Plans in Phase: 7
 Status: Executing Phase 45
-Last activity: 2026-11-07 — Completed 45-03 (async facade conversion: boot via connectDb, sqliteOnly
-gates, transaction() retired, migrations/seed/auth/2FA/OIDC/recovery/claims/scheduler on await facade;
-remaining snapshot 60 db.prepare + 25 db.exec → next plan 45-04)
+Last activity: 2026-11-07 — Completed 45-02 (deployment surface: single pg-enabled Docker
+image — runtime stage COPYs node_modules + db-adapter.mjs; D-12 COPY pin amended;
+DB_URL documented in .env.example + docker-compose passthrough)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -79,6 +79,12 @@ runtime dependencies, zero migrations, full suite green.
   one-way conversion D-05 was user-approved at the plan's Task 0 checkpoint
 - [Phase 45] 45-03: adapter gained close() export and ensureColumn (pragma vs
   information_schema branch); transaction() helper retired in favor of db.tx()
+- [Phase 45] 45-02: single image variant — runtime stage COPYs node_modules +
+  db-adapter.mjs (D-03); D-12 COPY pin amended to the 10-target set; package.json/lock
+  stay out of the runtime stage (pin doesn't demand them)
+- [Phase 45] 45-02: DB_URL is the only deployment env added — empty default = SQLite
+  (zero-dependency posture documented in .env.example); POSTGRES_TEST_URL deferred to
+  Plan 07 files; DEPLOY.md cross-reference lands in Plan 06
 
 ## Milestone History
 
@@ -170,8 +176,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T10:29:05.577Z
-Stopped at: Completed 45-03-PLAN.md (async facade conversion; next 45-04)
+Last session: 2026-11-07T11:55:00.000Z
+Stopped at: Completed 45-02-PLAN.md (deployment surface: pg Docker payload + DB_URL env; ran after 45-03 per wave schedule — Current Position pointer may need orchestrator reconciliation)
 Resume file: None
 
 ## Performance Metrics
@@ -190,6 +196,7 @@ Resume file: None
 | Phase 44 P02 | 25m | 2 tasks | 2 files |
 | Phase 45 P03 | ~2h | 4 tasks | 3 files |
 | Phase 44 P03 | 19m | 3 tasks | 14 files |
+| Phase 45 P02 | ~15m | 2 tasks | 4 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
