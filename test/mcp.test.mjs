@@ -161,6 +161,8 @@ test('handshake, tools/list exposes the full surface', async () => {
   const names = res.data.result.tools.map(t => t.name).sort();
   assert.deepEqual(names, [
     'add_comment',
+    'add_milestone',
+    'add_project_member',
     'add_subtask',
     'archive_project',
     'archive_task',
@@ -170,14 +172,18 @@ test('handshake, tools/list exposes the full surface', async () => {
     'delete_comment',
     'get_project',
     'get_task',
+    'handoff_task',
     'list_activity',
     'list_comments',
     'list_labels',
     'list_members',
+    'list_notifications',
     'list_projects',
     'list_tasks',
     'list_teams',
     'move_task',
+    'remove_milestone',
+    'remove_project_member',
     'remove_subtask',
     'rename_subtask',
     'reorder_task',
@@ -524,6 +530,53 @@ test('list_teams and list_labels return catalog shapes', async () => {
   assert.equal(labels.isError, false);
   assert.ok(labels.data.labels.some(l => l.id === 'bug'));
   assert.equal(typeof labels.data.other, 'number');
+});
+
+test('notifications, milestones, project members and handoff_task', async () => {
+  const writeKey = (await createKey({ label: 'Suite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+
+  /* list_notifications shape — filtered on the owner's own inbox rows even if empty */
+  const notifs = await call('list_notifications', { limit: 10 });
+  assert.equal(notifs.isError, false);
+  assert.ok(Array.isArray(notifs.data.notifications));
+
+  /* milestones: add → listed in get_project → remove by name → unknown rejected */
+  const ms = await call('add_milestone', { project: 'TEST', name: 'Launch', date: '2026-12-15' });
+  assert.equal(ms.isError, false);
+  const gotProj = await call('get_project', { project: 'TEST' });
+  assert.ok(gotProj.data.milestones.some(m => m.name === 'Launch'));
+  assert.equal((await call('remove_milestone', { project: 'TEST', name: 'Nope' })).isError, true);
+  const rm = await call('remove_milestone', { project: 'TEST', name: 'Launch' });
+  assert.equal(rm.isError, false);
+  assert.equal(rm.data.milestone.name, 'Launch');
+
+  /* project members: unknown member rejected, add by email, then remove */
+  assert.equal((await call('add_project_member', { project: 'TEST', member: 'ghost@test.local' })).isError, true);
+  const add = await call('add_project_member', { project: 'TEST', member: 'owner@test.local' });
+  assert.equal(add.isError, false);
+  const afterAdd = await call('get_project', { project: 'TEST' });
+  assert.ok(afterAdd.data.members.some(m => m.id === add.data.member.id));
+  const rmMember = await call('remove_project_member', { project: 'TEST', member: 'owner@test.local' });
+  assert.equal(rmMember.isError, false);
+
+  /* handoff_task: one call — assign + move to review + comment */
+  const t = await call('create_task', { project: 'TEST', title: 'Handoff me' });
+  const id = t.data.task.id;
+  const ho = await call('handoff_task', { id, assignee: 'owner@test.local', summary: 'Travail terminé, prêt pour review.' });
+  assert.equal(ho.isError, false);
+  assert.equal(ho.data.task.status, 'review');
+  assert.ok(ho.data.task.assignee);
+  assert.ok(ho.data.commentId);
+  const comments = await call('list_comments', { task: id });
+  assert.ok(comments.data.comments.some(c => c.text.includes('review')));
+  const act = await call('list_activity', { limit: 10 });
+  assert.ok(act.data.activity.some(e => e.verb === 'commentedOn'));
+  assert.ok(act.data.activity.some(e => e.verb === 'moved' || e.verb === 'assigned'));
+  /* idempotent second call: no duplicate move entry, summary still posted */
+  const ho2 = await call('handoff_task', { id, summary: 'Second passage.' });
+  assert.equal(ho2.isError, false);
 });
 
 test('prompts: list and get round-trip; unknown prompt rejected', async () => {

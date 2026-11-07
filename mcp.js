@@ -523,6 +523,93 @@ export function createMcp(deps) {
         return { updated: true, project: result };
       },
     },
+    add_milestone: {
+      description: 'Add a milestone (name + target date) to a project. Shown on the project overview and timeline.',
+      write: true,
+      schema: {
+        project: { t: 's', req: true },
+        name: { t: 's', req: true, max: 120 },
+        date: { t: 's', req: true, re: DUE_RE },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const p = findVisibleProjectRef(ctx, a.project, doc);
+        const ms = { name: a.name.trim(), date: a.date };
+        writeDoc(ctx.ws, d => {
+          const live = projectsOf(d).find(x => x.id === p.id);
+          live.milestones = Array.isArray(live.milestones) ? live.milestones : [];
+          live.milestones.push(ms);
+        });
+        return { added: true, milestone: ms, total: (p.milestones || []).length + 1 };
+      },
+    },
+    remove_milestone: {
+      description: 'Remove a milestone from a project, by name (exact) or 0-based index.',
+      write: true,
+      schema: {
+        project: { t: 's', req: true },
+        name: { t: 's', max: 120 },
+        index: { t: 'n', min: 0, max: 99 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const p = findVisibleProjectRef(ctx, a.project, doc);
+        let removed = null;
+        writeDoc(ctx.ws, d => {
+          const live = projectsOf(d).find(x => x.id === p.id);
+          const list = Array.isArray(live.milestones) ? live.milestones : [];
+          const i = a.name ? list.findIndex(m => m?.name === a.name) : a.index;
+          if (i < 0 || !list[i]) throw toolError(`Milestone not found on ${p.key || p.id}`);
+          removed = list[i];
+          live.milestones = list.filter((_, j) => j !== i);
+        });
+        return { removed: true, milestone: removed };
+      },
+    },
+    add_project_member: {
+      description: 'Add a member to a project (needed for private projects). Requires write scope and project management rights (lead or admin).',
+      write: true,
+      schema: {
+        project: { t: 's', req: true },
+        member: { t: 's', req: true, max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const p = findVisibleProjectRef(ctx, a.project, doc);
+        requireProjectManager(ctx, p);
+        const id = resolveAssignee(ctx, a.member);
+        writeDoc(ctx.ws, d => {
+          const live = projectsOf(d).find(x => x.id === p.id);
+          live.members = Array.isArray(live.members) ? live.members : [];
+          if (!live.members.includes(id)) live.members.push(id);
+        });
+        const m = roster(ctx).find(m => m.id === id);
+        return { added: true, member: { id, name: m?.name || id } };
+      },
+    },
+    remove_project_member: {
+      description: 'Remove a member from a project. Requires write scope and project management rights (lead or admin).',
+      write: true,
+      schema: {
+        project: { t: 's', req: true },
+        member: { t: 's', req: true, max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const p = findVisibleProjectRef(ctx, a.project, doc);
+        requireProjectManager(ctx, p);
+        const id = resolveAssignee(ctx, a.member);
+        writeDoc(ctx.ws, d => {
+          const live = projectsOf(d).find(x => x.id === p.id);
+          live.members = (Array.isArray(live.members) ? live.members : []).filter(x => x !== id);
+        });
+        return { removed: true };
+      },
+    },
     archive_project: {
       description: 'Archive a project (hidden from the board, its tasks stay in the database).',
       write: true,
@@ -896,6 +983,45 @@ export function createMcp(deps) {
         return { updated: true, deps: a.deps };
       },
     },
+    handoff_task: {
+      description: 'Atomic review handoff: move a task to review, optionally reassign it, and post a summary comment — the gesture of an agent finishing work. One transaction, one activity trail.',
+      write: true,
+      schema: {
+        id: { t: 's', req: true },
+        summary: { t: 's', max: 4000 },
+        assignee: { t: 's', max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const t = findVisibleTask(ctx, a.id, doc);
+        const leadId = a.assignee ? resolveAssignee(ctx, a.assignee) : null;
+        let result = null;
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === t.id);
+          if (live.archived) throw toolError(`Task not found: ${a.id}`);
+          const members = roster(ctx);
+          if (leadId && leadId !== live.assignee) {
+            logActivity(d, ctx, 'assigned', live, { kind: 'assignedTo', value: members.find(m => m.id === leadId)?.name || leadId });
+            live.assignee = leadId;
+          }
+          const from = live.status || 'todo';
+          if (from !== 'review') {
+            logActivity(d, ctx, from === 'done' ? 'reopened' : 'moved', live, { kind: 'statusMoved', from, to: 'review' });
+            live.status = 'review';
+          }
+          if (a.summary && a.summary.trim()) {
+            const comment = { id: uid('c'), task: live.id, by: ctx.membership.member_id || null, at: now(), text: a.summary.trim(), re: {} };
+            d.data.comments = Array.isArray(d.data.comments) ? d.data.comments : [];
+            d.data.comments.push(comment);
+            logActivity(d, ctx, 'commentedOn', live, {});
+            result = { commentId: comment.id };
+          }
+          live.updated = now();
+        });
+        return { handedOff: true, task: taskOut(ctx, tasksOf(loadDoc(ctx.ws)).find(x => x.id === t.id), doc), ...result };
+      },
+    },
     archive_task: {
       description: 'Archive a task (hidden from every view; use restore_task to bring it back).',
       write: true,
@@ -931,6 +1057,36 @@ export function createMcp(deps) {
           logActivity(d, ctx, 'restored', t, {});
         });
         return { restored: true };
+      },
+    },
+    list_notifications: {
+      description: 'The workspace inbox: notifications (mentions, assignments, moves), newest first, names resolved.',
+      schema: { unreadOnly: { t: 'b' }, limit: { t: 'n', min: 1, max: 100, def: 30 } },
+      run: async (ctx, a) => {
+        const doc = loadDoc(ctx.ws);
+        const members = roster(ctx);
+        const tasks = new Map(tasksOf(doc).map(t => [t.id, t]));
+        const projects = new Map(projectsOf(doc).map(p => [p.id, p]));
+        const rows = (Array.isArray(doc?.data?.notifs) ? doc.data.notifs : [])
+          .filter(n => n && typeof n.to === 'string')
+          .filter(n => !a.unreadOnly || !n.read)
+          .slice(0, a.limit ?? 30)
+          .map(n => ({
+            id: n.id || null,
+            to: n.to,
+            toName: members.find(m => m.id === n.to)?.name || n.to,
+            type: n.type || null,
+            by: n.by || null,
+            byName: n.by ? members.find(m => m.id === n.by)?.name || n.by : null,
+            task: n.task || null,
+            taskTitle: n.task ? tasks.get(n.task)?.title || null : null,
+            project: n.project || null,
+            projectName: n.project ? projects.get(n.project)?.name || null : null,
+            snippet: n.snippet || '',
+            at: n.at,
+            read: !!n.read,
+          }));
+        return { total: rows.length, notifications: rows };
       },
     },
     list_activity: {
@@ -1219,6 +1375,14 @@ export function createMcp(deps) {
   const canWrite = ctx => {
     if (ctx.scope !== 'write') throw toolError('This API key is read-only. Create a read+write key in Settings to allow mutations.');
     if ((ROLE_RANK[ctx.membership.role] || 0) < ROLE_RANK.member) throw toolError('Viewers cannot modify this workspace. Ask an administrator.');
+  };
+
+  /* Same rule as the web client (store.js canManageProject): workspace
+     admin/owner, or lead of the project. */
+  const requireProjectManager = (ctx, p) => {
+    if ((ROLE_RANK[ctx.membership.role] || 0) >= ROLE_RANK.admin) return;
+    if (p.lead && p.lead === ctx.membership.member_id) return;
+    throw toolError('Only the project lead or a workspace admin can manage this project');
   };
 
   /* --------------------------- JSON-RPC core ----------------------------- */

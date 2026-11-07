@@ -2,7 +2,7 @@
 
 Guide complet du serveur MCP (Model Context Protocol) de Projects Studio :
 installation, connexion d'un agent (OpenCode, Claude Desktop, Cursor…), et
-**le manuel d'utilisation de chacune des 29 commandes**, avec paramètres et
+**le manuel d'utilisation de chacune des 35 commandes**, avec paramètres et
 exemples d'appels/réponses.
 
 - Transport : streamable HTTP, endpoint `https://<domaine>/mcp`
@@ -20,12 +20,12 @@ exemples d'appels/réponses.
 3. [Lier un dossier local à un projet](#3-lier-un-dossier-local-à-un-projet)
 4. [Concepts](#4-concepts)
 5. [Manuel des commandes](#5-manuel-des-commandes)
-   - [Contexte](#contexte) — `whoami`, `list_projects`, `get_project`, `list_members`, `list_teams`, `list_labels`, `list_activity`
+   - [Contexte](#contexte) — `whoami`, `list_projects`, `get_project`, `list_members`, `list_teams`, `list_labels`, `list_notifications`, `list_activity`
    - [Tâches — lecture](#tâches--lecture) — `list_tasks`, `get_task`, `search_tasks`, `list_comments`
-   - [Tâches — écriture](#tâches--écriture) — `create_task`, `create_tasks`, `update_task`, `move_task`, `reorder_task`, `archive_task`, `restore_task`
+   - [Tâches — écriture](#tâches--écriture) — `create_task`, `create_tasks`, `update_task`, `move_task`, `reorder_task`, `handoff_task`, `archive_task`, `restore_task`
    - [Sous-tâches & dépendances](#sous-tâches--dépendances) — `add_subtask`, `toggle_subtask`, `rename_subtask`, `remove_subtask`, `set_dependencies`
    - [Commentaires](#commentaires) — `add_comment`, `delete_comment`
-   - [Projets — écriture](#projets--écriture) — `create_project`, `update_project`, `archive_project`, `restore_project`
+   - [Projets — écriture](#projets--écriture) — `create_project`, `update_project`, `add_milestone`, `remove_milestone`, `add_project_member`, `remove_project_member`, `archive_project`, `restore_project`
    - [Prompts](#prompts) — `daily-standup`, `triage-backlog`, `prepare-review`
 6. [Erreurs](#6-erreurs)
 7. [Notes d'implémentation](#7-notes-dimplémentation)
@@ -39,7 +39,7 @@ exemples d'appels/réponses.
 3. Renseignez :
    - **Libellé** — ex. « OpenCode — portable » (affiché dans la liste des clés) ;
    - **Espace de travail** — la clé n'accédera **qu'à celui-ci**, pour toujours ;
-   - **Permissions** — `Lecture seule` (les 11 outils de lecture) ou `Lecture + écriture` (les 29) ;
+   - **Permissions** — `Lecture seule` (les 12 outils de lecture) ou `Lecture + écriture` (les 35) ;
    - **Expiration** — 30, 90 ou 365 jours (obligatoire, pas de clé permanente).
 4. **Copiez la clé immédiatement** : elle n'est affichée qu'une seule fois. Le
    serveur ne stocke que son hash SHA-256 ; une clé perdue se remplace.
@@ -265,6 +265,31 @@ Les verbes sont les mêmes que la page Activité de l'app : `created`, `moved`,
 `changedDueDateOf`, `changedStartDateOf`, `updatedLabelsOn`, `estimated`,
 `updatedDependenciesOf`…
 
+#### `list_notifications`
+
+La boîte de réception de l'espace (mentions, attributions, déplacements),
+du plus récent au plus ancien, avec les noms résolus.
+
+| Param | Type | Défaut | Notes |
+|---|---|---|---|
+| `unreadOnly` | booléen | `false` | Ne montrer que les non-lues |
+| `limit` | entier 1–100 | 30 | |
+
+```json
+{ "unreadOnly": true, "limit": 10 }
+```
+
+```json
+{
+  "total": 1,
+  "notifications": [
+    { "id": "n7", "to": "m1", "toName": "Marie", "type": "assigned", "by": "m2", "byName": "Karim",
+      "task": "t42", "taskTitle": "Ajouter le mode sombre", "project": "p1", "projectName": "Kanban",
+      "snippet": "", "at": 1762400000000, "read": false }
+  ]
+}
+```
+
 ### Tâches — lecture
 
 #### `list_tasks`
@@ -455,6 +480,29 @@ champs de `create_task` **moins** `project`.
 { "created": 2, "tasks": [ { "id": "t51", "key": "KAN-108", "title": "Écrire les tests du tri", … }, { "id": "t52", "key": "KAN-109", … } ] }
 ```
 
+#### `handoff_task`
+
+Le geste de fin de travail d'un agent, **atomique** : déplace la tâche vers
+`review`, réattribue optionnellement, et publie un commentaire de synthèse —
+une transaction, un fil d'activité cohérent.
+
+| Param | Type | Notes |
+|---|---|---|
+| `id` ★ | string | |
+| `summary` | string ≤ 4000 | synthèse publiée en commentaire (vous comme auteur) |
+| `assignee` | string | re-attribue avant le déplacement (id, email, nom) |
+
+```json
+{ "id": "t42", "assignee": "karim@example.com", "summary": "Mode sombre livré : tokens + tests visuels passés." }
+```
+
+```json
+{ "handedOff": true, "task": { "id": "t42", "status": "review", "assignee": "m2", … }, "commentId": "c9" }
+```
+
+Idempotent : rappelé sans changement, il ne duplique pas l'entrée `moved` ;
+le commentaire est republié seulement si `summary` est fourni.
+
 #### `archive_task` / `restore_task`
 
 Archiver rend la tâche invisible partout (elle reste en base, avec
@@ -619,6 +667,40 @@ demandent explicitement une confirmation humaine avant toute écriture.
 
 ```json
 { "project": "KAN", "status": "hold" }
+```
+
+#### `add_milestone` / `remove_milestone`
+
+Les jalons (`{name, date}`) apparaissent sur la vue d'ensemble du projet et la
+timeline. `remove_milestone` cible par **nom exact** ou `index` (base 0).
+
+| Param | Type | Notes |
+|---|---|---|
+| `project` ★ | string | id ou préfixe de clé |
+| `name` ★ (`add`) | string ≤ 120 | |
+| `date` ★ (`add`) | string | `YYYY-MM-DD` — date cible |
+| `name` / `index` (`remove`) | string / entier | un des deux |
+
+```json
+{ "project": "KAN", "name": "Public launch", "date": "2026-12-15" }
+```
+
+```json
+{ "added": true, "milestone": { "name": "Public launch", "date": "2026-12-15" }, "total": 3 }
+```
+
+#### `add_project_member` / `remove_project_member`
+
+Gère l'accès à un projet (indispensable pour les projets **privés**). Réservé
+au **lead du projet** ou à un **admin/owner** de l'espace — même règle que le
+client web. `member` accepte id, email ou nom exact.
+
+```json
+{ "project": "KAN", "member": "karim@example.com" }
+```
+
+```json
+{ "added": true, "member": { "id": "m2", "name": "Karim" } }
 ```
 
 #### `archive_project` / `restore_project`
