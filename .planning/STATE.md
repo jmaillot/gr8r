@@ -4,10 +4,10 @@ milestone: v1.9
 current_phase: 45
 current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
 status: executing
-stopped_at: Completed 45-06-PLAN.md
-last_updated: "2026-11-07T14:42:00Z"
+stopped_at: Completed 45-07-PLAN.md
+last_updated: "2026-11-07T15:01:00Z"
 last_activity: 2026-11-07
-last_activity_desc: Phase 45 plan 06 executed (one-shot SQLite→pg copy script + DEPLOY.md runbook)
+last_activity_desc: Phase 45 plan 07 executed (opt-in Postgres test matrix — 7-gated tests; 3 pg-only adapter bugs fixed)
 state_head: e7be348e12a44d0f0ec1566ba9d171cf22f0ebfd
 progress:
   total_phases: 1
@@ -31,13 +31,14 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 ## Current Position
 
 Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7 (complete — phase ready for /gsd-verify-work)
 Total Plans in Phase: 7
-Status: Executing Phase 45
-Last activity: 2026-11-07 — Completed 45-06 (one-shot SQLite→pg copy script: read-only
-source, pgSchemaVariant-owned target schema, refuse-non-empty, single-transaction
-count-verified transfer, DSN-free output; 4 POSTGRES_TEST_URL-gated contract tests;
-DEPLOY.md §15 operator runbook)
+Status: Executing Phase 45 — all 7 plans executed
+Last activity: 2026-11-07 — Completed 45-07 (opt-in Postgres test matrix: 7
+POSTGRES_TEST_URL-gated critical-path tests green against live pg in ~5s,
+skipped+exit 0 when unset; D-04 fail-closed pinned via closed-port child;
+matrix caught and fixed 3 pg-only bugs — post-parameter `col = ? collate
+nocase` rewrite, `is not ?` → IS DISTINCT FROM, int8→number coercion)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -100,6 +101,12 @@ runtime dependencies, zero migrations, full suite green.
   the pg variant are skipped
 - [Phase 45] 45-06: pg client MUST be released before pool.end() — end() waits on
   checked-out clients; discovered as a child-hang in the contract tests
+- [Phase 45] 45-07: toPgSql grew two rewrite rules the matrix forced out — SQLite's
+  post-parameter `col = ? collate nocase` → lower(col) = lower(?), and null-safe
+  `is [not] ?` → IS [NOT] DISTINCT FROM (pg rejects both verbatim); both unit-pinned
+- [Phase 45] 45-07: Pitfall 1 closed in the adapter — int8 type parser coerces
+  bigint → number at pg load (mirrored in withPg); before the fix invites/sessions
+  payloads carried string timestamps on pg
 
 ## Milestone History
 
@@ -191,9 +198,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T14:42:00.000Z
-Stopped at: Completed 45-06-PLAN.md (one-shot SQLite→pg copy script + 4 pg-gated
-contract tests + DEPLOY.md §15 runbook — 2 code commits + summary commit)
+Last session: 2026-11-07T15:01:00.000Z
+Stopped at: Completed 45-07-PLAN.md (opt-in pg matrix: 7 gated tests + 3 adapter
+bug fixes — 2 code commits + summary commit; phase 45 all 7 plans done)
 Resume file: None
 
 ## Performance Metrics
@@ -214,6 +221,7 @@ Resume file: None
 | Phase 44 P03 | 19m | 3 tasks | 14 files |
 | Phase 45 P02 | ~15m | 2 tasks | 4 files |
 | Phase 45 P06 | ~21m | 2 tasks | 4 files |
+| Phase 45 P07 | ~13m | 2 tasks | 4 files |
 
 *(v1.8 metrics archived with the milestone record.)*
 
