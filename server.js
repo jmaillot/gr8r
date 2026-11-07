@@ -425,10 +425,8 @@ async function initDb() {
   // Phase 28 D-07: invites carry a JSON array of teams. The scalar `team`
   // column above stays on disk as backfill-only legacy (D-04) — never read.
   await adapterEnsureColumn('invites', 'teams', 'text');
-  // Phase 29 D-02: a membership or invite can carry a JSON scope
-  // ({teams:[],projects:[]}). null = workspace-wide is the correct legacy
-  // state — no backfill. Additive-only: second boot is a no-op by
-  // construction and pinned byte-identical in test/migration.test.mjs.
+  // Phase 29 D-02 introduced the scope columns; Phase 49 (D-49-5) retired
+  // them — they stay on disk only so the boot sweep can read legacy payloads.
   await adapterEnsureColumn('memberships', 'scope', 'text');
   await adapterEnsureColumn('invites', 'scope', 'text');
   await adapterEnsureColumn('users', 'locale', 'text');
@@ -914,7 +912,7 @@ function mergeRecentSearches(storedList, incomingList, hiddenTerms, keepStored) 
 async function redactDoc(doc, membership) {
   const data = doc?.data;
   if (!data) return doc;
-  // Phase 29: the single scope-aware funnel — private-hidden ∪ out-of-scope.
+  // [2026-11-07 D-49-1] the single collapsed funnel — private-hidden only.
   const hiddenProjects = await hiddenFor(doc, membership);
   if (!hiddenProjects.size) return doc;
   const hiddenTasks = hiddenTaskIds(doc, hiddenProjects);
@@ -980,8 +978,8 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
   normalizeProjects(next);
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
-  // Phase 29: same single scope-aware funnel as the read side — reserved
-  // out-of-scope rows can never be resurrected by a stale client doc PUT.
+  // [2026-11-07 D-49-1] same collapsed funnel as the read side — hidden rows
+  // can never be resurrected by a stale client doc PUT.
   const hiddenProjects = await hiddenFor(stored, membership);
   const storedData = stored?.data || {};
   const nextData = next.data;
@@ -1729,7 +1727,7 @@ function memberPayload(row, doc, selfId) {
 async function invitesOf(workspaceId) {
   return (
     await db.all(
-      `select token_hash, email, role, teams, scope, created_at, expires_at
+      `select token_hash, email, role, teams, created_at, expires_at
          from invites
         where workspace_id = ? and used_at is null and expires_at > ?
         order by created_at desc`,
@@ -1743,23 +1741,16 @@ async function invitesOf(workspaceId) {
         /* unreadable set degrades to teamless (D-03), never to the scalar */
       }
       if (!Array.isArray(teams)) teams = [];
-      /* SCOPE-05 (29-05): the scope rides the payload so a resend echoes it
-         back — omitting it made every resend silently strip a scoped invite
-         into a workspace-wide membership (CR-01). */
-      let scope = null;
-      try {
-        scope = JSON.parse(r.scope || 'null');
-      } catch {
-        scope = null;
-      }
-      if (!scope || typeof scope !== 'object' || Array.isArray(scope)) scope = null;
+      /* [2026-11-07 D-49-5] scope is retired — the Phase 49 sweep cleared the
+         columns and invites no longer carry one. The projection stays `null`
+         so client surfaces keep a stable shape until Phase 51 prunes it. */
       return {
         id: r.token_hash,
         email: r.email,
         role: r.role,
         roleLabel: ROLE_LABEL[r.role] || r.role,
         teams,
-        scope,
+        scope: null,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
       };
@@ -2877,7 +2868,7 @@ async function ensureMember(doc, user, role = 'member', workspaceId = null) {
   return id;
 }
 
-async function addMembership(ws, user, role, teams = [], scope = null) {
+async function addMembership(ws, user, role, teams = []) {
   if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
@@ -2895,16 +2886,15 @@ async function addMembership(ws, user, role, teams = [], scope = null) {
         .map(t => String(t).slice(0, 40)),
     ),
   ];
-  /* SCOPE-05 (Phase 29): an invite-carried scope lands on the membership row in
-     the same transaction. The coalesce keeps the legacy internal callers
-     (which pass nothing at all) from ever erasing a scope a re-run finds. */
-  const scopeJson = scope && typeof scope === 'object' && (Array.isArray(scope.teams) || Array.isArray(scope.projects)) ? JSON.stringify(scope) : null;
+  /* [2026-11-07 D-49-1/D-49-5] The membership `scope` column is retired: the
+     Phase 49 sweep materialized any stored scope into project access lists
+     and cleared the columns, so new rows are written with a NULL scope and
+     legacy coalescing is gone. */
   await db.tx(async () => {
     await db.run(
-      `insert into memberships (workspace_id, user_id, role, member_id, team, scope) values (?,?,?,?,?,?)
-       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id,
-       scope = coalesce(excluded.scope, memberships.scope)`,
-      [ws.id, user.id, role, memberId, null, scopeJson],
+      `insert into memberships (workspace_id, user_id, role, member_id, team, scope) values (?,?,?,?,?,null)
+       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
+      [ws.id, user.id, role, memberId, null],
     );
     /* TEAM-01: the teams picked at invite time land in the authority rows too —
        the scalar column is backfill-only legacy (D-04). */
@@ -3434,16 +3424,6 @@ async function handleApi(req, res, url) {
                   return JSON.parse(invite.teams || '[]');
                 } catch {
                   return [];
-                }
-              })(),
-              /* SCOPE-05: only the admin-validated scope stored on the invite
-                 row — never a token-controlled value. */
-              (() => {
-                try {
-                  const s = JSON.parse(invite.scope || 'null');
-                  return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
-                } catch {
-                  return null;
                 }
               })(),
             );
@@ -4790,13 +4770,8 @@ async function handleApi(req, res, url) {
     await db.tx(async () => {
       if (nextRole !== row.role) {
         await db.run('update memberships set role = ? where workspace_id = ? and user_id = ?', [nextRole, ctx.ws.id, target.id]);
-        // SCOPE-01/D-04 (Phase 29): promotion always clears scope — admin and
-        // owner memberships are workspace-wide by definition, cleared in the
-        // same transaction as the role change so no window exists where an
-        // admin carries a stored scope.
-        if (ROLE_RANK[nextRole] >= ROLE_RANK.admin) {
-          await db.run('update memberships set scope = null where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
-        }
+        /* [2026-11-07 D-49-5] The scope column is retired — the Phase 49
+           sweep cleared it; role changes no longer maintain it. */
       }
       await updateDoc(ctx.ws.id, async doc => {
         // D-05 ripple: ensureMember is async now (memberIdFor goes through the facade).
@@ -4869,67 +4844,6 @@ async function handleApi(req, res, url) {
     );
     member.teams = await teamsOfUser(ctx.ws.id, target.id); // read back from the authority, not the request
     return json(res, 200, { member });
-  }
-
-  /* SCOPE-01 (Phase 29, D-01/D-04/D-12): set a member's project scope in one
-     call. Admin-gated like the teams route, and it edits ONLY the
-     memberships.scope authority column inside its own transaction — the
-     document and its revision are untouched, so the response carries no
-     `revision` claim (same TEAM-05 precondition as above: another session's
-     pending doc write can never be clobbered by a membership change). D-04:
-     admin and owner memberships are always workspace-wide — a scope write to
-     an admin+ target is rejected outright rather than silently nulled. D-05:
-     memberPayload never projects scope details to anyone. */
-  const wsMemberScopeMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/scope$/);
-  if (wsMemberScopeMatch && method === 'PUT') {
-    const ctx = await requireWorkspace(req, res, wsMemberScopeMatch[1], 'admin');
-    if (!ctx) return;
-    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    const body = await readJson(req);
-    const target = await db.get('select * from users where id = ?', [wsMemberScopeMatch[2]]);
-    const row = target ? await membershipOf(ctx.ws.id, target.id) : null;
-    if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
-    if (ROLE_RANK[row.role] >= ROLE_RANK.admin) return fail(res, 400, 'scopeNotAllowed', 'Admin and owner memberships are always workspace-wide');
-    // Scope-explicit route: an absent scope field is a 400, an explicit null
-    // clears back to workspace-wide. Validation mirrors the invite-teams
-    // path (server.js:3611–3632 / T-28-07) per list: trim + 40-char slice,
-    // Set-dedup, cap 25, whitelist against the doc's team/project ids (T-29-01).
-    const raw = body?.scope;
-    if (raw === undefined) return fail(res, 400, 'scopeRequired', 'Provide a scope object or null');
-    if (raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) return fail(res, 400, 'scopeRequired', 'Provide a scope object or null');
-    let scope = null;
-    if (raw) {
-      if (!Array.isArray(raw.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
-      if (!Array.isArray(raw.projects)) return fail(res, 400, 'projectsRequired', 'Provide a projects array');
-      const teams = [...new Set(raw.teams.map(t => String(t || '').trim().slice(0, 40)).filter(Boolean))];
-      const projects = [...new Set(raw.projects.map(p => String(p || '').trim().slice(0, 40)).filter(Boolean))];
-      if (teams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
-      if (projects.length > 25) return fail(res, 400, 'tooManyProjects', 'Too many projects');
-      const knownTeams = new Set((JSON.parse(ctx.ws.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
-      const knownProjects = new Set((JSON.parse(ctx.ws.doc)?.data?.projects || []).map(p => p?.id).filter(Boolean));
-      if (teams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
-      if (projects.some(p => !knownProjects.has(p))) return fail(res, 400, 'unknownProject', 'Unknown project');
-      // D-01: an empty scope is workspace-wide — stored as null.
-      if (teams.length || projects.length) scope = { teams, projects };
-    }
-    await db.tx(async () => {
-      await db.run('update memberships set scope = ? where workspace_id = ? and user_id = ?', [scope ? JSON.stringify(scope) : null, ctx.ws.id, target.id]);
-    });
-    const doc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ctx.ws.id])).doc);
-    const member = memberPayload(
-      {
-        role: row.role,
-        member_id: row.member_id,
-        user_id: target.id,
-        email: target.email,
-        name: target.name,
-        last_login_at: target.last_login_at,
-        created_at: target.created_at,
-      },
-      doc,
-      ctx.user.id,
-    );
-    return json(res, 200, { member }); // no `revision` claim — doc untouched
   }
 
   /* ---------- workspace-admin session revocation (AUD-02, D-R1/R2/R4) ----------
@@ -5018,30 +4932,11 @@ async function handleApi(req, res, url) {
       ),
     ];
     if (teams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
-    /* SCOPE-05 (Phase 29, T-29-12): an invite may carry a scope, validated with
-       the exact mirror of the PUT members/:uid/scope route — non-array guards
-       (scopeRequired/teamsRequired/projectsRequired), per-item trim + 40-char
-       slice, Set-dedup, cap 25, whitelist against the doc's teams/projects.
-       D-04 (T-29-13): an admin/owner invite never carries scope. D-13/A3: the
-       guest path (role=viewer + a projects scope) must carry EXACTLY one
-       project id — enforced server-side at creation only. An absent scope
-       field degrades to null (unscooped invite). */
-    let scope = null;
-    if (body?.scope !== undefined && body?.scope !== null) {
-      if (typeof body.scope !== 'object' || Array.isArray(body.scope)) return fail(res, 400, 'scopeRequired', 'Provide a scope object');
-      if (!Array.isArray(body.scope.teams)) return fail(res, 400, 'teamsRequired', 'Provide a teams array');
-      if (!Array.isArray(body.scope.projects)) return fail(res, 400, 'projectsRequired', 'Provide a projects array');
-      const scopeTeams = [...new Set(body.scope.teams.map(t => String(t || '').trim().slice(0, 40)).filter(Boolean))];
-      const scopeProjects = [...new Set(body.scope.projects.map(p => String(p || '').trim().slice(0, 40)).filter(Boolean))];
-      if (scopeTeams.length > 25) return fail(res, 400, 'tooManyTeams', 'Too many teams');
-      if (scopeProjects.length > 25) return fail(res, 400, 'tooManyProjects', 'Too many projects');
-      const knownProjects = new Set((JSON.parse(ctx.ws.doc)?.data?.projects || []).map(p => p?.id).filter(Boolean));
-      if (scopeTeams.some(t => !knownTeams.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
-      if (scopeProjects.some(p => !knownProjects.has(p))) return fail(res, 400, 'unknownProject', 'Unknown project');
-      if (ROLE_RANK[role] >= ROLE_RANK.admin) return fail(res, 400, 'scopeNotAllowed', 'Admin and owner invites are always workspace-wide');
-      if (role === 'viewer' && scopeProjects.length > 1) return fail(res, 400, 'guestSingleProject', 'A guest is limited to exactly one project');
-      if (scopeTeams.length || scopeProjects.length) scope = { teams: scopeTeams, projects: scopeProjects };
-    }
+    /* [2026-11-07 D-49-5] Invite-carried scope is retired: the Phase 49
+       sweep materialized stored scopes into project access lists and
+       cleared the columns, so invites no longer validate, store or echo a
+       scope. Grant access by adding the member to the project's access
+       list instead. */
     let emails = Array.isArray(body?.emails) ? body.emails : [];
     emails = [
       ...new Set(
@@ -5087,20 +4982,19 @@ async function handleApi(req, res, url) {
           }
           const token = crypto.randomBytes(24).toString('base64url');
           await db.run(
-            'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
+            'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,null,?,?,?,?)',
             [
               sha256(token),
               email,
               role,
               JSON.stringify(teams),
-              scope ? JSON.stringify(scope) : null,
               ctx.ws.id,
               ctx.user.id,
               t,
               expiresAt,
             ],
           );
-          rows.push({ id: sha256(token), email, role, teams, scope, url: `${appBase(req)}/join/${token}`, expiresAt });
+          rows.push({ id: sha256(token), email, role, teams, scope: null, url: `${appBase(req)}/join/${token}`, expiresAt });
         }
       });
     } catch (err) {
@@ -5209,8 +5103,8 @@ async function handleApi(req, res, url) {
       /* HARD-04 (D-06): structural silent whitelist — exactly these three
          fields are read; everything else in the body is discarded by
          construction (no 400 on unknown keys: no schema probe, no breakage
-         of future client fields). Role, teams and scope come ONLY from the
-         invite row below (SCOPE-05). */
+         of future client fields). Role and teams come ONLY from the
+         invite row below. */
       const { name: rawName, email: rawEmail, password: rawPassword } = body || {};
       const name = String(rawName || '').trim();
       const email = String(rawEmail || '')
@@ -5244,16 +5138,6 @@ async function handleApi(req, res, url) {
             return JSON.parse(invite.teams || '[]');
           } catch {
             return [];
-          }
-        })(),
-        /* SCOPE-05 (T-29-14): acceptance writes only the scope the admin
-           validated at creation — never a client-controlled value. */
-        (() => {
-          try {
-            const s = JSON.parse(invite.scope || 'null');
-            return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
-          } catch {
-            return null;
           }
         })(),
       );

@@ -174,18 +174,18 @@ export function createMcp(deps) {
   }
 
   /* --------------------------- visibility -------------------------------- */
-  /* Mirror of memberCanReadProject (server.js) without the server import:
-     public ∨ access list ∨ live team intersection; admins/owners see all.
+  /* [2026-11-07 D-49-2/D-49-4] Mirror of memberCanReadProject (server.js)
+     without the server import: boolean private flag ∨ access list only —
+     the team term and the p.access legacy spelling are both retired. The
+     admin/owner exemption stays (server hiddenFor keeps the same bypass).
      Computed per call — never cached across requests. */
   async function canReadProject(ctx, p) {
     if (!p || typeof p !== 'object') return false;
     if ((ROLE_RANK[ctx.membership.role] || 0) >= ROLE_RANK.admin) return true;
-    const priv = typeof p.private === 'boolean' ? p.private : p.access === 'private';
+    const priv = p.private === true;
     if (!priv) return true;
     const mid = ctx.membership.member_id;
-    if (mid && Array.isArray(p.members) && p.members.includes(mid)) return true;
-    const teams = (await db.all('select team_id from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, ctx.user.id])).map(r => r.team_id);
-    return Array.isArray(p.teams) && p.teams.length > 0 && teams.length > 0 && p.teams.some(t => teams.includes(t));
+    return !!mid && Array.isArray(p.members) && p.members.includes(mid);
   }
 
   const tasksOf = doc => (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).filter(t => t?.id);
