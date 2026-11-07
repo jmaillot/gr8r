@@ -100,10 +100,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | TZ-01 | Phase 44 (v1.9, retroactive) | Complete |
 | LOGO-01 | Phase 43 (v1.9, retroactive) | Complete |
-| DBA-01..04 | Phase 45 | Pending |
-| MCP-01..04 | Phase 46 | Pending |
+| DBA-01 | Phase 45 | Pending |
+| DBA-02 | Phase 45 | Pending |
+| DBA-03 | Phase 45 | Pending |
+| DBA-04 | Phase 45 | Pending |
+| MCP-01 | Phase 46 | Pending |
+| MCP-02 | Phase 46 | Pending |
+| MCP-03 | Phase 46 | Pending |
+| MCP-04 | Phase 46 | Pending |
 | FIX-01 | Phase 47 | Complete |
-| PUSH-01..03 | Phase 48 | Complete |
+| PUSH-01 | Phase 48 | Complete |
+| PUSH-02 | Phase 48 | Complete |
+| PUSH-03 | Phase 48 | Complete |
 
 **Coverage:**
 - v1.10 requirements: 14 total (2 retroactive-complete, FIX-01 + PUSH-01..03 complete, 11 pending)

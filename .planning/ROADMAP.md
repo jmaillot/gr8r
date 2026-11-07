@@ -80,20 +80,20 @@ Plans:
 | 45. Database adapter | 0/0 | Not started (in-flight feat/sql) | - |
 | 46. MCP server | merged (e541e45) | UAT passed 2026-11-07 (5/5) — 3 fixes landed during UAT | 2026-11-07 |
 | 47. Command/UI hardening | merged (62b1826) | UAT passed 2026-11-07 (G shortcuts) | 2026-11-07 |
-| 48. Browser push & toasts | 2/2 | Complete (2026-11-07)|  |
+| 48. Browser push & toasts | 2/2 | Complete    | 2026-11-07 |
 
 ### Phase 48: Real browser push & toasts (from backlog 999.2)
 
 **Goal**: Real browser notifications replace the inert push_* toggles, and toast feedback lands for mention/assign events
 **Depends on**: Nothing (parallel-safe; pulled from backlog 999.2 at owner request)
-**Requirements**: PUSH-01..03 (to be defined in REQUIREMENTS.md)
+**Requirements**: PUSH-01, PUSH-02, PUSH-03
 **Success Criteria** (what must be TRUE):
   1. Real web push (service worker + browser Notification) wired to the existing push_mention/push_assign/push_comment pref keys — "coming soon" badge removed
   2. Toast notifications for mention/assign events
   3. Zero new runtime dependencies (D-12) — service worker + Notification API are browser built-ins
   4. Full suite green; i18n EN+FR for all new strings
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
