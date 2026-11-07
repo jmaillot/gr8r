@@ -363,8 +363,11 @@ export async function tx(fn) {
 
 /* ---- capability gate (D-09): pragma / wal_checkpoint / vacuum into are
    SQLite-only. On pg they no-op with one info line — never ported. ------ */
-export async function sqliteOnly(fn, label) {
-  if (backendKind !== 'pg') return fn();
+export async function sqliteOnly(fn, label, kind) {
+  // `kind` is a dependency-injection seam for tests (no real pg server needed);
+  // production always passes two args and reads the live backendKind.
+  const effective = kind ?? backendKind;
+  if (effective !== 'pg') return fn();
   logLine('info', `[db] sqlite-only op skipped (pg): ${label}`);
   return undefined;
 }

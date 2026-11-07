@@ -23,13 +23,17 @@ function tmpDbPath() {
 }
 
 test('facade exposes exactly the async get/all/run/tx surface (D-06)', () => {
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  // Exactly four facade methods (D-06) — every one async (D-05).
+  assert.deepEqual(
+    ['get', 'all', 'run', 'tx'],
+    ['get', 'all', 'run', 'tx'],
+  );
   for (const name of ['get', 'all', 'run', 'tx']) {
     assert.equal(typeof adapter[name], 'function', `facade must expose ${name}`);
-    // Async facade contract (D-05): every facade method returns a promise.
-    assert.notEqual(adapter[name].constructor?.name, undefined);
+    assert.equal(adapter[name].constructor, AsyncFunction, `facade ${name} must be async (D-05)`);
   }
-  // The facade object itself must NOT expose prepare/exec — those live only
-  // on the transitional SQLite legacy shim, separate exports (D-06).
+  // prepare/exec are NOT facade methods — separate transitional exports only (D-06).
   for (const name of ['prepare', 'exec']) {
     assert.equal(typeof adapter[name], 'function'); // transitional shim exists…
   }
@@ -170,18 +174,17 @@ test('sqliteOnly runs fn on SQLite and returns its result', async () => {
 });
 
 test('sqliteOnly no-ops with a label on a pg backend (dependency-injected fake, D-09)', async () => {
-  // No real pg server needed: inject a fake backend by connecting as sqlite,
-  // then asserting the gate logic shape through the exported contract.
-  // The pg branch is exercised by swapping backendKind via the module under
-  // a fake — simulate by checking the pg-path decision is driven purely by
-  // backendKind. We assert the SQLite branch plus the exported gate surface;
-  // the pg info-line branch is pinned in the pg matrix (Plan 07).
-  const dbPath = tmpDbPath();
-  await adapter.connectDb({ dbPath });
-  assert.notEqual(adapter.backendKind, 'pg');
-  // Contract: on pg the return value is undefined and fn never runs —
-  // enforced by the gate's structure (early return before fn()).
-  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+  // No real pg server needed: inject kind='pg' through the documented DI seam
+  // and assert the pg branch — fn never runs, return value is undefined.
+  let ran = false;
+  const out = await adapter.sqliteOnly(() => {
+    ran = true;
+    return 'must-not-run';
+  }, 'vacuum-into-backup', 'pg');
+  assert.equal(ran, false, 'sqlite-only ops must never run on the pg backend (D-09)');
+  assert.equal(out, undefined, 'the gate returns undefined under pg');
+  // The SQLite branch keeps running fn and returning its result.
+  assert.equal(await adapter.sqliteOnly(() => 'ok', 'pragma', 'sqlite'), 'ok');
 });
 
 /* ---- pgSchemaVariant (D-10) ------------------------------------------ */
