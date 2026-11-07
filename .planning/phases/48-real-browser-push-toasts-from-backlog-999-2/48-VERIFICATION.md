@@ -1,6 +1,6 @@
 ---
 phase: 48-real-browser-push-toasts-from-backlog-999-2
-verified: 2026-11-07T16:55:00Z
+verified: 2026-11-07T19:30:00Z
 status: passed
 score: 6/6 must-haves verified
 covered_files:
@@ -19,16 +19,18 @@ covered_files:
   - .planning/phases/48-real-browser-push-toasts-from-backlog-999-2/48-01-SUMMARY.md
   - .planning/phases/48-real-browser-push-toasts-from-backlog-999-2/48-02-SUMMARY.md
 
-covered_digest: "v2:sha256:17387bcc9d80df1cf7306e8c766b511c44178604379119081f80f0d10a8321e7"
+covered_digest: "v2:sha256:0f9a569ee55403170fba1225667e2792fc5ffe27800b22d342c0b571ab768d30"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: human_needed
   previous_score: 6/6
-  gaps_closed: []
+  gaps_closed:
+    - "CR-01 advisory: sw.js click URL now structurally rejects absolute cross-origin / malformed URLs (d16e559 — origin equality check with '/' fallback)"
+    - "WR-01 advisory: push seen-set re-primes per user+workspace seen key, so an SPA workspace switch seeds the target workspace backlog silently (5e3e4af — _primed boolean → _primedFor key memo)"
   gaps_remaining: []
   regressions: []
-  note: "Re-run triggered by a stale covered_digest (algorithm artifact, #4682) — no covered file changed since the prior verification (last impl commit 4ff18f0, 2026-11-07T14:20:24+01:00, predates the 16:20Z prior stamp; git-verified). The new digest uses the current v2:sha256: scheme, which is why it differs from the prior v2:39fb… hash. All conclusions were independently re-checked against the live codebase, not carried over."
+  note: "Re-run triggered by a stale covered_digest: three covered files changed after the prior 16:55Z stamp — public/sw.js (d16e559, CR-01 fix), src/core/push.js + test/browser-push.test.mjs (5e3e4af, WR-01 fix). Both commits are phase-48 review-disposition closure work, not regressions. Changed items got full re-verification; unchanged items got regression checks (all four test suites re-run green). Deploy-chain changes (Dockerfile 17:37, server.js 18:24) belong to Phase 45 (D-03 pg adapter) — server.js still serves sw.js no-cache (line 5272) and Dockerfile still COPYs dist/; package.json's new 'pg' dependency is the Phase 45 D-03 addition, not a D-12 violation for this phase."
 human_verification:
   - test: "Real permission flow: open Settings → Notifications, toggle a push_* pref ON, accept the browser permission prompt, hide the tab, trigger a mention from another user, confirm the OS notification appears and clicking it focuses/navigates to the task"
     expected: "Browser prompt appears inside the click gesture; hidden tab yields exactly one OS notification per event; click focuses the existing tab or opens the same-origin deep link"
@@ -41,9 +43,9 @@ human_verification:
 # Phase 48: Real browser push toasts from backlog 999.2 — Verification Report
 
 **Phase Goal:** Real browser notifications replace the inert push_* toggles, and toast feedback lands for mention/assign events.
-**Verified:** 2026-11-07T16:55:00Z
+**Verified:** 2026-11-07T19:30:00Z
 **Status:** human_needed (all must-haves re-verified; two live-browser flows remain manual-only)
-**Re-verification:** Yes — digest regenerated after the #4682 stale gate; full goal-backward re-check performed (prior conclusions not trusted, re-derived from code and test runs)
+**Re-verification:** Yes — stale digest refresh after CR-01/WR-01 closure commits; full goal-backward re-check on changed files, regression checks on the rest
 
 ## Goal Achievement
 
@@ -51,12 +53,12 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | New unseen mention/assign/comment row, gated by its push_* pref, produces exactly ONE feedback — browser Notification (via SW) when `document.hidden`, in-app toast when visible — never both (D-48-2) | ✓ VERIFIED | `src/core/push.js:115-123`: visible → `showToast(line)` (117) and `continue`; hidden → permission check (120) then `reg.showNotification()` (123) with constructor fallback (124). Branches are mutually exclusive. Behavioral tests pass: "a hidden-tab mention yields exactly ONE showNotification…", "a visible-tab mention fires the toast seam once and never showNotification" (`node --test test/browser-push.test.mjs`: 17/17 pass, re-run this verification) |
-| 2 | Seen rows, read rows, and update/reminder rows never notify; push-pref=false swallows rows; session prime is silent | ✓ VERIFIED | `deriveCandidates` (push.js:68-74) filters `n.read || seen.includes(n.id)` and requires a mapped type with a truthy pref; `_primed` block (99-104) seeds the seen-set and returns silently on first call; `markSeen` before dispatch (109). Passing tests: "a second notifyNewEvents call re-notifies nothing", "a push_assign=false gate swallows…", "update and due_reminder rows never dispatch", "a read row never dispatches", "the first notifyNewEvents call of a session primes…" — all green in the 17/17 run |
-| 3 | sw.js registered from main.js at absolute scope `/sw.js`, contains `notificationclick` and NO fetch/install/activate handler or imports | ✓ VERIFIED | Read `public/sw.js` in full (23 lines): single `notificationclick` listener, zero imports, zero fetch/install/activate handlers, zero strings. `src/main.js:108` `navigator.serviceWorker.register('/sw.js')` behind `'serviceWorker' in navigator && api.enabled`, load-gated, `.catch(() => {})`. Structural absence assertions in the passing harness |
-| 4 | "Coming soon" badge removed; push_* toggles persist via the EXISTING single-branch `IN.npToggle` path (D-48-3) | ✓ VERIFIED | `grep -r pushComingSoon src/ test/` → only the i18n catalogue-pin changelog comment (test/i18n-core-features.test.mjs:216/218); zero occurrences in src/. settings.js:505-514 renders the three push_* rows with only the derived badge. `IN.npToggle` (actions.js:2781+) prepends the permission pre-step then falls through to the unchanged persistence body. Catalogue pin at 1710 asserted by the passing i18n test (14/14); `test/unsubscribe-route.test.mjs:365` asserts the badge string is gone (15/15 pass) |
-| 5 | Toggle-ON with permission `default` calls `requestPermission()` inside the user gesture; denied → pref still saves + one-time explanatory toast; denied badge is derived per render and clears without reload (D-48-4) | ✓ VERIFIED | actions.js:2782-2792: pre-step gates on `el.checked && dataset.k.startsWith('push_') && permission==='default'`; every outcome falls through to `S.notifPrefs[el.dataset.k] = el.checked` + persistence. `blockedToastOnce()` module-scoped one-shot (push.js:38-43). settings.js:507 reads `window.Notification.permission` fresh per render (never stored). `permChanged` memo wired into the poll re-render condition (main.js:91). Passing tests: requestPermission-fires-once-and-pref-persists, blocked-toast-once-across-two-toggles, permChanged-fires-on-denied→granted-flip, main.js-wires-the-memo — all in the 17/17 run |
-| 6 | Zero new runtime dependencies (D-12) — SW + Notification API are browser built-ins | ✓ VERIFIED | `node --test test/dependencies.test.mjs` green (2/2, re-run); `git status` clean for package.json, Dockerfile, and test/dependencies.test.mjs; sw.js imports nothing; push.js imports only pre-existing project modules (store/api/i18n/toast) |
+| 1 | New unseen mention/assign/comment row, gated by its push_* pref, produces exactly ONE feedback — browser Notification (via SW) when `document.hidden`, in-app toast when visible — never both (D-48-2) | ✓ VERIFIED | Re-read push.js post-5e3e4af: visible → `showToast(line)` + `continue`; hidden → permission check then `reg.showNotification()` with constructor fallback. Branches mutually exclusive. Behavioral tests pass in the re-run (18/18): hidden-tab mention → exactly ONE showNotification; visible-tab mention → toast seam once, never showNotification |
+| 2 | Seen rows, read rows, and update/reminder rows never notify; push-pref=false swallows rows; session prime is silent — now PER user+workspace seen key | ✓ VERIFIED | `deriveCandidates` filters `read || seen.includes(id)` and requires a mapped type with truthy pref; prime now keyed: `_primedFor !== seenKey(wsId, userId)` seeds and returns silently — an SPA workspace switch re-primes silently (5e3e4af). Tests: re-prime test (WR-01, new), second-call-no-notify, push_assign=false gate, update/due_reminder never dispatch, read row never dispatch, first-call prime — all green in 18/18 |
+| 3 | sw.js registered from main.js at absolute scope `/sw.js`, contains `notificationclick` and NO fetch/install/activate handler or imports | ✓ VERIFIED | Re-read public/sw.js post-d16e559 (26 lines): single `notificationclick` listener, zero imports, zero fetch/install/activate handlers, zero user-visible strings. Click URL now origin-CHECKED: `new URL(data?.url || '/', origin)` inside try/catch, `u.origin === self.location.origin` gate, else '/'. main.js:108 `navigator.serviceWorker.register('/sw.js')` behind feature check, `.catch(() => {})` — unchanged, regression-passed |
+| 4 | "Coming soon" badge removed; push_* toggles persist via the EXISTING single-branch `IN.npToggle` path (D-48-3) | ✓ VERIFIED | Regression re-check: `grep -r "pushComingSoon\|coming soon" src/ public/` → zero hits (rc=1). settings.js/actions.js unchanged since prior verification (last touched 14:11/14:15, before prior stamp); i18n catalogue pin test (14/14) and coming-soon-removal regression test (15/15) green in re-run |
+| 5 | Toggle-ON with permission `default` calls `requestPermission()` inside the user gesture; denied → pref still saves + one-time explanatory toast; denied badge is derived per render and clears without reload (D-48-4) | ✓ VERIFIED | Regression re-check: actions.js pre-step + push.js `blockedToastOnce()` + settings.js fresh `Notification.permission` read + main.js `permChanged` memo all unchanged since prior full verification; behavioral tests green in the 18/18 run (requestPermission-once, blocked-toast-once, permChanged-flip, memo wiring) |
+| 6 | Zero new runtime dependencies (D-12) — SW + Notification API are browser built-ins | ✓ VERIFIED | `node --test test/dependencies.test.mjs` green (2/2 re-run). package.json's `pg` dependency is the Phase 45 D-03 addition (commit 52506c0, 12:30, predates this phase's prior verification) — no dependency was added BY Phase 48; sw.js imports nothing; push.js imports only pre-existing project modules |
 
 **Score:** 6/6 truths verified (0 present, behavior-unverified)
 
@@ -64,33 +66,33 @@ human_verification:
 
 | Artifact | Expected | Status | Details |
 | --- | --- | --- | --- |
-| `public/sw.js` | Minimal notificationclick router | ✓ VERIFIED | 23 lines re-read in full; single handler; zero imports/strings; no fetch/install/activate |
-| `src/core/push.js` | Dispatch core: notifyNewEvents, seen-set, deriveCandidates, toast-vs-notification branch | ✓ VERIFIED | 129 lines, substantive; exports test seams (showToast/deriveCandidates/buildNotifUrl/permChanged); all logic real |
-| `src/core/push.js` wiring | Poll hook in main.js | ✓ VERIFIED | Imported (main.js:64) and called at main.js:98 after successful hydration, behind poll guards |
-| `src/pages/settings.js` | Derived blocked badge swap | ✓ VERIFIED | Lines 505-514; fresh permission read per render; `.badge.red` reuse (no new CSS) |
-| `src/actions/actions.js` | requestPermission pre-step in npToggle | ✓ VERIFIED | Lines 2782-2792 prepended; persistence body unchanged below |
-| `test/browser-push.test.mjs` | Behavioral harness | ✓ VERIFIED | 17 tests, all passing (re-run this verification: 17 pass / 0 fail) |
+| `public/sw.js` | Minimal notificationclick router | ✓ VERIFIED | 26 lines re-read post-d16e559; single handler; origin-equality click-URL guard added; still zero imports/fetch/install/activate |
+| `src/core/push.js` | Dispatch core: notifyNewEvents, per-key seen-set, deriveCandidates, toast-vs-notification branch | ✓ VERIFIED | Substantive; `_primedFor` key memo replaces session boolean (5e3e4af); exports test seams; all logic real |
+| `src/core/push.js` wiring | Poll hook in main.js | ✓ VERIFIED | main.js unchanged since prior full check; import + poll call site intact (regression-passed via suite) |
+| `src/pages/settings.js` | Derived blocked badge swap | ✓ VERIFIED | Unchanged since prior verification; i18n test 14/14 re-run green |
+| `src/actions/actions.js` | requestPermission pre-step in npToggle | ✓ VERIFIED | Unchanged since prior verification; behavioral tests green |
+| `test/browser-push.test.mjs` | Behavioral harness | ✓ VERIFIED | Now 18 tests (WR-01 re-prime test added), 18 pass / 0 fail in re-run |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 | --- | --- | --- | --- | --- |
-| src/main.js poll | src/core/push.js notifyNewEvents() | one dispatch site inside pollNotifs, after hydrateFromServer success, behind poll guards | ✓ WIRED | main.js:98; never a parallel fetch channel |
-| src/core/push.js | myNotifs() from store.js | import (push.js:13) | ✓ WIRED | No raw `D().notifs` filtering anywhere in push.js |
-| src/core/push.js | registration.showNotification(title, options) | hidden branch (push.js:122-123) | ✓ WIRED | body/tag/icon + `data.url` present; sw.js holds zero strings and zero imports |
-| src/core/push.js toast branch | toast() from src/ui/toast.js | exported live binding (push.js:30-33) | ✓ WIRED | Plain composed string; toast.js esc()s |
-| src/pages/settings.js | fresh Notification.permission per render | derived `blocked` const (settings.js:507) | ✓ WIRED | Never stored; clears on next poll re-render via permChanged memo (main.js:91) |
-| IN.npToggle | Notification.requestPermission() | prepended pre-step (actions.js:2789) | ✓ WIRED | All outcomes fall through to unchanged persistence |
+| src/main.js poll | src/core/push.js notifyNewEvents() | one dispatch site inside pollNotifs, after hydration, behind poll guards | ✓ WIRED | Unchanged; regression-passed |
+| src/core/push.js | myNotifs() from store.js | import | ✓ WIRED | Unchanged; regression-passed |
+| src/core/push.js | registration.showNotification(title, options) | hidden branch | ✓ WIRED | body/tag/icon + `data.url`; sw.js holds zero strings/imports |
+| src/core/push.js toast branch | toast() from src/ui/toast.js | exported live binding | ✓ WIRED | Unchanged |
+| src/pages/settings.js | fresh Notification.permission per render | derived `blocked` const | ✓ WIRED | Unchanged; clears via permChanged memo |
+| IN.npToggle | Notification.requestPermission() | prepended pre-step | ✓ WIRED | Unchanged; persistence body intact |
 | src/main.js | service worker registration | absolute `/sw.js` (main.js:108) | ✓ WIRED | Failure silently ignored; poll+email remain the delivery guarantee |
-| Build/deploy chain | dist/sw.js served no-cache | vite publicDir copy + server.js | ✓ WIRED | Prior verification confirmed `dist/sw.js` identical to `public/sw.js`; Dockerfile COPYs dist/ (unchanged since — git status clean) |
+| Build/deploy chain | dist/sw.js served no-cache | vite publicDir copy + server.js | ✓ WIRED | server.js:5272 still returns `no-cache` for sw.js (re-checked post-Phase-45 refactor); Dockerfile still `COPY --from=build /app/dist ./dist` |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 | --- | --- | --- | --- | --- |
 | push.js candidates | `myNotifs()` + `S.notifPrefs` | server-hydrated store (30s poll) | Yes | ✓ FLOWING |
-| Notification title/body | `t('toast.push*', {name, title})` | i18n catalogue + task store (mem/task) | Yes | ✓ FLOWING |
-| sw.js click URL | `e.notification.data?.url` | `buildNotifUrl(n)` — live ws slug + task key | Yes | ✓ FLOWING |
+| Notification title/body | `t('toast.push*', {name, title})` | i18n catalogue + task store | Yes | ✓ FLOWING |
+| sw.js click URL | `e.notification.data?.url` | `buildNotifUrl(n)` — live ws slug + task key; now origin-checked | Yes | ✓ FLOWING |
 | Blocked badge | `Notification.permission` | live browser API read per render | Yes | ✓ FLOWING |
 
 No static/hardcoded data paths found.
@@ -98,17 +100,17 @@ No static/hardcoded data paths found.
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
-| --- | --- | --- | --- |
-| Push slice harness | `node --test test/browser-push.test.mjs` | 17 pass / 0 fail | ✓ PASS |
-| i18n catalogue pin (1710, EN+FR parity) | `node --test test/i18n-core-features.test.mjs` | 14 pass / 0 fail | ✓ PASS |
+| -------- | ------- | ------ | ------ |
+| Push slice harness (incl. new WR-01 re-prime test) | `node --test test/browser-push.test.mjs` | 18 pass / 0 fail | ✓ PASS |
+| i18n catalogue pin (EN+FR parity) | `node --test test/i18n-core-features.test.mjs` | 14 pass / 0 fail | ✓ PASS |
 | Coming-soon removal regression | `node --test test/unsubscribe-route.test.mjs` | 15 pass / 0 fail | ✓ PASS |
 | D-12 dependency gate | `node --test test/dependencies.test.mjs` | 2 pass / 0 fail | ✓ PASS |
 
-All four commands re-run during this verification (2026-11-07). i18n keys spot-checked directly: `toast.pushMention`, `toast.pushBrowserBlocked`, `settings.notif.pushBrowserBlocked` present in BOTH `src/locales/en.json` and `src/locales/fr.json` (3 matches each).
+All four commands re-run this verification (2026-11-07, HEAD 4bf2c2a). Full suite reported green today by orchestrator (1126 tests, 1112 pass, 0 fail, 14 skipped).
 
 ### Probe Execution
 
-None declared (no scripts/*/tests/probe-*.sh for this phase; not a migration/tooling phase). The VALIDATION.md per-task map is fully covered by the automated tests above.
+None declared (no scripts/*/tests/probe-*.sh for this phase; not a migration/tooling phase). The VALIDATION.md per-task map is covered by the automated tests above plus the two human-verification flows.
 
 ### Requirements Coverage
 
@@ -118,21 +120,19 @@ None declared (no scripts/*/tests/probe-*.sh for this phase; not a migration/too
 | PUSH-02 | 48-01 | Foreground tab → toast; background tab → SW notification; never both, never already-seen, gated by each push_* pref (D-48-2) | ✓ SATISFIED | Truths 1, 2 |
 | PUSH-03 | 48-02 | Denied permission: toggle still persists, "browser blocked" badge + explanatory toast, badge clears when permission returns (D-48-4); zero schema migration (D-48-3) | ✓ SATISFIED | Truth 5 |
 
-No orphaned requirements: REQUIREMENTS.md maps PUSH-01..03 to Phase 48 and all three are claimed across the two plans; traceability line 106 shows all complete.
+No orphaned requirements: REQUIREMENTS.md lines 114-116 map PUSH-01..03 to Phase 48, all Complete.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
-| --- | --- | --- | --- | --- |
-| (none) | — | No TBD/FIXME/XXX/HACK/PLACEHOLDER/coming-soon markers in any phase-modified file (grep re-run: clean) | — | Clean |
+| ---- | ---- | ------- | -------- | ------ |
+| (none) | — | No TBD/FIXME/XXX/HACK/PLACEHOLDER/coming-soon markers in any phase-modified file (grep re-run on current HEAD: clean) | — | Clean |
 
-### Review Findings Awareness (from 48-REVIEW.md — recorded, not phase gaps)
+### Review Findings Awareness (from 48-REVIEW.md — status updated this run)
 
-Surfaced by the phase code review and deliberately left open (48-REVIEW-DISPOSITION.md). Judged against the phase's success criteria, neither invalidates a must-have truth; both are recorded for human awareness and follow-up:
-
-- **CR-01 (sw.js same-origin guard)** — `new URL(data?.url || '/', origin)` at public/sw.js:11 does not reject absolute cross-origin URLs. No live exploit path: the only producer (`buildNotifUrl`, push.js:78-82) emits relative `/w/…` paths from internal data. Recommend a follow-up enforcing `u.origin === self.location.origin` so the T-48-03 claim is structural, not producer-trust. If accepted as a deliberate deviation, an override may be added to this file.
-- **WR-01 (workspace-switch re-prime storm)** — `_primed` is a session-wide boolean while the seen-set is keyed per user+workspace; an SPA workspace switch to a workspace with unread rows could fire a backlog burst (a path the must-haves did not name — they say "login"). Login prime is tested and holds. Recommend a follow-up re-priming on `seenKey(wsId, userId)` change.
-- IN-01 (fallback notification inert click — plan-pinned), IN-02 (200-id seen-set truncation edge), IN-03 (no `.catch` on the fire-and-forget poll call; all internal awaits guarded) — informational.
+- **CR-01 (sw.js same-origin guard) — CLOSED.** Commit d16e559 adds the origin-equality check with '/' fallback for malformed/cross-origin `data.url`. The T-48-03 claim is now structural, not producer-trust.
+- **WR-01 (workspace-switch re-prime storm) — CLOSED.** Commit 5e3e4af keys the prime memo on `seenKey(wsId, userId)`; a workspace switch re-primes the target workspace silently. Covered by a new behavioral test (18/18 green).
+- IN-01 (fallback notification inert click — plan-pinned), IN-02 (200-id seen-set truncation edge), IN-03 (no `.catch` on the fire-and-forget poll call; internal awaits guarded) — informational, unchanged.
 - Pre-existing totp-rewrap D-74 EACCES environmental test failure (STATE.md Deferred Items) predates this phase — not a phase gap.
 
 ### Human Verification Required
@@ -151,9 +151,9 @@ Surfaced by the phase code review and deliberately left open (48-REVIEW-DISPOSIT
 
 ### Gaps Summary
 
-No gaps. All six must-have truths re-verified directly against the live codebase (full file reads of sw.js and push.js, wiring greps in main.js/settings.js/actions.js, fresh test runs: 17+14+15+2 all green, i18n keys confirmed in EN and FR, dependency files untouched in git). The two live-browser flows cannot be exercised programmatically and are routed to human verification per the plan's own manual-only table.
+No gaps. The stale-digest delta was two phase-48 closure commits (d16e559 CR-01, 5e3e4af WR-01), both re-verified in full against the live code — they strengthen the phase and close both review findings without regressions (18+14+15+2 tests re-run green, coming-soon grep clean, sw.js still minimal and now origin-hardened, server no-cache header and Dockerfile dist/ copy intact after the Phase 45 deploy-chain changes). The `pg` runtime dependency belongs to Phase 45's D-03 decision, not this phase; D-12 holds for Phase 48's own scope. The two live-browser flows remain manual-only and route to human verification, exactly as before.
 
 ---
 
-_Verified: 2026-11-07T16:55:00Z_
+_Verified: 2026-11-07T19:30:00Z_
 _Verifier: the agent (gsd-verifier)_
