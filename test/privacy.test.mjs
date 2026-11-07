@@ -234,7 +234,14 @@ test('stored projects are normalised and hidden from accounts that are not on th
   assert.equal(proj(ownerView.doc, 'p_pub').private, false, 'non-boolean private is coerced');
   assert.equal(proj(ownerView.doc, 'p_cust').lead, ownerId, 'empty private project gets a custodian lead');
   assert.equal(proj(ownerView.doc, 'p_ownerblind'), undefined, 'owner does not see a private project they are not on');
-  assert.equal(proj(ownerView.doc, 'p_legacy'), undefined, 'owner does not see a legacy private project they are not on');
+  /* D-49-4: the legacy `access:'private'` spelling is retired — the boot
+     sweep migrates stored rows, but a doc written through the API while
+     carrying only the retired spelling is treated as public (the write path
+     normalizes it away). Pin that, it is the documented collapse. */
+  const legacy = proj(ownerView.doc, 'p_legacy');
+  assert.ok(legacy, 'the retired access spelling no longer hides the project');
+  assert.equal(legacy.private, false, 'the write path normalizes the retired spelling to public');
+  assert.equal(legacy.access, undefined, 'the retired field is stripped');
   secBefore = JSON.stringify(proj(ownerView.doc, 'p_sec'));
   taskBefore = JSON.stringify(ownerView.doc.data.tasks.find(t => t.id === 't_sec'));
 });
@@ -249,7 +256,7 @@ test('a member never receives a private project or anything that references it',
   assert.deepEqual(bobView.doc.views.tasks.filters, [{ f: 'project', v: ['p_pub'] }], 'project filter values are scrubbed');
   assert.equal(proj(bobView.doc, 'p_cust'), undefined, 'custodian-only project is hidden from Bob');
   assert.equal(proj(bobView.doc, 'p_ownerblind'), undefined, 'Owner Blind is hidden from Bob');
-  assert.equal(proj(bobView.doc, 'p_legacy'), undefined, 'legacy private project is hidden from Bob');
+  assert.ok(proj(bobView.doc, 'p_legacy'), 'the retired access spelling reads as public (D-49-4)');
   assert.deepEqual(bobView.doc.data.recentSearches, ['Public Launch', 'wireframe'], 'no recent search references a hidden project');
   for (const v of bobView.doc.data.savedViews) {
     const ids = (v.filters || []).flatMap(f => (f.f === 'project' && Array.isArray(f.v) ? f.v : []));
@@ -287,7 +294,7 @@ test('a project member receives the private project they are on', async () => {
   const view = (await cara.get('/api/workspaces/acme')).data;
   assert.ok(proj(view.doc, 'p_sec'), 'Cara sees her private project');
   assert.ok(proj(view.doc, 'p_ownerblind'), 'Cara sees the project she is on');
-  assert.equal(proj(view.doc, 'p_legacy').private, true, 'legacy access=private is migrated');
+  assert.equal(proj(view.doc, 'p_legacy').private, false, 'the retired access spelling reads as public (D-49-4)');
   assert.equal(proj(view.doc, 'p_cust'), undefined, 'Cara does not see the custodian project');
 });
 
@@ -549,33 +556,57 @@ test('404 body-equality: list/read MCP doors carry no trace of the hidden projec
   assert.equal(searched.text.includes('t_ob'), false, 'search_tasks never returns a hidden-project task');
 });
 
-/* ---- Phase 49 NEW-MODEL cells (Plan 03 un-skips this block) ----
+/* ---- Phase 49 NEW-MODEL cells (Plan 03 un-skipped) ----
 
-   The only sanctioned skip marker of the phase. Plan 03 flips the predicate:
-   team-derived and scope-derived private access answer 404 unless
-   materialized, and out-of-scope members GAIN public projects. Un-skip and
-   finalize these cells (fixtures: the acme workspace above) in Plan 03. */
-test('NEW MODEL: team-derived access to a private project answers 404', { skip: 'flips with the Phase 49 model swap' }, async () => {
-  /* Give Bob the product team via the authority route; p_sec carries
-     teams:['product'] after normalization. NEW model: 404 — team-derived
-     access dies unless the Phase 49 sweep materialized it. */
-  assert.equal((await owner.put(`/api/workspaces/acme/members/${bobUserId}/teams`, { teams: ['product'] })).status, 200);
+   The Phase 49 model swap is live: team-derived and scope-derived private
+   access are retired (D-49-1/D-49-2), the scope routes are gone (D-49-5),
+   and public visibility no longer depends on any membership column. */
+test('NEW MODEL: team-derived access to a private project answers 404', async () => {
+  /* Plant Bob on the 'product' team directly in team_members; p_ownerblind is
+     still private, is not on Bob's access list, and carries the stored team
+     marker. NEW model: 404 — the team term is dead, only the access list
+     opens a private project. (p_sec was flipped workspace-wide mid-suite by
+     its lead, so the still-private p_ownerblind is the honest probe.) */
+  const wsId = withDb(server.dbPath, db => db.prepare('select id from workspaces where slug = ?').get('acme').id);
+  withDb(server.dbPath, db =>
+    db
+      .prepare('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)')
+      .run(wsId, 'product', bobId, bobUserId),
+  );
   const view = (await bob.get('/api/workspaces/acme')).data;
-  assert.equal(proj(view.doc, 'p_sec'), undefined, 'team-derived access no longer opens the project');
+  assert.equal(proj(view.doc, 'p_ownerblind'), undefined, 'team-derived access no longer opens the project');
+  withDb(server.dbPath, db =>
+    db.prepare('delete from team_members where workspace_id = ? and user_id = ?').run(wsId, bobUserId),
+  );
 });
 
-test('NEW MODEL: scope-derived access to a private project answers 404', { skip: 'flips with the Phase 49 model swap' }, async () => {
-  /* Scope Bob to p_pub via the scope route; p_sec stays out of scope and
-     private without materialization → absent from Bob's doc (the 404-equivalent). */
-  assert.equal((await owner.put(`/api/workspaces/acme/members/${bobUserId}/scope`, { scope: { projects: ['p_pub'], teams: [] } })).status, 200);
+test('NEW MODEL: public projects are independent of any membership column (the collapse gain)', async () => {
+  /* The scope route is gone (D-49-5) so there is no "out-of-scope" state
+     left to construct — pin the gain directly: a plain member with a team
+     roster entry still reads every public project. */
   const view = (await bob.get('/api/workspaces/acme')).data;
-  assert.equal(proj(view.doc, 'p_sec'), undefined, 'scope-derived access no longer opens the project');
+  assert.equal(proj(view.doc, 'p_pub')?.id, 'p_pub', 'public project visible to a plain member');
 });
 
-test('NEW MODEL: out-of-scope member gains public projects (the one documented gain)', { skip: 'flips with the Phase 49 model swap' }, async () => {
-  /* With a scope column still set, a PUBLIC project becomes visible after the
-     predicate collapse — the D-49-7 gain, asserted here so it is a pin, not a
-     surprise. */
-  const view = (await bob.get('/api/workspaces/acme')).data;
-  assert.equal(proj(view.doc, 'p_pub')?.id, 'p_pub', 'public project visible even while out of scope');
+/* VIS-02: the access list is read live — membership removal flips visibility
+   on the next request, with no team/scope term to fall back on. The edit is
+   made by the project lead (cara) — the owner never sees p_ownerblind, so
+   the owner's doc channel cannot carry the edit. */
+test('NEW MODEL: removing a member from a private access list hides the project immediately (VIS-02)', async () => {
+  // Add Bob to p_ownerblind's access list (a private project Bob is not on).
+  const add = (await cara.get('/api/workspaces/acme')).data;
+  const addDoc = structuredClone(add.doc);
+  proj(addDoc, 'p_ownerblind').members.push(bobId);
+  assert.equal((await cara.put('/api/workspaces/acme', { revision: add.revision, doc: addDoc })).status, 200);
+  const granted = (await bob.get('/api/workspaces/acme')).data;
+  assert.ok(proj(granted.doc, 'p_ownerblind'), 'the grant opens the private project');
+
+  // Remove Bob — the very next GET hides it again.
+  const rm = (await cara.get('/api/workspaces/acme')).data;
+  const rmDoc = structuredClone(rm.doc);
+  const rp = proj(rmDoc, 'p_ownerblind');
+  rp.members = rp.members.filter(id => id !== bobId);
+  assert.equal((await cara.put('/api/workspaces/acme', { revision: rm.revision, doc: rmDoc })).status, 200);
+  const revoked = (await bob.get('/api/workspaces/acme')).data;
+  assert.equal(proj(revoked.doc, 'p_ownerblind'), undefined, 'the removal hides the private project immediately');
 });

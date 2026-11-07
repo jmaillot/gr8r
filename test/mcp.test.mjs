@@ -602,22 +602,23 @@ test('prompts: list and get round-trip; unknown prompt rejected', async () => {
   assert.equal(reqd.data.error?.code, -32602);
 });
 
-/* ---- Phase 49 (49-01) server↔MCP parity harness ----
+/* ---- Phase 49 (49-03) server↔MCP parity harness ----
 
    One fixture workspace, every actor shape, two engines: the server predicate
    (doc-GET door) and the mcp.js mirror (list_projects / whoami / get_project /
    get_task / list_tasks). Expectations come from the hand-derived
    VISIBILITY_MODEL / MIRROR_MODEL oracles in test/helpers/visibility-fixture.mjs
-   — never from memberCanReadProject or canReadProject (T-49-01).
+   composed with the dated sweep deltas — never from memberCanReadProject or
+   canReadProject (T-49-01).
 
-   Documented divergence (old model, 2026-11-07): for actors with a scope
-   column (m_scoped, m_guest) and for admin/owner (mirror ROLE_RANK bypass vs
-   access-list-gated server doc-GET), mirror ≠ server. The mirror model asserts
-   the mirror's true old semantics; the parity claim is asserted on the actors
-   whose predicates coincide today (null-scope non-admin shapes: m_plain,
-   m_team) and the divergence cells are asserted explicitly with dated
-   comments. Plan 02's sweep + Plan 03's collapse converge the engines; Plan 03
-   flips the divergence assertions to parity in this file. */
+   Collapsed model (2026-11-07, Plan 03): both predicates are private ∨ access
+   list over the sweep-materialized stored doc. The remaining divergences are
+   the pinned pre-existing drift: (1) admin/owner — the mirror's ROLE_RANK
+   bypass shows sealed/empty projects the access-list-gated server hides;
+   (2) m_guest — the mirror never dissolves an out-of-reach access-list entry
+   the way the sweep dissolved p_scopeddeny for m_scoped (the guest's own
+   grant is materialized, so only the admin/owner residue diverges). Parity is
+   asserted per-actor; the divergence cells assert the residue explicitly. */
 import { createVisibilityFixtureDb, MIRROR_MODEL, POST_SWEEP_MIRROR_DELTA, POST_SWEEP_SERVER_DELTA, VISIBILITY_MODEL, VIS_ACTORS, VIS_PASSWORD, VIS_WS, postSweepIds } from './helpers/visibility-fixture.mjs';
 
 const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly');
@@ -736,16 +737,16 @@ after(async () => {
   if (parDir) fs.rmSync(parDir, { recursive: true, force: true });
 });
 
-test('parity fixture: server doc-GET sets equal the VISIBILITY_MODEL oracle + sweep delta for every actor', async () => {
-  /* 2026-11-07 (Phase 49 Plan 02): the one-boot sweep materialized grants and
-     cleared the scope columns during boot, so doc-GETs now ride the old
-     predicate over swept data — VISIBILITY_MODEL plus the dated
-     POST_SWEEP_SERVER_DELTA (fixture helper). Plan 03 replaces this with the
-     collapsed-model oracle. */
+test('parity fixture: server doc-GET sets equal the collapsed-model oracle for every actor', async () => {
+  /* 2026-11-07 (Phase 49 Plan 03): the collapsed predicate is private ∨
+     access list over the sweep-materialized doc. The one-boot sweep ran at
+     boot (grants materialized, p.teams deleted, scope columns cleared), so
+     VISIBILITY_MODEL + POST_SWEEP_SERVER_DELTA IS the collapsed-model oracle
+     — pinned per actor, unchanged from the Plan-02 interim pin. */
   for (const mid of PAR_ACTORS) {
     const { status, ids } = await parVisibleDocIds(mid);
     assert.equal(status, 200, `${mid} reads the doc`);
-    assert.deepEqual(ids, postSweepIds(VISIBILITY_MODEL, mid, POST_SWEEP_SERVER_DELTA), `${mid}: server set matches the oracle + dated sweep delta`);
+    assert.deepEqual(ids, postSweepIds(VISIBILITY_MODEL, mid, POST_SWEEP_SERVER_DELTA), `${mid}: server set matches the collapsed-model oracle`);
   }
 });
 
@@ -761,38 +762,36 @@ test('parity: null-scope member/team actors agree across BOTH engines (green und
   }
 });
 
-test('parity: the mirror matches MIRROR_MODEL + sweep delta for every keyed actor (old-mirror semantics pinned)', async () => {
-  /* 2026-11-07 (Phase 49 Plan 02): the sweep materialized grants onto the
-     STORED access lists the mirror reads — MIRROR_MODEL plus the dated
-     POST_SWEEP_MIRROR_DELTA (fixture helper). Plan 03 collapses the predicate
-     and replaces this with the converged pins. */
+test('parity: the mirror matches MIRROR_MODEL + sweep delta for every keyed actor (collapsed mirror pinned)', async () => {
+  /* 2026-11-07 (Phase 49 Plan 03): the collapsed mirror (boolean private ∨
+     access list, admin bypass kept) reads the same sweep-materialized stored
+     doc, so MIRROR_MODEL + POST_SWEEP_MIRROR_DELTA IS the collapsed-model
+     mirror oracle — pinned per actor, unchanged from the Plan-02 interim pin. */
   for (const mid of PAR_ACTORS) {
     const mirror = await parMirrorIds(mid);
-    assert.deepEqual(mirror, postSweepIds(MIRROR_MODEL, mid, POST_SWEEP_MIRROR_DELTA), `${mid}: mirror set matches the hand-derived mirror oracle + dated sweep delta`);
+    assert.deepEqual(mirror, postSweepIds(MIRROR_MODEL, mid, POST_SWEEP_MIRROR_DELTA), `${mid}: mirror set matches the collapsed-model mirror oracle`);
   }
 });
 
-test('documented divergence (old model): mirror lacks the scope term mcp.js:180-189 (D-49-7)', async () => {
-  /* 2026-11-07 (Phase 49 Plan 02): the sweep cleared the scope columns and
-     materialized the grants, so the SERVER no longer subtracts scope — scoped
-     actors gain the public projects (A3) and their D-03 grants sit on the
-     stored access lists the mirror reads. The remaining divergences below are
-     the narrowed residue: p_scopeddeny (dissolved entry, server-visible only
-     via the owner-injection path for the doc owner) — Plan 03 collapses the
-     predicate and replaces this test with the converged pins. */
+test('documented divergence residue: dissolved grant state agrees on both engines (D-49-7)', async () => {
+  /* 2026-11-07 (Phase 49 Plan 03): the scope term is gone from BOTH engines.
+     The sweep materialized the D-03 grants onto the stored access lists the
+     mirror reads and dissolved the out-of-reach p_scopeddeny entry, so the
+     m_scoped divergence from the old model is retired — what remains is the
+     shared, engine-independent residue below. */
   const scopedServer = (await parVisibleDocIds('m_scoped')).ids;
   const scopedMirror = await parMirrorIds('m_scoped');
   assert.ok(!scopedServer.includes('p_scopeddeny') && !scopedMirror.includes('p_scopeddeny'), 'dissolved entry hidden on both engines (sweep removed the scoped lead)');
-  assert.ok(scopedServer.includes('p_scopeproj') && scopedMirror.includes('p_scopeproj'), 'D-03 grant materialized on the stored list — visible to BOTH engines now');
+  assert.ok(scopedServer.includes('p_scopeproj') && scopedMirror.includes('p_scopeproj'), 'D-03 grant materialized on the stored list — visible to BOTH engines');
   assert.ok(!scopedMirror.includes('p_sealed') && !scopedServer.includes('p_sealed'), 'sealed project stays sealed for scoped actors');
 });
 
-test('documented divergence (old model): mirror ROLE_RANK bypass vs access-list-gated server for admins', async () => {
-  /* 2026-11-07: server hiddenFor's admin path is hiddenProjectIds
-     (server.js:894) — access-list gated — while mcp.js:182 grants admins
-     everything. This is PRE-EXISTING drift (not introduced by Phase 49); the
-     parity harness documents it rather than hides it. Plan 03's lockstep edit
-     decides the mirror's admin semantics. */
+test('documented divergence residue: mirror ROLE_RANK bypass vs access-list-gated server for admins', async () => {
+  /* 2026-11-07 (Phase 49 Plan 03, PATTERNS lockstep decision): the collapsed
+     mirror KEEPS the ROLE_RANK admin bypass (mcp.js canReadProject) while the
+     server's admin path stays access-list-gated (hiddenProjectIds). The
+     sealed cell below pins the residue so a future convergence is a conscious
+     flip, not drift. */
   const adminServer = (await parVisibleDocIds('m_admin')).ids;
   const adminMirror = await parMirrorIds('m_admin');
   assert.ok(adminMirror.includes('p_sealed') && !adminServer.includes('p_sealed'), 'mirror bypass shows the sealed project; server access-list hides it');

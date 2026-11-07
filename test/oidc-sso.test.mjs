@@ -680,7 +680,7 @@ test('SSO-07/D-06: a first-login SSO user with exactly one pending invite gets i
     const memberships = db.prepare('select * from memberships where user_id = ?').all(user.id);
     assert.equal(memberships.length, 1, 'exactly one membership row');
     assert.equal(memberships[0].role, 'viewer', 'the membership carries the INVITE role via the acceptance recipe');
-    assert.equal(memberships[0].scope, '{"projects":["p-1"]}', 'the invite-carried scope landed on the membership (verbatim addMembership)');
+    assert.equal(memberships[0].scope, null, 'the membership scope is NULL — the invite-carried scope is retired (D-49-5), addMembership writes NULL');
     const teams = db.prepare('select * from team_members where user_id = ?').all(user.id);
     assert.equal(teams.length, 1, 'the invite-carried team landed as an authority row');
     const invites = db.prepare('select * from invites where lower(email) = ?').all('invite.one@example.com');
