@@ -5,16 +5,16 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 49
 current_phase_name: Visibility model collapse & grant materialization
 status: executing
-stopped_at: Phase 49 context gathered
-last_updated: "2026-11-07T20:20:16.188Z"
+stopped_at: Completed 49-01-PLAN.md
+last_updated: "2026-11-07T20:49:39.006Z"
 last_activity: 2026-11-07
 last_activity_desc: Phase 49 execution started
-state_head: 7fe37e328a4e7b5350d487534e95e34a83d5241b
+state_head: 2c4412a03b03eb20fd6e05d839db66657edc1a8c
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -32,8 +32,8 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 49 (Visibility model collapse & grant materialization) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 49
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-11-07 — Phase 49 execution started
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
@@ -99,6 +99,8 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
   this with explicit invites; `p.teams` deleted after materialization (MIG-01)
 - [v1.7 Phase 33]: invite-accept hardening pattern (sameOrigin first, fail-closed twins, silent
   body whitelist) — v2.0 Phase 50 accept-time re-derivation follows the same fail-closed shape
+- [Phase 49]: 49-01: VISIBILITY_MODEL oracle hand-derived from RESEARCH matrix, admin/owner rows corrected by live probe (access-list gating applies to everyone; private-empty projects serve to doc owner only)
+- [Phase 49]: 49-01: MCP parity asserted as deepEqual on coinciding actor shapes (m_plain/m_team) plus documented-divergence assertions for scoped/admin actors; MIRROR_MODEL pins old mirror semantics until Plan 03 collapse
 
 ### Roadmap Evolution
 
@@ -144,9 +146,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T19:58:58.964Z
-Stopped at: Phase 49 context gathered
-Resume file: .planning/phases/49-visibility-model-collapse-grant-materialization/49-CONTEXT.md
+Last session: 2026-11-07T20:49:38.974Z
+Stopped at: Completed 49-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -154,6 +156,7 @@ Resume file: .planning/phases/49-visibility-model-collapse-grant-materialization
 |------|----------|-------|-------|
 | Phase 48 P01 | 15 min | 3 tasks | 7 files |
 | Phase 48 P02 | 14 min | 3 tasks | 9 files |
+| Phase 49 P01 | ~2h | 3 tasks | 4 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 
