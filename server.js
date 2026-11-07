@@ -2349,7 +2349,12 @@ function sweepNeeded(docText, scopeRowCount) {
   if (Array.isArray(projects)) {
     for (const p of projects) {
       if (!p || typeof p !== 'object') continue;
-      if (Array.isArray(p.teams)) return true; // D-49-5/D-49-6: the marker itself
+      /* Only a NON-EMPTY teams array is a pre-sweep marker: an empty
+         `teams:[]` is the post-normalization status quo — normalizeProjects
+         re-adds it to every project on every served/written copy (:922) —
+         and grants nothing under the old predicate. Firing on it would make
+         every later boot re-sweep and churn the doc (breaks D-49-6). */
+      if (Array.isArray(p.teams) && p.teams.length) return true;
       if (p.access !== undefined) return true; // D-49-4: legacy dual representation
     }
   }
@@ -2498,6 +2503,15 @@ async function materializeVisibilityGrants() {
           if (!scope) return true; // workspace-wide member: the access list governed before and after
           return scope.projects.includes(p.id) || pTeams.some(t => scope.teams.includes(t));
         });
+        /* If the dissolve removed the project's lead, clear it: normalizeProjects
+           re-adds p.lead to p.members on every served copy (:925), so a surviving
+           scoped lead would silently resurrect the dissolved entry on read —
+           exactly the elevation the dissolve exists to prevent. With the lead
+           cleared, a private project that stays empty keeps the old served shape
+           (owner injected into the SERVED copy only, :929-936); a lead that is a
+           workspace-wide member or a scoped member with scope reach is untouched
+           (the filter above kept it). */
+        if (p.lead && !p.members.includes(p.lead) && memberScope.get(p.lead)) p.lead = null;
         if (grants.size > 0) {
           /* The old model served a private-EMPTY project to the document
              owner alone (normalizeProjects injects ownerId into the served

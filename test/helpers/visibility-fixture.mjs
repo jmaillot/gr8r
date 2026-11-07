@@ -195,6 +195,40 @@ export const MIRROR_MODEL = Object.freeze({
 /* Actors whose memberships carry a scope column value (the scoped branch). */
 export const VIS_SCOPED_ACTORS = Object.freeze(['m_scoped', 'm_guest']);
 
+/* Phase 49 Plan 02 (2026-11-07, D-49-2/A3 interim state): the dated, additive
+   visibility delta the ONE boot sweep induces, on top of the untouched
+   old-model oracles above. The sweep runs during boot (before any request),
+   so post-sweep doc-GETs ride the old predicate over swept data:
+   - scope columns NULL → scoped actors ride the null-scope branch and gain
+     every PUBLIC project (the A3 gain is inherent to the model swap; Plan 03
+     owns the collapsed-model pins and keeps it);
+   - m_owner: p_scopeddeny's out-of-scope access-list entry is dissolved
+     (old-hidden stays hidden) and its scoped lead is cleared with it —
+     normalizeProjects re-adds p.lead to the served members list (:925), so a
+     surviving lead would resurrect the dissolved entry on read. The project
+     is left private-empty — normalizeProjects' owner injection (:929-936)
+     serves it to the doc owner alone, exactly the pre-existing sealed-project
+     behavior — so m_owner GAINS it and m_scoped LOSES it;
+   - MIRROR (mcp.js, still old semantics, reads the STORED doc): grants now
+     sit on the stored access lists, so the mirror sees p_membershare (m_guest)
+     and p_scopeproj (m_scoped, D-03 grant materialized); p_scopeddeny's
+     dissolved entry no longer shows to m_scoped.
+   Plan 03 replaces these deltas with the collapsed-model pins. */
+export const POST_SWEEP_SERVER_DELTA = Object.freeze({
+  gains: Object.freeze({ m_owner: ['p_scopeddeny'], m_scoped: ['p_open', 'p_publicgain'], m_guest: ['p_open', 'p_publicgain'] }),
+  losses: Object.freeze({ m_scoped: ['p_scopeddeny'] }),
+});
+export const POST_SWEEP_MIRROR_DELTA = Object.freeze({
+  gains: Object.freeze({ m_guest: ['p_membershare'], m_scoped: ['p_scopeproj'] }),
+  losses: Object.freeze({ m_scoped: ['p_scopeddeny'] }),
+});
+
+export function postSweepIds(model, mid, delta) {
+  return [...new Set([...(model[mid] || []), ...(delta.gains[mid] || [])])]
+    .filter(id => !(delta.losses[mid] || []).includes(id))
+    .sort();
+}
+
 /* The current server.js SCHEMA (2026-11-07), copied verbatim so the fixture DB
    boots with zero ensureColumn surprises. boot's create-if-not-exists and
    ensureColumn probes are then all no-ops — the byte-identity pin measures the
