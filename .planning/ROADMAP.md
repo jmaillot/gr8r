@@ -44,10 +44,29 @@ when validated.)*
 
 ### Phase 45: Database adapter — optional Postgres backend via env, SQLite default
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Optional Postgres backend selected by env — `DB_URL` postgres:// runs the server on the
+`pg` driver through a minimal async adapter (`db.get/all/run/tx`); unset stays byte-identical
+SQLite (`node:sqlite`), zero-dependency and default. Fail-closed pg boot, dialect branches owned
+by the adapter, one-shot SQLite→pg copy script, opt-in `POSTGRES_TEST_URL` matrix. SQL Server
+out of scope.
+**Requirements**: D-01..D-14 (requirement IDs of record = CONTEXT.md decision IDs; see CONTEXT.md `<decisions>` and each plan's `requirements:` frontmatter)
 **Depends on:** Phase 44
-**Plans:** 0 plans
+**Plans:** 7 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 45 to break down)
+**Wave 1**
+- [ ] 45-01-PLAN.md — db-adapter.mjs facade + SQL rewrite + fail-closed probe + Wave 0 tests (tracer)
+- [ ] 45-03-PLAN.md — server.js boot-path swap, sqliteOnly gating, tx + auth/claims/scheduler conversion (checkpoint:decision — D-05 one-way async conversion)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 45-02-PLAN.md — Docker image node_modules/db-adapter COPY + dependency/COPY pins + DB_URL env surface
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 45-04-PLAN.md — remaining callsite conversion, legacy shim removal, static audit gate
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 45-05-PLAN.md — pg SCHEMA variant, idempotent pg migrations, portable seed (checkpoint:decision — D-11 doc column shape)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 45-06-PLAN.md — scripts/copy-sqlite-to-pg.mjs + contract tests + DEPLOY.md runbook
+- [ ] 45-07-PLAN.md — POSTGRES_TEST_URL-gated pg matrix (boot, auth, claims, dialect pins)
