@@ -61,7 +61,7 @@ import { A, hydrateNotifPrefs, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
 import { $ } from './core/utils.js';
-import { notifyNewEvents } from './core/push.js';
+import { notifyNewEvents, permChanged } from './core/push.js';
 import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale } from './core/i18n.js';
 
 /* The locale change re-renders the app: one listener, one re-render, never
@@ -74,6 +74,12 @@ addEventListener('projects:locale', () => render());
    full refresh. Skipped while a local edit is travelling to the server or the
    session is in conflict — hydration would clobber the client copy. */
 let _pollUnread = -1;
+/* D-48-4: the notif-push badge derives from Notification.permission, so the
+   poll compares a cheap sync permission read every tick and re-renders on a
+   flip (denied → granted in browser settings clears the badge without a
+   reload) — same memo pattern as _pollUnread, one combined render. */
+let _pollPerm = '';
+const pollPerm = () => (typeof window.Notification === 'undefined' ? '' : window.Notification.permission);
 const pollNotifs = async () => {
   if (!api.enabled || !api.user || S.ui.conflict || hasPendingChanges() || S.ui.auth) return;
   const slug = api.workspace?.slug;
@@ -81,8 +87,10 @@ const pollNotifs = async () => {
   const res = await hydrateFromServer(slug);
   if (!res.ok) return;
   const unread = myNotifs().filter(n => !n.read).length;
-  if (unread !== _pollUnread) {
+  const perm = pollPerm();
+  if (unread !== _pollUnread || permChanged(perm, _pollPerm)) {
     _pollUnread = unread;
+    _pollPerm = perm;
     render();
   }
   /* D-48-2: the push/toast diff runs AFTER a successful hydration, behind the

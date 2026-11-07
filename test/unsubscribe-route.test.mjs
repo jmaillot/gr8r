@@ -352,24 +352,28 @@ test('reminder resume (Phase 38 semantics): the flip merges into the stored row 
   }
 });
 
-test('badge-placement pin (D-11/D-12): the pushComingSoon badge decorates exactly the three inert push rows — functional rows untouched', async () => {
+test('badge-placement pin (D-11/D-12/48-02): the derived browser-blocked badge decorates exactly the three push rows — functional rows untouched', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../src/pages/settings.js', import.meta.url), 'utf8');
-  const pushCase = src.match(/case 'notif-push':[\s\S]*?(?=\n    case )/);
+  const pushCase = src.match(/case 'notif-push':\s*\{[\s\S]*?(?=\n    case )/);
   assert.ok(pushCase, "the 'notif-push' case exists in settings.js");
   const block = pushCase[0];
-  const badgeRefs = block.match(/settings\.notif\.pushComingSoon/g) || [];
-  assert.equal(badgeRefs.length, 3, 'the badge key is referenced exactly 3 times — once per inert push row');
-  for (const row of ['push_mention', 'push_assign', 'push_comment']) {
-    const re = new RegExp(`srow\\([^\\n]*pushComingSoon[^\\n]*tog\\('${row}'`);
-    assert.match(block, re, `the ${row} row carries the badge in its description slot`);
+  // 48-02 (D-48-4): the badge is DERIVED per render — one blocked expression,
+  // one shared `bad` slot reference per push row, no stored badge anywhere.
+  assert.match(block, /Notification\.permission === 'denied'/, 'the badge derives from a live permission read');
+  assert.match(block, /settings\.notif\.pushBrowserBlocked/, 'the badge label comes from the catalogue (T-48-06)');
+  assert.ok(!block.includes('pushComingSoon'), 'the Coming-soon badge is gone (D-48-3)');
+  assert.ok((block.match(/bad/g) || []).length >= 3, 'the three push rows share the derived badge slot');
+  for (const [row, key] of [['push_mention', 'pushBrowserBlocked'], ['push_assign', 'pushBrowserBlocked'], ['push_comment', 'pushBrowserBlocked']]) {
+    const re = new RegExp(`srow\\([^\\n]*tog\\('${row}'`);
+    assert.match(block, re, `the ${row} row keeps its toggle`);
   }
   for (const [row, key] of [['due_reminder', 'settings.notif.dueReminderDesc'], ['past_due', 'settings.notif.pastDueDesc']]) {
     const re = new RegExp(`srow\\([^\\n]*${key.replace(/\./g, '\\.')}[^\\n]*tog\\('${row}'`);
     assert.match(block, re, `the functional ${row} row keeps its real description`);
     assert.doesNotMatch(
       block,
-      new RegExp(`srow\\([^\\n]*${key.replace(/\./g, '\\.')}[^\\n]*pushComingSoon`),
+      new RegExp(`srow\\([^\\n]*${key.replace(/\./g, '\\.')}[^\\n]*bad`),
       `the functional ${row} row is badge-free (D-11)`,
     );
   }

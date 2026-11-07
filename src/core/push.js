@@ -85,6 +85,13 @@ export function buildNotifUrl(n) {
    returns silently (no toast/notification storm on login). Afterwards each
    candidate is marked seen BEFORE dispatching — the poll is the delivery
    guarantee, the email channel is the backstop. */
+
+/* PURE (test seam): the poll permission memo diff (48-02, D-48-4). The settings
+   badge derives from Notification.permission, so a flip (denied → granted) must
+   re-render without a reload; a stable read must not. */
+export function permChanged(current, memo) {
+  return current !== memo;
+}
 export async function notifyNewEvents() {
   /* typeof (not the quoted 'Notification' in-check): the i18n sweep reports any
      quoted capitalised single word as a suspected user-visible literal. */

@@ -317,3 +317,37 @@ test('toggling a non-push key never touches the permission API', async () => {
   assert.equal(rpCalls, 0);
   assert.equal(notifPrefsStored().email_mention, true, 'non-push keys persist exactly as before');
 });
+
+/* ---------- expansion (48-02): the poll permission memo (D-48-4) ----------
+   The badge derives from Notification.permission per render; main.js's 30s poll
+   compares the read every tick (the _pollUnread memo pattern) so a denied →
+   granted flip in browser settings clears the badge without a reload. */
+
+test('permChanged fires exactly once on a denied → granted flip and never on a stable tick (D-48-4)', () => {
+  let memo = 'denied';
+  let renders = 0;
+  const tick = perm => {
+    if (push.permChanged(perm, memo)) {
+      memo = perm;
+      renders++;
+    }
+  };
+  tick('denied'); /* stable: badge stays, no re-render */
+  tick('denied');
+  tick('granted'); /* the flip: exactly one re-render */
+  tick('granted'); /* stable again */
+  assert.equal(renders, 1, 'one re-render on the flip, none on stable ticks');
+  assert.equal(push.permChanged('granted', 'granted'), false);
+  assert.equal(push.permChanged('default', ''), true, 'the first tick after boot seeds the memo as a change');
+});
+
+test('main.js wires the permission memo into the poll render condition (source contract)', () => {
+  const src = source('src/main.js');
+  assert.ok(src.includes('let _pollPerm'), 'the _pollPerm memo exists beside _pollUnread');
+  assert.ok(src.includes('pollPerm()'), 'each poll tick reads the live permission');
+  assert.ok(
+    src.includes('unread !== _pollUnread || permChanged(perm, _pollPerm)'),
+    'the render condition is the combined unread-or-permission diff',
+  );
+  assert.ok(src.includes("_pollPerm = perm;"), 'the memo updates when the condition fires');
+});
