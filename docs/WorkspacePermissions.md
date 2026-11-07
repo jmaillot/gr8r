@@ -9,11 +9,11 @@ Quatre rôles existent côté serveur : `owner`, `admin`, `member`, `viewer` (co
 | Rôle UI | Rôle DB | Scope | Peut faire quoi |
 |---------|---------|-------|-----------------|
 | Owner | `owner` | **Workspace entier**, toujours | Tout ce qu'un admin peut, + gérer/rétrograder les admins, transférer la propriété, supprimer l'espace (server.js:4188-4212, 4140) |
-| Admin | `admin` | **Workspace entier, jamais limité à une équipe** | Inviter (tous rôles), gérer les membres et leurs équipes/limites d'accès, modifier les réglages de l'espace, révoquer des sessions. Un scope stocké ne peut **jamais** restreindre un admin : `projectScope()` renvoie `null` (workspace-wide) dès que le rang ≥ admin (server.js:707-713). La promotion en admin efface le scope dans la même transaction (server.js:4223-4228) |
-| Member | `member` | Workspace entier **par défaut**, ou restreint par des « limites d'accès » (scope) | Voir les projets autorisés, créer/éditer des tâches, créer des projets (si le toggle est actif), commenter |
-| Guest | `viewer` (= Guest) | **Un seul projet** (voir §3) | Lecture seule + commentaires sur son projet unique. 403 `readOnlyAccess` sur toute route ≥ member (server.js:2707-2721) |
+| Admin | `admin` | **Workspace entier** | Inviter (tous rôles), gérer les membres et leurs équipes, modifier les réglages de l'espace, révoquer des sessions. Les anciennes « limites d'accès » (scope) n'existent plus côté serveur depuis la Phase 49 — les colonnes correspondantes sont vides et ignorées (voir ProjectPermissions.md §5) |
+| Member | `member` | Workspace entier | Voir les projets non privés + les privés dont il est explicitement membre (`p.members`), créer/éditer des tâches, créer des projets (si le toggle est actif), commenter |
+| Guest | `viewer` (= Guest) | Lecture seule | Lecture + commentaires sur les projets auxquels il a été explicitement ajouté (`p.members`). 403 `readOnlyAccess` sur toute route ≥ member |
 
-**En résumé :** le rôle est toujours **au niveau de l'espace de travail** (workspace), jamais au niveau d'une équipe. Ce qui peut être restreint à un périmètre (équipes + projets), c'est le **scope** du membre — et uniquement pour Member/Guest (§2).
+**En résumé :** le rôle est toujours **au niveau de l'espace de travail** (workspace), jamais au niveau d'une équipe. Depuis la Phase 49, il n'existe plus de périmètre par membre : la visibilité est décidée uniquement par le flag privé de chaque projet et sa liste explicite `p.members` (voir ProjectPermissions.md).
 
 ## 2. Équipes — le formulaire d'invitation
 
@@ -21,30 +21,19 @@ Lors de l'invitation (`inviteModal`, src/overlays/modals.js:259-310), vous chois
 
 ### Pourquoi Admin = « juste l'équipe »
 
-Quand le rôle sélectionné est **Admin**, la section « Limites d'accès » disparaît entièrement du formulaire (modals.js:286-294). C'est cohérent avec le modèle : un admin est workspace-wide par définition, lui donner un périmètre n'aurait pas de sens — le serveur **rejette** d'ailleurs toute tentative de scope sur une invitation admin (`scopeNotAllowed`, server.js:4467, 4308). Les équipes sélectionnées pour un admin servent simplement à ses rattachements d'équipe (visibilité dans les équipes, assignation), pas à limiter son accès.
+Quand le rôle sélectionné est **Admin**, la section « Limites d'accès » disparaît entièrement du formulaire (modals.js:286-294). Depuis la Phase 49 cette section n'a plus d'effet pour **aucun** rôle : le serveur n'accepte, ne stocke et ne renvoie plus aucun scope — les colonnes `memberships.scope`/`invites.scope` sont vidées à la migration et ignorées ensuite. Les sélecteurs qui restent dans l'interface sont un résidu client, retiré à la Phase 51.
 
-### Pour Member/Guest : les « options supplémentaires de limites d'accès »
+### Les « options supplémentaires de limites d'accès » (résidu d'interface)
 
-Deux sélecteurs apparaissent (labels fr.json:758-759), alimentant `scope = { teams: [], projects: [] }` envoyé au serveur (actions.js:1823-1838), stocké sur l'invitation puis sur le membership à l'acceptation (server.js:4511-4521) :
+Les sélecteurs « Projets visibles » / « Équipes qui étendent la portée » (modals.js:290-291, actions.js) envoient encore un objet `scope = { teams: [], projects: [] }`, mais **le serveur l'ignore désormais intégralement** : aucune route ne le valide, ne le stocke ni ne le renvoie (Phase 49, MIG-02). La visibilité d'un membre est uniquement : projets non privés de l'espace + projets privés où il figure dans `p.members`.
 
-**« Projets visibles »** (`modal.scopeProjectsLabel`)
-Liste explicite de projets ajoutés au périmètre du membre. Pour un membre avec scope, la règle est **« visible ⟺ dans le scope »** : un projet hors scope est caché, même s'il serait accessible par un autre chemin (server.js:739-743, 771-801).
-
-**« Équipes qui étendent la portée »** (`modal.scopeTeamsLabel`)
-Équipes dont le membre « hérite » la portée : tout projet lié à ces équipes entre dans son scope (intersection `p.teams` ∩ `scope.teams`, server.js:763-769). Lier une équipe à un projet **ouvre** donc ce projet aux membres scopés sur cette équipe — l'effet des équipes est purement **additif** (elles ne cachent jamais rien, server.js:664-671).
-
-**Cas particuliers :**
-- Scope absent ou `null` → le membre voit **tout l'espace** (comportement par défaut historique).
-- Scope `{teams:[], projects:[]}` (vide) → également interprété workspace-wide (server.js:733-734).
-- Le scope se modifie après coup : `PUT /members/:uid/scope` et `/teams` (server.js:4259-4365), soit la même paire de sélecteurs dans le modal d'édition de membre (« Limites d'accès », modals.js:68-98 — pour un admin, ils y apparaissent en lecture seule « workspace-wide »).
+**Historique (avant Phase 49) :** un scope absent ou `null` donnait tout l'espace ; un scope `{teams:[], projects:[]}` vide était interprété workspace-wide ; un projet lié à une équipe scopée ouvrait ce projet au membre. Toutes ces valeurs stockées ont été **matérialisées en entrées explicites de `p.members`** par la migration de démarrage, puis effacées — personne n'a perdu ni gagné de visibilité lors du basculement (égalité d'ensemble vérifiée par test, test/visibility-migration.test.mjs).
 
 ## 3. Le toggle « Invité externe »
 
 Le toggle (`modal.guestToggle` = « Invité externe (projet unique) », fr.json:760) **n'est pas un réglage séparé : c'est le miroir du rôle Guest** dans le select de rôle (modals.js:292 ; handlers `IN.invRole`/`IN.invGuest`, actions.js:1934-1942). Activer l'un met l'autre à jour.
 
-**Pourquoi pas de sélection de projet « en plus » quand Guest est coché ?** Parce que pour un guest, la sélection de projet **est** son accès : Guest = rôle `viewer` + scope réduit à **exactement un projet** (règle D-13). Le sélecteur « Projets visibles » passe en sélection unique (actions.js:1920-1924) et le serveur rejette un guest avec plus d'un projet (`guestSingleProject`, 400, server.js:4468). Il n'y a donc pas deux endroits où choisir des projets — le picker de la section « limites d'accès » sert aux deux cas (multi pour Member, unique pour Guest).
-
-**« Externe » ne correspond à aucun mécanisme technique :** il n'existe ni flag `external`, ni logique de domaine email, ni table à part pour les guests dans le code. Un guest est simplement un `viewer` dont toute la visibilité se résume au projet auquel il a été ajouté — d'où le hint du modal : « Les invités ne voient que les projets auxquels ils sont ajoutés » (fr.json:1234).
+Un guest est un `viewer` dont la visibilité se résume aux projets auxquels il a été explicitement ajouté (`p.members`) — d'où le hint du modal : « Les invités ne voient que les projets auxquels ils sont ajoutés » (fr.json:1234). L'ancienne contrainte serveur « un seul projet » (`guestSingleProject`, basée sur le scope) a été retirée avec le modèle de scope à la Phase 49 ; le même compte guest peut désormais figurer dans `p.members` de plusieurs projets.
 
 ## 4. Rôles et autorisations (tableau de la page Permissions)
 
@@ -78,5 +67,5 @@ Trois toggles sont affichés (src/pages/settings.js:362-367) :
 
 ## Récapitulatif du modèle à deux niveaux
 
-1. **Niveau workspace** : rôle (`owner/admin/member/viewer`) + scope optionnel (équipes + projets, appliqué par `hiddenFor` sur chaque lecture/écriture de document, server.js:922-923, 988-990) → détermine **ce que vous pouvez toucher dans l'espace**.
-2. **Niveau projet** : `p.private` + `p.members` + équipes liées → détermine **qui voit ce projet** (voir ProjectPermissions.md).
+1. **Niveau workspace** : rôle (`owner/admin/member/viewer`), appliqué par `requireWorkspace` sur chaque route serveur → détermine **ce que vous pouvez toucher dans l'espace** (les anciennes « limites d'accès » par scope ont été retirées à la Phase 49).
+2. **Niveau projet** : `p.private` (booléen) + `p.members` (liste explicite) — la même règle s'applique à tous les rôles ; le miroir MCP conserve seul un contournement admin/owner (`ROLE_RANK`, mcp.js:184), divergence documentée couverte par les tests de parité (voir ProjectPermissions.md).
