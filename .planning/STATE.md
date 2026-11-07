@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.10
-milestone_name: Extensions & Adapters
-status: Awaiting next milestone
-stopped_at: Phases 45-48 complete — v1.10 milestone ready to close
-last_updated: "2026-11-07T18:51:19.402Z"
+milestone: v2.0
+milestone_name: Project-level Permissions & Invitations
+status: planning
+last_updated: "2026-11-07T19:35:42.222Z"
 last_activity: 2026-11-07
-last_activity_desc: Milestone v1.10 completed and archived
-state_head: 9a81d87f4b473687e364a660dbd243e032a9134f
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 20
-current_phase: 48
-current_phase_name: real-browser-push-toasts-from-backlog-999-2
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -30,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 
 ## Current Position
 
-Phase: Milestone v1.10 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-07 — Milestone v1.10 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-07 — Milestone v2.0 started
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 

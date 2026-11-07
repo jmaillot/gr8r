@@ -1,6 +1,41 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-07 after v1.10 milestone*
+*Last updated: 2026-11-07 after v2.0 milestone start*
+
+## Current Milestone: v2.0 Project-level Permissions & Invitations
+
+**Goal:** make access simple and predictable — visibility is decided at the project level
+(toggle private/public; a member sees only what they were invited to plus non-private
+projects), and the right to invite guests moves down to each project.
+
+**Target features:**
+- Strict invitation hierarchy: only an owner names another owner; admins invite
+  admin/member/guest; members invite guests only where the project allows it
+- Everything editable after the invite: role, scope and status changeable at any time,
+  effective immediately
+- Team sharing: invite whole teams through a private project's share options; all team
+  members see the project (teams are an invitation mechanism, not an implicit visibility
+  source — the v1.7 `project.teams ∩ member.teams` rule is replaced)
+- One guest concept: the "Invité externe" toggle is removed
+- Per-project private/public toggle replaces the current dropdown; non-private =
+  workspace-visible, private = explicit invitees (people or teams) only
+- Per-project "members may invite guests" toggle (admins/owner always allowed);
+  the workspace Settings > Permissions page is removed
+- Project creation: all members can create (become project members), with a workspace
+  setting to restrict to admins when desired
+- Transparency: a view showing exactly what a given member can see
+
+### v2.0 milestone decisions (owner-validated 2026-11-07)
+
+- M-01 Strict invitation hierarchy (owner↔owner only); M-02 everything editable post-invite
+- M-03 team invite = bulk invite to the project; M-04 single guest concept, toggle removed
+- M-05 private/public toggle per project replaces the dropdown; visibility = explicit
+  invitees + non-private projects (replaces v1.7 team-derived visibility and Phase 29 D-03
+  scope columns as the primary model)
+- M-06 per-project member-invite-guest toggle; Settings > Permissions page removed
+- M-07 creation stays open to all members with a workspace restriction setting
+- M-08 member-visibility transparency view
+- Scope: permissions/invitations only — notif debt, lint and DEP0210 stay out
 
 ## Current Milestone: v1.10 Extensions & Adapters — SHIPPED (2026-11-07)
 
@@ -27,8 +62,8 @@ record: `milestones/v1.10-ROADMAP.md`, `milestones/v1.10-REQUIREMENTS.md`,
 
 </details>
 
-**Next milestone:** not yet defined — start with `/gsd-new-milestone` (questioning →
-research → requirements → roadmap).
+**Next milestone:** v2.0 Project-level Permissions & Invitations — started 2026-11-07
+(see Current Milestone above).
 
 <details>
 <summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
@@ -536,7 +571,7 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-*(none — define with `/gsd-new-milestone`)*
+- [ ] v2.0 target features — see Current Milestone section above (M-01..M-08 decisions)
 
 ### Out of scope
 
