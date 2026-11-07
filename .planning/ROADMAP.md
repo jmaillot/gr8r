@@ -80,7 +80,7 @@ Plans:
 | 45. Database adapter | 0/0 | Not started (in-flight feat/sql) | - |
 | 46. MCP server | merged (e541e45) | UAT passed 2026-11-07 (5/5) — 3 fixes landed during UAT | 2026-11-07 |
 | 47. Command/UI hardening | merged (62b1826) | UAT passed 2026-11-07 (G shortcuts) | 2026-11-07 |
-| 48. Browser push & toasts | 1/2 | In Progress|  |
+| 48. Browser push & toasts | 2/2 | Complete (2026-11-07)|  |
 
 ### Phase 48: Real browser push & toasts (from backlog 999.2)
 
@@ -93,14 +93,14 @@ Plans:
   3. Zero new runtime dependencies (D-12) — service worker + Notification API are browser built-ins
   4. Full suite green; i18n EN+FR for all new strings
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 48-01-PLAN.md — Tracer + core: sw.js, src/core/push.js (seen-set, toast-vs-notification), poll hook, i18n keys, test harness
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 48-02-PLAN.md — Settings permission UX: blocked badge swap, requestPermission pre-step, pushComingSoon removal, final pin 1709
+- [x] 48-02-PLAN.md — Settings permission UX: blocked badge swap, requestPermission pre-step, pushComingSoon removal, catalogue at 1710 (EN-counted)
 
 ## Backlog
 
