@@ -55,7 +55,7 @@ Plans:
   3. Transport + lifecycle documented and test-pinned; MCP unconfigured = feature absent, zero overhead
   4. D-12 constraint amendment (SDK vs hand-rolled) decided at plan time with owner validation
 
-**Plans**: 0 plans *(agent worktree feat/mcp holds 4 commits / +2 866 lines on feat/mcp — reconcile before planning)*
+**Plans**: 0 plans *(RECONCILED 2026-11-07: feat/mcp merged to main at e541e45 — /mcp streamable-HTTP endpoint, hand-rolled JSON-RPC 2.0 on Node built-ins (D-12 respected, zero deps), personal API keys psk_live_ with hash storage/revocation/expiry, 25-test suite mcp.test.mjs 25/25, usage manual MCP.md, parked ideas MCP-IDEAS.md. Phase may be verified/closed without new plans if the owner accepts the branch as the phase deliverable.)*
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 46 to break down)
