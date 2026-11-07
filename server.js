@@ -384,11 +384,11 @@ async function initDb() {
   };
   /* D-10: schema creation is dialect-owned — the adapter branches ONCE
      (runSchema): SQLite executes the SCHEMA above verbatim; pg executes
-     pgSchemaVariant(SCHEMA) — `collate nocase` stripped, epoch-ms columns
-     widened to bigint, the lower(email) functional unique index added.
-     D-11 (checkpoint-approved, one-way): the workspace doc column stays a
-     plain text column in the pg variant — no jsonb. One statement per
-     facade call (node:sqlite prepare is single-statement). */
+     pgSchemaVariant(SCHEMA) — the nocase collation stripped, epoch-ms
+     columns widened to bigint, the lower(email) functional unique index
+     added. D-11 (checkpoint-approved, one-way): the workspace doc column
+     stays a plain text column in the pg variant — no jsonb. One statement
+     per facade call (node:sqlite prepare is single-statement). */
   await adapterRunSchema(SCHEMA);
   // Additive migration for databases created before multi-workspace support.
   // (D-10): the pragma table_info probe is SQLite-only; the adapter branches
