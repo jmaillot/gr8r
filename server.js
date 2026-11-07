@@ -2122,6 +2122,15 @@ async function bootstrap(opts) {
      load-bearing, Pitfall 2 discipline). */
   await migrateTotpFactors();
   await migrateTotpReWrap();
+  /* Phase 49 (MIG-01, D-49-7): one-boot grant materialization — every
+     old-predicate access path (team intersections, Phase-29 scope grants, the
+     D-03 inversion, legacy p.access) becomes an explicit p.members entry
+     BEFORE the collapsed predicate (Plan 03) can serve any request (Pitfall 1:
+     sweep precedes the predicate). AFTER migrateTeamMembership — the sweep
+     reads the team_members authority rows that backfill guarantees (Pitfall 2:
+     migration order is load-bearing). A throw here aborts boot exactly like a
+     failed migrateTenancy: never serve a half-migrated visibility model. */
+  await materializeVisibilityGrants();
   await ensureAdmin(opts);
   await stampInstanceAdmin();
 }
