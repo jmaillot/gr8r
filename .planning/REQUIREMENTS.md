@@ -42,16 +42,16 @@
 
 ### MCP — Model Context Protocol server (in-flight on feat/mcp)
 
-- [ ] **MCP-01**: Tasks Studio exposes an MCP server so external MCP clients (Claude Desktop,
+- [x] **MCP-01**: Tasks Studio exposes an MCP server so external MCP clients (Claude Desktop,
   coding agents) can operate on real workspace data — tool surface mapped from the existing
   command layer: task CRUD, batch create, subtask edit, reorder, own-comment delete,
   recurrence, teams/labels, project refs by key prefix, assignee by email/name
-- [ ] **MCP-02**: The MCP server is authenticated and workspace-scoped: no anonymous access,
+- [x] **MCP-02**: The MCP server is authenticated and workspace-scoped: no anonymous access,
   every tool call resolves to a member identity with the same permission funnel as the UI/API
   (admin paths stay server-validated, D-10 discipline)
-- [ ] **MCP-03**: Transport and lifecycle are documented and pinned by tests (stdio and/or
+- [x] **MCP-03**: Transport and lifecycle are documented and pinned by tests (stdio and/or
   HTTP), including graceful behavior when MCP is not configured (feature absent, zero overhead)
-- [ ] **MCP-04**: Zero-runtime-dependency constraint applies as for DBA-03: SDK choice
+- [x] **MCP-04**: Zero-runtime-dependency constraint applies as for DBA-03: SDK choice
   (dependency vs hand-rolled protocol) decided and documented at plan time with owner validation
 
 ### PUSH — Real browser push & toasts (from backlog 999.2; Phase 48)
@@ -104,10 +104,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DBA-02 | Phase 45 | Pending |
 | DBA-03 | Phase 45 | Pending |
 | DBA-04 | Phase 45 | Pending |
-| MCP-01 | Phase 46 | Pending |
-| MCP-02 | Phase 46 | Pending |
-| MCP-03 | Phase 46 | Pending |
-| MCP-04 | Phase 46 | Pending |
+| MCP-01 | Phase 46 (branch feat/mcp) | Complete |
+| MCP-02 | Phase 46 (branch feat/mcp) | Complete |
+| MCP-03 | Phase 46 (branch feat/mcp) | Complete |
+| MCP-04 | Phase 46 (branch feat/mcp) | Complete |
 | FIX-01 | Phase 47 | Complete |
 | PUSH-01 | Phase 48 | Complete |
 | PUSH-02 | Phase 48 | Complete |

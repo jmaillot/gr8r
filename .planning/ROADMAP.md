@@ -43,7 +43,7 @@ Details: [.planning/milestones/v1.9-ROADMAP.md](milestones/v1.9-ROADMAP.md)
 Plans:
 - [ ] TBD (run /gsd-plan-phase 45 to break down)
 
-### Phase 46: MCP server — expose workspace operations to external MCP clients *(in-flight: feat/mcp)*
+### Phase 46: MCP server — expose workspace operations to external MCP clients *(complete 2026-11-07: feat/mcp merged)*
 
 **Goal**: External MCP clients (Claude Desktop, coding agents) can safely operate on real workspace data through an authenticated, workspace-scoped MCP server built from the in-flight feat/mcp branch
 **Depends on**: Nothing structurally (parallel-safe with Phase 45)
@@ -54,7 +54,7 @@ Plans:
   3. Transport + lifecycle documented and test-pinned; MCP unconfigured = feature absent, zero overhead
   4. D-12 constraint amendment (SDK vs hand-rolled) decided at plan time with owner validation
 
-**Plans**: 0 plans *(RECONCILED 2026-11-07: feat/mcp merged to main at e541e45 — /mcp streamable-HTTP endpoint, hand-rolled JSON-RPC 2.0 on Node built-ins (D-12 respected, zero deps), personal API keys psk_live_ with hash storage/revocation/expiry, 25-test suite mcp.test.mjs 25/25, usage manual MCP.md, parked ideas MCP-IDEAS.md. Phase may be verified/closed without new plans if the owner accepts the branch as the phase deliverable.)*
+**Plans**: 0 plans *(DELIVERED VIA BRANCH 2026-11-07: feat/mcp merged to main at e541e45 — /mcp streamable-HTTP endpoint, hand-rolled JSON-RPC 2.0 on Node built-ins (D-12 respected, zero deps), personal API keys psk_live_ with hash storage/revocation/expiry, 35-tool surface, 25-test suite mcp.test.mjs 25/25, usage manual MCP.md, DEPLOY.md §15, parked ideas MCP-IDEAS.md. Owner accepted the branch as the phase deliverable — phase closed without new plans; UAT 5/5 in commit 5fe7f67.)*
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 46 to break down)
