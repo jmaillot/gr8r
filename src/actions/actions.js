@@ -43,6 +43,7 @@ import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
 import { prefValue } from '../core/prefs.js';
+import { blockedToastOnce } from '../core/push.js';
 
 /* The preference value is written the way the user chose it: the 'auto'
    sentinel must reach the bag as the string 'auto', so it is still read as
@@ -2771,7 +2772,23 @@ IN.prefToggle = el => {
    the row and adopts the canonical merged prefs the server returns. 401 rides
    the session-expired path (the langSel shape); any other failure is an error
    toast and the toggle stays where the user left it for the session. */
+/* D-48-3/D-48-4: the toggle is the user gesture that may legitimately prompt for
+   notification permission — PREPENDED pre-step, nothing below changes. Only a
+   toggle-ON of a push_* key while permission is 'default' requests; 'denied'
+   fires the one-time explanatory toast from push.js; every outcome (granted,
+   denied, prompt declined) falls through to the UNCHANGED persistence body —
+   the pref always saves (D-48-4). */
 IN.npToggle = async el => {
+  if (
+    el.checked &&
+    typeof el.dataset.k === 'string' &&
+    el.dataset.k.startsWith('push_') &&
+    typeof window.Notification !== 'undefined' &&
+    window.Notification.permission === 'default'
+  ) {
+    const p = await window.Notification.requestPermission();
+    if (p === 'denied') blockedToastOnce();
+  }
   S.notifPrefs[el.dataset.k] = el.checked;
   const wsId = api.enabled ? api.workspace?.id : D().ws.url;
   render();

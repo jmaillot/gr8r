@@ -32,6 +32,16 @@ export function setToastSink(fn) {
   showToast = fn || toast;
 }
 
+/* One-time explanatory toast when a permission request comes back 'denied'
+   (48-02, D-48-4): at most ONE per browser session, module-scoped — the user
+   has already been told; re-toggling never spams the same explanation. */
+let _blockedToastShown = false;
+export function blockedToastOnce() {
+  if (_blockedToastShown) return;
+  _blockedToastShown = true;
+  showToast(t('toast.pushBrowserBlocked'), { kind: 'err', ms: 9000 });
+}
+
 export const seenKey = (wsId, userId) => `${PUSH_SEEN_PREFIX}${wsId || 'local'}.${userId || 'local'}`;
 
 export function getSeen(wsId, userId) {
