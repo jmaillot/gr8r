@@ -182,3 +182,61 @@ test('admin PUT keeps the pinned-field block intact (id/userId/email/role/status
   assert.equal(storedBob.status, 'active', 'status pinned');
   assert.equal(storedBob.tz, 'Asia/Tokyo', 'tz write still flows for the admin path');
 });
+
+/* G-44-3, WR-01: every incoming member tz on the admin path funnels through
+   resolveTz — hostile values never stored raw, aliases stored canonical. */
+test('admin PUT hostile tz on another member funnels to Europe/Paris (D-10, WR-01)', async () => {
+  const snap = await read(admin);
+  const res = await put(admin, snap, doc => {
+    byEmail(doc.data.members, 'bob-tz@test.local').tz = '<img src=x onerror=alert(1)>';
+  });
+  assert.equal(res.status, 200);
+  assert.equal(byEmail(storedMembers(), 'bob-tz@test.local').tz, 'Europe/Paris', 'hostile string never stored raw on the admin path');
+});
+
+test('admin PUT 10k-char tz on another member funnels to Europe/Paris (WR-01)', async () => {
+  const snap = await read(admin);
+  const res = await put(admin, snap, doc => {
+    byEmail(doc.data.members, 'bob-tz@test.local').tz = 'x'.repeat(10000);
+  });
+  assert.equal(res.status, 200);
+  assert.equal(byEmail(storedMembers(), 'bob-tz@test.local').tz, 'Europe/Paris', 'oversized string never stored raw');
+});
+
+test('admin PUT alias tz on another member stores the canonical id (WR-01 + canonicalization)', async () => {
+  const snap = await read(admin);
+  const res = await put(admin, snap, doc => {
+    byEmail(doc.data.members, 'bob-tz@test.local').tz = 'US/Pacific';
+  });
+  assert.equal(res.status, 200);
+  assert.equal(byEmail(storedMembers(), 'bob-tz@test.local').tz, 'America/Los_Angeles', 'alias stored canonical');
+});
+
+test('admin PUT omitting another member\'s tz keeps the stored value (WR-01 undefined guard)', async () => {
+  const snap = await read(admin);
+  const res = await put(admin, snap, doc => {
+    delete byEmail(doc.data.members, 'bob-tz@test.local').tz;
+  });
+  assert.equal(res.status, 200);
+  assert.equal(byEmail(storedMembers(), 'bob-tz@test.local').tz, 'America/Los_Angeles', 'omitted tz never wipes the stored value');
+});
+
+test('admin PUT empty-string tz on another member clears to \'\' (D-07 semantics, WR-01)', async () => {
+  const snap = await read(admin);
+  const res = await put(admin, snap, doc => {
+    byEmail(doc.data.members, 'bob-tz@test.local').tz = '  ';
+  });
+  assert.equal(res.status, 200);
+  assert.equal(byEmail(storedMembers(), 'bob-tz@test.local').tz, '', 'whitespace-only submit clears');
+});
+
+test('doc-only member (no userId) with a hostile tz funnels to Europe/Paris (WR-01)', async () => {
+  const snap = await read(admin);
+  const res = await put(admin, snap, doc => {
+    doc.data.members.push({ name: 'Ghost', email: 'ghost-tz@test.local', tz: '<script>alert(1)</script>' });
+  });
+  assert.equal(res.status, 200);
+  const ghost = byEmail(storedMembers(), 'ghost-tz@test.local');
+  assert.ok(ghost, 'doc-only member lands');
+  assert.equal(ghost.tz, 'Europe/Paris', 'doc-only pass-through cannot smuggle a raw string');
+});

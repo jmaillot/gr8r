@@ -1,58 +1,83 @@
-# Requirements: Projects Studio — v1.9
+# Requirements: Projects Studio — v1.10
 
-**Defined:** 2026-11-05
+**Defined:** 2026-11-07
 **Core Value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Source:** Kanzo threads (Backlog 999.1 + Phase 39 RFC 8058 decision), domain research (`.planning/research/SUMMARY.md`).
+**Source:** Kanzo tasks (#5, #14, #16 backfill), in-flight agent worktrees (feat/sql, feat/mcp, fix/commands), backlog 999.2.
 
-## v1.9 Requirements
+## v1.10 Requirements
 
-### SUBJ — Digest context (Backlog 999.1, deferred from Phase 37 UAT Test 2)
+### TZ — Per-member timezones (retroactive bookkeeping — shipped in v1.9 Phase 44)
 
-- [x] **SUBJ-01**: A digest user receives one digest email per workspace, with the Workspace
-  name in the subject (2 emails if in two workspaces); the existing per-(workspace, user)
-  ledger claim key stays byte-identical — no double sends on deploy day
-- [x] **SUBJ-02**: Each task line in the digest reads "Project Name — Task Name"; degrades to
-  task-name-only when the project is unknown or invisible to the recipient (names resolved
-  through the single `hiddenFor`/`memberCanReadProject` funnel — no CR-01-class leak)
-- [x] **SUBJ-03**: User-controlled names in email headers (Subject) are CRLF-stripped and
-  RFC 2047-encoded through one tested builder — no SMTP header injection, no mojibake in FR
+- [x] **TZ-01**: Each member's reminders and digest fire at their own 09:00 — multiple timezones
+  supported with Paris default, replacing the single workspace-TZ model built on five hard-coded
+  `TZ_BY_LABEL` labels. One canonicalizing `resolveTz` funnel (aliases accepted but stored
+  canonical, hostile/unknown → Europe/Paris), static committed 418-zone list, searchable settings
+  combobox, dedup keys byte-identical under tz change. *Shipped and verified 2026-11-07
+  (Phase 44, 4/4 plans, UAT 3/3) — registered here retroactively for traceability (Kanzo task
+  projectsstudio#14, done).*
 
-### UNSUB — RFC 8058 one-click unsubscribe (Phase 39 audit decision)
+### LOGO — Workspace logo (retroactive bookkeeping — shipped in v1.9 Phase 43)
 
-- [ ] **UNSUB-01**: Digest emails carry `List-Unsubscribe` + `List-Unsubscribe-Post:
-  List-Unsubscribe=One-Click` headers built on a stateless HMAC token over (wsId, userId)
-  under the MASTER_KEY keyring (domain-separated, timing-safe compare); headers omitted when
-  MASTER_KEY is absent; the DKIM caveat (RFC 8058 §4 — relay-signed) documented in DEPLOY.md
-- [ ] **UNSUB-02**: `POST /unsubscribe/:token` — anonymous, throttled, sameOrigin-exempt
-  (the unguessable token is the CSRF defence), convergent/replay-safe with identical generic
-  responses (no existence oracle), GET on the token URL a stateless no-op — flips
-  `email_digest=false` for that (workspace, user) prefs row only; individual reminder
-  emails then resume per Phase 38 suppression semantics
-- [ ] **UNSUB-03**: The plain footer unsubscribe link stays alongside one-click; the settings
-  digest pref stays the re-subscribe path
+- [x] **LOGO-01**: A workspace can carry its own logo — uploaded by an admin (magic-byte
+  validated, size-capped, role-gated), stored server-side under `DATA_DIR/logos`, served via
+  session-free `GET /w/:slug/logo`, rendered wherever the workspace identity appears with a
+  clean fallback to `favicon.svg` when none is set (sidebar, topbar, favicon, settings, digest
+  header). *Shipped and verified 2026-11-06 (Phase 43, 3/3 plans) — registered here
+  retroactively for traceability (Kanzo task projectsstudio#16, done).*
+
+### DBA — Database adapter (Kanzo #5; in-flight on feat/sql)
+
+- [ ] **DBA-01**: Optional Postgres backend selected purely via environment configuration
+  (`DB_*` env, Postgres-only scope confirmed by owner 2026-11-07); absence of the config keeps
+  the current SQLite behavior byte-for-byte
+- [ ] **DBA-02**: No functional divergence between backends: every existing suite passes
+  unmodified against both SQLite and Postgres (same ledger/claim semantics, same migration
+  posture, same `node:sqlite` fallback when `node:postgres`-equivalent is used)
+- [ ] **DBA-03**: Zero-runtime-dependency constraint (D-12) revisited explicitly: the Postgres
+  driver choice (bundled vs vendored vs `pg` dependency) must be decided and documented at plan
+  time — a runtime dependency is acceptable only with an owner-validated constraint amendment
+- [ ] **DBA-04**: Deploy documentation (DEPLOY.md) covers the env matrix: SQLite-only default
+  (no config), Postgres connection (host/creds/pool), and what happens on misconfiguration
+  (fail fast at boot, never silently fall back)
+
+### MCP — Model Context Protocol server (in-flight on feat/mcp)
+
+- [ ] **MCP-01**: Tasks Studio exposes an MCP server so external MCP clients (Claude Desktop,
+  coding agents) can operate on real workspace data — tool surface mapped from the existing
+  command layer: task CRUD, batch create, subtask edit, reorder, own-comment delete,
+  recurrence, teams/labels, project refs by key prefix, assignee by email/name
+- [ ] **MCP-02**: The MCP server is authenticated and workspace-scoped: no anonymous access,
+  every tool call resolves to a member identity with the same permission funnel as the UI/API
+  (admin paths stay server-validated, D-10 discipline)
+- [ ] **MCP-03**: Transport and lifecycle are documented and pinned by tests (stdio and/or
+  HTTP), including graceful behavior when MCP is not configured (feature absent, zero overhead)
+- [ ] **MCP-04**: Zero-runtime-dependency constraint applies as for DBA-03: SDK choice
+  (dependency vs hand-rolled protocol) decided and documented at plan time with owner validation
+
+### FIX — Command/UI hardening (in-flight on fix/commands)
+
+- [ ] **FIX-01**: Reserved for the fixes produced by the fix/commands worktree — scope to be
+  finalized from that branch's actual content before its phase plans; requirement kept coarse
+  (one bullet per landed fix, traceability per commit) rather than speculative
 
 ### Cross-cutting invariants (standing constraints, pinned per phase)
 
-- Phase 38 suppression invariant and second-boot/no-duplicate digest tests pass unmodified
+- Zero runtime dependencies **unless an owner-validated constraint amendment exists for that
+  phase** (DBA-03/MCP-04 carve-outs must be explicit, documented in DEPLOY.md, and pinned by a
+  D-12 test update)
+- Full suite green on the default (SQLite) path at every phase boundary
 - All new user-facing strings catalogued EN+FR (i18n-scan gate green, server keys included)
-- Zero runtime dependencies, zero migrations, full suite green
-
-## Future Requirements
-
-*(Per-task reminder offsets, digest content beyond due-today/overdue, and other Phase 39
-audit recommendations stay `proposed` pending D-05 owner rulings — they join a future
-milestone only when validated.)*
+- Phase 38 suppression + no-double-send invariants and exactly-once ledger semantics pass
+  unmodified
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| In-repo DKIM signing | Phase 39 deferral holds — instances DKIM-sign at their SMTP relay; documented caveat instead |
-| One-click unsubscribe on per-type notification emails (mention, assign…) | Digest first; per-type headers are a separate audit decision |
-| Confirmation/landing page after one-click POST | RFC 8058 forbids redirects on the POST path; bare 2xx |
-| Global kill-switch unsubscribe tokens | Per-(workspace, user) granularity only |
-| Other Phase 39 trim recommendations (per-task offsets, digest content growth) | `proposed` pending D-05 owner validation |
-| Combined single-email digest with workspace sections | Owner-validated shape is per-workspace emails ("2 notifications if in two workspaces") |
+| Real browser push + toasts (backlog 999.2) | Not selected for v1.10 — stays backlog pending owner prioritization |
+| MySQL/MSSQL adapters | Owner confirmed Postgres-only scope (2026-11-07) |
+| Other MCP transports beyond what feat/mcp ships | Scope follows the in-flight branch; extras are follow-ups |
+| Per-task reminder offsets, digest content growth | Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings |
 
 ## Traceability
 
@@ -60,18 +85,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUBJ-01 | Phase 40 | Complete |
-| SUBJ-02 | Phase 40 | Complete |
-| SUBJ-03 | Phase 40 | Complete |
-| UNSUB-01 | Phase 41 | Pending |
-| UNSUB-02 | Phase 42 | Pending |
-| UNSUB-03 | Phase 41 | Pending |
+| TZ-01 | Phase 44 (v1.9, retroactive) | Complete |
+| LOGO-01 | Phase 43 (v1.9, retroactive) | Complete |
+| DBA-01..04 | Phase 45 | Pending |
+| MCP-01..04 | Phase 46 | Pending |
+| FIX-01 | Phase 47 | Pending |
 
 **Coverage:**
-- v1.9 requirements: 6 total
-- Mapped to phases: 6 ✓
+- v1.10 requirements: 11 total (2 retroactive-complete, 9 pending)
+- Mapped to phases: 11 ✓
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-11-05*
-*Last updated: 2026-11-05 after initial definition*
+*Requirements defined: 2026-11-07*
+*Note: TZ-01/LOGO-01 shipped in v1.9 (Phases 44/43) — registered here per the verifiers'
+milestone-boundary instruction; new work is DBA/MCP/FIX only.*

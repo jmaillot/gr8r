@@ -1,23 +1,49 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-06 after Phase 43 (v1.9)*
+*Last updated: 2026-11-07 at v1.10 milestone start*
 
-## Current Milestone: v1.9 Digest Context & One-Click Unsubscribe
+## Current Milestone: v1.10 Extensions & Adapters
 
-**Goal:** digest emails become self-identifying and honestly unsubscribable — one email
-per workspace with its name in the subject, "Project — Task" task lines, and RFC 8058
-one-click List-Unsubscribe; closes Backlog 999.1 and the Phase 39 unsubscribe decision.
+**Goal:** extend Projects Studio outward and upward — an optional Postgres backend chosen
+purely by environment (SQLite default unchanged), an authenticated MCP server exposing real
+workspace operations to external agents (built from the in-flight feat/mcp branch), and an
+intake phase for the fix/commands hardening work. TZ-01 and LOGO-01 are registered
+retroactively for traceability (shipped in v1.9 Phases 44/43).
 
 **Target features:**
-- SUBJ — Digest subject carries the Workspace name (one email per workspace, per the
-  owner's "2 notifications if in two workspaces" ruling); each task line reads
-  "Project Name — Task Name" with hiddenFor-funnel-safe degradation (Backlog 999.1)
-- SUBJ — Subject-header hardening: CRLF-strip + RFC 2047 encode of user-controlled names
-  through one tested builder (no SMTP header injection, no FR mojibake)
-- UNSUB — RFC 8058 one-click: List-Unsubscribe/-Post headers on a stateless HMAC token
-  under MASTER_KEY (no migration), anonymous convergent `POST /unsubscribe/:token`
-  flipping `email_digest=false` per (workspace, user); footer link retained; DKIM caveat
-  documented (signing stays at the instance's relay — Phase 39 deferral holds)
+- DBA — Database adapter: `DB_*` env selects Postgres (owner-confirmed Postgres-only scope,
+  Kanzo #5); absent config = byte-for-byte SQLite default; both backends pass the same suite;
+  D-12 zero-dependency amendment decided explicitly at plan time; DEPLOY.md env matrix
+  (Kanzo task projectsstudio#5)
+- MCP — Model Context Protocol server: tool surface from the in-flight feat/mcp branch
+  (task CRUD, batch create, subtask edit, reorder, own-comment delete, recurrence,
+  teams/labels, project refs by key prefix, assignee by email/name); authenticated,
+  workspace-scoped, same permission funnel as the UI/API; transport documented and pinned;
+  MCP unconfigured = feature absent with zero overhead
+- FIX — Command/UI hardening intake from the fix/commands worktree (scope finalized when
+  that branch carries content; one traceability bullet + regression test per fix)
+- TZ-01 / LOGO-01 — retroactive registration (already shipped and verified in v1.9)
+
+**In-flight coordination:** three agent worktrees (feat/sql → Phase 45, feat/mcp → Phase 46,
+fix/commands → Phase 47) hold work that predates this milestone's roadmap; their branches are
+the source material and must be reconciled (phase-seed commits, plan numbering) before their
+phases are planned. Backlog 999.2 (browser push + toasts) stays out of scope pending owner
+prioritization.
+
+<details>
+<summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
+<details>
+<summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
+
+**Shipped:** digest self-identification + revocability (SUBJ-01..03, UNSUB-01..03) via
+subject builder hardening, "Project — Task" lines, HMAC tokens and the anonymous one-click
+route; plus v1.10 polish pulled forward — workspace logo (43) and per-member timezones
+(44) with the canonicalizing resolveTz funnel and gap-closure 44-04. 5 phases, 13 plans,
+6/6 REQs, 1042-test suite (1038 pass, 1 pre-existing environmental). Full record:
+`milestones/v1.9-ROADMAP.md`, `milestones/v1.9-REQUIREMENTS.md`,
+`v1.9-MILESTONE-AUDIT.md`.
+
+</details>
 
 <details>
 <summary>Milestone v1.8 Notification Sanity (shipped 2026-11-05)</summary>

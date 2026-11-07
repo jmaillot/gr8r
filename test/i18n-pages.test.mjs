@@ -354,7 +354,6 @@ const TABLES = [
     ['settings.nav.email', undefined, 'Email'],
     ['settings.nav.push', undefined, 'Push'],
     ['settings.nav.mentions', undefined, 'Mentions'],
-    ['settings.nav.assignments', undefined, 'Task assignments'],
     ['settings.group.personal', undefined, 'Personal'],
     ['settings.group.security', undefined, 'Security'],
     // workspace
@@ -450,12 +449,6 @@ const TABLES = [
     ['settings.notif.atAll', undefined, '@mentions in comments and descriptions'],
     ['settings.notif.atTeam', undefined, '@team mentions'],
     ['settings.notif.atTeamDesc', undefined, 'When your team is mentioned, e.g. @Product.'],
-    ['settings.notif.atWorkspace', undefined, '@workspace mentions'],
-    ['settings.notif.atWorkspaceDesc', undefined, 'Announcements to everyone.'],
-    ['settings.notif.assignLead', undefined, 'Updates about tasks assigned to you.'],
-    ['settings.notif.assignedMe', undefined, "When I'm assigned a task"],
-    ['settings.notif.statusChange', undefined, 'When my task changes status'],
-    ['settings.notif.overdue', undefined, 'When my task is overdue'],
     // profile
     ['settings.profile.lead', undefined, 'How you appear to others in the workspace.'],
     ['settings.profile.avatarColor', undefined, 'Avatar color'],
@@ -625,7 +618,6 @@ test('the settings stored preference values are byte-identical', () => {
     'notif-email',
     'notif-push',
     'notif-mentions',
-    'notif-assign',
     'profile',
     'preferences',
     'shortcuts',

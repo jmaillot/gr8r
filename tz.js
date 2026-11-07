@@ -18,17 +18,19 @@ export const TZ_BY_LABEL = {
 
 /* D-06/D-07: one funnel for every tz resolution. Trimmed string input only
    (non-strings → empty); legacy labels map to their IANA ids; otherwise any
-   valid IANA zone (aliases accepted) passes Intl validation; hostile,
-   unknown, empty, or unresolvable input deterministically falls back to
-   Europe/Paris and never throws — the Intl construction inside try/catch is
-   the only validator (T-44-01). */
+   valid IANA zone passes Intl validation and is canonicalized via
+   resolvedOptions().timeZone (A2, consciously updated in G-44-3: aliases and
+   case variants are ACCEPTED but STORED CANONICAL — 'US/Pacific' →
+   'America/Los_Angeles'). Per-zone resolution, NOT supportedValuesOf
+   enumeration — D-03 stands. Hostile, unknown, empty, or unresolvable input
+   deterministically falls back to Europe/Paris and never throws — the Intl
+   construction inside try/catch is the only validator (T-44-01). */
 export function resolveTz(value) {
   const v = typeof value === 'string' ? value.trim() : '';
   if (TZ_BY_LABEL[v]) return TZ_BY_LABEL[v];
   if (v) {
     try {
-      new Intl.DateTimeFormat('en-CA', { timeZone: v });
-      return v;
+      return new Intl.DateTimeFormat('en-CA', { timeZone: v }).resolvedOptions().timeZone || 'Europe/Paris';
     } catch {
       /* RangeError — unknown zone: fall through to the D-07 fallback */
     }

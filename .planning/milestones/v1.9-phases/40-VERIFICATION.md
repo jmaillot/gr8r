@@ -15,7 +15,7 @@ covered_files:
   - test/i18n-core-features.test.mjs
   - src/locales/en.json
   - src/locales/fr.json
-covered_digest: "v2:sha256:814bbbd665af9fefbeef7bfe99ccf8e2ef75bbd1eb960aef9fe3cd8679583af0"
+covered_digest: "v2:sha256:6c9f6276506bd84732515bdf6c94200ef559b5305f4188a8b2f32eaee3c762bd"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

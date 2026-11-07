@@ -73,6 +73,9 @@
   .set-nav .gh {
     display: none;
   }
+  .set-nav .gsep {
+    display: none;
+  }
   .set-nav .sitem {
     width: auto;
     flex-shrink: 0;

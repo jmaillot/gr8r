@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
-milestone: v1.9
-milestone_name: Digest Context & One-Click Unsubscribe
-current_phase: 44
-current_phase_name: Per-Member Timezones
+milestone: v1.10
+milestone_name: Extensions & Adapters
+current_phase: 45
 status: executing
-stopped_at: Completed 44-02-PLAN.md
-last_updated: "2026-11-06T17:07:22.719Z"
-last_activity: 2026-11-06
-last_activity_desc: Phase 41 complete, transitioned to Phase 44
-state_head: 94be8ab3092ff58b20747b4a6f2966784701bd7c
+stopped_at: Milestone v1.10 started — phases 45-47 defined (in-flight agent worktrees feat/sql, feat/mcp, fix/commands)
+last_updated: "2026-11-07T09:28:16.255Z"
+last_activity: 2026-11-07
+last_activity_desc: Milestone v1.10 defined — Phase 45 (DBA) up next (2026-11-07)
+state_head: d11c23c3962fa84454bb82fcda26f4489de3156f
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 12
-  completed_plans: 11
+  completed_phases: 4
+  total_plans: 13
+  completed_plans: 13
+  percent: 80
 ---
 
 # STATE.md
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 44 — Per-Member Timezones
+**Current focus:** Phase 45 — Database adapter (in-flight on feat/sql; reconcile before planning)
 
 ## Current Position
 
-Phase: 44 (Per-Member Timezones) — COMPLETE (3/3 plans)
-Plan: 3 of 3
+Phase: 44
+Plan: Not started
 Total Plans in Phase: 3
-Status: 44-01, 44-02, 44-03 complete — phase ready for verify
-Last activity: 2026-11-06 — 44-03 executed (searchable IANA tz combobox, member-profile save path)
+Status: All phases complete
+Last activity: 2026-11-07 — v1.10 milestone defined (45-47)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -146,11 +146,15 @@ None yet.
 | deferred_items | 28-02 TEAM-05 pin born green | acknowledged (intentional no-RED per TDD rules) | 2026-11-02 | v1.6 |
 | deferred_items | DatabaseSync DEP0210 alias | noted (not a v1.7 concern) | 2026-11-02 | — |
 | deferred_items | 34/deferred-items.md: D-12 COPY-pin allowlist resolved | acknowledged | 2026-11-05 | v1.8 |
+| debug_sessions | G-44-3 | diagnosed→resolved (44-04 gap closure executed; session closed at v1.9 close) | 2026-11-07 | v1.9 |
+| deferred_items | 41/deferred-items.md: concurrent-session WIP contamination (feat/landing-signup-redesign) | deferred (out of scope, owning session's WIP) | 2026-11-07 | v1.9 |
+| deferred_items | 43/deferred-items.md: totp-rewrap D-74 EACCES pre-existing test failure | deferred (environmental, fixture DATA_DIR strategy to rework) | 2026-11-07 | v1.9 |
+| deferred_items | 43/deferred-items.md: ~12 pre-existing lint errors in untouched files | deferred (documented, 0 introduced by v1.9) | 2026-11-07 | v1.9 |
 
 ## Session Continuity
 
-Last session: 2026-11-06
-Stopped at: Completed 44-03-PLAN.md — Phase 44 complete (3/3 plans)
+Last session: 2026-11-07
+Stopped at: v1.10 milestone defined — run /gsd-discuss-phase 45 (reconcile feat/sql seed first)
 Resume file: None
 
 ## Performance Metrics

@@ -1,9 +1,9 @@
 ---
 phase: 44-per-member-timezones-v1-10
 verified: 2026-11-06T17:57:00Z
-status: human_needed
-score: 14/15 must-haves verified
-behavior_unverified: 1
+status: passed
+score: 15/15 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
 covered_files:
   - .planning/phases/44-per-member-timezones-v1-10/44-01-PLAN.md
@@ -12,6 +12,8 @@ covered_files:
   - .planning/phases/44-per-member-timezones-v1-10/44-01-SUMMARY.md
   - .planning/phases/44-per-member-timezones-v1-10/44-02-SUMMARY.md
   - .planning/phases/44-per-member-timezones-v1-10/44-03-SUMMARY.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-04-PLAN.md
+  - .planning/phases/44-per-member-timezones-v1-10/44-04-SUMMARY.md
   - tz.js
   - server.js
   - src/lib/timezones.js
@@ -25,7 +27,7 @@ covered_files:
   - test/tz-dedup.test.mjs
   - test/settings-tz.test.mjs
   - test/settings-tz-combobox.test.mjs
-covered_digest: "v2:sha256:3a2c3398dda2765253fe17bebf75884c5b548ab25fcf40f72fe050bacd003824"
+covered_digest: "v2:sha256:514ac89b778b6929928a8c4dd97f477f415064d0b7303905a000cddac46036d9"
 behavior_unverified_items:
   - truth: "Settings > Date & time shows a searchable combobox over the full bundled IANA zone list (44-03 truth 1)"
     test: "Open Settings > Date & time in a browser as a member; type in the combobox; arrow/enter select a zone; reload and confirm the selection persisted"
@@ -43,8 +45,8 @@ human_verification:
 # Phase 44: Per-Member Timezones Verification Report
 
 **Phase Goal:** Each member's reminders and digest fire at their own 09:00 — multiple timezones supported, Paris as the default — replacing the single workspace-timezone model built on five hard-coded `TZ_BY_LABEL` labels.
-**Verified:** 2026-11-06
-**Status:** human_needed (1 present-but-behavior-unverified truth → browser UAT; 0 gaps)
+**Verified:** 2026-11-07 (reconciled after 44-04 gap closure)
+**Status:** passed (2026-11-07) — browser UAT passed (44-UAT Tests 1 & 3); WR-01/WR-02 fixed by the 44-04 gap-closure plan (6d218e2, c01ac1b, 57292aa; UAT Test 2 reconciled pass); gap G-44-3 resolved; all 3 UAT tests pass; 15/15 truths verified.
 
 ## Requirement Traceability: TZ-01
 
@@ -62,17 +64,17 @@ human_verification:
 | 4 | Changing a member's tz never re-fires a claimed reminder for the same localDate; a different localDate fires exactly one new claim | ✓ VERIFIED | test/tz-dedup.test.mjs D-11a/D-11b + reminder-variant tests pass; claim keys byte-identical to pre-phase shapes (`${ws.id}:${t.id}:${t.assignee}:${offset}:${due}`, `${ws.id}:${r.user_id}:digest:${localDate}`) |
 | 5 | Two members with different tzs fire their own windows in one pass | ✓ VERIFIED | D-09 ordering test (Paris + LA assignees, no leakage, idempotent) passes |
 | 6 | A member-role client saves THEIR OWN tz via doc PUT; it persists in members[me].tz | ✓ VERIFIED | server.js:1716–1720 self-tz carve-out applied after role gates for both paths; test/settings-tz.test.mjs member-save test passes |
-| 7 | Member A can never write member B's tz (member-role payloads) | ✓ VERIFIED | non-admin path replaces members with storedMembers (`next.data.members = storedMembers`); self-only test passes. **Caveat (WR-01):** the ADMIN path still takes other members' tz verbatim from the incoming array — pre-existing admin member-management behavior, downstream-safe (all reads funnel through resolveTz), classified Warning not Blocker (see Review Findings) |
+| 7 | Member A can never write member B's tz (member-role payloads) | ✓ VERIFIED | non-admin path replaces members with storedMembers (`next.data.members = storedMembers`); self-only test passes. **WR-01 CLOSED 2026-11-07:** admin doc-PUT path now funnels every incoming member tz through resolveTz (c01ac1b) — undefined→keep, ''→clears, hostile → Paris; hostile-PUT tests pin it |
 | 8 | Submitted tz validated server-side through resolveTz; hostile coerces to Paris; empty stores '' | ✓ VERIFIED | carve-out ternary + resolveTz; hostile/empty/legacy-label submit tests all pass |
 | 9 | Admin merge pinning + non-admin replacement otherwise unchanged | ✓ VERIFIED | admin pinned-field test passes; carve-out applied only to the requester's own member |
-| 10 | Settings > Date & time shows a searchable combobox over the full bundled IANA zone list | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | Wiring pinned structurally (data-in/data-a hooks, keyboard.js routing, A.tzSel alias) by passing tests; `tzCombobox()` renders from 418-zone static list with Paris present; live browser rendering/interaction not exercised by any test → Human Verification #1 |
+| 10 | Settings > Date & time shows a searchable combobox over the full bundled IANA zone list | ✓ VERIFIED | Wiring pinned structurally; **browser UAT passed 2026-11-07** (44-UAT Test 1): filter, keyboard select, toast, persistence after reload, dropdown closes after selection (1bf1410) |
 | 11 | Option offsets computed live at render via Intl shortOffset — never cached/static | ✓ VERIFIED | `tzOffsetLabel()` constructs Intl.DateTimeFormat per call; test pins "no module-level cached offset map" |
 | 12 | Zone list is a committed static array; no runtime `Intl.supportedValuesOf` under src/ | ✓ VERIFIED | src/lib/timezones.js (418 zones, generated header); grep shows supportedValuesOf only in scripts/gen-timezones.mjs; test pins it |
-| 13 | Preselect chain: stored+resolvable → browser zone → Europe/Paris; nothing auto-saves; legacy labels display resolved zone | ✓ VERIFIED | `tzPreselect()` pure function tested (stored → resolveTz → list match → browser → Paris); `tzCombobox()` asserted save()-free; browser display aspect folded into Human Verification #1 |
+| 13 | Preselect chain: stored+resolvable → browser zone → Europe/Paris; nothing auto-saves; legacy labels display resolved zone | ✓ VERIFIED | `tzPreselect()` pure function tested; **WR-02 CLOSED 2026-11-07:** resolveTz canonicalizes (aliases/case stored canonical — 6d218e2), UTC added to the list, preselect-not-Paris pins pass (57292aa); browser UAT confirmed preselect display |
 | 14 | Choosing a zone writes the CURRENT member's tz in S.data.members and saves through the real doc PUT (never S.prefs) | ✓ VERIFIED | IN.tzSel handler: `m.tz = el.dataset.v; save();` — test asserts handler writes S.data.members, calls save(), never touches S.prefs; lands in 44-02 carve-out |
 | 15 | New strings catalogued EN+FR; i18n:scan green; all interpolated labels esc()-escaped | ✓ VERIFIED | `npm run i18n:scan` → 0 literals/pending/unlisted/stale/unresolved; EN+FR parity + esc() pins in combobox test pass |
 
-**Score:** 14/15 truths verified (1 present, behavior-unverified)
+**Score:** 15/15 truths verified (frontmatter updated to match — 2026-11-07 reconciliation: truth 10 browser-verified in UAT; truths 7/13 hardened by 44-04 gap closure)
 
 ## Roadmap Success Criteria (Phase 44)
 
@@ -119,21 +121,17 @@ human_verification:
 
 ## Human Verification Required
 
-### 1. Combobox browser UAT
+### 1. Combobox browser UAT — ✅ PASSED 2026-11-07
 
-**Test:** Open Settings > Date & time as a member; filter ("tokyo"), select via mouse and via arrow/enter; reload; verify persistence and preselect (Paris when unset; Singapore for stored legacy label '(GMT+08:00) Singapore').
-**Expected:** Live offsets render, selection persists in the member profile, preselect chain displays as specified.
-**Why human:** Rendered DOM behavior is pinned only structurally; no browser test exists.
+UAT Test 1 pass (44-UAT.md): combobox renders, filters ("tokyo" → Asia/Tokyo), keyboard select saves via toast, persists after reload; dropdown closes after validated selection (1bf1410, UAT Test 3 pass).
 
-### 2. Accept/defer WR-01 and WR-02 hardening
+### 2. Accept/defer WR-01 and WR-02 hardening — ✅ RESOLVED 2026-11-07 (fixed, not deferred)
 
-**Test:** Decide whether the two review warnings are accepted risks or a follow-up fix phase.
-**Expected:** Explicit acceptance or scheduled follow-up.
-**Why human:** Risk-acceptance judgment.
+User chose "Planifier un fix"; gap G-44-3 closed by the 44-04 gap-closure plan: WR-01 funneled (c01ac1b), WR-02 canonicalized (6d218e2), pins added (57292aa). A2 consciously changed: aliases accepted but stored canonical. UAT Test 2 recorded pass after reconciliation.
 
 ## Gaps Summary
 
-None. All three plans' must_haves are verified in code (not just claimed): the resolveTz funnel is the single choke point, the scheduler resolves per-assignee/per-recipient inside the loops, dedup claim keys are byte-identical to pre-phase shapes, the save-path carve-out is self-only and funnel-validated, and the combobox writes the member profile through the real doc PUT. The full test suite is green modulo the documented pre-existing totp-rewrap failure. One truth (live combobox behavior) is present-but-behavior-unverified and routed to human verification; status is human_needed per the decision tree, not gaps_found.
+**G-44-3 resolved 2026-11-07** by the 44-04 gap-closure plan (gap_closure: true, gap_ids: [G-44-3]): WR-01 + WR-02 fixed, UAT reconciled to pass, all 3 UAT tests pass, full suite 1038 pass / 1 pre-existing fail (totp-rewrap D-74), i18n:scan clean, no new lint errors. No open gaps.
 
 ---
 
