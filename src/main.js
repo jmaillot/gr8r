@@ -61,6 +61,7 @@ import { A, hydrateNotifPrefs, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
 import { $ } from './core/utils.js';
+import { notifyNewEvents } from './core/push.js';
 import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale } from './core/i18n.js';
 
 /* The locale change re-renders the app: one listener, one re-render, never
@@ -84,9 +85,20 @@ const pollNotifs = async () => {
     _pollUnread = unread;
     render();
   }
+  /* D-48-2: the push/toast diff runs AFTER a successful hydration, behind the
+     poll guards above — one dispatch site, never a parallel fetch channel. */
+  notifyNewEvents();
 };
 setInterval(pollNotifs, 30000);
 addEventListener('projects:notifs', () => pollNotifs());
+
+/* D-48-1: the minimal notification-click service worker. Absolute '/sw.js'
+   scope only — a relative URL from a routed deep link would register a
+   bogus sub-scope (Pitfall 1). Registration failure is silently ignored:
+   the poll + email channels remain the delivery guarantee. */
+if ('serviceWorker' in navigator && api.enabled) {
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
 
 addEventListener('projects:save-error', e => {
   const { status, error } = e.detail || {};
