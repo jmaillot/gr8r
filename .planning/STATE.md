@@ -31,10 +31,12 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 ## Current Position
 
 Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — EXECUTING
-Plan: 1 of 7
+Plan: 3 of 7
 Total Plans in Phase: 7
 Status: Executing Phase 45
-Last activity: 2026-11-07 — Completed 45-01 (adapter facade, pg dependency, Wave 0 pins); next plan 45-02
+Last activity: 2026-11-07 — Completed 45-03 (async facade conversion: boot via connectDb, sqliteOnly
+gates, transaction() retired, migrations/seed/auth/2FA/OIDC/recovery/claims/scheduler on await facade;
+remaining snapshot 60 db.prepare + 25 db.exec → next plan 45-04)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -72,6 +74,11 @@ runtime dependencies, zero migrations, full suite green.
   catalogue.test.mjs (duplicate pin found at execute time)
 - [Phase 45] 45-01: adapter normalizes rows to plain objects and run() returns exactly
   { changes } on both backends — callsite conventions for Plans 03–04
+- [Phase 45] 45-03: module-level `let db` shim { prepare, exec, close, get, all, run, tx }
+  keeps un-converted regions sync while converted regions call the async facade — the
+  one-way conversion D-05 was user-approved at the plan's Task 0 checkpoint
+- [Phase 45] 45-03: adapter gained close() export and ensureColumn (pragma vs
+  information_schema branch); transaction() helper retired in favor of db.tx()
 
 ## Milestone History
 
@@ -164,8 +171,8 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-07T10:29:05.577Z
-Stopped at: Phase 45 context gathered
-Resume file: .planning/phases/45-database-adapter-optional-postgres-backend-via-env-sqlite-de/45-CONTEXT.md
+Stopped at: Completed 45-03-PLAN.md (async facade conversion; next 45-04)
+Resume file: None
 
 ## Performance Metrics
 
@@ -181,6 +188,7 @@ Resume file: .planning/phases/45-database-adapter-optional-postgres-backend-via-
 | Phase 43 P03 | resumed-session | 2 tasks | 2 files |
 | Phase 44 P01 | 35m | 4 tasks | 5 files |
 | Phase 44 P02 | 25m | 2 tasks | 2 files |
+| Phase 45 P03 | ~2h | 4 tasks | 3 files |
 | Phase 44 P03 | 19m | 3 tasks | 14 files |
 
 *(v1.8 metrics archived with the milestone record.)*
