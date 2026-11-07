@@ -10,10 +10,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
 import url from 'node:url';
 
 import * as adapter from '../db-adapter.mjs';
+import { startServer } from './helpers/server.mjs';
 
 const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
@@ -270,6 +272,88 @@ test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB
   await adapter.runSchema(adapter.SQLITE_SCHEMA);
   assert.equal((await adapter.get('select count(*) as n from users')).n, 0);
   fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+});
+
+/* ---- pg-safe migration whitelist lint (T-45-08) ------------------------
+   Every SQL statement server.js hands the facade OUTSIDE a sqliteOnly gate
+   must match a pg-safe shape (select / update / delete / insert — the
+   insert-or-ignore/replace rewrites are adapter-owned — / create … if not
+   exists / alter table add column) and must carry NO SQLite-only token
+   (pragma, vacuum, rowid, begin, sqlite_master). Statements inside
+   sqliteOnly gates are exempt by construction (D-09: never ported). ------- */
+
+function sqliteOnlyRanges(source) {
+  const ranges = [];
+  const re = /sqliteOnly\s*\(/g;
+  let m;
+  while ((m = re.exec(source))) {
+    let depth = 0;
+    let i = source.indexOf('{', m.index);
+    for (; i < source.length; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    ranges.push([m.index, i]);
+  }
+  return ranges;
+}
+
+const PG_UNSAFE = /\bpragma\b|\bvacuum\b|\browid\b|\bbegin\b|\bsqlite_master\b/i;
+const PG_SAFE_SHAPE = /^\s*(select|update|delete|insert|create|alter|with)\b/i;
+
+function serverSource() {
+  return fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+}
+
+test('facade statements outside sqliteOnly gates are pg-safe shapes with zero SQLite-only tokens (T-45-08)', () => {
+  const source = serverSource();
+  const gated = sqliteOnlyRanges(source);
+  const inGated = idx => gated.some(([a, b]) => idx >= a && idx <= b);
+  const offenders = [];
+  const re = /\bdb\.(?:run|all|get)\(\s*(`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\])*')/g;
+  let m;
+  while ((m = re.exec(source))) {
+    if (inGated(m.index)) continue;
+    const sql = m[1].slice(1, -1);
+    if (!PG_SAFE_SHAPE.test(sql) || PG_UNSAFE.test(sql)) offenders.push(sql.replace(/\s+/g, ' ').trim().slice(0, 90));
+  }
+  assert.equal(offenders.length, 0, `pg-unsafe statements outside sqliteOnly gates:\n${offenders.join('\n')}`);
+});
+
+test('the invites scalar→teams backfill is sqliteOnly-gated (D-09: SQLite-only legacy migration)', () => {
+  const source = serverSource();
+  const idx = source.indexOf("'select rowid, team from invites where team is not null and teams is null'");
+  assert.ok(idx !== -1, 'the sanctioned invites-backfill statement must exist');
+  assert.ok(
+    sqliteOnlyRanges(source).some(([a, b]) => idx >= a && idx <= b),
+    'the rowid backfill must run inside a sqliteOnly gate (D-09)',
+  );
+});
+
+/* ---- seed portability (D-07) ------------------------------------------ */
+
+test('seed is portable: two fresh boots produce identical row counts across all 14 tables (D-07)', async () => {
+  const bootCounts = async () => {
+    const server = await startServer({ env: { SEED_DATA: 'true' } });
+    try {
+      const db = new DatabaseSync(server.dbPath);
+      try {
+        const counts = {};
+        for (const table of TABLES) counts[table] = db.prepare(`select count(*) as n from ${table}`).get().n;
+        return counts;
+      } finally {
+        db.close();
+      }
+    } finally {
+      await server.stop();
+    }
+  };
+  const [first, second] = await Promise.all([bootCounts(), bootCounts()]);
+  assert.notEqual(first.users, 0, 'the seed must create the bootstrap admin');
+  assert.deepEqual(second, first, 'the seed must be deterministic — identical row counts on every fresh boot');
 });
 
 

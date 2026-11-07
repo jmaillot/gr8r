@@ -2155,10 +2155,17 @@ async function migrateTeamMembership() {
                            where tm.workspace_id = m.workspace_id and tm.user_id = m.user_id)`,
     );
     /* D-07: scalar invites.team becomes a one-element JSON array in invites.teams.
-       The scalar column is never read again — this is its last reader (D-04). */
-    for (const row of await db.all('select rowid, team from invites where team is not null and teams is null')) {
-      await db.run('update invites set teams = ? where rowid = ?', [JSON.stringify([row.team]), row.rowid]);
-    }
+       The scalar column is never read again — this is its last reader (D-04).
+       D-09/D-10: the loop below is SQLite-only (pg has no row identifier) and
+       gated through sqliteOnly — on pg this backfill no-ops, because a pg
+       database is always created fresh with the teams column (no legacy
+       scalar rows can exist there). The portable team_members insert above
+       still runs on both backends. */
+    await sqliteOnly(async () => {
+      for (const row of await db.all('select rowid, team from invites where team is not null and teams is null')) {
+        await db.run('update invites set teams = ? where rowid = ?', [JSON.stringify([row.team]), row.rowid]);
+      }
+    }, 'invites scalar→teams rowid backfill');
   });
 }
 
