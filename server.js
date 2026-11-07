@@ -748,10 +748,13 @@ function normalizeDoc(doc, meta) {
   return out;
 }
 
+/* [2026-11-07 D-49-4] Visibility is the boolean `private` flag only. The
+   legacy `access: 'private'` spelling is retired — the Phase 49 sweep
+   strips it from every stored document, so honoring it here would let a
+   crafted pre-sweep document resurrect the old model. */
 function projectIsPrivate(p) {
   if (!p || typeof p !== 'object') return false;
-  if (typeof p.private === 'boolean') return p.private;
-  return p.access === 'private';
+  return p.private === true;
 }
 
 /* A private project is visible to its access list only. */
@@ -760,37 +763,15 @@ function canSeeProject(p, memberId) {
   return !!memberId && Array.isArray(p.members) && p.members.includes(memberId);
 }
 
-/* ---------------------- team-derived visibility (Phase 32) ---------------------- */
-
 /*
- * Phase 32 (D-04/D-05): the team term of the visibility predicate — true iff
- * the project carries a non-empty teams[] that intersects the member's team
- * set. The set is the LIVE team_members authority read at predicate time
- * (never cached, D-05) and never the doc roster (stripped display
- * projection). Purely widening: this term can only OPEN projects, never add
- * to a hidden set.
+ * [2026-11-07 D-49-2/D-49-3] The ONE member-level readable predicate after
+ * the visibility collapse. The Phase 32 team term (teamIntersects) and the
+ * Phase 29 scope term are both retired: private ∨ access list is the whole
+ * model. Kept `async` because every consumer already awaits it.
  */
-function teamIntersects(p, teamSet) {
-  return Array.isArray(p?.teams) && p.teams.length > 0 && Array.isArray(teamSet) && teamSet.length > 0 && p.teams.some(t => teamSet.includes(t));
-}
-
-/*
- * Phase 32 (VIS-01/VIS-04/D-04): the ONE member-level readable predicate —
- * existing rules (public ∨ access list) OR a live team intersection. Shared
- * by hiddenFor's null-scope branch and both send-time surfaces (reminder
- * pass, email mirror): never a second visibility pipeline. Ids are passed
- * explicitly in member_id space, but team_members is keyed by user_id, so
- * the membership row is resolved first (Pitfall 2). `liveTeams` lets
- * high-frequency callers (hiddenFor) resolve the set once per document.
- */
-async function memberCanReadProject(p, wsId, memberId, liveTeams = null) {
+async function memberCanReadProject(p, wsId, memberId) {
   if (canSeeProject(p, memberId)) return true;
-  if (!p || !wsId || !memberId) return false;
-  if (!liveTeams) {
-    const row = await db.get('select user_id from memberships where workspace_id = ? and member_id = ?', [wsId, memberId]);
-    liveTeams = row?.user_id ? await teamsOfUser(wsId, row.user_id) : [];
-  }
-  return teamIntersects(p, liveTeams);
+  return false;
 }
 
 function canManageProject(p, memberId, role) {
@@ -798,107 +779,24 @@ function canManageProject(p, memberId, role) {
   return !!memberId && p?.lead === memberId;
 }
 
-/* --------------------------- scope predicate (Phase 29) --------------------------- */
-
 /*
- * The membership's project scope (D-01/D-02/D-04): null = workspace-wide, else
- * { teams:[], projects:[] } — reach is the union of the scoped teams' projects
- * plus the explicitly scoped projects. Parsing is defensive: unreadable JSON,
- * non-object payloads and non-string ids degrade to workspace-wide (null)
- * rather than locking a member out. D-04: scope only subtracts reach, and an
- * admin/owner membership is ALWAYS workspace-wide — stored JSON can never
- * blind a higher role, whatever the column says.
+ * [2026-11-07 D-49-1] The ONE hidden-project funnel after the visibility
+ * collapse: private-hidden only. The Phase 29 scoped branch (projectScope /
+ * inScopeProject / scopeGrants) is retired — membership scope columns were
+ * materialized into project access lists by the boot sweep and cleared, so
+ * the scoped term has no input left to read. Admin/owner keep the plain
+ * hiddenProjectIds path (exemption on top, D-06).
  */
-const CORRUPT_SCOPE_WARNED = new Set(); // one warn per distinct corrupt payload (WR-04)
-function projectScope(membership) {
-  if (!membership || ROLE_RANK[membership.role] >= ROLE_RANK.admin) return null;
-  let raw = membership.scope;
-  if (typeof raw === 'string') {
-    try {
-      raw = JSON.parse(raw);
-    } catch {
-      /* WR-04: the fail-open default stands (availability, D-01/D-04), but a
-         corrupt scope column is indistinguishable from a cleared one — warn
-         once per distinct payload so an admin can tell tamper/corruption
-         from "scope cleared" without spamming the log. */
-      if (!CORRUPT_SCOPE_WARNED.has(membership.scope)) {
-        CORRUPT_SCOPE_WARNED.add(membership.scope);
-        logWarn(`membership ${membership.member_id || '?'} in workspace context has an unparseable scope column — treating as workspace-wide (D-04 fail-open)`);
-      }
-      return null;
-    }
-  }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const teams = Array.isArray(raw.teams) ? [...new Set(raw.teams.filter(t => typeof t === 'string' && t))] : [];
-  const projects = Array.isArray(raw.projects) ? [...new Set(raw.projects.filter(p => typeof p === 'string' && p))] : [];
-  // D-01: an empty scope ({teams:[],projects:[]}) IS workspace-wide.
-  if (!teams.length && !projects.length) return null;
-  return { teams, projects };
-}
-
-/* Does a project fall inside the scope's reach? Null scope = workspace-wide. */
-function inScopeProject(p, scope) {
-  if (!scope) return true;
-  if (p?.id && scope.projects.includes(p.id)) return true;
-  return Array.isArray(p?.teams) && p.teams.some(t => scope.teams.includes(t));
-}
-
-/*
- * The ONE hidden-project funnel (Phase 29): private-hidden ∪ out-of-scope for
- * scoped members, plain private-hidden otherwise. Both document read
- * (redactDoc) and write (mergeClientDoc) consume this — never a second
- * pipeline. Out-of-scope composition must NOT be `canSeeProject && inScope`:
- * the D-03 scope-grants-access inversion (a scoped guest opening a private
- * project) later rides this same function, and a conjunctive form would
- * structurally forbid it.
- */
-/*
- * D-03 grant inversion: inside a scoped member's reach, the scope OPENS the
- * project. The grant terms short-circuit the private check — the canonical
- * cell is a scoped guest opening a private project they were never added to.
- * Order matters only for readability; `inScopeProject(p, scope)` already
- * implies the first two grant terms, so the effective semantics for a scoped
- * member are "visible ⟺ in scope" — private+out-of-scope stays hidden even
- * when the member is on the access list.
- */
-function scopeGrants(p, scope, memberId) {
-  if (scope.projects.includes(p.id)) return true;
-  /* A1 union read: team reach also opens private team-linked projects. */
-  if (Array.isArray(p?.teams) && p.teams.some(t => scope.teams.includes(t))) return true;
-  if (!projectIsPrivate(p)) return true;
-  return !!memberId && Array.isArray(p.members) && p.members.includes(memberId);
-}
-
 async function hiddenFor(doc, membership) {
-  const scope = projectScope(membership);
-  if (!scope) {
-    /* Phase 32 (VIS-01/D-03/D-06): the team term lands in the null-scope
-       branch ONLY — the Phase-29 scoped branch below stays byte-identical.
-       Admin/owner (projectScope null via role) keep the plain
-       hiddenProjectIds path (exemption on top, D-06); a non-admin null-scope
-       membership hides exactly the projects neither its access list nor a
-       live team intersection reaches. Purely additive: the team term only
-       ever SUBTRACTS from the hidden set. */
-    if (membership?.workspace_id && ROLE_RANK[membership.role] < ROLE_RANK.admin) {
-      const memberId = membership.member_id || null;
-      const mRow = memberId
-        ? await db.get('select user_id from memberships where workspace_id = ? and member_id = ?', [membership.workspace_id, memberId])
-        : null;
-      const liveTeams = mRow?.user_id ? await teamsOfUser(membership.workspace_id, mRow.user_id) : [];
-      const seen = new Set();
-      for (const p of doc?.data?.projects || []) {
-        if (p?.id && !(await memberCanReadProject(p, membership.workspace_id, memberId, liveTeams))) seen.add(p.id);
-      }
-      return seen;
+  if (membership?.workspace_id && ROLE_RANK[membership.role] < ROLE_RANK.admin) {
+    const memberId = membership.member_id || null;
+    const seen = new Set();
+    for (const p of doc?.data?.projects || []) {
+      if (p?.id && !canSeeProject(p, memberId)) seen.add(p.id);
     }
-    return hiddenProjectIds(doc, membership?.member_id || null);
+    return seen;
   }
-  const seen = new Set();
-  for (const p of doc?.data?.projects || []) {
-    if (!p?.id) continue;
-    if (!inScopeProject(p, scope) || !scopeGrants(p, scope, membership.member_id)) seen.add(p.id);
-  }
-  return seen;
+  return hiddenProjectIds(doc, membership?.member_id || null);
 }
 
 /*
@@ -913,14 +811,10 @@ function normalizeProjects(doc) {
   const ownerId = profiles.find(m => String(m?.role || '').toLowerCase() === 'owner')?.id || null;
   for (const p of data.projects) {
     if (!p || typeof p !== 'object') continue;
-    /* P3 multi-team: the legacy scalar `team` migrates to a `teams[]` array.
-       Idempotent — a doc saved after migration has no `team` left. */
-    if (p.team !== undefined) {
-      p.teams = Array.isArray(p.team) ? p.team.filter(x => typeof x === 'string' && x) : typeof p.team === 'string' && p.team ? [p.team] : [];
-      delete p.team;
-    }
-    if (!Array.isArray(p.teams)) p.teams = [];
-    p.teams = p.teams.filter(x => typeof x === 'string' && x);
+    /* [2026-11-07 D-49-6] The legacy scalar `team` → `teams[]` migration and
+       the teams[] normalization are retired: the Phase 49 sweep deletes
+       p.teams from every stored document, and re-adding the field here would
+       break the sweep's second-boot byte-identity marker. */
     if (!Array.isArray(p.members)) p.members = [];
     if (p.lead && !p.members.includes(p.lead)) p.members.push(p.lead);
     if (projectIsPrivate(p)) {
@@ -1167,25 +1061,21 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
     mergedViews[key] = value;
   }
   next.views = mergedViews;
-  /* SCOPE-04 (server-side authority, T-29-10): a document write can never
-     assign a member to a task whose project sits outside the assignee's
-     scope — this closes the assignableInProject picker seam (Phase 28).
-     The client emit filter is advisory; this guard is the authority.
-     Admin/owner assignees (workspace-wide, D-04), members without a
-     membership row, and tasks without a project always pass. */
+  /* [2026-11-07 D-49-3, authority-not-advisory] A document write can never
+     assign a member to a task whose project the assignee cannot read — this
+     closes the assignableInProject picker seam. The client emit filter is
+     advisory; this guard is the authority. Visibility is the collapsed
+     memberCanReadProject funnel (private ∨ access list); admin/owner
+     assignees pass via canSeeProject's public/private handling, members
+     without a membership row, and tasks without a project always pass. */
   if (wsId) {
     const projectById = new Map(
       [...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]),
     );
-    const scopeByMember = new Map(
-      (await db.all('select member_id, role, scope from memberships where workspace_id = ?', [wsId])).map(r => [r.member_id, r]),
-    );
     for (const t of nextData.tasks || []) {
       if (!t?.id || !t.assignee || !t.project) continue;
-      const assignmentScope = projectScope(scopeByMember.get(t.assignee));
-      if (!assignmentScope) continue;
-      if (!inScopeProject(projectById.get(t.project), assignmentScope)) {
-        const err = new Error("Assignee is out of scope for the task project");
+      if (!(await memberCanReadProject(projectById.get(t.project), wsId, t.assignee))) {
+        const err = new Error("Assignee cannot read the task project");
         err.code = 'assigneeOutOfScope';
         throw err;
       }
@@ -1293,13 +1183,11 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
   const emailByUserId = new Map((await db.all('select id, email from users')).map(u => [u.id, u.email]));
   const emailByMemberEmail = new Map();
   for (const m of profiles.values()) if (m?.email && m.id) emailByMemberEmail.set(m.id, m.email);
-  /* SCOPE-04 (defense in depth, T-29-09): the email mirror re-checks each
-     recipient's scope against the notification's project before queuing.
-     Workspace-level rows (no project) keep flowing — send-time enforcement
-     only, never a notifications-list filter (D-07). */
-  const scopeByMember = new Map(
-    (await db.all('select member_id, role, scope from memberships where workspace_id = ?', [wsRow.id])).map(r => [r.member_id, r]),
-  );
+  /* [2026-11-07 D-49-1, defense in depth] the email mirror re-checks each
+     recipient's visibility against the notification's project before
+     queuing, through the SAME collapsed memberCanReadProject funnel every
+     other surface uses. Workspace-level rows (no project) keep flowing —
+     send-time enforcement only, never a notifications-list filter (D-07). */
   const projectById = new Map(
     (Array.isArray(nextDoc?.data?.projects) ? nextDoc.data.projects : [])
       .filter(p => p?.id)
@@ -1351,24 +1239,12 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
        all degrade to the base locale (Pitfalls 4/5, SC-5). */
     const recipientLocale = authority.get(n.to)?.locale === 'fr' ? 'fr' : 'en';
     const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
-    /* SCOPE-04: skip recipients whose scope excludes the notification's
-       project (null scope = workspace-wide, D-04). The project rides the row
-       when present, else the referenced task; underivable → keep flowing. */
-    const recipientScope = projectScope(scopeByMember.get(n.to));
-    if (recipientScope) {
-      /* Tasks carry `project` (the client's createTask writes it); the retired
-         `projectId` key is never read — it made this lookup always undefined. */
-      const projectId = n.project || task?.project || null;
-      if (!inScopeProject(projectId ? projectById.get(projectId) : null, recipientScope)) continue;
-    } else {
-      /* Phase 32 (VIS-04/D-04): a null-scope recipient's reach now includes
-         team intersection — skip when the project is hidden from them under
-         the SAME shared predicate hiddenFor's null-scope branch uses (never a
-         second pipeline). Scoped recipients keep the exact inScopeProject
-         semantics above: the D-03 grant short-circuit is not re-tightened. */
-      const projectId = n.project || task?.project || null;
-      if (projectId && !(await memberCanReadProject(projectById.get(projectId), wsRow.id, n.to))) continue;
-    }
+    /* [2026-11-07 D-49-1] skip recipients who cannot read the notification's
+       project under the collapsed funnel (private ∨ access list). Tasks carry
+       `project` (the client's createTask writes it); the retired `projectId`
+       key is never read. Underivable → keep flowing. */
+    const projectId = n.project || task?.project || null;
+    if (projectId && !(await memberCanReadProject(projectById.get(projectId), wsRow.id, n.to))) continue;
     const taskTitle = task?.title || 'a task';
     /* I18N-01 (Phase 36): the reminder by-label renders per recipient locale
        through tFor — still inlined in the by-resolution so the notif-email-link
@@ -1465,11 +1341,9 @@ async function runReminderPass({ now: at = new Date() } = {}) {
         if (hour < 8) continue;
         const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
-        /* SCOPE-04: a scoped member is never reminded about content outside
-           their scope — the same projectScope/inScopeProject predicate the
-           read funnel uses. No membership row (doc-only assignee) reads
-           workspace-wide, matching projectScope's defensive default. */
-        const assigneeMembership = await db.get('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?', [
+        /* [2026-11-07 D-49-1] visibility gate is the collapsed funnel only —
+           the Phase 29 scope term is retired. */
+        const assigneeMembership = await db.get('select user_id, role from memberships where workspace_id = ? and member_id = ?', [
           ws.id,
           t.assignee,
         ]);
@@ -1477,14 +1351,7 @@ async function runReminderPass({ now: at = new Date() } = {}) {
            the accessor — the membership row maps the member_id to the account
            (user_id); a doc-only assignee carries no row and reads defaults. */
         const prefs = await getUserNotifPrefs(assigneeMembership?.user_id || t.assignee, ws.id);
-        if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
-        /* Phase 32 (VIS-04/D-04): a null-scope assignee's reach now includes
-           team intersection — skip when the project is team-hidden from them
-           under the SAME shared predicate the read funnel uses (never a
-           second pipeline). Scoped assignees keep the exact inScopeProject
-           semantics above; ids are passed explicitly (ws.id + t.assignee, the
-           member_id) because this row carries only {role, scope} — Pitfall 2. */
-        if (!projectScope(assigneeMembership) && !(await memberCanReadProject(project, ws.id, t.assignee))) continue;
+        if (!(await memberCanReadProject(project, ws.id, t.assignee))) continue;
         const due = t.due;
         /* Window-open predicates on plain YYYY-MM-DD string compare — the
            open window plus an absent dedup key is the late-delivery
@@ -1593,17 +1460,12 @@ async function runReminderPass({ now: at = new Date() } = {}) {
           if (t.assignee !== r.member_id) continue;
           const project = projects.get(t?.project);
           if (!remindable(t, project)) continue;
-          /* SCOPE-04 per (recipient, task) — same three checks as the
-             reminder loop. With the assignee gate above, assignee ===
+          /* [2026-11-07 D-49-1] per (recipient, task) visibility — the
+             collapsed funnel only. With the assignee gate above, assignee ===
              recipient, so these are evaluated against the RECIPIENT's own
-             membership: one visibility pipeline, per D-06 (no digest-specific
+             visibility: one pipeline, per D-06 (no digest-specific
              second filter). */
-          const assigneeMembership = await db.get('select user_id, role, scope from memberships where workspace_id = ? and member_id = ?', [
-            ws.id,
-            t.assignee,
-          ]);
-          if (!inScopeProject(project, projectScope(assigneeMembership))) continue;
-          if (!projectScope(assigneeMembership) && !(await memberCanReadProject(project, ws.id, t.assignee))) continue;
+          if (!(await memberCanReadProject(project, ws.id, t.assignee))) continue;
           /* Same string compares as the reminder window predicates, split
              disjointly: due-today is the morning_of window's due-date edge,
              overdue is past_due's strictly-after edge. Future-dated tasks
@@ -4786,7 +4648,7 @@ async function handleApi(req, res, url) {
     } catch (err) {
       // SCOPE-04: the assignee write-guard rejects with an explicit 400 —
       // db.tx has already rolled the transaction back.
-      if (err?.code === 'assigneeOutOfScope') return fail(res, 400, 'assigneeOutOfScope', 'Assignee is out of scope for this project');
+      if (err?.code === 'assigneeOutOfScope') return fail(res, 400, 'assigneeOutOfScope', 'Assignee cannot read the task project');
       throw err;
     }
     if (refusal.code === 'workspaceNotFound') return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
