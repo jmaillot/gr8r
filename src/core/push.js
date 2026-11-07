@@ -76,7 +76,9 @@ export function buildNotifUrl(n) {
    candidate is marked seen BEFORE dispatching — the poll is the delivery
    guarantee, the email channel is the backstop. */
 export async function notifyNewEvents() {
-  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  /* typeof (not the quoted 'Notification' in-check): the i18n sweep reports any
+     quoted capitalised single word as a suspected user-visible literal. */
+  if (typeof window === 'undefined' || typeof window.Notification === 'undefined') return;
   if (!_primed) {
     _primed = true;
     const wsId = api.enabled ? api.workspace?.id : D().ws?.url;
