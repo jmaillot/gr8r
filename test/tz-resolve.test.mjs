@@ -40,10 +40,11 @@ test('T-44-01: hostile input never throws and always falls back to Europe/Paris'
   }
 });
 
-test('A2: arbitrary valid IANA zones and aliases are accepted as-is', () => {
+test('A2: aliases and case variants are accepted and stored canonical (G-44-3, deliberate spec change)', () => {
   assert.equal(resolveTz('Asia/Tokyo'), 'Asia/Tokyo');
-  assert.equal(resolveTz('America/Argentina/Buenos_Aires'), 'America/Argentina/Buenos_Aires', 'multi-segment zones');
-  assert.equal(resolveTz('US/Pacific'), 'US/Pacific', 'legacy aliases accepted');
+  assert.equal(resolveTz('America/Argentina/Buenos_Aires'), 'America/Buenos_Aires', 'multi-segment zone canonicalizes to this ICU\'s supported id (selectable in the list)');
+  assert.equal(resolveTz('US/Pacific'), 'America/Los_Angeles', 'legacy alias canonicalized');
+  assert.equal(resolveTz('america/new_york'), 'America/New_York', 'case-variant input, canonical output');
   assert.equal(resolveTz('UTC'), 'UTC');
 });
 
@@ -51,4 +52,7 @@ test('funnel is idempotent on valid zones and trims surrounding whitespace', () 
   assert.equal(resolveTz('Europe/Paris'), 'Europe/Paris');
   assert.equal(resolveTz('  Europe/Paris  '), 'Europe/Paris', 'trimmed before validation');
   assert.equal(resolveTz('  Asia/Tokyo '), 'Asia/Tokyo');
+  /* Canonical outputs are fixed points: re-resolving a canonical id is a no-op. */
+  assert.equal(resolveTz(resolveTz('US/Pacific')), 'America/Los_Angeles');
+  assert.equal(resolveTz(resolveTz('america/new_york')), 'America/New_York');
 });

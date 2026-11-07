@@ -421,4 +421,5 @@ export const TIMEZONES = [
   { id: "Pacific/Truk", name: "Truk" },
   { id: "Pacific/Wake", name: "Wake" },
   { id: "Pacific/Wallis", name: "Wallis" },
+  { id: "UTC", name: "UTC" },
 ];
