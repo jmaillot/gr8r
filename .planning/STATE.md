@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
 current_phase: 49
 current_phase_name: Visibility model collapse & grant materialization
-status: executing
-stopped_at: Completed 49-03-PLAN.md
-last_updated: "2026-11-07T22:00:59.778Z"
+status: verifying
+stopped_at: Completed 49-04-PLAN.md
+last_updated: "2026-11-07T22:10:05.448Z"
 last_activity: 2026-11-07
 last_activity_desc: Phase 49 execution started
-state_head: 5f7c8c88cbf0c1db04b6951c04433a00a99a68e7
+state_head: d235001e5f5540b055cb98575d2415da306e257e
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 Phase: 49 (Visibility model collapse & grant materialization) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-07 — Phase 49 execution started
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
@@ -104,6 +104,7 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 - [Phase 49]: Dissolve clears p.lead when the dissolved member was the lead (normalizeProjects :925 would resurrect the entry on read)
 - [Phase 49]: sweepNeeded fires only on non-empty p.teams arrays; empty teams:[] is post-normalization status quo and inert (D-49-6 second-boot no-op)
 - [Phase 49]: D-49-1..5: visibility collapsed to boolean-private + access list; scope/team terms retired; mcp mirror keeps ROLE_RANK admin bypass (documented residue)
+- [Phase 49]: 49-04: mcp mirror private field collapsed to boolean-only read (legacy p.access fallback deleted); historical retired-term mentions kept as D-49-tagged comments; docs/ProjectPermissions.md + WorkspacePermissions.md rewritten to the collapsed model
 
 ### Roadmap Evolution
 
@@ -149,8 +150,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T22:00:53.860Z
-Stopped at: Completed 49-03-PLAN.md
+Last session: 2026-11-07T22:10:05.413Z
+Stopped at: Completed 49-04-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -162,6 +163,7 @@ Resume file: None
 | Phase 49 P01 | ~2h | 3 tasks | 4 files |
 | Phase 49 P02 | 50m | 3 tasks | 4 files |
 | Phase 49 P03 | 75m | 3 tasks | 7 files |
+| Phase 49 P04 | 40 min | 2 tasks | 7 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 

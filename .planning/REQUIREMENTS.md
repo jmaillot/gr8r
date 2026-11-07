@@ -12,7 +12,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 
 - [ ] **VIS-01**: User (owner/admin) can switch any project between private and public
   via a per-project toggle (replaces the current dropdown)
-- [ ] **VIS-02**: A member sees exactly the non-private projects of the workspace plus
+- [x] **VIS-02**: A member sees exactly the non-private projects of the workspace plus
   the private projects they are explicitly invited to (individual or via team invite) —
   team-derived visibility (`project.teams ∩ member.teams ≠ ∅`) is replaced
 - [x] **VIS-03**: A private project is never sent to a non-invitee: redaction on read,
@@ -84,7 +84,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | VIS-01 | Phase 51 | Pending |
-| VIS-02 | Phase 49 | Pending |
+| VIS-02 | Phase 49 | Complete |
 | VIS-03 | Phase 49 | Complete |
 | VIS-04 | Phase 50 | Pending |
 | INV-01 | Phase 50 | Pending |

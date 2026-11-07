@@ -57,7 +57,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
   4. The reminder pass, email mirror, digest and the MCP permission mirror agree with the UI predicate through the same `memberCanReadProject` helper (parity test green; `mcp.js` edited in the same phase — no over-permissive window)
   5. Second boot is a byte-identical no-op on both SQLite and pg; Phase 37/38 scheduler suppression + no-double-send invariants pass unmodified
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -70,7 +70,7 @@ Plans:
 - [x] 49-03-PLAN.md — Predicate collapse + lockstep: memberCanReadProject/hiddenFor reduce to private+p.members, scope machinery and writers deleted, MCP mirror rewritten, suites moved to the collapsed model (MIG-02, MIG-03, VIS-02, VIS-03)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 49-04-PLAN.md — Phase close: repo-wide residual grep gates, docs/ProjectPermissions.md rewrite, five success criteria individually evidenced (all REQs)
+- [x] 49-04-PLAN.md — Phase close: repo-wide residual grep gates, docs/ProjectPermissions.md rewrite, five success criteria individually evidenced (all REQs)
 
 **Research note**: discuss-phase flagged — call-site census, fixture design, and D-xx rulings (scope-column disposition, `p.private` vs enum) land before planning. Deepest test investment of the milestone.
 
@@ -120,7 +120,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Visibility model collapse & grant materialization | 3/4 | In Progress|  |
+| 49. Visibility model collapse & grant materialization | 4/4 | In Progress|  |
 | 50. Invite hierarchy & per-project toggles (server) | 0/? | Not started | - |
 | 51. Client surfaces, Permissions-page removal & project creation | 0/? | Not started | - |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |
