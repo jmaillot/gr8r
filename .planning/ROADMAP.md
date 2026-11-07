@@ -81,6 +81,23 @@ Plans:
 | 45. Database adapter | 0/0 | Not started (in-flight feat/sql) | - |
 | 46. MCP server | merged (e541e45) | UAT passed 2026-11-07 (5/5) — 3 fixes landed during UAT | 2026-11-07 |
 | 47. Command/UI hardening | merged (62b1826) | UAT passed 2026-11-07 (G shortcuts) | 2026-11-07 |
+| 48. Browser push & toasts | 0/0 | Not started (from backlog 999.2) | - |
+
+### Phase 48: Real browser push & toasts (from backlog 999.2)
+
+**Goal**: Real browser notifications replace the inert push_* toggles, and toast feedback lands for mention/assign events
+**Depends on**: Nothing (parallel-safe; pulled from backlog 999.2 at owner request)
+**Requirements**: PUSH-01..03 (to be defined in REQUIREMENTS.md)
+**Success Criteria** (what must be TRUE):
+  1. Real web push (service worker + browser Notification) wired to the existing push_mention/push_assign/push_comment pref keys — "coming soon" badge removed
+  2. Toast notifications for mention/assign events
+  3. Zero new runtime dependencies (D-12) — service worker + Notification API are browser built-ins
+  4. Full suite green; i18n EN+FR for all new strings
+
+**Plans**: 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-discuss-phase 48 then /gsd-plan-phase 48)
 
 ## Backlog
 
@@ -89,11 +106,4 @@ project name on task lines) is consumed by v1.9 SUBJ-01/02, mapped to Phase 40. 
 Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings and join only
 when validated.)*
 
-### Phase 999.2: Follow-up — Phase 41 email-notification audit decision: real browser push + toasts (BACKLOG)
-
-**Goal:** Implement real browser push notifications and toast notifications, replacing the inert `push_mention`/`push_assign`/`push_comment` toggles (currently visible with a "coming soon" badge) and adding toast feedback for mentions/assignments.
-**Source phase:** 41 (email-notification audit, Kanzo task projectsstudio#6)
-**Deferred at:** 2026-11-05 during /gsd-verify-work 41 session (audit decisions)
-**Follow-ups:**
-- [ ] Test 1: Real web push (service worker + browser Notification) wired to the existing push_* pref keys, with a "coming soon" badge added to the Push section in Settings in the meantime (deferred 2026-11-05)
-- [ ] Test 3: Toast notifications for mention/assign events (deferred 2026-11-05)
+*(Phase 999.2 consumed into Phase 48, 2026-11-07 — owner decision.)*

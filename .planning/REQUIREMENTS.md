@@ -54,6 +54,19 @@
 - [ ] **MCP-04**: Zero-runtime-dependency constraint applies as for DBA-03: SDK choice
   (dependency vs hand-rolled protocol) decided and documented at plan time with owner validation
 
+### PUSH — Real browser push & toasts (from backlog 999.2; Phase 48)
+
+- [ ] **PUSH-01**: The three inert push toggles (`push_mention`/`push_assign`/`push_comment`)
+  gain real behavior: a minimal service worker + Notification API triggered from the existing
+  poll cycle (D-48-1 — NOT the Web Push protocol; email covers closed-tab delivery). "Coming
+  soon" badge removed
+- [ ] **PUSH-02**: Foreground tab → in-app toast; background tab → browser notification via the
+  service worker; never both for one event, never for already-seen events, gated by each
+  push_* pref key (D-48-2)
+- [ ] **PUSH-03**: Denied browser permission: toggle still persists (intent), a "browser
+  blocked" badge + explanatory toast inform the user, badge clears when permission returns
+  (D-48-4); settings keep the 3 granular toggles with zero schema migration (D-48-3)
+
 ### FIX — Command/UI hardening (in-flight on fix/commands)
 
 - [ ] **FIX-01**: Reserved for the fixes produced by the fix/commands worktree — scope to be
@@ -89,10 +102,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOGO-01 | Phase 43 (v1.9, retroactive) | Complete |
 | DBA-01..04 | Phase 45 | Pending |
 | MCP-01..04 | Phase 46 | Pending |
-| FIX-01 | Phase 47 | Pending |
+| FIX-01 | Phase 47 | Complete |
+| PUSH-01..03 | Phase 48 | Pending |
 
 **Coverage:**
-- v1.10 requirements: 11 total (2 retroactive-complete, 9 pending)
+- v1.10 requirements: 14 total (2 retroactive-complete, FIX-01 complete, 11 pending)
 - Mapped to phases: 11 ✓
 - Unmapped: 0
 
