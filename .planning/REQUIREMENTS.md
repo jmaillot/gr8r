@@ -83,12 +83,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | | |
+| VIS-01 | Phase 51 | Pending |
+| VIS-02 | Phase 49 | Pending |
+| VIS-03 | Phase 49 | Pending |
+| VIS-04 | Phase 50 | Pending |
+| INV-01 | Phase 50 | Pending |
+| INV-02 | Phase 50 | Pending |
+| INV-03 | Phase 50 | Pending |
+| INV-04 | Phase 50 | Pending |
+| MIG-01 | Phase 49 | Pending |
+| MIG-02 | Phase 49 | Pending |
+| MIG-03 | Phase 49 | Pending |
+| CRT-01 | Phase 51 | Pending |
+| CRT-02 | Phase 51 | Pending |
+| TRN-01 | Phase 52 | Pending |
+| UX-01 | Phase 51 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- v2.0 requirements: 14 total
+- Mapped to phases: 14 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-11-07*
