@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: v1.9
 current_phase: 45
 current_phase_name: Database adapter — optional Postgres backend via env, SQLite default
-status: completed
-stopped_at: Phase 45 context gathered
-last_updated: "2026-11-07T11:05:39.285Z"
+status: executing
+stopped_at: Completed 45-01-PLAN.md
+last_updated: "2026-11-07T11:36:31Z"
 last_activity: 2026-11-07
-last_activity_desc: v1.9 milestone archived (2026-11-07)
-state_head: 155b3248b3ab1028e4fffdc62ed86b2feb5bcd58
+last_activity_desc: Phase 45 plan 01 executed (database adapter facade)
+state_head: e7be348e12a44d0f0ec1566ba9d171cf22f0ebfd
 progress:
   total_phases: 1
   completed_phases: 4
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 - **Project:** Projects Studio — self-hosted PM workspace, zero runtime dependencies
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 44 — Per-Member Timezones
+**Current focus:** Phase 45 — Database adapter — optional Postgres backend via env, SQLite default
 
 ## Current Position
 
-Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — READY TO EXECUTE
-Plan: Not started
+Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — EXECUTING
+Plan: 1 of 7
 Total Plans in Phase: 7
-Status: All phases complete
-Last activity: 2026-11-07 — Phase 44 complete
+Status: Executing Phase 45
+Last activity: 2026-11-07 — Completed 45-01 (adapter facade, pg dependency, Wave 0 pins); next plan 45-02
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -66,6 +66,12 @@ runtime dependencies, zero migrations, full suite green.
   only the RFC 8058 digest decision graduated into v1.9 (owner-validated)
 - [Phase 38]: 38-02: suppression gate reads STORED email_digest via getStoredNotifPrefs (D-08) —
   Phase 42's unsubscribe upsert must write stored rows, not merged views
+- [Phase 45] 45-01: pg is the first runtime dependency — exactly { pg: ^8.23.1 }, plain
+  dependencies (never optionalDependencies), loaded via dynamic import only under
+  DB_URL=postgres:// (D-02); dependency pins amended in dependencies.test.mjs AND
+  catalogue.test.mjs (duplicate pin found at execute time)
+- [Phase 45] 45-01: adapter normalizes rows to plain objects and run() returns exactly
+  { changes } on both backends — callsite conventions for Plans 03–04
 
 ## Milestone History
 
