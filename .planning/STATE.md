@@ -2,20 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.10
 milestone_name: Extensions & Adapters
-current_phase: 48
-current_phase_name: real-browser-push-toasts-from-backlog-999-2
-status: All phases complete
+status: Awaiting next milestone
 stopped_at: Phases 45-48 complete — v1.10 milestone ready to close
-last_updated: "2026-11-07T18:10:00Z"
+last_updated: "2026-11-07T18:51:19.402Z"
 last_activity: 2026-11-07
-last_activity_desc: feat/sql (Phase 45) merged to main; UAT 2/2 recorded; DBA-01..04 and MCP-01..04 marked complete
-state_head: a1fb9de
+last_activity_desc: Milestone v1.10 completed and archived
+state_head: 9a81d87f4b473687e364a660dbd243e032a9134f
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 20
+  total_plans: 9
   completed_plans: 20
-  percent: 100
+current_phase: 48
+current_phase_name: real-browser-push-toasts-from-backlog-999-2
 ---
 
 # STATE.md
@@ -31,12 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 
 ## Current Position
 
-Phase: 48 — real browser push & toasts (complete; all v1.10 phases 44-48 done)
-Plan: All plans executed
-Total Plans in Phase: 2
-Status: All phases complete
-Last activity: 2026-11-07 — Phase 45 merged, DBA-01..04 verified complete
-full async conversion, pg schema/migrations/seed, copy script + runbook, pg matrix)
+Phase: Milestone v1.10 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-07 — Milestone v1.10 completed and archived
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -172,7 +169,6 @@ None yet.
 
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
-| 261106-b46 | Move the daily digest and due-date reminder scheduler window from 09:00 to 08:00 local workspace time (both scheduler predicates hour >= 9 -> hour >= 8, update D-27-1 comments, re-pin T09 test fixtures) | 2026-11-06 | aea0cb6 | Verified | [261106-b46-move-the-daily-digest-and-due-date-remin](./quick/261106-b46-move-the-daily-digest-and-due-date-remin/) |
 - [v1.9] MASTER_KEY rotation invalidates previously emailed unsubscribe links — document
   in DEPLOY.md; no other consumer depends on old links
 - [carried] v1.5 deferred items (2 unknown debug sessions, phase 26 WR-01/WR-02) — see
@@ -227,4 +223,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Approve the v1.9 roadmap, then `/gsd-plan-phase 40`
+- Start the next milestone with /gsd-new-milestone

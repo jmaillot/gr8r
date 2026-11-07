@@ -1,34 +1,34 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-07 after Phase 48 (v1.10 milestone complete)*
+*Last updated: 2026-11-07 after v1.10 milestone*
 
-## Current Milestone: v1.10 Extensions & Adapters
+## Current Milestone: v1.10 Extensions & Adapters — SHIPPED (2026-11-07)
+
+<details>
+<summary>Milestone v1.10 Extensions & Adapters (shipped 2026-11-07)</summary>
 
 **Goal:** extend Projects Studio outward and upward — an optional Postgres backend chosen
 purely by environment (SQLite default unchanged), an authenticated MCP server exposing real
-workspace operations to external agents (built from the in-flight feat/mcp branch), and an
-intake phase for the fix/commands hardening work. TZ-01 and LOGO-01 are registered
-retroactively for traceability (shipped in v1.9 Phases 44/43).
+workspace operations to external agents, real browser push, and command-palette hardening.
 
-**Target features:**
-- DBA — Database adapter: `DB_*` env selects Postgres (owner-confirmed Postgres-only scope,
-  Kanzo #5); absent config = byte-for-byte SQLite default; both backends pass the same suite;
-  D-12 zero-dependency amendment decided explicitly at plan time; DEPLOY.md env matrix
-  (Kanzo task projectsstudio#5)
-- MCP — Model Context Protocol server: tool surface from the in-flight feat/mcp branch
-  (task CRUD, batch create, subtask edit, reorder, own-comment delete, recurrence,
-  teams/labels, project refs by key prefix, assignee by email/name); authenticated,
-  workspace-scoped, same permission funnel as the UI/API; transport documented and pinned;
-  MCP unconfigured = feature absent with zero overhead
-- FIX — Command/UI hardening intake from the fix/commands worktree (scope finalized when
-  that branch carries content; one traceability bullet + regression test per fix)
-- TZ-01 / LOGO-01 — retroactive registration (already shipped and verified in v1.9)
+**Shipped:** the database adapter (DBA-01..04) — `DB_URL` postgres:// selects the `pg` driver
+through a minimal async facade (first runtime dependency, D-12 amended with owner approval),
+SQLite stays the zero-config default, one-shot copy script, pg schema/migrations/seed and a
+`POSTGRES_TEST_URL` test matrix; the MCP server (MCP-01..04) — 35 authenticated,
+workspace-scoped tools over hand-rolled JSON-RPC 2.0 at `/mcp`, personal `psk_live_` API keys
+(hash storage, revocation, expiry), same permission funnel as UI/API, documented in `MCP.md`
++ `DEPLOY.md` §15; real browser push & toasts (PUSH-01..03) — service worker + Notification
+API wired to the existing prefs, "coming soon" removed, zero deps; two-letter G shortcuts in
+the command palette (FIX-01) with behavioral regression tests. 4 phases (2 branch-delivered
+with retrospective artifacts), 14/14 requirements, 1133-test suite green. Milestone audit:
+**passed**. All four phase verifications passed (45: 8/8, 46: 4/4, 47: 2/2, 48: 6/6). Full
+record: `milestones/v1.10-ROADMAP.md`, `milestones/v1.10-REQUIREMENTS.md`,
+`milestones/v1.10-MILESTONE-AUDIT.md`, `milestones/v1.10-phases/`, `milestones/v1.10-quick/`.
 
-**In-flight coordination:** three agent worktrees (feat/sql → Phase 45, feat/mcp → Phase 46,
-fix/commands → Phase 47) hold work that predates this milestone's roadmap; their branches are
-the source material and must be reconciled (phase-seed commits, plan numbering) before their
-phases are planned. Backlog 999.2 (browser push + toasts) stays out of scope pending owner
-prioritization.
+</details>
+
+**Next milestone:** not yet defined — start with `/gsd-new-milestone` (questioning →
+research → requirements → roadmap).
 
 <details>
 <summary>Milestone v1.9 Digest Context & One-Click Unsubscribe (shipped 2026-11-07)</summary>
@@ -98,6 +98,11 @@ board / list / table / calendar / timeline / files views, members, teams, activi
   `SEED_DATA=false`.
 - **Multi-tenant since v1.1**: a workspace is a real tenant with its own URL, document and
   membership list. An account can belong to several workspaces with a role in each.
+- **Postgres-capable since v1.10**: `DB_URL` (postgres://) runs the server on `pg` through a
+  minimal async adapter; without it, embedded SQLite (`node:sqlite`) remains the default.
+- **Agent-facing since v1.10**: an authenticated MCP server at `/mcp` lets external MCP
+  clients (Claude Desktop, coding agents) operate on real workspace data with personal API
+  keys and the same permission funnel as the UI/API.
 - **Real auth since v1.3**: sessions, password change and TOTP 2FA are server-backed
   (`sessions`, `login_challenges`, `recovery_codes` tables) — no auth state in the document.
 - **2FA lifecycle complete since v1.4**: secrets encrypted at rest (`v1:` AES-256-GCM envelope,
@@ -515,24 +520,23 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   with VAPID, service-worker notification click/focus handling, settings-page permission
   UX with derived "Browser blocked" badge and one-time explanatory toast — Phase 48
   (verification 6/6 must-haves; UAT 2/2; security threats_open 0)
+- ✓ **DBA-01..04** — Database adapter: `DB_URL` selects Postgres via the `pg` driver through
+  a minimal async facade (`db.get/all/run/tx`), absent config stays byte-identical SQLite,
+  both backends pass the same suite, pg schema/migrations/seed + one-shot SQLite→pg copy
+  script + DEPLOY.md env matrix — Phase 45 (verification 8/8; UAT 2/2 owner-accepted)
+- ✓ **MCP-01..04** — MCP server: 35-tool authenticated workspace-scoped surface over
+  hand-rolled JSON-RPC 2.0 (D-12 respected — zero protocol dependencies), personal
+  `psk_live_` API keys with hash storage/revocation/expiry, same permission funnel as
+  UI/API, unconfigured = feature absent, `MCP.md` + `DEPLOY.md` §15 — Phase 46
+  (branch feat/mcp merged e541e45; verification 4/4; UAT 5/5)
+- ✓ **FIX-01** — Command/UI hardening: two-letter G shortcuts in the command palette
+  (shared `gPending` G-nav map, query-typing guard, initials-across-words filter
+  behaviorally pinned by test/palette-filter.test.mjs) — Phase 47 (branch fix/commands
+  merged 62b1826; verification 2/2; UAT recorded 5fe7f67)
 
 ### Active
 
-- ✓ **SUBJ-01..03** — Digest subject carries the Workspace name (one email per workspace);
-  task lines read "Project Name — Task Name" with hiddenFor-safe degradation; subject
-  headers CRLF-stripped + RFC 2047-encoded through one tested builder — Phase 40
-  (verification 9/9 must-haves; hostile-name suite 10/10; digest suite 16/16)
-- **UNSUB-01, UNSUB-03** — List-Unsubscribe/-Post headers on a stateless HMAC token under
-  MASTER_KEY (headers omitted when absent); footer unsubscribe link retained; DEPLOY.md
-  DKIM caveat — Phase 41 (verification 5/5 must-haves; token suite 10/10, digest suite 20/20)
-- **UNSUB-02** — Anonymous convergent `POST /unsubscribe/:token` (throttled, sameOrigin-
-  exempt, no existence oracle) flips `email_digest=false` per (workspace, user) — Phase 42
-  (verification passed; UAT complete)
-- **LOGO-01** — Per-workspace logo: upload/serve/delete trio (magic-byte validated, size-
-  capped, public serving with fixed mime + immutable cache + sandbox CSP), rendered in the
-  sidebar/topbar avatar, tab favicon, Settings header and digest email header with
-  per-surface fallbacks — Phase 43 (verification 8/8 must-haves; UAT 4/4 after gap closure:
-  remove-logo wiring fix + deployment forward-auth exclusion of the public logo route)
+*(none — define with `/gsd-new-milestone`)*
 
 ### Out of scope
 
@@ -558,16 +562,20 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ## Context
 
-- Shipped v1.7 (2026-11-04) with 4 phases, 12 plans, 13 tasks across the v1.6 → v1.7 range
-  (2026-11-02 → 2026-11-04, 116 commits, 96 files, +11 390/−162); full suite 896 pass /
-  0 fail / 3 skips, all four phase verifications passed.
-- ~19k lines of JavaScript across `server.js`, `oidc.js`, `test/`, `public/` and `src/`; still
-  zero runtime dependencies (one dev dependency: `@playwright/test`).
+- Shipped v1.10 (2026-11-07) with 4 phases (2 branch-delivered), 14/14 requirements; range
+  752bfb7^..HEAD ≈ 174 files, +13 898/−1 082; full suite 1133 tests (1119 pass, 14 skipped).
+- ~19k+ lines of JavaScript across `server.js`, `mcp.js`, `db-adapter.mjs`, `oidc.js`,
+  `test/`, `public/` and `src/`; runtime dependencies: `{ pg }` only (dynamic import under
+  `DB_URL=postgres://`; SQLite default unchanged).
 - Auth ground truth: `sessions` / `login_challenges` / `recovery_codes` / `totp_factors`
   tables, `v2:` keyring envelopes, `team_members` authority rows with scope columns,
-  `oidc_identities` + `oidc.js` (raw OIDC, `node:crypto` only), per-user `notif_prefs` rows.
-- Known deferred item: the `test/dependencies.test.mjs` Dockerfile COPY-pin allowlist (D-12)
-  needs updating for the new repo-root listing — documented in STATE.md Deferred Items.
+  `oidc_identities` + `oidc.js` (raw OIDC, `node:crypto` only), per-user `notif_prefs` rows,
+  `api_keys` for MCP/personal API keys.
+- Data ground truth: `db-adapter.mjs` async facade (SQLite `node:sqlite` default, `pg` via
+  `DB_URL`), pg schema variant with bigint epoch columns, `scripts/copy-sqlite-to-pg.mjs`.
+- Known deferred items: ensureColumn defs stay `integer` on pg (harmless today — documented
+  in the phase 45 deferred-items); pre-existing lint errors in untouched files; carried
+  v1.5 debug-session unknowns — see STATE.md Deferred Items.
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
 
 ## Evolution

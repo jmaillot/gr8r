@@ -1,5 +1,20 @@
 # Milestones
 
+## v1.10 Extensions & Adapters (Shipped: 2026-11-07)
+
+**Phases completed:** 4 phases, 9 plans, 7 tasks
+
+**Key accomplishments:**
+- Async dual-backend `db-adapter.mjs` — node:sqlite default with pg loaded via dynamic import only under `DB_URL=postgres://`, fail-closed boot probe that never leaks the DSN, and a test-pinned literal-aware SQL rewrite table neutralizing every SQLite-ism (D-02/D-04/D-05/D-06/D-09/D-10).
+- Single pg-enabled Docker image (runtime stage now COPYs node_modules + db-adapter.mjs) with the D-12 COPY pin amended to match exactly, and DB_URL documented in .env.example + forwarded via docker-compose with the SQLite-default posture explicit.
+- Boot path runs through the async `db-adapter` facade (`connectDb`/`initDb`), every SQLite-specific op is `sqliteOnly`-gated, and migrations, seed, auth, 2FA, OIDC, recovery, claims, scheduler and reminder/digest sweeps now run on awaited `db.get/all/run/tx` with `transaction()` retired.
+- Every remaining db.prepare/db.exec callsite (85 sites + 18 async-rippled helpers) now runs through the awaited `db.get/all/run/tx` facade, the transitional prepare/exec shim is deleted, and the phase's D-05/D-10 gates are pinned by a permanent static-audit test suite.
+- A 7-test POSTGRES_TEST_URL-gated matrix proves every critical path on live Postgres — boot+auth, second-boot row-identical no-op, D-04 fail-closed boot (closed-port child, DSN never printed), reminders_sent exactly-once, case-variant login, bigint epoch typing, prefs upsert, login_challenges round-trip — invisible (all skipped, exit 0) when the env is unset; the matrix immediately exposed and closed three real pg-only bugs (two SQL rewrites + int8 typing).
+- Minimal notification-click service worker plus a `src/core/push.js` module delivering exactly one toast (visible tab) or browser Notification (hidden tab) per new gated mention/assign/comment row, with a per-user+workspace seen-set and session prime.
+- Derived browser-blocked badge + requestPermission user-gesture pre-step in npToggle (one-time denied toast), poll permission memo that clears the badge without reload, catalogue at 1710
+
+---
+
 ## v1.9 Digest Context & One-Click Unsubscribe (Shipped: 2026-11-07)
 
 **Delivered:** digest emails are self-identifying and honestly unsubscribable — one email

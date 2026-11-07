@@ -12,130 +12,32 @@
 - ✅ **v1.7 Team Visibility & Hardening** — Phases 32-35 (shipped 2026-11-04)
 - ✅ **v1.8 Notification Sanity** — Phases 36-39 (shipped 2026-11-05)
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
-- 🚧 **v1.10 Extensions & Adapters** — Phases 45-47 (Phase 45 executed on feat/sql, merging; Phase 46 MCP merged; Phase 47 shipped via fix/commands)
+- ✅ **v1.10 Extensions & Adapters** — Phases 45-48 (shipped 2026-11-07)
+
+## Phases
 
 <details>
-<summary>✅ v1.9 Digest Context & One-Click Unsubscribe (Phases 40-44) — SHIPPED 2026-11-07</summary>
+<summary>✅ v1.0 MVP (Phases 1-9) — SHIPPED 2025-11-27</summary>
 
-- [x] Phase 40: Digest Subject & Task Lines (2/2 plans) — completed 2026-11-05
-- [x] Phase 41: Unsubscribe Tokens & List-Unsubscribe Headers (2/2 plans) — completed 2026-11-06
-- [x] Phase 42: One-Click Unsubscribe Endpoint (2/2 plans) — completed 2026-11-06
-- [x] Phase 43: Workspace Logo (3/3 plans) — completed 2026-11-06
-- [x] Phase 44: Per-Member Timezones (4/4 plans incl. gap closure 44-04) — completed 2026-11-07
-
-Details: [.planning/milestones/v1.9-ROADMAP.md](milestones/v1.9-ROADMAP.md)
+Details: [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md)
 
 </details>
 
-### Phase 45: Database adapter — optional Postgres backend via env, SQLite default *(in-flight: feat/sql)*
+<details>
+<summary>✅ v1.10 Extensions & Adapters (Phases 45-48) — SHIPPED 2026-11-07</summary>
 
-**Goal**: A deployer can point Projects Studio at Postgres purely through environment configuration; without that config the app keeps its current embedded-SQLite behavior unchanged
-**Depends on**: Phase 44 (v1.9)
-**Requirements**: DBA-01, DBA-02, DBA-03, DBA-04 (Kanzo #5 — Postgres-only scope confirmed by owner 2026-11-07)
-**Success Criteria** (what must be TRUE):
-  1. `DB_*` env selects Postgres; absent config = SQLite default, byte-for-byte behavior
-  2. Every existing suite passes unmodified against both backends (same ledger/claim semantics)
-  3. D-12 constraint amendment (if a driver dependency is needed) explicitly decided + documented + D-12 test updated
-  4. DEPLOY.md documents the env matrix and fail-fast on misconfiguration
+- [x] Phase 45: Database adapter — optional Postgres backend via env, SQLite default (7/7 plans) — completed 2026-11-07
+- [x] Phase 46: MCP server — workspace operations for external MCP clients (branch feat/mcp merged e541e45; retrospective artifacts) — completed 2026-11-07
+- [x] Phase 47: Command/UI hardening — fix/commands intake (branch fix/commands merged 62b1826; retrospective artifacts) — completed 2026-11-07
+- [x] Phase 48: Real browser push & toasts (2/2 plans) — completed 2026-11-07
 
-**Plans**: 7/7 plans complete *(agent worktree feat/sql holds the phase-seed commit 0b8e0a2 — reconcile before planning)*
+Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 
-Plans:
-- [ ] TBD (run /gsd-plan-phase 45 to break down)
-
-### Phase 46: MCP server — expose workspace operations to external MCP clients *(complete 2026-11-07: feat/mcp merged)*
-
-**Goal**: External MCP clients (Claude Desktop, coding agents) can safely operate on real workspace data through an authenticated, workspace-scoped MCP server built from the in-flight feat/mcp branch
-**Depends on**: Nothing structurally (parallel-safe with Phase 45)
-**Requirements**: MCP-01..04
-**Success Criteria** (what must be TRUE):
-  1. Tool surface covers the shipped commands (task CRUD, batch, subtasks, reorder, own-comment delete, recurrence, teams/labels, project refs by key prefix, assignee by email/name)
-  2. Every tool call resolves to a member identity through the same permission funnel as UI/API — no anonymous access
-  3. Transport + lifecycle documented and test-pinned; MCP unconfigured = feature absent, zero overhead
-  4. D-12 constraint amendment (SDK vs hand-rolled) decided at plan time with owner validation
-
-**Plans**: 0 plans *(DELIVERED VIA BRANCH 2026-11-07: feat/mcp merged to main at e541e45 — /mcp streamable-HTTP endpoint, hand-rolled JSON-RPC 2.0 on Node built-ins (D-12 respected, zero deps), personal API keys psk_live_ with hash storage/revocation/expiry, 35-tool surface, 25-test suite mcp.test.mjs 25/25, usage manual MCP.md, DEPLOY.md §15, parked ideas MCP-IDEAS.md. Owner accepted the branch as the phase deliverable — phase closed without new plans; UAT 5/5 in commit 5fe7f67.)*
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 46 to break down)
-
-### Phase 47: Command/UI hardening — fix/commands intake *(in-flight: fix/commands)*
-
-**Goal**: Land and pin the fixes produced by the fix/commands worktree (scope finalized from that branch's content; branch currently at main HEAD with no commits — reserve only)
-**Depends on**: Nothing (intake phase)
-**Requirements**: FIX-01
-**Success Criteria** (what must be TRUE):
-  1. Each landed fix carries a regression test and a REQUIREMENTS traceability bullet
-  2. Full suite green; no new runtime dependencies
-
-**Plans**: 0 plans *(agent worktree fix/commands — no commits yet; plan when content exists)*
-
-Plans:
-- [ ] TBD
-
-## Progress
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 45. Database adapter | 7/7 | Complete    | 2026-11-07 |
-| 46. MCP server | merged (e541e45) | UAT passed 2026-11-07 (5/5) — 3 fixes landed during UAT | 2026-11-07 |
-| 47. Command/UI hardening | merged (62b1826) | UAT passed 2026-11-07 (G shortcuts) | 2026-11-07 |
-| 48. Browser push & toasts | 2/2 | Complete    | 2026-11-07 |
-
-### Phase 48: Real browser push & toasts (from backlog 999.2)
-
-**Goal**: Real browser notifications replace the inert push_* toggles, and toast feedback lands for mention/assign events
-**Depends on**: Nothing (parallel-safe; pulled from backlog 999.2 at owner request)
-**Requirements**: PUSH-01, PUSH-02, PUSH-03
-**Success Criteria** (what must be TRUE):
-  1. Real web push (service worker + browser Notification) wired to the existing push_mention/push_assign/push_comment pref keys — "coming soon" badge removed
-  2. Toast notifications for mention/assign events
-  3. Zero new runtime dependencies (D-12) — service worker + Notification API are browser built-ins
-  4. Full suite green; i18n EN+FR for all new strings
-
-**Plans**: 2/2 plans complete
-
-Plans:
-**Wave 1**
-- [x] 48-01-PLAN.md — Tracer + core: sw.js, src/core/push.js (seen-set, toast-vs-notification), poll hook, i18n keys, test harness
-
-**Wave 2** *(blocked on Wave 1 completion)*
-- [x] 48-02-PLAN.md — Settings permission UX: blocked badge swap, requestPermission pre-step, pushComingSoon removal, catalogue at 1710 (EN-counted)
+</details>
 
 ## Backlog
 
-*(Empty — Phase 999.1 (Phase 37 deferred UAT Test 2: workspace name in digest subject +
-project name on task lines) is consumed by v1.9 SUBJ-01/02, mapped to Phase 40. Remaining
-Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings and join only
-when validated.)*
-
-*(Phase 999.2 consumed into Phase 48, 2026-11-07 — owner decision.)*
-
-### Phase 45: Database adapter — optional Postgres backend via env, SQLite default
-
-**Goal:** Optional Postgres backend selected by env — `DB_URL` postgres:// runs the server on the
-`pg` driver through a minimal async adapter (`db.get/all/run/tx`); unset stays byte-identical
-SQLite (`node:sqlite`), zero-dependency and default. Fail-closed pg boot, dialect branches owned
-by the adapter, one-shot SQLite→pg copy script, opt-in `POSTGRES_TEST_URL` matrix. SQL Server
-out of scope.
-**Requirements**: D-01..D-14 (requirement IDs of record = CONTEXT.md decision IDs; see CONTEXT.md `<decisions>` and each plan's `requirements:` frontmatter)
-**Depends on:** Phase 44
-**Plans:** 7/7 plans executed
-
-Plans:
-**Wave 1**
-- [x] 45-01-PLAN.md — db-adapter.mjs facade + SQL rewrite + fail-closed probe + Wave 0 tests (tracer)
-- [x] 45-03-PLAN.md — server.js boot-path swap, sqliteOnly gating, tx + auth/claims/scheduler conversion (checkpoint:decision — D-05 one-way async conversion)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-- [x] 45-02-PLAN.md — Docker image node_modules/db-adapter COPY + dependency/COPY pins + DB_URL env surface
-
-**Wave 3** *(blocked on Wave 2 completion)*
-- [x] 45-04-PLAN.md — remaining callsite conversion, legacy shim removal, static audit gate
-
-**Wave 4** *(blocked on Wave 3 completion)*
-- [x] 45-05-PLAN.md — pg SCHEMA variant, idempotent pg migrations, portable seed (checkpoint:decision — D-11 doc column shape)
-
-**Wave 5** *(blocked on Wave 4 completion)*
-- [x] 45-06-PLAN.md — scripts/copy-sqlite-to-pg.mjs + contract tests + DEPLOY.md runbook
-- [x] 45-07-PLAN.md — POSTGRES_TEST_URL-gated pg matrix (boot, auth, claims, dialect pins)
+*(Empty — Phase 999.1 (Phase 37 deferred UAT Test 2) was consumed by v1.9 SUBJ-01/02,
+mapped to Phase 40; Phase 999.2 was consumed into Phase 48, 2026-11-07 — owner decision.
+Remaining Phase 39 audit recommendations stay `proposed` pending D-05 owner rulings and
+join only when validated.)*
