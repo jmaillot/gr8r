@@ -16,6 +16,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data
 
 COPY --from=build /app/server.js ./server.js
+COPY --from=build /app/tz.js ./tz.js
 COPY --from=build /app/src ./src
 COPY --from=build /app/oidc.js ./oidc.js
 COPY --from=build /app/totp.js ./totp.js
