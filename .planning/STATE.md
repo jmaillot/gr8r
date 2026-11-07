@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-11-06)
 ## Current Position
 
 Phase: 45 (Database adapter — optional Postgres backend via env, SQLite default) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Total Plans in Phase: 7
 Status: Executing Phase 45
-Last activity: 2026-11-07 — Completed 45-02 (deployment surface: single pg-enabled Docker
-image — runtime stage COPYs node_modules + db-adapter.mjs; D-12 COPY pin amended;
-DB_URL documented in .env.example + docker-compose passthrough)
+Last activity: 2026-11-07 — Completed 45-04 (callsite conversion finished: zero
+db.prepare/db.exec sites, facade exactly { get, all, run, tx }, TRANSITIONAL shim
+deleted, static gates pinned in test/static-db-audit.test.mjs)
 
 ## v1.9 Phase Order (roadmap created 2026-11-05)
 
@@ -176,8 +176,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T11:55:00.000Z
-Stopped at: Completed 45-02-PLAN.md (deployment surface: pg Docker payload + DB_URL env; ran after 45-03 per wave schedule — Current Position pointer may need orchestrator reconciliation)
+Last session: 2026-11-07T13:30:00.000Z
+Stopped at: Completed 45-04-PLAN.md (callsite conversion finished; facade = get/all/run/tx, shim deleted, static gates pinned — 2 code commits + summary commit)
 Resume file: None
 
 ## Performance Metrics
