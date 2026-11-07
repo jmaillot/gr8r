@@ -1,21 +1,14 @@
 ---
-status: testing
+status: diagnosed
 phase: 44-per-member-timezones-v1-10
 source: [44-VERIFICATION.md]
 started: 2026-11-06T18:00:00Z
-updated: 2026-11-06T18:00:00Z
+updated: 2026-11-07T09:30:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Accepter ou reporter les alertes de revue WR-01 / WR-02
-expected: |
-  Décision humaine : accepter le stockage brut du tz des autres membres par le
-  chemin admin (WR-01, défense en profondeur) et la dégradation de
-  présélection pour les alias/casse (WR-02) comme durcissement différé, ou
-  planifier une phase de correction.
-awaiting: user response
+[testing complete — 1 issue recorded; entering diagnose → gap-closure planning]
 
 ## Tests
 
@@ -26,7 +19,9 @@ reported: "Second issue found in local repro: Settings > Date & time rendered th
 
 ### 2. Accept or defer review warnings WR-01 / WR-02
 expected: Human decision to accept admin-path raw tz storage (WR-01, defense-in-depth — downstream reads funnel through resolveTz) and alias/case preselect degradation (WR-02) as deferred hardening, or schedule a fix phase.
-result: [pending]
+result: issue
+reported: "User chose 'Planifier un fix': WR-01 (admin doc-PUT stores other members' tz raw, bypassing the D-10 funnel) and WR-02 (valid tz aliases like US/Pacific pass scheduling but the combobox preselects Paris) must be fixed before the phase completes."
+severity: major
 
 ### 3. Fermer le dropdown du sélecteur de fuseau après une sélection validée
 expected: Quand l'utilisateur valide une zone (Entrée ou clic), la liste d'options se referme et ne se réaffiche pas ; la mise en page ne bouge pas après la sélection. L'input affiche la zone choisie.
@@ -37,10 +32,21 @@ reported: "Fixed in 1bf1410 (pushed): la liste ne se monte que quand le picker e
 
 total: 3
 passed: 2
-issues: 0
-pending: 1
+issues: 1
+pending: 0
 skipped: 0
 blocked: 0
+
+## Gaps
+
+- gap_id: G-44-3
+  truth: "Every stored tz value reaches members[*].tz only through the resolveTz funnel — including the admin doc-PUT path (WR-01); a stored valid tz always preselects itself in the combobox (WR-02)"
+  status: failed
+  reason: "User chose to fix both review warnings: WR-01 — server.js admin doc-PUT path writes other members' tz verbatim, bypassing the D-10 funnel (never-stored-raw invariant broken); WR-02 — tz.js resolveTz returns alias/case input raw, so a valid alias schedules fine but tzPreselect fails the canonical-list match and shows Paris, and saving silently rewrites the value."
+  severity: major
+  test: 2
+  artifacts: []
+  missing: []
 
 ## Gaps
 
