@@ -312,13 +312,14 @@ A.go = el => {
   const tabOnly = r === 'project' && S.ui.route === 'project' && S.ui.params.id === p.id;
   go(r, p, { tab: tabOnly });
   if (r === 'members' && api.enabled) refreshMembers();
-  if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa') && api.enabled) {
+  if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa' || p.sec === 'apikeys') && api.enabled) {
     refreshSessions();
     refreshTfa(); // T-16-13: the card's on/off split re-reads the server
     if (p.sec === 'sessions') {
       refreshOperatorUsers(); // OPREV-02: card lives only on the sessions tab (IN-02)
       refreshAuditLog(); // AUD-03: the trail card lives beside the operator card
     }
+    if (p.sec === 'apikeys') refreshApiKeys(); // MCP-01: the key rows re-read the server
   }
 };
 A.back = () => {
@@ -2140,6 +2141,71 @@ export async function refreshSessions() {
   render();
   return res.data;
 }
+
+/* MCP-01: the API keys card's ground truth — re-reads /api/keys on mount and
+   after every create/revoke; never a client-side copy. A non-ok fetch leaves
+   the card empty rather than stale. */
+export async function refreshApiKeys() {
+  if (!api.enabled) return null;
+  const res = await api.apiKeys();
+  if (!res.ok) return null;
+  S.ui.apiKeys = res.data.keys || [];
+  S.ui.apiKeyDays = res.data.days || [];
+  render();
+  return res.data;
+}
+
+/* A.apiKeyCreate — the staged create form's submit (data-submit + button). */
+A.apiKeyCreate = () => {
+  const label = $('#ak-label')?.value?.trim();
+  const workspaceId = $('#ak-ws')?.value;
+  const scope = $('#ak-scope')?.value || 'read';
+  const days = Number($('#ak-days')?.value || 0);
+  if (!label || !workspaceId || !days) {
+    render();
+    return;
+  }
+  loadingBtn('ak-save', 0, async () => {
+    const res = await api.createApiKey({ label, workspaceId, scope, days });
+    if (!res.ok) {
+      toast(tErr(res));
+      render();
+      return;
+    }
+    /* The raw key rides THIS response only — stage it for the one-shot
+       display, then it lives nowhere (the server stores only the hash). */
+    S.ui.apiKeyStage = 'created';
+    S.ui.newKey = res.data.key;
+    await refreshApiKeys();
+  });
+};
+A.apiKeyAskCreate = () => {
+  S.ui.apiKeyStage = 'create';
+  S.ui.newKey = null;
+  render();
+};
+A.apiKeyDone = () => {
+  S.ui.apiKeyStage = null;
+  S.ui.newKey = null;
+  render();
+};
+A.apiKeyCancel = () => {
+  S.ui.apiKeyStage = null;
+  S.ui.newKey = null;
+  render();
+};
+A.apiKeyRevokeAsk = el => {
+  S.ui.apiKeyRevoke = el.dataset.id;
+  render();
+};
+A.apiKeyRevokeConfirm = el => {
+  const id = el.dataset.id;
+  S.ui.apiKeyRevoke = null;
+  api.revokeApiKey(id).then(async res => {
+    if (!res.ok) toast(tErr(res));
+    await refreshApiKeys();
+  });
+};
 
 /* The settings 2FA card's ground truth (T-16-13): re-reads the signed-in user
    (api.user.twoFa) from /api/auth/me — the on-state never renders from a

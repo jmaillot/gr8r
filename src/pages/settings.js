@@ -75,6 +75,7 @@ export const SET_NAV = [
       ['password', 'settings.nav.password', 'key-round'],
       ['tfa', 'settings.tfa.nav', 'smartphone'],
       ['sessions', 'settings.nav.sessions', 'monitor-smartphone'],
+      ['apikeys', 'settings.apikeys.nav', 'plug'],
     ],
   ],
 ];
@@ -728,6 +729,46 @@ export function settingsBody(sec, title) {
         H(t('settings.tfa.lead')) +
         `${e.tfaMsg ? `<div class="err" style="margin-bottom:12px">${ic('circle-alert', 12)}${e.tfaMsg}</div>` : ''}` +
         srow(t('settings.tfa.off'), t('settings.tfa.offDesc'), `<button class="btn btn-primary" data-a="tfaStart">${t('settings.tfa.start')}</button>`)
+      );
+    }
+    case 'apikeys': {
+      /* MCP-01: personal API keys for the /mcp endpoint. Ground truth is
+         S.ui.apiKeys (refreshApiKeys(), server data only). The raw key of a
+         fresh key (S.ui.newKey) renders exactly once — the server stores only
+         the hash. Revoke follows the operator card's inline-confirm stage. */
+      if (!api.enabled) return H(t('settings.apikeys.lead')) + srow(t('settings.apikeys.off'), t('settings.apikeys.offDesc'), '');
+      const rows = S.ui.apiKeys || [];
+      const stage = S.ui.apiKeyStage;
+      const wss = api.workspaces || [];
+      const scopeLabel = s => t(s === 'write' ? 'settings.apikeys.scopeWrite' : 'settings.apikeys.scopeRead');
+      const row = k =>
+        srow(
+          `<span class="row" style="gap:8px">${ic('plug', 15)}${esc(k.label)}<span class="mono faint">${esc(k.prefix)}…</span><span class="badge ${k.scope === 'write' ? '' : 'faint'}">${scopeLabel(k.scope)}</span>${k.revokedAt ? `<span class="badge amber">${t('settings.apikeys.revoked')}</span>` : k.expired ? `<span class="badge amber">${t('settings.apikeys.expired')}</span>` : ''}</span>`,
+          `${esc(k.workspaceName || '—')} · ${t('settings.apikeys.expires')} ${ago(k.expiresAt)}${k.lastUsedAt ? ` · ${t('settings.apikeys.lastUsed')} ${ago(k.lastUsedAt)}` : ''}`,
+          k.revokedAt || k.expired
+            ? ''
+            : S.ui.apiKeyRevoke === k.id
+              ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.apikeys.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="apiKeyRevokeConfirm" data-id="${esc(k.id)}">${t('settings.apikeys.revoke')}</button><button class="btn btn-secondary btn-sm" data-a="apiKeyCancel">${t('common.cancel')}</button></span>`
+              : `<button class="btn btn-danger-ghost btn-sm" data-a="apiKeyRevokeAsk" data-id="${esc(k.id)}">${t('settings.apikeys.revoke')}</button>`,
+        );
+      return (
+        H(t('settings.apikeys.lead')) +
+        (S.ui.newKey
+          ? `<div class="alert ok" style="margin-bottom:14px"><span>${t('settings.apikeys.createdHint')}</span></div><div class="field" style="max-width:560px"><label class="label">${t('settings.apikeys.newKey')}</label><div class="row" style="gap:0"><input class="input" id="apikey-value" readonly value="${esc(S.ui.newKey)}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.newKey)}">${t('settings.tfa.copy')}</button></div><span class="hint">${t('settings.apikeys.onceHint')}</span></div><div style="margin-top:10px"><button class="btn btn-secondary btn-sm" data-a="apiKeyDone">${t('common.next')}</button></div>`
+          : '') +
+        rows.map(row).join('') +
+        (!rows.length && !stage && !S.ui.newKey ? `<p class="hint">${t('settings.apikeys.empty')}</p>` : '') +
+        (stage === 'create'
+          ? `<form data-submit="apiKeyCreate" class="col" style="gap:14px;max-width:440px;margin-top:14px">
+              <div class="field"><label class="label" for="ak-label">${t('settings.apikeys.label')}</label><input class="input" id="ak-label" maxlength="60" placeholder="${t('settings.apikeys.labelPlaceholder')}"></div>
+              <div class="field"><label class="label" for="ak-ws">${t('settings.apikeys.workspace')}</label><select class="select" id="ak-ws" style="width:100%">${wss.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><span class="hint">${t('settings.apikeys.workspaceHint')}</span></div>
+              <div class="field"><label class="label" for="ak-scope">${t('settings.apikeys.scope')}</label><select class="select" id="ak-scope" style="width:100%"><option value="read">${scopeLabel('read')}</option><option value="write">${scopeLabel('write')}</option></select><span class="hint">${t('settings.apikeys.scopeHint')}</span></div>
+              <div class="field"><label class="label" for="ak-days">${t('settings.apikeys.expiry')}</label><select class="select" id="ak-days" style="width:100%">${(S.ui.apiKeyDays || []).map(d => `<option value="${d}">${t('settings.apikeys.days', { n: d })}</option>`).join('')}</select><span class="hint">${t('settings.apikeys.expiryHint')}</span></div>
+              <div class="row"><button class="btn btn-primary" data-a="apiKeyCreate" id="ak-save">${t('common.save')}</button><button type="button" class="btn btn-secondary" data-a="apiKeyCancel">${t('common.cancel')}</button></div>
+            </form>`
+          : stage !== 'created'
+            ? `<div style="margin-top:16px"><button class="btn btn-primary" data-a="apiKeyAskCreate">${ic('plus', 14)}${t('settings.apikeys.new')}</button></div>`
+            : '')
       );
     }
     case 'sessions': {

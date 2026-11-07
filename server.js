@@ -56,6 +56,7 @@ import { createMailer, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribe
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
+import { createMcp, generateApiKey, API_KEY_DAYS, validKeyDays, validKeyScope } from './mcp.js';
 import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 
@@ -350,6 +351,28 @@ const SCHEMA = `
     prefs        text not null,
     primary key (workspace_id, user_id)
   );
+  /* MCP-01: personal API keys for the /mcp endpoint. One key = one user on
+     ONE workspace (D-KEY-SCOPE), with a mandatory expiry (no permanent
+     keys) and a read/write scope. Only the sha256 hash is stored — the
+     raw psk_live_ key is shown exactly once at creation, exactly like the
+     session-token discipline (hash-at-rest, never a plaintext lookup).
+     'prefix' carries the first chars for display/leak-scanning, never
+     enough to reconstruct. */
+  create table if not exists api_keys (
+    id           text primary key,
+    user_id      text not null references users(id) on delete cascade,
+    workspace_id text not null references workspaces(id) on delete cascade,
+    label        text not null,
+    key_hash     text not null unique,
+    prefix       text not null,
+    scope        text not null check (scope in ('read','write')),
+    created_at   integer not null,
+    expires_at   integer not null,
+    last_used_at integer,
+    revoked_at   integer
+  );
+  create index if not exists api_keys_user on api_keys(user_id);
+  create index if not exists api_keys_ws on api_keys(workspace_id);
 `;
 
 function ensureColumn(conn, table, name, def) {
@@ -4096,6 +4119,83 @@ async function handleApi(req, res, url) {
     return json(res, 200, { revoked: del.changes, remaining: left.n }); // live post-delete counts (Pitfall 10)
   }
 
+  /* ------------------------- MCP API keys (MCP-01) -----------------------
+     The keys live in the api_keys table; only the sha256 hash is stored.
+     Creation happens behind the FULL browser session (login + 2FA +
+     sameOrigin) — the key is returned exactly once in the POST response,
+     then only its prefix is ever readable. A key is pinned to ONE
+     workspace the user belongs to and carries a MANDATORY expiry. */
+  if (pathname === '/api/keys' && method === 'GET') {
+    const user = requireUser(req, res);
+    if (!user) return;
+    const rows = db.prepare('select * from api_keys where user_id = ? order by created_at desc').all(user.id);
+    const wsName = id => db.prepare('select name from workspaces where id = ?').get(id)?.name || null;
+    return json(res, 200, {
+      keys: rows.map(r => ({
+        id: r.id,
+        label: r.label,
+        prefix: r.prefix,
+        scope: r.scope,
+        workspaceId: r.workspace_id,
+        workspaceName: wsName(r.workspace_id),
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+        lastUsedAt: r.last_used_at,
+        revokedAt: r.revoked_at,
+        expired: r.expires_at <= now(),
+      })),
+      days: API_KEY_DAYS,
+    });
+  }
+
+  if (pathname === '/api/keys' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    const body = await readJson(req);
+    const label = String(body?.label || '')
+      .trim()
+      .slice(0, 60);
+    if (!label) return fail(res, 400, 'keyLabelRequired', 'Enter a label for this key');
+    const scope = validKeyScope(String(body?.scope || ''));
+    if (!scope) return fail(res, 400, 'invalidScope', 'Scope must be read or write');
+    const days = validKeyDays(body?.days);
+    if (!days) return fail(res, 400, 'invalidExpiry', `Expiry must be one of: ${API_KEY_DAYS.join(', ')} days`);
+    const wsId = String(body?.workspaceId || '');
+    const membership = membershipOf(wsId, user.id);
+    if (!membership) return fail(res, 403, 'notAMember', 'You are not a member of that workspace');
+    const { key, prefix, hash } = generateApiKey();
+    const id = uid();
+    db.prepare(
+      'insert into api_keys (id, user_id, workspace_id, label, key_hash, prefix, scope, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
+    ).run(id, user.id, wsId, label, hash, prefix, scope, now(), now() + days * 24 * 60 * 60 * 1000);
+    logSecurity(user.id, 'api_key_created');
+    logInfo(`api key "${label}" (${scope}, ${days}d) created by ${user.email} for workspace ${membership.workspace_id}`);
+    db.prepare(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(uid(), user.id, id, 'api_key_created', 0, clientIp(req), wsId, user.name, user.email, label, 'api-key', now());
+    /* The raw key rides THIS response only — never stored, never logged. */
+    return json(res, 201, { id, key, prefix, scope, days });
+  }
+
+  const keyMatch = pathname.match(/^\/api\/keys\/([A-Za-z0-9_-]+)$/);
+  if (keyMatch && method === 'DELETE') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = requireUser(req, res);
+    if (!user) return;
+    /* Soft revoke: the row stays for the audit trail and last-used metadata. */
+    const row = db.prepare('select * from api_keys where id = ? and user_id = ?').get(keyMatch[1], user.id);
+    if (!row) return fail(res, 404, 'keyNotFound', 'API key not found');
+    if (!row.revoked_at) {
+      db.prepare('update api_keys set revoked_at = ? where id = ?').run(now(), row.id);
+      logSecurity(user.id, 'api_key_revoked');
+      db.prepare(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+      ).run(uid(), user.id, row.id, 'api_key_revoked', 0, clientIp(req), row.workspace_id, user.name, user.email, row.label, 'api-key', now());
+    }
+    return json(res, 200, { revoked: true });
+  }
+
   const sessionMatch = pathname.match(/^\/api\/auth\/sessions\/([0-9a-f]{12})$/);
   if (sessionMatch && method === 'DELETE') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
@@ -5530,6 +5630,13 @@ async function handleUnsubscribe(req, res, token) {
   res.end(buildUnsubscribePage(message));
 }
 
+/* ------------------------------- MCP ----------------------------------- */
+/* The /mcp endpoint (MCP-01): streamable HTTP mounted in the dispatch below,
+   BEFORE the /api/ chain. Auth is a bearer API key (api_keys table), never a
+   session cookie, so the sameOrigin CSRF gate structurally never applies.
+   See mcp.js for the full contract. */
+const MCP = createMcp({ db, now, uid, clientIp, logInfo, logWarn, tooMany, maxBody: MAX_BODY, ROLE_RANK });
+
 /* ------------------------------- server -------------------------------- */
 const server = http.createServer(async (req, res) => {
   const started = now();
@@ -5602,6 +5709,13 @@ const server = http.createServer(async (req, res) => {
         res.setHeader('Allow', 'GET, HEAD, POST, DELETE');
         fail(res, 405, 'methodNotAllowed', 'Method not allowed');
       }
+    } else if (url.pathname === '/mcp' || url.pathname === '/mcp/') {
+      /* MCP-01: intercepted BEFORE the /api/ branch (whose finish handler logs
+         /api/ pathnames and whose sameOrigin gate never applies here) and
+         before serveStatic (which would SPA-fallback the GET). Auth is the
+         bearer API key inside handle(); failures answer JSON 401/429, never
+         the login redirect — a non-browser client has no login page. */
+      await MCP.handle(req, res);
     } else if (url.pathname.startsWith('/api/')) {
       await handleApi(req, res, url);
       res.on('finish', () => {

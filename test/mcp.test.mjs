@@ -1,0 +1,332 @@
+/* MCP suite (MCP-01): real server, real SQLite, real SDK transport.
+   Covers the /api/keys lifecycle (create once → hash-only storage → revoke)
+   and the /mcp streamable endpoint: bearer auth, session-key binding, the
+   tool surface (list/create/move/comment), scope enforcement (read-only
+   keys cannot write), mandatory expiry, and the per-key rate limit.
+   No mocks. */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { after, before, test } from 'node:test';
+import { login, startServer, withDb } from './helpers/server.mjs';
+
+let server;
+let tempDir;
+let owner; // { client, data }
+let wsId;
+let writeKey; // raw psk_live_ key — lives only in this test's memory
+let sid; // mcp-session-id bound to writeKey
+
+const RPC_ID = { n: 0 };
+/* Full initialize params: the SDK's isInitializeRequest validates the shape, a bare { } would not count. */
+const INIT_PARAMS = { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mcp-test', version: '0.0.0' } };
+const mcpPost = async (key, body, session = sid) =>
+  fetch(`${server.base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      ...(key ? { authorization: `Bearer ${key}` } : {}),
+      ...(session ? { 'mcp-session-id': session } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+const rpc = async (key, method, params, session) => {
+  const res = await mcpPost(key, { jsonrpc: '2.0', id: ++RPC_ID.n, method, params }, session);
+  if (res.status !== 200) {
+    const body = await res.text();
+    throw new Error(`${method} → ${res.status} ${body.slice(0, 200)}`);
+  }
+  const type = res.headers.get('content-type') || '';
+  const id = RPC_ID.n;
+  let data;
+  if (type.includes('text/event-stream')) {
+    /* The transport may answer on an SSE stream; the JSON-RPC reply is the
+       data: line carrying our request id (skip response-only notifications). */
+    const raw = await res.text();
+    const line = raw
+      .split('\n')
+      .filter(l => l.startsWith('data:'))
+      .map(l => JSON.parse(l.slice(5).trim()))
+      .find(m => m.id === id);
+    data = line;
+  } else {
+    data = await res.json();
+  }
+  return { status: res.status, session: res.headers.get('mcp-session-id'), data };
+};
+
+/* Initialize the handshake the way a client does and pin the session id.
+   The initialize call carries NO session yet — `null` (not `undefined`:
+   mcpPost's default parameter would kick in on undefined). */
+const handshake = async key => {
+  const init = await rpc(key, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mcp-test', version: '0.0.0' } }, null);
+  assert.equal(init.status, 200);
+  const session = init.session;
+  assert.ok(session, 'session id header on initialize');
+  await mcpPost(key, { jsonrpc: '2.0', method: 'notifications/initialized' }, session);
+  return session;
+};
+
+const callTool = async (key, name, args = {}, session = sid) => {
+  const res = await rpc(key, 'tools/call', { name, arguments: args }, session);
+  assert.equal(res.status, 200);
+  const out = res.data?.result;
+  const text = out?.content?.[0]?.text;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    /* Tool errors carry the plain-text message, not JSON. */
+    data = text;
+  }
+  return { isError: !!out?.isError, data };
+};
+
+const createKey = async (body) => {
+  const res = await owner.client.post('/api/keys', body);
+  return { status: res.status, data: res.data };
+};
+
+before(async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-mcp-'));
+  server = await startServer({ dataDir: tempDir });
+  owner = await login(server.base, 'owner@test.local', 'owner-password-1');
+  assert.equal(owner.status, 200);
+  const wss = await owner.client.get('/api/workspaces');
+  wsId = wss.data.workspaces[0].id;
+  /* The harness boots an EMPTY workspace (SEED_DATA=false): plant one project
+     for the tool round-trips — same shape the client's project modal writes. */
+  withDb(server.dbPath, db => {
+    const row = db.prepare('select doc from workspaces where id = ?').get(wsId);
+    const doc = JSON.parse(row.doc);
+    doc.data.projects = [
+      { id: 'p1', key: 'TEST', name: 'Test Project', desc: '', status: 'active', private: false, members: [], teams: [], archived: false },
+    ];
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsId);
+  });
+});
+
+after(async () => {
+  await server?.stop();
+  if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+});
+
+test('POST /api/keys creates a key, returns it exactly once, stores only a hash', async () => {
+  const res = await createKey({ label: 'OpenCode', scope: 'write', workspaceId: wsId, days: 30 });
+  assert.equal(res.status, 201);
+  writeKey = res.data.key;
+  assert.match(writeKey, /^psk_live_[A-Za-z0-9_-]{43}$/);
+  assert.equal(res.data.scope, 'write');
+
+  /* The stored row: sha256 hex hash, display prefix, no raw key anywhere. */
+  const rows = withDb(server.dbPath, db => db.prepare('select * from api_keys').all());
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].key_hash.length, 64);
+  assert.doesNotMatch(JSON.stringify(rows[0]), /psk_live_[A-Za-z0-9_-]{43}/);
+  assert.ok(rows[0].expires_at > Date.now());
+
+  /* The list endpoint never carries the raw key. */
+  const list = await owner.client.get('/api/keys');
+  assert.equal(list.status, 200);
+  assert.equal(list.data.keys.length, 1);
+  assert.doesNotMatch(JSON.stringify(list.data), new RegExp(writeKey));
+});
+
+test('POST /api/keys validates label, scope, expiry and workspace membership', async () => {
+  assert.equal((await createKey({ label: '', scope: 'write', workspaceId: wsId, days: 30 })).status, 400);
+  assert.equal((await createKey({ label: 'x', scope: 'root', workspaceId: wsId, days: 30 })).status, 400);
+  assert.equal((await createKey({ label: 'x', scope: 'write', workspaceId: wsId, days: 7 })).status, 400);
+  assert.equal((await createKey({ label: 'x', scope: 'write', workspaceId: 'ws_nope', days: 30 })).status, 403);
+  /* Expiry is mandatory — the client cannot omit it. */
+  assert.equal((await createKey({ label: 'x', scope: 'write', workspaceId: wsId })).status, 400);
+});
+
+test('unauthenticated /mcp answers 401 JSON before any protocol work', async () => {
+  const res = await mcpPost(null, { jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS });
+  assert.equal(res.status, 401);
+  const data = await res.json();
+  assert.equal(data.code, 'mcpUnauthorized');
+});
+
+test('a garbage or revoked key answers 401', async () => {
+  assert.equal((await mcpPost('psk_live_nope', { jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS })).status, 401);
+});
+
+test('handshake, tools/list exposes the full surface', async () => {
+  sid = await handshake(writeKey);
+  const res = await rpc(writeKey, 'tools/list', {});
+  const names = res.data.result.tools.map(t => t.name).sort();
+  assert.deepEqual(names, [
+    'add_comment',
+    'create_task',
+    'get_task',
+    'list_comments',
+    'list_members',
+    'list_projects',
+    'list_tasks',
+    'move_task',
+    'search_tasks',
+    'update_task',
+  ]);
+});
+
+test('list_projects reports the seeded workspace', async () => {
+  const { isError, data } = await callTool(writeKey, 'list_projects');
+  assert.equal(isError, false);
+  assert.equal(data.workspace.id, wsId);
+  assert.deepEqual(data.statuses, ['backlog', 'todo', 'progress', 'review', 'done']);
+  assert.ok(Array.isArray(data.projects));
+});
+
+test('create_task → list_tasks → move_task round-trip lands in the document', async () => {
+  const proj = (await callTool(writeKey, 'list_projects')).data.projects[0];
+  const created = await callTool(writeKey, 'create_task', {
+    project: proj.id,
+    title: 'MCP round-trip task',
+    description: 'Created by the MCP test suite',
+    status: 'todo',
+    due: '2026-12-01',
+    labels: ['mcp'],
+  });
+  assert.equal(created.isError, false);
+  const taskId = created.data.task.id;
+  assert.match(created.data.task.key, new RegExp(`^${proj.key}-`));
+
+  const listed = await callTool(writeKey, 'list_tasks', { project: proj.id, status: 'todo', limit: 200 });
+  assert.ok(listed.data.tasks.some(t => t.id === taskId));
+
+  const moved = await callTool(writeKey, 'move_task', { id: taskId, status: 'progress' });
+  assert.equal(moved.data.task.status, 'progress');
+
+  /* The document really moved — read straight from SQLite. */
+  const doc = withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(wsId));
+  const task = JSON.parse(doc.doc).data.tasks.find(t => t.id === taskId);
+  assert.equal(task.status, 'progress');
+  assert.equal(task.due, '2026-12-01');
+
+  /* The activity row uses the machine verb shape the Activity page renders. */
+  const act = JSON.parse(doc.doc).data.activity[0];
+  assert.equal(act.verb, 'moved');
+  assert.deepEqual(act.extra, { kind: 'statusMoved', from: 'todo', to: 'progress' });
+});
+
+test('get_task, add_comment, list_comments, search_tasks', async () => {
+  const proj = (await callTool(writeKey, 'list_projects')).data.projects[0];
+  const created = await callTool(writeKey, 'create_task', { project: proj.id, title: 'Commented task' });
+  const taskId = created.data.task.id;
+  await callTool(writeKey, 'add_comment', { task: taskId, text: 'First comment via MCP' });
+  const comments = await callTool(writeKey, 'list_comments', { task: taskId });
+  assert.equal(comments.data.total, 1);
+  assert.equal(comments.data.comments[0].text, 'First comment via MCP');
+
+  const got = await callTool(writeKey, 'get_task', { id: taskId });
+  assert.equal(got.data.commentsCount, 1);
+
+  const search = await callTool(writeKey, 'search_tasks', { query: 'commented task' });
+  assert.ok(search.data.tasks.some(t => t.id === taskId));
+});
+
+test('update_task mutates fields and rejects unknown member ids', async () => {
+  const proj = (await callTool(writeKey, 'list_projects')).data.projects[0];
+  const created = await callTool(writeKey, 'create_task', { project: proj.id, title: 'Updatable task' });
+  const taskId = created.data.task.id;
+  const bad = await callTool(writeKey, 'update_task', { id: taskId, assignee: 'm_ghost' });
+  assert.equal(bad.isError, true);
+  const ok = await callTool(writeKey, 'update_task', { id: taskId, priority: 'high', due: null });
+  assert.equal(ok.isError, false);
+  assert.equal(ok.data.task.priority, 'high');
+  assert.equal(ok.data.task.due, null);
+  const invalid = await callTool(writeKey, 'create_task', { project: proj.id, title: 'x', due: '12/01/2026' });
+  assert.equal(invalid.isError, true);
+});
+
+test('invisible projects stay invisible; unknown ids answer "not found"', async () => {
+  const missing = await callTool(writeKey, 'get_task', { id: 't_missing' });
+  assert.equal(missing.isError, true);
+  const noProj = await callTool(writeKey, 'list_tasks', { project: 'p_missing' });
+  assert.equal(noProj.isError, true);
+});
+
+test('a read-scoped key cannot write but can read; its session is its own', async () => {
+  const res = await createKey({ label: 'Reader', scope: 'read', workspaceId: wsId, days: 90 });
+  assert.equal(res.status, 201);
+  const readKey = res.data.key;
+
+  /* Session binding: session id from ANOTHER key is rejected. */
+  const stolen = await mcpPost(readKey, { jsonrpc: '2.0', id: 99, method: 'tools/list' }, sid);
+  assert.equal(stolen.status, 401);
+
+  const readerSid = await handshake(readKey);
+  const proj = (await callTool(readKey, 'list_projects', {}, readerSid)).data.projects[0];
+  assert.ok(proj, 'reader can list projects');
+  const denied = await callTool(readKey, 'create_task', { project: proj.id, title: 'nope' }, readerSid);
+  assert.equal(denied.isError, true);
+  assert.match(denied.data ?? '', /read-only|read\+write/i);
+
+  /* Flip the row's scope in place: the live session is dropped immediately
+     (401 mcpSessionStale) and the NEXT handshake carries the new scope — the
+     gate reads the table, never the creation-time response. */
+  withDb(server.dbPath, db => db.prepare("update api_keys set scope = 'read' where label = 'OpenCode'").run());
+  const stale = await mcpPost(writeKey, { jsonrpc: '2.0', id: 97, method: 'tools/list' }, sid);
+  assert.equal(stale.status, 401);
+  assert.equal((await stale.json()).code, "mcpSessionStale");
+  sid = await handshake(writeKey);
+  const deniedWrite = await callTool(writeKey, 'create_task', { project: proj.id, title: 'should fail' });
+  assert.equal(deniedWrite.isError, true);
+  withDb(server.dbPath, db => db.prepare("update api_keys set scope = 'write' where label = 'OpenCode'").run());
+  sid = await handshake(writeKey); // back to write for the following tests
+});
+
+test('an expired key answers 401', async () => {
+  const res = await createKey({ label: 'Dying', scope: 'read', workspaceId: wsId, days: 30 });
+  const key = res.data.key;
+  withDb(server.dbPath, db => db.prepare('update api_keys set expires_at = ? where label = ?').run(Date.now() - 1000, 'Dying'));
+  const attempt = await mcpPost(key, { jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS }, null);
+  assert.equal(attempt.status, 401);
+});
+
+test('rate limit: 61 requests inside a minute answers 429 on the 61st', async () => {
+  const res = await createKey({ label: 'Hammer', scope: 'read', workspaceId: wsId, days: 30 });
+  const key = res.data.key;
+  const hammerSid = await handshake(key);
+  let last = null;
+  for (let i = 0; i < 61; i++) {
+    const res = await mcpPost(key, { jsonrpc: '2.0', id: 500 + i, method: 'tools/list' }, hammerSid);
+    const raw = await res.text();
+    let body = null;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      /* SSE frames are not JSON overall */
+    }
+    last = { status: res.status, code: body?.code };
+  }
+  assert.equal(last.status, 429);
+  assert.equal(last.code, 'mcpTooManyRequests');
+});
+
+test('DELETE /api/keys/:id revokes; the key stops working immediately', async () => {
+  const res = await createKey({ label: 'Shortlived', scope: 'read', workspaceId: wsId, days: 30 });
+  const key = res.data.key;
+  const keyId = res.data.id;
+  assert.equal((await mcpPost(key, { jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS }, null)).status, 200);
+  const del = await owner.client.del(`/api/keys/${keyId}`);
+  assert.equal(del.status, 200);
+  assert.equal((await mcpPost(key, { jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS }, null)).status, 401);
+  /* Revocation is soft: the row stays for the audit trail. */
+  const rows = withDb(server.dbPath, db => db.prepare('select * from api_keys where id = ?').all(keyId));
+  assert.equal(rows.length, 1);
+  assert.ok(rows[0].revoked_at);
+});
+
+test('every tool call lands in the audit log with an mcp. action', async () => {
+  const rows = withDb(server.dbPath, db => db.prepare("select action from audit_log where action like 'mcp%' or action like 'api_key%' order by created_at").all());
+  const actions = rows.map(r => r.action);
+  assert.ok(actions.includes('mcp.list_projects'));
+  assert.ok(actions.includes('mcp.create_task'));
+  assert.ok(actions.includes('api_key_created'));
+  assert.ok(actions.includes('api_key_revoked'));
+});

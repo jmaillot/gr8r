@@ -303,6 +303,17 @@ export const api = {
   async sessions() {
     return call('GET', '/api/auth/sessions');
   },
+  /* MCP-01: personal API keys (Settings > API keys). The raw key rides the
+     create response only — every later read sees the prefix. */
+  async apiKeys() {
+    return call('GET', '/api/keys');
+  },
+  async createApiKey(body) {
+    return call('POST', '/api/keys', body);
+  },
+  async revokeApiKey(id) {
+    return call('DELETE', `/api/keys/${encodeURIComponent(id)}`);
+  },
   async revokeSession(id) {
     return call('DELETE', `/api/auth/sessions/${encodeURIComponent(id)}`);
   },
