@@ -161,15 +161,27 @@ test('handshake, tools/list exposes the full surface', async () => {
   const names = res.data.result.tools.map(t => t.name).sort();
   assert.deepEqual(names, [
     'add_comment',
+    'add_subtask',
+    'archive_project',
+    'archive_task',
+    'create_project',
     'create_task',
+    'get_project',
     'get_task',
+    'list_activity',
     'list_comments',
     'list_members',
     'list_projects',
     'list_tasks',
     'move_task',
+    'restore_project',
+    'restore_task',
     'search_tasks',
+    'set_dependencies',
+    'toggle_subtask',
+    'update_project',
     'update_task',
+    'whoami',
   ]);
 });
 
@@ -329,4 +341,72 @@ test('every tool call lands in the audit log with an mcp. action', async () => {
   assert.ok(actions.includes('mcp.create_task'));
   assert.ok(actions.includes('api_key_created'));
   assert.ok(actions.includes('api_key_revoked'));
+});
+
+test('whoami identifies the workspace, the scope and the project map', async () => {
+  const { isError, data } = await callTool(writeKey, 'whoami');
+  assert.equal(isError, false);
+  assert.equal(data.workspace.id, wsId);
+  assert.equal(data.scope, 'write');
+  assert.match(data.keyPrefix, /^psk_live_/);
+  assert.ok(data.projects.some(p => p.key === 'TEST'));
+});
+
+test('projects: create by key ref, subtasks, deps, archive, activity', async () => {
+  /* Project references accept the human key prefix, not only the id. */
+  const created = await callTool(writeKey, 'create_task', { project: 'TEST', title: 'Ref-by-key task' });
+  assert.equal(created.isError, false);
+  assert.equal(created.data.task.projectKey, 'TEST');
+  const taskId = created.data.task.id;
+
+  /* get_project by key ref */
+  const proj = await callTool(writeKey, 'get_project', { project: 'TEST' });
+  assert.equal(proj.isError, false);
+  assert.equal(proj.data.key, 'TEST');
+  assert.ok(proj.data.tasksByStatus);
+
+  /* Subtasks: add → toggle → verify in the document */
+  const sub = await callTool(writeKey, 'add_subtask', { task: taskId, title: 'First sub' });
+  assert.equal(sub.isError, false);
+  const got = await callTool(writeKey, 'get_task', { id: taskId });
+  assert.equal(got.data.subtasks.length, 1);
+  const tog = await callTool(writeKey, 'toggle_subtask', { task: taskId, subtask: sub.data.subtask.id });
+  assert.equal(tog.data.subtask.done, true);
+  const doc1 = withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(wsId));
+  assert.equal(JSON.parse(doc1.doc).data.tasks.find(t => t.id === taskId).subtasks[0].done, true);
+
+  /* Dependencies: unknown id rejected, self-dependency rejected, valid set stored */
+  assert.equal((await callTool(writeKey, 'set_dependencies', { task: taskId, deps: ['t_ghost'] })).isError, true);
+  assert.equal((await callTool(writeKey, 'set_dependencies', { task: taskId, deps: [taskId] })).isError, true);
+  const other = await callTool(writeKey, 'create_task', { project: 'TEST', title: 'Dependency target' });
+  const deps = await callTool(writeKey, 'set_dependencies', { task: taskId, deps: [other.data.task.id] });
+  assert.equal(deps.isError, false);
+
+  /* estimate/start via update_task */
+  const upd = await callTool(writeKey, 'update_task', { id: taskId, estimate: '2d', start: '2026-11-10' });
+  assert.equal(upd.isError, false);
+
+  /* Archive → invisible to list_tasks → restore → back */
+  await callTool(writeKey, 'archive_task', { id: taskId });
+  const listed = await callTool(writeKey, 'list_tasks', { project: 'TEST', limit: 200 });
+  assert.ok(!listed.data.tasks.some(t => t.id === taskId));
+  await callTool(writeKey, 'restore_task', { id: taskId });
+  const back = await callTool(writeKey, 'list_tasks', { project: 'TEST', limit: 200 });
+  assert.ok(back.data.tasks.some(t => t.id === taskId));
+
+  /* Assignee by email (owner@test.local is the workspace owner) */
+  const byEmail = await callTool(writeKey, 'update_task', { id: taskId, assignee: 'owner@test.local' });
+  assert.equal(byEmail.isError, false);
+  assert.ok(byEmail.data.task.assignee, 'assignee resolved to a member id');
+
+  /* Project lifecycle + activity feed */
+  const newProj = await callTool(writeKey, 'create_project', { name: 'MCP Sandbox' });
+  assert.equal(newProj.isError, false);
+  assert.match(newProj.data.project.key, /^[A-Z0-9]+$/);
+  const st = await callTool(writeKey, 'update_project', { project: newProj.data.project.id, status: 'hold' });
+  assert.equal(st.data.project.status, 'hold');
+  const act = await callTool(writeKey, 'list_activity', { limit: 5 });
+  assert.equal(act.isError, false);
+  assert.ok(act.data.activity.length > 0);
+  assert.ok(act.data.activity.some(e => e.verb === 'projectStatusChanged'));
 });

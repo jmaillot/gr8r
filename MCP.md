@@ -58,6 +58,23 @@ Le transport est le streamable HTTP standard du protocole MCP : le client fait
 `tools/call` avec l'en-tête `mcp-session-id` retourné. Le flux SSE serveur→client
 (GET) n'est pas proposé ; le serveur ne pousse jamais de message spontané.
 
+### Lier un dossier local à un projet
+
+Le serveur MCP ne voit pas votre système de fichiers : c'est **la clé qui porte
+l'espace de travail**, et **l'agent qui porte la correspondance dossier → projet**.
+La recette recommandée (équivalent du git-URL de Kanzo) : dans le repo local,
+ajoutez une ligne à l'`AGENTS.md` (ou `opencode.json` → `instructions`) :
+
+```markdown
+## Projects Studio
+Le MCP `projects-studio` est connecté à l'espace « Acme ».
+Toute tâche de ce repo vit dans le projet `KAN` (Kanban).
+```
+
+Les outils acceptent le **préfixe de clé** partout où un projet est attendu
+(`create_task {project: "KAN"}`) et `whoami` renvoie la carte des projets —
+l'agent n'a donc jamais besoin d'aller-retour pour résoudre un id interne.
+
 ## 3. Outils exposés
 
 Statuts natifs (identiques aux colonnes du tableau) :
@@ -67,21 +84,31 @@ Statuts natifs (identiques aux colonnes du tableau) :
 
 | Outil | Description |
 |---|---|
+| `whoami` | Espace, rôle, scope, expiration de la clé + carte compacte des projets (`id`, `key`, `name`) — référence stable pour l'agent. |
 | `list_projects` | Projets de l'espace, avec compteurs de tâches ouvertes/total. |
-| `list_tasks` | Tâches, filtres `project`, `status`, `assignee`, `limit` (1–200, défaut 50). Triées par mise à jour décroissante. |
-| `get_task` | Une tâche en détail : description, sous-tâches, dépendances, nb de commentaires. |
+| `get_project` | Un projet en détail : description, statut (`planning/active/risk/hold/complete`), lead, membres, jalons, tâches par statut. |
+| `list_tasks` | Tâches, filtres `project` (**id ou préfixe de clé**, ex. `KAN`), `status`, `assignee`, `limit` (1–200, défaut 50). Triées par mise à jour décroissante. |
+| `get_task` | Une tâche en détail : description, sous-tâches (avec `id`), dépendances, nb de commentaires. |
 | `search_tasks` | Recherche plein-texte titres/descriptions/clés (insensible à la casse et aux accents), `limit` (défaut 20). |
 | `list_members` | Membres de l'espace — les `id` servent au paramètre `assignee`. |
 | `list_comments` | Commentaires d'une tâche, du plus ancien au plus récent. |
+| `list_activity` | Activité récente de l'espace, verbess machines + noms résolus, `limit` (défaut 30). |
 
 ### Écriture (clé `write` + rôle au moins membre)
 
 | Outil | Description |
 |---|---|
-| `create_task` | `project`, `title`, puis optionnels : `description`, `status` (défaut `todo`), `assignee`, `priority` (`urgent`/`high`/`medium`/`low`), `due` (`YYYY-MM-DD`), `labels` (≤10). |
-| `update_task` | `title`, `description`, `due` (ou `null` pour effacer), `priority`, `labels`, `assignee` (ou `null` pour désattribuer). Pour changer de statut, utiliser `move_task`. |
+| `create_task` | `project` (**id ou préfixe de clé**), `title`, puis optionnels : `description`, `status` (défaut `todo`), `assignee` (**id, email ou nom exact**), `priority` (`urgent`/`high`/`medium`/`low`), `due` (`YYYY-MM-DD`), `labels` (≤10). |
+| `update_task` | `title`, `description`, `due`/`start` (ou `null` pour effacer), `estimate` (ex. `2d`), `priority`, `labels`, `assignee` (id/email/nom, ou `null`). Pour changer de statut, utiliser `move_task`. |
 | `move_task` | `id` + `status` cible — toute transition est permise, y compris retour en `backlog`. |
 | `add_comment` | `task` + `text` (≤ 4000 caractères). L'auteur affiché est le propriétaire de la clé. |
+| `add_subtask` | Ajoute une sous-tâche (`task`, `title`). |
+| `toggle_subtask` | Coche/décoche une sous-tâche (`task` + `subtask` id de `get_task`, ou `index`). |
+| `set_dependencies` | Remplace la liste des dépendances blocked-by (`task`, `deps` = ids de tâches existantes). |
+| `archive_task` / `restore_task` | Archive (invisible partout) / restaure une tâche. |
+| `create_project` | `name` (le préfixe de clé est dérivé du nom sauf si `key` fourni), `description`, `status`, `private`. |
+| `update_project` | `name`, `description`, `status` (`planning/active/risk/hold/complete`). |
+| `archive_project` / `restore_project` | Archive / restaure un projet. |
 
 Les réponses sont du JSON sérialisé dans le contenu texte de l'outil (`content[0].text`).
 

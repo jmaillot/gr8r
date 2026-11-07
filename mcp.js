@@ -33,6 +33,8 @@ import crypto from 'node:crypto';
    never a display name. */
 export const MCP_STATUSES = ['backlog', 'todo', 'progress', 'review', 'done'];
 export const MCP_PRIORITIES = ['urgent', 'high', 'medium', 'low'];
+/* Project lifecycle ids (src/core/constants.js PSTAT). */
+export const MCP_PROJECT_STATUSES = ['planning', 'active', 'risk', 'hold', 'complete'];
 const DUE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PROTOCOL_VERSION = '2025-06-18';
 
@@ -214,10 +216,28 @@ export function createMcp(deps) {
     return t;
   }
 
-  function findVisibleProject(ctx, id, doc) {
-    const p = projectsOf(doc).find(p => p.id === id);
-    if (!p || p.archived || !canReadProject(ctx, p)) throw toolError(`Project not found: ${id}`);
+  /* A project reference may be the internal id OR the human key prefix
+     (TEST, KAN…) — the stable, human-readable name an agent can carry in
+     its own context (repo AGENTS.md) without a lookup round-trip. */
+  function findVisibleProjectRef(ctx, ref, doc) {
+    const p = projectsOf(doc).find(p => p.id === ref) || projectsOf(doc).find(p => p.key && p.key.toUpperCase() === String(ref).toUpperCase());
+    if (!p || p.archived || !canReadProject(ctx, p)) throw toolError(`Project not found: ${ref}`);
     return p;
+  }
+
+  /* Assignee resolution: member id first, then name, then email — so an
+     agent can write "assignee": "marie@example.com" without a list_members
+     round-trip. Exact id matches always win; names compare folded. */
+  function resolveAssignee(ctx, ref) {
+    const members = roster(ctx);
+    const exact = members.find(m => m.id === ref);
+    if (exact) return exact.id;
+    const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const hit =
+      members.find(m => m.email && m.email.toLowerCase() === String(ref).toLowerCase()) ||
+      members.find(m => fold(m.name) === fold(ref));
+    if (!hit) throw toolError(`Unknown member "${ref}" — use a member id, email, or exact name (see list_members)`);
+    return hit.id;
   }
 
   /* The roster projection (syncProfiles shape): membership rows are the
@@ -270,14 +290,14 @@ export function createMcp(deps) {
   /* One activity row per mutation, same shape logAct writes (machine verbs,
      `by` in member_id space) — the Activity page filters render these
      verbatim. */
-  function logActivity(doc, ctx, verb, task, extra = {}) {
+  function logActivity(doc, ctx, verb, task, extra = {}, projectId) {
     doc.data.activity = Array.isArray(doc.data.activity) ? doc.data.activity : [];
     doc.data.activity.unshift({
       id: uid('a'),
       by: ctx.membership.member_id || null,
       verb,
       task: task?.id || null,
-      project: task?.project || null,
+      project: task?.project || projectId || null,
       at: now(),
       extra,
     });
@@ -315,8 +335,165 @@ export function createMcp(deps) {
         };
       },
     },
+    whoami: {
+      description: 'Identify the API key: workspace, your role, scope, expiry, and a compact project map (id + key prefix + name) usable as a stable project reference.',
+      schema: {},
+      run: async ctx => {
+        const doc = loadDoc(ctx.ws);
+        return {
+          workspace: { id: ctx.ws.id, name: ctx.ws.name, slug: ctx.ws.slug },
+          user: { id: ctx.user.id, name: ctx.user.name, email: ctx.user.email },
+          role: ctx.membership.role,
+          scope: ctx.scope,
+          keyPrefix: ctx.key.prefix,
+          expiresAt: ctx.key.expires_at,
+          statuses: MCP_STATUSES,
+          projects: visibleProjects(ctx, doc).map(p => ({ id: p.id, key: p.key || null, name: p.name || '' })),
+        };
+      },
+    },
+    get_project: {
+      description: 'Get one project in full: description, status, lead, members, milestones.',
+      schema: { project: { t: 's', req: true } },
+      run: async (ctx, a) => {
+        const doc = loadDoc(ctx.ws);
+        const p = findVisibleProjectRef(ctx, a.project, doc);
+        const members = roster(ctx);
+        const counts = {};
+        for (const s of MCP_STATUSES) counts[s] = 0;
+        for (const t of tasksOf(doc)) if (t.project === p.id && !t.archived) counts[t.status || 'todo'] = (counts[t.status || 'todo'] || 0) + 1;
+        return {
+          id: p.id,
+          key: p.key || null,
+          name: p.name || '',
+          description: p.desc || '',
+          status: p.status || null,
+          private: typeof p.private === 'boolean' ? p.private : p.access === 'private',
+          lead: p.lead || null,
+          leadName: p.lead ? members.find(m => m.id === p.lead)?.name || p.lead : null,
+          members: (Array.isArray(p.members) ? p.members : []).map(id => ({ id, name: members.find(m => m.id === id)?.name || id })),
+          milestones: Array.isArray(p.milestones) ? p.milestones : [],
+          tasksByStatus: counts,
+        };
+      },
+    },
+    create_project: {
+      description: 'Create a project in the workspace. The key prefix (e.g. KAN) is derived from the name unless given.',
+      write: true,
+      schema: {
+        name: { t: 's', req: true, max: 60 },
+        key: { t: 's', re: /^[A-Z][A-Z0-9]{1,7}$/, max: 8 },
+        description: { t: 's', max: 2000 },
+        status: { t: 'enum', values: MCP_PROJECT_STATUSES, def: 'active' },
+        private: { t: 'b', def: false },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const used = new Set(projectsOf(doc).map(p => p.key).filter(Boolean));
+        let key = a.key || null;
+        if (!key) {
+          const letters = String(a.name).toUpperCase().replace(/[^A-Z]/g, '');
+          for (const cand of [letters.slice(0, 4), letters.slice(0, 3), letters.slice(0, 5) || 'PRJ']) {
+            if (cand && !used.has(cand)) {
+              key = cand;
+              break;
+            }
+          }
+          if (!key) key = 'PRJ';
+          let n = 2;
+          while (used.has(key)) key = `PRJ${n++}`;
+        } else if (used.has(key)) {
+          throw toolError(`Project key "${key}" is already taken`);
+        }
+        const me = roster(ctx).find(m => m.id === ctx.membership.member_id);
+        const project = {
+          id: uid(),
+          key,
+          name: a.name.trim(),
+          desc: a.description || '',
+          status: a.status || 'active',
+          private: !!a.private,
+          members: a.private && me ? [me.id] : [],
+          teams: [],
+          lead: me?.id || null,
+          milestones: [],
+          fav: false,
+          archived: false,
+        };
+        writeDoc(ctx.ws, d => {
+          d.data.projects = Array.isArray(d.data.projects) ? d.data.projects : [];
+          d.data.projects.push(project);
+          logActivity(d, ctx, 'createdProject', null, {}, project.id);
+        });
+        return { created: true, project: { id: project.id, key: project.key, name: project.name, status: project.status } };
+      },
+    },
+    update_project: {
+      description: 'Update a project: name, description, or lifecycle status (planning/active/risk/hold/complete).',
+      write: true,
+      schema: {
+        project: { t: 's', req: true },
+        name: { t: 's', max: 60 },
+        description: { t: 's', max: 2000 },
+        status: { t: 'enum', values: MCP_PROJECT_STATUSES },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        let result = null;
+        writeDoc(ctx.ws, d => {
+          const p = projectsOf(d).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project).toUpperCase()));
+          if (!p || p.archived) throw toolError(`Project not found: ${a.project}`);
+          if (a.name !== undefined && a.name.trim() !== p.name) {
+            logActivity(d, ctx, 'renamed', null, { kind: 'renamedTo', value: a.name.trim() }, p.id);
+            p.name = a.name.trim();
+          }
+          if (a.description !== undefined) p.desc = a.description;
+          if (a.status !== undefined && a.status !== p.status) {
+            logActivity(d, ctx, 'projectStatusChanged', null, { kind: 'projStatusSet', value: a.status }, p.id);
+            p.status = a.status;
+          }
+          result = { id: p.id, key: p.key, name: p.name, description: p.desc, status: p.status };
+        });
+        return { updated: true, project: result };
+      },
+    },
+    archive_project: {
+      description: 'Archive a project (hidden from the board, its tasks stay in the database).',
+      write: true,
+      schema: { project: { t: 's', req: true } },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        writeDoc(ctx.ws, d => {
+          const p = projectsOf(d).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project).toUpperCase()));
+          if (!p) throw toolError(`Project not found: ${a.project}`);
+          if (!p.archived) {
+            p.archived = true;
+            p.archivedAt = now();
+          }
+        });
+        return { archived: true };
+      },
+    },
+    restore_project: {
+      description: 'Restore an archived project.',
+      write: true,
+      schema: { project: { t: 's', req: true } },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        writeDoc(ctx.ws, d => {
+          const p = projectsOf(d).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project).toUpperCase()));
+          if (!p) throw toolError(`Project not found: ${a.project}`);
+          if (p.archived) {
+            p.archived = false;
+            p.archivedAt = null;
+          }
+        });
+        return { restored: true };
+      },
+    },
     list_tasks: {
-      description: 'List tasks, optionally filtered by project id, status, or assignee member id.',
+      description: 'List tasks, optionally filtered by project (id or key prefix), status, or assignee member id.',
       schema: {
         project: { t: 's' },
         status: { t: 'enum', values: MCP_STATUSES },
@@ -327,8 +504,8 @@ export function createMcp(deps) {
         const doc = loadDoc(ctx.ws);
         let rows = visibleTasks(ctx, doc);
         if (a.project) {
-          findVisibleProject(ctx, a.project, doc);
-          rows = rows.filter(t => t.project === a.project);
+          findVisibleProjectRef(ctx, a.project, doc);
+          rows = rows.filter(t => t.project === a.project || t.project === (projectsOf(doc).find(p => p.key && p.key.toUpperCase() === String(a.project).toUpperCase()) || {}).id);
         }
         if (a.status) rows = rows.filter(t => t.status === a.status);
         if (a.assignee) rows = rows.filter(t => t.assignee === a.assignee);
@@ -353,6 +530,7 @@ export function createMcp(deps) {
           start: t.start || null,
           estimate: t.estimate || null,
           dependencies: Array.isArray(t.deps) ? t.deps : [],
+          subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(s => ({ id: s?.id || null, title: s?.title || '', done: !!s?.done })) : [],
           projectName: proj.name || null,
           commentsCount: comments.length,
         };
@@ -396,8 +574,8 @@ export function createMcp(deps) {
       run: async (ctx, a) => {
         canWrite(ctx);
         const doc = loadDoc(ctx.ws);
-        const proj = findVisibleProject(ctx, a.project, doc);
-        if (a.assignee && !roster(ctx).some(m => m.id === a.assignee)) throw toolError(`Unknown member id: ${a.assignee}`);
+        const proj = findVisibleProjectRef(ctx, a.project, doc);
+        if (a.assignee) a.assignee = resolveAssignee(ctx, a.assignee);
         const tasks = tasksOf(doc);
         const n = tasks.reduce((max, x) => Math.max(max, Number(x.order) || 0), 0) + 1;
         const usedKeys = new Set(tasks.map(x => x.key).filter(Boolean));
@@ -439,20 +617,21 @@ export function createMcp(deps) {
       },
     },
     update_task: {
-      description: 'Update a task: title, description, due date, priority, labels or assignee. Use move_task for status changes.',
+      description: 'Update a task: title, description, dates (due/start), estimate, priority, labels or assignee (id, email, or exact name). Use move_task for status changes.',
       write: true,
       schema: {
         id: { t: 's', req: true },
         title: { t: 's', max: 200 },
         description: { t: 's', max: 20000 },
         due: { t: 's', re: DUE_RE, nullable: true },
+        start: { t: 's', re: DUE_RE, nullable: true },
+        estimate: { t: 's', max: 20, nullable: true },
         priority: { t: 'enum', values: MCP_PRIORITIES, nullable: true },
         labels: { t: 'arr', maxLen: 10, itemMax: 40 },
         assignee: { t: 's', nullable: true },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
-        const members = roster(ctx);
         let result = null;
         writeDoc(ctx.ws, d => {
           const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
@@ -468,6 +647,14 @@ export function createMcp(deps) {
             logActivity(d, ctx, 'changedDueDateOf', t, a.due ? { kind: 'dateSet', value: a.due } : { kind: 'dateCleared' });
             t.due = a.due;
           }
+          if (a.start !== undefined && a.start !== t.start) {
+            logActivity(d, ctx, 'changedStartDateOf', t, a.start ? { kind: 'dateSet', value: a.start } : { kind: 'dateCleared' });
+            t.start = a.start;
+          }
+          if (a.estimate !== undefined && a.estimate !== t.estimate) {
+            logActivity(d, ctx, 'estimated', t, a.estimate ? { kind: 'estimateSet', value: a.estimate } : {});
+            t.estimate = a.estimate || null;
+          }
           if (a.priority !== undefined && a.priority !== t.priority) {
             logActivity(d, ctx, 'changedPriorityOf', t, { kind: 'prioritySet', value: a.priority });
             t.priority = a.priority;
@@ -477,7 +664,8 @@ export function createMcp(deps) {
             t.labels = a.labels;
           }
           if (a.assignee !== undefined && a.assignee !== t.assignee) {
-            if (a.assignee && !members.some(m => m.id === a.assignee)) throw toolError(`Unknown member id: ${a.assignee}`);
+            if (a.assignee) a.assignee = resolveAssignee(ctx, a.assignee);
+            const members = roster(ctx);
             logActivity(d, ctx, 'assigned', t, a.assignee ? { kind: 'assignedTo', value: members.find(m => m.id === a.assignee)?.name || a.assignee } : { kind: 'unassigned' });
             t.assignee = a.assignee || null;
           }
@@ -525,6 +713,137 @@ export function createMcp(deps) {
           logActivity(d, ctx, 'commentedOn', tasksOf(d).find(x => x.id === t.id) || t, {});
         });
         return { posted: true, comment: { id: comment.id, at: comment.at } };
+      },
+    },
+    add_subtask: {
+      description: 'Add a subtask to a task.',
+      write: true,
+      schema: { task: { t: 's', req: true }, title: { t: 's', req: true, max: 200 } },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const t = findVisibleTask(ctx, a.task, doc);
+        const sub = { id: uid(), title: a.title.trim(), done: false };
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === t.id);
+          live.subtasks = Array.isArray(live.subtasks) ? live.subtasks : [];
+          live.subtasks.push(sub);
+          live.updated = now();
+          logActivity(d, ctx, 'addedSubtaskTo', live, { kind: 'subtaskAdded', value: sub.title });
+        });
+        return { added: true, subtask: sub };
+      },
+    },
+    toggle_subtask: {
+      description: 'Check/uncheck a subtask. The subtask id (or 0-based index) comes from get_task.',
+      write: true,
+      schema: {
+        task: { t: 's', req: true },
+        subtask: { t: 's' },
+        index: { t: 'n', min: 0, max: 99 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const t = findVisibleTask(ctx, a.task, doc);
+        let result = null;
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === t.id);
+          const list = Array.isArray(live.subtasks) ? live.subtasks : [];
+          const s = a.subtask ? list.find(x => x.id === a.subtask) : list[a.index];
+          if (!s) throw toolError(`Subtask not found on ${t.id}`);
+          s.done = !s.done;
+          live.updated = now();
+          logActivity(d, ctx, s.done ? 'completedSubtaskOn' : 'reopenedSubtaskOn', live, { kind: 'quoted', value: s.title });
+          result = { id: s.id, title: s.title, done: s.done, total: list.length, doneCount: list.filter(x => x.done).length };
+        });
+        return { toggled: true, subtask: result };
+      },
+    },
+    set_dependencies: {
+      description: 'Set the blocked-by dependencies of a task (array of task ids, replaces the whole list).',
+      write: true,
+      schema: {
+        task: { t: 's', req: true },
+        deps: { t: 'arr', maxLen: 50, itemMax: 64 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = loadDoc(ctx.ws);
+        const t = findVisibleTask(ctx, a.task, doc);
+        const ids = new Set(tasksOf(doc).map(x => x.id));
+        for (const dep of a.deps) {
+          if (!ids.has(dep)) throw toolError(`Unknown task id in deps: ${dep}`);
+          if (dep === t.id) throw toolError('A task cannot depend on itself');
+        }
+        writeDoc(ctx.ws, d => {
+          const live = tasksOf(d).find(x => x.id === t.id);
+          live.deps = a.deps;
+          live.updated = now();
+          logActivity(d, ctx, 'updatedDependenciesOf', live, {});
+        });
+        return { updated: true, deps: a.deps };
+      },
+    },
+    archive_task: {
+      description: 'Archive a task (hidden from every view; use restore_task to bring it back).',
+      write: true,
+      schema: { id: { t: 's', req: true } },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        writeDoc(ctx.ws, d => {
+          const t = tasksOf(d).find(x => x?.id === a.id);
+          if (!t) throw toolError(`Task not found: ${a.id}`);
+          if (!readableProjectIds(ctx, d).has(t.project)) throw toolError(`Task not found: ${a.id}`);
+          if (!t.archived) {
+            t.archived = true;
+            t.archivedAt = now();
+            logActivity(d, ctx, 'archived', t, {});
+          }
+        });
+        return { archived: true };
+      },
+    },
+    restore_task: {
+      description: 'Restore an archived task.',
+      write: true,
+      schema: { id: { t: 's', req: true } },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        writeDoc(ctx.ws, d => {
+          const tasks = Array.isArray(d.data.tasks) ? d.data.tasks : [];
+          const t = tasks.find(x => x?.id === a.id && x.archived);
+          if (!t) throw toolError(`Archived task not found: ${a.id}`);
+          if (!readableProjectIds(ctx, d).has(t.project)) throw toolError(`Task not found: ${a.id}`);
+          t.archived = false;
+          t.archivedAt = null;
+          logActivity(d, ctx, 'restored', t, {});
+        });
+        return { restored: true };
+      },
+    },
+    list_activity: {
+      description: 'Recent workspace activity, newest first (machine verbs + human names resolved).',
+      schema: { limit: { t: 'n', min: 1, max: 100, def: 30 } },
+      run: async (ctx, a) => {
+        const doc = loadDoc(ctx.ws);
+        const members = roster(ctx);
+        const tasks = new Map(tasksOf(doc).map(t => [t.id, t]));
+        const projects = new Map(projectsOf(doc).map(p => [p.id, p]));
+        const rows = (Array.isArray(doc?.data?.activity) ? doc.data.activity : [])
+          .slice(0, a.limit ?? 30)
+          .map(e => ({
+            verb: e.verb,
+            by: e.by,
+            byName: e.by ? members.find(m => m.id === e.by)?.name || e.by : null,
+            task: e.task || null,
+            taskTitle: e.task ? tasks.get(e.task)?.title || null : null,
+            project: e.project || null,
+            projectName: e.project ? projects.get(e.project)?.name || null : null,
+            at: e.at,
+            extra: e.extra || {},
+          }));
+        return { total: rows.length, activity: rows };
       },
     },
     list_comments: {
@@ -584,6 +903,9 @@ export function createMcp(deps) {
         out[key] = n;
       } else if (rule.t === 'enum') {
         if (!rule.values.includes(v)) throw toolError(`Argument "${key}" must be one of: ${rule.values.join(', ')}`);
+        out[key] = v;
+      } else if (rule.t === 'b') {
+        if (typeof v !== 'boolean') throw toolError(`Argument "${key}" must be a boolean`);
         out[key] = v;
       } else if (rule.t === 'arr') {
         if (!Array.isArray(v)) throw toolError(`Argument "${key}" must be an array of strings`);
