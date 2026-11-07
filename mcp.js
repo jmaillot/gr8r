@@ -32,7 +32,7 @@ import crypto from 'node:crypto';
    are what the document holds — this module reads and writes them verbatim,
    never a display name. */
 export const MCP_STATUSES = ['backlog', 'todo', 'progress', 'review', 'done'];
-export const MCP_PRIORITIES = ['urgent', 'high', 'medium', 'low'];
+export const MCP_PRIORITIES = ['none', 'urgent', 'high', 'medium', 'low']; // 'none' = UI-canonical cleared value (PRIOS, constants.js)
 /* Project lifecycle ids (src/core/constants.js PSTAT). */
 export const MCP_PROJECT_STATUSES = ['planning', 'active', 'risk', 'hold', 'complete'];
 /* The label catalog (src/core/constants.js LABELS ids). Task documents store
@@ -283,7 +283,7 @@ export function createMcp(deps) {
       projectKey: projectsOf(doc).find(p => p.id === t.project)?.key || null,
       assignee: t.assignee || null,
       assigneeName: t.assignee ? memberName(ctx, t.assignee) : null,
-      priority: t.priority || null,
+      priority: t.priority || 'none',
       due: t.due || null,
       recur: t.recur || null,
       labels: Array.isArray(t.labels) ? t.labels : [],
@@ -786,7 +786,7 @@ export function createMcp(deps) {
           title: a.title.trim(),
           status: a.status || 'todo',
           assignee: a.assignee || null,
-          priority: a.priority || null,
+          priority: a.priority || 'none', // UI-canonical: PR[null] would crash the client renderer
           due: a.due || null,
           start: null,
           labels: Array.isArray(a.labels) ? a.labels : [],
@@ -850,8 +850,9 @@ export function createMcp(deps) {
             t.estimate = a.estimate || null;
           }
           if (a.priority !== undefined && a.priority !== t.priority) {
-            logActivity(d, ctx, 'changedPriorityOf', t, { kind: 'prioritySet', value: a.priority });
-            t.priority = a.priority;
+            const cleared = a.priority === null || a.priority === 'none';
+            logActivity(d, ctx, 'changedPriorityOf', t, { kind: 'prioritySet', value: cleared ? 'none' : a.priority }); // same shape as the UI setter (actions.js)
+            t.priority = cleared ? 'none' : a.priority; // UI-canonical: never store null (PR[null] crashes the client renderer)
           }
           if (a.labels !== undefined) {
             logActivity(d, ctx, 'updatedLabelsOn', t, {});
@@ -1272,7 +1273,7 @@ export function createMcp(deps) {
               title: it.title.trim(),
               status: it.status || 'todo',
               assignee: it.assignee ? assignees.get(it.assignee) : null,
-              priority: it.priority || null,
+              priority: it.priority || 'none', // UI-canonical: PR[null] would crash the client renderer
               due: it.due || null,
               start: null,
               labels: Array.isArray(it.labels) ? it.labels : [],

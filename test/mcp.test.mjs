@@ -220,6 +220,10 @@ test('create_task → list_tasks → move_task round-trip lands in the document'
   const taskId = created.data.task.id;
   assert.match(created.data.task.key, new RegExp(`^${proj.key}-`));
 
+  /* UI-canonical priority: created tasks always carry a PRIOS id ('none'), never
+     null — the client renderer does PR[t.priority].name and PR[null] is undefined. */
+  assert.equal(created.data.task.priority, 'none');
+
   const listed = await callTool(writeKey, 'list_tasks', { project: proj.id, status: 'todo', limit: 200 });
   assert.ok(listed.data.tasks.some(t => t.id === taskId));
 
