@@ -61,7 +61,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
-import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn } from './db-adapter.mjs';
+import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn, runSchema as adapterRunSchema } from './db-adapter.mjs';
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
    through tFor, so the FR catalogue must be registered at boot from the SAME
@@ -382,10 +382,14 @@ async function initDb() {
     run: dbRun,
     tx: dbTx,
   };
-  /* D-06: one facade call per statement — the SCHEMA DDL is split on its
-     statement terminators and executed individually (node:sqlite prepare is
-     single-statement; pg goes through the same run() rewrite). */
-  for (const stmt of SCHEMA.split(/;\s*\n/).map(s => s.trim()).filter(Boolean)) await db.run(stmt);
+  /* D-10: schema creation is dialect-owned — the adapter branches ONCE
+     (runSchema): SQLite executes the SCHEMA above verbatim; pg executes
+     pgSchemaVariant(SCHEMA) — `collate nocase` stripped, epoch-ms columns
+     widened to bigint, the lower(email) functional unique index added.
+     D-11 (checkpoint-approved, one-way): the workspace doc column stays a
+     plain text column in the pg variant — no jsonb. One statement per
+     facade call (node:sqlite prepare is single-statement). */
+  await adapterRunSchema(SCHEMA);
   // Additive migration for databases created before multi-workspace support.
   // (D-10): the pragma table_info probe is SQLite-only; the adapter branches
   // to information_schema on pg — one branch site, pinned in the adapter.

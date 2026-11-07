@@ -190,13 +190,88 @@ test('sqliteOnly no-ops with a label on a pg backend (dependency-injected fake, 
 
 /* ---- pgSchemaVariant (D-10) ------------------------------------------ */
 
-test('pgSchemaVariant: lower(email) unique index present, zero collate nocase', () => {
+/* server.js's SCHEMA (single source) extracted verbatim — the variant and the
+   mirror must track it, so drift is a test failure, not a pg surprise. */
+const SERVER_SCHEMA = fs
+  .readFileSync(path.join(ROOT, 'server.js'), 'utf8')
+  .match(/const SCHEMA = (`(?:\\.|[^`\\])*`);/)?.[1]
+  ?.slice(1, -1);
+
+/* The mirror carries ONE intentional extra statement: the workspaces_slug_idx
+   unique index, which server.js runs separately after the ensureColumn wave
+   (openDb boot parity for pg). Everything else must match exactly. */
+test('SQLITE_SCHEMA mirror stays identical to server.js SCHEMA modulo comments/whitespace', () => {
+  assert.ok(SERVER_SCHEMA, 'server.js must declare a `const SCHEMA = \\`...\\`` template');
+  const normalize = sql => sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ').trim();
+  const expected = `${normalize(SERVER_SCHEMA)} create unique index if not exists workspaces_slug_idx on workspaces(slug);`;
+  assert.equal(normalize(adapter.SQLITE_SCHEMA), expected, 'the adapter mirror drifted from server.js SCHEMA');
+});
+
+const TABLES = [
+  'users',
+  'totp_factors',
+  'oidc_identities',
+  'sessions',
+  'login_challenges',
+  'workspaces',
+  'memberships',
+  'team_members',
+  'invites',
+  'recovery_codes',
+  'security_log',
+  'audit_log',
+  'reminders_sent',
+  'user_notif_prefs',
+];
+
+test('pgSchemaVariant: all 14 tables, zero collate nocase, zero pragma, functional nocase index', () => {
   const variant = adapter.pgSchemaVariant();
-  assert.match(variant, /create unique index if not exists users_email_nocase on users\(lower\(email\)\)/);
+  for (const table of TABLES) {
+    assert.match(variant, new RegExp(`create table if not exists ${table} \\(`), `table ${table} missing from pg variant`);
+  }
   assert.equal(/collate nocase/i.test(variant), false, 'pg variant must carry zero collate nocase');
+  assert.equal(/pragma/i.test(variant), false, 'pg variant must carry zero pragma');
+  assert.match(variant, /create unique index if not exists users_email_nocase on users\(lower\(email\)\)/);
   // The users email column keeps its unique constraint sans nocase.
   assert.match(variant, /email\s+text not null unique/);
 });
+
+test('pgSchemaVariant: epoch-ms columns become bigint; booleans/counters stay integer; doc stays text (D-11)', () => {
+  const variant = adapter.pgSchemaVariant();
+  // Epoch columns widen — Date.now() overflows pg integer (32-bit).
+  assert.match(variant, /created_at\s+bigint not null/);
+  assert.match(variant, /expires_at\s+bigint not null/);
+  assert.match(variant, /last_seen_at bigint/);
+  assert.match(variant, /last_login_at bigint/);
+  assert.match(variant, /used_at\s+bigint/);
+  assert.match(variant, /updated_at\s+bigint not null/);
+  // Boolean-ish and counter columns stay integer — `= 1` comparisons untouched.
+  assert.match(variant, /two_fa_enabled\s+integer not null default 0/);
+  assert.match(variant, /two_fa_last_step integer not null default 0/);
+  assert.match(variant, /is_instance_admin integer not null default 0/);
+  assert.match(variant, /revision\s+integer not null default 1/);
+  // D-11 (one-way, checkpoint-approved): the workspace document stays text — never jsonb.
+  assert.match(variant, /doc\s+text not null/);
+  assert.equal(/\bjsonb\b/i.test(variant), false, 'jsonb must never appear (D-11)');
+  // The SQLite SCHEMA itself is untouched by the variant function.
+  assert.match(adapter.SQLITE_SCHEMA, /created_at\s+integer not null/);
+});
+
+/* ---- runSchema (D-10): dialect-owned schema execution ----------------- */
+
+test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 14 tables)', async () => {
+  const dbPath = tmpDbPath();
+  await adapter.connectDb({ dbPath });
+  assert.equal(adapter.backendKind, 'sqlite');
+  await adapter.runSchema(adapter.SQLITE_SCHEMA);
+  const tables = (await adapter.all("select name from sqlite_master where type = 'table' order by name")).map(r => r.name);
+  for (const table of TABLES) assert.ok(tables.includes(table), `table ${table} must exist after runSchema`);
+  // Second execution is a no-op (create ... if not exists idempotency).
+  await adapter.runSchema(adapter.SQLITE_SCHEMA);
+  assert.equal((await adapter.get('select count(*) as n from users')).n, 0);
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+});
+
 
 /* ---- fail-closed boot probe (D-04, T-45-02) --------------------------- */
 

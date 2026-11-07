@@ -119,9 +119,11 @@ export function toPgSql(sql) {
 }
 
 /* ---- pg schema variant (D-10): nocase stripped + functional unique index.
-   This constant mirrors server.js SCHEMA verbatim; Plan 05 finalizes the
-   full pg schema body and its single source. --------------------------- */
-const SQLITE_SCHEMA = `
+   SQLITE_SCHEMA mirrors server.js SCHEMA verbatim (the mirror-sync test pins
+   the pair so neither can drift); runSchema() routes the server's SCHEMA
+   here on a pg boot. D-11 (one-way, checkpoint-approved): the workspace
+   document stays a plain `text` column — jsonb is never introduced. ------ */
+export const SQLITE_SCHEMA = `
   create table if not exists users (
     id            text primary key,
     email         text not null unique collate nocase,
@@ -260,11 +262,47 @@ const SQLITE_SCHEMA = `
   create unique index if not exists workspaces_slug_idx on workspaces(slug);
 `;
 
+/* Epoch-ms columns (Date.now() values) overflow pg's 32-bit integer, so the
+   pg variant widens exactly these named columns to bigint. Boolean-ish and
+   counter columns stay integer — that preserves server.js's `= 1`
+   comparisons verbatim on pg (Pitfall: bigint≠int comparison churn). */
+const PG_EPOCH_COLUMNS = new Set([
+  'created_at',
+  'updated_at',
+  'expires_at',
+  'last_seen_at',
+  'last_login_at',
+  'used_at',
+]);
+
 export function pgSchemaVariant(schema = SQLITE_SCHEMA) {
-  const stripped = schema.replaceAll(/\s+collate\s+nocase/gi, '');
+  // Line-scoped rewrite: `collate nocase` stripped everywhere; a column-def
+  // line whose column name is an epoch column gets integer→bigint. DDL text
+  // only — no literals carry either pattern (single-quoted spans are safe).
+  const stripped = schema
+    .split('\n')
+    .map(line => {
+      let out = line.replace(/\s+collate\s+nocase/gi, '');
+      const col = out.match(/^\s*([A-Za-z_]\w*)\s+integer\b/);
+      if (col && PG_EPOCH_COLUMNS.has(col[1].toLowerCase())) out = out.replace(/\binteger\b/, 'bigint');
+      return out;
+    })
+    .join('\n');
+  /* SQLite's `email … unique collate nocase` column constraint becomes, on
+     pg, a plain unique column + this functional unique index (Pitfall: pg has
+     no nocase collation — lower(email) IS the nocase semantics, D-10). */
   return `${stripped}
   create unique index if not exists users_email_nocase on users(lower(email));
 `;
+}
+
+/* ---- runSchema (D-10): schema creation is dialect-owned, one branch site.
+   server.js passes its SCHEMA; SQLite executes it verbatim, pg executes
+   pgSchemaVariant(SCHEMA). Statement-per-facade-call split (node:sqlite
+   prepare is single-statement; pg rewrites through run()). ---------------- */
+export async function runSchema(schemaSql) {
+  const sql = backendKind === 'pg' ? pgSchemaVariant(schemaSql) : schemaSql;
+  for (const stmt of sql.split(/;\s*\n/).map(s => s.trim()).filter(Boolean)) await run(stmt);
 }
 
 /* ---- SQLite backend ---------------------------------------------------- */
