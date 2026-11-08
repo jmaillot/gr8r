@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
-current_phase: 49
-current_phase_name: Visibility model collapse & grant materialization
-status: executing
-stopped_at: Completed 49-05-PLAN.md (gap closure CR-01)
-last_updated: "2026-11-08T06:39:58.911681+00:00"
+current_phase: 50
+current_phase_name: Invite hierarchy & per-project toggles (server)
+status: planning
+stopped_at: Phase 49 complete, ready to plan Phase 50
+last_updated: "2026-11-08T06:46:16.029Z"
 last_activity: 2026-11-08
-last_activity_desc: Phase 49 execution started
-state_head: ae99ee0c2bb5b0d71a6989aa3b36edd192899b34
+last_activity_desc: Phase 49 complete, transitioned to Phase 50
+state_head: 4383e737125990c237ffa4d162092034f220ba4c
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
   completed_plans: 5
-  percent: 0
+  percent: 25
 ---
 
 # STATE.md
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 49 (Visibility model collapse & grant materialization) — EXECUTING
-Plan: 5 of 5
-Status: Executing Phase 49
-Last activity: 2026-11-08 — 49-05 executed (gap closure CR-01: scalar p.team sweep coverage, WR-01/WR-02 closed)
+Phase: 50 — Invite hierarchy & per-project toggles (server)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-08 — Phase 49 complete, transitioned to Phase 50
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -153,7 +153,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-07T22:10:05.413Z
-Stopped at: Completed 49-04-PLAN.md
+Stopped at: Phase 49 complete, ready to plan Phase 50
 Resume file: None
 
 ## Performance Metrics

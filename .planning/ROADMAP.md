@@ -38,7 +38,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 
 ### v2.0 Project-level Permissions & Invitations (Phases 49-52)
 
-- [ ] **Phase 49: Visibility model collapse & grant materialization** — private flag + explicit `p.members` becomes the only access model; boot sweep migrates every old path; MCP mirror in lockstep
+- [x] **Phase 49: Visibility model collapse & grant materialization** — private flag + explicit `p.members` becomes the only access model; boot sweep migrates every old path; MCP mirror in lockstep (completed 2026-11-08)
 - [ ] **Phase 50: Invite hierarchy & per-project toggles (server)** — strict owner hierarchy, post-invite editing, team-share snapshot expansion, guest-invite toggle, one guest concept
 - [ ] **Phase 51: Client surfaces, Permissions-page removal & project creation** — private/public toggle UI, share-modal team invite, Settings > Permissions deleted, creation setting, i18n EN+FR
 - [ ] **Phase 52: Transparency view & milestone verification sweep** — member-visibility view through the funnel + full no-leak/invariant verification pass
@@ -57,7 +57,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
   4. The reminder pass, email mirror, digest and the MCP permission mirror agree with the UI predicate through the same `memberCanReadProject` helper (parity test green; `mcp.js` edited in the same phase — no over-permissive window)
   5. Second boot is a byte-identical no-op on both SQLite and pg; Phase 37/38 scheduler suppression + no-double-send invariants pass unmodified
 
-**Plans:** 5/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -123,7 +123,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Visibility model collapse & grant materialization | 5/5 | In Progress|  |
+| 49. Visibility model collapse & grant materialization | 5/5 | Complete    | 2026-11-08 |
 | 50. Invite hierarchy & per-project toggles (server) | 0/? | Not started | - |
 | 51. Client surfaces, Permissions-page removal & project creation | 0/? | Not started | - |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |
