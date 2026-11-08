@@ -433,6 +433,10 @@ async function initDb() {
   // them — they stay on disk only so the boot sweep can read legacy payloads.
   await adapterEnsureColumn('memberships', 'scope', 'text');
   await adapterEnsureColumn('invites', 'scope', 'text');
+  // Phase 50 (VIS-04): a member-tier guest invite is scoped to one project —
+  // nullable, set only on the member path (admin/owner invites stay
+  // workspace-scoped).
+  await adapterEnsureColumn('invites', 'project', 'text');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -1771,7 +1775,7 @@ function memberPayload(row, doc, selfId) {
 async function invitesOf(workspaceId) {
   return (
     await db.all(
-      `select token_hash, email, role, teams, created_at, expires_at
+      `select token_hash, email, role, teams, project, created_at, expires_at
          from invites
         where workspace_id = ? and used_at is null and expires_at > ?
         order by created_at desc`,
@@ -1795,6 +1799,7 @@ async function invitesOf(workspaceId) {
         roleLabel: ROLE_LABEL[r.role] || r.role,
         teams,
         scope: null,
+        project: r.project || null,
         createdAt: r.created_at,
         expiresAt: r.expires_at,
       };
@@ -4889,6 +4894,120 @@ async function handleApi(req, res, url) {
     return json(res, 200, { member });
   }
 
+  /* -------------------- project membership & the guest toggle --------------------
+     Phase 50 (INV-02 / VIS-04, D-50-1/2/4/7): the post-invite edit surface.
+     Scope (p.members add/remove) and status (in/out via the same list) are
+     p.members membership operations ONLY — no per-project roles, no suspended
+     flags, no provenance records (D-50-1/D-50-2). Every mutation writes the
+     CURRENT doc inside db.tx, and requireWorkspace/hiddenFor re-resolve per
+     request, so the change is enforced on the very next request (D-50-3 —
+     no memoization). The edit hierarchy is the stricter D-50-4 rule: only an
+     owner touches an admin/owner's project access. */
+
+  /* VIS-04 (D-50-7): the per-project "members may invite guests" toggle.
+     Admin/owner-only by workspace rank (a project lead who is a plain member
+     cannot flip it); default OFF everywhere. */
+  const wsProjectMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})$/);
+  if (wsProjectMatch && method === 'PATCH') {
+    const ctx = await requireWorkspace(req, res, wsProjectMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    if (typeof body?.allowInviteGuests !== 'boolean') {
+      return fail(res, 400, 'allowInviteGuestsRequired', 'Provide allowInviteGuests: true or false');
+    }
+    try {
+      await db.tx(async () => {
+        await updateDoc(ctx.ws.id, doc => {
+          const p = (Array.isArray(doc.data.projects) ? doc.data.projects : []).find(p => p?.id === wsProjectMatch[2]);
+          if (!p) {
+            const err = new Error('project not found');
+            err.code = 'projectNotFound';
+            throw err;
+          }
+          p.allowInviteGuests = body.allowInviteGuests;
+        });
+      });
+    } catch (err) {
+      if (err?.code === 'projectNotFound') return fail(res, 404, 'projectNotFound', 'Unknown project');
+      throw err;
+    }
+    logInfo(`project ${wsProjectMatch[2]} allowInviteGuests → ${body.allowInviteGuests} in "${ctx.ws.slug}" by ${ctx.user.email}`);
+    return json(res, 200, { projectId: wsProjectMatch[2], allowInviteGuests: body.allowInviteGuests, revision: await wsRevision(ctx.ws.id) });
+  }
+
+  const projectTargetOf = async (ctx, uidOrBody) => {
+    const target = await db.get('select * from users where id = ?', [String(uidOrBody || '')]);
+    const row = target ? await membershipOf(ctx.ws.id, target.id) : null;
+    return target && row ? { target, row } : null;
+  };
+
+  const wsProjectMembersMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})\/members$/);
+  if (wsProjectMembersMatch && method === 'POST') {
+    const ctx = await requireWorkspace(req, res, wsProjectMembersMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    const found = await projectTargetOf(ctx, body?.userId);
+    if (!found) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    const { target, row } = found;
+    if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.owner && ROLE_RANK[row.role] >= ROLE_RANK.admin) {
+      return fail(res, 403, 'ownerManagedRoles', 'Only an owner can manage admins and owners');
+    }
+    try {
+      await db.tx(async () => {
+        await updateDoc(ctx.ws.id, async doc => {
+          const p = (Array.isArray(doc.data.projects) ? doc.data.projects : []).find(p => p?.id === wsProjectMembersMatch[2]);
+          if (!p) {
+            const err = new Error('project not found');
+            err.code = 'projectNotFound';
+            throw err;
+          }
+          const memberId = (await ensureMember(doc, target, row.role, ctx.ws.id)) || row.member_id;
+          if (!Array.isArray(p.members)) p.members = [];
+          if (!p.members.includes(memberId)) p.members.push(memberId);
+        });
+      });
+    } catch (err) {
+      if (err?.code === 'projectNotFound') return fail(res, 404, 'projectNotFound', 'Unknown project');
+      throw err;
+    }
+    logInfo(`project member "${target.email}" added to ${wsProjectMembersMatch[2]} in "${ctx.ws.slug}" by ${ctx.user.email}`);
+    return json(res, 200, { added: true, userId: target.id, revision: await wsRevision(ctx.ws.id) });
+  }
+
+  const wsProjectMemberMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})\/members\/([A-Za-z0-9_-]{1,64})$/);
+  if (wsProjectMemberMatch && method === 'DELETE') {
+    const ctx = await requireWorkspace(req, res, wsProjectMemberMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const found = await projectTargetOf(ctx, wsProjectMemberMatch[3]);
+    if (!found) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    const { target, row } = found;
+    if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.owner && ROLE_RANK[row.role] >= ROLE_RANK.admin) {
+      return fail(res, 403, 'ownerManagedRoles', 'Only an owner can manage admins and owners');
+    }
+    try {
+      await db.tx(async () => {
+        await updateDoc(ctx.ws.id, async doc => {
+          const p = (Array.isArray(doc.data.projects) ? doc.data.projects : []).find(p => p?.id === wsProjectMemberMatch[2]);
+          if (!p) {
+            const err = new Error('project not found');
+            err.code = 'projectNotFound';
+            throw err;
+          }
+          const memberId = (await ensureMember(doc, target, row.role, ctx.ws.id)) || row.member_id;
+          if (Array.isArray(p.members)) p.members = p.members.filter(id => id !== memberId);
+        });
+      });
+    } catch (err) {
+      if (err?.code === 'projectNotFound') return fail(res, 404, 'projectNotFound', 'Unknown project');
+      throw err;
+    }
+    logInfo(`project member "${target.email}" removed from ${wsProjectMemberMatch[2]} in "${ctx.ws.slug}" by ${ctx.user.email}`);
+    return json(res, 200, { removed: true, userId: target.id, revision: await wsRevision(ctx.ws.id) });
+  }
+
   /* ---------- workspace-admin session revocation (AUD-02, D-R1/R2/R4) ----------
      D-R1 locks the /api/w/ prefix for this route even though sibling member
      routes use /api/workspaces/. The gate order mirrors the operator route
@@ -4950,7 +5069,10 @@ async function handleApi(req, res, url) {
   /* ------------------------------- invites ------------------------------- */
   const wsInviteMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/invites$/);
   if (wsInviteMatch && method === 'POST') {
-    const ctx = await requireWorkspace(req, res, wsInviteMatch[1], 'admin');
+    /* VIS-04 (D-50-7): the gate lowers to member tier — a member may mint ONE
+       thing only, a project-scoped guest (viewer) invite gated by the
+       per-project toggle. Admins/owners keep today's full surface. */
+    const ctx = await requireWorkspace(req, res, wsInviteMatch[1], 'member');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
 
@@ -4962,6 +5084,29 @@ async function handleApi(req, res, url) {
        mint a member invite where an escalation was attempted. */
     if (String(body?.role || '').trim().toLowerCase() === 'owner') {
       return fail(res, 403, 'ownerInviteForbidden', 'Ownership is transferred by an owner, never invited');
+    }
+    /* VIS-04 member-tier validation (T-50-05): viewer role only, a real
+       project on the CURRENT doc, toggle ON. Each cause carries its own
+       keyed refusal; team sets are a trusted admin/owner act (D-50-9) and
+       never ride a member invite. */
+    let inviteProject = null;
+    if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) {
+      if (role !== 'viewer') {
+        return fail(res, 403, 'inviteMemberRoleCeiling', 'Members can only invite guests (viewers) to a project');
+      }
+      inviteProject = String(body?.project || '');
+      if (!inviteProject) return fail(res, 400, 'inviteMemberProjectRequired', 'Choose a project for this guest invite');
+      const currentDoc = JSON.parse(ctx.ws.doc);
+      const project = (Array.isArray(currentDoc?.data?.projects) ? currentDoc.data.projects : []).find(p => p?.id === inviteProject);
+      if (!project) return fail(res, 400, 'inviteMemberProjectRequired', 'Unknown project');
+      /* D-50-7: OFF is the default everywhere — absent and false both mean
+         OFF, and nothing in the creation path ever writes it true. */
+      if (project.allowInviteGuests !== true) {
+        return fail(res, 403, 'inviteGuestToggleOff', 'Guest invites are off for this project');
+      }
+      if ((Array.isArray(body?.teams) ? body.teams : []).length > 0) {
+        return fail(res, 403, 'inviteTeamsAdminOnly', 'Only admins can invite teams');
+      }
     }
     /* D-07: an invite carries the full team set. Validation mirrors the PUT
        members/:uid/teams route exactly (T-28-07): per-item trim + 40-char
@@ -5032,19 +5177,21 @@ async function handleApi(req, res, url) {
           }
           const token = crypto.randomBytes(24).toString('base64url');
           await db.run(
-            'insert into invites (token_hash, email, role, teams, scope, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,null,?,?,?,?)',
+            'insert into invites (token_hash, email, role, teams, scope, project, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,null,?,?,?,?,?)',
             [
               sha256(token),
               email,
               role,
               JSON.stringify(teams),
+              /* VIS-04: only the member guest path scopes an invite to a project. */
+              inviteProject,
               ctx.ws.id,
               ctx.user.id,
               t,
               expiresAt,
             ],
           );
-          rows.push({ id: sha256(token), email, role, teams, scope: null, url: `${appBase(req)}/join/${token}`, expiresAt });
+          rows.push({ id: sha256(token), email, role, teams, scope: null, project: inviteProject, url: `${appBase(req)}/join/${token}`, expiresAt });
         }
       });
     } catch (err) {
@@ -5140,6 +5287,27 @@ async function handleApi(req, res, url) {
     if (ROLE_RANK[invite.role] >= ROLE_RANK.admin && !invite.email) {
       return fail(res, 403, 'inviteAdminEmailRequired', 'Admin invites must be sent to an email address');
     }
+    /* VIS-04 (D-50-8, T-50-06): the invite row is never trusted for
+       authorization — a project-scoped guest invite re-derives the toggle
+       from the CURRENT project doc at accept time (Phase 33 fail-closed
+       pattern). A flip to OFF (or a deleted project) kills the stale invite
+       without consuming it — and BEFORE any account creation or membership
+       write, so the refusal leaves no side effects. */
+    {
+      const wsRow = invite.workspace_id ? await db.get('select doc from workspaces where id = ?', [invite.workspace_id]) : null;
+      if (invite.project) {
+        let project = null;
+        try {
+          const currentDoc = JSON.parse(wsRow?.doc || 'null');
+          project = (Array.isArray(currentDoc?.data?.projects) ? currentDoc.data.projects : []).find(p => p?.id === invite.project) || null;
+        } catch {
+          project = null;
+        }
+        if (!project || project.allowInviteGuests !== true) {
+          return fail(res, 403, 'inviteGuestToggleOff', 'Guest invites are no longer open for this project');
+        }
+      }
+    }
 
     const body = await readJson(req);
     const session = await currentUser(req);
@@ -5178,7 +5346,7 @@ async function handleApi(req, res, url) {
        missing row fails closed to the 410 below; never a cross-tenant join. */
     const ws = await db.get('select * from workspaces where id = ?', [invite.workspace_id]);
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
-    if (!(await membershipOf(ws.id, user.id)))
+    if (!(await membershipOf(ws.id, user.id))) {
       await addMembership(
         ws,
         user,
@@ -5191,6 +5359,18 @@ async function handleApi(req, res, url) {
           }
         })(),
       );
+      /* VIS-04: the project-scoped guest lands on the access list — that
+         p.members entry IS the granted scope (D-50-1); it runs only after
+         the fail-closed re-derivation above. */
+      if (invite.project) {
+        await updateDoc(ws.id, async doc => {
+          const p = (Array.isArray(doc.data.projects) ? doc.data.projects : []).find(p => p?.id === invite.project);
+          if (!p) return;
+          const memberId = await ensureMember(doc, user, invite.role, ws.id);
+          if (memberId && Array.isArray(p.members) && !p.members.includes(memberId)) p.members.push(memberId);
+        });
+      }
+    }
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {
       await db.run('update invites set used_at = ?, used_by = ? where token_hash = ?', [now(), user.id, tokenHash]);

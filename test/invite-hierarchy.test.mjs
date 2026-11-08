@@ -171,3 +171,119 @@ describe('INV-04 — multi-project membership', () => {
     assert.ok(ids.includes('p_hidden'), 'second private project readable — no exactly-one-project refusal');
   });
 });
+describe('VIS-04 — the per-project guest-invite toggle', () => {
+  test('new projects default the toggle OFF', async () => {
+    const get = await owner.get(`/api/workspaces/${VIS_WS.slug}`);
+    const revision = get.data.revision;
+    const doc = JSON.parse(JSON.stringify(get.data.doc));
+    doc.data.projects.push({ id: 'p_fresh', key: 'fresh', name: 'Fresh', private: true, members: ['m_owner'], lead: 'm_owner', teams: [], status: 'active', perms: {} });
+    const put = await owner.put(`/api/workspaces/${VIS_WS.slug}`, { revision, doc });
+    assert.equal(put.status, 200, 'the owner creates a private project via the doc PUT');
+    assert.equal(project('p_fresh').allowInviteGuests, undefined, 'the creation path never writes the toggle true');
+
+    const refused = await inviteRefusal(member, { role: 'viewer', project: 'p_fresh' });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.code, 'inviteGuestToggleOff', 'absent toggle = OFF (deny-by-default)');
+  });
+
+  test('a member guest invite needs viewer role + a real project + the toggle ON (distinct key per cause)', async () => {
+    const noProject = await inviteRefusal(member, { role: 'viewer' });
+    assert.equal(noProject.status, 400);
+    assert.equal(noProject.code, 'inviteMemberProjectRequired');
+
+    const unknownProject = await inviteRefusal(member, { role: 'viewer', project: 'p_nonexistent' });
+    assert.equal(unknownProject.status, 400);
+    assert.equal(unknownProject.code, 'inviteMemberProjectRequired');
+
+    const toggleOff = await inviteRefusal(member, { role: 'viewer', project: 'p_hidden' });
+    assert.equal(toggleOff.status, 403);
+    assert.equal(toggleOff.code, 'inviteGuestToggleOff');
+
+    const aboveViewer = await inviteRefusal(member, { role: 'member', project: 'p_membershare' });
+    assert.equal(aboveViewer.status, 403);
+    assert.equal(aboveViewer.code, 'inviteMemberRoleCeiling');
+
+    const withTeams = await inviteRefusal(member, { role: 'viewer', project: 'p_membershare', teams: ['engA'] });
+    assert.equal(withTeams.status, 403);
+    assert.equal(withTeams.code, 'inviteTeamsAdminOnly', 'team invites are a trusted admin/owner act (D-50-9)');
+
+    const ok = await member.post(`/api/workspaces/${VIS_WS.slug}/invites`, { role: 'guest', project: 'p_membershare' });
+    assert.equal(ok.status, 201, 'the guest role normalizes to viewer and passes');
+    const inv = ok.data.invites[0];
+    assert.equal(inv.role, 'viewer');
+    assert.equal(inv.project, 'p_membershare', 'the invite carries its project');
+    const raw = withDb(server.dbPath, db =>
+      db.prepare('select role, project from invites where token_hash = ?').get(createHash('sha256').update(inviteToken(inv.url)).digest('hex')),
+    );
+    assert.equal(raw.role, 'viewer');
+    assert.equal(raw.project, 'p_membershare', 'invites.project is persisted');
+  });
+
+  test('admin invites bypass the toggle entirely (D-50-9)', async () => {
+    const linkOnly = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct@visfix.local'], role: 'viewer' });
+    assert.equal(linkOnly.status, 201, 'the admin path needs no project and no toggle');
+    const onOff = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct2@visfix.local'], role: 'viewer', project: 'p_hidden' });
+    assert.equal(onOff.status, 201, 'an admin guest invite succeeds even with the toggle OFF');
+    assert.equal(onOff.data.invites[0].project, null, 'the admin path stays workspace-scoped');
+  });
+
+  test('toggle flip: member refused, admin/owner allowed, stored on the doc', async () => {
+    const flipUrl = `/api/workspaces/${VIS_WS.slug}/projects/p_membershare`;
+    const asMember = await member.patch(flipUrl, { allowInviteGuests: true });
+    assert.equal(asMember.status, 403);
+    assert.equal(asMember.data.code, 'adminOnly', 'even the project lead cannot flip it — the gate is workspace rank');
+
+    const badBody = await admin.patch(flipUrl, {});
+    assert.equal(badBody.status, 400);
+    assert.equal(badBody.data.code, 'allowInviteGuestsRequired');
+
+    const off = await admin.patch(flipUrl, { allowInviteGuests: false });
+    assert.equal(off.status, 200);
+    assert.equal(project('p_membershare').allowInviteGuests, false, 'the flip is stored on the doc');
+    const on = await owner.patch(flipUrl, { allowInviteGuests: true });
+    assert.equal(on.status, 200);
+    assert.equal(project('p_membershare').allowInviteGuests, true);
+
+    const missing = await admin.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_nonexistent`, { allowInviteGuests: true });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.data.code, 'projectNotFound');
+  });
+
+  test('a stale member guest invite fails closed at accept (D-50-8)', async () => {
+    const [row] = (await member.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['stale@visfix.local'], role: 'viewer', project: 'p_membershare' })).data.invites;
+    assert.equal(row.project, 'p_membershare');
+    const token = inviteToken(row.url);
+
+    await owner.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: false });
+    const refused = await client(server.base, 'stale-anon').post(`/api/invites/${token}/accept`, {
+      name: 'Stale Guest',
+      email: 'stale@visfix.local',
+      password: PASSWORD,
+    });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'inviteGuestToggleOff', 'the accept re-derives the toggle from the CURRENT doc');
+    const pending = withDb(server.dbPath, db => db.prepare('select used_at from invites where token_hash = ?').get(withDb(server.dbPath, db => db.prepare("select token_hash from invites where email = 'stale@visfix.local'").get().token_hash)));
+    assert.equal(pending.used_at, null, 'the refusal does not consume the invite');
+
+    await owner.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: true });
+    const accepted = await client(server.base, 'stale-anon').post(`/api/invites/${token}/accept`, {
+      name: 'Stale Guest',
+      email: 'stale@visfix.local',
+      password: PASSWORD,
+    });
+    assert.equal(accepted.status, 201, 'with the toggle back ON the same invite accepts');
+  });
+
+  test('a flip to OFF never touches guests already on the access list', async () => {
+    await owner.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: false });
+    const stale = await login(server.base, 'stale@visfix.local', PASSWORD);
+    assert.equal(stale.status, 200);
+    const res = await stale.client.get(`/api/workspaces/${VIS_WS.slug}`);
+    const ids = (res.data?.doc?.data?.projects || []).map(p => p.id);
+    assert.ok(ids.includes('p_membershare'), 'the accepted guest keeps access after the flip');
+    const guestRes = await guest.get(`/api/workspaces/${VIS_WS.slug}`);
+    assert.ok((guestRes.data?.doc?.data?.projects || []).map(p => p.id).includes('p_membershare'), 'the pre-existing guest keeps access too');
+    /* leave the fixture toggle ON for the hierarchy cells that read it */
+    await owner.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: true });
+  });
+});
