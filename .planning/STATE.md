@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
-current_phase: 51
-current_phase_name: Client surfaces, Permissions-page removal & project creation
-status: verifying
-stopped_at: Completed 51-04-PLAN.md
-last_updated: "2026-11-08T12:38:37.809Z"
+current_phase: 52
+current_phase_name: Transparency view & milestone verification sweep
+status: planning
+stopped_at: Phase 51 complete, ready to plan Phase 52
+last_updated: "2026-11-08T16:52:48.894Z"
 last_activity: 2026-11-08
-last_activity_desc: Completed 51-04 (phase close: domain docs + evidence sweep)
-state_head: 7e960c3217fa623f0eda29cae6a4c90b04f7e423
+last_activity_desc: Phase 51 complete, transitioned to Phase 52
+state_head: 369d6fb177d686f31d774209c70ea5d9597347a3
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 14
   completed_plans: 14
-  percent: 50
+  percent: 75
 ---
 
 # STATE.md
@@ -27,14 +27,14 @@ See: .planning/PROJECT.md (updated 2026-11-08)
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 51 — Client surfaces, Permissions-page removal & project creation
+**Current focus:** Phase 52 — Transparency view & milestone verification sweep
 
 ## Current Position
 
-Phase: 51 (Client surfaces, Permissions-page removal & project creation) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-11-08 — Completed 51-04-PLAN.md (phase close)
+Phase: 52 — Transparency view & milestone verification sweep
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-08 — Phase 51 complete, transitioned to Phase 52
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -150,6 +150,8 @@ None yet.
   OFF) and D2.0-3 (one guest concept) already ruled in REQUIREMENTS.md
 - [v2.0] Phase 4 decision pending: transparency view access (admin-only vs self-permitted) —
   owner decision during Phase 52 planning (D2.0-4)
+- [51-UAT] Self-run UAT (Playwright + curl) passed 3/3: cold-start smoke, restricted-member create gating across 5 entry points (server refusal + toast, WR-02 known), toggle/teams/non-manager lock behavior — verification canonicalized to `passed`
+- [carried] Code review Phase 51 (advisory, not fixed): CR-01 inverted permCreate toggle polarity/role-gate (src/pages/settings.js:299), WR-02 partial create gating (only Projects-page button disabled), WR-01/WR-03 optimistic revert nuances — tracked in 51-REVIEW-DISPOSITION.md
 - [carried] v1.5/v1.9 deferred items — see Deferred Items
 
 ### Quick Tasks Completed
@@ -178,7 +180,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-08T12:38:37.752Z
-Stopped at: Completed 51-04-PLAN.md
+Stopped at: Phase 51 complete, ready to plan Phase 52
 Resume file: None
 
 ## Performance Metrics
