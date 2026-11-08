@@ -1271,6 +1271,7 @@ export const DEAD_KEY_ALLOWLIST = Object.freeze([
   'greeting.hello', // the t() interpolation fixture of test/i18n.test.mjs + i18n-locale.test.mjs
   'task.count', // the plural-mechanics fixture of the same suites
   'file.count', // the many-member (compact French) plural fixture
+  'page.members.visReason.', // built from the visibility endpoint's coarse reason code (members.js, Phase 52)
 ]);
 
 /* The t/tFor call sites of a source text are ONE input of the reference
