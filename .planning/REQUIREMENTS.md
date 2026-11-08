@@ -10,7 +10,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 
 ### Visibility & Permissions per Project
 
-- [ ] **VIS-01**: User (owner/admin) can switch any project between private and public
+- [x] **VIS-01**: User (owner/admin) can switch any project between private and public
   via a per-project toggle (replaces the current dropdown)
 - [x] **VIS-02**: A member sees exactly the non-private projects of the workspace plus
   the private projects they are explicitly invited to (individual or via team invite) —
@@ -48,7 +48,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 
 ### Project Creation & Settings
 
-- [ ] **CRT-01**: All members can create projects and automatically become members
+- [x] **CRT-01**: All members can create projects and automatically become members
   (lead) of them; a workspace setting can restrict creation to admins (M-07)
 - [ ] **CRT-02**: The workspace Settings > Permissions page is removed; anything still
   relevant relocates (or dies with the model) — no orphaned routes or i18n keys
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VIS-01 | Phase 51 | Pending |
+| VIS-01 | Phase 51 | Complete |
 | VIS-02 | Phase 49 | Complete |
 | VIS-03 | Phase 49 | Complete |
 | VIS-04 | Phase 50 | Complete |
@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MIG-01 | Phase 49 | Complete |
 | MIG-02 | Phase 49 | Complete |
 | MIG-03 | Phase 49 | Complete |
-| CRT-01 | Phase 51 | Pending |
+| CRT-01 | Phase 51 | Complete |
 | CRT-02 | Phase 51 | Pending |
 | TRN-01 | Phase 52 | Pending |
 | UX-01 | Phase 51 | Pending |

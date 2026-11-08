@@ -115,3 +115,7 @@ None.
 None.
 
 **Next:** Ready for 51-03 (Permissions-page teardown + permCreate relocation to General — the relocation must align the legacy `permCreate !== false` toggle polarity with the phase-wide `=== true` restriction read this plan gates on).
+
+## Self-Check: PASSED
+
+All key files exist on disk; commits 2612ae2, a362e95, 5eaeeb3, 277bec1 verified in history. Plan-level verification re-run: 22/22 targeted tests, i18n scan clean, full suite 1123 pass / 0 fail.

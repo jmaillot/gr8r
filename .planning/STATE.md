@@ -5,17 +5,17 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 51
 current_phase_name: Client surfaces, Permissions-page removal & project creation
 status: executing
-stopped_at: Phase 51 context gathered
-last_updated: "2026-11-08T10:58:05.146Z"
+stopped_at: Completed 51-02-PLAN.md
+last_updated: "2026-11-08T11:58:33Z"
 last_activity: 2026-11-08
-last_activity_desc: Phase 51 execution started
-state_head: 7254a2a2c1eb908af34adff53377ccc2a05727d0
+last_activity_desc: Completed 51-02 (Teams section, not-found state, create gating)
+state_head: 5eaeeb33c81657aad232000c42b87b31ab1b217f
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 14
-  completed_plans: 10
-  percent: 50
+  completed_plans: 11
+  percent: 54
 ---
 
 # STATE.md
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-11-08)
 ## Current Position
 
 Phase: 51 (Client surfaces, Permissions-page removal & project creation) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Executing Phase 51
-Last activity: 2026-11-08 — Completed 51-01-PLAN.md
+Last activity: 2026-11-08 — Completed 51-02-PLAN.md
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -54,6 +54,9 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 
 ## Recent Decisions
 
+- [51-02] Teams-section writes take the full optimistic+pushNow+snapshot-revert shape on BOTH link and unlink (plan specified it only for unlink) — one revert contract with the 51-01 toggle, all rides doc-sync (T-51-05)
+- [51-02] Visibility-epoch detection lives in applyDoc (S.ui.lostProjects) with the poll hydration as the trigger — no window-focus refetch machinery (plan: none without a failing case); the project route renders a dedicated stateNotFound() carrying err.projectNotFound
+- [51-02] Client create gating reads `prefs.permCreate === true` + role below admin live at render (disabled-with-tooltip, never hidden); submitProject maps ONLY the server's keyed projectCreateForbidden to a localized toast + optimistic-insert revert (T-51-07: client gate is UX, server refusal is the control)
 - [51-01] Keyed create-refusal rides the 200 doc-PUT response (`refused: [{code:'projectCreateForbidden', project}]`) — a whole-PUT 403 would break unrelated concurrent edits (Pitfall 1); Wave 2 maps the key to a toast without transport changes
 - [51-01] permCreate restriction semantics: stored `prefs.permCreate === true` means RESTRICTED (phase-wide convention per 51-02-PLAN); the legacy settings toggle polarity (checked = `permCreate !== false`) differs — 51-03's relocation must align it
 - [51-01] D-51-17 creator-as-lead superseded the privacy-test custodian model: a member's new private project now has the creator as lead+member (normalizeProjects no longer injects an owner custodian), so the creator sees their own project
@@ -170,9 +173,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T11:24:17Z
-Stopped at: Completed 51-01-PLAN.md
-Resume file: .planning/phases/51-client-surfaces-permissions-page-removal-project-creation/51-02-PLAN.md
+Last session: 2026-11-08T11:58:33Z
+Stopped at: Completed 51-02-PLAN.md
+Resume file: .planning/phases/51-client-surfaces-permissions-page-removal-project-creation/51-03-PLAN.md
 
 ## Performance Metrics
 
@@ -189,6 +192,7 @@ Resume file: .planning/phases/51-client-surfaces-permissions-page-removal-projec
 | Phase 50 P04 | 55 min | 3 tasks | 5 files |
 | Phase 50 P05 | 12 min | 3 tasks | 3 files |
 | Phase 51 P01 | 19 min | 3 tasks | 7 files |
+| Phase 51 P02 | 21 min | 3 tasks | 13 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 
