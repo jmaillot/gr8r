@@ -13,9 +13,10 @@ projects), and the right to invite guests moves down to each project.
   admin/member/guest; members invite guests only where the project allows it
 - Everything editable after the invite: role, scope and status changeable at any time,
   effective immediately
-- Team sharing: invite whole teams through a private project's share options; all team
-  members see the project (teams are an invitation mechanism, not an implicit visibility
-  source — the v1.7 `project.teams ∩ member.teams` rule is replaced)
+- Team sharing: link whole teams to a project through its share options; team
+  membership is a LIVE access source (updated 2026-11-08, D-50-5 — join/leave
+  the team grants/revokes access to linked projects; restores a live form of
+  the v1.7 team rule, superseding the Phase 49 snapshot materialization)
 - One guest concept: the "Invité externe" toggle is removed
 - Per-project private/public toggle replaces the current dropdown; non-private =
   workspace-visible, private = explicit invitees (people or teams) only
@@ -28,7 +29,11 @@ projects), and the right to invite guests moves down to each project.
 ### v2.0 milestone decisions (owner-validated 2026-11-07)
 
 - M-01 Strict invitation hierarchy (owner↔owner only); M-02 everything editable post-invite
-- M-03 team invite = bulk invite to the project; M-04 single guest concept, toggle removed
+- M-03 team invite = live team link to the project (updated 2026-11-08, Phase 50
+  D-50-5 — originally a snapshot bulk invite; the owner chose live roster-following
+  access: join team → access to linked projects, leave team → revoked unless
+  individually invited; `p.teams[]` returns, reversing Phase 49 D-49-5)
+- M-04 single guest concept, toggle removed
 - M-05 private/public toggle per project replaces the dropdown; visibility = explicit
   invitees + non-private projects (replaces v1.7 team-derived visibility and Phase 29 D-03
   scope columns as the primary model)

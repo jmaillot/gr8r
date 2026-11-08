@@ -85,7 +85,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Only an owner can grant the owner role — attempts by admins/owners-to-be at invite creation, role edit and invite acceptance are refused server-side (strict hierarchy at all three points)
   2. An admin/owner changes a member's role, project scope or status after the invite and the change is enforced on the very next request (no re-invite, no re-login)
-  3. Owner/admin inviting a team to a private project grants every current team member access; a user who joins the team afterwards gains nothing unless re-invited (snapshot semantics pinned by test)
+  3. A project's team links are LIVE: an owner/admin linking a team to a private project grants every current team member access; a user who joins the team afterwards gains access automatically, and a user who leaves loses it unless individually invited (live team link, D-50-5 — supersedes the original snapshot wording)
   4. On a project with "members may invite guests" off, a member's guest invite is refused while an admin/owner succeeds; existing projects migrate with the toggle OFF (D2.0-1) and a stale invite accepted after the model change re-derives fail-closed
   5. The same guest account can hold membership in multiple projects — no "exactly one project" refusal remains, and the "Invité externe" distinction no longer exists server-side
 

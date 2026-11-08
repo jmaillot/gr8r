@@ -27,9 +27,10 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
   and at accept time (M-01 strict hierarchy)
 - [ ] **INV-02**: Admin/owner can edit a member's role, project scope and status after
   the invite, with immediate effect (M-02)
-- [ ] **INV-03**: Owner/admin can invite whole teams through a private project's share
-  options; all current team members gain access (snapshot semantics — later team joiners
-  gain nothing unless re-invited) (M-03)
+- [ ] **INV-03**: Owner/admin can link whole teams to a project (live team link —
+  current team members gain access; members who join the team later gain access to
+  linked projects automatically, and members who leave lose it unless individually
+  invited) (M-03, updated 2026-11-08 per Phase 50 D-50-5 — supersedes snapshot semantics)
 - [ ] **INV-04**: One guest concept: the "Invité externe" toggle is removed; a guest can
   be invited to multiple projects (the "exactly one project" rule is retired, D2.0-3)
 
