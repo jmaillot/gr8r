@@ -3,13 +3,13 @@ gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
 current_phase: 50
-current_phase_name: invite-hierarchy-per-project-toggles-server
+current_phase_name: Invite hierarchy & per-project toggles (server)
 status: executing
 stopped_at: Phase 50 context gathered
-last_updated: "2026-11-08T07:42:56.659Z"
+last_updated: "2026-11-08T07:44:39.696Z"
 last_activity: 2026-11-08
-last_activity_desc: Phase 49 complete, transitioned to Phase 50
-state_head: 56dc618b5f03d209a650593701818dd0b5caca09
+last_activity_desc: Phase 50 execution started
+state_head: 6f278dd21f1732ef06a5caaca7c124c2df3283b5
 progress:
   total_phases: 4
   completed_phases: 1
@@ -27,14 +27,14 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 49 — Visibility model collapse & grant materialization
+**Current focus:** Phase 50 — Invite hierarchy & per-project toggles (server)
 
 ## Current Position
 
-Phase: 50 (invite-hierarchy-per-project-toggles-server) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-08 — Phase 49 complete, transitioned to Phase 50
+Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 50
+Last activity: 2026-11-08 — Phase 50 execution started
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
