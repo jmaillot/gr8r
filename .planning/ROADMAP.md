@@ -40,7 +40,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 
 - [x] **Phase 49: Visibility model collapse & grant materialization** — private flag + explicit `p.members` becomes the only access model; boot sweep migrates every old path; MCP mirror in lockstep (completed 2026-11-08)
 - [x] **Phase 50: Invite hierarchy & per-project toggles (server)** — strict owner hierarchy, post-invite editing, live team links (D-50-5), guest-invite toggle, one guest concept (completed 2026-11-08)
-- [ ] **Phase 51: Client surfaces, Permissions-page removal & project creation** — private/public toggle UI, share-modal team invite, Settings > Permissions deleted, creation setting, i18n EN+FR
+- [x] **Phase 51: Client surfaces, Permissions-page removal & project creation** — private/public toggle UI, share-modal team invite, Settings > Permissions deleted, creation setting, i18n EN+FR (completed 2026-11-08)
 - [ ] **Phase 52: Transparency view & milestone verification sweep** — member-visibility view through the funnel + full no-leak/invariant verification pass
 
 ## Phase Details
@@ -120,7 +120,7 @@ Plans:
   4. By default any member can create a project and automatically becomes its lead; with the workspace restriction on, a member sees no create affordance and the server refuses the attempt
   5. `npm run i18n:scan` passes with every new/changed surface string catalogued EN+FR (server keys included), and the removed-key leak check catches dead entries
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -133,7 +133,7 @@ Plans:
 - [x] 51-03-PLAN.md — Settings > Permissions teardown, permCreate → General, dead-key i18n gate + removed-key leak check, full-suite pass (CRT-02, UX-01)
 
 **Wave 4** *(blocked on 51-03)*
-- [ ] 51-04-PLAN.md — Phase close: domain docs to shipped model (lead role, live team semantics, deleted toggles), success-criteria evidence sweep (UX-01)
+- [x] 51-04-PLAN.md — Phase close: domain docs to shipped model (lead role, live team semantics, deleted toggles), success-criteria evidence sweep (UX-01) (completed 2026-11-08)
 
 ### Phase 52: Transparency view & milestone verification sweep
 
@@ -153,7 +153,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 49. Visibility model collapse & grant materialization | 5/5 | Complete    | 2026-11-08 |
 | 50. Invite hierarchy & per-project toggles (server) | 5/5 | Complete    | 2026-11-08 |
-| 51. Client surfaces, Permissions-page removal & project creation | 3/4 | In Progress|  |
+| 51. Client surfaces, Permissions-page removal & project creation | 4/4 | Complete    | 2026-11-08 |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |
 
 ## Milestone-wide invariants (pinned per phase)

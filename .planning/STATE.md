@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
 current_phase: 51
 current_phase_name: Client surfaces, Permissions-page removal & project creation
-status: executing
-stopped_at: Completed 51-03-PLAN.md
-last_updated: "2026-11-08T12:27:54.888Z"
+status: verifying
+stopped_at: Completed 51-04-PLAN.md
+last_updated: "2026-11-08T12:38:37.809Z"
 last_activity: 2026-11-08
-last_activity_desc: Completed 51-02 (Teams section, not-found state, create gating)
-state_head: f180b68a91a5545ac5e7bbf0b4a4cb6eb2529817
+last_activity_desc: Completed 51-04 (phase close: domain docs + evidence sweep)
+state_head: 7e960c3217fa623f0eda29cae6a4c90b04f7e423
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
   percent: 50
 ---
 
@@ -33,8 +33,8 @@ See: .planning/PROJECT.md (updated 2026-11-08)
 
 Phase: 51 (Client surfaces, Permissions-page removal & project creation) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-11-08 — Completed 51-02-PLAN.md
+Status: Phase complete — ready for verification
+Last activity: 2026-11-08 — Completed 51-04-PLAN.md (phase close)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -54,6 +54,8 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 
 ## Recent Decisions
 
+- [51-04] Domain docs rewritten to the shipped model with file:line refs verified in the live tree at doc time (canManageProject server.js:820-823, keyed refusal server.js:1061/4686, toggle modals.js:286, Teams section actions.js:1737/1756) — no line refs carried over from pre-phase plans
+- [51-04] The two deleted settings toggles are documented descriptively without naming their keys, so the docs themselves satisfy the no-dead-key leak bar the i18n gate enforces on the catalogue
 - [51-02] Teams-section writes take the full optimistic+pushNow+snapshot-revert shape on BOTH link and unlink (plan specified it only for unlink) — one revert contract with the 51-01 toggle, all rides doc-sync (T-51-05)
 - [51-02] Visibility-epoch detection lives in applyDoc (S.ui.lostProjects) with the poll hydration as the trigger — no window-focus refetch machinery (plan: none without a failing case); the project route renders a dedicated stateNotFound() carrying err.projectNotFound
 - [51-02] Client create gating reads `prefs.permCreate === true` + role below admin live at render (disabled-with-tooltip, never hidden); submitProject maps ONLY the server's keyed projectCreateForbidden to a localized toast + optimistic-insert revert (T-51-07: client gate is UX, server refusal is the control)
@@ -175,8 +177,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T12:27:54.830Z
-Stopped at: Completed 51-03-PLAN.md
+Last session: 2026-11-08T12:38:37.752Z
+Stopped at: Completed 51-04-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -196,6 +198,8 @@ Resume file: None
 | Phase 51 P01 | 19 min | 3 tasks | 7 files |
 | Phase 51 P02 | 21 min | 3 tasks | 13 files |
 | Phase 51 P03 | 32 min | 3 tasks | 12 files |
+| Phase 51 P04 | 16 min | 2 tasks | 2 files |
+| Phase 51 P04 | 16 min | 2 tasks | 2 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 
