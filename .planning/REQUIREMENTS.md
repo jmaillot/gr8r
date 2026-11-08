@@ -27,7 +27,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
   and at accept time (M-01 strict hierarchy)
 - [ ] **INV-02**: Admin/owner can edit a member's role, project scope and status after
   the invite, with immediate effect (M-02)
-- [ ] **INV-03**: Owner/admin can link whole teams to a project (live team link —
+- [x] **INV-03**: Owner/admin can link whole teams to a project (live team link —
   current team members gain access; members who join the team later gain access to
   linked projects automatically, and members who leave lose it unless individually
   invited) (M-03, updated 2026-11-08 per Phase 50 D-50-5 — supersedes snapshot semantics)
@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIS-04 | Phase 50 | Pending |
 | INV-01 | Phase 50 | Pending |
 | INV-02 | Phase 50 | Pending |
-| INV-03 | Phase 50 | Pending |
+| INV-03 | Phase 50 | Complete |
 | INV-04 | Phase 50 | Pending |
 | MIG-01 | Phase 49 | Complete |
 | MIG-02 | Phase 49 | Complete |

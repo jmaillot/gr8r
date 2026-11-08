@@ -5,17 +5,17 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 50
 current_phase_name: Invite hierarchy & per-project toggles (server)
 status: executing
-stopped_at: Phase 50 context gathered
-last_updated: "2026-11-08T07:44:39.696Z"
+stopped_at: Completed 50-01-PLAN.md
+last_updated: "2026-11-08T08:06:00.000Z"
 last_activity: 2026-11-08
-last_activity_desc: Phase 50 execution started
-state_head: 6f278dd21f1732ef06a5caaca7c124c2df3283b5
+last_activity_desc: Plan 50-01 executed (live team link restored, sweep retired)
+state_head: 34388fb
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
-  percent: 25
+  completed_plans: 6
+  percent: 67
 ---
 
 # STATE.md
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
-Plan: 1 of 4
+Plan: 2 of 4
 Status: Executing Phase 50
-Last activity: 2026-11-08 — Phase 50 execution started
+Last activity: 2026-11-08 — Plan 50-01 executed (live team link restored, sweep retired)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -53,6 +53,10 @@ unmodified; EN+FR i18n gate (server keys included); zero new runtime dependencie
 green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for migration tests.
 
 ## Recent Decisions
+
+- [50-01] D-50-5 "live" = the predicate reads current p.teams + current team_members on every evaluation, no cache — a team join grants and a leave revokes on the very next request (pinned by visibility-team tests)
+- [50-01] Admin/owner doc-GET path stays access-list-gated (no team term via hiddenProjectIds); the mcp.js mirror keeps its ROLE_RANK bypass — documented drift preserved per RESEARCH Open Question 2
+- [50-01] Phase 49 sweep deleted outright (0 symbols on any boot path); scope columns dormant-on-disk, read by nothing; scalar p.team key is dead (nothing converts it)
 
 - [49-05] Scalar `p.team` conversion is sweep-side, NOT normalizeProjects — a re-add would churn served copies and break the D-49-6 second-boot byte-identity pin (CR-01 closure)
 - [49-05] WR-02: sweepNeeded falls back to `scopeRowCount > 0` on unreadable docs; the tx clears scope columns on that path in the same transaction — no-churn preserved
@@ -152,9 +156,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T07:14:09.309Z
-Stopped at: Phase 50 context gathered
-Resume file: .planning/phases/50-invite-hierarchy-per-project-toggles-server/50-CONTEXT.md
+Last session: 2026-11-08T08:06:00.000Z
+Stopped at: Completed 50-01-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -166,6 +170,7 @@ Resume file: .planning/phases/50-invite-hierarchy-per-project-toggles-server/50-
 | Phase 49 P02 | 50m | 3 tasks | 4 files |
 | Phase 49 P03 | 75m | 3 tasks | 7 files |
 | Phase 49 P04 | 40 min | 2 tasks | 7 files |
+| Phase 50 P01 | 35 min | 3 tasks | 6 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 

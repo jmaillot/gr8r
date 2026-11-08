@@ -93,7 +93,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 50-01-PLAN.md — Live team link (D-50-5/INV-03): funnel + MCP mirror + mergeClientDoc pinning + Phase 49 sweep retirement, team-link 404-matrix cells first
+- [x] 50-01-PLAN.md — Live team link (D-50-5/INV-03): funnel + MCP mirror + mergeClientDoc pinning + Phase 49 sweep retirement, team-link 404-matrix cells first (completed 2026-11-08)
 
 **Wave 2** *(blocked on Wave 1)*
 - [ ] 50-02-PLAN.md — Guarded boot migrations: D-50-6 reverse sweep (provenance decision checkpoint) + D-50-10 guest→viewer normalization; byte-identical second boot

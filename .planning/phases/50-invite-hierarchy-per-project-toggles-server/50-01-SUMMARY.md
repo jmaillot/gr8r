@@ -24,7 +24,7 @@ actuals:
   tasks: 3
   commits: 1
 plan_head_before: 6f278dd21f1732ef06a5caaca7c124c2df3283b5
-plan_head_after: 4be4f6bd  # see git for full hash
+plan_head_after: 4be4f6b2d7728a26438bdfb1df0e1329630f736a
 commits: 1
 duration: ~35 min
 completed: 2026-11-08
