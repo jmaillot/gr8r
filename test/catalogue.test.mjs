@@ -449,3 +449,29 @@ test('the French key order mirrors the English key order', () => {
   const frShared = Object.keys(fr).filter(key => Object.hasOwn(en, key));
   assert.deepEqual(frShared, enShared, `the shared keys drifted out of order (fr: [${frShared.join(', ')}] against en: [${enShared.join(', ')}])`);
 });
+
+/* ---------- the removed-key leak check (51-03, UX-01 criterion 5) ---------- */
+
+/* The Settings > Permissions page was torn down in phase 51 (CRT-02,
+   D-51-10..13). These keys must never come back: a re-added key with no
+   source reference is exactly the half-shipped state the dead-key detector
+   (i18n-scan.mjs) now catches — this cell pins the teardown itself. */
+test('the removed settings-permissions keys are absent from both catalogues', () => {
+  const removed = [
+    'settings.nav.permissions',
+    'settings.perms.lead',
+    'settings.perms.guests',
+    'settings.perms.guestsDesc',
+    'settings.perms.public',
+    'settings.perms.publicDesc',
+  ];
+  for (const key of removed) {
+    assert.ok(!Object.hasOwn(en, key), `${key} leaked back into en.json`);
+    assert.ok(!Object.hasOwn(fr, key), `${key} leaked back into fr.json`);
+  }
+  /* The two survivors: settings.perms.create relocated to Workspace > General,
+     settings.perms.roleTable living on the Members page (D-51-13). */
+  for (const key of ['settings.perms.create', 'settings.perms.roleTable']) {
+    assert.ok(Object.hasOwn(en, key) && Object.hasOwn(fr, key), `the surviving key ${key} left a catalogue`);
+  }
+});

@@ -16,7 +16,7 @@ import path from 'node:path';
 import url from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-import { scanSource, scanTree, compare, EXCLUDED_FILES, main, sweepDisplayLabels, scanServerNotifKeys, notifParity } from '../scripts/i18n-scan.mjs';
+import { scanSource, scanTree, compare, EXCLUDED_FILES, main, sweepDisplayLabels, scanServerNotifKeys, notifParity, findDeadKeys, DEAD_KEY_ALLOWLIST } from '../scripts/i18n-scan.mjs';
 import en from '../src/locales/en.json' with { type: 'json' };
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
@@ -569,4 +569,76 @@ test('src/data/seed.js is never scanned', () => {
   assert.equal(fromSeed.length, 0);
   const seedStrings = [...fs.readFileSync(path.join(REPO_ROOT, 'src/data/seed.js'), 'utf8').matchAll(/'([A-Z][A-Za-z]{2,})'/g)].map(m => m[1]);
   assert.ok(seedStrings.length > 10, 'the seed fixture is empty');
+});
+
+/* ---------- the dead-key family (51-03, UX-01 criterion 5) ---------- */
+
+/* A minimal catalogue + source set: the fixtures are synthetic, like every
+   contract test of this file. The catalogue is a flat object; the sources are
+   a { file: text } map. */
+const LIVE = { 'a.live': 'Live', 'a.gone': 'Gone', 'err.someCode': 'Some failure', 'project.template.web.name': 'Website' };
+
+function deadOf(catalogue, sources) {
+  return findDeadKeys(catalogue, sources).map(f => f.text).sort();
+}
+
+/* The live src/ tree as a { relPath: text } map, for the whole-tree dead check. */
+function walkSrcTexts() {
+  const out = [];
+  const walk = dir =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+      const p = path.join(dir, e.name);
+      return e.isDirectory() ? walk(p) : /\.js$/.test(e.name) ? [p] : [];
+    });
+  for (const file of walk(path.join(REPO_ROOT, 'src'))) {
+    const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
+    if (EXCLUDED_FILES.has(rel)) continue;
+    out.push([rel, fs.readFileSync(file, 'utf8')]);
+  }
+  return out;
+}
+
+test('a catalogue key no source references is reported dead (UX-01 criterion 5)', () => {
+  const sources = { 'src/pages/x.js': "import { t } from '../core/i18n.js';\nexport const h = () => t('a.live');\n" };
+  assert.deepEqual(deadOf(LIVE, sources), ['a.gone'], 'the unreferenced key is dead, the referenced one is not');
+});
+
+test('a key referenced only through a composed t() prefix is NOT dead (no false positive)', () => {
+  const sources = { 'src/actions/x.js': "import { t } from '../core/i18n.js';\nexport const m = code => t('err.' + code);\n" };
+  const catalogue = { 'err.someCode': 'Some failure', 'err.otherCode': 'Other failure' };
+  assert.deepEqual(deadOf(catalogue, sources), [], 'composed prefixes keep every err.* key alive');
+  const templateSources = { 'src/overlays/x.js': "import { t } from '../core/i18n.js';\nexport const n = id => t(`project.template.${id}.name`);\n" };
+  assert.deepEqual(deadOf({ 'project.template.web.name': 'Website' }, templateSources), [], 'template-literal prefixes work too');
+});
+
+test('the dynamic allow-list exempts the interpolated key families', () => {
+  const sources = { 'src/pages/x.js': "import { t } from '../core/i18n.js';\nexport const h = () => t('a.live');\n" };
+  const catalogue = { 'a.live': 'Live', 'project.template.web.desc': 'Built by interpolation', 'common.perm.view': 'View' };
+  const dead = deadOf(catalogue, sources);
+  assert.deepEqual(dead, [], 'project.template.* and common.perm.* are exempt (they are built at actions.js:1557 / modals.js:201)');
+  for (const prefix of DEAD_KEY_ALLOWLIST) assert.ok(typeof prefix === 'string' && prefix.endsWith('.'), 'every allow-list entry is a key prefix');
+});
+
+test('a t() call in a file that does not import t is not a reference', () => {
+  const sources = { 'src/lib/x.js': "export const s = t('a.gone');\n" };
+  assert.deepEqual(deadOf(LIVE, sources), ['a.gone'], "a bare t( in a file without the i18n import does not keep a key alive");
+});
+
+test('main() gates on dead keys — exit 1 when one lingers, 0 when the tree is clean', () => {
+  const dir = fixtureTree({ 'src/pages/x.js': "import { t } from '../core/i18n.js';\nexport const h = () => t('a.live');\n" });
+  const enFile = path.join(dir, 'en.json');
+  fs.writeFileSync(enFile, JSON.stringify({ 'a.live': 'Live', 'a.gone': 'Gone' }));
+  const base = { root: dir, catalogue: enFile, frCatalogue: enFile, allowList: path.join(dir, 'none.json'), serverFiles: [] };
+  assert.equal(main([], base), 1, 'a dead key fails the gate');
+  fs.writeFileSync(enFile, JSON.stringify({ 'a.live': 'Live' }));
+  assert.equal(main([], base), 0, 'a clean catalogue passes');
+});
+
+test('the live post-teardown tree is dead-key clean', () => {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'src/locales/en.json'), 'utf8'));
+  const sources = {};
+  for (const file of ['server.js', 'mailer.js']) sources[file] = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+  for (const [rel, text] of walkSrcTexts()) sources[rel] = text;
+  const dead = findDeadKeys(catalogue, sources).filter(f => !DEAD_KEY_ALLOWLIST.some(p => f.text.startsWith(p)));
+  assert.deepEqual(dead.map(f => f.text), [], `live dead keys: ${dead.map(f => f.text).join(', ')}`);
 });
