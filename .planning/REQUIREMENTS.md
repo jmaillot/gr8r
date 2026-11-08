@@ -17,21 +17,21 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
   team-derived visibility (`project.teams ∩ member.teams ≠ ∅`) is replaced
 - [x] **VIS-03**: A private project is never sent to a non-invitee: redaction on read,
   merge protection on write, and byte-identical 404s on every side door are preserved
-- [ ] **VIS-04**: Per-project "members may invite guests" toggle: members can invite a
+- [x] **VIS-04**: Per-project "members may invite guests" toggle: members can invite a
   guest into a project only when the toggle is on (admins/owner always allowed);
   existing projects migrate with the toggle OFF (D2.0-1)
 
 ### Invitations & Hierarchy
 
-- [ ] **INV-01**: Only an owner can name another owner — at invite time, at edit time,
+- [x] **INV-01**: Only an owner can name another owner — at invite time, at edit time,
   and at accept time (M-01 strict hierarchy)
-- [ ] **INV-02**: Admin/owner can edit a member's role, project scope and status after
+- [x] **INV-02**: Admin/owner can edit a member's role, project scope and status after
   the invite, with immediate effect (M-02)
 - [x] **INV-03**: Owner/admin can link whole teams to a project (live team link —
   current team members gain access; members who join the team later gain access to
   linked projects automatically, and members who leave lose it unless individually
   invited) (M-03, updated 2026-11-08 per Phase 50 D-50-5 — supersedes snapshot semantics)
-- [ ] **INV-04**: One guest concept: the "Invité externe" toggle is removed; a guest can
+- [x] **INV-04**: One guest concept: the "Invité externe" toggle is removed; a guest can
   be invited to multiple projects (the "exactly one project" rule is retired, D2.0-3)
 
 ### Migration & Data
@@ -87,11 +87,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIS-01 | Phase 51 | Pending |
 | VIS-02 | Phase 49 | Complete |
 | VIS-03 | Phase 49 | Complete |
-| VIS-04 | Phase 50 | Pending |
-| INV-01 | Phase 50 | Pending |
-| INV-02 | Phase 50 | Pending |
+| VIS-04 | Phase 50 | Complete |
+| INV-01 | Phase 50 | Complete |
+| INV-02 | Phase 50 | Complete |
 | INV-03 | Phase 50 | Complete |
-| INV-04 | Phase 50 | Pending |
+| INV-04 | Phase 50 | Complete |
 | MIG-01 | Phase 49 | Complete |
 | MIG-02 | Phase 49 | Complete |
 | MIG-03 | Phase 49 | Complete |

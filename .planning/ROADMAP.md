@@ -89,7 +89,7 @@ Plans:
   4. On a project with "members may invite guests" off, a member's guest invite is refused while an admin/owner succeeds; existing projects migrate with the toggle OFF (D2.0-1) and a stale invite accepted after the model change re-derives fail-closed
   5. The same guest account can hold membership in multiple projects — no "exactly one project" refusal remains, and the "Invité externe" distinction no longer exists server-side
 
-**Plans:** 4 plans — 2 complete (50-01, 50-02)
+**Plans:** 4 plans — 3 complete (50-01, 50-02, 50-03)
 
 Plans:
 **Wave 1**
@@ -99,7 +99,7 @@ Plans:
 - [x] 50-02-PLAN.md — Guarded boot migrations: D-50-6 reverse sweep (provenance decision checkpoint) + D-50-10 guest→viewer normalization; byte-identical second boot (completed 2026-11-08)
 
 **Wave 3** *(blocked on Wave 2)*
-- [ ] 50-03-PLAN.md — Invite routes: INV-01 hierarchy pins (create/edit/accept), INV-02 scope/status surface (p.members), VIS-04 per-project guest toggle with fail-closed accept (INV-01, INV-02, INV-04, VIS-04)
+- [x] 50-03-PLAN.md — Invite routes: INV-01 hierarchy pins (create/edit/accept), INV-02 scope/status surface (p.members), VIS-04 per-project guest toggle with fail-closed accept (INV-01, INV-02, INV-04, VIS-04) (completed 2026-11-08)
 
 **Wave 4** *(blocked on Wave 3)*
 - [ ] 50-04-PLAN.md — Phase close: docs + planning-doc lockstep (D-50-5), success-criteria evidence sweep (all REQs)

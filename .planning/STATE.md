@@ -5,17 +5,17 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 50
 current_phase_name: Invite hierarchy & per-project toggles (server)
 status: executing
-stopped_at: Completed 50-02-PLAN.md
-last_updated: "2026-11-08T08:30:00.000Z"
+stopped_at: Completed 50-03-PLAN.md
+last_updated: "2026-11-08T09:05:00.000Z"
 last_activity: 2026-11-08
-last_activity_desc: Plan 50-02 executed (D-50-6 reverse sweep + D-50-10 guest normalization boot migrations)
-state_head: f84fcee
+last_activity_desc: Plan 50-03 executed (INV-01 hierarchy pins, INV-02 p.members surface, VIS-04 per-project guest toggle with fail-closed accept)
+state_head: 451a314
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # STATE.md
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Executing Phase 50
-Last activity: 2026-11-08 — Plan 50-02 executed (D-50-6 reverse sweep + D-50-10 guest normalization boot migrations)
+Last activity: 2026-11-08 — Plan 50-03 executed (INV-01 hierarchy pins, INV-02 p.members surface, VIS-04 per-project guest toggle with fail-closed accept)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -53,6 +53,10 @@ unmodified; EN+FR i18n gate (server keys included); zero new runtime dependencie
 green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for migration tests.
 
 ## Recent Decisions
+
+- [50-03] Fail-closed toggle re-derivation at accept runs BEFORE account creation/membership writes — a stale-invite refusal leaves zero side effects and does not consume the invite (D-50-8)
+- [50-03] The invite gate is rank-conditional inside one route: admin/owner behavior byte-preserved (team invites bypass the toggle, D-50-9); member ⇒ viewer-only + project + toggle ON on the CURRENT doc
+- [50-03] Toggle flip is workspace-rank-gated (admin/owner) even for a project lead who is a plain member; default OFF everywhere, creation path never writes it true
 
 - [50-01] D-50-5 "live" = the predicate reads current p.teams + current team_members on every evaluation, no cache — a team join grants and a leave revokes on the very next request (pinned by visibility-team tests)
 - [50-01] Admin/owner doc-GET path stays access-list-gated (no team term via hiddenProjectIds); the mcp.js mirror keeps its ROLE_RANK bypass — documented drift preserved per RESEARCH Open Question 2
