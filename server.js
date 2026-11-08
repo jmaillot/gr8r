@@ -5360,7 +5360,8 @@ async function handleApi(req, res, url) {
        missing row fails closed to the 410 below; never a cross-tenant join. */
     const ws = await db.get('select * from workspaces where id = ?', [invite.workspace_id]);
     if (!ws) return fail(res, 410, 'workspaceGone', 'This workspace no longer exists');
-    if (!(await membershipOf(ws.id, user.id))) {
+    const existingMembership = await membershipOf(ws.id, user.id);
+    if (!existingMembership) {
       await addMembership(
         ws,
         user,
@@ -5373,17 +5374,23 @@ async function handleApi(req, res, url) {
           }
         })(),
       );
-      /* VIS-04: the project-scoped guest lands on the access list — that
-         p.members entry IS the granted scope (D-50-1); it runs only after
-         the fail-closed re-derivation above. */
-      if (invite.project) {
-        await updateDoc(ws.id, async doc => {
-          const p = (Array.isArray(doc.data.projects) ? doc.data.projects : []).find(p => p?.id === invite.project);
-          if (!p) return;
-          const memberId = await ensureMember(doc, user, invite.role, ws.id);
-          if (memberId && Array.isArray(p.members) && !p.members.includes(memberId)) p.members.push(memberId);
-        });
-      }
+    }
+    /* VIS-04, hoisted (50-05 WR-01): the project-scoped grant runs for EVERY
+       successful acceptance — not only accounts that were not members before.
+       The fail-closed re-derivation above has already run for both shapes, so
+       a project-scoped invite surviving to this point is toggle-valid. For an
+       existing member the membership row's member_id is used and ensureMember
+       is NOT called (its match branch would rewrite match.role — a clobber);
+       the ensureMember path is kept verbatim on the new-member branch. */
+    if (invite.project) {
+      await updateDoc(ws.id, async doc => {
+        const p = (Array.isArray(doc.data.projects) ? doc.data.projects : []).find(p => p?.id === invite.project);
+        if (!p) return;
+        const memberId = existingMembership
+          ? existingMembership.member_id || (await memberIdFor(ws.id, user))
+          : await ensureMember(doc, user, invite.role, ws.id);
+        if (memberId && Array.isArray(p.members) && !p.members.includes(memberId)) p.members.push(memberId);
+      });
     }
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {

@@ -325,6 +325,6 @@ describe('VIS-04 — the per-project guest-invite toggle', () => {
       db.prepare('select role from memberships where workspace_id = ? and user_id = ?').get(VIS_WS.id, 'u_scoped'),
     );
     assert.equal(role.role, 'member', 'the existing workspace role is not rewritten by the accept');
-    assert.equal(project('p_membershare').members.includes('m_admin'), true, 'pre-existing entries untouched');
+    assert.equal(project('p_membershare').members.includes('m_plain'), true, 'pre-existing entries untouched');
   });
 });
