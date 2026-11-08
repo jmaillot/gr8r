@@ -1,0 +1,31 @@
+{
+  "plan": "51-01",
+  "task": 2,
+  "command": "node --test --test-concurrency=2 test/project-creation.test.mjs",
+  "exit_code": 1,
+  "discovered": 5,
+  "target_test_failures": [
+    {
+      "test": "restriction OFF: a member PUT introducing a project merges — the creator becomes lead (D-51-17)",
+      "assertion": "the acting member is enforced as lead server-side",
+      "planned_behavior": "member-created project gets lead = acting member id"
+    },
+    {
+      "test": "restriction ON: the member create is refused with projectCreateForbidden while the rest of the PUT still merges",
+      "assertion": "a keyed refusal rides the 200 response (got: {\"revision\":3,\"updatedAt\":...})",
+      "planned_behavior": "keyed projectCreateForbidden refusal, scoped, rest of PUT merges"
+    },
+    {
+      "test": "a member PUT flipping stored prefs.permCreate leaves the STORED pref unchanged (T-51-01, Pitfall 3)",
+      "assertion": "the member cannot rewrite the restriction through the doc PUT",
+      "planned_behavior": "stored permCreate pinned against member writes"
+    },
+    {
+      "test": "immediacy: the restriction is read from the stored doc per request — the next PUT sees the flip (D-51-16)",
+      "assertion": "the immediate flip refuses the next create",
+      "planned_behavior": "no cache/restart — stored pref read per request"
+    }
+  ],
+  "verdict": "RED_EVIDENCE_OK",
+  "note": "Validated by the executor directly: gsd_run CLI unavailable in this environment, so `gsd_run check tdd-red-evidence` could not run. All 5 tests were discovered (no zero-test/parse INVALID_RED class); every failure is an intentional AssertionError on a planned behavior of THIS task; the admin cell (no new server behavior) stayed green."
+}
