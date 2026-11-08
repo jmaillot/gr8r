@@ -124,7 +124,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 51-01-PLAN.md — Server enforcement & authority tests: tracer (lead toggle flip end-to-end via doc-sync + toggle control swap), permCreate enforcement + lead-on-create in mergeClientDoc, team-link write invariants (CRT-01, VIS-01)
+- [x] 51-01-PLAN.md — Server enforcement & authority tests: tracer (lead toggle flip end-to-end via doc-sync + toggle control swap), permCreate enforcement + lead-on-create in mergeClientDoc, team-link write invariants (CRT-01, VIS-01) (completed 2026-11-08)
 
 **Wave 2** *(blocked on 51-01)*
 - [ ] 51-02-PLAN.md — Share-modal surfaces: Teams section (invite/linked note/remove, live-semantics copy), honest not-found on lost visibility, create affordance gating + refusal toast (VIS-01, CRT-01)
