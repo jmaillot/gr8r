@@ -57,7 +57,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
   4. The reminder pass, email mirror, digest and the MCP permission mirror agree with the UI predicate through the same `memberCanReadProject` helper (parity test green; `mcp.js` edited in the same phase — no over-permissive window)
   5. Second boot is a byte-identical no-op on both SQLite and pg; Phase 37/38 scheduler suppression + no-double-send invariants pass unmodified
 
-**Plans:** 4/4 plans executed
+**Plans:** 5/5 plans executed
 
 Plans:
 **Wave 1**
@@ -71,6 +71,9 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 49-04-PLAN.md — Phase close: repo-wide residual grep gates, docs/ProjectPermissions.md rewrite, five success criteria individually evidenced (all REQs)
+
+**Wave 5** *(gap closure — verification CR-01)*
+- [x] 49-05-PLAN.md — Gap closure CR-01: sweep detects the pre-Phase-32 scalar `p.team` marker and normalizes it with the retired 2eec642 semantics; WR-01/WR-02 closed; WR-03 stays recorded open (MIG-01)
 
 **Research note**: discuss-phase flagged — call-site census, fixture design, and D-xx rulings (scope-column disposition, `p.private` vs enum) land before planning. Deepest test investment of the milestone.
 
@@ -120,7 +123,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Visibility model collapse & grant materialization | 4/4 | In Progress|  |
+| 49. Visibility model collapse & grant materialization | 5/5 | In Progress|  |
 | 50. Invite hierarchy & per-project toggles (server) | 0/? | Not started | - |
 | 51. Client surfaces, Permissions-page removal & project creation | 0/? | Not started | - |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |

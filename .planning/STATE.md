@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
 current_phase: 49
-current_phase_name: visibility-model-collapse-grant-materialization
+current_phase_name: Visibility model collapse & grant materialization
 status: executing
-stopped_at: Completed 49-04-PLAN.md
-last_updated: "2026-11-08T06:26:14.691Z"
-last_activity: 2026-11-07
+stopped_at: Completed 49-05-PLAN.md (gap closure CR-01)
+last_updated: "2026-11-08T06:39:58.911681+00:00"
+last_activity: 2026-11-08
 last_activity_desc: Phase 49 execution started
-state_head: 59291ce9eb7a7b63241f93aadcc0956feb238b47
+state_head: ae99ee0c2bb5b0d71a6989aa3b36edd192899b34
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 49 (visibility-model-collapse-grant-materialization) — READY TO EXECUTE
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-11-07 — Phase 49 execution started
+Phase: 49 (Visibility model collapse & grant materialization) — EXECUTING
+Plan: 5 of 5
+Status: Executing Phase 49
+Last activity: 2026-11-08 — 49-05 executed (gap closure CR-01: scalar p.team sweep coverage, WR-01/WR-02 closed)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -54,6 +54,8 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 
 ## Recent Decisions
 
+- [49-05] Scalar `p.team` conversion is sweep-side, NOT normalizeProjects — a re-add would churn served copies and break the D-49-6 second-boot byte-identity pin (CR-01 closure)
+- [49-05] WR-02: sweepNeeded falls back to `scopeRowCount > 0` on unreadable docs; the tx clears scope columns on that path in the same transaction — no-churn preserved
 - [v2.0 roadmap] Phase numbering continues from v1.10 (Phase 48) — v2.0 is Phases 49-52, no reset
 - [v2.0 roadmap] Research's 4-phase build order adopted (ARCHITECTURE.md primary): funnel+migration
   → invites/toggles → client surfaces → transparency+verification; sweep and predicate change land
