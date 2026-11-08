@@ -1021,13 +1021,20 @@ function mergeIds(storedList, incomingList, reserved) {
   return out;
 }
 
-async function mergeClientDoc(incoming, stored, membership, wsId) {
+async function mergeClientDoc(incoming, stored, membership, wsId, refusals = []) {
   const next = incoming && typeof incoming === 'object' ? JSON.parse(JSON.stringify(incoming)) : {};
   next.data = next.data && typeof next.data === 'object' ? next.data : {};
   normalizeProjects(stored);
   normalizeProjects(next);
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
+  /* [2026-11-08 D-51-15/16, T-51-01] The project-creation restriction is read
+     from the STORED document's prefs ONLY — the client ships its prefs copy on
+     every save, so the incoming one is never trusted (Pitfall 3). Read fresh
+     per request: a settings flip bites on the very next PUT (D-51-16 — no
+     cache, no restart). */
+  const createRestricted = stored?.prefs?.permCreate === true;
+  const isWorkspaceManager = ROLE_RANK[role] >= ROLE_RANK.admin;
   // [2026-11-07 D-49-1] same collapsed funnel as the read side — hidden rows
   // can never be resurrected by a stale client doc PUT.
   const hiddenProjects = await hiddenFor(stored, membership);
@@ -1040,9 +1047,29 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
 
   nextData.projects = mergeList(storedData.projects, nextData.projects, hiddenProjects);
   const storedProjects = new Map((storedData.projects || []).map(p => [p.id, p]));
+  const refusedCreateIds = new Set();
   for (const p of nextData.projects) {
     if (!p?.id) continue;
     const prev = storedProjects.get(p.id);
+    /* [2026-11-08 D-51-15/16, CRT-01] The scoped create-refusal: a
+       below-admin actor on a restricted workspace can never introduce a
+       project id the stored doc has never seen. The refusal is keyed and
+       scoped to the create operation only — the rest of the PUT still merges
+       (never a whole-PUT 403, Pitfall 1). */
+    if (!prev && !isWorkspaceManager && createRestricted) {
+      refusedCreateIds.add(p.id);
+      refusals.push({ code: 'projectCreateForbidden', project: p.id });
+      continue;
+    }
+    /* [2026-11-08 D-51-17] Lead-on-create: on a member-created project the
+       creator becomes lead SERVER-side, so the guarantee does not depend on
+       client goodwill (the client createProject defaults f.lead to its own
+       id — this mirrors it). Admin/owner creates keep the doc-set lead. */
+    if (!prev && !isWorkspaceManager && memberId) {
+      p.lead = memberId;
+      if (!Array.isArray(p.members)) p.members = [];
+      if (!p.members.includes(memberId)) p.members.push(memberId);
+    }
     if (prev && !canManageProject(prev, memberId, role)) {
       // Access fields belong to a manager even when the project is visible.
       p.private = prev.private;
@@ -1063,6 +1090,16 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
     }
   }
   nextData.projOrder = mergeIds(storedData.projOrder, nextData.projOrder, hiddenProjects);
+  /* [2026-11-08 CRT-01] A refused create leaves nothing behind: the project,
+     its tasks, their comments and the projOrder entries never merge — a
+     retried PUT must not resurrect them through orphaned dependants. */
+  if (refusedCreateIds.size) {
+    nextData.projects = nextData.projects.filter(p => !refusedCreateIds.has(p?.id));
+    nextData.tasks = (nextData.tasks || []).filter(t => !refusedCreateIds.has(t?.project));
+    const mergedTaskIds = new Set(nextData.tasks.map(t => t?.id).filter(Boolean));
+    nextData.comments = (nextData.comments || []).filter(c => !c?.task || mergedTaskIds.has(c.task));
+    if (Array.isArray(nextData.projOrder)) nextData.projOrder = nextData.projOrder.filter(id => !refusedCreateIds.has(id));
+  }
 
   const reservedDependants = (storedList, incomingList, isHidden) => {
     const ids = new Set();
@@ -1115,6 +1152,16 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
     mergedViews[key] = value;
   }
   next.views = mergedViews;
+  /* [2026-11-08 T-51-01, Pitfall 3] A below-admin doc PUT never rewrites the
+     workspace creation restriction — the stored value wins no matter what the
+     client ships in its prefs copy. Admin/owner pref writes (the settings
+     toggle) pass through unchanged. */
+  if (!isWorkspaceManager) {
+    next.prefs = {
+      ...(next.prefs && typeof next.prefs === 'object' ? next.prefs : {}),
+      permCreate: stored?.prefs?.permCreate,
+    };
+  }
   /* [2026-11-07 D-49-3, authority-not-advisory] A document write can never
      assign a member to a task whose project the assignee cannot read — this
      closes the assignableInProject picker seam. The client emit filter is
@@ -1632,8 +1679,14 @@ function logDocChanges(ws, storedDoc, next, actorName) {
   }
 }
 
-async function docFromClient(incoming, stored, ws, role, membership) {
-  const next = await mergeClientDoc(incoming, stored, membership, ws.id);
+async function docFromClient(incoming, stored, ws, role, membership, refusals = []) {
+  const next = await mergeClientDoc(incoming, stored, membership, ws.id, refusals);
+  /* [2026-11-08 D-51-15] V7 audit: one INFO line per refused create, best-effort. */
+  for (const r of refusals) {
+    try {
+      logInfo(`project create refused (permCreate) "${r.project}" by ${membership?.member_id || 'unknown'} [${ws?.slug || 'ws'}]`);
+    } catch {}
+  }
   delete next.data.workspaces;
   next.data.me = null;
   next.data.ws = { name: ws.name, url: ws.slug, c: ws.color || '#1D1C1A', brand: true };
@@ -4630,6 +4683,10 @@ async function handleApi(req, res, url) {
        rollback on any throw, and early refusals exit via the sentinel below so
        the transaction commits harmlessly with no write. */
     const refusal = {};
+    /* [2026-11-08 D-51-15] Scoped create-refusals (projectCreateForbidden) ride
+       the 200 response — a whole-PUT 403 would break unrelated concurrent
+       edits (Pitfall 1). */
+    const createRefusals = [];
     let outcome = null;
     try {
       outcome = await db.tx(async () => {
@@ -4644,7 +4701,7 @@ async function handleApi(req, res, url) {
           return null;
         }
         const storedDoc = JSON.parse(row.doc);
-        const next = await docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership);
+        const next = await docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership, createRefusals);
         /* D-04: the same server mutation that drops a file record unlinks its
          binary. Strict same-PUT diff only — no broader orphan sweep. */
         const storedFileIds = new Set((Array.isArray(storedDoc?.data?.files) ? storedDoc.data.files : []).map(f => f?.id).filter(Boolean));
@@ -4687,7 +4744,7 @@ async function handleApi(req, res, url) {
           if (err && err.code !== 'ENOENT') logWarn(`file unlink ${fileId}: ${err.message}`);
         });
       }
-      return json(res, 200, { revision: revision + 1, updatedAt: t });
+      return json(res, 200, { revision: revision + 1, updatedAt: t, ...(createRefusals.length ? { refused: createRefusals } : {}) });
     }
   }
 
