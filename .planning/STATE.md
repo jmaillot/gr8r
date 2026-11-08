@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
-current_phase: 50
-current_phase_name: Invite hierarchy & per-project toggles (server)
-status: executing
-stopped_at: Completed 50-04-PLAN.md (Phase 50 complete — ready for /gsd-verify-work 50)
-last_updated: "2026-11-08T09:58:26.895Z"
+current_phase: 51
+current_phase_name: Client surfaces, Permissions-page removal & project creation
+status: planning
+stopped_at: Phase 50 complete, ready to plan Phase 51
+last_updated: "2026-11-08T10:17:22.056Z"
 last_activity: 2026-11-08
-last_activity_desc: Phase 50 execution resumed (wave continue)
-state_head: bfbb0e749fb36a0e8b3fdebefde1af7380fc1dfc
+last_activity_desc: Phase 50 complete, transitioned to Phase 51
+state_head: 4184b7b47ccb6b7c0f12960452c7bb0851d01091
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 50
 ---
 
@@ -31,10 +31,10 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 
 ## Current Position
 
-Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
-Plan: 4 of 4 — COMPLETE (phase ready for /gsd-verify-work)
-Status: Executing Phase 50
-Last activity: 2026-11-08 — Phase 50 execution resumed (wave continue)
+Phase: 51 — Client surfaces, Permissions-page removal & project creation
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-08 — Phase 50 complete, transitioned to Phase 51
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -168,7 +168,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-11-08T10:10:00.000Z
-Stopped at: Completed 50-05-PLAN.md (gap closure: CR-01 + WR-01 fixed, suite green)
+Stopped at: Phase 50 complete, ready to plan Phase 51
 Resume file: None
 
 ## Performance Metrics
