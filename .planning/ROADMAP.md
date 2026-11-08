@@ -145,7 +145,12 @@ Plans:
   2. The view agrees with the member's own experience: what it lists is precisely what the member's session can open (cross-checked against the redacted document)
   3. Milestone-wide verification sweep is green: full 404-matrix, Phase 38 suppression + no-double-send invariants unmodified, EN+FR i18n gate, full test suite green, zero new runtime dependencies
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 52-01-PLAN.md — Transparency endpoint + reason helper + D-52-9 parity test suite (server)
+- [ ] 52-02-PLAN.md — Members-row expansion UI + EN/FR reason labels (client)
+- [ ] 52-03-PLAN.md — Milestone verification sweep + docs refresh (v2.0 model)
 
 ## Progress
 
@@ -154,7 +159,7 @@ Plans:
 | 49. Visibility model collapse & grant materialization | 5/5 | Complete    | 2026-11-08 |
 | 50. Invite hierarchy & per-project toggles (server) | 5/5 | Complete    | 2026-11-08 |
 | 51. Client surfaces, Permissions-page removal & project creation | 4/4 | Complete    | 2026-11-08 |
-| 52. Transparency view & milestone verification sweep | 0/? | Not started | - |
+| 52. Transparency view & milestone verification sweep | 0/3 | Not started | - |
 
 ## Milestone-wide invariants (pinned per phase)
 
