@@ -375,7 +375,11 @@ test('a write cannot forge, delete or extract hidden projects', async () => {
   );
   assert.equal(afterBob.doc.data.activity.filter(a => a.id === 'a_sec').length, 1, 'hidden activity is not duplicated');
   assert.ok(proj(afterBob.doc, 'p_inj'), 'Bob can create a new private project');
-  assert.ok(proj(afterBob.doc, 'p_inj').members.includes(ownerId), 'new private project gets a custodian');
+  /* [2026-11-08 D-51-17] The creator becomes the per-project lead — server-enforced:
+     Bob is the manager of his own private project, so normalizeProjects no longer
+     injects the workspace owner as custodian (the project already has one). */
+  assert.equal(proj(afterBob.doc, 'p_inj').lead, bobId, 'the creator is enforced as lead of his private project');
+  assert.ok(proj(afterBob.doc, 'p_inj').members.includes(bobId), 'the creator stays on the access list');
   assert.ok(proj(afterBob.doc, 'p_inj').private, 'new project stays private even with an empty access list');
   assert.equal(jsonHas(bobView.doc, 'p_sec'), false, 'redaction check remains valid');
 });
@@ -391,7 +395,9 @@ test('a clean write keeps newest-first activity order with hidden rows restored 
   assert.equal(afterClean.doc.data.activity.filter(a => a.id === 'a_sec').length, 1, 'hidden activity still restored once');
 
   const bAfter = (await bob.get('/api/workspaces/acme')).data;
-  assert.equal(proj(bAfter.doc, 'p_inj'), undefined, 'Bob does not see the custodian-only project after saving');
+  /* [2026-11-08 D-51-17] p_inj is now Bob's OWN project (creator-as-lead) — he
+     sees it. The D-51-17 guarantee replaces the old custodian-only model. */
+  assert.equal(proj(bAfter.doc, 'p_inj').lead, bobId, 'Bob keeps seeing the private project he created and leads');
 });
 
 test('a project lead manages access and can make the project workspace-wide', async () => {
