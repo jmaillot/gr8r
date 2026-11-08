@@ -6,16 +6,16 @@ current_phase: 50
 current_phase_name: Invite hierarchy & per-project toggles (server)
 status: executing
 stopped_at: Completed 50-04-PLAN.md (Phase 50 complete — ready for /gsd-verify-work 50)
-last_updated: "2026-11-08T09:55:00.000Z"
+last_updated: "2026-11-08T09:58:26.895Z"
 last_activity: 2026-11-08
-last_activity_desc: Plan 50-04 executed (domain + planning docs locked to D-50-5 live team link; five success criteria evidenced; full suite green)
-state_head: f4d9796
+last_activity_desc: Phase 50 execution resumed (wave continue)
+state_head: bfbb0e749fb36a0e8b3fdebefde1af7380fc1dfc
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 9
+  completed_phases: 2
+  total_plans: 10
   completed_plans: 9
-  percent: 100
+  percent: 50
 ---
 
 # STATE.md
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
 Plan: 4 of 4 — COMPLETE (phase ready for /gsd-verify-work)
 Status: Executing Phase 50
-Last activity: 2026-11-08 — Plan 50-04 executed (docs + planning-doc lockstep to D-50-5; five success criteria evidenced; phase gate green)
+Last activity: 2026-11-08 — Phase 50 execution resumed (wave continue)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -107,6 +107,7 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 - Zero-dependency scheduling: in-process `setInterval` pass + boot catch-up, no cron/redis
 - Keyring format frozen: `v2:<key-id>:<iv>:<tag>:<ct>` — HMAC tokens domain-separate from MASTER_KEY
 - [Phase 38]: suppression gate reads STORED email_digest via getStoredNotifPrefs (D-08)
+- [Phase 50 P05]: restoreTeamLinks removal constrained to positively team-derived entries (fail-open per D-50-6); WR-01 grant hoisted with role-clobber guard; WR-02/WR-03 remain tracked open
 - [Phase 34]: notif prefs are sparse SQLite rows keyed (workspace_id, user_id); consumers read
   STORED values via getStoredNotifPrefs
 - [v1.6 Phase 29]: D-03 grant inversion (scope OPENS private projects) — v2.0 M-05 DEMOTES this
@@ -166,8 +167,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T09:55:00.000Z
-Stopped at: Completed 50-04-PLAN.md (Phase 50 complete)
+Last session: 2026-11-08T10:10:00.000Z
+Stopped at: Completed 50-05-PLAN.md (gap closure: CR-01 + WR-01 fixed, suite green)
 Resume file: None
 
 ## Performance Metrics
@@ -183,6 +184,7 @@ Resume file: None
 | Phase 50 P01 | 35 min | 3 tasks | 6 files |
 | Phase 50 P02 | 45 min | 3 tasks | 2 files |
 | Phase 50 P04 | 55 min | 3 tasks | 5 files |
+| Phase 50 P05 | 12 min | 3 tasks | 3 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 
