@@ -26,6 +26,7 @@ import {
   notifyMembers,
   proj,
   projTeams,
+  pushNow,
   roleLabel,
   save,
   task,
@@ -1784,16 +1785,30 @@ IN.sharePerm = el => {
     toast(t('toast.permChanged', { name: mem(mid).name, perm: el.value }), { ms: 1800 });
   }
 };
-IN.shareAccess = el => {
+IN.shareAccess = async el => {
   const p = proj(el.dataset.id);
   if (!p) return;
   if (!canManageProject(p)) return;
-  const priv = el.value === 'private';
+  /* [2026-11-08 D-51-1/2/3] Two-state toggle replacing the shareAccess select:
+     the checkbox IS the private flag. Optimistic flip with revert — no
+     wait-for-ack spinner (D-51-3): the UI flips instantly, pushNow() settles
+     the doc-sync PUT, and a server refusal (409/401/403) restores the
+     pre-flip doc with a localized error toast. The self-grant on privatize
+     stays (matches server.js mergeClientDoc self-grant). */
+  const priv = el.checked;
+  const snap = snapshot();
   mutate(() => {
     p.private = priv;
     if (priv && D().me && !p.members.includes(D().me)) p.members.push(D().me);
   });
+  render();
   toast(priv ? t('toast.privateProject') : t('toast.publicProject', { name: D().ws.name }));
+  const res = await pushNow();
+  if (!res.ok) {
+    restore(snap);
+    render();
+    toast(t('err.cannotChangeAccess'), { kind: 'err' });
+  }
 };
 A.invite = () => {
   S.ui.inviteDraft = '';
