@@ -2761,10 +2761,24 @@ async function restoreTeamLinks() {
         const pre = p && typeof p === 'object' ? snapshot.get(p.id) : undefined;
         if (!pre || pre.teams.length === 0 || 'teams' in p) continue;
         // Sweep-materialized = present now, absent from the pre-sweep access
-        // list (T-50-04: the ONLY removal basis — no heuristic, no guessing).
-        const materialized = (Array.isArray(p.members) ? p.members : []).filter(
-          m => typeof m === 'string' && !pre.members.includes(m),
-        );
+        // list AND positively team-derived (50-05 CR-01): the removed
+        // member_id must resolve through memberships.user_id to a current
+        // team_members row of one of the restored teams. An entry that fails
+        // the lookup or the team check may be a genuine individual invite
+        // added between boots — it STAYS (D-50-6 preservation clause,
+        // fail-open for the indistinguishable).
+        const current = Array.isArray(p.members) ? p.members.filter(m => typeof m === 'string') : [];
+        const materialized = [];
+        for (const m of current) {
+          if (pre.members.includes(m)) continue;
+          const userId = (await db.get('select user_id from memberships where workspace_id = ? and member_id = ?', [wsId, m]))?.user_id || null;
+          if (!userId) continue;
+          const onRestoredTeam = await db.get(
+            `select 1 from team_members where workspace_id = ? and user_id = ? and team_id in (${pre.teams.map(() => '?').join(',')}) limit 1`,
+            [wsId, userId, ...pre.teams],
+          );
+          if (onRestoredTeam) materialized.push(m);
+        }
         p.teams = [...pre.teams];
         if (materialized.length > 0) {
           p.members = (Array.isArray(p.members) ? p.members : []).filter(m => !materialized.includes(m));
