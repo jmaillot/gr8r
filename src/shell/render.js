@@ -73,6 +73,11 @@ export function go(route, params = {}, opt = {}) {
   S.ui.pop = null;
   S.ui.composer = null;
   S.ui.editCell = null;
+  /* Phase 52 (WR-03): the members transparency expander is transient per-surface
+     UI — clearing it on navigation guarantees returning to Members refetches
+     (D-52-3) instead of re-showing the previous fetch's access data. */
+  S.ui.memberVisibility = null;
+  S.ui.memberVisibilityData = null;
   if (!opt.keepDrawer && S.ui.drawer && innerWidth < 900) S.ui.drawer = null;
   // Pages render instantly; motion (not a fake wait) carries the transition.
   clearTimeout(go._t);
