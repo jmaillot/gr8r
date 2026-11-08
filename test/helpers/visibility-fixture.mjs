@@ -36,8 +36,11 @@ export const VIS_WS = Object.freeze({ id: 'ws_visfix', slug: 'visfix' });
 export const VIS_INVITE_TOKEN = 'visfix-invite-token-1234567890';
 export const VIS_CREATED_AT = 1_700_000_000_000;
 
-/* Deterministic actor and project ids (plan-mandated). */
-export const VIS_ACTORS = Object.freeze(['m_admin', 'm_owner', 'm_plain', 'm_team', 'm_scoped', 'm_guest', 'm_doconly']);
+/* Deterministic actor and project ids (plan-mandated). Phase 52 (52-01,
+   D-52-9) extends both sets: m_admin2 (admin whose ONLY private-project grant
+   is a live team link — the funnel-authority divergence cell) and three
+   project cells (p_adminteam, p_leadonly, p_lostvis). */
+export const VIS_ACTORS = Object.freeze(['m_admin', 'm_owner', 'm_plain', 'm_team', 'm_scoped', 'm_guest', 'm_doconly', 'm_admin2']);
 export const VIS_PROJECTS = Object.freeze([
   'p_membershare',
   'p_hidden',
@@ -51,6 +54,9 @@ export const VIS_PROJECTS = Object.freeze([
   'p_legacy',
   'p_legacyteam',
   'p_open',
+  'p_adminteam',
+  'p_leadonly',
+  'p_lostvis',
 ]);
 
 /* The scope JSON columns (Phase 29) carried by the fixture, in the same shape
@@ -71,7 +77,15 @@ const USERS = Object.freeze({
      member could never read the workspace at all — the Phase 49 expansion must
      skip them and lose nothing (RESEARCH §Fixtures row 4). */
   m_doconly: { userId: 'u_doconly', email: 'doconly@visfix.local', name: 'Dee DocOnly', role: 'member', roleLabel: 'Member' },
+  /* m_admin2 (Phase 52, D-52-9): an admin in engA whose ONLY grant to
+     p_adminteam is the live team link. The transparency funnel lists it;
+     the access-list-gated admin doc-GET path hides it. */
+  m_admin2: { userId: 'u_admin2', email: 'admin2@visfix.local', name: "Ari Admin II", role: 'admin', roleLabel: 'Admin' },
 });
+
+/* member id → users.id, exported so consumers hit route paths in the userId
+   space the member routes resolve (users lookup + membershipOf). */
+export const VIS_USER_IDS = Object.freeze(Object.fromEntries(Object.entries(USERS).map(([mid, u]) => [mid, u.userId])));
 
 const profile = (id, extra = {}) => {
   const u = USERS[id];
@@ -140,6 +154,25 @@ export function visfixDoc() {
         { id: 'p_legacyteam', key: 'legacyteam', name: 'Legacy Scalar Team', private: true, members: ['m_admin'], lead: 'm_admin', team: 'engA', status: 'active', perms: {} },
         /* Plain public project. */
         { id: 'p_open', key: 'open', name: 'Open', private: false, members: [], lead: null, teams: [], status: 'active', perms: {} },
+        /* Phase 52 (D-52-9) cells:
+           - p_adminteam: an admin's ONLY grant is the LIVE engA link. The
+             transparency funnel lists it (reason 'team'); the access-list-
+             gated admin doc-GET path hides it — the pinned funnel-authority
+             divergence (RESEARCH Open Question 1, option (a)). Stored
+             members [] / lead null: normalizeProjects injects the doc owner
+             into the served copy, so the OWNER alone sees it on doc-GET. */
+        { id: 'p_adminteam', key: 'adminteam', name: 'Admin Team Link', private: true, members: [], lead: null, teams: ['engA'], status: 'active', perms: {} },
+        /* - p_leadonly: the target is p.lead and NOT in the literal
+             p.members array before normalization — normalizeProjects pushes
+             the lead into members on every read (that push IS part of the
+             cell), so the funnel reads the member through the lead term,
+             labeled 'lead' before plain 'member' inside the membership tier. */
+        { id: 'p_leadonly', key: 'leadonly', name: 'Lead Only', private: true, members: [], lead: 'm_admin', teams: [], status: 'active', perms: {} },
+        /* - p_lostvis: the D-51-4 lost-visibility cell — m_team sits on the
+             access list of a private project with NO team link; the
+             transparency suite removes the entry and the server list must
+             shrink on the very next request. */
+        { id: 'p_lostvis', key: 'lostvis', name: 'Lost Visibility', private: true, members: ['m_team'], lead: 'm_admin', teams: [], status: 'active', perms: {} },
       ],
       tasks: [
         { id: 't_open', project: 'p_open', title: 'Open task', status: 'todo', subtasks: [] },
@@ -174,14 +207,18 @@ export function visfixDoc() {
    SERVED copy (owner alone sees them).
    Per actor:
    - m_admin (admin, access-list-gated): private ∋ m_admin → p_hidden,
-     p_teamshare, p_teamboth, p_scopeteam, p_legacyteam; + publics.
+     p_teamshare, p_teamboth, p_scopeteam, p_legacyteam, p_leadonly,
+     p_lostvis (normalization pushes the lead into members on every read)
+     + publics. NOT p_adminteam (no individual entry; the admin doc-GET
+     path carries no team term).
    - m_owner (owner, same gate): private-empty injection → p_scopeproj,
-     p_sealed; + publics. NOT p_scopeddeny (m_scoped keeps its entry — the
+     p_sealed, p_adminteam (owner injected into the served copy) + publics.
+      NOT p_scopeddeny (m_scoped keeps its entry — the
      Phase 49 dissolve sweep is retired).
    - m_plain: p_membershare (access list) + publics. NOT p_teamshare
      (non-linked member × team-linked private project — the 404 cell).
    - m_team (member, engA live): p_teamshare (live team), p_teamboth (team AND
-     individual) + publics. NOT p_legacyteam (scalar team key is dead —
+     individual), p_adminteam (live team), p_lostvis (access list) + publics. NOT p_legacyteam (scalar team key is dead —
      nothing converts it, the sweep is retired).
    - m_scoped (member, scopedTeam live): p_scopeteam (live team),
      p_scopeddeny (access list — the scope SUBTRACTION is gone with the
@@ -189,15 +226,19 @@ export function visfixDoc() {
      is dormant, nothing materializes it).
    - m_guest (viewer, no team rows): publics only — the scope.projects grant
      to p_membershare is dormant.
+   - m_admin2 (admin, engA live, access-list-gated doc-GET): publics only —
+     p_adminteam stays hidden on THIS door (the funnel-authority divergence
+     cell; the transparency endpoint DOES list it).
    - m_doconly: no memberships row → requireWorkspace 404s before any
      predicate runs. */
 export const VISIBILITY_MODEL = Object.freeze({
-  m_admin: ['p_hidden', 'p_legacy', 'p_legacyteam', 'p_open', 'p_publicgain', 'p_scopeteam', 'p_teamboth', 'p_teamshare'],
-  m_owner: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeproj', 'p_sealed'],
+  m_admin: ['p_hidden', 'p_leadonly', 'p_legacy', 'p_legacyteam', 'p_lostvis', 'p_open', 'p_publicgain', 'p_scopeteam', 'p_teamboth', 'p_teamshare'],
+  m_owner: ['p_adminteam', 'p_legacy', 'p_open', 'p_publicgain', 'p_scopeproj', 'p_sealed'],
   m_plain: ['p_legacy', 'p_membershare', 'p_open', 'p_publicgain'],
-  m_team: ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
+  m_team: ['p_adminteam', 'p_legacy', 'p_lostvis', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
   m_scoped: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeddeny', 'p_scopeteam'],
   m_guest: ['p_legacy', 'p_open', 'p_publicgain'],
+  m_admin2: ['p_legacy', 'p_open', 'p_publicgain'],
   m_doconly: [],
 });
 
@@ -210,8 +251,9 @@ const ALL = [...VIS_PROJECTS];
 export const MIRROR_MODEL = Object.freeze({
   m_admin: ALL,
   m_owner: ALL,
+  m_admin2: ALL, // admin bypass on the mirror — including the team-link cell
   m_plain: ['p_legacy', 'p_membershare', 'p_open', 'p_publicgain'],
-  m_team: ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
+  m_team: ['p_adminteam', 'p_legacy', 'p_lostvis', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
   m_scoped: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeddeny', 'p_scopeteam'],
   m_guest: ['p_legacy', 'p_open', 'p_publicgain'],
   /* m_doconly can never obtain an API key: no memberships row → POST /api/keys
@@ -419,6 +461,7 @@ export function createVisibilityFixtureDb(dataDir) {
     const insertMembership = db.prepare('insert into memberships (workspace_id, user_id, role, member_id, scope) values (?,?,?,?,?)');
     insertMembership.run(VIS_WS.id, USERS.m_owner.userId, 'owner', 'm_owner', null);
     insertMembership.run(VIS_WS.id, USERS.m_admin.userId, 'admin', 'm_admin', null);
+    insertMembership.run(VIS_WS.id, USERS.m_admin2.userId, 'admin', 'm_admin2', null);
     insertMembership.run(VIS_WS.id, USERS.m_plain.userId, 'member', 'm_plain', null);
     insertMembership.run(VIS_WS.id, USERS.m_team.userId, 'member', 'm_team', null);
     insertMembership.run(VIS_WS.id, USERS.m_scoped.userId, 'member', 'm_scoped', JSON.stringify(VIS_SCOPED_SCOPE));
@@ -429,6 +472,7 @@ export function createVisibilityFixtureDb(dataDir) {
        doc-only member's row is unreachable through the old predicate. */
     const insertTeamMember = db.prepare('insert into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)');
     insertTeamMember.run(VIS_WS.id, 'engA', 'm_team', USERS.m_team.userId);
+    insertTeamMember.run(VIS_WS.id, 'engA', 'm_admin2', USERS.m_admin2.userId);
     insertTeamMember.run(VIS_WS.id, 'engA', null, USERS.m_doconly.userId);
     insertTeamMember.run(VIS_WS.id, 'scopedTeam', 'm_scoped', USERS.m_scoped.userId);
 

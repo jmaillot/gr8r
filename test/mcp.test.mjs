@@ -622,6 +622,7 @@ import { createVisibilityFixtureDb, MIRROR_MODEL, VISIBILITY_MODEL, VIS_ACTORS, 
 const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly');
 const parEmailOf = mid => ({
   m_admin: 'admin@visfix.local',
+  m_admin2: 'admin2@visfix.local', // Phase 52 (D-52-9): the admin × team-only divergence actor
   m_owner: 'owner@visfix.local',
   m_plain: 'plain@visfix.local',
   m_team: 'team@visfix.local',

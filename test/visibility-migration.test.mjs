@@ -77,6 +77,7 @@ async function visibleViaDocGet(actorEmail) {
 
 const emailOf = mid => ({
   m_admin: 'admin@visfix.local',
+  m_admin2: 'admin2@visfix.local', // Phase 52 (D-52-9): the admin × team-only divergence actor
   m_owner: 'owner@visfix.local',
   m_plain: 'plain@visfix.local',
   m_team: 'team@visfix.local',
@@ -211,7 +212,7 @@ test('dormant scope cell: corrupt scope JSON is never read — plain member sema
      historical invariant still holds: never a lockout, never an elevation. */
   const { status, ids } = await visibleViaDocGet('corrupt@visfix.local');
   assert.equal(status, 200, 'the corrupt-scope member still reads the workspace');
-  assert.deepEqual(ids, ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'], 'plain member semantics: live team grants + publics, nothing more');
+  assert.deepEqual(ids, ['p_adminteam', 'p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'], 'plain member semantics: live team grants + publics, nothing more');
   const projects = projectById();
   assert.deepEqual(projects.p_teamshare.members, ['m_admin'], 'nothing materialized — the grant is LIVE via team_members');
   assert.deepEqual(projects.p_hidden.members, ['m_admin'], 'no elevation: the access list still governs');
@@ -322,10 +323,14 @@ describe('restoreTeamLinks (D-50-6): pre-sweep backup provenance', { concurrency
             '$.data.projects[2].members',
             '$.data.projects[2].teams',
             '$.data.projects[3].teams',
-            '$.data.projects[12].teams'
+            /* [15] = p_betweenboots: appended by the json_insert above, AFTER
+               the three Phase 52 fixture cells (p_adminteam/p_leadonly/
+               p_lostvis at indices 12-14). Index-targeted surgery — keep in
+               sync with VIS_PROJECTS order. */
+            '$.data.projects[15].teams'
           ),
           '$.data.projects[2].members', json_array('m_admin', 'm_team'),
-          '$.data.projects[12].members', json_array('m_admin', 'm_team', 'm_plain', 'm_doconly')
+          '$.data.projects[15].members', json_array('m_admin', 'm_team', 'm_plain', 'm_doconly')
         ) where id = '${VIS_WS.id}';
         commit;
       `);
@@ -370,10 +375,12 @@ describe('restoreTeamLinks (D-50-6): pre-sweep backup provenance', { concurrency
     const res = await session.client.get(`/api/workspaces/${VIS_WS.slug}`);
     assert.equal(res.status, 200);
     const ids = (res.data?.doc?.data?.projects || []).map(p => p.id).sort();
-    /* Hand-derived: p_teamshare + p_teamboth via the live engA term, plus the
-       publics, plus p_betweenboots (restored engA link AND restored access-list
-       entry). NOT p_membershare (m_plain's genuine invite), NOT p_hidden. */
-    assert.deepEqual(ids, ['p_betweenboots', 'p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare']);
+    /* Hand-derived: p_teamshare + p_teamboth + p_adminteam via the live engA
+       term (p_adminteam is a Phase 52 engA-linked cell), p_lostvis via the
+       genuine access-list entry, plus the publics, plus p_betweenboots
+       (restored engA link AND restored access-list entry). NOT p_membershare
+       (m_plain's genuine invite), NOT p_hidden, NOT p_leadonly. */
+    assert.deepEqual(ids, ['p_adminteam', 'p_betweenboots', 'p_legacy', 'p_lostvis', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare']);
   });
 
   test('between-boots genuine invite survives the sweep; only positively team-derived entries are removed (CR-01, 50-05)', () => {
