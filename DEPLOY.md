@@ -242,7 +242,7 @@ treated exactly like a disabled one — the routes answer a plain 404 and reveal
 **Azure Portal app registration** (Entra admin center → Applications → App registrations →
 New registration):
 
-1. Name the app, select *Accounts in this organizational directory only* (single tenant).
+1. Name the app, select _Accounts in this organizational directory only_ (single tenant).
 2. Platform **Web**, redirect URI: `https://<your-host>/api/auth/oidc/callback` — this
    exact path, HTTPS, no trailing slash.
 3. Certificates & secrets → New client secret → copy the **value** (not the secret ID)
@@ -662,13 +662,13 @@ migrations are additive, so the volume survives rebuilds — but take the backup
 
 | Symptom                                   | Check                                                                                                                                   |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `set ADMIN_EMAIL in .env` on `compose up` | You are not in `/opt/projects`, or `.env` is missing.                                                                                       |
+| `set ADMIN_EMAIL in .env` on `compose up` | You are not in `/opt/projects`, or `.env` is missing.                                                                                   |
 | Traefik returns 404                       | The container is not on the `traefik` network, or the `Host(...)` label does not match DNS. Try `docker network inspect traefik`.       |
-| 502 Bad Gateway                           | The container is down or unhealthy: `docker compose ps`, `docker compose logs projects`.                                                    |
+| 502 Bad Gateway                           | The container is down or unhealthy: `docker compose ps`, `docker compose logs projects`.                                                |
 | No certificate                            | DNS not propagated, ports 80/443 blocked, or the resolver is not named `letsencrypt`. Check the Traefik logs.                           |
 | Login bounces back to the form            | The cookie was rejected. Confirm HTTPS, that Traefik sends `X-Forwarded-Proto`, and try `SECURE_COOKIE=true`.                           |
 | "Could not reach the server" in the UI    | `/api` is not routed. Test `https://host/api/health`.                                                                                   |
-| Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' projects node server.js --set-password you@example.com`                                         |
+| Forgot the admin password                 | `docker compose exec -e USER_PASSWORD='...' projects node server.js --set-password you@example.com`                                     |
 | Which accounts exist?                     | See the command below.                                                                                                                  |
 | Data disappeared                          | Someone ran `docker compose down -v`, which deletes the volume. Restore from backup.                                                    |
 | `unable to open database file` at startup | `/data` is not writable by the configured `PUID` (default 1000). Usually an old image, or a manual `user:` override. See the fix below. |
@@ -846,8 +846,8 @@ the one-click header and show only the plain footer link. That is a degraded
 deliverability experience, not a security failure — ship only once you have
 confirmed your relay signs.
 
-**Rotation invalidates emailed links.** Rotating `MASTER_KEY` (per *Running a
-rotation*) invalidates every previously emailed unsubscribe token: old
+**Rotation invalidates emailed links.** Rotating `MASTER_KEY` (per _Running a
+rotation_) invalidates every previously emailed unsubscribe token: old
 one-click links stop verifying and the email's footer link becomes the only
 working unsubscribe path for older digests. This is expected behavior, not
 data loss — unsubscribe tokens are stateless (no table, no migration), so
@@ -940,17 +940,17 @@ easy (see the recovery note below), but preventing it is easier.
    above — or, in the current-generation case, the id of the new `MASTER_KEY`
    (rows already `v2:<new-key-id>:` are fine; there is nothing to re-wrap).
    If neither key id matches a stamped id, **stop**: rotation cannot recover
-   that envelope (one-generation policy — see *Completing rotation* below);
+   that envelope (one-generation policy — see _Completing rotation_ below);
    the row needs manual recovery.
 
-1. Generate the new key (above), then edit `/opt/projects/.env`:
+3. Generate the new key (above), then edit `/opt/projects/.env`:
 
    ```dotenv
    MASTER_KEY=<new key>
    MASTER_KEY_PREVIOUS=<old key>
    ```
 
-2. Recreate the container so Compose picks up the new environment:
+4. Recreate the container so Compose picks up the new environment:
 
    ```sh
    cd /opt/projects
@@ -958,7 +958,7 @@ easy (see the recovery note below), but preventing it is easier.
    docker compose logs --tail=40 projects
    ```
 
-3. Expect these boot log lines:
+5. Expect these boot log lines:
 
    ```
      pre-migration backup: /data/projects-preenvelope-<timestamp>.db
@@ -966,14 +966,14 @@ easy (see the recovery note below), but preventing it is easier.
    ```
 
    The backup line is written **before** anything is modified — it is the
-   rollback artifact (see *Backup-before-rotation / rollback* below). Two
+   rollback artifact (see _Backup-before-rotation / rollback_ below). Two
    `pre-migration backup:` lines in one boot are normal: the plaintext-sealing
    pass and the re-wrap pass each mint their own when both have work to do.
    If a row decrypts under neither key, a warning names the user id and leaves
    the row byte-identical (`… decrypts under neither keyring key …`) — those
    rows need manual recovery, not another reboot.
 
-4. Users notice nothing: 2FA devices keep working, no re-enrollment is needed.
+6. Users notice nothing: 2FA devices keep working, no re-enrollment is needed.
 
 ### If the rotation boot logged an unrecognized-version line but no re-wrap line
 
@@ -999,16 +999,17 @@ byte-identical — there is **no data loss**. Recovery:
    ```
 
    The row's key id resolves again under the single old key and login works.
+
 2. **Fix the deployment.** Verify the image-currency precondition (the
    `grep -c migrateTotpReWrap server.js` check above), correct the
    env/compose so the old key actually reaches the container, and confirm
-   with the key-id coverage precondition — then re-run *Running a rotation*
+   with the key-id coverage precondition — then re-run _Running a rotation_
    from the two checks.
 
 This note applies only to the D-K7-with-no-re-wrap-line signature above. If
 instead a `TOTP re-wrap:` line ran and warned that a row `decrypts under
 neither keyring key`, that row needs the manual recovery path described in
-*Running a rotation* step 3 — rebooting will not recover it.
+_Running a rotation_ step 3 — rebooting will not recover it.
 
 ### Compose users: no extra step
 
@@ -1021,12 +1022,12 @@ installs without the variable boot unchanged — only set it when rotating.
 
 In the walkthrough's terms: (a) add `MASTER_KEY_PREVIOUS=<old key>` to
 `/opt/projects/.env`; (b) recreate the container with `docker compose up -d`
-(the same step as *Running a rotation* step 2); (c) verify the boot log's
+(the same step as _Running a rotation_ step 2); (c) verify the boot log's
 `TOTP re-wrap:` line and the stamped key ids exactly as the runbook prescribes
 — the two pre-rotation checks and the zero-stale-envelopes query apply
-verbatim; (d) retire per *Completing rotation*: remove the old key line from
+verbatim; (d) retire per _Completing rotation_: remove the old key line from
 `.env` and reboot. The image-currency precondition governs as before — an
-image predating the re-wrap pass still means STOP (see *Running a rotation*
+image predating the re-wrap pass still means STOP (see _Running a rotation_
 check 1).
 
 ### Verifying zero stale envelopes
@@ -1092,7 +1093,7 @@ back-to-back, run the first to completion (verify `0`, remove
 **Read this before reaching for the rotation section.** Rotation does NOT
 respond to a compromised key. A compromised key must be assumed to have
 exported every 2FA secret it ever sealed — re-sealing those secrets with a new
-key only locks the attacker's *old* copies; the attacker already has the
+key only locks the attacker's _old_ copies; the attacker already has the
 plaintext. The honest response is:
 
 1. Disable 2FA for all affected users (or the whole workspace).
@@ -1101,7 +1102,7 @@ plaintext. The honest response is:
 3. Investigate how the key leaked — `.env` permissions, shell history, backup
    encryption, host access — before trusting the new key.
 
-`MASTER_KEY_PREVIOUS` and rotation exist for *planned* key hygiene, never for
+`MASTER_KEY_PREVIOUS` and rotation exist for _planned_ key hygiene, never for
 incident response.
 
 ## 15. Postgres backend (optional)
@@ -1121,6 +1122,50 @@ zero-dependency path.
 Boot is **fail-closed**: if `DB_URL` is set but Postgres is unreachable (bad credentials,
 host down), the server refuses to start with a clear error. It never silently falls back
 to SQLite, and never prints the connection string in the error output.
+
+### Schema initialization and migrations are automatic
+
+No manual schema step exists. At every boot the server:
+
+1. **creates the full schema on an empty database** — every `create table if not exists`
+   runs on both backends (the adapter rewrites the SQLite dialect for Postgres: `nocase`
+   collations stripped, epoch-ms columns widened to `bigint`);
+2. **applies additive migrations** — new columns are added when missing (`ensureColumn`,
+   probed via `information_schema` on Postgres), idempotently, on every start.
+
+So "set `DB_URL`, boot, done": pointing the app at a **fresh, empty** Postgres database
+initializes it on first start. There is no versioned migration runner to babysit —
+schema changes ship as additive `ensureColumn` calls plus the shared schema definition.
+
+To initialize or migrate **without starting the server** (CI check, first-deploy probe,
+or to fail fast on a bad `DB_URL` before switching traffic), run the same openDb() path
+as the boot:
+
+```sh
+npm run db:init                                          # from a checkout
+docker compose exec projects node server.js --db-init    # inside the container
+```
+
+It connects, creates the schema if the database is empty, applies the additive
+migrations, and exits with a one-line confirmation (`schema ready: Postgres initialized`).
+Same fail-closed behavior: a wrong `DB_URL` exits non-zero with the error code.
+
+The bundled `docker-compose.yml` ships an optional Postgres container for the simplest
+setup — activate the profile, set the two variables in `.env`, and boot:
+
+```sh
+# .env
+POSTGRES_PASSWORD=<long unique password>
+DB_URL=postgres://projects:<same password>@db:5432/projects?sslmode=disable
+
+docker compose --profile postgres up -d
+```
+
+The container stores its data on the `projects-studio-pg` volume; the app reaches it as
+host `db` over the shared Docker network (no TLS needed there — traffic never leaves the
+Docker host). `docker compose up -d` without the profile keeps the SQLite default and
+never starts the database container. For a Postgres outside Docker, skip the profile and
+use one of the `sslmode` setups below.
 
 ### The connection string is a secret
 
