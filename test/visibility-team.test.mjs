@@ -193,3 +193,85 @@ test('stale client doc PUT cannot delete p.teams or flip p.allowInviteGuests (T-
   const bothAfter = after.data.projects.find(p => p.id === 'p_teamboth');
   assert.deepEqual(bothAfter.teams, ['engA'], 'stale PUT cannot delete p.teams on an unmanaged project');
 });
+
+/* ---------------- Phase 51 (51-01): team-link WRITE-path invariants ----------------
+   The cells Wave 2's Teams section depends on (D-51-9 unlink, RESEARCH
+   Validation Architecture): manager-gated p.teams writes, the private-project
+   unlink invariant (Pitfall 6), and the live-link regression guard for links
+   written THROUGH doc-sync. */
+
+async function docPutAs(session, mutate) {
+  const get = await session.client.get(`/api/workspaces/${VIS_WS.slug}`);
+  assert.equal(get.status, 200);
+  const doc = JSON.parse(JSON.stringify(get.data.doc));
+  mutate(doc);
+  return session.client.put(`/api/workspaces/${VIS_WS.slug}`, { revision: get.data.revision, doc });
+}
+
+test('manager-gated team-link writes: owner and lead persist, member PUT is pinned', async () => {
+  /* Setup: give the public p_open a plain-member lead (a manager by D-51-17),
+     simulated with the raw stored-doc edit a manager write produces. */
+  const doc = storedDoc();
+  const open = doc.data.projects.find(p => p.id === 'p_open');
+  open.lead = 'm_plain';
+  if (!open.members.includes('m_plain')) open.members.push('m_plain');
+  withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), VIS_WS.id));
+
+  const ownerSession = await login(server.base, 'owner@visfix.local', VIS_PASSWORD);
+  const leadSession = await login(server.base, 'plain@visfix.local', VIS_PASSWORD);
+  assert.equal(ownerSession.status, 200);
+  assert.equal(leadSession.status, 200);
+
+  /* Owner (workspace manager) links engA — persists. */
+  const ownerPut = await docPutAs(ownerSession, d => {
+    d.data.projects.find(p => p.id === 'p_open').teams = ['engA'];
+  });
+  assert.equal(ownerPut.status, 200);
+  assert.deepEqual(project('p_open').teams, ['engA'], 'the owner team link persists');
+
+  /* Member (m_team — not a manager of p_open) attempts removal — pinned. */
+  const memberPut = await docPutAs(teamSession, d => {
+    d.data.projects.find(p => p.id === 'p_open').teams = [];
+  });
+  assert.equal(memberPut.status, 200, 'the doc PUT itself succeeds — fields are pinned, not rejected');
+  assert.deepEqual(project('p_open').teams, ['engA'], 'a member cannot unlink a team (whole-team revocation guard)');
+
+  /* Lead (m_plain, non-admin) links a second team — the D-51-17 manage right persists. */
+  const leadPut = await docPutAs(leadSession, d => {
+    d.data.projects.find(p => p.id === 'p_open').teams = ['engA', 'scopedTeam'];
+  });
+  assert.equal(leadPut.status, 200);
+  assert.deepEqual(project('p_open').teams, ['engA', 'scopedTeam'], 'the lead team link persists');
+});
+
+test('unlinking the ONLY team from a private project neither seals it nor opens it (Pitfall 6)', async () => {
+  /* p_teamshare: private, lead m_admin, teams ['engA'] — the ONLY link. The
+     admin (manager) unlinks it through doc-sync. */
+  const adminSession = await login(server.base, 'admin@visfix.local', VIS_PASSWORD);
+  assert.equal(adminSession.status, 200);
+  const res = await docPutAs(adminSession, d => {
+    d.data.projects.find(p => p.id === 'p_teamshare').teams = [];
+  });
+  assert.equal(res.status, 200);
+  const p = project('p_teamshare');
+  assert.deepEqual(p.teams, [], 'the unlink persisted');
+  assert.equal(p.private, true, 'the private project did not silently open');
+  assert.ok(Array.isArray(p.members) && p.members.includes('m_admin'), 'a manager stays on the access list — not sealed');
+});
+
+test('live-link sanity: a team link written through doc-sync grants a current team member on the next read', async () => {
+  /* Restore m_team's engA row (the earlier leave-revoke test deleted it), then
+     link engA onto p_hidden (private, access list [m_admin]) via the admin's
+     doc PUT. The 3-term predicate must honor the doc-sync-written link. */
+  withDb(server.dbPath, db =>
+    db.prepare('insert into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)').run(VIS_WS.id, 'engA', 'm_team', 'u_team'),
+  );
+  const adminSession = await login(server.base, 'admin@visfix.local', VIS_PASSWORD);
+  const res = await docPutAs(adminSession, d => {
+    d.data.projects.find(p => p.id === 'p_hidden').teams = ['engA'];
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(project('p_hidden').teams, ['engA'], 'the link persisted');
+  const viaDoc = await docGet(teamSession);
+  assert.ok(viaDoc.ids.includes('p_hidden'), 'the current team member reads the newly linked project');
+});
