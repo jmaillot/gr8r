@@ -89,9 +89,11 @@ Plans:
   4. On a project with "members may invite guests" off, a member's guest invite is refused while an admin/owner succeeds; existing projects migrate with the toggle OFF (D2.0-1) and a stale invite accepted after the model change re-derives fail-closed
   5. The same guest account can hold membership in multiple projects — no "exactly one project" refusal remains, and the "Invité externe" distinction no longer exists server-side
 
-**Plans:** 4 plans — 4 complete (50-01, 50-02, 50-03, 50-04)
+**Plans:** 5/5 plans executed — 4 complete (50-01, 50-02, 50-03, 50-04)
 
 Plans:
+- [x] 50-05-PLAN.md
+
 **Wave 1**
 - [x] 50-01-PLAN.md — Live team link (D-50-5/INV-03): funnel + MCP mirror + mergeClientDoc pinning + Phase 49 sweep retirement, team-link 404-matrix cells first (completed 2026-11-08)
 
@@ -138,7 +140,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Visibility model collapse & grant materialization | 5/5 | Complete    | 2026-11-08 |
-| 50. Invite hierarchy & per-project toggles (server) | 4/4 | Complete    | 2026-11-08 |
+| 50. Invite hierarchy & per-project toggles (server) | 5/5 | In Progress|  |
 | 51. Client surfaces, Permissions-page removal & project creation | 0/? | Not started | - |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |
 
