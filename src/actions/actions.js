@@ -2418,7 +2418,14 @@ A.memberVisibilityToggle = async el => {
   S.ui.memberVisibilityData = null; // open shows a loading state until the fetch lands
   render();
   const m = mem(id);
-  if (!m?.userId) return;
+  if (!m?.userId) {
+    /* The roster can change between render and click (e.g. a mid-session
+       membership removal) — never leave the panel stuck in the loading state. */
+    S.ui.memberVisibility = null;
+    S.ui.memberVisibilityData = { err: true };
+    render();
+    return;
+  }
   const res = await api.memberVisibility(m.userId);
   if (!res.ok) {
     /* D-28: the central intercept owns mid-session 401s. */
