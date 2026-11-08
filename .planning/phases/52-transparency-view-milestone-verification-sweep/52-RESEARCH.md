@@ -271,13 +271,14 @@ node --check server.js   # Phase 51 syntax gate
 | A3 | A "lead without explicit membership" cell does not exist in the current fixture (every lead is also in `p.members`) | Pattern 3 | LOW — verified by reading `visfixDoc()`; if a cell exists that I misread, the extended matrix just needs less work |
 | A4 | The m_admin VISIBILITY_MODEL row holds under both funnel and access-list-gated readings (no admin×team-only cell) | Pitfall 1 | MEDIUM — if wrong, existing parity assertions need updating; verified against `visfixDoc()` by inspection, but the planner should re-derive when adding cells |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Admin-target parity semantics (Pitfall 1) — (a) new divergence cell or (b) documented-divergence assertion?**
-   - What we know: funnel (endpoint, TRN-01) vs admin doc-GET (access-list-gated) can differ; fixture currently safe by luck.
-   - Recommendation: (a) — add the cell and pin the endpoint as the authority; it is honest and future-proof. Planner decision within the agent's discretion.
-2. **Endpoint response shape:** flat `[{id, name, reason}]` vs grouped. Recommendation: flat + reason code; UI renders labels. (Discretion area.)
-3. **Where the 'lost-visibility' D-51-4 cell is exercised:** S.ui.lostProjects is client-side; the parity test can only assert the SERVER list shrinks. Recommendation: assert the endpoint list (not the client epoch machinery) — TRN-01 is about the endpoint.
+   - RESOLVED → (a): new divergence cell added to the extended matrix, endpoint pinned as the authority (52-01-PLAN.md Task 1).
+2. **Endpoint response shape:** flat `[{id, name, reason}]` vs grouped.
+   - RESOLVED → flat `{id, name, reason}` with a coarse machine reason code; UI renders labels (52-01-PLAN.md Task 2).
+3. **Where the 'lost-visibility' D-51-4 cell is exercised:** S.ui.lostProjects is client-side; the parity test can only assert the SERVER list shrinks.
+   - RESOLVED → assert the endpoint list shrinks in the parity test, not the client epoch machinery (52-01-PLAN.md Task 1).
 
 ## Environment Availability
 
