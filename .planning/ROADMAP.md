@@ -120,8 +120,20 @@ Plans:
   4. By default any member can create a project and automatically becomes its lead; with the workspace restriction on, a member sees no create affordance and the server refuses the attempt
   5. `npm run i18n:scan` passes with every new/changed surface string catalogued EN+FR (server keys included), and the removed-key leak check catches dead entries
 
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 51-01-PLAN.md — Server enforcement & authority tests: tracer (lead toggle flip end-to-end via doc-sync + toggle control swap), permCreate enforcement + lead-on-create in mergeClientDoc, team-link write invariants (CRT-01, VIS-01)
+
+**Wave 2** *(blocked on 51-01)*
+- [ ] 51-02-PLAN.md — Share-modal surfaces: Teams section (invite/linked note/remove, live-semantics copy), honest not-found on lost visibility, create affordance gating + refusal toast (VIS-01, CRT-01)
+
+**Wave 3** *(blocked on 51-02)*
+- [ ] 51-03-PLAN.md — Settings > Permissions teardown, permCreate → General, dead-key i18n gate + removed-key leak check, full-suite pass (CRT-02, UX-01)
+
+**Wave 4** *(blocked on 51-03)*
+- [ ] 51-04-PLAN.md — Phase close: domain docs to shipped model (lead role, live team semantics, deleted toggles), success-criteria evidence sweep (UX-01)
 
 ### Phase 52: Transparency view & milestone verification sweep
 
