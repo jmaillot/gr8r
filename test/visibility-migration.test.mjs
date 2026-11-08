@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { after, before, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
 import {
   createVisibilityFixtureDb,
   VIS_ACTORS,
@@ -226,6 +226,13 @@ test('second boot is byte-identical and ZERO pre-visibility backups exist (sweep
   /* 2026-11-08 (D-50-5): flipped 1 → 0 — no sweep exists to mint a backup, and
      no boot path can delete the restored p.teams on any boot (Pitfall 1). */
   assert.equal(backups().length, 0, 'zero projects-pre-visibility-*.db after two boots');
+  /* 50-02: the NEW migrations are no-ops here too — this fixture carries no
+     pre-visibility snapshot (fail-open posture) and no legacy guest rows, so
+     neither migration may write or back up. */
+  const newBackups = prefix =>
+    fs.readdirSync(dataDir).filter(name => name.startsWith(prefix) && name.endsWith('.db'));
+  assert.equal(newBackups('projects-pre-team-link-').length, 0, 'zero projects-pre-team-link- backups (fail-open posture writes nothing)');
+  assert.equal(newBackups('projects-pre-guest-normalize-').length, 0, 'zero projects-pre-guest-normalize- backups (no guest rows)');
 
   /* The live team links survive the reboot byte-for-byte. */
   const teamsharePost = storedDoc().data.projects.find(p => p.id === 'p_teamshare');
@@ -242,4 +249,217 @@ test('second boot is byte-identical and ZERO pre-visibility backups exist (sweep
   assert.deepEqual(team.ids, [...VISIBILITY_MODEL.m_team].sort());
   const owner = await visibleViaDocGet(emailOf('m_owner'));
   assert.deepEqual(owner.ids, [...VISIBILITY_MODEL.m_owner].sort());
+});
+
+/* ==========================================================================
+   50-02 Task 2 (D-50-6): restoreTeamLinks — the provenance-(a) path.
+   A SEPARATE fixture/dataDir boots a workspace whose stored doc is the exact
+   post-Phase-49-sweep shape (p.teams deleted, team-derived members
+   materialized), while a planted projects-pre-visibility-*.db snapshot holds
+   the PRE-sweep doc (teams linked, genuine access list only). Both fixture
+   labels are HAND-WRITTEN here — never derived from production code
+   (anti-tautology contract).
+     - p_teamshare  sweep materialized m_team  → restore link, REMOVE m_team
+     - p_teamboth   m_team was ALREADY on the pre-sweep list (genuine) →
+                    restore link, REMOVE NOTHING
+     - p_membershare the genuine individual invite (m_plain): untouched by the
+                    sweep, so untouched by the reverse sweep — no teams key,
+                    membership preserved (D-50-6 preservation clause)
+   The fallback posture (no backup → fail open, zero writes) is exercised by
+   the main harness above: its dataDir carries no pre-visibility snapshot.
+   ========================================================================== */
+describe('restoreTeamLinks (D-50-6): pre-sweep backup provenance', { concurrency: false }, () => {
+  const TEAM_LINK_PREFIX = 'projects-pre-team-link-';
+  const PRE_SWEEP_PREFIX = 'projects-pre-visibility-';
+  let dir;
+  let srv;
+  let postRestore;
+
+  const wsRow = () =>
+    withDb(srv.dbPath, db => db.prepare('select doc, revision from workspaces where id = ?').get(VIS_WS.id));
+  const doc = () => JSON.parse(wsRow().doc);
+  const project = id => doc().data.projects.find(p => p.id === id);
+  const backupsOf = prefix => fs.readdirSync(dir).filter(n => n.startsWith(prefix) && n.endsWith('.db'));
+
+  before(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-teamlink-'));
+    createVisibilityFixtureDb(dir);
+    /* Snapshot the fixture db AS the pre-sweep backup (the real Phase 49
+       backup was a full-database vacuum-into of exactly this shape), THEN
+       rewrite the live doc to the post-sweep shape: links deleted,
+       team-derived members materialized. */
+    fs.copyFileSync(path.join(dir, 'projects.db'), path.join(dir, `${PRE_SWEEP_PREFIX}2026-11-07T00-00-00-000Z.db`));
+    const raw = new DatabaseSync(path.join(dir, 'projects.db'));
+    try {
+      raw.exec(`
+        begin;
+        update workspaces set doc = json_remove(
+          json_set(doc, '$.data.projects[2].members', json_array('m_admin', 'm_team')),
+          '$.data.projects[2].teams',
+          '$.data.projects[3].teams'
+        ) where id = '${VIS_WS.id}';
+        commit;
+      `);
+    } finally {
+      raw.close();
+    }
+    srv = await startServer({ dataDir: dir });
+    postRestore = JSON.stringify({ doc: wsRow().doc, revision: wsRow().revision });
+  });
+
+  after(async () => {
+    await srv?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('boot 1 restores the swept links and removes ONLY the sweep-materialized entries', () => {
+    /* p_teamshare: pre-sweep members were ['m_admin'] only — the planted
+       'm_team' entry is sweep-materialized → moved back to the (restored)
+       team link. */
+    const share = project('p_teamshare');
+    assert.deepEqual(share.teams, ['engA'], 'p_teamshare: the engA link is restored from the snapshot');
+    assert.deepEqual(share.members, ['m_admin'], 'p_teamshare: the materialized m_team entry is removed');
+
+    /* p_teamboth: m_team was ALREADY on the pre-sweep access list — the link
+       is restored but the genuine individual entry stands (preservation). */
+    const both = project('p_teamboth');
+    assert.deepEqual(both.teams, ['engA'], 'p_teamboth: the engA link is restored');
+    assert.deepEqual(both.members, ['m_admin', 'm_team'], 'p_teamboth: the genuine individual entry is preserved');
+
+    /* The genuine individual invite the sweep never touched: no teams key,
+       membership intact (fail-open preservation clause, D-50-6). */
+    const genuine = project('p_membershare');
+    assert.deepEqual(genuine.teams, [], 'p_membershare: no team link added — the snapshot had none to restore');
+    assert.deepEqual(genuine.members, ['m_plain'], 'p_membershare: the genuine individual invite is untouched');
+
+    assert.equal(doc().data.teamLinksRestored, 1, 'the second-boot no-op marker is written once');
+  });
+
+  test('restored links grant access through the LIVE funnel (Plan-01 predicate)', async () => {
+    const session = await login(srv.base, emailOf('m_team'), VIS_PASSWORD);
+    assert.equal(session.status, 200);
+    const res = await session.client.get(`/api/workspaces/${VIS_WS.slug}`);
+    assert.equal(res.status, 200);
+    const ids = (res.data?.doc?.data?.projects || []).map(p => p.id).sort();
+    /* Hand-derived: p_teamshare + p_teamboth via the live engA term, plus the
+       publics; NOT p_membershare (m_plain's genuine invite), NOT p_hidden. */
+    assert.deepEqual(ids, ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare']);
+  });
+
+  test('exactly ONE projects-pre-team-link- backup, and the planted snapshot is untouched', () => {
+    assert.equal(backupsOf(TEAM_LINK_PREFIX).length, 1, 'one pre-team-link backup (first migrating boot only)');
+    assert.equal(backupsOf(PRE_SWEEP_PREFIX).length, 1, 'the provenance snapshot itself is never rewritten');
+  });
+
+  test('second boot is byte-identical: no marker churn, no new backups', async () => {
+    await srv.stop();
+    srv = await startServer({ dataDir: dir });
+    assert.equal(JSON.stringify({ doc: wsRow().doc, revision: wsRow().revision }), postRestore, 'doc bytes identical across the reboot');
+    assert.equal(backupsOf(TEAM_LINK_PREFIX).length, 1, 'no second backup on the no-op boot');
+  });
+});
+
+/* ==========================================================================
+   50-02 Task 3 (D-50-10): normalizeGuestRoles — the legacy path. The current
+   schema's CHECK constraints admit no 'guest' role, so the fixture rebuilds
+   the memberships/invites tables WITHOUT the constraints (the legacy
+   pre-constraint shape) and plants raw 'guest' rows. Post-boot both must read
+   'viewer', the funnel must treat the member as a viewer, and a second boot
+   must be a no-op with zero additional backups.
+   ========================================================================== */
+describe('normalizeGuestRoles (D-50-10): legacy guest rows normalize to viewer', { concurrency: false }, () => {
+  const GUEST_PREFIX = 'projects-pre-guest-normalize-';
+  let dir;
+  let srv;
+  let postNormalize;
+
+  const membershipRole = () =>
+    withDb(srv.dbPath, db =>
+      db.prepare('select role from memberships where workspace_id = ? and user_id = ?').get(VIS_WS.id, 'u_guest')?.role,
+    );
+  const inviteRoles = () =>
+    withDb(srv.dbPath, db => db.prepare('select email, role from invites where workspace_id = ? order by email').all(VIS_WS.id));
+  const backupsOf = prefix => fs.readdirSync(dir).filter(n => n.startsWith(prefix) && n.endsWith('.db'));
+
+  before(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-guestnorm-'));
+    createVisibilityFixtureDb(dir);
+    /* Rebuild the two role-bearing tables in the LEGACY pre-CHECK shape and
+       plant raw 'guest' rows — production current-schema DBs can never hold
+       these; that is exactly why the migration is defensive. */
+    const db = new DatabaseSync(path.join(dir, 'projects.db'));
+    try {
+      db.exec(`
+        begin;
+        create table memberships_legacy (
+          workspace_id text not null,
+          user_id      text not null,
+          role         text not null,
+          member_id    text,
+          team         text,
+          scope        text,
+          primary key (workspace_id, user_id)
+        );
+        insert into memberships_legacy select workspace_id, user_id, role, member_id, team, scope from memberships;
+        drop table memberships;
+        alter table memberships_legacy rename to memberships;
+        create table invites_legacy (
+          token_hash   text primary key,
+          email        text,
+          role         text not null,
+          team         text,
+          teams        text,
+          workspace_id text,
+          created_by   text not null,
+          created_at   integer not null,
+          expires_at   integer not null,
+          used_at      integer,
+          used_by      text,
+          scope        text
+        );
+        insert into invites_legacy select token_hash, email, role, team, teams, workspace_id, created_by, created_at, expires_at, used_at, used_by, scope from invites;
+        drop table invites;
+        alter table invites_legacy rename to invites;
+        update memberships set role = 'guest' where user_id = 'u_guest';
+        update invites set role = 'guest';
+        commit;
+      `);
+    } finally {
+      db.close();
+    }
+    srv = await startServer({ dataDir: dir });
+    postNormalize = JSON.stringify({ memberships: membershipRole(), invites: inviteRoles() });
+  });
+
+  after(async () => {
+    await srv?.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('boot 1 rewrites every legacy guest row to viewer (memberships AND invites)', () => {
+    assert.equal(membershipRole(), 'viewer', 'the planted memberships role guest → viewer');
+    const roles = inviteRoles().map(r => r.role);
+    assert.ok(roles.length >= 1, 'the planted invite row is present');
+    assert.ok(roles.every(r => r === 'viewer'), 'every planted invites role guest → viewer');
+  });
+
+  test('the funnel treats the normalized member as a viewer (D-50-11: behavior, not data model)', async () => {
+    const session = await login(srv.base, emailOf('m_guest'), VIS_PASSWORD);
+    assert.equal(session.status, 200);
+    const res = await session.client.get(`/api/workspaces/${VIS_WS.slug}`);
+    assert.equal(res.status, 200);
+    const ids = (res.data?.doc?.data?.projects || []).map(p => p.id).sort();
+    assert.deepEqual(ids, [...VISIBILITY_MODEL.m_guest].sort(), 'viewer semantics after normalization');
+  });
+
+  test('exactly ONE projects-pre-guest-normalize- backup (no backup = no mutation held)', () => {
+    assert.equal(backupsOf(GUEST_PREFIX).length, 1, 'one pre-guest-normalize backup, first migrating boot only');
+  });
+
+  test('second boot is a no-op: no drift, no additional backups', async () => {
+    await srv.stop();
+    srv = await startServer({ dataDir: dir });
+    assert.equal(JSON.stringify({ memberships: membershipRole(), invites: inviteRoles() }), postNormalize, 'no drift across the reboot');
+    assert.equal(backupsOf(GUEST_PREFIX).length, 1, 'no second backup on the no-op boot');
+  });
 });

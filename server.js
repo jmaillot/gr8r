@@ -63,6 +63,10 @@ import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
 import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn, runSchema as adapterRunSchema, backendKind } from './db-adapter.mjs';
+/* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
+   snapshots READ-ONLY (never through the adapter — they are historical files,
+   not the live handle). Sole direct node:sqlite use in server.js. */
+import { DatabaseSync } from 'node:sqlite';
 
 /* I18N-01/02 (Phase 36): the server renders notification emails per recipient
    through tFor, so the FR catalogue must be registered at boot from the SAME
@@ -2015,11 +2019,13 @@ async function bootstrap(opts) {
      load-bearing, Pitfall 2 discipline). */
   await migrateTotpFactors();
   await migrateTotpReWrap();
-  /* [2026-11-08 D-50-5] The Phase 49 grant-materialization sweep is RETIRED:
-     the live team link is restored as the third visibility term (p.teams is
-     read again, never deleted), and the scope columns stay dormant-on-disk.
-     There is deliberately NO boot pass that touches p.teams — a sweep here
-     would erase every live link on the next boot (Pitfall 1). */
+  /* D-50-6/D-50-10 (Phase 50, Plan 02): the reverse-sweep restoration and the
+     legacy guest normalization. The Phase 49 materialization sweep stays
+     RETIRED — restoreTeamLinks() only ever ADDS p.teams back from a
+     human-confirmed provenance source and never deletes a link (Pitfall 1);
+     a boot pass that erased live links would undo D-50-5 on every restart. */
+  await restoreTeamLinks();
+  await normalizeGuestRoles();
   await ensureAdmin(opts);
   await stampInstanceAdmin();
 }
@@ -2594,6 +2600,231 @@ async function migrateTotpReWrap() {
   logInfo(
     `  TOTP re-wrap: ${rewrapped} row(s) re-sealed to v2:<current-key-id>, ${undecryptable} undecryptable left as-is, ${sealFailed} seal failure(s).`,
   );
+}
+
+/*
+ * D-50-6 (Phase 50, Plan 02): reverse-sweep boot migration — the inverse of the
+ * retired Phase 49 grant materialization. Phase 49 pushed team-derived grants
+ * into p.members with NO per-entry provenance marker and deleted p.teams, so
+ * the reconstruction source is a HUMAN-CONFIRMED decision (checkpoint recorded
+ * 2026-11-08): (a) read the pre-sweep backup DBs (projects-pre-visibility-*.db,
+ * the Phase 49 sweep's own "no backup = no mutation" snapshots) when present —
+ * the backup doc holds each project's pre-sweep teams[] and members[], so
+ * team-derived entries are exactly (current members − pre-sweep members);
+ * (b) otherwise FAIL OPEN: every stored p.members entry is treated as a
+ * genuine individual invite, no team link is restored from the sweep era, and
+ * a boot warning names the workspaces that need owner relinking (no lockouts;
+ * stale access persists until an owner relinks — documented, tested posture).
+ *
+ * Prohibition (T-50-04): no heuristic ever converts a genuine individual
+ * p.members entry into a team link — removal happens ONLY where the backup
+ * positively identifies the entry as sweep-materialized (absent from the
+ * pre-sweep members list). The migration is idempotent via a doc marker
+ * (data.teamLinksRestored): a second boot is a byte-identical no-op, and a
+ * team link an owner later deletes is never resurrected.
+ *
+ * D-49-8 discipline: raw JSON.stringify doc writes only — normalizeProjects is
+ * never called inside this migration (sealed private-empty projects stay
+ * sealed), and no revision churn.
+ */
+async function restoreTeamLinks() {
+  const PRE_SWEEP_PREFIX = 'projects-pre-visibility-';
+  let preSweepBackups = [];
+  try {
+    preSweepBackups = fs
+      .readdirSync(DATA_DIR)
+      .filter(name => name.startsWith(PRE_SWEEP_PREFIX) && name.endsWith('.db'))
+      .sort();
+  } catch {
+    preSweepBackups = [];
+  }
+  if (preSweepBackups.length === 0) {
+    // Provenance posture (b): fail open. Zero writes — the scan itself must
+    // never mutate, so later boots re-evaluate (e.g. if a backup appears).
+    const wsIds = (await db.all('select id from workspaces')).map(r => r.id);
+    if (wsIds.length > 0) {
+      logWarn(
+        `  team-link restoration (D-50-6): no pre-sweep backup (${PRE_SWEEP_PREFIX}*.db) found — fail-open posture: every stored p.members entry is treated as a genuine individual invite and NO team links are restored from the Phase 49 sweep era. Workspaces that may need an owner to relink teams: ${wsIds.join(', ')}`,
+      );
+    }
+    return;
+  }
+
+  // Provenance posture (a): read the newest pre-sweep snapshot read-only,
+  // SQLite-only (the backups exist only on the SQLite lane — pg boots take
+  // the fail-open path above, their DATA_DIR carries no such backups).
+  const preSweep = new Map(); // wsId -> Map(projectId -> { teams, members })
+  await sqliteOnly(
+    async () => {
+      let dbBackup;
+      try {
+        dbBackup = new DatabaseSync(path.join(DATA_DIR, preSweepBackups[preSweepBackups.length - 1]), { readOnly: true });
+        for (const row of dbBackup.prepare('select id, doc from workspaces').all()) {
+          let doc = {};
+          try {
+            doc = JSON.parse(row.doc);
+          } catch {
+            continue;
+          }
+          const projects = new Map();
+          for (const p of doc?.data?.projects || []) {
+            if (!p || typeof p !== 'object' || typeof p.id !== 'string') continue;
+            projects.set(p.id, {
+              teams: Array.isArray(p.teams) ? p.teams.filter(t => typeof t === 'string') : [],
+              members: Array.isArray(p.members) ? p.members.filter(m => typeof m === 'string') : [],
+            });
+          }
+          preSweep.set(row.id, projects);
+        }
+      } catch (err) {
+        // Unreadable snapshot → no provenance → fail open, never guess.
+        logWarn(`  team-link restoration (D-50-6): pre-sweep backup unreadable (${err.message}) — fail-open posture, nothing restored.`);
+        preSweep.clear();
+      } finally {
+        try {
+          dbBackup?.close();
+        } catch {
+          /* already closed */
+        }
+      }
+    },
+    `read pre-sweep provenance snapshot (${PRE_SWEEP_PREFIX}*)`,
+  );
+  if (preSweep.size === 0) return;
+
+  // Candidate scan (marker-guard): a workspace needs restoration iff the
+  // marker is absent AND some project lost a teams key to the sweep (absent
+  // now, non-empty in the snapshot). A project the owner already relinked
+  // (teams key present) is skipped entirely — its current entries are
+  // post-migration truth, never touched.
+  const candidates = [];
+  for (const row of await db.all('select id, doc from workspaces')) {
+    if (!preSweep.has(row.id)) continue;
+    let doc = {};
+    try {
+      doc = JSON.parse(row.doc);
+    } catch {
+      continue;
+    }
+    if (doc?.data?.teamLinksRestored) continue;
+    const snapshot = preSweep.get(row.id);
+    let needsRestore = false;
+    for (const p of doc?.data?.projects || []) {
+      const pre = p && typeof p === 'object' ? snapshot.get(p.id) : undefined;
+      if (pre && pre.teams.length > 0 && !('teams' in p)) {
+        needsRestore = true;
+        break;
+      }
+    }
+    if (needsRestore) candidates.push(row.id);
+  }
+  if (candidates.length === 0) return;
+
+  // No backup = no mutation (T-50-03): a dedicated snapshot under a NEW
+  // prefix before the first restore boot touches anything.
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-pre-team-link-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    logError(`  team-link restoration skipped: pre-migration backup failed: ${err.message}`);
+    return;
+  }
+
+  let restored = 0;
+  let removed = 0;
+  await db.tx(async () => {
+    for (const wsId of candidates) {
+      // In-tx re-read — the candidate scan is a hint, the tx state is the
+      // authority (Phase 49 template mechanics).
+      const row = await db.get('select doc from workspaces where id = ?', [wsId]);
+      let doc = {};
+      try {
+        doc = JSON.parse(row?.doc);
+      } catch {
+        continue;
+      }
+      if (doc?.data?.teamLinksRestored) continue;
+      const snapshot = preSweep.get(wsId);
+      let changed = false;
+      for (const p of doc?.data?.projects || []) {
+        const pre = p && typeof p === 'object' ? snapshot.get(p.id) : undefined;
+        if (!pre || pre.teams.length === 0 || 'teams' in p) continue;
+        // Sweep-materialized = present now, absent from the pre-sweep access
+        // list (T-50-04: the ONLY removal basis — no heuristic, no guessing).
+        const materialized = (Array.isArray(p.members) ? p.members : []).filter(
+          m => typeof m === 'string' && !pre.members.includes(m),
+        );
+        p.teams = [...pre.teams];
+        if (materialized.length > 0) {
+          p.members = (Array.isArray(p.members) ? p.members : []).filter(m => !materialized.includes(m));
+          removed += materialized.length;
+        }
+        restored++;
+        changed = true;
+      }
+      if (!changed) continue;
+      doc.data.teamLinksRestored = 1; // second-boot no-op marker (idempotence)
+      await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(doc), wsId]);
+    }
+  });
+  if (restored > 0) {
+    logInfo(`  team-link restoration (D-50-6): restored ${restored} team link(s), removed ${removed} sweep-materialized p.members entr(ies).`);
+  }
+}
+
+/*
+ * D-50-10 (Phase 50, Plan 02): defensive normalization of the collapsed guest
+ * model. The current schema's CHECK constraints admit only
+ * owner/admin/member/viewer (memberships) and admin/member/viewer (invites),
+ * so current-schema databases can never carry a 'guest' role row — this pass
+ * exists for legacy pre-constraint SQLite databases only. Scan-based guard:
+ * zero 'guest' rows → zero writes, no backup, byte-identical no-op. When
+ * candidates exist: dedicated projects-pre-guest-normalize-<stamp>.db backup
+ * first (no backup = no mutation, T-50-03), then a single transaction of
+ * guest→viewer rewrites. Doc-embedded role copies need no transform: p.members
+ * is a plain member-id array (no roles), and the doc profiles' role field is
+ * the presentation label (ROLE_LABEL), not the authorization value. The
+ * guest specialness survives via behavior only (D-50-11) — viewer-role checks.
+ * inviteRole()'s intake mapping guest→viewer (server.js inviteRole) stays:
+ * it IS the normalization at the door.
+ */
+async function normalizeGuestRoles() {
+  const guestCount = async table =>
+    (await db.get(`select count(*) as n from ${table} where role = 'guest'`)).n;
+  if ((await guestCount('memberships')) === 0 && (await guestCount('invites')) === 0) return;
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-pre-guest-normalize-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    logError(`  guest-role normalization skipped: pre-migration backup failed: ${err.message}`);
+    return;
+  }
+
+  let normalized = 0;
+  await db.tx(async () => {
+    // Per-table re-check inside the transaction (Phase 49 defense-in-depth
+    // discipline): only touch tables that still hold candidates.
+    for (const table of ['memberships', 'invites']) {
+      const before = await guestCount(table);
+      if (before === 0) continue;
+      await db.run(`update ${table} set role = 'viewer' where role = 'guest'`);
+      normalized += before;
+    }
+  });
+  logInfo(`  guest normalization (D-50-10): ${normalized} legacy 'guest' role row(s) normalized to 'viewer'.`);
 }
 
 /*
