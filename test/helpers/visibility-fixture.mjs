@@ -1,23 +1,28 @@
-/* Phase 49 (49-01, T-49-01): the 13-cell actor × project visibility matrix as a
-   raw SQLite fixture, plus the INDEPENDENT visibility oracle.
+/* Phase 49 (49-01, T-49-01) → Phase 50 (50-01, D-50-5): the actor × project
+   visibility matrix as a raw SQLite fixture, plus the INDEPENDENT visibility
+   oracle.
 
    ANTI-TAUTOLOGY CONTRACT: VISIBILITY_MODEL and MIRROR_MODEL below are
-   hand-derived from the model tables in
-   .planning/phases/49-visibility-model-collapse-grant-materialization/49-RESEARCH.md
-   (§Fixtures), corrected by a one-time empirical probe of the OLD-model server
-   (2026-11-07, recorded in the comments on each row). They NEVER call
-   memberCanReadProject (server.js) or canReadProject (mcp.js); consumers must
-   not derive expectations from production code either.
+   hand-derived from the predicate — NEVER read from production code.
+   Consumers must not derive expectations from memberCanReadProject (server.js)
+   or canReadProject (mcp.js) either.
 
-   Probe correction (2026-11-07): the RESEARCH model-table row "admin / owner —
-   ROLE_RANK bypass — visible, untouched" is wrong for the doc-GET surface.
-   hiddenFor's admin/owner path is hiddenProjectIds (server.js:894), which is
-   canSeeProject ONLY: private projects are access-list-gated for EVERYONE, and
-   a private project with an empty access list is served to the document owner
-   alone (normalizeProjects injects ownerId into the served copy, server.js:929-936).
-   The ROLE_RANK bypass at server.js:882 only skips the scope/team funnel — it
-   does not open the access list. The mcp.js mirror (canReadProject :182) DOES
-   grant admins/owners everything, which is the pre-existing mirror drift the
+   D-50-5 model (2026-11-08, Phase 50 Plan 01): the single visibility
+   predicate is
+       public ∨ memberId ∈ p.members ∨ member's LIVE team ∈ p.teams
+   where "live" means the predicate reads current p.teams and current
+   team_members rows on every evaluation, with no caching layer. The Phase 49
+   grant-materialization sweep is RETIRED: p.teams is never deleted, scope
+   columns stay dormant-on-disk/ignored-by-code, and legacy p.access remains
+   an un-honored string (projectIsPrivate reads the boolean only, so a
+   never-swept access:'private' doc behaves public — D-49-4 posture kept).
+
+   Probe-correction note (Phase 49, still true): the doc-GET admin/owner path
+   is hiddenProjectIds = canSeeProject WITHOUT the team term (default param) —
+   private projects stay access-list-gated for admins/owners, and a private
+   project with an empty access list is served to the document owner alone
+   (normalizeProjects injects ownerId into the served copy). The mcp.js mirror
+   DOES grant admins/owners everything — the pre-existing mirror drift the
    parity harness documents rather than hides. */
 
 import crypto from 'node:crypto';
@@ -37,6 +42,7 @@ export const VIS_PROJECTS = Object.freeze([
   'p_membershare',
   'p_hidden',
   'p_teamshare',
+  'p_teamboth',
   'p_scopeproj',
   'p_scopeteam',
   'p_scopeddeny',
@@ -105,8 +111,12 @@ export function visfixDoc() {
         { id: 'p_membershare', key: 'membershare', name: 'Member Share', private: true, members: ['m_plain'], lead: 'm_plain', teams: [], status: 'active', perms: {} },
         /* Plain member NOT on the access list (hidden cell). */
         { id: 'p_hidden', key: 'hidden', name: 'Hidden From Plain', private: true, members: ['m_admin'], lead: 'm_admin', teams: [], status: 'active', perms: {} },
-        /* Team-derived cell (Phase 32): to be materialized by the Plan 02 sweep. */
+        /* Team-derived cell (D-50-5): m_team's engA team_members row grants
+           live access — NO materialization step (sweep retired). */
         { id: 'p_teamshare', key: 'teamshare', name: 'Team Share', private: true, members: ['m_admin'], lead: 'm_admin', teams: ['engA'], status: 'active', perms: {} },
+        /* Team-linked AND individually listed (D-50-5 unless-clause): m_team
+           keeps access even after leaving engA (individual entry stands). */
+        { id: 'p_teamboth', key: 'teamboth', name: 'Team And Member', private: true, members: ['m_admin', 'm_team'], lead: 'm_admin', teams: ['engA'], status: 'active', perms: {} },
         /* Scope.projects grant cell (D-03 inversion) — private, NOT in members. */
         { id: 'p_scopeproj', key: 'scopeproj', name: 'Scope Project', private: true, members: [], lead: null, teams: [], status: 'active', perms: {} },
         /* Scope.teams ∩ p.teams grant cell (D-03 A1 union). */
@@ -114,16 +124,19 @@ export function visfixDoc() {
         /* Access-list member OUT OF scope: hidden today, stays hidden (RESEARCH row 7). */
         { id: 'p_scopeddeny', key: 'scopeddeny', name: 'Scope Deny', private: true, members: ['m_scoped'], lead: 'm_scoped', teams: [], status: 'active', perms: {} },
         /* The ONE intentional Phase 49 visibility gain: out-of-scope member ×
-           PUBLIC project — hidden today, visible after the model swap. */
-        { id: 'p_publicgain', key: 'publicgain', name: 'Public Gain', private: false, members: [], lead: null, teams: [], status: 'active', perms: {} },
+           PUBLIC project — hidden today, visible after the model swap. The
+           engA link on a public project changes nothing (public is public):
+           the D-50-5 "team-linked on public project" cell. */
+        { id: 'p_publicgain', key: 'publicgain', name: 'Public Gain', private: false, members: [], lead: null, teams: ['engA'], status: 'active', perms: {} },
         /* Sealed: private, empty members, no teams, no scope anywhere (D-49-8). */
         { id: 'p_sealed', key: 'sealed', name: 'Sealed', private: true, members: [], lead: null, teams: [], status: 'active', perms: {} },
         /* Legacy p.access:'private' with no boolean private (server.js:754). */
         { id: 'p_legacy', key: 'legacyp', name: 'Legacy Access', access: 'private', members: ['m_admin'], lead: 'm_admin', teams: [], status: 'active', perms: {} },
         /* Legacy scalar `team` cell (CR-01, 49-05): a pre-Phase-32 stored doc —
-           scalar `team` key, NO `teams` key. The one-boot sweep's scalar marker
-           fires on it, and the retired 2eec642 semantics convert it so the
-           engA team grant (m_team) materializes into p.members. */
+           scalar `team` key, NO `teams` key. The Phase 50 sweep retirement
+           means NOTHING converts or deletes this key: the D-50-5 predicate
+           reads p.teams only, so the engA link here is dead — a live-team
+           grant must use the teams[] spelling. */
         { id: 'p_legacyteam', key: 'legacyteam', name: 'Legacy Scalar Team', private: true, members: ['m_admin'], lead: 'm_admin', team: 'engA', status: 'active', perms: {} },
         /* Plain public project. */
         { id: 'p_open', key: 'open', name: 'Open', private: false, members: [], lead: null, teams: [], status: 'active', perms: {} },
@@ -152,92 +165,62 @@ export function visfixDoc() {
 }
 
 /* The expected VISIBLE project-id set per actor through the doc-GET door under
-   the OLD model, hand-derived from the RESEARCH §Fixtures matrix plus the
-   probe-corrected admin/owner semantics (see module comment).
-   Legacy shapes the one-boot sweep consumes: the p_legacy `access:'private'`
-   string, p.teams arrays, and (CR-01, 49-05) the p_legacyteam scalar `team`
-   key — sweepNeeded's scalar marker fires on it and the tx's 2eec642
-   semantics materialize the engA grant (m_admin, m_team) into p.members.
-
-   Reading of the old predicate per actor class:
-   - admin/owner (projectScope null via role, D-49-retired): hiddenProjectIds = canSeeProject
-     ONLY (server.js:894) — access list or public; the served copy has
-     normalizeProjects' ownerId injected into private-empty projects
-     (server.js:929-936), so those belong to the doc owner alone. No team term,
-     no scope term.
-   - member without scope (null-scope branch, server.js:882-893): canSeeProject
-     OR a live team_members intersection (memberCanReadProject :786-794).
-   - scoped member (server.js:896-901, D-49-retired): visible ⟺ inScopeProject ∧ scopeGrants
-     (:864-870) — scope OPENS its projects/teams (D-03) and SUBTRACTS everything
-     else, including public projects.
-   - viewer with invite-derived scope: same scoped branch.
-   - doc-only profile: no memberships row → requireWorkspace 404s before any
+   the D-50-5 model, HAND-DERIVED from:
+       public ∨ memberId ∈ p.members ∨ member's LIVE team ∈ p.teams
+   with the Phase 49 admin/owner posture kept (hiddenProjectIds = access-list-
+   gated, NO team term for admins/owners) and normalizeProjects' effects:
+   p_legacy (access:'private', no boolean) is un-honored → public for everyone;
+   private-empty p_scopeproj/p_sealed get the doc owner injected into the
+   SERVED copy (owner alone sees them).
+   Per actor:
+   - m_admin (admin, access-list-gated): private ∋ m_admin → p_hidden,
+     p_teamshare, p_teamboth, p_scopeteam, p_legacyteam; + publics.
+   - m_owner (owner, same gate): private-empty injection → p_scopeproj,
+     p_sealed; + publics. NOT p_scopeddeny (m_scoped keeps its entry — the
+     Phase 49 dissolve sweep is retired).
+   - m_plain: p_membershare (access list) + publics. NOT p_teamshare
+     (non-linked member × team-linked private project — the 404 cell).
+   - m_team (member, engA live): p_teamshare (live team), p_teamboth (team AND
+     individual) + publics. NOT p_legacyteam (scalar team key is dead —
+     nothing converts it, the sweep is retired).
+   - m_scoped (member, scopedTeam live): p_scopeteam (live team),
+     p_scopeddeny (access list — the scope SUBTRACTION is gone with the
+     dormant scope columns) + publics. NOT p_scopeproj (the D-03 scope grant
+     is dormant, nothing materializes it).
+   - m_guest (viewer, no team rows): publics only — the scope.projects grant
+     to p_membershare is dormant.
+   - m_doconly: no memberships row → requireWorkspace 404s before any
      predicate runs. */
 export const VISIBILITY_MODEL = Object.freeze({
-  m_admin: ['p_hidden', 'p_teamshare', 'p_scopeteam', 'p_publicgain', 'p_legacy', 'p_legacyteam', 'p_open'],
-  m_owner: ['p_scopeproj', 'p_sealed', 'p_publicgain', 'p_open'],
-  m_plain: ['p_membershare', 'p_open', 'p_publicgain'],
-  m_team: ['p_teamshare', 'p_legacyteam', 'p_open', 'p_publicgain'],
-  m_scoped: ['p_scopeproj', 'p_scopeteam'],
-  m_guest: ['p_membershare'],
+  m_admin: ['p_hidden', 'p_legacy', 'p_legacyteam', 'p_open', 'p_publicgain', 'p_scopeteam', 'p_teamboth', 'p_teamshare'],
+  m_owner: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeproj', 'p_sealed'],
+  m_plain: ['p_legacy', 'p_membershare', 'p_open', 'p_publicgain'],
+  m_team: ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
+  m_scoped: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeddeny', 'p_scopeteam'],
+  m_guest: ['p_legacy', 'p_open', 'p_publicgain'],
   m_doconly: [],
 });
 
-/* The expected visible set per actor through the MCP mirror under the OLD
-   model, hand-derived from mcp.js canReadProject (:180-189):
-   admin/owner bypass (ROLE_RANK >= admin → everything) ∨ public ∨ access list
-   (on the STORED doc, before any normalization) ∨ live team intersection.
-   The mirror has NO scope term — the documented Phase 49 divergence for
-   m_scoped/m_guest. After Plan 02's sweep + Plan 03's collapse, mirror and
-   server converge; consumers flip the documented-divergence assertions then. */
+/* The expected visible set per actor through the MCP mirror under the D-50-5
+   model, hand-derived from mcp.js canReadProject: admin/owner bypass
+   (ROLE_RANK >= admin → everything) ∨ public ∨ access list ∨ LIVE team
+   intersection, read on the STORED doc (no normalization). The mirror keeps
+   the documented admin/owner drift (RESEARCH Open Question 2: preserved). */
 const ALL = [...VIS_PROJECTS];
 export const MIRROR_MODEL = Object.freeze({
   m_admin: ALL,
   m_owner: ALL,
-  m_plain: ['p_membershare', 'p_open', 'p_publicgain'],
-  m_team: ['p_teamshare', 'p_legacyteam', 'p_open', 'p_publicgain'],
-  m_scoped: ['p_scopeteam', 'p_scopeddeny', 'p_publicgain', 'p_open'],
-  m_guest: ['p_open', 'p_publicgain'],
+  m_plain: ['p_legacy', 'p_membershare', 'p_open', 'p_publicgain'],
+  m_team: ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
+  m_scoped: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeddeny', 'p_scopeteam'],
+  m_guest: ['p_legacy', 'p_open', 'p_publicgain'],
   /* m_doconly can never obtain an API key: no memberships row → POST /api/keys
      answers 403 notAMember. */
 });
 
-/* Actors whose memberships carry a scope column value (the scoped branch). */
+/* Actors whose memberships carry a scope column value (dormant-on-disk since
+   the Phase 50 sweep retirement — nothing reads them). */
 export const VIS_SCOPED_ACTORS = Object.freeze(['m_scoped', 'm_guest']);
-
-/* Phase 49 Plan 02 (2026-11-07, D-49-2/A3 interim state): the dated, additive
-   visibility delta the ONE boot sweep induces, on top of the untouched
-   old-model oracles above. The sweep runs during boot (before any request),
-   so post-sweep doc-GETs ride the old predicate over swept data:
-   - scope columns NULL → scoped actors ride the null-scope branch and gain
-     every PUBLIC project (the A3 gain is inherent to the model swap; Plan 03
-     owns the collapsed-model pins and keeps it);
-   - m_owner: p_scopeddeny's out-of-scope access-list entry is dissolved
-     (old-hidden stays hidden) and its scoped lead is cleared with it —
-     normalizeProjects re-adds p.lead to the served members list (:925), so a
-     surviving lead would resurrect the dissolved entry on read. The project
-     is left private-empty — normalizeProjects' owner injection (:929-936)
-     serves it to the doc owner alone, exactly the pre-existing sealed-project
-     behavior — so m_owner GAINS it and m_scoped LOSES it;
-   - MIRROR (mcp.js, still old semantics, reads the STORED doc): grants now
-     sit on the stored access lists, so the mirror sees p_membershare (m_guest)
-     and p_scopeproj (m_scoped, D-03 grant materialized); p_scopeddeny's
-     dissolved entry no longer shows to m_scoped.
-   Plan 03 replaces these deltas with the collapsed-model pins. */
-export const POST_SWEEP_SERVER_DELTA = Object.freeze({
-  gains: Object.freeze({ m_owner: ['p_scopeddeny'], m_scoped: ['p_open', 'p_publicgain'], m_guest: ['p_open', 'p_publicgain'] }),
-  losses: Object.freeze({ m_scoped: ['p_scopeddeny'] }),
-});
-export const POST_SWEEP_MIRROR_DELTA = Object.freeze({
-  gains: Object.freeze({ m_guest: ['p_membershare'], m_scoped: ['p_scopeproj'] }),
-  losses: Object.freeze({ m_scoped: ['p_scopeddeny'] }),
-});
-
-export function postSweepIds(model, mid, delta) {
-  return [...new Set([...(model[mid] || []), ...(delta.gains[mid] || [])])]
-    .filter(id => !(delta.losses[mid] || []).includes(id))
-    .sort();
-}
 
 /* The current server.js SCHEMA (2026-11-07), copied verbatim so the fixture DB
    boots with zero ensureColumn surprises. boot's create-if-not-exists and

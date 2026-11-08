@@ -1,20 +1,16 @@
-/* Phase 49 (49-02): the set-equality + byte-identity migration harness with the
-   sweep pins ACTIVE (D-49-1 flip, 2026-11-07). Boots the real server against
-   the 13-cell visibility fixture plus a planted fail-open scope cell and pins:
-     1. the fixture's legacy shapes on disk BEFORE the boot (the sweep's input);
-     2. post-boot: scope columns NULL everywhere (D-49-1), no p.teams and no
-        p.access anywhere (D-49-4/5), the sealed shape preserved (D-49-8), the
-        doc-only team profile never materialized;
-     3. per-actor doc-GET visibility == the old oracle + the dated interim
-        sweep delta (POST_SWEEP_SERVER_DELTA) — the plan's set-equality pin
-        against the UNCHANGED VISIBILITY_MODEL oracle, with the unsweepable
-        cells (public projects for now-null-scope actors; the pruned-empty
-        injection for the owner) carried as an explicit dated delta that
-        Plan 03 replaces with the collapsed-model pins;
-     4. the fail-open scope-parse cell (T-49-04): corrupt scope JSON behaves
-        as workspace-wide — never a lockout, never an elevation;
-     5. a second boot is byte-identical with EXACTLY ONE projects-pre-visibility-
-        backup (D-49-6 marker). */
+/* Phase 49 (49-02) → Phase 50 (50-01): the migration harness flipped to pin
+   the SWEEP RETIREMENT (D-50-5). Boots the real server against the visibility
+   fixture (plus the planted fail-open scope cell) and pins:
+     1. the fixture's legacy shapes on disk BEFORE the boot (unchanged input);
+     2. boot 1 writes NOTHING: scope columns stay populated (dormant), and the
+        stored doc is byte-identical to the fixture — p.teams, p.access and
+        the scalar team key all survive (no grant materialization);
+     3. per-actor doc-GET visibility == the hand-derived D-50-5 model
+        (public ∨ p.members ∨ LIVE team ∈ p.teams, admins access-list-gated);
+     4. the planted corrupt-scope cell rides the plain member branch — the
+        dormant scope column is never read, never a lockout, never a grant;
+     5. a second boot is byte-identical with ZERO pre-visibility backups
+        (no sweep exists to mint one or to delete p.teams on any boot). */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -23,8 +19,6 @@ import { DatabaseSync } from 'node:sqlite';
 import { after, before, test } from 'node:test';
 import {
   createVisibilityFixtureDb,
-  POST_SWEEP_SERVER_DELTA,
-  postSweepIds,
   VIS_ACTORS,
   VIS_CREATED_AT,
   VIS_GUEST_SCOPE,
@@ -153,68 +147,51 @@ test('fixture DB (pre-boot): the legacy shapes the sweep consumes are on disk', 
   assert.equal(preBoot.revision, 1, 'the fixture ships at revision 1');
 });
 
-test('post-sweep: scope columns are NULL everywhere and the boot stayed deterministic (D-49-1)', () => {
-  /* 2026-11-07 (D-49-1): flipped from the pre-sweep value pins — the sweep is
-     `update memberships/invites set scope = null` inside the doc-write
-     transaction, so EVERY row reads NULL after one boot. */
+test('boot 1 writes NOTHING: scope columns stay populated and the doc is byte-identical (sweep retired, D-50-5)', () => {
+  /* 2026-11-08 (D-50-5): flipped from the Phase 49 NULL pins — the sweep is
+     retired, so the dormant scope columns are never cleared and never read. */
   assert.ok(membershipRows().length >= 7, 'all memberships present');
-  assert.ok(membershipRows().every(r => r.scope === null), 'every memberships.scope is NULL');
-  assert.ok(inviteRows().every(r => r.scope === null), 'every invites.scope is NULL');
+  assert.equal(membershipRows().find(r => r.member_id === 'm_scoped').scope, JSON.stringify(VIS_SCOPED_SCOPE), 'm_scoped scope column untouched (dormant)');
+  assert.equal(membershipRows().find(r => r.member_id === 'm_guest').scope, JSON.stringify(VIS_GUEST_SCOPE), 'm_guest scope column untouched (dormant)');
+  assert.ok(inviteRows().some(r => r.scope !== null && r.scope !== undefined), 'the invites row keeps its scope value (dormant)');
 
-  /* The sweep's raw doc write never churns the envelope (A5): revision, slug,
-     name and the TEAM-01 state are untouched. */
+  /* No boot pass touches the stored doc: revision, slug and the TEAM-01 state
+     are untouched, and the doc bytes equal the fixture's. */
   assert.equal(docRow().revision, 1);
   assert.equal(docRow().slug, VIS_WS.slug);
   assert.ok(membershipRows().every(r => r.team === null), 'the TEAM-01 backfill still found zero eligible rows');
+  /* NOTE: boot 1 does append the planted m_corrupt doc profile (the pre-existing
+     backfillMemberships ensureMember pass — untouched by this plan); byte-identity
+     of the visibility state across boots is pinned by the second-boot test below. */
 });
 
-test('post-sweep: no p.teams, no p.access, and the materialized grant set is exact (D-49-4/5/7/8)', () => {
+test('sweep retired: p.teams, p.access and the scalar team key all survive boot 1 — nothing materialized', () => {
   const projects = projectById();
 
-  for (const p of Object.values(projects)) {
-    assert.equal('teams' in p, false, `${p.id}: p.teams deleted (D-49-5)`);
-    assert.equal('access' in p, false, `${p.id}: p.access deleted (D-49-4)`);
-  }
-  assert.equal(projects.p_legacy.private, true, 'the legacy p.access string normalized to the boolean (D-49-4)');
+  /* D-50-5: p.teams is the LIVE third term — no boot path may delete it. */
+  assert.deepEqual(projects.p_teamshare.teams, ['engA'], 'p_teamshare keeps its live team link');
+  assert.deepEqual(projects.p_teamboth.teams, ['engA'], 'p_teamboth keeps its live team link');
+  assert.deepEqual(projects.p_publicgain.teams, ['engA'], 'p_publicgain keeps its team link (inert on a public project)');
+  /* D-49-4 posture kept without the sweep: the legacy string survives on disk
+     un-honored (projectIsPrivate reads the boolean only). */
+  assert.equal(projects.p_legacy.access, 'private', 'the legacy p.access string survives un-honored');
+  assert.equal(projects.p_legacyteam.team, 'engA', 'the scalar team key survives — nothing converts it');
+  assert.equal('teams' in projects.p_legacyteam, false, 'the scalar cell keeps the pre-Phase-32 shape');
 
-  /* Materialized grants — exactly the old-predicate reach, per cell: */
-  assert.deepEqual(projects.p_teamshare.members.includes('m_team'), true, 'team-intersection grant materialized (m_team)');
-  assert.deepEqual(projects.p_teamshare.members.includes('m_doconly'), false, 'doc-only profile (no memberships row) NOT materialized');
-  assert.deepEqual(projects.p_membershare.members.includes('m_guest'), true, 'scope.projects grant materialized (m_guest, D-03)');
-  assert.deepEqual(projects.p_scopeproj.members.includes('m_scoped'), true, 'scope.projects grant materialized (m_scoped, D-03)');
-  assert.deepEqual(projects.p_scopeproj.members.includes('m_owner'), true, 'owner entry pinned: the grant un-empties the project and switches off normalizeProjects\' owner injection');
-  assert.deepEqual(projects.p_scopeteam.members.includes('m_scoped'), true, 'scope.teams ∩ p.teams grant materialized (D-03 A1)');
-  assert.deepEqual(projects.p_scopeddeny.members.includes('m_scoped'), false, 'out-of-scope access-list entry dissolved — old-hidden stays hidden');
-  assert.deepEqual(projects.p_scopeddeny.private, true, 'the dissolved project stays private');
-  assert.deepEqual(projects.p_hidden.members, ['m_admin'], 'no phantom grants: the hidden cell keeps its exact list');
-
-  /* CR-01 (49-05): the scalar-p.team cell materializes end-to-end (SC1 for the
-     scalar shape) — the engA team-derived grant survived one reboot. */
-  /* m_corrupt (the planted T-49-04 cell, not in VIS_ACTORS) is a workspace-wide
-     fail-open member with an engA team_members row — its grant materializes
-     here exactly as it does on p_teamshare. */
-  assert.deepEqual([...projects.p_legacyteam.members].sort(), ['m_admin', 'm_corrupt', 'm_team'], 'scalar cell: team-derived grants materialized (set-equal, order-independent)');
-  assert.equal('team' in projects.p_legacyteam, false, 'scalar cell: p.team key deleted by the tx normalize');
-  assert.equal('teams' in projects.p_legacyteam, false, 'scalar cell: p.teams deleted (D-49-5)');
-  assert.equal(projects.p_legacyteam.private, true, 'scalar cell: stays private');
-
-  /* D-49-8: the sealed cell keeps its exact sealed shape — no ownerId
-     injected, private not flipped (the sweep never calls normalizeProjects). */
-  const sealed = projects.p_sealed;
-  assert.deepEqual(sealed.members, [], 'the sealed project keeps its empty members list');
-  assert.equal(sealed.private, true, 'the sealed project stays private');
+  /* No grant materialization: access lists are exactly the fixture's. */
+  assert.deepEqual(projects.p_teamshare.members, ['m_admin'], 'no team grant materialized — access is LIVE via the predicate');
+  assert.deepEqual(projects.p_scopeproj.members, [], 'no scope grant materialized (dormant)');
+  assert.deepEqual(projects.p_scopeddeny.members, ['m_scoped'], 'no dissolve — the out-of-scope access-list entry stands');
+  assert.deepEqual(projects.p_hidden.members, ['m_admin'], 'no phantom grants');
+  assert.deepEqual(projects.p_sealed.members, [], 'the sealed project keeps its empty members list (D-49-8 shape preserved on disk)');
+  assert.equal(projects.p_sealed.private, true, 'the sealed project stays sealed on disk');
 });
 
-test('sweep set-equality: every actor’s doc-GET visibility equals the oracle + the dated sweep delta', async () => {
-  /* 2026-11-07: the oracle rows (VISIBILITY_MODEL) are UNTOUCHED — the old
-     model, hand-derived and probe-corrected. The sweep runs during boot over
-     the OLD predicate, which induces exactly two unsweepable interim cells,
-     carried by POST_SWEEP_SERVER_DELTA (fixture helper, dated): scoped actors
-     ride the null-scope branch and gain every PUBLIC project (A3 gain —
-     inherent to clearing the scope columns, Plan 03 owns it), and the owner
-     sees the pruned-empty p_scopeddeny via normalizeProjects' injection
-     (pre-existing sealed-project behavior). Everything else is byte-equal to
-     the old map — nothing old-visible is lost, nothing old-hidden gained. */
+test('D-50-5 set-equality: every actor’s doc-GET visibility equals the hand-derived model', async () => {
+  /* 2026-11-08: the oracle rows (VISIBILITY_MODEL) are the hand-derived
+     D-50-5 model — public ∨ p.members ∨ LIVE team ∈ p.teams, admins
+     access-list-gated, dormant scope columns read by nothing. The live team
+     term restores m_team's reach WITHOUT any materialization step. */
   for (const actor of VIS_ACTORS) {
     const { status, ids } = await visibleViaDocGet(emailOf(actor));
     if (actor === 'm_doconly') {
@@ -222,50 +199,47 @@ test('sweep set-equality: every actor’s doc-GET visibility equals the oracle +
       continue;
     }
     assert.equal(status, 200, `${actor} reads the workspace doc`);
-    assert.deepEqual(ids, postSweepIds(VISIBILITY_MODEL, actor, POST_SWEEP_SERVER_DELTA), `${actor} sees exactly the oracle + dated delta set`);
+    assert.deepEqual(ids, [...VISIBILITY_MODEL[actor]].sort(), `${actor} sees exactly the D-50-5 hand-derived set`);
   }
 });
 
-test('fail-open scope-parse cell: corrupt scope JSON behaves as workspace-wide (T-49-04)', async () => {
-  /* m_corrupt's scope column is unparseable ('not-json{'). Old-model semantics
-     (projectScope :816-829, D-04 fail-open, D-49-retired): treated as workspace-wide — the
-     null-scope branch (public ∨ access list ∨ live team intersection). The
-     sweep reproduces that exactly: the engA team grant materializes onto
-     p_teamshare, nothing else is granted (no elevation), and the member is
-     not locked out of anything they could read before. */
+test('dormant scope cell: corrupt scope JSON is never read — plain member semantics (T-49-04 posture, D-50-5)', async () => {
+  /* m_corrupt's scope column is unparseable ('not-json{') and stays on disk —
+     the D-50-5 predicate reads no scope column at all, so the cell rides the
+     plain member branch: live engA team term on p_teamshare + publics. The
+     fail-open posture is moot (nothing fails open — nothing is read), but the
+     historical invariant still holds: never a lockout, never an elevation. */
   const { status, ids } = await visibleViaDocGet('corrupt@visfix.local');
   assert.equal(status, 200, 'the corrupt-scope member still reads the workspace');
-  assert.deepEqual(ids, ['p_legacyteam', 'p_open', 'p_publicgain', 'p_teamshare'], 'workspace-wide fail-open: team grants + publics, nothing more');
+  assert.deepEqual(ids, ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'], 'plain member semantics: live team grants + publics, nothing more');
   const projects = projectById();
-  assert.deepEqual(projects.p_teamshare.members.includes('m_corrupt'), true, 'the team grant materialized through the corrupt scope');
-  assert.deepEqual(projects.p_hidden.members.includes('m_corrupt'), false, 'fail-open is workspace-wide semantics, NOT all-access');
+  assert.deepEqual(projects.p_teamshare.members, ['m_admin'], 'nothing materialized — the grant is LIVE via team_members');
+  assert.deepEqual(projects.p_hidden.members, ['m_admin'], 'no elevation: the access list still governs');
 });
-
-test('second boot is byte-identical and exactly ONE pre-visibility backup exists (D-49-6)', async () => {
+test('second boot is byte-identical and ZERO pre-visibility backups exist (sweep retired)', async () => {
   const firstBoot = snapshot();
   await server.stop();
 
   server = await startServer({ dataDir });
   const secondBoot = snapshot();
   assert.deepEqual(secondBoot, firstBoot, 'no doc/scope/rows drift across the reboot');
-  /* 2026-11-07 (D-49-1): flipped 0 → 1 — the first boot minted the guarded
-     pre-sweep backup; the second finds the D-49-6 marker absent (no p.teams,
-     no p.access, all scopes NULL) and writes nothing. */
-  assert.equal(backups().length, 1, 'exactly one projects-pre-visibility-*.db after two boots');
+  /* 2026-11-08 (D-50-5): flipped 1 → 0 — no sweep exists to mint a backup, and
+     no boot path can delete the restored p.teams on any boot (Pitfall 1). */
+  assert.equal(backups().length, 0, 'zero projects-pre-visibility-*.db after two boots');
 
-  /* CR-01 (49-05): the formerly-scalar cell carries neither the `team` scalar
-     form nor `teams` after the second boot — no later boot re-introduces or
-     re-migrates the field (D-49-6 for formerly-scalar docs). */
+  /* The live team links survive the reboot byte-for-byte. */
+  const teamsharePost = storedDoc().data.projects.find(p => p.id === 'p_teamshare');
+  assert.deepEqual(teamsharePost.teams, ['engA'], 'p_teamshare keeps its live team link after the second boot');
   const legacyteamPost = storedDoc().data.projects.find(p => p.id === 'p_legacyteam');
-  assert.equal('team' in legacyteamPost, false, 'scalar cell: no `team` key after the second boot');
-  assert.equal('teams' in legacyteamPost, false, 'scalar cell: no `teams` key after the second boot');
+  assert.equal(legacyteamPost.team, 'engA', 'scalar cell: the team scalar survives untouched');
+  assert.equal('teams' in legacyteamPost, false, 'scalar cell: normalizeProjects did NOT re-add a teams key (D-49-6 no-churn)');
 
-  /* The swept model still holds on the rebooted server — visibility is stable
+  /* The D-50-5 model still holds on the rebooted server — visibility is stable
      across boots, not just within one process. */
   const plain = await visibleViaDocGet(emailOf('m_plain'));
-  assert.deepEqual(plain.ids, postSweepIds(VISIBILITY_MODEL, 'm_plain', POST_SWEEP_SERVER_DELTA));
-  const scoped = await visibleViaDocGet(emailOf('m_scoped'));
-  assert.deepEqual(scoped.ids, postSweepIds(VISIBILITY_MODEL, 'm_scoped', POST_SWEEP_SERVER_DELTA));
+  assert.deepEqual(plain.ids, [...VISIBILITY_MODEL.m_plain].sort());
+  const team = await visibleViaDocGet(emailOf('m_team'));
+  assert.deepEqual(team.ids, [...VISIBILITY_MODEL.m_team].sort());
   const owner = await visibleViaDocGet(emailOf('m_owner'));
-  assert.deepEqual(owner.ids, postSweepIds(VISIBILITY_MODEL, 'm_owner', POST_SWEEP_SERVER_DELTA));
+  assert.deepEqual(owner.ids, [...VISIBILITY_MODEL.m_owner].sort());
 });

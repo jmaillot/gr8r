@@ -608,18 +608,16 @@ test('prompts: list and get round-trip; unknown prompt rejected', async () => {
    (doc-GET door) and the mcp.js mirror (list_projects / whoami / get_project /
    get_task / list_tasks). Expectations come from the hand-derived
    VISIBILITY_MODEL / MIRROR_MODEL oracles in test/helpers/visibility-fixture.mjs
-   composed with the dated sweep deltas — never from memberCanReadProject or
-   canReadProject (T-49-01).
+   — never from memberCanReadProject or canReadProject (T-49-01).
 
-   Collapsed model (2026-11-07, Plan 03): both predicates are private ∨ access
-   list over the sweep-materialized stored doc. The remaining divergences are
-   the pinned pre-existing drift: (1) admin/owner — the mirror's ROLE_RANK
-   bypass shows sealed/empty projects the access-list-gated server hides;
-   (2) m_guest — the mirror never dissolves an out-of-reach access-list entry
-   the way the sweep dissolved p_scopeddeny for m_scoped (the guest's own
-   grant is materialized, so only the admin/owner residue diverges). Parity is
-   asserted per-actor; the divergence cells assert the residue explicitly. */
-import { createVisibilityFixtureDb, MIRROR_MODEL, POST_SWEEP_MIRROR_DELTA, POST_SWEEP_SERVER_DELTA, VISIBILITY_MODEL, VIS_ACTORS, VIS_PASSWORD, VIS_WS, postSweepIds } from './helpers/visibility-fixture.mjs';
+   D-50-5 model (2026-11-08, Phase 50 Plan 01): both predicates carry the LIVE
+   team term (public ∨ access list ∨ member's team ∈ p.teams), the Phase 49
+   sweep is retired (nothing materializes or deletes p.teams). The remaining
+   divergence is the pinned pre-existing drift: admin/owner — the mirror's
+   ROLE_RANK bypass shows everything while the server's admin path stays
+   access-list-gated. Parity is asserted per-actor; the divergence cells assert
+   the residue explicitly. */
+import { createVisibilityFixtureDb, MIRROR_MODEL, VISIBILITY_MODEL, VIS_ACTORS, VIS_PASSWORD, VIS_WS } from './helpers/visibility-fixture.mjs';
 
 const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly');
 const parEmailOf = mid => ({
@@ -737,57 +735,54 @@ after(async () => {
   if (parDir) fs.rmSync(parDir, { recursive: true, force: true });
 });
 
-test('parity fixture: server doc-GET sets equal the collapsed-model oracle for every actor', async () => {
-  /* 2026-11-07 (Phase 49 Plan 03): the collapsed predicate is private ∨
-     access list over the sweep-materialized doc. The one-boot sweep ran at
-     boot (grants materialized, p.teams deleted, scope columns cleared), so
-     VISIBILITY_MODEL + POST_SWEEP_SERVER_DELTA IS the collapsed-model oracle
-     — pinned per actor, unchanged from the Plan-02 interim pin. */
+test('parity fixture: server doc-GET sets equal the D-50-5 hand-derived model for every actor', async () => {
+  /* 2026-11-08 (Phase 50 Plan 01): the D-50-5 predicate is public ∨ access
+     list ∨ LIVE team ∈ p.teams over the UNSWEPT stored doc — the sweep is
+     retired, so the hand-derived VISIBILITY_MODEL IS the oracle. */
   for (const mid of PAR_ACTORS) {
     const { status, ids } = await parVisibleDocIds(mid);
     assert.equal(status, 200, `${mid} reads the doc`);
-    assert.deepEqual(ids, postSweepIds(VISIBILITY_MODEL, mid, POST_SWEEP_SERVER_DELTA), `${mid}: server set matches the collapsed-model oracle`);
+    assert.deepEqual(ids, [...VISIBILITY_MODEL[mid]].sort(), `${mid}: server set matches the D-50-5 model`);
   }
 });
 
-test('parity: null-scope member/team actors agree across BOTH engines (green under both models)', async () => {
-  /* These two shapes are where old-server and old-mirror predicates coincide:
-     member/team semantics (public ∨ access list ∨ the D-49-retired team term)
-     with no scope column. After Plan 03 they remain the parity canaries. */
-  for (const mid of ['m_plain', 'm_team']) {
+test('parity: non-admin actors agree across BOTH engines on every team-link cell (D-50-5)', async () => {
+  /* With the sweep retired and the team term restored on both engines, the
+     plain/team/scoped/guest actors are fully aligned — including the live
+     team cells (m_team on p_teamshare/p_teamboth) and the dormant-scope
+     cells (m_scoped, m_guest). */
+  for (const mid of ['m_plain', 'm_team', 'm_scoped', 'm_guest']) {
     const server = await parVisibleDocIds(mid);
     const mirror = await parMirrorIds(mid);
     assert.deepEqual(mirror, server.ids, `${mid}: mirror set === server set`);
-    assert.deepEqual(mirror, [...VISIBILITY_MODEL[mid]].sort(), `${mid}: both engines match the oracle`);
+    assert.deepEqual(mirror, [...VISIBILITY_MODEL[mid]].sort(), `${mid}: both engines match the D-50-5 model`);
   }
 });
 
-test('parity: the mirror matches MIRROR_MODEL + sweep delta for every keyed actor (collapsed mirror pinned)', async () => {
-  /* 2026-11-07 (Phase 49 Plan 03): the collapsed mirror (boolean private ∨
-     access list, admin bypass kept) reads the same sweep-materialized stored
-     doc, so MIRROR_MODEL + POST_SWEEP_MIRROR_DELTA IS the collapsed-model
-     mirror oracle — pinned per actor, unchanged from the Plan-02 interim pin. */
+test('parity: the mirror matches MIRROR_MODEL for every keyed actor', async () => {
+  /* 2026-11-08 (Phase 50 Plan 01): the D-50-5 mirror (public ∨ access list ∨
+     LIVE team, admin bypass kept) reads the same UNSWEPT stored doc, so
+     MIRROR_MODEL IS the mirror oracle. */
   for (const mid of PAR_ACTORS) {
     const mirror = await parMirrorIds(mid);
-    assert.deepEqual(mirror, postSweepIds(MIRROR_MODEL, mid, POST_SWEEP_MIRROR_DELTA), `${mid}: mirror set matches the collapsed-model mirror oracle`);
+    assert.deepEqual(mirror, [...MIRROR_MODEL[mid]].sort(), `${mid}: mirror set matches the D-50-5 mirror oracle`);
   }
 });
 
-test('documented divergence residue: dissolved grant state agrees on both engines (D-49-7)', async () => {
-  /* 2026-11-07 (Phase 49 Plan 03): the scope term is gone from BOTH engines.
-     The sweep materialized the D-03 grants onto the stored access lists the
-     mirror reads and dissolved the out-of-reach p_scopeddeny entry, so the
-     m_scoped divergence from the old model is retired — what remains is the
-     shared, engine-independent residue below. */
+test('documented divergence residue: dormant scope grants are invisible on BOTH engines (D-50-5)', async () => {
+  /* 2026-11-08: the sweep is retired, so the D-03 scope grants are never
+     materialized onto the access lists — and no engine reads the dormant
+     scope columns. m_scoped keeps p_scopeddeny (access list), gains nothing
+     from scope, and the sealed cell stays sealed. */
   const scopedServer = (await parVisibleDocIds('m_scoped')).ids;
   const scopedMirror = await parMirrorIds('m_scoped');
-  assert.ok(!scopedServer.includes('p_scopeddeny') && !scopedMirror.includes('p_scopeddeny'), 'dissolved entry hidden on both engines (sweep removed the scoped lead)');
-  assert.ok(scopedServer.includes('p_scopeproj') && scopedMirror.includes('p_scopeproj'), 'D-03 grant materialized on the stored list — visible to BOTH engines');
+  assert.ok(scopedServer.includes('p_scopeddeny') && scopedMirror.includes('p_scopeddeny'), 'access-list entry visible on both engines (scope subtraction is gone)');
+  assert.ok(!scopedServer.includes('p_scopeproj') && !scopedMirror.includes('p_scopeproj'), 'dormant scope grant materializes NOWHERE (sweep retired)');
   assert.ok(!scopedMirror.includes('p_sealed') && !scopedServer.includes('p_sealed'), 'sealed project stays sealed for scoped actors');
 });
 
 test('documented divergence residue: mirror ROLE_RANK bypass vs access-list-gated server for admins', async () => {
-  /* 2026-11-07 (Phase 49 Plan 03, PATTERNS lockstep decision): the collapsed
+  /* 2026-11-08 (Phase 50 Plan 01, PATTERNS lockstep decision): the D-50-5
      mirror KEEPS the ROLE_RANK admin bypass (mcp.js canReadProject) while the
      server's admin path stays access-list-gated (hiddenProjectIds). The
      sealed cell below pins the residue so a future convergence is a conscious

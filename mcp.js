@@ -174,18 +174,26 @@ export function createMcp(deps) {
   }
 
   /* --------------------------- visibility -------------------------------- */
-  /* [2026-11-07 D-49-2/D-49-4] Mirror of memberCanReadProject (server.js)
-     without the server import: boolean private flag ∨ access list only —
-     the team term and the p.access legacy spelling are both retired. The
-     admin/owner exemption stays (server hiddenFor keeps the same bypass).
-     Computed per call — never cached across requests. */
+  /* [2026-11-07 D-49-2/D-49-4, 2026-11-08 D-50-5] Mirror of memberCanReadProject
+     (server.js) without the server import: boolean private flag ∨ access list
+     ∨ LIVE team link (the same D-50-5 third term — p.teams is read again).
+     The admin/owner exemption stays (server hiddenFor keeps the same bypass);
+     the legacy p.access spelling stays retired. Computed per call — never
+     cached across requests. */
   async function canReadProject(ctx, p) {
     if (!p || typeof p !== 'object') return false;
     if ((ROLE_RANK[ctx.membership.role] || 0) >= ROLE_RANK.admin) return true;
-    const priv = p.private === true;
-    if (!priv) return true;
+    if (p.private !== true) return true;
     const mid = ctx.membership.member_id;
-    return !!mid && Array.isArray(p.members) && p.members.includes(mid);
+    if (!mid) return false;
+    if (Array.isArray(p.members) && p.members.includes(mid)) return true;
+    /* D-50-5: resolve the caller's LIVE team ids from team_members (user_id
+       space) and intersect with p.teams — the exact term server.js resolves. */
+    const pTeams = Array.isArray(p.teams) ? p.teams.filter(t => typeof t === 'string' && t) : [];
+    if (!pTeams.length) return false;
+    const rows = await db.all('select team_id from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, ctx.membership.user_id]);
+    const mine = new Set(rows.map(r => r.team_id));
+    return pTeams.some(t => mine.has(t));
   }
 
   const tasksOf = doc => (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).filter(t => t?.id);
