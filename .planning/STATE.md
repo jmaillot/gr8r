@@ -22,12 +22,12 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-07)
+See: .planning/PROJECT.md (updated 2026-11-08)
 
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 50 — Invite hierarchy & per-project toggles (server)
+**Current focus:** Phase 51 — Client surfaces, Permissions-page removal & project creation
 
 ## Current Position
 

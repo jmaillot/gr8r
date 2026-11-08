@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-07 after v2.0 milestone start*
+*Last updated: 2026-11-08 after Phase 50*
 
 ## Current Milestone: v2.0 Project-level Permissions & Invitations
 
@@ -381,6 +381,9 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Validated
 
+- ✓ MIG-01..03, VIS-02, VIS-03 — visibility model collapse + grant materialization (Phase 49)
+- ✓ INV-01..04, VIS-04 — project-level invite hierarchy, live team links, per-project guest
+  toggle, one guest concept (Phase 50)
 - ✓ R1 — A workspace is a row in `workspaces` with a unique slug and its own document — v1.1
 - ✓ R2 — An account can hold several memberships with a role per workspace — v1.1
 - ✓ R3 — `/w/:slug` addresses a workspace; all share/invite links are workspace-scoped — v1.1
