@@ -5,17 +5,17 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 50
 current_phase_name: Invite hierarchy & per-project toggles (server)
 status: executing
-stopped_at: Completed 50-01-PLAN.md
-last_updated: "2026-11-08T08:06:00.000Z"
+stopped_at: Completed 50-02-PLAN.md
+last_updated: "2026-11-08T08:30:00.000Z"
 last_activity: 2026-11-08
-last_activity_desc: Plan 50-01 executed (live team link restored, sweep retired)
-state_head: 34388fb
+last_activity_desc: Plan 50-02 executed (D-50-6 reverse sweep + D-50-10 guest normalization boot migrations)
+state_head: f84fcee
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # STATE.md
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Executing Phase 50
-Last activity: 2026-11-08 — Plan 50-01 executed (live team link restored, sweep retired)
+Last activity: 2026-11-08 — Plan 50-02 executed (D-50-6 reverse sweep + D-50-10 guest normalization boot migrations)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -57,6 +57,9 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 - [50-01] D-50-5 "live" = the predicate reads current p.teams + current team_members on every evaluation, no cache — a team join grants and a leave revokes on the very next request (pinned by visibility-team tests)
 - [50-01] Admin/owner doc-GET path stays access-list-gated (no team term via hiddenProjectIds); the mcp.js mirror keeps its ROLE_RANK bypass — documented drift preserved per RESEARCH Open Question 2
 - [50-01] Phase 49 sweep deleted outright (0 symbols on any boot path); scope columns dormant-on-disk, read by nothing; scalar p.team key is dead (nothing converts it)
+- [50-02] D-50-6 provenance owner-ruled at the blocking-human checkpoint: pre-sweep backup DBs (projects-pre-visibility-*.db) when present, documented fail-open fallback otherwise (no links restored, boot warning names workspaces needing owner relinking)
+- [50-02] restoreTeamLinks removes ONLY entries the backup diff positively identifies as sweep-materialized (current − pre-sweep members); owner-relinked projects (teams key present) are skipped; doc marker data.teamLinksRestored makes boot 2 a byte-identical no-op and never resurrects a deleted link
+- [50-02] D-50-10 is a pure table transform (memberships + invites guest→viewer) — doc-embedded role copies need none (p.members is a plain id array; profile role is the presentation label); ROLE_LABEL.viewer='Guest' stays until Phase 51 (flagged-edge scope ruling)
 
 - [49-05] Scalar `p.team` conversion is sweep-side, NOT normalizeProjects — a re-add would churn served copies and break the D-49-6 second-boot byte-identity pin (CR-01 closure)
 - [49-05] WR-02: sweepNeeded falls back to `scopeRowCount > 0` on unreadable docs; the tx clears scope columns on that path in the same transaction — no-churn preserved
@@ -156,8 +159,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T08:06:00.000Z
-Stopped at: Completed 50-01-PLAN.md
+Last session: 2026-11-08T08:30:00.000Z
+Stopped at: Completed 50-02-PLAN.md
 Resume file: None
 
 ## Performance Metrics
@@ -171,6 +174,7 @@ Resume file: None
 | Phase 49 P03 | 75m | 3 tasks | 7 files |
 | Phase 49 P04 | 40 min | 2 tasks | 7 files |
 | Phase 50 P01 | 35 min | 3 tasks | 6 files |
+| Phase 50 P02 | 45 min | 3 tasks | 2 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 
