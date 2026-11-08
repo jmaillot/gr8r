@@ -1,5 +1,5 @@
 ---
-status: passed
+status: complete
 phase: 51-client-surfaces-permissions-page-removal-project-creation
 source: [51-VERIFICATION.md]
 started: 2026-11-08T14:10:00Z
