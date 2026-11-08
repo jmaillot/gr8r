@@ -2,7 +2,7 @@
 import { ago, esc, fmtDate, foldForSearch, minsAgo } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
-import { S, TM, canSee, mem, progressOf, projTeams, tasksOf, visibleProjects } from '../core/store.js';
+import { S, TM, canSee, me, mem, progressOf, projTeams, tasksOf, visibleProjects } from '../core/store.js';
 import { t } from '../core/i18n.js';
 import { av, avStack, empty, pIcon, pStatus, progBar } from '../ui/helpers.js';
 
@@ -21,6 +21,15 @@ export function projectCard(p) {
 }
 export function pageProjects() {
   const u = S.ui;
+  /* [2026-11-08 D-51-14/16] CRT-01 client gating: with the stored restriction
+     on (prefs.permCreate === true, the phase-wide convention — the legacy
+     settings toggle's !== false polarity is relocated in 51-03) and the current
+     user's workspace role below admin, the create affordance renders DISABLED
+     with a localized tooltip — never hidden. Read live at render time: no
+     cached restriction state (D-51-16); admins/owners keep the live control. */
+  const createRestricted = S.prefs.permCreate === true && !['Owner', 'Admin'].includes(me()?.role || '');
+  const createBtn = restricted =>
+    `<button class="btn btn-primary" data-a="newProject" ${restricted ? `disabled aria-disabled="true" data-tip="${esc(t('page.projects.createRestricted'))}"` : ''}>${ic('plus', 14)}${t('act.newProject')}</button>`;
   const q = foldForSearch(u.projQ || '').text;
   const st = u.projStatus || 'all';
   const sort = u.projSort || 'recent';
@@ -32,7 +41,7 @@ export function pageProjects() {
   const view = u.projView;
   let body;
   if (!visibleProjects().length)
-    body = `<div class="panel">${empty('folder-kanban', t('page.states.noProjectsYet'), t('page.states.createFirst'), `<button class="btn btn-primary btn-sm" data-a="newProject">${ic('plus', 14)}${t('palette.createProject')}</button>`)}</div>`;
+    body = `<div class="panel">${empty('folder-kanban', t('page.states.noProjectsYet'), t('page.states.createFirst'), createBtn(createRestricted))}</div>`;
   else if (!ps.length)
     body = `<div class="panel">${empty('search-x', t('palette.noResults'), t('page.projects.noMatch'), `<button class="btn btn-secondary btn-sm" data-a="clearProjFilters">${t('act.clearFilters')}</button>`)}</div>`;
   else if (view === 'grid') body = `<div class="pgrid">${ps.map(projectCard).join('')}</div>`;
@@ -54,7 +63,7 @@ export function pageProjects() {
       .join('')}
     </tbody></table></div>`;
   return `<div class="page wide">
-    <div class="ph"><div><h1>${t('nav.route.projects')}</h1><p>${t('page.projects.subtitle', { a: visibleProjects().filter(p => p.status !== 'complete').length, c: visibleProjects().filter(p => p.status === 'complete').length })}</p></div><div class="acts"><button class="btn btn-primary" data-a="newProject">${ic('plus', 14)}${t('act.newProject')}</button></div></div>
+    <div class="ph"><div><h1>${t('nav.route.projects')}</h1><p>${t('page.projects.subtitle', { a: visibleProjects().filter(p => p.status !== 'complete').length, c: visibleProjects().filter(p => p.status === 'complete').length })}</p></div><div class="acts">${createBtn(createRestricted)}</div></div>
     <div class="row" style="margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="proj-q" data-in="projQ" placeholder="${t('a11y.searchProjects')}" value="${esc(u.projQ || '')}" aria-label="${t('a11y.searchProjects')}"></div>
       <select class="select" style="height:26px;width:auto;font-size:12px" data-in="projStatus" aria-label="${t('a11y.filterByStatus')}"><option value="all">${t('page.projects.allStatuses')}</option>${Object.entries(

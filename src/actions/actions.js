@@ -1535,11 +1535,14 @@ export function createProject(f, tmplId) {
     color: f.color,
     status: 'planning',
     teams: Array.isArray(f.teams) ? f.teams.filter(Boolean) : [],
-    lead: f.lead,
+    /* [2026-11-08 D-51-17] Lead-on-create, client default: the creator is the
+       lead unless the form carries one — the server enforces the same grant
+       (51-01 mergeClientDoc), this keeps the local optimistic copy honest. */
+    lead: f.lead || D().me,
     due: f.due || dOff(30),
     start: dOff(0),
     fav: false,
-    members: [...new Set([D().me, f.lead])],
+    members: [...new Set([D().me, f.lead || D().me])],
     desc: f.desc || t('common.noDescriptionYet'),
     milestones: [],
     last: 0,
@@ -1560,7 +1563,7 @@ export function createProject(f, tmplId) {
     });
   return p;
 }
-A.submitProject = () => {
+A.submitProject = async () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const f = S.ui.pform;
   f.name = ($('#p-name')?.value || '').trim();
@@ -1571,6 +1574,9 @@ A.submitProject = () => {
     $('#p-name')?.focus();
     return;
   }
+  /* [2026-11-08 D-51-17] The lead select exists in the modal (modals.js); a
+     form state that somehow lost it still defaults to the creator. */
+  if (!f.lead) f.lead = D().me;
   if (m.edit) {
     const p = proj(m.edit);
     if (
@@ -1594,12 +1600,28 @@ A.submitProject = () => {
     return;
   }
   let p;
+  /* [2026-11-08 D-51-14/15/16] CRT-01 client: the create rides the doc-sync
+     PUT, settled with pushNow() so the server's scoped keyed refusal is
+     observable. ONLY the projectCreateForbidden code maps to the restricted-
+     create toast + revert of the optimistic insert; a generic sync failure
+     keeps its existing handling (the conflict banner machinery). No cached
+     restriction state — the refusal comes from the server per request
+     (D-51-16), the disabled affordance above is UX only (T-51-07). */
+  const snap = snapshot();
   if (
     !mutate(() => {
       p = createProject(f, f.tmpl);
     })
   )
     return;
+  const res = await pushNow();
+  const refused = Array.isArray(res.data?.refused) ? res.data.refused.map(r => r?.code || r) : [];
+  if (refused.includes('projectCreateForbidden')) {
+    restore(snap);
+    render();
+    toast(t('err.projectCreateForbidden'), { kind: 'err' });
+    return;
+  }
   S.ui.modals.pop();
   go('project', { id: p.id, tab: f.tmpl === 'blank' ? 'overview' : S.prefs.defaultTab || 'board' });
   toast(tasksOf(p.id).length ? t('toast.createdStarters', { name: p.name, n: tasksOf(p.id).length }) : t('toast.createdProject', { name: p.name }));

@@ -153,3 +153,16 @@ test('immediacy: the restriction is read from the stored doc per request — the
   assert.ok(codes.includes('projectCreateForbidden'), 'the immediate flip refuses the next create');
   assert.ok(!project('p_made5'), 'the immediate refusal kept the project out of the stored doc');
 });
+
+/* ---------------- Phase 51 (51-02): CRT-01 client surfaces ---------------- */
+
+test('the restricted-create client strings are catalogued EN+FR (the refusal toast and the tooltip localize)', () => {
+  const en = JSON.parse(fs.readFileSync(new URL('../src/locales/en.json', import.meta.url), 'utf8'));
+  const fr = JSON.parse(fs.readFileSync(new URL('../src/locales/fr.json', import.meta.url), 'utf8'));
+  for (const key of ['err.projectCreateForbidden', 'page.projects.createRestricted']) {
+    assert.ok(en[key], `en.json carries ${key}`);
+    assert.ok(fr[key], `fr.json carries ${key}`);
+    assert.equal(en[key].includes('<'), false, `${key} (en) respects the catalogue contract (no <)`);
+    assert.equal(fr[key].includes('<'), false, `${key} (fr) respects the catalogue contract (no <)`);
+  }
+});
