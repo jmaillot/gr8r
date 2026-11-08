@@ -99,8 +99,6 @@ const ORACLE = [
   ['act.signOutOthersBody', undefined, "You'll stay signed in on this device. Other devices will need to sign in again."],
   ['act.signOutOthers', undefined, 'Sign out others'],
   ['err.tfaCode', undefined, 'Enter the 6-digit code from your app'],
-  ['act.disable2faTitle', undefined, 'Turn off two-factor authentication?'],
-  ['act.disable2faBody', undefined, 'Your account will be protected by your password only.'],
   ['act.turnOff', undefined, 'Turn off'],
   // the auth flows
   ['err.noWorkspace', undefined, 'No workspace to open'],

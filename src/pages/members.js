@@ -53,7 +53,7 @@ export function pageMembers() {
       tab === 'teams'
         ? `<div class="row" style="margin-bottom:12px"><span class="muted" style="font-size:13px">${t('page.teams.count', { n: teamsList().length })}</span><span class="sp"></span><button class="btn btn-secondary btn-sm" data-a="newTeam">${ic('plus', 13)}${t('act.newTeam')}</button></div>${teamsGrid()}`
         : tab === 'roles'
-          ? permsTable()
+          ? `<div class="sblock"><h2 style="margin-bottom:10px">${t('settings.perms.roleTable')}</h2>${permsTable()}</div>`
           : `
     <div class="row" style="margin-bottom:12px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="mem-q" data-in="memQ" placeholder="${t('a11y.searchNameOrEmail')}" value="${esc(u.memQ || '')}" aria-label="${t('a11y.searchMembers')}"></div>
       <div class="seg">${['all', ...ROLES].map(r => `<button class="${role === r ? 'on' : ''}" data-a="set" data-k="memRole" data-v="${r}">${r === 'all' ? t('page.activity.filterAll') : roleLabel(r)}</button>`).join('')}</div></div>

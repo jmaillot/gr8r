@@ -492,6 +492,7 @@ test('an empty notif.* namespace is a legal empty input, not an error', () => {
   const options = serverFixture({
     'src/locales/en.json': JSON.stringify({ 'a11y.dismiss': 'Dismiss' }),
     'src/locales/fr.json': JSON.stringify({ 'a11y.dismiss': 'Rejeter' }),
+    'src/y.js': "import { t } from './core/i18n.js';\nexport const h = () => t('a11y.dismiss');\n",
   });
   assert.equal(main([], options), 0);
 });
@@ -576,7 +577,7 @@ test('src/data/seed.js is never scanned', () => {
 /* A minimal catalogue + source set: the fixtures are synthetic, like every
    contract test of this file. The catalogue is a flat object; the sources are
    a { file: text } map. */
-const LIVE = { 'a.live': 'Live', 'a.gone': 'Gone', 'err.someCode': 'Some failure', 'project.template.web.name': 'Website' };
+const LIVE = { 'a.live': 'Live', 'a.gone': 'Gone' };
 
 function deadOf(catalogue, sources) {
   return findDeadKeys(catalogue, sources).map(f => f.text).sort();
@@ -616,12 +617,17 @@ test('the dynamic allow-list exempts the interpolated key families', () => {
   const catalogue = { 'a.live': 'Live', 'project.template.web.desc': 'Built by interpolation', 'common.perm.view': 'View' };
   const dead = deadOf(catalogue, sources);
   assert.deepEqual(dead, [], 'project.template.* and common.perm.* are exempt (they are built at actions.js:1557 / modals.js:201)');
-  for (const prefix of DEAD_KEY_ALLOWLIST) assert.ok(typeof prefix === 'string' && prefix.endsWith('.'), 'every allow-list entry is a key prefix');
+  for (const prefix of DEAD_KEY_ALLOWLIST) assert.ok(typeof prefix === 'string' && prefix.length > 0, 'every allow-list entry is a non-empty key prefix');
 });
 
-test('a t() call in a file that does not import t is not a reference', () => {
-  const sources = { 'src/lib/x.js': "export const s = t('a.gone');\n" };
-  assert.deepEqual(deadOf(LIVE, sources), ['a.gone'], "a bare t( in a file without the i18n import does not keep a key alive");
+test('a key-shaped literal counts as a reference wherever it appears (permissive contract)', () => {
+  /* The collector is SHAPE-BASED by design: keys live as VALUES in lookup
+     tables (SET_NAV, ACCENT_TIPS, SHORTCUTS) and pass through t(variable) at
+     render, so a key-shaped literal anywhere in a source keeps its key alive.
+     A missed reference (a dead key kept alive by a coincidental literal) is
+     acceptable; a false positive on a live key is not (Test 4's rule). */
+  const sources = { 'src/shell/x.js': "export const NAV = [['a', 'a.gone', 'icon']];\n" };
+  assert.deepEqual(deadOf({ 'a.gone': 'Gone' }, sources), [], 'the lookup-table value keeps a.gone alive');
 });
 
 test('main() gates on dead keys — exit 1 when one lingers, 0 when the tree is clean', () => {

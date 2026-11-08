@@ -1255,6 +1255,109 @@ export function notifParity(en, fr) {
   return { missingInFr, missingInEn };
 }
 
+/* ---------- the dead-key family (51-03, UX-01 criterion 5) ---------- */
+
+/* The catalogue keys that are built by INTERPOLATION at a call site no static
+   scan can see as a full literal (actions.js:1557 builds project.template.*,
+   modals.js:201 builds common.perm.*), plus the contract.* fixtures that are
+   referenced only by the test suite. Prefix-shaped: a key starting with any
+   entry is exempt from the dead check. Extend, never replace (Pitfall 4):
+   an entry added here hides a real dead key (T-51-09) — each one needs the
+   call site named in the comment. */
+export const DEAD_KEY_ALLOWLIST = Object.freeze([
+  'project.template.', // built by template-id interpolation (actions.js:1557, modals.js:191)
+  'common.perm.', // built by PERM_KEYS lookup (modals.js:201)
+  'contract.', // the catalogue-contract fixtures, referenced by the test suite only
+  'greeting.hello', // the t() interpolation fixture of test/i18n.test.mjs + i18n-locale.test.mjs
+  'task.count', // the plural-mechanics fixture of the same suites
+  'file.count', // the many-member (compact French) plural fixture
+]);
+
+/* The t/tFor call sites of a source text are ONE input of the reference
+   collection, but the collector is deliberately SHAPE-BASED and permissive:
+   EVERY string literal that looks like a catalogue key (flat, dotted,
+   lowercase segments — the DOTTED_KEY shape) counts as a reference, wherever
+   it appears, and every catalogue-key-shaped literal ending in a dot (t('err.'
+   + code)) or template head (t(`project.template.${id}.name`)) counts as a
+   PREFIX reference. The reason is indirect referencing: keys live as VALUES
+   in lookup tables (SET_NAV, ACCENT_TIPS, SHORTCUTS, the pw-meter key array)
+   and pass through t(variable) at render, and several modules wrap t in
+   local aliases (tMsg, …) a structural scan cannot see. A missed reference
+   (a dead key kept alive by a coincidental literal) is acceptable; a false
+   positive on a live key is not (Test 4). */
+const KEY_REF_SHAPE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
+
+export function collectReferencedKeys(text) {
+  const keys = new Set();
+  const prefixes = new Set();
+  const { tokens } = lex(text);
+  for (const stream of tokenStreams(tokens)) {
+    for (const t of stream) {
+      if (t.type === 'str') {
+        /* A literal ending in a dot is a composed key's base (t('err.' + code));
+           anything else matching the key shape is a full literal reference. */
+        if (t.value.endsWith('.') && /^[a-z][a-z0-9.]*$/.test(t.value)) prefixes.add(t.value);
+        else if (KEY_REF_SHAPE.test(t.value)) keys.add(t.value);
+      } else if (t.type === 'template') {
+        /* A template head is a COMPOSED key's static part, verbatim: the head
+           already carries whatever separator the built key extends ('task.status.'
+           for t(`task.status.${s}`), 'toast.push' without one for
+           t(`toast.push${Type}`)). */
+        const head = t.quasis[0]?.text ?? '';
+        if (t.exprs.length && /^[a-z][a-z0-9.]*$/.test(head)) prefixes.add(head);
+        else if (!t.exprs.length && KEY_REF_SHAPE.test(head)) keys.add(head);
+      }
+    }
+  }
+  return { keys, prefixes };
+}
+
+/* The dead keys of a catalogue against a { file: text } source map: a key is
+   DEAD when no source references it — neither as a full literal, nor through
+   a composed prefix, nor via the documented allow-list. Returns findings in
+   the same shape as the other families (kind: 'dead'). The catalogue is the
+   EN one: the EN↔FR key-set parity is enforced elsewhere, so one catalogue
+   answers for both. */
+export function findDeadKeys(catalogue, sources) {
+  const findings = [];
+  if (!catalogue) return findings;
+  const keys = new Set();
+  const prefixes = new Set();
+  for (const [file, text] of Object.entries(sources || {})) {
+    void file;
+    const refs = collectReferencedKeys(text);
+    for (const k of refs.keys) keys.add(k);
+    for (const p of refs.prefixes) prefixes.add(p);
+  }
+  const alive = key => keys.has(key) || [...prefixes].some(p => key.startsWith(p)) || DEAD_KEY_ALLOWLIST.some(p => key.startsWith(p));
+  for (const key of Object.keys(catalogue).sort()) {
+    if (!alive(key)) findings.push({ file: 'src/locales/en.json', line: 1, col: 0, kind: 'dead', text: key });
+  }
+  return findings;
+}
+
+/* The { file: text } map the dead check runs over: the whole src/ tree plus
+   the server surfaces — server.js and mailer.js carry the tFor notif.* call
+   sites, so a dead check scoped to src/ alone would flag every server
+   notification key as a false positive (Test 4's no-false-positive rule). */
+function deadKeySources(root = 'src', serverFiles = ['server.js', 'mailer.js']) {
+  const sources = {};
+  for (const file of walk(path.resolve(REPO_ROOT, root))) {
+    const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
+    if (EXCLUDED_FILES.has(rel)) continue;
+    sources[rel] = fs.readFileSync(file, 'utf8');
+  }
+  for (const file of serverFiles || []) {
+    const p = path.isAbsolute(file) ? file : path.join(REPO_ROOT, file);
+    try {
+      sources[path.relative(REPO_ROOT, p).split(path.sep).join('/') || file] = fs.readFileSync(p, 'utf8');
+    } catch {
+      /* a missing server file is not a dead-key input */
+    }
+  }
+  return sources;
+}
+
 /* ---------- the public API ---------- */
 
 function lineStarts(src) {
@@ -1533,6 +1636,13 @@ export function main(argv = process.argv.slice(2), options = {}) {
     findings.push({ file: 'src/locales/en.json', line: 1, col: 0, kind: 'unresolved', text: `${key} (parity: missing from en.json)` });
   }
 
+  /* The dead-key gate (51-03, UX-01 criterion 5): a catalogue key no source
+     references any more fails the build, so a removed surface cannot leave
+     its strings behind. Runs on the EN catalogue — the EN↔FR key-set parity
+     is enforced elsewhere. */
+  const dead = findDeadKeys(catalogue, deadKeySources(root, options.serverFiles));
+  for (const f of dead) findings.push(f);
+
   const allowList = readAllowList(allowListFile);
   const verdict = compare(findings, allowList);
 
@@ -1544,15 +1654,17 @@ export function main(argv = process.argv.slice(2), options = {}) {
   console.log(
     `i18n scan — ${literals.length} literals, ${verdict.pending.length} pending, ` +
       `${verdict.unlisted.length} unlisted, ${verdict.stale.length} stale, ` +
-      `${verdict.unresolved.length} unresolved, ${verdict.mismatch.length} placeholder-mismatch`,
+      `${verdict.unresolved.length} unresolved, ${verdict.mismatch.length} placeholder-mismatch, ` +
+      `${dead.length} dead`,
   );
 
   for (const f of verdict.unlisted) console.log(`unlisted  ${f.file}:${f.line}  ${f.kind}  ${f.text}`);
   for (const e of verdict.stale) console.log(`stale     ${e.file}  ${e.text}`);
   for (const f of verdict.unresolved) console.log(`unresolved  ${f.file}:${f.line}  ${f.text}`);
   for (const f of verdict.mismatch) console.log(`placeholder-mismatch  ${f.file}:${f.line}  ${f.text}`);
+  for (const f of dead) console.log(`dead  ${f.text}`);
 
-  const violations = verdict.unlisted.length + verdict.stale.length + verdict.unresolved.length + verdict.mismatch.length;
+  const violations = verdict.unlisted.length + verdict.stale.length + verdict.unresolved.length + verdict.mismatch.length + dead.length;
   if (violations) {
     console.error(`i18n scan FAILED — ${violations} violation(s).`);
     return 1;
