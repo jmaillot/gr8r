@@ -344,7 +344,6 @@ const TABLES = [
     ['settings.nav.workspace', undefined, 'Workspace'],
     ['settings.nav.appearance', undefined, 'Appearance'],
     ['settings.nav.datetime', undefined, 'Date & time'],
-    ['settings.nav.permissions', undefined, 'Permissions'],
     ['settings.nav.profile', undefined, 'Profile'],
     ['settings.nav.preferences', undefined, 'Preferences'],
     ['settings.nav.shortcuts', undefined, 'Keyboard shortcuts'],
@@ -426,13 +425,10 @@ const TABLES = [
     ['settings.projects.archived', undefined, 'Archived projects'],
     ['settings.projects.noArchived', undefined, 'No archived projects. Archived projects are hidden from the sidebar but keep all their tasks.'],
     ['settings.projects.openArchive', undefined, 'Open archive'],
-    // permissions
-    ['settings.perms.lead', undefined, 'Control what each role can do.'],
+    // permissions (the Settings > Permissions page was removed in phase 51 —
+    // only settings.perms.create, relocated to Workspace > General, and
+    // settings.perms.roleTable, living on the Members page, survive)
     ['settings.perms.create', undefined, 'Members can create projects'],
-    ['settings.perms.guests', undefined, 'Members can invite guests'],
-    ['settings.perms.guestsDesc', undefined, 'Guests only see projects they are added to.'],
-    ['settings.perms.public', undefined, 'Allow public share links'],
-    ['settings.perms.publicDesc', undefined, 'Anyone with the link can view a project.'],
     ['settings.perms.roleTable', undefined, 'Role permissions'],
     // notifications
     ['settings.notif.emailLead', undefined, 'Choose which emails you receive.'],
@@ -614,7 +610,6 @@ test('the settings stored preference values are byte-identical', () => {
     'members',
     'teams',
     'projects',
-    'permissions',
     'notif-email',
     'notif-push',
     'notif-mentions',

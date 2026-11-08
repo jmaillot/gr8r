@@ -8,7 +8,7 @@ import { D, S, isMemberAdmin, me, projTeams, team } from '../core/store.js';
 import { api } from '../core/api.js';
 import { renderQrSvg } from '../lib/qr.js';
 import { av, pIcon } from '../ui/helpers.js';
-import { permsTable, teamsGrid } from './members.js';
+import { teamsGrid } from './members.js';
 import { page404 } from './errors.js';
 import { SHORTCUTS } from '../overlays/modals.js';
 import { TIMEZONES } from '../lib/timezones.js';
@@ -49,7 +49,6 @@ export const SET_NAV = [
       ['members', 'nav.route.members', 'users'],
       ['teams', 'nav.route.teams', 'users-round'],
       ['projects', 'nav.route.projects', 'folder-kanban'],
-      ['permissions', 'settings.nav.permissions', 'shield'],
     ],
   ],
   [
@@ -263,7 +262,12 @@ export function auditTrailCard() {
 const auditVerbMatch = v => (S.ui.auditVerb || '') === v;
 
 export function pageSettings() {
-  const sec = S.ui.params.sec || S.ui.settings || 'appearance';
+  const known = SET_NAV.flatMap(g => g[1]).map(x => x[0]);
+  /* T-51-08: a stale ?sec=<removed-section> deep-link (e.g. the deleted
+     Permissions page) never renders a 404 body — an unknown section falls
+     back to the first tab. */
+  let sec = S.ui.params.sec || S.ui.settings || 'appearance';
+  if (!known.includes(sec)) sec = known[0];
   const title = SET_NAV.flatMap(g => g[1]).find(x => x[0] === sec) || ['appearance', 'settings.nav.appearance'];
   return `<div class="set">
     <nav class="set-nav" aria-label="${t('nav.route.settings')}">${SET_NAV.map(([g, items]) => `${g === 'settings.group.personal' ? '<hr class="gsep" aria-hidden="true">' : ''}<div class="gh">${t(g)}</div>${items.map(([k, n, i]) => `<button class="sitem ${sec === k ? 'on' : ''}" data-a="go" data-r="settings" data-sec="${k}">${ic(i, 15)}<span>${t(n)}</span></button>`).join('')}`).join('')}</nav>
@@ -292,6 +296,7 @@ export function settingsBody(sec, title) {
       <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">${t('common.wsName')}</label><input class="input" id="ws-name" value="${esc(d.ws.name)}" ${wsAdmin ? '' : 'readonly'}></div>
       <div class="field"><label class="label" for="ws-url">${t('common.wsUrl')}</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? t('settings.ws.urlWarning') : t('settings.ws.urlReadonly')}</span></div>
       ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">${t('settings.ws.saveChanges')}</button></div>` : ''}</div></div></form>
+      <div class="sblock">${srow(t('settings.perms.create'), '', tog('permCreate', P.permCreate === true))}</div>
       ${
         api.enabled
           ? `<div class="sblock"><h2 style="color:var(--red)">${t('settings.ws.dangerZone')}</h2>
@@ -484,14 +489,6 @@ export function settingsBody(sec, title) {
         `<div class="sblock"><h2>${t('settings.projects.archived')}</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">${t('act.restore')}</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">${t('act.delete')}</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">${t('settings.projects.noArchived')}</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}${t('settings.projects.openArchive')}</button></div></div>`
       );
     }
-    case 'permissions':
-      return (
-        H(t('settings.perms.lead')) +
-        srow(t('settings.perms.create'), '', tog('permCreate', P.permCreate !== false)) +
-        srow(t('settings.perms.guests'), t('settings.perms.guestsDesc'), tog('permGuests', P.permGuests !== false)) +
-        srow(t('settings.perms.public'), t('settings.perms.publicDesc'), tog('permPublic', !!P.permPublic)) +
-        `<div class="sblock"><h2>${t('settings.perms.roleTable')}</h2><div style="margin-top:12px">${permsTable()}</div></div>`
-      );
     case 'notif-email':
       return (
         H(t('settings.notif.emailLead')) +
