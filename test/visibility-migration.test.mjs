@@ -145,6 +145,10 @@ test('fixture DB (pre-boot): the legacy shapes the sweep consumes are on disk', 
   assert.ok(preBoot.inviteScopes.some(s => s !== null && s !== undefined), 'an invites row carries a scope value');
   assert.ok(Object.values(preProjects).some(p => Array.isArray(p.teams)), 'a stored project carries p.teams');
   assert.equal(preProjects.p_legacy.access, 'private', 'a stored project carries the legacy p.access string');
+  /* CR-01 (49-05): the scalar cell's pre-boot shape — the exact marker
+     sweepNeeded must detect and the tx must convert. */
+  assert.equal(preProjects.p_legacyteam.team, 'engA', 'the scalar cell carries team:\'engA\' on disk pre-boot');
+  assert.equal('teams' in preProjects.p_legacyteam, false, 'the scalar cell carries NO teams key (the pre-Phase-32 shape)');
   assert.equal(preProjects.p_sealed.private, true, 'the sealed project is sealed on disk pre-boot (D-49-8 input)');
   assert.equal(preBoot.revision, 1, 'the fixture ships at revision 1');
 });
@@ -184,6 +188,16 @@ test('post-sweep: no p.teams, no p.access, and the materialized grant set is exa
   assert.deepEqual(projects.p_scopeddeny.private, true, 'the dissolved project stays private');
   assert.deepEqual(projects.p_hidden.members, ['m_admin'], 'no phantom grants: the hidden cell keeps its exact list');
 
+  /* CR-01 (49-05): the scalar-p.team cell materializes end-to-end (SC1 for the
+     scalar shape) — the engA team-derived grant survived one reboot. */
+  /* m_corrupt (the planted T-49-04 cell, not in VIS_ACTORS) is a workspace-wide
+     fail-open member with an engA team_members row — its grant materializes
+     here exactly as it does on p_teamshare. */
+  assert.deepEqual([...projects.p_legacyteam.members].sort(), ['m_admin', 'm_corrupt', 'm_team'], 'scalar cell: team-derived grants materialized (set-equal, order-independent)');
+  assert.equal('team' in projects.p_legacyteam, false, 'scalar cell: p.team key deleted by the tx normalize');
+  assert.equal('teams' in projects.p_legacyteam, false, 'scalar cell: p.teams deleted (D-49-5)');
+  assert.equal(projects.p_legacyteam.private, true, 'scalar cell: stays private');
+
   /* D-49-8: the sealed cell keeps its exact sealed shape — no ownerId
      injected, private not flipped (the sweep never calls normalizeProjects). */
   const sealed = projects.p_sealed;
@@ -221,7 +235,7 @@ test('fail-open scope-parse cell: corrupt scope JSON behaves as workspace-wide (
      not locked out of anything they could read before. */
   const { status, ids } = await visibleViaDocGet('corrupt@visfix.local');
   assert.equal(status, 200, 'the corrupt-scope member still reads the workspace');
-  assert.deepEqual(ids, ['p_open', 'p_publicgain', 'p_teamshare'], 'workspace-wide fail-open: team grant + publics, nothing more');
+  assert.deepEqual(ids, ['p_legacyteam', 'p_open', 'p_publicgain', 'p_teamshare'], 'workspace-wide fail-open: team grants + publics, nothing more');
   const projects = projectById();
   assert.deepEqual(projects.p_teamshare.members.includes('m_corrupt'), true, 'the team grant materialized through the corrupt scope');
   assert.deepEqual(projects.p_hidden.members.includes('m_corrupt'), false, 'fail-open is workspace-wide semantics, NOT all-access');
@@ -238,6 +252,13 @@ test('second boot is byte-identical and exactly ONE pre-visibility backup exists
      pre-sweep backup; the second finds the D-49-6 marker absent (no p.teams,
      no p.access, all scopes NULL) and writes nothing. */
   assert.equal(backups().length, 1, 'exactly one projects-pre-visibility-*.db after two boots');
+
+  /* CR-01 (49-05): the formerly-scalar cell carries neither the `team` scalar
+     form nor `teams` after the second boot — no later boot re-introduces or
+     re-migrates the field (D-49-6 for formerly-scalar docs). */
+  const legacyteamPost = storedDoc().data.projects.find(p => p.id === 'p_legacyteam');
+  assert.equal('team' in legacyteamPost, false, 'scalar cell: no `team` key after the second boot');
+  assert.equal('teams' in legacyteamPost, false, 'scalar cell: no `teams` key after the second boot');
 
   /* The swept model still holds on the rebooted server — visibility is stable
      across boots, not just within one process. */
