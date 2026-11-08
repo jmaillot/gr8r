@@ -62,7 +62,18 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
-import { connectDb, close as dbClose, get as dbGet, all as dbAll, run as dbRun, tx as dbTx, sqliteOnly, ensureColumn as adapterEnsureColumn, runSchema as adapterRunSchema, backendKind } from './db-adapter.mjs';
+import {
+  connectDb,
+  close as dbClose,
+  get as dbGet,
+  all as dbAll,
+  run as dbRun,
+  tx as dbTx,
+  sqliteOnly,
+  ensureColumn as adapterEnsureColumn,
+  runSchema as adapterRunSchema,
+  backendKind,
+} from './db-adapter.mjs';
 /* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
    snapshots READ-ONLY (never through the adapter — they are historical files,
    not the live handle). Sole direct node:sqlite use in server.js. */
@@ -166,8 +177,7 @@ if (MASTER_KEY && MASTER_KEY_PREVIOUS && keyIdFor(MASTER_KEY) === keyIdFor(MASTE
    the domain separator (frozen by the token-freeze tests). Fail-open-null:
    no MASTER_KEY → null → no token → no unsubscribeUrl → headers omitted. */
 const UNSUB_TOKENS_PURPOSE = 'unsubscribe-tokens:v1';
-const unsubscribeHmacKey = () =>
-  MASTER_KEY ? crypto.createHash('sha256').update(MASTER_KEY).update(UNSUB_TOKENS_PURPOSE).digest() : null;
+const unsubscribeHmacKey = () => (MASTER_KEY ? crypto.createHash('sha256').update(MASTER_KEY).update(UNSUB_TOKENS_PURPOSE).digest() : null);
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
@@ -1115,13 +1125,11 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
      exactly like any other member. Members without a membership row, and
      tasks without a project, always pass. */
   if (wsId) {
-    const projectById = new Map(
-      [...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]),
-    );
+    const projectById = new Map([...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]));
     for (const t of nextData.tasks || []) {
       if (!t?.id || !t.assignee || !t.project) continue;
       if (!(await memberCanReadProject(projectById.get(t.project), wsId, t.assignee))) {
-        const err = new Error("Assignee cannot read the task project");
+        const err = new Error('Assignee cannot read the task project');
         err.code = 'assigneeOutOfScope';
         throw err;
       }
@@ -1234,11 +1242,7 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
      queuing, through the SAME collapsed memberCanReadProject funnel every
      other surface uses. Workspace-level rows (no project) keep flowing —
      send-time enforcement only, never a notifications-list filter (D-07). */
-  const projectById = new Map(
-    (Array.isArray(nextDoc?.data?.projects) ? nextDoc.data.projects : [])
-      .filter(p => p?.id)
-      .map(p => [p.id, p]),
-  );
+  const projectById = new Map((Array.isArray(nextDoc?.data?.projects) ? nextDoc.data.projects : []).filter(p => p?.id).map(p => [p.id, p]));
   /* G-23-1: the stored doc never persists account-backed member profiles (the
      roster is authority-backed in memberships+users, rebuilt only on read via
      syncProfiles), so the doc-profile map is empty of account members at
@@ -1247,10 +1251,9 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
      — keeping the doc profiles as the fallback for doc-only members. */
   const authority = new Map(
     (
-      await db.all(
-        'select m.member_id, m.user_id, u.name, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?',
-        [wsRow.id],
-      )
+      await db.all('select m.member_id, m.user_id, u.name, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?', [
+        wsRow.id,
+      ])
     ).map(r => [r.member_id, r]),
   );
   for (const n of newNotifs) {
@@ -1295,7 +1298,9 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
     /* I18N-01 (Phase 36): the reminder by-label renders per recipient locale
        through tFor — still inlined in the by-resolution so the notif-email-link
        source-extraction tests keep evaluating this line standalone. */
-    const by = ['due_reminder', 'past_due'].includes(n.type) ? tFor(recipientLocale, 'notif.email.byReminders') : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
+    const by = ['due_reminder', 'past_due'].includes(n.type)
+      ? tFor(recipientLocale, 'notif.email.byReminders')
+      : authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre';
     /* LINK-01 (plan 23-01): the email links to the task, not the app root. The
        key is resolved at email-build time (it is mutable on project move) and
        the absolute base is APP_URL unconditionally — the boot guard exits when
@@ -1389,10 +1394,7 @@ async function runReminderPass({ now: at = new Date() } = {}) {
         if (!remindable(t, project)) continue;
         /* [2026-11-07 D-49-1] visibility gate is the collapsed funnel only —
            the Phase 29 scope term is retired. */
-        const assigneeMembership = await db.get('select user_id, role from memberships where workspace_id = ? and member_id = ?', [
-          ws.id,
-          t.assignee,
-        ]);
+        const assigneeMembership = await db.get('select user_id, role from memberships where workspace_id = ? and member_id = ?', [ws.id, t.assignee]);
         /* PREFS (Phase 34, D-04): reminder prefs resolve per assignee through
            the accessor — the membership row maps the member_id to the account
            (user_id); a doc-only assignee carries no row and reads defaults. */
@@ -1603,7 +1605,7 @@ function logDocChanges(ws, storedDoc, next, actorName) {
     const afterIds = new Set(afterTasks.map(t => t.id));
     const commentsByTask = doc => {
       const map = new Map();
-      for (const c of (Array.isArray(doc?.data?.comments) ? doc.data.comments : [])) {
+      for (const c of Array.isArray(doc?.data?.comments) ? doc.data.comments : []) {
         if (c?.task) map.set(c.task, (map.get(c.task) || 0) + 1);
       }
       return map;
@@ -1642,8 +1644,7 @@ async function docFromClient(incoming, stored, ws, role, membership) {
      the non-admin replacement and the admin pinning then let the carve-out
      re-apply it, same "access fields belong to the membership" family as the
      pinned-field block above. */
-  const incomingSelfTz = (Array.isArray(incoming?.data?.members) ? incoming.data.members : [])
-    .find(m => m?.id === membership?.member_id && 'tz' in m)?.tz;
+  const incomingSelfTz = (Array.isArray(incoming?.data?.members) ? incoming.data.members : []).find(m => m?.id === membership?.member_id && 'tz' in m)?.tz;
   if (ROLE_RANK[role] < ROLE_RANK.admin) {
     next.data.members = storedMembers;
   } else {
@@ -1657,19 +1658,23 @@ async function docFromClient(incoming, stored, ws, role, membership) {
           /* D-10 (G-44-3, WR-01): doc-only members pass through unpinned, but
              tz still goes through the resolveTz funnel — the wholly-unpinned
              path cannot smuggle a raw string into the doc. */
-          return { ...m, tz: (typeof m?.tz === 'string' && m.tz.trim() === '') ? '' : resolveTz(m.tz) };
+          return { ...m, tz: typeof m?.tz === 'string' && m.tz.trim() === '' ? '' : resolveTz(m.tz) };
         }
         const prev = official.get(m.userId);
-        return prev ? {
-          ...m,
-          id: prev.id, userId: prev.userId, email: prev.email, role: prev.role, status: prev.status,
-          /* D-10 (G-44-3, WR-01): tz funnels exactly like the self carve-out —
+        return prev
+          ? {
+              ...m,
+              id: prev.id,
+              userId: prev.userId,
+              email: prev.email,
+              role: prev.role,
+              status: prev.status,
+              /* D-10 (G-44-3, WR-01): tz funnels exactly like the self carve-out —
              undefined keeps the stored value (an admin snapshot omitting tz
              must not wipe it), '' clears (D-07), anything else funnels. */
-          tz: m.tz === undefined ? prev.tz
-            : (typeof m.tz === 'string' && m.tz.trim() === '') ? ''
-            : resolveTz(m.tz),
-        } : null;
+              tz: m.tz === undefined ? prev.tz : typeof m.tz === 'string' && m.tz.trim() === '' ? '' : resolveTz(m.tz),
+            }
+          : null;
       })
       .filter(Boolean);
     // A member the client's copy does not know about — they joined in another
@@ -1688,7 +1693,7 @@ async function docFromClient(incoming, stored, ws, role, membership) {
      No other field is ever taken from the incoming array. */
   if (incomingSelfTz !== undefined) {
     const storedSelf = (Array.isArray(next.data.members) ? next.data.members : []).find(m => m?.id === membership?.member_id);
-    if (storedSelf) storedSelf.tz = (typeof incomingSelfTz === 'string' && incomingSelfTz.trim() === '') ? '' : resolveTz(incomingSelfTz);
+    if (storedSelf) storedSelf.tz = typeof incomingSelfTz === 'string' && incomingSelfTz.trim() === '' ? '' : resolveTz(incomingSelfTz);
   }
   // The plan, invoices, sessions and tfa fields are gone; a stale client's copy
   // must never resurrect them. Both the read path (normalizeDoc) and this write
@@ -1735,9 +1740,7 @@ async function membersOf(workspaceId) {
 
 /* TEAM-01: the team set of one member, read from the join-table authority. */
 async function teamsOfUser(workspaceId, userId) {
-  return (
-    await db.all('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id', [workspaceId, userId])
-  ).map(r => r.team_id);
+  return (await db.all('select team_id from team_members where workspace_id = ? and user_id = ? order by team_id', [workspaceId, userId])).map(r => r.team_id);
 }
 
 /* TEAM-01: bulk form for syncProfiles — Map<user_id, string[]> over the workspace. */
@@ -1782,37 +1785,32 @@ async function invitesOf(workspaceId) {
       [workspaceId, now()],
     )
   ).map(r => {
-      let teams = [];
-      try {
-        teams = JSON.parse(r.teams || '[]');
-      } catch {
-        /* unreadable set degrades to teamless (D-03), never to the scalar */
-      }
-      if (!Array.isArray(teams)) teams = [];
-      /* [2026-11-07 D-49-5] scope is retired — the Phase 49 sweep cleared the
+    let teams = [];
+    try {
+      teams = JSON.parse(r.teams || '[]');
+    } catch {
+      /* unreadable set degrades to teamless (D-03), never to the scalar */
+    }
+    if (!Array.isArray(teams)) teams = [];
+    /* [2026-11-07 D-49-5] scope is retired — the Phase 49 sweep cleared the
          columns and invites no longer carry one. The projection stays `null`
          so client surfaces keep a stable shape until Phase 51 prunes it. */
-      return {
-        id: r.token_hash,
-        email: r.email,
-        role: r.role,
-        roleLabel: ROLE_LABEL[r.role] || r.role,
-        teams,
-        scope: null,
-        project: r.project || null,
-        createdAt: r.created_at,
-        expiresAt: r.expires_at,
-      };
-    });
+    return {
+      id: r.token_hash,
+      email: r.email,
+      role: r.role,
+      roleLabel: ROLE_LABEL[r.role] || r.role,
+      teams,
+      scope: null,
+      project: r.project || null,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+    };
+  });
 }
 
 async function ownerCount(workspaceId, excludeUserId = null) {
-  return (
-    await db.get("select count(*) as n from memberships where workspace_id = ? and role = 'owner' and user_id is not ?", [
-      workspaceId,
-      excludeUserId,
-    ])
-  ).n;
+  return (await db.get("select count(*) as n from memberships where workspace_id = ? and role = 'owner' and user_id is not ?", [workspaceId, excludeUserId])).n;
 }
 
 /* Overlay the authority fields of every profile that belongs to an account,
@@ -1900,11 +1898,7 @@ async function updateDoc(workspaceId, edit) {
   if (!row) throw httpError(404, 'Workspace not found', 'workspaceNotFound');
   const doc = JSON.parse(row.doc);
   await edit(doc); // D-05 ripple: callbacks may be async (ensureMember facade await)
-  await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [
-    JSON.stringify(doc),
-    now(),
-    workspaceId,
-  ]);
+  await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(doc), now(), workspaceId]);
   return doc;
 }
 
@@ -2162,11 +2156,7 @@ async function migrateUserNotifPrefs() {
          not just members who "already have a row" (insert or ignore keeps any
          pre-existing per-user row the user set after the accessor shipped). */
       for (const m of await db.all('select user_id from memberships where workspace_id = ?', [ws.id])) {
-        await db.run('insert or ignore into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [
-          ws.id,
-          m.user_id,
-          JSON.stringify(ws.prefs),
-        ]);
+        await db.run('insert or ignore into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [ws.id, m.user_id, JSON.stringify(ws.prefs)]);
       }
       /* D-11: the doc-field delete lives in the SAME transaction as the row
          copies, so a crashed boot can never leave rows and doc disagreeing. */
@@ -2323,11 +2313,9 @@ async function migrateTotpEncryption() {
   // envelope-shaped row out of the pending set, so SQL/JS drift can never put
   // a permanently-undecryptable envelope back on the backup-every-boot churn.
   const pendingRows = async () =>
-    (
-      await db.all(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'",
-      )
-    ).filter(row => !isEnvelopeVersion(row.two_fa_secret));
+    (await db.all("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret not like 'v_:%'")).filter(
+      row => !isEnvelopeVersion(row.two_fa_secret),
+    );
   let rows = await pendingRows();
   if (rows.length === 0) return;
 
@@ -2510,16 +2498,10 @@ async function migrateTotpReWrap() {
   // a factor row left under the old key would brick TOTP login after the
   // users column converges. One pass, one backup, one summary.
   const staleCandidates = async () => [
-    ...(
-      await db.all(
-        "select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'",
-      )
-    )
+    ...(await db.all("select id, two_fa_secret from users where two_fa_secret is not null and two_fa_secret != '' and two_fa_secret like 'v_:%'"))
       .filter(row => isStaleEnvelope(row.two_fa_secret, currentId))
       .map(row => ({ table: 'users', id: row.id, value: row.two_fa_secret })),
-    ...(
-      await db.all("select id, secret from totp_factors where secret is not null and secret != '' and secret like 'v_:%'")
-    )
+    ...(await db.all("select id, secret from totp_factors where secret is not null and secret != '' and secret like 'v_:%'"))
       .filter(row => isStaleEnvelope(row.secret, currentId))
       .map(row => ({ table: 'totp_factors', id: row.id, value: row.secret })),
   ];
@@ -2587,7 +2569,9 @@ async function migrateTotpReWrap() {
             : null;
       if (plaintext === null) {
         undecryptable++;
-        logWarn(`  TOTP re-wrap: ${row.table === 'users' ? 'user' : 'factor row'} ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`);
+        logWarn(
+          `  TOTP re-wrap: ${row.table === 'users' ? 'user' : 'factor row'} ${row.id} carries an envelope that decrypts under neither keyring key — left as-is; decrypt fails closed (D-K9).`,
+        );
         continue; // byte-identical, never deleted (D-K9)
       }
       // D-K10: the ONLY writer is encryptTotpSecret(…, 'v2') — never re-key as v1.
@@ -2602,9 +2586,7 @@ async function migrateTotpReWrap() {
     }
   });
   // D-76: outcomes on console only — counts, version tags, ids; no key material.
-  logInfo(
-    `  TOTP re-wrap: ${rewrapped} row(s) re-sealed to v2:<current-key-id>, ${undecryptable} undecryptable left as-is, ${sealFailed} seal failure(s).`,
-  );
+  logInfo(`  TOTP re-wrap: ${rewrapped} row(s) re-sealed to v2:<current-key-id>, ${undecryptable} undecryptable left as-is, ${sealFailed} seal failure(s).`);
 }
 
 /*
@@ -2659,42 +2641,39 @@ async function restoreTeamLinks() {
   // SQLite-only (the backups exist only on the SQLite lane — pg boots take
   // the fail-open path above, their DATA_DIR carries no such backups).
   const preSweep = new Map(); // wsId -> Map(projectId -> { teams, members })
-  await sqliteOnly(
-    async () => {
-      let dbBackup;
-      try {
-        dbBackup = new DatabaseSync(path.join(DATA_DIR, preSweepBackups[preSweepBackups.length - 1]), { readOnly: true });
-        for (const row of dbBackup.prepare('select id, doc from workspaces').all()) {
-          let doc = {};
-          try {
-            doc = JSON.parse(row.doc);
-          } catch {
-            continue;
-          }
-          const projects = new Map();
-          for (const p of doc?.data?.projects || []) {
-            if (!p || typeof p !== 'object' || typeof p.id !== 'string') continue;
-            projects.set(p.id, {
-              teams: Array.isArray(p.teams) ? p.teams.filter(t => typeof t === 'string') : [],
-              members: Array.isArray(p.members) ? p.members.filter(m => typeof m === 'string') : [],
-            });
-          }
-          preSweep.set(row.id, projects);
-        }
-      } catch (err) {
-        // Unreadable snapshot → no provenance → fail open, never guess.
-        logWarn(`  team-link restoration (D-50-6): pre-sweep backup unreadable (${err.message}) — fail-open posture, nothing restored.`);
-        preSweep.clear();
-      } finally {
+  await sqliteOnly(async () => {
+    let dbBackup;
+    try {
+      dbBackup = new DatabaseSync(path.join(DATA_DIR, preSweepBackups[preSweepBackups.length - 1]), { readOnly: true });
+      for (const row of dbBackup.prepare('select id, doc from workspaces').all()) {
+        let doc = {};
         try {
-          dbBackup?.close();
+          doc = JSON.parse(row.doc);
         } catch {
-          /* already closed */
+          continue;
         }
+        const projects = new Map();
+        for (const p of doc?.data?.projects || []) {
+          if (!p || typeof p !== 'object' || typeof p.id !== 'string') continue;
+          projects.set(p.id, {
+            teams: Array.isArray(p.teams) ? p.teams.filter(t => typeof t === 'string') : [],
+            members: Array.isArray(p.members) ? p.members.filter(m => typeof m === 'string') : [],
+          });
+        }
+        preSweep.set(row.id, projects);
       }
-    },
-    `read pre-sweep provenance snapshot (${PRE_SWEEP_PREFIX}*)`,
-  );
+    } catch (err) {
+      // Unreadable snapshot → no provenance → fail open, never guess.
+      logWarn(`  team-link restoration (D-50-6): pre-sweep backup unreadable (${err.message}) — fail-open posture, nothing restored.`);
+      preSweep.clear();
+    } finally {
+      try {
+        dbBackup?.close();
+      } catch {
+        /* already closed */
+      }
+    }
+  }, `read pre-sweep provenance snapshot (${PRE_SWEEP_PREFIX}*)`);
   if (preSweep.size === 0) return;
 
   // Candidate scan (marker-guard): a workspace needs restoration iff the
@@ -2814,8 +2793,7 @@ async function restoreTeamLinks() {
  * it IS the normalization at the door.
  */
 async function normalizeGuestRoles() {
-  const guestCount = async table =>
-    (await db.get(`select count(*) as n from ${table} where role = 'guest'`)).n;
+  const guestCount = async table => (await db.get(`select count(*) as n from ${table} where role = 'guest'`)).n;
   if ((await guestCount('memberships')) === 0 && (await guestCount('invites')) === 0) return;
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -2962,12 +2940,7 @@ async function addMembership(ws, user, role, teams = []) {
        the scalar column is backfill-only legacy (D-04). */
     if (teamList.length) {
       for (const team of teamList) {
-        await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [
-          ws.id,
-          team,
-          memberId,
-          user.id,
-        ]);
+        await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [ws.id, team, memberId, user.id]);
       }
     }
   });
@@ -2983,13 +2956,7 @@ async function createUser(email, name, password) {
   const id = uid();
   const cleanName = (name || '').trim() || clean.split('@')[0];
   try {
-    await db.run('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)', [
-      id,
-      clean,
-      cleanName,
-      hashPassword(password),
-      now(),
-    ]);
+    await db.run('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)', [id, clean, cleanName, hashPassword(password), now()]);
   } catch (err) {
     /* WR-06: a signup race can pass the pre-check and hit the UNIQUE constraint.
        Map it to the same 409 accountExists as the pre-check; any other SQL error
@@ -3393,7 +3360,9 @@ async function handleApi(req, res, url) {
 
       const claims = verdict.claims;
       const subject = String(claims.sub || '');
-      const email = String(claims.email || '').trim().toLowerCase();
+      const email = String(claims.email || '')
+        .trim()
+        .toLowerCase();
       if (!subject || !emailOk(email)) return errorRedirect();
 
       /* Identity resolution — SSO-03 strict verified-email linking (T-30-06,
@@ -3414,12 +3383,13 @@ async function handleApi(req, res, url) {
          established identity. preferred_username is never consulted — only
          the email claim can link. */
       const isPinnedTenant = claims.tid === OIDC.config.tenantId;
-      const guestShape =
-        (typeof claims.idp === 'string' && claims.idp !== '' && claims.idp !== OIDC.config.issuer) ||
-        String(claims.acct ?? '') === '1';
+      const guestShape = (typeof claims.idp === 'string' && claims.idp !== '' && claims.idp !== OIDC.config.issuer) || String(claims.acct ?? '') === '1';
       const canLink = isPinnedTenant && !guestShape;
       const verifiedEmail = claims.email_verified === true;
-      let row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [OIDC.config.issuer, subject]);
+      let row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [
+        OIDC.config.issuer,
+        subject,
+      ]);
       if (!row) {
         const existing = await db.get('select * from users where email = ?', [email]);
         if (existing && !(canLink && verifiedEmail)) return errorRedirect();
@@ -3450,7 +3420,10 @@ async function handleApi(req, res, url) {
              (issuer, subject) won the unique index — resolve to ITS row instead
              of failing the login. Any other SQL error rethrows (fail closed). */
           if (!/UNIQUE|oidc_identities_subject/i.test(String(err?.message || ''))) throw err;
-          row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [OIDC.config.issuer, subject]);
+          row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [
+            OIDC.config.issuer,
+            subject,
+          ]);
         }
       }
 
@@ -3463,10 +3436,7 @@ async function handleApi(req, res, url) {
          auto-accept. */
       let ssoRedirect = '/';
       if (!(await db.get('select 1 from memberships where user_id = ?', [row.id]))) {
-        const pendingInvites = await db.all('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?', [
-          row.email,
-          now(),
-        ]);
+        const pendingInvites = await db.all('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?', [row.email, now()]);
         if (pendingInvites.length === 1) {
           /* Exactly one pending invite: auto-accept with the acceptance
              recipe VERBATIM from the accept route — addMembership with the
@@ -4184,10 +4154,9 @@ async function handleApi(req, res, url) {
     // an attacker cannot aim the throttle at an arbitrary victim address.
     const challengeToken = parseCookies(req.headers.cookie)[CHALLENGE_COOKIE];
     const challenge = challengeToken
-      ? await db.get(
-          'select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?',
-          [sha256(challengeToken)],
-        )
+      ? await db.get('select lc.*, u.email as email from login_challenges lc join users u on u.id = lc.user_id where lc.challenge_token_hash = ?', [
+          sha256(challengeToken),
+        ])
       : null;
     if (!challenge) return fail(res, 401, 'challengeExpired', 'Your sign-in challenge has expired — start again');
     // D-11 budget shape, keyed 2fa-login|ip|email (constants match tfa/enable).
@@ -4348,19 +4317,21 @@ async function handleApi(req, res, url) {
     const rows = await db.all('select * from api_keys where user_id = ? order by created_at desc', [user.id]);
     const wsName = async id => (await db.get('select name from workspaces where id = ?', [id]))?.name || null;
     return json(res, 200, {
-      keys: await Promise.all(rows.map(async r => ({
-        id: r.id,
-        label: r.label,
-        prefix: r.prefix,
-        scope: r.scope,
-        workspaceId: r.workspace_id,
-        workspaceName: await wsName(r.workspace_id),
-        createdAt: r.created_at,
-        expiresAt: r.expires_at,
-        lastUsedAt: r.last_used_at,
-        revokedAt: r.revoked_at,
-        expired: r.expires_at <= now(),
-      }))),
+      keys: await Promise.all(
+        rows.map(async r => ({
+          id: r.id,
+          label: r.label,
+          prefix: r.prefix,
+          scope: r.scope,
+          workspaceId: r.workspace_id,
+          workspaceName: await wsName(r.workspace_id),
+          createdAt: r.created_at,
+          expiresAt: r.expires_at,
+          lastUsedAt: r.last_used_at,
+          revokedAt: r.revoked_at,
+          expired: r.expires_at <= now(),
+        })),
+      ),
       days: API_KEY_DAYS,
     });
   }
@@ -4383,10 +4354,17 @@ async function handleApi(req, res, url) {
     if (!membership) return fail(res, 403, 'notAMember', 'You are not a member of that workspace');
     const { key, prefix, hash } = generateApiKey();
     const id = uid();
-    await db.run(
-      'insert into api_keys (id, user_id, workspace_id, label, key_hash, prefix, scope, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)',
-      [id, user.id, wsId, label, hash, prefix, scope, now(), now() + days * 24 * 60 * 60 * 1000],
-    );
+    await db.run('insert into api_keys (id, user_id, workspace_id, label, key_hash, prefix, scope, created_at, expires_at) values (?,?,?,?,?,?,?,?,?)', [
+      id,
+      user.id,
+      wsId,
+      label,
+      hash,
+      prefix,
+      scope,
+      now(),
+      now() + days * 24 * 60 * 60 * 1000,
+    ]);
     logSecurity(user.id, 'api_key_created');
     logInfo(`api key "${label}" (${scope}, ${days}d) created by ${user.email} for workspace ${membership.workspace_id}`);
     await db.run(
@@ -4459,9 +4437,7 @@ async function handleApi(req, res, url) {
     if (isInstanceAdmin(user)) {
       // Operators see the whole trail — workspace-less operator-tier rows included.
     } else {
-      const adminWsIds = (await membershipsOf(user.id))
-        .filter(m => ROLE_RANK[m.role] >= ROLE_RANK.admin)
-        .map(m => m.id);
+      const adminWsIds = (await membershipsOf(user.id)).filter(m => ROLE_RANK[m.role] >= ROLE_RANK.admin).map(m => m.id);
       if (!adminWsIds.length) return fail(res, 403, 'adminOnly', 'Only workspace admins can do that');
       where.push(`workspace_id in (${adminWsIds.map(() => '?').join(',')})`);
       args.push(...adminWsIds);
@@ -4657,36 +4633,36 @@ async function handleApi(req, res, url) {
     let outcome = null;
     try {
       outcome = await db.tx(async () => {
-      const row = await db.get('select * from workspaces where id = ?', [ctx.ws.id]);
-      if (!row) {
-        refusal.code = 'workspaceNotFound';
-        return null;
-      }
-      if (row.revision !== revision) {
-        refusal.code = 'workspaceChanged';
-        refusal.revision = row.revision;
-        return null;
-      }
-      const storedDoc = JSON.parse(row.doc);
-      const next = await docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership);
-      /* D-04: the same server mutation that drops a file record unlinks its
+        const row = await db.get('select * from workspaces where id = ?', [ctx.ws.id]);
+        if (!row) {
+          refusal.code = 'workspaceNotFound';
+          return null;
+        }
+        if (row.revision !== revision) {
+          refusal.code = 'workspaceChanged';
+          refusal.revision = row.revision;
+          return null;
+        }
+        const storedDoc = JSON.parse(row.doc);
+        const next = await docFromClient(doc, storedDoc, row, ctx.membership.role, ctx.membership);
+        /* D-04: the same server mutation that drops a file record unlinks its
          binary. Strict same-PUT diff only — no broader orphan sweep. */
-      const storedFileIds = new Set((Array.isArray(storedDoc?.data?.files) ? storedDoc.data.files : []).map(f => f?.id).filter(Boolean));
-      const keptFileIds = new Set((Array.isArray(next?.data?.files) ? next.data.files : []).map(f => f?.id).filter(Boolean));
-      /* P4-f: notifications that arrived with this PUT are candidates for a
+        const storedFileIds = new Set((Array.isArray(storedDoc?.data?.files) ? storedDoc.data.files : []).map(f => f?.id).filter(Boolean));
+        const keptFileIds = new Set((Array.isArray(next?.data?.files) ? next.data.files : []).map(f => f?.id).filter(Boolean));
+        /* P4-f: notifications that arrived with this PUT are candidates for a
          notification email. Diffed against the stored doc so each row emails
          exactly once. Collected now, sent after the commit — the response
          must never wait on SMTP. */
-      const storedNotifIds = new Set((Array.isArray(storedDoc?.data?.notifs) ? storedDoc.data.notifs : []).map(n => n?.id).filter(Boolean));
-      const newNotifs = (Array.isArray(next?.data?.notifs) ? next.data.notifs : []).filter(n => n?.id && !storedNotifIds.has(n.id));
-      /* TEAM-05 (D-02): membership no longer rides the doc PUT — the
+        const storedNotifIds = new Set((Array.isArray(storedDoc?.data?.notifs) ? storedDoc.data.notifs : []).map(n => n?.id).filter(Boolean));
+        const newNotifs = (Array.isArray(next?.data?.notifs) ? next.data.notifs : []).filter(n => n?.id && !storedNotifIds.has(n.id));
+        /* TEAM-05 (D-02): membership no longer rides the doc PUT — the
          team_members rows are edited only through the dedicated PUT
          /members/:uid/teams route, inside its own transaction. Doc writes can
          neither carry nor clobber membership. */
-      const t = now();
-      await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(next), t, row.id]);
-      return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t };
-    });
+        const t = now();
+        await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(next), t, row.id]);
+        return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t };
+      });
     } catch (err) {
       // SCOPE-04: the assignee write-guard rejects with an explicit 400 —
       // db.tx has already rolled the transaction back.
@@ -4887,7 +4863,13 @@ async function handleApi(req, res, url) {
     if (teams.some(t => !known.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
     await db.tx(async () => {
       await db.run('delete from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
-      for (const t of teams) await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [ctx.ws.id, t, row.member_id, target.id]);
+      for (const t of teams)
+        await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [
+          ctx.ws.id,
+          t,
+          row.member_id,
+          target.id,
+        ]);
     });
     const doc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ctx.ws.id])).doc);
     await syncProfiles(doc, ctx.ws.id); // the response projects the fresh teams[] set
@@ -5096,7 +5078,11 @@ async function handleApi(req, res, url) {
        an owner via the members route, never invited. Checked on the RAW body
        value — inviteRole() would silently coerce 'owner' to 'member' and
        mint a member invite where an escalation was attempted. */
-    if (String(body?.role || '').trim().toLowerCase() === 'owner') {
+    if (
+      String(body?.role || '')
+        .trim()
+        .toLowerCase() === 'owner'
+    ) {
       return fail(res, 403, 'ownerInviteForbidden', 'Ownership is transferred by an owner, never invited');
     }
     /* VIS-04 member-tier validation (T-50-05): viewer role only, a real
@@ -6153,6 +6139,20 @@ async function main() {
   if (args[0] === '--add-user') return addUserCli(args.slice(1));
   if (args[0] === '--set-password') return setPasswordCli(args.slice(1));
   if (args[0] === '--backup') return backupCli(args[1]);
+  /* --db-init: connect, create the schema on an empty database and run the
+     additive ensureColumn migrations, then exit — the same openDb() path the
+     server takes at boot, without listening. Works on both backends; with
+     DB_URL set it initializes a fresh Postgres database non-interactively
+     (docker exec / CI / first-deploy probe). */
+  if (args[0] === '--db-init') {
+    logInfo(
+      backendKind === 'pg'
+        ? 'schema ready: Postgres initialized (DB_URL) — tables created if empty, additive migrations applied'
+        : `schema ready: SQLite initialized (${DB_PATH}) — tables created if empty, additive migrations applied`,
+    );
+    await db.close();
+    return;
+  }
 
   await bootstrap();
   logInfo(`boot complete in ${Date.now() - BOOT_STARTED}ms (schema migrations + sweeps)`);
@@ -6202,9 +6202,7 @@ async function main() {
 
   server.listen(PORT, HOST, () => {
     logInfo(`Projects Studio listening on http://${HOST}:${PORT}`);
-    logInfo(backendKind === 'pg'
-      ? 'database: Postgres (DB_URL set — path log shows the SQLite rollback file only)'
-      : `database: ${DB_PATH}`);
+    logInfo(backendKind === 'pg' ? 'database: Postgres (DB_URL set — path log shows the SQLite rollback file only)' : `database: ${DB_PATH}`);
     if (MAILER.enabled) logInfo(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
     else if (MAILER.error) logWarn(`invite email: disabled — ${MAILER.error}`);
     else logInfo('invite email: disabled (set SMTP_HOST to email invitations)');

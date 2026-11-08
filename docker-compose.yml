@@ -1,4 +1,26 @@
 services:
+  # Optional PostgreSQL backend — inactive by default. Start both containers
+  # with `docker compose --profile postgres up -d`, set DB_URL (see .env.example
+  # and DEPLOY.md §15). The app creates the schema on an empty database at
+  # boot; `docker compose exec projects node server.js --db-init` initializes
+  # it ahead of the first start if you prefer.
+  db:
+    image: postgres:18-alpine
+    profiles: [postgres]
+    container_name: projects-studio-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-projects}
+      # Only used with the postgres profile — set a long unique password in .env
+      # before running `docker compose --profile postgres up -d`. (Left soft so
+      # SQLite-only deployments never fail compose validation.)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-projects}
+    volumes:
+      - projects-studio-pg:/var/lib/postgresql/data
+    networks:
+      - traefik
+
   projects:
     build: .
     image: projects-studio:1.1.1
@@ -38,7 +60,7 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       DATA_DIR: /data
       MASTER_KEY: ${MASTER_KEY:?set MASTER_KEY in .env (32+ random chars; encrypts TOTP secrets — losing it locks out 2FA)}
-      MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-}   # old key during rotation (DEPLOY.md §14)
+      MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-} # old key during rotation (DEPLOY.md §14)
       OIDC_ENABLED: ${OIDC_ENABLED:-false}
       OIDC_TENANT_ID: ${OIDC_TENANT_ID:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
@@ -75,6 +97,7 @@ services:
 
 volumes:
   projects-studio-data:
+  projects-studio-pg:
 
 networks:
   traefik:

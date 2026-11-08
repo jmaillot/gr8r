@@ -13,6 +13,7 @@
     "build:en": "LOCALES=en vite build",
     "preview": "vite preview",
     "start": "node server.js",
+    "db:init": "node server.js --db-init",
     "seed:json": "node scripts/export-seed.mjs > seed.json",
     "lint": "eslint .",
     "test": "node --test --test-concurrency=2 test/*.test.mjs",

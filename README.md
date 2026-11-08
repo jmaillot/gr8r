@@ -116,13 +116,27 @@ the one-shot SQLite→Postgres copy script, and backups). Boot is fail-closed: a
 unreachable or misconfigured `DB_URL` stops the server with a clear error, never a
 silent SQLite fallback, and the connection string is never logged.
 
+**Initialization and migrations are automatic.** On an empty database the app creates
+every table at first boot; additive migrations (new columns) apply on every start on
+both backends. No manual migration step exists or is needed. To create the schema
+ahead of the first start (CI, first-deploy probe), run:
+
+```sh
+npm run db:init                        # uses DB_URL / DB_PATH from the environment
+docker compose exec projects node server.js --db-init   # inside the container
+```
+
+The bundled `docker-compose.yml` also ships an optional Postgres service, activated
+with `docker compose --profile postgres up -d` (set `POSTGRES_PASSWORD` and `DB_URL`
+in `.env` — see `.env.example`).
+
 How much you configure TLS depends on where Postgres runs relative to the app:
 
-| Where Postgres runs | `sslmode` in `DB_URL` | Why |
-|---------------------|----------------------|-----|
-| Same private network / Docker network / VPC | `disable` | Traffic never leaves the trusted network; TLS adds nothing |
-| Distant host with self-signed or provider TLS | `require` | Encrypts the link; server certificate is accepted without verification |
-| Managed endpoint over the public internet (RDS, Neon, Supabase…) | `verify-full` (+ `sslrootcert`) | Encrypts **and** authenticates the server — blocks man-in-the-middle |
+| Where Postgres runs                                              | `sslmode` in `DB_URL`           | Why                                                                    |
+| ---------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------- |
+| Same private network / Docker network / VPC                      | `disable`                       | Traffic never leaves the trusted network; TLS adds nothing             |
+| Distant host with self-signed or provider TLS                    | `require`                       | Encrypts the link; server certificate is accepted without verification |
+| Managed endpoint over the public internet (RDS, Neon, Supabase…) | `verify-full` (+ `sslrootcert`) | Encrypts **and** authenticates the server — blocks man-in-the-middle   |
 
 `sslmode` is a parameter of `DB_URL` itself (`postgres://user:pass@host:5432/db?sslmode=require`) —
 it is environment configuration, never a code change.
