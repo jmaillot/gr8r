@@ -43,6 +43,7 @@ export const VIS_PROJECTS = Object.freeze([
   'p_publicgain',
   'p_sealed',
   'p_legacy',
+  'p_legacyteam',
   'p_open',
 ]);
 
@@ -119,6 +120,11 @@ export function visfixDoc() {
         { id: 'p_sealed', key: 'sealed', name: 'Sealed', private: true, members: [], lead: null, teams: [], status: 'active', perms: {} },
         /* Legacy p.access:'private' with no boolean private (server.js:754). */
         { id: 'p_legacy', key: 'legacyp', name: 'Legacy Access', access: 'private', members: ['m_admin'], lead: 'm_admin', teams: [], status: 'active', perms: {} },
+        /* Legacy scalar `team` cell (CR-01, 49-05): a pre-Phase-32 stored doc —
+           scalar `team` key, NO `teams` key. The one-boot sweep's scalar marker
+           fires on it, and the retired 2eec642 semantics convert it so the
+           engA team grant (m_team) materializes into p.members. */
+        { id: 'p_legacyteam', key: 'legacyteam', name: 'Legacy Scalar Team', private: true, members: ['m_admin'], lead: 'm_admin', team: 'engA', status: 'active', perms: {} },
         /* Plain public project. */
         { id: 'p_open', key: 'open', name: 'Open', private: false, members: [], lead: null, teams: [], status: 'active', perms: {} },
       ],
@@ -148,6 +154,10 @@ export function visfixDoc() {
 /* The expected VISIBLE project-id set per actor through the doc-GET door under
    the OLD model, hand-derived from the RESEARCH §Fixtures matrix plus the
    probe-corrected admin/owner semantics (see module comment).
+   Legacy shapes the one-boot sweep consumes: the p_legacy `access:'private'`
+   string, p.teams arrays, and (CR-01, 49-05) the p_legacyteam scalar `team`
+   key — sweepNeeded's scalar marker fires on it and the tx's 2eec642
+   semantics materialize the engA grant (m_admin, m_team) into p.members.
 
    Reading of the old predicate per actor class:
    - admin/owner (projectScope null via role, D-49-retired): hiddenProjectIds = canSeeProject
@@ -164,10 +174,10 @@ export function visfixDoc() {
    - doc-only profile: no memberships row → requireWorkspace 404s before any
      predicate runs. */
 export const VISIBILITY_MODEL = Object.freeze({
-  m_admin: ['p_hidden', 'p_teamshare', 'p_scopeteam', 'p_publicgain', 'p_legacy', 'p_open'],
+  m_admin: ['p_hidden', 'p_teamshare', 'p_scopeteam', 'p_publicgain', 'p_legacy', 'p_legacyteam', 'p_open'],
   m_owner: ['p_scopeproj', 'p_sealed', 'p_publicgain', 'p_open'],
   m_plain: ['p_membershare', 'p_open', 'p_publicgain'],
-  m_team: ['p_teamshare', 'p_open', 'p_publicgain'],
+  m_team: ['p_teamshare', 'p_legacyteam', 'p_open', 'p_publicgain'],
   m_scoped: ['p_scopeproj', 'p_scopeteam'],
   m_guest: ['p_membershare'],
   m_doconly: [],
@@ -185,7 +195,7 @@ export const MIRROR_MODEL = Object.freeze({
   m_admin: ALL,
   m_owner: ALL,
   m_plain: ['p_membershare', 'p_open', 'p_publicgain'],
-  m_team: ['p_teamshare', 'p_open', 'p_publicgain'],
+  m_team: ['p_teamshare', 'p_legacyteam', 'p_open', 'p_publicgain'],
   m_scoped: ['p_scopeteam', 'p_scopeddeny', 'p_publicgain', 'p_open'],
   m_guest: ['p_open', 'p_publicgain'],
   /* m_doconly can never obtain an API key: no memberships row → POST /api/keys
