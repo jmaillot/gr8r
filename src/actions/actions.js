@@ -1705,6 +1705,50 @@ A.shareAdd = el => {
   render();
   toast(t('toast.memberCanEdit', { name: m.name, project: p.name }));
 };
+/* [2026-11-08 D-51-5/6/7/8/9] The share modal's Teams section actions. Both
+   ride the doc-sync path ONLY (no REST route — a non-admin lead must be able
+   to link/unlink teams, and the admin-gated routes would 403 for them; the
+   server-side manager gating for p.teams writes is pinned in the
+   visibility-team suite). No role choice (D-51-7): the link confers
+   Member-level access; optimistic flip with snapshot revert on a refused PUT
+   — the same revert shape as the shareAccess toggle (D-51-3). */
+A.shareTeamInvite = async el => {
+  const p = proj(el.dataset.id);
+  const tm = teamsList().find(x => x.id === el.dataset.tid);
+  if (!p || !tm) return;
+  if (!canManageProject(p)) return toast(t('err.cannotChangeAccess'), { kind: 'err' });
+  const snap = snapshot();
+  mutate(() => {
+    p.teams = Array.isArray(p.teams) ? p.teams : [];
+    if (!p.teams.includes(tm.id)) p.teams.push(tm.id);
+  });
+  render();
+  toast(t('toast.teamLinked', { name: tm.name }));
+  const res = await pushNow();
+  if (!res.ok) {
+    restore(snap);
+    render();
+    toast(t('err.cannotChangeAccess'), { kind: 'err' });
+  }
+};
+A.shareTeamRemove = async el => {
+  const p = proj(el.dataset.id);
+  const tm = teamsList().find(x => x.id === el.dataset.tid);
+  if (!p || !tm) return;
+  if (!canManageProject(p)) return toast(t('err.cannotChangeAccess'), { kind: 'err' });
+  const snap = snapshot();
+  mutate(() => {
+    p.teams = (Array.isArray(p.teams) ? p.teams : []).filter(x => x !== tm.id);
+  });
+  render();
+  toast(t('toast.teamUnlinked', { name: tm.name }));
+  const res = await pushNow();
+  if (!res.ok) {
+    restore(snap);
+    render();
+    toast(t('err.cannotChangeAccess'), { kind: 'err' });
+  }
+};
 A.shareInvite = () => {
   const m = S.ui.modals[S.ui.modals.length - 1];
   const p = proj(m.id);

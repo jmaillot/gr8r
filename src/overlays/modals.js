@@ -205,6 +205,9 @@ export function shareModal(m, H) {
   if (!p) return H(t('err.projectNotFound'));
   const canManage = canManageProject(p);
   const members = Array.isArray(p.members) ? p.members : [];
+  /* [2026-11-08 D-51-9] The project's linked teams — invite list excludes them,
+     the note below lists them with a remove action. */
+  const linkedTeams = Array.isArray(p.teams) ? p.teams.filter(Boolean) : [];
   const perms = p.perms && typeof p.perms === 'object' ? p.perms : {};
   const lockHint = canManage ? '' : `<div class="alert info" style="margin-bottom:12px">${ic('lock', 14)}<span>${t('modal.shareLockHint')}</span></div>`;
   return `${H(t('modal.shareTitle', { name: esc(p.name) }))}
@@ -231,6 +234,37 @@ export function shareModal(m, H) {
               .join('') ||
             `<div class="mi faint" style="cursor:default">${S.ui.shareQ.includes('@') ? t('modal.pressInvite', { email: esc(S.ui.shareQ) }) : t('modal.noMatchingMembers')}</div>`
           }</div>`
+        : ''
+    }
+    ${
+      /* [2026-11-08 D-51-5/6/7/8/9] The Teams section: workspace teams not yet
+         linked offer an 'Invite team' action (no role choice — team access is
+         Member-level by definition, D-51-7; elevated roles come from separate
+         individual invites whose role takes precedence). Linked teams render
+         in the note with a remove action, and the hint carries the LIVE
+         team-semantics copy (D-51-8 per D-50-5) — access follows team
+         membership, never a snapshot. Non-managers keep the lock hint above. */
+      canManage
+        ? `<div style="border-top:1px solid var(--divider);padding-top:12px;margin-top:12px"><div class="eyebrow" style="margin-bottom:8px">${t('modal.teamsSection')}</div>
+      <div class="tmpls" role="group" aria-label="${t('modal.teamsSection')}">${teamsList()
+          .filter(tm => !linkedTeams.includes(tm.id))
+          .map(
+            tm =>
+              `<button type="button" class="opt" data-a="shareTeamInvite" data-id="${p.id}" data-tid="${tm.id}" style="padding:8px" aria-label="${esc(t('a11y.inviteTeam', { name: tm.name }))}">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${ic('plus', 13)}</button>`,
+          )
+          .join('')}</div>
+      ${
+        linkedTeams.length
+          ? `<div class="col" style="gap:2px;margin-top:8px">${linkedTeams
+              .map(tid => {
+                const tm = teamsList().find(x => x.id === tid);
+                if (!tm) return '';
+                return `<div class="row" style="height:34px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b><span class="sp"></span><button type="button" class="ibtn ibtn-xs" data-a="shareTeamRemove" data-id="${p.id}" data-tid="${tm.id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></div>`;
+              })
+              .join('')}</div>`
+          : ''
+      }
+      <span class="hint">${t('modal.teamsLiveHint')}</span></div>`
         : ''
     }
     <div><div class="eyebrow" style="margin-bottom:4px">${t('modal.peopleWithAccess')}</div>

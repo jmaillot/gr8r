@@ -302,7 +302,7 @@ test('the machine identifiers survived the wave — tree-wide data-a / data-r / 
     r += [...text.matchAll(/data-r="/g)].length;
     v += [...text.matchAll(/data-v="/g)].length;
   }
-  assert.equal(a, 476, 'data-a sites'); // +1: the tz combobox options (44-03) // +1: the settings remove-logo button (43-02) // +3: member-teams modal (mteamToggle/submitMemberTeams) + context-menu editMemberTeams (28-02); +1: invite multi-select invTeamToggle (28-03); +10: the add-factor wizard + remove-confirm controls (31-03); +2: the invite-form and member-modal scope pickers (29-04); +1: the invitations card signOut (30-04); +7: the API-keys card (MCP-01): apiKeyAskCreate/apiKeyCreate×2/apiKeyDone/apiKeyRevokeAsk/apiKeyRevokeConfirm/apiKeyCancel/copyText
+  assert.equal(a, 478, 'data-a sites'); // +1: the tz combobox options (44-03) // +1: the settings remove-logo button (43-02) // +3: member-teams modal (mteamToggle/submitMemberTeams) + context-menu editMemberTeams (28-02); +1: invite multi-select invTeamToggle (28-03); +10: the add-factor wizard + remove-confirm controls (31-03); +2: the invite-form and member-modal scope pickers (29-04); +1: the invitations card signOut (30-04); +7: the API-keys card (MCP-01): apiKeyAskCreate/apiKeyCreate×2/apiKeyDone/apiKeyRevokeAsk/apiKeyRevokeConfirm/apiKeyCancel/copyText // +2: the share-modal Teams section invite/unlink actions (51-02)
   assert.equal(v, 79, 'data-v sites'); // +1: the tz combobox option value (44-03) // +1: member-teams modal toggle button (28-02); +1: invite multi-select toggle (28-03); +2: the scope pickers (29-04)
   assert.equal(r, 57, 'data-r sites');
 

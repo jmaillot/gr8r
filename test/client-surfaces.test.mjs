@@ -111,3 +111,26 @@ test('member PUT cannot flip p.private — the server pins it (stored doc keeps 
   assert.equal(res.status, 200, 'the doc PUT itself succeeds (fields are pinned, not rejected)');
   assert.equal(project('p_open').private, false, 'the member privatize attempt was pinned');
 });
+
+/* ---------------- Phase 51 (51-02): the share modal's Teams section ----------------
+   D-51-5/6/7/8/9: the invite + unlink actions ride the SAME doc-sync path as the
+   toggle — the non-admin lead links and unlinks a team on their own project and
+   the stored doc reflects it (the client canManageProject gate mirrors the
+   server-side manager gating pinned in visibility-team.test.mjs). */
+
+test('END-TO-END: the non-admin lead links then unlinks a team via doc-sync (Teams section write path)', async () => {
+  const res = await docPutAs('plain@visfix.local', doc => {
+    const p = doc.data.projects.find(x => x.id === 'p_membershare');
+    p.teams = Array.isArray(p.teams) ? p.teams : [];
+    if (!p.teams.includes('engA')) p.teams.push('engA');
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(project('p_membershare').teams, ['engA'], 'the team link persisted');
+
+  const res2 = await docPutAs('plain@visfix.local', doc => {
+    const p = doc.data.projects.find(x => x.id === 'p_membershare');
+    p.teams = (Array.isArray(p.teams) ? p.teams : []).filter(x => x !== 'engA');
+  });
+  assert.equal(res2.status, 200);
+  assert.deepEqual(project('p_membershare').teams, [], 'the team unlink persisted');
+});
