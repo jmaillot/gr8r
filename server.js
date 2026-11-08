@@ -1065,9 +1065,11 @@ async function mergeClientDoc(incoming, stored, membership, wsId) {
      assign a member to a task whose project the assignee cannot read — this
      closes the assignableInProject picker seam. The client emit filter is
      advisory; this guard is the authority. Visibility is the collapsed
-     memberCanReadProject funnel (private ∨ access list); admin/owner
-     assignees pass via canSeeProject's public/private handling, members
-     without a membership row, and tasks without a project always pass. */
+     memberCanReadProject funnel — a pure funnel over canSeeProject with NO
+     ROLE_RANK bypass of the private access list — so an admin/owner assignee
+     on a private project they are not listed on IS rejected by this guard,
+     exactly like any other member. Members without a membership row, and
+     tasks without a project, always pass. */
   if (wsId) {
     const projectById = new Map(
       [...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]),
@@ -2196,9 +2198,12 @@ function sweepNeeded(docText, scopeRowCount) {
   try {
     doc = JSON.parse(docText);
   } catch {
-    /* unreadable document: nothing to re-derive from (migrateTenancy :2293-2298
-       fallback posture — the tx body re-checks and skips with a warning) */
-    return false;
+    /* WR-02 (49-05): an unreadable document still needs its scope columns
+       cleared — fall through to the scope-row check instead of
+       short-circuiting. The tx body re-checks and skips the doc write but
+       still clears inside the same transaction (migrateTenancy :2293-2298
+       fallback posture). */
+    return scopeRowCount > 0;
   }
   const projects = doc?.data?.projects;
   if (Array.isArray(projects)) {
@@ -2211,6 +2216,12 @@ function sweepNeeded(docText, scopeRowCount) {
          every later boot re-sweep and churn the doc (breaks D-49-6). */
       if (Array.isArray(p.teams) && p.teams.length) return true;
       if (p.access !== undefined) return true; // D-49-4: legacy dual representation
+      /* CR-01 (49-05): the pre-Phase-32 scalar `p.team` marker. normalizeProjects'
+         scalar→teams[] migration was retired in Phase 49 (D-49-6), so the sweep
+         is the only remaining converter — re-adding it to normalizeProjects
+         would churn every served copy and break the second-boot byte-identity
+         pin. */
+      if (p.team !== undefined) return true;
     }
   }
   return scopeRowCount > 0; // D-49-1: any non-NULL scope still needs clearing
@@ -2260,6 +2271,13 @@ async function materializeVisibilityGrants() {
         doc = JSON.parse(row?.doc);
       } catch {
         logWarn(`  visibility sweep: workspace ${wsId} has an unreadable document — skipped (nothing to re-derive from)`);
+        /* WR-02 (49-05): skip the doc write, but do NOT skip the scope-column
+           clears — an unreadable payload must not block D-49-1. Hoisted here
+           so the clears run on this path too, inside the same transaction;
+           after this boot the scope rows are NULL and sweepNeeded (via its
+           WR-02 fallback) returns false — D-49-6 no-churn preserved. */
+        await db.run('update memberships set scope = null where workspace_id = ?', [wsId]);
+        await db.run('update invites set scope = null where workspace_id = ?', [wsId]);
         return;
       }
       const data = doc?.data;
@@ -2318,6 +2336,18 @@ async function materializeVisibilityGrants() {
       const ownerId = Array.isArray(data?.members) ? (data.members.find(m => String(m?.role || '').toLowerCase() === 'owner')?.id || null) : null;
       for (const p of projects) {
         if (!p || typeof p !== 'object') continue;
+        /* CR-01 (49-05): reproduce the retired 2eec642 scalar→teams[] semantics
+           BEFORE the pTeams read and the grants loop, so team-derived grants
+           materialize for pre-Phase-32 docs. Array → string-filtered copy;
+           non-empty string → [that string]; else []. Merged with any existing
+           teams array (dedup, string-filtered) so scalar-and-array coexistence
+           loses nothing; both keys end up deleted (D-49-5 posture). */
+        if (p.team !== undefined) {
+          const scalarTeams = Array.isArray(p.team) ? p.team.filter(t => typeof t === 'string' && t) : (typeof p.team === 'string' && p.team ? [p.team] : []);
+          const arrayTeams = Array.isArray(p.teams) ? p.teams.filter(t => typeof t === 'string' && t) : [];
+          p.teams = [...new Set([...scalarTeams, ...arrayTeams])];
+          delete p.team;
+        }
         /* D-49-4: normalize the legacy representation BEFORE the
            visibility-bearing writes, so old and new representations agree. */
         if (p.access === 'private') p.private = true;
