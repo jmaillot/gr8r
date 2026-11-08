@@ -2423,6 +2423,9 @@ A.memberVisibilityToggle = async el => {
   if (!res.ok) {
     /* D-28: the central intercept owns mid-session 401s. */
     if (res.status === 401) return;
+    /* Same stale-guard as the success path: a slow failing request must not
+       overwrite a panel that was closed or re-targeted while it was in flight. */
+    if (S.ui.memberVisibility !== id) return;
     S.ui.memberVisibilityData = { err: true };
     render();
     return toast(tErr(res.data?.code, res.data, res.error || t('err.serverUnreachable')), { kind: 'err' });
