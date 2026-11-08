@@ -5,17 +5,17 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 51
 current_phase_name: Client surfaces, Permissions-page removal & project creation
 status: executing
-stopped_at: Completed 51-02-PLAN.md
-last_updated: "2026-11-08T11:58:33Z"
+stopped_at: Completed 51-03-PLAN.md
+last_updated: "2026-11-08T12:27:54.888Z"
 last_activity: 2026-11-08
 last_activity_desc: Completed 51-02 (Teams section, not-found state, create gating)
-state_head: 5eaeeb33c81657aad232000c42b87b31ab1b217f
+state_head: f180b68a91a5545ac5e7bbf0b4a4cb6eb2529817
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 14
-  completed_plans: 11
-  percent: 54
+  completed_plans: 13
+  percent: 50
 ---
 
 # STATE.md
@@ -32,8 +32,8 @@ See: .planning/PROJECT.md (updated 2026-11-08)
 ## Current Position
 
 Phase: 51 (Client surfaces, Permissions-page removal & project creation) — EXECUTING
-Plan: 3 of 4
-Status: Executing Phase 51
+Plan: 4 of 4
+Status: Ready to execute
 Last activity: 2026-11-08 — Completed 51-02-PLAN.md
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
@@ -128,6 +128,8 @@ green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for mig
 - [Phase 49]: sweepNeeded fires only on non-empty p.teams arrays; empty teams:[] is post-normalization status quo and inert (D-49-6 second-boot no-op)
 - [Phase 49]: D-49-1..5: visibility collapsed to boolean-private + access list; scope/team terms retired; mcp mirror keeps ROLE_RANK admin bypass (documented residue)
 - [Phase 49]: 49-04: mcp mirror private field collapsed to boolean-only read (legacy p.access fallback deleted); historical retired-term mentions kept as D-49-tagged comments; docs/ProjectPermissions.md + WorkspacePermissions.md rewritten to the collapsed model
+- [Phase 51]: permCreate relocation aligned the toggle to the phase-wide === true restriction read (51-02 follow-up); the plan's verbatim !== false would render an undefined pref as ON — polarity consistency between the settings row and the create gating
+- [Phase 51]: The i18n dead-key collector is shape-based and permissive (src/ + server.js + mailer.js, full literals + composed prefixes); 17 orphaned keys deleted (catalogue 1701), t()-mechanics fixtures allow-listed — no false positives on value-held/alias-referenced live keys; a missed reference is acceptable
 
 ### Roadmap Evolution
 
@@ -173,9 +175,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T11:58:33Z
-Stopped at: Completed 51-02-PLAN.md
-Resume file: .planning/phases/51-client-surfaces-permissions-page-removal-project-creation/51-03-PLAN.md
+Last session: 2026-11-08T12:27:54.830Z
+Stopped at: Completed 51-03-PLAN.md
+Resume file: None
 
 ## Performance Metrics
 
@@ -193,6 +195,7 @@ Resume file: .planning/phases/51-client-surfaces-permissions-page-removal-projec
 | Phase 50 P05 | 12 min | 3 tasks | 3 files |
 | Phase 51 P01 | 19 min | 3 tasks | 7 files |
 | Phase 51 P02 | 21 min | 3 tasks | 13 files |
+| Phase 51 P03 | 32 min | 3 tasks | 12 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 

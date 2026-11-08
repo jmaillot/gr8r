@@ -50,14 +50,14 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 
 - [x] **CRT-01**: All members can create projects and automatically become members
   (lead) of them; a workspace setting can restrict creation to admins (M-07)
-- [ ] **CRT-02**: The workspace Settings > Permissions page is removed; anything still
+- [x] **CRT-02**: The workspace Settings > Permissions page is removed; anything still
   relevant relocates (or dies with the model) — no orphaned routes or i18n keys
 
 ### Transparency & UX
 
 - [ ] **TRN-01**: Admin/owner can open a transparency view showing exactly what a given
   member can see (public projects + private projects they can access) (M-08, D2.0-4)
-- [ ] **UX-01**: Every user-facing string of the new surfaces is catalogued EN+FR and
+- [x] **UX-01**: Every user-facing string of the new surfaces is catalogued EN+FR and
   the i18n build gate passes (standing invariant)
 
 ## v3 Requirements (deferred)
@@ -98,9 +98,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MIG-02 | Phase 49 | Complete |
 | MIG-03 | Phase 49 | Complete |
 | CRT-01 | Phase 51 | Complete |
-| CRT-02 | Phase 51 | Pending |
+| CRT-02 | Phase 51 | Complete |
 | TRN-01 | Phase 52 | Pending |
-| UX-01 | Phase 51 | Pending |
+| UX-01 | Phase 51 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 14 total
