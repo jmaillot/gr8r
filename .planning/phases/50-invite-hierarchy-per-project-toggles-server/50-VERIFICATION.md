@@ -25,7 +25,7 @@ covered_files:
   - test/invite-hierarchy.test.mjs
   - test/membership.test.mjs
   - test/helpers/visibility-fixture.mjs
-covered_digest: "v2:sha256:4c06962250d8e35bb6af294b4404f3b595aab3d1cc6ddfda30895c1223056df6"
+covered_digest: "v2:sha256:2a85086737e30af86f47aa8a45d6b76bcdf25eb401bbe85b6d63a5d11e430ce2"
 re_verification:
   previous_status: gaps_found
   previous_score: 15/17
