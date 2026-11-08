@@ -2400,6 +2400,40 @@ A.memberRevokeCancel = () => {
   S.ui.memberRevoke = null;
   render();
 };
+/* Phase 52 (TRN-01, D-52-1..D-52-4): the admin/owner transparency expander on
+   the members surface. Toggle by member id; EVERY open refetches the
+   visibility endpoint (D-52-3 — no caching between opens), so the panel is
+   always the server's current answer, never a client-side derivation from the
+   redacted doc (success criterion 1 anti-pattern). The client gate on the
+   button is UX only — the server's 'admin' gate (D-52-4) is the control. */
+A.memberVisibilityToggle = async el => {
+  const id = el.dataset.id;
+  if (S.ui.memberVisibility === id) {
+    S.ui.memberVisibility = null;
+    S.ui.memberVisibilityData = null;
+    render();
+    return;
+  }
+  S.ui.memberVisibility = id;
+  S.ui.memberVisibilityData = null; // open shows a loading state until the fetch lands
+  render();
+  const m = mem(id);
+  if (!m?.userId) return;
+  const res = await api.memberVisibility(m.userId);
+  if (!res.ok) {
+    /* D-28: the central intercept owns mid-session 401s. */
+    if (res.status === 401) return;
+    S.ui.memberVisibilityData = { err: true };
+    render();
+    return toast(tErr(res.data?.code, res.data, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  /* The expansion may have been closed (or re-targeted) while the request was
+     in flight — only the still-open member's result is adopted. */
+  if (S.ui.memberVisibility !== id) return;
+  S.ui.memberVisibilityData = { projects: res.data?.projects || [] };
+  render();
+};
+
 A.memberRevokeConfirm = async el => {
   const id = el.dataset.id;
   const m = mem(id);

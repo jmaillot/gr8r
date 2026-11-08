@@ -64,6 +64,30 @@ export function pageMembers() {
       .map(m => {
         const ap = visibleProjects().filter(p => p.members.includes(m.id) && p.status !== 'complete').length;
         const ot = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
+        /* Phase 52 (TRN-01): admin/owner transparency expander — client UX gate
+           only (D-52-4); the server gate on the visibility endpoint is the real
+           control. The list itself comes ONLY from the server response — never
+           from visibleProjects() or the redacted client doc. */
+        const visOpen = isAdmin && m.userId && S.ui.memberVisibility === m.id;
+        const visRow = visOpen
+          ? (() => {
+              const data = S.ui.memberVisibilityData;
+              const KNOWN = ['everyone', 'lead', 'member', 'team'];
+              let body;
+              if (!data) body = `<span class="faint">${t('a11y.loading')}</span>`;
+              else if (data.err) body = `<span class="faint">—</span>`;
+              else if (!data.projects.length) body = `<span class="faint">${t('page.members.visReasonEmpty')}</span>`;
+              else
+                body = data.projects
+                  .map(p => {
+                    const label = KNOWN.includes(p.reason) ? t(`page.members.visReason.${p.reason}`) : esc(String(p.reason));
+                    return `<div class="row" style="gap:8px"><span>${esc(p.name || p.id)}</span><span class="badge">${label}</span></div>`;
+                  })
+                  .join('');
+              return `<tr><td colspan="8" style="padding:10px 14px 14px 14px;background:var(--bg, rgba(0,0,0,.03))"><div class="stack" style="gap:6px">${body}</div></td></tr>`;
+            })()
+          : '';
+        const expander = isAdmin && m.userId ? `<button class="ibtn ibtn-sm" data-a="memberVisibilityToggle" data-id="${esc(m.id)}" aria-label="${t('a11y.memberVisibility')}" aria-expanded="${visOpen ? 'true' : 'false'}">${ic('chevron-down', 14)}</button>` : '';
         return `<tr data-ctx="member" data-id="${m.id}"><td style="padding-left:14px"><button class="row" data-a="go" data-r="member" data-id="${m.id}" style="gap:10px;text-align:left">${av(m.id, 'md', false)}<span class="col"><b style="font-weight:500">${esc(m.name)}${m.id === D().me ? ` <span class="faint" style="font-weight:400">(${t('page.members.you')})</span>` : ''}</b><span class="faint" style="font-size:12px">${esc(m.email)}</span></span></button></td>
       <td style="text-align:left">${canManage(m) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${roleLabel(m.role)}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${roleLabel(m.role)}</span>`}</td>
       <td style="text-align:left">${(() => {
@@ -78,7 +102,7 @@ export function pageMembers() {
             ? `<span class="row" style="gap:8px;justify-content:flex-end"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="memberRevokeConfirm" data-id="${esc(m.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="memberRevokeCancel">${t('common.cancel')}</button></span>`
             : `<button class="btn btn-secondary btn-sm" data-a="memberRevokeAsk" data-id="${esc(m.id)}">${t('settings.operator.revokeShort')}</button>`
           : ''
-      }<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.memberOptions')}">${ic('ellipsis', 14)}</button></td></tr>`;
+      }${expander}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.memberOptions')}">${ic('ellipsis', 14)}</button></td></tr>${visRow}`;
       })
       .join('')}
     </tbody></table>`

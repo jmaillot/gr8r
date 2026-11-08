@@ -329,6 +329,14 @@ export const api = {
   async operatorRevokeSessions(userId) {
     return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/revoke-sessions`);
   },
+  /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
+     member can access, computed server-side through the visibility funnel.
+     D-52-3: the caller refetches on every open; nothing is cached here. */
+  async memberVisibility(userId) {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/visibility`);
+  },
   /* AUD-02 (phase 24): the workspace-admin tier — revoke a member's sessions
      from the members surface. D-R1 locks the /api/w/ prefix even though the
      sibling member routes use /api/workspaces/. The slug resolves from the
