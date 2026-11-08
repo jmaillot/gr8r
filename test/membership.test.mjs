@@ -779,3 +779,81 @@ test('a role change is enforced on the very next request (D-50-3 immediate effec
     await s.stop();
   }
 });
+
+/* Phase 50 (50-03, INV-02 / D-50-1/2/3/4): the project-membership edit
+   surface — scope/status are p.members operations ONLY, immediate on the very
+   next request, guarded by the stricter D-50-4 hierarchy, coexisting with
+   live team-linked access. Runs on its own server instance (the main suite
+   has no editable members left and the accept throttle is spent). */
+test('project membership edits: immediate effect, hierarchy guard, team-term coexistence', async () => {
+  const s = await startServer();
+  try {
+    const boss = (await login(s.base, ADMIN.email, ADMIN.password)).client;
+    const join = async (name, email) => {
+      const who = (await signup(s.base, ACCOUNT(name, email))).client;
+      const [inv] = (await boss.post('/api/workspaces/acme/invites', { emails: [email], role: 'member' })).data.invites;
+      assert.equal((await who.post(`/api/invites/${inviteToken(inv.url)}/accept`)).status, 200, `${email} joins`);
+      return who;
+    };
+    const pat = await join('Pat', 'pat@test.local');
+    const quinn = await join('Quinn', 'quinn@test.local');
+    const remy = await join('Remy', 'remy@test.local');
+    const rosterOf = async () => (await boss.get('/api/workspaces/acme/members')).data.members;
+    const uidOf = async email => (await rosterOf()).find(m => m.email === email).userId;
+
+    // A private project (owner-managed) and a team-linked private project.
+    const live = await (await boss.get('/api/workspaces/acme')).data;
+    const doc = structuredClone(live.doc);
+    const ownerId = (await rosterOf()).find(m => m.role === 'owner').memberId;
+    doc.data.teams = [{ id: 'tA', name: 'Alpha', members: [] }];
+    doc.data.projects.push({ id: 'p_priv', key: 'priv', name: 'Private', private: true, members: [ownerId], lead: ownerId, teams: [], status: 'active', perms: {} });
+    doc.data.projects.push({ id: 'p_team', key: 'team', name: 'Team Private', private: true, members: [ownerId], lead: ownerId, teams: ['tA'], status: 'active', perms: {} });
+    assert.equal((await boss.put('/api/workspaces/acme', { revision: live.revision, doc })).status, 200);
+
+    // 1) Admin adds U to p.members → the very next request reads P (same session).
+    const patId = await uidOf('pat@test.local');
+    assert.equal((await boss.post('/api/workspaces/acme/projects/p_priv/members', { userId: patId })).status, 200);
+    const patDoc = await pat.get('/api/workspaces/acme');
+    assert.ok(
+      (patDoc.data?.doc?.data?.projects || []).some(p => p.id === 'p_priv'),
+      'the added member reads the private project on the request immediately after the edit',
+    );
+
+    // 2) Admin removes U → the very next request no longer serves P.
+    assert.equal((await boss.del(`/api/workspaces/acme/projects/p_priv/members/${patId}`)).status, 200);
+    const afterRemoval = await pat.get('/api/workspaces/acme');
+    assert.equal(
+      (afterRemoval.data?.doc?.data?.projects || []).some(p => p.id === 'p_priv'),
+      false,
+      'the removed member loses access on the request immediately after the edit',
+    );
+
+    // 3) Cross-admin refusal (D-50-4): an admin cannot edit another admin's
+    //    project access; the owner can.
+    assert.equal((await boss.patch(`/api/workspaces/acme/members/${patId}`, { role: 'admin' })).status, 200);
+    const quinnId = await uidOf('quinn@test.local');
+    assert.equal((await boss.patch(`/api/workspaces/acme/members/${quinnId}`, { role: 'admin' })).status, 200);
+    const crossAdmin = await quinn.post('/api/workspaces/acme/projects/p_priv/members', { userId: patId });
+    assert.equal(crossAdmin.status, 403);
+    assert.equal(crossAdmin.data.code, 'ownerManagedRoles');
+    assert.equal((await boss.post('/api/workspaces/acme/projects/p_priv/members', { userId: patId })).status, 200, 'the owner edits the admin');
+
+    // 4) Team-linked access coexists: removing Remy from p_team.members keeps
+    //    Remy's live tA link in force (D-50-5 predicate on the next request).
+    const remyId = await uidOf('remy@test.local');
+    assert.equal((await boss.put(`/api/workspaces/acme/members/${remyId}/teams`, { teams: ['tA'] })).status, 200);
+    assert.equal((await boss.post('/api/workspaces/acme/projects/p_team/members', { userId: remyId })).status, 200);
+    assert.ok(
+      (await (await remy.get('/api/workspaces/acme')).data.doc.data.projects).some(p => p.id === 'p_team'),
+      'the team-linked member reads the project',
+    );
+    assert.equal((await boss.del(`/api/workspaces/acme/projects/p_team/members/${remyId}`)).status, 200);
+    assert.ok(
+      (await (await remy.get('/api/workspaces/acme')).data.doc.data.projects).some(p => p.id === 'p_team'),
+      'the access-list removal does not touch the team term — access retained',
+    );
+    assert.deepEqual((await rosterOf()).find(m => m.userId === remyId).teams, ['tA'], 'the team authority rows are untouched by the project edit');
+  } finally {
+    await s.stop();
+  }
+});
