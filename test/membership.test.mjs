@@ -742,3 +742,40 @@ test('TEAM composite: the team set survives invites, edits, mentions and concurr
     await s.stop();
   }
 });
+
+/* Phase 50 (50-03, D-50-3): a role edit takes effect on the VERY next request
+   with the same session — requireWorkspace re-resolves the membership row per
+   request, so the demoted account hits the role gate without re-login.
+   Runs on its own server instance: by this point in the suite the main
+   workspace has no editable plain member left (cara removed, eve and bob
+   left), and the main server's accept throttle is spent. */
+test('a role change is enforced on the very next request (D-50-3 immediate effect)', async () => {
+  const s = await startServer();
+  try {
+    const boss = (await login(s.base, ADMIN.email, ADMIN.password)).client;
+    const plain = (await signup(s.base, ACCOUNT('Pat', 'pat@test.local'))).client;
+    // Pat joins as a plain member through an owner invite.
+    const [inv] = (await boss.post('/api/workspaces/acme/invites', { emails: ['pat@test.local'], role: 'member' })).data.invites;
+    assert.equal((await plain.post(`/api/invites/${inviteToken(inv.url)}/accept`)).status, 200);
+
+    // Baseline: the member can push the doc today.
+    const live = await (await plain.get('/api/workspaces/acme')).data;
+    assert.equal((await plain.put('/api/workspaces/acme', { revision: live.revision, doc: live.doc })).status, 200);
+
+    // Owner demotes member → viewer.
+    const uid = (await roster(boss)).members.find(m => m.email === 'pat@test.local').userId;
+    assert.equal((await boss.patch(`/api/workspaces/acme/members/${uid}`, { role: 'viewer' })).status, 200);
+
+    // Same session, next request: the write surface is already closed.
+    const after = await plain.get('/api/workspaces/acme');
+    assert.equal(after.status, 200, 'a viewer still reads');
+    const refused = await plain.put('/api/workspaces/acme', { revision: after.data.revision, doc: after.data.doc });
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'readOnlyAccess');
+    const label = (await roster(boss)).members.find(m => m.email === 'pat@test.local');
+    assert.equal(label.role, 'viewer');
+    assert.equal(label.roleLabel, 'Guest', 'the roster reflects the demotion with no re-login');
+  } finally {
+    await s.stop();
+  }
+});

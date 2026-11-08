@@ -4956,6 +4956,13 @@ async function handleApi(req, res, url) {
 
     const body = await readJson(req);
     const role = inviteRole(body?.role);
+    /* INV-01 (D-50-4, first enforcement point): ownership is transferred by
+       an owner via the members route, never invited. Checked on the RAW body
+       value — inviteRole() would silently coerce 'owner' to 'member' and
+       mint a member invite where an escalation was attempted. */
+    if (String(body?.role || '').trim().toLowerCase() === 'owner') {
+      return fail(res, 403, 'ownerInviteForbidden', 'Ownership is transferred by an owner, never invited');
+    }
     /* D-07: an invite carries the full team set. Validation mirrors the PUT
        members/:uid/teams route exactly (T-28-07): per-item trim + 40-char
        slice, Set-dedup, whitelist against the doc's team definitions, cap 25.
