@@ -39,7 +39,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 ### v2.0 Project-level Permissions & Invitations (Phases 49-52)
 
 - [x] **Phase 49: Visibility model collapse & grant materialization** — private flag + explicit `p.members` becomes the only access model; boot sweep migrates every old path; MCP mirror in lockstep (completed 2026-11-08)
-- [ ] **Phase 50: Invite hierarchy & per-project toggles (server)** — strict owner hierarchy, post-invite editing, live team links (D-50-5), guest-invite toggle, one guest concept
+- [x] **Phase 50: Invite hierarchy & per-project toggles (server)** — strict owner hierarchy, post-invite editing, live team links (D-50-5), guest-invite toggle, one guest concept (completed 2026-11-08)
 - [ ] **Phase 51: Client surfaces, Permissions-page removal & project creation** — private/public toggle UI, share-modal team invite, Settings > Permissions deleted, creation setting, i18n EN+FR
 - [ ] **Phase 52: Transparency view & milestone verification sweep** — member-visibility view through the funnel + full no-leak/invariant verification pass
 
@@ -89,7 +89,7 @@ Plans:
   4. On a project with "members may invite guests" off, a member's guest invite is refused while an admin/owner succeeds; existing projects migrate with the toggle OFF (D2.0-1) and a stale invite accepted after the model change re-derives fail-closed
   5. The same guest account can hold membership in multiple projects — no "exactly one project" refusal remains, and the "Invité externe" distinction no longer exists server-side
 
-**Plans:** 4 plans — 3 complete (50-01, 50-02, 50-03)
+**Plans:** 4 plans — 4 complete (50-01, 50-02, 50-03, 50-04)
 
 Plans:
 **Wave 1**
@@ -102,7 +102,7 @@ Plans:
 - [x] 50-03-PLAN.md — Invite routes: INV-01 hierarchy pins (create/edit/accept), INV-02 scope/status surface (p.members), VIS-04 per-project guest toggle with fail-closed accept (INV-01, INV-02, INV-04, VIS-04) (completed 2026-11-08)
 
 **Wave 4** *(blocked on Wave 3)*
-- [ ] 50-04-PLAN.md — Phase close: docs + planning-doc lockstep (D-50-5), success-criteria evidence sweep (all REQs)
+- [x] 50-04-PLAN.md — Phase close: docs + planning-doc lockstep (D-50-5), success-criteria evidence sweep (all REQs) (completed 2026-11-08)
 
 **Research note**: discuss-phase flagged — M-02 "scope" meaning under demoted D-03 and snapshotted-team-removal UX need owner clarification before planning.
 
@@ -138,7 +138,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Visibility model collapse & grant materialization | 5/5 | Complete    | 2026-11-08 |
-| 50. Invite hierarchy & per-project toggles (server) | 0/? | Not started | - |
+| 50. Invite hierarchy & per-project toggles (server) | 4/4 | Complete    | 2026-11-08 |
 | 51. Client surfaces, Permissions-page removal & project creation | 0/? | Not started | - |
 | 52. Transparency view & milestone verification sweep | 0/? | Not started | - |
 

@@ -5,17 +5,17 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 50
 current_phase_name: Invite hierarchy & per-project toggles (server)
 status: executing
-stopped_at: Completed 50-03-PLAN.md
-last_updated: "2026-11-08T09:05:00.000Z"
+stopped_at: Completed 50-04-PLAN.md (Phase 50 complete — ready for /gsd-verify-work 50)
+last_updated: "2026-11-08T09:55:00.000Z"
 last_activity: 2026-11-08
-last_activity_desc: Plan 50-03 executed (INV-01 hierarchy pins, INV-02 p.members surface, VIS-04 per-project guest toggle with fail-closed accept)
-state_head: 451a314
+last_activity_desc: Plan 50-04 executed (domain + planning docs locked to D-50-5 live team link; five success criteria evidenced; full suite green)
+state_head: f4d9796
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # STATE.md
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-11-07)
 ## Current Position
 
 Phase: 50 (Invite hierarchy & per-project toggles (server)) — EXECUTING
-Plan: 4 of 4
+Plan: 4 of 4 — COMPLETE (phase ready for /gsd-verify-work)
 Status: Executing Phase 50
-Last activity: 2026-11-08 — Plan 50-03 executed (INV-01 hierarchy pins, INV-02 p.members surface, VIS-04 per-project guest toggle with fail-closed accept)
+Last activity: 2026-11-08 — Plan 50-04 executed (docs + planning-doc lockstep to D-50-5; five success criteria evidenced; phase gate green)
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -53,6 +53,9 @@ unmodified; EN+FR i18n gate (server keys included); zero new runtime dependencie
 green; byte-identical 404s (no existence oracle); SQLite+pg dual backend for migration tests.
 
 ## Recent Decisions
+
+- [50-04] Domain docs restate the three-term live predicate (public ∨ p.members ∨ p.teams) and the guest→viewer collapse; permGuests is documented as superseded by the per-project p.allowInviteGuests toggle
+- [50-04] REQUIREMENTS.md TEAM-RESYNC (v3) and the "live-list team grants" out-of-scope row marked superseded by D-50-5 — no planning doc contradicts the live team link
 
 - [50-03] Fail-closed toggle re-derivation at accept runs BEFORE account creation/membership writes — a stale-invite refusal leaves zero side effects and does not consume the invite (D-50-8)
 - [50-03] The invite gate is rank-conditional inside one route: admin/owner behavior byte-preserved (team invites bypass the toggle, D-50-9); member ⇒ viewer-only + project + toggle ON on the CURRENT doc
@@ -163,8 +166,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-08T08:30:00.000Z
-Stopped at: Completed 50-02-PLAN.md
+Last session: 2026-11-08T09:55:00.000Z
+Stopped at: Completed 50-04-PLAN.md (Phase 50 complete)
 Resume file: None
 
 ## Performance Metrics
@@ -179,9 +182,10 @@ Resume file: None
 | Phase 49 P04 | 40 min | 2 tasks | 7 files |
 | Phase 50 P01 | 35 min | 3 tasks | 6 files |
 | Phase 50 P02 | 45 min | 3 tasks | 2 files |
+| Phase 50 P04 | 55 min | 3 tasks | 5 files |
 
 *(v1.9 and earlier metrics archived with the milestone records.)*
 
 ## Operator Next Steps
 
-- /gsd-discuss-phase 49 (research-flagged), then /gsd-plan-phase 49
+- /gsd-verify-work 50 (phase gate green: 1115 tests, 0 fail), then /gsd-plan-phase 51
