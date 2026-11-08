@@ -286,4 +286,45 @@ describe('VIS-04 — the per-project guest-invite toggle', () => {
     /* leave the fixture toggle ON for the hierarchy cells that read it */
     await owner.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: true });
   });
+
+  test('an existing workspace member accepting a project-scoped guest invite lands on the access list (WR-01, 50-05)', async () => {
+    /* m_scoped is already a workspace member (memberships row, role member)
+       and is NOT on p_membershare's access list. m_plain (member tier, toggle
+       ON) mints a link-only viewer invite scoped to p_membershare. */
+    const before = (await member.get(`/api/workspaces/${VIS_WS.slug}`)).data;
+    assert.equal(before.revision >= 1, true);
+
+    const ok = await member.post(`/api/workspaces/${VIS_WS.slug}/invites`, { role: 'viewer', project: 'p_membershare' });
+    assert.equal(ok.status, 201);
+    const token = inviteToken(ok.data.invites[0].url);
+
+    const scoped = await login(server.base, 'scoped@visfix.local', VIS_PASSWORD);
+    assert.equal(scoped.status, 200, 'the existing member signs in');
+    const accepted = await scoped.client.post(`/api/invites/${token}/accept`, {
+      name: 'Sam Scoped',
+      email: 'scoped@visfix.local',
+      password: VIS_PASSWORD,
+    });
+    assert.equal(accepted.status, 200, 'an existing member accepts via their session');
+
+    /* The hoisted grant: m_scoped's member_id is on p.members... */
+    const entry = project('p_membershare').members.includes('m_scoped');
+    assert.equal(entry, true, 'p_membershare access list now contains the existing member');
+
+    /* ...and the grant is live on the very next request. */
+    const res = await scoped.client.get(`/api/workspaces/${VIS_WS.slug}`);
+    assert.equal(res.status, 200);
+    assert.ok(
+      (res.data?.doc?.data?.projects || []).map(p => p.id).includes('p_membershare'),
+      'the project is readable on the next request',
+    );
+
+    /* No role clobber: the pre-existing membership row keeps its role, and
+       ensureMember was never called for the already-member acceptor. */
+    const role = withDb(server.dbPath, db =>
+      db.prepare('select role from memberships where workspace_id = ? and user_id = ?').get(VIS_WS.id, 'u_scoped'),
+    );
+    assert.equal(role.role, 'member', 'the existing workspace role is not rewritten by the accept');
+    assert.equal(project('p_membershare').members.includes('m_admin'), true, 'pre-existing entries untouched');
+  });
 });
