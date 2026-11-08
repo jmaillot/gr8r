@@ -284,6 +284,29 @@ describe('restoreTeamLinks (D-50-6): pre-sweep backup provenance', { concurrency
   before(async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-teamlink-'));
     createVisibilityFixtureDb(dir);
+    /* 50-05 CR-01: plant the between-boots cell BEFORE the snapshot is taken —
+       a team-linked private project that, on the LIVE doc (post-rewrite below),
+       holds a sweep-materialized team member (m_team — u_team ∈ engA) AND a
+       genuine individual invitee added between the Phase 49 boot and the Phase
+       50 boot (m_plain — u_plain is in NO restored team) AND an entry whose
+       member_id resolves to no memberships row at all (m_doconly). Only the
+       first may be removed by the reverse sweep. */
+    const planted = new DatabaseSync(path.join(dir, 'projects.db'));
+    try {
+      planted.exec(`
+        begin;
+        update workspaces set doc = json_insert(
+          doc,
+          '$.data.projects[#]',
+          json('{"id":"p_betweenboots","key":"betweenboots","name":"Between Boots","private":true,"members":["m_admin"],"lead":"m_admin","teams":["engA"],"status":"active","perms":{}}'),
+          '$.data.projOrder[#]',
+          json('"p_betweenboots"')
+        ) where id = '${VIS_WS.id}';
+        commit;
+      `);
+    } finally {
+      planted.close();
+    }
     /* Snapshot the fixture db AS the pre-sweep backup (the real Phase 49
        backup was a full-database vacuum-into of exactly this shape), THEN
        rewrite the live doc to the post-sweep shape: links deleted,
@@ -293,10 +316,16 @@ describe('restoreTeamLinks (D-50-6): pre-sweep backup provenance', { concurrency
     try {
       raw.exec(`
         begin;
-        update workspaces set doc = json_remove(
-          json_set(doc, '$.data.projects[2].members', json_array('m_admin', 'm_team')),
-          '$.data.projects[2].teams',
-          '$.data.projects[3].teams'
+        update workspaces set doc = json_set(
+          json_remove(
+            doc,
+            '$.data.projects[2].members',
+            '$.data.projects[2].teams',
+            '$.data.projects[3].teams',
+            '$.data.projects[12].teams'
+          ),
+          '$.data.projects[2].members', json_array('m_admin', 'm_team'),
+          '$.data.projects[12].members', json_array('m_admin', 'm_team', 'm_plain', 'm_doconly')
         ) where id = '${VIS_WS.id}';
         commit;
       `);
@@ -342,8 +371,17 @@ describe('restoreTeamLinks (D-50-6): pre-sweep backup provenance', { concurrency
     assert.equal(res.status, 200);
     const ids = (res.data?.doc?.data?.projects || []).map(p => p.id).sort();
     /* Hand-derived: p_teamshare + p_teamboth via the live engA term, plus the
-       publics; NOT p_membershare (m_plain's genuine invite), NOT p_hidden. */
-    assert.deepEqual(ids, ['p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare']);
+       publics, plus p_betweenboots (restored engA link AND restored access-list
+       entry). NOT p_membershare (m_plain's genuine invite), NOT p_hidden. */
+    assert.deepEqual(ids, ['p_betweenboots', 'p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare']);
+  });
+
+  test('between-boots genuine invite survives the sweep; only positively team-derived entries are removed (CR-01, 50-05)', () => {
+    const cell = project('p_betweenboots');
+    assert.deepEqual(cell.teams, ['engA'], 'the engA link is restored for the between-boots project');
+    assert.ok(!cell.members.includes('m_team'), 'the sweep-materialized team member (u_team ∈ engA) is removed');
+    assert.ok(cell.members.includes('m_plain'), 'the genuine between-boots invitee (u_plain in NO restored team) survives the sweep');
+    assert.ok(cell.members.includes('m_doconly'), 'an entry whose member_id resolves to no memberships row survives (fail-open, D-50-6)');
   });
 
   test('exactly ONE projects-pre-team-link- backup, and the planted snapshot is untouched', () => {
