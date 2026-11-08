@@ -817,6 +817,23 @@ async function memberCanReadProject(p, wsId, memberId) {
   return canSeeProject(p, memberId, memberTeams);
 }
 
+/* [2026-11-08 Phase 52, D-52-5/D-52-6] The transparency LABEL helper — a pure
+   mirror of canSeeProject's short-circuit order (above) that names the FIRST
+   matching reason. It never edits the funnel: the predicate above stays the
+   single authority. The lead check inside the membership tier is a label
+   refinement only — normalizeProjects guarantees lead ∈ members on every
+   normalized read, so `lead` and `member` are the same predicate term and
+   'lead' merely names it. Coarse machine CODES only ('everyone' | 'lead' |
+   'member' | 'team') — never team rosters or access lists (T-52-03). */
+function projectAccessReason(p, memberId, memberTeams = []) {
+  if (!projectIsPrivate(p)) return 'everyone';
+  if (!memberId) return null;
+  if (p.lead === memberId) return 'lead';
+  if (Array.isArray(p.members) && p.members.includes(memberId)) return 'member';
+  if (Array.isArray(p.teams) && p.teams.length > 0 && memberTeams.some(t => p.teams.includes(t))) return 'team';
+  return null;
+}
+
 function canManageProject(p, memberId, role) {
   if (role === 'owner' || role === 'admin') return true;
   return !!memberId && p?.lead === memberId;
@@ -4945,6 +4962,41 @@ async function handleApi(req, res, url) {
     );
     member.teams = await teamsOfUser(ctx.ws.id, target.id); // read back from the authority, not the request
     return json(res, 200, { member });
+  }
+
+  /* Phase 52 (TRN-01, D-52-4..D-52-6): the admin transparency view — what can
+     the TARGET member read, and why. The list is computed ONLY through the
+     ONE funnel (memberCanReadProject) for the target member, never from the
+     redacted client doc; projectAccessReason mirrors the funnel's
+     short-circuit order for the label. The server-side 'admin' gate is the
+     control (D-52-4 — client gating is UX only, per the 51-02 convention).
+     Unknown AND absent target ids share the same keyed notAMember 404 body
+     (T-52-01 — no existence oracle). Teams resolve ONCE per target per
+     request (the hiddenFor pattern; never memoized across members or
+     requests, D-50-3). No funnel function is edited (Phase 49/50 pins). */
+  const wsMemberVisibilityMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})\/visibility$/);
+  if (wsMemberVisibilityMatch && method === 'GET') {
+    const ctx = await requireWorkspace(req, res, wsMemberVisibilityMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const target = await db.get('select * from users where id = ?', [wsMemberVisibilityMatch[2]]);
+    const row = target ? await membershipOf(ctx.ws.id, target.id) : null;
+    if (!target || !row) return fail(res, 404, 'notAMember', 'That person is not a member of this workspace');
+    const targetMemberId = row.member_id || null;
+    /* normalizeProjects is in-place and runs on a READ COPY of the stored doc
+       (same posture as the served doc-GET: lead ∈ members push, owner
+       injection into private-empty projects) — the stored bytes are never
+       written by this route. */
+    const doc = JSON.parse(ctx.ws.doc);
+    normalizeProjects(doc);
+    const memberTeams = await teamsOfMember(ctx.ws.id, targetMemberId, row);
+    const projects = [];
+    for (const p of doc?.data?.projects || []) {
+      if (!p?.id) continue;
+      if (!(await memberCanReadProject(p, ctx.ws.id, targetMemberId))) continue;
+      projects.push({ id: p.id, name: p.name || p.id, reason: projectAccessReason(p, targetMemberId, memberTeams) ?? 'member' });
+    }
+    return json(res, 200, { member: targetMemberId, projects });
   }
 
   /* -------------------- project membership & the guest toggle --------------------

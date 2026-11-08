@@ -40,7 +40,12 @@ const EMAILS = Object.freeze({
   m_doconly: 'doconly@visfix.local',
   m_admin2: 'admin2@visfix.local',
 });
-const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly');
+const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly' && id !== 'm_admin2');
+/* m_admin2 (the admin × team-only divergence cell) is EXCLUDED from both
+   parity loops: its funnel set (engA-linked privates included) diverges from
+   its doc-GET set (publics only) by design. The divergence test pins BOTH
+   sets hand-derived — the funnel is the authority (OQ1 option (a)). */
+const ENDPOINT_MODEL_ADMIN2 = Object.freeze(['p_adminteam', 'p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare']);
 
 let server;
 let dir;
@@ -56,7 +61,7 @@ const docIds = async mid => {
 const endpointIds = async mid => {
   const res = await vis(S.m_admin, VIS_USER_IDS[mid]);
   assert.equal(res.status, 200, `${mid} expansion resolves`);
-  assert.equal(res.data.member, VIS_USER_IDS[mid], 'response echoes the target member id');
+  assert.equal(res.data.member, mid, 'response echoes the target member id (p.members space)');
   for (const p of res.data.projects) {
     assert.deepEqual(Object.keys(p).sort(), ['id', 'name', 'reason'], 'project entries carry exactly {id, name, reason} — no rosters, no access lists');
     assert.equal(typeof p.reason, 'string', `reason is a coarse machine code (${p.id})`);
@@ -142,13 +147,20 @@ test('funnel agreement pin: the endpoint lists exactly what the one funnel reads
 /* ---- 3. The admin × team-only divergence cell (RESEARCH Open Question 1,
         option (a): the funnel is the authority) ---- */
 
-test('documented divergence: admin × team-only grant — the funnel lists it, the admin doc-GET hides it', async () => {
-  const res = await vis(S.m_admin, VIS_USER_IDS.m_admin2);
-  const entry = res.data.projects.find(p => p.id === 'p_adminteam');
-  assert.ok(entry, 'endpoint (the funnel) lists the team-linked private project for the admin target');
-  assert.equal(entry.reason, 'team', 'the live team link is the first matching reason');
+test('documented divergence: admin × team-only grant — the funnel is the authority (OQ1 option (a))', async () => {
+  /* Hand-derived funnel set for m_admin2 (admin, u_admin2 ∈ engA): publics +
+     EVERY engA-linked private — p_teamshare, p_teamboth, p_adminteam —
+     because memberCanReadProject carries the LIVE team term regardless of
+     the target's role. The access-list-gated admin doc-GET path grants none
+     of them (m_admin2 has no individual entries). */
+  const ids = (await endpointIds('m_admin2')).sort();
+  assert.deepEqual(ids, [...ENDPOINT_MODEL_ADMIN2].sort(), 'the funnel lists every engA-linked private for the admin target');
+  for (const teamCell of ['p_adminteam', 'p_teamboth', 'p_teamshare']) {
+    const res = await vis(S.m_admin, VIS_USER_IDS.m_admin2);
+    assert.equal(res.data.projects.find(p => p.id === teamCell).reason, 'team', `${teamCell}: the live team link is the first matching reason`);
+  }
   const served = await docIds('m_admin2');
-  assert.equal(served.includes('p_adminteam'), false, 'admin doc-GET stays access-list-gated — a pinned divergence, not parity (mirror-drift precedent)');
+  assert.deepEqual(served.sort(), ['p_legacy', 'p_open', 'p_publicgain'], 'the admin doc-GET stays access-list-gated — a pinned divergence, not parity (mirror-drift precedent)');
 });
 
 /* ---- 4. Reason rows (D-52-5/D-52-6): first-match coarse codes ---- */
