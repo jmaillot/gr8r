@@ -5,11 +5,11 @@ milestone_name: Project-level Permissions & Invitations
 current_phase: 50
 current_phase_name: Invite hierarchy & per-project toggles (server)
 status: planning
-stopped_at: Phase 49 complete, ready to plan Phase 50
-last_updated: "2026-11-08T06:46:16.029Z"
+stopped_at: Phase 50 context gathered
+last_updated: "2026-11-08T07:14:09.361Z"
 last_activity: 2026-11-08
 last_activity_desc: Phase 49 complete, transitioned to Phase 50
-state_head: 4383e737125990c237ffa4d162092034f220ba4c
+state_head: ac5dfdd79ca37ce2caee9362813e122ef4662fb0
 progress:
   total_phases: 4
   completed_phases: 1
@@ -152,9 +152,9 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-11-07T22:10:05.413Z
-Stopped at: Phase 49 complete, ready to plan Phase 50
-Resume file: None
+Last session: 2026-11-08T07:14:09.309Z
+Stopped at: Phase 50 context gathered
+Resume file: .planning/phases/50-invite-hierarchy-per-project-toggles-server/50-CONTEXT.md
 
 ## Performance Metrics
 
