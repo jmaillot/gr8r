@@ -237,6 +237,14 @@ if (typeof window !== 'undefined') {
 /* Replace local state with the server copy (used at boot and after sign-in). */
 export function applyDoc(doc, revision) {
   if (!doc || typeof doc !== 'object') return false;
+  /* [2026-11-08 D-51-4] Visibility-epoch detection: capture the project ids the
+     local doc carried BEFORE the hydrate replaces it. A project present here
+     but absent from the merged doc means someone flipped it private (the
+     server redacts it from this member's served copy). The ids are recorded on
+     S.ui.lostProjects so open views and overlays render the honest localized
+     not-found state — no silent removal, no crash. No refetch machinery: the
+     poll hydration IS the epoch trigger (plan Task 2 / RESEARCH A1). */
+  const beforeIds = new Set((Array.isArray(S.data?.projects) ? S.data.projects : []).map(p => p?.id).filter(Boolean));
   if (doc.data) S.data = doc.data;
   S.data.recentSearches = Array.isArray(S.data.recentSearches) ? S.data.recentSearches : [];
   S.data.savedViews = Array.isArray(S.data.savedViews) ? S.data.savedViews : [];
@@ -266,6 +274,11 @@ export function applyDoc(doc, revision) {
     S.prefs.name = current.name;
     S.prefs.title = current.title || '';
   }
+  /* [2026-11-08 D-51-4] Compare against the pre-hydrate set and record the loss.
+     null when nothing vanished, so a later clean hydrate clears the state. */
+  const afterIds = new Set((Array.isArray(S.data.projects) ? S.data.projects : []).map(p => p?.id).filter(Boolean));
+  const lost = [...beforeIds].filter(id => !afterIds.has(id));
+  S.ui.lostProjects = lost.length ? lost : null;
   return true;
 }
 

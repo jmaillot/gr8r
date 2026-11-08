@@ -134,3 +134,79 @@ test('END-TO-END: the non-admin lead links then unlinks a team via doc-sync (Tea
   assert.equal(res2.status, 200);
   assert.deepEqual(project('p_membershare').teams, [], 'the team unlink persisted');
 });
+
+/* ---------------- Phase 51 (51-02): D-51-4 honest not-found ---------------- */
+
+test('END-TO-END: after an admin privatizes p_open, the member\'s served doc no longer carries it (the visibility epoch)', async () => {
+  /* The admin flips p_open private through doc-sync; m_team (not a member of
+     p_open, no team link) stops seeing it — the GET that drives the client's
+     hydration no longer contains the project. That hydration IS the epoch
+     trigger: applyDoc detects the disappearance and records the loss. */
+  const res = await docPutAs('admin@visfix.local', doc => {
+    doc.data.projects.find(p => p.id === 'p_open').private = true;
+  });
+  assert.equal(res.status, 200);
+  const c = sessions['team@visfix.local'];
+  const get = await c.get(`/api/workspaces/${VIS_WS.slug}`);
+  assert.equal(get.status, 200);
+  const ids = (get.data.doc.data.projects || []).map(p => p.id);
+  assert.ok(!ids.includes('p_open'), 'the privatized project is redacted from the member\'s served doc');
+});
+
+test('D-51-4: applyDoc records the visibility epoch — vanished projects are detected, not crashed on or silently dropped', async () => {
+  /* Unit cell: the client store module imports into node behind a minimal DOM
+     shim (node --test runs each file in its own process, so the shim cannot
+     leak into the other suites). Expectations are stated inline. */
+  globalThis.window = { addEventListener() {}, dispatchEvent() {}, matchMedia: () => ({ matches: false }) };
+  globalThis.document = {
+    addEventListener() {},
+    getElementById: () => null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    visibilityState: 'visible',
+    documentElement: { style: { setProperty() {} } },
+  };
+  globalThis.CustomEvent = class {
+    constructor(type, opts) {
+      this.type = type;
+      this.detail = opts?.detail;
+    }
+  };
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+  const store = await import('../src/core/store.js');
+  const fresh = () => ({
+    data: {
+      projects: [
+        { id: 'p_keep', name: 'Keep', subtasks: [] },
+        { id: 'p_vanish', name: 'Vanish', subtasks: [] },
+      ],
+      members: [{ id: 'm1', name: 'M', status: 'active' }],
+      me: 'm1',
+      ws: { name: 'W' },
+      tasks: [{ id: 't1', project: 'p_vanish', title: 'orphan', subtasks: [], labels: [], files: [] }],
+      notifs: [],
+      projOrder: ['p_keep', 'p_vanish'],
+      activity: [],
+      comments: [],
+      files: [],
+      savedViews: [],
+      recentSearches: [],
+    },
+    prefs: {},
+    views: {},
+  });
+  Object.assign(store.S, fresh(), { ui: store.S.ui });
+  store.S.ui.modals = [];
+  assert.equal(store.proj('p_vanish')?.name, 'Vanish', 'the local doc carries the project before hydration');
+  assert.ok(store.allTasks().some(t => t.id === 't1'), 'the task on the visible project is listed before the epoch');
+
+  const ok = store.applyDoc({ data: { ...JSON.parse(JSON.stringify(store.S.data)), projects: [{ id: 'p_keep', name: 'Keep', subtasks: [] }], projOrder: ['p_keep'] }, prefs: {}, views: {} }, 5);
+  assert.equal(ok, true);
+  assert.ok(store.S.ui.lostProjects?.includes('p_vanish'), 'the vanished project id is recorded on S.ui.lostProjects');
+  assert.equal(store.proj('p_vanish'), undefined, 'the project is gone from the local doc after hydration');
+  assert.equal(store.allTasks().some(t => t.id === 't1'), false, 'allTasks filters the orphaned task through canSee(proj) — no raw exception path');
+
+  const ok2 = store.applyDoc({ data: JSON.parse(JSON.stringify(store.S.data)), prefs: {}, views: {} }, 6);
+  assert.equal(ok2, true);
+  assert.equal(store.S.ui.lostProjects, null, 'a clean hydrate with no loss clears the epoch state');
+});

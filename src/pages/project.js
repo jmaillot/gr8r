@@ -10,7 +10,7 @@ import { api } from '../core/api.js';
 import { avStack, empty, pIcon } from '../ui/helpers.js';
 import { applyView, groupTasks, viewOf, viewToolbar } from '../shell/view-engine.js';
 import { listHtml } from '../components/task-list.js';
-import { page404, stateDenied } from './errors.js';
+import { page404, stateDenied, stateNotFound } from './errors.js';
 import { projActivity, projOverview } from '../views/project-overview.js';
 import { boardHtml } from '../views/board.js';
 import { tableHtml } from '../views/table.js';
@@ -35,7 +35,11 @@ export const ptabs = () => [
 
 export function pageProject() {
   const p = proj(S.ui.params.id);
-  if (!p) return page404();
+  /* [2026-11-08 D-51-4] The honest project-not-found state: a vanished project
+     (lost visibility, redacted from the served doc at the hydration epoch)
+     renders the localized project-specific copy — never a crash, never a
+     silent removal, never the generic page copy. */
+  if (!p) return stateNotFound();
   if (!canSee(p)) return api.enabled ? page404() : stateDenied(p);
   const tab = S.ui.params.tab || 'board';
   const views = D().savedViews.filter(v => v.project === p.id);
