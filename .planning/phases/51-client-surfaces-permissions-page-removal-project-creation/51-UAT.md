@@ -3,17 +3,12 @@ status: passed
 phase: 51-client-surfaces-permissions-page-removal-project-creation
 source: [51-VERIFICATION.md]
 started: 2026-11-08T14:10:00Z
-updated: 2026-11-08T14:10:00Z
+updated: 2026-11-08T16:55:00Z
 ---
 
 ## Current Test
 
-number: 3
-name: Toggle + Teams section visual behavior in the running app
-expected: |
-  As a lead (non-admin), open the share modal: flip the private/public toggle, then invite a team and remove it.
-  Expected: Toggle flips optimistically and persists (reverts with a localized toast on refusal); Teams section lists unlinked teams with Invite actions, linked teams in the note with remove actions; live-semantics hint visible; non-managers see the lock hint and no controls.
-awaiting: none — all tests executed
+[testing complete]
 
 ## Tests
 
