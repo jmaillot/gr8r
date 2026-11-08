@@ -63,8 +63,10 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 ## v3 Requirements (deferred)
 
 - **TRN-02**: Members see their own (redacted) visibility view
-- **TEAM-RESYNC**: A "re-sync team" affordance to grant access to members who joined a
-  team after a project invite snapshot
+- **TEAM-RESYNC**: ~~A "re-sync team" affordance to grant access to members who joined a
+  team after a project invite snapshot~~ **Superseded by D-50-5 (2026-11-08)**: team links
+  are live — a member who joins a linked team gains access on the very next request, so
+  no re-sync affordance is needed
 - **NOTIF-TRIM**: Notification audit trim recommendations (rows still `proposed` in
   `docs/notification-audit.md`) — deferred, requires owner rulings
 
@@ -76,7 +78,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 | Subdomain tenancy, SAML/SCIM | Unchanged from PROJECT.md out-of-scope |
 | Real billing / quotas | Unchanged |
 | Team visibility kept as a fallback model | Replaced deliberately — no dual model |
-| Live-list team grants (auto-grant new team members) | Snapshot semantics chosen; re-sync deferred |
+| Live-list team grants (auto-grant new team members) | **Superseded by D-50-5 (2026-11-08)** — live team links ARE the model now (reverses this original out-of-scope ruling; re-snapshotting would mean re-running a sweep and rewriting the predicate) |
 
 ## Traceability
 

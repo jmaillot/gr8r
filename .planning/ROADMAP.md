@@ -39,7 +39,7 @@ Details: [.planning/milestones/v1.10-ROADMAP.md](milestones/v1.10-ROADMAP.md)
 ### v2.0 Project-level Permissions & Invitations (Phases 49-52)
 
 - [x] **Phase 49: Visibility model collapse & grant materialization** — private flag + explicit `p.members` becomes the only access model; boot sweep migrates every old path; MCP mirror in lockstep (completed 2026-11-08)
-- [ ] **Phase 50: Invite hierarchy & per-project toggles (server)** — strict owner hierarchy, post-invite editing, team-share snapshot expansion, guest-invite toggle, one guest concept
+- [ ] **Phase 50: Invite hierarchy & per-project toggles (server)** — strict owner hierarchy, post-invite editing, live team links (D-50-5), guest-invite toggle, one guest concept
 - [ ] **Phase 51: Client surfaces, Permissions-page removal & project creation** — private/public toggle UI, share-modal team invite, Settings > Permissions deleted, creation setting, i18n EN+FR
 - [ ] **Phase 52: Transparency view & milestone verification sweep** — member-visibility view through the funnel + full no-leak/invariant verification pass
 
@@ -79,7 +79,7 @@ Plans:
 
 ### Phase 50: Invite hierarchy & per-project toggles (server)
 
-**Goal**: Invitations and their rules live at the project level — only an owner names another owner, everything about a membership is editable after the invite, teams are invited as a snapshot bulk grant, and the right to invite guests is a per-project toggle
+**Goal**: Invitations and their rules live at the project level — only an owner names another owner, everything about a membership is editable after the invite, teams are linked to projects as live team links (D-50-5 — join/leave the team grants/revokes access on the very next request), and the right to invite guests is a per-project toggle
 **Depends on**: Phase 49 (new predicate; scope columns dormant)
 **Requirements**: INV-01, INV-02, INV-03, INV-04, VIS-04
 **Success Criteria** (what must be TRUE):
