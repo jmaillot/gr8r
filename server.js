@@ -839,6 +839,52 @@ function canManageProject(p, memberId, role) {
   return !!memberId && p?.lead === memberId;
 }
 
+/* [2026-11-09 Phase 53 (53-01), PSET-02/03] Per-team permission levels live as
+   namespaced keys INSIDE the existing p.perms map ('team:'+teamId) — never a
+   top-level field (zero sink changes: the pin block, the removal sweep and
+   normalizeProjects' object check cover them for free). The ONE content-write
+   gate after the visibility collapse: returns the member's effective
+   permission TIER — one of PROJECT_PERMS. Visibility stays boolean (D-03):
+   this gates content writes only, never reads. Rank order mirrors PERMS in
+   src/overlays/modals.js:195 (duplicated literal — server.js never imports
+   client modules). Semantics (docs/ProjectPermissions.md, decision A3):
+   role owner/admin or p.lead ⇒ 'Full access'; otherwise the BEST
+   (highest-ranked) of the direct p.perms[memberId] entry and every live
+   p.perms['team:'+t] entry where t ∈ memberTeams ∩ p.teams; a member with no
+   applicable entry defaults to the per-person tier ('Can edit' for members,
+   'Can comment' for guests/viewer — the shareModal defaults) when they sit on
+   the access list or a linked team; a caller who canSeeProject but holds NO
+   applicable entry (a public-project non-member) ranks 'Can view' — see ≠
+   write. Enforcement reads the STORED doc (D-51-15/16 rule). Team 'Full
+   access' is content-only: canManageProject stays the manager gate (D-01),
+   and this function never grants management. */
+const PROJECT_PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
+
+function projectPermFor(p, memberId, memberTeams = [], role = null) {
+  if (!p || typeof p !== 'object') return 'Can view';
+  if (role === 'owner' || role === 'admin') return 'Full access';
+  if (memberId && p.lead === memberId) return 'Full access';
+  const rank = v => {
+    const i = PROJECT_PERMS.indexOf(v);
+    return i === -1 ? -1 : i;
+  };
+  const perms = p.perms && typeof p.perms === 'object' ? p.perms : {};
+  let best = rank(perms[memberId]);
+  const teams = Array.isArray(p.teams) ? p.teams : [];
+  const mine = Array.isArray(memberTeams) ? memberTeams : [];
+  for (const t of mine) {
+    if (!teams.includes(t)) continue;
+    best = Math.max(best, rank(perms['team:' + t]));
+  }
+  if (best === -1) {
+    const onAccessList = Array.isArray(p.members) && p.members.includes(memberId);
+    const onLinkedTeam = teams.some(t => mine.includes(t));
+    if (!onAccessList && !onLinkedTeam) return 'Can view'; // see ≠ write
+    return role === 'viewer' ? 'Can comment' : 'Can edit';
+  }
+  return PROJECT_PERMS[best];
+}
+
 /*
  * [2026-11-07 D-49-1] The ONE hidden-project funnel after the visibility
  * collapse: private-hidden only. The D-49-retired Phase 29 scoped branch
@@ -1062,6 +1108,47 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
   const reservedTasks = hiddenTaskIds(stored, hiddenProjects);
   for (const t of nextData.tasks || []) if (t?.id && hiddenProjects.has(t.project)) reservedTasks.add(t.id);
 
+  /* [2026-11-09 Phase 53 (53-01), T-53-03] The per-team content-write gate,
+     enforced SERVER-side on the STORED doc (D-51-15/16 rule — never the
+     incoming payload). Task writes (create, edit, move, delete) require
+     ≥ 'Can edit'; the refusal is keyed and scoped per item (the D-51-15
+     shape) — the rest of the PUT still merges, never a whole-PUT 403
+     (Pitfall 1). Denied rows are held via the merge reserved-sets below, so
+     the stored row survives byte-identical. Visibility stays boolean (D-03);
+     project-level routes stay under canManageProject (D-01). */
+  const permDeniedTasks = new Set();
+  const isBelowManager = !isWorkspaceManager && !!memberId;
+  const memberTeams53 = isBelowManager && membership?.workspace_id
+    ? await teamsOfMember(membership.workspace_id, memberId, membership)
+    : [];
+  if (isBelowManager) {
+    const permProjects = new Map((storedData.projects || []).map(p => [p?.id, p]).filter(([id]) => id));
+    const effCache = new Map();
+    const effFor = pid => {
+      if (!effCache.has(pid)) effCache.set(pid, projectPermFor(permProjects.get(pid), memberId, memberTeams53, role));
+      return effCache.get(pid);
+    };
+    const EDIT_RANK = PROJECT_PERMS.indexOf('Can edit');
+    const changed = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+    const storedTasksById = new Map((storedData.tasks || []).map(t => [t?.id, t]).filter(([id]) => id));
+    const incomingTaskIds = new Set((nextData.tasks || []).map(t => t?.id).filter(Boolean));
+    for (const t of nextData.tasks || []) {
+      if (!t?.id || !t.project) continue;
+      if (hiddenProjects.has(t.project) || reservedTasks.has(t.id)) continue;
+      const prev = storedTasksById.get(t.id);
+      if (prev && !changed(prev, t)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(t.project)) < EDIT_RANK) permDeniedTasks.add(t.id);
+    }
+    // A delete is a content write too: a stored row the actor dropped from the
+    // incoming list is held back unless they may edit its project.
+    for (const [id, t] of storedTasksById) {
+      if (incomingTaskIds.has(id) || reservedTasks.has(id)) continue;
+      if (!t?.project || hiddenProjects.has(t.project)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(t.project)) < EDIT_RANK) permDeniedTasks.add(id);
+    }
+    for (const id of permDeniedTasks) refusals.push({ code: 'projectPermDenied', task: id });
+  }
+
   nextData.projects = mergeList(storedData.projects, nextData.projects, hiddenProjects);
   const storedProjects = new Map((storedData.projects || []).map(p => [p.id, p]));
   const refusedCreateIds = new Set();
@@ -1124,7 +1211,7 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
     for (const row of incomingList || []) if (row?.id && isHidden(row)) ids.add(row.id);
     return ids;
   };
-  const taskHidden = t => hiddenProjects.has(t?.project) || reservedTasks.has(t?.id);
+  const taskHidden = t => hiddenProjects.has(t?.project) || reservedTasks.has(t?.id) || permDeniedTasks.has(t?.id);
   nextData.tasks = mergeList(storedData.tasks, nextData.tasks, reservedDependants(storedData.tasks, nextData.tasks, taskHidden));
 
   const commentHidden = c => reservedTasks.has(c?.task);
@@ -1698,10 +1785,12 @@ function logDocChanges(ws, storedDoc, next, actorName) {
 
 async function docFromClient(incoming, stored, ws, role, membership, refusals = []) {
   const next = await mergeClientDoc(incoming, stored, membership, ws.id, refusals);
-  /* [2026-11-08 D-51-15] V7 audit: one INFO line per refused create, best-effort. */
+  /* [2026-11-08 D-51-15] V7 audit: one INFO line per refused operation, best-effort.
+     [2026-11-09 53-01] The refusal code is logged (projectCreateForbidden rides the
+     same channel as the 53-01 projectPermDenied content-write refusals). */
   for (const r of refusals) {
     try {
-      logInfo(`project create refused (permCreate) "${r.project}" by ${membership?.member_id || 'unknown'} [${ws?.slug || 'ws'}]`);
+      logInfo(`doc write refused (${r.code || 'unknown'}) project "${r.project || '-'}" by ${membership?.member_id || 'unknown'} [${ws?.slug || 'ws'}]`);
     } catch {}
   }
   delete next.data.workspaces;
