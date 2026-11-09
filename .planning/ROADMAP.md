@@ -40,7 +40,7 @@ Plans:
 - [x] 53-01-PLAN.md — Per-team perms server model (`p.perms['team:']`, `projectPermFor` write gates, lockstep mirrors, oracle + pin regression)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 53-02-PLAN.md — Invite modal: draft `data-in` fix, Projects chips, shared guest validator (create/edit/accept) + D-06 UX
+- [x] 53-02-PLAN.md — Invite modal: draft `data-in` fix, Projects chips, shared guest validator (create/edit/accept) + D-06 UX
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 53-03-PLAN.md — Unified project settings modal (General + Access) replacing projectModal + Share modal, per-team perm dropdowns

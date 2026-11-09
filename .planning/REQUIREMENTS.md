@@ -7,14 +7,14 @@
 
 ### Invite Modal
 
-- [ ] **INVT-01**: Email draft survives role/team/scope changes in the invite modal
+- [x] **INVT-01**: Email draft survives role/team/scope changes in the invite modal
   (`data-in="inviteDraft"` state binding + `IN.inviteDraft` handler — the textarea at
   modals.js:312 currently has no binding, so any `render()` wipes typed emails)
-- [ ] **INVT-02**: Admin/owner can select Projects in the invite modal — chip
+- [x] **INVT-02**: Admin/owner can select Projects in the invite modal — chip
   multi-select (same design as the Team chip picker, modals.js:314-319) below Team
   selection; the selection feeds the invite's project scope (payload already carries
   scope end-to-end: actions.js:1934-1983 → server.js:5217-5226)
-- [ ] **INVT-03**: Guest invariant enforced on the new path: a guest invite carries
+- [x] **INVT-03**: Guest invariant enforced on the new path: a guest invite carries
   exactly one project (client clamp in `A.submitInvite` + server re-derivation on
   create AND invite edit; verify the MCP invite tool ceiling at plan time)
 
@@ -85,9 +85,9 @@
 |-------------|--------------|--------|
 | PSET-02 | Phase 53, plan 53-01 | Complete |
 | PSET-03 | Phase 53, plan 53-01 | Complete |
-| INVT-01 | Phase 53, plan 53-02 | Pending |
-| INVT-02 | Phase 53, plan 53-02 | Pending |
-| INVT-03 | Phase 53, plan 53-02 | Pending |
+| INVT-01 | Phase 53, plan 53-02 | Complete |
+| INVT-02 | Phase 53, plan 53-02 | Complete |
+| INVT-03 | Phase 53, plan 53-02 | Complete |
 | PSET-01 | Phase 53, plan 53-03 | Pending |
 | PSET-04 | Phase 53, plan 53-03 | Pending |
 | PROJ-01 | Phase 53, plan 53-04 | Pending |
