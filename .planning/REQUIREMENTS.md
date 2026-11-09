@@ -49,10 +49,10 @@
 
 ### Projects Table & Page
 
-- [ ] **PROJ-01**: Projects table columns: Lead (avatar+name) / Teams / Members
+- [x] **PROJ-01**: Projects table columns: Lead (avatar+name) / Teams / Members
   (count) / Status (PSTAT pill + task-based `progressOf` bar) / Target date (`p.due`)
   — renderers already exist (overview.js:40, home.js:74); no avatar stacks
-- [ ] **PROJ-02**: Project page has exactly one Share button (labeled) — the `user+`
+- [x] **PROJ-02**: Project page has exactly one Share button (labeled) — the `user+`
   icon button (project.js:75) and avatar-stack button (project.js:74) are removed;
   Share opens the unified settings modal's Access section
 
@@ -90,8 +90,8 @@
 | INVT-03 | Phase 53, plan 53-02 | Complete |
 | PSET-01 | Phase 53, plan 53-03 | Complete |
 | PSET-04 | Phase 53, plan 53-03 | Complete |
-| PROJ-01 | Phase 53, plan 53-04 | Pending |
-| PROJ-02 | Phase 53, plan 53-04 | Pending |
+| PROJ-01 | Phase 53, plan 53-04 | Complete |
+| PROJ-02 | Phase 53, plan 53-04 | Complete |
 | TEAM-01 | Phase 53, plan 53-05 | Pending |
 | TEAM-02 | Phase 53, plan 53-05 | Pending |
 | TEAM-03 | Phase 53, plan 53-05 | Pending |

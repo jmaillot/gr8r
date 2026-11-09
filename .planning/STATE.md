@@ -5,8 +5,8 @@ milestone_name: Member & Project Experience
 current_phase: 53
 current_phase_name: Member & Project Experience
 status: executing
-stopped_at: Completed 53-03-PLAN.md
-last_updated: "2026-11-09T12:32:19.014Z"
+stopped_at: Completed 53-04-PLAN.md
+last_updated: "2026-11-09T12:45:00Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 53 execution started
 state_head: 2ec61f9805ab14517c8bc36198aa440ad8f86645
@@ -32,8 +32,8 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 Phase: 53 (Member & Project Experience) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-11-09 — Phase 53 execution started
+Status: Ready to execute (53-04 complete; 53-05 is the last plan)
+Last activity: 2026-11-09 — Completed 53-04-PLAN.md
 
 ## v2.1 Plan Order (approved 2026-11-09 — single Phase 53, executed plan-by-plan)
 
@@ -93,8 +93,8 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-09T12:31:16.273Z
-**Stopped at:** Completed 53-03-PLAN.md
+**Last session:** 2026-11-09T12:45:00Z
+**Stopped at:** Completed 53-04-PLAN.md
 **Resume file:** None
 
 ### Last completed
@@ -114,8 +114,10 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 | Phase 53 P01 | 34 min | 3 tasks | 10 files |
 | Phase 53 P02 | 55 min | 3 tasks | 12 files |
 | Phase 53 P03 | 110 min | 3 tasks | 9 files |
+| Phase 53 P04 | 10 min | 2 tasks | 8 files |
 
 ## Decisions
 
 - [Phase 53]: Invite scope bug fix: swapped ROLE_MEMBER_UI/ROLE_ADMIN_UI destructure (since 29-04) corrected — invites defaulted to Admin and member invites POSTed scope:null; fixed in 53-02
 - [Phase 53]: Create/edit modal split (projectCreate vs projectSettings) removes the last dual-purpose modal; the deleted modals' i18n key families are all reused by the unified modal (i18n:scan 0 dead, no allowlist edits)
+- [Phase 53]: Share dedup (53-04): the labeled Share button carries data-a=projectSettings data-tab=access directly in markup; A.share remains only for the context-menu entry; overview members pill made display-only so M-13's "exactly one Share affordance" holds on every tab

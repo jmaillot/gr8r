@@ -46,7 +46,7 @@ Plans:
 - [x] 53-03-PLAN.md — Unified project settings modal (General + Access) replacing projectModal + Share modal, per-team perm dropdowns
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 53-04-PLAN.md — Projects table columns (Lead/Teams/Members/Status/Target) + one labeled Share → Access tab
+- [x] 53-04-PLAN.md — Projects table columns (Lead/Teams/Members/Status/Target) + one labeled Share → Access tab
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 53-05-PLAN.md — Teams polish (searchable members box, hint, invite removal) + milestone i18n close-out
@@ -122,7 +122,7 @@ self-contained and commits atomically):
 | 53-01 Per-team perms (server model) | Complete | 2026-11-09 |
 | 53-02 Invite modal (draft, chips, guest clamp) | Complete | 2026-11-09 |
 | 53-03 Unified project settings modal | Complete | 2026-11-09 |
-| 53-04 Projects table columns & Share dedup | Not started | - |
+| 53-04 Projects table columns & Share dedup | Complete | 2026-11-09 |
 | 53-05 Teams polish & i18n close-out | Not started | - |
 
 ## Backlog
