@@ -281,17 +281,17 @@ Today: `if (p.perms && typeof p.perms !== 'object') delete p.perms` [CITED: mile
 | A4 | `normalizeProjects` current line is :899 with only the object-type check [CITED: milestone research — consistent with my verified reads but the exact line not re-read] | Code Examples | Normalization weaker than assumed; fail-loud test covers it |
 | A5 | Catalogue pin = 1711 keys [CITED: milestone research/STACK.md] | Pitfall 6 | Pin bump amount differs; gate failure is loud and self-correcting |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **MCP invite tool ceiling for INVT-03**
    - What we know: REQUIREMENTS.md says "verify the MCP invite tool ceiling at plan time"; STATE.md repeats it.
    - What's unclear: whether the MCP invite path carries the guest project requirement today.
-   - Recommendation: planner adds an explicit verify-and-fix task in 53-02; A2 covers it if the check is absent.
+   - RESOLVED: 53-02 Task 2 verifies and, if absent, adds the guest-project guard to the MCP invite path.
 2. **Invite-edit route location and shape**
    - What we know: create route verified indirectly (server.js:5187/5217-5226 per milestone research); edit route not located this session.
-   - Recommendation: 53-02 plan includes a locate-read step before writing the shared validator.
+   - RESOLVED: 53-02 Task 2 locates the edit route among the project-membership routes (server.js:5061/:5095 region) and applies the same shared validator plus the accept path; includes a locate-read step before writing the shared validator.
 3. **Precedence rule for `projectPermFor` (A3)**
-   - Recommendation: default to "best of direct and team tiers, lead/manager ⇒ Full access", document in `docs/ProjectPermissions.md` update; surface in plan as a named decision.
+   - RESOLVED: 53-01 Task 1 implements "best of direct and team tiers, lead/manager ⇒ Full access" and documents it in the docs/ProjectPermissions.md update.
 
 ## Environment Availability
 
