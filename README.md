@@ -106,12 +106,12 @@ contract in Chromium.
 `vercel.json` builds with Vite and serves `dist/` as a static, browser-local demo.
 
 For a self-hosted instance — one Node container, accounts and server-side SQLite storage —
-see [DEPLOY.md](DEPLOY.md).
+see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ### Postgres backend (optional)
 
 By default the app runs on embedded SQLite. Setting `DB_URL` in `.env` switches it to
-Postgres — nothing else changes (see [DEPLOY.md §15](DEPLOY.md) for the full runbook,
+Postgres — nothing else changes (see [docs/DEPLOY.md §14](docs/DEPLOY.md) for the full runbook,
 the one-shot SQLite→Postgres copy script, and backups). Boot is fail-closed: an
 unreachable or misconfigured `DB_URL` stops the server with a clear error, never a
 silent SQLite fallback, and the connection string is never logged.

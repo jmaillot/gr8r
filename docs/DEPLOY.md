@@ -1,6 +1,7 @@
 # Deploying Projects Studio
 
 This guide takes a fresh Ubuntu/Debian server to a working HTTPS instance behind Traefik.
+For local development instead, see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 The app runs as **one container**: a Node 24 process serves the built SPA and a JSON API,
 and stores everything in SQLite on a Docker volume. There is no external database and no
 runtime npm dependency.
@@ -724,53 +725,7 @@ docker compose exec projects node -e \
   "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/data/projects.db');console.log(db.prepare('select email, name from users').all())"
 ```
 
-## 12. Local development
-
-Browser-local demo, no API (the original behaviour):
-
-```sh
-npm ci
-npm run dev            # http://localhost:5173
-```
-
-Full stack:
-
-```sh
-npm ci
-npm run build
-npm run seed:json
-DATA_DIR=./data ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='local password' \
-  PORT=8080 npm start
-npm run dev            # Vite proxies /api to localhost:8080
-```
-
-`API_ORIGIN` overrides the proxy target. If the API is not running, `/api/config` fails and
-the client falls back to local demo mode.
-
-### Tests
-
-```sh
-npm test              # tenancy, membership, privacy and migration suites (real servers)
-npm run test:privacy  # phase 3 privacy matrix only
-```
-
-Both spawn `server.js` on an ephemeral loopback port with a temporary `DATA_DIR`; they need
-Node 24 (for `node:sqlite`), no developer database and no built `dist/`.
-
-The browser suite needs a production build and Chromium first:
-
-```sh
-npm run build
-npx playwright install chromium   # add --with-deps on a fresh Linux host
-npm run e2e
-```
-
-CI runs `npm test` in the build job and `npm run e2e` in a separate job that uploads Playwright
-traces when it fails (`.github/workflows/ci.yml`). A third job, `docker-build`, builds the
-image, boots a throwaway container from it, and asserts the French catalogue chunk is served
-with French content — so the shipped image is verified to carry the French catalogue.
-
-## 13. Operational limits
+## 12. Operational limits
 
 - **One JSON document per workspace.** Saves carry an integer `revision`; a stale write
   gets `409` instead of overwriting someone else's work, and the client asks you to reload.
@@ -799,7 +754,7 @@ with French content — so the shipped image is verified to carry the French cat
 - **CSP allows Google Fonts.** For an air-gapped deployment, self-host the fonts and
   tighten `Content-Security-Policy` in `server.js`.
 
-## 14. Key custody & rotation
+## 13. Key custody & rotation
 
 Two-factor secrets are encrypted at rest with a key only you hold: `MASTER_KEY`
 (set in `/opt/projects/.env`). There is no backdoor — losing the key loses every
@@ -1105,7 +1060,7 @@ plaintext. The honest response is:
 `MASTER_KEY_PREVIOUS` and rotation exist for _planned_ key hygiene, never for
 incident response.
 
-## 15. Postgres backend (optional)
+## 14. Postgres backend (optional)
 
 By default the app stores everything in SQLite on the `/data` volume. As of Phase 45 the
 server can also run on **Postgres**: when the `DB_URL` environment variable holds a
