@@ -92,6 +92,20 @@ Le protocole est le streamable HTTP standard : `initialize` →
 `mcp-session-id` retourné par `initialize`. Le flux SSE serveur→client (GET)
 n'est pas proposé — le serveur ne pousse jamais de message spontané.
 
+### DeepSeek harness [DSH]
+
+1. Éditez l'endpoint par défaut dans
+   `integrations/deepseek-harness/cordis.patch.yml` (ou définissez
+   `PRJSTUDIO_MCP_URL` dans l'environnement de lancement).
+2. Définissez `PRJSTUDIO_MCP_TOKEN=psk_live_…` dans l'environnement de
+   lancement du harness.
+3. Installez le bundle :
+   `dsh plugin install ./integrations/deepseek-harness`
+   (ou Plugins → Install dans l'application, en sélectionnant ce dossier).
+4. Vérifiez en demandant à l'agent d'appeler `mcp__projects-studio__whoami`.
+
+Détails : [`integrations/deepseek-harness/README.md`](../integrations/deepseek-harness/README.md).
+
 ## 3. Lier un dossier local à un projet
 
 Le serveur MCP ne voit pas votre système de fichiers. La correspondance
@@ -902,6 +916,19 @@ The protocol is the standard streamable HTTP: `initialize` →
 `notifications/initialized` → `tools/list` / `tools/call` with the
 `mcp-session-id` header returned by `initialize`. The server→client SSE stream
 (GET) is not offered — the server never pushes unsolicited messages.
+
+### DeepSeek harness [DSH]
+
+1. Edit the endpoint default in
+   `integrations/deepseek-harness/cordis.patch.yml` (or set
+   `PRJSTUDIO_MCP_URL` in the launch environment).
+2. Set `PRJSTUDIO_MCP_TOKEN=psk_live_…` in the harness launch environment.
+3. Install the bundle:
+   `dsh plugin install ./integrations/deepseek-harness`
+   (or Plugins → Install in the app, selecting this folder).
+4. Verify by asking the agent to call `mcp__projects-studio__whoami`.
+
+Details: [`integrations/deepseek-harness/README.md`](../integrations/deepseek-harness/README.md).
 
 ## 3. Link a local folder to a project
 
