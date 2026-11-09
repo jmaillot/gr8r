@@ -1,6 +1,35 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-09 after v2.0 milestone*
+*Last updated: 2026-11-09 after v2.1 milestone start*
+
+## Current Milestone: v2.1 Member & Project Experience
+
+**Goal:** make the everyday surfaces — invite modal, team editing, project settings,
+projects table — match how people actually use workspaces.
+
+**Target features:**
+- Invite modal: email draft survives role/team changes (`data-in` state-binding fix);
+  Projects multi-select chips below Team selection; guest = exactly one project
+- Teams: searchable members box in Edit Team (`foldForSearch` pattern); replace the wrong
+  primary-team hint with multi-team wording; remove "Invite to workspace" from the team
+  detail page (invites only via Workspace > Members)
+- Unified project settings modal: General (desc/icon/color/lead/target date) + Access
+  (Teams with per-team perms view/comment/edit/full, Individual Members, General Access) —
+  replaces both the current projectModal and the Share modal, same settings on
+  Workspace > Projects and the project page
+- Projects table columns: Lead / Teams / Members (count) / Status (PSTAT pill +
+  task-based progress) / Target date; single Share button on the project page
+  (remove user+ icon and avatar-stack duplicates)
+
+### v2.1 milestone decisions (owner-validated 2026-11-09)
+
+- M-09 per-team perms on projects reuse the existing per-person perms model
+  (Can view/Can comment/Can edit/Full access) — no new role concept
+- M-10 status labels = PSTAT values (planning/active/risk/hold/complete → Planning /
+  In Progress / At Risk / On Hold / Completed); progress = task-based `progressOf`
+- M-11 Date column = target date (p.due)
+- M-12 one unified settings modal replaces projectModal + share modal
+- M-13 one Share button on the project page (keep the labeled one)
 
 ## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 

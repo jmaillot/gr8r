@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.0
-milestone_name: Project-level Permissions & Invitations
-status: Awaiting next milestone
-stopped_at: Phase 52 complete — all phases complete
-last_updated: "2026-11-09T08:57:11.415Z"
+milestone: v2.1
+milestone_name: Member & Project Experience
+status: planning
+last_updated: "2026-11-09T09:10:25.101Z"
 last_activity: 2026-11-09
-last_activity_desc: Milestone v2.0 completed and archived
-state_head: dd16c39cf61e5db60989f205aaa2c5f5bc0acb03
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
-current_phase: 52
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -30,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-08)
 
 ## Current Position
 
-Phase: Milestone v2.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-09 — Milestone v2.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-09 — Milestone v2.1 started
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
