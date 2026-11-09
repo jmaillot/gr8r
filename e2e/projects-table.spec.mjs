@@ -108,11 +108,12 @@ test('the table renders all columns with a numeric Members cell, and the row gea
 });
 
 /* =====================================================================
-   Task 2: Share dedup — exactly one labeled Share affordance on the
-   project page, opening the unified modal's Access tab (D-05/M-13).
+   Task 2: Share dedup — the project page has NO Share button (2026-11-09
+   owner ruling: redundant with the settings gear); access management lives
+   in the unified modal's Access tab, opened from the gear.
    ===================================================================== */
 
-test('exactly one Share affordance opens the Access tab; the deleted duplicates are gone (EN) (PROJ-02)', async ({ browser }) => {
+test('no Share button on the project page; the gear opens General with Access reachable (EN) (PROJ-02, 2026-11-09 ruling)', async ({ browser }) => {
   const run = newRunId();
   const name = `Share Solo ${run}`;
   const { account, client } = await createAccount(BASE_URL, run, 'shsol-en', 'Share Solo Owner', { locale: 'en', workspace: `shsol-en-${run}` });
@@ -125,26 +126,24 @@ test('exactly one Share affordance opens the Access tab; the deleted duplicates 
     await page.locator(`[data-a='go'][data-r='project'][aria-label="${name}"]`).click();
     await expect(page.locator('.proj-h h1')).toHaveText(name);
 
-    /* Exactly one Share affordance, dispatching the unified modal on Access. */
-    const share = page.locator('[data-a="projectSettings"][data-tab="access"]');
-    await expect(share).toHaveCount(1);
-    await expect(share).toContainText('Share');
-
-    /* The deleted duplicates: no data-a="share" markup, no addMember
-       user-plus button anywhere on the page. */
+    /* The removed Share affordance: zero labeled Share buttons in the page
+       header, zero data-a="share" markup, no addMember user-plus button. */
+    await expect(page.locator('.proj-h').getByRole('button', { name: 'Share' })).toHaveCount(0);
     await expect(page.locator('[data-a="share"]')).toHaveCount(0);
     await expect(page.locator('button[aria-label="Add member"]')).toHaveCount(0);
 
-    /* The overview members pill is display-only — never a second Share
-       affordance. */
+    /* Access management stays reachable: the gear opens General, the Access
+       tab renders the access body. */
+    await page.locator('button[data-a="editProject"]').click();
+    await expect(page.getByRole('heading', { name: 'Project settings', level: 2 })).toBeVisible();
+    await page.getByRole('tab', { name: 'Access' }).click();
+    await expect(page.getByText('People with access')).toBeVisible();
+
+    /* The overview members pill is display-only — never a Share affordance. */
+    await page.keyboard.press('Escape');
     await page.locator('nav[aria-label="Project views"] button[data-tab="overview"]').click();
     await expect(page.locator('dd span.pillbtn').first()).toBeVisible();
-    await expect(page.locator('[data-a="projectSettings"][data-tab="access"]')).toHaveCount(1);
-
-    /* The one labeled Share opens the modal directly on the Access tab. */
-    await page.locator('.proj-h').locator('[data-a="projectSettings"][data-tab="access"]').click();
-    await expect(page.getByRole('heading', { name: `Share “${name}”`, level: 2 })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Access' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[data-a="share"]')).toHaveCount(0);
   } finally {
     await context.close();
   }

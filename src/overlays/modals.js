@@ -164,6 +164,17 @@ export function settingsGeneralFields(m) {
   const f = S.ui.pform;
   const err = S.ui.errors.pname;
   const leadLocked = !!m.edit && !canManageProject(proj(m.edit));
+  /* [2026-11-09 owner ruling] Team selection lives ONLY in the Access tab on
+     edit — the General-tab chips duplicated it and their submit would clobber
+     Access-tab links. The create form keeps the chips (initial teaming). */
+  const teamsField = m.edit
+    ? ''
+    : `<div class="field" style="flex:1;min-width:150px"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group">${teamsList()
+        .map(
+          tm =>
+            `<button type="button" role="checkbox" aria-checked="${f.teams.includes(tm.id)}" class="opt ${f.teams.includes(tm.id) ? 'on' : ''}" data-a="pformTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${f.teams.includes(tm.id) ? ic('check', 13) : ''}</button>`,
+        )
+        .join('')}</div><span class="hint">${t('modal.teamsHint')}</span></div>`;
   return `<div class="row" style="gap:10px;align-items:flex-start">
       <button type="button" class="picon lg" style="--c:${PCOLORS[f.color]};cursor:default;flex-shrink:0;margin-top:22px" aria-hidden="true" tabindex="-1">${ic(f.icon, 18)}</button>
       <div class="field grow"><label class="label" for="p-name">${t('modal.projectName')}</label><input class="input ${err ? 'is-error' : ''}" id="p-name" data-in="pform" data-f="name" value="${esc(f.name)}" placeholder="${t('modal.projectNamePlaceholder')}" autofocus aria-invalid="${!!err}">${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
@@ -181,12 +192,7 @@ export function settingsGeneralFields(m) {
         .join('')}</div></div>
     </div>
     <div class="row" style="gap:12px;flex-wrap:wrap">
-      <div class="field" style="flex:1;min-width:150px"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group">${teamsList()
-        .map(
-          tm =>
-            `<button type="button" role="checkbox" aria-checked="${f.teams.includes(tm.id)}" class="opt ${f.teams.includes(tm.id) ? 'on' : ''}" data-a="pformTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${f.teams.includes(tm.id) ? ic('check', 13) : ''}</button>`,
-        )
-        .join('')}</div><span class="hint">${t('modal.teamsHint')}</span></div>
+      ${teamsField}
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-lead">${t('modal.lead')}</label><select class="select" id="p-lead" data-in="pform" data-f="lead" ${leadLocked ? 'disabled' : ''}>${D()
         .members.filter(x => x.status === 'active')
         .map(x => `<option value="${x.id}" ${f.lead === x.id ? 'selected' : ''}>${esc(x.name)}</option>`)

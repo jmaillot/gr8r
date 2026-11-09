@@ -768,6 +768,7 @@
   "modal.targetDate": "Target date",
   "modal.template": "Template",
   "err.projectNotFound": "Project not found",
+  "err.projectSaveFailed": "Could not save the project — check your connection and try again",
   "modal.shareLockHint": "Only the project lead, an admin or the owner can change who has access.",
   "modal.shareTitle": "Share “{name}”",
   "modal.settingsTabs": "Settings sections",

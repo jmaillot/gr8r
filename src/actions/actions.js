@@ -1578,24 +1578,35 @@ A.submitProject = async () => {
   if (!f.lead) f.lead = D().me;
   if (m.edit) {
     const p = proj(m.edit);
-    if (
-      mutate(() =>
-        Object.assign(p, {
-          name: f.name,
-          desc: f.desc,
-          icon: f.icon,
-          color: f.color,
-          teams: Array.isArray(f.teams) ? f.teams.filter(Boolean) : [],
-          lead: f.lead,
-          due: f.due,
-          members: [...new Set([...p.members, f.lead])],
-        }),
-      )
-    ) {
-      S.ui.modals.pop();
+    /* [2026-11-09 owner ruling] teams are no longer editable here — the
+       General tab dropped its team chips (they live in Access); writing the
+       form's stale f.teams would silently unlink Access-tab connections. */
+    const snap = snapshot();
+    mutate(() =>
+      Object.assign(p, {
+        name: f.name,
+        desc: f.desc,
+        icon: f.icon,
+        color: f.color,
+        lead: f.lead,
+        due: f.due,
+        members: [...new Set([...p.members, f.lead])],
+      }),
+    );
+    /* [2026-11-09 WR-01] Conflict honesty: settle the debounced push before
+       claiming success — a 409 from a concurrent admin surfaces the conflict
+       message with the store restored, never a success toast over a lost
+       write (same contract as IN.teamPerm / IN.sharePerm). */
+    const res = await pushNow();
+    if (!res.ok) {
+      restore(snap);
       render();
-      toast(t('toast.projectUpdated'));
+      toast(res.status === 409 ? t('modal.settingsConflict') : t('err.projectSaveFailed'), { kind: 'err' });
+      return;
     }
+    S.ui.modals.pop();
+    render();
+    toast(t('toast.projectUpdated'));
     return;
   }
   let p;

@@ -71,7 +71,6 @@ export function pageProject() {
         <button class="pillbtn bordered" data-a="pop" data-pop="pstatus" data-id="${p.id}" aria-label="${t('a11y.projectStatus')}" style="height:24px"><span class="pdot" style="--c:${PSTAT[p.status].c};border-radius:50%;width:7px;height:7px"></span>${PSTAT[p.status].name}${ic('chevron-down', 12)}</button>
         <span class="sp"></span>
         <div class="row" style="gap:4px">
-          <button class="btn btn-secondary btn-sm hide-m" data-a="projectSettings" data-id="${p.id}" data-tab="access">${ic('share-2', 13)}${t('act.share')}</button>
           <button class="ibtn ibtn-sm" data-a="editProject" data-id="${p.id}" data-tip="${t('a11y.projectSettings')}" aria-label="${t('a11y.projectSettings')}">${ic('settings', 15)}</button>
           <button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${p.id}" aria-label="${t('a11y.more')}">${ic('ellipsis', 15)}</button>
         </div>

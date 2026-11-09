@@ -142,11 +142,10 @@ async function openSwitchMatrix(browser, account, lang, projectName) {
     await page.keyboard.press('Escape');
     await expect(page.locator('.modal')).toHaveCount(0);
 
-    /* The Share button deep-links straight to Access. */
-    await page.getByRole('button', { name: L[lang].share, exact: true }).click();
-    await assertSettingsModal(page, lang, 'access', projectName);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.modal')).toHaveCount(0);
+    /* [2026-11-09 owner ruling] No Share button in the page header — the
+       gear is the sole affordance there. Access deep-linking lives in the
+       Workspace > Projects ⋯ context menu's Share entry. */
+    await expect(page.locator('.proj-h').getByRole('button', { name: L[lang].share, exact: true })).toHaveCount(0);
 
     /* Workspace > Projects: the card's ⋯ context menu opens the SAME modal. */
     await page.getByRole('button', { name: L[lang].projects }).first().click();
@@ -198,12 +197,54 @@ test('General tab renders every former projectModal field, Access tab every form
     await expect(page.locator('.iconpick button[role="radio"]').first()).toBeVisible();
     await expect(page.locator('.swatches button[role="radio"]').first()).toBeVisible();
 
+    /* [2026-11-09 owner ruling] NO team chips on the edit General tab — team
+       selection lives only in the Access tab. */
+    await expect(page.locator('button[role="checkbox"][data-a="pformTeamToggle"]')).toHaveCount(0);
+
     await page.getByRole('tab', { name: 'Access' }).click();
     /* Access: invite-by-email row, People with access, General access — the
        former shareModal sections. */
     await expect(page.getByText('People with access')).toBeVisible();
     await expect(page.getByText('General access')).toBeVisible();
     await expect(page.getByLabel('Invite by email')).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+/* [2026-11-09 owner ruling] Regression: teams linked in the Access tab
+   survive a General-tab save — the edit submit no longer writes p.teams
+   (WR-01 fix rides the same branch: a concurrent-admin 409 surfaces the
+   conflict message, not a success toast). */
+test('Access-tab team links survive a General-tab save; the edit submit is conflict-honest (D-02/T-53-08)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Survival ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'sv-en', 'Survival Owner', { locale: 'en', workspace: `sv-en-${run}` });
+  await addTeams(client, account.slug, [{ id: 'tm_sv_a', name: `Crew S ${run}` }]);
+  await addProject(client, account.slug, { id: 'p_sv_a', key: 'sv-a', name });
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
+  const page = await context.newPage();
+  try {
+    await openProjectPage(page, account, 'en', name);
+
+    /* Link the team from the Access tab. */
+    await page.locator('button[data-a="editProject"]').click();
+    await page.getByRole('tab', { name: 'Access' }).click();
+    await page.locator(`button[data-a="shareTeamInvite"][data-tid="tm_sv_a"]`).click();
+    await expect(page.locator(`select[data-in="teamPerm"][data-tid="tm_sv_a"]`)).toHaveValue('Can edit');
+
+    /* Save from the General tab: rename, submit, wait for the settled push. */
+    await page.getByRole('tab', { name: 'General' }).click();
+    await page.locator('#p-name').fill(`${name} v2`);
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Project updated')).toBeVisible();
+
+    /* Reopen: the Access tab STILL lists the linked team — the save never
+       touched p.teams. */
+    await page.locator('button[data-a="editProject"]').click();
+    await page.getByRole('tab', { name: 'Access' }).click();
+    await expect(page.locator(`select[data-in="teamPerm"][data-tid="tm_sv_a"]`)).toBeVisible();
+    await expect(page.locator(`select[data-in="teamPerm"][data-tid="tm_sv_a"]`)).toHaveValue('Can edit');
   } finally {
     await context.close();
   }
@@ -397,16 +438,16 @@ test('the old modals are gone: create opens the create-only form and no route op
     await expect(page.locator('.modal .tmpls[role="radiogroup"]').first()).toBeVisible();
     await page.keyboard.press('Escape');
 
-    /* No entry point — gear, Share button, or context menu — opens anything
-       but the unified projectSettings modal. */
+    /* No entry point opens anything but the unified projectSettings modal.
+       [2026-11-09 owner ruling] The header has NO Share button — the gear
+       and the context menu are the surviving entry points. */
     await page.goto(`${BASE_URL}/w/${account.slug}/project/lg-a`);
     await expect(page.locator('.proj-h h1')).toHaveText(name);
+    await expect(page.locator('.proj-h').getByRole('button', { name: 'Share', exact: true })).toHaveCount(0);
     await page.locator('button[data-a="editProject"]').click();
     await expect(page.locator('.modal')).toHaveCount(1);
     await assertSettingsModal(page, 'en', 'general', name);
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Share', exact: true }).click();
-    await expect(page.locator('.modal')).toHaveCount(1);
+    await page.getByRole('tab', { name: 'Access' }).click();
     await assertSettingsModal(page, 'en', 'access', name);
   } finally {
     await context.close();

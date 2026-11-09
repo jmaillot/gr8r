@@ -768,6 +768,7 @@
   "modal.targetDate": "Date cible",
   "modal.template": "Modèle",
   "err.projectNotFound": "Projet introuvable",
+  "err.projectSaveFailed": "Impossible d’enregistrer le projet — vérifiez votre connexion et réessayez",
   "modal.shareLockHint": "Seul le responsable du projet, un admin ou le propriétaire peut modifier les personnes qui ont accès.",
   "modal.shareTitle": "Partager « {name} »",
   "modal.settingsTabs": "Sections des paramètres",
