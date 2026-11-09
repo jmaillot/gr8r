@@ -336,7 +336,20 @@ export const visibleProjects = () =>
     .projOrder.map(proj)
     .filter(Boolean)
     .filter(p => !p.archived);
-export const canSee = p => !!p && (!p.private || (Array.isArray(p.members) && p.members.includes(D().me)));
+/* [2026-11-09 fix] The client mirror of the server funnel (canSeeProject,
+   server.js:800): non-private ∨ access list ∨ LIVE linked-team term (D-50-5).
+   The server-side team term was restored in Phase 50 but this mirror kept the
+   access-list-only shape, so a project granted through a team rendered in the
+   list (the server sends it) and then 404'd on open (this predicate denied
+   it). One shared predicate — every surface filters through this. */
+export const canSee = p => {
+  if (!p) return false;
+  if (!p.private) return true;
+  if (Array.isArray(p.members) && p.members.includes(D().me)) return true;
+  const pt = projTeams(p);
+  if (!pt.length) return false;
+  return memberTeams(me()).some(t => pt.includes(t));
+};
 export const canManageProject = p => {
   const role = me()?.role;
   return role === 'Owner' || role === 'Admin' || (!!p && p.lead === D().me);
