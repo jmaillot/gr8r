@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v2.0
 milestone_name: Project-level Permissions & Invitations
-current_phase: 52
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 52 complete — all phases complete
-last_updated: "2026-11-09T08:19:03.457Z"
+last_updated: "2026-11-09T08:57:11.415Z"
 last_activity: 2026-11-09
-last_activity_desc: Phase 52 complete
-state_head: f6430a600d01f6b3a600815b218d0c11da8ac306
+last_activity_desc: Milestone v2.0 completed and archived
+state_head: dd16c39cf61e5db60989f205aaa2c5f5bc0acb03
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 17
   completed_plans: 17
   percent: 100
+current_phase: 52
 ---
 
 # STATE.md
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-08)
 
 ## Current Position
 
-Phase: 52
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-09 — Phase 52 complete
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-09 — Milestone v2.0 completed and archived
 
 ## v2.0 Phase Order (roadmap created 2026-11-07)
 
@@ -206,4 +206,4 @@ Resume file: .planning/phases/52-transparency-view-milestone-verification-sweep/
 
 ## Operator Next Steps
 
-- /gsd-verify-work 50 (phase gate green: 1115 tests, 0 fail), then /gsd-plan-phase 51
+- Start the next milestone with /gsd-new-milestone

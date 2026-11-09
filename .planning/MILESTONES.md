@@ -1,5 +1,22 @@
 # Milestones
 
+## v2.0 Project-level Permissions & Invitations (Shipped: 2026-11-09)
+
+**Phases completed:** 4 phases, 17 plans, 10 tasks
+
+**Key accomplishments:**
+- 13-cell visibility fixture with a hand-derived (probed, anti-tautology) oracle, a green-today set-equality + byte-identity migration harness, a server↔MCP parity harness across every actor shape, and model-neutral 404 body-equality rows — all green against the unchanged old-model server, giving Plans 02/03 an independent verification oracle.
+- Collapsed visibility to boolean-private ∨ access list across server + MCP mirror, retired every scope writer (route, invites, addMembership, promotion), and rewrote the suites to the collapsed model — 1079 pass / 0 fail with canaries unmodified.
+- Repo-wide residual sweep cleared (one real code fix: mcp legacy `p.access` fallback deleted), permissions docs rewritten to the collapsed model, all five Phase 49 success criteria individually evidenced — 1079 pass / 0 fail, canaries byte-unmodified.
+- The one-boot visibility sweep now detects the pre-Phase-32 scalar `p.team` marker, converts it with the retired 2eec642 semantics before the grants loop, and pins the materialized grant end-to-end with a new `p_legacyteam` fixture cell — closing verification gap CR-01 plus review warnings WR-01/WR-02.
+- restoreTeamLinks now removes only p.members entries positively provable as team-derived (member_id → memberships.user_id → team_members ∩ restored teams), and the invite.project p.members grant runs for every successful accept (existing members keep their role).
+- Share-modal private toggle made real end-to-end (two-state control, optimistic revert, doc-sync only) plus the two missing server capabilities — stored-prefs-only `permCreate` enforcement with a scoped keyed `projectCreateForbidden` refusal, and server-enforced creator-as-lead — pinned by 13 new authority-matrix/project-creation/team-link tests; full suite 1119 pass / 0 fail.
+- The share modal gains a canManage-gated Teams section (invite list excluding linked teams, linked-teams note with remove, live-semantics copy, Member-level invites on doc-sync with snapshot revert), clients that lose a project render an honest localized not-found state via an applyDoc visibility-epoch marker, and restricted members get a disabled-with-tooltip create control whose refused attempts map the server's keyed `projectCreateForbidden` to a localized toast + optimistic-insert revert — 8 new EN+FR keys, full suite 1123 pass / 0 fail.
+- The Settings > Permissions page is gone end-to-end (nav entry, case body, permGuests/permPublic toggles, 6 catalogue keys EN+FR) with permCreate relocated to Workspace > General under the phase-wide `=== true` polarity, unknown `?sec=` deep-links fall back to the first tab, and the i18n gate gains a dead-key detector — shape-based reference collection over src/ + server surfaces, gated into `i18n:scan`/`prebuild` — whose first sweep deleted 17 more orphaned keys (catalogue 1718 → 1701); full suite 1130 pass / 0 fail / 11 documented skips.
+- Both permission domain docs rewritten to the shipped Phase 51 model (two-state share-modal toggle with optimistic revert, Teams section with live semantics and Member-level invites, the D-51-17 lead role mirroring `canManageProject`, permCreate as a real server-enforced setting, Permissions page removed end-to-end) with D-NN-tagged supersessions and file:line references verified against the live tree; all five roadmap success criteria individually evidenced; full suite 1130 pass / 0 fail / 11 documented skips and i18n gate fully clean.
+
+---
+
 ## v1.10 Extensions & Adapters (Shipped: 2026-11-07)
 
 **Phases completed:** 4 phases, 9 plans, 7 tasks

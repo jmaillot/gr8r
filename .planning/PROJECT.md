@@ -1,8 +1,8 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-08 after Phase 51*
+*Last updated: 2026-11-09 after v2.0 milestone*
 
-## Current Milestone: v2.0 Project-level Permissions & Invitations
+## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 
 **Goal:** make access simple and predictable — visibility is decided at the project level
 (toggle private/public; a member sees only what they were invited to plus non-private
@@ -42,7 +42,27 @@ projects), and the right to invite guests moves down to each project.
 - M-08 member-visibility transparency view
 - Scope: permissions/invitations only — notif debt, lint and DEP0210 stay out
 
-## Current Milestone: v1.10 Extensions & Adapters — SHIPPED (2026-11-07)
+<details>
+<summary>Milestone v2.0 Project-level Permissions & Invitations (shipped 2026-11-09)</summary>
+
+**Shipped:** visibility collapse to boolean-private ∨ access list with one live funnel
+(`memberCanReadProject`) across server + MCP mirror; strict invite hierarchy (owner-only
+owner grants), post-invite editability (role/scope/status), live team→project links
+(join/leave grants/revokes on next request), one guest concept (viewer + exactly one
+project), per-project "members may invite guests" toggle, Settings > Permissions page
+removed with permCreate relocated to Workspace > General, lead-on-create + keyed
+`projectCreateForbidden` refusal, admin transparency view of any member's exact access
+through the funnel with reason labels. 4 phases, 17 plans, 15/15 requirements, 1141-test
+suite green, i18n gate 0 dead/0 stale. Milestone audit: **passed** (12/12 requirements,
+14/14 integration connections, 6/6 E2E flows). Full record:
+`milestones/v2.0-ROADMAP.md`, `milestones/v2.0-REQUIREMENTS.md`,
+`milestones/v2.0-MILESTONE-AUDIT.md`, `milestones/v2.0-phases/`.
+
+</details>
+
+**Next milestone:** not yet planned — UI/UX polish batch (invite modal state fix,
+searchable team members, unified project settings modal with per-team permissions,
+projects table columns) awaiting `/gsd-new-milestone`.
 
 <details>
 <summary>Milestone v1.10 Extensions & Adapters (shipped 2026-11-07)</summary>
@@ -388,6 +408,10 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   refetch, lead-on-create + permCreate restriction setting, Settings > Permissions page
   removed (dead-key i18n gate), honest not-found + refusal toasts (Phase 51; verification
   6/6 must-haves; UAT 3/3 self-run)
+- ✓ TRN-01 — Admin transparency view: exactly what a member can access, computed live
+  through `memberCanReadProject` with coarse reason codes + team name, admin-gated keyed
+  404 route, member-row expander (Phase 52; verification 3/3 fresh digest, UAT 9/9,
+  security threats_open 0)
 - ✓ R1 — A workspace is a row in `workspaces` with a unique slug and its own document — v1.1
 - ✓ R2 — An account can hold several memberships with a role per workspace — v1.1
 - ✓ R3 — `/w/:slug` addresses a workspace; all share/invite links are workspace-scoped — v1.1
@@ -583,7 +607,8 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-- [ ] v2.0 target features — see Current Milestone section above (M-01..M-08 decisions)
+*(None — next milestone not yet planned; UI/UX polish batch scoped in session, awaiting
+`/gsd-new-milestone`.)*
 
 ### Out of scope
 
@@ -609,8 +634,8 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ## Context
 
-- Shipped v1.10 (2026-11-07) with 4 phases (2 branch-delivered), 14/14 requirements; range
-  752bfb7^..HEAD ≈ 174 files, +13 898/−1 082; full suite 1133 tests (1119 pass, 14 skipped).
+- Shipped v2.0 (2026-11-09) with 4 phases, 15/15 requirements; full suite 1152 tests
+  (1141 pass / 0 fail / 11 pre-existing skips); i18n catalogue pinned at 1711 keys.
 - ~19k+ lines of JavaScript across `server.js`, `mcp.js`, `db-adapter.mjs`, `oidc.js`,
   `test/`, `public/` and `src/`; runtime dependencies: `{ pg }` only (dynamic import under
   `DB_URL=postgres://`; SQLite default unchanged).
