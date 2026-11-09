@@ -1,128 +1,78 @@
-# Stack Research
+# Technology Stack
 
-**Domain:** Stack additions/changes for v2.0 project-level permissions & invitations rewrite (Projects Studio)
-**Researched:** 2026-11-07
-**Confidence:** HIGH (every claim verified against the live codebase: `server.js`, `db-adapter.mjs`, `mcp.js`; zero external research needed — the question is internal architecture, not ecosystem)
+**Project:** gr8r / Projects Studio — v2.1 Member & Project Experience (UI/UX features)
+**Researched:** 2026-11-09
+**Mode:** Ecosystem (stack additions for new features)
 
-## Recommended Stack
+## Verdict: ZERO new stack additions
 
-### Verdict: the existing zero-dependency stack suffices — no new libraries, exactly one new table
+**Every v2.1 feature is buildable with the existing vanilla stack — zero new runtime dependencies, zero dev dependencies, zero build-config changes.** The milestone is a UI refactor/polish batch (modals, table columns, search boxes, pills) that touches only already-proven patterns. The standing zero-runtime-dependency constraint (PROJECT.md:152) holds untouched.
 
-Nothing in the new permission model needs a runtime dependency. The features are: a visibility enum instead of a boolean, two per-project booleans/doc fields, one join table, a boot backfill, and a simplified predicate. Every mechanism they need already exists and is proven: `ensureColumn` additive migrations (D-10, `db-adapter.mjs:508`), guarded boot backfills with eligibility predicates (`migrateTeamMembers` backfill, `server.js:2130+`), pre-backup `vacuum into`, byte-identical-second-boot pinning in `test/migration.test.mjs`, and the dual SQLite/pg adapter (`db.get/all/run/tx`).
+## Recommended Stack (unchanged)
 
-### Core Technologies
+| Technology | Version | Purpose | Why (for v2.1) |
+|------------|---------|---------|----------------|
+| Vanilla ES modules | ES2022 | All new UI | Every feature is DOM templating + event wiring the app already does everywhere |
+| Vite | ^6.4.4 (dev) | Bundling | No config change needed; no new assets |
+| Hand-made `t()` i18n | — (1711 keys pinned) | All new labels EN+FR | New modal/column/chip strings slot into `src/locales/*.json`; `scripts/i18n-scan.mjs` prebuild gate enforces parity |
+| `data-a` action pinning | — | New buttons/rows | Projects-table rows and modal buttons keep e2e and click-handling stable |
+| `node:sqlite` / `pg` adapter | — | Per-team perms persistence | **Only data change**: `p.teamsPerms` (or `p.perms` keyed by `team:<id>`) — a doc-field addition, not a schema migration; server merge/redact of access fields already exists (PROJECT.md:317-321) |
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| node:sqlite via `db-adapter.mjs` | current | unchanged persistence default | New model is pure relational CRUD over ids; adapter's `get/all/run/tx` covers it |
-| `pg` (only runtime dep, dynamic import under `DB_URL`) | current | optional Postgres backend | Schema suggestions below are portable: `text` ids, `integer` epochs, no `collate nocase`, adapter-translated `insert or ignore` (precedent: team_members backfill) |
-| `ensureColumn` + guarded boot sweeps | existing | the only migration machinery needed | New columns are additive; the one semantic rewrite (visibility) is a guarded doc/table backfill following the Phase-28 pattern |
-| `hiddenFor()` / `memberCanReadProject()` funnels | existing | the only places the new predicate lands | The new model *deletes* code (team term, scope grants) rather than adding pipelines — single-funnel discipline (D-06) pays off here |
+## Reuse Map — existing capabilities consumed by each new feature
 
-### Schema Changes (the deliverable)
+### 1. Invite modal: projects multi-select chips (guest = exactly one project)
+- **Reuse the chip-based multi-select picker pattern from `src/overlays/modals.js`** — the invite form already renders the same multi-selects for teams with toggle state on `S.ui.pform.teams` (`src/actions/actions.js:1508-1509`, write at `:1537`, `:1589`). Add a parallel `S.ui.pform.projects` with identical toggle/filter/selected-chip markup.
+- **`foldForSearch`** (`src/core/utils.js:22`) already filters pickers by accent-insensitive needle in `modals.js:203,228` — the projects picker needs the same needle.
+- **`data-in` state binding** is the existing mechanism for the email-draft-survival fix (`modals.js:137` shows the pattern) — role/team change re-renders keep draft state via `S.ui`, not DOM state.
+- **Constraint logic (guest = 1 project)**: pure client validation at `actions.js` toggle + submit; server-side already rejects multi-project guests (v2.0 model). No new library.
 
-#### 1. NEW table: `project_members` — the explicit-access authority (mirrors `team_members` exactly)
+### 2. Searchable members box in Edit Team
+- **`foldForSearch`** (`src/core/utils.js:22`) is the canonical matcher, already used in exactly this shape: settings timezone combobox (`src/pages/settings.js:144-145`) and share-modal member search (`modals.js:203-228`). Copy that combobox pattern — no autocomplete library.
+- Roster source is the existing `teams[]` projection (`team_members` rows, PROJECT.md:552).
 
-```sql
-create table if not exists project_members (
-  workspace_id text not null references workspaces(id) on delete cascade,
-  project_id   text not null,          -- doc-resident id; no FK, same as team_members.team_id (D-02 precedent)
-  member_id    text,                   -- doc profiles key on member_id (memberships precedent)
-  user_id      text not null references users(id) on delete cascade,
-  added_by     text,                   -- user_id of inviter — feeds the transparency view + audit
-  created_at   integer not null,
-  primary key (workspace_id, project_id, user_id)
-);
-create index if not exists project_members_user on project_members(workspace_id, user_id);
+### 3. Unified project settings modal (General + Access, per-team perms)
+- **Modal shell**: existing modal rendering in `modals.js` (comment at `:70-73` documents the pickers → PUT editor pattern).
+- **Per-team perms reuse the per-person perms model**: `PERMS = ['Can view','Can comment','Can edit','Full access']` (`src/overlays/modals.js:195`), stored in `p.perms` (`src/actions/actions.js:1790-1791`, `:1826-1827`, `:1848-1849`). Per-team entries follow the identical `<select>` UI keyed by team id — same model, no new role concept (M-09).
+- **Team list** comes from live `p.teams` links (`actions.js:1744-1745`, `:1763`).
+- **M-12 unification** means deleting the projectModal + share modal code paths — net code reduction, no additions.
+
+### 4. Projects table columns (Lead / Teams / Members count / Status+progress / Target date)
+- **Every cell renderer already exists** — the columns are reassembly of helpers proven in `src/pages/overview.js:40` (lead via `av` + `mem`, `pStatus`, `progBar(pr)` with green/red classes, `fmtDate(p.due)`) and `src/pages/home.js:74` (same row shape).
+- **`progressOf(pid)`** (`src/core/store.js:401`) — task-based %, M-10.
+- **`PSTAT`** (`src/core/constants.js:139`) — status labels/colors pill; already rendered as a pill on the project page (`src/pages/project.js:71`).
+- **Teams cell**: project→team names resolve via `projTeams` (`src/views/project-overview.js:6`).
+- **Members count**: `p.members.length` — trivial.
+- **`data-a="go"` row pinning** already established (`overview.js:40`, `home.js:74`).
+
+### 5. Single Share button on project page
+- **M-13** is pure deletion (remove user+ icon and avatar-stack duplicates, keep labeled Share). The kept Share button opens the new unified modal. `avStack` (`src/ui/helpers.js:18`) may survive elsewhere (home.js uses it) — it stays in helpers.js; only its duplicate *instances* on the project page go.
+
+## What NOT to Add (hard)
+
+| Tempting addition | Why NOT |
+|-------------------|---------|
+| UI framework (React/Preact/Svelte) | Violates zero-dep constraint (PROJECT.md:183); every v2.1 feature is string templating the app already does; framework migration would touch ~19k lines for zero feature gain |
+| Component library (shadcn, Radix, Web Components kit) | CSS is hand-rolled and consistent; new chips/pills/comboboxes clone existing in-repo markup, which is *less* work than adapting a kit's styling |
+| State management lib | `S.ui.*` singleton on `store.js` is the working state layer; the invite-draft fix is precisely about using it correctly, not replacing it |
+| Search/autocomplete library (fuse.js, typeahead) | `foldForSearch` + filter is 3 lines per box and already ships in 4+ surfaces |
+| i18n framework | D-12-era decision (PROJECT.md:364-367): every candidate measured is bigger than the layer it replaces |
+| Date-picker library | Target-date input exists in the current projectModal; move, don't replace |
+| New dev tooling (lint/test/build plugins) | i18n-scan gate, Playwright e2e, `node --test` already cover the new surfaces; e2e coverage for invite/share modals exists since Phase 10 |
+
+## Installation
+
+```bash
+# Nothing. No install step for v2.1.
 ```
 
-**Why a table and not the existing doc field `projects[].members[]`:** the doc access list exists today and `canSeeProject()` reads it, but v2.0 makes explicit project access the *primary* visibility authority queried per read (the way `team_members` displaced the doc roster in Phase 28 and `notif_prefs` left the doc in Phase 34). A table gives: (a) lockstep with the established "doc is a projection, authority rows decide" doctrine; (b) the M-08 transparency view becomes one SQL query instead of a JSON walk; (c) team bulk-invite fan-out (M-03) is row inserts, not doc-revision contention. The no-FK-on-`project_id` shape is exactly the accepted `team_members`/`teams[]` trade (whitelist check at write time).
+Only data-model note: per-team perms ride the existing workspace-document merge/redact path (`p.perms` access fields are restored on read per PROJECT.md:317-321) — extend that restore list to include team entries. **Zero migrations** (standing constraint, PROJECT.md:152) holds: this is a doc field, not a table.
 
-**Do NOT add a per-project role column.** M-02's editable role/scope/status are workspace-level `memberships.role` / invite fields. Project membership in v2.0 is binary (invited or not). Adding `role` to `project_members` would create a second, conflicting rank system — the exact ambiguity the single-guest concept (M-04) removes.
+## Risks / Flags
 
-#### 2. Doc fields on `projects[]` (no schema migration — JSON document)
-
-| Field | Type | Replaces | Notes |
-|-------|------|----------|-------|
-| `p.visibility` | `'public' \| 'private'` | `p.private` boolean + retired dropdown | `projectIsPrivate()` becomes `p.visibility === 'private'`; sweep deletes `p.private` like the `delete p.access` precedent in `normalizeProjects()` |
-| `p.members_may_invite_guests` | boolean | the workspace Settings > Permissions page (removed per M-06) | Per-project toggle; admins/owner always allowed regardless. **Default decision needed from owner: `false` (safe) vs `true` (preserves today's behaviour where any member can invite).** |
-| `p.teams[]` | — | becomes legacy, swept away | M-03: teams are an invitation mechanism, not a stored link. Boot sweep fans `p.teams` out into `project_members` rows and deletes the field (same "scalar→array then delete" pattern as `p.team`→`p.teams` in `normalizeProjects()`) |
-
-Also: extend the `redactDoc()`/`mergeClientDoc()` restore-and-protect lists — today they restore `private, members, perms, lead`; they must restore `visibility` and `members_may_invite_guests` from storage, or a redacted client could blank a project's privacy (the exact bug class `mergeClientDoc()` exists to prevent).
-
-#### 3. `ensureColumn` additions
-
-```js
-await adapterEnsureColumn('invites', 'project_id', 'text');   // project-scoped guest invites
-await adapterEnsureColumn('invites', 'status', 'text');       // if post-invite status editing needs a value beyond used_at/expires_at — likely NULL for now
-await adapterEnsureColumn('memberships', 'status', 'text');   // M-02 editable status (e.g. 'active'|'suspended'), nullable = active
-```
-
-The existing `invites.teams` column is **reused, not replaced**: under M-03 a team invite to a private project is a pending invite whose acceptance fans out into `project_members` rows. `invites.scope` / `memberships.scope` stay on disk as legacy-never-read (the `invites.team` D-04 precedent).
-
-### Migration Strategy (the only risky part)
-
-One guarded boot pass, following the Phase-28 pattern precisely:
-
-1. **Pre-backup** `vacuum into` (existing machinery) gated on an eligibility predicate.
-2. **Eligibility predicates** (so second boot is a byte-identical no-op):
-   - `anyProjectWithoutVisibility()` — any `data.projects[]` entry lacking `visibility`
-   - `projectMembersEligible()` — `count(*) from project_members` == 0 but private projects have non-empty `members[]` (mirrors the `team_members` guard at `server.js:2149`)
-3. **Backfill order is load-bearing** (Phase 28 Pitfall 4 applies verbatim):
-   a. For every project with `p.private === true` → `visibility = 'private'`, else `'public'`; delete `p.private`.
-   b. Fan out `project_members`: private projects' `p.members[]` → rows; **then** `p.teams[]` ∩ `team_members` → rows. Order matters: teams must be resolved from `team_members` before `p.teams` is deleted. This fan-out is what makes the migration *visibility-preserving* — a team member who saw the project via the v1.7 `teamIntersects` rule still sees it via their new `project_members` row. **This equivalence is the acceptance test for the whole migration.**
-   c. Delete `p.teams` from every project.
-   d. Scope conversion (D-03 retirement): for each membership with a parseable non-null `scope`, write `scope.projects` (and `scope.teams` ∩ `team_members`) into `project_members`, then set `scope = null` (workspace-wide). This preserves the D-03 grant inversion's *effect* (scoped guests keep access to their one project) while making the new model the only semantics. Keep the defensive `projectScope()` parser as dead-path armor — deleting it is cleanup, not migration.
-4. **Portability:** use the adapter's existing `insert or ignore` translation (proven in the team_members backfill); `integer` epoch columns match the pg bigint-epoch variant; no `collate nocase` (D-10 line-scoped rule); every new statement runs through `db.get/all/run/tx`, never raw sqlite.
-5. **Pins:** extend `test/migration.test.mjs` with (i) byte-identical second boot, (ii) a visibility-equivalence matrix — for each seeded member × project, `memberCanReadProject` before migration == after.
-
-### Integration Points with Existing Funnels (what changes where)
-
-| Site | Change |
-|------|--------|
-| `memberCanReadProject()` (server.js:786) | **Rewrites to:** `!isPrivate(p) \|\| project_members has (ws, p.id, member)`. Deletes the `teamIntersects` term and the `teamsOfUser` lookup — the function gets *cheaper* (one indexed lookup vs the live-team set resolution). Signature keeps `liveTeams` param slot or drops it. |
-| `hiddenFor()` (server.js:872) | The scoped branch (`projectScope()` non-null) becomes unreachable after the scope sweep — collapse to the single null-scope path. Keep the defensive scope parse returning null so a stray legacy row fails open. |
-| `scopeGrants()` / `inScopeProject()` | Deletable once the sweep converges (D-03 grant inversion is subsumed: an invited guest's `project_members` row *is* the grant). |
-| Send-time surfaces (reminder pass ~:1357, :1480, :1605, email mirror) | All already route through `memberCanReadProject` — **zero changes** if the helper's signature is preserved. This is the strongest argument for rewriting in place rather than adding a v2 predicate. |
-| `redactDoc()` / `mergeClientDoc()` | Restore-list extension (above) + hidden-set derivation unchanged. |
-| `mcp.js:177` | It carries a *mirror* of `memberCanReadProject` (no server import). **This is the one place the new model must be applied twice** — a known liability of the no-import design. Update in lockstep and add a behavioural parity test, or accept the small duplication with a pinned test. |
-| `guestSingleProject` rule (server.js:4931) | Phase-29's "viewer + exactly one project" scope constraint conflicts with the single-guest concept (a guest can now be invited to several projects). Decision needed: drop the exactly-one rule (recommended — the `project_members` rows *are* the boundary) or keep it as a guard. Schema supports either; nothing to migrate. |
-| M-01/M-02 invite hierarchy + post-invite editing | Pure route logic on `memberships.role` / `invites.role` — no stack change; the `check (role in (...))` constraints already admit all needed values. |
-
-### What NOT to Add
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| RBAC/ABAC library (Casbin, oso, accesscontrol) | Would break the zero-dependency invariant (D-12); the model is 2 predicates and 1 table | Hand-rolled predicate in `memberCanReadProject` (existing doctrine) |
-| A `projects` table | Projects are doc-resident with optimistic revision concurrency; extracting them mid-milestone is a rewrite, not a permission change | `project_members` referencing doc ids by convention (team_members precedent) |
-| Per-project role column | Creates a second rank system conflicting with M-01/M-04 | Workspace `memberships.role` stays the only role |
-| Separate `project_visibility` / toggles table | Two more joins per read for two booleans | Doc fields on the project object |
-| DB triggers/cascades for visibility | Audit-log doctrine (D-A2) forbids hidden implicit writes; visibility must be deterministic at predicate time | Explicit boot sweep + explicit route writes |
-| Dropping the legacy columns (`private` fields inside docs, `scope` columns, `p.teams`) via destructive migration | Zero-migration-fatigue convention: legacy fields are deleted from *new writes* and left dormant on disk | `delete p.private` in normalize + never-read columns (D-04 pattern) |
-| A second hidden-set pipeline for MCP | Two funnels = drift | Rewrite the mcp.js mirror + parity test (accepted duplication precedent) |
-
-### Workspace-level settings (M-06/M-07)
-
-The removed Settings > Permissions page and the new "restrict project creation to admins" setting are workspace-scoped config. Store them as fields on the workspace settings object (the existing workspace-settings surface, not `user_notif_prefs` — that table is per-user by design). No new table, no migration: absent field = default (creation open to all members per M-07 default).
-
-## Alternatives Considered
-
-| Recommended | Alternative | When the Alternative Would Win |
-|-------------|-------------|-------------------------------|
-| `project_members` authority table | Keep doc `projects[].members[]` as the access list | Only if the workspace doc stays small (< a few hundred project memberships); doc-list wins on zero migration, but loses on transparency-view queryability and write contention with team fan-out. The doctrine shift already happened in Phase 28 — follow it. |
-| Convert-and-clear scope sweep | Keep `memberships.scope` live alongside the new model as a "restriction" layer | Only if the owner wants D-03 as a permanent admin restriction tool. Two overlapping access semantics is what M-05 explicitly replaces; the sweep is the honest retirement. |
-| `visibility` enum on the doc | Keep `private` boolean | Enum is the dropdown replacement M-05 names and leaves room for a future `'unlisted'` without a second migration. |
+- **Only genuine watch-item:** the `p.perms` merge/redact must not drop team-keyed entries on write by non-admin callers — this is a logic risk inside existing code, not a stack gap. Flag for plan-phase, not for research.
+- i18n gate: expect ~20-40 new keys (unified modal, table headers, guest-one-project error) in EN+FR — routine, gate enforces it.
 
 ## Sources
 
-- `server.js:760-930` — `projectIsPrivate`, `canSeeProject`, `teamIntersects`, `memberCanReadProject`, `projectScope`, `scopeGrants`, `hiddenFor` (read directly — HIGH)
-- `server.js:280-320, 420-445` — authority-table schema + `ensureColumn` inventory (HIGH)
-- `server.js:2105-2195` — the Phase-28 guarded backfill pattern (eligibility predicates, pre-backup, portable inserts) (HIGH)
-- `server.js:2936, 4931-4947` — guest/viewer mapping and `guestSingleProject` constraint (HIGH)
-- `mcp.js:177` — duplicated permission predicate (HIGH)
-- `db-adapter.mjs:505+` — D-10 `ensureColumn`, portability rules, `collate nocase` ban (HIGH)
-- `.planning/PROJECT.md` — M-01..M-08 decisions, migration conventions (HIGH)
-
----
-*Stack research for: v2.0 Project-level Permissions & Invitations*
-*Researched: 2026-11-07*
+- Repo inspection (HIGH confidence — direct file reads): package.json (deps: `pg` only; devDeps unchanged), `src/core/utils.js:22`, `src/core/store.js:401`, `src/core/constants.js:139`, `src/overlays/modals.js:195,203-228,137`, `src/actions/actions.js:1508-1537,1744-1849`, `src/ui/helpers.js:18,56`, `src/pages/overview.js:40`, `src/pages/home.js:74`, `src/pages/project.js:71`, `src/pages/settings.js:144-145`
+- PROJECT.md v2.1 decisions M-09..M-13 (owner-validated 2026-11-09)

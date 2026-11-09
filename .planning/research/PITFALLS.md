@@ -1,278 +1,208 @@
-# Pitfalls Research — Replacing Team-Derived Visibility with Project-Level Permissions (v2.0)
+# Domain Pitfalls — v2.1 UI/UX features on the v2.0 permission system
 
-**Domain:** Permission-model replacement in a live multi-tenant PM workspace (Projects Studio v2.0)
-**Researched:** 2026-11-07
-**Confidence:** HIGH — grounded in this codebase's documented funnel architecture (`hiddenFor()`, `memberCanReadProject`, `projectScope`, D-03, 404-matrix tests, reminder/digest/email/MCP consumers) rather than generic advice. These are the specific traps this codebase invites.
+**Domain:** Adding per-team perms, an invite-modal projects picker, and a unified settings modal to an app whose security posture is a hard-won single visibility funnel (`memberCanReadProject`), whole-doc PUT with `mergeClientDoc` field pinning, and keyed refusals.
+**Researched:** 2026-11-09 (direct code reads of server.js, mcp.js, src/overlays/modals.js, src/actions/actions.js, scripts/i18n-scan.mjs, plus v2.0 phase artifacts)
+**Overall confidence:** HIGH — every claim below is anchored to a live file:line read this session; no speculative APIs assumed.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Orphaned access paths — a second consumer still calls the old model
+### Pitfall 1: Per-team perms widen the visibility funnel — and the funnel has five consumers, not one
 
-**What goes wrong:**
-The v1.7/v1.10 work established a *single* read funnel (`hiddenFor()` via `memberCanReadProject`) deliberately adopted by the reminder pass, email mirror, and digest. When the model changes, the danger is not that the funnel changes — it is that some consumer bypasses the funnel or keeps an old assumption cached in its own code. Classic failure: the digest or reminder pass still computes "in scope" from the Phase 29 scope columns (D-03 inversion) or from `project.teams ∩ member.teams` directly, so a reminder email leaks a task in a private project the recipient can no longer read — or silently *drops* notifications for a project the recipient CAN read (leak one direction, silent data loss the other; both are defects, the drop is quieter and rots longer).
+**What goes wrong:** Per-team perms introduce a *new access-grant dimension* (`p.teamPerms[teamId] → view/comment/edit/full`). The visibility predicate `canSeeProject` (server.js:800-805) — `public ∨ memberId ∈ p.members ∨ member's team ∈ p.teams` — must gain a team-perm term, but the same predicate is consumed through **five doors**, and v2.0 already produced the exact failure mode once:
 
-**Why it happens:**
-`inScopeProject` (Phase 40 digest) and `memberCanReadProject` are separate helpers with overlapping semantics. When you rewrite one, grep-hits on the other look like "already handled." The MCP server (35 tools, Phase 46) was built on "same permission funnel as UI/API" — but each tool resolves lists independently, and a tool that pages or projects rows (`list_tasks`, activity reads, file metadata) can hold a pre-redaction row set before the funnel runs.
+- The Phase 50 review caught `remindable()` calling the *synchronous* `canSeeProject` without the team term while every other consumer used the async `memberCanReadProject` — team-granted members were silently dropped from due-date reminders (50-REVIEW.md line 101). The parity claim was "true by construction" and false in fact.
+- The MCP mirror `canReadProject` (mcp.js:183-197) is a **hand-maintained copy** (comment: "Mirror of memberCanReadProject… without the server import"). If `teamPerms` is added to server.js and not mirrored in the same commit, MCP clients get an over- or under-permissive window that the UI never shows.
+- `projectAccessReason` (server.js:828-835) mirrors the short-circuit order for labels; if it lags, the transparency view (Phase 52) labels team-perm grants as `'member'` or omits them — and its `?? 'member'` fallback (server.js:4997 area, flagged in 52-REVIEW.md) would **silently mask the divergence** instead of surfacing it.
+- `hiddenFor` (server.js:851-865) resolves the member's teams once per evaluation; the team-perm term must resolve the *perm level* for those same teams, not just existence.
+- Send-time consumers: reminder pass, email mirror, digest (server.js:1195, 1360, 1466, 1580) all funnel through `memberCanReadProject` — they inherit the term for free **only if** the term lives inside the funnel, not beside it.
 
-**How to avoid:**
-1. Make the swap inside `memberCanReadProject` ONLY — the new model (private → explicit invitees ∪ teams-as-invitees ∪ creator/lead; non-private → workspace-visible) must be expressed as a new body of the same helper, not a parallel `canSeeProjectV2`.
-2. Before starting, produce an exhaustive call-site census of: `memberCanReadProject`, `hiddenFor`, `projectScope`, `inScopeProject`, `redactDoc`, `mergeClientDoc` — every file:line, committed to the phase plan. Phase 39's audit doc did this for notifications; repeat the exercise for visibility.
-3. The 404-matrix per endpoint family must gain new rows for the new model BEFORE the implementation phase writes code (test-first matrix extension) — see Test Strategy below.
+**Why it happens:** The pinned-test doctrine says "never edit `canSeeProject`/`memberCanReadProject`/`hiddenFor`/`normalizeProjects`" (52-PATTERNS.md line 93) — a implementer reading that literally will build a *second* predicate beside the funnel instead of editing it, which is precisely the anti-pattern the one-funnel doctrine exists to prevent (RETROSPECTIVE.md line 256: "never a second pipeline").
 
-**Warning signs:**
-- Any diff that touches visibility without touching at least one of reminder/digest/email-mirror/MCP tests.
-- A digest fixture that passes with zero recipient-filtering assertions changed.
-- grep still finds `project.teams` or scope-column reads outside `memberCanReadProject` after the swap.
+**Consequences:** A team granted "Can view" that can't actually see the project (invisible rows, 404s for legitimate users), or worse, the mirror divergence — MCP agents see projects the UI hides. Both are silent; nothing crashes.
 
-**Phase to address:** Funnel phase (the phase that rewrites `memberCanReadProject`). The census is its first task; the 404-matrix extension its second.
+**Prevention:**
+1. **Edit the funnel in place** — `teamPerms` becomes a fourth term inside `canSeeProject`/`memberCanReadProject`; do NOT create a parallel `teamPermCanRead()` helper.
+2. **One lockstep commit** for server.js funnel + `projectAccessReason` + mcp.js `canReadProject`, exactly the Phase 50 pattern (50-01-PLAN: "MCP mirror… no over/under-permissive window").
+3. **Extend the pinned tests, don't bypass them** — the Phase 49/50 behavior pins must be updated *in the same phase* as the funnel edit, or the suite blocks the change (which is the pins working, not failing).
+4. **Update the hand-derived oracle** `VISIBILITY_MODEL` in test/helpers/visibility-fixture.mjs with new fixture cells (team-perm-view-only, team-perm-revoked, dangling team id) — respecting its anti-tautology contract (:5-8): expectations are never derived from the code under test.
+5. **Decide read-vs-write semantics before coding:** a team with "Can edit"/"Full access" gains *visibility + task write rights*, but must NOT gain `canManageProject` rights (server.js:837-840 — lead/admin/owner only). If per-team "Full access" is meant to allow access-list editing, that is an explicit semantic decision the owner must rule on, not an implementation accident.
 
----
+**Detection:** grep-diff in the phase summary confirming zero edits *outside* the funnel + mirror; fixture cell "m_teamperm (team-perm only) sees p_teamperm through every door (doc GET, MCP list, reminder, digest, transparency)".
 
-### Pitfall 2: D-03 scope columns and team-derived visibility left half-dead — two competing truths
-
-**What goes wrong:**
-M-05 says the new model "replaces" both team-derived visibility AND the D-03 scope columns *as the primary model*. The trap: degrading D-03 to "no longer consulted" without deciding what happens to the *stored data*. Existing `team_members` rows carry scope columns; existing private projects carry `teams[]` arrays and per-member scopes written under the old semantics (scope OPENS private projects — the inverse of the new "private = explicit invitees only" read). If the new reader interprets old rows literally, a team that was granted scope under D-03 (which *opened* a private project) may or may not count as "invited" — the two models disagree about what a scope grant means. Silent privilege change either way: access gained that no admin intended, or access lost with no email and no UI trace.
-
-**Why it happens:**
-"Replace the model" is read as "change the predicate." It should be read as "change the predicate AND converge stored state so the predicate reads the truth." Scope columns were also *invite-carried* (Phase 29) and editable in the member modal — UI surfaces for them still exist at swap time.
-
-**How to avoid:**
-1. Explicitly decide (owner-validated, as with D-03 in v1.6) the migration rule: e.g. "a Phase-29 scope grant on a private project converts to an explicit project-membership/invitee row" or "scope columns become read-only projections, deleted in a later sweep." Write it as a named decision (D-xx) in PROJECT.md before the migration phase plans.
-2. Migration must be additive and guarded per the standing invariant: pre-backup, transactional, **byte-identical second boot** — the `migrateTotpReWrap()` / SETTINGS-01 pattern is the house style; copy it, including the loud-deferral path when a precondition is missing.
-3. Boot sweep for legacy shapes is proven here (Phase 33's "extinct in stored data" update-only sweep) — use the same pattern for stale scope semantics.
-4. Test the pg variant too: pg rows carry bigint epochs; the copy script and pg schema must both survive the migration (multi-backend matrix — see Test Strategy).
-
-**Warning signs:**
-- A migration phase plan with no owner-validated decision id for scope-column disposition.
-- Tests that assert old-scope behavior still pass unchanged after the "swap" (means nothing actually converged).
-- Second boot produces a diff (any byte) — migration not idempotent.
-
-**Phase to address:** Migration phase (data convergence + decision D-xx). The UI phase must not ship member-modal scope editing until the decision lands.
+**Phase:** the server/funnel phase (per-team perms, server half) — this is the phase's core, not a cleanup.
 
 ---
 
-### Pitfall 3: Guest model collapse — "exactly one project" breaks silently
+### Pitfall 2: Forgetting `p.teamPerms` in the `mergeClientDoc` pin block — a stale PUT silently revokes a whole team's grant
 
-**What goes wrong:**
-Today a guest is `viewer + exactly one project`. The new model removes the "Invité externe" toggle (M-04) and makes guests per-project invitees with the per-project member-invite-guest toggle (M-06). Traps:
-- **Old guests with zero or >1 project:** a guest whose single project becomes public, or whose project membership is removed, becomes a guest with *no* project — an undefined state. Today the invariant is structural; after the swap it must be re-derived or the account must be converted (to member? suspended?).
-- **Toggle drift:** per-project "members may invite guests" defaults — a project created before the toggle exists has no stored value; default-allow vs default-deny silently changes who can invite on legacy projects.
-- **Guest editing after invite (M-02):** "everything editable post-invite" interacts with guests — changing a guest's project must revoke access to the old one in the same transaction, or the redaction funnel briefly (or forever) trusts a stale row.
-- **Invite hierarchy enforcement:** members can invite guests *only where the project allows* — the check must run at invite-creation AND at accept time (invite accepted later, after the toggle flips to deny → must fail closed, matching the v1.7 HARD-01..05 fail-closed invite twins).
+**What goes wrong:** `mergeClientDoc` (server.js:1041) pins manager-owned access fields for non-managers at :1090-1101:
 
-**Why it happens:**
-Guests are a *cross-project* invariant living in per-project data after the swap. Every invariant that spans rows needs a migration check plus a boot-time validator, not just a route guard.
+```js
+if (prev && !canManageProject(prev, memberId, role)) {
+  p.private = prev.private; p.members = prev.members; p.perms = prev.perms;
+  p.lead = prev.lead; p.teams = prev.teams; p.allowInviteGuests = prev.allowInviteGuests;
+}
+```
 
-**How to avoid:**
-1. Boot sweep classifying existing guests: exactly-one-project → convert to new guest shape; zero-project → convert or flag loudly (never silently delete access).
-2. Decide and pin the default value of the member-invite-guest toggle for pre-existing and new projects (owner decision, like the rest of M-01..M-08).
-3. Re-validate guest state at accept-time and at every role/scope edit (M-02): the edit route re-checks the invite hierarchy, not just the create route.
-4. Extend the 404-matrix with guest rows: guest reads second project → byte-identical 404; guest after project-reassignment → old project 404s.
+This pin list is the security posture (T-50-01: a stale non-manager PUT "can never delete p.teams — which would silently revoke a whole team"). Adding `teamPerms` without adding it to this block means a member whose client doc predates an admin's team grant can PUT and **delete the entire teamPerms map** — silently revoking every team grant at once, with no refusal, no 409 (their revision may be current), and no visible symptom until the team reports losing access.
 
-**Warning signs:**
-- Any test suite with no guest-with-zero-projects fixture.
-- Invite-accept route unchanged while invite-create route changed (half-enforced hierarchy).
-- Toggle absence treated as `true` by default without a written decision.
+**Why it happens:** The pin list is an imperative sequence of field assignments, not a data-driven rule — every new access field must be *remembered* into it. The same field must also be considered in the `wasPrivate` re-add logic (:1103-1107) and `normalizeProjects` (:872-889, which validates members/lead but must learn to validate team ids in `teamPerms` — dangling team ids after a team deletion must be swept, following the p.teams precedent).
 
-**Phase to address:** Migration phase (state conversion) + funnel phase (accept-time re-validation). UI phase owns the toggle surfaces and EN+FR keys.
+**Consequences:** Silent mass-revocation; the exact class of bug the v2.0 milestone spent four phases eliminating.
 
----
+**Prevention:**
+1. Every new manager-owned access field (`teamPerms`, plus anything the unified Access section introduces, e.g. a general-access enum if it replaces the boolean) is added to the pin block **in the same commit** as the field's introduction, with a test: non-manager PUT carrying a stale/missing `teamPerms` → stored value survives byte-identical.
+2. Mirror the D-51-15/16 lesson (server.js:1048-1053): any server-authoritative value read during merge (perm levels for enforcement) comes from the **STORED** doc, never the incoming one.
+3. If the milestone decides to restructure access fields (e.g. folding `perms` + `teamPerms` into one object), that restructuring must go through `normalizeProjects` + a boot sweep like Phase 49's — not a free-form client write.
 
-### Pitfall 4: Invite-in-flight during the model swap
+**Detection:** pin-block grep (`p.private = prev.private` region) reviewed in code review; regression test named after the T-50-01 pattern (e.g. T-XX-01 "stale non-manager PUT cannot delete teamPerms").
 
-**What goes wrong:**
-Invites carry scope today (Phase 29 `invite-carried scope`). An invite created under the old model, accepted after the new model ships, must land in the *new* model — but the stored invite row was written under old semantics. Failure modes: a workspace-level invite that carried team-sharing or scope now confers project access nobody re-approved; an admin "link-only invite" (made impossible at creation in Phase 33, harmless at accept, swept to extinction) resurfaces as a viable path; the guest toggle flips between create and accept and the accept honors the stale permission.
-
-**Why it happens:**
-Accept routes were hardened to fail closed (Phase 33) precisely because invites are *stored permission promises*. Model swaps invalidate promises; accept-time code that trusts the row rather than re-deriving from current state ships the stale promise.
-
-**How to avoid:**
-1. Accept-time re-derivation rule: at accept, evaluate the invite against *current* project/workspace state under the new model; deny (410, matching the HARD twins) when the promised shape no longer exists.
-2. Boot sweep migrating in-flight invites to the new schema in the same additive migration as the scope convergence (Pitfall 2) — one migration, one backup, one idempotence proof.
-3. Test the interleaving explicitly: create invite → run migration → accept → assert new-model outcome; and the reverse order.
-
-**Warning signs:**
-- Accept route diffs limited to a role-mapping rename.
-- No test covers "invite created pre-swap, accepted post-swap."
-
-**Phase to address:** Migration phase (row conversion), verified inside the funnel phase with interleaving tests.
+**Phase:** the server half of per-team perms AND the unified-settings phase — both touch this block; the second phase must re-verify the first's pin rather than assume it.
 
 ---
 
-### Pitfall 5: Client store caches roster/visibility — UI shows ghosts after the swap
+### Pitfall 3: The unified settings modal writes access fields from a client doc that was redacted or stale — pinning breaks in the *other* direction
 
-**What goes wrong:**
-The client keeps workspace documents with optimistic concurrency (`revision`, `redactDoc`/`mergeClientDoc` round-trips). After the swap, three stale-cache surfaces appear:
-- **Ghost projects:** a project that just went private still renders for a non-invitee until the next full doc fetch; clicks hit 404s mid-session.
-- **Ghost access:** the transparency view (M-08) computed client-side from a cached doc can show *more* than the server would send — the transparency view must be server-computed or it lies, and a lying transparency view is worse than none (admins make revocation decisions from it).
-- **Roster drift:** project member lists (now invitee lists + teams-as-bulk-invitees) cached in the client store show removed members; the share modal offers teams that are no longer invitees.
+**What goes wrong:** Today the Share modal edits access fields per-project from a freshly-read project (`proj(m.id)` at shareModal, modals.js:204). The unified modal merges General + Access into ONE write path replacing two — meaning one PUT now carries both lead-editable General fields (desc/icon/color/due) and manager-only Access fields (private/members/perms/teams/teamPerms/allowInviteGuests). Three distinct failure modes:
 
-**Why it happens:**
-Redaction is server-side, but *staleness* is client-side. The mid-session 401 teardown (Phase 14) handles auth loss; nothing handles "your visibility changed under you." `mergeClientDoc` restores access fields it can't see — correct for write-merging, but it means the client never learns a project vanished unless the server explicitly sends its absence.
+- **Manager-of-target but not workspace-manager, stale doc:** the client's doc snapshot predates another admin's change (e.g. a new team link). The PUT is not pinned (caller IS a manager of that project) — it *legitimately* overwrites and silently reverts the other admin's grant. Revision 409 only helps if the modal actually adopted the latest revision after its own refetch; a modal built once at open-time and submitted minutes later is a stale-PUT machine.
+- **Non-manager lead confusion:** per-team perms M-09 means a team member with "Can edit" opens the unified modal and sees the Access section. If the modal renders it editable client-side, the PUT carries modified access fields — the server pins them (Pitfall 2), so the user's edit silently vanishes on save with a success toast. The client must render the Access section read-only using the same `canManageProject` semantics as the server (it already imports it — modals.js:159).
+- **Redacted-doc write:** the settings modal is reachable from both Workspace > Projects and the project page. A guest/viewer opening it on the projects table must not build a PUT from a doc where the project row exists but its access fields are manager-owned values they shouldn't echo back — the merge tolerates it, but only if the pin list is complete (circular dependency with Pitfall 2).
 
-**How to avoid:**
-1. Server pushes (PUSH-01..03 infrastructure exists) or 30s polling must carry a cheap visibility-version/epoch per workspace; client refetches the doc when it changes. A per-workspace `visibility_epoch` bumped by any permission-affecting write is zero-dependency and matches the house style.
-2. 404 handling on project deep-links must route to a localized "no longer available" state, not a dead toast — mirrors the v1.5 localized not-found toast pattern.
-3. Transparency view (M-08) is server-computed: one endpoint returning exactly the visible set for a member, built by calling `memberCanReadProject` — never derived client-side. This also makes it the human-readable oracle for the 404-matrix (the view and the 404s must agree by construction, same helper).
-4. Removing the Settings > Permissions page (M-06): sweep client code, palette commands, and i18n keys for the removed surface — the i18n-scan build gate will catch orphaned *new* keys, not orphaned *removed* pages; add a leak check for the removed strings.
+**Why it happens:** The whole-doc PUT model means "the modal saves" is really "the modal edits the in-memory doc and the app pushes the whole document." Any modal that caches a doc slice at open-time instead of mutating live store state reintroduces the stale snapshot.
 
-**Warning signs:**
-- Transparency view rendered from client state.
-- No epoch/version in the doc payload.
-- Chromium tests only cover fresh-load, never "permission changed in another tab/session."
+**Consequences:** Silent permission reverts between admins; silent save-failure for non-managers; possible 409 loops.
 
-**Phase to address:** UI phase (staleness handling, transparency endpoint, permissions-page removal). The epoch bump belongs to the funnel phase (bump on every permission write).
+**Prevention:**
+1. The modal mutates **live store state** (`S.ui.*` form objects, the `pform`/`data-in` pattern) and the submit path reads the doc at push time — never a frozen copy captured at open.
+2. After opening, refetch (or adopt the pushed revision) before allowing save if the store's revision moved — the existing "every endpoint reports the new revision and the client adopts it" contract (PROJECT.md:323-324) is the mechanism; the modal must not break it.
+3. Client-side `canManageProject` gate on the Access section, matching server.js:837-840 exactly — one shared helper, not a re-implementation.
+4. Test matrix mirroring the 404-matrix tradition: {manager, lead, team-edit-member, plain member, guest} × {open modal, edit general, edit access, save} with assertions on which fields actually persisted.
+
+**Detection:** a UAT scenario "two admins edit the same project's settings concurrently — second save must 409, not silently win".
+
+**Phase:** the unified settings modal phase (this is *the* risk of that phase).
 
 ---
 
-### Pitfall 6: The 404-matrix regresses into a tautology
+### Pitfall 4: Full re-render wiping unsaved modal input — the bug being fixed will be reintroduced by the unified modal, and other modals share the disease
 
-**What goes wrong:**
-The 404-matrix tests (Phase 29/32) prove "no existence oracle" — byte-identical 404s for unauthorized and nonexistent. Two failure modes during the swap:
-- **Tautology:** the matrix is rewritten to use `memberCanReadProject` itself as the oracle — now the tests assert the implementation agrees with itself and can never catch a leak. The matrix must encode the *model* (who should see what) independently of the code under test.
-- **Incomplete families:** 35 MCP tools are endpoint families too. The original matrix covered HTTP families; MCP tools resolve lists through the same funnel but a matrix row per MCP tool is easy to skip ("it goes through the funnel") — exactly the assumption Pitfall 1 warns against. Also: the file-serve side door (Phase 29 byte-identical `fileNotFound`) is its own family and must gain new-model rows.
+**What goes wrong:** Modals are template-string functions of state (modals.js:41-43, 156, 202) re-rendered on state change. Inputs survive only when bound via `data-in`/`data-f` to persistent state (`pform.name` etc.). The v2.1 headline bug is exactly the miss: the invite email draft doesn't survive role/team changes because its binding or its state slot resets. The unified settings modal is a much larger multi-section form — the blast radius of one missed binding is bigger: description textarea, target date, per-team perm dropdowns (one per linked team — dynamically generated rows are the classic miss), member search input, general-access radio group.
 
-**Why it happens:**
-Matrix tests are expensive to extend; the shortcut is "the funnel is shared, one family proves it." That is true only if every consumer calls the funnel *unconditionally*, which is the thing being tested.
+**Why it happens:** Any state change that re-renders the open modal — role select change, team chip toggle, `shareQ` typing driving a filtered list re-render (shareModal:203-224 re-renders on every keystroke of the search), a background 30s notif poll triggering a store update, or a post-save revision adoption — wipes unbound input. The `shareQ` pattern (`data-in="shareQ"` at modals.js:218) is the proven fix; the invite draft bug proves it's easy to forget on new fields.
 
-**How to avoid:**
-1. Extend the matrix BEFORE implementation with a table of (actor shape × project shape × expected visibility) where actor/project shapes are the new model's: explicit invitee, team-invitee, guest via allowed toggle, guest via denied toggle, member on public, member on private, admin/owner, removed invitee, SSO JIT bare account (no role — must see nothing).
-2. One row per MCP tool family, at least for list/read tools; assert byte-identical empty-result/404 bodies, not just status.
-3. Keep 404 bodies byte-identical — assert body equality, not just status codes; the existing named-404-per-family tests make this cheap to extend.
-4. Add EN+FR parity to nothing here (no user-visible copy in 404 bodies) — but the "no longer available" UI state from Pitfall 5 does need both locales; the i18n-scan gate covers it only if keys are added, not strings.
+**Consequences:** Users lose typed text mid-form; worst in the Access section where a lost team-perm edit might be re-saved wrong.
 
-**Warning signs:**
-- Matrix diffs that reduce row count or replace expected values with `memberCanReadProject(...)` output.
-- No MCP tool in any 404/empty test after the swap.
+**Prevention:**
+1. **Every keystroke-able field in the unified modal gets a `data-in` binding to a durable state slot** before any interaction logic is written — this is a plan-level checklist item, not a code-review hope.
+2. Dynamically generated rows (per-team perm selects) key their state by team id (`S.ui.settingsForm.teamPerms[teamId]`), not by DOM position.
+3. Gate background re-renders: a poll/push-driven store update must not re-render an open modal mid-typing (or must merge through the data-in bindings, which it does only if they exist).
+4. Chromium e2e in both locales: type into every field → toggle role/team/search/select → assert all values survived. Mirror the existing invite-modal e2e (Phase 10 covered it) and extend it to the new picker.
+5. Sweep the *other* modals while in there: Edit Team's searchable members box (`foldForSearch` pattern is cited in the milestone plan) and any modal with a search input should get the same survives-interaction e2e — the bug class is shared even when the specific fix is scoped to the invite modal.
 
-**Phase to address:** Funnel phase (matrix extension is its definition-of-done), written before implementation code.
+**Detection:** e2e assertion per field; a review rule "new modal input without data-in = blocking".
+
+**Phase:** the invite-modal phase introduces the fix pattern; the unified-modal phase applies it at scale; a small sweep item belongs to whichever phase ships last.
 
 ---
 
-### Pitfall 7: Zero-dependency scheduler reads permissions outside a transaction — torn notification passes
+### Pitfall 5: Guest one-project invariant enforced client-side only on the NEW picker paths
 
-**What goes wrong:**
-The reminder pass and digest are scheduled, batched, transactional-exactly-once (`reminders_sent` claims). During (or after) the swap, a pass that reads project visibility across many projects in one tick can observe torn state: migration partially applied, a toggle flipped mid-scan, a bulk team invite half-committed. Consequences: duplicate or missing notifications, or a digest built against pre-swap visibility. The no-double-send and post-09:00 catch-up invariants (Phase 37/38) must survive unmodified — a torn pass that claims-and-fails burns the exactly-once slot.
+**What goes wrong:** The guest = viewer + exactly one project invariant is currently enforced at three server points: member-tier invite requires a project and caps the role (`inviteMemberRoleCeiling`/`inviteMemberProjectRequired`, server.js:5215-5218), the accept path re-derives `allowInviteGuests` fail-closed (:5411 region), and the legacy-role boot normalization (:2850-2894). Client-side, the picker "degrades to single-select on the guest path" (actions.js:2023-2029) — and the role checkbox mirrors the Guest role (:2044-2045). The v2.1 picker + unified modal add **new write paths** that can break the invariant if they only re-implement the client rule:
 
-**Why it happens:**
-The scheduler's correctness story is per-claim, not per-view. The new model adds more per-project state consulted per recipient, widening the read set inside a pass.
+- **Invite edit path:** M-02 "everything editable post-invite" — changing an existing invite's role Member→Guest must now *require* a project server-side. If the edit route predates the per-project model or only re-checks role at creation, a guest invite with zero projects slips through.
+- **Role flip on the stored invite:** Guest→Member must be allowed to keep/drop the project deliberately; Member→Guest with multiple selected projects must be refused (or coerced) **server-side**, not just de-selected in the UI.
+- **MCP invite tools:** the MCP server shares "the same permission funnel" (PROJECT.md:193-194) — its invite tool must carry the same guest ceiling and project requirement, or an agent creates the invite the UI would have refused.
+- **Lifecycle drift:** removing the guest's only project (project member removal, project archive/delete, team unlink) leaves a guest with zero projects — define the behavior (downgrade? invite stays but inert?) before the picker makes it easy to trigger.
 
-**How to avoid:**
-1. Snapshot the visibility decision per (recipient, project) once per pass — resolve `memberCanReadProject` at claim time inside the same transaction as the claim, exactly as the digest already resolves names strictly after `inScopeProject` + `memberCanReadProject` (Phase 40 D-05/D-06 pattern — preserve that ordering verbatim).
-2. Migration must be transactional per its own guard so a pass never observes half-migrated rows (the guarded-additive invariant already demands this — test it with a pass running concurrently in the multi-backend matrix).
-3. Keep the Phase 38 suppression invariant tests green unmodified — they are the canary; if they need changes beyond recipient-source updates, the pass architecture drifted.
+**Why it happens:** The invariant is behavior-only by design (D-50-11: guest "specialness survives via behavior only — viewer-role checks"); there is no schema constraint backing it, so every new write path must re-derive it by hand.
 
-**Warning signs:**
-- Reminder/digest tests needing new ordering or new transactions to pass.
-- A pass that resolves visibility before claiming.
+**Consequences:** A guest account with workspace-wide read (viewer role, no project) — a real privilege escalation relative to the documented model, invisible in the UI.
 
-**Phase to address:** Funnel phase (with the consumers), verified in the migration phase's concurrency tests.
+**Prevention:**
+1. One shared server-side validation helper (e.g. `validateGuestInviteShape(role, projects)`) called from create, edit, and accept paths — not three inline copies.
+2. MCP invite tool routes through the same helper; add a fixture to test/mcp.test.mjs.
+3. Client single-select degradation stays (UX), but is treated as cosmetic — tests assert the server refuses, not that the UI prevents.
+4. Decide and document the zero-projects-guest lifecycle in this milestone (it becomes reachable via the new picker's un-select UX).
+
+**Detection:** server test: PUT/POST invite edit {role: guest, projects: []} → keyed refusal; MCP tool test for the same.
+
+**Phase:** the invite-modal picker phase (server half); the unified settings modal phase for the lifecycle decision.
 
 ---
 
-## Technical Debt Patterns
+## Moderate Pitfalls
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Parallel `canReadV2` next to old helper | No risk to old paths during dev | Two funnels diverge; consumers pick the wrong one; leaks | Never — swap in place inside `memberCanReadProject` |
-| Leaving Phase 29 scope columns readable but ignored | No migration risk | Stored state disagrees with access decisions; future contributor "fixes" it in either direction | Only with a written D-xx decision + boot sweep plan |
-| Client-side transparency view | No new endpoint | View lies about access; admins revoke on bad data | Never |
-| Default-allow on the new member-invite-guest toggle for legacy projects | One less migration column | Legacy projects change who can invite, silently | Only if owner-validated as the intended default (M-06 gap) |
-| Skipping per-MCP-tool matrix rows ("same funnel") | Cheaper tests | One bypassing tool = leak with no test | Never for read/list tools |
-| Deleting old `project.teams` arrays at swap | Cleaner model | Undo/history (delTeam undo pattern) and audit lose context | Never — additive; sweep only when proven extinct (Phase 33 pattern) |
+### Pitfall 6: i18n gate — dead keys from removed modals, and the dead-key allowlist accidentally killing future checks
 
-## Integration Gotchas
+**What goes wrong:** Replacing projectModal + shareModal with one unified modal orphans keys (`modal.shareTitle`, `modal.shareLockHint`, `modal.teamsHint`, `modal.projectHint`…). The dead-key family (scripts/i18n-scan.mjs:1258-1356) fails the build on them — which is correct behavior, but the temptation is to add prefixes to `DEAD_KEY_ALLOWLIST` (:1270, "extend, never replace — an entry added here hides a real dead key, T-51-09"). A broad prefix like `'modal.'` would permanently blind the gate to every future dead modal key. Conversely, the *new* modal's keys must exist in EN **and** FR with matching placeholders (catalogue-key family :1115-1195, EN↔FR parity enforced), and PROJECT.md pins the catalogue at 1711 keys — the pin test needs a deliberate bump, not a surprise failure.
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Reminder pass | Re-deriving visibility from scope columns/teams instead of calling the helper | Resolve strictly after (and via) `memberCanReadProject` inside the claim transaction (Phase 40 ordering) |
-| Digest | Project-name resolution before the visibility filter (`|| ''` masking a leak) | Preserve the D-05/D-06 strict ordering; the `|| ''` is snapshot defense, not a substitute for the filter |
-| Email mirror / inbox rows | Writing notif rows for recipients who cannot read the project | Recipient set computed through the funnel at write time; keyed rows render post-hoc but recipient selection must be current |
-| MCP (35 tools) | Treating "same funnel" as automatic | Census each tool's row-resolution path; add matrix rows per read/list tool |
-| Client doc sync | Assuming redaction-on-read implies freshness | Add a visibility epoch; refetch on change; localized not-found for ghosts |
-| pg backend | Migrating SQLite only | Migration + sweeps + matrix run under both backends (`POSTGRES_TEST_URL` matrix; bigint epoch columns) |
-| i18n gate | Adding EN keys, FR "later" | i18n-scan gate fails the build — new toggle/share/transparency strings land EN+FR together, server notif keys included (Phase 36 parity gate) |
+**Why it happens:** Deleting a modal deletes its `t()` call sites; the catalogue entries become dead. People "fix" the build by allowlisting instead of pruning.
 
-## Performance Traps
+**Prevention:** Delete dead keys in the same phase that removes the modal (the Phase 51 dead-key gate exists precisely for this — UX-01 criterion 5 precedent). Add only *narrow* allowlist entries with a comment each. Update the catalogue-size pin intentionally, in the phase summary.
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Per-user × per-project visibility queries without index on invitee rows | Slow digest at 09:00 for all workspaces at once | Invitee/permission tables indexed on (project_id, user_id); resolve in batched queries per pass | Hundreds of invitees × many private projects |
-| Transparency view recomputing full doc redaction per member | Slow member-inspection UI | Compute visible-set directly from invitee rows; only render redacted doc on demand | Member lists > ~100 |
-| Visibility epoch refetch storms | Every permission write triggers all clients refetching | Coalesce epoch bumps per write; clients debounce refetch | Busy workspaces with many concurrent editors |
+**Detection:** `node scripts/i18n-scan.mjs` exit 0 with 0 dead / 0 stale; diff of the allowlist reviewed in code review.
 
-## Security Mistakes
+**Phase:** the unified settings modal phase; the projects-table phase if it removes the duplicate Share affordances' strings.
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Public toggle meaning "workspace-visible" but code treating it as "anyone with URL" | Data exposure beyond tenant | Keep tenant boundary (`requireWorkspace`) untouched; public = workspace members only — pin with test |
-| Existence oracle via timing or differing bodies on new routes (share options, transparency) | Enumerating private projects | Byte-identical 404s on every new route; matrix rows for them |
-| Bulk team invite granting more than intended (team later gains members) | Access creep — new team members inherit project access silently | Decide and document: team-as-invitee is live membership (per M-03); warn in share UI; transparency view shows team-sourced access explicitly |
-| Stale API keys after guest conversion | MCP key retains access to project it lost | Key resolution re-runs the funnel per call (it already must) — add a matrix test: guest loses project → MCP tool 404s with same key |
-| Guest role escalation via M-02 post-invite edits | Guest edited into member where toggle denied | Edit route re-checks invite hierarchy with current toggle state, fail-closed |
+### Pitfall 7: `data-a` action-name pin drift during the modal consolidation
 
-## UX Pitfalls
+**What goes wrong:** Action names wired through event delegation (`data-a="pformSet"`, `"pformTeamToggle"`, `"shareInvite"`, `"closeModal"`, `"submitProject"`) are behaviorally pinned by Chromium e2e and the i18n scanner's position logic (i18n-scan.mjs:145 documents the modals.js catalogue-key patterns). Merging two modals invites renaming handlers ("submitSettings" instead of "submitProject") — which breaks delegation silently if the dispatcher's switch isn't updated in the same commit, and breaks e2e pins.
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Members lose access with zero explanation (team-derived → explicit) | Confusion, support load, "the app is broken" | Migration report per workspace; admins see who lost what; transparency view ready at switch |
-| Share modal still offering team-derived language ("teams on this project") | Users expect old semantics | Copy reflects invite semantics ("invite this team to this project"); EN+FR |
-| Settings > Permissions removed but referenced in docs/onboarding | Dead links | DEPLOY.md/README sweep; palette commands removed |
-| Ghost project links from old notifications/emails | 404 on click, feels like data loss | Localized "no longer available" landing state (v1.5 pattern) |
+**Prevention:** Rename in one commit with the dispatcher + all data-a attributes + e2e selectors; grep `data-a="` and the handler map before declaring done. Prefer *reusing* existing action names where semantics match (submitProject already handles create+edit — the unified modal can extend it).
 
-## "Looks Done But Isn't" Checklist
+**Phase:** unified settings modal phase.
 
-- [ ] **Funnel swap:** every consumer re-verified — grep census shows zero `project.teams`/scope reads outside the helper — verify with committed census doc
-- [ ] **Migration:** second boot byte-identical, both backends — run migration.test.mjs extended for pg
-- [ ] **Guests:** zero-project guest state impossible or loudly flagged — boot validator test
-- [ ] **Invites in flight:** created-pre-swap invite accepted post-swap lands in new model — interleaving test
-- [ ] **MCP:** all 35 tools resolve through new funnel; read/list tools have matrix rows — per-tool test
-- [ ] **Transparency view:** server-computed via `memberCanReadProject`; agrees with 404-matrix by construction
-- [ ] **Scheduler:** Phase 37/38 no-double-send + suppression invariants pass unmodified
-- [ ] **i18n:** every new key EN+FR, server notif keys included; removed Permissions-page keys swept
-- [ ] **404 bodies:** byte-identical asserted (body equality, not status) on all new routes
-- [ ] **Client staleness:** visibility epoch + refetch; cross-session permission-change Chromium test
-- [ ] **Team bulk invite:** later-added team members gain access per M-03 — pinned by test
-- [ ] **Member-invite-guest toggle:** enforced at create AND accept; fail-closed after flip
+### Pitfall 8: Projects-table columns leaking data the funnel redacts
 
-## Recovery Strategies
+**What goes wrong:** New columns Lead / Teams / Members (count) / Status / Target date render data the client already has — but for a *member who cannot manage* a project, `p.members`, `p.teams` and `p.perms` are manager-owned fields they can *see* (redaction removes whole projects, not fields). Rendering member counts and team names is fine; rendering per-team perm levels or the access list in a tooltip is a disclosure decision, and the transparency doctrine (T-52-03: coarse codes, never rosters) should govern it. Also the guest's table view: guests see exactly one project — the table must not render sibling-project hints via column aggregates.
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Leaked access via bypassing consumer | MEDIUM | Fix consumer to call helper; add matrix row; audit notif rows sent (they are keyed/logged) and notify affected users if needed |
-| Lost access after swap (silent drop) | MEDIUM | Additive migration re-grants from backup-derived mapping; the pre-migration backup (standing invariant) is the recovery artifact |
-| Non-idempotent migration discovered in prod | HIGH | Restore from vacuum-into backup; fix; re-run — this is why the backup precedes first write |
-| Client ghost state reported by users | LOW | Ship epoch/refetch; no data harm, cosmetic |
-| Torn scheduler pass / burned claim | MEDIUM | `reminders_sent` claim is transactional — un-claim in a repair script scoped to the affected window; Phase 37 catch-up re-sends |
+**Prevention:** Columns render only fields that pass through `hiddenFor` on the read side; no new field joins the doc without a redaction consideration. Tooltip content follows the reason-code doctrine.
 
-## Pitfall-to-Phase Mapping
+**Phase:** projects-table phase.
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| 1 Orphaned access paths | Funnel phase | Consumer census committed; zero out-of-funnel reads; per-MCP-tool matrix rows |
-| 2 Scope/teams half-dead data | Migration phase | D-xx decision logged; boot sweep; second-boot byte-identical on SQLite + pg |
-| 3 Guest model collapse | Migration + funnel | Boot guest validator; guest matrix rows; create+accept hierarchy tests |
-| 4 Invites in flight | Migration (data) + funnel (tests) | Interleaving tests; fail-closed accept re-derivation |
-| 5 Client staleness / lying transparency | UI phase (endpoint in funnel phase) | Server-computed transparency agrees with matrix; epoch refetch Chromium test; i18n sweep |
-| 6 404-matrix tautology | Funnel phase | Matrix extended BEFORE implementation; expected values independent of code under test |
-| 7 Torn scheduler passes | Funnel phase, concurrency-tested in migration phase | Phase 37/38 invariants unmodified; concurrent-pass test in both backends |
+---
 
-## Suggested test strategy (for the roadmap)
+## Minor Pitfalls
 
-- **404-matrix extension first:** new (actor × project) shape table covering invitee, team-invitee, guest (toggle allow/deny), public/private, removed invitee, JIT bare account, admin/owner; assert body-byte equality; add rows for every new route (share options, transparency) and per-MCP read/list tool.
-- **Multi-backend matrix:** every migration, sweep, and scheduler-concurrency test runs under both SQLite and `POSTGRES_TEST_URL`; second-boot byte-identity asserted per backend.
-- **Interleaving tests:** invite create → migrate → accept; toggle flip → accept; team join after bulk invite.
-- **Consumer canaries:** Phase 37/38 invariant tests must pass unmodified; Phase 40 digest-ordering pins must pass unmodified.
-- **Full suite:** ~1133 tests green stands; new suites push count up but skipped count must not grow.
+### Pitfall 9: `normalizeProjects` and legacy docs vs the new `teamPerms` field
+
+Old documents (and crafted ones) lack `teamPerms` or carry dangling team ids after team deletion. `normalizeProjects` must treat it like `members`: default absent → `{}`, drop ids pointing at deleted teams (the doc is the source of truth; a deleted team's id must not silently grant anything through the funnel's new term). **Prevention:** normalize on every read (the function is already called in mergeClientDoc on both copies, :1044-1045) + a boot sweep decision only if cleanup matters. **Phase:** per-team perms server phase.
+
+### Pitfall 10: PSTAT pill + progress column double-painting i18n
+
+PSTAT labels (planning/active/risk/hold/complete) are new catalogue keys with `common.perm.*`-style derived naming opportunity — reuse the PERM_KEYS lowercase-bridging pattern (modals.js:195-201) so stored values map to keys without quoting tokens; a missing mapping currently falls back to the first perm silently (:201) — the same silent fallback on a status value would render wrong labels without an error. **Prevention:** explicit map + test that every stored PSTAT value resolves. **Phase:** projects-table phase.
+
+---
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Per-team perms (server) | Funnel consumers diverge (reminder/digest/MCP/transparency) — the Phase 50 `remindable()` lesson | Edit `canSeeProject` in place, mirror mcp.js:183 in the same commit, extend `VISIBILITY_MODEL` oracle with team-perm cells |
+| Per-team perms (server) | `p.teamPerms` missing from the mergeClientDoc pin block (:1090-1101) | Add field + pin + stale-PUT regression test in one commit |
+| Per-team perms (server) | Team "Can edit" accidentally granting `canManageProject` | Decide read/write semantics with the owner first; keep access-list editing manager-only unless ruled otherwise |
+| Unified settings modal | Stale doc snapshot at open-time → silent revert of another admin's grants (Pitfall 3) | Mutate live store state; adopt revision; concurrent-edit UAT scenario |
+| Unified settings modal | Non-manager sees editable Access section, save silently no-ops | Client gate via shared `canManageProject`; render read-only |
+| Unified settings modal | Missed `data-in` binding wipes input on any re-render (Pitfall 4) | Bind every field first; per-field e2e; dynamic rows keyed by team id |
+| Unified settings modal | Dead i18n keys + broad allowlist entry (Pitfall 6) | Prune keys in-phase; narrow allowlist entries only; bump catalogue pin deliberately |
+| Invite modal picker | Guest single-select enforced client-side only (Pitfall 5) | Shared server validator across invite create/edit/accept/MCP; zero-projects-guest lifecycle decided |
+| Projects table columns | Access-field disclosure beyond the reason-code doctrine (Pitfall 8) | Coarse values only; no rosters/perm levels in tooltips |
+
+---
 
 ## Sources
 
-- `.planning/PROJECT.md` — funnel architecture, D-03, Phase 29/32/33/37/38/40/45/46/48 ground truth, M-01..M-08 decisions (HIGH, first-party)
-- House patterns cited from shipped phases: guarded additive migration (SETTINGS-01, TEAM-01), boot sweeps (HARD-05), fail-closed invite twins (HARD-01..05), digest ordering (Phase 40 D-05/D-06), 404-matrix (Phase 29/32), pg test matrix (Phase 45)
-- No external sources needed — this is a codebase-internal architecture analysis; generic "permission migration" literature adds nothing the first-party funnel facts don't already pin down more precisely.
+- server.js:771-865 (projectIsPrivate / teamsOfMember / canSeeProject / memberCanReadProject / projectAccessReason / canManageProject / hiddenFor / normalizeProjects) — read this session
+- server.js:1041-1159 (mergeClientDoc pin block, D-51-15/16 stored-doc rule, create refusal) — read this session
+- mcp.js:176-218 (canReadProject mirror, visibleProjects, readableProjectIds) — read this session
+- server.js:5215-5218, :5411 (guest invite ceiling, fail-closed accept re-derivation), :2850-2894 (guest role normalization) — read this session
+- src/overlays/modals.js:156-225 (projectModal, shareModal, data-in bindings, PERM_KEYS derived keys) — read this session
+- src/actions/actions.js:2023-2045 (guest single-select degradation, role-checkbox mirror) — read this session
+- scripts/i18n-scan.mjs:10-19, 1258-1356 (gate families, dead-key allowlist doctrine) — read this session
+- .planning/PROJECT.md (v2.1 targets, M-09..M-13 decisions, standing constraints) — read this session
+- .planning/milestones/v2.0-phases/50-*/50-REVIEW.md (the `remindable()` parity failure — the canonical consumer-divergence post-mortem), 52-PATTERNS.md:93 (funnel pin doctrine), 52-REVIEW.md (`?? 'member'` fallback masking), test/helpers/visibility-fixture.mjs:5-8 (anti-tautology contract) — via grep, line-quoted
 
----
-*Pitfalls research for: Projects Studio v2.0 — project-level permissions & invitations*
-*Researched: 2026-11-07*
+**Confidence: HIGH** — code-verified file:line anchors throughout; the one forward-looking item (MCP invite-tool guest check) is flagged as "verify at plan time" rather than asserted.

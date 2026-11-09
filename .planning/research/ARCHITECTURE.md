@@ -1,143 +1,150 @@
-# Architecture Research — v2.0 Project-level Permissions & Invitations
+# Architecture Patterns
 
-**Domain:** Permission-model rewrite on an existing single-file Node server (document-store + authority-rows hybrid)
-**Researched:** 2026-11-07
-**Confidence:** HIGH (every claim below is grounded in the live code: server.js, mcp.js, mailer.js read this session)
+**Domain:** v2.1 UI/UX batch — invite modal persistence + project chips, searchable team members, unified project settings modal with per-team perms, projects table columns
+**Researched:** 2026-11-09
+**Method:** direct codebase investigation (server.js, src/overlays/modals.js, src/actions/actions.js, src/pages/, src/core/)
 
-## The one structural decision: where project membership lives
+---
 
-**Recommendation: project membership STAYS in the document (`p.members[]`), and visibility stays a pure doc predicate. Do NOT create a `project_members` authority table.**
+## Part 1 — Per-TEAM project perms: storage/keying decision
 
-Rationale, grounded in the existing architecture:
+### How access works today (the funnel)
 
-1. **Projects themselves live in the doc.** `data.projects[]` is a JSON array inside `workspaces.doc` (server.js `projectsOf`, `normalizeProjects` ~909-943). There is no project table to hang a join table off; a `project_members` authority row would reference a doc-resident project id with no FK, be denormalized against the doc on every write, and would force `mergeClientDoc` (which already restores access fields from storage, lines 1099-1116) to reconcile two sources of truth. That is a rewrite-shaped cost for zero behavioral gain.
-2. **The v2.0 model is strictly a *simplification* of the existing predicate.** `canSeeProject` (server.js:758-761) — public ∨ on the access list — is already exactly M-05's semantics. The whole milestone is: *delete* the widening terms (`teamIntersects`, Phase 32; `scopeGrants`/D-03, Phase 29) and add two doc-carried toggles.
-3. **Teams become an invitation mechanism, not a visibility source (M-03).** "Invite a team" = the server *expands* the team's members into `p.members` at invite time (a materialized snapshot). Later team joiners do **not** gain access — which is the owner-validated semantics and is only expressible if membership is the materialized list.
+One read funnel governs every access decision:
 
-The corollary: **the scope columns on `memberships` (and `invites.scope`) retire entirely** — `projectScope`/`inScopeProject`/`scopeGrants`/D-03 are deleted, not deprecated. Under M-05 a guest (role `viewer`) sees non-private projects like anyone else plus their explicit invites; the "exactly one project" guest shape (Phase 29) is subsumed by `p.members`.
+- `canSeeProject(p, memberId, memberTeams)` — **server.js:800-805**. Short-circuit order: public (`!projectIsPrivate`) → `p.members.includes(memberId)` → `p.teams` ∩ `memberTeams` ≠ ∅.
+- `memberCanReadProject(p, wsId, memberId)` — **server.js:813-818**. Async wrapper that resolves the caller's live teams via `teamsOfMember(wsId, memberId, …)` (**server.js:816**, also :857) then re-enters `canSeeProject`. Consumed by: `hiddenFor` (:851-865 via :860), reminder pass (:1466), email mirror (:1580), digest scope (:1360), MCP transparency view (:4996).
+- Label mirror `projectAccessReason(p, memberId, memberTeams)` — **server.js:828-835** (Phase 52 transparency view). **Must be updated in lockstep** if the predicate gains a term, or reason labels will diverge from reality.
 
-### What changes shape-wise
+### How `p.perms` works today
 
-| Store | v1.7–v1.10 today | v2.0 |
-|---|---|---|
-| `workspaces.doc` → `data.projects[]` | `p.private`, `p.members[]`, `p.teams[]`, `p.perms`, `p.lead` | `p.private` (becomes THE toggle, dropdown retired), `p.members[]` (now also holds materialized team invitees), `p.teams` **retired** (or inert display-only), new `p.allowInviteGuests` boolean, `p.perms`, `p.lead` |
-| `memberships` | `role`, `member_id`, `scope` text column (D-03) | `role`, `member_id` — `scope` becomes inert (never read) |
-| `team_members` | authority rows; drive `teamsOfUser` → visibility | authority rows; drive rosters/pickers/mentions/invites only — **no visibility role** |
-| `invites` | `role`, `team`, `teams` JSON, `scope` JSON | `role`, `teams` (kept as bulk-invite target list), new `project` column (target private project for project-scoped/guest invites), `scope` retired |
-| New | — | **nothing** (no new table, no new column except `invites.project`) |
+- `p.perms` is a **member-id-keyed plain object** with values from `PERMS = ['Can view','Can comment','Can edit','Full access']` (client constant **src/overlays/modals.js:195**; stored strings, display translated via `permLabel` :200-201).
+- It is **display/permission-tier only today — it does NOT gate visibility**. `canSeeProject` never reads `p.perms`; a member in `p.members` gets read access regardless of their perm tier. The share modal writes `p.perms[mid]` through `IN.sharePerm` (**src/actions/actions.js:1833**).
+- Sanitized on member removal: **server.js:1948-1958** (`Object.fromEntries(Object.entries(p.perms).filter(([k]) => !hit(k)))`).
+- Guarded on write: non-manager doc-PUTs get `p.perms = prev.perms` restored — **server.js:1094** (inside the `canManageProject` block :1090-1102, which also pins `private/members/lead/teams/allowInviteGuests`).
+- Validated loosely on normalize: **server.js:899** (`if (p.perms && typeof p.perms !== 'object') delete p.perms`).
 
-This preserves the standing constraints: zero new runtime dependencies, and the only migration is one additive `ensureColumn` (`invites.project`) plus a one-shot data sweep.
+### Decision: `p.perms` gains a team-keyed sub-object — NO new field
 
-## Integration map — new vs modified, explicitly
+Reuse `p.perms` with a **namespaced sub-key** `team:<teamId>` (or an inner map `p.perms.teams = { [teamId]: perm }`). Recommendation: **flat `p.perms['team:'+teamId]`**, because:
 
-### The funnel: `hiddenFor` / `redactDoc` / `mergeClientDoc` (MODIFIED — one choke point)
+1. Every existing sink treats `p.perms` as an opaque id→perm object: the removal sweep at server.js:1950 filters by key without interpreting it (works unchanged), the write guard at :1094 copies it whole (works unchanged), normalize at :899 accepts any object (works unchanged). A flat map requires **zero changes** to mergeClientDoc, normalizeProjects, or the removal path.
+2. Member keys and team keys can never collide if team ids are namespaced (`team:` prefix), so `Object.entries` consumers stay safe.
+3. No migration: the field already exists in stored docs; absent team keys = "no team override".
 
-- **`hiddenFor(doc, membership)`** (server.js:872-902): collapse to the null-scope body only. The scoped branch (`inScopeProject` ∪ `scopeGrants`, lines 896-901) and the D-03 comment block are deleted. Inside the remaining branch, `memberCanReadProject` loses its team term. Result: hidden = private ∧ member ∉ `p.members`, for everyone below admin/owner (admins/owners already bypass via the `ROLE_RANK` gate at line 882 — keep that).
-- **`memberCanReadProject(p, wsId, memberId, liveTeams)`** (server.js:786-794): body reduces to `canSeeProject(p, memberId) || roleIsAdmin`. The `liveTeams` parameter, the membership→user_id resolution and `teamIntersects` all disappear — it becomes synchronous and cheap. **Keep the same name and call sites** so the "one visibility pipeline" discipline (RETROSPECTIVE: "one helper, one funnel") survives the rewrite.
-- **`redactDoc` / `mergeClientDoc`** (server.js:1020-1195): structurally untouched — they consume `hiddenFor` and nothing else. Two surgical edits in `mergeClientDoc`:
-  1. the access-field pinning block (lines 1104-1110) gains `p.allowInviteGuests = prev.allowInviteGuests` alongside `private/members/perms/lead` — a non-manager's stale doc PUT can never flip the invite toggle (same "access fields belong to a manager" family);
-  2. the **assigneeOutOfScope write guard** (lines 1176-1192) is deleted with `projectScope` — its replacement, if any (see Pitfall 2), must not resurrect a second pipeline.
-- The client-side matcher in `src/lib/redaction.js` (SEARCH-01 hidden-terms matcher) is unaffected: it consumes whatever `hiddenProjectTerms` produces.
+### What server changes ARE required
 
-### `memberCanReadProject` consumers — each gets the simplified predicate for free
+The critical finding: **per-team perms must change `canSeeProject`'s contract, not just add a field.** Today team access is binary (member of a linked team ⇒ full read). To make `view/comment/edit/full` real, the predicate that answers "what can this member do" needs the team tier:
 
-| Consumer | Location | Change |
-|---|---|---|
-| `hiddenFor` null-scope branch | server.js:882-893 | simplified automatically via the helper |
-| Reminder pass | server.js:1370, 1487, 1606 | the `!projectScope(assigneeMembership) &&` prefix of each SCOPE-04 check is deleted; the `memberCanReadProject` term stays. Phase 38's exactly-once claim architecture is untouched |
-| Email mirror (`queueNotifEmails`) | server.js:1296+ | same: drop the scope re-check term, keep the project re-check |
-| Digest loop | server.js:1561-1590 | same three-check → one-check reduction; D-05 name-resolution-after-funnel order survives verbatim |
-| MCP mirror `canReadProject` | mcp.js:177-189 | **must be edited in lockstep** — it is a documented duplicate ("Mirror of memberCanReadProject without the server import"), not an import. Delete the team-intersection term (line 188). Better: since the new predicate is sync and pure (`p.private ∧ !p.members.includes(mid)`), consider inlining it and noting the parity contract in the comment — but do not attempt an import; the single-file architecture keeps server.js/mcp.js decoupled on purpose |
-| File-serve side door | byte-identical 404 (`fileNotFound`) | untouched — it already routes through the same funnel; the 404-matrix tests keep their shape, only team/scope cells change expectation |
+1. **New helper** `projectPermFor(p, memberId, memberTeams)` (server.js, near :805): resolve effective perm — lead/membership `p.perms[memberId]` takes precedence over team entry `p.perms['team:'+teamId]` for the best (highest-rank) linked team; default tier for members is `Can edit` (mirrors share modal's default at modals.js:275: lead='Full access', members='Can edit', guests='Can comment'), team-only members default to their team entry or 'Can edit'.
+2. **`canSeeProject` stays a visibility predicate** (server.js:800-805) — per-team perms do NOT remove read access; they only tier it. This keeps `memberCanReadProject`, `hiddenFor`, and all 10 call sites untouched. The gate changes live in **write paths** (task edit/comment/board-move routes) which currently only check read; those need `projectPermFor` checks (e.g. comment/edit require ≥ 'Can edit').
+3. **`projectAccessReason`** (server.js:828-835): add a team-perm reason only if the transparency view should distinguish tiers — otherwise leave as-is (M-09 says "reuse the existing per-person perms model — no new role concept", so coarse reasons can stay).
+4. **Validation on doc-PUT**: extend server.js:899 normalize to whitelist team-key shape (`/^team:/` keys must reference known team ids; values ∈ PERMS). Cheap, fail-loud on garbage.
+5. **mergeClientDoc needs NO change** — :1094 already restores `p.perms` wholesale for non-managers; a manager's client doc writes it through the normal doc-PUT path (**server.js:1700** → mergeClientDoc).
 
-### Invites (MODIFIED — the biggest behavior change)
+**Build order consequence: server perm-resolution helper + write-route gating BEFORE the settings modal UI ships the team-perm pickers** — otherwise the UI writes values nothing enforces.
 
-- **Workspace invites**: unchanged route, but authorization changes per M-01/M-02/M-06: admin/owner invite admin/member/guest as today; a plain member may open the invite modal only where they hold the right — workspace-level guests invites are governed by the *target project's* `allowInviteGuests` when the invite is project-scoped. Concretely: a member's invite creation requires a `project` target, and the route checks `p.allowInviteGuests === true` (admins/owner bypass).
-- **Team share (M-03)**: "invite team X to project P" is a server-side mutation that appends X's current members (user_id → member_id via the `memberships` map, since `p.members` is member_id-space and `team_members` is user_id-space — Pitfall 3) to `P.members`, then bumps the doc revision through the normal push path. It is NOT stored as `P.teams`; no lingering team reference means later team membership changes never alter visibility. The share modal renders the expansion result, so removal is per-person, matching M-02 (everything editable post-invite).
-- **`invites.project`** (new nullable column): on accept, if set, the accepted member is appended to that project's `p.members` (in addition to the workspace role). The `invites.teams` column stays for admin workspace-level team invites; its *visibility* meaning is gone — at accept it only seeds `team_members` as today.
-- **Post-invite editing (M-02)**: role changes already live in `memberships`; project membership edits are doc edits to `p.members` gated by `canManageProject` — which already exists (server.js:796-799) and needs no change. New: a member who was invited to a private project can be removed from it by any manager; `normalizeProjects`'s "private project must keep a manager and non-empty access list" safety net (lines 926-936) already prevents sealing a project shut.
+---
 
-### Settings > Permissions page (REMOVED) + the two toggles
+## Part 2 — Invite modal: email persistence + projects chips
 
-- The workspace-level permission surface (Phase 29 member-modal scope editor) is deleted end-to-end: UI page, the admin PUT route that wrote `memberships.scope`, and the invite-form scope picker. `projectScope`'s fail-open warn set (`CORRUPT_SCOPE_WARNED`) goes with it.
-- **Private/public toggle** replaces the access dropdown in the project settings/share modal — same `p.private` field, same `normalizeProjects` invariants, so redaction semantics are identical. The existing merge behavior "whoever restricts keeps access" (lines 1111-1115) is retained and is exactly the M-02 spirit.
-- **`allowInviteGuests`** is a new doc field on the project: read by the invite-authorization route, pinned by `mergeClientDoc` (above), rendered in the share modal, default `false` (fail-closed).
+### The persistence bug and its fix
 
-### Transparency view (NEW — one new component)
+- The email textarea at **src/overlays/modals.js:312** renders `esc(S.ui.inviteDraft || '')` but carries **no `data-in` attribute** — so keystrokes never update state, and any `render()` triggered by role/team/scope interaction (e.g. `A.invProjToggle` at actions.js:2025, `IN.invRole` at :2040) re-renders the full DOM via `wrap()` at modals.js:45 and **wipes the unsaved draft**. (`S.ui.inviteDraft` is set at open — actions.js:1880 — and only captured on submit at :1927-1928.)
+- Fix, matching the existing two-path binding dispatch:
+  - **src/actions/events.js:56-60** handles non-change `input` events (`IN[el.dataset.in]?.(el, e)` when `!isChangeEl(el)`); :61-65 handles `change` events for selects/checkboxes. A textarea rides the `input` path.
+  - Add `data-in="inviteDraft"` to the textarea (modals.js:312) and a handler **`IN.inviteDraft = el => { S.ui.inviteDraft = el.value; }`** next to the other IN handlers in **src/actions/actions.js** (IN.sharePerm :1833, IN.shareAccess :1854, IN.invRole :2040, IN.invGuest :2046). **No render() call in the handler** — that's the whole point; state updates silently and re-renders restore the value from store.
+- `A.invite` (actions.js:1879-1890) already resets `S.ui.inviteDraft = ''` on open — no change needed there.
 
-A single server endpoint, e.g. `GET /api/workspaces/:slug/members/:memberId/visibility`, admin-only (or self-permitted — owner decision, flag it), computed **live through the funnel**: iterate `data.projects`, apply the (new, sync) `memberCanReadProject` per project for the target membership, return `{ public: [...], private: [...] }` plus team rosters. It must call the helper — never re-implement the predicate (the D-06 one-pipeline rule is the codebase's hardest-won lesson). Client renders a read-only table. No doc writes, no revision bump.
+### Projects chips ride the existing scope payload — mostly wiring, little plumbing
 
-### Client store (MODIFIED, lightly)
+The payload already carries project scope end-to-end:
 
-The client keeps a full local doc and PUTs snapshots; because `mergeClientDoc` keeps its reserved-row semantics, the store needs: the visibility dropdown → toggle swap, share-modal team-invite expansion UI, removal of the Permissions page and guest toggle, and the transparency view route. No store-architecture change — redaction is and remains server-authoritative.
+1. Client state: `S.ui.inviteScope = { teams: [], projects: [] }` — **actions.js:1885**.
+2. Picker state: `A.invProjToggle` — **actions.js:2025-2039** (renders scope project chips via `scopePicker('proj', scope.projects, 'invProjToggle', 'folder')` at **modals.js:324** — the chips UI already exists).
+3. Payload build: `A.submitInvite` — **actions.js:1934-1942** — dedupes `st.projects` into `scope.projects` and sends for Member/Guest roles (null for Admin, :1934-1936).
+4. API call: `api.createInvites(list, API_ROLE[role], teams, scope)` — **actions.js:1983**.
+5. Server: `POST /api/workspaces/:slug/invites` — **server.js:5187**. For member-tier callers, `body.project` is validated (existence + `allowInviteGuests === true`, **server.js:5217-5226**) and stored as the invite's `project` column (**server.js:5300**, insert with `scope: null` + `project`; the VIS-04 comment at :5306 notes only the member guest path scopes an invite to a project).
 
-## Data Flow (after rewrite)
+**Gap to close — "guest = exactly one project" (M decision):** today the server enforces project only for **member-tier** callers (server.js:5213 gate). An **admin/owner** Guest invite with zero projects currently sails through. Changes:
 
-```
-[Client doc PUT] → mergeClientDoc ─→ hiddenFor (sync, doc-predicate) ─→ reserved rows restored
-                                     ↳ pin private/members/perms/lead/allowInviteGuests
-[Doc GET]        → docForClient → redactDoc → hiddenFor → stripped doc
-[Reminder/digest/email pass] → memberCanReadProject per (recipient, project) → send/omit
-[MCP tool]       → canReadProject mirror (same predicate, no team term)
-[Invite accept]  → memberships row + (invites.project → append p.members) → doc push
-[Team share]     → expand team_members → append p.members → doc push (one revision)
-[Transparency]   → memberCanReadProject × projects → read-only report
-```
+- Server (**server.js:5196+**, after role resolution): when `role === 'viewer'`, require exactly one project regardless of caller tier — validate `body.project` (or `body.scope.projects` length === 1) exists, reuse the same keyed refusals (`inviteMemberProjectRequired` :5218, new `inviteGuestProjectRequired` if needed).
+- Client (`A.submitInvite`, actions.js:1934-1942): when `role === ROLE_GUEST_UI`, degrade scope to exactly `{ projects: [one] }` — client-side validation toast if 0 or >1 selected (mirror of the server keys). The scope picker may need a radio-like behavior for Guest (selecting a second project replaces the first), reusing `A.invProjToggle`.
+- Note the server reads a flat `body.project`, while the client sends `scope.projects[]` — check `src/core/api.js` `createInvites` for how scope flattens into the POST body before choosing where the "exactly one" clamp lives.
 
-Note what vanished from the data flow: the per-request `teamsOfUser` lookup inside `hiddenFor` (one `db.all` per document read today) and the `scopeByMember` map in the write guard. Read paths get *faster and synchronous*.
+### Searchable members box in teamModal (`foldForSearch`)
 
-## Migration path (the load-bearing part)
+- `teamModal` lives in **src/features/teams.js:11**; the members fieldset hint is at :45.
+- The pattern to copy is the **share modal member search**: needle from `S.ui.shareQ` folded through `foldForSearch` (modals.js:203), filter over `D().members` (:226-233), bound input `data-in="shareQ"` (:218) with no render in the IN handler. `foldForSearch` is **src/core/utils.js:22** (accent/token folding; same family used in pages/members.js:35, pages/settings.js:144-145).
+- New state `S.ui.teamMembersQ` + `IN.teamMembersQ` handler; filter the roster inside the teamModal fieldset. Pure client feature — no server change.
 
-**Principle: grant materialization.** Every (member, project) pair visible under the old predicate must be visible under the new one. The boot sweep computes old-visibility and writes it into `p.members` *before* the new predicate takes effect — same guarded, additive, pre-backup, byte-identical-second-boot machinery as Phases 28/34:
+---
 
-1. **Pre-backup** (existing `vacuum into` pattern).
-2. **Sweep, per workspace doc** (idempotent, one transaction per workspace):
-   - For each private project `p`: for each team id in `p.teams[]`, append the member_id of every `team_members` row of that team (mapping user_id→member_id through `memberships`); likewise for each membership with a parseable `scope`, append scoped `projects[]` ids' members for that member and the member-ids of scoped teams for team-linked projects.
-   - Set `p.allowInviteGuests` only where explicitly intended — default **absent** (undefined-falsy = false); do not backfill `true` anywhere.
-   - `delete p.teams` (the teams-as-visibility data is now materialized; keep teams[] only if the UI still displays "shared with teams" history — recommendation: delete, the activity log carries history).
-3. **Schema**: `ensureColumn('invites', 'project', ...)`. The `memberships.scope` and `invites.scope` columns are left in place but never read (the codebase precedent — `p.access`, `invites.team` — is retire-by-ignoring, not `ALTER TABLE DROP`); this keeps the pg schema/SQLite schema in lockstep and the migration additive.
-4. **Byte-identical second boot**: the sweep must detect "already materialized" — the natural marker is `p.teams` absence (delete-on-sweep makes the second pass a no-op) plus a scope-column read that is simply gone from the code.
-5. **Sequencing within the deploy**: predicate simplification and sweep MUST land in the same phase (one boot). If the predicate ships first, team-scoped members lose access until the sweep runs; if the sweep ships first, nothing breaks (pure widening). So the safe order is: sweep code + predicate code together, sweep executes first at boot.
+## Part 3 — Unified project settings modal (replaces projectModal + shareModal)
 
-**Lossless check for the migration test suite**: snapshot visibility sets for every (membership, project) under the old predicate on a fixture DB, run boot, assert set-equality under the new predicate — including the three edge fixtures: scoped-guest-on-private-project (D-03 canonical cell), team-only access, private project with empty members list (`normalizeProjects` un-seals it — that de-sealing must survive the sweep).
+### Today's two modals
 
-## Recommended build order (dependency-driven)
+| Modal | Location | Renders | Save path |
+|---|---|---|---|
+| `projectModal` | **src/overlays/modals.js:156-194** | name/desc/icon/color/teams/lead/due (+template on create) via `S.ui.pform`, `data-in="pform"` fields | `data-submit="submitProject"` form (:161), footer `data-a="submitProject"` (:193) — rides the doc-PUT optimistic path |
+| `shareModal` | **src/overlays/modals.js:202-289** | member search+invite (:216-238), Teams section (:247-268, live-link semantics per D-50-5), People-with-access with per-member perm selects (:270-284, `data-in="sharePerm"`), General Access toggle (:285-286, `data-in="shareAccess"`) | **no form submit — every control is an immediate-action** (`A.shareInvite`, `A.shareAdd`, `A.shareTeamInvite/Remove`, `IN.sharePerm` actions.js:1833, `IN.shareAccess` :1854 — each pushes the doc itself with snapshot-revert) |
 
-1. **Phase 1 — Predicate collapse + grant materialization migration** (atomic, as argued above). Everything else depends on the new `hiddenFor`/`memberCanReadProject` shape. Deliverables: simplified funnel, boot sweep, 404-matrix test updates (team/scope cells now expect hidden), migration test with visibility set-equality, MCP mirror updated in the same phase (it is part of the surface contract; shipping it later leaves a live over-permissive leak window — MCP would still honor team intersection the UI no longer does).
-   *Flag: this phase carries the migration; it needs the deepest test investment.*
-2. **Phase 2 — Invite authorization + the two toggles**. `invites.project` column, project-scoped guest invites with the `allowInviteGuests` gate, strict hierarchy checks (M-01), post-invite edit routes (M-02), team-share expansion endpoint (M-03), removal of the scope-writing admin route. Depends on Phase 1 (guest semantics no longer rely on scope columns).
-3. **Phase 3 — Removal surfaces + client**: Settings > Permissions page deleted end-to-end, private/public toggle swap, share modal (team bulk invite + guest toggle), client store adjustments. Depends on Phase 2's routes. i18n gate (EN+FR, `scripts/i18n-scan.mjs`) applies from this phase onward — batch all new strings here and in Phase 4.
-4. **Phase 4 — Transparency view + consumers verification sweep**: the visibility endpoint + UI; then a verification pass over reminder pass / email mirror / digest asserting the scope-check deletions and re-running the no-leak fixtures (Phase 38's digest leak class, v1.8 CR-01). Could fold into Phase 1-3, but keeping it last gives one clean UAT surface per consumer.
-   *Actually split:* the consumer code edits (deleting scope prefixes) belong in **Phase 1** (they cannot compile against a deleted `projectScope`); Phase 4 is verification + transparency only.
+Dispatcher: **src/overlays/modals.js:41-43** — `case 'project' → projectModal`, `case 'share' → shareModal` inside the central modal `wrap()`. `canManageProject` client-side (modals.js:159, :206) mirrors server.js:837-840.
 
-Revised: **Phase 1 = predicate + migration + consumer edits + MCP mirror; Phase 2 = invites/toggles/hierarchy; Phase 3 = client surfaces + Permissions-page removal + i18n; Phase 4 = transparency view + cross-consumer verification (reminder/digest/email/MCP no-leak matrix).**
+### Render/state impact — LOW, the architecture makes it cheap
 
-## Pitfalls
+1. **One case label changes**: merge into a single `case 'settings'` (or keep `project` and fold share content in) at modals.js:41-43. Both `data-a="share"` and `data-a="newProject"/"editProject"` entry points retarget to the same modal type.
+2. **Two interaction models coexist naturally**: the General section keeps the form+submit model (`pform` state, `S.ui.pform` at modals.js:157); the Access section keeps immediate-action controls (sharePerm/shareAccess handlers). The unified modal is a `<form>` body whose footer Save commits General fields, while Access controls keep acting inline (they already each `render()` and `pushNow()` independently). No conflict — the share controls don't touch `pform`.
+3. **New state slots**: `S.ui.settingsTab` ('general' | 'access') if sectioned by tabs, or none if stacked sections; `S.ui.shareQ` reused as-is for the member search; team perm selects add `IN.teamPerm` (mirror of `IN.sharePerm` at actions.js:1833, writing `p.perms['team:'+tid]`).
+4. **Net component count goes DOWN**: `projectModal` (156-194) and `shareModal` (202-289) are deleted; one new renderer (~300 lines) replaces them. Footer, dispatcher case, and entry-point actions (`A.share`, `A.editProject`) retarget.
+5. **Server impact of the merge: zero beyond Part 1.** Both modals already write through the same doc-PUT path; per-team perms ride `p.perms` (guarded at server.js:1094 for non-managers, normalized at :899).
 
-### Pitfall 1 — Splitting the sweep from the predicate change (CRITICAL)
-Shipped separately, one boot serves docs under the wrong rule: predicate-first locks team-scoped members out; sweep-first alone is safe but useless without the new rule. **Same phase, same boot, sweep before predicate takes effect.**
+### Projects table + Share button (mostly exists)
 
-### Pitfall 2 — Deleting the assigneeOutOfScope guard removes a real invariant
-Today a doc PUT cannot assign a member to a task in a project they cannot see (server.js:1183-1191). With scope gone, the analogous invariant is "assignee can read the project" — under the new model a member sees all public projects anyway, so the guard is *mostly* subsumed, but a private project with an assignee later removed from `p.members` leaves an orphaned assignment (reminder pass already skips those sends — line 1487 — so the residual risk is a stale assignee chip). Recommendation: keep a cheap guard reusing `canSeeProject`, or accept and document; do not leave the throw half-deleted.
+- Table columns at **src/pages/projects.js:56-64**: Project / Status (`pStatus`) / **Lead** (:61, `av(p.lead)`) / **Teams** (:61, `projTeams(p)`) / Progress / Tasks / Start / **Due** (:61, `fmtDate(p.due)`) / Last activity. Missing: **Members count** column (add `p.members.length` next to Teams — the v2.1 decision says count, not avatar stack). Status labels come from `PSTAT` (projects.js:70-73) — M-10 wants the pill + task-based `progressOf` (:51, :61 already do exactly this). Mostly a column-insert + label tweak, no architecture change.
+- Project page header buttons at **src/pages/project.js:74-76**: avatar-stack `data-a="share"` (:74), `user-plus` icon `data-a="share"` (:75), labeled Share `data-a="share"` (:76). M-13 = delete :74-75, keep :76; all three already point at the same action, so the unified modal swap is transparent to them. Also `src/views/project-overview.js:43` renders an `avStack` pill (leave or align per spec).
 
-### Pitfall 3 — user_id vs member_id in the team expansion
-`p.members` is member_id-space; `team_members` is user_id-space keyed (server.js:789-791 comment). The expansion MUST map through `memberships`, and members without an account-backed membership row (doc-only profiles) cannot be team members anyway — skip silently, assert in tests.
+---
 
-### Pitfall 4 — MCP mirror drift
-`mcp.js canReadProject` is a deliberate copy. If Phase 1 edits server.js and forgets mcp.js, MCP keeps honoring team intersection → a live over-permissive surface with no UI to notice. Pin it with a parity test (same fixture doc, same member, both predicates must agree).
+## Recommended build order (server-before-client dependency)
 
-### Pitfall 5 — `invites.teams` semantics silently changing
-The column persists; its *effect* changes from "team visibility via scope/teams columns" to "seed team_members only". Any code path at accept-time that previously propagated invite scope into `memberships.scope` must be deleted, not orphaned, or a stale invite resurrects a scope row the new code ignores — harmless at runtime but confusing and it breaks the byte-identical-boot invariant on later reads.
+1. **Server perms model first**: `projectPermFor` helper + team-key normalization (server.js:899 area) + write-route gating + lockstep check on `projectAccessReason` (server.js:828-835). No UI depends on it yet; everything downstream writes through it.
+2. **Invite modal fix** (independent, small): `data-in="inviteDraft"` (modals.js:312) + `IN.inviteDraft` (actions.js, near :2040) — ships alone, zero server change.
+3. **Guest-one-project clamp**: server.js:5196+ role-based validation + client scope clamp in `A.submitInvite` (actions.js:1934-1942) — depends on reading `createInvites` in src/core/api.js to pick the payload shape.
+4. **Unified settings modal UI** (depends on 1): merge projectModal+shareModal (modals.js:156-289), add `IN.teamPerm`, retarget `A.share`/`A.editProject` and dispatcher (modals.js:41-43).
+5. **Team modal search + wording** (independent): `foldForSearch` box in teams.js:11 fieldset.
+6. **Projects table columns + Share-button cleanup** (independent): projects.js:56-64, project.js:74-76.
 
-## Anti-Patterns
+Steps 2, 5, 6 are parallelizable; 1 → 4 is a hard ordering; 3 is small and independent of 1/4.
 
-- **A `project_members` authority table** — dual source of truth against doc-resident projects; reconciliation logic in every write path for zero behavioral gain.
-- **Keeping `project.teams` as a display-only visibility hint** — any surviving read of `p.teams` in a predicate is the old model leaking back in. Materialize and delete.
-- **A second transparency computation** in the client — the view must be server-computed through the funnel; a client-side reimplementation of visibility over the (redacted!) local doc is definitionally wrong — the client cannot see what it cannot see.
+---
+
+## Patterns to Follow
+
+### Pattern 1: data-in silent-state binding (no render in handler)
+**What:** `IN.x` handlers mutate `S.ui` only; re-renders read state back into value attributes.
+**Where:** IN.sharePerm (actions.js:1833), IN.invRole (:2040); dispatch at events.js:56-65.
+**Why:** full-DOM `render()` on any state change means any handler that re-renders loses focus/draft — the invite-draft bug is exactly this missing binding.
+
+### Pattern 2: immediate-action share controls (no form submit)
+**What:** Access-level edits push the doc per-control with snapshot revert (IN.shareAccess at actions.js:1854, snapshot-revert shape noted at :1736).
+**When:** reuse for team-perm selects in the unified modal.
+
+### Pattern 3: manager-guarded access fields on doc-PUT
+**What:** non-managers can never alter access fields — server restores them (server.js:1090-1102).
+**Consequence:** per-team perms inherit this protection for free by living inside `p.perms`.
+
+## Anti-Patterns to Avoid
+
+### Adding a new top-level project field for team perms
+**Why bad:** a `p.teamPerms` field would need its own restore line at server.js:1090-1102, its own sanitize in the removal sweep (:1948-1958), and its own normalize branch — three changed sinks instead of zero.
+**Instead:** namespaced keys inside `p.perms`.
+
+### Gating visibility per perm tier
+**Why bad:** `canSeeProject` (server.js:800-805) is the single visibility term consumed by 10+ call sites; tiered visibility would fork it.
+**Instead:** keep visibility boolean; tier **capabilities** in write routes via the new helper.
 
 ## Sources
 
-- `server.js` (read this session): `canSeeProject` 751-761, `teamIntersects` 773-775, `memberCanReadProject` 786-794, `projectScope`/`inScopeProject`/`scopeGrants` 813-870, `hiddenFor` 872-902, `normalizeProjects` 909-943, `redactDoc` 1020-1045, `mergeClientDoc` 1082-1195, reminder/digest scope checks 1370/1487/1561-1590/1606, `docForClient` 1675-1685, `docFromClient` 1725-1810, `teamsOfUser` 1829-1833, schema 270-312
-- `mcp.js`: `canReadProject` mirror 177-189, `visibleProjects`/`readableProjectIds` 194-215
-- `mailer.js:696`, reminder/digest consumers, `docs/ProjectPermissions.md` (FR summary of the funnel)
-- `.planning/PROJECT.md` (M-01..M-08 decisions, standing constraints), `.planning/RETROSPECTIVE.md` ("one helper, one funnel" rule)
+- Direct file reads: server.js (800-865, 1041-1119, 1935-1963, 5185-5314), src/overlays/modals.js (156-344), src/actions/actions.js (1868-2050, 1736-1858), src/actions/events.js (40-79), src/pages/projects.js (20-75), src/pages/project.js (74-76), src/features/teams.js, src/core/utils.js
+- PROJECT.md milestone decisions M-09..M-13 (.planning/PROJECT.md:26-33)
