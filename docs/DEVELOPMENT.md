@@ -5,11 +5,17 @@ container behind Traefik — see [`DEPLOY.md`](DEPLOY.md).
 
 ## Quick start
 
+Requires Node.js 24 or newer (`.nvmrc` pins 24, and the Docker image uses `node:24-alpine`).
+
 Browser-local demo, no API (the original behaviour):
 
 ```sh
 npm ci
-npm run dev            # http://localhost:5173
+npm run dev       # http://localhost:5173 with hot reload
+npm run build     # production build in dist/
+npm run preview   # serve the production build locally
+npm run lint      # ESLint
+npm run format    # Prettier
 ```
 
 Full stack:

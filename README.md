@@ -8,18 +8,72 @@ UI framework and no runtime dependency.
 
 ![Projects Studio home dashboard](docs/preview.png)
 
-## Getting started
+> **Fork notice** — this project started as a fork of
+> [gr8rstudio/gr8r-studio](https://github.com/gr8rstudio/gr8r-studio), the browser-only demo.
+> See [What this fork adds](#what-this-fork-adds) below.
 
-Requires Node.js 24 or newer (`.nvmrc` pins 24, and the Docker image uses `node:24-alpine`).
+## What you can do with it
 
-```bash
-npm install
-npm run dev       # http://localhost:5173 with hot reload
-npm run build     # production build in dist/
-npm run preview   # serve the production build locally
-npm run lint      # ESLint
-npm run format    # Prettier
-```
+**In the browser (demo mode)** — the original experience: open the app, explore a seeded demo
+workspace, everything stays in your browser (`localStorage`). No server, no accounts. That is
+what [gr8r-studio](https://gr8rstudio/gr8r-studio) ships, and it still works here.
+
+**Self-hosted** — run one Node container and the same interface becomes a real multi-user tool:
+
+- **Accounts and roles.** Sign in with email and password (or Microsoft Entra SSO). Owners,
+  admins, members and guests each see and change only what their role allows. Admins manage
+  accounts, workspaces and password resets from a CLI or the settings pages.
+- **Several workspaces in one instance.** Each workspace has its own URL (`/w/<slug>`), its own
+  projects, members and settings. Switch from the sidebar or the command palette; the server
+  enforces membership on every call — a non-member gets `404`, never a leak.
+- **Private projects.** A project can be shared with everyone or restricted to an invited list.
+  Hidden projects are filtered out of every response — tasks, comments, files, activity,
+  notifications and saved views included.
+- **Real file uploads.** Attach files to tasks; they are stored as real binaries on the server
+  (25 MB per file by default, configurable) with image and PDF previews in the browser.
+- **Invitations by email (optional).** Configure SMTP and invite teammates by link or email;
+  without SMTP the server still generates invite links to copy.
+- **AI agents via MCP.** A built-in Model Context Protocol server exposes 35 tools (tasks,
+  projects, comments, prompts…) over streamable HTTP, authenticated with per-agent API keys.
+  Ready-made integration guides for OpenCode, Claude Code and the DeepSeek harness live in
+  [`integrations/`](integrations/) — see [`docs/MCP.md`](docs/MCP.md) for the full manual.
+- **Bilingual interface.** English and French, chosen per account. A browser sweep and a
+  build-time scan guarantee no untranslated string ships.
+
+Run it in five minutes with the bundled compose file — see
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+## Deploy
+
+`vercel.json` builds with Vite and serves `dist/` as a static, browser-local demo.
+
+For a self-hosted instance — one Node container behind Traefik, accounts and server-side
+storage — see [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+By default the app runs on embedded SQLite. Setting `DB_URL` in `.env` switches it to Postgres
+(fail-closed boot, automatic schema and migrations). See
+[`docs/POSTGRES.md`](docs/POSTGRES.md) and [`docs/DEPLOY.md §14`](docs/DEPLOY.md).
+
+## What this fork adds
+
+Compared with the original
+[gr8rstudio/gr8r-studio](https://github.com/gr8rstudio/gr8r-studio) — a static,
+browser-only demo with seeded data and no backend — this fork turns it into a
+self-hostable product:
+
+| Area | Original | This fork |
+|---|---|---|
+| Backend | None — data lives in `localStorage` | Node 24 server (`server.js`), hand-rolled JSON API, accounts and sessions |
+| Persistence | Browser only | Server-side SQLite (default) or PostgreSQL, on a Docker volume |
+| Users | Single local user | Accounts, scrypt passwords, sessions, Microsoft Entra SSO, invitations (SMTP optional) |
+| Tenancy | One local workspace | Multiple workspaces per instance, role-based access (owner/admin/member/guest) |
+| Privacy | Everything visible | Private projects filtered server-side from every response |
+| Files | Records only, no binary | Real uploads on disk with previews and workspace-scoped links |
+| AI | — | MCP server (35 tools), API keys per agent, integration bundles for OpenCode, [CC] and [DSH] |
+| CLI | — | Account/workspace management, backups, key rotation (`node server.js …`) |
+| Operations | Static hosting | Docker image, Traefik guide, backups and restore, updates and rollback runbook |
+| Languages | English only | English + French catalogues with a translation guarantee enforced in CI |
+| CI | Lint, format, build | Plus server tests, browser UAT (Playwright) and a Docker image build job |
 
 ## Project structure
 
@@ -29,50 +83,19 @@ public/favicon.svg      brand mark
 vite.config.js          Vite config, including the Lucide icon-subset plugin
 eslint.config.js        lint rules (ESLint flat config); formatting by Prettier (.prettierrc.json)
 .github/workflows/      CI: lint, format check, build, server tests, browser UAT
-docs/preview.png        README screenshot
+docs/                   deployment, development, MCP and i18n guides
+integrations/           ready-made MCP bundles (OpenCode, [CC], [DSH])
 src/
   main.js               entry: imports styles and modules, then boots the app
-  styles/
-    index.css           imports every stylesheet in cascade order
-    tokens.css          colours, spacing, type, radius, the shared --gutter
-    base.css  components.css  shell.css  panels.css  overlays.css  states.css  motion.css  responsive.css
-    views/              list, board, table, calendar, timeline, projects & files
-    pages/              settings, auth & onboarding
+  server.js             self-hosted server: JSON API, auth, storage (SQLite/Postgres)
+  styles/               tokens, base, components, views and pages stylesheets
   core/                 utilities, constants, icons, store (state + lookups), theme
+  locales/              en.json / fr.json catalogues
   data/seed.js          demo workspace data
-  ui/                   shared render helpers, toasts, the select dropdown
-  shell/                render loop and router, sidebar/topbar layout, skeletons, view engine
-  components/           task list renderer
-  pages/                one module per route
-  views/                project views: board, table, calendar, timeline, files, overview
-  overlays/             task drawer, modals, popovers, context menu, command palette
-  features/             teams, subtasks, archive (rendering)
-  actions/              user actions, event wiring, keyboard shortcuts, drag and drop
+  ui/ shell/ components/  render helpers, layout, router, view engine
+  pages/ views/ overlays/ one module per route, project views, task drawer & modals
+  features/ actions/    teams & archive rendering, user actions, drag and drop
 ```
-
-### Layers
-
-Dependencies point downward:
-
-1. `core/` and `data/` depend on nothing else in the app.
-2. `ui/`, `shell/`, `components/`, `pages/`, `views/`, `overlays/` and `features/` render HTML from state.
-3. `actions/` change state and re-render. Each action module registers its handlers on the
-   shared action table (`A`) when it loads, so `main.js` imports them after `actions/actions.js`.
-
-## Conventions
-
-- **Rendering:** each page or view is a function that returns an HTML string from the store
-  (`S`). `render()` rebuilds the shell and keeps focus and scroll positions.
-- **Interactions:** elements declare `data-a="actionName"`. `actions/events.js` delegates the
-  click to `A.actionName`. Inputs use `data-in`, blur handlers use `data-blur`.
-- **Layout:** every page edge uses `var(--gutter)`, so the breadcrumb, page header, toolbar,
-  list, table and board start on the same line.
-- **Dropdowns:** write a normal `<select class="select">`. `ui/select.js` renders it as the
-  design-system menu and keeps the native element as the source of truth.
-- **Icons:** call `ic('name')` with any [Lucide](https://lucide.dev) icon name. The
-  `virtual:icons` plugin bundles only the icons the source uses.
-- **Project templates:** how to add or edit the new-project templates —
-  see [docs/project-templates.md](docs/project-templates.md).
 
 ## Continuous integration
 
@@ -84,142 +107,16 @@ Every push to `main` and every pull request runs two required jobs
   (`npx playwright install --with-deps chromium`) and runs `npm run e2e`. Playwright traces and
   screenshots are uploaded as an artifact only when the job fails.
 
-## Testing
+A third job, `docker-build`, builds the image and asserts the French catalogue is served
+with French content — so the shipped image is verified to carry the French catalogue.
 
-```bash
-npm test              # isolated Node suite: tenancy, membership, privacy, migration
-npm run test:privacy  # the phase 3 privacy matrix on its own
-npm run build && npx playwright install chromium && npm run e2e
-```
+## Documentation
 
-`npm test` spawns real `server.js` processes on ephemeral loopback ports, each with its own
-temporary `DATA_DIR`, so no developer database, port 8080 or prebuilt `dist/` is involved.
-`npm run test:privacy` stays available as the phase 3 release gate.
-
-The browser suite needs a production build (`npm run build`) and Chromium
-(`npx playwright install chromium`). It boots its own throwaway server and database, creates two
-workspaces and three accounts through the API, and asserts the tenancy and private-project
-contract in Chromium.
-
-## Deploy
-
-`vercel.json` builds with Vite and serves `dist/` as a static, browser-local demo.
-
-For a self-hosted instance — one Node container, accounts and server-side SQLite storage —
-see [docs/DEPLOY.md](docs/DEPLOY.md).
-
-### Postgres backend (optional)
-
-By default the app runs on embedded SQLite. Setting `DB_URL` in `.env` switches it to
-Postgres — nothing else changes (see [docs/DEPLOY.md §14](docs/DEPLOY.md) for the full runbook,
-the one-shot SQLite→Postgres copy script, and backups). Boot is fail-closed: an
-unreachable or misconfigured `DB_URL` stops the server with a clear error, never a
-silent SQLite fallback, and the connection string is never logged.
-
-**Initialization and migrations are automatic.** On an empty database the app creates
-every table at first boot; additive migrations (new columns) apply on every start on
-both backends. No manual migration step exists or is needed. To create the schema
-ahead of the first start (CI, first-deploy probe), run:
-
-```sh
-npm run db:init                        # uses DB_URL / DB_PATH from the environment
-docker compose exec projects node server.js --db-init   # inside the container
-```
-
-The bundled `docker-compose.yml` also ships an optional Postgres service, activated
-with `docker compose --profile postgres up -d` (set `POSTGRES_PASSWORD` and `DB_URL`
-in `.env` — see `.env.example`).
-
-How much you configure TLS depends on where Postgres runs relative to the app:
-
-| Where Postgres runs                                              | `sslmode` in `DB_URL`           | Why                                                                    |
-| ---------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------- |
-| Same private network / Docker network / VPC                      | `disable`                       | Traffic never leaves the trusted network; TLS adds nothing             |
-| Distant host with self-signed or provider TLS                    | `require`                       | Encrypts the link; server certificate is accepted without verification |
-| Managed endpoint over the public internet (RDS, Neon, Supabase…) | `verify-full` (+ `sslrootcert`) | Encrypts **and** authenticates the server — blocks man-in-the-middle   |
-
-`sslmode` is a parameter of `DB_URL` itself (`postgres://user:pass@host:5432/db?sslmode=require`) —
-it is environment configuration, never a code change.
-
-**Running Postgres in Docker — per mode:**
-
-```sh
-# Mode 1 — private network, no TLS (sslmode=disable)
-#   Postgres listens without TLS; both containers share a Docker network.
-docker network create projects-net
-docker run -d --name projects-pg --network projects-net \
-  -e POSTGRES_PASSWORD=secret \
-  -e POSTGRES_DB=projects \
-  -v projects-pgdata:/var/lib/postgresql/data \
-  postgres:17-alpine
-#   App side: DB_URL=postgres://postgres:secret@projects-pg:5432/projects?sslmode=disable
-
-# Mode 2 — TLS enabled, certificate not verified (sslmode=require)
-#   Generate a self-signed cert and start Postgres with TLS on:
-openssl req -new -x509 -days 365 -nodes -subj "/CN=projects-pg" \
-  -keyout server.key -out server.crt
-chmod 600 server.key && chown 999:999 server.key server.crt
-docker run -d --name projects-pg \
-  -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=projects \
-  -v projects-pgdata:/var/lib/postgresql/data \
-  -v "$PWD/server.crt:/var/lib/postgresql/server.crt:ro" \
-  -v "$PWD/server.key:/var/lib/postgresql/server.key:ro" \
-  postgres:17-alpine \
-  -c ssl=on
-#   App side: DB_URL=postgres://postgres:secret@projects-pg:5432/projects?sslmode=require
-
-# Mode 3 — public internet / managed endpoint (sslmode=verify-full)
-#   Download the provider CA certificate and mount it into the APP container:
-DB_URL='postgres://user:pass@db.example.com:5432/projects?sslmode=verify-full&sslrootcert=/certs/ca.crt'
-docker run -d --name projects-app \
-  -v /path/to/ca.crt:/certs/ca.crt:ro \
-  --env-file /opt/projects/.env \
-  -p 8080:8080 projects-studio
-```
-
-With docker-compose, only `.env` changes: add `DB_URL=...` to `/opt/projects/.env`
-(already forwarded by `docker-compose.yml`) and `docker compose up -d`. To roll back to
-SQLite, remove `DB_URL` and recreate — the old `projects.db` file is never touched by
-pg mode.
-
-## Internationalization
-
-- **The interface is translated into English and French.** Every user-visible interface string
-  comes from a locale catalogue (`src/locales/en.json` / `fr.json`); dates, numbers, plurals and
-  the stored vocabulary render per locale, and each account's language choice persists.
-- **The demo seed's sample content is English.** The sample projects, tasks and notes shipped
-  with demo mode are not translated (PROJECT.md D-15).
-- **The two prototype pages are English.** The `design-system` and `states` prototype pages are
-  excluded from the catalogues.
-- **Four other languages are absent until they exist** — the selector once listed them, but only
-  English and French are real (LANG-01 future work).
-- **The guarantee is guarded.** A 21-route browser sweep proves no untranslated English string
-  is served in French, and a build-time static scan fails the build on a new user-visible literal
-  that never reached a catalogue.
-
-## Workspaces
-
-The self-hosted server keeps **several workspaces in one SQLite file**. Each has its own URL
-(`/w/<slug>`), its own document (projects, tasks, members, settings) and its own membership
-list. Every API call is scoped to a slug and the server enforces the signed-in account's role
-on both reads and writes; an account that is not a member of a workspace gets `404`, and the
-per-account `me` is derived from the session instead of being stored in the shared document.
-Workspaces are listed in the sidebar menu and the command palette, and new ones are created
-from the setup wizard.
-
-Projects inside a workspace can be **private** to an invited list instead of shared with
-everyone. The server filters hidden projects, tasks, comments, files, activity, notifications
-and saved views out of every response, and refuses writes that try to touch a project the
-caller cannot see. Owners and admins can always manage a project; its lead manages the access
-list and the private switch.
-
-**File uploads are real.** On a self-hosted instance, files attached to tasks are stored as
-real binaries under `DATA_DIR/files/` (each capped by the `MAX_UPLOAD_MB` knob, 25 MB by
-default), with image and PDF previews in the browser and workspace-scoped `/w/:slug/file/:id`
-links. The browser-only demo stores file records without their binary content — no server
-means nothing to upload to.
-
-The browser-only demo (Vite dev without the server, and the static Vercel build) has exactly
-one local workspace backed by `localStorage`: there is no workspace switcher and no workspace
-creation, so nothing implies server-backed multi-tenancy. It applies the same private-project
-visibility in the browser.
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — self-hosting runbook: Docker, Traefik, accounts,
+  backups, updates, SSO, key rotation
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — local development and testing
+- [`docs/POSTGRES.md`](docs/POSTGRES.md) — the optional PostgreSQL backend
+- [`docs/MCP.md`](docs/MCP.md) — MCP server: API keys and the 35-tool manual
+- [`integrations/`](integrations/) — connect an agent (OpenCode, [CC], [DSH])
+- [`docs/i18n-fr-glossary.md`](docs/i18n-fr-glossary.md) — French terminology choices
+- [`CHANGELOG.md`](CHANGELOG.md) — release history
