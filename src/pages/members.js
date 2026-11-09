@@ -74,20 +74,24 @@ export function pageMembers() {
               const data = S.ui.memberVisibilityData;
               const KNOWN = ['everyone', 'lead', 'member', 'team'];
               let body;
-              if (!data) body = `<span class="faint">${t('a11y.loading')}</span>`;
-              else if (data.err) body = `<span class="faint">—</span>`;
-              else if (!data.projects.length) body = `<span class="faint">${t('page.members.visReasonEmpty')}</span>`;
+              if (!data) body = `<span class="faint" style="font-size:12px">${t('page.members.visLoading')}</span>`;
+              else if (data.err) body = `<span class="faint" style="font-size:12px">${t('page.members.visReasonError')}</span>`;
+              else if (!data.projects.length) body = `<span class="faint" style="font-size:12px">${t('page.members.visReasonEmpty')}</span>`;
               else
                 body = data.projects
                   .map(p => {
-                    const label = KNOWN.includes(p.reason) ? t(`page.members.visReason.${p.reason}`) : esc(String(p.reason));
+                    const label = KNOWN.includes(p.reason)
+                      ? p.reason === 'team' && p.teamName
+                        ? t('page.members.visReasonTeam', { name: esc(p.teamName) })
+                        : t(`page.members.visReason.${p.reason}`)
+                      : esc(String(p.reason));
                     return `<div class="row" style="gap:8px"><span>${esc(p.name || p.id)}</span><span class="badge">${label}</span></div>`;
                   })
                   .join('');
-              return `<tr><td colspan="8" style="padding:10px 14px 14px 14px;background:var(--bg, rgba(0,0,0,.03))"><div class="stack" style="gap:6px">${body}</div></td></tr>`;
+              return `<tr><td colspan="8" ${!data ? 'aria-busy="true" ' : ''}style="padding:var(--s-2) var(--s-3) var(--s-3) var(--s-3);background:var(--bg)"><div id="vis-${esc(m.id)}" class="stack" style="gap:var(--s-2)"><div class="faint" style="font-size:12px">${t('page.members.visDetailTitle')}${data && !data.err ? ` (${data.projects.length})` : ''}</div>${body}</div></td></tr>`;
             })()
           : '';
-        const expander = isAdmin && m.userId ? `<button class="ibtn ibtn-sm" data-a="memberVisibilityToggle" data-id="${esc(m.id)}" aria-label="${t('a11y.memberVisibility')}" aria-expanded="${visOpen ? 'true' : 'false'}">${ic('chevron-down', 14)}</button>` : '';
+        const expander = isAdmin && m.userId ? `<button class="ibtn ibtn-sm" data-a="memberVisibilityToggle" data-id="${esc(m.id)}" aria-label="${t('a11y.memberVisibility')}" aria-expanded="${visOpen ? 'true' : 'false'}"${visOpen ? ` aria-controls="vis-${esc(m.id)}"` : ''}>${visOpen ? ic('chevron-down', 14) : ic('chevron-right', 14)}</button>` : '';
         return `<tr data-ctx="member" data-id="${m.id}"><td style="padding-left:14px"><button class="row" data-a="go" data-r="member" data-id="${m.id}" style="gap:10px;text-align:left">${av(m.id, 'md', false)}<span class="col"><b style="font-weight:500">${esc(m.name)}${m.id === D().me ? ` <span class="faint" style="font-weight:400">(${t('page.members.you')})</span>` : ''}</b><span class="faint" style="font-size:12px">${esc(m.email)}</span></span></button></td>
       <td style="text-align:left">${canManage(m) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${roleLabel(m.role)}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${roleLabel(m.role)}</span>`}</td>
       <td style="text-align:left">${(() => {
