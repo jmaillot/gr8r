@@ -1304,7 +1304,7 @@ The MCP endpoint lives at `/mcp` (streamable HTTP, JSON-RPC 2.0, hand-rolled on 
 built-ins — no SDK, D-12 respected). Clients authenticate with a **personal API key**
 (`psk_live_…`) generated from **Settings → API keys** after a full login + 2FA browser
 session; only the key's sha256 hash is stored. One key = one user + one workspace.
-Full tool manual: [`MCP.md`](MCP.md).
+Full tool manual: [`docs/MCP.md`](docs/MCP.md).
 
 ### Image requirement
 

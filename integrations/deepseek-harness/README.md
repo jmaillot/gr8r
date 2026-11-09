@@ -53,13 +53,13 @@ and the next activation picks the new values up.
 
 ## Notes
 
-- `serverName: projects-studio` matches the naming already used in `MCP.md`
+- `serverName: projects-studio` matches the naming already used in `docs/MCP.md`
   for OpenCode / Claude Desktop / Cursor, so tools surface as
   `mcp__projects-studio__<tool>` everywhere.
 - `failOnStartupError: true` makes a bad URL or an invalid key fail loudly in
   the plugin manager instead of silently leaving the agent without tools.
 
-## Snippet for the main MCP.md
+## Snippet for `docs/MCP.md`
 
 ```markdown
 ### DeepSeek Harness
