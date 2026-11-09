@@ -1,0 +1,15 @@
+# DeepSeek Harness bundle for the Projects Studio MCP server.
+#
+# Mounts the built-in @deepseek-ai/dsh-mcp-client plugin against the Projects Studio
+# /mcp endpoint. Secrets stay out of this file: the bearer token is read
+# from the PRJSTUDIO_MCP_TOKEN environment variable at plugin activation.
+- insert:
+    - id: prjstudio-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: projects-studio
+        transport: streamable-http
+        url: !!js "process.env.PRJSTUDIO_MCP_URL ?? 'https://your-instance.example/mcp'"
+        headers:
+          Authorization: !!js '`Bearer ${process.env.PRJSTUDIO_MCP_TOKEN}`'
+        failOnStartupError: true
