@@ -63,7 +63,17 @@ const endpointIds = async mid => {
   assert.equal(res.status, 200, `${mid} expansion resolves`);
   assert.equal(res.data.member, mid, 'response echoes the target member id (p.members space)');
   for (const p of res.data.projects) {
-    assert.deepEqual(Object.keys(p).sort(), ['id', 'name', 'reason'], 'project entries carry exactly {id, name, reason} — no rosters, no access lists');
+    /* Phase 52 UI review: the optional teamName (a SINGLE team name for
+       team-granted access) is allowed; rosters and access lists still are not. */
+    assert.deepEqual(
+      Object.keys(p).filter(k => k !== 'teamName').sort(),
+      ['id', 'name', 'reason'],
+      'project entries carry exactly {id, name, reason[, teamName]} — no rosters, no access lists',
+    );
+    if ('teamName' in p) {
+      assert.equal(p.reason, 'team', 'teamName only appears on the team reason');
+      assert.equal(typeof p.teamName, 'string', 'teamName is a plain string');
+    }
     assert.equal(typeof p.reason, 'string', `reason is a coarse machine code (${p.id})`);
   }
   return res.data.projects.map(p => p.id);

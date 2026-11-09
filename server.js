@@ -4994,7 +4994,18 @@ async function handleApi(req, res, url) {
     for (const p of doc?.data?.projects || []) {
       if (!p?.id) continue;
       if (!(await memberCanReadProject(p, ctx.ws.id, targetMemberId))) continue;
-      projects.push({ id: p.id, name: p.name || p.id, reason: projectAccessReason(p, targetMemberId, memberTeams) ?? 'member' });
+      const reason = projectAccessReason(p, targetMemberId, memberTeams) ?? 'member';
+      const entry = { id: p.id, name: p.name || p.id, reason };
+      /* Phase 52 UI review: for team-granted access, name the ONE first-matching
+         team so the admin sees WHY without a roster. A single team name — never
+         the team list, never member rosters (T-52-03). The coarse reason code is
+         unchanged for backward compat. */
+      if (reason === 'team') {
+        const tid = memberTeams.find(t => Array.isArray(p.teams) && p.teams.includes(t));
+        const tName = (Array.isArray(doc?.data?.teams) ? doc.data.teams : []).find(tm => tm?.id === tid)?.name;
+        if (tName) entry.teamName = String(tName);
+      }
+      projects.push(entry);
     }
     return json(res, 200, { member: targetMemberId, projects });
   }
