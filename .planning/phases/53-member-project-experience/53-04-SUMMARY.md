@@ -157,3 +157,10 @@ None - no external service configuration required.
 ---
 *Phase: 53-member-project-experience*
 *Completed: 2026-11-09*
+
+## Self-Check: PASSED
+
+- 53-04-SUMMARY.md and e2e/projects-table.spec.mjs exist on disk.
+- All 3 commits (06a18e5, 6e90e59, 629d711) present in `git log`.
+- Acceptance criteria re-run: Members count cell + `data-a="projectSettings" data-tab="general"` gear in the table renderer; e2e asserts all five columns + gear→modal→General and one Share→Access (2/2 pass); `npm run i18n:scan` exits 0 with `table.members` in both locales and `a11y.addMember` deleted; `grep -rn 'data-a="share"' src/` returns nothing; no tooltip in the new columns renders names or perm levels (count/date only).
+- Plan verification: `npm run e2e -- e2e/projects-table.spec.mjs` 2/2 green; `npm run e2e -- e2e/project-settings.spec.mjs` 9/9 and `e2e/flows.spec.mjs` 30/30 (no regressions); `npm test` 1147 pass / 1 fail (pre-existing totp-rewrap DEPLOY.md ENOENT, already tracked in WINDOWS.md, out of scope).
