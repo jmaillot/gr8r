@@ -81,7 +81,7 @@ const WAVE_ORACLE = [
   ['a11y.teamDescExample', 'e.g. Acquisition experiments and lifecycle email'],
   ['common.icon', 'Icon'],
   ['common.color', 'Color'],
-  ['page.team.membersHint', 'Everyone belongs to one primary team. Adding someone here moves them from their current team.'],
+  ['page.team.accessHint', 'Every member of a team can have access to a project that is assigned to a team'],
   ['act.saveChanges', 'Save changes'],
   ['act.createTeam', 'Create team'],
 ];

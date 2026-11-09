@@ -409,7 +409,7 @@ test('D-K12 (d): zero envelope rows with both keys set — the pass returns befo
 
 import { execFileSync } from 'node:child_process';
 
-const DEPLOY = fs.readFileSync(new URL('../DEPLOY.md', import.meta.url), 'utf8');
+const DEPLOY = fs.readFileSync(new URL('../docs/DEPLOY.md', import.meta.url), 'utf8'); // relocated to docs/ by the 5e4d954 docs split
 
 /* The key-id one-liner: first `node -e '…'` fenced line carrying the sha256
    derivation. Fails loudly (and intentionally) if DEPLOY.md rephrases it. */
