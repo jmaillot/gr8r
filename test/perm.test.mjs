@@ -293,6 +293,56 @@ test('row 14: the membership edit surface can never drive a guest to zero projec
   assert.deepEqual(stillScoped.map(p => p.id), ['p_membershare'], 'no clamp, no downgrade — the scope is untouched');
 });
 
+/* -------------------- rows 16-18 (CR-01 regression, 2026-11-09) --------------------
+   The content-write gate keys on the STORED row's project ("stored parent
+   wins" — the comment-gate rule), never on the incoming row's. Both bypass
+   vectors from the review are pinned: (a) stripping the project binding must
+   not skip the gate; (b) re-pointing the project at one the actor can edit
+   must not launder a write out of the view-only project. Fail closed: an
+   unresolvable id is refused, never merged past the gate. */
+
+test('row 16 (CR-01 vector a): a view-only member cannot bypass the task gate by omitting the project binding', async () => {
+  await setTeamPerm('Can view');
+  const before = JSON.stringify(task('t_teamshare'));
+  const res = await docPutAs(member, doc => {
+    const t = doc.data.tasks.find(t => t.id === 't_teamshare');
+    delete t.project; // the crafted payload strips the binding the gate used to key on
+    t.title = 'Rewritten with binding stripped';
+  });
+  assert.equal(res.status, 200, 'the refusal rides the 200 (Pitfall 1)');
+  const codes = (res.data?.refused || []).map(r => r.code || r);
+  assert.ok(codes.includes('projectPermDenied'), `the binding-stripped PUT is refused (got: ${JSON.stringify(res.data)})`);
+  assert.equal(JSON.stringify(task('t_teamshare')), before, 'the stored task survives byte-identical');
+  assert.equal(task('t_teamshare').project, 'p_teamshare', 'the project binding was never stripped from storage');
+});
+
+test('row 17 (CR-01 vector b): re-pointing a view-only task at an editable project is refused (source-project check)', async () => {
+  const before = JSON.stringify(task('t_teamshare'));
+  const res = await docPutAs(member, doc => {
+    const t = doc.data.tasks.find(t => t.id === 't_teamshare');
+    t.project = 'p_teamboth'; // m_team sits on this access list → defaults to Can edit
+    t.title = 'Moved out of the view-only project';
+  });
+  assert.equal(res.status, 200);
+  const codes = (res.data?.refused || []).map(r => r.code || r);
+  assert.ok(codes.includes('projectPermDenied'), `the re-point is refused (got: ${JSON.stringify(res.data)})`);
+  assert.equal(JSON.stringify(task('t_teamshare')), before, 'the source project content survives byte-identical');
+  assert.equal(task('t_teamshare').project, 'p_teamshare', 'the task never moved');
+});
+
+test('row 18 (CR-01, files): the same stored-wins rule refuses a re-pointed file record below the edit tier', async () => {
+  const before = JSON.stringify(storedDoc().data.files.find(f => f.id === 'f_canedit'));
+  const res = await docPutAs(member, doc => {
+    const f = doc.data.files.find(f => f.id === 'f_canedit');
+    f.project = 'p_teamboth'; // destination is editable — the gate must still key on the stored project
+    f.name = 'laundered.txt';
+  });
+  assert.equal(res.status, 200);
+  const codes = (res.data?.refused || []).map(r => r.code || r);
+  assert.ok(codes.includes('projectPermDenied'), `the file re-point is refused (got: ${JSON.stringify(res.data)})`);
+  assert.equal(JSON.stringify(storedDoc().data.files.find(f => f.id === 'f_canedit')), before, 'the stored file record survives byte-identical');
+});
+
 test('row 15 (T-53-06 MCP ceiling): the MCP server exposes exactly three tools and none of them creates invites', async () => {
   const fs2 = await import('node:fs');
   const src = fs2.readFileSync(new URL('../mcp.js', import.meta.url), 'utf8');

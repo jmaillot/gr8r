@@ -1148,12 +1148,20 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
     /* Task writes (create, edit, move, delete) require ≥ 'Can edit'. */
     const storedTasksById = new Map((storedData.tasks || []).map(t => [t?.id, t]).filter(([id]) => id));
     const incomingTaskIds = new Set((nextData.tasks || []).map(t => t?.id).filter(Boolean));
+    /* [2026-11-09 CR-01 fix] Gate on the STORED row's project ("stored parent
+       wins" — same rule as the comment gate): a member cannot re-point a row's
+       project to dodge the source-project check, and a row that drops its
+       project binding entirely can never skip the gate. Fail closed: an id
+       with no resolvable project is refused (held byte-identical), never
+       merged past the gate. */
     for (const t of nextData.tasks || []) {
-      if (!t?.id || !t.project) continue;
-      if (hiddenProjects.has(t.project) || reservedTasks.has(t.id)) continue;
+      if (!t?.id) continue;
       const prev = storedTasksById.get(t.id);
+      const tProj = prev?.project || t.project;
+      if (!tProj) { permDeniedTasks.add(t.id); continue; }
+      if (hiddenProjects.has(tProj) || reservedTasks.has(t.id)) continue;
       if (prev && !changed(prev, t)) continue;
-      if (PROJECT_PERMS.indexOf(effFor(t.project)) < EDIT_RANK) permDeniedTasks.add(t.id);
+      if (PROJECT_PERMS.indexOf(effFor(tProj)) < EDIT_RANK) permDeniedTasks.add(t.id);
     }
     // A delete is a content write too: a stored row the actor dropped from the
     // incoming list is held back unless they may edit its project.
@@ -1190,12 +1198,17 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
        rides the doc channel), so the doc funnel IS the file gate. */
     const storedFilesById = new Map((storedData.files || []).map(f => [f?.id, f]).filter(([id]) => id));
     const incomingFileIds = new Set((nextData.files || []).map(f => f?.id).filter(Boolean));
+    /* [2026-11-09 CR-01 fix] Same stored-wins rule as tasks: the file record's
+       project comes from the stored row first; an unresolvable id fails
+       closed. */
     for (const f of nextData.files || []) {
-      if (!f?.id || !f.project) continue;
-      if (hiddenProjects.has(f.project) || reservedTasks.has(f.task)) continue;
-      const prev = storedFilesById.get(f.id);
-      if (prev && !changed(prev, f)) continue;
-      if (PROJECT_PERMS.indexOf(effFor(f.project)) < EDIT_RANK) permDeniedFiles.add(f.id);
+      if (!f?.id) continue;
+      const prevF = storedFilesById.get(f.id);
+      const fProj = prevF?.project || f.project;
+      if (!fProj) { permDeniedFiles.add(f.id); continue; }
+      if (hiddenProjects.has(fProj) || reservedTasks.has(f.task)) continue;
+      if (prevF && !changed(prevF, f)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(fProj)) < EDIT_RANK) permDeniedFiles.add(f.id);
     }
     for (const [id, f] of storedFilesById) {
       if (incomingFileIds.has(id) || reservedTasks.has(f?.task)) continue;
