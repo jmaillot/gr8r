@@ -20,13 +20,13 @@
 
 ### Teams
 
-- [ ] **TEAM-01**: Edit Team members box is searchable — accent-insensitive
+- [x] **TEAM-01**: Edit Team members box is searchable — accent-insensitive
   `foldForSearch` filter input above the checkbox list (teams.js:33-45), like the
   share-modal member autocomplete (modals.js:203-228)
-- [ ] **TEAM-02**: Hint text replaced with correct multi-team wording:
+- [x] **TEAM-02**: Hint text replaced with correct multi-team wording:
   "Every member of a team can have access to a project that is assigned to a team"
   (replaces the factually wrong `page.team.membersHint` primary-team text; EN+FR)
-- [ ] **TEAM-03**: "Invite to workspace" button removed from the team detail page
+- [x] **TEAM-03**: "Invite to workspace" button removed from the team detail page
   (members.js:174) — invites are managed only via Workspace > Members
 
 ### Project Settings
@@ -58,7 +58,7 @@
 
 ### Standing Invariants
 
-- [ ] **UX-01**: Every user-facing string catalogued EN+FR; `npm run i18n:scan` passes
+- [x] **UX-01**: Every user-facing string catalogued EN+FR; `npm run i18n:scan` passes
   (0 dead / 0 stale); catalogue-size and data-a pins updated in the same commits as
   the changes that alter them; dead keys from removed modals deleted, never allowlisted
 
@@ -92,9 +92,9 @@
 | PSET-04 | Phase 53, plan 53-03 | Complete |
 | PROJ-01 | Phase 53, plan 53-04 | Complete |
 | PROJ-02 | Phase 53, plan 53-04 | Complete |
-| TEAM-01 | Phase 53, plan 53-05 | Pending |
-| TEAM-02 | Phase 53, plan 53-05 | Pending |
-| TEAM-03 | Phase 53, plan 53-05 | Pending |
-| UX-01 | Phase 53, plan 53-05 (milestone-wide invariant, enforced in every plan) | Pending |
+| TEAM-01 | Phase 53, plan 53-05 | Complete (2026-11-09) |
+| TEAM-02 | Phase 53, plan 53-05 | Complete (2026-11-09) |
+| TEAM-03 | Phase 53, plan 53-05 | Complete (2026-11-09) |
+| UX-01 | Phase 53, plan 53-05 (milestone-wide invariant, enforced in every plan) | Complete (2026-11-09) |
 
 Coverage: 13/13 v2.1 requirements mapped to plan-level units inside the single Phase 53, no orphans, no duplicates.

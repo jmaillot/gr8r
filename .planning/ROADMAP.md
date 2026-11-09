@@ -49,7 +49,7 @@ Plans:
 - [x] 53-04-PLAN.md — Projects table columns (Lead/Teams/Members/Status/Target) + one labeled Share → Access tab
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 53-05-PLAN.md — Teams polish (searchable members box, hint, invite removal) + milestone i18n close-out
+- [x] 53-05-PLAN.md — Teams polish (searchable members box, hint, invite removal) + milestone i18n close-out
 
 **Execution order** (plans are built and executed in this order; each plan is
 self-contained and commits atomically):
@@ -123,7 +123,7 @@ self-contained and commits atomically):
 | 53-02 Invite modal (draft, chips, guest clamp) | Complete | 2026-11-09 |
 | 53-03 Unified project settings modal | Complete | 2026-11-09 |
 | 53-04 Projects table columns & Share dedup | Complete | 2026-11-09 |
-| 53-05 Teams polish & i18n close-out | Not started | - |
+| 53-05 Teams polish & i18n close-out | Complete | 2026-11-09 |
 
 ## Backlog
 

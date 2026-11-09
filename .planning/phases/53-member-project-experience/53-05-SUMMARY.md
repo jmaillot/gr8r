@@ -176,4 +176,8 @@ None - no external service configuration required.
 *Phase: 53-member-project-experience*
 *Completed: 2026-11-09*
 
-## Self-Check: PENDING
+## Self-Check: PASSED
+
+- 53-05-SUMMARY.md and e2e/teams.spec.mjs exist on disk; all 3 commits (29a2dff, 7afeaab, fe93e11) in `git log`.
+- Acceptance criteria re-run: `grep "teamSearch\|foldForSearch" src/features/teams.js` shows needle + filtered map; `npm run e2e -- e2e/teams.spec.mjs` 3/3 green (search+checked-state, zero-invite+hint EN, hint FR); `npm run i18n:scan` exit 0 (0 dead/0 stale); `membersHint` absent from locales and src; `node --test test/i18n-shell.test.mjs test/i18n-toast.test.mjs` green at pin 480; unit suite 1169/1169.
+- Plan verification: `npm test` 0 fail; `npm run e2e` 97 passed / 11 failed (all 11 bisected pre-existing at 6e90e59, documented in deferred-items.md); `git diff package.json` empty; no allowlist additions during phase 53.
