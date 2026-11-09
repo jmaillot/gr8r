@@ -1464,6 +1464,7 @@
   "a11y.sort": "Sort",
   "page.projects.col.start": "Start",
   "page.projects.col.lastActivity": "Last activity",
+  "table.members": "Members",
   "page.projects.sortRecent": "Recently active",
   "page.projects.sortName": "Name",
   "page.inbox.cat.updates": "Updates",
