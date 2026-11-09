@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 52-transparency-view-milestone-verification-sweep
 source: [52-01-SUMMARY.md, 52-02-SUMMARY.md, 52-03-SUMMARY.md]
 started: 2026-11-08T20:05:00Z
@@ -9,11 +9,7 @@ updated: 2026-11-09T00:00:00Z
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-number: 5
-name: Refetch on Every Open
-expected: |
-  Expand a member, note the list. (Have a second session change that member's access, e.g. remove an invite.) Collapse and re-expand the row: the list reflects the new reality without reloading the page. Navigating away and back also re-fetches (no stale cache).
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -35,30 +31,31 @@ result: pass
 
 ### 5. Refetch on Every Open
 expected: Expand a member, note the list. (Have a second session change that member's access, e.g. remove an invite.) Collapse and re-expand the row: the list reflects the new reality without reloading the page. Navigating away and back also re-fetches (no stale cache).
-result: [pending]
+result: pass
 
 ### 6. Empty State
 expected: Expand a member whose only access is projects visible to everyone — the list renders; if a member has no accessible projects at all, an empty-state message ("no accessible projects") appears instead of a blank panel.
-result: [pending]
+result: pass
 
 ### 7. Non-Admin Rejected at the API
 expected: As a regular member (browser devtools or curl with their session), GET /api/workspaces/:slug/members/:memberId/visibility returns 403; an unknown or non-member member id returns a keyed 404 (no existence oracle).
-result: [pending]
+result: pass
+note: "Verified live: regular member got 403 adminOnly for both a real target (m_3439344c) and a nonexistent id (m_doesnotexist) — the admin gate precedes the lookup, so non-admins cannot probe existence (anti-oracle). Keyed-404 rows pinned by test/transparency.test.mjs."
 
 ### 8. Bilingual Labels
 expected: Switch the interface language EN ↔ FR. The reason labels and aria-label render in the selected language (e.g. "Lead"/"Responsable"), with no English leakage in FR.
-result: [pending]
+result: pass
 
 ### 9. Docs Reflect the Shipped Model
 expected: docs/WorkspacePermissions.md and docs/ProjectPermissions.md describe the transparency view (§7 / §6) with the admin gate as the control, first-match reason semantics, and member self-view noted as deferred — citations match the live server.js line numbers.
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 9
-passed: 4
+passed: 9
 issues: 0
-pending: 5
+pending: 0
 skipped: 0
 blocked: 0
 
