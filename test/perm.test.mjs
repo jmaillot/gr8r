@@ -238,6 +238,10 @@ test('row 11: an ADMIN guest invite with two projects is refused (inviteGuestPro
 });
 
 test('row 12: an ADMIN guest invite with exactly one project is accepted and stored with that project', async () => {
+  /* [2026-11-09 WR-03] The toggle gate applies at creation for every tier —
+     the fixture's guest project carries allowInviteGuests ON. */
+  const flip = await admin.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: true });
+  assert.equal(flip.status, 200, `toggle flipped (got ${flip.status}: ${JSON.stringify(flip.data)})`);
   const res = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, {
     emails: [GUEST_EMAIL],
     role: 'viewer',
@@ -254,8 +258,10 @@ test('row 12: an ADMIN guest invite with exactly one project is accepted and sto
 
 test('row 13: accepting the well-formed guest invite creates the membership scoped to the one project', async () => {
   assert.ok(guestInviteUrl, 'row 12 must have produced a link');
-  // The accept path re-derives the per-project allowInviteGuests toggle from
-  // the CURRENT doc (D-50-8) — flip it on for p_membershare as the admin first.
+  // [2026-11-09 WR-03] The toggle gate now applies at creation for every
+  // tier, so the fixture's guest project needs allowInviteGuests ON before
+  // row 12 mints the invite — accept-time re-derives it from the CURRENT
+  // doc (D-50-8), so leave it ON for the accept below.
   const flip = await admin.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: true });
   assert.equal(flip.status, 200, `toggle flipped (got ${flip.status}: ${JSON.stringify(flip.data)})`);
   const token = guestInviteUrl.slice(guestInviteUrl.lastIndexOf('/join/') + '/join/'.length);

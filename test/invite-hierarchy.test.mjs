@@ -222,16 +222,21 @@ describe('VIS-04 — the per-project guest-invite toggle', () => {
     assert.equal(raw.project, 'p_membershare', 'invites.project is persisted');
   });
 
-  test('admin invites bypass the toggle entirely (D-50-9) — but not the guest invariant (T-53-05)', async () => {
-    /* [2026-11-09 53-02] A guest with zero projects is refused regardless of
-       the inviter tier; the toggle bypass still holds once the one-project
-       invariant is satisfied (p_hidden has the toggle OFF). */
+  test('admin guest invites obey the toggle too (WR-03) — no more dead-on-arrival links', async () => {
+    /* [2026-11-09 WR-03] Accept-time re-derives allowInviteGuests and fails
+       closed, so an admin minting a guest invite against a toggle-OFF
+       project produced a shareable link that 403'd on every accept. The
+       gate now applies at creation for every tier; the D-50-9 bypass
+       survives only for invites with no project scope. */
     const linkOnly = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct@visfix.local'], role: 'viewer' });
     assert.equal(linkOnly.status, 400, 'a zero-project guest invite is refused on the admin path too');
     assert.equal(linkOnly.data.code, 'inviteGuestProjectRequired');
     const onOff = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct2@visfix.local'], role: 'viewer', project: 'p_hidden' });
-    assert.equal(onOff.status, 201, 'an admin guest invite succeeds even with the toggle OFF');
-    assert.equal(onOff.data.invites[0].project, 'p_hidden', 'the admin invite carries its project');
+    assert.equal(onOff.status, 403, 'a toggle-OFF project refuses the admin guest invite at creation');
+    assert.equal(onOff.data.code, 'inviteGuestToggleOff');
+    const onProject = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct3@visfix.local'], role: 'viewer', project: 'p_membershare' });
+    assert.equal(onProject.status, 201, 'a toggle-ON project accepts the admin guest invite');
+    assert.equal(onProject.data.invites[0].project, 'p_membershare', 'the admin invite carries its project');
   });
 
   test('toggle flip: member refused, admin/owner allowed, stored on the doc', async () => {

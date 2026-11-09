@@ -5446,13 +5446,21 @@ async function handleApi(req, res, url) {
     } else if (role === 'viewer') {
       /* T-53-05 (admin/owner guest invite): the validator above only
          guarantees an exactly-one candidate list — resolve it against the
-         CURRENT doc so a stale/unknown id fails closed. The per-project
-         allowInviteGuests toggle stays a member-tier gate (admins manage
-         access directly, D-50-7). */
+         CURRENT doc so a stale/unknown id fails closed. */
       inviteProject = String(guestProjects[0]);
       const currentDoc = JSON.parse(ctx.ws.doc);
       const project = (Array.isArray(currentDoc?.data?.projects) ? currentDoc.data.projects : []).find(p => p?.id === inviteProject);
       if (!project) return fail(res, 400, 'inviteGuestProjectRequired', 'Unknown project');
+      /* [2026-11-09 WR-03] The toggle applies to EVERY guest invite, admin
+         tier included: accept-time re-derives allowInviteGuests from the
+         CURRENT doc and fails closed (inviteGuestToggleOff), so minting an
+         invite against a toggle-OFF project was a shareable link that 403'd
+         on every accept — dead on arrival. The D-50-9 bypass survives for
+         member/admin invites (no project scope); a guest invite IS a project
+         scope, so it obeys the same gate at creation as at accept. */
+      if (project.allowInviteGuests !== true) {
+        return fail(res, 403, 'inviteGuestToggleOff', 'Guest invites are off for this project');
+      }
     }
     /* D-07: an invite carries the full team set. Validation mirrors the PUT
        members/:uid/teams route exactly (T-28-07): per-item trim + 40-char
