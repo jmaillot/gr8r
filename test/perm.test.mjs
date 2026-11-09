@@ -128,3 +128,80 @@ test('row 4: the project lead bypasses with Full access even under a view-only t
   assert.deepEqual(res.data?.refused || [], [], 'the lead (m_admin) is never gated by the team key');
   assert.equal(task('t_teamshare').title, 'Renamed by the lead', 'the lead edit merged');
 });
+
+test('row 5: normalizeProjects sweeps a dangling team key and a non-PERMS team value', async () => {
+  // Write invalid keys straight into storage, then trigger a normalize pass via any doc read/write.
+  const doc = storedDoc();
+  const p = doc.data.projects.find(x => x.id === 'p_teamshare');
+  p.perms['team:ghost'] = 'Can edit'; // ghost ∉ p.teams
+  p.perms['team:engA'] = 'Owner only'; // not a PERMS value
+  p.perms['m_plain'] = 'Can view'; // non-team key keeps member semantics
+  withDb(server.dbPath, db =>
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), VIS_WS.id));
+  // normalizeProjects mutates the merged doc on the PUT path — a doc read only
+  // normalizes the served COPY, so persist the sweep through a doc PUT.
+  const put = await docPutAs(admin, () => {});
+  assert.equal(put.status, 200);
+  const swept = storedDoc().data.projects.find(p => p.id === 'p_teamshare').perms;
+  assert.ok(!('team:ghost' in swept), 'the dangling team key is deleted');
+  assert.ok(!('team:engA' in swept), 'the non-PERMS team value is deleted');
+  assert.equal(swept['m_plain'], 'Can view', 'non-team keys keep their member semantics');
+});
+
+test('row 6: a view-only team member is refused a comment create (≥ Can comment required) — no comment merges', async () => {
+  await setTeamPerm('Can view');
+  const before = (storedDoc().data.comments || []).length;
+  const res = await docPutAs(member, doc => {
+    doc.data.comments.push({ id: 'c_viewonly', task: 't_teamshare', text: 'Comment by view-only member', by: 'm_team', at: 1 });
+  });
+  assert.equal(res.status, 200);
+  const codes = (res.data?.refused || []).map(r => r.code || r);
+  assert.ok(codes.includes('projectPermDenied'), `the comment create is refused (got: ${JSON.stringify(res.data)})`);
+  assert.equal((storedDoc().data.comments || []).length, before, 'no comment merged');
+});
+
+test('row 7: a Can-edit team member comments and attaches a file record; a view-only member is refused a file edit', async () => {
+  await setTeamPerm('Can edit');
+  const ok = await docPutAs(member, doc => {
+    doc.data.comments.push({ id: 'c_canedit', task: 't_teamshare', text: 'Comment by Can-edit member', by: 'm_team', at: 2 });
+    doc.data.files.push({ id: 'f_canedit', project: 'p_teamshare', task: 't_teamshare', name: 'a.txt', size: 3, mime: 'text/plain', by: 'm_team', at: 2 });
+  });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.data?.refused || [], [], 'comment + file record merge at the Can-edit tier');
+  assert.ok(storedDoc().data.comments.some(c => c.id === 'c_canedit'));
+  assert.ok(storedDoc().data.files.some(f => f.id === 'f_canedit'));
+
+  await setTeamPerm('Can view');
+  const denied = await docPutAs(member, doc => {
+    const f = doc.data.files.find(f => f.id === 'f_canedit');
+    f.name = 'renamed.txt'; // file metadata edit below the edit tier
+  });
+  assert.equal(denied.status, 200);
+  const codes = (denied.data?.refused || []).map(r => r.code || r);
+  assert.ok(codes.includes('projectPermDenied'), `the file-record edit is refused (got: ${JSON.stringify(denied.data)})`);
+  assert.equal(storedDoc().data.files.find(f => f.id === 'f_canedit').name, 'a.txt', 'the stored file record survives byte-identical');
+});
+
+test('row 8 (T-53-01 pin property): a non-manager PUT whose payload omits p.perms entirely leaves stored team keys untouched', async () => {
+  await setTeamPerm('Can edit');
+  const before = JSON.stringify(project('p_teamshare').perms);
+  const res = await docPutAs(member, doc => {
+    const p = doc.data.projects.find(p => p.id === 'p_teamshare');
+    delete p.perms; // the stale client omits the map entirely
+    const t = doc.data.tasks.find(t => t.id === 't_teamshare');
+    t.title = 'Unrelated task edit while omitting perms';
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.data?.refused || [], [], 'the task edit itself is allowed at the Can-edit tier');
+  assert.equal(JSON.stringify(project('p_teamshare').perms), before, 'p.perms is pinned wholesale by the non-manager PUT');
+});
+
+test('row 9 (T-53-01 pin property): a stale team key in a non-manager PUT cannot downgrade the stored value', async () => {
+  const res = await docPutAs(member, doc => {
+    const p = doc.data.projects.find(p => p.id === 'p_teamshare');
+    p.perms['team:engA'] = 'Can view'; // stale client copy — the stored value is 'Can edit'
+  });
+  assert.equal(res.status, 200);
+  assert.equal(project('p_teamshare').perms['team:engA'], 'Can edit', 'the stored team perm is byte-identical after mergeClientDoc');
+});
+

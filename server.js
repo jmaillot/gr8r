@@ -943,6 +943,18 @@ function normalizeProjects(doc) {
       p.private = false;
     }
     if (p.perms && typeof p.perms !== 'object') delete p.perms;
+    /* [2026-11-09 Phase 53 (53-01), PSET-02] Team-perm keys ride p.perms as
+       'team:'+teamId — a dangling key (team id not in p.teams) or a
+       non-PERMS value is swept in place, fail-safe (delete, never throw).
+       Non-team keys keep their member semantics (the pin block already pins
+       p.perms wholesale on non-manager PUTs). */
+    if (p.perms && typeof p.perms === 'object') {
+      const pTeams53 = Array.isArray(p.teams) ? p.teams : [];
+      for (const k of Object.keys(p.perms)) {
+        if (!k.startsWith('team:')) continue;
+        if (!pTeams53.includes(k.slice(5)) || !PROJECT_PERMS.includes(p.perms[k])) delete p.perms[k];
+      }
+    }
     delete p.access;
   }
 }
@@ -1117,6 +1129,8 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
      the stored row survives byte-identical. Visibility stays boolean (D-03);
      project-level routes stay under canManageProject (D-01). */
   const permDeniedTasks = new Set();
+  const permDeniedComments = new Set();
+  const permDeniedFiles = new Set();
   const isBelowManager = !isWorkspaceManager && !!memberId;
   const memberTeams53 = isBelowManager && membership?.workspace_id
     ? await teamsOfMember(membership.workspace_id, memberId, membership)
@@ -1129,7 +1143,9 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
       return effCache.get(pid);
     };
     const EDIT_RANK = PROJECT_PERMS.indexOf('Can edit');
+    const COMMENT_RANK = PROJECT_PERMS.indexOf('Can comment');
     const changed = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+    /* Task writes (create, edit, move, delete) require ≥ 'Can edit'. */
     const storedTasksById = new Map((storedData.tasks || []).map(t => [t?.id, t]).filter(([id]) => id));
     const incomingTaskIds = new Set((nextData.tasks || []).map(t => t?.id).filter(Boolean));
     for (const t of nextData.tasks || []) {
@@ -1146,7 +1162,49 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
       if (!t?.project || hiddenProjects.has(t.project)) continue;
       if (PROJECT_PERMS.indexOf(effFor(t.project)) < EDIT_RANK) permDeniedTasks.add(id);
     }
+    /* Comment writes (create, edit, delete) require ≥ 'Can comment'; the
+       project comes from the parent task (stored parent wins — a comment can
+       never relocate itself onto a task the payload claims). */
+    const storedCommentsById = new Map((storedData.comments || []).map(c => [c?.id, c]).filter(([id]) => id));
+    const incomingCommentIds = new Set((nextData.comments || []).map(c => c?.id).filter(Boolean));
+    const storedTasksProject = new Map([...storedTasksById].map(([id, t]) => [id, t?.project || null]));
+    const commentProject = c => storedTasksProject.get(c?.task)
+      || (nextData.tasks || []).find(t => t?.id === c?.task)?.project
+      || (storedData.files || []).find(f => f?.id && f?.task === c?.task)?.project
+      || null;
+    for (const c of nextData.comments || []) {
+      if (!c?.id || !c.task) continue;
+      if (hiddenProjects.has(commentProject(c)) || reservedTasks.has(c.task)) continue;
+      const prev = storedCommentsById.get(c.id);
+      if (prev && !changed(prev, c)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(commentProject(c))) < COMMENT_RANK) permDeniedComments.add(c.id);
+    }
+    for (const [id, c] of storedCommentsById) {
+      if (incomingCommentIds.has(id) || reservedTasks.has(c?.task)) continue;
+      const proj = commentProject(c);
+      if (!proj || hiddenProjects.has(proj)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(proj)) < COMMENT_RANK) permDeniedComments.add(id);
+    }
+    /* File record writes (attach, edit metadata, delete) require ≥ 'Can edit'
+       — the /w/:slug/files REST upload carries no project binding (the record
+       rides the doc channel), so the doc funnel IS the file gate. */
+    const storedFilesById = new Map((storedData.files || []).map(f => [f?.id, f]).filter(([id]) => id));
+    const incomingFileIds = new Set((nextData.files || []).map(f => f?.id).filter(Boolean));
+    for (const f of nextData.files || []) {
+      if (!f?.id || !f.project) continue;
+      if (hiddenProjects.has(f.project) || reservedTasks.has(f.task)) continue;
+      const prev = storedFilesById.get(f.id);
+      if (prev && !changed(prev, f)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(f.project)) < EDIT_RANK) permDeniedFiles.add(f.id);
+    }
+    for (const [id, f] of storedFilesById) {
+      if (incomingFileIds.has(id) || reservedTasks.has(f?.task)) continue;
+      if (!f?.project || hiddenProjects.has(f.project)) continue;
+      if (PROJECT_PERMS.indexOf(effFor(f.project)) < EDIT_RANK) permDeniedFiles.add(id);
+    }
     for (const id of permDeniedTasks) refusals.push({ code: 'projectPermDenied', task: id });
+    for (const id of permDeniedComments) refusals.push({ code: 'projectPermDenied', comment: id });
+    for (const id of permDeniedFiles) refusals.push({ code: 'projectPermDenied', file: id });
   }
 
   nextData.projects = mergeList(storedData.projects, nextData.projects, hiddenProjects);
@@ -1214,9 +1272,9 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
   const taskHidden = t => hiddenProjects.has(t?.project) || reservedTasks.has(t?.id) || permDeniedTasks.has(t?.id);
   nextData.tasks = mergeList(storedData.tasks, nextData.tasks, reservedDependants(storedData.tasks, nextData.tasks, taskHidden));
 
-  const commentHidden = c => reservedTasks.has(c?.task);
+  const commentHidden = c => reservedTasks.has(c?.task) || permDeniedComments.has(c?.id);
   nextData.comments = mergeList(storedData.comments, nextData.comments, reservedDependants(storedData.comments, nextData.comments, commentHidden));
-  const fileHidden = f => hiddenProjects.has(f?.project) || reservedTasks.has(f?.task);
+  const fileHidden = f => hiddenProjects.has(f?.project) || reservedTasks.has(f?.task) || permDeniedFiles.has(f?.id);
   nextData.files = mergeList(storedData.files, nextData.files, reservedDependants(storedData.files, nextData.files, fileHidden));
   const activityHidden = a => hiddenProjects.has(a?.project) || reservedTasks.has(a?.task);
   nextData.activity = mergeList(storedData.activity, nextData.activity, reservedDependants(storedData.activity, nextData.activity, activityHidden));
