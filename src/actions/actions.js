@@ -2035,6 +2035,13 @@ A.invScopeTeamToggle = el => {
   st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
   render();
 };
+/* [2026-11-09 INVT-01] Silent-state draft binding (NO render() — a full
+   re-render here re-creates the wipe bug the binding exists to fix; Pitfall 4).
+   The textarea renders esc(S.ui.inviteDraft), so background polls and chip
+   toggles restore the typed emails from state. */
+IN.inviteDraft = el => {
+  S.ui.inviteDraft = el.value;
+};
 /* The role select re-renders the form: the scope section is D-04-gated on
    admin, and the guest toggle follows the Guest role. */
 IN.invRole = el => {
