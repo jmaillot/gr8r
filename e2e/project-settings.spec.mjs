@@ -322,3 +322,93 @@ test('a non-manager sees the Access section read-only with the lock hint — no 
     await context.close();
   }
 });
+
+/* =====================================================================
+   Task 3: per-field data-in survival sweep (EN + FR) + old modals gone.
+   ===================================================================== */
+
+/* Focuses every keystroke-able General field, types/selects a value, forces
+   a full re-render by switching tabs, and asserts every value survived the
+   re-render (all fields are data-in-bound to S.ui.pform). */
+async function survivalSweep(browser, account, lang, projectName, values) {
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: lang === 'fr' ? 'fr-FR' : 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
+  const page = await context.newPage();
+  try {
+    await openProjectPage(page, account, lang, projectName);
+    await page.locator('button[data-a="editProject"]').click();
+    await assertSettingsModal(page, lang, 'general', projectName);
+
+    await page.locator('#p-name').fill(values.name);
+    await page.locator('#p-desc').fill(values.desc);
+    await page.locator('#p-due').fill(values.due);
+    await page.locator('.iconpick button[role="radio"][aria-label="rocket"]').click();
+
+    /* Force a full modal re-render (tab toggle re-renders from live store
+       state) — every value must survive. */
+    await page.getByRole('tab', { name: L[lang].tabAccess }).click();
+    await page.getByRole('tab', { name: L[lang].tabGeneral }).click();
+
+    await expect(page.locator('#p-name')).toHaveValue(values.name);
+    await expect(page.locator('#p-desc')).toHaveValue(values.desc);
+    await expect(page.locator('#p-due')).toHaveValue(values.due);
+    await expect(page.locator('.iconpick button[role="radio"][aria-label="rocket"]')).toHaveAttribute('aria-checked', 'true');
+
+    /* The Access tab's per-team select also re-renders from live state —
+       its stored tier survives the round-trip too. */
+    await page.getByRole('tab', { name: L[lang].tabAccess }).click();
+    await expect(page.locator('select[data-in="teamPerm"]').first()).toHaveValue('Can edit');
+  } finally {
+    await context.close();
+  }
+}
+
+test('per-field survival sweep: type into every field, re-render, values survive (EN)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Survival EN ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'sv-en', 'Survival EN Owner', { locale: 'en', workspace: `sv-en-${run}` });
+  await addTeams(client, account.slug, [{ id: 'tm_sv_a', name: `Sweep Crew ${run}` }]);
+  await addProject(client, account.slug, { id: 'p_sv_a', key: 'sv-a', name, teamIds: ['tm_sv_a'] });
+  await survivalSweep(browser, account, 'en', name, { name: `Survival Renamed ${run}`, desc: `Keystroke survival ${run}`, due: '2030-06-15' });
+});
+
+test('per-field survival sweep in French (FR)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Survie FR ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'sv-fr', 'Survival FR Owner', { locale: 'fr', workspace: `sv-fr-${run}` });
+  await addTeams(client, account.slug, [{ id: 'tm_sv_b', name: `Équipe Sweep ${run}` }]);
+  await addProject(client, account.slug, { id: 'p_sv_b', key: 'sv-b', name, teamIds: ['tm_sv_b'] });
+  await survivalSweep(browser, account, 'fr', name, { name: `Survie Renommé ${run}`, desc: `Survie des frappes ${run}`, due: '2031-01-20' });
+});
+
+test('the old modals are gone: create opens the create-only form and no route opens a share/project modal', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Legacy Gone ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'lg-en', 'Legacy Owner', { locale: 'en', workspace: `lg-en-${run}` });
+  await addProject(client, account.slug, { id: 'p_lg_a', key: 'lg-a', name });
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
+  const page = await context.newPage();
+  try {
+    await signIn(page, account, 'en');
+
+    /* The create path still works — through the create-only form, never the
+       removed projectModal. */
+    await page.getByRole('button', { name: 'New project' }).first().click();
+    await expect(page.getByRole('heading', { name: 'New project', level: 2 })).toBeVisible();
+    await expect(page.locator('.modal .tmpls[role="radiogroup"]').first()).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    /* No entry point — gear, Share button, or context menu — opens anything
+       but the unified projectSettings modal. */
+    await page.goto(`${BASE_URL}/w/${account.slug}/project/lg-a`);
+    await expect(page.locator('.proj-h h1')).toHaveText(name);
+    await page.locator('button[data-a="editProject"]').click();
+    await expect(page.locator('.modal')).toHaveCount(1);
+    await assertSettingsModal(page, 'en', 'general', name);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await expect(page.locator('.modal')).toHaveCount(1);
+    await assertSettingsModal(page, 'en', 'access', name);
+  } finally {
+    await context.close();
+  }
+});

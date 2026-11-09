@@ -1478,7 +1478,7 @@ A.newProject = () => {
   S.ui.pform = { name: '', desc: '', icon: 'folder', color: 'indigo', teams: memberTeams(me()), lead: D().me, due: dOff(30), tmpl: 'blank' };
   S.ui.errors = {};
   S.ui.pop = null;
-  openModal({ type: 'project' });
+  openModal({ type: 'projectCreate' });
 };
 A.editProject = el => {
   /* [53-03 D-05] The gear (and the context-menu Edit entry) opens the unified

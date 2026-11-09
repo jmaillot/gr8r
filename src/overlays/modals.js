@@ -37,17 +37,13 @@ export function modalHtml(m) {
   switch (m.type) {
     case 'task':
       return wrap('', taskModal(m, H));
-    /* [53-03 D-04] One unified project settings modal. `case 'project'` keeps
-       routing: a create (no edit id) still renders the new-project form; an
-       edit routes to the unified modal. `case 'share'` is a Task-1 alias kept
-       only while old callers may still open type 'share' — deleted with the
-       old modals in 53-03 Task 3. */
+    /* [53-03 D-04] One unified project settings modal — the only settings
+       surface. Editing routes here from the gear and every Share entry
+       (D-05). Creation has its own create-only modal (projectCreate). */
     case 'projectSettings':
       return wrap('', projectSettingsModal(m, H));
-    case 'project':
-      return wrap('', m.edit ? projectSettingsModal(m, H) : projectModal(m, H));
-    case 'share':
-      return wrap('', projectSettingsModal(m, H));
+    case 'projectCreate':
+      return wrap('', projectCreateModal(m, H));
     case 'invite':
       return wrap('', inviteModal(m, H));
     case 'confirm':
@@ -161,9 +157,9 @@ export const TEMPLATES = [
   { id: 'personal', icon: 'heart', tasks: 4 },
 ];
 /* [53-03 D-04] The General-tab field set of the unified project settings
-   modal — the former projectModal edit fields moved verbatim: same
+   modal — the former project modal edit fields moved verbatim: same
    data-in/data-f names, same S.ui.pform model, same submitProject form. The
-   template picker is create-only and stays in projectModal below. */
+   template picker is create-only and lives in projectCreateModal below. */
 export function settingsGeneralFields(m) {
   const f = S.ui.pform;
   const err = S.ui.errors.pname;
@@ -200,8 +196,8 @@ export function settingsGeneralFields(m) {
 }
 /* The create-new-project form: the General field set plus the create-only
    template picker. Editing a project opens the unified projectSettings
-   modal (53-03) — this renderer is create-only from now on. */
-export function projectModal(m, H) {
+   modal (53-03) — this renderer is create-only. */
+export function projectCreateModal(m, H) {
   return `${H(t('act.newProject'), t('modal.projectHint'))}
   <form class="modal-b" data-submit="submitProject">
     ${settingsGeneralFields(m)}
@@ -216,18 +212,8 @@ export const PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
    access' -> access). Derived, so no icon-name token is quoted in source. */
 const PERM_KEYS = Object.fromEntries(PERMS.map(p => [p, p.split(' ').pop().toLowerCase()]));
 const permLabel = p => t('common.perm.' + (PERM_KEYS[p] ?? PERM_KEYS[PERMS[0]]));
-export function shareModal(m, H) {
-  const p = proj(m.id);
-  if (!p) return H(t('err.projectNotFound'));
-  /* [53-03] The standalone Share modal survives only as a Task-1 alias — the
-     body moved verbatim into accessBody, which the unified projectSettings
-     modal's Access tab renders. Deleted with the alias in 53-03 Task 3. */
-  return `${H(t('modal.shareTitle', { name: esc(p.name) }))}
-  <div class="modal-b">${accessBody(m)}</div>
-  <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-pid="${p.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('act.done')}</button></div>`;
-}
 /* [53-03 D-04] The Access body of the unified project settings modal — the
-   former shareModal content moved verbatim: the invite-by-email row, the
+   former share modal content moved verbatim: the invite-by-email row, the
    Teams section, People with access and the General-access toggle, all with
    their existing immediate-action handlers (IN.sharePerm, IN.shareAccess,
    shareTeamInvite/Remove). Rendered from LIVE store state on every render —
@@ -334,9 +320,9 @@ export function accessBody(m) {
       <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(p.private ? 'lock' : 'building-2', 14)}</span><div class="grow"><label class="row" style="gap:10px;font-size:12.5px;font-weight:500"><input type="checkbox" class="toggle" data-in="shareAccess" data-id="${p.id}" aria-label="${t('modal.generalAccess')}" ${p.private ? 'checked' : ''} ${canManage ? '' : 'disabled'}>${p.private ? t('modal.onlyInvited') : t('modal.everyoneAt', { name: esc(D().ws.name) })}</label><div class="faint" style="font-size:11.5px;padding-left:4px">${p.private ? t('modal.privateHint') : t('modal.workspaceHint')}</div></div></div></div>`;
 }
 /* [53-03 D-04/D-05] The unified project settings modal: one modal, two tabs.
-   General hosts the former projectModal edit fields (settingsGeneralFields,
+   General hosts the former project-modal edit fields (settingsGeneralFields,
    same pform model and submitProject form); Access hosts the former
-   shareModal body (accessBody, same immediate-action handlers). The tab
+   share-modal body (accessBody, same immediate-action handlers). The tab
    state rides S.ui.settingsTab, seeded by the open action (A.projectSettings)
    from the entry point: the gear opens General, every Share entry opens
    Access (D-05). Both tabs render from live store state — a concurrent

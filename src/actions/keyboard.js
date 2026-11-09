@@ -212,7 +212,7 @@ document.addEventListener('keydown', e => {
       A.submitTask();
       return;
     }
-    if (top?.type === 'project') {
+    if (top?.type === 'projectSettings' || top?.type === 'projectCreate') {
       e.preventDefault();
       A.submitProject();
       return;

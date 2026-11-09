@@ -237,7 +237,10 @@ const { filesHtml } = await import('../src/views/files.js');
 const { applyView } = await import('../src/shell/view-engine.js');
 const { popList } = await import('../src/overlays/popovers.js');
 const { paletteItems } = await import('../src/overlays/palette.js');
-const { shareModal } = await import('../src/overlays/modals.js');
+/* [53-03] The share surface is now the Access tab of the unified project
+   settings modal — same member-filter body, exercised through the real
+   renderer. */
+const { projectSettingsModal } = await import('../src/overlays/modals.js');
 
 test('the member filter folds both sides: "elodie" finds "Élodie" through her name alone', () => {
   S.ui.memQ = 'elodie';
@@ -320,12 +323,14 @@ test("the palette's own command and workspace filters fold both sides", () => {
   assert.ok(!s.includes('c.name.toLowerCase().includes(ql)'), 'the command filter must not compare raw lower-cased strings');
 });
 
-test('the share-modal member filter folds both sides: "elodie" finds "Élodie"', () => {
+test('the Access tab member filter folds both sides: "elodie" finds "Élodie"', async () => {
+  S.ui.settingsTab = 'access';
   S.ui.shareQ = 'elodie';
-  const html = shareModal({ id: 'p1' }, t => `<h2>${t}</h2>`);
+  const html = projectSettingsModal({ id: 'p-elo' }, t => `<h2>${t}</h2>`);
   assert.ok(html.includes('Élodie'), 'the accented member must be offered for sharing');
   assert.ok(!html.includes('No matching members'), 'the modal must not report no matching members');
   S.ui.shareQ = 'zzzquux';
-  assert.ok(shareModal({ id: 'p1' }, t => t).includes('No matching members'), 'a query that matched nothing before still matches nothing');
+  assert.ok(projectSettingsModal({ id: 'p-elo' }, t => t).includes('No matching members'), 'a query that matched nothing before still matches nothing');
   S.ui.shareQ = '';
+  S.ui.settingsTab = 'general';
 });
