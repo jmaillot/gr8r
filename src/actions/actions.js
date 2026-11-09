@@ -1481,11 +1481,10 @@ A.newProject = () => {
   openModal({ type: 'project' });
 };
 A.editProject = el => {
-  const p = proj(el.dataset.id);
-  S.ui.pop = null;
-  S.ui.pform = { name: p.name, desc: p.desc, icon: p.icon, color: p.color, teams: projTeams(p), lead: p.lead, due: p.due, tmpl: 'blank' };
-  S.ui.errors = {};
-  openModal({ type: 'project', edit: p.id });
+  /* [53-03 D-05] The gear (and the context-menu Edit entry) opens the unified
+     project settings modal on the General tab. */
+  el.dataset.tab = el.dataset.tab || 'general';
+  A.projectSettings(el);
 };
 IN.pform = el => {
   S.ui.pform[el.dataset.f] = el.value;
@@ -1705,11 +1704,34 @@ A.requestAccess = el => {
 };
 
 /* sharing & invites */
-A.share = el => {
+/* [53-03 D-04/D-05] The unified project settings modal. The entry point
+   seeds the tab: gear/general (via A.editProject), share/access. The form
+   model (S.ui.pform) and the invite search (S.ui.shareQ) reset here, and the
+   modal object carries both the id and the edit id submitProject expects.
+   The body renders from live store state — this action takes NO snapshot
+   (53-03 Pitfall 3: a stale snapshot would overwrite concurrent grants). */
+A.projectSettings = el => {
   const id = el.dataset.id || curProjectId();
+  const p = proj(id);
+  if (!p) return;
+  S.ui.pform = { name: p.name, desc: p.desc, icon: p.icon, color: p.color, teams: projTeams(p), lead: p.lead, due: p.due, tmpl: 'blank' };
+  S.ui.errors = {};
   S.ui.shareQ = '';
+  S.ui.settingsTab = el.dataset.tab === 'access' ? 'access' : 'general';
   S.ui.pop = null;
-  openModal({ type: 'share', id });
+  openModal({ type: 'projectSettings', id, edit: id });
+};
+/* Tab clicks route through the data-a click pipeline (the tab buttons carry
+   the action name), so the handler lives in A, not IN. */
+A.settingsTab = el => {
+  S.ui.settingsTab = el.dataset.v === 'access' ? 'access' : 'general';
+  render();
+};
+A.share = el => {
+  /* [53-03 D-05] Every Share entry (labeled button, avatar stack, user-plus,
+     context menu) opens the unified modal directly on the Access tab. */
+  el.dataset.tab = 'access';
+  A.projectSettings(el);
 };
 IN.shareQ = el => {
   S.ui.shareQ = el.value;

@@ -37,10 +37,17 @@ export function modalHtml(m) {
   switch (m.type) {
     case 'task':
       return wrap('', taskModal(m, H));
+    /* [53-03 D-04] One unified project settings modal. `case 'project'` keeps
+       routing: a create (no edit id) still renders the new-project form; an
+       edit routes to the unified modal. `case 'share'` is a Task-1 alias kept
+       only while old callers may still open type 'share' — deleted with the
+       old modals in 53-03 Task 3. */
+    case 'projectSettings':
+      return wrap('', projectSettingsModal(m, H));
     case 'project':
-      return wrap('', projectModal(m, H));
+      return wrap('', m.edit ? projectSettingsModal(m, H) : projectModal(m, H));
     case 'share':
-      return wrap('', shareModal(m, H));
+      return wrap('', projectSettingsModal(m, H));
     case 'invite':
       return wrap('', inviteModal(m, H));
     case 'confirm':
@@ -153,13 +160,15 @@ export const TEMPLATES = [
   { id: 'software', icon: 'code', tasks: 6 },
   { id: 'personal', icon: 'heart', tasks: 4 },
 ];
-export function projectModal(m, H) {
+/* [53-03 D-04] The General-tab field set of the unified project settings
+   modal — the former projectModal edit fields moved verbatim: same
+   data-in/data-f names, same S.ui.pform model, same submitProject form. The
+   template picker is create-only and stays in projectModal below. */
+export function settingsGeneralFields(m) {
   const f = S.ui.pform;
   const err = S.ui.errors.pname;
-  const leadLocked = !!m.edit && !canManageProject(proj(m.id));
-  return `${H(m.edit ? t('act.projectSettings') : t('act.newProject'), m.edit ? '' : t('modal.projectHint'))}
-  <form class="modal-b" data-submit="submitProject">
-    <div class="row" style="gap:10px;align-items:flex-start">
+  const leadLocked = !!m.edit && !canManageProject(proj(m.edit));
+  return `<div class="row" style="gap:10px;align-items:flex-start">
       <button type="button" class="picon lg" style="--c:${PCOLORS[f.color]};cursor:default;flex-shrink:0;margin-top:22px" aria-hidden="true" tabindex="-1">${ic(f.icon, 18)}</button>
       <div class="field grow"><label class="label" for="p-name">${t('modal.projectName')}</label><input class="input ${err ? 'is-error' : ''}" id="p-name" data-in="pform" data-f="name" value="${esc(f.name)}" placeholder="${t('modal.projectNamePlaceholder')}" autofocus aria-invalid="${!!err}">${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
     </div>
@@ -187,10 +196,18 @@ export function projectModal(m, H) {
         .map(x => `<option value="${x.id}" ${f.lead === x.id ? 'selected' : ''}>${esc(x.name)}</option>`)
         .join('')}</select>${leadLocked ? `<span class="hint">${t('modal.leadLockHint')}</span>` : ''}</div>
       <div class="field" style="flex:1;min-width:150px"><label class="label" for="p-due">${t('modal.targetDate')}</label><input type="date" class="input" id="p-due" data-in="pform" data-f="due" value="${f.due || ''}"></div>
-    </div>
-    ${m.edit ? '' : `<div class="field"><span class="label">${t('modal.template')}</span><div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${f.tmpl === tp.id}" class="opt ${f.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>`}
+    </div>`;
+}
+/* The create-new-project form: the General field set plus the create-only
+   template picker. Editing a project opens the unified projectSettings
+   modal (53-03) — this renderer is create-only from now on. */
+export function projectModal(m, H) {
+  return `${H(t('act.newProject'), t('modal.projectHint'))}
+  <form class="modal-b" data-submit="submitProject">
+    ${settingsGeneralFields(m)}
+    <div class="field"><span class="label">${t('modal.template')}</span><div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${S.ui.pform.tmpl === tp.id}" class="opt ${S.ui.pform.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>
   </form>
-  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${m.edit ? t('act.saveChanges') : t('palette.createProject')}</button></div>`;
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${t('palette.createProject')}</button></div>`;
 }
 export const PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
 /* The permission names are STORED values the document holds; the display is a
@@ -200,9 +217,24 @@ export const PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
 const PERM_KEYS = Object.fromEntries(PERMS.map(p => [p, p.split(' ').pop().toLowerCase()]));
 const permLabel = p => t('common.perm.' + (PERM_KEYS[p] ?? PERM_KEYS[PERMS[0]]));
 export function shareModal(m, H) {
-  const shareNeedle = foldForSearch(S.ui.shareQ || '').text;
   const p = proj(m.id);
   if (!p) return H(t('err.projectNotFound'));
+  /* [53-03] The standalone Share modal survives only as a Task-1 alias — the
+     body moved verbatim into accessBody, which the unified projectSettings
+     modal's Access tab renders. Deleted with the alias in 53-03 Task 3. */
+  return `${H(t('modal.shareTitle', { name: esc(p.name) }))}
+  <div class="modal-b">${accessBody(m)}</div>
+  <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-pid="${p.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('act.done')}</button></div>`;
+}
+/* [53-03 D-04] The Access body of the unified project settings modal — the
+   former shareModal content moved verbatim: the invite-by-email row, the
+   Teams section, People with access and the General-access toggle, all with
+   their existing immediate-action handlers (IN.sharePerm, IN.shareAccess,
+   shareTeamInvite/Remove). Rendered from LIVE store state on every render —
+   no open-time snapshot (53-03 Pitfall 3). */
+export function accessBody(m) {
+  const shareNeedle = foldForSearch(S.ui.shareQ || '').text;
+  const p = proj(m.id);
   const canManage = canManageProject(p);
   const members = Array.isArray(p.members) ? p.members : [];
   /* [2026-11-08 D-51-9] The project's linked teams — invite list excludes them,
@@ -210,8 +242,7 @@ export function shareModal(m, H) {
   const linkedTeams = Array.isArray(p.teams) ? p.teams.filter(Boolean) : [];
   const perms = p.perms && typeof p.perms === 'object' ? p.perms : {};
   const lockHint = canManage ? '' : `<div class="alert info" style="margin-bottom:12px">${ic('lock', 14)}<span>${t('modal.shareLockHint')}</span></div>`;
-  return `${H(t('modal.shareTitle', { name: esc(p.name) }))}
-  <div class="modal-b">
+  return `
     ${lockHint}
     ${
       canManage
@@ -283,9 +314,38 @@ export function shareModal(m, H) {
         .join('')}
     </div>
     <div style="border-top:1px solid var(--divider);padding-top:12px"><div class="eyebrow" style="margin-bottom:8px">${t('modal.generalAccess')}</div>
-      <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(p.private ? 'lock' : 'building-2', 14)}</span><div class="grow"><label class="row" style="gap:10px;font-size:12.5px;font-weight:500"><input type="checkbox" class="toggle" data-in="shareAccess" data-id="${p.id}" aria-label="${t('modal.generalAccess')}" ${p.private ? 'checked' : ''} ${canManage ? '' : 'disabled'}>${p.private ? t('modal.onlyInvited') : t('modal.everyoneAt', { name: esc(D().ws.name) })}</label><div class="faint" style="font-size:11.5px;padding-left:4px">${p.private ? t('modal.privateHint') : t('modal.workspaceHint')}</div></div></div></div>
-  </div>
+      <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(p.private ? 'lock' : 'building-2', 14)}</span><div class="grow"><label class="row" style="gap:10px;font-size:12.5px;font-weight:500"><input type="checkbox" class="toggle" data-in="shareAccess" data-id="${p.id}" aria-label="${t('modal.generalAccess')}" ${p.private ? 'checked' : ''} ${canManage ? '' : 'disabled'}>${p.private ? t('modal.onlyInvited') : t('modal.everyoneAt', { name: esc(D().ws.name) })}</label><div class="faint" style="font-size:11.5px;padding-left:4px">${p.private ? t('modal.privateHint') : t('modal.workspaceHint')}</div></div></div></div>`;
+}
+/* [53-03 D-04/D-05] The unified project settings modal: one modal, two tabs.
+   General hosts the former projectModal edit fields (settingsGeneralFields,
+   same pform model and submitProject form); Access hosts the former
+   shareModal body (accessBody, same immediate-action handlers). The tab
+   state rides S.ui.settingsTab, seeded by the open action (A.projectSettings)
+   from the entry point: the gear opens General, every Share entry opens
+   Access (D-05). Both tabs render from live store state — a concurrent
+   admin's adopted grant is visible on the next render, and no open-time
+   snapshot ever feeds a submit (Pitfall 3). */
+export function projectSettingsModal(m, H) {
+  const p = proj(m.id);
+  if (!p) return H(t('err.projectNotFound'));
+  const tab = S.ui.settingsTab === 'access' ? 'access' : 'general';
+  const tabBar = `<nav class="tabs" role="tablist" aria-label="${t('modal.settingsTabs')}">${[
+    ['general', 'modal.settingsTabGeneral'],
+    ['access', 'modal.settingsTabAccess'],
+  ]
+    .map(
+      ([k, key]) =>
+        `<button role="tab" aria-selected="${tab === k}" class="tab ${tab === k ? 'on' : ''}" data-a="settingsTab" data-v="${k}">${t(key)}</button>`,
+    )
+    .join('')}</nav>`;
+  if (tab === 'access') {
+    return `${H(t('modal.shareTitle', { name: esc(p.name) }))}${tabBar}
+  <div class="modal-b">${accessBody(m)}</div>
   <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-pid="${p.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('act.done')}</button></div>`;
+  }
+  return `${H(t('act.projectSettings'))}${tabBar}
+  <form class="modal-b" data-submit="submitProject">${settingsGeneralFields(m)}</form>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${t('act.saveChanges')}</button></div>`;
 }
 /* The invite form's role options (29-04) — display labels stored as picker
    state; api.js bridges them to the API roles via its own map. */
