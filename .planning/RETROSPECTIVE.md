@@ -340,6 +340,51 @@
 
 ---
 
+## Milestone: v2.0 — Project-level Permissions & Invitations
+
+**Shipped:** 2026-11-09
+**Phases:** 4 | **Plans:** 17
+
+### What Was Built
+
+- Visibility collapsed to boolean-private ∨ access list through one live funnel
+  (`memberCanReadProject`) mirrored across server, reminder/email fanout and MCP.
+- Strict invite hierarchy (owner-only owner grants), post-invite editability, one guest
+  concept (viewer + exactly one project), per-project members-may-invite-guests toggle.
+- Live team→project links (D-50-5): joining/leaving a linked team grants/revokes access on
+  the very next request — replacing Phase 49's materialization sweep mid-milestone.
+- Settings > Permissions page removed end-to-end; permCreate became a real server-enforced
+  setting with a keyed refusal; lead-on-create; honest not-found epoch.
+- Admin transparency view of any member's exact access with reason labels (Phase 52).
+
+### What Worked
+
+- The mid-milestone design pivot (snapshot → live team links) was cheap because the funnel
+  was already single-entry: deleting the sweep was safer than keeping both models.
+- The dead-key i18n detector (Phase 51) turned the standing EN+FR invariant into a build
+  gate that self-cleaned 17 orphaned keys.
+- Hand-derived visibility oracle fixture (13 cells) kept parity claims testable, not asserted.
+
+### What Was Inefficient
+
+- Shared-file digest churn again: closing the milestone left 3 of 4 phase digests stale
+  (server.js edits in later phases); close proceeded as override_closeout backed by the
+  milestone audit re-running the full suite + 6/6 E2E flows at HEAD.
+- UI review findings arrived after UAT, requiring a second fix round on Phase 52.
+
+### Patterns Established
+
+- Keyed refusals riding a 200 (e.g. `projectCreateForbidden`) with localized toast +
+  optimistic revert — the client-never-lies error shape for preference-gated actions.
+- `data-in` binding + `IN.*` handler as the required pattern for modal inputs that must
+  survive a full re-render.
+
+### Key Lessons
+
+- Verify-then-edit ordering matters less than auditing the final tree: the audit's
+  fresh full-suite + integration pass is what actually carried the close.
+- Design pivots are safe when the access decision has exactly one doorway.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
