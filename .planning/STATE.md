@@ -10,10 +10,10 @@ last_activity: 2026-11-09
 last_activity_desc: Phase 53 complete
 state_head: cec43bd4b2760862a2b8ff596cddb4e6ac0cc6b2
 progress:
-  total_phases: 5
-  completed_phases: 0
+  total_phases: 1
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 5
 ---
 
 # STATE.md
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 53 — Member & Project Experience
+**Current focus:** v2.1 complete — no phase in flight; next milestone not yet planned
 
 ## Current Position
 
-Phase: 53
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-09 — Phase 53 complete
+Phase: 53 (complete — last phase of v2.1)
+Plan: 5/5 complete
+Status: Phase 53 verified (17/17 must-haves) — milestone ready to close
+Last activity: 2026-11-09 — Phase 53 verification refreshed and phase marked complete
 
 ## v2.1 Plan Order (approved 2026-11-09 — single Phase 53, executed plan-by-plan)
 
@@ -92,19 +92,19 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-09T13:30:00Z
-**Stopped at:** Phase 53 complete — all phases complete
+**Last session:** 2026-11-09T20:30:00Z
+**Stopped at:** Phase 53 complete and verified (17/17 must-haves) — v2.1 ready to close
 **Resume file:** None
 
 ### Last completed
 
-- v2.1 roadmap creation (this session): ROADMAP.md, STATE.md, REQUIREMENTS.md traceability
+- Phase 53 re-verification: VERIFICATION.md regenerated against HEAD `cec43bd` (17/17,
+  1164 unit tests, 20/20 phase e2e, i18n gate 0/0), phase marked complete (11ebcb0)
 
 ### Next
 
-- Owner approves roadmap → `/gsd-plan-phase 53` (research flags: read/write semantics
-  for team "Full access" is an explicit owner ruling; confirm MCP invite tool ceiling
-  in Phase 54 planning)
+- `/gsd-complete-milestone v2.1` — archive v2.1 and prepare the next milestone
+  (UI/UX polish batch is already scoped in the backlog)
 
 ## Performance Metrics
 
@@ -124,3 +124,5 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 - [Phase 53]: Team modal submitTeam now awaits pushNow() before the membership PUTs — the 450ms-debounced doc push raced the team-whitelisted PUT (400 unknownTeam); latent bug fixed in 53-05
 - [Phase 53]: The team-page invite button removed (TEAM-03) with its dead act.inviteToWorkspace key; invites only via Workspace > Members; page.team.accessHint carries the owner's verbatim multi-team sentence EN+FR (membersHint deleted)
 - [Phase 53]: 11 pre-existing e2e failures (tenancy/locale/flows/french-overflow) bisected to pre-53-05 commit 6e90e59 — logged in deferred-items.md for milestone-verification triage; unit suite 1169/1169 green
+- [Phase 53]: Re-verification 2026-11-09 (post-fix digest): 17/17 must-haves verified against HEAD `cec43bd`; PROJ-02 override recorded — owner ruling 5ca7a26 removed the header labeled Share button, leaving the project context-menu as the single Share entry point (REQUIREMENTS.md PROJ-02 / ROADMAP SC5 wording still says "labeled Share button" and should be reconciled at milestone close)
+- [Phase 53]: WR-03 (guest invite to `allowInviteGuests=false`) confirmed fixed at 97468bc during re-verification; `53-REVIEW-DISPOSITION.md` row is stale ("open") and can be reconciled on the next review pass

@@ -1,8 +1,8 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-09 after v2.1 milestone start*
+*Last updated: 2026-11-09 after Phase 53 completion (v2.1)*
 
-## Current Milestone: v2.1 Member & Project Experience
+## Current Milestone: v2.1 Member & Project Experience — SHIPPED (2026-11-09)
 
 **Goal:** make the everyday surfaces — invite modal, team editing, project settings,
 projects table — match how people actually use workspaces.
@@ -21,6 +21,19 @@ projects table — match how people actually use workspaces.
   task-based progress) / Target date; single Share button on the project page
   (remove user+ icon and avatar-stack duplicates)
 
+**Shipped:** one ordered phase (53) delivering 13 requirements across 5 plans —
+per-team permission levels stored inside `p.perms['team:'+id]` and enforced server-first
+through `projectPermFor` on every content write (VISIBILITY_MODEL oracle + server/MCP/client
+mirror parity pinned by test); invite modal with a surviving draft (`data-in`), Projects
+chips, and one shared server validator enforcing guest = exactly one project across
+create/edit/accept; one unified `projectSettings` modal (General + Access) replacing both
+`projectModal` and `shareModal`, with per-team perm dropdowns and honest 409 conflict
+handling; projects table Members count + status/target columns and a single Share entry
+point; teams polish (accent-insensitive member search, multi-team ownership wording,
+team-page invite button removed) with the EN+FR i18n gate at 0 dead / 0 stale.
+Verification 17/17 must-haves; 1164 unit tests, 20 phase e2e in EN+FR, zero new runtime
+dependencies, zero migrations.
+
 ### v2.1 milestone decisions (owner-validated 2026-11-09)
 
 - M-09 per-team perms on projects reuse the existing per-person perms model
@@ -30,6 +43,22 @@ projects table — match how people actually use workspaces.
 - M-11 Date column = target date (p.due)
 - M-12 one unified settings modal replaces projectModal + share modal
 - M-13 one Share button on the project page (keep the labeled one)
+
+### v2.1 phase decisions (Phase 53, 2026-11-09)
+
+- D-53-1 Per-team permission levels live as `p.perms['team:'+teamId]` keys — no new
+  top-level field, so `mergeClientDoc`/normalize/removal sweeps needed no new sink and
+  visibility stays boolean (M-09 write-only gating).
+- D-53-2 The guest = exactly-one-project invariant is re-derived server-side by ONE shared
+  validator used by invite create, edit and accept (plus the MCP mirror), not by the UI.
+- D-53-3 One `projectSettings` modal (General + Access) replaces both legacy modals; the
+  General tab does not edit team links, which live only in Access.
+- D-53-4 **Owner ruling (5ca7a26):** the labeled Share button in the project header was
+  removed as redundant with the settings gear/context-menu entry. There is exactly one
+  Share affordance (context-menu → Access tab). This overrides the literal PROJ-02 /
+  ROADMAP SC5 wording "single labeled Share button"; REQUIREMENTS.md and ROADMAP.md
+  text should be reconciled at milestone close. Recorded as an accepted override in
+  53-VERIFICATION.md.
 
 ## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 
@@ -430,6 +459,10 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Validated
 
+- ✓ PSET-02, PSET-03, PSET-01, PSET-04, INVT-01..03, PROJ-01, PROJ-02, TEAM-01..03,
+  UX-01 — Member & Project Experience (Phase 53; verification 17/17 against HEAD
+  `cec43bd`, unit suite 1164 pass, phase e2e 20/20 EN+FR, i18n gate 0 dead/0 stale;
+  PROJ-02 override: owner ruling removed the header labeled Share button — see D-53-4)
 - ✓ MIG-01..03, VIS-02, VIS-03 — visibility model collapse + grant materialization (Phase 49)
 - ✓ INV-01..04, VIS-04 — project-level invite hierarchy, live team links, per-project guest
   toggle, one guest concept (Phase 50)
@@ -636,8 +669,8 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-*(None — next milestone not yet planned; UI/UX polish batch scoped in session, awaiting
-`/gsd-new-milestone`.)*
+*(None — v2.1 shipped 2026-11-09. Next step: `/gsd-complete-milestone v2.1`, then
+`/gsd-new-milestone` to scope the UI/UX polish batch already proposed in the backlog.)*
 
 ### Out of scope
 
