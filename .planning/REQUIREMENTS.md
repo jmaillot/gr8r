@@ -35,10 +35,10 @@
   lead/target date) + Access section (Teams, Individual Members, General Access) —
   replaces both the current `projectModal` (modals.js:156-194) and the Share modal
   (modals.js:202-289); net code reduction
-- [ ] **PSET-02**: Per-team permissions: each team with access gets a perm level
+- [x] **PSET-02**: Per-team permissions: each team with access gets a perm level
   (Can view / Can comment / Can edit / Full access), reusing the per-person perms
   model (`PERMS` array, `p.perms` map — team-keyed namespacing per ARCHITECTURE.md)
-- [ ] **PSET-03**: Per-team perms enforced server-side: write-route gating via a
+- [x] **PSET-03**: Per-team perms enforced server-side: write-route gating via a
   `projectPermFor` helper, semantics decided inside `canSeeProject`/`memberCanReadProject`,
   mirrored into `mcp.js:183` `canReadProject` and `projectAccessReason` in ONE lockstep
   change, `mergeClientDoc` pin block + `normalizeProjects` extended, VISIBILITY_MODEL
@@ -83,8 +83,8 @@
 
 | Requirement | Phase / Plan | Status |
 |-------------|--------------|--------|
-| PSET-02 | Phase 53, plan 53-01 | Pending |
-| PSET-03 | Phase 53, plan 53-01 | Pending |
+| PSET-02 | Phase 53, plan 53-01 | Complete |
+| PSET-03 | Phase 53, plan 53-01 | Complete |
 | INVT-01 | Phase 53, plan 53-02 | Pending |
 | INVT-02 | Phase 53, plan 53-02 | Pending |
 | INVT-03 | Phase 53, plan 53-02 | Pending |

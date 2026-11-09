@@ -37,7 +37,7 @@ PROJ-01, PROJ-02, TEAM-01, TEAM-02, TEAM-03, UX-01
 
 Plans:
 **Wave 1**
-- [ ] 53-01-PLAN.md — Per-team perms server model (`p.perms['team:']`, `projectPermFor` write gates, lockstep mirrors, oracle + pin regression)
+- [x] 53-01-PLAN.md — Per-team perms server model (`p.perms['team:']`, `projectPermFor` write gates, lockstep mirrors, oracle + pin regression)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 53-02-PLAN.md — Invite modal: draft `data-in` fix, Projects chips, shared guest validator (create/edit/accept) + D-06 UX
@@ -119,7 +119,7 @@ self-contained and commits atomically):
 
 | Plan | Status | Completed |
 |------|--------|-----------|
-| 53-01 Per-team perms (server model) | Not started | - |
+| 53-01 Per-team perms (server model) | Complete | 2026-11-09 |
 | 53-02 Invite modal (draft, chips, guest clamp) | Not started | - |
 | 53-03 Unified project settings modal | Not started | - |
 | 53-04 Projects table columns & Share dedup | Not started | - |
