@@ -426,7 +426,13 @@ test('uploads are gated: unauthenticated callers get 401 and viewers get 403 rea
 
     /* a read-only member cannot upload either (D-05 / no-oracle rule intact) */
     const admin = await login(server.base, ADMIN.email, ADMIN.password);
-    const invite = await admin.client.post('/api/workspaces/acme/invites', { emails: ['viewer@test.local'], role: 'Viewer' });
+    /* [2026-11-09 53-02] The guest invite needs exactly one real project (T-53-05). */
+    const wsGet = await admin.client.get('/api/workspaces/acme');
+    const wsDoc = wsGet.data.doc;
+    wsDoc.data.projects = [...(wsDoc.data.projects || []), { id: 'p_upload_fixture', key: 'upload-fixture', name: 'Upload fixture', private: false, members: [], perms: {}, team: null, status: 'active', allowInviteGuests: true }];
+    wsDoc.data.projOrder = [...(wsDoc.data.projOrder || []), 'p_upload_fixture'];
+    assert.equal((await admin.client.put('/api/workspaces/acme', { revision: wsGet.data.revision, doc: wsDoc })).status, 200, 'the upload fixture project is created');
+    const invite = await admin.client.post('/api/workspaces/acme/invites', { emails: ['viewer@test.local'], role: 'Viewer', project: 'p_upload_fixture' });
     assert.equal(invite.status, 201);
     const accepted = await client(server.base, 'viewer').post(`/api/invites/${encodeURIComponent(inviteToken(invite.data.invites[0].url))}/accept`, {
       name: 'Viewer',

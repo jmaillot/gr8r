@@ -14,8 +14,10 @@ let cara;
 let dan;
 
 /* Invite an account that already signed up, then accept while signed in. */
-async function join(actor, slug, account, email, role) {
-  const invited = await actor.post(`/api/workspaces/${slug}/invites`, { emails: [email], role });
+async function join(actor, slug, account, email, role, project) {
+  /* [2026-11-09 53-02] A viewer invite must carry exactly one real project
+     (T-53-05 guest invariant). */
+  const invited = await actor.post(`/api/workspaces/${slug}/invites`, { emails: [email], role, ...(project ? { project } : {}) });
   assert.equal(invited.status, 201, `invite ${email} to ${slug}`);
   const accepted = await account.post(`/api/invites/${inviteToken(invited.data.invites[0].url)}/accept`);
   assert.equal(accepted.status, 200, `${email} accepts the ${slug} invite`);
@@ -125,7 +127,10 @@ test('an account that only belongs to beta cannot read or write acme', async () 
 });
 
 test('a viewer reads but cannot write', async () => {
-  await join(owner, 'acme', cara, 'cara@test.local', 'viewer');
+  /* [2026-11-09 53-02] A guest invite needs exactly one project whose guest
+     toggle is ON (T-53-05 + D-50-8). */
+  assert.equal((await owner.patch('/api/workspaces/acme/projects/p_acme', { allowInviteGuests: true })).status, 200, 'the guest toggle is opened for the fixture project');
+  await join(owner, 'acme', cara, 'cara@test.local', 'viewer', 'p_acme');
 
   const read = await cara.get('/api/workspaces/acme');
   assert.equal(read.status, 200);

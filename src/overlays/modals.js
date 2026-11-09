@@ -3,7 +3,7 @@ import { $$, ago, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
 import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
-import { D, S, canManageProject, mem, pColor, proj, task, teamsList } from '../core/store.js';
+import { D, S, canManageProject, mem, pColor, proj, task, teamsList, visibleProjects } from '../core/store.js';
 import { api } from '../core/api.js';
 import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -300,13 +300,25 @@ export function inviteModal(m, H) {
   const role = S.ui.inviteRole || INVITE_ROLE_OPTIONS[0];
   const scope = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
   const guest = role === 'Guest';
-  const scopePicker = (kind, list, action, icon) =>
-    `<div class="tmpls" role="group" aria-label="${t('modal.scopeSection')}">${teamsList()
+  /* [2026-11-09 INVT-02] The Projects chips list PROJECTS (visibleProjects),
+     not teams — the picker previously rendered teamsList() for both rows, so
+     the "Projects they can see" chips toggled team ids into
+     S.ui.inviteScope.projects. The Teams row keeps teamsList(). */
+  const scopePicker = (kind, list, action, icon) => {
+    const items = kind === 'proj' ? visibleProjects() : teamsList();
+    return `<div class="tmpls" role="group" aria-label="${t('modal.scopeSection')}">${items
       .map(
-        tm =>
-          `<button type="button" role="checkbox" aria-checked="${list.includes(tm.id)}" class="opt ${list.includes(tm.id) ? 'on' : ''}" data-a="${action}" data-v="${tm.id}" style="padding:8px">${ic(icon, 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${list.includes(tm.id) ? ic('check', 13) : ''}</button>`,
+        it =>
+          `<button type="button" role="checkbox" aria-checked="${list.includes(it.id)}" class="opt ${list.includes(it.id) ? 'on' : ''}" data-a="${action}" data-v="${it.id}" style="padding:8px">${ic(icon, 14)}<b style="font-size:12.5px">${esc(it.name)}</b>${list.includes(it.id) ? ic('check', 13) : ''}</button>`,
       )
       .join('')}</div>`;
+  };
+  /* [2026-11-09 D-06] The guest invariant expressed as disable+hint, never a
+     silent clamp or role downgrade: with the Guest role and ≠1 project the
+     send button is disabled and the localized hint shows. Chip toggles
+     re-render, so this state re-evaluates on every toggle; the email draft
+     is the only silent field (INVT-01). */
+  const guestNeedsProject = guest && scope.projects.length !== 1;
   return `${H(t('modal.inviteTo', { name: esc(D().ws.name) }), api.mailEnabled ? t('modal.inviteMailHint') : api.enabled ? t('modal.inviteLinkHint') : t('modal.inviteLocalHint'))}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" data-in="inviteDraft" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
@@ -340,7 +352,7 @@ export function inviteModal(m, H) {
         : ''
     }
   </form>
-  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button></div>`;
+  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button>${guestNeedsProject ? `<span class="hint" role="status">${t('modal.inviteGuestNeedsProject')}</span>` : ''}<button class="btn btn-primary" data-a="submitInvite" id="inv-submit" ${guestNeedsProject ? 'disabled' : ''}>${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button></div>`;
 }
 export function confirmModal(m) {
   const needs = m.typeName;

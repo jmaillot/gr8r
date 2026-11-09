@@ -1892,7 +1892,11 @@ const API_ROLE = { Owner: 'owner', Admin: 'admin', Member: 'member', Guest: 'vie
 /* The invite form's role options and their named UI keys (29-04): the display
    labels double as the stored picker state; API_ROLE bridges them to the API
    roles. Owner is not an invitable role. */
-const [ROLE_MEMBER_UI, ROLE_ADMIN_UI, ROLE_GUEST_UI] = Object.keys(API_ROLE).filter(r => r !== 'Owner');
+/* [2026-11-09 fix] The destructure order used to be (MEMBER, ADMIN, GUEST),
+   binding ROLE_MEMBER_UI='Admin' and ROLE_ADMIN_UI='Member' — every invite
+   defaulted to the Admin role and member invites sent scope:null, so the
+   scope chips never reached the POST body. Keys order is Admin/Member/Guest. */
+const [ROLE_ADMIN_UI, ROLE_MEMBER_UI, ROLE_GUEST_UI] = Object.keys(API_ROLE).filter(r => r !== 'Owner');
 
 function addInvitedMember(invites, role, teams) {
   invites.forEach(inv => {
@@ -2019,14 +2023,15 @@ A.invTeamToggle = el => {
   S.ui.inviteTeams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
   render();
 };
-/* SCOPE-05/06 (29-04, D-09/D-10/D-13): the invite form's scope pickers. The
-   projects picker degrades to single-select on the guest path (D-13: exactly
-   one project), the teams picker stays multi. */
+/* SCOPE-05/06 (29-04, D-09/D-10): the invite form's scope pickers — both
+   multi-select for every role. [2026-11-09 D-06] The guest single-select
+   clamp that used to live here is GONE: the invalid state (guest with ≠1
+   project) is expressed by the disable+hint on inv-submit, never by
+   silently replacing the selection. */
 A.invProjToggle = el => {
   const st = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
   const id = el.dataset.v;
-  const guest = (S.ui.inviteRole || ROLE_MEMBER_UI) === ROLE_GUEST_UI;
-  st.projects = guest ? (st.projects.includes(id) ? [] : [id]) : st.projects.includes(id) ? st.projects.filter(x => x !== id) : [...st.projects, id];
+  st.projects = st.projects.includes(id) ? st.projects.filter(x => x !== id) : [...st.projects, id];
   render();
 };
 A.invScopeTeamToggle = el => {

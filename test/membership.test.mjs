@@ -24,10 +24,26 @@ const roster = async who => {
   return res.data;
 };
 const find = (rows, email) => rows.find(row => row.email === email);
-const invite = async (emails, role) => {
-  const res = await owner.post('/api/workspaces/acme/invites', { emails, role });
+const invite = async (emails, role, extra = {}) => {
+  const res = await owner.post('/api/workspaces/acme/invites', { emails, role, ...extra });
   assert.equal(res.status, 201, `invite ${emails.join(', ')}`);
   return res.data.invites;
+};
+
+/* [2026-11-09 53-02] A guest (viewer) invite must carry exactly one real
+   project (T-53-05 invariant). This idempotently adds the fixture project
+   to the workspace doc and returns its id. */
+const ensureProject = async (who, slug, id = 'p_guest_fixture') => {
+  const got = await who.get(`/api/workspaces/${slug}`);
+  assert.equal(got.status, 200, `workspace ${slug} readable`);
+  const doc = got.data.doc;
+  if (!(doc.data.projects || []).some(p => p.id === id)) {
+    doc.data.projects = [...(doc.data.projects || []), { id, key: id, name: 'Guest fixture', private: false, members: [], perms: {}, team: null, status: 'active', allowInviteGuests: true }];
+    doc.data.projOrder = [...(doc.data.projOrder || []), id];
+    const put = await who.put(`/api/workspaces/${slug}`, { revision: got.data.revision, doc });
+    assert.equal(put.status, 200, `fixture project ${id} created in ${slug}`);
+  }
+  return id;
 };
 
 before(async () => {
@@ -76,7 +92,8 @@ test('an invited address joins the roster with the invited role', async () => {
 });
 
 test('pending invites are listed for admins only', async () => {
-  const [row] = await invite(['ghost@test.local'], 'viewer');
+  const projectId = await ensureProject(owner, 'acme');
+  const [row] = await invite(['ghost@test.local'], 'viewer', { project: projectId });
   assert.ok(inviteToken(row.url));
 
   const asOwner = await roster(owner);
@@ -152,7 +169,8 @@ test('an existing member cannot be invited again', async () => {
 });
 
 test('a pending invite can be revoked once', async () => {
-  const [row] = await invite(['revoked@test.local'], 'viewer');
+  const projectId = await ensureProject(owner, 'acme');
+  const [row] = await invite(['revoked@test.local'], 'viewer', { project: projectId });
   const token = inviteToken(row.url);
   const pending = (await owner.get('/api/workspaces/acme/invites')).data.invites;
   const target = pending.find(entry => entry.email === 'revoked@test.local');
@@ -321,8 +339,9 @@ test('leave reports the next workspace and needs another owner', async () => {
 });
 
 test('deleting a workspace cascades memberships and invites', async () => {
+  const gammaProjectId = await ensureProject(eve, 'gamma');
   const gamma = (await eve.get('/api/workspaces/gamma')).data;
-  const inviteRow = (await eve.post('/api/workspaces/gamma/invites', { emails: ['ghost@test.local'], role: 'viewer' })).data.invites[0];
+  const inviteRow = (await eve.post('/api/workspaces/gamma/invites', { emails: ['ghost@test.local'], role: 'viewer', project: gammaProjectId })).data.invites[0];
   const token = inviteToken(inviteRow.url);
 
   const deleted = await eve.del('/api/workspaces/gamma');

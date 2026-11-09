@@ -187,9 +187,12 @@ describe('VIS-04 — the per-project guest-invite toggle', () => {
   });
 
   test('a member guest invite needs viewer role + a real project + the toggle ON (distinct key per cause)', async () => {
+    /* [2026-11-09 53-02] The shared guest validator (T-53-05) now runs before
+       the member-tier branching, so a guest with no project carries the
+       guest-invariant key; the unknown-project cause keeps the member key. */
     const noProject = await inviteRefusal(member, { role: 'viewer' });
     assert.equal(noProject.status, 400);
-    assert.equal(noProject.code, 'inviteMemberProjectRequired');
+    assert.equal(noProject.code, 'inviteGuestProjectRequired');
 
     const unknownProject = await inviteRefusal(member, { role: 'viewer', project: 'p_nonexistent' });
     assert.equal(unknownProject.status, 400);
@@ -219,12 +222,16 @@ describe('VIS-04 — the per-project guest-invite toggle', () => {
     assert.equal(raw.project, 'p_membershare', 'invites.project is persisted');
   });
 
-  test('admin invites bypass the toggle entirely (D-50-9)', async () => {
+  test('admin invites bypass the toggle entirely (D-50-9) — but not the guest invariant (T-53-05)', async () => {
+    /* [2026-11-09 53-02] A guest with zero projects is refused regardless of
+       the inviter tier; the toggle bypass still holds once the one-project
+       invariant is satisfied (p_hidden has the toggle OFF). */
     const linkOnly = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct@visfix.local'], role: 'viewer' });
-    assert.equal(linkOnly.status, 201, 'the admin path needs no project and no toggle');
+    assert.equal(linkOnly.status, 400, 'a zero-project guest invite is refused on the admin path too');
+    assert.equal(linkOnly.data.code, 'inviteGuestProjectRequired');
     const onOff = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, { emails: ['direct2@visfix.local'], role: 'viewer', project: 'p_hidden' });
     assert.equal(onOff.status, 201, 'an admin guest invite succeeds even with the toggle OFF');
-    assert.equal(onOff.data.invites[0].project, null, 'the admin path stays workspace-scoped');
+    assert.equal(onOff.data.invites[0].project, 'p_hidden', 'the admin invite carries its project');
   });
 
   test('toggle flip: member refused, admin/owner allowed, stored on the doc', async () => {
