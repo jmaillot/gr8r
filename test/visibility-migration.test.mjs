@@ -84,6 +84,10 @@ const emailOf = mid => ({
   m_scoped: 'scoped@visfix.local',
   m_guest: 'guest@visfix.local',
   m_doconly: 'doconly@visfix.local',
+  /* Phase 53 (53-01) team-perm actor cells. */
+  m_teamviewonly: 'teamviewonly@visfix.local',
+  m_teamrevoked: 'teamrevoked@visfix.local',
+  m_danglingteam: 'danglingteam@visfix.local',
 }[mid]);
 
 before(async () => {

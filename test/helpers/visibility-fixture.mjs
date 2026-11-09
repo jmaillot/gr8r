@@ -40,7 +40,7 @@ export const VIS_CREATED_AT = 1_700_000_000_000;
    D-52-9) extends both sets: m_admin2 (admin whose ONLY private-project grant
    is a live team link — the funnel-authority divergence cell) and three
    project cells (p_adminteam, p_leadonly, p_lostvis). */
-export const VIS_ACTORS = Object.freeze(['m_admin', 'm_owner', 'm_plain', 'm_team', 'm_scoped', 'm_guest', 'm_doconly', 'm_admin2']);
+export const VIS_ACTORS = Object.freeze(['m_admin', 'm_owner', 'm_plain', 'm_team', 'm_scoped', 'm_guest', 'm_doconly', 'm_admin2', /* Phase 53 (53-01, D-03) team-perm actor cells — VISIBILITY ONLY: per-team perms (p.perms['team:'+id]) gate content WRITES and never tier visibility, so these actors' visible sets are derived from the SAME D-50-5 predicate as before: */ 'm_teamviewonly', 'm_teamrevoked', 'm_danglingteam']);
 export const VIS_PROJECTS = Object.freeze([
   'p_membershare',
   'p_hidden',
@@ -78,9 +78,18 @@ const USERS = Object.freeze({
      skip them and lose nothing (RESEARCH §Fixtures row 4). */
   m_doconly: { userId: 'u_doconly', email: 'doconly@visfix.local', name: 'Dee DocOnly', role: 'member', roleLabel: 'Member' },
   /* m_admin2 (Phase 52, D-52-9): an admin in engA whose ONLY grant to
-     p_adminteam is the live team link. The transparency funnel lists it;
+     p_adminteam is a live team link. The transparency funnel lists it;
      the access-list-gated admin doc-GET path hides it. */
   m_admin2: { userId: 'u_admin2', email: 'admin2@visfix.local', name: "Ari Admin II", role: 'admin', roleLabel: 'Admin' },
+  /* Phase 53 (53-01, D-03) team-perm actor cells. Visibility stays boolean —
+     the per-team perms stored as p.perms['team:'+teamId] gate content WRITES
+     only, so none of these rows tier visibility (boolean-only cells). */
+  m_teamviewonly: { userId: 'u_tvonly', email: 'teamviewonly@visfix.local', name: 'Vera ViewOnly', role: 'member', roleLabel: 'Member' },
+  m_teamrevoked: { userId: 'u_trevoked', email: 'teamrevoked@visfix.local', name: 'Rex Revoked', role: 'member', roleLabel: 'Member' },
+  /* m_danglingteam's only team_members row points at team id 'ghost' — absent
+     from doc.teams and from every p.teams (the dangling-key shape; the perm
+     KEY sweep itself is pinned in test/perm.test.mjs row 5). */
+  m_danglingteam: { userId: 'u_dangling', email: 'danglingteam@visfix.local', name: 'Dan Dangling', role: 'member', roleLabel: 'Member' },
 });
 
 /* member id → users.id, exported so consumers hit route paths in the userId
@@ -239,6 +248,16 @@ export const VISIBILITY_MODEL = Object.freeze({
   m_scoped: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeddeny', 'p_scopeteam'],
   m_guest: ['p_legacy', 'p_open', 'p_publicgain'],
   m_admin2: ['p_legacy', 'p_open', 'p_publicgain'],
+  /* 53-01 (D-03) team-perm cells — VISIBILITY ONLY, hand-derived from the same
+     D-50-5 predicate (per-team perms never tier visibility):
+     - m_teamviewonly: engA live → the exact m_team set (a 'Can view' team perm
+       would refuse its WRITES — test/perm.test.mjs — not its reads);
+     - m_teamrevoked: no team rows → publics only;
+     - m_danglingteam: its only live team id 'ghost' intersects NO p.teams →
+       publics only, unchanged by any dangling 'team:ghost' perm key. */
+  m_teamviewonly: ['p_adminteam', 'p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
+  m_teamrevoked: ['p_legacy', 'p_open', 'p_publicgain'],
+  m_danglingteam: ['p_legacy', 'p_open', 'p_publicgain'],
   m_doconly: [],
 });
 
@@ -256,6 +275,11 @@ export const MIRROR_MODEL = Object.freeze({
   m_team: ['p_adminteam', 'p_legacy', 'p_lostvis', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
   m_scoped: ['p_legacy', 'p_open', 'p_publicgain', 'p_scopeddeny', 'p_scopeteam'],
   m_guest: ['p_legacy', 'p_open', 'p_publicgain'],
+  /* 53-01 (D-03) team-perm cells — the mirror stays boolean; same hand-derived
+     sets as VISIBILITY_MODEL for the three new non-admin actors. */
+  m_teamviewonly: ['p_adminteam', 'p_legacy', 'p_open', 'p_publicgain', 'p_teamboth', 'p_teamshare'],
+  m_teamrevoked: ['p_legacy', 'p_open', 'p_publicgain'],
+  m_danglingteam: ['p_legacy', 'p_open', 'p_publicgain'],
   /* m_doconly can never obtain an API key: no memberships row → POST /api/keys
      answers 403 notAMember. */
 });
@@ -466,6 +490,10 @@ export function createVisibilityFixtureDb(dataDir) {
     insertMembership.run(VIS_WS.id, USERS.m_team.userId, 'member', 'm_team', null);
     insertMembership.run(VIS_WS.id, USERS.m_scoped.userId, 'member', 'm_scoped', JSON.stringify(VIS_SCOPED_SCOPE));
     insertMembership.run(VIS_WS.id, USERS.m_guest.userId, 'viewer', 'm_guest', JSON.stringify(VIS_GUEST_SCOPE));
+    /* Phase 53 (53-01) team-perm actor cells — all plain members. */
+    insertMembership.run(VIS_WS.id, USERS.m_teamviewonly.userId, 'member', 'm_teamviewonly', null);
+    insertMembership.run(VIS_WS.id, USERS.m_teamrevoked.userId, 'member', 'm_teamrevoked', null);
+    insertMembership.run(VIS_WS.id, USERS.m_danglingteam.userId, 'member', 'm_danglingteam', null);
     /* No memberships row for u_doconly — that absence IS the cell. */
 
     /* team_members is the team authority (Phase 28); user_id space. The
@@ -475,6 +503,12 @@ export function createVisibilityFixtureDb(dataDir) {
     insertTeamMember.run(VIS_WS.id, 'engA', 'm_admin2', USERS.m_admin2.userId);
     insertTeamMember.run(VIS_WS.id, 'engA', null, USERS.m_doconly.userId);
     insertTeamMember.run(VIS_WS.id, 'scopedTeam', 'm_scoped', USERS.m_scoped.userId);
+    /* 53-01 cells: m_teamviewonly rides engA (a 'Can view' team perm on a
+       project would gate its writes, never its visibility); m_teamrevoked has
+       NO team rows (revoked — the team term grants nothing); m_danglingteam's
+       only row targets 'ghost' (∉ doc.teams, ∉ every p.teams). */
+    insertTeamMember.run(VIS_WS.id, 'engA', 'm_teamviewonly', USERS.m_teamviewonly.userId);
+    insertTeamMember.run(VIS_WS.id, 'ghost', 'm_danglingteam', USERS.m_danglingteam.userId);
 
     /* The invite carrying the guest's scope: the materialization source shape
        (Phase 29 SCOPE-05). The guest's membership above already carries the

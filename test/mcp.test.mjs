@@ -628,6 +628,10 @@ const parEmailOf = mid => ({
   m_team: 'team@visfix.local',
   m_scoped: 'scoped@visfix.local',
   m_guest: 'guest@visfix.local',
+  /* Phase 53 (53-01, D-03) team-perm actor cells. */
+  m_teamviewonly: 'teamviewonly@visfix.local',
+  m_teamrevoked: 'teamrevoked@visfix.local',
+  m_danglingteam: 'danglingteam@visfix.local',
 }[mid]);
 
 let parServer;
@@ -767,6 +771,61 @@ test('parity: the mirror matches MIRROR_MODEL for every keyed actor', async () =
   for (const mid of PAR_ACTORS) {
     const mirror = await parMirrorIds(mid);
     assert.deepEqual(mirror, [...MIRROR_MODEL[mid]].sort(), `${mid}: mirror set matches the D-50-5 mirror oracle`);
+  }
+});
+
+test('53-01 parity: team-perm actor cells agree on BOTH engines (D-03 — visibility stays boolean)', async () => {
+  /* The 53-01 per-team perm keys (p.perms['team:'+teamId]) gate content WRITES
+     only. The three team-perm actors must read exactly like their D-50-5
+     derivations on the server door AND the mcp mirror:
+     - m_teamviewonly rides engA → the m_team visible set on both engines;
+     - m_teamrevoked (no team rows) and m_danglingteam (dead 'ghost' link)
+       see publics only, on both engines. */
+  for (const mid of ['m_teamviewonly', 'm_teamrevoked', 'm_danglingteam']) {
+    const server = await parVisibleDocIds(mid);
+    const mirror = await parMirrorIds(mid);
+    assert.deepEqual(mirror, server.ids, `${mid}: mirror set === server set`);
+    assert.deepEqual(server.ids, [...VISIBILITY_MODEL[mid]].sort(), `${mid}: both engines match the 53-01 team-perm cells`);
+  }
+});
+
+test('53-01 client parity fixture: the client canSee mirror agrees with the server funnel for every served doc (09a9c41 class)', async () => {
+  /* The 09a9c41 bug class: the client canSee mirror drifting from the server
+     funnel. This cell evaluates the REAL client predicate (src/core/store.js
+     canSee, imported behind a minimal DOM shim — same pattern as
+     client-surfaces.test.mjs; node --test runs each file in its own process)
+     against the SERVED doc each actor actually receives, and asserts
+     clientVisible === serverVisible for every actor × project cell of
+     VISIBILITY_MODEL. Hand-derived model only — never canSee itself. */
+  globalThis.window = { addEventListener() {}, dispatchEvent() {}, matchMedia: () => ({ matches: false }) };
+  globalThis.document = {
+    addEventListener() {},
+    getElementById: () => null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    visibilityState: 'visible',
+    documentElement: { style: { setProperty() {} } },
+  };
+  globalThis.CustomEvent = class {
+    constructor(type, opts) { this.type = type; this.detail = opts?.detail; }
+  };
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+  const store = await import('../src/core/store.js');
+  for (const mid of PAR_ACTORS) {
+    const get = await parKeys[mid].client.get(`/api/workspaces/${VIS_WS.slug}`);
+    assert.equal(get.status, 200, `${mid} reads the doc`);
+    const served = JSON.parse(JSON.stringify(get.data.doc));
+    served.data.me = mid;
+    Object.assign(store.S, { data: served.data, prefs: served.prefs || {}, views: served.views || {} }, {});
+    store.S.ui = store.S.ui || {};
+    const serverSet = new Set([...VISIBILITY_MODEL[mid]]);
+    for (const p of served.data.projects || []) {
+      const clientVisible = store.canSee(p);
+      assert.equal(clientVisible, serverSet.has(p.id), `${mid} × ${p.id}: client canSee === server funnel`);
+    }
+    // No project outside the served doc's own set flips the predicate either.
+    const servedIds = new Set((served.data.projects || []).map(p => p.id));
+    for (const pid of serverSet) assert.ok(servedIds.has(pid), `${mid}: the served doc carries every model-visible project`);
   }
 });
 

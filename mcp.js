@@ -174,12 +174,17 @@ export function createMcp(deps) {
   }
 
   /* --------------------------- visibility -------------------------------- */
-  /* [2026-11-07 D-49-2/D-49-4, 2026-11-08 D-50-5] Mirror of memberCanReadProject
-     (server.js) without the server import: boolean private flag ∨ access list
-     ∨ LIVE team link (the same D-50-5 third term — p.teams is read again).
-     The admin/owner exemption stays (server hiddenFor keeps the same bypass);
-     the legacy p.access spelling stays retired. Computed per call — never
-     cached across requests. */
+  /* [2026-11-07 D-49-2/D-49-4, 2026-11-08 D-50-5, 2026-11-09 Phase 53 (53-01)]
+     Mirror of memberCanReadProject (server.js) without the server import:
+     boolean private flag ∨ access list ∨ LIVE team link (the same D-50-5
+     third term — p.teams is read again). The admin/owner exemption stays
+     (server hiddenFor keeps the same bypass); the legacy p.access spelling
+     stays retired. Computed per call — never cached across requests.
+     [53-01, D-03] The 53-01 per-team permission keys ride INSIDE p.perms as
+     'team:'+teamId (no top-level field) and gate CONTENT WRITES only —
+     visibility stays boolean, so this mirror needs NO perm-tier logic; its
+     agreement with the server funnel is pinned per-actor in test/mcp.test.mjs
+     (53-01 parity rows, VISIBILITY_MODEL/MIRROR_MODEL team-perm cells). */
   async function canReadProject(ctx, p) {
     if (!p || typeof p !== 'object') return false;
     if ((ROLE_RANK[ctx.membership.role] || 0) >= ROLE_RANK.admin) return true;

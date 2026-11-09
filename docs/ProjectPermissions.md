@@ -97,6 +97,18 @@ public ∨ (membre ∈ p.members) ∨ (une équipe du membre ∈ p.teams)
 
 **Conséquence volontaire (Phase 50) :** l'appartenance à une équipe est la source d'accès vivante — un arrivant dans l'équipe voit les projets liés sans nouvelle invitation, un partant les perd (sauf invitation individuelle).
 
+## 5bis. Permissions par équipe (Phase 53)
+
+Depuis la Phase 53 (53-01), les niveaux d'autorisation peuvent être fixés **par équipe liée** :
+
+- **Stockage** : les niveaux par équipe vivent **dans la carte `p.perms` existante**, sous la forme de clés `p.perms['team:'+teamId]` — **jamais** de champ de premier niveau (zéro migration, zéro changement des puits d'écriture : l'épinglage `mergeClientDoc` couvre `p.perms` en bloc, et `normalizeProjects` balaie toute clé `team:` dont l'identifiant n'est pas dans `p.teams` ou dont la valeur n'est pas un niveau valide).
+- **Les quatre niveaux** (M-09) sont les valeurs canoniques `PERMS` : `Can view` < `Can comment` < `Can edit` < `Full access`.
+- **Règle de précédence** (`projectPermFor`, server.js) : rôle `owner`/`admin` ou `p.lead` ⇒ `Full access` ; sinon le **meilleur** (rang le plus élevé) de l'entrée directe `p.perms[memberId]` et des clés `p.perms['team:'+t]` des équipes liées vivantes du membre. Sans entrée applicable : un membre de la liste d'accès ou d'une équipe liée garde le niveau par défaut des personnes (`Can edit` ; `Can comment` pour un guest/viewer) ; un non-membre d'un projet public (qui voit sans entrée) se voit refuser les écritures — **voir ≠ écrire**.
+- **D-01 — `Full access` d'équipe = contenu seulement** : il ne confère **aucun** pouvoir de gestion (`canManageProject` reste la gate admin/owner/lead pour l'onglet Access, PATCH projet, membres, équipes, `allowInviteGuests`).
+- **D-02 — défaut à la liaison** : une équipe nouvellement liée vaut `Can edit` (niveau écrit explicitement par l'UI des réglages, plan 53-03 — l'absence de clé n'est pas la sémantique attendue).
+- **D-03 — la visibilité reste booléenne** : les permissions par équipe ne **graduent jamais la visibilité** — `canSeeProject` / `memberCanReadProject` / `canSee` restent des prédicats booléens ; les clés d'équipe ne gated que les **écritures de contenu** (tâches ≥ `Can edit`, commentaires ≥ `Can comment`, enregistrements de fichiers ≥ `Can edit`, création/édition/suppression comprises) via l'entonnoir doc-PUT (`mergeClientDoc`), avec refus ciblé `projectPermDenied` empruntant la réponse 200 — le reste du PUT fusionne.
+- **Verrouillage en épingle** : les cellules d'acteurs équipe de l'oracle `VISIBILITY_MODEL`/`MIRROR_MODEL` (test/helpers/visibility-fixture.mjs), la fixture de parité du miroir client `canSee` et le miroir MCP (test/mcp.test.mjs, classe de bug 09a9c41) pinuent l'accord des trois moteurs à chaque évolution.
+
 ## 6. La vue de transparence admin (Phase 52)
 
 Depuis Espace de travail > Membres, chaque ligne est **dépliable par un admin/owner** : pour le membre choisi, l'endpoint `GET /api/workspaces/:slug/members/:memberId/visibility` (server.js:4977-5005) liste les projets lisibles — calculés **uniquement** via `memberCanReadProject` (server.js:813-818), jamais depuis le doc client expurgé — chacun accompagné de sa **première raison d'accès** en ordre d'entonnoir (`projectAccessReason`, server.js:828-836) : Tout le monde → Responsable (lead, D-51-17) → Membre → Équipe. La gate `requireWorkspace(..., 'admin')` est le contrôle réel ; le panneau refetch à chaque ouverture (sémantique vivante D-50-5/D-52-3) et la perte d'accès récente se traduit par l'état « introuvable » honnête (D-51-4, §3). La vue de soi du membre reste différée (v3).
@@ -106,7 +118,7 @@ Depuis Espace de travail > Membres, chaque ligne est **dépliable par un admin/o
 | Question | Réponse courte |
 |----------|----------------|
 | Partager vs bonhomme | Même modal, deux boutons |
-| Niveaux projet (voir/commenter/éditer/complet) | Vocabulaire distinct des rôles workspace ; stockés mais **non appliqués** côté serveur aujourd'hui |
+| Niveaux projet (voir/commenter/éditer/complet) | Vocabulaire distinct des rôles workspace ; **appliqués côté serveur depuis la Phase 53** pour les écritures de contenu (§5bis) — par personne et par équipe (`p.perms['team:'+teamId]`), refus ciblé `projectPermDenied` |
 | Seule exception effective | Le responsable (lead, D-51-17) = Accès complet ; la liste d'accès `p.members` ouvre un projet privé |
 | Nouveau projet | Public par défaut ; le créateur en devient le lead (D-51-17) ; création restreignable via `permCreate` (réglage serveur réel, refus ciblé `projectCreateForbidden`) |
 | Toggle privé/public | Case à deux états dans le modal de partage (D-51-1/2), flip optimiste avec retour arrière (D-51-3) |

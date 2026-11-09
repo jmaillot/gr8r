@@ -39,6 +39,10 @@ const EMAILS = Object.freeze({
   m_guest: 'guest@visfix.local',
   m_doconly: 'doconly@visfix.local',
   m_admin2: 'admin2@visfix.local',
+  /* Phase 53 (53-01) team-perm actor cells. */
+  m_teamviewonly: 'teamviewonly@visfix.local',
+  m_teamrevoked: 'teamrevoked@visfix.local',
+  m_danglingteam: 'danglingteam@visfix.local',
 });
 const PAR_ACTORS = VIS_ACTORS.filter(id => id !== 'm_doconly' && id !== 'm_admin2');
 /* m_admin2 (the admin × team-only divergence cell) is EXCLUDED from both
