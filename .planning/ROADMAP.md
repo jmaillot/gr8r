@@ -18,7 +18,7 @@
 
 ## Phases
 
-- [ ] **Phase 53: Member & Project Experience** - One ordered phase covering all v2.1 requirements: per-team perms (server first), invite modal, unified project settings, projects table & Share dedup, teams polish — executed plan-by-plan in the dependency order below
+- [x] **Phase 53: Member & Project Experience** - One ordered phase covering all v2.1 requirements: per-team perms (server first), invite modal, unified project settings, projects table & Share dedup, teams polish — executed plan-by-plan in the dependency order below (completed 2026-11-09)
 
 ## Phase Details
 
@@ -33,7 +33,7 @@ server-first through the one existing funnel.
 **Requirements**: PSET-02, PSET-03, INVT-01, INVT-02, INVT-03, PSET-01, PSET-04,
 PROJ-01, PROJ-02, TEAM-01, TEAM-02, TEAM-03, UX-01
 
-**Plans:** 5 plans
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
