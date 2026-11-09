@@ -85,7 +85,7 @@ export function pageMembers() {
                         ? t('page.members.visReasonTeam', { name: esc(p.teamName) })
                         : t(`page.members.visReason.${p.reason}`)
                       : esc(String(p.reason));
-                    return `<div class="row" style="gap:8px"><span>${esc(p.name || p.id)}</span><span class="badge">${label}</span></div>`;
+                    return `<div class="row" style="gap:8px">${pIcon(p, '', 14)}<span>${esc(p.name || p.id)}</span><span class="badge">${label}</span></div>`;
                   })
                   .join('');
               return `<tr><td colspan="8" ${!data ? 'aria-busy="true" ' : ''}style="padding:var(--s-2) var(--s-3) var(--s-3) var(--s-3);background:var(--bg)"><div id="vis-${esc(m.id)}" class="stack" style="gap:var(--s-2)"><div class="faint" style="font-size:12px">${t('page.members.visDetailTitle')}${data && !data.err ? ` (${data.projects.length})` : ''}</div>${body}</div></td></tr>`;
