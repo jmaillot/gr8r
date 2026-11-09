@@ -50,6 +50,22 @@ export function isSubseq(needle, hay) {
    of crypto.getRandomValues entropy over the ids the document references across
    tasks, members and the activity journal (IN-04, T-09-12). The old PRNG path is gone. */
 export const uid = (p = 'x') => p + [...crypto.getRandomValues(new Uint8Array(6))].map(b => b.toString(36).padStart(2, '0')).join('');
+/* [2026-11-09 IN-03] Key-order-stable JSON compare. Plain JSON.stringify
+   reads a {a:1,b:2} vs {b:2,a:1} pair as "changed" — fails safe (the write
+   still happens) but breaks the skip-unchanged fast paths and the
+   teams-changed guard. Objects get their keys sorted recursively before
+   serializing; arrays keep their order (order IS data there). */
+export const stableJson = v => {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v)
+      .sort()
+      .map(k => `${JSON.stringify(k)}:${stableJson(v[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v);
+};
+export const jsonEqual = (a, b) => stableJson(a) === stableJson(b);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 /* The keyboard hint's modifier label, a lazy getter: the Ctrl half is interface text and

@@ -1,7 +1,7 @@
 /* =====================================================================
    SHELL: render loop, router, sidebar, topbar, skeletons, filter engine
    ===================================================================== */
-import { $, $$ } from '../core/utils.js';
+import { $, $$, jsonEqual } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { D, S, canSee, mem, proj, task, team } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -65,7 +65,9 @@ export const ROUTE_ICONS = {
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
   if (!opt.back && !opt.noHistory && !opt.replace) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
-  const same = S.ui.route === route && JSON.stringify(S.ui.params) === JSON.stringify(params);
+  /* [2026-11-09 IN-03] jsonEqual — a re-navigated params object with the
+     same keys in a different insertion order is the SAME route. */
+  const same = S.ui.route === route && jsonEqual(S.ui.params, params);
   S.ui.route = route;
   S.ui.params = params;
   S.ui.mnav = false;

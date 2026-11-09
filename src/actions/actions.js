@@ -1,7 +1,7 @@
 /* =====================================================================
    ACTIONS · INPUT HANDLERS · DRAG & DROP · KEYBOARD · INIT
    ===================================================================== */
-import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid } from '../core/utils.js';
+import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { PR, PSTAT } from '../core/constants.js';
 import { seed } from '../data/seed.js';
@@ -40,7 +40,7 @@ import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { viewOf } from '../shell/view-engine.js';
-import { PERMS, TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
+import { PERMS, TEMPLATES, closeModal, openModal, permLabel } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
 import { prefValue } from '../core/prefs.js';
@@ -191,7 +191,9 @@ export function applyPatch(t, patch) {
   for (const k of Object.keys(patch)) {
     const old = t[k],
       nv = patch[k];
-    if (JSON.stringify(old) === JSON.stringify(nv)) continue;
+    /* [2026-11-09 IN-03] jsonEqual: the skip-unchanged fast path must not
+       depend on the patch object's key insertion order. */
+    if (jsonEqual(old, nv)) continue;
     t[k] = nv;
     if (k === 'status') {
       if (nv === 'done') {
@@ -1886,7 +1888,7 @@ IN.sharePerm = el => {
       p.perms = p.perms || {};
       p.perms[mid] = el.value;
     });
-    toast(t('toast.permChanged', { name: mem(mid).name, perm: el.value }), { ms: 1800 });
+    toast(t('toast.permChanged', { name: mem(mid).name, perm: permLabel(el.value) }), { ms: 1800 });
   }
 };
 IN.shareAccess = async el => {
@@ -1932,7 +1934,7 @@ IN.teamPerm = async el => {
     p.perms = p.perms || {};
     p.perms['team:' + tid] = el.value;
   });
-  toast(t('toast.permChanged', { name: teamsList().find(x => x.id === tid)?.name || tid, perm: el.value }), { ms: 1800 });
+  toast(t('toast.permChanged', { name: teamsList().find(x => x.id === tid)?.name || tid, perm: permLabel(el.value) }), { ms: 1800 });
   const res = await pushNow();
   if (!res.ok) {
     restore(snap);
@@ -2209,7 +2211,9 @@ A.submitMemberTeams = async () => {
   S.ui.modals.pop();
   const previous = memberTeams(m);
   const next = [...new Set(st.teams)];
-  const teamsChanged = JSON.stringify(previous) !== JSON.stringify(next);
+  /* [2026-11-09 IN-03] Key-order-stable compare — memberTeams order IS data
+     (see the helper), but the guard must not depend on object key order. */
+  const teamsChanged = !jsonEqual(previous, next);
   if (teamsChanged) {
     mutate(() => {
       m.teams = next;

@@ -858,6 +858,9 @@ function canManageProject(p, memberId, role) {
    write. Enforcement reads the STORED doc (D-51-15/16 rule). Team 'Full
    access' is content-only: canManageProject stays the manager gate (D-01),
    and this function never grants management. */
+/* [2026-11-09 IN-01] The tier ladder mirrors the client's PERMS literal
+   (src/overlays/modals.js) — one contract, two sides; drift is pinned in
+   test/perm-drift.test.mjs. */
 const PROJECT_PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
 
 function projectPermFor(p, memberId, memberTeams = [], role = null) {

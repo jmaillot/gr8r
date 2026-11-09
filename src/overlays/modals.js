@@ -212,12 +212,18 @@ export function projectCreateModal(m, H) {
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${t('palette.createProject')}</button></div>`;
 }
 export const PERMS = ['Can view', 'Can comment', 'Can edit', 'Full access'];
+/* [2026-11-09 IN-01] Single source of truth: the server's PROJECT_PERMS must
+   stay byte-identical to this literal — the tier ladder (indexOf ordering)
+   and the perm dropdown are the same contract on both sides. Pinned in
+   test/perm-drift.test.mjs. */
 /* The permission names are STORED values the document holds; the display is a
    catalogue value keyed on the id (the lowercase-bridging rule: the last word
    of the stored name, lowercased, is the key — 'Can view' -> view, 'Full
    access' -> access). Derived, so no icon-name token is quoted in source. */
 const PERM_KEYS = Object.fromEntries(PERMS.map(p => [p, p.split(' ').pop().toLowerCase()]));
-const permLabel = p => t('common.perm.' + (PERM_KEYS[p] ?? PERM_KEYS[PERMS[0]]));
+/* [2026-11-09 IN-02] Exported for the perm-change toasts in actions.js — a
+   toast interpolating the raw machine value leaked English copy in FR. */
+export const permLabel = p => t('common.perm.' + (PERM_KEYS[p] ?? PERM_KEYS[PERMS[0]]));
 /* [53-03 D-04] The Access body of the unified project settings modal — the
    former share modal content moved verbatim: the invite-by-email row, the
    Teams section, People with access and the General-access toggle, all with
