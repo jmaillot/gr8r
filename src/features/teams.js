@@ -1,7 +1,7 @@
 /* =====================================================================
    COMPLETION: teams (create / edit / delete), subtask detail view, archive
    ===================================================================== */
-import { esc } from '../core/utils.js';
+import { esc, foldForSearch } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS } from '../core/constants.js';
@@ -31,17 +31,27 @@ export function teamModal(m, H) {
         .join('')}</div></div>
     </div>
     <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.members')} <span class="faint" style="font-weight:400">· ${f.members.length} selected</span></legend>
-      <div class="panel" style="max-height:220px;overflow-y:auto;padding:4px">${people
-        .map(
-          x =>
-            `<label class="mi" style="cursor:pointer;min-height:36px"><input type="checkbox" class="check" data-a="tformMember" data-id="${x.id}" ${f.members.includes(x.id) ? 'checked' : ''}>${av(x.id, 'sm', false)}<span class="grow trunc">${esc(x.name)}</span><span class="r">${memberTeams(
-              x,
-            )
-              .filter(id => id !== m.edit)
-              .map(id => esc(TM[id].name))
-              .join(', ')}</span></label>`,
-        )
-        .join('')}</div>
+      <input class="input" style="margin-bottom:6px" data-in="teamSearch" value="${esc(S.ui.teamSearch || '')}" placeholder="${t('a11y.searchMembers')}" aria-label="${t('a11y.searchMembers')}">${(() => {
+        /* [TEAM-01] Accent-insensitive member search over the checkbox list. The
+           needle lives in S.ui.teamSearch (a data-in binding, so typing never
+           wipes); the CHECKED state lives in f.members and is re-derived on
+           every render, so filtering can never lose a check. foldForSearch
+           folds both sides — "elodie" finds "Élodie". */
+        const needle = foldForSearch(S.ui.teamSearch || '').text;
+        const shown = people.filter(x => !needle || foldForSearch(x.name).text.includes(needle));
+        if (!shown.length) return `<div class="panel" style="padding:10px"><div class="faint">${t('team.noMembersMatch')}</div></div>`;
+        return `<div class="panel" style="max-height:220px;overflow-y:auto;padding:4px">${shown
+          .map(
+            x =>
+              `<label class="mi" style="cursor:pointer;min-height:36px"><input type="checkbox" class="check" data-a="tformMember" data-id="${x.id}" ${f.members.includes(x.id) ? 'checked' : ''}>${av(x.id, 'sm', false)}<span class="grow trunc">${esc(x.name)}</span><span class="r">${memberTeams(
+                x,
+              )
+                .filter(id => id !== m.edit)
+                .map(id => esc(TM[id].name))
+                .join(', ')}</span></label>`,
+          )
+          .join('')}</div>`;
+      })()}
       <span class="hint">${t('page.team.membersHint')}</span></fieldset>
   </form>
   <div class="modal-f">${m.edit ? `<button class="btn btn-danger-ghost" data-a="delTeam" data-id="${m.edit}">${ic('trash-2', 14)}${t('act.deleteTeam')}</button>` : ''}<span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitTeam">${m.edit ? t('act.saveChanges') : t('act.createTeam')}</button></div>`;

@@ -506,6 +506,7 @@
   "page.team.name": "Nom de l’équipe",
   "page.team.owns": "Que possède cette équipe ?",
   "page.team.membersHint": "Chaque personne appartient à une seule équipe principale. L’ajouter ici la déplace depuis son équipe actuelle.",
+  "team.noMembersMatch": "Aucun membre ne correspond à cette recherche.",
   "a11y.teamNameExample": "p. ex. Growth",
   "a11y.teamDescExample": "p. ex. Expériences d’acquisition et e-mails du cycle de vie",
   "page.columns.task": "Tâche",

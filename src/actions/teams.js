@@ -14,6 +14,7 @@ import { A, IN, confirmDlg, restore, snapshot } from './actions.js';
 A.newTeam = () => {
   S.ui.pop = null;
   S.ui.errors = {};
+  S.ui.teamSearch = '';
   S.ui.tform = { name: '', desc: '', icon: 'users', color: 'teal', members: [] };
   openModal({ type: 'team' });
 };
@@ -22,6 +23,7 @@ A.editTeam = el => {
   if (!t) return;
   S.ui.pop = null;
   S.ui.errors = {};
+  S.ui.teamSearch = '';
   S.ui.tform = {
     name: t.name,
     desc: t.desc,
@@ -39,6 +41,14 @@ IN.tform = el => {
     S.ui.errors.tname = null;
     render();
   }
+};
+/* [TEAM-01] The members-box search needle. The needle lives in S.ui (like
+   IN.shareQ in the share modal), so a full re-render restores the input's
+   value from state; the checked boxes live in S.ui.tform.members, not the
+   DOM, so filtering can never lose a check. */
+IN.teamSearch = el => {
+  S.ui.teamSearch = el.value;
+  render();
 };
 A.tformSet = el => {
   S.ui.tform[el.dataset.f] = el.dataset.v;
@@ -91,6 +101,19 @@ A.submitTeam = async () => {
     }
   });
   if (!ok) return;
+  /* [TEAM-01 fix] The doc push (carrying the new/edited team definition) is
+     debounced by save() (450ms), but the membership PUT below is whitelisted
+     against the STORED doc server-side — a premature PUT 400s unknownTeam and
+     the modal silently keeps its state. Flush the doc write FIRST through the
+     awaitable pushNow (same sequencing rule as the delTeam undo), and stop
+     honestly on failure. */
+  if (api.enabled) {
+    const pushed = await pushNow();
+    if (!pushed.ok) {
+      toast(tMsg('err.changeTeam'), { kind: 'err' });
+      return;
+    }
+  }
   /* Persist the changed memberships through the API (server mode) — the doc
      write above never reaches the wire as membership. */
   if (api.enabled) {
