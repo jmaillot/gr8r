@@ -55,7 +55,7 @@ validated by the owner 2026-11-07 (see PROJECT.md), plus migration rulings D2.0-
 
 ### Transparency & UX
 
-- [ ] **TRN-01**: Admin/owner can open a transparency view showing exactly what a given
+- [x] **TRN-01**: Admin/owner can open a transparency view showing exactly what a given
   member can see (public projects + private projects they can access) (M-08, D2.0-4)
 - [x] **UX-01**: Every user-facing string of the new surfaces is catalogued EN+FR and
   the i18n build gate passes (standing invariant)
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MIG-03 | Phase 49 | Complete |
 | CRT-01 | Phase 51 | Complete |
 | CRT-02 | Phase 51 | Complete |
-| TRN-01 | Phase 52 | Pending |
+| TRN-01 | Phase 52 | Complete |
 | UX-01 | Phase 51 | Complete |
 
 **Coverage:**
