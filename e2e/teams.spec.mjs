@@ -59,6 +59,47 @@ async function openEditTeam(page, slug, teamName) {
 const memberCheck = (page, name) =>
   page.locator('label.mi', { hasText: name }).locator('input[type="checkbox"]');
 
+test.describe('team page hygiene (TEAM-02, TEAM-03)', () => {
+  /* One fixture workspace, reused by the EN and FR rows. */
+  let fx;
+  test.beforeAll(async () => {
+    const run = newRunId();
+    const slug = `teams-${run}`;
+    const { account, client } = await createAccount(BASE_URL, run, 'owner', 'Teams Owner', { workspace: slug });
+    await addMember(BASE_URL, client, slug, run, 'alice', 'Alice Alpha');
+    fx = { slug, account };
+  });
+
+  async function openTeamPage(page) {
+    await signIn(page, fx.account);
+    await page.goto(`/w/${fx.slug}/teams`);
+    await page.locator('.pcard[data-a="go"][data-r="team"]').first().click();
+  }
+
+  test('the team detail page has no invite button and the hint reads the owner sentence (EN, TEAM-02/03)', async ({ page }) => {
+    await openTeamPage(page);
+    await expect(page.locator('[data-a="invite"]')).toHaveCount(0);
+    await page.getByRole('button', { name: en['act.editTeam'] }).click();
+    await expect(page.locator('.modal-b .hint')).toHaveText(en['page.team.accessHint']);
+  });
+
+  test('the team hint reads the owner sentence in French too (TEAM-02)', async ({ page }) => {
+    /* The locale is an account property (LOC-03): patch it, then the same
+       surfaces render FR without any workspace change. */
+    const c = apiClient(BASE_URL, { name: 'owner-fr', ip: clientIp(fx.slug, 'owner-fr') });
+    const login = await c.post('/api/auth/login', { email: fx.account.email, password: fx.account.password });
+    if (login.status !== 200) throw new Error(`fr login failed: HTTP ${login.status}`);
+    const patch = await c.patch('/api/auth/me', { locale: 'fr' });
+    if (patch.status !== 200) throw new Error(`fr locale patch failed: HTTP ${patch.status}`);
+    await signIn(page, fx.account);
+    await page.goto(`/w/${fx.slug}/teams`);
+    await page.locator('.pcard[data-a="go"][data-r="team"]').first().click();
+    await expect(page.locator('[data-a="invite"]')).toHaveCount(0);
+    await page.getByRole('button', { name: fr['act.editTeam'] }).click();
+    await expect(page.locator('.modal-b .hint')).toHaveText(fr['page.team.accessHint']);
+  });
+});
+
 test.describe('team members box (TEAM-01)', () => {
   test('accent-insensitive search filters the list and never loses checked state', async ({ page }) => {
     const run = newRunId();

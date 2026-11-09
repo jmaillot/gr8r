@@ -52,7 +52,7 @@ export function teamModal(m, H) {
           )
           .join('')}</div>`;
       })()}
-      <span class="hint">${t('page.team.membersHint')}</span></fieldset>
+      <span class="hint">${t('page.team.accessHint')}</span></fieldset>
   </form>
   <div class="modal-f">${m.edit ? `<button class="btn btn-danger-ghost" data-a="delTeam" data-id="${m.edit}">${ic('trash-2', 14)}${t('act.deleteTeam')}</button>` : ''}<span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitTeam">${m.edit ? t('act.saveChanges') : t('act.createTeam')}</button></div>`;
 }
