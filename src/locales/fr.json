@@ -772,6 +772,8 @@
   "modal.settingsTabs": "Sections des paramètres",
   "modal.settingsTabGeneral": "Général",
   "modal.settingsTabAccess": "Accès",
+  "modal.teamPermFor": "Permission pour l’équipe {name}",
+  "modal.settingsConflict": "Cette modification entre en conflit avec une édition récente d’une autre personne — les paramètres affichent la version enregistrée. Vérifiez et réappliquez votre modification.",
   "a11y.inviteByEmail": "Inviter par e-mail",
   "a11y.invitePlaceholder": "Ajouter des personnes par nom ou e-mail",
   "modal.permission": "Permission",

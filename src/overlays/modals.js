@@ -269,12 +269,17 @@ export function accessBody(m) {
     }
     ${
       /* [2026-11-08 D-51-5/6/7/8/9] The Teams section: workspace teams not yet
-         linked offer an 'Invite team' action (no role choice — team access is
-         Member-level by definition, D-51-7; elevated roles come from separate
-         individual invites whose role takes precedence). Linked teams render
-         in the note with a remove action, and the hint carries the LIVE
-         team-semantics copy (D-51-8 per D-50-5) — access follows team
-         membership, never a snapshot. Non-managers keep the lock hint above. */
+         linked offer an 'Invite team' action (no role choice on the link —
+         D-51-7; the per-team perm level is chosen on the linked row). Linked
+         teams render as rows with a per-team perm dropdown keyed on the team
+         id (53-03 D-02: data-tid, writing p.perms['team:'+tid]; a freshly
+         linked team reads 'Can edit' — the link action stores the explicit
+         value, so absence-of-key is never load-bearing) plus the unlink
+         action. The hint carries the LIVE team-semantics copy (D-51-8 per
+         D-50-5) — access follows team membership, never a snapshot.
+         [53-03 D-01] Non-managers keep the lock hint above and see the linked
+         teams' perm levels as static muted spans — read-only coarse levels of
+         a project they can already see (T-53-10), never editable controls. */
       canManage
         ? `<div style="border-top:1px solid var(--divider);padding-top:12px;margin-top:12px"><div class="eyebrow" style="margin-bottom:8px">${t('modal.teamsSection')}</div>
       <div class="tmpls" role="group" aria-label="${t('modal.teamsSection')}">${teamsList()
@@ -290,13 +295,25 @@ export function accessBody(m) {
               .map(tid => {
                 const tm = teamsList().find(x => x.id === tid);
                 if (!tm) return '';
-                return `<div class="row" style="height:34px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b><span class="sp"></span><button type="button" class="ibtn ibtn-xs" data-a="shareTeamRemove" data-id="${p.id}" data-tid="${tm.id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></div>`;
+                const stored = perms['team:' + tid];
+                const perm = PERMS.includes(stored) ? stored : 'Can edit';
+                return `<div class="row" style="height:34px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b><span class="sp"></span><select class="select" style="width:auto;height:26px;font-size:12px;border-color:transparent;background-color:transparent" data-in="teamPerm" data-id="${p.id}" data-tid="${tm.id}" aria-label="${t('modal.teamPermFor', { name: esc(tm.name) })}">${PERMS.map(q => `<option value="${q}" ${q === perm ? 'selected' : ''}>${permLabel(q)}</option>`).join('')}</select><button type="button" class="ibtn ibtn-xs" data-a="shareTeamRemove" data-id="${p.id}" data-tid="${tm.id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></div>`;
               })
               .join('')}</div>`
           : ''
       }
       <span class="hint">${t('modal.teamsLiveHint')}</span></div>`
-        : ''
+        : linkedTeams.length
+          ? `<div style="border-top:1px solid var(--divider);padding-top:12px;margin-top:12px"><div class="eyebrow" style="margin-bottom:8px">${t('modal.teamsSection')}</div><div class="col" style="gap:2px">${linkedTeams
+              .map(tid => {
+                const tm = teamsList().find(x => x.id === tid);
+                if (!tm) return '';
+                const stored = perms['team:' + tid];
+                const perm = PERMS.includes(stored) ? stored : 'Can edit';
+                return `<div class="row" style="height:34px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b><span class="sp"></span><span class="muted" style="font-size:12.5px;padding-right:8px">${esc(permLabel(perm))}</span></div>`;
+              })
+              .join('')}</div></div>`
+          : ''
     }
     <div><div class="eyebrow" style="margin-bottom:4px">${t('modal.peopleWithAccess')}</div>
       ${members

@@ -40,7 +40,7 @@ import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { viewOf } from '../shell/view-engine.js';
-import { TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
+import { PERMS, TEMPLATES, closeModal, openModal } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
 import { prefValue } from '../core/prefs.js';
@@ -1765,14 +1765,17 @@ A.shareTeamInvite = async el => {
   mutate(() => {
     p.teams = Array.isArray(p.teams) ? p.teams : [];
     if (!p.teams.includes(tm.id)) p.teams.push(tm.id);
+    /* [53-03 D-02] A freshly linked team stores its explicit default tier so
+       absence-of-key is never load-bearing: the dropdown reads 'Can edit'. */
+    p.perms = p.perms || {};
+    if (!p.perms['team:' + tm.id]) p.perms['team:' + tm.id] = 'Can edit';
   });
   render();
   toast(t('toast.teamLinked', { name: tm.name }));
   const res = await pushNow();
   if (!res.ok) {
     restore(snap);
-    render();
-    toast(t('err.cannotChangeAccess'), { kind: 'err' });
+    toast(res.status === 409 ? t('modal.settingsConflict') : t('err.cannotChangeAccess'), { kind: 'err' });
   }
 };
 A.shareTeamRemove = async el => {
@@ -1783,14 +1786,16 @@ A.shareTeamRemove = async el => {
   const snap = snapshot();
   mutate(() => {
     p.teams = (Array.isArray(p.teams) ? p.teams : []).filter(x => x !== tm.id);
+    /* [53-03] The unlink sweeps the team's perm key client-side, mirroring
+       53-01's normalizeProjects sweep on the stored doc. */
+    if (p.perms && typeof p.perms === 'object') delete p.perms['team:' + tm.id];
   });
   render();
   toast(t('toast.teamUnlinked', { name: tm.name }));
   const res = await pushNow();
   if (!res.ok) {
     restore(snap);
-    render();
-    toast(t('err.cannotChangeAccess'), { kind: 'err' });
+    toast(res.status === 409 ? t('modal.settingsConflict') : t('err.cannotChangeAccess'), { kind: 'err' });
   }
 };
 A.shareInvite = () => {
@@ -1889,13 +1894,38 @@ IN.shareAccess = async el => {
     p.private = priv;
     if (priv && D().me && !p.members.includes(D().me)) p.members.push(D().me);
   });
-  render();
   toast(priv ? t('toast.privateProject') : t('toast.publicProject', { name: D().ws.name }));
   const res = await pushNow();
   if (!res.ok) {
     restore(snap);
-    render();
-    toast(t('err.cannotChangeAccess'), { kind: 'err' });
+    /* [53-03 T-53-08] A revision conflict is surfaced honestly: the write was
+       refused, so the optimistic toast is followed by the conflict message —
+       never a bare success story. */
+    toast(res.status === 409 ? t('modal.settingsConflict') : t('err.cannotChangeAccess'), { kind: 'err' });
+  }
+};
+/* [53-03 D-02/T-53-08/T-53-09] The per-team perm dropdown (Access tab): the
+   client gate mirrors the server's canManageProject (53-01 projectPermFor) —
+   a denied write never even opens the optimistic path. The write mutates the
+   LIVE store project (never a modal-open snapshot), pushes immediately, and
+   on refusal restores the snapshot and surfaces the refusal — a revision
+   conflict shows the dedicated conflict message, not a success story. */
+IN.teamPerm = async el => {
+  const p = proj(el.dataset.id);
+  const tid = el.dataset.tid;
+  if (!p || !tid) return;
+  if (!canManageProject(p)) return toast(t('err.cannotChangeAccess'), { kind: 'err' });
+  if (!PERMS.includes(el.value)) return;
+  const snap = snapshot();
+  mutate(() => {
+    p.perms = p.perms || {};
+    p.perms['team:' + tid] = el.value;
+  });
+  toast(t('toast.permChanged', { name: teamsList().find(x => x.id === tid)?.name || tid, perm: el.value }), { ms: 1800 });
+  const res = await pushNow();
+  if (!res.ok) {
+    restore(snap);
+    toast(res.status === 409 ? t('modal.settingsConflict') : t('err.cannotChangeAccess'), { kind: 'err' });
   }
 };
 A.invite = () => {

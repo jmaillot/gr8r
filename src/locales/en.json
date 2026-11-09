@@ -772,6 +772,8 @@
   "modal.settingsTabs": "Settings sections",
   "modal.settingsTabGeneral": "General",
   "modal.settingsTabAccess": "Access",
+  "modal.teamPermFor": "Permission for team {name}",
+  "modal.settingsConflict": "This change conflicts with a recent edit by someone else — the settings now show the saved version. Review and reapply your change.",
   "a11y.inviteByEmail": "Invite by email",
   "a11y.invitePlaceholder": "Add people by name or email",
   "modal.permission": "Permission",

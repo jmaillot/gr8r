@@ -14,7 +14,7 @@
    per-run client IPs.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, createAccount, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, apiClient, clientIp, createAccount, newRunId } from './helpers/setup.mjs';
 
 const L = {
   en: {
@@ -56,7 +56,7 @@ async function signIn(page, account, lang) {
 }
 
 /* Adds one named public project to the workspace doc through the real API. */
-async function addProject(client, slug, { id, key, name }) {
+async function addProject(client, slug, { id, key, name, teamIds = [] }) {
   const got = await client.get(`/api/workspaces/${slug}`);
   if (got.status !== 200) throw new Error(`workspace GET failed with HTTP ${got.status}`);
   const doc = got.data.doc;
@@ -69,7 +69,7 @@ async function addProject(client, slug, { id, key, name }) {
       icon: 'map',
       color: 'indigo',
       status: 'active',
-      team: null,
+      teams: [...teamIds],
       lead: null,
       due: null,
       start: null,
@@ -85,6 +85,19 @@ async function addProject(client, slug, { id, key, name }) {
   doc.data.projOrder = [...(doc.data.projOrder || []), id];
   const put = await client.put(`/api/workspaces/${slug}`, { revision: got.data.revision, doc });
   if (put.status !== 200) throw new Error(`doc PUT failed with HTTP ${put.status}`);
+}
+
+/* Adds named teams to the workspace doc (teams ride the document — no REST route). */
+async function addTeams(client, slug, defs) {
+  const got = await client.get(`/api/workspaces/${slug}`);
+  if (got.status !== 200) throw Error(`workspace GET failed with HTTP ${got.status}`);
+  const doc = got.data.doc;
+  doc.data.teams = [
+    ...(doc.data.teams || []),
+    ...defs.map(({ id, name }) => ({ id, name, icon: 'users', c: '#3B82C4', desc: `Team ${name}` })),
+  ];
+  const put = await client.put(`/api/workspaces/${slug}`, { revision: got.data.revision, doc });
+  if (put.status !== 200) throw new Error(`teams PUT failed with HTTP ${put.status}`);
 }
 
 /* Signs in and lands on the fixture project's page. */
@@ -191,6 +204,120 @@ test('General tab renders every former projectModal field, Access tab every form
     await expect(page.getByText('People with access')).toBeVisible();
     await expect(page.getByText('General access')).toBeVisible();
     await expect(page.getByLabel('Invite by email')).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+/* =====================================================================
+   Task 2: per-team perm dropdowns (D-01/D-02) + concurrency honesty.
+   ===================================================================== */
+
+const CONFLICT_EN = 'This change conflicts with a recent edit by someone else';
+
+test('linking a team defaults its perm to Can edit; the changed perm persists after reload (D-02)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Team Perm ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'tp-en', 'Team Perm Owner', { locale: 'en', workspace: `tp-en-${run}` });
+  await addTeams(client, account.slug, [{ id: 'tm_tp_a', name: `Crew A ${run}` }]);
+  await addProject(client, account.slug, { id: 'p_tp_a', key: 'tp-a', name });
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
+  const page = await context.newPage();
+  try {
+    await openProjectPage(page, account, 'en', name);
+    await page.locator('button[data-a="editProject"]').click();
+    await page.getByRole('tab', { name: 'Access' }).click();
+
+    /* Link the team from the chips row — the linked row appears with the
+       D-02 default 'Can edit' preselected. */
+    await page.locator(`button[data-a="shareTeamInvite"][data-tid="tm_tp_a"]`).click();
+    const sel = page.locator(`select[data-in="teamPerm"][data-tid="tm_tp_a"]`);
+    await expect(sel).toBeVisible();
+    await expect(sel).toHaveValue('Can edit');
+
+    /* Change the tier and reload — the stored value round-trips. */
+    await sel.selectOption({ label: 'Can view' });
+    await expect(page.getByText(`Crew A ${run}: Can view`)).toBeVisible();
+    await page.reload();
+    await page.locator('button[data-a="editProject"]').click();
+    await page.getByRole('tab', { name: 'Access' }).click();
+    await expect(page.locator(`select[data-in="teamPerm"][data-tid="tm_tp_a"]`)).toHaveValue('Can view');
+
+    /* The stored doc carries the team-keyed perm under p.perms. */
+    const got = await client.get(`/api/workspaces/${account.slug}`);
+    const stored = (got.data.doc.data.projects || []).find(p => p.id === 'p_tp_a');
+    expect(stored?.perms?.['team:tm_tp_a'], 'the perm rides the team-keyed namespace').toBe('Can view');
+  } finally {
+    await context.close();
+  }
+});
+
+test('a concurrent admin write surfaces the honest conflict error, never a silent overwrite (T-53-08)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Concurrent ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'cc-en', 'Concurrent Owner', { locale: 'en', workspace: `cc-en-${run}` });
+  await addTeams(client, account.slug, [{ id: 'tm_cc_a', name: `Crew C ${run}` }]);
+  await addProject(client, account.slug, { id: 'p_cc_a', key: 'cc-a', name, teamIds: ['tm_cc_a'] });
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
+  const page = await context.newPage();
+  try {
+    await openProjectPage(page, account, 'en', name);
+    await page.locator('button[data-a="editProject"]').click();
+    await page.getByRole('tab', { name: 'Access' }).click();
+    await expect(page.locator(`select[data-in="teamPerm"][data-tid="tm_cc_a"]`)).toBeVisible();
+
+    /* A concurrent admin session writes the doc between the modal opening
+       and the perm save — the browser's revision goes stale. */
+    const cc = await client.get(`/api/workspaces/${account.slug}`);
+    const doc = cc.data.doc;
+    const proj = doc.data.projects.find(p => p.id === 'p_cc_a');
+    proj.name = `Concurrent Renamed ${run}`;
+    const put = await client.put(`/api/workspaces/${account.slug}`, { revision: cc.data.revision, doc });
+    if (put.status !== 200) throw new Error(`concurrent PUT failed with HTTP ${put.status}`);
+
+    /* The stale PUT is refused: the honest conflict message shows and the
+       optimistic value reverts to the stored tier. */
+    await page.locator(`select[data-in="teamPerm"][data-tid="tm_cc_a"]`).selectOption({ label: 'Can view' });
+    await expect(page.getByText(CONFLICT_EN)).toBeVisible();
+    await expect(page.locator(`select[data-in="teamPerm"][data-tid="tm_cc_a"]`)).toHaveValue('Can edit');
+  } finally {
+    await context.close();
+  }
+});
+
+test('a non-manager sees the Access section read-only with the lock hint — no editable perm controls (D-01)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Read Only ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'ro-en', 'Read Only Owner', { locale: 'en', workspace: `ro-en-${run}` });
+  await addTeams(client, account.slug, [{ id: 'tm_ro_a', name: `Crew R ${run}` }]);
+  await addProject(client, account.slug, { id: 'p_ro_a', key: 'ro-a', name, teamIds: ['tm_ro_a'] });
+
+  /* Invite a plain member through the real API. */
+  const memberEmail = `ro-member-${run}@e2e.local`;
+  const invite = (await client.post(`/api/workspaces/${account.slug}/invites`, { emails: [memberEmail], role: 'member' })).data.invites[0];
+  const member = { email: memberEmail, password: 'e2e-password-1', ip: clientIp(run, 'ro-member') };
+  const mClient = apiClient(BASE_URL, { name: 'ro-member', ip: member.ip });
+  expect((await mClient.post('/api/auth/signup', { name: 'Read Only Member', email: member.email, password: member.password })).status).toBe(201);
+  const token = invite.url.slice(String(invite.url).lastIndexOf('/join/') + '/join/'.length);
+  expect((await mClient.post(`/api/invites/${token}/accept`, {})).status).toBeLessThan(400);
+
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': member.ip } });
+  const page = await context.newPage();
+  try {
+    await signIn(page, { ...member, slug: account.slug }, 'en');
+    await page.goto(`${BASE_URL}/w/${account.slug}/project/ro-a`);
+    await expect(page.locator('.proj-h h1')).toHaveText(name);
+    await page.locator('button[data-a="editProject"]').click();
+    await page.getByRole('tab', { name: 'Access' }).click();
+
+    /* The lock hint shows; the linked team renders a static level, and no
+       editable per-team control exists anywhere in the modal. */
+    await expect(page.getByText('Only the project lead, an admin or the owner can change who has access.')).toBeVisible();
+    await expect(page.locator('.modal').getByText(`Crew R ${run}`)).toBeVisible();
+    await expect(page.getByText('Can edit').first()).toBeVisible();
+    await expect(page.locator('select[data-in="teamPerm"]')).toHaveCount(0);
+    await expect(page.locator('button[data-a="shareTeamInvite"]')).toHaveCount(0);
+    await expect(page.locator('button[data-a="shareTeamRemove"]')).toHaveCount(0);
   } finally {
     await context.close();
   }
