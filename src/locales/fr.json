@@ -1446,7 +1446,6 @@
   "page.project.removeFav": "Retirer des favoris",
   "page.project.addFav": "Ajouter aux favoris",
   "a11y.projectStatus": "Statut du projet",
-  "a11y.addMember": "Ajouter un membre",
   "a11y.projectSettings": "Paramètres du projet",
   "a11y.projectViews": "Vues du projet",
   "a11y.saveCurrentFilters": "Enregistrer les filtres actuels comme une vue",

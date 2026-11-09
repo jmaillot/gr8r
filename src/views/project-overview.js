@@ -40,7 +40,7 @@ export function projOverview(p) {
           <dt>${ic('users', 14)}${tk('nav.route.team')}</dt><dd><span class="row" style="flex-wrap:wrap;gap:4px">${projTeams(p).length ? projTeams(p).map(id => `<button class="pillbtn" data-a="go" data-r="team" data-id="${id}">${ic(TM[id].icon, 13)}${TM[id].name}</button>`).join('') : `<span class="pillbtn">${TM[''].name}</span>`}</span></dd>
           <dt>${ic('calendar', 14)}${tk('page.projects.col.start')}</dt><dd><span class="pillbtn num">${fmtDate(p.start, true)}</span></dd>
           <dt>${ic('flag', 14)}${tk('page.home.col.due')}</dt><dd><span class="pillbtn num">${fmtDate(p.due, true)}</span></dd>
-          <dt>${ic('user-plus', 14)}${tk('nav.route.members')}</dt><dd><button class="pillbtn" data-a="share" data-id="${p.id}">${avStack(p.members, 6)}<span class="faint">${p.members.length}</span></button></dd>
+          <dt>${ic('user-plus', 14)}${tk('nav.route.members')}</dt><dd><span class="pillbtn">${avStack(p.members, 6)}<span class="faint">${p.members.length}</span></span></dd>
         </dl></div></section>
         <section class="panel"><div class="panel-h"><h2>${tk('page.project.milestones')}</h2></div><div class="panel-b">${
           (p.milestones || [])

@@ -106,3 +106,46 @@ test('the table renders all columns with a numeric Members cell, and the row gea
     await context.close();
   }
 });
+
+/* =====================================================================
+   Task 2: Share dedup — exactly one labeled Share affordance on the
+   project page, opening the unified modal's Access tab (D-05/M-13).
+   ===================================================================== */
+
+test('exactly one Share affordance opens the Access tab; the deleted duplicates are gone (EN) (PROJ-02)', async ({ browser }) => {
+  const run = newRunId();
+  const name = `Share Solo ${run}`;
+  const { account, client } = await createAccount(BASE_URL, run, 'shsol-en', 'Share Solo Owner', { locale: 'en', workspace: `shsol-en-${run}` });
+  await addProject(client, account.slug, { id: 'p_shsol_a', key: 'shsol-a', name, members: ['m-shsol-a'] });
+  const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
+  const page = await context.newPage();
+  try {
+    await signIn(page, account);
+    await page.getByRole('button', { name: 'Projects' }).first().click();
+    await page.locator(`[data-a='go'][data-r='project'][aria-label="${name}"]`).click();
+    await expect(page.locator('.proj-h h1')).toHaveText(name);
+
+    /* Exactly one Share affordance, dispatching the unified modal on Access. */
+    const share = page.locator('[data-a="projectSettings"][data-tab="access"]');
+    await expect(share).toHaveCount(1);
+    await expect(share).toContainText('Share');
+
+    /* The deleted duplicates: no data-a="share" markup, no addMember
+       user-plus button anywhere on the page. */
+    await expect(page.locator('[data-a="share"]')).toHaveCount(0);
+    await expect(page.locator('button[aria-label="Add member"]')).toHaveCount(0);
+
+    /* The overview members pill is display-only — never a second Share
+       affordance. */
+    await page.locator('nav[aria-label="Project views"] button[data-tab="overview"]').click();
+    await expect(page.locator('dd span.pillbtn').first()).toBeVisible();
+    await expect(page.locator('[data-a="projectSettings"][data-tab="access"]')).toHaveCount(1);
+
+    /* The one labeled Share opens the modal directly on the Access tab. */
+    await page.locator('.proj-h').locator('[data-a="projectSettings"][data-tab="access"]').click();
+    await expect(page.getByRole('heading', { name: `Share “${name}”`, level: 2 })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Access' })).toHaveAttribute('aria-selected', 'true');
+  } finally {
+    await context.close();
+  }
+});
