@@ -435,30 +435,27 @@ test.describe('project share modal', () => {
     test(`the share modal adds a member by email with a catalogue-labelled permission select (${lang})`, async ({ browser }) => {
       const owner = FLOW[lang].shareOwner;
       const target = FLOW[lang].target;
-      const wsName = FLOW[lang].shareWsName;
       const projectName = FLOW[lang].projectName;
       const context = await newContext(browser, { ip: owner.ip });
       const page = await context.newPage();
       try {
         await signIn(page, owner);
 
-        /* Open the project from the projects grid, then its share modal. */
+        /* Open the project from the projects grid, then its settings modal's
+           Access tab [2026-11-09 owner ruling: the header Share button is
+           gone — the gear is the project-page entry point]. */
         await page
           .getByRole('button', { name: fmt('nav.route.projects', {}, lang) })
           .first()
           .click();
         await page.locator(`[data-a='go'][data-r='project'][aria-label="${projectName}"]`).click();
-        await page.getByRole('button', { name: fmt('act.share', {}, lang), exact: true }).click();
+        await page.locator(`button[data-a='editProject']`).click();
+        await page.getByRole('tab', { name: fmt('modal.settingsTabAccess', {}, lang) }).click();
 
-        /* Header and the two access sections. */
+        /* Header, the two access sections. */
         await expect(page.getByRole('heading', { name: fmt('modal.shareTitle', { name: projectName }, lang), level: 2 })).toBeVisible();
         await expect(page.getByText(fmt('modal.peopleWithAccess', {}, lang))).toBeVisible();
-        await expect(page.getByText(fmt('modal.generalAccess', {}, lang))).toBeVisible();
-
-        /* The general-access select renders both catalogue options without
-           needing to change it. */
-        const accessOptions = await page.locator(`select[data-in='shareAccess'] option`).allTextContents();
-        expect(accessOptions).toEqual([fmt('modal.onlyInvited', {}, lang), fmt('modal.everyoneAt', { name: wsName }, lang)]);
+        await expect(page.locator(`input[data-in='shareAccess']`)).toBeVisible();
 
         /* Add the existing workspace member by email; the permission select
            is driven by its RENDERED catalogue label (I18N-07: selecting by
@@ -678,7 +675,7 @@ test.describe('project creation', () => {
         await page.locator(`[data-a='go'][data-r='projects']`).first().click();
 
         /* Open the modal from the projects header button. */
-        await page.locator(`button[data-a='newProject']`, { hasText: d.newButton }).click();
+        await page.locator(`button[data-a='newProject']`, { hasText: d.newButton }).first().click();
 
         /* Modal header and hint, then the labelled name field. */
         await expect(page.getByRole('heading', { name: d.header, level: 2 })).toBeVisible();
