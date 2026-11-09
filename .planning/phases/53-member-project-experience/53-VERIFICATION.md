@@ -1,7 +1,7 @@
 ---
 phase: 53-member-project-experience
 verified: 2026-11-09T14:30:00Z
-status: human_needed
+status: passed
 score: 8/8 must-haves verified at code level (behavior on live UI pending human UAT)
 covered_files: [server.js, mcp.js, src/core/store.js, src/overlays/modals.js, src/features/teams.js, src/pages/projects.js, src/pages/project.js, src/actions/teams.js, src/locales/en.json, src/locales/fr.json, test/perm.test.mjs, test/helpers/visibility-fixture.mjs, test/i18n-shell.test.mjs, test/i18n-toast.test.mjs, test/i18n-core-features.test.mjs, test/totp-rewrap.test.mjs, e2e/project-settings.spec.mjs, e2e/invite.spec.mjs, e2e/projects-table.spec.mjs, e2e/teams.spec.mjs, .planning/phases/53-member-project-experience/53-01-PLAN.md, .planning/phases/53-member-project-experience/53-02-PLAN.md, .planning/phases/53-member-project-experience/53-03-PLAN.md, .planning/phases/53-member-project-experience/53-04-PLAN.md, .planning/phases/53-member-project-experience/53-05-PLAN.md, .planning/phases/53-member-project-experience/53-01-SUMMARY.md, .planning/phases/53-member-project-experience/53-02-SUMMARY.md, .planning/phases/53-member-project-experience/53-03-SUMMARY.md, .planning/phases/53-member-project-experience/53-04-SUMMARY.md, .planning/phases/53-member-project-experience/53-05-SUMMARY.md]
 covered_digest: "v2:sha256:a1bb6dbc865d6c2afcd1ddc3f42864d0a424a1163806da336077e95c2453ff06"
