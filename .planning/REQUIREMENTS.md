@@ -81,4 +81,20 @@
 
 ## Traceability
 
-See ROADMAP.md phase mapping (filled by the roadmapper).
+| Requirement | Phase / Plan | Status |
+|-------------|--------------|--------|
+| PSET-02 | Phase 53, plan 53-01 | Pending |
+| PSET-03 | Phase 53, plan 53-01 | Pending |
+| INVT-01 | Phase 53, plan 53-02 | Pending |
+| INVT-02 | Phase 53, plan 53-02 | Pending |
+| INVT-03 | Phase 53, plan 53-02 | Pending |
+| PSET-01 | Phase 53, plan 53-03 | Pending |
+| PSET-04 | Phase 53, plan 53-03 | Pending |
+| PROJ-01 | Phase 53, plan 53-04 | Pending |
+| PROJ-02 | Phase 53, plan 53-04 | Pending |
+| TEAM-01 | Phase 53, plan 53-05 | Pending |
+| TEAM-02 | Phase 53, plan 53-05 | Pending |
+| TEAM-03 | Phase 53, plan 53-05 | Pending |
+| UX-01 | Phase 53, plan 53-05 (milestone-wide invariant, enforced in every plan) | Pending |
+
+Coverage: 13/13 v2.1 requirements mapped to plan-level units inside the single Phase 53, no orphans, no duplicates.
