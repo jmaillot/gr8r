@@ -43,7 +43,7 @@ Plans:
 - [x] 53-02-PLAN.md — Invite modal: draft `data-in` fix, Projects chips, shared guest validator (create/edit/accept) + D-06 UX
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 53-03-PLAN.md — Unified project settings modal (General + Access) replacing projectModal + Share modal, per-team perm dropdowns
+- [x] 53-03-PLAN.md — Unified project settings modal (General + Access) replacing projectModal + Share modal, per-team perm dropdowns
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 53-04-PLAN.md — Projects table columns (Lead/Teams/Members/Status/Target) + one labeled Share → Access tab
@@ -120,8 +120,8 @@ self-contained and commits atomically):
 | Plan | Status | Completed |
 |------|--------|-----------|
 | 53-01 Per-team perms (server model) | Complete | 2026-11-09 |
-| 53-02 Invite modal (draft, chips, guest clamp) | Not started | - |
-| 53-03 Unified project settings modal | Not started | - |
+| 53-02 Invite modal (draft, chips, guest clamp) | Complete | 2026-11-09 |
+| 53-03 Unified project settings modal | Complete | 2026-11-09 |
 | 53-04 Projects table columns & Share dedup | Not started | - |
 | 53-05 Teams polish & i18n close-out | Not started | - |
 

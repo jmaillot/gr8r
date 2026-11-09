@@ -5,11 +5,11 @@ milestone_name: Member & Project Experience
 current_phase: 53
 current_phase_name: Member & Project Experience
 status: executing
-stopped_at: Completed 53-02-PLAN.md
-last_updated: "2026-11-09T11:54:01.676Z"
+stopped_at: Completed 53-03-PLAN.md
+last_updated: "2026-11-09T12:32:19.014Z"
 last_activity: 2026-11-09
 last_activity_desc: Phase 53 execution started
-state_head: 627352285072bb6e97ed3115063237c032b659c5
+state_head: 2ec61f9805ab14517c8bc36198aa440ad8f86645
 progress:
   total_phases: 5
   completed_phases: 0
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 53 (Member & Project Experience) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-11-09 — Phase 53 execution started
 
@@ -93,8 +93,8 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-09T11:54:01.644Z
-**Stopped at:** Completed 53-02-PLAN.md
+**Last session:** 2026-11-09T12:31:16.273Z
+**Stopped at:** Completed 53-03-PLAN.md
 **Resume file:** None
 
 ### Last completed
@@ -113,7 +113,9 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 |------|----------|-------|-------|
 | Phase 53 P01 | 34 min | 3 tasks | 10 files |
 | Phase 53 P02 | 55 min | 3 tasks | 12 files |
+| Phase 53 P03 | 110 min | 3 tasks | 9 files |
 
 ## Decisions
 
 - [Phase 53]: Invite scope bug fix: swapped ROLE_MEMBER_UI/ROLE_ADMIN_UI destructure (since 29-04) corrected — invites defaulted to Admin and member invites POSTed scope:null; fixed in 53-02
+- [Phase 53]: Create/edit modal split (projectCreate vs projectSettings) removes the last dual-purpose modal; the deleted modals' i18n key families are all reused by the unified modal (i18n:scan 0 dead, no allowlist edits)

@@ -31,7 +31,7 @@
 
 ### Project Settings
 
-- [ ] **PSET-01**: Unified project settings modal: General section (desc/icon/color/
+- [x] **PSET-01**: Unified project settings modal: General section (desc/icon/color/
   lead/target date) + Access section (Teams, Individual Members, General Access) —
   replaces both the current `projectModal` (modals.js:156-194) and the Share modal
   (modals.js:202-289); net code reduction
@@ -44,7 +44,7 @@
   change, `mergeClientDoc` pin block + `normalizeProjects` extended, VISIBILITY_MODEL
   oracle extended (anti-tautology). Note: perms gate write actions, not visibility —
   `canSeeProject` stays boolean unless the owner rules otherwise
-- [ ] **PSET-04**: The same settings modal opens from Workspace > Projects (per-row
+- [x] **PSET-04**: The same settings modal opens from Workspace > Projects (per-row
   gear) and the project page — identical component, no divergent copies
 
 ### Projects Table & Page
@@ -88,8 +88,8 @@
 | INVT-01 | Phase 53, plan 53-02 | Complete |
 | INVT-02 | Phase 53, plan 53-02 | Complete |
 | INVT-03 | Phase 53, plan 53-02 | Complete |
-| PSET-01 | Phase 53, plan 53-03 | Pending |
-| PSET-04 | Phase 53, plan 53-03 | Pending |
+| PSET-01 | Phase 53, plan 53-03 | Complete |
+| PSET-04 | Phase 53, plan 53-03 | Complete |
 | PROJ-01 | Phase 53, plan 53-04 | Pending |
 | PROJ-02 | Phase 53, plan 53-04 | Pending |
 | TEAM-01 | Phase 53, plan 53-05 | Pending |
