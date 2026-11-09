@@ -3268,6 +3268,23 @@ function inviteRole(value) {
   return 'member';
 }
 
+/* [2026-11-09 INVT-03 / T-53-05, D-50-11 re-derived] ONE shared guest
+   validator: a guest (viewer-tier) invitee carries EXACTLY one project —
+   zero is a workspace-wide guest, two is scope drift. Returns null when
+   valid, else a { code, message } keyed refusal (one cause per key).
+   Applied on every write path that can change a guest's project scope:
+   the invite create route (ALL inviter tiers — the admin/owner path had
+   no check before T-53-05), the project-membership add/remove routes,
+   and the accept path (defensive belt-and-braces). Never clamp, never
+   auto-downgrade (D-06): the server refuses, the client disables+hints. */
+function validateGuestInviteShape(role, projects) {
+  if (role !== 'viewer') return null;
+  const list = (Array.isArray(projects) ? projects : []).filter(Boolean);
+  if (list.length === 0) return { code: 'inviteGuestProjectRequired', message: 'Guests need exactly one project' };
+  if (list.length > 1) return { code: 'inviteGuestProjectSingle', message: 'Guests can only be scoped to one project' };
+  return null;
+}
+
 function clientIp(req) {
   if (TRUST_PROXY && firstForwardedValue(req, 'x-forwarded-for')) return firstForwardedValue(req, 'x-forwarded-for');
   return req.socket.remoteAddress || 'unknown';
@@ -5217,6 +5234,17 @@ async function handleApi(req, res, url) {
     if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.owner && ROLE_RANK[row.role] >= ROLE_RANK.admin) {
       return fail(res, 403, 'ownerManagedRoles', 'Only an owner can manage admins and owners');
     }
+    /* [2026-11-09 INVT-03 / D-50-11] Guest scope invariant on the edit
+       surface: a guest already scoped to one project cannot be granted a
+       second — the validator refuses, no clamping (D-06). */
+    const guestMid = row.member_id;
+    if (row.role === 'viewer' && guestMid) {
+      const docNow = JSON.parse(ctx.ws.doc);
+      const projects = Array.isArray(docNow?.data?.projects) ? docNow.data.projects : [];
+      const guestScopes = projects.filter(p => Array.isArray(p?.members) && p.members.includes(guestMid) && p.id !== wsProjectMembersMatch[2]);
+      const shape = validateGuestInviteShape('viewer', [wsProjectMembersMatch[2], ...guestScopes.map(p => p.id)]);
+      if (shape) return fail(res, 400, shape.code, shape.message);
+    }
     try {
       await db.tx(async () => {
         await updateDoc(ctx.ws.id, async doc => {
@@ -5249,6 +5277,19 @@ async function handleApi(req, res, url) {
     const { target, row } = found;
     if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.owner && ROLE_RANK[row.role] >= ROLE_RANK.admin) {
       return fail(res, 403, 'ownerManagedRoles', 'Only an owner can manage admins and owners');
+    }
+    /* [2026-11-09 INVT-03 / D-50-11] Guest scope invariant on the edit
+       surface: removing a guest from their ONLY project would leave them
+       scoped to zero — the validator refuses (D-06: no silent clamp, no
+       role downgrade; the admin revokes the guest role explicitly if the
+       access must go). */
+    const guestMid = row.member_id;
+    if (row.role === 'viewer' && guestMid) {
+      const docNow = JSON.parse(ctx.ws.doc);
+      const projects = Array.isArray(docNow?.data?.projects) ? docNow.data.projects : [];
+      const guestScopes = projects.filter(p => Array.isArray(p?.members) && p.members.includes(guestMid));
+      const shape = validateGuestInviteShape('viewer', guestScopes.filter(p => p.id !== wsProjectMemberMatch[2]).map(p => p.id));
+      if (shape) return fail(res, 400, shape.code, shape.message);
     }
     try {
       await db.tx(async () => {
@@ -5357,12 +5398,27 @@ async function handleApi(req, res, url) {
        keyed refusal; team sets are a trusted admin/owner act (D-50-9) and
        never ride a member invite. */
     let inviteProject = null;
+    /* [2026-11-09 INVT-03] The client sends the scope as body.scope.projects
+       (SCOPE-05, api.createInvites); a scalar body.project stays the raw-API
+       fallback. The candidate list is derived for ALL inviter tiers and the
+       guest shape is validated BEFORE tier branching (T-53-05: the
+       admin/owner path had no guest-project check today). */
+    const guestProjects = Array.isArray(body?.scope?.projects)
+      ? body.scope.projects
+      : body?.project
+        ? [body.project]
+        : [];
+    const guestShapeRefusal = validateGuestInviteShape(role, guestProjects);
+    if (guestShapeRefusal) return fail(res, 400, guestShapeRefusal.code, guestShapeRefusal.message);
+    /* VIS-04 member-tier validation (T-50-05): viewer role only, a real
+       project on the CURRENT doc, toggle ON. Each cause carries its own
+       keyed refusal; team sets are a trusted admin/owner act (D-50-9) and
+       never ride a member invite. */
     if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) {
       if (role !== 'viewer') {
         return fail(res, 403, 'inviteMemberRoleCeiling', 'Members can only invite guests (viewers) to a project');
       }
-      inviteProject = String(body?.project || '');
-      if (!inviteProject) return fail(res, 400, 'inviteMemberProjectRequired', 'Choose a project for this guest invite');
+      inviteProject = String(guestProjects[0] || '');
       const currentDoc = JSON.parse(ctx.ws.doc);
       const project = (Array.isArray(currentDoc?.data?.projects) ? currentDoc.data.projects : []).find(p => p?.id === inviteProject);
       if (!project) return fail(res, 400, 'inviteMemberProjectRequired', 'Unknown project');
@@ -5374,6 +5430,16 @@ async function handleApi(req, res, url) {
       if ((Array.isArray(body?.teams) ? body.teams : []).length > 0) {
         return fail(res, 403, 'inviteTeamsAdminOnly', 'Only admins can invite teams');
       }
+    } else if (role === 'viewer') {
+      /* T-53-05 (admin/owner guest invite): the validator above only
+         guarantees an exactly-one candidate list — resolve it against the
+         CURRENT doc so a stale/unknown id fails closed. The per-project
+         allowInviteGuests toggle stays a member-tier gate (admins manage
+         access directly, D-50-7). */
+      inviteProject = String(guestProjects[0]);
+      const currentDoc = JSON.parse(ctx.ws.doc);
+      const project = (Array.isArray(currentDoc?.data?.projects) ? currentDoc.data.projects : []).find(p => p?.id === inviteProject);
+      if (!project) return fail(res, 400, 'inviteGuestProjectRequired', 'Unknown project');
     }
     /* D-07: an invite carries the full team set. Validation mirrors the PUT
        members/:uid/teams route exactly (T-28-07): per-item trim + 40-char
@@ -5553,6 +5619,14 @@ async function handleApi(req, res, url) {
        legacy rows; this refusal makes any survivor harmless. */
     if (ROLE_RANK[invite.role] >= ROLE_RANK.admin && !invite.email) {
       return fail(res, 403, 'inviteAdminEmailRequired', 'Admin invites must be sent to an email address');
+    }
+    /* [2026-11-09 INVT-03 / D-50-11] Defensive re-derivation at accept time:
+       a stored viewer invite whose scope violates the one-project invariant
+       is refused before any membership write (belt-and-braces — the create
+       route refuses to mint one, but a legacy/crafted row must stay inert). */
+    if (invite.role === 'viewer') {
+      const shape = validateGuestInviteShape('viewer', invite.project ? [invite.project] : []);
+      if (shape) return fail(res, 403, shape.code, shape.message);
     }
     /* VIS-04 (D-50-8, T-50-06): the invite row is never trusted for
        authorization — a project-scoped guest invite re-derives the toggle

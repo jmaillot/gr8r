@@ -205,3 +205,104 @@ test('row 9 (T-53-01 pin property): a stale team key in a non-manager PUT cannot
   assert.equal(project('p_teamshare').perms['team:engA'], 'Can edit', 'the stored team perm is byte-identical after mergeClientDoc');
 });
 
+/* -------------------- rows 10-14 (53-02, INVT-03 / T-53-05) --------------------
+   Guest = exactly one project (D-50-11 re-derived) on every write path:
+   the invite create route (admin/owner path — previously UNGUARDED), the
+   accept path, and the project-membership edit routes. The MCP ceiling
+   (row 14b/T-53-06) pins that no MCP tool can mint invites. */
+
+const GUEST_EMAIL = 'freshguest@visfix.local';
+const GUEST_PASSWORD = 'guest-password-1';
+let guestInviteUrl = null;
+
+test('row 10: an ADMIN guest invite with zero projects is refused with a keyed refusal (T-53-05, unguarded path)', async () => {
+  const res = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, {
+    emails: [`zero-${GUEST_EMAIL}`],
+    role: 'viewer',
+    teams: [],
+    scope: { projects: [], teams: [] },
+  });
+  assert.equal(res.status, 400, `expected 400, got ${res.status}: ${JSON.stringify(res.data)}`);
+  assert.equal(res.data?.code, 'inviteGuestProjectRequired', 'the zero-project guest refusal is keyed');
+});
+
+test('row 11: an ADMIN guest invite with two projects is refused (inviteGuestProjectSingle)', async () => {
+  const res = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, {
+    emails: [`two-${GUEST_EMAIL}`],
+    role: 'viewer',
+    teams: [],
+    scope: { projects: ['p_membershare', 'p_teamshare'], teams: [] },
+  });
+  assert.equal(res.status, 400, `expected 400, got ${res.status}: ${JSON.stringify(res.data)}`);
+  assert.equal(res.data?.code, 'inviteGuestProjectSingle', 'the two-project guest refusal is keyed');
+});
+
+test('row 12: an ADMIN guest invite with exactly one project is accepted and stored with that project', async () => {
+  const res = await admin.post(`/api/workspaces/${VIS_WS.slug}/invites`, {
+    emails: [GUEST_EMAIL],
+    role: 'viewer',
+    teams: [],
+    scope: { projects: ['p_membershare'], teams: [] },
+  });
+  assert.equal(res.status, 201, `expected 201, got ${res.status}: ${JSON.stringify(res.data)}`);
+  const row = (res.data?.invites || [])[0];
+  assert.equal(row?.project, 'p_membershare', 'the stored invite carries the single guest project');
+  assert.equal(row?.role, 'viewer');
+  guestInviteUrl = row?.url || null;
+  assert.ok(guestInviteUrl, 'the invite response carries the join link');
+});
+
+test('row 13: accepting the well-formed guest invite creates the membership scoped to the one project', async () => {
+  assert.ok(guestInviteUrl, 'row 12 must have produced a link');
+  // The accept path re-derives the per-project allowInviteGuests toggle from
+  // the CURRENT doc (D-50-8) — flip it on for p_membershare as the admin first.
+  const flip = await admin.patch(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare`, { allowInviteGuests: true });
+  assert.equal(flip.status, 200, `toggle flipped (got ${flip.status}: ${JSON.stringify(flip.data)})`);
+  const token = guestInviteUrl.slice(guestInviteUrl.lastIndexOf('/join/') + '/join/'.length);
+  const fresh = client(server.base, 'freshguest');
+  const res = await fresh.post(`/api/invites/${token}/accept`, { name: 'Fay FreshGuest', email: GUEST_EMAIL, password: GUEST_PASSWORD });
+  assert.ok([200, 201].includes(res.status), `accept succeeded (got ${res.status}: ${JSON.stringify(res.data)})`);
+  const doc = storedDoc();
+  const guestProfile = doc.data.members.find(m => (m.email || '').toLowerCase() === GUEST_EMAIL);
+  assert.ok(guestProfile, 'the accepted guest has a doc member profile');
+  assert.equal(guestProfile.role, 'Guest', 'the guest role rides the invite row');
+  const scoped = doc.data.projects.filter(p => Array.isArray(p.members) && p.members.includes(guestProfile.id));
+  assert.deepEqual(
+    scoped.map(p => p.id),
+    ['p_membershare'],
+    'the guest is scoped to exactly the one invited project',
+  );
+});
+
+test('row 14: the membership edit surface can never drive a guest to zero projects or to two (D-50-11)', async () => {
+  const doc = storedDoc();
+  const guestProfile = doc.data.members.find(m => (m.email || '').toLowerCase() === GUEST_EMAIL);
+  assert.ok(guestProfile, 'the fresh guest from row 13 exists');
+  // (a) granting a SECOND project is refused
+  const add = await admin.post(`/api/workspaces/${VIS_WS.slug}/projects/p_open/members`, { userId: guestProfile.userId });
+  assert.equal(add.status, 400, `second-project grant refused (got ${add.status}: ${JSON.stringify(add.data)})`);
+  assert.equal(add.data?.code, 'inviteGuestProjectSingle', 'the second-project refusal is keyed');
+  // (b) removing the guest from their ONLY project is refused
+  const del = await admin.del(`/api/workspaces/${VIS_WS.slug}/projects/p_membershare/members/${guestProfile.userId}`);
+  assert.equal(del.status, 400, `zero-project removal refused (got ${del.status}: ${JSON.stringify(del.data)})`);
+  assert.equal(del.data?.code, 'inviteGuestProjectRequired', 'the zero-project refusal is keyed');
+  // (c) no silent clamping happened: the guest still holds exactly the one project
+  const after = storedDoc();
+  const id = guestProfile.id;
+  const stillScoped = after.data.projects.filter(p => Array.isArray(p.members) && p.members.includes(id));
+  assert.deepEqual(stillScoped.map(p => p.id), ['p_membershare'], 'no clamp, no downgrade — the scope is untouched');
+});
+
+test('row 15 (T-53-06 MCP ceiling): the MCP server exposes exactly three tools and none of them creates invites', async () => {
+  const fs2 = await import('node:fs');
+  const src = fs2.readFileSync(new URL('../mcp.js', import.meta.url), 'utf8');
+  const names = [...src.matchAll(/name: '([a-z-]+)'/g)].map(m => m[1]);
+  const toolNames = names.filter(n => ['daily-standup', 'triage-backlog', 'prepare-review'].includes(n));
+  assert.deepEqual(
+    [...new Set(toolNames)].sort(),
+    ['daily-standup', 'prepare-review', 'triage-backlog'],
+    'the MCP tool list is exactly the three read-only tools',
+  );
+  assert.ok(!names.some(n => /invite/.test(n)), 'no MCP tool name mentions invites — no MCP path can mint one');
+});
+
