@@ -33,6 +33,15 @@ server-first through the one existing funnel.
 **Requirements**: PSET-02, PSET-03, INVT-01, INVT-02, INVT-03, PSET-01, PSET-04,
 PROJ-01, PROJ-02, TEAM-01, TEAM-02, TEAM-03, UX-01
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 53-01-PLAN.md — Per-team perms server model (`p.perms['team:']`, `projectPermFor` write gates, lockstep mirrors, oracle + pin regression)
+- [ ] 53-02-PLAN.md — Invite modal: draft `data-in` fix, Projects chips, shared guest validator (create/edit/accept) + D-06 UX
+- [ ] 53-03-PLAN.md — Unified project settings modal (General + Access) replacing projectModal + Share modal, per-team perm dropdowns
+- [ ] 53-04-PLAN.md — Projects table columns (Lead/Teams/Members/Status/Target) + one labeled Share → Access tab
+- [ ] 53-05-PLAN.md — Teams polish (searchable members box, hint, invite removal) + milestone i18n close-out
+
 **Execution order** (plans are built and executed in this order; each plan is
 self-contained and commits atomically):
 
