@@ -2,7 +2,9 @@
 import { $$, ago, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
 import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { PCOLORS, PICONS } from '../core/constants.js';
+import { PCOLORS, PICONS, LB } from '../core/constants.js';
+import { buildExportModel } from '../export/model.js';
+import { applyView, viewOf } from '../shell/view-engine.js';
 import { D, S, canManageProject, mem, pColor, proj, task, teamsList, visibleProjects } from '../core/store.js';
 import { api } from '../core/api.js';
 import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
@@ -42,6 +44,8 @@ export function modalHtml(m) {
        (D-05). Creation has its own create-only modal (projectCreate). */
     case 'projectSettings':
       return wrap('', projectSettingsModal(m, H));
+    case 'export':
+      return wrap('', exportModal(m, H));
     case 'projectCreate':
       return wrap('', projectCreateModal(m, H));
     case 'invite':
@@ -361,6 +365,25 @@ export function projectSettingsModal(m, H) {
   return `${H(t('act.projectSettings'))}${tabBar}
   <form class="modal-b" data-submit="submitProject">${settingsGeneralFields(m)}</form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${t('act.saveChanges')}</button></div>`;
+}
+/* [54-01 D-54-2] The export modal — the ONE surface of the CSV vertical
+   slice. Row count and scope state ride S.ui.expOptions / S.ui.expScope /
+   S.ui.expViewKey (set by A.exportOpen); every label reads the catalogue at
+   render time; every project value passes esc. The submit guard re-checks
+   canManageProject so a tampered DOM cannot post for a non-manager. */
+export function exportModal(m, H) {
+  const p = proj(m.id);
+  if (!p || !canManageProject(p)) return H(t('err.projectNotFound'));
+  const opts = { ...(S.ui.expOptions || {}) };
+  const count = (buildExportModel(D(), p.id, { scope: 'all', options: opts }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() })?.rows || []).length;
+  return `${H(t('export.title', { name: esc(p.name) }))}
+  <div class="modal-b">
+    <div class="field"><span class="label">${t('export.format.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.format.label')}"><label class="opt on"><input type="radio" name="expFormat" value="csv" checked>${ic('table-2', 14)}${t('export.format.csv')}</label></div></div>
+    <div class="field"><span class="label">${t('export.scope.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.scope.label')}"><label class="opt on"><input type="radio" name="expScope" value="all" checked>${ic('list', 14)}${t('export.scope.all')}</label></div></div>
+    <div class="hint">${t('export.scope.count', { n: count })}</div>
+    ${api.enabled ? '' : `<div class="alert info">${ic('info', 14)}<span>${t('export.notice.staticMode')}</span></div>`}
+  </div>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="exportSubmit" data-id="${p.id}" ${count === 0 ? 'disabled' : ''}>${ic('download', 14)}${t('export.submit')}</button></div>`;
 }
 /* The invite form's role options (29-04) — display labels stored as picker
    state; api.js bridges them to the API roles via its own map. */

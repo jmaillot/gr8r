@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
-import { PR, PSTAT } from '../core/constants.js';
+import { PR, PSTAT, LB } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
@@ -39,12 +39,14 @@ import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
 import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
-import { viewOf } from '../shell/view-engine.js';
+import { applyView, viewOf } from '../shell/view-engine.js';
 import { PERMS, TEMPLATES, closeModal, openModal, permLabel } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../pages/settings.js';
 import { prefValue } from '../core/prefs.js';
 import { blockedToastOnce } from '../core/push.js';
+import { DEFAULT_OPTIONS, buildExportModel } from '../export/model.js';
+import { download, saveBlob } from '../core/download.js';
 
 /* The preference value is written the way the user chose it: the 'auto'
    sentinel must reach the bag as the string 'auto', so it is still read as
@@ -1739,6 +1741,69 @@ A.projectSettings = el => {
 A.settingsTab = el => {
   S.ui.settingsTab = el.dataset.v === 'access' ? 'access' : 'general';
   render();
+};
+/* ==================== EXPORT (54-01, D-54-1/D-54-2, R1) ====================
+   One modal, two entry points (header icon button, context menu), one
+   canManageProject guard at open AND at submit. The view id mapping: a
+   saved-view tab ('v:<id>') exports that saved view ('sv:<id>'); a task tab
+   exports the project's project-view; overview/files/activity have no task
+   view — the modal disables the view scope there. */
+A.exportOpen = el => {
+  const id = el.dataset.id;
+  const p = proj(id);
+  if (!p || !canManageProject(p)) return;
+  const tab = S.ui.params.tab || 'board';
+  S.ui.expOptions = { ...DEFAULT_OPTIONS };
+  S.ui.expScope = 'all';
+  S.ui.expFormat = 'csv';
+  S.ui.expViewKey = tab.startsWith('v:')
+    ? 'sv:' + tab.slice(2)
+    : ['board', 'list', 'table', 'calendar', 'timeline'].includes(tab)
+      ? 'p:' + p.id
+      : null;
+  openModal({ type: 'export', id });
+};
+IN.exportFormat = el => {
+  S.ui.expFormat = el.value;
+  render();
+};
+IN.exportScope = el => {
+  S.ui.expScope = el.value;
+  render();
+};
+IN.exportOption = el => {
+  const opts = S.ui.expOptions || (S.ui.expOptions = { ...DEFAULT_OPTIONS });
+  opts[el.dataset.key] = el.checked;
+  render();
+};
+/* The scope ids a view-scope export sends — computed from the SAME view the
+   user is looking at, so what you see is what you export. */
+const exportViewIds = p => {
+  if (S.ui.expScope !== 'view' || !S.ui.expViewKey) return undefined;
+  const v = viewOf(S.ui.expViewKey);
+  return applyView(tasksOf(p.id), v).map(t => t.id);
+};
+const exportCount = p =>
+  (buildExportModel(D(), p.id, { scope: S.ui.expScope === 'view' ? 'view' : 'all', ids: exportViewIds(p), options: S.ui.expOptions }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() })?.rows || []).length;
+A.exportSubmit = async el => {
+  const p = proj(el.dataset.id);
+  if (!p || !canManageProject(p)) return toast(t('err.exportForbidden'), { kind: 'err' });
+  const count = exportCount(p);
+  if (count === 0) return toast(t('export.scope.count', { n: 0 }), { kind: 'info' });
+  const body = { format: 'csv', scope: S.ui.expScope === 'view' ? 'view' : 'all', options: { ...(S.ui.expOptions || DEFAULT_OPTIONS) } };
+  if (body.scope === 'view') {
+    const ids = exportViewIds(p);
+    if (!ids) {
+      body.scope = 'all';
+    } else {
+      body.ids = ids;
+    }
+  }
+  const r = await download(`/api/workspaces/${encodeURIComponent(D().ws.url)}/projects/${p.id}/export`, body);
+  if (!r.ok) return toast(r.error || t('err.exportFailed'), { kind: 'err' });
+  saveBlob(r.blob, r.filename);
+  closeModal();
+  toast(t('export.scope.count', { n: count }), { ms: 1800 });
 };
 A.share = el => {
   /* [53-03 D-05] Every Share entry (labeled button, avatar stack, user-plus,
