@@ -1,7 +1,7 @@
 /* ---------------- CONTEXT MENUS ---------------- */
 import { ic } from '../core/icons.js';
 import { ST } from '../core/constants.js';
-import { D, mem, me, proj, task, visibleProjects, isMemberAdmin } from '../core/store.js';
+import { D, mem, me, proj, task, visibleProjects, isMemberAdmin, canManageProject } from '../core/store.js';
 /* ctxMenu's task variable is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg } from '../core/i18n.js';
 
