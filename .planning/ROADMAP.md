@@ -130,7 +130,7 @@ Plans:
 - [x] 54-04-PLAN.md — Adaptive Gantt geometry, Timeline bars, diamonds and dependency connectors, Today column, shape cap and responsiveness
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 54-05-PLAN.md — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue and the human Microsoft Project check
+- [x] 54-05-PLAN.md — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue and the human Microsoft Project check (complete 2026-11-10; Project open check OPEN as UAT — owner skipped, no Project machine)
 
 ## Milestone-Wide Invariants (pinned per plan)
 
@@ -156,7 +156,7 @@ Plans:
 | 54-02 Workbook writer + six-sheet shell (Tasks) | Complete | 2026-11-10 |
 | 54-03 Summary, KPIs, charts, Board/Members/Milestones | Complete | 2026-11-10 |
 | 54-04 Gantt geometry + dependency connectors | Complete | 2026-11-10 |
-| 54-05 MSPDI serializer + i18n close-out | Pending | — |
+| 54-05 MSPDI serializer + i18n close-out | Complete (UAT caveat) | 2026-11-10 |
 
 ## Backlog
 

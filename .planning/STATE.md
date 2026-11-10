@@ -5,7 +5,7 @@ milestone_name: Member & Project Experience
 current_phase: 54
 current_phase_name: Project export — Excel report, MSPDI XML and CSV
 status: executing
-stopped_at: Completed 54-04-PLAN.md
+stopped_at: Completed 54-05-PLAN.md (open UAT: Project open check skipped — no Project machine)
 last_updated: "2026-11-10T11:06:44.374Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 54 execution started
@@ -46,7 +46,9 @@ Last activity: 2026-11-10 — Completed 54-03-PLAN.md (Summary/Board/Members/Mil
 4. Plan 54-04 — Adaptive Gantt geometry, Timeline bars, diamonds, dependency connectors,
    Today column, shape cap, responsiveness. Wave 4 (blocked on 54-03).
 5. Plan 54-05 — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue, human
-   Microsoft Project check. Wave 5 (blocked on 54-04).
+   Microsoft Project check. Wave 5 (blocked on 54-04). COMPLETE 2026-11-10 — the human
+   Project open check remains OPEN as UAT (owner verdict "skipped: no Project machine",
+   recorded in 54 deferred-items.md).
 
 **Drift warning**: the phase 54 artifacts were authored against a pre-Phase-53 tree
 (`src/pages/project.js:73-80` header still had the avatar stack + labeled Share button).
@@ -142,6 +144,7 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 | Phase 54 P01 | 29 min | 3 tasks | 15 files |
 | Phase 54 P02 | 14 min | 3 tasks | 14 files |
 | Phase 54 P04 | 2h | 3 tasks | 10 files |
+| Phase 54 P05 | 15 min (close-out) | 3 tasks (2 auto + 1 skipped checkpoint) | 12 files |
 
 ## Decisions
 
@@ -163,6 +166,11 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
   shipped first) rather than a new milestone — its artifacts carry no milestone identity,
   and `54-01` builds on post-53 code. Drift caveat recorded: the plans reference
   `src/pages/project.js:73-80` (pre-53 header with avatar stack + labeled Share).
+- [Phase 54]: MSPDI writer does not map comments onto any Project field (recorded R3
+  exception, D-54-8); the comments toggle is asserted byte-identical in export-mspdi.test.mjs.
+- [Phase 54]: 54-05 human Project open check recorded as OPEN UAT (owner verdict verbatim
+  "skipped: no Project machine", 2026-11-10) — checklist in 54 deferred-items.md; mechanical
+  suite (27/27 mspdi, route, client, full 1340 pass) is the verification of record.
 - [Phase 54]: Export model is DOM-free (zero imports); all writers receive machine fields so they never re-read the document
 - [Phase 54]: Export route reads only docForClient; hidden-private and nonexistent ids return byte-identical 404s (no enumeration)
 - [Phase 54]: Owner approval 2026-11-10: approved @office-kit/xlsx 0.26.1 (exact pin, integrity-verified, no install script)
