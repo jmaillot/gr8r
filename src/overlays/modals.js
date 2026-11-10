@@ -398,13 +398,14 @@ export function exportModal(m, H) {
      rendered option is always a servable format. */
   const FORMATS = api.enabled ? [['xlsx', 'table-2'], ['mspdi', 'file-code'], ['csv', 'table-2']] : [['csv', 'table-2']];
   const fmt = S.ui.expFormat || FORMATS[0][0];
-  /* [2026-11-10 owner redesign] the format picker is icon buttons (name in
-     the tooltip + aria-label), NOT big cards; the include list is compact
+  /* [2026-11-10 owner redesign] the format picker is compact boxes — icon on
+     top, the format code, and a hint line below (owner: "just put a hint
+     below every box") — NOT big cards; the include list is compact
      selectable rows. Scope keeps its card radios. The inputs keep the same
      data-in wiring — only the presentation changed. */
   const formatIcons = FORMATS.map(
     ([id, icon]) =>
-      `<label class="xfmt ${fmt === id ? 'on' : ''}" title="${t('export.format.' + id)}"><input type="radio" name="expFormat" value="${id}" data-in="exportFormat" ${fmt === id ? 'checked' : ''} aria-label="${t('export.format.' + id)}">${ic(icon, 18)}</label>`,
+      `<label class="xfmt ${fmt === id ? 'on' : ''}"><input type="radio" name="expFormat" value="${id}" data-in="exportFormat" ${fmt === id ? 'checked' : ''} aria-label="${t('export.format.' + id)}">${ic(icon, 16)}<b>${id.toUpperCase()}</b><span>${t('export.hint.' + id)}</span></label>`,
   ).join('');
   const includeList = EXP_OPTIONS.map(
     ([key, icon]) =>
