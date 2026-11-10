@@ -2,8 +2,8 @@
 import { esc, fmtDate, iso } from '../core/utils.js';
 import { t as tk, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { S, isOver, mem, pColor, proj, task } from '../core/store.js';
-import { av, dueHtml, empty, lbl, prPill, stIcon, stPill } from '../ui/helpers.js';
+import { S, isOver, mem, pColor, proj, task, taskProg } from '../core/store.js';
+import { av, dueHtml, empty, lbl, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { groupTasks, viewOf } from '../shell/view-engine.js';
 
 /* The column table: element 1 is a CATALOGUE KEY, not display text — the header
@@ -12,6 +12,7 @@ import { groupTasks, viewOf } from '../shell/view-engine.js';
 export const TCOLS = [
   ['title', 'page.columns.task', 314],
   ['status', 'page.field.status', 132],
+  ['progress', 'page.columns.progress', 116],
   ['priority', 'page.field.priority', 112],
   ['assignee', 'page.field.assignee', 156],
   ['due', 'page.field.due', 112],
@@ -31,6 +32,11 @@ export function tcell(t, c) {
         : `<td class="sticky cellbtn" data-a="openTask" data-id="${t.id}" data-dbl="editCell" data-f="title" title="${tk('a11y.dblClickRename')}"><span class="row" style="gap:8px">${stIcon(t.status, 13)}<span class="trunc" style="font-weight:450">${esc(t.title)}</span><span class="mono faint" style="font-size:11px;margin-left:auto">${t.key}</span></span></td>`;
     case 'status':
       return `<td class="cellbtn" data-a="pop" data-pop="status" data-id="${t.id}"><span class="row" style="gap:6px">${stPill(t.status)}</span></td>`;
+    case 'progress':
+      /* Owner request 2026-11-10: the achievement at a glance — the same
+         taskProg curve as the board card, clickable into the status popover
+         like its neighbours. */
+      return `<td class="cellbtn" data-a="pop" data-pop="status" data-id="${t.id}" data-tip="${tk('page.columns.progress')}"><span class="row" style="gap:8px">${progBar(taskProg(t), t.status === 'done' ? 'green' : '')}<span class="mono faint" style="font-size:11px">${taskProg(t)}%</span></span></td>`;
     case 'priority':
       return `<td class="cellbtn" data-a="pop" data-pop="priority" data-id="${t.id}"><span class="row" style="gap:6px">${prPill(t.priority)}</span></td>`;
     case 'assignee':
@@ -81,5 +87,5 @@ export function tableHtml(ts, key, p) {
       .join('')}
       <tr><td class="sticky cellbtn" data-a="newTask" ${p ? `data-project="${p.id}"` : ''} colspan="${cols.length}" style="color:var(--text-3)"><span class="row" style="gap:6px">${ic('plus', 14)}${tk('act.newTask')}</span></td></tr>
     </tbody></table></div>
-    <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${av(t.assignee, 'sm', false)}<span class="muted">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(fmtEstimate(t.estimate))}</span>` : ''}</div></div>`).join('')}</div>`;
+    <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${av(t.assignee, 'sm', false)}<span class="muted">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(fmtEstimate(t.estimate))}</span>` : ''}<span style="width:64px;display:inline-flex" data-tip="${tk('page.columns.progress')}">${progBar(taskProg(t), t.status === 'done' ? 'green' : '')}</span></div></div>`).join('')}</div>`;
 }

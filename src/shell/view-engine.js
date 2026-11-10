@@ -3,7 +3,7 @@ import { DAY, TODAY, diffD, esc, foldForSearch, parse } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { t } from '../core/i18n.js';
 import { LABELS, PR, PRIOS, STATUSES } from '../core/constants.js';
-import { D, S, canSee, isOver, mem, pColor, proj, visibleProjects } from '../core/store.js';
+import { D, S, canSee, isOver, mem, pColor, proj, taskProg, visibleProjects } from '../core/store.js';
 import { av, prIcon, stIcon } from '../ui/helpers.js';
 
 /* The filter fields. The name is read through a getter so the catalogue
@@ -143,6 +143,7 @@ export function sortTasks(ts, s) {
       updated: t => -t.updated,
       estimate: t => t.estimate || 'zzz',
       project: t => proj(t.project)?.name,
+      progress: t => taskProg(t),
     }[s.f] || (t => t.order);
   return a.sort((x, y) => {
     const p = key(x),
@@ -209,6 +210,7 @@ export function viewToolbar(key, opt = {}) {
     start: t('page.sort.start'),
     estimate: t('page.sort.estimate'),
     project: t('page.field.project'),
+    progress: t('page.columns.progress'),
   }[v.sort.f];
   return `<div class="toolbar" role="toolbar">
     <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="vq-${key}" data-in="viewQ" data-key="${key}" placeholder="${t('a11y.searchTasks')}" value="${esc(v.q)}" aria-label="${t('a11y.searchTasks')}"></div>

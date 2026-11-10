@@ -7,7 +7,7 @@ import { t as tMsg, formatDate, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
-import { av, dueHtml, empty, lbl, prIcon, prPill, stIcon, stPill } from '../ui/helpers.js';
+import { av, dueHtml, empty, lbl, prIcon, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
 /* ---------- shared list renderer ---------- */
@@ -61,7 +61,7 @@ export function taskRow(t, cols, tpl, opt = {}) {
       <span class="key">${t.key}</span>
       ${editing ? `<input class="inline-in" id="edit-title" data-in="noop" data-blur="commitTitle" data-key-enter="commitTitle" data-id="${t.id}" value="${esc(t.title)}" aria-label="${tMsg('a11y.taskTitle')}">` : `<span class="tt">${esc(t.title)}</span>`}
       ${t.recur ? `<span class="meta-mini" data-tip="${tMsg('a11y.repeats', { freq: esc(t.recur.toLowerCase()) })}">${ic('repeat', 11)}</span>` : ''}
-      ${t.subtasks.length ? `<span class="meta-mini">${ic('list-checks', 11)}${sd}/${t.subtasks.length}</span>` : ''}
+      ${t.subtasks.length ? `<span class="meta-mini">${ic('list-checks', 11)}${sd}/${t.subtasks.length}<span style="width:52px;display:inline-flex" data-tip="${tMsg('page.columns.progress')}">${progBar(Math.round((sd / t.subtasks.length) * 100), sd === t.subtasks.length ? 'green' : '')}</span></span>` : ''}
       ${cc ? `<span class="meta-mini">${ic('message-square', 11)}${cc}</span>` : ''}
     </div>
     ${cols.map(c => `<div class="c-meta c-${c === 'labels' ? 'lbl' : c}">${CELL[c](t)}</div>`).join('')}

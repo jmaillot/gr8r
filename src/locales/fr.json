@@ -523,6 +523,7 @@
   "a11y.teamNameExample": "p. ex. Growth",
   "a11y.teamDescExample": "p. ex. Expériences d’acquisition et e-mails du cycle de vie",
   "page.columns.task": "Tâche",
+  "page.columns.progress": "Avancement",
   "page.tasks.emptyTitle": "Aucune tâche ici",
   "page.tasks.emptyBody": "Ajoutez une tâche pour vous lancer.",
   "a11y.taskStatus": "Statut : {status}",

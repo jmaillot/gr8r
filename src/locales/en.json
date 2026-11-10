@@ -522,6 +522,7 @@
   "a11y.teamNameExample": "e.g. Growth",
   "a11y.teamDescExample": "e.g. Acquisition experiments and lifecycle email",
   "page.columns.task": "Task",
+  "page.columns.progress": "Progress",
   "page.tasks.emptyTitle": "No tasks here",
   "page.tasks.emptyBody": "Add a task to get things moving.",
   "a11y.taskStatus": "Status: {status}",
