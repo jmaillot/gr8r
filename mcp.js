@@ -1082,6 +1082,55 @@ export function createMcp(deps) {
         return { query: a.query, total: rows.length, tasks: await Promise.all(await Promise.all(rows.map(t => taskOut(ctx, t, doc)))) };
       },
     },
+    /* Workspace row settings (name/slug/color) — the PATCH /api/workspaces/:slug
+       semantics mirrored: admin-gated, slug sanitized + uniqueness-checked,
+       color a hex value. The MCP surface is scoped to ONE workspace via the
+       key, so there is no workspace selector — "this workspace" is implicit. */
+    update_workspace: {
+      description: "Update this workspace's settings: name, URL slug, or color (hex). Changing the slug changes every workspace URL — existing browser bookmarks and open sessions keep working through redirects, but anything referencing the old URL breaks.",
+      write: true,
+      schema: {
+        name: { t: 's', max: 60 },
+        slug: { t: 's', max: 40 },
+        color: { t: 's', max: 7 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) throw toolError('Only admins and owners can update workspace settings');
+        if (a.name === undefined && a.slug === undefined && a.color === undefined) {
+          throw toolError('Nothing to update — pass name, slug or color');
+        }
+        let name = ctx.ws.name;
+        let slug = ctx.ws.slug;
+        let color = ctx.ws.color || '#1D1C1A';
+        if (a.name !== undefined) {
+          name = String(a.name).trim().slice(0, 60);
+          if (!name) throw toolError('Workspace name must not be empty');
+        }
+        if (a.slug !== undefined && a.slug !== slug) {
+          /* Local mirror of server.js sanitizeSlug + uniqueness probe (single
+             statement per facade call, so two lookups instead of one). */
+          const normalized = String(a.slug)
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          const next = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/.test(normalized) && !['api', 'w', 'join', 'assets', 'static', 'health', 'login', 'signup', 'onboarding', 'settings', 'admin'].includes(normalized) ? normalized : null;
+          if (!next) throw toolError('Invalid slug — use 2–40 lowercase letters, numbers, or hyphens');
+          if (await db.get('select 1 from workspaces where slug = ? collate nocase and id is not ?', [next, ctx.ws.id])) {
+            throw toolError(`Slug "${next}" is already taken`);
+          }
+          slug = next;
+        }
+        if (a.color !== undefined) {
+          if (!/^#[0-9a-f]{6}$/i.test(String(a.color))) throw toolError('Invalid color — use a hex value like #1D1C1A');
+          color = String(a.color);
+        }
+        await db.run('update workspaces set name = ?, slug = ?, color = ?, updated_at = ? where id = ?', [name, slug, color, now(), ctx.ws.id]);
+        return { updated: true, workspace: { id: ctx.ws.id, name, slug, color } };
+      },
+    },
     list_members: {
       description: 'List the members of the workspace (member ids for assignee parameters).',
       schema: {},

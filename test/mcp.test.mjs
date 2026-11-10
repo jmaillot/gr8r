@@ -203,6 +203,7 @@ test('handshake, tools/list exposes the full surface', async () => {
     'update_project',
     'update_task',
     'update_team',
+    'update_workspace',
     'whoami',
   ]);
 });
@@ -704,6 +705,31 @@ test('create_task: start date, inline subtasks and top position', async () => {
   const gotBatch = await call('get_task', { id: batch.data.tasks[0].id });
   assert.ok(gotBatch.data.subtasks.length === 1);
   assert.equal((await call('create_tasks', { project: 'TEST', tasks: [{ title: 'Bad', start: 'nope' }] })).isError, true);
+});
+
+test('workspace settings: update name/color, slug guards; no-arg refused', async () => {
+  const writeKey = (await createKey({ label: 'WsSuite', scope: 'write', workspaceId: wsId, days: 90 })).data.key;
+  const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(writeKey, name, args, session);
+
+  /* read the seeded name to restore it later */
+  const before = (await call('whoami')).data;
+  const originalName = before.workspace?.name || 'Prodware';
+
+  /* no-op refused */
+  assert.equal((await call('update_workspace', {})).isError, true);
+  /* bad color / bad slug / reserved slug refused */
+  assert.equal((await call('update_workspace', { color: 'red' })).isError, true);
+  assert.equal((await call('update_workspace', { slug: 'x' })).isError, true);
+  assert.equal((await call('update_workspace', { slug: 'admin' })).isError, true);
+  /* valid update */
+  const upd = await call('update_workspace', { name: 'Renamed WS', color: '#5A67D8' });
+  assert.equal(upd.isError, false);
+  assert.equal(upd.data.workspace.name, 'Renamed WS');
+  assert.equal(upd.data.workspace.color, '#5A67D8');
+  /* restore the seeded name/color so other tests see the original state */
+  const back = await call('update_workspace', { name: originalName, color: '#1D1C1A' });
+  assert.equal(back.isError, false);
 });
 
 test('prompts: list and get round-trip; unknown prompt rejected', async () => {
