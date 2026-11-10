@@ -222,8 +222,8 @@ test('the catalogue holds after the billing removal, the D-10/D-12/D-16 addition
   );
 });
 
-test('the icon baseline holds at 172 names', () => {
+test('the icon baseline holds at 173 names', () => {
   const baseline = JSON.parse(fs.readFileSync(path.join(ROOT, 'test/fixtures/icons-baseline.json'), 'utf8'));
   const names = Array.isArray(baseline) ? baseline : baseline.icons || Object.keys(baseline);
-  assert.equal(names.length, 172, 'the icon baseline moved'); // +1: percent (the Summary KPI rows, 54-03) // +2: align-left (export scope selector) + view (the export modal icon) — the export entry points and modal (54-01) // +1: plug for the API-keys nav entry (MCP-01); shield-check returns for the 2FA login screen (17-02); −1: the apple glyph left with the demo social buttons
+  assert.equal(names.length, 173, 'the icon baseline moved'); // +1: network (the Timeline connector/dependency legend, 54-04) // +1: percent (the Summary KPI rows, 54-03) // +2: align-left (export scope selector) + view (the export modal icon) — the export entry points and modal (54-01) // +1: plug for the API-keys nav entry (MCP-01); shield-check returns for the 2FA login screen (17-02); −1: the apple glyph left with the demo social buttons
 });
