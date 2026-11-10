@@ -11,3 +11,25 @@
   the fr.json NBSP fixes (export.title guillemets, export.notice.staticMode colon).
 - The pre-existing server.js lint errors (TZ_BY_LABEL, empty block) recorded by the 54-02
   executor remain — out of phase scope, untouched.
+
+## OPEN UAT ENTRY — human Project/workbook check (54-05 Task 3, 2026-11-10)
+
+Owner verdict received: **"skipped: no Project machine"** (2026-11-10). This is an explicit
+skip, NOT a verification success. The mechanical suite stands as the automated verification
+of record (27/27 mspdi + route + client; full suite 1340 pass / 0 fail; lint/format/build
+green). The human check remains OPEN for the first Project-equipped machine:
+
+Run `node test/make-export-samples.mjs`, then:
+
+1. Open `test-results/export-samples/project-en.xml` in Microsoft Project, accept the import,
+   and report:
+   - whether a repair prompt appeared (if yes: record the exact dialog text + failing element, hand to planner — do NOT patch in-place);
+   - number of tasks, and whether both milestones show;
+   - whether the finish-to-start dependency arrow/link exists;
+   - whether the five custom fields (Text1 key, Text2 status, Text3 priority, Text4 labels, Text5 estimate) are populated;
+   - whether durations read in days and match the fixture estimates (3d, 90m, spans);
+   - whether accented / non-Latin text survived.
+2. Open `test-results/export-samples/project-en.xlsx` once in LibreOffice or Excel and confirm
+   the six sheets, the three charts, the Gantt bars and at least one dependency arrow render.
+
+Closes R8 acceptance on confirmation.
