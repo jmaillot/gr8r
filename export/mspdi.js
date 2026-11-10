@@ -154,8 +154,21 @@ function taskSchedule(row, fallbackStartISO) {
   const startISO = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) ? row.start : fallbackStartISO;
   /* The duration derives from the RESOLVED span, not the raw row: child
      rows inherit their parent's dates (owner 2026-11-10), so a blank
-     row.start must not zero the estimate-derived duration. */
-  const minutes = parseEstimate(row.estimate) ?? workingDaysInclusive(startISO, row.due) * 480;
+     row.start must not zero the estimate-derived duration.
+     Owner report 2026-11-10 ("blocks render as lines"): Project derives
+     Finish from Duration for auto-scheduled tasks, so a ZERO duration
+     collapses Finish onto Start and draws a line. Any task that carries
+     at least one date gets a minimum one-working-day duration; only a
+     genuinely undated task stays at zero (a line at the project start). */
+  const spanDays = workingDaysInclusive(startISO, row.due);
+  const estimateMinutes = parseEstimate(row.estimate);
+  const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
+  /* The DATED SPAN wins over the estimate: Project re-derives Finish from
+     Duration, so an estimate-based Duration on a multi-day span renders a
+     tiny bar (the owner's "lines, not blocks"). The estimate fills in only
+     when the dates don't span any working days. */
+  const minutes =
+    spanDays > 0 ? spanDays * 480 : (estimateMinutes ?? (dated ? 480 : 0));
   let finishISO;
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(row.due))) {
     finishISO = row.due;

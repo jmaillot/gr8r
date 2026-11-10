@@ -135,6 +135,32 @@ test('task-level children appear in the documented schema order', () => {
   }
 });
 
+test('dated spans win over estimates and dated rows never collapse to zero duration (owner 2026-11-10)', () => {
+  /* Project re-derives Finish from Duration, so an estimate-based duration
+     on a multi-day span renders a near-zero bar ("lines, not blocks"). */
+  const mismatchDoc = {
+    members: [{ id: 'm1', name: 'Me', role: 'Owner' }],
+    projects: [{ id: 'p1', name: 'P', key: 'PRJ', status: 'active', start: '2026-11-02', due: '2026-12-31', lead: 'm1', members: ['m1'], teams: [], archived: false }],
+    tasks: [
+      /* estimate 2h but a five-working-day span: the SPAN must win */
+      { id: 't1', project: 'p1', key: 'PRJ-1', title: 'Span wins', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '2h', subtasks: [], deps: [], order: 1, start: '2026-11-09', due: '2026-11-13' },
+      /* start only, no due, no estimate: minimum one working day, never zero */
+      { id: 't2', project: 'p1', key: 'PRJ-2', title: 'Start only', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 2, start: '2026-11-09' },
+      /* undated, estimate only: the estimate duration survives */
+      { id: 't3', project: 'p1', key: 'PRJ-3', title: 'Estimate only', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '3h', subtasks: [], deps: [], order: 3 },
+      /* undated, nothing: zero duration stays (a line at the project start) */
+      { id: 't4', project: 'p1', key: 'PRJ-4', title: 'Nothing at all', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 4 },
+    ],
+    comments: [],
+    projOrder: ['p1'],
+  };
+  const mismatchXml = buildMspdi(buildExportModel(mismatchDoc, 'p1', { scope: 'all' }, DEPS));
+  assert.ok(taskSlice(mismatchXml, 'Span wins').includes('<Duration>PT40H0M0S</Duration>'), '5-working-day span beats the 2h estimate');
+  assert.ok(taskSlice(mismatchXml, 'Start only').includes('<Duration>PT8H0M0S</Duration>'), 'start-only task gets a minimum one working day');
+  assert.ok(taskSlice(mismatchXml, 'Estimate only').includes('<Duration>PT3H0M0S</Duration>'), 'undated task keeps its estimate duration');
+  assert.ok(taskSlice(mismatchXml, 'Nothing at all').includes('<Duration>PT0H0M0S</Duration>'), 'undated and unestimated stays zero');
+});
+
 test('dated tasks carry a SNET constraint pinning their start (owner report 2026-11-10)', () => {
   /* MS Project re-schedules auto tasks on import and ignores <Start>/<Finish>
      without a constraint — every line collapsed to the project start date. */
