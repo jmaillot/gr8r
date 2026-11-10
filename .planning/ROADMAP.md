@@ -121,7 +121,7 @@ Plans:
 - [x] 54-01-PLAN.md — CSV end-to-end tracer: model, CSV writer, gated export route, download helper, modal and both entry points
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 54-02-PLAN.md — Pinned workbook writer behind a legitimacy checkpoint, repository gates, unzip/XML helpers and the six-sheet shell with the Tasks sheet
+- [x] 54-02-PLAN.md — Pinned workbook writer behind a legitimacy checkpoint, repository gates, unzip/XML helpers and the six-sheet shell with the Tasks sheet
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 54-03-PLAN.md — Summary meta, KPIs and charts 1-2; Board snapshot; Members with chart 3; Milestones sheet
@@ -153,7 +153,7 @@ Plans:
 | 53-04 Projects table columns & Share dedup | Complete | 2026-11-09 |
 | 53-05 Teams polish & i18n close-out | Complete | 2026-11-09 |
 | 54-01 CSV end-to-end tracer | Complete | 2026-11-10 |
-| 54-02 Workbook writer + six-sheet shell (Tasks) | Pending | — |
+| 54-02 Workbook writer + six-sheet shell (Tasks) | Complete | 2026-11-10 |
 | 54-03 Summary, KPIs, charts, Board/Members/Milestones | Pending | — |
 | 54-04 Gantt geometry + dependency connectors | Pending | — |
 | 54-05 MSPDI serializer + i18n close-out | Pending | — |
