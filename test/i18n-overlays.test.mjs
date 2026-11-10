@@ -173,6 +173,7 @@ test('task 1: the context menu action keys and icon names are byte-identical', (
     ['toggleFavProj', 'star'],
     ['editProject', 'pencil'],
     ['share', 'share-2'],
+    ['exportOpen', 'download'],
     ['copyLink', 'link'],
     ['dupProject', 'copy'],
     ['projUp', 'arrow-up'],
