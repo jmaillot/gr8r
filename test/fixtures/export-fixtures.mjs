@@ -41,16 +41,124 @@ export function makeDoc() {
   const tasks = [
     /* The six core statuses. Array order differs from `order` on purpose:
        scope all sorts by manual order, and the tests pin that. */
-    { id: 't_a1', project: 'p_alpha', key: 'ALPHA-4', title: 'Backlog idea', status: 'backlog', priority: 'low', assignee: 'm_plain', labels: ['design'], estimate: '2d', subtasks: [], deps: [], order: 30 },
-    { id: 't_a2', project: 'p_alpha', key: 'ALPHA-1', title: 'Todo task', status: 'todo', priority: 'urgent', assignee: 'm_lead', labels: [], estimate: '4h', subtasks: [], deps: [], order: 10 },
-    { id: 't_a3', project: 'p_alpha', key: 'ALPHA-2', title: 'In progress task', status: 'progress', priority: 'high', assignee: 'm_plain', labels: ['backend'], estimate: '1d', start: '2026-01-10', due: '2026-02-01', subtasks: [], deps: ['t_a2'], order: 20 },
-    { id: 't_a4', project: 'p_alpha', key: 'ALPHA-5', title: 'Review task', status: 'review', priority: 'medium', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 40 },
-    { id: 't_a5', project: 'p_alpha', key: 'ALPHA-3', title: 'Done task', status: 'done', priority: 'medium', assignee: 'm_plain', labels: [], estimate: '3h', subtasks: [], deps: [], order: 50 },
-    { id: 't_a6', project: 'p_alpha', key: 'ALPHA-6', title: 'Second done task', status: 'done', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 60 },
+    {
+      id: 't_a1',
+      project: 'p_alpha',
+      key: 'ALPHA-4',
+      title: 'Backlog idea',
+      status: 'backlog',
+      priority: 'low',
+      assignee: 'm_plain',
+      labels: ['design'],
+      estimate: '2d',
+      subtasks: [],
+      deps: [],
+      order: 30,
+    },
+    {
+      id: 't_a2',
+      project: 'p_alpha',
+      key: 'ALPHA-1',
+      title: 'Todo task',
+      status: 'todo',
+      priority: 'urgent',
+      assignee: 'm_lead',
+      labels: [],
+      estimate: '4h',
+      subtasks: [],
+      deps: [],
+      order: 10,
+    },
+    {
+      id: 't_a3',
+      project: 'p_alpha',
+      key: 'ALPHA-2',
+      title: 'In progress task',
+      status: 'progress',
+      priority: 'high',
+      assignee: 'm_plain',
+      labels: ['backend'],
+      estimate: '1d',
+      start: '2026-01-10',
+      due: '2026-02-01',
+      subtasks: [],
+      deps: ['t_a2'],
+      order: 20,
+    },
+    {
+      id: 't_a4',
+      project: 'p_alpha',
+      key: 'ALPHA-5',
+      title: 'Review task',
+      status: 'review',
+      priority: 'medium',
+      assignee: 'm_lead',
+      labels: [],
+      estimate: '',
+      subtasks: [],
+      deps: [],
+      order: 40,
+    },
+    {
+      id: 't_a5',
+      project: 'p_alpha',
+      key: 'ALPHA-3',
+      title: 'Done task',
+      status: 'done',
+      priority: 'medium',
+      assignee: 'm_plain',
+      labels: [],
+      estimate: '3h',
+      subtasks: [],
+      deps: [],
+      order: 50,
+    },
+    {
+      id: 't_a6',
+      project: 'p_alpha',
+      key: 'ALPHA-6',
+      title: 'Second done task',
+      status: 'done',
+      priority: 'none',
+      assignee: '',
+      labels: [],
+      estimate: '',
+      subtasks: [],
+      deps: [],
+      order: 60,
+    },
     /* Archived — out under the default option set. */
-    { id: 't_a7', project: 'p_alpha', key: 'ALPHA-7', title: 'Archived task', status: 'todo', priority: 'low', assignee: 'm_idle', labels: [], estimate: '', subtasks: [], deps: [], order: 70, archived: true },
+    {
+      id: 't_a7',
+      project: 'p_alpha',
+      key: 'ALPHA-7',
+      title: 'Archived task',
+      status: 'todo',
+      priority: 'low',
+      assignee: 'm_idle',
+      labels: [],
+      estimate: '',
+      subtasks: [],
+      deps: [],
+      order: 70,
+      archived: true,
+    },
     /* Overdue — due strictly before the injected export date, not done. */
-    { id: 't_a8', project: 'p_alpha', key: 'ALPHA-8', title: 'Overdue task', status: 'todo', priority: 'high', assignee: 'm_plain', labels: [], estimate: '', due: '2026-01-01', subtasks: [], deps: [], order: 80 },
+    {
+      id: 't_a8',
+      project: 'p_alpha',
+      key: 'ALPHA-8',
+      title: 'Overdue task',
+      status: 'todo',
+      priority: 'high',
+      assignee: 'm_plain',
+      labels: [],
+      estimate: '',
+      due: '2026-01-01',
+      subtasks: [],
+      deps: [],
+      order: 80,
+    },
     /* Two subtasks — child rows keyed ALPHA-9.1 / ALPHA-9.2 when opted in. */
     {
       id: 't_a9',
@@ -70,8 +178,34 @@ export function makeDoc() {
       order: 90,
     },
     /* Injection and escaping probes (T-54-03, R12). */
-    { id: 't_a10', project: 'p_alpha', key: 'ALPHA-10', title: '=1+1', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 100 },
-    { id: 't_a11', project: 'p_alpha', key: 'ALPHA-11', title: 'A & <B>', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 110 },
+    {
+      id: 't_a10',
+      project: 'p_alpha',
+      key: 'ALPHA-10',
+      title: '=1+1',
+      status: 'todo',
+      priority: 'none',
+      assignee: '',
+      labels: [],
+      estimate: '',
+      subtasks: [],
+      deps: [],
+      order: 100,
+    },
+    {
+      id: 't_a11',
+      project: 'p_alpha',
+      key: 'ALPHA-11',
+      title: 'A & <B>',
+      status: 'todo',
+      priority: 'none',
+      assignee: '',
+      labels: [],
+      estimate: '',
+      subtasks: [],
+      deps: [],
+      order: 110,
+    },
     {
       id: 't_a12',
       project: 'p_alpha',
@@ -88,7 +222,20 @@ export function makeDoc() {
       order: 120,
     },
     /* The foreign task — must never be selectable into a p_alpha export. */
-    { id: 't_b1', project: 'p_beta', key: 'BETA-1', title: 'Foreign task', status: 'todo', priority: 'low', assignee: 'm_idle', labels: [], estimate: '', subtasks: [], deps: [], order: 10 },
+    {
+      id: 't_b1',
+      project: 'p_beta',
+      key: 'BETA-1',
+      title: 'Foreign task',
+      status: 'todo',
+      priority: 'low',
+      assignee: 'm_idle',
+      labels: [],
+      estimate: '',
+      subtasks: [],
+      deps: [],
+      order: 10,
+    },
   ];
   const comments = [
     { id: 'c_a5_old', task: 't_a5', by: 'm_plain', at: 1_700_000_000_000, text: 'First note', re: {} },
@@ -118,8 +265,36 @@ export function makeZeroChartDoc() {
   return {
     projects: [{ id: 'p_zero', key: 'zero', name: 'Zero Chart Project', status: 'active', lead: 'm_lead', members: ['m_lead'], teams: [], perms: {} }],
     tasks: [
-      { id: 't_z1', project: 'p_zero', key: 'ZERO-1', title: 'Archived one', status: 'done', priority: 'low', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 10, archived: true },
-      { id: 't_z2', project: 'p_zero', key: 'ZERO-2', title: 'Archived two', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 20, archived: true },
+      {
+        id: 't_z1',
+        project: 'p_zero',
+        key: 'ZERO-1',
+        title: 'Archived one',
+        status: 'done',
+        priority: 'low',
+        assignee: 'm_lead',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 10,
+        archived: true,
+      },
+      {
+        id: 't_z2',
+        project: 'p_zero',
+        key: 'ZERO-2',
+        title: 'Archived two',
+        status: 'todo',
+        priority: 'none',
+        assignee: '',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 20,
+        archived: true,
+      },
     ],
     comments: [],
     members: [{ id: 'm_lead', userId: 'u_lead', name: 'Léa Lead', role: 'Member', email: 'lea@ex.local' }],
@@ -142,10 +317,62 @@ export function makeEmptyLaneDoc() {
   return {
     projects: [{ id: 'p_lane', key: 'lane', name: 'Lane Project', status: 'active', lead: 'm_lead', members: ['m_lead', 'm_plain'], teams: [], perms: {} }],
     tasks: [
-      { id: 't_l1', project: 'p_lane', key: 'LANE-2', title: 'Backlog one', status: 'backlog', priority: 'low', assignee: 'm_plain', labels: [], estimate: '', subtasks: [], deps: [], order: 20 },
-      { id: 't_l2', project: 'p_lane', key: 'LANE-1', title: 'Backlog two', status: 'backlog', priority: 'medium', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 10 },
-      { id: 't_l3', project: 'p_lane', key: 'LANE-3', title: 'Done one', status: 'done', priority: 'high', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 30 },
-      { id: 't_l4', project: 'p_lane', key: 'LANE-4', title: 'Done two', status: 'done', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 40 },
+      {
+        id: 't_l1',
+        project: 'p_lane',
+        key: 'LANE-2',
+        title: 'Backlog one',
+        status: 'backlog',
+        priority: 'low',
+        assignee: 'm_plain',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 20,
+      },
+      {
+        id: 't_l2',
+        project: 'p_lane',
+        key: 'LANE-1',
+        title: 'Backlog two',
+        status: 'backlog',
+        priority: 'medium',
+        assignee: 'm_lead',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 10,
+      },
+      {
+        id: 't_l3',
+        project: 'p_lane',
+        key: 'LANE-3',
+        title: 'Done one',
+        status: 'done',
+        priority: 'high',
+        assignee: 'm_lead',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 30,
+      },
+      {
+        id: 't_l4',
+        project: 'p_lane',
+        key: 'LANE-4',
+        title: 'Done two',
+        status: 'done',
+        priority: 'none',
+        assignee: '',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 40,
+      },
     ],
     comments: [],
     members,
@@ -166,11 +393,23 @@ export function makeChartDoc() {
     { id: 'm_guest', userId: 'u_guest', name: 'Gus Guest', role: 'Guest', email: 'gus@ex.local' },
   ];
   const T = (id, key, status, priority, assignee, order) => ({
-    id, project: 'p_chart', key, title: key + ' title', status, priority,
-    assignee, labels: [], estimate: '', subtasks: [], deps: [], order,
+    id,
+    project: 'p_chart',
+    key,
+    title: key + ' title',
+    status,
+    priority,
+    assignee,
+    labels: [],
+    estimate: '',
+    subtasks: [],
+    deps: [],
+    order,
   });
   return {
-    projects: [{ id: 'p_chart', key: 'chart', name: 'Chart Project', status: 'active', lead: 'm_lead', members: ['m_lead', 'm_plain', 'm_guest'], teams: [], perms: {} }],
+    projects: [
+      { id: 'p_chart', key: 'chart', name: 'Chart Project', status: 'active', lead: 'm_lead', members: ['m_lead', 'm_plain', 'm_guest'], teams: [], perms: {} },
+    ],
     tasks: [
       T('t_c1', 'CH-1', 'backlog', 'urgent', 'm_plain', 1),
       T('t_c2', 'CH-2', 'backlog', 'high', 'm_lead', 2),
@@ -194,18 +433,39 @@ export function makeChartDoc() {
 export function makeMilestoneDoc() {
   const members = [{ id: 'm_lead', userId: 'u_lead', name: 'Léa Lead', role: 'Member', email: 'lea@ex.local' }];
   return {
-    projects: [{
-      id: 'p_ms', key: 'ms', name: 'Milestone Project', status: 'active', lead: 'm_lead',
-      members: ['m_lead'], teams: [], perms: {},
-      milestones: [
-        { id: 'ms_after', name: 'After milestone', date: '2026-03-01' },
-        { id: 'ms_on', name: 'On-export-date milestone', date: '2026-02-01' },
-        { id: 'ms_before', name: 'Before milestone', date: '2026-01-05' },
-        { id: 'ms_nodate', name: 'Undated milestone' },
-      ],
-    }],
+    projects: [
+      {
+        id: 'p_ms',
+        key: 'ms',
+        name: 'Milestone Project',
+        status: 'active',
+        lead: 'm_lead',
+        members: ['m_lead'],
+        teams: [],
+        perms: {},
+        milestones: [
+          { id: 'ms_after', name: 'After milestone', date: '2026-03-01' },
+          { id: 'ms_on', name: 'On-export-date milestone', date: '2026-02-01' },
+          { id: 'ms_before', name: 'Before milestone', date: '2026-01-05' },
+          { id: 'ms_nodate', name: 'Undated milestone' },
+        ],
+      },
+    ],
     tasks: [
-      { id: 't_m1', project: 'p_ms', key: 'MS-1', title: 'Milestone task', status: 'todo', priority: 'medium', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 1 },
+      {
+        id: 't_m1',
+        project: 'p_ms',
+        key: 'MS-1',
+        title: 'Milestone task',
+        status: 'todo',
+        priority: 'medium',
+        assignee: 'm_lead',
+        labels: [],
+        estimate: '',
+        subtasks: [],
+        deps: [],
+        order: 1,
+      },
     ],
     comments: [],
     members,
@@ -234,10 +494,21 @@ function ganttProject(id, key, name, start, due, milestones) {
 
 function ganttTask(id, key, title, order, dates, deps, extra) {
   return {
-    id, project: 'p_g', key, title, status: 'todo', priority: 'medium',
-    assignee: 'm_lead', labels: [], estimate: '', subtasks: [],
-    start: dates?.start || '', due: dates?.due || '',
-    deps: deps || [], order, ...extra,
+    id,
+    project: 'p_g',
+    key,
+    title,
+    status: 'todo',
+    priority: 'medium',
+    assignee: 'm_lead',
+    labels: [],
+    estimate: '',
+    subtasks: [],
+    start: dates?.start || '',
+    due: dates?.due || '',
+    deps: deps || [],
+    order,
+    ...extra,
   };
 }
 
@@ -311,10 +582,7 @@ export function makeBoundaryDocs() {
 export function makeZeroDatedDoc() {
   return {
     projects: [ganttProject('p_g', 'g', 'Gantt Zero Dated', '2026-03-02', '2026-03-31', [])],
-    tasks: [
-      ganttTask('t_z1', 'Z-1', 'Undated one', 1, {}, []),
-      ganttTask('t_z2', 'Z-2', 'Undated two', 2, {}, []),
-    ],
+    tasks: [ganttTask('t_z1', 'Z-1', 'Undated one', 1, {}, []), ganttTask('t_z2', 'Z-2', 'Undated two', 2, {}, [])],
     comments: [],
     members: GANTT_MEMBERS,
     projOrder: ['p_g'],
@@ -365,9 +633,16 @@ export function makeFutureDoc() {
 export function makeBenchmarkDoc() {
   const tasks = [];
   for (let i = 0; i < 500; i++) {
-    tasks.push(ganttTask('t_b' + i, 'B-' + i, 'Benchmark task ' + i, i + 1,
-      { start: isoAdd('2026-03-02', i), due: isoAdd('2026-03-02', i) },
-      i > 0 ? ['t_b' + (i - 1)] : []));
+    tasks.push(
+      ganttTask(
+        't_b' + i,
+        'B-' + i,
+        'Benchmark task ' + i,
+        i + 1,
+        { start: isoAdd('2026-03-02', i), due: isoAdd('2026-03-02', i) },
+        i > 0 ? ['t_b' + (i - 1)] : [],
+      ),
+    );
   }
   return {
     projects: [ganttProject('p_g', 'g', 'Gantt Benchmark', '2026-03-02', isoAdd('2026-03-02', 500), [])],
@@ -383,9 +658,16 @@ export function makeBenchmarkDoc() {
 export function makeExactCapDoc() {
   const tasks = [];
   for (let i = 0; i < 380; i++) {
-    tasks.push(ganttTask('t_e' + i, 'E-' + i, 'Exact cap task ' + i, i + 1,
-      { start: isoAdd('2026-03-02', i), due: isoAdd('2026-03-02', i) },
-      i > 0 && i <= 20 ? ['t_e' + (i - 1)] : []));
+    tasks.push(
+      ganttTask(
+        't_e' + i,
+        'E-' + i,
+        'Exact cap task ' + i,
+        i + 1,
+        { start: isoAdd('2026-03-02', i), due: isoAdd('2026-03-02', i) },
+        i > 0 && i <= 20 ? ['t_e' + (i - 1)] : [],
+      ),
+    );
   }
   return {
     projects: [ganttProject('p_g', 'g', 'Gantt Exact Cap', '2026-03-02', isoAdd('2026-03-02', 380), [])],
@@ -394,4 +676,91 @@ export function makeExactCapDoc() {
     members: GANTT_MEMBERS,
     projOrder: ['p_g'],
   };
+}
+
+/* =====================================================================
+   54-05 fixtures: the MSPDI serializer doc. Two linked tasks, subtasks,
+   the estimate grammar probes (3d / 90m), a Friday→Monday span, a task
+   without dates, a script-tag description, an archived task (its
+   inbound link must vanish), the escaping probes (ampersand/angle
+   brackets, quotes, non-Latin) and two milestones — one dated before
+   the injected export date. buildMspdi consumes this THROUGH
+   buildExportModel, exactly like every other writer.
+   ===================================================================== */
+export function makeMspdiDoc() {
+  const members = [
+    { id: 'm_lead', userId: 'u_lead', name: 'Léa Lead', role: 'Member', email: 'lea@ex.local' },
+    { id: 'm_plain', userId: 'u_plain', name: 'Pat Plain', role: 'Member', email: 'pat@ex.local' },
+  ];
+  const T = (id, key, title, order, extra) => ({
+    id,
+    project: 'p_msp',
+    key,
+    title,
+    status: 'todo',
+    priority: 'medium',
+    assignee: '',
+    labels: [],
+    estimate: '',
+    start: '',
+    due: '',
+    subtasks: [],
+    deps: [],
+    order,
+    ...extra,
+  });
+  return {
+    projects: [
+      {
+        id: 'p_msp',
+        key: 'msp',
+        name: 'MSPDI Project',
+        status: 'active',
+        lead: 'm_lead',
+        members: ['m_lead', 'm_plain'],
+        teams: [],
+        perms: {},
+        start: '2026-03-02',
+        due: '2026-03-31',
+        milestones: [
+          { id: 'ms_before', name: 'Kickoff', date: '2026-03-01' },
+          { id: 'ms_after', name: 'Launch', date: '2026-03-25' },
+        ],
+      },
+    ],
+    tasks: [
+      T('t_x1', 'MSP-1', 'Linked one', 1, { start: '2026-03-02', due: '2026-03-02', assignee: 'm_lead' }),
+      T('t_x2', 'MSP-2', 'Linked two', 2, { start: '2026-03-05', due: '2026-03-06', assignee: 'm_plain', deps: ['t_x1', 't_x8'] }),
+      T('t_x3', 'MSP-3', 'Subtasked task', 3, {
+        subtasks: [
+          { title: 'Child one', done: true },
+          { title: 'Child two', done: false },
+        ],
+      }),
+      T('t_x4', 'MSP-4', 'Three day estimate', 4, { start: '2026-03-09', due: '2026-03-11', estimate: '3d', assignee: 'm_lead' }),
+      T('t_x5', 'MSP-5', 'Ninety minute estimate', 5, { estimate: '90m' }),
+      T('t_x6', 'MSP-6', 'No dates task', 6),
+      T('t_x7', 'MSP-7', 'Script task', 7, { desc: 'Bonjour <script>alert(1)</script> & naïve café' }),
+      T('t_x8', 'MSP-8', 'Archived task', 8, { archived: true }),
+      T('t_x9', 'MSP-9', 'Friday to Monday', 9, { start: '2026-03-06', due: '2026-03-09' }),
+      T('t_x10', 'MSP-10', 'A & <B>', 10),
+      T('t_x11', 'MSP-11', 'Quote "task" title', 11),
+      T('t_x12', 'MSP-12', 'Données — naïve café 日本語', 12),
+    ],
+    comments: [],
+    members,
+    projOrder: ['p_msp'],
+  };
+}
+
+/* The same project carrying comments — feed to the no-op assertion: the
+   comments toggle must change NO byte of the MSPDI output (recorded R3
+   exception, module header). */
+export function makeMspdiCommentsOnDoc() {
+  const doc = makeMspdiDoc();
+  doc.comments = [
+    { id: 'c_x1', task: 't_x1', by: 'm_plain', at: 1_700_000_000_000, text: 'A comment that must never reach the XML', re: {} },
+    { id: 'c_x4', task: 't_x4', by: 'm_lead', at: 1_700_000_050_000, text: 'Second thread entry', re: {} },
+  ];
+  return doc;
 }

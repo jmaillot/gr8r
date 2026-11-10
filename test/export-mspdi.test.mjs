@@ -1,0 +1,329 @@
+/* =====================================================================
+   MSPDI SERIALIZER TESTS — Phase 54 (54-05)
+   Structure, order, links, escaping, durations — everything the
+   automated suite CAN prove about the Microsoft Project XML. The one
+   check it cannot make (Project opens the file without a repair
+   prompt) is the human checkpoint in the plan (54-05 Task 3).
+   ===================================================================== */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { buildMspdi, escapeXml, parseEstimate, isoDuration, workingDaysInclusive, formatDateTime } from '../export/mspdi.js';
+import { buildExportModel } from '../src/export/model.js';
+import { makeMspdiDoc, makeMspdiCommentsOnDoc, makeEmptyProjectDoc } from './fixtures/export-fixtures.mjs';
+import { assertWellFormed, tags } from './helpers/xml.mjs';
+
+/* Deterministic export date: 2026-03-20 (the Kickoff milestone on
+   2026-03-01 is strictly before it, the Launch milestone after). */
+const EXPORT_NOW = new Date('2026-03-20T12:00:00');
+const DEPS = { translate: k => k, labelName: id => id, now: EXPORT_NOW };
+
+function buildModel(doc, options = {}) {
+  return buildExportModel(doc, 'p_msp', { scope: 'all', options: { ...options } }, DEPS);
+}
+
+/* The Project-level child sequence the schema pins positionally
+   (Pitfall 8) — one reordered child triggers Project's repair prompt. */
+const PROJECT_ORDER = [
+  'SaveVersion',
+  'Name',
+  'Title',
+  'CreationDate',
+  'ScheduleFromStart',
+  'StartDate',
+  'FinishDate',
+  'CalendarUID',
+  'DefaultStartTime',
+  'DefaultFinishTime',
+  'MinutesPerDay',
+  'MinutesPerWeek',
+  'DaysPerMonth',
+  'DurationFormat',
+  'ExtendedAttributes',
+  'Calendars',
+  'Tasks',
+  'Resources',
+  'Assignments',
+];
+
+const TASK_ORDER = ['UID', 'ID', 'Name', 'Type', 'Start', 'Finish', 'Duration', 'DurationFormat', 'Milestone', 'PercentComplete'];
+
+/* Slice the raw XML for one task by its Name value. */
+function taskSlice(xml, name) {
+  const marker = `<Name>${name}</Name>`;
+  const start = xml.indexOf(marker);
+  assert.notEqual(start, -1, `a task named ${name} exists`);
+  const end = xml.indexOf('</Task>', start);
+  return xml.slice(xml.lastIndexOf('<Task>', start), end);
+}
+
+/* ---------------- unit helpers ---------------- */
+
+test('parseEstimate reads the stored ASCII grammar at 480 minutes per day', () => {
+  assert.equal(parseEstimate('90m'), 90);
+  assert.equal(parseEstimate('2h'), 120);
+  assert.equal(parseEstimate('3d'), 1440);
+  assert.equal(parseEstimate(''), null);
+  assert.equal(parseEstimate('3w'), null);
+  assert.equal(parseEstimate('abc'), null);
+  assert.equal(parseEstimate('-5d'), null);
+});
+
+test('isoDuration renders the xsd:duration schema form', () => {
+  assert.equal(isoDuration(1440), 'PT24H0M0S');
+  assert.equal(isoDuration(90), 'PT1H30M0S');
+  assert.equal(isoDuration(0), 'PT0H0M0S');
+  assert.equal(isoDuration(NaN), 'PT0H0M0S');
+});
+
+test('workingDaysInclusive counts Monday to Friday inclusive in UTC', () => {
+  /* Mon 2026-03-02 to Wed 2026-03-04 → 3; Fri 2026-03-06 to Mon 2026-03-09 → 2. */
+  assert.equal(workingDaysInclusive('2026-03-02', '2026-03-04'), 3);
+  assert.equal(workingDaysInclusive('2026-03-06', '2026-03-09'), 2);
+  assert.equal(workingDaysInclusive('2026-03-07', '2026-03-08'), 0, 'a pure weekend span counts zero');
+  assert.equal(workingDaysInclusive('2026-03-09', '2026-03-02'), 0, 'a reversed span counts zero');
+  assert.equal(workingDaysInclusive('', '2026-03-09'), 0);
+});
+
+test('formatDateTime carries no Z and no offset', () => {
+  assert.equal(formatDateTime('2026-03-02', '08:00:00'), '2026-03-02T08:00:00');
+  assert.equal(formatDateTime('', '08:00:00'), '');
+});
+
+test('escapeXml replaces the five entities, ampersand first', () => {
+  assert.equal(escapeXml('A & <B> "c" \'d\''), 'A &amp; &lt;B&gt; &quot;c&quot; &apos;d&apos;');
+  assert.equal(escapeXml('&amp;'), '&amp;amp;', 'a pre-escaped ampersand is escaped again, never double-rendered');
+  assert.equal(escapeXml(null), '');
+});
+
+/* ---------------- document structure ---------------- */
+
+const model = buildModel(makeMspdiDoc());
+const xml = buildMspdi(model);
+
+test('the document is well-formed with the short Microsoft project namespace', () => {
+  assertWellFormed(xml);
+  assert.ok(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'), 'UTF-8 declaration first');
+  assert.ok(xml.includes('<Project xmlns="http://schemas.microsoft.com/project">'), 'the short namespace, no /2007');
+});
+
+test('project-level children appear in the documented schema order', () => {
+  let last = -1;
+  for (const name of PROJECT_ORDER) {
+    const at = xml.indexOf(`<${name}>`);
+    assert.notEqual(at, -1, `${name} is present`);
+    assert.ok(at > last, `${name} comes after the previous element`);
+    last = at;
+  }
+});
+
+test('task-level children appear in the documented schema order', () => {
+  for (const name of ['Linked one', 'Three day estimate', 'Friday to Monday']) {
+    const slice = taskSlice(xml, name);
+    let last = -1;
+    for (const el of TASK_ORDER) {
+      const at = slice.indexOf(`<${el}>`);
+      assert.notEqual(at, -1, `${el} present in ${name}`);
+      assert.ok(at > last, `${el} in order inside ${name}`);
+      last = at;
+    }
+    /* PredecessorLink / ExtendedAttribute / Notes come after PercentComplete when present. */
+    for (const el of ['PredecessorLink', 'ExtendedAttribute', 'Notes']) {
+      const at = slice.indexOf(`<${el}`);
+      if (at !== -1) assert.ok(at > slice.indexOf('<PercentComplete>'), `${el} after PercentComplete in ${name}`);
+    }
+  }
+});
+
+test('task count equals exported rows plus milestones', () => {
+  assert.equal(tags(xml, 'Task').length, model.rows.length + model.milestones.length);
+  /* The archived MSP-8 is not exported, its child rows ride under MSP-3. */
+  assert.equal(model.rows.filter(r => r.key === 'MSP-8').length, 0);
+});
+
+test('every resolvable dependency yields exactly one finish-to-start link with the right UID', () => {
+  const slice = taskSlice(xml, 'Linked two');
+  /* deps = [t_x1 (exported), t_x8 (archived, dropped)] → exactly one link. */
+  assert.equal((slice.match(/<\/PredecessorLink>/g) || []).length, 1);
+  assert.ok(
+    slice.includes(
+      '<PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>',
+    ),
+    'the link resolves to Linked one (UID 1) in PredecessorLink child order',
+  );
+  const archived = taskSlice(xml, 'Friday to Monday');
+  assert.equal(tags(archived, 'PredecessorLink').length, 0, 'the no-deps task carries no link');
+});
+
+test('custom fields use the five exact FieldIDs and no Text element is emitted', () => {
+  const attrs = xml.slice(xml.indexOf('<ExtendedAttributes>'), xml.indexOf('</ExtendedAttributes>'));
+  assert.deepEqual(
+    [...attrs.matchAll(/<FieldID>(\d+)<\/FieldID>/g)].map(m => m[1]),
+    ['188743731', '188743734', '188743737', '188743740', '188743743'],
+  );
+  for (const name of ['Text1', 'Text2', 'Text3', 'Text4', 'Text5']) {
+    assert.equal(tags(xml, name).length, 0, `no <${name}> element exists`);
+  }
+});
+
+test('the Text1..Text5 attribute values ride the rows in order', () => {
+  const slice = taskSlice(xml, 'Three day estimate');
+  assert.ok(slice.includes('<FieldID>188743731</FieldID><Value>MSP-4</Value>'), 'Text1 = key');
+  assert.ok(slice.includes('<FieldID>188743734</FieldID><Value>task.status.todo</Value>'), 'Text2 = localized status');
+  assert.ok(slice.includes('<FieldID>188743737</FieldID><Value>task.priority.medium</Value>'), 'Text3 = localized priority');
+  assert.ok(!slice.includes('<FieldID>188743740</FieldID>'), 'Text4 omitted when the label list is empty');
+  assert.ok(slice.includes('<FieldID>188743743</FieldID><Value>3d</Value>'), 'Text5 = raw estimate');
+});
+
+test('durations follow the estimate grammar, then the working-day span, then zero', () => {
+  assert.ok(taskSlice(xml, 'Three day estimate').includes('<Duration>PT24H0M0S</Duration>'), '3d → PT24H0M0S');
+  assert.ok(taskSlice(xml, 'Ninety minute estimate').includes('<Duration>PT1H30M0S</Duration>'), '90m → PT1H30M0S');
+  assert.ok(taskSlice(xml, 'Linked one').includes('<Duration>PT8H0M0S</Duration>'), 'one working-day span → PT8H0M0S');
+  assert.ok(taskSlice(xml, 'Friday to Monday').includes('<Duration>PT16H0M0S</Duration>'), 'Friday→Monday → PT16H0M0S');
+  assert.ok(taskSlice(xml, 'No dates task').includes('<Duration>PT0H0M0S</Duration>'), 'no estimate, no dates → zero');
+});
+
+test('milestones have Milestone 1, zero duration and equal start and finish', () => {
+  const kickoff = taskSlice(xml, 'Kickoff');
+  assert.ok(kickoff.includes('<Milestone>1</Milestone>'));
+  assert.ok(kickoff.includes('<Duration>PT0H0M0S</Duration>'));
+  const start = kickoff.match(/<Start>([^<]+)<\/Start>/)[1];
+  const finish = kickoff.match(/<Finish>([^<]+)<\/Finish>/)[1];
+  assert.equal(start, finish);
+  assert.ok(start.endsWith('T08:00:00'));
+});
+
+test('Start and Finish carry no Z and no offset', () => {
+  for (const m of xml.matchAll(/<(Start|Finish|StartDate|FinishDate|CreationDate)>([^<]+)<\/\1>/g)) {
+    assert.ok(!/[Zz]|[+-]\d{2}:\d{2}$/.test(m[2]), `${m[1]} value ${m[2]} has no timezone suffix`);
+    assert.match(m[2], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+  }
+});
+
+test('task starts sit at 08:00:00 and finishes at 17:00:00', () => {
+  const slice = taskSlice(xml, 'Linked one');
+  assert.ok(slice.includes('<Start>2026-03-02T08:00:00</Start>'));
+  assert.ok(slice.includes('<Finish>2026-03-02T17:00:00</Finish>'));
+});
+
+test('PercentComplete is the row progress clamped to 0-100', () => {
+  const slice = taskSlice(xml, 'Linked one');
+  assert.ok(slice.includes('<PercentComplete>5</PercentComplete>'), 'a todo task reads the model progress (5)');
+});
+
+test('a task without dates still produces a Start and a Finish', () => {
+  const slice = taskSlice(xml, 'No dates task');
+  assert.match(slice, /<Start>\d{4}-\d{2}-\d{2}T08:00:00<\/Start>/);
+  assert.match(slice, /<Finish>\d{4}-\d{2}-\d{2}T17:00:00<\/Finish>/);
+});
+
+/* ---------------- descriptions, escaping, toggles ---------------- */
+
+test('the description reaches Notes only with the toggle on, as inert plain text', () => {
+  const off = buildMspdi(buildModel(makeMspdiDoc()));
+  assert.ok(!taskSlice(off, 'Script task').includes('<Notes>'), 'descriptions off → no Notes');
+  const on = buildMspdi(buildModel(makeMspdiDoc(), { descriptions: true }));
+  const slice = taskSlice(on, 'Script task');
+  const notes = slice.match(/<Notes>([^<]*(?:<[^/][^>]*>)?[^<]*)<\/Notes>/);
+  assert.ok(notes, 'descriptions on → Notes present');
+  const text = notes[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  assert.ok(!/<script/i.test(text), 'the script tag is gone (stripped by the model)');
+  assert.ok(text.includes('Bonjour') && text.includes('naïve café'), 'the plain text survives');
+});
+
+test('an empty description omits the Notes element instead of writing undefined', () => {
+  const on = buildMspdi(buildModel(makeMspdiDoc(), { descriptions: true }));
+  for (const row of ['Linked one', 'No dates task', 'A &amp; &lt;B&gt;']) {
+    const slice = taskSlice(on, row);
+    if (slice.includes('<Name>')) assert.ok(!slice.includes('<Notes>undefined</Notes>'));
+  }
+  assert.ok(!on.includes('undefined'), 'the word undefined appears nowhere in the document');
+});
+
+test('a title with ampersand, brackets and quotes round-trips through the escaping', () => {
+  const slice = taskSlice(xml, 'A &amp; &lt;B&gt;');
+  assert.ok(slice.includes('<Name>A &amp; &lt;B&gt;</Name>'), 'the escaped title');
+  assert.ok(taskSlice(xml, 'Quote &quot;task&quot; title').includes('<Name>Quote &quot;task&quot; title</Name>'), 'double quotes escaped');
+  const decoded = 'A &amp; &lt;B&gt;'
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+  assert.equal(decoded, 'A & <B>', 'replacing the five entities reads back the original');
+});
+
+test('non-Latin text survives the UTF-8 document', () => {
+  assert.ok(xml.includes('Données — naïve café 日本語'), 'the accented and CJK title survives verbatim');
+  assert.ok(!xml.includes('\uFFFD'), 'no replacement characters');
+});
+
+test('the comments toggle changes no byte of the MSPDI output (recorded R3 exception)', () => {
+  const base = buildMspdi(buildModel(makeMspdiDoc()));
+  const withComments = buildMspdi(buildModel(makeMspdiCommentsOnDoc(), { comments: true }));
+  assert.equal(withComments, base, 'comments never reach the XML');
+  assert.ok(!base.includes('comment'), 'no comment content anywhere');
+});
+
+/* ---------------- empty project, resources, assignments ---------------- */
+
+test('a zero-task project omits Tasks, Resources and Assignments yet resolves CalendarUID 1', () => {
+  const emptyModel = buildExportModel(
+    makeEmptyProjectDoc(),
+    'p_empty',
+    { scope: 'all' },
+    {
+      translate: k => k,
+      labelName: id => id,
+      now: EXPORT_NOW,
+    },
+  );
+  const emptyXml = buildMspdi(emptyModel);
+  assertWellFormed(emptyXml);
+  assert.equal(tags(emptyXml, 'Tasks').length, 0);
+  assert.equal(tags(emptyXml, 'Resources').length, 0);
+  assert.equal(tags(emptyXml, 'Assignments').length, 0);
+  assert.ok(emptyXml.includes('<CalendarUID>1</CalendarUID>'));
+  assert.equal(tags(emptyXml, 'Calendar').length, 1, 'the single base calendar is unconditional');
+  const days = tags(emptyXml, 'WeekDay').length;
+  assert.equal(days, 7, 'DayType 1 through 7');
+  assert.ok(emptyXml.includes('<DayType>1</DayType><DayWorking>0</DayWorking>'), 'Sunday non-working');
+  assert.ok(emptyXml.includes('<DayType>7</DayType><DayWorking>0</DayWorking>'), 'Saturday non-working');
+});
+
+test('the calendar week works Monday to Friday 08:00-12:00 and 13:00-17:00', () => {
+  const calendar = xml.slice(xml.indexOf('<Calendar>'), xml.indexOf('</Calendar>') + 11);
+  for (const type of [2, 3, 4, 5, 6]) {
+    assert.ok(calendar.includes(`<DayType>${type}</DayType><DayWorking>1</DayWorking>`), `DayType ${type} works`);
+  }
+  assert.ok(calendar.includes('<FromTime>08:00:00</FromTime><ToTime>12:00:00</ToTime>'));
+  assert.ok(calendar.includes('<FromTime>13:00:00</FromTime><ToTime>17:00:00</ToTime>'));
+});
+
+test('resources are the distinct assignees of the exported rows, unassigned excluded', () => {
+  const names = xml.slice(xml.indexOf('<Resources>'), xml.indexOf('</Resources>'));
+  const list = [...names.matchAll(/<Name>([^<]+)<\/Name>/g)].map(m => m[1]);
+  assert.deepEqual(list, ['Léa Lead', 'Pat Plain'], 'first-appearance order, no unassigned entry');
+  const assignmentsBlock = xml.slice(xml.indexOf('<Assignments>'), xml.indexOf('</Assignments>'));
+  const assignments = assignmentsBlock
+    .slice('<Assignments>'.length)
+    .split('<Assignment>')
+    .filter(s => s.length);
+  assert.equal(assignments.length, 3, 'one assignment per task×resource pair (Linked one, Linked two, Three day estimate)');
+  assert.ok(assignments[0].startsWith('<UID>1</UID><TaskUID>1</TaskUID><ResourceUID>1</ResourceUID>'), 'task-major order, UID/TaskUID/ResourceUID first');
+  assert.ok(assignments[0].includes('<Units>1</Units>'));
+  assert.ok(assignments[0].includes('<Work>PT8H0M0S</Work>'), 'the assignment carries the task duration');
+});
+
+test('project StartDate and FinishDate derive from the project and task spans', () => {
+  assert.ok(xml.includes('<StartDate>2026-03-02T08:00:00</StartDate>'), 'the earliest task start / project start');
+  assert.ok(xml.includes('<FinishDate>2026-03-31T17:00:00</FinishDate>'), 'the project due at 17:00');
+  assert.ok(xml.includes('<CreationDate>2026-03-20T00:00:00</CreationDate>'), 'the export date at midnight');
+  assert.ok(xml.includes('<ScheduleFromStart>1</ScheduleFromStart>'));
+  assert.ok(
+    xml.includes('<MinutesPerDay>480</MinutesPerDay>') &&
+      xml.includes('<MinutesPerWeek>2400</MinutesPerWeek>') &&
+      xml.includes('<DaysPerMonth>20</DaysPerMonth>'),
+  );
+  assert.ok(xml.includes('<Name>MSPDI Project</Name>'), 'Name is the project name, never a filename');
+});
