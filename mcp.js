@@ -506,6 +506,10 @@ export function createMcp(deps) {
         await writeDoc(ctx.ws, async d => {
           d.data.projects = Array.isArray(d.data.projects) ? d.data.projects : [];
           d.data.projects.push(project);
+          /* The web UI lists projects through data.projOrder (store.js visibleProjects);
+             without this entry an MCP-created project never renders on the Projects page. */
+          d.data.projOrder = Array.isArray(d.data.projOrder) ? d.data.projOrder : [];
+          d.data.projOrder.unshift(project.id);
           logActivity(d, ctx, 'createdProject', null, {}, project.id);
         });
         return { created: true, project: { id: project.id, key: project.key, name: project.name, status: project.status } };
