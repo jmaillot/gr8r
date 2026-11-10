@@ -35,6 +35,7 @@
     "vite": "^6.4.4"
   },
   "dependencies": {
+    "@office-kit/xlsx": "0.26.1",
     "pg": "^8.23.1"
   }
 }
