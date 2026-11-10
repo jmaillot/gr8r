@@ -30,7 +30,7 @@
    ===================================================================== */
 import { createWorkbook, addWorksheet, setActiveSheet, makeWorkbookView } from '@office-kit/xlsx/workbook';
 import {
-  setCell, setColumnWidth, setFreezePanes, makePageSetup, getCell, setRowHeight,
+  setCell, setColumnWidth, setFreezePanes, makePageSetup, getCell, setRowHeight, mergeCells,
 } from '@office-kit/xlsx/worksheet';
 import {
   formatAsHeader, setCellNumberFormat, setBold, indentCell, wrapCellText,
@@ -46,7 +46,9 @@ import { buildGantt } from '../src/export/gantt.js';
 
 /* R4: the six sheets exist up front, in this fixed English order —
    never created lazily, sheet order is the acceptance criterion. */
-const SHEET_NAMES = ['Summary', 'Tasks', 'Board', 'Timeline', 'Members', 'Milestones'];
+/* Owner request 2026-11-10: milestones are excluded from the XLSX —
+   no Milestones sheet, no Timeline diamonds. Five sheets, locked order. */
+const SHEET_NAMES = ['Summary', 'Tasks', 'Board', 'Timeline', 'Members'];
 
 /* Column widths (plan: sensible fixed values per column key). */
 const WIDTHS = {
@@ -93,7 +95,6 @@ const LITERAL_PERCENT_CODE = '0"%"';
    anchor tie rule. Colors are the plan-locked hex values.
    ===================================================================== */
 const GANTT_PALETTE = { backlog: '94A3B8', todo: '60A5FA', progress: 'F59E0B', review: 'A78BFA', done: '22C55E' };
-const GANTT_DIAMOND_FILL = 'F59E0B';
 const GANTT_LINK_COLOR = '475569';
 const GANTT_TODAY_FILL = 'FEF3C7';
 const GANTT_TODAY_HEADER_FILL = 'FDE68A';
@@ -152,46 +153,66 @@ function fillTimeline(wb, ws, model) {
      axis column (the day for a daily column, the Monday of the week
      for a weekly one — the reader's locale decides the display via
      the builtin short-date code on weekly; daily pins 'dd'). */
-  model.headers.timeline.forEach((label, i) => setCell(ws, 1, i + 1, label));
-  formatAsHeader(wb, ws, 'A1:C1');
-  for (let c = 0; c < axis.columns; c++) {
-    const col = 4 + c;
+  model.headers.timeline.forEach((label, i) => setCell(ws, 2, i + 1, label));
+  formatAsHeader(wb, ws, 'A2:C2');
+
+  /* ---- month row (owner request 2026-11-10): row 1 carries the
+     localized month name over each month's column span, merged so one
+     label reads across the whole span. Columns carry a real date (day
+     for daily, the Monday for weekly); the month of each column's own
+     date groups consecutive columns. */
+  const months = model.labels.months || [];
+  const monthOf = c => {
     const offset = axis.mode === 'daily' ? c : c * 7;
-    setCell(ws, 1, col, toDayOffset(axis.startISO, offset));
-    setCellNumberFormat(wb, getCell(ws, 1, col), axis.mode === 'daily' ? 'dd' : SHORT_DATE_CODE);
-    setColumnWidth(ws, col, 4.5);
+    return toDayOffset(axis.startISO, offset).getUTCMonth();
+  };
+  let c = 0;
+  while (c < axis.columns) {
+    let end = c;
+    while (end + 1 < axis.columns && monthOf(end + 1) === monthOf(c)) end += 1;
+    const first = colLetter(4 + c);
+    const label = months[monthOf(c)] || '';
+    setCell(ws, 1, 4 + c, label);
+    if (end > c) {
+      mergeCells(ws, { minCol: 4 + c, minRow: 1, maxCol: 4 + end, maxRow: 1 });
+      /* mergeCells drops the covered cells — rewrite the anchor after. */
+      setCell(ws, 1, 4 + c, label);
+    }
+    c = end + 1;
   }
-  setRowHeight(ws, 1, 28);
+  setRowHeight(ws, 1, 18);
+
+  for (let col = 0; col < axis.columns; col++) {
+    const colNum = 4 + col;
+    const offset = axis.mode === 'daily' ? col : col * 7;
+    setCell(ws, 2, colNum, toDayOffset(axis.startISO, offset));
+    setCellNumberFormat(wb, getCell(ws, 2, colNum), axis.mode === 'daily' ? 'dd' : SHORT_DATE_CODE);
+    setColumnWidth(ws, colNum, 4.5);
+  }
+  setRowHeight(ws, 2, 28);
 
   /* ---- rows from row 2: bars first, then milestones, in buildGantt
      order. No cell here is a formula. */
   /* WR-01 (54-05 review): top-level rows only — child rows carry the
      parent's id and would overwrite its status label. */
   const statusLabelById = new Map(model.rows.filter(r => !r.parent).map(r => [r.id, r.status]));
-  let tableRow = 2;
+  let tableRow = 3; /* row 1 = months, row 2 = dates, table from row 3 */
   for (const bar of gantt.bars) {
     setCell(ws, tableRow, 1, bar.key);
     setCell(ws, tableRow, 2, bar.title);
     setCell(ws, tableRow, 3, statusLabelById.get(bar.taskId) || '');
     tableRow += 1;
   }
-  for (const ms of gantt.milestones) {
-    setCell(ws, tableRow, 1, 'MS');
-    setCell(ws, tableRow, 2, ms.name);
-    setCell(ws, tableRow, 3, model.labels.milestoneDone);
-    tableRow += 1;
-  }
   const lastTable = tableRow - 1;
 
   /* ---- shapes (T-54-16: machine ids, never a title). Connectors are
-     pushed AFTER bars and diamonds so they draw on top. Milestones
-     share the one-column geometry and the same row basis. */
+     pushed AFTER bars so they draw on top. */
   if (!gantt.truncated) {
     const items = [];
     gantt.bars.forEach((bar, i) => {
       const fill = solid(GANTT_PALETTE[bar.statusId] || GANTT_PALETTE.backlog);
       items.push(makeShapeDrawingItem(
-        twoCell(axis.columnOf(bar.start) + 3, bar.row + 1, axis.columnOf(bar.due) + 4, bar.row + 2, 0, 0, 'twoCell'),
+        twoCell(axis.columnOf(bar.start) + 3, bar.row + 2, axis.columnOf(bar.due) + 4, bar.row + 3, 0, 0, 'twoCell'),
         {
           name: `bar-${i}`,
           spPr: makeShapeProperties({
@@ -202,28 +223,10 @@ function fillTimeline(wb, ws, model) {
         },
       ));
     });
-    gantt.milestones.forEach((ms, i) => {
-      /* A milestone can be dated outside the bar-derived padded span
-         (the span never includes milestone dates): such a diamond has
-         no column to sit on and is skipped — its table row stays. */
-      if (ms.date < axis.startISO || ms.date > axis.endISO) return;
-      const fill = solid(GANTT_DIAMOND_FILL);
-      items.push(makeShapeDrawingItem(
-        twoCell(axis.columnOf(ms.date) + 3, ms.row + 1, axis.columnOf(ms.date) + 4, ms.row + 2, 0, 0, 'twoCell'),
-        {
-          name: `ms-${i}`,
-          spPr: makeShapeProperties({
-            geometry: makePresetGeometry('diamond'),
-            fill,
-            ln: makeLine({ fill }),
-          }),
-        },
-      ));
-    });
     gantt.links.forEach((link, i) => {
       const { fromCol, toCol } = linkAnchorCols(axis, link);
       items.push(makeShapeDrawingItem(
-        twoCell(fromCol, link.predRow + 1, toCol, link.succRow + 1, LINK_ROW_OFF_PRED, LINK_ROW_OFF_SUCC, 'oneCell'),
+        twoCell(fromCol, link.predRow + 2, toCol, link.succRow + 2, LINK_ROW_OFF_PRED, LINK_ROW_OFF_SUCC, 'oneCell'),
         {
           connector: true,
           name: `link-${i}`,
@@ -251,15 +254,16 @@ function fillTimeline(wb, ws, model) {
     const todayCol = 4 + axis.today;
     setRangeBackgroundColor(wb, ws, `${colLetter(todayCol)}1:${colLetter(todayCol)}${lastTable}`, GANTT_TODAY_FILL);
     setCellBackgroundColor(wb, getCell(ws, 1, todayCol), GANTT_TODAY_HEADER_FILL);
+    setCellBackgroundColor(wb, getCell(ws, 2, todayCol), GANTT_TODAY_HEADER_FILL);
   }
 
-  /* ---- freeze the task block from D2 and aim the viewport one column
-     before today (clamped at D), so the file opens on the current
-     week; today null opens at D2. xSplit stays 3 (the freeze's own
-     value). */
-  setFreezePanes(ws, 'D2');
+  /* ---- freeze the task block from D3 (month + date rows frozen) and
+     aim the viewport one column before today (clamped at D), so the
+     file opens on the current week; today null opens at D3. xSplit
+     stays 3 (the freeze's own value). */
+  setFreezePanes(ws, 'D3');
   if (ws.views[0] && ws.views[0].pane) {
-    ws.views[0].pane.topLeftCell = colLetter(4 + Math.max(0, axis.today - 1)) + '2';
+    ws.views[0].pane.topLeftCell = colLetter(4 + Math.max(0, axis.today - 1)) + '3';
   }
 }
 
@@ -377,7 +381,8 @@ const yieldToLoop = () => new Promise(resolve => setImmediate(resolve));
 export async function buildWorkbook(model) {
   const wb = createWorkbook();
 
-  /* R4: all six sheets exist up front, in the locked order. */
+  /* R4 (as amended by the owner 2026-11-10): all five sheets exist up
+     front, in the locked order. */
   const sheets = SHEET_NAMES.map(name => ({ name, ws: addWorksheet(wb, name) }));
   const byName = Object.fromEntries(sheets.map(s => [s.name, s.ws]));
 
@@ -386,14 +391,13 @@ export async function buildWorkbook(model) {
 
   /* Every sheet gets its header row, freeze and landscape setup now —
      plan 04 fills Timeline content. Summary's A1 is the project name
-     (styled below); Board/Members/Milestones headers are the model's. */
+     (styled below); Board/Members headers are the model's. */
   initSheet(wb, byName.Summary, []);
   initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress']);
   initSheet(wb, byName.Timeline, []);
   fillTimeline(wb, byName.Timeline, model);
   await yieldToLoop();
   initSheet(wb, byName.Members, model.headers.members, ['member', 'open', 'done', 'total']);
-  initSheet(wb, byName.Milestones, model.headers.milestones, ['name', 'date', 'state']);
   initSheet(wb, byName.Tasks, columnLabels, columnKeys);
   await yieldToLoop();
 
@@ -519,24 +523,6 @@ export async function buildWorkbook(model) {
       `Members!$A$${blockStart + 1}:$A$${lastRow}`, `Members!$B$${blockStart + 1}:$B$${lastRow}`,
       { barDir: 'bar', heightPx: 320 });
   }
-  await yieldToLoop();
-
-  /* ===================================================================
-     MILESTONES sheet (R11): name, real date, localized done/upcoming
-     state — dates sorted by the model, states derived from the export
-     date (D-54-13), user milestone names never translated.
-     =================================================================== */
-  const milestonesWs = byName.Milestones;
-  model.milestones.forEach((milestone, i) => {
-    const row = 2 + i;
-    setCell(milestonesWs, row, 1, milestone.name);
-    const date = utcDate(milestone.date);
-    if (date) {
-      setCell(milestonesWs, row, 2, date);
-      setCellNumberFormat(wb, getCell(milestonesWs, row, 2), SHORT_DATE_CODE);
-    }
-    setCell(milestonesWs, row, 3, milestone.state);
-  });
   await yieldToLoop();
 
   /* TASKS sheet — one row per model row (parents and child rows in

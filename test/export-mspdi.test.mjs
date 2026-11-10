@@ -135,8 +135,10 @@ test('task-level children appear in the documented schema order', () => {
   }
 });
 
-test('task count equals exported rows plus milestones', () => {
-  assert.equal(tags(xml, 'Task').length, model.rows.length + model.milestones.length);
+test('task count equals exported rows only — milestones excluded (owner 2026-11-10)', () => {
+  assert.equal(tags(xml, 'Task').length, model.rows.length);
+  assert.ok(model.milestones.length > 0, 'fixture sanity: the model still derives milestones');
+  assert.ok(!xml.includes('Kickoff') && !xml.includes('Launch'), 'no milestone Task reaches the XML');
   /* The archived MSP-8 is not exported, its child rows ride under MSP-3. */
   assert.equal(model.rows.filter(r => r.key === 'MSP-8').length, 0);
 });
@@ -183,14 +185,8 @@ test('durations follow the estimate grammar, then the working-day span, then zer
   assert.ok(taskSlice(xml, 'No dates task').includes('<Duration>PT0H0M0S</Duration>'), 'no estimate, no dates → zero');
 });
 
-test('milestones have Milestone 1, zero duration and equal start and finish', () => {
-  const kickoff = taskSlice(xml, 'Kickoff');
-  assert.ok(kickoff.includes('<Milestone>1</Milestone>'));
-  assert.ok(kickoff.includes('<Duration>PT0H0M0S</Duration>'));
-  const start = kickoff.match(/<Start>([^<]+)<\/Start>/)[1];
-  const finish = kickoff.match(/<Finish>([^<]+)<\/Finish>/)[1];
-  assert.equal(start, finish);
-  assert.ok(start.endsWith('T08:00:00'));
+test('no Task carries the Milestone flag (owner 2026-11-10: milestones excluded)', () => {
+  assert.ok(!xml.includes('<Milestone>1</Milestone>'), 'the Milestone element never appears');
 });
 
 test('Start and Finish carry no Z and no offset', () => {

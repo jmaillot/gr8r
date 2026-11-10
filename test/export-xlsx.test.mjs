@@ -22,7 +22,8 @@ import { textEntries } from './helpers/unzip.mjs';
 import { assertWellFormed, tags } from './helpers/xml.mjs';
 
 const NOW = new Date('2026-01-15T12:00:00');
-const SHEET_ORDER = ['Summary', 'Tasks', 'Board', 'Timeline', 'Members', 'Milestones'];
+/* Owner request 2026-11-10: milestones excluded from the XLSX — five sheets. */
+const SHEET_ORDER = ['Summary', 'Tasks', 'Board', 'Timeline', 'Members'];
 
 /* Full-opt-in model: descriptions, comments and subtasks all in —
    the widest Tasks-sheet shape. */
@@ -53,13 +54,13 @@ function xfAttr(xf, attr) {
   return m ? m[1] : undefined;
 }
 
-test('the workbook is a zip whose workbook.xml lists the six sheets in the locked order (R4)', async () => {
+test('the workbook is a zip whose workbook.xml lists the five sheets in the locked order (R4, as amended 2026-11-10)', async () => {
   const { parts } = await buildZip(buildModel());
   const wbXml = parts.get('xl/workbook.xml');
   assert.ok(wbXml, 'xl/workbook.xml exists');
   assertWellFormed(wbXml);
   const sheetTags = tags(wbXml, 'sheet');
-  assert.equal(sheetTags.length, 6, `exactly six sheets expected — got ${sheetTags.length}`);
+  assert.equal(sheetTags.length, 5, `exactly five sheets expected — got ${sheetTags.length}`);
   const names = sheetTags.map(t => /name="([^"]*)"/.exec(t)[1]);
   assert.deepEqual(names, SHEET_ORDER);
 });
@@ -71,7 +72,7 @@ test('every sheet has a frozen pane and the workbook activates Timeline (R4, R6;
   assert.equal(views.length, 1, 'exactly one workbookView — setActiveSheet alone emits none');
   assert.match(views[0], /activeTab="3"/, 'the workbook opens on Timeline (activeTab 3, sheet 4)');
 
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 5; i++) {
     const xml = parts.get(`xl/worksheets/sheet${i}.xml`);
     assert.ok(xml, `xl/worksheets/sheet${i}.xml exists`);
     assertWellFormed(xml);
@@ -175,7 +176,7 @@ test('=1+1 stays literal shared-string text and no worksheet carries a formula e
   const { parts } = await buildZip(buildModel());
   const shared = parts.get('xl/sharedStrings.xml');
   assert.ok(shared.includes('=1+1'), 'the title =1+1 is stored as literal shared-string text');
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 5; i++) {
     const xml = parts.get(`xl/worksheets/sheet${i}.xml`);
     assert.ok(!/<f[\s>]/.test(xml), `sheet${i} contains no <f> formula element`);
   }
@@ -375,11 +376,11 @@ test('all-zero data emits NO chart part and NO source block, and the workbook st
   }
   assert.ok(!/[Cc]hart/.test(parts.get('xl/worksheets/sheet1.xml')), 'no chart source block on Summary');
   assert.ok(!parts.has('xl/drawings/drawing1.xml'), 'no drawing part for zero data');
-  /* the workbook remains valid: six sheets, ordered, frozen */
+  /* the workbook remains valid: five sheets, ordered, frozen */
   const wbXml = parts.get('xl/workbook.xml');
   assertWellFormed(wbXml);
   assert.deepEqual(tags(wbXml, 'sheet').map(t => /name="([^"]*)"/.exec(t)[1]), SHEET_ORDER);
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 5; i++) {
     assert.match(tags(parts.get(`xl/worksheets/sheet${i}.xml`), 'pane').join(''), /state="frozen"/, `sheet${i} still frozen`);
   }
 });
@@ -538,37 +539,24 @@ test('chart3 is a clustered bar chart (barDir bar) anchored at F2', async () => 
   assert.ok(chartXml, 'chart3.xml exists');
   assert.match(chartXml, /<c:barDir val="bar"\/>/, 'barDir bar');
   assert.match(chartXml, /<c:grouping val="clustered"\/>/, 'grouping clustered');
-  const drawing = parts.get('xl/drawings/drawing2.xml');
+  /* resolve the Members drawing through the sheet's rels — never a
+     hardcoded drawing number (the numbering shifts with the sheet set) */
+  const rels = parts.get('xl/worksheets/_rels/sheet5.xml.rels') || '';
+  const target = /Target="([^"]*drawings\/[^"]*)"/.exec(rels)?.[1];
+  const drawing = target ? parts.get('xl/drawings/' + target.split('/').pop()) : null;
   assert.ok(drawing, 'the Members sheet carries its own drawing part');
   assert.match(drawing, /<xdr:col>5<\/xdr:col>/, 'the anchor column is F (0-based 5)');
   assert.match(chartXml, /<c:spPr>[\s\S]*?<a:srgbClr val="4F46E5">/, 'the series style was assigned AFTER construction (makeBarSeries drops it)');
 });
 
-test('Milestones is date-sorted with done/upcoming states derived from the export date (D-54-13)', async () => {
-  const model = modelOf(makeMilestoneDoc(), 'p_ms');
-  assert.equal(model.milestones.length, 3, 'the undated milestone is dropped');
-  const { parts } = await buildZip(model);
-  const xml = parts.get('xl/worksheets/sheet6.xml');
-  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
-  const values = sheetValues(xml, shared);
-  const dates = [2, 3, 4].map(r => Number(values.get(`B${r}`)));
-  assert.deepEqual([...dates].sort((a, b) => a - b), dates, 'rows are date-sorted');
-  const doneDate = Math.round((Date.UTC(2026, 0, 5) - Date.UTC(1899, 11, 30)) / 86_400_000);
-  const states = [2, 3, 4].map(r => values.get(`C${r}`));
-  assert.equal(states[dates.indexOf(doneDate)], 'export.milestone.done', 'the milestone before the export date reads done');
-  assert.notEqual(states[0], states[1], 'the state column differs between before and after the export date');
-  const onDateRow = model.milestones.findIndex(m => m.date === '2026-02-01') + 2;
-  assert.equal(values.get(`C${onDateRow}`), 'export.milestone.upcoming', 'a milestone dated exactly ON the export date reads upcoming');
-});
-
-test('chart3 is absent for the zero-chart fixture while all six sheets stay valid', async () => {
+test('chart3 is absent for the zero-chart fixture while all five sheets stay valid', async () => {
   const zeroModel = modelOf(makeZeroChartDoc(), 'p_zero');
   const { parts } = await buildZip(zeroModel);
   assert.equal(parts.get('xl/charts/chart3.xml'), undefined, 'no chart part for zero data');
   assert.ok(!/[Cc]hart/.test(parts.get('xl/worksheets/sheet5.xml')), 'no Members source block for zero data');
   const wbXml = parts.get('xl/workbook.xml');
-  assert.deepEqual(tags(wbXml, 'sheet').map(t => /name="([^"]*)"/.exec(t)[1]), SHEET_ORDER, 'six sheets still in order');
-  for (let i = 1; i <= 6; i++) {
+  assert.deepEqual(tags(wbXml, 'sheet').map(t => /name="([^"]*)"/.exec(t)[1]), SHEET_ORDER, 'five sheets still in order');
+  for (let i = 1; i <= 5; i++) {
     assert.match(tags(parts.get(`xl/worksheets/sheet${i}.xml`), 'pane').join(''), /state="frozen"/, `sheet${i} still frozen`);
   }
 });
@@ -633,28 +621,42 @@ function anchors(drawingXml) {
 /* Excel serial for a UTC date: days since 1899-12-30. */
 const serial = iso => ganttToDay(iso) + 25569;
 
-test('Timeline date headers: one real date cell per axis column, width 4.5, row height 28 (R6)', async () => {
+test('Timeline date headers on row 2, month row on row 1, width 4.5, heights 18/28 (R6 + owner 2026-11-10)', async () => {
   const daily = ganttModel(makeDailyGanttDoc());
   const axisDaily = buildGantt(daily).axis;
-  const { sheet } = await timelineParts(makeDailyGanttDoc());
-  const row1 = /<row r="1"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
-  const cells = [...row1.matchAll(/<c r="([A-Z]+)1"/g)].map(m => m[1]);
-  assert.equal(cells.length, 3 + axisDaily.columns, 'A-C task block plus one date cell per axis column');
-  assert.ok(/<row r="1" ht="28" customHeight="1"/.test(sheet), 'row 1 height 28');
+  const { parts, sheet } = await timelineParts(makeDailyGanttDoc());
+  const row2 = /<row r="2"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
+  const cells = [...row2.matchAll(/<c r="([A-Z]+)2"/g)].map(m => m[1]);
+  assert.equal(cells.length, 3 + axisDaily.columns, 'A-C task block plus one date cell per axis column, on row 2');
+  assert.ok(/<row r="2" ht="28" customHeight="1"/.test(sheet), 'date row 2 height 28');
+  assert.ok(/<row r="1" ht="18" customHeight="1"/.test(sheet), 'month row 1 height 18');
   assert.match(sheet, /<col min="4" max="38" width="4.5" customWidth="1"/, 'date columns width 4.5');
   /* last daily header is the padded Sunday, serial-valued */
-  const lastRef = cells[cells.length - 1] + '1';
+  const lastRef = cells[cells.length - 1] + '2';
   const lastCell = new RegExp(`<c r="${lastRef}"[^>]*><v>([\\d.]+)</v>`).exec(sheet);
   assert.equal(Number(lastCell[1]), serial(axisDaily.endISO), 'the last daily header holds the padded Sunday');
   assert.match(sheet, new RegExp(`<c r="${lastRef}"[^>]*s="`), 'date headers are styled cells');
 
+  /* the month row: localized labels (the test model's translate is identity,
+     so the label IS the catalogue key), merged across each month span */
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(sheet, shared);
+  const merges = [...sheet.matchAll(/<mergeCell ref="([A-Z]+1:[A-Z]+1)"\/>/g)].map(m => m[1]);
+  assert.ok(merges.length >= 2, 'the month spans are merged — got ' + JSON.stringify(merges));
+  const firstMonthCell = values.get(merges[0].split(':')[0]);
+  assert.ok(firstMonthCell && firstMonthCell.startsWith('export.month.'), 'the month label is a catalogue key through the model translator');
+  const monthCells = [...values.entries()].filter(([ref, v]) => /1$/.test(ref) && String(v).startsWith('export.month.'));
+  const monthIdxs = monthCells.map(([ref]) => ref);
+  assert.ok(monthIdxs.every(ref => merges.some(m => m.startsWith(ref.split('').filter(ch => /[A-Z]/.test(ch)).join('') + '1:')) || merges.some(m => m.split(':')[0] === ref)),
+    'every month label anchors one of the merged spans');
+
   const weekly = ganttModel(makeWeeklyGanttDoc(), NOW_WEEKLY);
   const axisWeekly = buildGantt(weekly).axis;
   const weeklyParts = await timelineParts(makeWeeklyGanttDoc(), NOW_WEEKLY);
-  const weeklyRow1 = /<row r="1"[^>]*>([\s\S]*?)<\/row>/.exec(weeklyParts.sheet)[1];
-  const weeklyCells = [...weeklyRow1.matchAll(/<c r="[A-Z]+1"/g)].map(m => m[0]);
-  assert.equal(weeklyCells.length, 3 + axisWeekly.columns, 'weekly: one header per week column');
-  const lastWeeklyRef = [...weeklyRow1.matchAll(/<c r="([A-Z]+)1"/g)][weeklyCells.length - 1][1] + '1';
+  const weeklyRow2 = /<row r="2"[^>]*>([\s\S]*?)<\/row>/.exec(weeklyParts.sheet)[1];
+  const weeklyCells = [...weeklyRow2.matchAll(/<c r="[A-Z]+2"/g)].map(m => m[0]);
+  assert.equal(weeklyCells.length, 3 + axisWeekly.columns, 'weekly: one header per week column on row 2');
+  const lastWeeklyRef = [...weeklyRow2.matchAll(/<c r="([A-Z]+)2"/g)][weeklyCells.length - 1][1] + '2';
   const lastWeekly = new RegExp(`<c r="${lastWeeklyRef}"[^>]*><v>([\\d.]+)</v>`).exec(weeklyParts.sheet);
   assert.equal(Number(lastWeekly[1]), serial(ganttFromDay(ganttToDay(axisWeekly.startISO) + (axisWeekly.columns - 1) * 7)),
     'the last weekly header holds the Monday of the last week column');
@@ -665,36 +667,35 @@ test('Timeline pane: frozen at xSplit 3 and topLeftCell one column before today 
   const pane = tags(sheet, 'pane').join('');
   assert.match(pane, /state="frozen"/);
   assert.match(pane, /xSplit="3"/, 'the task block A-C is frozen');
-  assert.match(pane, /topLeftCell="P2"/, 'today is column Q (index 13) — the viewport opens one column before it');
+  assert.match(pane, /ySplit="2"/, 'the month + date rows are frozen');
+  assert.match(pane, /topLeftCell="P3"/, 'today is column Q (index 13) — the viewport opens one column before it, on the table row');
 });
 
-test('Timeline shapes: one anchored roundRect per bar and diamond per milestone with exact columns (R6, T-54-16)', async () => {
+test('Timeline shapes: one anchored roundRect per bar, NO diamonds (milestones excluded, owner 2026-11-10), exact columns (R6, T-54-16)', async () => {
   const { drawing } = await timelineParts(makeDailyGanttDoc());
   const list = anchors(drawing);
   const sps = list.filter(a => !a.connector);
-  assert.equal(sps.length, 4, 'three bars plus one milestone diamond');
+  assert.equal(sps.length, 3, 'three bars, no milestone diamonds');
 
   const byName = Object.fromEntries(list.map(a => [a.name, a]));
   /* padded Monday 2026-03-02: columnOf(date) = dayDiff */
   assert.deepEqual([byName['bar-0'].from.col, byName['bar-0'].to.col], [3, 6], 'G-3 spans 03-02..03-04');
   assert.deepEqual([byName['bar-1'].from.col, byName['bar-1'].to.col], [11, 22], 'G-2 spans 03-10..03-20');
   assert.deepEqual([byName['bar-2'].from.col, byName['bar-2'].to.col], [21, 22], 'G-1 (start equals due) is one column wide');
-  assert.deepEqual([byName['ms-0'].from.col, byName['ms-0'].to.col], [16, 17], 'the Launch milestone sits on its one column');
-  assert.equal(byName['ms-0'].prst, 'diamond');
-  assert.equal(byName['ms-0'].fill, 'F59E0B');
+  assert.equal(byName['ms-0'], undefined, 'no diamond shape exists');
   assert.equal(byName['bar-0'].prst, 'roundRect');
   assert.equal(byName['bar-0'].fill, '60A5FA', 'todo status fill');
 
   /* T-54-16: shape names are machine ids — never a task title. */
-  for (const a of list) assert.match(a.name, /^(bar|ms|link)-\d+$/, `shape name ${a.name} is a machine id`);
+  for (const a of list) assert.match(a.name, /^(bar|link)-\d+$/, `shape name ${a.name} is a machine id`);
 
-  /* connectors are emitted after bars and diamonds so they draw on top */
+  /* connectors are emitted after bars so they draw on top */
   const firstLink = list.findIndex(a => a.connector);
   const lastSp = list.map(a => a.connector ? -1 : list.indexOf(a)).reduce((x, y) => Math.max(x, y), -1);
-  assert.ok(firstLink > lastSp, 'every cxnSp comes after every bar and diamond');
+  assert.ok(firstLink > lastSp, 'every cxnSp comes after every bar');
 });
 
-test('Timeline row basis: bar-0 and ms-0 anchor on the sheet rows their own table cells occupy (R6)', async () => {
+test('Timeline row basis: bar-0 anchors on the sheet rows its own table cells occupy (R6; table starts at row 3)', async () => {
   const doc = makeDailyGanttDoc();
   const model = ganttModel(doc);
   const g = buildGantt(model);
@@ -704,20 +705,13 @@ test('Timeline row basis: bar-0 and ms-0 anchor on the sheet rows their own tabl
   const list = anchors(drawing);
   const byName = Object.fromEntries(list.map(a => [a.name, a]));
 
-  /* the first bar (table index 0) writes its key at sheet row 2 */
+  /* the first bar (table index 0) writes its key at sheet row 3 —
+     two header rows (months, dates) above the table */
   const firstBar = g.bars[0];
-  const keyRef = `A${firstBar.row + 2}`;
+  const keyRef = `A${firstBar.row + 3}`;
   assert.equal(values.get(keyRef), firstBar.key, `the first bar's key cell sits at ${keyRef}`);
-  assert.equal(byName['bar-0'].from.row, firstBar.row + 1, 'from row = table index + 1');
-  assert.equal(byName['bar-0'].to.row, firstBar.row + 2, 'to row = table index + 2 (its own cell row)');
-
-  /* the first milestone writes MS at sheet row bars.length + 2 */
-  const firstMs = g.milestones[0];
-  const msRef = `A${firstMs.row + 2}`;
-  assert.equal(values.get(msRef), 'MS', `the first milestone's MS cell sits at ${msRef}`);
-  assert.equal(values.get(`B${firstMs.row + 2}`), firstMs.name);
-  assert.equal(byName['ms-0'].from.row, firstMs.row + 1, 'milestone from row one less than its table cell row');
-  assert.equal(byName['ms-0'].to.row, firstMs.row + 2);
+  assert.equal(byName['bar-0'].from.row, firstBar.row + 2, 'from row = table index + 2 (two header rows)');
+  assert.equal(byName['bar-0'].to.row, firstBar.row + 3, 'to row = table index + 3 (its own cell row)');
 });
 
 test('Timeline connectors: predecessor finish to successor start, clamped so none points left (D-54-6)', async () => {
@@ -750,21 +744,21 @@ test('zero dated tasks: no drawing, but table header, date header and Today fill
   assert.equal(drawing, null, 'no drawing part for an empty Gantt');
   const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
   const values = sheetValues(sheet, shared);
-  assert.equal(values.get('A1'), 'export.col.key');
-  assert.equal(values.get('B1'), 'export.col.title');
-  assert.equal(values.get('C1'), 'export.col.status');
-  const row1 = /<row r="1"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
-  assert.equal([...row1.matchAll(/<c r="[A-Z]+1"/g)].length, 3 + buildGantt(ganttModel(makeZeroDatedDoc())).axis.columns,
-    'the date header keeps one cell per axis column');
+  assert.equal(values.get('A2'), 'export.col.key');
+  assert.equal(values.get('B2'), 'export.col.title');
+  assert.equal(values.get('C2'), 'export.col.status');
+  const row2 = /<row r="2"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
+  assert.equal([...row2.matchAll(/<c r="[A-Z]+2"/g)].length, 3 + buildGantt(ganttModel(makeZeroDatedDoc())).axis.columns,
+    'the date header keeps one cell per axis column, on row 2');
   /* Today fill on the export-date column: a style change only, so pin
      the fill color in styles.xml. */
   assert.ok(parts.get('xl/styles.xml').includes('FEF3C7'), 'the Today column fill survives an empty Gantt');
 });
 
-test('a future project: no Today fill anywhere and the viewport opens at D2 (D-54-7)', async () => {
+test('a future project: no Today fill anywhere and the viewport opens at D3 (D-54-7)', async () => {
   const { parts, sheet } = await timelineParts(makeFutureDoc(), NOW_FUTURE);
   const pane = tags(sheet, 'pane').join('');
-  assert.match(pane, /topLeftCell="D2"/, 'no today column to scroll to — open at the first date column');
+  assert.match(pane, /topLeftCell="D3"/, 'no today column to scroll to — open at the first date column, on the table row');
   assert.ok(!parts.get('xl/styles.xml').includes('FEF3C7'), 'no Today fill is written at all');
   assert.ok(!parts.get('xl/styles.xml').includes('FDE68A'), 'no Today header fill either');
 });
@@ -775,12 +769,12 @@ test('above the shape cap: no drawing items, the table stays and the note row ca
   assert.equal(drawing, null, 'no drawing part is created above the cap');
   const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
   const values = sheetValues(sheet, shared);
-  /* last table row = 1 + 201 bars; the note sits one row further */
-  const noteRow = 1 + 201 + 2;
+  /* last table row = 2 + 201 bars (table starts at row 3); the note sits one row further */
+  const noteRow = 2 + 201 + 2;
   assert.equal(values.get(`A${noteRow}`), 'export.timeline.truncated', 'the truncation note lands in column A');
-  const row1 = /<row r="1"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
-  assert.ok([...row1.matchAll(/<c r="[A-Z]+1"/g)].length > 3, 'the date header survives the degradation');
-  assert.equal(values.get('A2'), 'K-0', 'the table rows stay');
+  const row2 = /<row r="2"[^>]*>([\s\S]*?)<\/row>/.exec(sheet)[1];
+  assert.ok([...row2.matchAll(/<c r="[A-Z]+2"/g)].length > 3, 'the date header survives the degradation');
+  assert.equal(values.get('A3'), 'K-0', 'the table rows stay');
 });
 
 test('exactly at the shape cap the sheet still draws (R13 inclusive boundary)', async () => {
@@ -820,7 +814,7 @@ test('the 500-task benchmark builds a valid zip with the event loop held under t
   assert.equal(drawing, null, 'the capped benchmark Timeline draws nothing');
   const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
   const values = sheetValues(sheet, shared);
-  assert.equal(values.get('A503'), 'export.timeline.truncated', 'the note row follows the 501-row table (header + 500 bars)');
+  assert.equal(values.get('A504'), 'export.timeline.truncated', 'the note row follows the table (two header rows + 500 bars)');
   assert.ok(values.get('A2'), 'the table itself stays');
 });
 

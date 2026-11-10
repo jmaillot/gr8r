@@ -167,14 +167,14 @@ function taskSchedule(row, fallbackStartISO) {
    (subtasks/completed/archived live in model.rows). */
 export function buildMspdi(model) {
   const rows = Array.isArray(model?.rows) ? model.rows : [];
-  const milestones = Array.isArray(model?.milestones) ? model.milestones : [];
   const options = model?.options || {};
   const proj = model?.project || {};
   const exportDateISO = model?.exportDateISO;
 
   const fallbackStartISO = proj.start || exportDateISO || '';
 
-  /* ---- UID resolution: rows in model order, then milestones.
+  /* ---- UID resolution: rows in model order. Milestones are excluded
+     from the MSPDI (owner request 2026-11-10).
      CR-01 (54-05 review): only TOP-LEVEL rows enter the id→UID map —
      child rows carry the parent's id (model.js emits id: t.id with
      parent: t.id), so a naive map let the LAST child overwrite the
@@ -182,10 +182,6 @@ export function buildMspdi(model) {
   const uidOf = new Map();
   rows.forEach((r, i) => {
     if (r && r.id && !r.parent) uidOf.set(r.id, i + 1);
-  });
-  const firstMilestoneUid = rows.length + 1;
-  milestones.forEach((_m, i) => {
-    uidOf.set('__ms__' + i, firstMilestoneUid + i);
   });
 
   /* ---- schedule extremes for the project StartDate/FinishDate. ---- */
@@ -237,13 +233,6 @@ export function buildMspdi(model) {
 
     tasksXml.push(
       `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type><Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><PercentComplete>${percent}</PercentComplete>${links}${attrs}${notes}</Task>`,
-    );
-  }
-  for (const ms of milestones) {
-    uid += 1;
-    const start = formatDateTime(ms.date, '08:00:00');
-    tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(ms.name)}</Name><Type>1</Type><Start>${start}</Start><Finish>${start}</Finish><Duration>PT0H0M0S</Duration><DurationFormat>7</DurationFormat><Milestone>1</Milestone><PercentComplete>${ms.date < model.exportDateISO ? 100 : 0}</PercentComplete></Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

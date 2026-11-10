@@ -378,6 +378,9 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   const labels = {
     timelineTruncated: translate('export.timeline.truncated'),
     milestoneDone: translate('export.milestone.done'),
+    /* Owner request 2026-11-10: the Timeline month row — one localized
+       name per month index, consumed by the workbook writer only. */
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => translate('export.month.' + String(m).padStart(2, '0'))),
   };
 
   return {
