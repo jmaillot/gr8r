@@ -438,6 +438,7 @@
   "task.label.backup": "Sauvegarde",
   "task.label.documentation": "Documentation",
   "task.label.vendor": "Prestataire",
+  "page.subtask.inheritedDue": "Échéance héritée de la tâche parente",
   "project.status.planning": "Planification",
   "project.status.active": "En cours",
   "project.status.risk": "À risque",

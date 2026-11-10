@@ -437,6 +437,7 @@
   "task.label.backup": "Backup",
   "task.label.documentation": "Documentation",
   "task.label.vendor": "Vendor",
+  "page.subtask.inheritedDue": "Due date inherited from parent task",
   "project.status.planning": "Planning",
   "project.status.active": "In Progress",
   "project.status.risk": "At Risk",

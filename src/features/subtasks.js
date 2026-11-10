@@ -16,7 +16,7 @@ export function subtaskHtml(task, s) {
     <div class="faint" style="font-size:12px;margin:4px 0 0 26px">${t('page.subtask.progress', { i: i + 1, n: task.subtasks.length })} · ${s.done ? t('page.subtask.done') : t('page.subtask.open')}</div>
     <dl class="kv" style="margin-top:16px">
       <dt>${ic('user', 14)}${t('page.field.assignee')}</dt><dd><button class="pillbtn ${s.assignee ? '' : 'empty'}" data-a="pop" data-pop="subassignee" data-id="${task.id}" data-i="${i}">${av(s.assignee, 'sm', false)}<span>${s.assignee ? esc(mem(s.assignee)?.name) : t('common.unassigned')}</span></button></dd>
-      <dt>${ic('calendar', 14)}${t('page.field.due')}</dt><dd><button class="pillbtn ${s.due ? '' : 'empty'}" data-a="pop" data-pop="date" data-field="subdue" data-id="${task.id}" data-i="${i}">${ic('calendar', 13)}<span class="num">${s.due ? relDate(s.due) : t('common.setDate')}</span></button></dd>
+      <dt>${ic('calendar', 14)}${t('page.field.due')}</dt><dd><button class="pillbtn ${s.due ? '' : 'empty'}" data-a="pop" data-pop="date" data-field="subdue" data-id="${task.id}" data-i="${i}" ${!s.due && task.due ? `title="${esc(t('page.subtask.inheritedDue'))}"` : ''}>${ic('calendar', 13)}<span class="num">${s.due ? relDate(s.due) : task.due ? relDate(task.due) : t('common.setDate')}</span></button></dd>
       <dt>${ic('folder', 14)}${t('page.subtask.parent')}</dt><dd><button class="pillbtn" data-a="closeSub"><span class="mono faint" style="font-size:11px">${task.key}</span>${esc(task.title)}</button></dd>
     </dl>
     <div class="dsec"><div class="dsec-h"><h3 id="s-note-l">${t('page.subtask.notes')}</h3></div>
