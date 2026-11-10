@@ -16,10 +16,10 @@ test('the first character is the UTF-8 BOM', () => {
   assert.equal(csv.charCodeAt(0), 0xfeff);
 });
 
-test('the header equals the model column labels', () => {
+test('the header equals the model column labels, ; separated (owner request 2026-11-10)', () => {
   const m = build();
   const header = parseLines(toCsv(m))[0];
-  assert.equal(header, m.columns.map(c => c.label).join(','));
+  assert.equal(header, m.columns.map(c => c.label).join(';'));
 });
 
 test('a known task cell carries the member name, never the raw member id', () => {
@@ -37,7 +37,7 @@ test('lines are CRLF-terminated and one row per exported task plus the header', 
   assert.equal(lines.length, m.rows.length + 1);
 });
 
-test('comma, quote and newline quoting per RFC 4180', () => {
+test('semicolon, comma, quote and newline quoting per RFC 4180', () => {
   const doc = makeDoc();
   doc.tasks.push(
     { id: 't_q1', project: 'p_alpha', key: 'Q-1', title: 'has, comma', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 200 },
@@ -45,12 +45,12 @@ test('comma, quote and newline quoting per RFC 4180', () => {
     { id: 't_q3', project: 'p_alpha', key: 'Q-3', title: 'has\nnewline', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 202 },
   );
   const csv = toCsv(buildExportModel(doc, 'p_alpha', { scope: 'all' }, { translate: k => k, labelName: i => i, now: NOW }));
-  assert.ok(csv.includes('"has, comma"'));
+  assert.ok(csv.includes('"has, comma"'), 'a comma is now a quotable character (the separator is ;) — the title contains a comma so it must be quoted');
   assert.ok(csv.includes('"has ""quote"""'));
   assert.ok(csv.includes('"has\nnewline"'));
   /* the quoted title sits as the second cell of the Q-1 row */
   const row = parseLines(csv).find(l => l.includes('Q-1'));
-  assert.ok(row.startsWith('Q-1,"has, comma"'), `title cell quoted: ${row}`);
+  assert.ok(row.startsWith('Q-1;"has, comma"'), `title cell quoted: ${row}`);
 });
 
 test('= + - and @ leading values all gain the apostrophe', () => {
@@ -79,14 +79,14 @@ test('an empty description writes an empty field, never the word undefined', () 
   assert.equal(csv.includes('undefined'), false);
   const row = parseLines(csv).find(l => l.includes('ALPHA-2'));
   /* description column exists; this row's desc is empty → trailing empty field */
-  const fields = row.split(',');
+  const fields = row.split(';');
   assert.equal(fields[fields.length - 1], '');
 });
 
 test('option toggles widen the header exactly as the model does', () => {
-  const base = build().columns.map(c => c.label).join(',');
-  assert.equal(parseLines(toCsv(build({ scope: 'all', options: { descriptions: true } })))[0], base + ',export.col.description');
-  assert.equal(parseLines(toCsv(build({ scope: 'all', options: { comments: true } })))[0], base + ',export.col.comments,export.col.latestComment,export.col.thread');
+  const base = build().columns.map(c => c.label).join(';');
+  assert.equal(parseLines(toCsv(build({ scope: 'all', options: { descriptions: true } })))[0], base + ';export.col.description');
+  assert.equal(parseLines(toCsv(build({ scope: 'all', options: { comments: true } })))[0], base + ';export.col.comments;export.col.latestComment;export.col.thread');
 });
 
 test('accented and non-Latin text round-trips through UTF-8 bytes', () => {
