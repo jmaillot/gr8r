@@ -126,3 +126,89 @@ export function makeZeroChartDoc() {
     projOrder: ['p_zero'],
   };
 }
+
+/* =====================================================================
+   54-03 fixtures: empty lane, chart tallies, milestone dates.
+   ===================================================================== */
+
+/* Every task is done or backlog, so the middle lanes (todo, progress,
+   review) are empty — the Board must still render each of them with
+   count 0 (R7 empty edge). */
+export function makeEmptyLaneDoc() {
+  const members = [
+    { id: 'm_lead', userId: 'u_lead', name: 'Léa Lead', role: 'Member', email: 'lea@ex.local' },
+    { id: 'm_plain', userId: 'u_plain', name: 'Pat Plain', role: 'Member', email: 'pat@ex.local' },
+  ];
+  return {
+    projects: [{ id: 'p_lane', key: 'lane', name: 'Lane Project', status: 'active', lead: 'm_lead', members: ['m_lead', 'm_plain'], teams: [], perms: {} }],
+    tasks: [
+      { id: 't_l1', project: 'p_lane', key: 'LANE-2', title: 'Backlog one', status: 'backlog', priority: 'low', assignee: 'm_plain', labels: [], estimate: '', subtasks: [], deps: [], order: 20 },
+      { id: 't_l2', project: 'p_lane', key: 'LANE-1', title: 'Backlog two', status: 'backlog', priority: 'medium', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 10 },
+      { id: 't_l3', project: 'p_lane', key: 'LANE-3', title: 'Done one', status: 'done', priority: 'high', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 30 },
+      { id: 't_l4', project: 'p_lane', key: 'LANE-4', title: 'Done two', status: 'done', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 40 },
+    ],
+    comments: [],
+    members,
+    projOrder: ['p_lane'],
+  };
+}
+
+/* Distinct counts in every status, every priority and three assignees
+   plus one unassigned task — the chart-tally and Board-card fixture.
+   Statuses: backlog 2, todo 3, progress 2, review 1, done 2.
+   Priorities: urgent 2, high 2, medium 3, low 2, none 1.
+   Assignees (open counts over top rows): Pat Plain 4, Gus Guest 2,
+   Léa Lead 2, unassigned 0 (its only task is done). */
+export function makeChartDoc() {
+  const members = [
+    { id: 'm_lead', userId: 'u_lead', name: 'Léa Lead', role: 'Member', email: 'lea@ex.local' },
+    { id: 'm_plain', userId: 'u_plain', name: 'Pat Plain', role: 'Member', email: 'pat@ex.local' },
+    { id: 'm_guest', userId: 'u_guest', name: 'Gus Guest', role: 'Guest', email: 'gus@ex.local' },
+  ];
+  const T = (id, key, status, priority, assignee, order) => ({
+    id, project: 'p_chart', key, title: key + ' title', status, priority,
+    assignee, labels: [], estimate: '', subtasks: [], deps: [], order,
+  });
+  return {
+    projects: [{ id: 'p_chart', key: 'chart', name: 'Chart Project', status: 'active', lead: 'm_lead', members: ['m_lead', 'm_plain', 'm_guest'], teams: [], perms: {} }],
+    tasks: [
+      T('t_c1', 'CH-1', 'backlog', 'urgent', 'm_plain', 1),
+      T('t_c2', 'CH-2', 'backlog', 'high', 'm_lead', 2),
+      T('t_c3', 'CH-3', 'todo', 'urgent', 'm_plain', 3),
+      T('t_c4', 'CH-4', 'todo', 'medium', 'm_lead', 4),
+      T('t_c5', 'CH-5', 'todo', 'medium', 'm_guest', 5),
+      T('t_c6', 'CH-6', 'progress', 'high', 'm_plain', 6),
+      T('t_c7', 'CH-7', 'progress', 'low', 'm_guest', 7),
+      T('t_c8', 'CH-8', 'review', 'medium', 'm_plain', 8),
+      T('t_c9', 'CH-9', 'done', 'low', 'm_lead', 9),
+      T('t_c10', 'CH-10', 'done', 'none', '', 10),
+    ],
+    comments: [],
+    members,
+    projOrder: ['p_chart'],
+  };
+}
+
+/* Milestones out of date order: one dated before the injected export
+   date, one dated exactly ON it (must read upcoming) and one after. */
+export function makeMilestoneDoc() {
+  const members = [{ id: 'm_lead', userId: 'u_lead', name: 'Léa Lead', role: 'Member', email: 'lea@ex.local' }];
+  return {
+    projects: [{
+      id: 'p_ms', key: 'ms', name: 'Milestone Project', status: 'active', lead: 'm_lead',
+      members: ['m_lead'], teams: [], perms: {},
+      milestones: [
+        { id: 'ms_after', name: 'After milestone', date: '2026-03-01' },
+        { id: 'ms_on', name: 'On-export-date milestone', date: '2026-02-01' },
+        { id: 'ms_before', name: 'Before milestone', date: '2026-01-05' },
+        { id: 'ms_nodate', name: 'Undated milestone' },
+      ],
+    }],
+    tasks: [
+      { id: 't_m1', project: 'p_ms', key: 'MS-1', title: 'Milestone task', status: 'todo', priority: 'medium', assignee: 'm_lead', labels: [], estimate: '', subtasks: [], deps: [], order: 1 },
+    ],
+    comments: [],
+    members,
+    projOrder: ['p_ms'],
+  };
+}

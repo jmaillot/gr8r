@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { buildExportModel, DEFAULT_OPTIONS, STATUS_IDS, PRIORITY_IDS, taskProgress, plainText } from '../src/export/model.js';
-import { makeDoc, makeEmptyProjectDoc, makeZeroChartDoc } from './fixtures/export-fixtures.mjs';
+import { makeDoc, makeEmptyProjectDoc, makeZeroChartDoc, makeEmptyLaneDoc, makeChartDoc, makeMilestoneDoc } from './fixtures/export-fixtures.mjs';
 
 /* Deterministic injected deps: a translator that just echoes the key so
    assertions can pin exact catalogue keys, and a fixed export date whose
@@ -261,4 +261,183 @@ test('completed false plus subtasks true never emits a child of a filtered-out p
   /* t_a5 is done; if it has children none may survive — it has none, so the
      general invariant above plus the done-exclusion covers the composition. */
   assert.ok(!m.rows.some(r => r.parent && !topIds.has(r.parent)));
+});
+
+/* =====================================================================
+   54-03 Task 1: summary, charts, board, members, milestones, headers.
+   ===================================================================== */
+
+/* A translator that prefixes its key — any exporter label that did NOT
+   come from the injected translator fails the prefix assertion. */
+const prefixedDeps = over => deps({ translate: k => 'T:' + k, ...over });
+
+test('summary meta: name, lead, status, start, due, progress in order with kinds (54-03)', () => {
+  const m = build(makeDoc(), 'p_alpha', { scope: 'all' }, prefixedDeps());
+  const meta = m.summary.meta;
+  assert.deepEqual(meta.map(e => e.key), ['name', 'lead', 'status', 'start', 'due', 'progress']);
+  assert.deepEqual(meta.map(e => e.kind), ['text', 'text', 'text', 'date', 'date', 'percent']);
+  assert.deepEqual(meta.map(e => e.label), ['T:export.meta.name', 'T:export.meta.lead', 'T:export.meta.status', 'T:export.meta.start', 'T:export.meta.due', 'T:export.meta.progress']);
+  assert.equal(meta[0].value, 'Alpha Project');
+  assert.equal(meta[1].value, 'Léa Lead');
+  assert.equal(meta[2].value, 'T:project.status.active', 'statusLabel is already a translator output');
+  assert.equal(meta[3].value, '2026-01-05');
+  assert.equal(meta[4].value, '2026-03-31');
+  assert.equal(meta[5].value, Math.round((2 / 11) * 100), 'progress is the raw 0-100 number, never divided by 100');
+});
+
+test('summary kpis: four labelled entries equal to the row counts', () => {
+  const m = build(makeDoc(), 'p_alpha', { scope: 'all' }, prefixedDeps());
+  const n = topRows(m).length;
+  const done = topRows(m).filter(r => r.statusId === 'done').length;
+  assert.deepEqual(m.summary.kpis.map(k => k.key), ['total', 'open', 'done', 'overdue']);
+  assert.deepEqual(m.summary.kpis.map(k => k.label), ['T:export.kpi.total', 'T:export.kpi.open', 'T:export.kpi.done', 'T:export.kpi.overdue']);
+  assert.deepEqual(m.summary.kpis.map(k => k.value), [n, n - done, done, 1]);
+});
+
+test('status and priority charts tally exported top rows and ignore child rows (D-54-10)', () => {
+  const sub = build(makeDoc(), 'p_alpha', { scope: 'all', options: { subtasks: true } }, prefixedDeps());
+  const tally = (labels, counts, prefix) => Object.fromEntries(labels.map((l, i) => [l.slice(prefix.length), counts[i]]));
+  const st = tally(sub.charts.status.labels, sub.charts.status.counts, 'T:task.status.');
+  const manual = {};
+  for (const r of topRows(sub)) manual[r.statusId] = (manual[r.statusId] || 0) + 1;
+  for (const id of STATUS_IDS) assert.equal(st[id], manual[id] || 0, `status tally for ${id}`);
+  const pr = tally(sub.charts.priority.labels, sub.charts.priority.counts, 'T:task.priority.');
+  const manualP = {};
+  for (const r of topRows(sub)) manualP[r.priorityId] = (manualP[r.priorityId] || 0) + 1;
+  for (const id of PRIORITY_IDS) assert.equal(pr[id], manualP[id] || 0, `priority tally for ${id}`);
+  assert.equal(STATUS_IDS.reduce((s, id) => s + st[id], 0), topRows(sub).length, 'child rows never inflate the chart');
+});
+
+test('chart fixture: counts match the manual tally for every status, priority and assignee', () => {
+  const m = buildExportModel(makeChartDoc(), 'p_chart', { scope: 'all' }, prefixedDeps());
+  const st = Object.fromEntries(STATUS_IDS.map((id, i) => [id, m.charts.status.counts[i]]));
+  assert.deepEqual(st, { backlog: 2, todo: 3, progress: 2, review: 1, done: 2 });
+  const pr = Object.fromEntries(PRIORITY_IDS.map((id, i) => [id, m.charts.priority.counts[i]]));
+  assert.deepEqual(pr, { urgent: 2, high: 2, medium: 3, low: 2, none: 1 });
+  assert.deepEqual(m.charts.assignees.counts, [4, 2, 2, 0], 'open counts desc: Pat Plain 4, then Gus Guest and Léa Lead 2, unassigned 0');
+  assert.deepEqual(m.charts.assignees.labels, ['Pat Plain', 'Gus Guest', 'Léa Lead', 'T:export.unassigned']);
+});
+
+test('assignee chart sorts by open desc then name asc and includes Unassigned', () => {
+  const m = buildExportModel(makeChartDoc(), 'p_chart', { scope: 'all' }, prefixedDeps());
+  const opens = m.charts.assignees.counts;
+  for (let i = 1; i < opens.length; i++) assert.ok(opens[i - 1] >= opens[i], 'open counts are non-increasing');
+  const names = m.charts.assignees.labels;
+  assert.ok(names.includes('T:export.unassigned'), 'Unassigned is in the chart labels');
+  /* tied open counts are name-ascending: Gus Guest and Léa Lead both 2 */
+  assert.ok(names.indexOf('Gus Guest') < names.indexOf('Léa Lead'), 'plain string comparison, never localeCompare');
+});
+
+test('every chart block carries its translated title; the title disappears with the block', () => {
+  const m = build(makeDoc(), 'p_alpha', { scope: 'all' }, prefixedDeps());
+  assert.equal(m.charts.status.title, 'T:export.chart.status');
+  assert.equal(m.charts.priority.title, 'T:export.chart.priority');
+  assert.equal(m.charts.assignees.title, 'T:export.chart.assignees');
+  const z = buildExportModel(makeZeroChartDoc(), 'p_zero', {}, prefixedDeps());
+  for (const key of ['status', 'priority', 'assignees']) {
+    assert.equal(z.charts[key], null, `an all-zero chart block is null (${key})`);
+  }
+});
+
+test('the zero-chart fixture is null because the model has no exported row, not because the doc is empty', () => {
+  const z = buildExportModel(makeZeroChartDoc(), 'p_zero', {}, deps());
+  assert.equal(z.rows.length, 0, 'zero exported rows under the default options');
+  assert.notEqual(makeZeroChartDoc().tasks.length, 0, 'the document itself holds tasks');
+});
+
+test('board lanes are exactly the five ids in order, counts match, cards sort by order', () => {
+  const m = buildExportModel(makeChartDoc(), 'p_chart', { scope: 'all' }, prefixedDeps());
+  assert.deepEqual(m.board.lanes.map(l => l.id), ['backlog', 'todo', 'progress', 'review', 'done']);
+  assert.deepEqual(m.board.lanes.map(l => l.count), [2, 3, 2, 1, 2]);
+  const todo = m.board.lanes[1].cards;
+  assert.deepEqual(todo.map(c => c.key), ['CH-3', 'CH-4', 'CH-5'], 'card order follows the task order field');
+  for (const lane of m.board.lanes) {
+    assert.equal(lane.count, lane.cards.length);
+    assert.equal(lane.label, 'T:task.status.' + lane.id);
+  }
+});
+
+test('an empty lane still renders: count 0 and an empty cards array (R7 empty)', () => {
+  const m = buildExportModel(makeEmptyLaneDoc(), 'p_lane', { scope: 'all' }, prefixedDeps());
+  assert.deepEqual(m.board.lanes.map(l => l.id), ['backlog', 'todo', 'progress', 'review', 'done']);
+  assert.deepEqual(m.board.lanes.map(l => l.count), [2, 0, 0, 0, 2]);
+  for (const lane of m.board.lanes.filter(l => l.count === 0)) {
+    assert.deepEqual(lane.cards, [], `the empty ${lane.id} lane still exists with no cards`);
+  }
+  const backlog = m.board.lanes[0].cards;
+  assert.deepEqual(backlog.map(c => c.key), ['LANE-1', 'LANE-2'], 'cards sort by order (10 before 20)');
+  assert.deepEqual(backlog.map(c => c.assigneeName), ['Léa Lead', 'Pat Plain']);
+  assert.equal(backlog[0].priorityLabel, 'T:task.priority.medium');
+  assert.equal(backlog[0].progress, 0);
+});
+
+test('members: one row per assignee plus Unassigned, totals equal open plus done (D-54-10)', () => {
+  const sub = build(makeDoc(), 'p_alpha', { scope: 'all', options: { subtasks: true } }, prefixedDeps());
+  const total = sub.members.reduce((s, e) => s + e.total, 0);
+  assert.equal(total, topRows(sub).length, 'member totals never include child rows');
+  for (const e of sub.members) assert.equal(e.total, e.open + e.done);
+  const unassigned = sub.members.filter(e => e.id === null);
+  assert.equal(unassigned.length, 1, 'unassigned appears exactly once');
+  assert.equal(unassigned[0].name, 'T:export.unassigned');
+  const m = buildExportModel(makeChartDoc(), 'p_chart', { scope: 'all' }, prefixedDeps());
+  assert.deepEqual(m.members.map(e => e.name), ['Pat Plain', 'Gus Guest', 'Léa Lead', 'T:export.unassigned']);
+  assert.deepEqual(m.members.map(e => [e.open, e.done, e.total]), [[4, 0, 4], [2, 0, 2], [2, 1, 3], [0, 1, 1]]);
+  assert.ok(m.members.every(e => e.name !== 'm_plain' && e.name !== 'm_lead' && e.name !== 'm_guest'), 'member ids never leak as names');
+});
+
+test('milestones sort by date then name and derive state from the injected export date (D-54-13)', () => {
+  const m = buildExportModel(makeMilestoneDoc(), 'p_ms', { scope: 'all' }, prefixedDeps());
+  assert.deepEqual(m.milestones.map(x => x.date), ['2026-01-05', '2026-02-01', '2026-03-01'], 'sorted by date, undated entry dropped');
+  assert.deepEqual(m.milestones.map(x => x.name), ['Before milestone', 'On-export-date milestone', 'After milestone']);
+  assert.equal(m.milestones[0].state, 'T:export.milestone.done', 'before the export date reads done');
+  assert.equal(m.milestones[1].state, 'T:export.milestone.upcoming', 'dated exactly ON the export date reads upcoming');
+  assert.equal(m.milestones[2].state, 'T:export.milestone.upcoming');
+  /* the export date is injected, not the wall clock */
+  const later = buildExportModel(makeMilestoneDoc(), 'p_ms', { scope: 'all' }, prefixedDeps({ now: new Date(2025, 0, 1) }));
+  assert.equal(later.milestones[0].state, 'T:export.milestone.upcoming', 'an older export date flips the same milestone to upcoming');
+});
+
+test('headers carry the localized labels for board, members and milestones', () => {
+  const m = build(makeDoc(), 'p_alpha', { scope: 'all' }, prefixedDeps());
+  assert.deepEqual(m.headers.board, ['T:export.col.lane', 'T:export.col.count', 'T:export.col.key', 'T:export.col.title', 'T:export.col.assignee', 'T:export.col.priority', 'T:export.col.due', 'T:export.col.progress']);
+  assert.deepEqual(m.headers.members, ['T:export.col.member', 'T:export.col.open', 'T:export.col.done', 'T:export.col.total']);
+  assert.deepEqual(m.headers.milestones, ['T:export.col.name', 'T:export.col.date', 'T:export.col.state']);
+});
+
+test('every exporter-authored string comes from the injected translator (D-54-12, D-54-14)', () => {
+  const m = build(makeChartDoc(), 'p_chart', { scope: 'all', options: { subtasks: true } }, prefixedDeps());
+  const walk = value => {
+    if (typeof value === 'string') assert.match(value, /^(T:|CH-|Lan|$)/, `unexpected literal: ${value}`);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) {
+        /* machine keys and user-authored meta values (project name, lead,
+           status label) are not exporter-authored display strings */
+        if (k === 'key' || k === 'kind' || k === 'id' || k === 'value' || k === 'assigneeName') continue;
+        if ((k === 'date') && /^\d{4}-\d{2}-\d{2}$/.test(v ?? '')) continue;
+        walk(v);
+      }
+    }
+  };
+  walk(m.summary.meta.map(e => ({ label: e.label, kind: e.kind })));
+  walk(m.summary.kpis);
+  /* assignee chart labels are user member names — walk only its title */
+  assert.match(m.charts.assignees.title, /^T:/);
+  walk({ status: m.charts.status, priority: m.charts.priority });
+  walk(m.board);
+  /* member ids are machine fields — walk only the display fields */
+  for (const e of m.members) {
+    assert.match(e.name, /^(T:|[A-ZÉ])/);
+    for (const k of ['open', 'done', 'total']) assert.equal(typeof e[k], 'number');
+  }
+  walk(m.milestones);
+  walk(m.headers);
+});
+
+test('no literal export string leaks into a user-authored title, member name or milestone name', () => {
+  const m = buildExportModel(makeChartDoc(), 'p_chart', { scope: 'all' }, prefixedDeps());
+  for (const r of topRows(m)) assert.ok(!r.title.startsWith('T:'), 'task titles stay untranslated');
+  const lane = buildExportModel(makeMilestoneDoc(), 'p_ms', { scope: 'all' }, prefixedDeps());
+  for (const ms of lane.milestones) assert.ok(!ms.name.startsWith('T:'), 'milestone names stay untranslated');
+  for (const e of lane.members) assert.ok(e.name.startsWith('T:') || e.name === 'Léa Lead', 'member names come from the doc, labels from the translator');
 });

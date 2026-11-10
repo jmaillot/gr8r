@@ -1,11 +1,15 @@
 /* =====================================================================
-   EXPORT MODEL — Phase 54 (54-01)
+   EXPORT MODEL — Phase 54 (54-01, extended by 54-03)
    =====================================================================
    The one DOM-free, dependency-free export model shared by every writer
    (CSV here; the xlsx and MSPDI writers in plans 02–05). It implements
-   R2 (scope selection), R3 (the five include toggles), R10 (it is fed the
-   docForClient-shaped redacted document only), R12 (descriptions are inert
-   plain text) and D-54-8..D-54-16 (opt-in content shape, KPI contract).
+   R2 (scope selection), R3 (the five include toggles), R4/R5/R7 (the
+   workbook surface: summary, charts, board lanes, members, milestones),
+   R10 (it is fed the docForClient-shaped redacted document only),
+   R11 (every exporter-authored string resolves through the injected
+   translator; user text is never translated) and R12 (descriptions are
+   inert plain text) plus D-54-8..D-54-16 (opt-in content shape, KPI
+   contract, chart null rule, board lanes, milestone states).
 
    NO IMPORTS AT ALL: src/core/store.js and src/core/utils.js touch the DOM
    at module scope and src/core/constants.js holds lazy client-translator
@@ -148,6 +152,7 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
       priorityId: t.priority,
       deps: Array.isArray(t.deps) ? [...t.deps] : [],
       archived: !!t.archived,
+      order: t.order ?? 0,
     };
     if (options.descriptions) base.description = plainText(t.desc);
     if (options.comments) {
@@ -202,17 +207,171 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   const overdue = topRows.filter(r => r.due && r.statusId !== 'done' && r.due < today).length;
   const progress = topRows.length ? Math.round((doneCount / topRows.length) * 100) : 0;
 
+  /* =====================================================================
+     54-03: summary meta, KPI labels, chart data, board, members,
+     milestones and localized headers. Everything below derives from
+     topRows (D-54-10: child rows never inflate a count) and every
+     exporter-authored string goes through translate (R11, D-54-12,
+     D-54-14). Key literals are written HERE — src/export/model.js is
+     scanned by the i18n dead-key gate; export/ is not.
+     ===================================================================== */
+
+  /* Deterministic name comparator — plain string comparison, never
+     localeCompare (host-dependent collations). */
+  const plainCmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+  const proj = {
+    id: project.id,
+    key: project.key || '',
+    name: project.name || '',
+    statusLabel: project.status ? translate('project.status.' + project.status) : '',
+    leadName: project.lead ? memberName.get(project.lead) || project.lead : '',
+    start: project.start || '',
+    due: project.due || '',
+    progress,
+  };
+
+  /* ---- SUMMARY: six meta rows (name, lead, status, start, due,
+     progress) and four KPI counts (D-54-15). kind tells the writer how
+     to render the value: text / date (raw YYYY-MM-DD) / percent
+     (raw 0-100 number, written at that scale, never divided by 100). */
+  const summary = {
+    meta: [
+      { key: 'name', label: translate('export.meta.name'), value: proj.name, kind: 'text' },
+      { key: 'lead', label: translate('export.meta.lead'), value: proj.leadName, kind: 'text' },
+      { key: 'status', label: translate('export.meta.status'), value: proj.statusLabel, kind: 'text' },
+      { key: 'start', label: translate('export.meta.start'), value: proj.start, kind: 'date' },
+      { key: 'due', label: translate('export.meta.due'), value: proj.due, kind: 'date' },
+      { key: 'progress', label: translate('export.meta.progress'), value: proj.progress, kind: 'percent' },
+    ],
+    kpis: [
+      { key: 'total', label: translate('export.kpi.total'), value: topRows.length },
+      { key: 'open', label: translate('export.kpi.open'), value: topRows.length - doneCount },
+      { key: 'done', label: translate('export.kpi.done'), value: doneCount },
+      { key: 'overdue', label: translate('export.kpi.overdue'), value: overdue },
+    ],
+  };
+
+  /* ---- CHARTS (R5, D-54-10): counts tally the exported top-level rows
+     only. title is the ONLY source of the chart title and of the source
+     block label the writer writes — export/ holds no display literal
+     (D-54-12). A block whose every count is zero becomes null: the
+     writer then omits the chart and its source block entirely (R5
+     boundary rule — no empty axes). */
+  const tallyStatus = () => {
+    const counts = new Map(STATUS_IDS.map(id => [id, 0]));
+    for (const r of topRows) counts.set(r.statusId, (counts.get(r.statusId) || 0) + 1);
+    return counts;
+  };
+  const tallyPriority = () => {
+    const counts = new Map(PRIORITY_IDS.map(id => [id, 0]));
+    for (const r of topRows) counts.set(r.priorityId, (counts.get(r.priorityId) || 0) + 1);
+    return counts;
+  };
+  const statusCounts = tallyStatus();
+  const priorityCounts = tallyPriority();
+
+  /* open per member over exported top-level rows: open = not done. */
+  const openByMember = new Map();
+  for (const r of topRows) {
+    const k = r.assigneeId || null;
+    openByMember.set(k, (openByMember.get(k) || 0) + (r.statusId === 'done' ? 0 : 1));
+  }
+
+  const assigneeEntries = [...openByMember.entries()].map(([id, open]) => ({
+    id,
+    name: id ? memberName.get(id) || id : translate('export.unassigned'),
+    open,
+  }));
+  /* open descending, then name ascending (plain comparison). */
+  assigneeEntries.sort((a, b) => (b.open - a.open) || plainCmp(a.name, b.name));
+
+  const charts = {
+    status: [...statusCounts.values()].some(c => c > 0)
+      ? {
+          title: translate('export.chart.status'),
+          labels: STATUS_IDS.map(id => translate('task.status.' + id)),
+          counts: STATUS_IDS.map(id => statusCounts.get(id) || 0),
+        }
+      : null,
+    priority: [...priorityCounts.values()].some(c => c > 0)
+      ? {
+          title: translate('export.chart.priority'),
+          labels: PRIORITY_IDS.map(id => translate('task.priority.' + id)),
+          counts: PRIORITY_IDS.map(id => priorityCounts.get(id) || 0),
+        }
+      : null,
+    assignees: assigneeEntries.some(e => e.open > 0)
+      ? {
+          title: translate('export.chart.assignees'),
+          labels: assigneeEntries.map(e => e.name),
+          counts: assigneeEntries.map(e => e.open),
+        }
+      : null,
+  };
+
+  /* ---- BOARD (R7): five lanes in the locked STATUS_IDS order. An empty
+     lane still exists with count 0. Cards sort by order then key. */
+  const boardLanes = STATUS_IDS.map(id => {
+    const cards = topRows
+      .filter(r => r.statusId === id)
+      .sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)) || plainCmp(String(a.key), String(b.key)))
+      .map(r => ({
+        key: r.key,
+        title: r.title,
+        assigneeName: r.assigneeName,
+        priorityLabel: r.priority,
+        due: r.due,
+        progress: r.progress,
+      }));
+    return {
+      id,
+      label: translate('task.status.' + id),
+      count: cards.length,
+      cards,
+    };
+  });
+  const board = { lanes: boardLanes };
+
+  /* ---- MEMBERS (D-54-10): one row per assignee appearing in the
+     exported set plus Unassigned; counts over top-level rows only. */
+  const memberEntries = [];
+  for (const r of topRows) {
+    const id = r.assigneeId || null;
+    let e = memberEntries.find(x => x.id === id);
+    if (!e) {
+      e = { id, name: id ? memberName.get(id) || id : translate('export.unassigned'), open: 0, done: 0 };
+      memberEntries.push(e);
+    }
+    if (r.statusId === 'done') e.done += 1;
+    else e.open += 1;
+  }
+  for (const e of memberEntries) e.total = e.open + e.done;
+  memberEntries.sort((a, b) => (b.open - a.open) || plainCmp(a.name, b.name));
+
+  /* ---- MILESTONES (R11): date-sorted; done when the date is strictly
+     before the EXPORT date (the project-overview predicate
+     diffD(parse(date), TODAY) < 0 on the export date, D-54-13) — a
+     milestone due on the export date still reads upcoming. */
+  const milestones = (Array.isArray(project.milestones) ? project.milestones : [])
+    .filter(m => m && m.date)
+    .sort((a, b) => plainCmp(String(a.date), String(b.date)) || plainCmp(String(a.name ?? a.title ?? ''), String(b.name ?? b.title ?? '')))
+    .map(m => ({
+      name: m.name || m.title || '',
+      date: m.date,
+      state: m.date < today ? translate('export.milestone.done') : translate('export.milestone.upcoming'),
+    }));
+
+  /* ---- localized headers for the Board, Members and Milestones sheets. */
+  const hcol = name => translate('export.col.' + name);
+  const headers = {
+    board: ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress'].map(hcol),
+    members: ['member', 'open', 'done', 'total'].map(hcol),
+    milestones: ['name', 'date', 'state'].map(hcol),
+  };
+
   return {
-    project: {
-      id: project.id,
-      key: project.key || '',
-      name: project.name || '',
-      statusLabel: project.status ? translate('project.status.' + project.status) : '',
-      leadName: project.lead ? memberName.get(project.lead) || project.lead : '',
-      start: project.start || '',
-      due: project.due || '',
-      progress,
-    },
+    project: proj,
     rows,
     topRows,
     columns: columns.map(col),
@@ -221,6 +380,12 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
     exportDate: now,
     exportDateISO: today,
     options,
+    summary,
+    charts,
+    board,
+    members: memberEntries,
+    milestones,
+    headers,
     statusIds: [...STATUS_IDS],
     priorityIds: [...PRIORITY_IDS],
   };
