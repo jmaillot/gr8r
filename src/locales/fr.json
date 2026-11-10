@@ -221,10 +221,10 @@
   "toast.demoPreview": "C’était un aperçu — rien n’a été archivé",
   "toast.loaded": "Chargé",
   "toast.notifPrefsSaved": "Préférences de notification enregistrées",
- "toast.pushMention": "{name} vous a mentionné sur {title}",
- "toast.pushAssign": "{name} vous a assigné à {title}",
- "toast.pushComment": "{name} a commenté {title}",
- "toast.pushBrowserBlocked": "Les notifications sont bloquées dans les réglages de votre navigateur — réactivez-les pour ce site pour recevoir les alertes.",
+  "toast.pushMention": "{name} vous a mentionné sur {title}",
+  "toast.pushAssign": "{name} vous a assigné à {title}",
+  "toast.pushComment": "{name} a commenté {title}",
+  "toast.pushBrowserBlocked": "Les notifications sont bloquées dans les réglages de votre navigateur — réactivez-les pour ce site pour recevoir les alertes.",
   "err.notifPrefsSaveFailed": "Impossible d’enregistrer vos préférences de notification",
   "err.methodNotAllowed": "Méthode non autorisée",
   "toast.localeSaveFailed": "Langue non enregistrée : elle ne s’applique qu’à cette session",
@@ -856,7 +856,10 @@
   "export.option.subtasks": "Sous-tâches",
   "export.option.completed": "Tâches terminées",
   "export.option.archived": "Tâches archivées",
-  "export.scope.count": { "one": "{n} tâche", "other": "{n} tâches" },
+  "export.scope.count": {
+    "one": "{n} tâche",
+    "other": "{n} tâches"
+  },
   "export.submit": "Exporter",
   "export.notice.staticMode": "Mode statique : le fichier est généré dans le navigateur, sans serveur.",
   "export.notice.mspdi": "Le fichier est un XML Microsoft Project pour import dans Microsoft Project, généré à partir des données du projet.",
@@ -1346,7 +1349,7 @@
   "settings.notif.pastDue": "Alertes de retard",
   "settings.notif.pastDueDesc": "Une seule alerte, le matin qui suit l’échéance d’une tâche.",
   "settings.notif.pushLead": "Notifications sur ordinateur et mobile.",
- "settings.notif.pushBrowserBlocked": "Navigateur bloqué",
+  "settings.notif.pushBrowserBlocked": "Navigateur bloqué",
   "settings.notif.mentionsLead": "Choisissez les mentions qui vous parviennent.",
   "settings.notif.atAll": "@mentions dans les commentaires et les descriptions",
   "settings.notif.atTeam": "Mentions @team",
@@ -1867,5 +1870,11 @@
   "act.extra.off": "désactivée",
   "act.extra.none": "aucune",
   "act.extra.inProject": "dans",
-  "contract.frenchOnly": "Français seulement"
+  "contract.frenchOnly": "Français seulement",
+  "kanban.section.columnHeader": "Déplacer vers la colonne",
+  "kanban.section.columnEmpty": "colonne vide — glissez des cartes ici",
+  "kanban.section.addCardHere": "Ajouter une carte ici",
+  "kanban.section.rowLabel": "Ligne",
+  "kanban.section.rowHeader": "Déplacer vers la ligne",
+  "kanban.section.rowEmpty": "ligne vide — glissez des cartes ici"
 }

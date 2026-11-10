@@ -220,10 +220,10 @@
   "toast.demoPreview": "This was a preview — nothing was archived",
   "toast.loaded": "Loaded",
   "toast.notifPrefsSaved": "Notification preferences saved",
- "toast.pushMention": "{name} mentioned you on {title}",
- "toast.pushAssign": "{name} assigned you to {title}",
- "toast.pushComment": "{name} commented on {title}",
- "toast.pushBrowserBlocked": "Notifications are blocked in your browser settings — re-enable them for this site to get alerts.",
+  "toast.pushMention": "{name} mentioned you on {title}",
+  "toast.pushAssign": "{name} assigned you to {title}",
+  "toast.pushComment": "{name} commented on {title}",
+  "toast.pushBrowserBlocked": "Notifications are blocked in your browser settings — re-enable them for this site to get alerts.",
   "err.notifPrefsSaveFailed": "Could not save your notification preferences",
   "err.methodNotAllowed": "Method not allowed",
   "toast.localeSaveFailed": "Language not saved — it applies to this session only",
@@ -856,7 +856,10 @@
   "export.option.subtasks": "Subtasks",
   "export.option.completed": "Completed tasks",
   "export.option.archived": "Archived tasks",
-  "export.scope.count": { "one": "{n} task", "other": "{n} tasks" },
+  "export.scope.count": {
+    "one": "{n} task",
+    "other": "{n} tasks"
+  },
   "export.submit": "Export",
   "export.notice.staticMode": "Static mode: the file is generated in the browser, without a server.",
   "export.notice.mspdi": "The file is Microsoft Project XML for import into Microsoft Project, generated from the project data.",
@@ -1346,7 +1349,7 @@
   "settings.notif.pastDue": "Overdue nudges",
   "settings.notif.pastDueDesc": "One nudge the morning after a task is overdue.",
   "settings.notif.pushLead": "Notifications on desktop and mobile.",
- "settings.notif.pushBrowserBlocked": "Browser blocked",
+  "settings.notif.pushBrowserBlocked": "Browser blocked",
   "settings.notif.mentionsLead": "Decide which mentions reach you.",
   "settings.notif.atAll": "@mentions in comments and descriptions",
   "settings.notif.atTeam": "@team mentions",
@@ -1866,5 +1869,11 @@
   "act.extra.into": "into {value}",
   "act.extra.off": "off",
   "act.extra.none": "none",
-  "act.extra.inProject": "in"
+  "act.extra.inProject": "in",
+  "kanban.section.columnHeader": "Move to column",
+  "kanban.section.columnEmpty": "empty column — drag cards here",
+  "kanban.section.addCardHere": "Add card here",
+  "kanban.section.rowLabel": "Row",
+  "kanban.section.rowHeader": "Move to row",
+  "kanban.section.rowEmpty": "empty row — drag cards here"
 }

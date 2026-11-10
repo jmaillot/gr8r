@@ -1272,6 +1272,7 @@ export const DEAD_KEY_ALLOWLIST = Object.freeze([
   'task.count', // the plural-mechanics fixture of the same suites
   'file.count', // the many-member (compact French) plural fixture
   'page.members.visReason.', // built from the visibility endpoint's coarse reason code (members.js, Phase 52)
+  'kanban.section.', // the wave-4 board-section builder renders these from section type ids (board.js, Phase 55)
 ]);
 
 /* The t/tFor call sites of a source text are ONE input of the reference

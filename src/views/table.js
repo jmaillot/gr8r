@@ -89,3 +89,4 @@ export function tableHtml(ts, key, p) {
     </tbody></table></div>
     <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${av(t.assignee, 'sm', false)}<span class="muted">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(fmtEstimate(t.estimate))}</span>` : ''}<span style="width:64px;display:inline-flex" data-tip="${tk('page.columns.progress')}">${progBar(taskProg(t), t.status === 'done' ? 'green' : '')}</span></div></div>`).join('')}</div>`;
 }
+

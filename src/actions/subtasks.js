@@ -64,7 +64,7 @@ A.promoteSub = el => {
         title: s.title,
         project: t.project,
         status: s.done ? 'done' : 'todo',
-        assignee: s.assignee || t.assignee,
+        assignees: s.assignees?.length ? [...s.assignees] : [...(t.assignees || [])],
         priority: t.priority,
         due: s.due || t.due || null,
         labels: [...t.labels],
