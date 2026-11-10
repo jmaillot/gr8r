@@ -12,6 +12,12 @@
    DB_URL the instance remains 100% Node built-ins. A new runtime
    dependency or a heavier runtime image must still fail npm test
    before it ships.
+
+   Phase 54 (2026-11-10, T-54-SC): @office-kit/xlsx joins the runtime
+   dependencies as an EXACT pin (0.26.1, no caret) after the blocking
+   human package-legitimacy checkpoint — server-only workbook writer,
+   imported only from the repository-root export/ directory, never from
+   src/. The runtime image ships export/ beside src/.
    ===================================================================== */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,20 +29,25 @@ import pkg from '../package.json' with { type: 'json' };
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
-test('package.json runtime dependencies are exactly { pg } (D-12 as amended by Phase 45 D-02)', () => {
+test('package.json runtime dependencies are exactly { @office-kit/xlsx, pg } (D-12 as amended by Phase 45 D-02 + Phase 54)', () => {
   assert.ok(
     pkg.dependencies,
     'package.json lost the "dependencies" key — pg must be a REQUIRED runtime dependency (Phase 45 D-02): optionalDependencies would let a broken install silently vanish, defeating D-04 fail-closed boot',
   );
   assert.deepEqual(
     Object.keys(pkg.dependencies).sort(),
-    ['pg'],
-    `package.json runtime dependencies must be exactly { pg } (Phase 45 D-02) — found: ${Object.keys(pkg.dependencies).join(' | ')}`,
+    ['@office-kit/xlsx', 'pg'],
+    `package.json runtime dependencies must be exactly { @office-kit/xlsx, pg } (Phase 45 D-02, Phase 54 T-54-SC) — found: ${Object.keys(pkg.dependencies).join(' | ')}`,
   );
   assert.match(pkg.dependencies.pg, /^\^8\./, 'pg must stay on the 8.x line (D-01 pin)');
+  assert.equal(
+    pkg.dependencies['@office-kit/xlsx'],
+    '0.26.1',
+    '@office-kit/xlsx must be pinned EXACTLY at 0.26.1 (Phase 54 T-54-SC): no caret range — the approved version was human-verified; a floating range would silently pull an unvetted release',
+  );
 });
 
-test('the Dockerfile runtime stage stays bare node + su-exec with exactly the five COPY targets (D-12)', () => {
+test('the Dockerfile runtime stage stays bare node + su-exec with exactly the pinned app COPY targets (D-12)', () => {
   const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
 
   // Scope every assertion to the runtime stage, never the build stage
@@ -64,9 +75,10 @@ test('the Dockerfile runtime stage stays bare node + su-exec with exactly the fi
   // Phase 34: server.js imports src/lib/redaction.js at runtime, so the image ships src/ too.
   // Phase 44: server.js imports tz.js at runtime (resolveTz funnel), so the image ships it too.
   // Phase 45 (D-03) + Phase 46: single pg-enabled image ships node_modules + db-adapter.mjs, and mcp.js (MCP server) joins the runtime stage.
+  // Phase 54: server.js imports export/ at runtime (server-only xlsx + MSPDI writers), so the image ships it too.
   assert.deepEqual(
     copyTargets.sort(),
-    ['db-adapter.mjs', 'dist', 'mailer.js', 'mcp.js', 'node_modules', 'oidc.js', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js'],
-    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, mcp.js, db-adapter.mjs, node_modules, seed.json, src and dist — found: ${copyTargets.join(' | ')} (D-12 as amended by Phase 45 D-03 + Phase 46)`,
+    ['db-adapter.mjs', 'dist', 'export', 'mailer.js', 'mcp.js', 'node_modules', 'oidc.js', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js'],
+    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, mcp.js, db-adapter.mjs, node_modules, seed.json, src, export and dist — found: ${copyTargets.join(' | ')} (D-12 as amended by Phase 45 D-03 + Phase 46 + Phase 54)`,
   );
 });

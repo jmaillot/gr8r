@@ -22,6 +22,7 @@ COPY --from=build /app/mcp.js ./mcp.js
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/db-adapter.mjs ./db-adapter.mjs
 COPY --from=build /app/src ./src
+COPY --from=build /app/export ./export
 COPY --from=build /app/oidc.js ./oidc.js
 COPY --from=build /app/totp.js ./totp.js
 COPY --from=build /app/mailer.js ./mailer.js
