@@ -18,11 +18,14 @@ export function pageInbox() {
     ['update', t('page.inbox.cat.updates')],
   ];
   const cat = S.ui.inboxCat;
+  /* [55-04 D-55-13] Removed-assignee rows file under the Assignments category
+     — they are the mirror half of the assignment notification. */
+  const inCat = (n, k) => (k === 'assign' ? n.type === 'assign' || n.type === 'assignRemoved' : n.type === k);
   let ns = myNotifs()
     .slice()
     .sort((a, b) => b.at - a.at);
-  const count = k => ns.filter(n => (k === 'all' || n.type === k) && !n.read).length;
-  ns = ns.filter(n => cat === 'all' || n.type === cat);
+  const count = k => ns.filter(n => (k === 'all' || inCat(n, k)) && !n.read).length;
+  ns = ns.filter(n => cat === 'all' || inCat(n, cat));
   if (S.ui.inboxUnread) ns = ns.filter(n => !n.read);
   const sel = myNotifs().find(n => n.id === S.ui.inboxSel) || null;
   return `<div class="page flush">

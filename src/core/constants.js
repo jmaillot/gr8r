@@ -77,6 +77,10 @@ export const PRIOS = [
   },
 ];
 export const PR = Object.fromEntries(PRIOS.map(p => [p.id, p]));
+/* [55-04 D-55-7] Max 5 assignees per task — the picker blocks a 6th add with
+   a visible hint; the server's normalize cap (55-01) is the authority and this
+   is the UX belt of the belt-and-braces pair (T-55-11). */
+export const ASSIGNEE_CAP = 5;
 export const LABELS = [
   {
     id: 'design',

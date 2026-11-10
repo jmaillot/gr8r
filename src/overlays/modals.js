@@ -2,10 +2,10 @@
 import { $$, ago, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
 import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { PCOLORS, PICONS, LB } from '../core/constants.js';
+import { ASSIGNEE_CAP, PCOLORS, PICONS, LB } from '../core/constants.js';
 import { buildExportModel } from '../export/model.js';
 import { applyView, viewOf } from '../shell/view-engine.js';
-import { D, S, canManageProject, mem, pColor, proj, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
+import { D, S, assignableInProject, canManageProject, mem, pColor, proj, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
 import { api } from '../core/api.js';
 import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
@@ -50,6 +50,10 @@ export function modalHtml(m) {
       return wrap('', projectCreateModal(m, H));
     case 'invite':
       return wrap('', inviteModal(m, H));
+    /* [55-04 D-55-6] The assignee picker — the chip-pattern search modal that
+       replaced the single-assignee pop. */
+    case 'assigneePick':
+      return wrap('sm', assigneePickModal(m, H));
     case 'confirm':
       return wrap('sm', confirmModal(m, H));
     case 'recovery':
@@ -129,7 +133,7 @@ export function taskModal(m, H) {
     <div class="row" style="flex-wrap:wrap;gap:6px">
       ${formChip('project', `<span class="pdot" style="--c:${pColor(p)}"></span>${esc(p?.name || t('page.field.project'))}`, t('page.field.project'))}
       ${formChip('status', stPill(f.status), t('page.field.status'))}
-      ${formChip('assignee', `${av(f.assignee, 'sm', false)}${esc(mem(f.assignee)?.name || t('page.field.assignee'))}`, t('page.field.assignee'))}
+      ${formChip('assignee', `${av(f.assignees?.[0], 'sm', false)}${esc(f.assignees?.length > 1 ? `${mem(f.assignees[0])?.name || ''} +${f.assignees.length - 1}` : mem(f.assignees?.[0])?.name || t('page.field.assignee'))}`, t('page.field.assignee'))}
       ${formChip('priority', prPill(f.priority), t('page.field.priority'))}
       ${formChip('date', `${ic('calendar', 13)}${f.due ? t('modal.duePrefix') + fmtDate(f.due) : t('page.field.due')}`, 'due')}
       ${formChip('date', `${ic('calendar-arrow-up', 13)}${f.start ? t('modal.startsPrefix') + fmtDate(f.start) : t('page.sort.start')}`, 'start')}
@@ -488,6 +492,55 @@ export function inviteModal(m, H) {
     }
   </form>
   <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button>${guestNeedsProject ? `<span class="hint" role="status">${t('modal.inviteGuestNeedsProject')}</span>` : ''}<button class="btn btn-primary" data-a="submitInvite" id="inv-submit" ${guestNeedsProject ? 'disabled' : ''}>${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button></div>`;
+}
+/* [55-04 D-55-6] The assignee picker modal — the invite modal's chip pattern
+   applied to assignment: the draft rides S.ui.assigneePick so a full
+   re-render never wipes the selection (STATE.md pitfall 4), the search input
+   is data-in bound with its value restored from state on every render,
+   candidates filter through the TEAM-04 assignableInProject predicate
+   (D-55-9 — members who cannot read the project are never offered, while
+   members already in the draft stay listed), and the cap (D-55-7) blocks a
+   6th add with a visible hint. Confirm applies the whole draft as ONE array
+   write — the diff-based notify lives in the action layer (D-55-13).
+   taskId '__form' targets the new/edit task form's S.ui.form.assignees;
+   subtaskIndex != null targets that subtask (D-55-5 — same predicate). */
+export function assigneePickModal(m, H) {
+  const st = S.ui.assigneePick || { taskId: null, subtaskIndex: null, draft: [], q: '' };
+  const isForm = st.taskId === '__form';
+  const tk = isForm ? null : task(st.taskId);
+  const p = proj(isForm ? S.ui.form.project : tk?.project);
+  const needle = foldForSearch(st.q || '').text;
+  const cands = (D().members || [])
+    .filter(mm => mm.status !== 'deactivated' && assignableInProject(mm, p, st.draft))
+    .filter(mm => !needle || foldForSearch(mm.name).text.includes(needle));
+  const atCap = st.draft.length >= ASSIGNEE_CAP;
+  return `${H(t('act.assignTo'), tk ? esc(tk.title) : '')}
+  <div class="modal-b" style="gap:10px">
+    <input class="input" id="ap-q" data-in="assigneePickQ" placeholder="${t('modal.assigneeSearch')}" value="${esc(st.q || '')}" autofocus aria-label="${t('modal.assigneeSearch')}">
+    ${
+      st.draft.length
+        ? `<div class="row" style="flex-wrap:wrap;gap:6px">${st.draft
+            .map(
+              id =>
+                `<span class="chip">${av(id, 'sm', false)}<b>${esc(mem(id)?.name || '')}</b><button type="button" class="ibtn" data-a="assigneePickToggle" data-v="${id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></span>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
+    ${atCap ? `<div class="alert info" style="margin:0">${ic('circle-alert', 14)}<span>${t('page.field.assigneeCap', { n: ASSIGNEE_CAP })}</span></div>` : ''}
+    <div class="col" style="gap:2px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:4px">
+      ${
+        cands
+          .map(mm => {
+            const on = st.draft.includes(mm.id);
+            const blocked = !on && atCap;
+            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:8px">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${mm.id === D().me ? `<span class="faint" style="font-weight:400">${t('common.youSuffix').trim()}</span>` : ''}${on ? ic('check', 13) : ''}</button>`;
+          })
+          .join('') || `<div class="mi faint" style="cursor:default">${t('modal.assigneeNoMatches')}</div>`
+      }
+    </div>
+  </div>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="assigneePickApply">${t('act.done')}</button></div>`;
 }
 export function confirmModal(m) {
   const needs = m.typeName;

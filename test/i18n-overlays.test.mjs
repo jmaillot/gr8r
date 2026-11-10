@@ -402,7 +402,6 @@ const TASK3_ORACLE = [
   ['a11y.prevMonth', undefined, 'Previous month'],
   ['a11y.nextMonth', undefined, 'Next month'],
   ['common.youSuffix', undefined, ' (you)'],
-  ['a11y.assignSubtask', undefined, 'Assign subtask to…'],
   ['a11y.filterLabels', undefined, 'Filter labels…'],
   ['popover.recurNone', undefined, 'Does not repeat'],
   ['popover.recurDaily', undefined, 'Daily'],

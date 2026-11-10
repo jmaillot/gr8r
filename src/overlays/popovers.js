@@ -18,7 +18,6 @@ import {
   roleLabel,
   task,
   visibleProjects,
-  assignableInProject,
   workspaceList as wsList,
 } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -125,43 +124,17 @@ export function popHtml(p) {
   let inner = '',
     cls = '',
     style = '';
-  const t = ['status', 'priority', 'assignee', 'labels', 'date', 'project', 'deps', 'recur', 'estimate'].includes(p.type) ? tgt(p) : null;
+  const t = ['status', 'priority', 'labels', 'date', 'project', 'deps', 'recur', 'estimate'].includes(p.type) ? tgt(p) : null;
   switch (p.type) {
     case 'create':
       inner = `<div class="mh">${tMsg('modal.sc.create')}</div><button class="mi" data-a="newTask">${ic('circle-check', 15)}${tMsg('page.columns.task')}<span class="r"><kbd>N</kbd></span></button><button class="mi" data-a="newProject">${ic('folder-plus', 15)}${tMsg('page.field.project')}<span class="r"><kbd>P</kbd></span></button><button class="mi" data-a="newTeam">${ic('users', 15)}${tMsg('nav.route.team')}</button>${isMemberAdmin() ? `<div class="msep"></div><button class="mi" data-a="invite">${ic('user-plus', 15)}${tMsg('palette.inviteMember')}</button>` : ''}`;
       style = 'width:220px';
       break;
-    case 'subassignee': {
-      const tk = task(p.id);
-      const sb = tk?.subtasks[p.i];
-      if (!sb) break;
-      inner = popList(
-        [
-          { id: '', name: tMsg('common.unassigned'), html: av(null, 'sm', false), on: !sb.assignee },
-          ...D()
-            .members.filter(m => m.status !== 'deactivated' && assignableInProject(m, proj(tk.project), sb.assignee))
-            .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? tMsg('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: sb.assignee === m.id })),
-        ],
-        { search: tMsg('a11y.assignSubtask') },
-      );
-      break;
-    }
     case 'status':
       inner = popList(STATUSES.map((s, i) => ({ id: s.id, name: s.name, html: stIcon(s.id), on: t?.status === s.id, kbd: i + 1 })));
       break;
     case 'priority':
       inner = popList(PRIOS.map(x => ({ id: x.id, name: x.name, html: prIcon(x.id), on: t?.priority === x.id })));
-      break;
-    case 'assignee':
-      inner = popList(
-        [
-          { id: '', name: tMsg('common.unassigned'), html: av(null, 'sm', false), on: !t?.assignee },
-          ...D()
-            .members.filter(m => m.status !== 'deactivated' && assignableInProject(m, proj(t?.project), t?.assignee))
-            .map(m => ({ id: m.id, name: m.name + (m.id === D().me ? tMsg('common.youSuffix') : ''), html: av(m.id, 'sm', false), on: t?.assignee === m.id })),
-        ],
-        { search: tMsg('act.assignTo') },
-      );
       break;
     case 'labels':
       inner = popList(

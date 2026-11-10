@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
-import { PR, PSTAT, LB } from '../core/constants.js';
+import { ASSIGNEE_CAP, PR, PSTAT, LB } from '../core/constants.js';
 import { seed } from '../data/seed.js';
 import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
@@ -245,7 +245,15 @@ export function applyPatch(t, patch) {
         if (memberScopeEligible(mem(id), t.project))
           notifyMembers([id], { type: 'assign', by: D().me, task: t.id, project: t.project, snippet: fmtDate(t.due) || '' });
       }
-      for (const id of prev) if (!next.includes(id)) logAct('assigned', t, { kind: 'unassigned' });
+      for (const id of prev)
+        if (!next.includes(id)) {
+          logAct('assigned', t, { kind: 'unassigned' });
+          /* D-55-13: removed assignees get notified too — the mirror of the
+             add path, eligibility pre-filtered (advisory; the server guards
+             are the authority). */
+          if (memberScopeEligible(mem(id), t.project))
+            notifyMembers([id], { type: 'assignRemoved', by: D().me, task: t.id, project: t.project });
+        }
     } else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
     else if (k === 'due') logAct('changedDueDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
     else if (k === 'start') logAct('changedStartDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
@@ -418,6 +426,13 @@ A.setPref = el => {
 /* ---------- popovers ---------- */
 A.pop = el => {
   const d = el.dataset;
+  /* [55-04 D-55-6] The single-assignee pops are gone — the task pop (board
+     cell, table cell, drawer field, form chip) and the subtask pop (D-55-5)
+     open the assignee picker modal instead, from the same placements. */
+  if (d.pop === 'assignee' || d.pop === 'subassignee') {
+    A.assigneePickOpen(el);
+    return;
+  }
   const p = S.ui.pop;
   if (p && p.type === d.pop && p.id === d.id && p.key === d.key && p.i == (d.i != null ? +d.i : undefined) && p.field === d.field) {
     closePop();
@@ -439,26 +454,15 @@ A.ctxBtn = el => {
 A.popPick = el => {
   const p = S.ui.pop;
   let v = el.dataset.v;
-  if (p.type === 'subassignee' || (p.type === 'date' && p.field === 'subdue')) {
+  if (p.type === 'date' && p.field === 'subdue') {
     const t = task(p.id);
     const sb = t?.subtasks[p.i];
     if (!sb) return;
-    const k = p.type === 'subassignee' ? 'assignee' : 'due';
-    v = v || null;
+    const v = el.dataset.v || null;
     S.ui.pop = null;
     mutate(() => {
-      sb[k] = v;
-      logAct(
-        k === 'assignee' ? 'assignedASubtaskOn' : 'setASubtaskDueDateOn',
-        t,
-        k === 'assignee'
-          ? v
-            ? { kind: 'assignedTo', value: mem(v)?.name ?? '' }
-            : { kind: 'unassigned' }
-          : v
-            ? { kind: 'dateSet', value: v }
-            : { kind: 'dateCleared' },
-      );
+      sb.due = v;
+      logAct('setASubtaskDueDateOn', t, v ? { kind: 'dateSet', value: v } : { kind: 'dateCleared' });
     });
     return;
   }
@@ -558,13 +562,79 @@ IN.popQ = el => {
     render();
   }
 };
+/* ---------- 55-04 assignee picker ---------- */
+/* The picker's open/toggle/apply trio. The draft lives in S.ui.assigneePick
+   (pitfall 4) so background renders and chip toggles never wipe it; the
+   confirm applies the whole draft as ONE array write and the applyPatch
+   assignees branch diffs it against the previous array (D-55-13). */
+A.assigneePickOpen = el => {
+  const d = el.dataset;
+  const id = d.id;
+  const subI = d.i != null ? +d.i : null;
+  const cur =
+    id === '__form'
+      ? S.ui.form.assignees || []
+      : subI != null
+        ? task(id)?.subtasks[subI]?.assignees || []
+        : task(id)?.assignees || [];
+  S.ui.assigneePick = { taskId: id, subtaskIndex: subI, draft: [...cur], q: '' };
+  S.ui.pop = null;
+  openModal({ type: 'assigneePick' });
+};
+A.assigneePickToggle = el => {
+  const st = S.ui.assigneePick;
+  if (!st) return;
+  const id = el.dataset.v;
+  if (st.draft.includes(id)) st.draft = st.draft.filter(x => x !== id);
+  else if (st.draft.length < ASSIGNEE_CAP) st.draft = [...st.draft, id];
+  /* At the cap a further add is blocked (D-55-7) — the hint is visible on the
+     modal, so a blocked click only re-renders. */
+  render();
+};
+IN.assigneePickQ = el => {
+  if (!S.ui.assigneePick) return;
+  S.ui.assigneePick.q = el.value;
+  render();
+};
+A.assigneePickApply = () => {
+  const st = S.ui.assigneePick;
+  if (!st) return;
+  const draft = [...st.draft];
+  const { taskId, subtaskIndex } = st;
+  S.ui.assigneePick = null;
+  closeModal();
+  if (taskId === '__form') {
+    S.ui.form.assignees = draft;
+    render();
+    return;
+  }
+  if (subtaskIndex != null) {
+    const tk = task(taskId);
+    const sb = tk?.subtasks[subtaskIndex];
+    if (!sb) return;
+    mutate(() => {
+      /* Subtask assignees carry the canonical array shape (D-55-5; server-side
+         invariants in 55-01) — the diff feeds the same assigned/unassigned
+         activity verbs the old pop used. */
+      const prev = Array.isArray(sb.assignees) ? sb.assignees : sb.assignee ? [sb.assignee] : [];
+      sb.assignees = draft;
+      for (const id of draft)
+        if (!prev.includes(id)) logAct('assignedASubtaskOn', tk, { kind: 'assignedTo', value: mem(id)?.name ?? '' });
+      for (const id of prev) if (!draft.includes(id)) logAct('assignedASubtaskOn', tk, { kind: 'unassigned' });
+    });
+    return;
+  }
+  updateTask(taskId, { assignees: draft });
+};
 export const ctxTo = type => () => {
   S.ui.pop = { ...S.ui.pop, type, q: '' };
   if (type === 'date') S.ui.pop.m = iso(TODAY);
   render();
 };
 A.ctxStatus = ctxTo('status');
-A.ctxAssign = ctxTo('assignee');
+/* [55-04 D-55-6] The context menu's Assign entry opens the picker modal —
+   the scalar assignee pop it used to open no longer exists. */
+A.ctxAssign = el => A.assigneePickOpen(el);
 A.ctxPrio = ctxTo('priority');
 A.ctxMove = ctxTo('project');
 A.ctxRole = ctxTo('role');
