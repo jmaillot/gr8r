@@ -89,6 +89,54 @@ async function makeWorkspace(tasks, prefs = {}, tz = TZ, srv = server) {
   return { ws, memberId: mem.member_id, email: owner.email, own: emitted => emitted.filter(n => ids.has(n.task)) };
 }
 
+/* [Phase 55, D-55-10] Multi-member fixture: workspace with the real owner
+   member PLUS doc-only extra members (own tz each). `tasks(m)` returns tasks
+   referencing `m` (the owner's member id) and any extra member id. `prefs`
+   lands in user_notif_prefs for the OWNER's account — doc-only extras read
+   all-ON defaults (no membership row). Returns `own` filtered to the fixture
+   tasks, as makeWorkspace. */
+async function makeMultiWorkspace({ extraMembers = [], tasks, prefs = {}, projects = [{ id: 'p1', name: 'P1' }] }, tz = TZ, srv = server) {
+  if (!owners.has(srv.base)) {
+    const email = `owner-${++seq}@test.local`;
+    await signup(srv.base, { name: 'Owner', email, password: GOOD });
+    const c = client(srv.base, email);
+    const logged = await c.post('/api/auth/login', { email, password: GOOD });
+    assert.equal(logged.status, 200, 'owner login');
+    owners.set(srv.base, { email, c });
+  }
+  const owner = owners.get(srv.base);
+  const created = await owner.c.post('/api/workspaces', { name: `Ws${++seq}`, slug: `ws-${seq}` });
+  assert.equal(created.status, 201, `workspace create ${created.status}`);
+  const ws = withDb(srv.dbPath, db => db.prepare('select * from workspaces where slug = ?').get(`ws-${seq}`));
+  const mem = withDb(srv.dbPath, db => db.prepare('select member_id from memberships where workspace_id = ? order by rowid limit 1').get(ws.id));
+  assert.ok(mem?.member_id, 'membership carries a member_id');
+  const fixtureTasks = tasks(mem.member_id);
+  const doc = {
+    data: {
+      members: [
+        { id: mem.member_id, name: 'Owner', email: owner.email, userId: null, tz },
+        ...extraMembers.map(m => ({ id: m.id, name: m.name || m.id, tz: m.tz || TZ })),
+      ],
+      projects,
+      tasks: fixtureTasks,
+      comments: [],
+      activity: [],
+      notifs: [],
+      files: [],
+    },
+  };
+  withDb(srv.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id));
+  if (Object.keys(prefs).length) {
+    withDb(srv.dbPath, db => {
+      const uidRow = db.prepare('select user_id from memberships where workspace_id = ? order by rowid limit 1').get(ws.id);
+      assert.ok(uidRow?.user_id, 'membership carries a user_id');
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, uidRow.user_id, JSON.stringify(prefs));
+    });
+  }
+  const ids = new Set(fixtureTasks.map(t => t.id));
+  return { ws, memberId: mem.member_id, own: emitted => emitted.filter(n => ids.has(n.task)) };
+}
+
 const revisionOf = (slug, srv = server) =>
   withDb(srv.dbPath, db => db.prepare('select revision from workspaces where slug = ?').get(slug).revision);
 const notifRows = (slug, srv = server) =>
@@ -103,7 +151,10 @@ const task = (memberId, over = {}) => ({
   key: `P1-${uid}`,
   title: 'Ship it',
   status: 'todo',
-  assignee: memberId,
+  /* [Phase 55, D-55-3] the scalar `assignee` is retired — fixtures carry the
+     canonical `assignees` array (server-side normalize would migrate the
+     scalar at pass time anyway, but fixtures speak the canonical shape). */
+  assignees: [memberId],
   project: 'p1',
   ...over,
 });
@@ -381,6 +432,83 @@ test('REM-02: Pacific label maps through DST — the local date, not the UTC dat
      legacy UTC fallback). Inject 07:00Z = 08:00 Europe/Paris (CET, winter). */
   const { own: ownU } = await makeWorkspace(m => [task(m, { due: '2026-01-15' })], {}, '');
   assert.ok(ownU(await trigger('2026-01-15T07:00:00Z')).some(n => n.snippet === 'Due today: Ship it'), 'empty tz label falls back to Europe/Paris (D-07)');
+});
+
+/* ================= Phase 55 D-55-10: per-assignee reminder fan-out ================= */
+
+test('D-55-10 (a)+(c): 2 assignees in different TZs — one reminder each at their own window, replay emits nothing', async () => {
+  const { ws, memberId, own } = await makeMultiWorkspace({
+    extraMembers: [{ id: 'mA-tz', tz: '(GMT-08:00) Pacific Time' }],
+    tasks: m => [{
+      id: 'tTz', key: 'P1-TZ', title: 'Tz task', status: 'todo', due: '2026-01-15',
+      assignees: [m, 'mA-tz'], project: 'p1',
+    }],
+  });
+  /* 08:00Z = London 08:00 (window opens for the owner) but Pacific 00:00 —
+     mA-tz's window is still closed (D-27-1 per-member window). */
+  const first = own(await trigger(at8('2026-01-15')));
+  assert.equal(first.length, 1, 'only the London member is reminded at 08:00Z');
+  assert.equal(first[0].to, memberId);
+  /* 16:00Z = Pacific 08:00 — mA-tz's own window opens now; the London member's
+     claim already exists, so exactly one new row fires. */
+  const second = own(await trigger('2026-01-15T16:00:00Z'));
+  assert.equal(second.length, 1, 'the Pacific member is reminded at their own 08:00 local');
+  assert.equal(second[0].to, 'mA-tz');
+  const keys = reminderKeys(ws.id).filter(k => k.includes(':tTz:'));
+  assert.equal(keys.length, 2, 'one ledger row per (task, assignee)');
+  assert.ok(keys.includes(`${ws.id}:tTz:${memberId}:morning_of:2026-01-15`));
+  assert.ok(keys.includes(`${ws.id}:tTz:mA-tz:morning_of:2026-01-15`));
+  /* (c) replay: full re-run of the pass on the SAME due day emits nothing —
+     exactly-once per member (moving to the next day would legitimately fire
+     the past_due nudge, which is not a duplicate). */
+  const replay = own(await trigger('2026-01-15T18:00:00Z'));
+  assert.equal(replay.length, 0, 'past_due already claimed on the 16:00Z pass for both members — replay silent');
+  const keysAfter = reminderKeys(ws.id).filter(k => k.includes(':tTz:'));
+  assert.equal(keysAfter.length, 2, 'no duplicate ledger rows on replay');
+});
+
+test('D-55-10 (b): a member with prefs off gets no reminder while other assignees still do', async () => {
+  const { own } = await makeMultiWorkspace({
+    extraMembers: [{ id: 'mB-prefs' }],
+    tasks: m => [{
+      id: 'tPrefs', key: 'P1-PR', title: 'Prefs task', status: 'todo', due: '2026-01-20',
+      assignees: [m, 'mB-prefs'], project: 'p1',
+    }],
+    prefs: { due_reminder: false, past_due: false },
+  });
+  const day = own(await trigger(at8('2026-01-20')));
+  assert.deepEqual(day.map(n => n.to), ['mB-prefs'], 'the off-prefs member is silent, the other assignee still reminded');
+  assert.equal(day[0].type, 'due_reminder');
+  const after = own(await trigger(at8('2026-01-21')));
+  assert.deepEqual(after.map(n => n.to), ['mB-prefs'], 'past_due also fans out only to the opted-in assignee');
+});
+
+test('D-55-10 (d): one member failing memberCanReadProject does not suppress the others (per-member isolation)', async () => {
+  const { own } = await makeMultiWorkspace({
+    extraMembers: [{ id: 'mC-vis' }, { id: 'mD-vis' }],
+    projects: [{ id: 'p1', name: 'P1' }, { id: 'pPriv2', name: 'Private', private: true, members: ['mC-vis'] }],
+    tasks: () => [{
+      id: 'tVis', key: 'P1-VS', title: 'Vis task', status: 'todo', due: '2026-01-22',
+      assignees: ['mC-vis', 'mD-vis'], project: 'pPriv2',
+    }],
+  });
+  const emitted = own(await trigger(at8('2026-01-22')));
+  assert.deepEqual(emitted.map(n => n.to), ['mC-vis'], 'only the member who can read the private project is reminded');
+});
+
+test('D-55-10 (e): subtask assignees get NO reminder fan-out this phase (D-55-5)', async () => {
+  const { ws, own } = await makeMultiWorkspace({
+    extraMembers: [{ id: 'mE-sub' }],
+    tasks: m => [{
+      id: 'tSub', key: 'P1-SB', title: 'Sub task', status: 'todo', due: '2026-01-23',
+      assignees: [m], project: 'p1',
+      subtasks: [{ id: 's1', title: 'Sub', status: 'todo', assignees: ['mE-sub'] }],
+    }],
+  });
+  const emitted = own(await trigger(at8('2026-01-23')));
+  assert.ok(emitted.every(n => n.to !== 'mE-sub'), 'the subtask assignee is never reminded');
+  assert.equal(emitted.length, 1, 'only the task-level assignee fans out');
+  assert.ok(!reminderKeys(ws.id).some(k => k.includes(':mE-sub:')), 'no ledger row for the subtask assignee');
 });
 
 /* ==================== REM-05: reminder email path (Task 3) ==================== */
