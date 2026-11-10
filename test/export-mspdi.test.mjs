@@ -179,19 +179,21 @@ test('dated tasks carry a SNET constraint pinning their start (owner report 2026
   assert.ok(!undated.includes('<ConstraintType>'), 'undated rows stay unconstrained so the fallback still applies');
 });
 
-test('child tasks carry NO dates (owner ruling 2026-11-10) and nest via OutlineLevel', () => {
+test('child tasks carry the PARENT span + SNET pin so the summary rollup lands on it (owner 2026-11-10)', () => {
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
     const slice = taskSlice(subXml, name);
-    /* OutlineLevel sits exactly between Type and Milestone (no Start on children) */
+    /* OutlineLevel sits exactly between Type and Start on a child row */
     const typeAt = slice.indexOf('<Type>');
     const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');
-    const milestoneAt = slice.indexOf('<Milestone>');
-    assert.ok(olAt > typeAt && olAt < milestoneAt, `${name}: OutlineLevel after Type, before Milestone`);
-    /* dates and constraints are omitted entirely on child rows */
-    for (const el of ['Start', 'Finish', 'Duration', 'ConstraintType', 'ConstraintDate']) {
-      assert.ok(!slice.includes(`<${el}`), `${name} has no <${el}> — dates live on the parent only`);
-    }
+    const startAt = slice.indexOf('<Start>');
+    assert.ok(olAt > typeAt && olAt < startAt, `${name}: OutlineLevel after Type, before Start`);
+    /* Children inherit the PARENT's start/due: dateless children make
+       Project roll the whole summary back to the project start. */
+    assert.ok(slice.includes('<Start>2026-03-04T08:00:00</Start>'), `${name} starts with the parent task's start`);
+    assert.ok(slice.includes('<Finish>2026-03-10T17:00:00</Finish>'), `${name} finishes with the parent task's due`);
+    assert.ok(slice.includes('<ConstraintType>4</ConstraintType>'), `${name} is SNET-pinned so Project keeps the dates`);
+    assert.ok(slice.includes('<ConstraintDate>2026-03-04T08:00:00</ConstraintDate>'), `${name} pins the inherited start`);
   }
   /* the parent keeps its OWN dates, plus the SNET pin */
   const parent = taskSlice(subXml, 'Subtasked task');
