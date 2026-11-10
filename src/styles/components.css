@@ -652,6 +652,11 @@
 .avs .more {
   --c: var(--gray);
 }
+/* 55-07 A1: narrow mobile card (table.js .only-m) — same 3+overflow shape,
+   tighter overlap so the stack never pushes the row wider. */
+.only-m .avs .av + .av {
+  margin-left: -4px;
+}
 .presence {
   position: relative;
 }
