@@ -173,3 +173,13 @@ Plans:
 Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 </details>
+
+### Phase 55: Multiple assignees per task (full parity)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 54
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 55 to break down)

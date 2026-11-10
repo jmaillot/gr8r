@@ -178,3 +178,8 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 - [Phase 54]: makeAxis returns startISO/endISO so the Timeline writer derives one real date per header column
 - [Phase 54]: Milestone diamonds dated outside the bar-derived padded span are skipped (table row kept); the span never includes milestone dates
 - [Phase 54]: padToWeek yields spans that are multiples of 7 — the 90/91 mode switch is asserted on makeAxis directly; boundary fixtures pad to 35/91 days
+
+## Accumulated Context
+
+### Roadmap Evolution
+- Phase 55 added: Multiple assignees per task (full parity)
