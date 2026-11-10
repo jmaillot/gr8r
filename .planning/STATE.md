@@ -5,11 +5,11 @@ milestone_name: Member & Project Experience
 current_phase: 54
 current_phase_name: Project export — Excel report, MSPDI XML and CSV
 status: executing
-stopped_at: Completed 54-03-PLAN.md
-last_updated: "2026-11-10T10:04:33.283Z"
+stopped_at: Completed 54-04-PLAN.md
+last_updated: "2026-11-10T11:06:44.374Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 54 execution started
-state_head: c909ca548830fd3a339ec5913d2fdc2ecc392e42
+state_head: 04b92070b6d1eaf7d57c6c11a7a9457739abd7a9
 progress:
   total_phases: 2
   completed_phases: 1
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 54 (Project export — Excel report, MSPDI XML and CSV) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-11-10 — Completed 54-03-PLAN.md (Summary/Board/Members/Milestones + charts 1-3)
 
@@ -111,8 +111,8 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-10T10:04:33.233Z
-**Stopped at:** Completed 54-02-PLAN.md
+**Last session:** 2026-11-10T11:06:44.319Z
+**Stopped at:** Completed 54-04-PLAN.md
 **Resume file:** None
 
 ### Last completed
@@ -141,6 +141,7 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 | Phase 53 P05 | 40 min | 3 tasks | 10 files |
 | Phase 54 P01 | 29 min | 3 tasks | 15 files |
 | Phase 54 P02 | 14 min | 3 tasks | 14 files |
+| Phase 54 P04 | 2h | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -166,3 +167,6 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 - [Phase 54]: Export route reads only docForClient; hidden-private and nonexistent ids return byte-identical 404s (no enumeration)
 - [Phase 54]: Owner approval 2026-11-10: approved @office-kit/xlsx 0.26.1 (exact pin, integrity-verified, no install script)
 - [Phase 54]: XLSX writer is server-only at the repo-root export/ directory; prohibition test makes the src/ boundary mechanical
+- [Phase 54]: makeAxis returns startISO/endISO so the Timeline writer derives one real date per header column
+- [Phase 54]: Milestone diamonds dated outside the bar-derived padded span are skipped (table row kept); the span never includes milestone dates
+- [Phase 54]: padToWeek yields spans that are multiples of 7 — the 90/91 mode switch is asserted on makeAxis directly; boundary fixtures pad to 35/91 days
