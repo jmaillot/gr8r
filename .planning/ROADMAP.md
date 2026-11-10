@@ -14,12 +14,12 @@
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
 - ✅ **v1.10 Extensions & Adapters** — Phases 45-48 (shipped 2026-11-07)
 - ✅ **v2.0 Project-level Permissions & Invitations** — Phases 49-52 (shipped 2026-11-09)
-- 🚧 **v2.1 Member & Project Experience** — Phase 53 shipped 2026-11-09; Phase 54 in progress
+- 🚧 **v2.1 Member & Project Experience** — Phase 53 shipped 2026-11-09; Phase 54 shipped 2026-11-10 (open UAT: MS Project/Excel visual checks)
 
 ## Phases
 
 - [x] **Phase 53: Member & Project Experience** - One ordered phase covering all v2.1 requirements: per-team perms (server first), invite modal, unified project settings, projects table & Share dedup, teams polish — executed plan-by-plan in the dependency order below (completed 2026-11-09)
-- [ ] **Phase 54: Project export — Excel report, MSPDI XML and CSV** - One export model, three writers (xlsx / MSPDI / CSV), scoped to the current filtered view or the whole project
+- [x] **Phase 54: Project export — Excel report, MSPDI XML and CSV** - One export model, three writers (xlsx / MSPDI / CSV), scoped to the current filtered view or the whole project — shipped 2026-11-10; the MS Project import + Excel visual checks remain open UAT entries (owner skipped, no Project machine)
 
 ## Phase Details
 

@@ -4,7 +4,7 @@ milestone: v2.1
 milestone_name: Member & Project Experience
 current_phase: 54
 current_phase_name: Project export — Excel report, MSPDI XML and CSV
-status: executing
+status: phase_complete_pending_verification
 stopped_at: Completed 54-05-PLAN.md (open UAT: Project open check skipped — no Project machine)
 last_updated: "2026-11-10T11:06:44.374Z"
 last_activity: 2026-11-10
