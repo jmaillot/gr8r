@@ -60,9 +60,11 @@ import { referencesHidden } from './src/lib/redaction.js';
 import { createMcp, generateApiKey, API_KEY_DAYS, validKeyDays, validKeyScope } from './mcp.js';
 import { registerCatalogue, tFor } from './src/core/i18n.js';
 /* Phase 54 (54-01): the export funnel — one redacted-document read, one
-   DOM-free model, one CSV writer (T-54-01..T-54-06). */
+   DOM-free model, one writer per format (T-54-01..T-54-06). 54-02 adds
+   the server-only xlsx writer at the repository root (never under src/). */
 import { buildExportModel } from './src/export/model.js';
 import { toCsv } from './src/export/csv.js';
+import { buildWorkbook } from './export/xlsx.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -5223,6 +5225,9 @@ async function handleApi(req, res, url) {
        MSPDI entries arrive with their writers in plans 02 and 05. */
     const EXPORT_FORMATS = {
       csv: { ext: 'csv', mime: 'text/csv; charset=utf-8', write: model => Buffer.from(toCsv(model), 'utf8') },
+      /* 54-02: the workbook writer is async — write() returns a promise the
+         generation step awaits below, before any header is written. */
+      xlsx: { ext: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', write: model => buildWorkbook(model) },
     };
     const entry = body && EXPORT_FORMATS[body.format];
     if (!entry) return fail(res, 400, 'exportInvalidRequest', 'Provide a supported export format');
@@ -5254,7 +5259,7 @@ async function handleApi(req, res, url) {
         },
       );
       if (!model) return fail(res, 404, 'projectNotFound', 'Project not found');
-      const buffer = entry.write(model);
+      const buffer = await entry.write(model);
       /* T-54-04: filename allow-list — every character outside A-Z a-z 0-9
          dot underscore hyphen becomes a hyphen; extension from the map. */
       const safeStem = value => {

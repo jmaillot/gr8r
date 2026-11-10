@@ -122,7 +122,10 @@ test('export route: invisible project and nonexistent project are byte-identical
 
 test('export route: unsupported format is rejected 400 exportInvalidRequest', async t => {
   const { server, auth } = await bootVisfixServer(t);
-  const res = await rawPost(server, auth.plain, exportPath('p_membershare'), { format: 'xlsx' });
+  /* 54-02: xlsx is now a supported format, so the unsupported probe is
+     'mpp' — which also pins the prohibition that .mpp is never served
+     (the MSPDI XML is never labelled .mpp). */
+  const res = await rawPost(server, auth.plain, exportPath('p_membershare'), { format: 'mpp' });
   assert.equal(res.status, 400);
   const body = JSON.parse(await res.text());
   assert.equal(body.code, 'exportInvalidRequest');

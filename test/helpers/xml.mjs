@@ -23,8 +23,10 @@ export function assertWellFormed(xml) {
   const stack = [];
   const re = /<\/?([A-Za-z_][\w.:-]*)((?:"[^"]*"|'[^']*'|[^"'>])*)(\/?)>/g;
   for (const m of body.matchAll(re)) {
-    const [, name, , selfClose] = m;
-    if (selfClose === '/') continue;
+    const [, name] = m;
+    /* self-closing: the attrs group may greedily swallow the trailing
+       slash, so test the full match instead of the captured group. */
+    if (m[0].endsWith('/>')) continue;
     if (m[0][1] === '/') {
       const top = stack.pop();
       if (top !== name) {
@@ -40,9 +42,10 @@ export function assertWellFormed(xml) {
 }
 
 /* All raw open tags for a name, in document order — e.g.
-   tags(xml, 'sheet') returns every `<sheet ...>` match array. */
+   tags(xml, 'sheet') returns every `<sheet ...>` match array. The
+   look-ahead keeps `<sheets>` from matching name 'sheet'. */
 export function tags(xml, name) {
   const body = stripPrologue(xml);
-  const re = new RegExp(`<${name}((?:"[^"]*"|'[^']*'|[^"'>])*)>`, 'g');
+  const re = new RegExp(`<${name}(?=[\\s/>])((?:"[^"]*"|'[^']*'|[^"'>])*)>`, 'g');
   return [...body.matchAll(re)].map(m => m[0]);
 }
