@@ -182,3 +182,63 @@ test('EN and FR catalogues carry the scope/option keys with matching placeholder
     assert.ok(!/[<>"]/.test(en[k]) && !/[<>"]/.test(fr[k]), `${k} values carry no angle bracket or double quote`);
   }
 });
+
+/* =====================================================================
+   54-05: the completed format surface. Every rendered option must be a
+   format the server actually serves; the static build keeps CSV only.
+   ===================================================================== */
+
+const SERVER_FORMATS = () => {
+  const server = read('server.js');
+  const block = server.slice(server.indexOf('EXPORT-ROUTE-BEGIN'), server.indexOf('EXPORT-ROUTE-END'));
+  return [...block.matchAll(/(\w+):\s*\{\s*ext:/g)].map(m => m[1]).sort();
+};
+
+test('the modal format list is xlsx, mspdi, csv on the server build and csv only on the static build', () => {
+  const modal = read('src/overlays/modals.js').split('export function exportModal')[1];
+  const formatsLine = modal.split('\n').find(l => l.includes('const FORMATS'));
+  assert.ok(formatsLine, 'the format list is built per mode');
+  const serverList = formatsLine.split('?')[1].split(':')[0];
+  const staticList = formatsLine.split(':')[1];
+  assert.ok(serverList.includes("'xlsx'") && serverList.includes("'mspdi'") && serverList.includes("'csv'"), 'the server build offers all three');
+  assert.ok(!staticList.includes("'xlsx'") && !staticList.includes("'mspdi'") && staticList.includes("'csv'"), 'the static build offers CSV only');
+  assert.ok(modal.includes("t('export.format.' + id)"), 'each radio reads its catalogue label');
+  assert.ok(modal.includes("data-in=\"${name === 'expScope' ? 'exportScope' : 'exportFormat'}\"") || modal.includes("'exportFormat'"), 'the radios write through IN.exportFormat');
+});
+
+test('the mspdi notice renders only on the server build and only when mspdi is selected', () => {
+  const modal = read('src/overlays/modals.js').split('export function exportModal')[1];
+  assert.ok(modal.includes("api.enabled && fmt === 'mspdi'"), 'the notice is gated on the server build AND the selected format');
+  assert.ok(modal.includes('export.notice.mspdi'), 'the notice key is export.notice.mspdi');
+});
+
+test('A.exportOpen defaults to xlsx on the server build and csv on the static build', () => {
+  const src = read('src/actions/actions.js');
+  const open = src.slice(src.indexOf('A.exportOpen'));
+  assert.ok(open.includes("S.ui.expFormat = api.enabled ? 'xlsx' : 'csv'"), 'the default follows the mode');
+  const submit = src.slice(src.indexOf('A.exportSubmit'));
+  assert.ok(submit.includes('format: S.ui.expFormat'), 'the submit sends the selected format, never a hardcoded id');
+});
+
+test('every format id rendered by the modal exists in the server EXPORT_FORMATS map', () => {
+  const serverFormats = SERVER_FORMATS();
+  assert.deepEqual(serverFormats, ['csv', 'mspdi', 'xlsx'].sort(), 'the server serves csv, mspdi and xlsx');
+  const modal = read('src/overlays/modals.js').split('export function exportModal')[1];
+  const formatsLine = modal.split('\n').find(l => l.includes('const FORMATS'));
+  const rendered = [...formatsLine.matchAll(/\['(\w+)',/g)].map(m => m[1]);
+  for (const id of rendered) {
+    assert.ok(serverFormats.includes(id), `the rendered format ${id} is servable`);
+  }
+});
+
+test('the mspdi catalogue keys exist in both languages and name the XML format honestly', () => {
+  const en = JSON.parse(read('src/locales/en.json'));
+  const fr = JSON.parse(read('src/locales/fr.json'));
+  for (const k of ['export.format.mspdi', 'export.notice.mspdi']) {
+    assert.ok(typeof en[k] === 'string' && en[k].length > 0, `EN has ${k}`);
+    assert.ok(typeof fr[k] === 'string' && fr[k].length > 0, `FR has ${k}`);
+    assert.ok(!/[<>"]/.test(en[k]) && !/[<>"]/.test(fr[k]), `${k} carries no angle bracket or double quote`);
+  }
+  assert.ok(/\.xml/.test(en['export.format.mspdi']), 'the label names the .xml extension');
+  assert.ok(!/\.mpp/i.test(en['export.format.mspdi'] + en['export.notice.mspdi']), 'no label claims native Project binary support');
+});

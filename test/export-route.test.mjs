@@ -189,3 +189,56 @@ test('export route: unauthenticated request hits the workspace gate', async t =>
   assert.ok([401, 403].includes(res.status), `unauthenticated request denied with ${res.status}`);
   assert.equal(res.headers.get('content-disposition'), null);
 });
+
+/* =====================================================================
+   54-05: the two binary formats. The mspdi response is MSPDI XML —
+   extension and media type come from the static server map, never the
+   request (T-54-20); the xlsx response is a real zip container.
+   ===================================================================== */
+import { assertWellFormed } from './helpers/xml.mjs';
+
+test('export route: mspdi returns XML with the xml filename, no-store and the short namespace', async t => {
+  const { server, auth } = await bootVisfixServer(t);
+  const res = await rawPost(server, auth.plain, exportPath('p_membershare'), { format: 'mspdi', scope: 'all' });
+
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /^application\/xml/);
+  assert.match(res.headers.get('content-type'), /charset=utf-8/, 'the media type carries the charset');
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  const disposition = res.headers.get('content-disposition');
+  assert.match(disposition, /filename\*?=[^;]*\.xml/, 'filename carries the .xml extension');
+
+  const body = Buffer.from(await res.arrayBuffer()).toString('utf8');
+  assertWellFormed(body);
+  assert.ok(body.includes('<Project xmlns="http://schemas.microsoft.com/project">'), 'the short Microsoft project namespace');
+  assert.ok(body.includes('<SaveVersion>12</SaveVersion>'), 'a real MSPDI document, not a stub');
+});
+
+test('export route: mspdi is denied to a reader without manage rights with zero bytes', async t => {
+  const { server, auth } = await bootVisfixServer(t);
+  const res = await rawPost(server, auth.team, exportPath('p_teamboth'), { format: 'mspdi' });
+  assert.equal(res.status, 403);
+  assert.equal(JSON.parse(await res.text()).code, 'exportForbidden');
+  assert.equal(res.headers.get('content-disposition'), null, 'no bytes, no filename');
+});
+
+test('export route: unsupported and path-shaped formats are rejected before generation', async t => {
+  const { server, auth } = await bootVisfixServer(t);
+  for (const format of ['mpp', 'csv.xml', '../etc/passwd', 'xml/..', 'xlsx/']) {
+    const res = await rawPost(server, auth.plain, exportPath('p_membershare'), { format });
+    assert.equal(res.status, 400, `format ${JSON.stringify(format)} rejected`);
+    assert.equal(JSON.parse(await res.text()).code, 'exportInvalidRequest');
+  }
+});
+
+test('export route: xlsx returns a real zip container with the .xlsx filename', async t => {
+  const { server, auth } = await bootVisfixServer(t);
+  const res = await rawPost(server, auth.plain, exportPath('p_membershare'), { format: 'xlsx', scope: 'all' });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /^application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+  assert.match(res.headers.get('content-disposition'), /filename\*?=[^;]*\.xlsx/, 'filename carries the .xlsx extension');
+  const buffer = Buffer.from(await res.arrayBuffer());
+  assert.ok(buffer.length > 4, 'a non-empty workbook');
+  assert.deepEqual([...buffer.subarray(0, 4)], [0x50, 0x4b, 0x03, 0x04], 'the body starts with the zip magic');
+});

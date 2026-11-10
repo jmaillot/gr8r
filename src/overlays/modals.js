@@ -391,15 +391,24 @@ export function exportModal(m, H) {
   const count = (model?.rows || []).length;
   const radio = (name, value, label, icon, checked, disabled = false) =>
     `<label class="opt ${checked ? 'on' : ''}${disabled ? ' off' : ''}" ${disabled ? 'aria-disabled="true"' : ''} style="${disabled ? 'opacity:.5' : ''}"><input type="radio" name="${name}" value="${value}" data-in="${name === 'expScope' ? 'exportScope' : 'exportFormat'}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>${ic(icon, 14)}${label}</label>`;
+  /* 54-05: the format list is built per mode — Excel and Microsoft Project
+     XML on the server build, CSV only on the static build (R9: the static
+     writer is dependency-free CSV; the xlsx and MSPDI writers are
+     server-only). Every rendered id is a server EXPORT_FORMATS key, so a
+     rendered option is always a servable format. */
+  const FORMATS = api.enabled ? [['xlsx', 'table-2'], ['mspdi', 'file-code'], ['csv', 'table-2']] : [['csv', 'table-2']];
+  const fmt = S.ui.expFormat || FORMATS[0][0];
+  const formatRadios = FORMATS.map(([id, icon]) => radio('expFormat', id, t('export.format.' + id), icon, fmt === id)).join('');
   return `${H(t('export.title', { name: esc(p.name) }))}
   <div class="modal-b">
-    <div class="field"><span class="label">${t('export.format.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.format.label')}">${radio('expFormat', 'csv', t('export.format.csv'), 'table-2', true)}</div></div>
+    <div class="field"><span class="label">${t('export.format.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.format.label')}">${formatRadios}</div></div>
     <div class="field"><span class="label">${t('export.scope.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.scope.label')}">${radio('expScope', 'all', t('export.scope.all'), 'list', scope === 'all')}${radio('expScope', 'view', hasView ? t('export.scope.view') : t('export.scope.viewUnavailable'), 'list-filter', scope === 'view', !hasView)}</div></div>
     <div class="field"><span class="label">${t('export.options.label')}</span><div class="tmpls" role="group" aria-label="${t('export.options.label')}">${EXP_OPTIONS.map(
       ([key, icon]) =>
         `<label class="opt ${opts[key] ? 'on' : ''}"><input type="checkbox" data-in="exportOption" data-key="${key}" ${opts[key] ? 'checked' : ''}>${ic(icon, 14)}${t('export.option.' + key)}</label>`,
     ).join('')}</div></div>
     <div class="hint">${t('export.scope.count', { n: count })}${hasView ? '' : ` · ${t('export.scope.viewUnavailable')}`}</div>
+    ${api.enabled && fmt === 'mspdi' ? `<div class="alert info">${ic('info', 14)}<span>${t('export.notice.mspdi')}</span></div>` : ''}
     ${api.enabled ? '' : `<div class="alert info">${ic('info', 14)}<span>${t('export.notice.staticMode')}</span></div>`}
   </div>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="exportSubmit" data-id="${p.id}" ${count === 0 ? 'disabled' : ''}>${ic('download', 14)}${t('export.submit')}</button></div>`;

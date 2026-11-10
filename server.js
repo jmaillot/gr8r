@@ -65,6 +65,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import { buildExportModel } from './src/export/model.js';
 import { toCsv } from './src/export/csv.js';
 import { buildWorkbook } from './export/xlsx.js';
+import { buildMspdi } from './export/mspdi.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -5228,6 +5229,10 @@ async function handleApi(req, res, url) {
       /* 54-02: the workbook writer is async — write() returns a promise the
          generation step awaits below, before any header is written. */
       xlsx: { ext: 'xlsx', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', write: model => buildWorkbook(model) },
+      /* 54-05: the MSPDI serializer is a pure string builder — the route
+         converts to a UTF-8 Buffer here, the only place the extension and
+         media type are chosen (T-54-20: static map, never the request). */
+      mspdi: { ext: 'xml', mime: 'application/xml; charset=utf-8', write: model => Buffer.from(buildMspdi(model), 'utf8') },
     };
     const entry = body && EXPORT_FORMATS[body.format];
     if (!entry) return fail(res, 400, 'exportInvalidRequest', 'Provide a supported export format');

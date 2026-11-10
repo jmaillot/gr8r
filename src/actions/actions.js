@@ -1756,7 +1756,10 @@ A.exportOpen = el => {
   const tab = S.ui.params.tab || 'board';
   S.ui.expOptions = { ...DEFAULT_OPTIONS };
   S.ui.expScope = 'all';
-  S.ui.expFormat = 'csv';
+  /* 54-05: the default format follows the mode — Excel on the server
+     build (the richest artifact), CSV on the static build (the only
+     browser writer). The submit path sends S.ui.expFormat verbatim. */
+  S.ui.expFormat = api.enabled ? 'xlsx' : 'csv';
   S.ui.expViewKey = tab.startsWith('v:')
     ? 'sv:' + tab.slice(2)
     : ['board', 'list', 'table', 'calendar', 'timeline'].includes(tab)
@@ -1811,7 +1814,7 @@ A.exportSubmit = async el => {
     closeModal();
     return toast(t('export.scope.count', { n: count }), { ms: 1800 });
   }
-  const body = { format: 'csv', scope, options };
+  const body = { format: S.ui.expFormat || 'csv', scope, options };
   if (scope === 'view') {
     if (!ids) {
       body.scope = 'all';
