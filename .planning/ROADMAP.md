@@ -176,7 +176,10 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 ### Phase 55: Multiple assignees per task (full parity)
 
-**Goal:** [To be planned]
+**Goal:** Tasks carry multiple assignees with full parity — schema (`assignee` → `assignees[]` with doc migration), UI everywhere (avatar stacks on board/list/table/timeline, multi-select assignee picker, "any of" filters, My-Tasks membership), server fan-out (one reminder per assignee with their own TZ + prefs, per-member write-guard and `assigneeOutOfScope`), and exports carrying all assignees.
+
+**Folded in (owner decision 2026-11-10):** subtask start dates — add `start` to the subtask schema with parent-start inheritance, overridable per subtask (mirrors the subtask due pattern, `page.subtask.inheritedDue`); subtask drawer gains a Start row; exports (MSPDI + XLSX model) write `s.start || t.start` so subtasks stop falling through to the project start date in MS Project.
+
 **Requirements**: TBD
 **Depends on:** Phase 54
 **Plans:** 0 plans
