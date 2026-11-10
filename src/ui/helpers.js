@@ -15,9 +15,21 @@ export function av(id, cls = '', tip = true) {
     .slice(0, 2);
   return `<span class="av ${cls}" style="--c:${m.c}" ${tip ? `data-tip="${esc(m.name)}"` : ''} aria-label="${esc(m.name)}">${ini}</span>`;
 }
-export function avStack(ids, max = 4, cls = 'sm') {
-  const v = ids.slice(0, max);
-  return `<span class="avs">${v.map(i => av(i, cls)).join('')}${ids.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)">+${ids.length - max}</span>` : ''}</span>`;
+/* D-55-8: first `max` avatars overlapping, then a `+N` overflow chip whose tooltip names
+   the remaining members. An empty array falls back to the single empty avatar so every
+   render site keeps its existing no-assignee rendering. The chip tooltip is always on —
+   it is the only place the hidden members are discoverable — while `tip` controls the
+   per-avatar tooltips for tight surfaces. */
+export function avStack(ids, max = 3, cls = 'sm', tip = true) {
+  const v = ids || [];
+  if (!v.length) return av(null, cls, tip);
+  const rest = v
+    .slice(max)
+    .map(i => mem(i)?.name)
+    .filter(Boolean);
+  return `<span class="avs">${v.slice(0, max).map(i => av(i, cls, tip)).join('')}${
+    v.length > max ? `<span class="av ${cls} more" style="--c:var(--gray)"${rest.length ? ` data-tip="${esc(rest.join(', '))}"` : ''}>+${v.length - max}</span>` : ''
+  }</span>`;
 }
 export function stIcon(st, s = 14) {
   const c = `var(--st-${st})`;

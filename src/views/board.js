@@ -4,7 +4,7 @@ import { t as tk } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, STATUSES } from '../core/constants.js';
 import { S, commentsOf, pColor, proj } from '../core/store.js';
-import { av, dueHtml, lbl, prIcon, progBar, stIcon } from '../ui/helpers.js';
+import { avStack, dueHtml, lbl, prIcon, progBar, stIcon } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
 export function kcard(t, opt = {}) {
@@ -24,7 +24,7 @@ export function kcard(t, opt = {}) {
       ${t.recur ? `<span class="m" data-tip="${tk('a11y.repeats', { freq: esc(t.recur.toLowerCase()) })}">${ic('repeat', 12)}</span>` : ''}
       ${cc ? `<span class="m" aria-label="${tk('a11y.taskComments', { n: cc })}">${ic('message-square', 12)}${cc}</span>` : ''}
       ${ac ? `<span class="m" aria-label="${tk('a11y.taskAttachments', { n: ac })}">${ic('paperclip', 12)}${ac}</span>` : ''}
-      <button class="m" data-a="pop" data-pop="assignee" data-id="${t.id}" style="margin-left:auto" aria-label="${tk('page.field.assignee')}">${av(t.assignee, 'sm')}</button>
+      <button class="m" data-a="pop" data-pop="assignee" data-id="${t.id}" style="margin-left:auto" aria-label="${tk('page.field.assignee')}">${avStack(t.assignees || [], 3, 'sm')}</button>
     </div>
     <div class="hacts"><button class="ibtn ibtn-xs" data-a="toggleDone" data-id="${t.id}" data-tip="${t.status === 'done' ? tk('act.reopen') : tk('act.markComplete')}" aria-label="${t.status === 'done' ? tk('act.reopen') : tk('act.markComplete')}">${ic(t.status === 'done' ? 'rotate-ccw' : 'check', 13)}</button><button class="ibtn ibtn-xs" data-a="editTask" data-id="${t.id}" data-tip="${tk('act.quickEdit')}" aria-label="${tk('act.quickEdit')}">${ic('pencil', 12)}</button><button class="ibtn ibtn-xs" data-a="ctxBtn" data-ctx="task" data-id="${t.id}" aria-label="${tk('a11y.more')}">${ic('ellipsis', 13)}</button></div>
   </div>`;

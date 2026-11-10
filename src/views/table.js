@@ -3,7 +3,7 @@ import { esc, fmtDate, iso } from '../core/utils.js';
 import { t as tk, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { S, isOver, mem, pColor, proj, task, taskProg } from '../core/store.js';
-import { av, dueHtml, empty, lbl, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
+import { avStack, dueHtml, empty, lbl, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { groupTasks, viewOf } from '../shell/view-engine.js';
 
 /* The column table: element 1 is a CATALOGUE KEY, not display text — the header
@@ -39,8 +39,12 @@ export function tcell(t, c) {
       return `<td class="cellbtn" data-a="pop" data-pop="status" data-id="${t.id}" data-tip="${tk('page.columns.progress')}"><span class="row" style="gap:8px">${progBar(taskProg(t), t.status === 'done' ? 'green' : '')}<span class="mono faint" style="font-size:11px">${taskProg(t)}%</span></span></td>`;
     case 'priority':
       return `<td class="cellbtn" data-a="pop" data-pop="priority" data-id="${t.id}"><span class="row" style="gap:6px">${prPill(t.priority)}</span></td>`;
-    case 'assignee':
-      return `<td class="cellbtn" data-a="pop" data-pop="assignee" data-id="${t.id}"><span class="row" style="gap:6px">${av(t.assignee, 'sm', false)}<span class="trunc ${t.assignee ? '' : 'faint'}">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span></span></td>`;
+    case 'assignee': {
+      const as = t.assignees || [];
+      const m = mem(as[0]);
+      const label = as.length ? `${m?.name || ''}${as.length > 1 ? ` +${as.length - 1}` : ''}` : tk('common.unassigned');
+      return `<td class="cellbtn" data-a="pop" data-pop="assignee" data-id="${t.id}"><span class="row" style="gap:6px">${avStack(as, 3, 'sm', false)}<span class="trunc ${as.length ? '' : 'faint'}">${esc(label)}</span></span></td>`;
+    }
     case 'due':
       return `<td class="cellbtn num ${isOver(t) ? '' : ''}" data-a="pop" data-pop="date" data-field="due" data-id="${t.id}" style="${isOver(t) ? 'color:var(--red)' : ''}">${t.due ? fmtDate(t.due) : '<span class="faint">—</span>'}</td>`;
     case 'start':
@@ -87,6 +91,6 @@ export function tableHtml(ts, key, p) {
       .join('')}
       <tr><td class="sticky cellbtn" data-a="newTask" ${p ? `data-project="${p.id}"` : ''} colspan="${cols.length}" style="color:var(--text-3)"><span class="row" style="gap:6px">${ic('plus', 14)}${tk('act.newTask')}</span></td></tr>
     </tbody></table></div>
-    <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${av(t.assignee, 'sm', false)}<span class="muted">${esc(mem(t.assignee)?.name || tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(fmtEstimate(t.estimate))}</span>` : ''}<span style="width:64px;display:inline-flex" data-tip="${tk('page.columns.progress')}">${progBar(taskProg(t), t.status === 'done' ? 'green' : '')}</span></div></div>`).join('')}</div>`;
+    <div class="only-m" style="padding:8px 16px 90px">${ts.map(t => `<div class="panel" style="padding:12px;margin-bottom:8px" data-a="openTask" data-id="${t.id}"><div class="row" style="margin-bottom:8px">${stIcon(t.status)}<b style="font-weight:500" class="grow">${esc(t.title)}</b><span class="mono faint" style="font-size:11px">${t.key}</span></div><div class="row" style="flex-wrap:wrap;gap:10px;font-size:12px" class="muted">${prPill(t.priority)}${avStack(t.assignees || [], 3, 'sm', false)}<span class="muted">${esc((t.assignees || []).length ? `${mem(t.assignees[0])?.name || ''}${t.assignees.length > 1 ? ` +${t.assignees.length - 1}` : ''}` : tk('common.unassigned'))}</span>${dueHtml(t)}${t.estimate ? `<span class="faint">${ic('timer', 12)} ${esc(fmtEstimate(t.estimate))}</span>` : ''}<span style="width:64px;display:inline-flex" data-tip="${tk('page.columns.progress')}">${progBar(taskProg(t), t.status === 'done' ? 'green' : '')}</span></div></div>`).join('')}</div>`;
 }
 

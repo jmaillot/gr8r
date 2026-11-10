@@ -3,7 +3,7 @@ import { ago, esc, foldForSearch } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, canSee, mem, pColor, proj, task, visibleProjects } from '../core/store.js';
 import { t } from '../core/i18n.js';
-import { FT, av, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
+import { FT, av, avStack, empty, hl, pIcon, pStatus, stIcon } from '../ui/helpers.js';
 
 export function searchAll(q) {
   /* The query is folded ONCE, before the filter runs, and every candidate is folded as it
@@ -55,7 +55,7 @@ export function pageSearch() {
               r.tasks
                 .map(
                   t =>
-                    `<div class="mini" data-a="openTask" data-id="${t.id}">${stIcon(t.status)}<span class="mono faint" style="font-size:11px">${t.key}</span><span class="tt">${hl(t.title, q)}</span><span class="pj"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span>${esc(proj(t.project).name)}</span>${av(t.assignee, 'sm')}</div>`,
+                    `<div class="mini" data-a="openTask" data-id="${t.id}">${stIcon(t.status)}<span class="mono faint" style="font-size:11px">${t.key}</span><span class="tt">${hl(t.title, q)}</span><span class="pj"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span>${esc(proj(t.project).name)}</span>${avStack(t.assignees || [], 3, 'sm')}</div>`,
                 )
                 .join(''),
             ) +

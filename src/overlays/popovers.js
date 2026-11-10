@@ -352,7 +352,7 @@ export function popHtml(p) {
         ts
           .map(
             x =>
-              `<button class="mi" data-a="openTask" data-id="${x.id}">${stIcon(x.status)}<span class="trunc">${esc(x.title)}</span><span class="r">${av(x.assignee, 'sm', false)}</span></button>`,
+              `<button class="mi" data-a="openTask" data-id="${x.id}">${stIcon(x.status)}<span class="trunc">${esc(x.title)}</span><span class="r">${avStack(t.assignees || [], 3, 'sm', false)}</span></button>`,
           )
           .join('');
       style = 'width:280px';

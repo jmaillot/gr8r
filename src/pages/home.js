@@ -3,7 +3,7 @@ import { DAY, TODAY, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { monthName, t, weekdayName } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, canSee, isMemberAdmin, isOver, pColor, progressOf, proj, visibleProjects } from '../core/store.js';
-import { av, avStack, empty, pIcon, pStatus, prIcon, progBar } from '../ui/helpers.js';
+import { avStack, empty, pIcon, pStatus, prIcon, progBar } from '../ui/helpers.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { actHtml, miniRow } from '../components/task-list.js';
 
@@ -90,7 +90,7 @@ export function pageHome() {
                     .slice(0, 4)
                     .map(
                       t =>
-                        `<div class="row" style="height:30px;cursor:pointer;gap:8px;font-size:13px" data-a="openTask" data-id="${t.id}"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span><span class="trunc grow">${esc(t.title)}</span>${prIcon(t.priority, 13)}${av(t.assignees?.[0], 'sm')}</div>`,
+                        `<div class="row" style="height:30px;cursor:pointer;gap:8px;font-size:13px" data-a="openTask" data-id="${t.id}"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span><span class="trunc grow">${esc(t.title)}</span>${prIcon(t.priority, 13)}${avStack(t.assignees || [], 3, 'sm')}</div>`,
                     )
                     .join('') +
                   (g.ts.length > 4 ? `<div class="faint" style="font-size:11.5px;padding-left:16px">${t('page.home.more', { n: g.ts.length - 4 })}</div>` : '')

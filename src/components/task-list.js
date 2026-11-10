@@ -7,7 +7,7 @@ import { t as tMsg, formatDate, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
-import { av, dueHtml, empty, lbl, prIcon, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
+import { av, avStack, dueHtml, empty, lbl, prIcon, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
 /* ---------- shared list renderer ---------- */
@@ -25,8 +25,10 @@ export function cellStatus(t) {
   return `<button class="pillbtn" data-a="pop" data-pop="status" data-id="${t.id}" aria-label="${tMsg('a11y.taskStatus', { status: ST[t.status].name })}">${stPill(t.status)}</button>`;
 }
 export function cellAssignee(t) {
-  const m = mem(t.assignee);
-  return `<button class="pillbtn ${m ? '' : 'empty'}" data-a="pop" data-pop="assignee" data-id="${t.id}" aria-label="${tMsg('page.field.assignee')}">${av(t.assignee, 'sm', false)}<span class="trunc">${m ? esc(m.name) : tMsg('common.unassigned')}</span></button>`;
+  const as = t.assignees || [];
+  const m = mem(as[0]);
+  const label = as.length ? `${m?.name || ''}${as.length > 1 ? ` +${as.length - 1}` : ''}` : tMsg('common.unassigned');
+  return `<button class="pillbtn ${as.length ? '' : 'empty'}" data-a="pop" data-pop="assignee" data-id="${t.id}" aria-label="${tMsg('page.field.assignee')}">${avStack(as, 3, 'sm', false)}<span class="trunc">${esc(label)}</span></button>`;
 }
 export function cellPrio(t) {
   return `<button class="pillbtn ${t.priority === 'none' ? 'empty' : ''}" data-a="pop" data-pop="priority" data-id="${t.id}" aria-label="${tMsg('page.field.priority')}">${prPill(t.priority)}</button>`;
@@ -290,6 +292,6 @@ export function miniRow(t, opt = {}) {
     ${opt.noProj ? '' : `<span class="pj hide-m"><span class="pdot" style="--c:${pColor(p)}"></span><span class="trunc">${esc(p.name)}</span></span>`}
     <span data-tip="${tMsg('a11y.priorityTip', { priority: PR[t.priority].name })}">${prIcon(t.priority)}</span>
     <span style="width:74px;text-align:right" class="hide-m">${dueHtml(t, false)}</span>
-    ${opt.av === false ? '' : av(t.assignee, 'sm')}
+    ${opt.av === false ? '' : avStack(t.assignees || [], 3, 'sm')}
   </div>`;
 }

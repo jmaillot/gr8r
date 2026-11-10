@@ -3,7 +3,7 @@ import { TODAY, addD, diffD, esc, fmtDate, iso, parse, sod } from '../core/utils
 import { monthName, t as tk, weekdayName } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, allTasks, pColor, proj } from '../core/store.js';
-import { av, prIcon, stIcon } from '../ui/helpers.js';
+import { avStack, prIcon, stIcon } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { applyView, viewOf, viewToolbar } from '../shell/view-engine.js';
 
@@ -30,7 +30,7 @@ export function calendarHtml(ts, opt = {}) {
     }
     const t = it.t;
     const p = proj(t.project);
-    return `<button class="cev ${t.status === 'done' ? 'done' : ''}${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task" title="${esc(t.title)}">${t.status === 'done' ? stIcon('done', 11) : prIcon(t.priority, 11)}<span class="trunc">${esc(t.title)}</span>${av(t.assignee, '', false)}</button>`;
+    return `<button class="cev ${t.status === 'done' ? 'done' : ''}${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task" title="${esc(t.title)}">${t.status === 'done' ? stIcon('done', 11) : prIcon(t.priority, 11)}<span class="trunc">${esc(t.title)}</span>${avStack(t.assignees || [], 3, '', false)}</button>`;
   };
   let label, body;
   if (mode === 'month') {
@@ -72,7 +72,7 @@ export function calendarHtml(ts, opt = {}) {
               }
               const t = it.t;
               const p = proj(t.project);
-              return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p.name)}</span>${av(t.assignee, 'sm', false)}</span></button>`;
+              return `<button class="wcard${fxc('moved', t.id)}" style="--c:${pColor(p)}" draggable="true" data-drag-cal="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task"><span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--text-3)' : ''}"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(t.title)}</span><span class="m">${stIcon(t.status, 11)}${prIcon(t.priority, 11)}<span class="trunc grow">${esc(p.name)}</span>${avStack(t.assignees || [], 3, 'sm', false)}</span></button>`;
             })
             .join('') || `<span class="faint" style="font-size:12px;padding:4px">${tk('page.states.noTasks')}</span>`
         }</div></div>`;
