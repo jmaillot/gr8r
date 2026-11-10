@@ -493,11 +493,11 @@ test('the projection-marked out-of-scope target never lands in the mention fan-o
 
 test('the assign notify and the watcher set ride the same eligibility filter', () => {
   clientDoc();
-  clientCreateTask({ title: 'Out of scope assign', project: 'p_out', assignee: 'm_marked' });
+  clientCreateTask({ title: 'Out of scope assign', project: 'p_out', assignees: ['m_marked'] });
   assert.ok(!CD().notifs.some(n => n.to === 'm_marked' && n.type === 'assign'), 'no assign notify to an out-of-scope assignee');
-  clientCreateTask({ title: 'In scope assign', project: 'p_in', assignee: 'm_marked' });
+  clientCreateTask({ title: 'In scope assign', project: 'p_in', assignees: ['m_marked'] });
   assert.ok(CD().notifs.some(n => n.to === 'm_marked' && n.type === 'assign'), 'in-scope assignee still notified');
-  const tOut = { id: 't3', project: 'p_out', assignee: 'm_plain', creator: 'm_marked' };
+  const tOut = { id: 't3', project: 'p_out', assignees: ['m_plain'], creator: 'm_marked' };
   const watchers = clientTaskWatchers(tOut);
   assert.ok(!watchers.includes('m_marked'), 'out-of-scope watcher filtered');
   assert.ok(watchers.includes('m_plain'), 'default-allow watcher kept');

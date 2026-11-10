@@ -169,7 +169,9 @@ document.addEventListener('drop', e => {
       const g = v.group;
       if (g === 'status' && ST[d.group]) patch.status = d.group;
       if (g === 'priority' && PR[d.group]) patch.priority = d.group;
-      if (g === 'assignee') patch.assignee = d.group === 'none' ? null : d.group;
+      /* D-55-12 / pitfall 8: "move to member's group" REPLACES the assignees
+         array; dragging out to Unassigned clears to []. Never the scalar. */
+      if (g === 'assignee') patch.assignees = d.group === 'none' ? [] : [d.group];
       if (g === 'project' && proj(d.group)) patch.project = d.group;
     }
     let switched = false;

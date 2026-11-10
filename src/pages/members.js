@@ -63,7 +63,7 @@ export function pageMembers() {
     ${ms
       .map(m => {
         const ap = visibleProjects().filter(p => p.members.includes(m.id) && p.status !== 'complete').length;
-        const ot = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
+        const ot = allTasks().filter(t => t.assignees?.includes(m.id) && t.status !== 'done').length;
         /* Phase 52 (TRN-01): admin/owner transparency expander — client UX gate
            only (D-52-4); the server gate on the visibility endpoint is the real
            control. The list itself comes ONLY from the server response — never
@@ -169,7 +169,7 @@ export function pageTeam() {
   if (!tm) return page404();
   const ms = D().members.filter(m => memberTeams(m).includes(tm.id));
   const ps = visibleProjects().filter(p => projInTeam(p, tm.id));
-  const ts = allTasks().filter(x => ms.some(m => m.id === x.assignee) && x.status !== 'done');
+  const ts = allTasks().filter(x => ms.some(m => x.assignees?.includes(m.id)) && x.status !== 'done');
   return `<div class="page">
     <div class="ph"><div class="row" style="gap:12px"><span class="picon lg" style="--c:${tm.c}">${ic(tm.icon, 18)}</span><div><h1>${tm.name}</h1><p style="margin:2px 0 0">${tm.desc}</p></div></div><div class="acts"><button class="btn btn-secondary" data-a="editTeam" data-id="${tm.id}">${ic('pencil', 14)}${t('act.editTeam')}</button></div></div>
     <div class="grid2"><div class="stack">
@@ -188,7 +188,7 @@ export function pageTeam() {
 export function pageMember() {
   const m = mem(S.ui.params.id);
   if (!m) return page404();
-  const ts = allTasks().filter(x => x.assignee === m.id);
+  const ts = allTasks().filter(x => x.assignees?.includes(m.id));
   const open = ts.filter(x => x.status !== 'done');
   const done = ts.filter(x => x.status === 'done');
   const ps = visibleProjects().filter(p => p.members.includes(m.id) && p.status !== 'complete' && canSee(p));

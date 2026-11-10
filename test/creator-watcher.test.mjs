@@ -84,7 +84,7 @@ test('taskWatchers includes the creator when they are neither assignee nor comme
 
 test('taskWatchers returns ONE entry when the creator is also the assignee', () => {
   freshDoc('u1');
-  const tk = createTask({ title: 'Ada made it for herself', project: 'p1', assignee: 'u1' });
+  const tk = createTask({ title: 'Ada made it for herself', project: 'p1', assignees: ['u1'] });
   D().me = 'u2';
   const watchers = taskWatchers(tk);
   assert.equal(watchers.filter(x => x === 'u1').length, 1, 'Set dedup: creator===assignee must not duplicate');
@@ -93,7 +93,7 @@ test('taskWatchers returns ONE entry when the creator is also the assignee', () 
 
 test('a legacy task without a creator field yields watchers without throwing', () => {
   freshDoc('u1');
-  const legacy = { id: 't-legacy', assignee: 'u2' };
+  const legacy = { id: 't-legacy', assignees: ['u2'] };
   const watchers = taskWatchers(legacy);
   assert.deepEqual(watchers, ['u2']);
   assert.ok(!watchers.includes(undefined), 'filter(Boolean) must drop the absent creator');
@@ -101,7 +101,7 @@ test('a legacy task without a creator field yields watchers without throwing', (
 
 test('the acting user never appears in their own taskWatchers output', () => {
   freshDoc('u1');
-  const tk = createTask({ title: 'Ada watching herself', project: 'p1', assignee: 'u2' });
+  const tk = createTask({ title: 'Ada watching herself', project: 'p1', assignees: ['u2'] });
   D().comments.push({ id: 'c1', task: tk.id, by: 'u1', body: 'my own comment' });
   assert.ok(commentsOf(tk.id).length === 1);
   const watchers = taskWatchers(tk);

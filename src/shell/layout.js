@@ -91,7 +91,7 @@ export function renderSidebar() {
   applyWsFavicon();
   const unreadInbox = myNotifs().filter(n => !n.read && n.type !== 'update').length;
   const unreadAll = myNotifs().filter(n => !n.read).length;
-  const myOpen = allTasks().filter(tk => tk.assignee === d.me && tk.status !== 'done' && tk.due && diffD(parse(tk.due), TODAY) <= 0).length;
+  const myOpen = allTasks().filter(tk => tk.assignees?.includes(d.me) && tk.status !== 'done' && tk.due && diffD(parse(tk.due), TODAY) <= 0).length;
   const projs = visibleProjects().filter(p => p.status !== 'complete');
   const inProj = u.route === 'project' ? u.params.id : null;
   return `<nav class="side" aria-label="${t('a11y.mainNav')}">

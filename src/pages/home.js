@@ -11,7 +11,7 @@ export function pageHome() {
   const h = new Date().getHours();
   const greet = h < 12 ? t('page.home.greeting.morning') : h < 18 ? t('page.home.greeting.afternoon') : t('page.home.greeting.evening');
   const all = allTasks();
-  const mineAll = all.filter(t => t.assignee === D().me);
+  const mineAll = all.filter(t => t.assignees?.includes(D().me));
   const activeP = visibleProjects().filter(p => canSee(p) && p.status !== 'complete');
   const open = all.filter(t => t.status !== 'done');
   const doneWk = all.filter(t => t.status === 'done' && t.completedAt && Date.now() - t.completedAt < 7 * DAY);
@@ -42,7 +42,7 @@ export function pageHome() {
       <div class="acts">${isMemberAdmin() ? `<button class="btn btn-secondary hide-m" data-a="invite">${ic('user-plus', 14)}${t('palette.inviteMember')}</button>` : ''}<button class="btn btn-secondary hide-m" data-a="newProject">${ic('folder-plus', 14)}${t('act.newProject')}</button><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}${t('act.newTask')}</button></div></div>
     <div class="stats" style="margin-bottom:16px">
       <button class="stat" data-a="go" data-r="projects"><span class="k">${ic('folder-kanban', 14)}${t('page.home.stat.activeProjects')}</span><span class="v">${activeP.length}</span><span class="d">${activeP.filter(p => p.status === 'risk').length} ${t('page.home.stat.atRisk')}</span></button>
-      <button class="stat" data-a="goTasks" data-f="open"><span class="k">${ic('circle-dashed', 14)}${t('page.home.stat.openTasks')}</span><span class="v">${open.length}</span><span class="d">${open.filter(t => t.assignee === D().me).length} ${t('page.home.stat.assignedToYou')}</span></button>
+      <button class="stat" data-a="goTasks" data-f="open"><span class="k">${ic('circle-dashed', 14)}${t('page.home.stat.openTasks')}</span><span class="v">${open.length}</span><span class="d">${open.filter(t => t.assignees?.includes(D().me)).length} ${t('page.home.stat.assignedToYou')}</span></button>
       <button class="stat" data-a="goTasks" data-f="done"><span class="k">${ic('circle-check', 14)}${t('project.status.complete')}</span><span class="v">${doneWk.length}</span><span class="d up">${t('page.home.stat.thisWeek')}</span></button>
       <button class="stat" data-a="goTasks" data-f="overdue"><span class="k">${ic('clock-alert', 14)}${t('page.filter.overdue')}</span><span class="v" style="${over.length ? 'color:var(--red)' : ''}">${over.length}</span><span class="d ${over.length ? 'bad' : ''}">${over.length ? t('page.home.stat.needAttention') : t('page.home.stat.allOnTrack')}</span></button>
     </div>
@@ -90,7 +90,7 @@ export function pageHome() {
                     .slice(0, 4)
                     .map(
                       t =>
-                        `<div class="row" style="height:30px;cursor:pointer;gap:8px;font-size:13px" data-a="openTask" data-id="${t.id}"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span><span class="trunc grow">${esc(t.title)}</span>${prIcon(t.priority, 13)}${av(t.assignee, 'sm')}</div>`,
+                        `<div class="row" style="height:30px;cursor:pointer;gap:8px;font-size:13px" data-a="openTask" data-id="${t.id}"><span class="pdot" style="--c:${pColor(proj(t.project))}"></span><span class="trunc grow">${esc(t.title)}</span>${prIcon(t.priority, 13)}${av(t.assignees?.[0], 'sm')}</div>`,
                     )
                     .join('') +
                   (g.ts.length > 4 ? `<div class="faint" style="font-size:11.5px;padding-left:16px">${t('page.home.more', { n: g.ts.length - 4 })}</div>` : '')

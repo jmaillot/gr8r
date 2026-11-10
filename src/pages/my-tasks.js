@@ -11,7 +11,7 @@ export function pageMyTasks() {
   const key = 'mytasks';
   const v = viewOf(key);
   const mine = applyView(
-    allTasks().filter(t => t.assignee === D().me),
+    allTasks().filter(t => t.assignees?.includes(D().me)),
     v.sort.f === 'manual' ? { ...v, sort: { f: 'due', dir: 1 } } : v,
   );
   const groups = [

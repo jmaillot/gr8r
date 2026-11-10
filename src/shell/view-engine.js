@@ -105,7 +105,11 @@ export function matchF(t, f) {
   if (!f.v || !f.v.length) return true;
   let hit;
   if (f.f === 'labels') hit = f.v.some(v => t.labels.includes(v));
-  else if (f.f === 'assignee') hit = f.v.includes(t.assignee || 'none');
+  else if (f.f === 'assignee')
+    /* D-55-12 any-of: a task matches when ANY selected member is in
+       assignees[]; 'none' is the empty-array sentinel so Unassigned tasks
+       keep matching. */
+    hit = f.v.some(v => (v === 'none' ? !(t.assignees?.length) : t.assignees?.includes(v)));
   else if (f.f === 'due') {
     hit = f.v.some(v => {
       if (v === 'nodate') return !t.due;
@@ -138,7 +142,7 @@ export function sortTasks(ts, s) {
       start: t => t.start || '9999',
       priority: t => -PR[t.priority || 'none'].w,
       status: t => STATUSES.findIndex(x => x.id === t.status),
-      assignee: t => mem(t.assignee)?.name || 'zzz',
+      assignee: t => mem(t.assignees?.[0])?.name || 'zzz',
       created: t => -t.created,
       updated: t => -t.updated,
       estimate: t => t.estimate || 'zzz',
@@ -158,8 +162,11 @@ export function groupTasks(ts, g) {
   else if (g === 'priority') groups = PRIOS.map(p => ({ key: p.id, name: p.name, html: prIcon(p.id), set: { priority: p.id } }));
   else if (g === 'assignee')
     groups = [
-      ...D().members.map(m => ({ key: m.id, name: m.name, html: av(m.id, 'sm', false), set: { assignee: m.id } })),
-      { key: 'none', name: t('common.unassigned'), html: av(null, 'sm', false), set: { assignee: null } },
+      /* D-55-11: a multi-assignee task lands in EACH member's group; the
+         Unassigned group holds empty-array tasks. Composer `set` patches the
+         whole array (replace semantics) — never the scalar (D-55-3). */
+      ...D().members.map(m => ({ key: m.id, name: m.name, html: av(m.id, 'sm', false), set: { assignees: [m.id] } })),
+      { key: 'none', name: t('common.unassigned'), html: av(null, 'sm', false), set: { assignees: [] } },
     ];
   else if (g === 'project')
     groups = visibleProjects()
@@ -175,7 +182,7 @@ export function groupTasks(ts, g) {
     ].map(x => ({ ...x, html: ic('calendar', 14) }));
   groups.forEach(G => {
     G.tasks = ts.filter(t => {
-      if (g === 'assignee') return (t.assignee || 'none') === G.key;
+      if (g === 'assignee') return G.key === 'none' ? !(t.assignees?.length) : t.assignees?.includes(G.key);
       if (g === 'due') return matchF(t, { f: 'due', op: 'is', v: [G.key] });
       return t[g] === G.key;
     });

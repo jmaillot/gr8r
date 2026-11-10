@@ -18,7 +18,7 @@ export function pageOverview() {
     .slice(0, 6);
   const load = D()
     .members.filter(m => m.status === 'active')
-    .map(m => ({ m, ts: all.filter(x => x.assignee === m.id && x.status !== 'done') }))
+    .map(m => ({ m, ts: all.filter(x => x.assignees?.includes(m.id) && x.status !== 'done') }))
     .sort((a, b) => b.ts.length - a.ts.length);
   const maxL = Math.max(...load.map(l => l.ts.length), 1);
   return `<div class="page">

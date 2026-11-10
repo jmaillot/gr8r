@@ -78,7 +78,7 @@ export function createTask(f) {
       project: p.id,
       title: t('task.untitled'),
       status: 'todo',
-      assignee: null,
+      assignees: [],
       priority: 'none',
       due: null,
       start: null,
@@ -103,11 +103,12 @@ export function createTask(f) {
   D().tasks.push(tk);
   fxSet({ added: tk.id });
   logAct('created', tk, {});
-  /* P4-b: a task created directly with an assignee notifies them too.
+  /* P4-b: tasks created directly with assignees notify the new members too.
      SCOPE-04 (A4): the eligibility pre-filter is advisory — the server's
      assignee write-guard is the authority. */
-  if (tk.assignee && memberScopeEligible(mem(tk.assignee), tk.project))
-    notifyMembers([tk.assignee], { type: 'assign', by: D().me, task: tk.id, project: tk.project, snippet: fmtDate(tk.due) || '' });
+  for (const id of tk.assignees || [])
+    if (memberScopeEligible(mem(id), tk.project))
+      notifyMembers([id], { type: 'assign', by: D().me, task: tk.id, project: tk.project, snippet: fmtDate(tk.due) || '' });
   return tk;
 }
 export const RECUR_DAYS = { Daily: 1, Weekly: 7, 'Every 2 weeks': 14, Monthly: 30 };
@@ -183,7 +184,7 @@ export function taskWatchers(t) {
   /* SCOPE-04 (A4): the eligibility pre-filter is advisory — the server guards
      are the authority; memberScopeEligible defaults to allow when scope is
      underivable (D-05). */
-  return [...new Set([t.assignee, t.creator, ...commentsOf(t.id).map(c => c.by)])]
+  return [...new Set([...(t.assignees || []), t.creator, ...commentsOf(t.id).map(c => c.by)])]
     .filter(Boolean)
     .filter(x => x !== D().me)
     .filter(x => memberScopeEligible(mem(x), t.project));
@@ -230,12 +231,21 @@ export function applyPatch(t, patch) {
         delete n.prevStatus;
         msgs.push(tMsg('toast.recurringNext', { title: t.title, date: fmtDate(nd) }));
       }
-    } else if (k === 'assignee') {
-      logAct('assigned', t, nv ? { kind: 'assignedTo', value: mem(nv)?.name } : { kind: 'unassigned' });
-      /* P4-b: notify the new assignee (author excluded inside notifyMembers).
+    } else if (k === 'assignees') {
+      /* D-55-13 diff-based: only newly-added members get the assignment
+         notification (author excluded inside notifyMembers) and only removed
+         members log `unassigned`; untouched assignees are never pinged.
          SCOPE-04 (A4): the eligibility pre-filter is advisory — the server's
          assignee write-guard is the authority. */
-      if (nv && memberScopeEligible(mem(nv), t.project)) notifyMembers([nv], { type: 'assign', by: D().me, task: t.id, project: t.project, snippet: fmtDate(t.due) || '' });
+      const prev = Array.isArray(old) ? old : [];
+      const next = Array.isArray(nv) ? nv : [];
+      for (const id of next) {
+        if (prev.includes(id)) continue;
+        logAct('assigned', t, { kind: 'assignedTo', value: mem(id)?.name });
+        if (memberScopeEligible(mem(id), t.project))
+          notifyMembers([id], { type: 'assign', by: D().me, task: t.id, project: t.project, snippet: fmtDate(t.due) || '' });
+      }
+      for (const id of prev) if (!next.includes(id)) logAct('assigned', t, { kind: 'unassigned' });
     } else if (k === 'priority') logAct('changedPriorityOf', t, { kind: 'prioritySet', value: nv });
     else if (k === 'due') logAct('changedDueDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
     else if (k === 'start') logAct('changedStartDateOf', t, nv ? { kind: 'dateSet', value: nv } : { kind: 'dateCleared' });
@@ -506,11 +516,13 @@ A.popPick = el => {
     toast(t('toast.roleChanged', { name: m.name, article: getLocale() === 'fr' ? 'un' : v === 'Admin' ? 'an' : 'a', role: roleLabel(v) }));
     return;
   }
-  const field = { status: 'status', priority: 'priority', assignee: 'assignee', project: 'project', recur: 'recur', estimate: 'estimate', date: p.field }[
+  const field = { status: 'status', priority: 'priority', assignee: 'assignees', project: 'project', recur: 'recur', estimate: 'estimate', date: p.field }[
     p.type
   ];
   if (!field) return;
-  if (field === 'assignee' && !v) v = null;
+  /* D-55-3: the client never writes the scalar — a member pick replaces the
+     array with [v], clearing maps to []. */
+  if (field === 'assignees') v = v ? [v] : [];
   if (field === 'recur' && v === 'Does not repeat') v = null;
   if ((field === 'estimate' || field === 'due' || field === 'start') && !v) v = null;
   S.ui.pop = null;
@@ -745,7 +757,7 @@ A.editTask = el => {
       .trim(),
     project: t.project,
     status: t.status,
-    assignee: t.assignee,
+    assignees: [...(t.assignees || [])],
     priority: t.priority,
     due: t.due,
     start: t.start,
@@ -771,7 +783,7 @@ A.newTask = el => {
     desc: '',
     project: canSee(proj(pid)) ? pid : 'p1',
     status: 'todo',
-    assignee: d.assignee || D().me,
+    assignees: d.assignee ? [d.assignee] : [D().me],
     priority: 'medium',
     due: d.due || null,
     start: null,
@@ -831,7 +843,7 @@ A.submitTask = () => {
     title,
     project: f.project,
     status: f.status,
-    assignee: f.assignee,
+    assignees: f.assignees || [],
     priority: f.priority,
     due: f.due,
     start: f.start && f.due && f.start > f.due ? f.due : f.start,
@@ -913,7 +925,7 @@ A.commitComposer = () => {
   }
   const f = { title: v, ...c.gb };
   f.project = f.project || projectFromKey(c.ctx) || curProjectId() || 'p1';
-  if (c.ctx === 'mytasks') f.assignee = D().me;
+  if (c.ctx === 'mytasks') f.assignees = [D().me];
   mutate(() => createTask(f));
   setTimeout(() => $('#composer-in')?.focus(), 0);
 };
@@ -1226,8 +1238,13 @@ A.clearSel = () => {
   render();
 };
 A.bulkSet = el => {
-  const f = el.dataset.f;
+  let f = el.dataset.f;
   let v = el.dataset.v || null;
+  /* D-55-3: bulk assignment replaces each task's assignees array. */
+  if (f === 'assignee') {
+    f = 'assignees';
+    v = v ? [v] : [];
+  }
   const ids = [...S.ui.sel];
   S.ui.pop = null;
   if (mutate(() => ids.forEach(id => applyPatch(task(id), { [f]: v })))) toast(t('act.tasksUpdated', { n: ids.length }));
@@ -1560,7 +1577,7 @@ export function createProject(f, tmplId) {
       project: p.id,
       title: t(`project.template.${tmplId}.task.${i + 1}`),
       status: i === 0 ? 'todo' : 'backlog',
-      assignee: i === 0 ? D().me : null,
+      assignees: i === 0 ? [D().me] : [],
       priority: i === 0 ? 'high' : 'medium',
       due: dOff(5 + i * 5),
       start: dOff(i * 5),
@@ -2696,7 +2713,7 @@ A.deleteWorkspace = () => {
 A.removeMember = el => {
   const m = mem(el.dataset.id);
   S.ui.pop = null;
-  const n = allTasks().filter(t => t.assignee === m.id && t.status !== 'done').length;
+  const n = allTasks().filter(t => t.assignees?.includes(m.id) && t.status !== 'done').length;
   confirmDlg({
     title: t('act.removeTitle', { name: m.name }),
     body: `${t('act.removeAccess.losesAccess', { name: esc(m.name), ws: esc(D().ws.name) })}${
@@ -2720,7 +2737,7 @@ A.removeMember = el => {
         mutate(() => {
           D().members = D().members.filter(x => x !== m);
           D().tasks.forEach(t => {
-            if (t.assignee === m.id) t.assignee = null;
+            t.assignees = (t.assignees || []).filter(id => id !== m.id);
           });
           D().projects.forEach(p => (p.members = p.members.filter(x => x !== m.id)));
         })
