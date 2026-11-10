@@ -32,7 +32,9 @@ import { createWorkbook, addWorksheet, setActiveSheet, makeWorkbookView } from '
 import {
   setCell, setColumnWidth, setFreezePanes, makePageSetup, getCell,
 } from '@office-kit/xlsx/worksheet';
-import { formatAsHeader, setCellNumberFormat, indentCell, wrapCellText } from '@office-kit/xlsx/styles';
+import { formatAsHeader, setCellNumberFormat, setBold, indentCell, wrapCellText } from '@office-kit/xlsx/styles';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '@office-kit/xlsx/chart';
+import { addChartAt, makeShapeProperties, makeSolidFill, makeColor, makeSrgbColor, makeLine } from '@office-kit/xlsx/drawing';
 import { workbookToBuffer } from '@office-kit/xlsx/node';
 
 /* R4: the six sheets exist up front, in this fixed English order —
@@ -55,6 +57,16 @@ const WIDTHS = {
   comments: 40,
   latestComment: 40,
   thread: 40,
+  /* Board / Members / Milestones column keys (54-03) */
+  lane: 16,
+  count: 8,
+  member: 18,
+  open: 8,
+  done: 8,
+  total: 8,
+  name: 40,
+  date: 14,
+  state: 16,
 };
 
 /* Columns whose text wraps (descriptions and comment threads). */
@@ -134,6 +146,34 @@ function writeTaskRow(wb, ws, row, r, columnKeys) {
 }
 
 /**
+ * Add one native clustered bar/column chart anchored at `at` on `ws`.
+ * The title comes from the model (a translated string) and the series
+ * caches carry the SAME arrays written into the sheet's source block, so
+ * the chart renders without recalculation (R5, T-54-11). makeBarSeries
+ * drops spPr — the series style is assigned after construction
+ * (54-PATTERNS, Pitfall 4).
+ */
+function addBarChart(ws, at, title, labels, counts, catRef, valRef, opts = {}) {
+  const series = makeBarSeries({
+    idx: 0,
+    order: 0,
+    tx: { kind: 'literal', value: title },
+    cat: { ref: catRef, cacheKind: 'str', cache: labels },
+    val: { ref: valRef, cache: counts },
+  });
+  series.spPr = makeShapeProperties({
+    fill: makeSolidFill(makeColor(makeSrgbColor('4F46E5'))),
+    ln: makeLine({ fill: makeSolidFill(makeColor(makeSrgbColor('312E81'))) }),
+  });
+  addChartAt(ws, at, {
+    space: makeChartSpace({
+      plotArea: { chart: makeBarChart({ barDir: opts.barDir || 'col', grouping: 'clustered', series: [series] }) },
+      title,
+    }),
+  }, { widthPx: opts.widthPx || 520, heightPx: opts.heightPx || 300 });
+}
+
+/**
  * Build the six-sheet workbook from the shared export model.
  * @param model the buildExportModel result (never a raw stored document)
  * @returns {Promise<Buffer>} the .xlsx binary, produced fully in memory
@@ -149,12 +189,149 @@ export async function buildWorkbook(model) {
   const columnLabels = model.columns.map(c => c.label);
 
   /* Every sheet gets its header row, freeze and landscape setup now —
-     plans 03-04 fill Board/Timeline/Members/Milestones content. */
-  const taskKeys = ['Summary', 'Board', 'Timeline', 'Members', 'Milestones'];
-  for (const name of taskKeys) {
-    initSheet(wb, byName[name], ['']);
-  }
+     plan 04 fills Timeline content. Summary's A1 is the project name
+     (styled below); Board/Members/Milestones headers are the model's. */
+  initSheet(wb, byName.Summary, []);
+  initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress']);
+  initSheet(wb, byName.Timeline, ['']);
+  initSheet(wb, byName.Members, model.headers.members, ['member', 'open', 'done', 'total']);
+  initSheet(wb, byName.Milestones, model.headers.milestones, ['name', 'date', 'state']);
   initSheet(wb, byName.Tasks, columnLabels, columnKeys);
+
+  /* ===================================================================
+     SUMMARY sheet (R5, D-54-15): project name in A1, the six meta rows
+     from row 4, the four KPI counts from row 11, then the two chart
+     source blocks (A19:B24 status, A26:B31 priority) and charts 1-2.
+     Every label/title is the model's translated string — export/ holds
+     no display literal (D-54-12).
+     =================================================================== */
+  const summaryWs = byName.Summary;
+  setCell(summaryWs, 1, 1, model.project.name || '');
+  formatAsHeader(wb, summaryWs, 'A1:B1');
+  setColumnWidth(summaryWs, 1, 22);
+  setColumnWidth(summaryWs, 2, 28);
+
+  const writeMetaRow = (row, entry) => {
+    setCell(summaryWs, row, 1, entry.label);
+    if (entry.kind === 'date') {
+      const date = utcDate(entry.value);
+      if (date) {
+        setCell(summaryWs, row, 2, date);
+        setCellNumberFormat(wb, getCell(summaryWs, row, 2), SHORT_DATE_CODE);
+      }
+    } else if (entry.kind === 'percent') {
+      /* raw 0-100 value under the literal-percent format — the same
+         scale the Tasks and Board sheets use (never divided by 100). */
+      setCell(summaryWs, row, 2, Number(entry.value) || 0);
+      setCellNumberFormat(wb, getCell(summaryWs, row, 2), LITERAL_PERCENT_CODE);
+    } else {
+      setCell(summaryWs, row, 2, String(entry.value ?? ''));
+    }
+  };
+  model.summary.meta.forEach((entry, i) => writeMetaRow(4 + i, entry));
+
+  model.summary.kpis.forEach((kpi, i) => {
+    const row = 11 + i;
+    setCell(summaryWs, row, 1, kpi.label);
+    setBold(wb, getCell(summaryWs, row, 1), true);
+    setCell(summaryWs, row, 2, Number(kpi.value) || 0);
+  });
+
+  /* Chart source blocks + charts — presence is decided on the MODEL: a
+     null block means no block and no chart part (R5 boundary rule). */
+  if (model.charts.status) {
+    setCell(summaryWs, 19, 1, model.charts.status.title);
+    setBold(wb, getCell(summaryWs, 19, 1), true);
+    model.charts.status.labels.forEach((label, i) => setCell(summaryWs, 20 + i, 1, label));
+    model.charts.status.counts.forEach((count, i) => setCell(summaryWs, 20 + i, 2, count));
+    addBarChart(summaryWs, 'D2', model.charts.status.title, model.charts.status.labels, model.charts.status.counts,
+      'Summary!$A$20:$A$24', 'Summary!$B$20:$B$24');
+  }
+  if (model.charts.priority) {
+    setCell(summaryWs, 26, 1, model.charts.priority.title);
+    setBold(wb, getCell(summaryWs, 26, 1), true);
+    model.charts.priority.labels.forEach((label, i) => setCell(summaryWs, 27 + i, 1, label));
+    model.charts.priority.counts.forEach((count, i) => setCell(summaryWs, 27 + i, 2, count));
+    addBarChart(summaryWs, 'D20', model.charts.priority.title, model.charts.priority.labels, model.charts.priority.counts,
+      'Summary!$A$27:$A$31', 'Summary!$B$27:$B$31');
+  }
+
+  /* ===================================================================
+     BOARD sheet (R7): a static snapshot of the five locked lanes.
+     Row 1 is the model's header; each lane writes one lane row
+     (label + count — an empty lane still shows count 0) followed by
+     one row per card (C..H). Values are the SAME ones the Tasks
+     sheet writes for that task: due as a real date under the builtin
+     short-date format, progress as the raw 0-100 number under the
+     literal-percent format.
+     =================================================================== */
+  const boardWs = byName.Board;
+  let boardRow = 2;
+  for (const lane of model.board.lanes) {
+    setCell(boardWs, boardRow, 1, lane.label);
+    setBold(wb, getCell(boardWs, boardRow, 1), true);
+    setCell(boardWs, boardRow, 2, lane.count);
+    boardRow += 1;
+    for (const card of lane.cards) {
+      setCell(boardWs, boardRow, 3, card.key);
+      setCell(boardWs, boardRow, 4, card.title);
+      setCell(boardWs, boardRow, 5, card.assigneeName);
+      setCell(boardWs, boardRow, 6, card.priorityLabel);
+      const dueDate = utcDate(card.due);
+      if (dueDate) {
+        setCell(boardWs, boardRow, 7, dueDate);
+        setCellNumberFormat(wb, getCell(boardWs, boardRow, 7), SHORT_DATE_CODE);
+      }
+      setCell(boardWs, boardRow, 8, Number(card.progress) || 0);
+      setCellNumberFormat(wb, getCell(boardWs, boardRow, 8), LITERAL_PERCENT_CODE);
+      boardRow += 1;
+    }
+  }
+
+  /* ===================================================================
+     MEMBERS sheet (D-54-10): one row per assignee appearing in the
+     exported set plus Unassigned, counts over top-level rows only.
+     Below the rows sits the chart's source block (title + per-member
+     open counts) and chart 3, when the model's assignees chart exists.
+     =================================================================== */
+  const membersWs = byName.Members;
+  model.members.forEach((entry, i) => {
+    const row = 2 + i;
+    setCell(membersWs, row, 1, entry.name);
+    setCell(membersWs, row, 2, entry.open);
+    setCell(membersWs, row, 3, entry.done);
+    setCell(membersWs, row, 4, entry.total);
+  });
+  if (model.charts.assignees) {
+    const blockStart = Math.max(12, model.members.length + 3);
+    setCell(membersWs, blockStart, 1, model.charts.assignees.title);
+    setBold(wb, getCell(membersWs, blockStart, 1), true);
+    const labels = model.charts.assignees.labels;
+    const counts = model.charts.assignees.counts;
+    labels.forEach((label, i) => setCell(membersWs, blockStart + 1 + i, 1, label));
+    counts.forEach((count, i) => setCell(membersWs, blockStart + 1 + i, 2, count));
+    const lastRow = blockStart + labels.length;
+    addBarChart(membersWs, 'F2', model.charts.assignees.title, labels, counts,
+      `Members!$A$${blockStart + 1}:$A$${lastRow}`, `Members!$B$${blockStart + 1}:$B$${lastRow}`,
+      { barDir: 'bar', heightPx: 320 });
+  }
+
+  /* ===================================================================
+     MILESTONES sheet (R11): name, real date, localized done/upcoming
+     state — dates sorted by the model, states derived from the export
+     date (D-54-13), user milestone names never translated.
+     =================================================================== */
+  const milestonesWs = byName.Milestones;
+  model.milestones.forEach((milestone, i) => {
+    const row = 2 + i;
+    setCell(milestonesWs, row, 1, milestone.name);
+    const date = utcDate(milestone.date);
+    if (date) {
+      setCell(milestonesWs, row, 2, date);
+      setCellNumberFormat(wb, getCell(milestonesWs, row, 2), SHORT_DATE_CODE);
+    }
+    setCell(milestonesWs, row, 3, milestone.state);
+  });
 
   /* TASKS sheet — one row per model row (parents and child rows in
      model order), starting at row 2 under the frozen header. */

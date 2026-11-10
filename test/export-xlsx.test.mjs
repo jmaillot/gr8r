@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 
 import { buildWorkbook } from '../export/xlsx.js';
 import { buildExportModel } from '../src/export/model.js';
-import { makeDoc } from './fixtures/export-fixtures.mjs';
+import { makeDoc, makeZeroChartDoc, makeChartDoc, makeEmptyLaneDoc, makeMilestoneDoc } from './fixtures/export-fixtures.mjs';
 import { textEntries } from './helpers/unzip.mjs';
 import { assertWellFormed, tags } from './helpers/xml.mjs';
 
@@ -216,5 +216,355 @@ test('generated XML parts are well-formed', async () => {
   const { parts } = await buildZip(buildModel());
   for (const [name, xml] of parts) {
     if (/\.xml$/.test(name)) assertWellFormed(xml);
+  }
+});
+
+/* =====================================================================
+   54-03 Task 2: the Summary sheet — meta, KPIs, source blocks, charts.
+   ===================================================================== */
+
+/* Resolve one cell's displayed value: shared-string index -> text, or
+   the raw <v> number. Returns { raw, shared } — shared is the resolved
+   string when the cell is a string cell. */
+function readCell(xml, ref, sharedStrings) {
+  const m = new RegExp(`<c\\s+([^>]*?\\br="${ref}"[^>]*?)(?:\\/>|>([\\s\\S]*?)</c>)`).exec(xml);
+  if (!m) return undefined;
+  const attrs = m[1];
+  const body = m[2] || '';
+  const v = /<v>([\s\S]*?)<\/v>/.exec(body);
+  if (!v) return { raw: undefined, attrs, body };
+  if (/\bt="s"/.test(attrs)) {
+    return { raw: Number(v[1]), shared: sharedStrings[Number(v[1])], attrs, body };
+  }
+  return { raw: v[1], attrs, body };
+}
+
+function parseSharedStrings(sharedXml) {
+  if (!sharedXml) return [];
+  return [...sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m =>
+    [...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(t => t[1]).join(''),
+  );
+}
+
+/* Pull one chart's category and value caches out of chart XML. */
+function chartCaches(chartXml) {
+  const strRef = /<c:strRef>([\s\S]*?)<\/c:strRef>/.exec(chartXml);
+  const numRef = /<c:numRef>([\s\S]*?)<\/c:numRef>/.exec(chartXml);
+  const strCache = strRef ? /<c:strCache>([\s\S]*?)<\/c:strCache>/.exec(strRef[1]) : null;
+  const numCache = numRef ? /<c:numCache>([\s\S]*?)<\/c:numCache>/.exec(numRef[1]) : null;
+  const pts = block => (block ? [...block[1].matchAll(/<c:v>([\s\S]*?)<\/c:v>/g)].map(m => m[1]) : []);
+  return {
+    strRefF: strRef ? /<c:f>([\s\S]*?)<\/c:f>/.exec(strRef[1])[1] : null,
+    numRefF: numRef ? /<c:f>([\s\S]*?)<\/c:f>/.exec(numRef[1])[1] : null,
+    cats: pts(strCache),
+    vals: pts(numCache),
+    title: /<c:title>[\s\S]*?<a:t>([\s\S]*?)<\/a:t>/.exec(chartXml)?.[1],
+  };
+}
+
+test('chart1 and chart2 exist with a barChart, one strRef and one numRef, and non-empty caches (R5)', async () => {
+  const { parts } = await buildZip(buildModel());
+  for (const [part, catRef, valRef] of [
+    ['xl/charts/chart1.xml', 'Summary!$A$20:$A$24', 'Summary!$B$20:$B$24'],
+    ['xl/charts/chart2.xml', 'Summary!$A$27:$A$31', 'Summary!$B$27:$B$31'],
+  ]) {
+    const xml = parts.get(part);
+    assert.ok(xml, `${part} exists`);
+    assertWellFormed(xml);
+    assert.ok((xml.match(/<c:barChart>/g) || []).length === 1, `${part} carries exactly one barChart element`);
+    assert.equal((xml.match(/<c:strRef>/g) || []).length, 1, `${part} carries one strRef`);
+    assert.equal((xml.match(/<c:numRef>/g) || []).length, 1, `${part} carries one numRef`);
+    const cache = chartCaches(xml);
+    assert.equal(cache.strRefF, catRef, `${part} category range points at the source block`);
+    assert.equal(cache.numRefF, valRef, `${part} value range points at the source block`);
+    assert.ok(cache.cats.length > 0 && cache.cats.every(Boolean), `${part} string cache non-empty`);
+    assert.ok(cache.vals.length > 0, `${part} numeric cache non-empty`);
+  }
+});
+
+test('the Summary sheet carries the meta rows 4-9, KPI numbers 11-14, and source blocks equal to the chart caches', async () => {
+  const model = buildModel();
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet1.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const cell = ref => readCell(xml, ref, shared);
+
+  /* meta rows 4..9: label in A, value in B */
+  const meta = model.summary.meta;
+  for (let i = 0; i < meta.length; i++) {
+    const row = 4 + i;
+    assert.equal(cell(`A${row}`).shared, meta[i].label, `meta label row ${row}`);
+    if (meta[i].kind === 'percent') {
+      assert.equal(Number(cell(`B${row}`).raw), meta[i].value, 'progress keeps the raw 0-100 scale');
+    } else if (meta[i].kind === 'date') {
+      /* YYYY-MM-DD at UTC midnight: days since 1899-12-30 */
+      const [y, mo, d] = meta[i].value.split('-').map(Number);
+      const expected = Math.round((Date.UTC(y, mo - 1, d) - Date.UTC(1899, 11, 30)) / 86_400_000);
+      assert.equal(Number(cell(`B${row}`).raw), expected, `a date meta value is a real serial (${meta[i].key})`);
+    } else {
+      assert.equal(cell(`B${row}`).shared, String(meta[i].value), `meta value row ${row}`);
+    }
+  }
+
+  /* KPI rows 11..14 */
+  for (let i = 0; i < model.summary.kpis.length; i++) {
+    const row = 11 + i;
+    assert.equal(cell(`A${row}`).shared, model.summary.kpis[i].label);
+    assert.equal(Number(cell(`B${row}`).raw), model.summary.kpis[i].value, `KPI ${model.summary.kpis[i].key}`);
+  }
+
+  /* source blocks match the chart caches exactly (T-54-11) */
+  const statusCache = chartCaches(parts.get('xl/charts/chart1.xml'));
+  const priorityCache = chartCaches(parts.get('xl/charts/chart2.xml'));
+  statusCache.cats.forEach((label, i) => assert.equal(cell(`A${20 + i}`).shared, label, `status block label row ${20 + i}`));
+  statusCache.vals.forEach((v, i) => assert.equal(Number(cell(`B${20 + i}`).raw), Number(v), `status block count row ${20 + i}`));
+  priorityCache.cats.forEach((label, i) => assert.equal(cell(`A${27 + i}`).shared, label, `priority block label row ${27 + i}`));
+  priorityCache.vals.forEach((v, i) => assert.equal(Number(cell(`B${27 + i}`).raw), Number(v), `priority block count row ${27 + i}`));
+});
+
+test('the meta date cells are real dates: numeric cells under a builtin date number format (D-54-13)', async () => {
+  const { parts } = await buildZip(buildModel());
+  const xml = parts.get('xl/worksheets/sheet1.xml');
+  const stylesXml = parts.get('xl/styles.xml');
+  for (const ref of ['B7', 'B8']) {
+    const attrs = cellAttrs(xml, ref);
+    assert.ok(attrs, `the date cell ${ref} exists`);
+    assert.ok(!/\bt="(s|str|inlineStr)"/.test(attrs), `${ref} is NOT a string cell`);
+    const s = Number((STYLE_INDEX.exec(attrs) || [])[1] || 0);
+    const xf = cellXfs(stylesXml)[s] || '';
+    assert.equal(xfAttr(xf, 'numFmtId'), '14', `${ref} carries builtin numFmtId 14`);
+  }
+});
+
+test('A19 and chart1\'s title both come from the model — a French build renders the French title everywhere', async () => {
+  const en = buildModel();
+  const { parts } = await buildZip(en);
+  const summaryXml = parts.get('xl/worksheets/sheet1.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const a19 = readCell(summaryXml, 'A19', shared);
+  assert.equal(a19.shared, en.charts.status.title);
+  assert.equal(chartCaches(parts.get('xl/charts/chart1.xml')).title, en.charts.status.title, 'chart1 title equals the model title');
+
+  /* French translator: every exporter key renders a French value */
+  const frValues = {
+    'export.chart.status': 'Tâches par statut',
+    'export.chart.priority': 'Tâches par priorité',
+    'export.chart.assignees': 'Tâches ouvertes par assigné',
+  };
+  const frModel = buildExportModel(makeDoc(), 'p_alpha', { scope: 'all', options: { descriptions: true, comments: true, subtasks: true } }, {
+    translate: k => frValues[k] || k,
+    labelName: id => 'L:' + id,
+    now: NOW,
+  });
+  const fr = await buildZip(frModel);
+  const frSummary = fr.parts.get('xl/worksheets/sheet1.xml');
+  const frShared = parseSharedStrings(fr.parts.get('xl/sharedStrings.xml'));
+  assert.equal(readCell(frSummary, 'A19', frShared).shared, 'Tâches par statut', 'the source block label is French');
+  assert.equal(chartCaches(fr.parts.get('xl/charts/chart1.xml')).title, 'Tâches par statut', 'chart1 title is French');
+  /* no English chart title anywhere in the package */
+  for (const [name, xml] of fr.parts) {
+    if (/\.xml$/.test(name)) assert.ok(!xml.includes('export.chart.'), `${name} carries no untranslated chart key`);
+  }
+});
+
+test('all-zero data emits NO chart part and NO source block, and the workbook stays valid (R5 boundary)', async () => {
+  const zeroModel = buildExportModel(makeZeroChartDoc(), 'p_zero', {}, { translate: k => k, labelName: id => 'L:' + id, now: NOW });
+  const { parts } = await buildZip(zeroModel);
+  for (const part of ['xl/charts/chart1.xml', 'xl/charts/chart2.xml', 'xl/charts/chart3.xml']) {
+    assert.equal(parts.get(part), undefined, `${part} must not exist for zero data`);
+  }
+  assert.ok(!/[Cc]hart/.test(parts.get('xl/worksheets/sheet1.xml')), 'no chart source block on Summary');
+  assert.ok(!parts.has('xl/drawings/drawing1.xml'), 'no drawing part for zero data');
+  /* the workbook remains valid: six sheets, ordered, frozen */
+  const wbXml = parts.get('xl/workbook.xml');
+  assertWellFormed(wbXml);
+  assert.deepEqual(tags(wbXml, 'sheet').map(t => /name="([^"]*)"/.exec(t)[1]), SHEET_ORDER);
+  for (let i = 1; i <= 6; i++) {
+    assert.match(tags(parts.get(`xl/worksheets/sheet${i}.xml`), 'pane').join(''), /state="frozen"/, `sheet${i} still frozen`);
+  }
+});
+
+test('no worksheet part carries a formula element for any user-authored title or name', async () => {
+  const { parts } = await buildZip(buildModel());
+  for (const [name, xml] of parts) {
+    if (name.startsWith('xl/worksheets/')) {
+      assert.ok(!/<f[\s>]/.test(xml), `${name} holds no <f> formula element`);
+    }
+  }
+});
+
+/* =====================================================================
+   54-03 Task 3: Board, Members (+ chart 3) and Milestones sheets.
+   ===================================================================== */
+
+/* All (row, column) -> displayed value of one sheet, resolved through
+   the shared-strings table. */
+function sheetValues(xml, sharedStrings) {
+  const out = new Map();
+  for (const m of xml.matchAll(/<c\s+([^>]*?)>([\s\S]*?)<\/c>/g)) {
+    const ref = /\br="([A-Z]+\d+)"/.exec(m[1])[1];
+    const v = /<v>([\s\S]*?)<\/v>/.exec(m[2]);
+    if (!v) continue;
+    if (/\bt="s"/.test(m[1])) out.set(ref, sharedStrings[Number(v[1])]);
+    else out.set(ref, v[1]);
+  }
+  return out;
+}
+
+const modelOf = (doc, pid, opts = {}) => buildExportModel(doc, pid, { scope: 'all', ...opts }, {
+  translate: k => k, labelName: id => 'L:' + id, now: NOW,
+});
+
+test('Board lane rows appear in the locked order with the model counts, cards carry their fields (R7)', async () => {
+  const model = modelOf(makeChartDoc(), 'p_chart');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet3.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+
+  const laneLabels = model.board.lanes.map(l => l.label);
+  const laneRows = laneLabels.map(label => {
+    for (const [ref, value] of values) {
+      if (/^A\d+$/.test(ref) && value === label) return Number(ref.slice(1));
+    }
+    return -1;
+  });
+  assert.ok(laneRows.every(r => r > 0), 'every lane label is present');
+  assert.deepEqual([...laneRows].sort((a, b) => a - b), laneRows, 'lane rows appear in backlog, todo, progress, review, done order');
+  laneRows.forEach((row, i) => {
+    assert.equal(Number(values.get(`B${row}`)), model.board.lanes[i].count, `lane ${model.board.lanes[i].id} count`);
+    const card = model.board.lanes[i].cards[0];
+    if (card) {
+      assert.equal(values.get(`C${row + 1}`), card.key, 'card key');
+      assert.equal(values.get(`D${row + 1}`), card.title, 'card title');
+      assert.equal(values.get(`E${row + 1}`), card.assigneeName, 'card assignee');
+      assert.equal(values.get(`F${row + 1}`), card.priorityLabel, 'card priority');
+    }
+  });
+});
+
+test('the empty-lane fixture still shows its label with count 0 (R7 empty)', async () => {
+  const model = modelOf(makeEmptyLaneDoc(), 'p_lane');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet3.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  const labels = model.board.lanes.map(l => l.label);
+  const rows = labels.map(label => Number(Object.entries(Object.fromEntries(values)).find(([, v]) => v === label)?.[0]?.slice(1)));
+  assert.ok(rows.every(Number.isFinite), 'all five lane labels rendered');
+  assert.deepEqual([...rows].sort((a, b) => a - b), rows, 'lanes in locked order');
+  const todoIdx = model.board.lanes.findIndex(l => l.id === 'todo');
+  const todoRow = rows[todoIdx];
+  assert.equal(Number(values.get(`B${todoRow}`)), 0, 'the empty todo lane shows count 0');
+  /* no card rows follow it: the next lane label sits directly below */
+  assert.equal(values.get(`A${todoRow + 1}`), model.board.lanes[todoIdx + 1].label, 'an empty lane writes only its lane row');
+  /* card rows carry a real due date when dated */
+  const datedCard = model.board.lanes.flatMap(l => l.cards).find(c => c.due);
+  assert.equal(datedCard, undefined, 'fixture sanity: lane cards are undated');
+});
+
+test('a dated Board card stores a real date serial under numFmtId 14 (D-54-13)', async () => {
+  const model = modelOf(makeDoc(), 'p_alpha');
+  const dated = model.board.lanes.flatMap(l => l.cards).find(c => c.due);
+  assert.ok(dated, 'fixture sanity: a dated card exists');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet3.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  const [y, mo, d] = dated.due.split('-').map(Number);
+  const expected = Math.round((Date.UTC(y, mo - 1, d) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  const rowRef = [...values.entries()].find(([ref, v]) => /^G\d+$/.test(ref) && Number(v) === expected);
+  assert.ok(rowRef, `the due serial ${expected} appears in the Board due column`);
+  const attrs = cellAttrs(xml, rowRef[0]);
+  const xf = cellXfs(parts.get('xl/styles.xml'))[Number((STYLE_INDEX.exec(attrs) || [])[1] || 0)] || '';
+  assert.equal(xfAttr(xf, 'numFmtId'), '14', 'the Board due cell carries the builtin short-date format');
+});
+
+test('Board card progress stores the same number AND format as that task\'s Tasks-sheet cell', async () => {
+  const model = modelOf(makeDoc(), 'p_alpha');
+  const task = model.rows.find(r => r.id === 't_a3'); // ALPHA-2, progress 45
+  assert.equal(task.progress, 45);
+  const { parts } = await buildZip(model);
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const board = sheetValues(parts.get('xl/worksheets/sheet3.xml'), shared);
+  const tasksXml = parts.get('xl/worksheets/sheet2.xml');
+  const tasks = sheetValues(tasksXml, shared);
+  const taskRow = Number(Object.entries(Object.fromEntries(tasks)).find(([ref, v]) => /^A\d+$/.test(ref) && v === task.key)?.[0]?.slice(1));
+  assert.ok(taskRow, 'the task row found by its key on Tasks');
+  /* progress on Board sits in column H under the card's lane row */
+  const boardRef = [...board.entries()].find(([ref, v]) => /^H\d+$/.test(ref) && v === String(task.progress));
+  assert.ok(boardRef, `progress ${task.progress} appears on the Board progress column`);
+  const boardAttrs = cellAttrs(parts.get('xl/worksheets/sheet3.xml'), boardRef[0]);
+  const taskAttrs = cellAttrs(tasksXml, `H${taskRow}`);
+  const boardS = (STYLE_INDEX.exec(boardAttrs) || [])[1];
+  const taskS = (STYLE_INDEX.exec(taskAttrs) || [])[1];
+  assert.equal(boardS, taskS, 'the two progress cells carry the identical style index (same number format)');
+});
+
+test('Members rows equal the model and the source block matches chart3\'s cache (T-54-11)', async () => {
+  const model = modelOf(makeDoc(), 'p_alpha');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet5.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  model.members.forEach((e, i) => {
+    const row = 2 + i;
+    assert.equal(values.get(`A${row}`), e.name, `member ${e.name}`);
+    assert.equal(Number(values.get(`B${row}`)), e.open);
+    assert.equal(Number(values.get(`C${row}`)), e.done);
+    assert.equal(Number(values.get(`D${row}`)), e.total, 'total is open plus done');
+  });
+  const unassigned = model.members.filter(e => e.id === null);
+  assert.equal(unassigned.length, 1, 'exactly one Unassigned row');
+
+  const chartXml = parts.get('xl/charts/chart3.xml');
+  assert.ok(chartXml, 'chart3.xml exists for the full fixture');
+  const cache = chartCaches(chartXml);
+  assert.equal(cache.title, model.charts.assignees.title, 'chart3 title equals the model title');
+  assert.equal(cache.strRefF, `Members!$A$13:$A$${12 + cache.cats.length}`, 'chart3 category range points at the Members source block');
+  assert.equal(cache.numRefF, `Members!$B$13:$B$${12 + cache.cats.length}`, 'chart3 value range points at the Members source block');
+  assert.ok(cache.cats.length > 0 && cache.vals.length > 0, 'chart3 caches non-empty');
+  cache.cats.forEach((label, i) => assert.equal(values.get(`A${13 + i}`), label, `block label row ${13 + i} equals the cache`));
+  cache.vals.forEach((v, i) => assert.equal(Number(values.get(`B${13 + i}`)), Number(v), `block count row ${13 + i} equals the cache`));
+});
+
+test('chart3 is a clustered bar chart (barDir bar) anchored at F2', async () => {
+  const { parts } = await buildZip(modelOf(makeDoc(), 'p_alpha'));
+  const chartXml = parts.get('xl/charts/chart3.xml');
+  assert.ok(chartXml, 'chart3.xml exists');
+  assert.match(chartXml, /<c:barDir val="bar"\/>/, 'barDir bar');
+  assert.match(chartXml, /<c:grouping val="clustered"\/>/, 'grouping clustered');
+  const drawing = parts.get('xl/drawings/drawing2.xml');
+  assert.ok(drawing, 'the Members sheet carries its own drawing part');
+  assert.match(drawing, /<xdr:col>5<\/xdr:col>/, 'the anchor column is F (0-based 5)');
+  assert.match(chartXml, /<c:spPr>[\s\S]*?<a:srgbClr val="4F46E5">/, 'the series style was assigned AFTER construction (makeBarSeries drops it)');
+});
+
+test('Milestones is date-sorted with done/upcoming states derived from the export date (D-54-13)', async () => {
+  const model = modelOf(makeMilestoneDoc(), 'p_ms');
+  assert.equal(model.milestones.length, 3, 'the undated milestone is dropped');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet6.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  const dates = [2, 3, 4].map(r => Number(values.get(`B${r}`)));
+  assert.deepEqual([...dates].sort((a, b) => a - b), dates, 'rows are date-sorted');
+  const doneDate = Math.round((Date.UTC(2026, 0, 5) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  const states = [2, 3, 4].map(r => values.get(`C${r}`));
+  assert.equal(states[dates.indexOf(doneDate)], 'export.milestone.done', 'the milestone before the export date reads done');
+  assert.notEqual(states[0], states[1], 'the state column differs between before and after the export date');
+  const onDateRow = model.milestones.findIndex(m => m.date === '2026-02-01') + 2;
+  assert.equal(values.get(`C${onDateRow}`), 'export.milestone.upcoming', 'a milestone dated exactly ON the export date reads upcoming');
+});
+
+test('chart3 is absent for the zero-chart fixture while all six sheets stay valid', async () => {
+  const zeroModel = modelOf(makeZeroChartDoc(), 'p_zero');
+  const { parts } = await buildZip(zeroModel);
+  assert.equal(parts.get('xl/charts/chart3.xml'), undefined, 'no chart part for zero data');
+  assert.ok(!/[Cc]hart/.test(parts.get('xl/worksheets/sheet5.xml')), 'no Members source block for zero data');
+  const wbXml = parts.get('xl/workbook.xml');
+  assert.deepEqual(tags(wbXml, 'sheet').map(t => /name="([^"]*)"/.exec(t)[1]), SHEET_ORDER, 'six sheets still in order');
+  for (let i = 1; i <= 6; i++) {
+    assert.match(tags(parts.get(`xl/worksheets/sheet${i}.xml`), 'pane').join(''), /state="frozen"/, `sheet${i} still frozen`);
   }
 });
