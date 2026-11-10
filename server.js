@@ -1418,12 +1418,24 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
      tasks without a project, always pass. */
   if (wsId) {
     const projectById = new Map([...(storedData.projects || []), ...(nextData.projects || [])].filter(p => p?.id).map(p => [p.id, p]));
+    /* [Phase 55, D-55-4/D-55-9] Per-member guard: every member of every task's
+       AND subtask's assignees array must be able to read the task's project —
+       a guest/private leak through a subtask array is the same rejection as
+       through the task itself (research pitfall 2). Empty arrays pass —
+       Unassigned is valid. mergeClientDoc normalized above, so the arrays are
+       canonical here; no scalar fallback is read (D-55-3). */
     for (const t of nextData.tasks || []) {
-      if (!t?.id || !t.assignee || !t.project) continue;
-      if (!(await memberCanReadProject(projectById.get(t.project), wsId, t.assignee))) {
-        const err = new Error('Assignee cannot read the task project');
-        err.code = 'assigneeOutOfScope';
-        throw err;
+      if (!t?.id || !t.project) continue;
+      const assigneeIds = [
+        ...(Array.isArray(t.assignees) ? t.assignees : []),
+        ...((Array.isArray(t.subtasks) ? t.subtasks : []).flatMap(s => (Array.isArray(s?.assignees) ? s.assignees : []))),
+      ];
+      for (const a of assigneeIds) {
+        if (!(await memberCanReadProject(projectById.get(t.project), wsId, a))) {
+          const err = new Error('Assignee cannot read the task project');
+          err.code = 'assigneeOutOfScope';
+          throw err;
+        }
       }
     }
   }
@@ -2189,10 +2201,16 @@ function stripMember(doc, memberId, userId = null) {
   if (!ids.size && !userId) return;
   const hit = v => !!v && ids.has(v);
   d.members = (d.members || []).filter(m => !(userId && m.userId === userId) && !hit(m.id));
+  /* [Phase 55, D-55-4] Assignments live in assignees arrays now — normalize
+     first (migrates any legacy scalar), then filter the removed member's id
+     out of every task and subtask array. An array that becomes empty stays an
+     empty array (renders Unassigned downstream). */
+  normalizeAssigneesData(d);
   d.tasks = (d.tasks || []).map(t => {
-    const next = hit(t.assignee) ? { ...t, assignee: null } : t;
-    if (Array.isArray(next.subtasks) && next.subtasks.some(s => hit(s?.assignee))) {
-      next.subtasks = next.subtasks.map(s => (hit(s?.assignee) ? { ...s, assignee: null } : s));
+    const next = { ...t };
+    if (Array.isArray(next.assignees)) next.assignees = next.assignees.filter(id => !hit(id));
+    if (Array.isArray(next.subtasks) && next.subtasks.some(s => Array.isArray(s?.assignees) && s.assignees.some(hit))) {
+      next.subtasks = next.subtasks.map(s => (Array.isArray(s?.assignees) ? { ...s, assignees: s.assignees.filter(id => !hit(id)) } : s));
     }
     return next;
   });

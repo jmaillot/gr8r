@@ -310,8 +310,10 @@ test('removing a member cleans up their assignments and access', async () => {
     'the profile is gone',
   );
   const task = after.doc.data.tasks.find(t => t.id === 't_cleanup');
-  assert.equal(task.assignee, null, 'the task is unassigned');
-  assert.equal(task.subtasks[0].assignee, null, 'the subtask is unassigned');
+  /* [Phase 55, D-55-3/D-55-4] The scalar assignee is retired — removal filters
+     the assignees array and an emptied array stays an empty array. */
+  assert.deepEqual(task.assignees, [], 'the task is unassigned (empty array preserved)');
+  assert.deepEqual(task.subtasks[0].assignees, [], 'the subtask is unassigned (empty array preserved)');
   const project = after.doc.data.projects.find(p => p.id === 'p_cleanup');
   assert.equal(project.members.includes(caraRow.memberId), false, 'the project roster is stripped');
   assert.equal(caraRow.memberId in project.perms, false, 'the project permissions are stripped');
