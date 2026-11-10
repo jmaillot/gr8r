@@ -59,6 +59,10 @@ import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRec
 import { referencesHidden } from './src/lib/redaction.js';
 import { createMcp, generateApiKey, API_KEY_DAYS, validKeyDays, validKeyScope } from './mcp.js';
 import { registerCatalogue, tFor } from './src/core/i18n.js';
+/* Phase 54 (54-01): the export funnel — one redacted-document read, one
+   DOM-free model, one CSV writer (T-54-01..T-54-06). */
+import { buildExportModel } from './src/export/model.js';
+import { toCsv } from './src/export/csv.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -5199,6 +5203,82 @@ async function handleApi(req, res, url) {
      request, so the change is enforced on the very next request (D-50-3 —
      no memoization). The edit hierarchy is the stricter D-50-4 rule: only an
      owner touches an admin/owner's project access. */
+
+  /* =====================================================================
+     EXPORT-ROUTE-BEGIN — Phase 54 (54-01): POST project export.
+     Funnel order IS the security property (D-54-1, R10, T-54-01/02/05):
+     workspace → sameOrigin → body/format → docForClient (the ONLY raw-doc
+     reference inside these markers) → 404 parity → canManageProject →
+     generation → binary headers. Every failure exits through fail() as
+     JSON before a single byte is generated or a header written.
+     ===================================================================== */
+  const exportMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})\/export$/);
+  if (exportMatch && method === 'POST') {
+    const ctx = await requireWorkspace(req, res, exportMatch[1], 'viewer');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    /* T-54-04: the extension and MIME come from this server-side map,
+       never from the request. Plan 01 carries csv only; the xlsx and
+       MSPDI entries arrive with their writers in plans 02 and 05. */
+    const EXPORT_FORMATS = {
+      csv: { ext: 'csv', mime: 'text/csv; charset=utf-8', write: model => Buffer.from(toCsv(model), 'utf8') },
+    };
+    const entry = body && EXPORT_FORMATS[body.format];
+    if (!entry) return fail(res, 400, 'exportInvalidRequest', 'Provide a supported export format');
+    if (body.scope !== undefined && body.scope !== 'view' && body.scope !== 'all') {
+      return fail(res, 400, 'exportInvalidRequest', 'Scope must be view or all');
+    }
+    /* T-54-05: the ONLY document read this route may make — the redacted
+       docForClient-shaped document. Never ctx.ws.doc. */
+    const doc = await docForClient(JSON.parse(ctx.ws.doc), ctx.ws, ctx.membership);
+    const project = (Array.isArray(doc?.data?.projects) ? doc.data.projects : []).find(p => p?.id === exportMatch[2]);
+    if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
+    if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
+      return fail(res, 403, 'exportForbidden', 'You do not have permission to export this project');
+    }
+    const locale = ctx.user.locale === 'fr' ? 'fr' : 'en';
+    try {
+      const model = buildExportModel(
+        doc.data,
+        exportMatch[2],
+        {
+          scope: body.scope === 'view' ? 'view' : 'all',
+          ids: body.scope === 'view' && Array.isArray(body.ids) ? body.ids.slice(0, 5000).map(String) : undefined,
+          options: body.options,
+        },
+        {
+          translate: (k, v) => tFor(locale, k, v),
+          labelName: id => tFor(locale, 'task.label.' + id),
+          now: new Date(),
+        },
+      );
+      if (!model) return fail(res, 404, 'projectNotFound', 'Project not found');
+      const buffer = entry.write(model);
+      /* T-54-04: filename allow-list — every character outside A-Z a-z 0-9
+         dot underscore hyphen becomes a hyphen; extension from the map. */
+      const safeStem = value => {
+        const safe = String(value || '')
+          .replace(/[^A-Za-z0-9._-]+/g, '-')
+          .replace(/-{2,}/g, '-')
+          .replace(/^-+|-+$/g, '');
+        return safe || 'project';
+      };
+      const name = `${safeStem(project.key)}-${model.exportDateISO}.${entry.ext}`;
+      res.writeHead(200, {
+        'Content-Type': entry.mime,
+        'Content-Disposition': fileDisposition(name, false),
+        'Cache-Control': 'no-store',
+        'Content-Length': Buffer.byteLength(buffer),
+        'X-Content-Type-Options': 'nosniff',
+      });
+      return res.end(buffer);
+    } catch (err) {
+      logWarn(`export failed for ${exportMatch[2]} in "${ctx.ws.slug}": ${err?.message || err}`);
+      return fail(res, 500, 'exportFailed', 'Export generation failed');
+    }
+  }
+  /* EXPORT-ROUTE-END */
 
   /* VIS-04 (D-50-7): the per-project "members may invite guests" toggle.
      Admin/owner-only by workspace rank (a project lead who is a plain member
