@@ -118,7 +118,7 @@ were authored before Phase 53 landed and need a drift check at execute time
 
 Plans:
 **Wave 1**
-- [ ] 54-01-PLAN.md — CSV end-to-end tracer: model, CSV writer, gated export route, download helper, modal and both entry points
+- [x] 54-01-PLAN.md — CSV end-to-end tracer: model, CSV writer, gated export route, download helper, modal and both entry points
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 54-02-PLAN.md — Pinned workbook writer behind a legitimacy checkpoint, repository gates, unzip/XML helpers and the six-sheet shell with the Tasks sheet
@@ -152,7 +152,7 @@ Plans:
 | 53-03 Unified project settings modal | Complete | 2026-11-09 |
 | 53-04 Projects table columns & Share dedup | Complete | 2026-11-09 |
 | 53-05 Teams polish & i18n close-out | Complete | 2026-11-09 |
-| 54-01 CSV end-to-end tracer | Pending | — |
+| 54-01 CSV end-to-end tracer | Complete | 2026-11-10 |
 | 54-02 Workbook writer + six-sheet shell (Tasks) | Pending | — |
 | 54-03 Summary, KPIs, charts, Board/Members/Milestones | Pending | — |
 | 54-04 Gantt geometry + dependency connectors | Pending | — |
