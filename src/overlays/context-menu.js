@@ -40,6 +40,9 @@ export function ctxMenu(p) {
       I('toggleFavProj', 'star', pr.fav ? tMsg('act.removeFromFavorites') : tMsg('act.addToFavorites')) +
       I('editProject', 'pencil', tMsg('act.renameEdit')) +
       I('share', 'share-2', tMsg('act.share')) +
+      /* [54-01 D-54-2] Second export entry point — same modal as the header
+         button, same canManageProject guard, rendered only for managers. */
+      (canManageProject(pr) ? I('exportOpen', 'download', tMsg('export.action')) : '') +
       I('copyLink', 'link', tMsg('act.copyLink')) +
       I('dupProject', 'copy', tMsg('act.duplicate')) +
       sep +

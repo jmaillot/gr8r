@@ -46,6 +46,7 @@ import { strengthMeter } from '../pages/settings.js';
 import { prefValue } from '../core/prefs.js';
 import { blockedToastOnce } from '../core/push.js';
 import { DEFAULT_OPTIONS, buildExportModel } from '../export/model.js';
+import { toCsv } from '../export/csv.js';
 import { download, saveBlob } from '../core/download.js';
 
 /* The preference value is written the way the user chose it: the 'auto'
@@ -1785,14 +1786,33 @@ const exportViewIds = p => {
 };
 const exportCount = p =>
   (buildExportModel(D(), p.id, { scope: S.ui.expScope === 'view' ? 'view' : 'all', ids: exportViewIds(p), options: S.ui.expOptions }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() })?.rows || []).length;
+/* Static-mode filename helper (D-54-2): the same allow-list as the server —
+   every character outside A-Z a-z 0-9 dot underscore hyphen becomes a hyphen. */
+const safeExportStem = value =>
+  String(value || '')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '') || 'project';
 A.exportSubmit = async el => {
   const p = proj(el.dataset.id);
   if (!p || !canManageProject(p)) return toast(t('err.exportForbidden'), { kind: 'err' });
   const count = exportCount(p);
   if (count === 0) return toast(t('export.scope.count', { n: 0 }), { kind: 'info' });
-  const body = { format: 'csv', scope: S.ui.expScope === 'view' ? 'view' : 'all', options: { ...(S.ui.expOptions || DEFAULT_OPTIONS) } };
-  if (body.scope === 'view') {
-    const ids = exportViewIds(p);
+  const options = { ...(S.ui.expOptions || DEFAULT_OPTIONS) };
+  const scope = S.ui.expScope === 'view' && S.ui.expViewKey ? 'view' : 'all';
+  const ids = scope === 'view' ? exportViewIds(p) : undefined;
+  /* STATIC MODE (54-01): no server — the model and writer run in the browser,
+     exactly the code path the server route uses (R9: no charts, no arrows,
+     no multi-sheet pretence — CSV only). */
+  if (!api.enabled) {
+    const model = buildExportModel(D(), p.id, { scope, ids, options }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() });
+    const csv = toCsv(model);
+    saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeExportStem(p.key)}-${model.exportDateISO}.csv`);
+    closeModal();
+    return toast(t('export.scope.count', { n: count }), { ms: 1800 });
+  }
+  const body = { format: 'csv', scope, options };
+  if (scope === 'view') {
     if (!ids) {
       body.scope = 'all';
     } else {

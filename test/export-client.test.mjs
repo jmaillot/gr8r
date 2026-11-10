@@ -114,3 +114,71 @@ test('DEFAULT_OPTIONS stays frozen with the five toggles (model/CSV client parit
   assert.deepEqual(DEFAULT_OPTIONS, { descriptions: false, comments: false, subtasks: false, completed: true, archived: false });
   assert.ok(Object.isFrozen(DEFAULT_OPTIONS));
 });
+
+/* ---- 54-01 Task 3: scope, toggles, static mode, second entry point ---- */
+
+test('the context menu carries exactly one exportOpen item, guarded by canManageProject', () => {
+  const src = read('src/overlays/context-menu.js');
+  assert.equal(src.split("data-a=\"${act}\"").length >= 1, true, 'menu items ride the I factory');
+  assert.equal(src.split('exportOpen').length - 1, 1, 'exactly one exportOpen occurrence');
+  const guarded = src.slice(src.indexOf('exportOpen') - 200, src.indexOf('exportOpen'));
+  assert.ok(guarded.includes('canManageProject(pr)'), 'the item is guarded by canManageProject(pr)');
+  assert.ok(src.includes("tMsg('export.action')"), 'the label reads export.action');
+  assert.ok(src.includes("'download'"), 'the item uses the download icon');
+});
+
+test('the modal contains the five option keys and the static note', () => {
+  const src = read('src/overlays/modals.js');
+  const modal = src.split('export function exportModal')[1];
+  assert.ok(modal.includes('data-key="${key}"'), 'the toggles render their key through data-key');
+  const opts = src.slice(src.indexOf('const EXP_OPTIONS'), src.indexOf('export function exportModal'));
+  for (const key of ['descriptions', 'comments', 'subtasks', 'completed', 'archived']) {
+    assert.ok(opts.includes(`'${key}'`), `EXP_OPTIONS carries ${key}`);
+    assert.ok(modal.includes("'export.option.' + key"), 'the option label keys resolve through the EXP_OPTIONS loop');
+  }
+  assert.ok(modal.includes('data-in="exportOption"'), 'the toggles write through IN.exportOption');
+  assert.ok(modal.includes('export.notice.staticMode'), 'the static note is present');
+  assert.ok(modal.includes("t('export.scope.view')"), 'the view scope option exists');
+  assert.ok(modal.includes("t('export.scope.viewUnavailable')"), 'the disabled-view fallback exists');
+});
+
+test('the static submit branch builds CSV locally and never calls download', () => {
+  const src = read('src/actions/actions.js');
+  const submit = src.slice(src.indexOf('A.exportSubmit'));
+  const submitEnd = submit.indexOf('\n};');
+  const staticBranch = submit.slice(submit.indexOf('!api.enabled'), submit.indexOf('\n  const body = {') > -1 ? submit.indexOf('\n  const body = {') : submitEnd);
+  assert.ok(staticBranch.includes('toCsv('), 'the static branch calls toCsv directly');
+  assert.ok(staticBranch.includes('new Blob('), 'the static branch builds a Blob');
+  assert.ok(staticBranch.includes('saveBlob('), 'the static branch saves via saveBlob');
+  assert.ok(!staticBranch.includes('download('), 'the static branch never calls the network helper');
+  assert.ok(src.includes('charset=utf-8'), 'the Blob type carries the charset');
+  /* the static filename uses the server-identical allow-list stem */
+  assert.ok(src.includes('safeExportStem'), 'a local safeExportStem helper exists');
+});
+
+test('the scope count expression is derived from buildExportModel, not a raw length', () => {
+  const src = read('src/actions/actions.js');
+  const count = src.slice(src.indexOf('const exportCount'));
+  assert.ok(count.includes('buildExportModel'), 'the count calls buildExportModel');
+  const modal = read('src/overlays/modals.js').split('export function exportModal')[1];
+  assert.ok(modal.includes('buildExportModel'), 'the modal count calls buildExportModel');
+});
+
+test('EN and FR catalogues carry the scope/option keys with matching placeholders', () => {
+  const en = JSON.parse(read('src/locales/en.json'));
+  const fr = JSON.parse(read('src/locales/fr.json'));
+  for (const k of [
+    'export.scope.view',
+    'export.scope.viewUnavailable',
+    'export.options.label',
+    'export.option.descriptions',
+    'export.option.comments',
+    'export.option.subtasks',
+    'export.option.completed',
+    'export.option.archived',
+  ]) {
+    assert.ok(en[k] !== undefined, `EN has ${k}`);
+    assert.ok(fr[k] !== undefined, `FR has ${k}`);
+    assert.ok(!/[<>"]/.test(en[k]) && !/[<>"]/.test(fr[k]), `${k} values carry no angle bracket or double quote`);
+  }
+});

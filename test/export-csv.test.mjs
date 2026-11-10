@@ -103,3 +103,16 @@ test('an empty model still produces a valid BOM + header CSV', () => {
   assert.equal(csv.charCodeAt(0), 0xfeff);
   assert.equal(parseLines(csv).length, 1);
 });
+
+test('static-mode Blob equivalent: Buffer from toCsv starts with the BOM and parses to the expected row count', () => {
+  /* What A.exportSubmit's static branch produces: a Buffer (Blob equivalent)
+     of toCsv output, type text/csv;charset=utf-8. */
+  const model = buildExportModel(makeDoc(), 'p_alpha', { scope: 'all' }, { translate: k => k, labelName: i => 'L:' + i, now: NOW });
+  const csv = toCsv(model);
+  const blobEquivalent = Buffer.from(csv, 'utf8');
+  assert.equal(blobEquivalent.length, Buffer.byteLength(csv), 'the buffer is the exact byte payload');
+  const text = blobEquivalent.toString('utf8');
+  assert.equal(text.charCodeAt(0), 0xfeff, 'the payload still starts with the BOM');
+  const lines = text.replace(/^\uFEFF/, '').split('\r\n').filter(l => l !== '');
+  assert.equal(lines.length, model.rows.length + 1, 'header plus one row per exported task');
+});

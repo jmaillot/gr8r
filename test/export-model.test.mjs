@@ -210,3 +210,55 @@ test('drift gate: STATUS_IDS and PRIORITY_IDS match src/core/constants.js', asyn
   assert.deepEqual(STATUS_IDS, STATUSES.map(s => s.id));
   assert.deepEqual(PRIORITY_IDS, PRIOS.map(p => p.id));
 });
+
+/* ---- 54-01 Task 3: the five-toggle matrix (each toggle adds exactly its content) ---- */
+test('five-toggle matrix: each toggle on adds exactly its content and nothing else', () => {
+  const def = build(makeDoc(), 'p_alpha', { scope: 'all' });
+  const defKeys = def.columns.map(c => c.key);
+  const defRowCount = topRows(def).length;
+
+  const desc = build(makeDoc(), 'p_alpha', { scope: 'all', options: { descriptions: true } });
+  assert.deepEqual(desc.columns.map(c => c.key), [...defKeys, 'description']);
+  assert.equal(topRows(desc).length, defRowCount, 'descriptions adds no rows');
+
+  const com = build(makeDoc(), 'p_alpha', { scope: 'all', options: { comments: true } });
+  assert.deepEqual(com.columns.map(c => c.key), [...defKeys, 'comments', 'latestComment', 'thread']);
+  assert.equal(topRows(com).length, defRowCount, 'comments adds no rows');
+
+  const sub = build(makeDoc(), 'p_alpha', { scope: 'all', options: { subtasks: true } });
+  assert.equal(topRows(sub).length, defRowCount, 'subtasks adds no TOP rows — children ride under parents');
+  assert.ok(sub.rows.some(r => r.parent === 't_a9'), 'the subtask children exist');
+  assert.deepEqual(def.rows.map(r => r.id).sort(), topRows(sub).map(r => r.id).sort(), 'top rows identical to default');
+
+  const done = build(makeDoc(), 'p_alpha', { scope: 'all', options: { completed: false } });
+  assert.ok(topRows(done).every(r => r.statusId !== 'done'), 'completed false removes every done row');
+  assert.equal(topRows(done).length, defRowCount - 2, 'exactly the two done rows leave');
+
+  const arch = build(makeDoc(), 'p_alpha', { scope: 'all', options: { archived: true } });
+  assert.ok(topRows(arch).some(r => r.id === 't_a7'), 'archived true adds the archived row');
+  assert.equal(topRows(arch).length, defRowCount + 1, 'exactly one row joins');
+});
+
+test('all toggles off reproduces the default column set and row count', () => {
+  const allOff = build(makeDoc(), 'p_alpha', {
+    scope: 'all',
+    options: { descriptions: false, comments: false, subtasks: false, completed: false, archived: false },
+  });
+  const baseline = build(makeDoc(), 'p_alpha', { scope: 'all', options: { completed: false } });
+  assert.deepEqual(allOff.columns.map(c => c.key), baseline.columns.map(c => c.key));
+  assert.deepEqual(allOff.rows.map(r => r.id), baseline.rows.map(r => r.id), 'explicit false === omitted');
+});
+
+test('completed false plus subtasks true never emits a child of a filtered-out parent (D-54-9)', () => {
+  const m = build(makeDoc(), 'p_alpha', { scope: 'all', options: { completed: false, subtasks: true } });
+  const topIds = new Set(topRows(m).map(r => r.id));
+  for (const r of m.rows) {
+    if (r.parent) {
+      const parentKey = r.parent;
+      assert.ok([...topIds].some(id => id === parentKey), 'no child outlives a filtered-out parent');
+    }
+  }
+  /* t_a5 is done; if it has children none may survive — it has none, so the
+     general invariant above plus the done-exclusion covers the composition. */
+  assert.ok(!m.rows.some(r => r.parent && !topIds.has(r.parent)));
+});
