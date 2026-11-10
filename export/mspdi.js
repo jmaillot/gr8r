@@ -254,20 +254,33 @@ export function buildMspdi(model) {
        instead of writing the word undefined. */
     const notes = options.descriptions && row.description ? `<Notes>${esc(row.description)}</Notes>` : '';
 
-    /* Owner ruling 2026-11-10, revised: child rows DO carry dates — the
-       parent's span. Project turns a parent with subtasks into a SUMMARY
-       task and RECOMPUTES its Start/Finish from its children, so dateless
-       children roll every line back to the project start ("all tasks same
-       dates"). Children inherit the parent's start/due from the model and
-       get the same SNET pin, making the rollup land exactly on the
-       parent's own dates. */
+    /* Owner report 2026-11-10 ("only end date is not good"): Project
+       re-derives Finish from Duration on its Mon-Fri calendar, pulling
+       weekend dues back and shifting span ends. A MANUALLY SCHEDULED
+       task is never rescheduled on open: ManualStart/ManualFinish/
+       ManualDuration are honored verbatim, and a manual SUMMARY keeps
+       its own dates instead of rolling up from its children — exactly
+       the owner's rule (parent end = its due, subtask end = parent
+       end). Manual* elements sit between DurationFormat and Milestone
+       per the pj15 Task sequence (ManualStart, ManualFinish,
+       ManualDuration, Manual). The SNET constraint stays as a fallback
+       in case a Project version ignores the Manual flag. */
+    const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
+    const manual = dated
+      ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration><Manual>1</Manual>`
+      : '';
+
+    /* SNET pin (owner report "all lines 20/11"): only rows whose start
+       resolves from their own (or parent-inherited) ISO start. Undated
+       rows stay unconstrained so the project-start fallback still
+       applies to them. */
     const constraint =
       start && finish && /^\d{4}-\d{2}-\d{2}$/.test(String(row.start))
         ? `<ConstraintType>4</ConstraintType><ConstraintDate>${start}</ConstraintDate>`
         : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${row.parent ? '<OutlineLevel>1</OutlineLevel>' : ''}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${row.parent ? '<OutlineLevel>1</OutlineLevel>' : ''}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat>${manual}<Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

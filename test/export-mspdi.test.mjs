@@ -194,13 +194,22 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
     assert.ok(slice.includes('<Finish>2026-03-10T17:00:00</Finish>'), `${name} finishes with the parent task's due`);
     assert.ok(slice.includes('<ConstraintType>4</ConstraintType>'), `${name} is SNET-pinned so Project keeps the dates`);
     assert.ok(slice.includes('<ConstraintDate>2026-03-04T08:00:00</ConstraintDate>'), `${name} pins the inherited start`);
+    /* Manual scheduling pins the dates verbatim (no calendar re-derivation) */
+    assert.ok(slice.includes('<Manual>1</Manual>'), `${name} is manually scheduled`);
+    assert.ok(slice.includes('<ManualStart>2026-03-04T08:00:00</ManualStart>'), `${name} pins ManualStart to the inherited start`);
+    assert.ok(slice.includes('<ManualFinish>2026-03-10T17:00:00</ManualFinish>'), `${name} pins ManualFinish to the inherited due`);
+    const msAt = slice.indexOf('<ManualStart>');
+    const dfAt = slice.indexOf('<DurationFormat>');
+    const miAt = slice.indexOf('<Milestone>');
+    assert.ok(msAt > dfAt && msAt < miAt, `${name}: Manual* block between DurationFormat and Milestone`);
   }
-  /* the parent keeps its OWN dates, plus the SNET pin */
+  /* the parent keeps its OWN dates, plus the SNET pin and manual mode */
   const parent = taskSlice(subXml, 'Subtasked task');
   assert.ok(!parent.includes('<OutlineLevel>'), 'the parent carries no OutlineLevel (top level)');
   assert.ok(parent.includes('<Start>2026-03-04T08:00:00</Start>'), 'the parent starts at its own start');
   assert.ok(parent.includes('<Finish>2026-03-10T17:00:00</Finish>'), 'the parent finishes at its own due');
   assert.ok(parent.includes('<ConstraintType>4</ConstraintType>'), 'the parent is SNET-pinned');
+  assert.ok(parent.includes('<Manual>1</Manual>'), 'the parent is manually scheduled — Project keeps its own dates instead of rolling up');
 });
 
 test('task count equals exported rows only — milestones excluded (owner 2026-11-10)', () => {
