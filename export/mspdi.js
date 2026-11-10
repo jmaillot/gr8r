@@ -28,6 +28,8 @@
      unconditional — even for a project with zero tasks (Pitfall 11);
    - dates carry NO timezone suffix (YYYY-MM-DDThh:mm:ss); durations
      are xsd:duration at one day = 480 minutes (D-54-13);
+   - rows that parent child rows carry <Summary>1</Summary> so Project
+     renders them as bold summary tasks (owner request 2026-11-10);
    - the short namespace xmlns="http://schemas.microsoft.com/project"
      (no /2007) — 54-RESEARCH Open Question 1, asserted by the suite
      and confirmed by the human Project check (54-05 Task 3).
@@ -184,6 +186,11 @@ export function buildMspdi(model) {
     if (r && r.id && !r.parent) uidOf.set(r.id, i + 1);
   });
 
+  /* ---- summary flags (owner 2026-11-10): a row that parents child
+     rows carries <Summary>1</Summary> — Project renders those tasks
+     bold. Everything else is 0. ---- */
+  const summaryIds = new Set(rows.map(r => r?.parent).filter(Boolean));
+
   /* ---- schedule extremes for the project StartDate/FinishDate. ---- */
   let earliestStart = null;
   let latestFinish = null;
@@ -232,7 +239,7 @@ export function buildMspdi(model) {
     const notes = options.descriptions && row.description ? `<Notes>${esc(row.description)}</Notes>` : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type><Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><PercentComplete>${percent}</PercentComplete>${links}${attrs}${notes}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type><Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${links}${attrs}${notes}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

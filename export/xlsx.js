@@ -24,6 +24,7 @@
 
    D-54-9: child rows (parentKey.n) sit under their parent with a
    one-level cell-style indent on the title — never leading spaces.
+   Owner request 2026-11-10: parent titles render BOLD.
 
    fromBuffer (@office-kit/xlsx/node) is BROKEN in 0.26.1 — verification
    is via test/helpers/unzip.mjs (node:zlib), never the library reader.
@@ -331,8 +332,10 @@ function writeTaskRow(wb, ws, row, r, columnKeys) {
       setCell(ws, row, col, String(value));
       if (WRAP_COLUMNS.has(key)) wrapCellText(wb, getCell(ws, row, col), true);
       /* D-54-9: child rows indent their TITLE cell by one level via the
-         cell style — never leading spaces in the text. */
+         cell style — never leading spaces in the text. Owner request
+         2026-11-10: parent titles render BOLD. */
       if (key === 'title' && r.parent) indentCell(wb, getCell(ws, row, col), 1);
+      else if (key === 'title') setBold(wb, getCell(ws, row, col), true);
     }
   }
   return row;

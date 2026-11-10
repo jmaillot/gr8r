@@ -46,7 +46,7 @@ const PROJECT_ORDER = [
   'Assignments',
 ];
 
-const TASK_ORDER = ['UID', 'ID', 'Name', 'Type', 'Start', 'Finish', 'Duration', 'DurationFormat', 'Milestone', 'PercentComplete'];
+const TASK_ORDER = ['UID', 'ID', 'Name', 'Type', 'Start', 'Finish', 'Duration', 'DurationFormat', 'Milestone', 'Summary', 'PercentComplete'];
 
 /* Slice the raw XML for one task by its Name value. */
 function taskSlice(xml, name) {
@@ -187,6 +187,16 @@ test('durations follow the estimate grammar, then the working-day span, then zer
 
 test('no Task carries the Milestone flag (owner 2026-11-10: milestones excluded)', () => {
   assert.ok(!xml.includes('<Milestone>1</Milestone>'), 'the Milestone element never appears');
+});
+
+test('parent tasks carry Summary=1, top-level and child rows Summary=0 (owner 2026-11-10: parents render bold in Project)', () => {
+  const out = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
+  assert.ok(taskSlice(out, 'Subtasked task').includes('<Summary>1</Summary>'), 'the subtasked parent is a Summary task');
+  assert.ok(taskSlice(out, 'Child two').includes('<Summary>0</Summary>'), 'a child row is not a Summary task');
+  assert.ok(taskSlice(out, 'Linked one').includes('<Summary>0</Summary>'), 'a top-level task without subtasks is not a Summary task');
+  for (const m of out.matchAll(/<Summary>(\d)<\/Summary>/g)) {
+    assert.ok(m[1] === '0' || m[1] === '1', `Summary is a boolean flag (got ${m[1]})`);
+  }
 });
 
 test('Start and Finish carry no Z and no offset', () => {

@@ -136,6 +136,33 @@ test('child rows carry a one-level cell-style indent on the title; parents do no
   assert.equal(parentIndent, 0, `parent title cell carries no indent (got style ${parentS}: ${xfs[parentS]})`);
 });
 
+/* Parse styles.xml's font block into an ordered array; bold resolves as
+   a font carrying the <b/> (or <b val="1"/>) element. */
+function fonts(stylesXml) {
+  const m = /<fonts[^>]*>([\s\S]*?)<\/fonts>/.exec(stylesXml);
+  assert.ok(m, 'styles.xml carries a fonts block');
+  return [...m[1].matchAll(/<font>[\s\S]*?<\/font>|<font\/>/g)].map(match => match[0]);
+}
+
+const isBoldFont = f => /<b(\s+val="(?:1|true)")?\s*\/>/.test(f || '');
+
+test('parent task titles are bold; child titles are not (owner 2026-11-10)', async () => {
+  const model = buildModel();
+  const childIdx = model.rows.findIndex(r => r.parent);
+  const parentIdx = model.rows.findIndex(r => r.key === 'ALPHA-9');
+
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet2.xml');
+  const stylesXml = parts.get('xl/styles.xml');
+  const xfs = cellXfs(stylesXml);
+  const allFonts = fonts(stylesXml);
+
+  const childFontId = Number(xfAttr(xfs[Number((STYLE_INDEX.exec(cellAttrs(xml, `B${childIdx + 2}`) || '') || [])[1] || 0)] || '', 'fontId') || 0);
+  const parentFontId = Number(xfAttr(xfs[Number((STYLE_INDEX.exec(cellAttrs(xml, `B${parentIdx + 2}`) || '') || [])[1] || 0)] || '', 'fontId') || 0);
+  assert.ok(isBoldFont(allFonts[parentFontId]), `the parent title font is bold (fontId ${parentFontId}: ${allFonts[parentFontId]})`);
+  assert.ok(!isBoldFont(allFonts[childFontId]), `the child title font is not bold (fontId ${childFontId})`);
+});
+
 test('date cells are numeric under the builtin short-date format (numFmtId 14), never ISO strings (D-54-13)', async () => {
   const { parts } = await buildZip(buildModel());
   const xml = parts.get('xl/worksheets/sheet2.xml');
