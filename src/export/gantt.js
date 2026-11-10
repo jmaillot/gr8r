@@ -87,7 +87,7 @@ export function makeAxis({ paddedStart, paddedEnd, exportDate }) {
   const exportDay = dayDiff(paddedStart, exportISO);
   const today = exportDay < 0 || exportDay >= spanDays ? null : columnOf(exportISO);
 
-  return { mode, spanDays, columns, columnOf, today };
+  return { mode, spanDays, columns, columnOf, today, startISO: paddedStart, endISO: paddedEnd };
 }
 
 /* 1-based column number -> letter(s): A..Z, AA.. */
