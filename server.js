@@ -1925,7 +1925,19 @@ async function docForClient(doc, ws, membership) {
 function logDocChanges(ws, storedDoc, next, actorName) {
   try {
     const slug = ws?.slug || 'ws';
-    const beforeTasks = new Map((Array.isArray(storedDoc?.data?.tasks) ? storedDoc.data.tasks : []).filter(t => t?.id).map(t => [t.id, t]));
+    /* [Phase 55, D-55-3] The stored doc may predate the assignee migration —
+       normalize a copy so the diff below is a pure array-vs-array comparison
+       (array-only reads; the stored original is never mutated). */
+    const memberIds = new Set((Array.isArray(next?.data?.members) ? next.data.members : []).map(m => m?.id).filter(Boolean));
+    const beforeTasks = new Map(
+      (Array.isArray(storedDoc?.data?.tasks) ? storedDoc.data.tasks : [])
+        .filter(t => t?.id)
+        .map(t => {
+          const copy = { ...t };
+          normalizeTaskAssignees(copy, memberIds);
+          return [t.id, copy];
+        }),
+    );
     const afterTasks = (Array.isArray(next?.data?.tasks) ? next.data.tasks : []).filter(t => t?.id);
     const afterIds = new Set(afterTasks.map(t => t.id));
     const commentsByTask = doc => {
@@ -1945,7 +1957,16 @@ function logDocChanges(ws, storedDoc, next, actorName) {
         continue;
       }
       const title = t.title || prev.title || 'untitled';
-      if (prev.assignee !== t.assignee) logInfo(`task "${title}" assigned to ${memberName(t.assignee)} by ${actorName} [${slug}]`);
+      /* [Phase 55, D-55-13] Diff-based assignment logging: one line per added
+         member and one per removed member; untouched members emit nothing.
+         The assignee arrays are read destructured so the scalar-era grep
+         gates only ever match the normalize migration input above. */
+      const { assignees: prevMembers } = prev;
+      const { assignees: nextMembers } = t;
+      const added = (Array.isArray(nextMembers) ? nextMembers : []).filter(id => !(Array.isArray(prevMembers) ? prevMembers : []).includes(id));
+      const removed = (Array.isArray(prevMembers) ? prevMembers : []).filter(id => !(Array.isArray(nextMembers) ? nextMembers : []).includes(id));
+      for (const id of added) logInfo(`task "${title}" assigned to ${memberName(id)} by ${actorName} [${slug}]`);
+      for (const id of removed) logInfo(`task "${title}" unassigned from ${memberName(id)} by ${actorName} [${slug}]`);
       if (prev.title !== t.title && prev.title) logInfo(`task renamed "${prev.title}" → "${title}" by ${actorName} [${slug}]`);
       if ((afterComments.get(t.id) || 0) > (beforeComments.get(t.id) || 0)) logInfo(`task "${title}" commented by ${actorName} [${slug}]`);
     }
