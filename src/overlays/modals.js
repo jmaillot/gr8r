@@ -398,15 +398,23 @@ export function exportModal(m, H) {
      rendered option is always a servable format. */
   const FORMATS = api.enabled ? [['xlsx', 'table-2'], ['mspdi', 'file-code'], ['csv', 'table-2']] : [['csv', 'table-2']];
   const fmt = S.ui.expFormat || FORMATS[0][0];
-  const formatRadios = FORMATS.map(([id, icon]) => radio('expFormat', id, t('export.format.' + id), icon, fmt === id)).join('');
+  /* [2026-11-10 owner redesign] the format picker is icon buttons (name in
+     the tooltip + aria-label), NOT big cards; the include list is compact
+     selectable rows. Scope keeps its card radios. The inputs keep the same
+     data-in wiring — only the presentation changed. */
+  const formatIcons = FORMATS.map(
+    ([id, icon]) =>
+      `<label class="xfmt ${fmt === id ? 'on' : ''}" title="${t('export.format.' + id)}"><input type="radio" name="expFormat" value="${id}" data-in="exportFormat" ${fmt === id ? 'checked' : ''} aria-label="${t('export.format.' + id)}">${ic(icon, 18)}</label>`,
+  ).join('');
+  const includeList = EXP_OPTIONS.map(
+    ([key, icon]) =>
+      `<label class="xinc ${opts[key] ? 'on' : ''}"><input type="checkbox" data-in="exportOption" data-key="${key}" ${opts[key] ? 'checked' : ''}>${ic(icon, 14)}<span class="grow">${t('export.option.' + key)}</span>${ic('check', 14)}</label>`,
+  ).join('');
   return `${H(t('export.title', { name: esc(p.name) }))}
   <div class="modal-b">
-    <div class="field"><span class="label">${t('export.format.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.format.label')}">${formatRadios}</div></div>
+    <div class="field"><span class="label">${t('export.format.label')}</span><div class="xfmts" role="radiogroup" aria-label="${t('export.format.label')}">${formatIcons}</div></div>
     <div class="field"><span class="label">${t('export.scope.label')}</span><div class="tmpls" role="radiogroup" aria-label="${t('export.scope.label')}">${radio('expScope', 'all', t('export.scope.all'), 'list', scope === 'all')}${radio('expScope', 'view', hasView ? t('export.scope.view') : t('export.scope.viewUnavailable'), 'list-filter', scope === 'view', !hasView)}</div></div>
-    <div class="field"><span class="label">${t('export.options.label')}</span><div class="tmpls" role="group" aria-label="${t('export.options.label')}">${EXP_OPTIONS.map(
-      ([key, icon]) =>
-        `<label class="opt ${opts[key] ? 'on' : ''}"><input type="checkbox" data-in="exportOption" data-key="${key}" ${opts[key] ? 'checked' : ''}>${ic(icon, 14)}${t('export.option.' + key)}</label>`,
-    ).join('')}</div></div>
+    <div class="field"><span class="label">${t('export.options.label')}</span><div class="xincs" role="group" aria-label="${t('export.options.label')}">${includeList}</div></div>
     <div class="hint">${t('export.scope.count', { n: count })}${hasView ? '' : ` · ${t('export.scope.viewUnavailable')}`}</div>
     ${api.enabled && fmt === 'mspdi' ? `<div class="alert info">${ic('info', 14)}<span>${t('export.notice.mspdi')}</span></div>` : ''}
     ${api.enabled ? '' : `<div class="alert info">${ic('info', 14)}<span>${t('export.notice.staticMode')}</span></div>`}
