@@ -823,6 +823,7 @@
   "export.col.comments": "Commentaires",
   "export.col.latestComment": "Dernier commentaire",
   "export.col.thread": "Fil",
+  "export.timeline.truncated": "trop de barres à tracer, le tableau seul est affiché",
   "export.action": "Exporter en CSV",
   "export.title": "Exporter « {name} »",
   "export.format.label": "Format",

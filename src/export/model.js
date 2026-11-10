@@ -368,6 +368,16 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
     board: ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress'].map(hcol),
     members: ['member', 'open', 'done', 'total'].map(hcol),
     milestones: ['name', 'date', 'state'].map(hcol),
+    /* 54-04: the Timeline task block (columns A..C). */
+    timeline: ['key', 'title', 'status'].map(hcol),
+  };
+
+  /* Exporter-authored standalone labels the writers need verbatim
+     (54-04): the shape-cap degradation note and the milestone done
+     label reused on the Timeline milestone rows. */
+  const labels = {
+    timelineTruncated: translate('export.timeline.truncated'),
+    milestoneDone: translate('export.milestone.done'),
   };
 
   return {
@@ -386,6 +396,7 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
     members: memberEntries,
     milestones,
     headers,
+    labels,
     statusIds: [...STATUS_IDS],
     priorityIds: [...PRIORITY_IDS],
   };
