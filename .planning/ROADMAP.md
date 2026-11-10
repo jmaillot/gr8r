@@ -180,9 +180,13 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 **Folded in (owner decision 2026-11-10):** subtask start dates — add `start` to the subtask schema with parent-start inheritance, overridable per subtask (mirrors the subtask due pattern, `page.subtask.inheritedDue`); subtask drawer gains a Start row; exports (MSPDI + XLSX model) write `s.start || t.start` so subtasks stop falling through to the project start date in MS Project.
 
-**Requirements**: TBD
+**Requirements:** ASSIG-1, ASSIG-2, ASSIG-3, ASSIG-4, ASSIG-5, ASSIG-6
 **Depends on:** Phase 54
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 55 to break down)
+- [ ] 55-01-PLAN.md — Schema migration + server core (normalize invariants, guard, stripMember, event-log diff)
+- [ ] 55-02-PLAN.md — Reminder fan-out per assignee + digest/mirror membership
+- [ ] 55-05-PLAN.md — Exports carry all assignees + subtask start dates (folded in)
+- [ ] 55-03-PLAN.md — Picker search modal + client membership/filters/notifications
+- [ ] 55-04-PLAN.md — Avatar stacks across all render surfaces
