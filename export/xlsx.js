@@ -30,12 +30,19 @@
    ===================================================================== */
 import { createWorkbook, addWorksheet, setActiveSheet, makeWorkbookView } from '@office-kit/xlsx/workbook';
 import {
-  setCell, setColumnWidth, setFreezePanes, makePageSetup, getCell,
+  setCell, setColumnWidth, setFreezePanes, makePageSetup, getCell, setRowHeight,
 } from '@office-kit/xlsx/worksheet';
-import { formatAsHeader, setCellNumberFormat, setBold, indentCell, wrapCellText } from '@office-kit/xlsx/styles';
+import {
+  formatAsHeader, setCellNumberFormat, setBold, indentCell, wrapCellText,
+  setCellBackgroundColor, setRangeBackgroundColor,
+} from '@office-kit/xlsx/styles';
 import { makeBarChart, makeBarSeries, makeChartSpace } from '@office-kit/xlsx/chart';
-import { addChartAt, makeShapeProperties, makeSolidFill, makeColor, makeSrgbColor, makeLine } from '@office-kit/xlsx/drawing';
+import {
+  addChartAt, makeShapeProperties, makeSolidFill, makeColor, makeSrgbColor, makeLine,
+  makeDrawing, makeShapeDrawingItem, makePresetGeometry,
+} from '@office-kit/xlsx/drawing';
 import { workbookToBuffer } from '@office-kit/xlsx/node';
+import { buildGantt } from '../src/export/gantt.js';
 
 /* R4: the six sheets exist up front, in this fixed English order —
    never created lazily, sheet order is the acceptance criterion. */
@@ -80,6 +87,186 @@ const SHORT_DATE_CODE = 'mm-dd-yy';
 /* Literal percent: digit zero followed by a quoted percent sign.
    Never the percentage format code (which multiplies by 100). */
 const LITERAL_PERCENT_CODE = '0"%"';
+
+/* =====================================================================
+   54-04: Timeline sheet — fixed shape palette, fills and the connector
+   anchor tie rule. Colors are the plan-locked hex values.
+   ===================================================================== */
+const GANTT_PALETTE = { backlog: '94A3B8', todo: '60A5FA', progress: 'F59E0B', review: 'A78BFA', done: '22C55E' };
+const GANTT_DIAMOND_FILL = 'F59E0B';
+const GANTT_LINK_COLOR = '475569';
+const GANTT_TODAY_FILL = 'FEF3C7';
+const GANTT_TODAY_HEADER_FILL = 'FDE68A';
+/* Drawing row offsets: the predecessor end sits low in its row, the
+   successor start sits high in its own row, so a clamped connector
+   still reads as a vertical step down across rows (D-54-6). */
+const LINK_ROW_OFF_PRED = 700000;
+const LINK_ROW_OFF_SUCC = 300000;
+/* Line width 1pt in EMU. */
+const LINK_WIDTH_EMU = 12700;
+
+function solid(hex) {
+  return makeSolidFill(makeColor(makeSrgbColor(hex)));
+}
+
+/* The connector tie rule, named so the backward-arrow case cannot
+   reappear: fromCol is the predecessor's finish boundary
+   (columnOf(predDue) + 4) and toCol is the successor's start boundary
+   (columnOf(succStart) + 3) UNLESS that places toCol left of fromCol —
+   then toCol becomes fromCol. An equal-day pair (predDue equal to
+   succStart) puts fromCol one column past the successor's start
+   boundary; clamped, it draws the zero-length horizontal connector
+   that steps down into the successor row (SPEC R6, D-54-6). The same
+   clamp covers a weekly successor that starts inside the week column
+   the predecessor already finishes in. */
+function linkAnchorCols(axis, link) {
+  const fromCol = axis.columnOf(link.predDue) + 4;
+  const toCol = Math.max(fromCol, axis.columnOf(link.succStart) + 3);
+  return { fromCol, toCol };
+}
+
+/* Two-cell anchor from marker columns/rows — markers are 0-based
+   (drawing row 1 sits on sheet row 2). */
+function twoCell(fromCol, fromRow, toCol, toRow, fromRowOff, toRowOff, editAs) {
+  return {
+    kind: 'twoCell',
+    from: { col: fromCol, colOff: 0, row: fromRow, rowOff: fromRowOff },
+    to: { col: toCol, colOff: 0, row: toRow, rowOff: toRowOff },
+    editAs,
+  };
+}
+
+/**
+ * Fill the Timeline sheet (54-04, R6): the key/title/status task block,
+ * one real date header per axis column, status-coloured bars, milestone
+ * diamonds and one clamped connector per in-scope dependency, the
+ * marked Today column, the frozen task block (D2) and a viewport that
+ * opens one column before today. Above SHAPE_CAP the sheet keeps the
+ * table, adds the truncation note and draws nothing (R13, T-54-13).
+ */
+function fillTimeline(wb, ws, model) {
+  const gantt = buildGantt(model);
+  const axis = gantt.axis;
+
+  /* ---- table: task block header A..C, then one real date header per
+     axis column (the day for a daily column, the Monday of the week
+     for a weekly one — the reader's locale decides the display via
+     the builtin short-date code on weekly; daily pins 'dd'). */
+  model.headers.timeline.forEach((label, i) => setCell(ws, 1, i + 1, label));
+  formatAsHeader(wb, ws, 'A1:C1');
+  for (let c = 0; c < axis.columns; c++) {
+    const col = 4 + c;
+    const offset = axis.mode === 'daily' ? c : c * 7;
+    setCell(ws, 1, col, toDayOffset(axis.startISO, offset));
+    setCellNumberFormat(wb, getCell(ws, 1, col), axis.mode === 'daily' ? 'dd' : SHORT_DATE_CODE);
+    setColumnWidth(ws, col, 4.5);
+  }
+  setRowHeight(ws, 1, 28);
+
+  /* ---- rows from row 2: bars first, then milestones, in buildGantt
+     order. No cell here is a formula. */
+  const statusLabelById = new Map(model.rows.map(r => [r.id, r.status]));
+  let tableRow = 2;
+  for (const bar of gantt.bars) {
+    setCell(ws, tableRow, 1, bar.key);
+    setCell(ws, tableRow, 2, bar.title);
+    setCell(ws, tableRow, 3, statusLabelById.get(bar.taskId) || '');
+    tableRow += 1;
+  }
+  for (const ms of gantt.milestones) {
+    setCell(ws, tableRow, 1, 'MS');
+    setCell(ws, tableRow, 2, ms.name);
+    setCell(ws, tableRow, 3, model.labels.milestoneDone);
+    tableRow += 1;
+  }
+  const lastTable = tableRow - 1;
+
+  /* ---- shapes (T-54-16: machine ids, never a title). Connectors are
+     pushed AFTER bars and diamonds so they draw on top. Milestones
+     share the one-column geometry and the same row basis. */
+  if (!gantt.truncated) {
+    const items = [];
+    gantt.bars.forEach((bar, i) => {
+      const fill = solid(GANTT_PALETTE[bar.statusId] || GANTT_PALETTE.backlog);
+      items.push(makeShapeDrawingItem(
+        twoCell(axis.columnOf(bar.start) + 3, bar.row + 1, axis.columnOf(bar.due) + 4, bar.row + 2, 0, 0, 'twoCell'),
+        {
+          name: `bar-${i}`,
+          spPr: makeShapeProperties({
+            geometry: makePresetGeometry('roundRect'),
+            fill,
+            ln: makeLine({ fill }),
+          }),
+        },
+      ));
+    });
+    gantt.milestones.forEach((ms, i) => {
+      /* A milestone can be dated outside the bar-derived padded span
+         (the span never includes milestone dates): such a diamond has
+         no column to sit on and is skipped — its table row stays. */
+      if (ms.date < axis.startISO || ms.date > axis.endISO) return;
+      const fill = solid(GANTT_DIAMOND_FILL);
+      items.push(makeShapeDrawingItem(
+        twoCell(axis.columnOf(ms.date) + 3, ms.row + 1, axis.columnOf(ms.date) + 4, ms.row + 2, 0, 0, 'twoCell'),
+        {
+          name: `ms-${i}`,
+          spPr: makeShapeProperties({
+            geometry: makePresetGeometry('diamond'),
+            fill,
+            ln: makeLine({ fill }),
+          }),
+        },
+      ));
+    });
+    gantt.links.forEach((link, i) => {
+      const { fromCol, toCol } = linkAnchorCols(axis, link);
+      items.push(makeShapeDrawingItem(
+        twoCell(fromCol, link.predRow + 1, toCol, link.succRow + 1, LINK_ROW_OFF_PRED, LINK_ROW_OFF_SUCC, 'oneCell'),
+        {
+          connector: true,
+          name: `link-${i}`,
+          spPr: makeShapeProperties({
+            geometry: makePresetGeometry('bentConnector3'),
+            ln: makeLine({ w: LINK_WIDTH_EMU, fill: solid(GANTT_LINK_COLOR), tailEnd: { type: 'triangle' } }),
+          }),
+        },
+      ));
+    });
+    /* Only assign the drawing when there is something to draw — an
+       empty drawing part would break the zero-data workbook (R5). */
+    if (items.length) ws.drawing = makeDrawing(items);
+  } else {
+    /* R13 degradation: table + date header + Today stay; the note goes
+       into column A of the row after the last table row plus one. */
+    setCell(ws, lastTable + 2, 1, model.labels.timelineTruncated);
+  }
+
+  /* ---- Today column (D-54-7): derived from the export date via
+     columnOf; when it is null the export date lies outside the padded
+     span (a project that starts in the future) and NO fill is written
+     at all — never a negative or undefined column. */
+  if (axis.today !== null) {
+    const todayCol = 4 + axis.today;
+    setRangeBackgroundColor(wb, ws, `${colLetter(todayCol)}1:${colLetter(todayCol)}${lastTable}`, GANTT_TODAY_FILL);
+    setCellBackgroundColor(wb, getCell(ws, 1, todayCol), GANTT_TODAY_HEADER_FILL);
+  }
+
+  /* ---- freeze the task block from D2 and aim the viewport one column
+     before today (clamped at D), so the file opens on the current
+     week; today null opens at D2. xSplit stays 3 (the freeze's own
+     value). */
+  setFreezePanes(ws, 'D2');
+  if (ws.views[0] && ws.views[0].pane) {
+    ws.views[0].pane.topLeftCell = colLetter(4 + Math.max(0, axis.today - 1)) + '2';
+  }
+}
+
+/* ISO date + day offset -> a real UTC-midnight Date (null-safe like
+   utcDate). */
+function toDayOffset(baseISO, days) {
+  const [y, m, d] = baseISO.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + days * 86400000);
+}
 
 /* Local YYYY-MM-DD string -> a real Date at UTC midnight. Empty or
    malformed values become null (no cell written). */
@@ -193,7 +380,8 @@ export async function buildWorkbook(model) {
      (styled below); Board/Members/Milestones headers are the model's. */
   initSheet(wb, byName.Summary, []);
   initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress']);
-  initSheet(wb, byName.Timeline, ['']);
+  initSheet(wb, byName.Timeline, []);
+  fillTimeline(wb, byName.Timeline, model);
   initSheet(wb, byName.Members, model.headers.members, ['member', 'open', 'done', 'total']);
   initSheet(wb, byName.Milestones, model.headers.milestones, ['name', 'date', 'state']);
   initSheet(wb, byName.Tasks, columnLabels, columnKeys);
@@ -342,8 +530,9 @@ export async function buildWorkbook(model) {
   }
 
   /* D-54-14 / 54-RESEARCH Pattern 2: setActiveSheet ALONE emits no
-     bookViews — Excel would open on the first tab regardless. Set both. */
-  setActiveSheet(wb, 'Summary');
+     bookViews — Excel would open on the first tab regardless. Set both.
+     54-04: the workbook opens on Timeline (sheet 4, activeTab 3). */
+  setActiveSheet(wb, 'Timeline');
   wb.bookViews = [makeWorkbookView({ activeTab: wb.activeSheetIndex })];
 
   /* R13 groundwork: one async build, one buffer — the route awaits this
