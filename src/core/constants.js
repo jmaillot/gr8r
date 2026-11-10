@@ -134,6 +134,93 @@ export const LABELS = [
     },
     c: 'var(--orange)',
   },
+  /* Infrastructure & migration catalog (added 2026-11-10): phase labels let a
+     board filter "where are we?", domain labels filter "what kind of work?".
+     Same contract as the original eight: fixed ids, i18n names, CSS-var colors. */
+  {
+    id: 'assessment',
+    get name() {
+      return t('task.label.assessment');
+    },
+    c: 'var(--gray)',
+  },
+  {
+    id: 'preparation',
+    get name() {
+      return t('task.label.preparation');
+    },
+    c: 'var(--blue)',
+  },
+  {
+    id: 'migration',
+    get name() {
+      return t('task.label.migration');
+    },
+    c: 'var(--violet)',
+  },
+  {
+    id: 'validation',
+    get name() {
+      return t('task.label.validation');
+    },
+    c: 'var(--green)',
+  },
+  {
+    id: 'identity',
+    get name() {
+      return t('task.label.identity');
+    },
+    c: 'var(--amber)',
+  },
+  {
+    id: 'email',
+    get name() {
+      return t('task.label.email');
+    },
+    c: 'var(--teal)',
+  },
+  {
+    id: 'licensing',
+    get name() {
+      return t('task.label.licensing');
+    },
+    c: 'var(--violet)',
+  },
+  {
+    id: 'network',
+    get name() {
+      return t('task.label.network');
+    },
+    c: 'var(--rose)',
+  },
+  {
+    id: 'security',
+    get name() {
+      return t('task.label.security');
+    },
+    c: 'var(--red)',
+  },
+  {
+    id: 'backup',
+    get name() {
+      return t('task.label.backup');
+    },
+    c: 'var(--orange)',
+  },
+  {
+    id: 'documentation',
+    get name() {
+      return t('task.label.documentation');
+    },
+    c: 'var(--gray)',
+  },
+  {
+    id: 'vendor',
+    get name() {
+      return t('task.label.vendor');
+    },
+    c: 'var(--blue)',
+  },
 ];
 export const LB = Object.fromEntries(LABELS.map(l => [l.id, l]));
 export const PSTAT = {

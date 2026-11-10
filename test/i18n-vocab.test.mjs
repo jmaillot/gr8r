@@ -78,6 +78,18 @@ const LABEL_ORACLE = [
   ['bug', 'Bug'],
   ['qa', 'QA'],
   ['growth', 'Growth'],
+  ['assessment', 'Assessment'],
+  ['preparation', 'Preparation'],
+  ['migration', 'Migration'],
+  ['validation', 'Validation'],
+  ['identity', 'Identity'],
+  ['email', 'Email'],
+  ['licensing', 'Licensing'],
+  ['network', 'Network'],
+  ['security', 'Security'],
+  ['backup', 'Backup'],
+  ['documentation', 'Documentation'],
+  ['vendor', 'Vendor'],
 ];
 const PROJECT_STATUS_ORACLE = [
   ['planning', 'Planning'],

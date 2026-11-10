@@ -48,8 +48,14 @@ export const MCP_COLOR_VARS = {
   slate: '#6B7280',
 };
 /* The label catalog (src/core/constants.js LABELS ids). Task documents store
-   label ids, never free strings — this is the closed vocabulary. */
-export const MCP_LABELS = ['design', 'frontend', 'backend', 'research', 'content', 'bug', 'qa', 'growth'];
+   label ids, never free strings — this is the closed vocabulary. The original
+   product catalog plus the infrastructure/migration set (2026-11-10). */
+export const MCP_LABELS = [
+  'design', 'frontend', 'backend', 'research', 'content', 'bug', 'qa', 'growth',
+  'assessment', 'preparation', 'migration', 'validation',
+  'identity', 'email', 'licensing', 'network', 'security', 'backup',
+  'documentation', 'vendor',
+];
 /* Recurrence values exactly as the client stores them (actions.js RECUR_DAYS). */
 export const MCP_RECUR = ['Daily', 'Weekly', 'Every 2 weeks', 'Monthly'];
 const DUE_RE = /^\d{4}-\d{2}-\d{2}$/;
