@@ -768,7 +768,58 @@ function normalizeDoc(doc, meta) {
      stale or crafted document carrying notifPrefs is stripped on every read;
      the D-27-5 read-side default merge is retired with the doc field itself. */
   delete out.data.notifPrefs;
+  /* [Phase 55, D-55-1..4] Read-time assignee migration: every task and subtask
+     leaves this function carrying `assignees` as an array — the one canonical
+     shape (D-55-3, array-only reads). Old scalar `assignee` docs self-heal to
+     `[old]` (D-55-2); invariants (dedupe, junk strip, cap 5) are enforced HERE
+     in one place so no consumer defends individually. The OUT-OF-SCOPE strip
+     needs a resolved member roster: it runs where the roster is authoritative
+     — docForClient (after syncProfiles) and mergeClientDoc — so a raw stored
+     doc with an incomplete roster is never destructively stripped on migration. */
+  normalizeAssigneesData(out.data, []);
   return out;
+}
+
+/* [Phase 55, D-55-1..4] The single assignee-normalization step. Sync and
+   idempotent: an old scalar `assignee` joins the candidate set alongside any
+   existing `assignees` array; ids are deduped, nulls/junk dropped, ids outside
+   the document's member roster dropped (out-of-scope strip), the result capped
+   at 5 in insertion order, written back to `assignees` (an empty array is
+   valid — Unassigned), and the scalar field deleted. Runs on every read
+   (normalizeDoc/docForClient) and on every incoming doc (mergeClientDoc).
+   `memberIds` may be supplied by a caller holding the authoritative roster;
+   when omitted it is derived from `data.members`. A missing/empty roster
+   disables the scope strip — a doc with no member set has nothing to resolve
+   against, and the write-guard re-derives per member anyway (D-55-9). */
+function normalizeTaskAssignees(t, memberIds) {
+  const incoming = [];
+  if (Array.isArray(t.assignees)) incoming.push(...t.assignees);
+  if (t.assignee !== null && t.assignee !== undefined && t.assignee !== '') incoming.push(t.assignee);
+  const out = [];
+  const seen = new Set();
+  for (const id of incoming) {
+    if (typeof id !== 'string' || !id || seen.has(id)) continue;
+    if (memberIds && memberIds.size && !memberIds.has(id)) continue; // out-of-scope strip (D-55-4)
+    seen.add(id);
+    out.push(id);
+    if (out.length === 5) break; // cap 5, insertion order preserved (D-55-7)
+  }
+  t.assignees = out;
+  delete t.assignee;
+  if (Array.isArray(t.subtasks)) {
+    for (const s of t.subtasks) if (s && typeof s === 'object') normalizeTaskAssignees(s, memberIds);
+  }
+}
+
+function normalizeAssigneesData(data, memberIds = null) {
+  if (!data || !Array.isArray(data.tasks)) return;
+  const ids = memberIds
+    ? new Set(memberIds)
+    : new Set((Array.isArray(data.members) ? data.members : []).map(m => m?.id).filter(Boolean));
+  for (const t of data.tasks) {
+    if (!t || typeof t !== 'object') continue;
+    normalizeTaskAssignees(t, ids);
+  }
 }
 
 /* [2026-11-07 D-49-4] Visibility is the boolean `private` flag only. The
@@ -1111,6 +1162,15 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
   next.data = next.data && typeof next.data === 'object' ? next.data : {};
   normalizeProjects(stored);
   normalizeProjects(next);
+  /* [Phase 55, D-55-1/D-55-4] Every incoming doc normalizes to the canonical
+     `assignees[]` shape before any downstream consumer (merge gates, the
+     write-guard) reads it. The roster scope set is the union of stored and
+     incoming members — an admin roster edit and the task writes ride the same
+     PUT, and the removed member's assignments are handled by stripMember. */
+  normalizeAssigneesData(next.data, [
+    ...((Array.isArray(stored?.data?.members) ? stored.data.members : []).map(m => m?.id)),
+    ...((Array.isArray(next.data.members) ? next.data.members : []).map(m => m?.id)),
+  ].filter(Boolean));
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
   /* [2026-11-08 D-51-15/16, T-51-01] The project-creation restriction is read
@@ -1576,13 +1636,15 @@ import { localParts, resolveTz, TZ_BY_LABEL } from './tz.js';
 
 /* REM-04 + RESEARCH Pitfall 4: one predicate for every offset. Mirrors the
    client's isOver (t.due && status !== 'done') plus archived-task and
-   archived-project exclusions and private-project visibility (canSee) so a
-   reminder never leaks to a member who cannot see the task. */
+   archived-project exclusions. [Phase 55, D-55-3] The private-project
+   visibility term moved INTO the loops: with multiple assignees it re-derives
+   per member (canSeeProject / memberCanReadProject per assignee id) — the
+   structure here is member-agnostic now. */
 function remindable(task, project) {
   if (!task || !/^\d{4}-\d{2}-\d{2}$/.test(task.due || '')) return false;
   if (task.status === 'done' || task.archived) return false;
   if (!project || project.archived) return false;
-  return canSeeProject(project, task.assignee);
+  return true;
 }
 
 function reminderSnippet(offset, task) {
@@ -1602,6 +1664,12 @@ async function runReminderPass({ now: at = new Date() } = {}) {
   for (const ws of await db.all('select * from workspaces')) {
     try {
       const doc = JSON.parse(ws.doc);
+      /* [Phase 55, D-55-1] The stored doc is normalized before the loops:
+         every task carries the canonical `assignees` array — the reminder
+         pass is an array-only reader (D-55-3). Migration only — no roster
+         strip: the pass reads raw stored docs whose roster may be partial,
+         and per-member visibility is re-derived below anyway (D-55-9). */
+      normalizeAssigneesData(doc?.data, []);
       const tasks = Array.isArray(doc?.data?.tasks) ? doc.data.tasks : [];
       const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]));
       /* D-09/D-14 per-member window: (localDate, hour) is computed per
@@ -1616,73 +1684,80 @@ async function runReminderPass({ now: at = new Date() } = {}) {
          offset, due); ticks before 08:00 stay pure reads (REM-01 / SC-5:
          no claim, no doc write, no revision bump). */
       for (const t of tasks) {
-        /* Per-assignee resolution (D-09): the window comes from THE
-           ASSIGNEE's own stored tz (doc.data.members[*].tz) through the
-           resolveTz funnel — never from a shared workspace tz. */
-        const assigneeTz = resolveTz((doc?.data?.members || []).find(m => m?.id === t.assignee)?.tz);
-        const { date: localDate, hour } = localParts(assigneeTz, at);
-        if (hour < 8) continue;
         const project = projects.get(t?.project);
         if (!remindable(t, project)) continue;
-        /* [2026-11-07 D-49-1] visibility gate is the collapsed funnel only —
-           the Phase 29 scope term is retired. */
-        const assigneeMembership = await db.get('select user_id, role from memberships where workspace_id = ? and member_id = ?', [ws.id, t.assignee]);
-        /* PREFS (Phase 34, D-04): reminder prefs resolve per assignee through
-           the accessor — the membership row maps the member_id to the account
-           (user_id); a doc-only assignee carries no row and reads defaults. */
-        const prefs = await getUserNotifPrefs(assigneeMembership?.user_id || t.assignee, ws.id);
-        if (!(await memberCanReadProject(project, ws.id, t.assignee))) continue;
-        const due = t.due;
-        /* Window-open predicates on plain YYYY-MM-DD string compare — the
-           open window plus an absent dedup key is the late-delivery
-           catch-up for ANY tick at-or-after 08:00 local (restart, downtime,
-           delayed boot), not only during the 08:00 hour. */
-        const offsets = [];
-        if (prefs.due_reminder !== false) {
-          if (localDate >= due) offsets.push('morning_of');
-        }
-        if (prefs.past_due !== false && localDate > due) offsets.push('past_due');
-        for (const offset of offsets) {
-          const notif = {
-            id: uid(),
-            type: offset === 'past_due' ? 'past_due' : 'due_reminder',
-            to: t.assignee,
-            by: null, // system actor — queueNotifEmails' self-skip must never drop a reminder
-            task: t.id,
-            /* I18N-03 (D-04/D-05): machine key + send-time vars snapshot
-               VALUES — the inbox localizes per viewer locale without joins,
-               so historical text survives task rename/deletion. Additive:
-               the English snippet stays (D-06 dual store). */
-            key: `notif.reminder.${offset === 'morning_of' ? 'morningOf' : 'pastDue'}`,
-            vars: { title: t.title || 'a task' },
-            snippet: reminderSnippet(offset, t),
-            /* Client notif contract is `at` + `read` (store.js notifyMembers) —
-               `ts` kept only for existing test assertions. */
-            at: at.getTime(),
-            read: false,
-            ts: at.getTime(),
-          };
-          /* T-27-03: claim + append commit together or not at all. */
-          let claimed = false;
-          await db.tx(async () => {
-            const r = await db.run('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)', [
-              `${ws.id}:${t.id}:${t.assignee}:${offset}:${due}`,
-              ws.id,
-              now(),
-            ]);
-            if (r.changes === 0) return; // already sent — exactly-once (REM-03)
-            await updateDoc(ws.id, d => {
-              d.data.notifs.push(notif);
+        /* [Phase 55, D-55-3/D-55-10 (minimal)] Array-only reads: one pass per
+           ASSIGNEE inside the existing loop — each member resolves their own
+           tz, prefs, read-check and ledger row. The full fan-out design is
+           Plan 55-02; the shape conversion lives here because the stored doc
+           no longer carries a scalar assignee. */
+        for (const assigneeId of Array.isArray(t.assignees) ? t.assignees : []) {
+          /* Per-assignee resolution (D-09): the window comes from THE
+             ASSIGNEE's own stored tz (doc.data.members[*].tz) through the
+             resolveTz funnel — never from a shared workspace tz. */
+          const assigneeTz = resolveTz((doc?.data?.members || []).find(m => m?.id === assigneeId)?.tz);
+          const { date: localDate, hour } = localParts(assigneeTz, at);
+          if (hour < 8) continue;
+          /* [2026-11-07 D-49-1] visibility gate is the collapsed funnel only —
+             the Phase 29 scope term is retired. Re-derived PER MEMBER. */
+          const assigneeMembership = await db.get('select user_id, role from memberships where workspace_id = ? and member_id = ?', [ws.id, assigneeId]);
+          /* PREFS (Phase 34, D-04): reminder prefs resolve per assignee through
+             the accessor — the membership row maps the member_id to the account
+             (user_id); a doc-only assignee carries no row and reads defaults. */
+          const prefs = await getUserNotifPrefs(assigneeMembership?.user_id || assigneeId, ws.id);
+          if (!(await memberCanReadProject(project, ws.id, assigneeId))) continue;
+          const due = t.due;
+          /* Window-open predicates on plain YYYY-MM-DD string compare — the
+             open window plus an absent dedup key is the late-delivery
+             catch-up for ANY tick at-or-after 08:00 local (restart, downtime,
+             delayed boot), not only during the 08:00 hour. */
+          const offsets = [];
+          if (prefs.due_reminder !== false) {
+            if (localDate >= due) offsets.push('morning_of');
+          }
+          if (prefs.past_due !== false && localDate > due) offsets.push('past_due');
+          for (const offset of offsets) {
+            const notif = {
+              id: uid(),
+              type: offset === 'past_due' ? 'past_due' : 'due_reminder',
+              to: assigneeId,
+              by: null, // system actor — queueNotifEmails' self-skip must never drop a reminder
+              task: t.id,
+              /* I18N-03 (D-04/D-05): machine key + send-time vars snapshot
+                 VALUES — the inbox localizes per viewer locale without joins,
+                 so historical text survives task rename/deletion. Additive:
+                 the English snippet stays (D-06 dual store). */
+              key: `notif.reminder.${offset === 'morning_of' ? 'morningOf' : 'pastDue'}`,
+              vars: { title: t.title || 'a task' },
+              snippet: reminderSnippet(offset, t),
+              /* Client notif contract is `at` + `read` (store.js notifyMembers) —
+                 `ts` kept only for existing test assertions. */
+              at: at.getTime(),
+              read: false,
+              ts: at.getTime(),
+            };
+            /* T-27-03: claim + append commit together or not at all. */
+            let claimed = false;
+            await db.tx(async () => {
+              const r = await db.run('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)', [
+                `${ws.id}:${t.id}:${assigneeId}:${offset}:${due}`,
+                ws.id,
+                now(),
+              ]);
+              if (r.changes === 0) return; // already sent — exactly-once (REM-03)
+              await updateDoc(ws.id, d => {
+                d.data.notifs.push(notif);
+              });
+              claimed = true;
             });
-            claimed = true;
-          });
-          if (!claimed) continue;
-          emitted.push(notif);
-          /* Post-commit fan-out — NEVER inside the transaction (a hung SMTP
-             server would hold the SQLite write lock). Uses the post-write doc. */
-          if (MAILER.enabled) {
-            const nextDoc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ws.id])).doc);
-            await queueNotifEmails(ws, nextDoc, [notif]);
+            if (!claimed) continue;
+            emitted.push(notif);
+            /* Post-commit fan-out — NEVER inside the transaction (a hung SMTP
+               server would hold the SQLite write lock). Uses the post-write doc. */
+            if (MAILER.enabled) {
+              const nextDoc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ws.id])).doc);
+              await queueNotifEmails(ws, nextDoc, [notif]);
+            }
           }
         }
       }
@@ -1737,7 +1812,9 @@ async function runReminderPass({ now: at = new Date() } = {}) {
              assigned to someone else never enters this recipient's digest,
              no matter its project or visibility. First filter, before any
              content is computed (T-38-07). */
-          if (t.assignee !== r.member_id) continue;
+          /* [Phase 55, D-55-11] Digest membership is `assignees.includes(me)` —
+             a task with N assignees enters every member's digest. */
+          if (!Array.isArray(t.assignees) || !t.assignees.includes(r.member_id)) continue;
           const project = projects.get(t?.project);
           if (!remindable(t, project)) continue;
           /* [2026-11-07 D-49-1] per (recipient, task) visibility — the
@@ -1745,7 +1822,7 @@ async function runReminderPass({ now: at = new Date() } = {}) {
              recipient, so these are evaluated against the RECIPIENT's own
              visibility: one pipeline, per D-06 (no digest-specific
              second filter). */
-          if (!(await memberCanReadProject(project, ws.id, t.assignee))) continue;
+          if (!(await memberCanReadProject(project, ws.id, r.member_id))) continue;
           /* Same string compares as the reminder window predicates, split
              disjointly: due-today is the morning_of window's due-date edge,
              overdue is past_due's strictly-after edge. Future-dated tasks
@@ -1818,6 +1895,10 @@ async function docForClient(doc, ws, membership) {
   const out = normalizeDoc(JSON.parse(JSON.stringify(doc || {})), { name: ws.name, slug: ws.slug, color: ws.color || '#1D1C1A' });
   normalizeProjects(out);
   await syncProfiles(out, ws.id);
+  /* [Phase 55, D-55-1] Re-run the assignee normalize AFTER syncProfiles: the
+     roster completion above may add profiles for members the stored doc was
+     missing, and their ids must not be stripped from assignees arrays. */
+  normalizeAssigneesData(out.data);
   // P4-a: with the roster rebuilt, drop notifications addressed to removed members.
   if (Array.isArray(out.data.notifs)) {
     const memberIds = new Set((Array.isArray(out.data.members) ? out.data.members : []).map(m => m?.id).filter(Boolean));
