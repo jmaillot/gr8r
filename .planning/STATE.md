@@ -14,7 +14,7 @@ progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # STATE.md
