@@ -5,11 +5,11 @@ milestone_name: Member & Project Experience
 current_phase: 54
 current_phase_name: Project export — Excel report, MSPDI XML and CSV
 status: executing
-stopped_at: Completed 54-01-PLAN.md
-last_updated: "2026-11-10T09:29:15.434Z"
+stopped_at: Completed 54-02-PLAN.md
+last_updated: "2026-11-10T10:04:33.283Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 54 execution started
-state_head: c7fefc0faaccd6c299a45813e08f6f1c706ec79a
+state_head: c909ca548830fd3a339ec5913d2fdc2ecc392e42
 progress:
   total_phases: 2
   completed_phases: 1
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 ## Current Position
 
 Phase: 54 (Project export — Excel report, MSPDI XML and CSV) — EXECUTING
-Plan: 4 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-11-10 — Phase 54 execution started
 
@@ -111,8 +111,8 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-10T09:27:32.395Z
-**Stopped at:** Completed 54-01-PLAN.md
+**Last session:** 2026-11-10T10:04:33.233Z
+**Stopped at:** Completed 54-02-PLAN.md
 **Resume file:** None
 
 ### Last completed
@@ -140,6 +140,7 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 | Phase 53 P04 | 10 min | 2 tasks | 8 files |
 | Phase 53 P05 | 40 min | 3 tasks | 10 files |
 | Phase 54 P01 | 29 min | 3 tasks | 15 files |
+| Phase 54 P02 | 14 min | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -163,3 +164,5 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
   `src/pages/project.js:73-80` (pre-53 header with avatar stack + labeled Share).
 - [Phase 54]: Export model is DOM-free (zero imports); all writers receive machine fields so they never re-read the document
 - [Phase 54]: Export route reads only docForClient; hidden-private and nonexistent ids return byte-identical 404s (no enumeration)
+- [Phase 54]: Owner approval 2026-11-10: approved @office-kit/xlsx 0.26.1 (exact pin, integrity-verified, no install script)
+- [Phase 54]: XLSX writer is server-only at the repo-root export/ directory; prohibition test makes the src/ boundary mechanical
