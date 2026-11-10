@@ -135,6 +135,24 @@ test('task-level children appear in the documented schema order', () => {
   }
 });
 
+test('dated tasks carry a SNET constraint pinning their start (owner report 2026-11-10)', () => {
+  /* MS Project re-schedules auto tasks on import and ignores <Start>/<Finish>
+     without a constraint — every line collapsed to the project start date. */
+  for (const name of ['Linked one', 'Three day estimate']) {
+    const slice = taskSlice(xml, name);
+    assert.ok(slice.includes('<ConstraintType>4</ConstraintType>'), `${name} is Start-No-Earlier-Than constrained`);
+    const start = /<Start>([^<]*)<\/Start>/.exec(slice)[1];
+    assert.ok(slice.includes(`<ConstraintDate>${start}</ConstraintDate>`), `${name} pins its own start`);
+    /* Constraint elements sit after PercentComplete and before the link group */
+    assert.ok(slice.indexOf('<ConstraintType>') > slice.indexOf('<PercentComplete>'), `${name}: constraint after PercentComplete`);
+    const hasLinks = slice.includes('<PredecessorLink>');
+    if (hasLinks) assert.ok(slice.indexOf('<ConstraintDate>') < slice.indexOf('<PredecessorLink>'), `${name}: constraint before the link group`);
+  }
+  /* Undated tasks keep the project-start fallback with NO constraint */
+  const undated = taskSlice(xml, 'No dates task');
+  assert.ok(!undated.includes('<ConstraintType>'), 'undated rows stay unconstrained so the fallback still applies');
+});
+
 test('child tasks inherit the parent start/finish and nest via OutlineLevel (owner 2026-11-10)', () => {
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
