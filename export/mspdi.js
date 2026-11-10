@@ -254,21 +254,25 @@ export function buildMspdi(model) {
        instead of writing the word undefined. */
     const notes = options.descriptions && row.description ? `<Notes>${esc(row.description)}</Notes>` : '';
 
-    /* Owner report 2026-11-10 ("all lines 20/11"): MS Project re-schedules
-       auto-scheduled tasks on import and IGNORES <Start>/<Finish> unless
-       the task carries a constraint — every undated/blank line collapses
-       to the project StartDate. A Start-No-Earlier-Than constraint
-       (ConstraintType 4) with the task's resolved start pins the schedule
-       while still allowing Project to finish the task later if its
-       duration requires. Undated rows (no resolved ISO start) stay
-       unconstrained so the project-start fallback still applies to them. */
+    /* Owner ruling 2026-11-10: dates are exported on PARENT tasks only.
+       Child rows omit Start/Finish/Duration entirely (all optional in the
+       schema) so Project nests them under the summary and schedules them
+       itself — no inherited dates, no constraint. */
+    const isChild = !!row.parent;
+    const dates = isChild
+      ? ''
+      : `<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat>`;
+    /* SNET pin (owner report "all lines 20/11"): parents only, and only
+       when the row carries its own (or inherited) ISO start. Undated
+       parent rows stay unconstrained so the project-start fallback
+       still applies to them. */
     const constraint =
-      start && finish && /^\d{4}-\d{2}-\d{2}$/.test(String(row.start))
+      !isChild && start && finish && /^\d{4}-\d{2}-\d{2}$/.test(String(row.start))
         ? `<ConstraintType>4</ConstraintType><ConstraintDate>${start}</ConstraintDate>`
         : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${row.parent ? '<OutlineLevel>1</OutlineLevel>' : ''}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${row.parent ? '<OutlineLevel>1</OutlineLevel>' : ''}${dates}<Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

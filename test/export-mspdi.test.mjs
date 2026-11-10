@@ -143,13 +143,13 @@ test('dated spans win over estimates and dated rows never collapse to zero durat
     projects: [{ id: 'p1', name: 'P', key: 'PRJ', status: 'active', start: '2026-11-02', due: '2026-12-31', lead: 'm1', members: ['m1'], teams: [], archived: false }],
     tasks: [
       /* estimate 2h but a five-working-day span: the SPAN must win */
-      { id: 't1', project: 'p1', key: 'PRJ-1', title: 'Span wins', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '2h', subtasks: [], deps: [], order: 1, start: '2026-11-09', due: '2026-11-13' },
+      { id: 't1', project: 'p1', key: 'PRJ-1', title: 'Span wins', status: 'todo', priority: 'medium', assignees: [], labels: [], estimate: '2h', subtasks: [], deps: [], order: 1, start: '2026-11-09', due: '2026-11-13' },
       /* start only, no due, no estimate: minimum one working day, never zero */
-      { id: 't2', project: 'p1', key: 'PRJ-2', title: 'Start only', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 2, start: '2026-11-09' },
+      { id: 't2', project: 'p1', key: 'PRJ-2', title: 'Start only', status: 'todo', priority: 'medium', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 2, start: '2026-11-09' },
       /* undated, estimate only: the estimate duration survives */
-      { id: 't3', project: 'p1', key: 'PRJ-3', title: 'Estimate only', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '3h', subtasks: [], deps: [], order: 3 },
+      { id: 't3', project: 'p1', key: 'PRJ-3', title: 'Estimate only', status: 'todo', priority: 'medium', assignees: [], labels: [], estimate: '3h', subtasks: [], deps: [], order: 3 },
       /* undated, nothing: zero duration stays (a line at the project start) */
-      { id: 't4', project: 'p1', key: 'PRJ-4', title: 'Nothing at all', status: 'todo', priority: 'medium', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 4 },
+      { id: 't4', project: 'p1', key: 'PRJ-4', title: 'Nothing at all', status: 'todo', priority: 'medium', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 4 },
     ],
     comments: [],
     projOrder: ['p1'],
@@ -179,22 +179,26 @@ test('dated tasks carry a SNET constraint pinning their start (owner report 2026
   assert.ok(!undated.includes('<ConstraintType>'), 'undated rows stay unconstrained so the fallback still applies');
 });
 
-test('child tasks inherit the parent start/finish and nest via OutlineLevel (owner 2026-11-10)', () => {
+test('child tasks carry NO dates (owner ruling 2026-11-10) and nest via OutlineLevel', () => {
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
     const slice = taskSlice(subXml, name);
-    /* OutlineLevel sits exactly between Type and Start on a child row */
+    /* OutlineLevel sits exactly between Type and Milestone (no Start on children) */
     const typeAt = slice.indexOf('<Type>');
     const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');
-    const startAt = slice.indexOf('<Start>');
-    assert.ok(olAt > typeAt && olAt < startAt, `${name}: OutlineLevel after Type, before Start`);
-    assert.ok(slice.includes('<Start>2026-03-04T08:00:00</Start>'), `${name} starts with the PARENT task's start, not the project start`);
-    assert.ok(slice.includes('<Finish>2026-03-10T17:00:00</Finish>'), `${name} finishes with the parent task's due`);
+    const milestoneAt = slice.indexOf('<Milestone>');
+    assert.ok(olAt > typeAt && olAt < milestoneAt, `${name}: OutlineLevel after Type, before Milestone`);
+    /* dates and constraints are omitted entirely on child rows */
+    for (const el of ['Start', 'Finish', 'Duration', 'ConstraintType', 'ConstraintDate']) {
+      assert.ok(!slice.includes(`<${el}`), `${name} has no <${el}> — dates live on the parent only`);
+    }
   }
-  /* the parent itself stays top level with its OWN dates */
+  /* the parent keeps its OWN dates, plus the SNET pin */
   const parent = taskSlice(subXml, 'Subtasked task');
   assert.ok(!parent.includes('<OutlineLevel>'), 'the parent carries no OutlineLevel (top level)');
-  assert.ok(parent.includes('<Start>2026-03-04T08:00:00</Start>') && parent.includes('<Finish>2026-03-10T17:00:00</Finish>'), 'the parent keeps its own span');
+  assert.ok(parent.includes('<Start>2026-03-04T08:00:00</Start>'), 'the parent starts at its own start');
+  assert.ok(parent.includes('<Finish>2026-03-10T17:00:00</Finish>'), 'the parent finishes at its own due');
+  assert.ok(parent.includes('<ConstraintType>4</ConstraintType>'), 'the parent is SNET-pinned');
 });
 
 test('task count equals exported rows only — milestones excluded (owner 2026-11-10)', () => {
@@ -398,7 +402,7 @@ test('project StartDate and FinishDate derive from the project and task spans', 
 
 test('CR-01: child rows never shadow a subtasked parent in the UID map (54-05 review)', () => {
   const doc = makeMspdiDoc();
-  doc.tasks[2].assignee = 'm_lead'; // the subtasked parent gets an assignee
+  doc.tasks[2].assignees = ['m_lead']; // the subtasked parent gets an assignee
   doc.tasks[1].deps = ['t_x1', 't_x8', 't_x3']; // and a dep lands on the subtasked parent
   const out = buildMspdi(buildModel(doc, { subtasks: true }));
   const taskUid = name => {
