@@ -124,7 +124,7 @@ Plans:
 - [x] 54-02-PLAN.md — Pinned workbook writer behind a legitimacy checkpoint, repository gates, unzip/XML helpers and the six-sheet shell with the Tasks sheet
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 54-03-PLAN.md — Summary meta, KPIs and charts 1-2; Board snapshot; Members with chart 3; Milestones sheet
+- [x] 54-03-PLAN.md — Summary meta, KPIs and charts 1-2; Board snapshot; Members with chart 3; Milestones sheet (complete 2026-11-10)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 54-04-PLAN.md — Adaptive Gantt geometry, Timeline bars, diamonds and dependency connectors, Today column, shape cap and responsiveness
@@ -154,7 +154,7 @@ Plans:
 | 53-05 Teams polish & i18n close-out | Complete | 2026-11-09 |
 | 54-01 CSV end-to-end tracer | Complete | 2026-11-10 |
 | 54-02 Workbook writer + six-sheet shell (Tasks) | Complete | 2026-11-10 |
-| 54-03 Summary, KPIs, charts, Board/Members/Milestones | Pending | — |
+| 54-03 Summary, KPIs, charts, Board/Members/Milestones | Complete | 2026-11-10 |
 | 54-04 Gantt geometry + dependency connectors | Pending | — |
 | 54-05 MSPDI serializer + i18n close-out | Pending | — |
 
