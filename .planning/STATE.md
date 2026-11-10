@@ -2,18 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v2.1
 milestone_name: Member & Project Experience
-current_phase: 53
-status: completed
-stopped_at: Phase 53 complete — all phases complete
-last_updated: "2026-11-09T20:30:48.826Z"
-last_activity: 2026-11-09
-last_activity_desc: Phase 53 complete
-state_head: cec43bd4b2760862a2b8ff596cddb4e6ac0cc6b2
+current_phase: 54
+current_phase_name: Project export — Excel report, MSPDI XML and CSV
+status: Executing — 5 plans ready, wave 1 next (ported onto main 2026-11-10)
+stopped_at: Phase 54 planning ported to main — 5 plans ready to execute
+last_updated: "2026-11-10T07:49:13.783Z"
+last_activity: 2026-11-10
+state_head: c9e437125756164f778edb3b0acfacc86ba1de55
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 5
+  completed_plans: 0
+last_activity_desc: Phase 54 planning ported from the feat/export worktree (10 commits, 11 artifacts)
 ---
 
 # STATE.md
@@ -25,14 +26,32 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** v2.1 complete — no phase in flight; next milestone not yet planned
+**Current focus:** Phase 54 — Project export (Excel report, MSPDI XML and CSV)
 
 ## Current Position
 
-Phase: 53 (complete — last phase of v2.1)
-Plan: 5/5 complete
-Status: Phase 53 verified (17/17 must-haves) — milestone ready to close
-Last activity: 2026-11-09 — Phase 53 verification refreshed and phase marked complete
+Phase: 54 (Project export — Excel report, MSPDI XML and CSV) — READY TO EXECUTE
+Plan: —
+Status: Executing — 5 plans ready, wave 1 next (ported onto main 2026-11-10)
+Last activity: 2026-11-10
+
+## v2.1 Phase 54 Plan Order (authored 2026-11-09, ported onto main 2026-11-10)
+
+1. Plan 54-01 — CSV end-to-end tracer (model, CSV writer, gated export route, download
+   helper, modal, both entry points). Wave 1.
+2. Plan 54-02 — Pinned workbook writer behind a legitimacy checkpoint, repository gates,
+   unzip/XML helpers, six-sheet shell + Tasks sheet. Wave 2 (blocked on 54-01).
+3. Plan 54-03 — Summary meta, KPIs, charts 1-2, Board snapshot, Members + chart 3,
+   Milestones sheet. Wave 3 (blocked on 54-02).
+4. Plan 54-04 — Adaptive Gantt geometry, Timeline bars, diamonds, dependency connectors,
+   Today column, shape cap, responsiveness. Wave 4 (blocked on 54-03).
+5. Plan 54-05 — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue, human
+   Microsoft Project check. Wave 5 (blocked on 54-04).
+
+**Drift warning**: the phase 54 artifacts were authored against a pre-Phase-53 tree
+(`src/pages/project.js:73-80` header still had the avatar stack + labeled Share button).
+Phase 53 removed both; the header now has settings + overflow and Share lives in the
+context menu. Verify every line ref before executing 54-01.
 
 ## v2.1 Plan Order (approved 2026-11-09 — single Phase 53, executed plan-by-plan)
 
@@ -92,19 +111,24 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-09T20:30:00Z
-**Stopped at:** Phase 53 complete and verified (17/17 must-haves) — v2.1 ready to close
+**Last session:** 2026-11-10T00:00:00Z
+**Stopped at:** Phase 54 planning ported to main — 5 plans ready to execute
 **Resume file:** None
 
 ### Last completed
 
-- Phase 53 re-verification: VERIFICATION.md regenerated against HEAD `cec43bd` (17/17,
-  1164 unit tests, 20/20 phase e2e, i18n gate 0/0), phase marked complete (11ebcb0)
+- Phase 54 planning port: 11 artifacts (`54-SPEC`, `54-CONTEXT`, `54-DISCUSSION-LOG`,
+  `54-PATTERNS`, `54-RESEARCH`, `54-VALIDATION`, `54-01..05-PLAN`) brought from the
+  `feat/export` worktree onto `main`; ROADMAP/STATE updated without reverting Phase 53
+- Phase 53 re-verification (2026-11-09): VERIFICATION.md regenerated against HEAD `cec43bd`
+  (17/17, 1164 unit tests, 20/20 phase e2e, i18n gate 0/0), phase marked complete (11ebcb0)
 
 ### Next
 
-- `/gsd-complete-milestone v2.1` — archive v2.1 and prepare the next milestone
-  (UI/UX polish batch is already scoped in the backlog)
+- `/gsd-execute-phase 54` — but run a drift check first: the plans reference the
+  pre-Phase-53 header (`project.js:73-80`), where the labeled Share button and avatar
+  stack no longer exist. Either refresh the plans with `/gsd-plan-phase 54` or amend
+  54-01's entry-point task against the current header.
 
 ## Performance Metrics
 
@@ -126,3 +150,13 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 - [Phase 53]: 11 pre-existing e2e failures (tenancy/locale/flows/french-overflow) bisected to pre-53-05 commit 6e90e59 — logged in deferred-items.md for milestone-verification triage; unit suite 1169/1169 green
 - [Phase 53]: Re-verification 2026-11-09 (post-fix digest): 17/17 must-haves verified against HEAD `cec43bd`; PROJ-02 override recorded — owner ruling 5ca7a26 removed the header labeled Share button, leaving the project context-menu as the single Share entry point (REQUIREMENTS.md PROJ-02 / ROADMAP SC5 wording still says "labeled Share button" and should be reconciled at milestone close)
 - [Phase 53]: WR-03 (guest invite to `allowInviteGuests=false`) confirmed fixed at 97468bc during re-verification; `53-REVIEW-DISPOSITION.md` row is stale ("open") and can be reconciled on the next review pass
+- [Phase 54 port 2026-11-10]: Phase 54 planning recovered from the `feat/export` worktree
+  (detached HEAD `776c0a3`, 10 commits, branched 58 commits behind main at `9b3f014`).
+  Ported as file copies + ROADMAP/STATE/PROJECT edits, NOT a git merge: the worktree's
+  planning docs were pre-53 snapshots and a merge would have reverted Phase 53 completion
+  (PROJECT "SHIPPED" text, 13 requirement ticks, traceability table, roadmap phase entry).
+  The commits are preserved on branch `phase-54-export`.
+- [Phase 54 port 2026-11-10]: Phase 54 is treated as a v2.1 continuation phase (Phase 53
+  shipped first) rather than a new milestone — its artifacts carry no milestone identity,
+  and `54-01` builds on post-53 code. Drift caveat recorded: the plans reference
+  `src/pages/project.js:73-80` (pre-53 header with avatar stack + labeled Share).

@@ -14,11 +14,12 @@
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
 - ✅ **v1.10 Extensions & Adapters** — Phases 45-48 (shipped 2026-11-07)
 - ✅ **v2.0 Project-level Permissions & Invitations** — Phases 49-52 (shipped 2026-11-09)
-- 🚧 **v2.1 Member & Project Experience** — Phase 53 (in progress)
+- 🚧 **v2.1 Member & Project Experience** — Phase 53 shipped 2026-11-09; Phase 54 in progress
 
 ## Phases
 
 - [x] **Phase 53: Member & Project Experience** - One ordered phase covering all v2.1 requirements: per-team perms (server first), invite modal, unified project settings, projects table & Share dedup, teams polish — executed plan-by-plan in the dependency order below (completed 2026-11-09)
+- [ ] **Phase 54: Project export — Excel report, MSPDI XML and CSV** - One export model, three writers (xlsx / MSPDI / CSV), scoped to the current filtered view or the whole project
 
 ## Phase Details
 
@@ -104,6 +105,33 @@ self-contained and commits atomically):
 
 **UI hint**: yes (plans 53-02, 53-03, 53-04, 53-05)
 
+### Phase 54: Project export — Excel report, MSPDI XML and CSV
+
+**Goal**: A member can export a project's data — scoped to the current filtered view or the whole project — as a formatted Excel report with native charts and a Gantt carrying dependency arrows, as a Microsoft Project MSPDI XML file that opens with real task links, or as a flat CSV on the static demo.
+
+**Depends on**: Phase 53 (v2.1) — no hard code dependency, but the plan line refs
+were authored before Phase 53 landed and need a drift check at execute time
+
+**Requirements**: See `54-SPEC.md` (13 locked requirements, ambiguity 0.11)
+
+**Plans:** 5 plans
+
+Plans:
+**Wave 1**
+- [ ] 54-01-PLAN.md — CSV end-to-end tracer: model, CSV writer, gated export route, download helper, modal and both entry points
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 54-02-PLAN.md — Pinned workbook writer behind a legitimacy checkpoint, repository gates, unzip/XML helpers and the six-sheet shell with the Tasks sheet
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 54-03-PLAN.md — Summary meta, KPIs and charts 1-2; Board snapshot; Members with chart 3; Milestones sheet
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 54-04-PLAN.md — Adaptive Gantt geometry, Timeline bars, diamonds and dependency connectors, Today column, shape cap and responsiveness
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 54-05-PLAN.md — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue and the human Microsoft Project check
+
 ## Milestone-Wide Invariants (pinned per plan)
 
 - **UX-01** applies to EVERY plan: any commit that removes UI deletes its dead keys in
@@ -124,6 +152,11 @@ self-contained and commits atomically):
 | 53-03 Unified project settings modal | Complete | 2026-11-09 |
 | 53-04 Projects table columns & Share dedup | Complete | 2026-11-09 |
 | 53-05 Teams polish & i18n close-out | Complete | 2026-11-09 |
+| 54-01 CSV end-to-end tracer | Pending | — |
+| 54-02 Workbook writer + six-sheet shell (Tasks) | Pending | — |
+| 54-03 Summary, KPIs, charts, Board/Members/Milestones | Pending | — |
+| 54-04 Gantt geometry + dependency connectors | Pending | — |
+| 54-05 MSPDI serializer + i18n close-out | Pending | — |
 
 ## Backlog
 

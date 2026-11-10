@@ -1,8 +1,8 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-09 after Phase 53 completion (v2.1)*
+*Last updated: 2026-11-10 after Phase 54 planning port (v2.1)*
 
-## Current Milestone: v2.1 Member & Project Experience — SHIPPED (2026-11-09)
+## Current Milestone: v2.1 Member & Project Experience — Phase 53 SHIPPED (2026-11-09), Phase 54 in progress
 
 **Goal:** make the everyday surfaces — invite modal, team editing, project settings,
 projects table — match how people actually use workspaces.
@@ -43,6 +43,19 @@ dependencies, zero migrations.
 - M-11 Date column = target date (p.due)
 - M-12 one unified settings modal replaces projectModal + share modal
 - M-13 one Share button on the project page (keep the labeled one)
+
+### Phase 54 — Project export (planned 2026-11-09, ready to execute)
+
+**Goal:** a member can export a project — current filtered view or whole project — as a
+formatted six-sheet Excel workbook with native charts and a Gantt carrying dependency
+arrows, as a Microsoft Project MSPDI XML file that opens with real task links, or as a
+flat CSV on the static demo. Requirements live in
+`.planning/phases/54-project-export-excel-report-mspdi-xml-and-csv/54-SPEC.md`
+(13 locked, ambiguity 0.11).
+
+**Caveat:** the plan artifacts were authored against a pre-Phase-53 tree
+(`src/pages/project.js` header still had the avatar stack and labeled Share button);
+line refs need a drift check before executing 54-01.
 
 ### v2.1 phase decisions (Phase 53, 2026-11-09)
 
@@ -669,8 +682,11 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-*(None — v2.1 shipped 2026-11-09. Next step: `/gsd-complete-milestone v2.1`, then
-`/gsd-new-milestone` to scope the UI/UX polish batch already proposed in the backlog.)*
+- **Phase 54 — Project export** (v2.1 continuation): planning ported from the
+  `feat/export` worktree on 2026-11-10 (11 artifacts, 5 plans, 4 checker rounds).
+  Execution pending a drift check of the plan line refs against the post-53 tree.
+- **Backlog:** UI/UX polish batch — scoped in session, needs `/gsd-new-milestone`
+  after v2.1 closes.
 
 ### Out of scope
 
