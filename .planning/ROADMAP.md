@@ -127,7 +127,7 @@ Plans:
 - [x] 54-03-PLAN.md — Summary meta, KPIs and charts 1-2; Board snapshot; Members with chart 3; Milestones sheet (complete 2026-11-10)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 54-04-PLAN.md — Adaptive Gantt geometry, Timeline bars, diamonds and dependency connectors, Today column, shape cap and responsiveness
+- [x] 54-04-PLAN.md — Adaptive Gantt geometry, Timeline bars, diamonds and dependency connectors, Today column, shape cap and responsiveness
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 54-05-PLAN.md — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue and the human Microsoft Project check
@@ -155,7 +155,7 @@ Plans:
 | 54-01 CSV end-to-end tracer | Complete | 2026-11-10 |
 | 54-02 Workbook writer + six-sheet shell (Tasks) | Complete | 2026-11-10 |
 | 54-03 Summary, KPIs, charts, Board/Members/Milestones | Complete | 2026-11-10 |
-| 54-04 Gantt geometry + dependency connectors | Pending | — |
+| 54-04 Gantt geometry + dependency connectors | Complete | 2026-11-10 |
 | 54-05 MSPDI serializer + i18n close-out | Pending | — |
 
 ## Backlog
