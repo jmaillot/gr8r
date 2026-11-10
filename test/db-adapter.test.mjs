@@ -412,10 +412,11 @@ test('connectDb refuses a non-postgres:// DB_URL loudly (D-04 spirit)', async ()
   );
 });
 
-/* ---- dependencies pin (D-02 amendment of D-12) ------------------------ */
-test('package.json runtime dependencies are exactly { pg } (D-12 as amended, Phase 45 D-02)', () => {
+/* ---- dependencies pin (D-02 amendment of D-12, 54-02 amendment) -------- */
+test('package.json runtime dependencies are exactly { pg, @office-kit/xlsx } (D-12 as amended)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies, 'dependencies key required — pg presence is fail-closed (D-04)');
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['pg']);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@office-kit/xlsx', 'pg']); // +@office-kit/xlsx: the workbook writer, exact pin 0.26.1 approved through the blocking-human package-legitimacy checkpoint (54-02, T-54-SC)
+  assert.equal(pkg.dependencies['@office-kit/xlsx'], '0.26.1'); // exact approved pin — no range drift
   assert.match(pkg.dependencies.pg, /^\^8\./);
 });
