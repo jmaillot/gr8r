@@ -365,6 +365,13 @@ function addBarChart(ws, at, title, labels, counts, catRef, valRef, opts = {}) {
  * @param model the buildExportModel result (never a raw stored document)
  * @returns {Promise<Buffer>} the .xlsx binary, produced fully in memory
  */
+/* R13 / T-54-14: generation stays cooperative without streaming —
+   setImmediate hands the event loop back between every sheet builder
+   and every 200 rows of the Tasks/Board loops, so a 500-task export
+   cannot starve other requests. The workbook is still built fully in
+   memory and returned as ONE buffer. */
+const yieldToLoop = () => new Promise(resolve => setImmediate(resolve));
+
 export async function buildWorkbook(model) {
   const wb = createWorkbook();
 
@@ -382,9 +389,11 @@ export async function buildWorkbook(model) {
   initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress']);
   initSheet(wb, byName.Timeline, []);
   fillTimeline(wb, byName.Timeline, model);
+  await yieldToLoop();
   initSheet(wb, byName.Members, model.headers.members, ['member', 'open', 'done', 'total']);
   initSheet(wb, byName.Milestones, model.headers.milestones, ['name', 'date', 'state']);
   initSheet(wb, byName.Tasks, columnLabels, columnKeys);
+  await yieldToLoop();
 
   /* ===================================================================
      SUMMARY sheet (R5, D-54-15): project name in A1, the six meta rows
@@ -443,6 +452,7 @@ export async function buildWorkbook(model) {
     addBarChart(summaryWs, 'D20', model.charts.priority.title, model.charts.priority.labels, model.charts.priority.counts,
       'Summary!$A$27:$A$31', 'Summary!$B$27:$B$31');
   }
+  await yieldToLoop();
 
   /* ===================================================================
      BOARD sheet (R7): a static snapshot of the five locked lanes.
@@ -455,6 +465,7 @@ export async function buildWorkbook(model) {
      =================================================================== */
   const boardWs = byName.Board;
   let boardRow = 2;
+  let boardRowsWritten = 0;
   for (const lane of model.board.lanes) {
     setCell(boardWs, boardRow, 1, lane.label);
     setBold(wb, getCell(boardWs, boardRow, 1), true);
@@ -473,8 +484,11 @@ export async function buildWorkbook(model) {
       setCell(boardWs, boardRow, 8, Number(card.progress) || 0);
       setCellNumberFormat(wb, getCell(boardWs, boardRow, 8), LITERAL_PERCENT_CODE);
       boardRow += 1;
+      boardRowsWritten += 1;
+      if (boardRowsWritten % 200 === 0) await yieldToLoop();
     }
   }
+  await yieldToLoop();
 
   /* ===================================================================
      MEMBERS sheet (D-54-10): one row per assignee appearing in the
@@ -503,6 +517,7 @@ export async function buildWorkbook(model) {
       `Members!$A$${blockStart + 1}:$A$${lastRow}`, `Members!$B$${blockStart + 1}:$B$${lastRow}`,
       { barDir: 'bar', heightPx: 320 });
   }
+  await yieldToLoop();
 
   /* ===================================================================
      MILESTONES sheet (R11): name, real date, localized done/upcoming
@@ -520,13 +535,17 @@ export async function buildWorkbook(model) {
     }
     setCell(milestonesWs, row, 3, milestone.state);
   });
+  await yieldToLoop();
 
   /* TASKS sheet — one row per model row (parents and child rows in
      model order), starting at row 2 under the frozen header. */
   let row = 2;
+  let taskRowsWritten = 0;
   for (const r of model.rows) {
     writeTaskRow(wb, byName.Tasks, row, r, columnKeys);
     row += 1;
+    taskRowsWritten += 1;
+    if (taskRowsWritten % 200 === 0) await yieldToLoop();
   }
 
   /* D-54-14 / 54-RESEARCH Pattern 2: setActiveSheet ALONE emits no

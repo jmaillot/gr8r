@@ -790,3 +790,49 @@ test('exactly at the shape cap the sheet still draws (R13 inclusive boundary)', 
   assert.equal(list.filter(a => !a.connector).length, 201, 'all 201 bars draw');
   assert.equal(list.filter(a => a.connector).length, 199, 'all 199 connectors draw');
 });
+
+/* =====================================================================
+   54-04 Task 3: responsiveness — yields between sheets, the 500-task
+   benchmark and the exact-cap draw.
+   ===================================================================== */
+import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { makeBenchmarkDoc, makeExactCapDoc } from './fixtures/export-fixtures.mjs';
+
+test('the 500-task benchmark builds a valid zip with the event loop held under two seconds (R13, T-54-14)', async t => {
+  if (typeof monitorEventLoopDelay !== 'function') {
+    t.skip('monitorEventLoopDelay is unavailable on this runtime — responsiveness not measured');
+    return;
+  }
+  const hist = monitorEventLoopDelay({ resolution: 10 });
+  hist.enable();
+  const started = Date.now();
+  const buf = await buildWorkbook(ganttModel(makeBenchmarkDoc()));
+  const elapsed = Date.now() - started;
+  hist.disable();
+
+  assert.ok(buf.subarray(0, 2).toString('latin1') === 'PK', 'the benchmark buffer starts with the zip magic');
+  assert.ok(elapsed < 30000, `the 500-task build finished in ${elapsed}ms — under the 30000ms bound`);
+  assert.ok(hist.max < 2000 * 1e6, `maximum event-loop delay ${hist.max}ns — under 2000ms because generation yields`);
+  assert.ok(typeof hist.count === 'number' && hist.count >= 0, 'the histogram probe resolved (skip path only when monitorEventLoopDelay is unavailable)');
+
+  /* the benchmark crosses the shape cap: the Timeline degrades */
+  const { parts, sheet, drawing } = await timelineParts(makeBenchmarkDoc());
+  assert.equal(drawing, null, 'the capped benchmark Timeline draws nothing');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(sheet, shared);
+  assert.equal(values.get('A503'), 'export.timeline.truncated', 'the note row follows the 501-row table (header + 500 bars)');
+  assert.ok(values.get('A2'), 'the table itself stays');
+});
+
+test('the exact-cap fixture draws all 400 shapes with no note row (R13 inclusive boundary)', async () => {
+  const { parts, sheet, drawing } = await timelineParts(makeExactCapDoc());
+  const list = anchors(drawing);
+  assert.equal(list.filter(a => !a.connector).length, 380, '380 bars draw at the cap');
+  assert.equal(list.filter(a => a.connector).length, 20, '20 connectors draw at the cap');
+  assert.equal(list.length, 400, 'exactly 400 shapes — the cap is inclusive');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(sheet, shared);
+  const noteRows = [...values.entries()].filter(([, v]) => v === 'export.timeline.truncated');
+  assert.equal(noteRows.length, 0, 'no truncation note at exactly 400 shapes');
+  assert.ok(list.some(a => a.connector), 'at least one cxnSp exists');
+});

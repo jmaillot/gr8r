@@ -353,3 +353,45 @@ export function makeFutureDoc() {
     projOrder: ['p_g'],
   };
 }
+
+/* =====================================================================
+   54-04 Task 3 fixtures: the responsiveness benchmark and the exact
+   shape-cap fixture.
+   ===================================================================== */
+
+/* 500 top-level dated one-day tasks walking forward one day each with
+   400 dependencies between consecutive tasks — the R13 responsiveness
+   fixture (900 shapes: the Timeline degrades to the table + note). */
+export function makeBenchmarkDoc() {
+  const tasks = [];
+  for (let i = 0; i < 500; i++) {
+    tasks.push(ganttTask('t_b' + i, 'B-' + i, 'Benchmark task ' + i, i + 1,
+      { start: isoAdd('2026-03-02', i), due: isoAdd('2026-03-02', i) },
+      i > 0 ? ['t_b' + (i - 1)] : []));
+  }
+  return {
+    projects: [ganttProject('p_g', 'g', 'Gantt Benchmark', '2026-03-02', isoAdd('2026-03-02', 500), [])],
+    tasks,
+    comments: [],
+    members: GANTT_MEMBERS,
+    projOrder: ['p_g'],
+  };
+}
+
+/* Exactly 380 dated bars plus 20 dependencies = 400 shapes: at the
+   inclusive cap, so the sheet still draws and no note row appears. */
+export function makeExactCapDoc() {
+  const tasks = [];
+  for (let i = 0; i < 380; i++) {
+    tasks.push(ganttTask('t_e' + i, 'E-' + i, 'Exact cap task ' + i, i + 1,
+      { start: isoAdd('2026-03-02', i), due: isoAdd('2026-03-02', i) },
+      i > 0 && i <= 20 ? ['t_e' + (i - 1)] : []));
+  }
+  return {
+    projects: [ganttProject('p_g', 'g', 'Gantt Exact Cap', '2026-03-02', isoAdd('2026-03-02', 380), [])],
+    tasks,
+    comments: [],
+    members: GANTT_MEMBERS,
+    projOrder: ['p_g'],
+  };
+}
