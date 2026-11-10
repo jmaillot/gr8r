@@ -35,6 +35,18 @@ export const MCP_STATUSES = ['backlog', 'todo', 'progress', 'review', 'done'];
 export const MCP_PRIORITIES = ['none', 'urgent', 'high', 'medium', 'low']; // 'none' = UI-canonical cleared value (PRIOS, constants.js)
 /* Project lifecycle ids (src/core/constants.js PSTAT). */
 export const MCP_PROJECT_STATUSES = ['planning', 'active', 'risk', 'hold', 'complete'];
+/* Color keys (src/core/constants.js PCOLORS) — projects store the key, teams the mapped value. */
+export const MCP_COLORS = ['indigo', 'blue', 'violet', 'teal', 'rose', 'amber', 'green', 'slate'];
+export const MCP_COLOR_VARS = {
+  indigo: '#5A67D8',
+  blue: '#3B82C4',
+  violet: '#8662C9',
+  teal: '#23918A',
+  rose: '#C54B78',
+  amber: '#C48A1E',
+  green: '#3D8E5F',
+  slate: '#6B7280',
+};
 /* The label catalog (src/core/constants.js LABELS ids). Task documents store
    label ids, never free strings — this is the closed vocabulary. */
 export const MCP_LABELS = ['design', 'frontend', 'backend', 'research', 'content', 'bug', 'qa', 'growth'];
@@ -258,6 +270,56 @@ export function createMcp(deps) {
     return hit.id;
   }
 
+  /* Resolve a member reference to the membership authority row: {user_id,
+     member_id, role, email, name}. Team rows and membership edits key on
+     user_id; project access lists on member_id — tools need both. */
+  async function resolveMembership(ctx, ref) {
+    const members = await roster(ctx);
+    const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const hit =
+      members.find(m => m.id === ref) ||
+      members.find(m => m.email && m.email.toLowerCase() === String(ref).toLowerCase()) ||
+      members.find(m => fold(m.name) === fold(ref));
+    if (!hit) throw toolError(`Unknown member "${ref}" — use a member id, email, or exact name (see list_members)`);
+    const row =
+      (await db.get('select user_id, role, member_id from memberships where workspace_id = ? and member_id = ?', [ctx.ws.id, hit.id])) ||
+      (await db.get('select user_id, role, member_id from memberships where workspace_id = ? and user_id = (select id from users where email = ?)', [ctx.ws.id, (hit.email || '').toLowerCase()]));
+    if (!row) throw toolError(`Unknown member "${ref}" — no membership row found`);
+    return { user_id: row.user_id, member_id: row.member_id || hit.id, role: row.role, email: hit.email, name: hit.name };
+  }
+
+  /* Local mirror of server.js stripMember (not in the deps): remove a member's
+     profile and every reference from the document. Private projects must keep
+     at least one member and a lead (same lastPrivateMember guard). */
+  function mcpStripMember(doc, memberId, userId = null) {
+    const d = doc?.data;
+    if (!d) return;
+    const ids = new Set(
+      [memberId, ...(d.members || []).filter(m => (userId && m.userId === userId) || (memberId && m.id === memberId)).map(m => m.id)].filter(Boolean),
+    );
+    const hit = v => !!v && ids.has(v);
+    d.members = (d.members || []).filter(m => !(userId && m.userId === userId) && !hit(m.id));
+    d.tasks = (d.tasks || []).map(t => {
+      const next = hit(t.assignee) ? { ...t, assignee: null } : t;
+      if (Array.isArray(next.subtasks) && next.subtasks.some(s => hit(s?.assignee))) {
+        next.subtasks = next.subtasks.map(s => (hit(s?.assignee) ? { ...s, assignee: null } : s));
+      }
+      return next;
+    });
+    d.projects = (d.projects || []).map(p => {
+      const members = Array.isArray(p.members) ? p.members.filter(x => !hit(x)) : p.members;
+      const perms = p.perms && typeof p.perms === 'object' ? Object.fromEntries(Object.entries(p.perms).filter(([k]) => !hit(k))) : p.perms;
+      let lead = hit(p.lead) ? null : p.lead;
+      if (p.private === true) {
+        if (!Array.isArray(members) || !members.length) {
+          throw toolError(`Private project "${p.name}" would be left without a member — add someone or make it public first`);
+        }
+        if (!lead || !members.includes(lead)) lead = members[0];
+      }
+      return { ...p, lead, members, perms };
+    });
+  }
+
   /* The roster projection (syncProfiles shape): membership rows are the
      authority; doc profiles only decorate. id is member_id space when the
      membership carries one. */
@@ -470,6 +532,10 @@ export function createMcp(deps) {
         private: { t: 'b', def: false },
         start: { t: 's', re: DUE_RE, nullable: true },
         due: { t: 's', re: DUE_RE, nullable: true },
+        icon: { t: 's', max: 30 },
+        color: { t: 'enum', values: MCP_COLORS },
+        lead: { t: 's' },
+        teams: { t: 'arr', maxLen: 25, itemMax: 40 },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
@@ -491,18 +557,24 @@ export function createMcp(deps) {
           throw toolError(`Project key "${key}" is already taken`);
         }
         const me = (await roster(ctx)).find(m => m.id === ctx.membership.member_id);
+        const lead = a.lead ? await resolveAssignee(ctx, a.lead) : me?.id || null;
+        const knownTeams = new Set((Array.isArray(doc?.data?.teams) ? doc.data.teams : []).map(t => t?.id).filter(Boolean));
+        const teams = Array.isArray(a.teams) ? [...new Set(a.teams.map(t => String(t).slice(0, 40)))] : [];
+        if (teams.some(t => !knownTeams.has(t))) throw toolError('teams[] contains an unknown team id — see list_teams');
         const project = {
           id: uid(),
           key,
           name: a.name.trim(),
           desc: a.description || '',
+          icon: a.icon || null,
+          color: a.color || null,
           status: a.status || 'active',
           private: !!a.private,
           start: a.start || null,
           due: a.due || null,
-          members: a.private && me ? [me.id] : [],
-          teams: [],
-          lead: me?.id || null,
+          members: a.private && lead ? [...new Set([lead, me?.id].filter(Boolean))] : [],
+          teams,
+          lead,
           milestones: [],
           fav: false,
           archived: false,
@@ -529,6 +601,10 @@ export function createMcp(deps) {
         status: { t: 'enum', values: MCP_PROJECT_STATUSES },
         start: { t: 's', re: DUE_RE, nullable: true },
         due: { t: 's', re: DUE_RE, nullable: true },
+        icon: { t: 's', max: 30, nullable: true },
+        color: { t: 'enum', values: MCP_COLORS, nullable: true },
+        lead: { t: 's', nullable: true },
+        teams: { t: 'arr', maxLen: 25, itemMax: 40 },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
@@ -547,7 +623,20 @@ export function createMcp(deps) {
           }
           if (a.start !== undefined) p.start = a.start;
           if (a.due !== undefined) p.due = a.due;
-          result = { id: p.id, key: p.key, name: p.name, description: p.desc, status: p.status, start: p.start ?? null, due: p.due ?? null };
+          if (a.icon !== undefined) p.icon = a.icon;
+          if (a.color !== undefined) p.color = a.color;
+          if (a.lead !== undefined) {
+            const lead = a.lead ? await resolveAssignee(ctx, a.lead) : null;
+            if (lead && !p.members.includes(lead)) p.members.push(lead); // normalizeProjects convention: lead ∈ members
+            p.lead = lead;
+          }
+          if (a.teams !== undefined) {
+            const knownTeams = new Set((Array.isArray(d?.data?.teams) ? d.data.teams : []).map(t => t?.id).filter(Boolean));
+            const teams = [...new Set(a.teams.map(t => String(t).slice(0, 40)))];
+            if (teams.some(t => !knownTeams.has(t))) throw toolError('teams[] contains an unknown team id — see list_teams');
+            p.teams = teams;
+          }
+          result = { id: p.id, key: p.key, name: p.name, description: p.desc, status: p.status, start: p.start ?? null, due: p.due ?? null, icon: p.icon ?? null, color: p.color ?? null, lead: p.lead ?? null, teams: p.teams ?? [] };
         });
         return { updated: true, project: result };
       },
@@ -637,6 +726,265 @@ export function createMcp(deps) {
           live.members = (Array.isArray(live.members) ? live.members : []).filter(x => x !== id);
         });
         return { removed: true };
+      },
+    },
+    /* ------------------------- teams -------------------------
+       Definitions live in doc.data.teams[] ({id, name, desc, icon, c});
+       membership lives in the team_members SQL authority table (user_id
+       space) — exactly the split TEAM-01 (D-01/D-02) pinned. */
+    create_team: {
+      description: 'Create a team (definition only — add members with add_team_member).',
+      write: true,
+      schema: {
+        name: { t: 's', req: true, max: 60 },
+        description: { t: 's', max: 2000 },
+        icon: { t: 's', max: 30 },
+        color: { t: 'enum', values: MCP_COLORS },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const doc = await loadDoc(ctx.ws);
+        const defs = Array.isArray(doc?.data?.teams) ? doc.data.teams : [];
+        if (defs.some(t => (t?.name || '').toLowerCase() === a.name.trim().toLowerCase())) {
+          throw toolError(`A team called "${a.name.trim()}" already exists`);
+        }
+        const team = {
+          id: uid('tm'),
+          name: a.name.trim(),
+          desc: a.description || '',
+          icon: a.icon || 'users',
+          c: a.color ? MCP_COLOR_VARS[a.color] : MCP_COLOR_VARS.slate,
+        };
+        await writeDoc(ctx.ws, async d => {
+          d.data.teams = Array.isArray(d.data.teams) ? d.data.teams : [];
+          d.data.teams.push(team);
+        });
+        return { created: true, team: { id: team.id, name: team.name, color: a.color || 'slate' } };
+      },
+    },
+    update_team: {
+      description: 'Update a team definition: name, description, icon or color. Membership is managed with add/remove_team_member.',
+      write: true,
+      schema: {
+        team: { t: 's', req: true, max: 60 },
+        name: { t: 's', max: 60 },
+        description: { t: 's', max: 2000, nullable: true },
+        icon: { t: 's', max: 30, nullable: true },
+        color: { t: 'enum', values: MCP_COLORS, nullable: true },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        let result = null;
+        await writeDoc(ctx.ws, async d => {
+          const defs = Array.isArray(d.data.teams) ? d.data.teams : [];
+          const tm = defs.find(t => t?.id === a.team || (t?.name || '').toLowerCase() === a.team.toLowerCase());
+          if (!tm) throw toolError(`Team not found: ${a.team} — use a team id or exact name (see list_teams)`);
+          if (a.name !== undefined) {
+            if (defs.some(t => t !== tm && (t?.name || '').toLowerCase() === a.name.trim().toLowerCase())) {
+              throw toolError(`A team called "${a.name.trim()}" already exists`);
+            }
+            tm.name = a.name.trim();
+          }
+          if (a.description !== undefined) tm.desc = a.description || '';
+          if (a.icon !== undefined) tm.icon = a.icon || 'users';
+          if (a.color !== undefined) tm.c = a.color ? MCP_COLOR_VARS[a.color] : MCP_COLOR_VARS.slate;
+          result = { id: tm.id, name: tm.name, description: tm.desc, icon: tm.icon, color: a.color || null };
+        });
+        return { updated: true, team: result };
+      },
+    },
+    delete_team: {
+      description: 'Delete a team: the definition goes, members keep their accounts and projects, but lose this team (and team-based project access with it).',
+      write: true,
+      schema: {
+        team: { t: 's', req: true, max: 60 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        let removed = null;
+        await writeDoc(ctx.ws, async d => {
+          const defs = Array.isArray(d.data.teams) ? d.data.teams : [];
+          const tm = defs.find(t => t?.id === a.team || (t?.name || '').toLowerCase() === a.team.toLowerCase());
+          if (!tm) throw toolError(`Team not found: ${a.team} — use a team id or exact name (see list_teams)`);
+          removed = { id: tm.id, name: tm.name };
+          // T-28-05 order: purge the authority rows BEFORE the definition disappears.
+          db.run('delete from team_members where workspace_id = ? and team_id = ?', [ctx.ws.id, tm.id]);
+          d.data.teams = defs.filter(t => t !== tm);
+          // Mirror the client delTeam: unlink the team from every project.
+          for (const p of projectsOf(d)) {
+            if (Array.isArray(p.teams) && p.teams.includes(tm.id)) p.teams = p.teams.filter(x => x !== tm.id);
+          }
+        });
+        return { deleted: true, team: removed };
+      },
+    },
+    add_team_member: {
+      description: 'Add a workspace member to a team (member id, email, or exact name).',
+      write: true,
+      schema: {
+        team: { t: 's', req: true, max: 60 },
+        member: { t: 's', req: true, max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const target = await resolveMembership(ctx, a.member);
+        const doc = await loadDoc(ctx.ws);
+        const tm = (Array.isArray(doc?.data?.teams) ? doc.data.teams : []).find(t => t?.id === a.team || (t?.name || '').toLowerCase() === a.team.toLowerCase());
+        if (!tm) throw toolError(`Team not found: ${a.team} — use a team id or exact name (see list_teams)`);
+        await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [ctx.ws.id, tm.id, target.member_id, target.user_id]);
+        return { added: true, team: tm.id, member: target.member_id };
+      },
+    },
+    remove_team_member: {
+      description: 'Remove a workspace member from a team (member id, email, or exact name).',
+      write: true,
+      schema: {
+        team: { t: 's', req: true, max: 60 },
+        member: { t: 's', req: true, max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        const target = await resolveMembership(ctx, a.member);
+        const doc = await loadDoc(ctx.ws);
+        const tm = (Array.isArray(doc?.data?.teams) ? doc.data.teams : []).find(t => t?.id === a.team || (t?.name || '').toLowerCase() === a.team.toLowerCase());
+        if (!tm) throw toolError(`Team not found: ${a.team} — use a team id or exact name (see list_teams)`);
+        await db.run('delete from team_members where workspace_id = ? and team_id = ? and user_id = ?', [ctx.ws.id, tm.id, target.user_id]);
+        return { removed: true, team: tm.id, member: target.member_id };
+      },
+    },
+    /* ------------------------- members & invites ------------------------- */
+    invite_member: {
+      description: 'Create a join invite for an email address. Returns the one-time join URL — deliver it to the invitee yourself (this server never sends email). Roles: admin, member, or viewer. A viewer (guest) invite requires an accessible project with guest invites enabled.',
+      write: true,
+      schema: {
+        email: { t: 's', req: true, max: 200 },
+        role: { t: 'enum', values: ['admin', 'member', 'viewer'], def: 'member' },
+        teams: { t: 'arr', maxLen: 25, itemMax: 40 },
+        project: { t: 's', max: 64 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) {
+          throw toolError('Only admins and owners can create invites through MCP');
+        }
+        const email = String(a.email).trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw toolError(`Invalid email: ${email}`);
+        const doc = await loadDoc(ctx.ws);
+        const knownTeams = new Set((Array.isArray(doc?.data?.teams) ? doc.data.teams : []).map(t => t?.id).filter(Boolean));
+        const teams = Array.isArray(a.teams) ? [...new Set(a.teams.map(t => String(t).slice(0, 40)))] : [];
+        if (teams.some(t => !knownTeams.has(t))) throw toolError('teams[] contains an unknown team id — see list_teams');
+        let inviteProject = null;
+        if (a.role === 'viewer') {
+          const p = projectsOf(doc).find(p => p.id === a.project || (p.key && p.key.toUpperCase() === String(a.project || '').toUpperCase()));
+          if (!p) throw toolError('A viewer (guest) invite requires a valid project — pass project: <id or key>');
+          if (p.allowInviteGuests !== true) throw toolError(`Guest invites are off for project "${p.name}" — enable them in the project share settings first`);
+          inviteProject = p.id;
+        }
+        // One live invite per address: a fresh link replaces the previous one (same rule as the REST route).
+        const roster_ = await roster(ctx);
+        if (roster_.some(m => (m.email || '').toLowerCase() === email)) throw toolError(`${email} is already a member of this workspace`);
+        const token = crypto.randomBytes(24).toString('base64url');
+        const t = now();
+        const expiresAt = t + Number(process.env.INVITE_DAYS || 7) * 86400 * 1000;
+        db.run('update invites set used_at = ? where workspace_id = ? and email = ? and used_at is null', [t, ctx.ws.id, email]);
+        db.run(
+          'insert into invites (token_hash, email, role, teams, scope, project, workspace_id, created_by, created_at, expires_at) values (?,?,?,?,null,?,?,?,?,?)',
+          [sha256hex(token), email, a.role || 'member', JSON.stringify(teams), inviteProject, ctx.ws.id, ctx.user.id, t, expiresAt],
+        );
+        const base = process.env.APP_URL || '';
+        return {
+          invited: true,
+          email,
+          role: a.role || 'member',
+          teams,
+          project: inviteProject,
+          expiresAt,
+          url: base ? `${base}/join/${token}` : null,
+          joinPath: `/join/${token}`, // when APP_URL is unset, prefix it with the deployment base URL yourself
+        };
+      },
+    },
+    update_member: {
+      description: "Change a workspace member's role (admin/member/viewer — ownership transfers separately) or title. Owner-tier rules apply: only an owner manages admins/owners, and the last owner cannot be demoted or removed.",
+      write: true,
+      schema: {
+        member: { t: 's', req: true, max: 200 },
+        role: { t: 'enum', values: ['owner', 'admin', 'member', 'viewer'] },
+        title: { t: 's', max: 60, nullable: true },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) throw toolError('Only admins and owners can manage members');
+        const target = await resolveMembership(ctx, a.member);
+        if (target.user_id === ctx.user.id) throw toolError('Use "leave workspace" in the UI to change your own membership');
+        const actorRank = ROLE_RANK[ctx.membership.role];
+        if (actorRank < ROLE_RANK.owner && ROLE_RANK[target.role] >= ROLE_RANK.admin) {
+          throw toolError('Only an owner can manage admins and owners');
+        }
+        const owners = (await db.get("select count(*) as n from memberships where workspace_id = ? and role = 'owner'", [ctx.ws.id])).n;
+        if (a.role !== undefined && a.role !== target.role) {
+          if (a.role === 'owner' && actorRank < ROLE_RANK.owner) throw toolError('Only an owner can transfer ownership');
+          if (target.role === 'owner' && owners <= 1) throw toolError('Every workspace needs an owner — promote someone else first');
+        }
+        const nextRole = a.role !== undefined ? a.role : target.role;
+        await db.run('update memberships set role = ? where workspace_id = ? and user_id = ?', [nextRole, ctx.ws.id, target.user_id]);
+        await writeDoc(ctx.ws, async d => {
+          const profile = (d.data.members || []).find(m => m.id === target.member_id || m.userId === target.user_id);
+          if (profile) {
+            if (a.role !== undefined && a.role !== target.role) profile.role = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Guest' }[nextRole] || profile.role;
+            if (a.title !== undefined) profile.title = a.title;
+          }
+        });
+        return { updated: true, member: target.member_id, role: nextRole, title: a.title ?? null };
+      },
+    },
+    remove_member: {
+      description: 'Remove a member from the workspace: their membership, team rows and profile go; their tasks keep existing unassigned. Owner-tier rules and the last-owner guard apply.',
+      write: true,
+      schema: {
+        member: { t: 's', req: true, max: 200 },
+      },
+      run: async (ctx, a) => {
+        canWrite(ctx);
+        if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) throw toolError('Only admins and owners can manage members');
+        const target = await resolveMembership(ctx, a.member);
+        if (target.user_id === ctx.user.id) throw toolError('Use "leave workspace" in the UI to remove yourself');
+        const actorRank = ROLE_RANK[ctx.membership.role];
+        if (actorRank < ROLE_RANK.owner && ROLE_RANK[target.role] >= ROLE_RANK.admin) {
+          throw toolError('Only an owner can manage admins and owners');
+        }
+        if (target.role === 'owner') {
+          const owners = (await db.get("select count(*) as n from memberships where workspace_id = ? and role = 'owner'", [ctx.ws.id])).n;
+          if (owners <= 1) throw toolError('Every workspace needs an owner — promote someone else first');
+        }
+        /* NOT wrapped in db.tx — writeDoc opens its own begin-immediate
+           transaction and the facade's tx mutex serializes, so nesting would
+           deadlock. SQL rows go first, then the doc ripple in its own tx. */
+        await db.run('delete from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, target.user_id]);
+        await db.run('delete from memberships where workspace_id = ? and user_id = ?', [ctx.ws.id, target.user_id]);
+        await writeDoc(ctx.ws, async d => mcpStripMember(d, target.member_id, target.user_id));
+        return { removed: true, member: target.member_id, email: target.email };
+      },
+    },
+    list_invites: {
+      description: 'Pending join invites for the workspace (admin/owner only).',
+      schema: {},
+      run: async ctx => {
+        if (ROLE_RANK[ctx.membership.role] < ROLE_RANK.admin) throw toolError('Only admins and owners can list invites');
+        const rows = await db.all(
+          'select email, role, teams, project, created_at, expires_at from invites where workspace_id = ? and used_at is null and expires_at > ?',
+          [ctx.ws.id, now()],
+        );
+        return {
+          invites: rows.map(r => ({
+            email: r.email,
+            role: r.role,
+            teams: r.teams ? JSON.parse(r.teams) : [],
+            project: r.project || null,
+            createdAt: r.created_at,
+            expiresAt: r.expires_at,
+          })),
+        };
       },
     },
     archive_project: {
@@ -790,8 +1138,11 @@ export function createMcp(deps) {
         assignee: { t: 's' },
         priority: { t: 'enum', values: MCP_PRIORITIES },
         due: { t: 's', re: DUE_RE },
+        start: { t: 's', re: DUE_RE },
         labels: { t: 'arr', maxLen: 10, itemMax: 40 },
         recur: { t: 'enum', values: MCP_RECUR },
+        subtasks: { t: 'arr', maxLen: 20, itemMax: 200 },
+        position: { t: 'enum', values: ['top', 'bottom'], def: 'bottom' },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
@@ -799,7 +1150,9 @@ export function createMcp(deps) {
         const proj = await findVisibleProjectRef(ctx, a.project, doc);
         if (a.assignee) a.assignee = await resolveAssignee(ctx, a.assignee);
         const tasks = tasksOf(doc);
-        const n = tasks.reduce((max, x) => Math.max(max, Number(x.order) || 0), 0) + 1;
+        const maxOrder = tasks.reduce((max, x) => Math.max(max, Number(x.order) || 0), 0);
+        const minOrder = tasks.reduce((min, x) => Math.min(min, Number(x.order) || 0), 0);
+        const n = a.position === 'top' ? minOrder - 1 : maxOrder + 1;
         const usedKeys = new Set(tasks.map(x => x.key).filter(Boolean));
         let key = null;
         if (proj.key) {
@@ -817,9 +1170,9 @@ export function createMcp(deps) {
           assignee: a.assignee || null,
           priority: a.priority || 'none', // UI-canonical: PR[null] would crash the client renderer
           due: a.due || null,
-          start: null,
+          start: a.start || null,
           labels: Array.isArray(a.labels) ? a.labels : [],
-          subtasks: [],
+          subtasks: (Array.isArray(a.subtasks) ? a.subtasks : []).map(title => ({ id: uid('s'), title: String(title).trim().slice(0, 200), done: false })),
           attachments: [],
           deps: [],
           desc: a.description ? (a.description.includes('<') ? a.description : `<p>${esc(a.description)}</p>`) : '',
@@ -1265,14 +1618,16 @@ export function createMcp(deps) {
           if (!t || typeof t !== 'object' || typeof t.title !== 'string' || !t.title.trim()) {
             throw toolError('Every item of tasks[] needs a non-empty "title"');
           }
-          if (Object.keys(t).some(k => !['title', 'description', 'status', 'assignee', 'priority', 'due', 'labels', 'recur', 'estimate'].includes(k))) {
-            throw toolError(`Unknown key in tasks[] item: ${Object.keys(t).filter(k => !['title', 'description', 'status', 'assignee', 'priority', 'due', 'labels', 'recur', 'estimate'].includes(k)).join(', ')}`);
+          if (Object.keys(t).some(k => !['title', 'description', 'status', 'assignee', 'priority', 'due', 'start', 'labels', 'recur', 'estimate', 'subtasks'].includes(k))) {
+            throw toolError(`Unknown key in tasks[] item: ${Object.keys(t).filter(k => !['title', 'description', 'status', 'assignee', 'priority', 'due', 'start', 'labels', 'recur', 'estimate', 'subtasks'].includes(k)).join(', ')}`);
           }
           if (t.status && !MCP_STATUSES.includes(t.status)) throw toolError(`tasks[] item status must be one of: ${MCP_STATUSES.join(', ')}`);
           if (t.priority && !MCP_PRIORITIES.includes(t.priority)) throw toolError(`tasks[] item priority must be one of: ${MCP_PRIORITIES.join(', ')}`);
           if (t.due && !DUE_RE.test(t.due)) throw toolError('tasks[] item due must be YYYY-MM-DD');
+          if (t.start && !DUE_RE.test(t.start)) throw toolError('tasks[] item start must be YYYY-MM-DD');
           if (t.recur && !MCP_RECUR.includes(t.recur)) throw toolError(`tasks[] item recur must be one of: ${MCP_RECUR.join(', ')}`);
           if (t.labels && (!Array.isArray(t.labels) || t.labels.length > 10)) throw toolError('tasks[] item labels must be an array of at most 10 strings');
+          if (t.subtasks && (!Array.isArray(t.subtasks) || t.subtasks.length > 20)) throw toolError('tasks[] item subtasks must be an array of at most 20 strings');
           return t;
         });
         if (!items.length) throw toolError('tasks[] must not be empty');
@@ -1304,9 +1659,9 @@ export function createMcp(deps) {
               assignee: it.assignee ? assignees.get(it.assignee) : null,
               priority: it.priority || 'none', // UI-canonical: PR[null] would crash the client renderer
               due: it.due || null,
-              start: null,
+              start: it.start || null,
               labels: Array.isArray(it.labels) ? it.labels : [],
-              subtasks: [],
+              subtasks: (Array.isArray(it.subtasks) ? it.subtasks : []).map(title => ({ id: uid('s'), title: String(title).trim().slice(0, 200), done: false })),
               attachments: [],
               deps: [],
               desc: it.description ? (it.description.includes('<') ? it.description : `<p>${esc(it.description)}</p>`) : '',
