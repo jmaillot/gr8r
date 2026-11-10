@@ -147,10 +147,6 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
       priority: priorityLabel(t.priority),
       assignees: joined,
       assigneeName: joined,
-      /* 55-05 Task-1 compat (removed in Task 2): first-assignee scalars
-         so the MSPDI writer keeps its current shape until its own plan
-         task lands. */
-      assigneeId: ids[0] || '',
       assigneeIds: [...ids],
       start: t.start || '',
       due: t.due || '',
@@ -202,7 +198,6 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
           priority: translate('task.priority.none'),
           assignees: sjoined,
           assigneeName: sjoined,
-          assigneeId: sids[0] || '',
           assigneeIds: [...sids],
           start: t.start || '',
           due: t.due || '',
@@ -428,6 +423,9 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
     charts,
     board,
     members: memberEntries,
+    /* 55-05: id→name resolution for the writers (MSPDI one Resource per
+       member) — they never re-read the document. */
+    memberNames: Object.fromEntries(memberName),
     milestones,
     headers,
     labels,

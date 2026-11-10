@@ -426,3 +426,56 @@ test('CR-01: child rows never shadow a subtasked parent in the UID map (54-05 re
   const first = '<Assignment>' + forParent[0];
   assert.ok(first.indexOf('<Start>') < first.indexOf('<Finish>'), 'WR-02: Assignment emits Start before Finish (positional schema)');
 });
+
+/* =====================================================================
+   55-05 Task 2: multi-assignee MSPDI (D-55-15, CR-01).
+   ===================================================================== */
+import { makeMultiAssigneeDoc } from './fixtures/export-fixtures.mjs';
+
+const buildMultiMspdi = () =>
+  buildMspdi(buildExportModel(makeMultiAssigneeDoc(), 'p_multi', { scope: 'all' }, { translate: k => k, labelName: id => id, now: EXPORT_NOW }));
+const resourceNames = out => [...out.slice(out.indexOf('<Resources>') + 11, out.indexOf('</Resources>')).matchAll(/<Name>([^<]+)<\/Name>/g)].map(m => m[1]);
+const assignmentPairs = out =>
+  out
+    .slice(out.indexOf('<Assignments>') + 13, out.indexOf('</Assignments>'))
+    .match(/<Assignment><UID>\d+<\/UID><TaskUID>\d+<\/TaskUID><ResourceUID>\d+<\/ResourceUID>/g)
+    ?.map(s => s.match(/<UID>(\d+)<\/UID><TaskUID>(\d+)<\/TaskUID><ResourceUID>(\d+)<\/ResourceUID>/).slice(1).map(Number)) || [];
+
+test('multi-assignee MSPDI (a): a 2-assignee task yields 2 Resources and 2 task-major assignment pairs', () => {
+  const out = buildMultiMspdi();
+  assert.deepEqual(resourceNames(out), ['Ada One', 'Ben Two'], 'one Resource per member, first-appearance order');
+  const pairs = assignmentPairs(out);
+  assert.equal(pairs.length, 3);
+  /* rows: t_ma1 → TaskUID 1, t_ma2 → 2, t_ma3 → 3. Resources: m_one → 1, m_two → 2. */
+  assert.deepEqual(pairs, [[1, 1, 1], [2, 1, 2], [3, 2, 1]], 'task-major order: both members of the shared task first, then the solo task');
+  assert.ok(out.includes('<UID>1</UID><TaskUID>1</TaskUID><ResourceUID>1</ResourceUID>'), 'per-pair UIDs are sequential from 1');
+});
+
+test('multi-assignee MSPDI (b): a member shared by two tasks appears once in Resources and in both pairs', () => {
+  const out = buildMultiMspdi();
+  assert.equal(resourceNames(out).filter(n => n === 'Ada One').length, 1, 'exactly one Ada One resource');
+  const pairs = assignmentPairs(out);
+  assert.equal(pairs.filter(([, t, r]) => r === 1).length, 2, 'resource UID 1 assigned on both of its tasks');
+  assert.deepEqual(pairs.filter(([, t]) => t === 2).map(([, , r]) => r), [1], 'the solo task pairs with the shared member');
+});
+
+test('multi-assignee MSPDI (c): an empty-assignee task emits no resource and no pair', () => {
+  const out = buildMultiMspdi();
+  assert.ok(!resourceNames(out).includes('Cal Three'), 'the subtask-only member is not a Resource (D-54-10)');
+  const pairs = assignmentPairs(out);
+  assert.equal(pairs.length, 3, 'only the assigned pairs exist — the unassigned task emits none');
+  assert.ok(!pairs.some(([, t]) => t === 3), 'TaskUID 3 (MA-3, nobody) carries no assignment');
+  assert.ok(out.includes('<Name>Ada One</Name>'), 'sanity: the Resources block exists');
+});
+
+test('multi-assignee MSPDI: the subtasked parent emits pairs on its OWN UID, the child never shadows it (CR-01 pair level)', () => {
+  const doc = makeMultiAssigneeDoc();
+  doc.tasks[0].subtasks[0].assignees = ['m_two']; // child with its own assignee
+  const out = buildMspdi(buildExportModel(doc, 'p_multi', { scope: 'all', options: { subtasks: true } }, { translate: k => k, labelName: id => id, now: EXPORT_NOW }));
+  const pairs = assignmentPairs(out);
+  assert.equal(pairs.length, 3, 'the child adds NO assignment row (the parent Task carries the assignment)');
+  assert.ok(!pairs.some(([, t]) => t === 1 && false));
+  /* the child row sits at UID 4 (4 rows total) and never appears as a TaskUID owner of a pair */
+  const pairsWithChildTaskUid = pairs.filter(([, t]) => t === 4);
+  assert.equal(pairsWithChildTaskUid.length, 0, 'child rows never own an assignment pair');
+});

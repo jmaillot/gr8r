@@ -277,41 +277,43 @@ export function buildMspdi(model) {
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';
 
-  /* ---- Resources: distinct assignee names of the exported rows, in
-       first-appearance order. The unassigned label is NOT a resource —
-       rows carry assigneeId '' exactly when unassigned (T-54-19: the
-       resource list is the exported rows' assignees only). ---- */
-  const resourceNames = [];
+  /* ---- Resources: one Resource per member appearing in the exported
+        rows' assigneeIds, in task-major first-appearance order (D-55-15).
+        The unassigned label is NOT a resource — an empty array emits
+        nothing (T-54-19: the resource list is the exported rows'
+        assignees only). Names come from the model's memberNames map —
+        the writer never re-reads the document. ---- */
+  const memberNames = model?.memberNames || {};
   const resourceIndex = new Map();
   for (const row of rows) {
-    const id = row?.assigneeId;
-    if (!id) continue;
-    const name = String(row.assigneeName || id);
-    if (!resourceIndex.has(name)) {
-      resourceIndex.set(name, resourceNames.length + 1);
-      resourceNames.push(name);
+    for (const id of Array.isArray(row?.assigneeIds) ? row.assigneeIds : []) {
+      if (!id || resourceIndex.has(id)) continue;
+      resourceIndex.set(id, resourceIndex.size + 1);
     }
   }
-  const resourcesBlock = resourceNames.length
-    ? `<Resources>${resourceNames.map((name, i) => `<Resource><UID>${i + 1}</UID><ID>${i + 1}</ID><Name>${esc(name)}</Name><Type>1</Type></Resource>`).join('')}</Resources>`
+  const resourcesBlock = resourceIndex.size
+    ? `<Resources>${[...resourceIndex.entries()].map(([id, i]) => `<Resource><UID>${i}</UID><ID>${i}</ID><Name>${esc(String(memberNames[id] || id))}</Name><Type>1</Type></Resource>`).join('')}</Resources>`
     : '';
 
-  /* ---- Assignments: one per task×resource pair, task-major order. ---- */
+  /* ---- Assignments: one per task×assignee pair, task-major order
+        (CR-01 extends to the pair loop: child rows never shadow the
+        parent UID — only top-level rows emit pairs). Unassigned rows
+        (empty array) emit no pairs. ---- */
   const assignmentXml = [];
   let aUid = 0;
   for (const row of rows) {
     if (row.parent) continue; /* CR-01: child rows share the parent's id — the parent Task already carries the assignment */
-    const id = row?.assigneeId;
-    if (!id) continue;
-    const name = String(row.assigneeName || id);
-    const resourceUid = resourceIndex.get(name);
     const taskUid = uidOf.get(row.id);
-    if (!resourceUid || taskUid === undefined) continue;
-    aUid += 1;
-    const { startISO, finishISO, minutes } = taskSchedule(row, fallbackStartISO);
-    assignmentXml.push(
-      `<Assignment><UID>${aUid}</UID><TaskUID>${taskUid}</TaskUID><ResourceUID>${resourceUid}</ResourceUID><PercentWorkComplete>${Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)))}</PercentWorkComplete><Start>${formatDateTime(startISO, '08:00:00')}</Start><Finish>${formatDateTime(finishISO, '17:00:00')}</Finish><Units>1</Units><Work>${isoDuration(minutes)}</Work></Assignment>`,
-    );
+    if (taskUid === undefined) continue;
+    for (const id of Array.isArray(row?.assigneeIds) ? row.assigneeIds : []) {
+      const resourceUid = resourceIndex.get(id);
+      if (!resourceUid) continue;
+      aUid += 1;
+      const { startISO, finishISO, minutes } = taskSchedule(row, fallbackStartISO);
+      assignmentXml.push(
+        `<Assignment><UID>${aUid}</UID><TaskUID>${taskUid}</TaskUID><ResourceUID>${resourceUid}</ResourceUID><PercentWorkComplete>${Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)))}</PercentWorkComplete><Start>${formatDateTime(startISO, '08:00:00')}</Start><Finish>${formatDateTime(finishISO, '17:00:00')}</Finish><Units>1</Units><Work>${isoDuration(minutes)}</Work></Assignment>`,
+      );
+    }
   }
   const assignmentsBlock = assignmentXml.length ? `<Assignments>${assignmentXml.join('')}</Assignments>` : '';
 
