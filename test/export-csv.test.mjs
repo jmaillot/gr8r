@@ -40,9 +40,9 @@ test('lines are CRLF-terminated and one row per exported task plus the header', 
 test('semicolon, comma, quote and newline quoting per RFC 4180', () => {
   const doc = makeDoc();
   doc.tasks.push(
-    { id: 't_q1', project: 'p_alpha', key: 'Q-1', title: 'has, comma', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 200 },
-    { id: 't_q2', project: 'p_alpha', key: 'Q-2', title: 'has "quote"', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 201 },
-    { id: 't_q3', project: 'p_alpha', key: 'Q-3', title: 'has\nnewline', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 202 },
+    { id: 't_q1', project: 'p_alpha', key: 'Q-1', title: 'has, comma', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 200 },
+    { id: 't_q2', project: 'p_alpha', key: 'Q-2', title: 'has "quote"', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 201 },
+    { id: 't_q3', project: 'p_alpha', key: 'Q-3', title: 'has\nnewline', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 202 },
   );
   const csv = toCsv(buildExportModel(doc, 'p_alpha', { scope: 'all' }, { translate: k => k, labelName: i => i, now: NOW }));
   assert.ok(csv.includes('"has, comma"'), 'a comma is now a quotable character (the separator is ;) — the title contains a comma so it must be quoted');
@@ -56,10 +56,10 @@ test('semicolon, comma, quote and newline quoting per RFC 4180', () => {
 test('= + - and @ leading values all gain the apostrophe', () => {
   const doc = makeDoc();
   doc.tasks.push(
-    { id: 't_f1', project: 'p_alpha', key: 'F-1', title: '=1+1', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 210 },
-    { id: 't_f2', project: 'p_alpha', key: 'F-2', title: '+SUM(A1)', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 211 },
-    { id: 't_f3', project: 'p_alpha', key: 'F-3', title: '-2 degrees', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 212 },
-    { id: 't_f4', project: 'p_alpha', key: 'F-4', title: '@risk', status: 'todo', priority: 'none', assignee: '', labels: [], estimate: '', subtasks: [], deps: [], order: 213 },
+    { id: 't_f1', project: 'p_alpha', key: 'F-1', title: '=1+1', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 210 },
+    { id: 't_f2', project: 'p_alpha', key: 'F-2', title: '+SUM(A1)', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 211 },
+    { id: 't_f3', project: 'p_alpha', key: 'F-3', title: '-2 degrees', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 212 },
+    { id: 't_f4', project: 'p_alpha', key: 'F-4', title: '@risk', status: 'todo', priority: 'none', assignees: [], labels: [], estimate: '', subtasks: [], deps: [], order: 213 },
   );
   const csv = toCsv(buildExportModel(doc, 'p_alpha', { scope: 'all' }, { translate: k => k, labelName: i => i, now: NOW }));
   assert.ok(csv.includes("'=1+1"));

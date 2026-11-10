@@ -827,7 +827,7 @@
   "export.col.title": "Titre",
   "export.col.status": "Statut",
   "export.col.priority": "Priorité",
-  "export.col.assignee": "Assigné à",
+  "export.col.assignees": "Assignés",
   "export.col.start": "Début",
   "export.col.due": "Échéance",
   "export.col.progress": "Avancement",

@@ -57,7 +57,7 @@ const WIDTHS = {
   title: 40,
   status: 12,
   priority: 12,
-  assignee: 18,
+  assignees: 30,
   start: 12,
   due: 12,
   progress: 10,
@@ -396,7 +396,7 @@ export async function buildWorkbook(model) {
      plan 04 fills Timeline content. Summary's A1 is the project name
      (styled below); Board/Members headers are the model's. */
   initSheet(wb, byName.Summary, []);
-  initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress']);
+  initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignees', 'priority', 'due', 'progress']);
   initSheet(wb, byName.Timeline, []);
   fillTimeline(wb, byName.Timeline, model);
   await yieldToLoop();

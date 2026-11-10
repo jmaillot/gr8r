@@ -34,7 +34,7 @@ export const PRIORITY_IDS = ['urgent', 'high', 'medium', 'low', 'none'];
 
 /* Column key literals live here so the i18n dead-key gate sees them. The
    label text itself always comes from the injected translator. */
-const BASE_COLUMNS = ['key', 'title', 'status', 'priority', 'assignee', 'start', 'due', 'progress', 'labels', 'estimate'];
+const BASE_COLUMNS = ['key', 'title', 'status', 'priority', 'assignees', 'start', 'due', 'progress', 'labels', 'estimate'];
 const COMMENT_COLUMNS = ['comments', 'latestComment', 'thread'];
 
 /* The default progress curve for a status (mirrors taskProg in
@@ -131,15 +131,27 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   /* ---- rows ---- */
   const rows = [];
   for (const t of ordered) {
-    const name = t.assignee ? memberName.get(t.assignee) || t.assignee : null;
+    /* D-55-14: the model carries the FULL assignee array. `assigneeIds`
+       is the machine field — the writers and the per-member counts
+       iterate it (D-55-16: a shared task counts once per member);
+       `assignees`/`assigneeName` hold the comma-joined member names,
+       the single cell value of the Tasks and Board sheets. */
+    const ids = Array.isArray(t.assignees) ? t.assignees.filter(Boolean) : [];
+    const joined = ids.length
+      ? ids.map(id => memberName.get(id) || id).join(', ')
+      : translate('export.unassigned');
     const base = {
       key: t.key || '',
       title: t.title || '',
       status: statusLabel(t.status),
       priority: priorityLabel(t.priority),
-      assignee: name || translate('export.unassigned'),
-      assigneeName: name || translate('export.unassigned'),
-      assigneeId: t.assignee || '',
+      assignees: joined,
+      assigneeName: joined,
+      /* 55-05 Task-1 compat (removed in Task 2): first-assignee scalars
+         so the MSPDI writer keeps its current shape until its own plan
+         task lands. */
+      assigneeId: ids[0] || '',
+      assigneeIds: [...ids],
       start: t.start || '',
       due: t.due || '',
       progress: taskProgress(t),
@@ -177,14 +189,21 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
     if (options.subtasks && Array.isArray(t.subtasks)) {
       t.subtasks.forEach((s, i) => {
         const done = !!s?.done;
+        /* D-55-5: subtasks carry their OWN assignees array — never the
+           hardcoded Unassigned scalars of Phase 54. */
+        const sids = Array.isArray(s?.assignees) ? s.assignees.filter(Boolean) : [];
+        const sjoined = sids.length
+          ? sids.map(id => memberName.get(id) || id).join(', ')
+          : translate('export.unassigned');
         rows.push({
           key: (t.key || '') + '.' + (i + 1),
           title: s?.title || '',
           status: translate('task.status.' + (done ? 'done' : 'todo')),
           priority: translate('task.priority.none'),
-          assignee: translate('export.unassigned'),
-          assigneeName: translate('export.unassigned'),
-          assigneeId: '',
+          assignees: sjoined,
+          assigneeName: sjoined,
+          assigneeId: sids[0] || '',
+          assigneeIds: [...sids],
           start: t.start || '',
           due: t.due || '',
           progress: done ? 100 : 0,
@@ -275,11 +294,16 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   const statusCounts = tallyStatus();
   const priorityCounts = tallyPriority();
 
-  /* open per member over exported top-level rows: open = not done. */
+  /* open per member over exported top-level rows: open = not done.
+     D-55-16: iterate EVERY member of the array — a shared task counts
+     once per member; an empty array counts once under the unassigned
+     bucket. */
   const openByMember = new Map();
   for (const r of topRows) {
-    const k = r.assigneeId || null;
-    openByMember.set(k, (openByMember.get(k) || 0) + (r.statusId === 'done' ? 0 : 1));
+    const ids = r.assigneeIds && r.assigneeIds.length ? r.assigneeIds : [null];
+    for (const k of ids) {
+      openByMember.set(k, (openByMember.get(k) || 0) + (r.statusId === 'done' ? 0 : 1));
+    }
   }
 
   const assigneeEntries = [...openByMember.entries()].map(([id, open]) => ({
@@ -337,18 +361,21 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   });
   const board = { lanes: boardLanes };
 
-  /* ---- MEMBERS (D-54-10): one row per assignee appearing in the
-     exported set plus Unassigned; counts over top-level rows only. */
+  /* ---- MEMBERS (D-54-10, D-55-16): one row per member appearing in the
+      exported set plus Unassigned; counts over top-level rows only,
+      iterated per array member so a shared task counts once per member. */
   const memberEntries = [];
   for (const r of topRows) {
-    const id = r.assigneeId || null;
-    let e = memberEntries.find(x => x.id === id);
-    if (!e) {
-      e = { id, name: id ? memberName.get(id) || id : translate('export.unassigned'), open: 0, done: 0 };
-      memberEntries.push(e);
+    const ids = r.assigneeIds && r.assigneeIds.length ? r.assigneeIds : [null];
+    for (const id of ids) {
+      let e = memberEntries.find(x => x.id === id);
+      if (!e) {
+        e = { id, name: id ? memberName.get(id) || id : translate('export.unassigned'), open: 0, done: 0 };
+        memberEntries.push(e);
+      }
+      if (r.statusId === 'done') e.done += 1;
+      else e.open += 1;
     }
-    if (r.statusId === 'done') e.done += 1;
-    else e.open += 1;
   }
   for (const e of memberEntries) e.total = e.open + e.done;
   memberEntries.sort((a, b) => (b.open - a.open) || plainCmp(a.name, b.name));
@@ -369,7 +396,7 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   /* ---- localized headers for the Board, Members and Milestones sheets. */
   const hcol = name => translate('export.col.' + name);
   const headers = {
-    board: ['lane', 'count', 'key', 'title', 'assignee', 'priority', 'due', 'progress'].map(hcol),
+    board: ['lane', 'count', 'key', 'title', 'assignees', 'priority', 'due', 'progress'].map(hcol),
     members: ['member', 'open', 'done', 'total'].map(hcol),
     milestones: ['name', 'date', 'state'].map(hcol),
     /* 54-04: the Timeline task block (columns A..C). */

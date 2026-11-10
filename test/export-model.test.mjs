@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { buildExportModel, DEFAULT_OPTIONS, STATUS_IDS, PRIORITY_IDS, taskProgress, plainText } from '../src/export/model.js';
-import { makeDoc, makeEmptyProjectDoc, makeZeroChartDoc, makeEmptyLaneDoc, makeChartDoc, makeMilestoneDoc } from './fixtures/export-fixtures.mjs';
+import { makeDoc, makeEmptyProjectDoc, makeZeroChartDoc, makeEmptyLaneDoc, makeChartDoc, makeMilestoneDoc, makeMultiAssigneeDoc } from './fixtures/export-fixtures.mjs';
 
 /* Deterministic injected deps: a translator that just echoes the key so
    assertions can pin exact catalogue keys, and a fixed export date whose
@@ -71,7 +71,7 @@ test('scope all orders by manual order (order values differ from array order)', 
 test('default columns and rows omit description, comments and thread; toggles add exactly their content', () => {
   const def = build(makeDoc(), 'p_alpha', { scope: 'all' });
   const colKeys = def.columns.map(c => c.key);
-  assert.deepEqual(colKeys, ['key', 'title', 'status', 'priority', 'assignee', 'start', 'due', 'progress', 'labels', 'estimate']);
+  assert.deepEqual(colKeys, ['key', 'title', 'status', 'priority', 'assignees', 'start', 'due', 'progress', 'labels', 'estimate']);
   const row = def.rows.find(r => r.id === 't_a5');
   assert.equal(row.description, undefined);
   assert.equal(row.comments, undefined);
@@ -160,13 +160,14 @@ test('machine fields ride every row so writers never re-read the document', () =
   assert.deepEqual(child.deps, []);
 });
 
-test('the assignee column is the member name, never the raw id', () => {
+test('the assignees cell is the comma-joined member names, never the raw ids (D-55-14)', () => {
   const m = build(makeDoc(), 'p_alpha', { scope: 'all' });
   const r = m.rows.find(r => r.id === 't_a1');
-  assert.equal(r.assignee, 'Pat Plain');
-  assert.equal(r.assigneeId, 'm_plain');
+  assert.equal(r.assignees, 'Pat Plain');
+  assert.deepEqual(r.assigneeIds, ['m_plain']);
   const un = m.rows.find(r => r.id === 't_a10');
-  assert.equal(un.assignee, 'export.unassigned');
+  assert.equal(un.assignees, 'export.unassigned');
+  assert.deepEqual(un.assigneeIds, []);
 });
 
 test('localized labels come from the injected translator and label resolver', () => {
@@ -404,7 +405,7 @@ test('milestones sort by date then name and derive state from the injected expor
 
 test('headers carry the localized labels for board, members and milestones', () => {
   const m = build(makeDoc(), 'p_alpha', { scope: 'all' }, prefixedDeps());
-  assert.deepEqual(m.headers.board, ['T:export.col.lane', 'T:export.col.count', 'T:export.col.key', 'T:export.col.title', 'T:export.col.assignee', 'T:export.col.priority', 'T:export.col.due', 'T:export.col.progress']);
+  assert.deepEqual(m.headers.board, ['T:export.col.lane', 'T:export.col.count', 'T:export.col.key', 'T:export.col.title', 'T:export.col.assignees', 'T:export.col.priority', 'T:export.col.due', 'T:export.col.progress']);
   assert.deepEqual(m.headers.members, ['T:export.col.member', 'T:export.col.open', 'T:export.col.done', 'T:export.col.total']);
   assert.deepEqual(m.headers.milestones, ['T:export.col.name', 'T:export.col.date', 'T:export.col.state']);
 });
@@ -445,4 +446,53 @@ test('no literal export string leaks into a user-authored title, member name or 
   const lane = buildExportModel(makeMilestoneDoc(), 'p_ms', { scope: 'all' }, prefixedDeps());
   for (const ms of lane.milestones) assert.ok(!ms.name.startsWith('T:'), 'milestone names stay untranslated');
   for (const e of lane.members) assert.ok(e.name.startsWith('T:') || e.name === 'Léa Lead', 'member names come from the doc, labels from the translator');
+});
+
+/* =====================================================================
+   55-05 Task 1: multi-assignee export model (D-55-14, D-55-16, D-55-17).
+   ===================================================================== */
+const buildMulti = (opts, over = {}) => buildExportModel(makeMultiAssigneeDoc(), 'p_multi', { scope: 'all', options: opts }, deps(over));
+
+test('multi-assignee (a): the joined Assignees cell is "Ada One, Ben Two" in insertion order (D-55-14)', () => {
+  const m = buildMulti();
+  const shared = m.rows.find(r => r.id === 't_ma1');
+  assert.equal(shared.assignees, 'Ada One, Ben Two');
+  assert.equal(shared.assigneeName, 'Ada One, Ben Two', 'the Board cell reads the same joined list');
+  assert.deepEqual(shared.assigneeIds, ['m_one', 'm_two']);
+  const solo = m.rows.find(r => r.id === 't_ma2');
+  assert.equal(solo.assignees, 'Ada One');
+});
+
+test('multi-assignee (b): Members sheet counts the shared task once PER member (D-55-16)', () => {
+  const m = buildMulti();
+  const byName = Object.fromEntries(m.members.map(e => [e.name, e]));
+  assert.deepEqual([byName['Ada One'].open, byName['Ada One'].done, byName['Ada One'].total], [1, 1, 2]);
+  assert.deepEqual([byName['Ben Two'].open, byName['Ben Two'].done, byName['Ben Two'].total], [1, 0, 1]);
+  assert.equal(byName['export.unassigned'].open, 1, 'the empty-assignee task counts under Unassigned');
+  assert.equal('Cal Three' in byName, false, 'a subtask-only member never reaches the Members sheet (D-54-10)');
+});
+
+test('multi-assignee (b): the open chart counts the shared task for each member (D-55-16)', () => {
+  const m = buildMulti();
+  const pairs = m.charts.assignees.labels.map((l, i) => [l, m.charts.assignees.counts[i]]);
+  assert.ok(pairs.some(([l, c]) => l === 'Ada One' && c === 1));
+  assert.ok(pairs.some(([l, c]) => l === 'Ben Two' && c === 1));
+  assert.ok(pairs.some(([l, c]) => l === 'export.unassigned' && c === 1));
+});
+
+test('multi-assignee (c): an empty array reads Unassigned everywhere (D-55-17)', () => {
+  const m = buildMulti();
+  const nobody = m.rows.find(r => r.id === 't_ma3');
+  assert.equal(nobody.assignees, 'export.unassigned');
+  assert.deepEqual(nobody.assigneeIds, []);
+  const card = m.board.lanes.flatMap(l => l.cards).find(c => c.key === 'MA-3');
+  assert.equal(card.assigneeName, 'export.unassigned', 'the Board card carries the Unassigned label');
+});
+
+test('multi-assignee (d): subtask rows carry their OWN assignees arrays (D-55-5)', () => {
+  const m = buildMulti({ subtasks: true });
+  const child = m.rows.find(r => r.parent === 't_ma1');
+  assert.deepEqual(child.assigneeIds, ['m_three']);
+  assert.equal(child.assignees, 'Cal Three');
+  assert.equal(child.key, 'MA-1.1', 'the child stays a child row, keyed under its parent');
 });

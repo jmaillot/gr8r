@@ -94,7 +94,7 @@ test('the Tasks sheet has one row per model row plus the header', async () => {
 
 test('the assignee cell holds the member NAME, never the member id', async () => {
   const model = buildModel();
-  assert.ok(model.rows.some(r => r.assignee === 'Pat Plain'), 'fixture sanity: Pat Plain is exported');
+  assert.ok(model.rows.some(r => r.assignees === 'Pat Plain'), 'fixture sanity: Pat Plain is exported');
   const { parts } = await buildZip(model);
   const shared = parts.get('xl/sharedStrings.xml');
   assert.ok(shared.includes('Pat Plain'), 'assignee name reaches shared strings');
