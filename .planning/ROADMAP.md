@@ -182,11 +182,13 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 **Requirements:** ASSIG-1, ASSIG-2, ASSIG-3, ASSIG-4, ASSIG-5, ASSIG-6
 **Depends on:** Phase 54
-**Plans:** 5 plans
+**Plans:** 7 plans
 
 Plans:
 - [ ] 55-01-PLAN.md — Schema migration + server core (normalize invariants, guard, stripMember, event-log diff)
 - [ ] 55-02-PLAN.md — Reminder fan-out per assignee + digest/mirror membership
-- [ ] 55-05-PLAN.md — Exports carry all assignees + subtask start dates (folded in)
-- [ ] 55-03-PLAN.md — Picker search modal + client membership/filters/notifications
-- [ ] 55-04-PLAN.md — Avatar stacks across all render surfaces
+- [ ] 55-03-PLAN.md — Client membership predicates + any-of filters/group/sort + drag-drop
+- [ ] 55-04-PLAN.md — Assignee picker search modal + diff-based notifications
+- [ ] 55-05-PLAN.md — Exports carry all assignees
+- [ ] 55-06-PLAN.md — Subtask assignees[] parity + subtask start dates (folded in)
+- [ ] 55-07-PLAN.md — Avatar stacks across all render surfaces
