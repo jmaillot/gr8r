@@ -174,10 +174,14 @@ export function buildMspdi(model) {
 
   const fallbackStartISO = proj.start || exportDateISO || '';
 
-  /* ---- UID resolution: rows in model order, then milestones. ---- */
+  /* ---- UID resolution: rows in model order, then milestones.
+     CR-01 (54-05 review): only TOP-LEVEL rows enter the id→UID map —
+     child rows carry the parent's id (model.js emits id: t.id with
+     parent: t.id), so a naive map let the LAST child overwrite the
+     parent's UID, corrupting assignments and dependency resolution. */
   const uidOf = new Map();
   rows.forEach((r, i) => {
-    if (r && r.id) uidOf.set(r.id, i + 1);
+    if (r && r.id && !r.parent) uidOf.set(r.id, i + 1);
   });
   const firstMilestoneUid = rows.length + 1;
   milestones.forEach((_m, i) => {
@@ -267,6 +271,7 @@ export function buildMspdi(model) {
   const assignmentXml = [];
   let aUid = 0;
   for (const row of rows) {
+    if (row.parent) continue; /* CR-01: child rows share the parent's id — the parent Task already carries the assignment */
     const id = row?.assigneeId;
     if (!id) continue;
     const name = String(row.assigneeName || id);
@@ -276,7 +281,7 @@ export function buildMspdi(model) {
     aUid += 1;
     const { startISO, finishISO, minutes } = taskSchedule(row, fallbackStartISO);
     assignmentXml.push(
-      `<Assignment><UID>${aUid}</UID><TaskUID>${taskUid}</TaskUID><ResourceUID>${resourceUid}</ResourceUID><PercentWorkComplete>${Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)))}</PercentWorkComplete><Finish>${formatDateTime(finishISO, '17:00:00')}</Finish><Start>${formatDateTime(startISO, '08:00:00')}</Start><Units>1</Units><Work>${isoDuration(minutes)}</Work></Assignment>`,
+      `<Assignment><UID>${aUid}</UID><TaskUID>${taskUid}</TaskUID><ResourceUID>${resourceUid}</ResourceUID><PercentWorkComplete>${Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)))}</PercentWorkComplete><Start>${formatDateTime(startISO, '08:00:00')}</Start><Finish>${formatDateTime(finishISO, '17:00:00')}</Finish><Units>1</Units><Work>${isoDuration(minutes)}</Work></Assignment>`,
     );
   }
   const assignmentsBlock = assignmentXml.length ? `<Assignments>${assignmentXml.join('')}</Assignments>` : '';

@@ -327,3 +327,30 @@ test('project StartDate and FinishDate derive from the project and task spans', 
   );
   assert.ok(xml.includes('<Name>MSPDI Project</Name>'), 'Name is the project name, never a filename');
 });
+
+test('CR-01: child rows never shadow a subtasked parent in the UID map (54-05 review)', () => {
+  const doc = makeMspdiDoc();
+  doc.tasks[2].assignee = 'm_lead'; // the subtasked parent gets an assignee
+  doc.tasks[1].deps = ['t_x1', 't_x8', 't_x3']; // and a dep lands on the subtasked parent
+  const out = buildMspdi(buildModel(doc, { subtasks: true }));
+  const taskUid = name => {
+    const m = out.match(new RegExp(`<Task><UID>(\\d+)</UID>\\d*<ID>\\d+</ID><Name>${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</Name>`));
+    return m ? Number(m[1]) : null;
+  };
+  const parentUid = taskUid('Subtasked task');
+  const childUid = taskUid('Child two');
+  assert.ok(parentUid !== null && childUid !== null, 'both the parent and the child are emitted as Tasks');
+  assert.notEqual(parentUid, childUid, 'parent and child carry distinct UIDs');
+
+  const linkedTwoStart = out.indexOf('<Name>Linked two</Name>');
+  const linkedTwo = out.slice(linkedTwoStart, out.indexOf('</Task>', linkedTwoStart));
+  assert.ok(linkedTwo.includes(`<PredecessorUID>${parentUid}</PredecessorUID>`), 'the dep on the subtasked parent resolves to the parent row UID');
+  assert.ok(!linkedTwo.includes(`<PredecessorUID>${childUid}</PredecessorUID>`), 'the dep never resolves to a child row UID');
+
+  const assignmentsBlock = out.slice(out.indexOf('<Assignments>'), out.indexOf('</Assignments>'));
+  const forParent = assignmentsBlock.split('<Assignment>').filter(s => s.startsWith('<UID>') && s.includes(`<TaskUID>${parentUid}</TaskUID>`));
+  assert.equal(forParent.length, 1, 'exactly one assignment for the subtasked parent, on its own UID');
+
+  const first = '<Assignment>' + forParent[0];
+  assert.ok(first.indexOf('<Start>') < first.indexOf('<Finish>'), 'WR-02: Assignment emits Start before Finish (positional schema)');
+});

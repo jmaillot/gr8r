@@ -836,3 +836,19 @@ test('the exact-cap fixture draws all 400 shapes with no note row (R13 inclusive
   assert.equal(noteRows.length, 0, 'no truncation note at exactly 400 shapes');
   assert.ok(list.some(a => a.connector), 'at least one cxnSp exists');
 });
+
+test('WR-01: the Timeline status column keeps the top-level row status — child rows never overwrite it (54-05 review)', async () => {
+  const doc = makeDoc();
+  const t = doc.tasks.find(x => x.id === 't_a9');
+  t.start = '2026-02-02';
+  t.due = '2026-02-06';
+  const model = modelOf(doc, 'p_alpha', { options: { subtasks: true } });
+  const parent = model.rows.find(r => r.id === 't_a9' && !r.parent);
+  const lastChild = [...model.rows].reverse().find(r => r.parent === 't_a9');
+  assert.ok(parent && lastChild && parent.status !== lastChild.status, 'fixture sanity: the parent status differs from the last child status');
+  const { parts } = await buildZip(model);
+  const values = sheetValues(parts.get('xl/worksheets/sheet4.xml'), parseSharedStrings(parts.get('xl/sharedStrings.xml')));
+  const barRow = [...values.entries()].find(([, v]) => v === 'Subtasked task')?.[0].slice(1);
+  assert.ok(barRow, 'the subtasked parent has a bar row on the Timeline');
+  assert.equal(values.get('C' + barRow), parent.status, 'the status cell shows the parent status, not the last child status');
+});

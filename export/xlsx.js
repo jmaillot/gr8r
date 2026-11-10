@@ -165,7 +165,9 @@ function fillTimeline(wb, ws, model) {
 
   /* ---- rows from row 2: bars first, then milestones, in buildGantt
      order. No cell here is a formula. */
-  const statusLabelById = new Map(model.rows.map(r => [r.id, r.status]));
+  /* WR-01 (54-05 review): top-level rows only — child rows carry the
+     parent's id and would overwrite its status label. */
+  const statusLabelById = new Map(model.rows.filter(r => !r.parent).map(r => [r.id, r.status]));
   let tableRow = 2;
   for (const bar of gantt.bars) {
     setCell(ws, tableRow, 1, bar.key);
