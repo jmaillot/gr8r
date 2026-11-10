@@ -186,18 +186,18 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 Plans:
 **Wave 1**
-- [ ] 55-01-PLAN.md — Schema migration + server core (normalize invariants, guard, stripMember, event-log diff)
-- [ ] 55-03-PLAN.md — Client membership predicates + any-of filters/group/sort + drag-drop
+- [x] 55-01-PLAN.md — Schema migration + server core (normalize invariants, guard, stripMember, event-log diff)
+- [x] 55-03-PLAN.md — Client membership predicates + any-of filters/group/sort + drag-drop
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 55-02-PLAN.md — Reminder fan-out per assignee + digest/mirror membership
-- [ ] 55-05-PLAN.md — Exports carry all assignees
+- [x] 55-02-PLAN.md — Reminder fan-out per assignee + digest/mirror membership
+- [x] 55-05-PLAN.md — Exports carry all assignees
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 55-04-PLAN.md — Assignee picker search modal + diff-based notifications
+- [x] 55-04-PLAN.md — Assignee picker search modal + diff-based notifications
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 55-06-PLAN.md — Subtask assignees[] parity + subtask start dates (folded in)
+- [x] 55-06-PLAN.md — Subtask assignees[] parity + subtask start dates (folded in)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 55-07-PLAN.md — Avatar stacks across all render surfaces
+- [x] 55-07-PLAN.md — Avatar stacks across all render surfaces
