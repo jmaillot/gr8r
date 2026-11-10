@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Member & Project Experience
 current_phase: 54
 current_phase_name: Project export — Excel report, MSPDI XML and CSV
-status: Executing — 5 plans ready, wave 1 next (ported onto main 2026-11-10)
-stopped_at: Phase 54 planning ported to main — 5 plans ready to execute
-last_updated: "2026-11-10T07:49:13.783Z"
+status: executing
+stopped_at: Completed 54-01-PLAN.md
+last_updated: "2026-11-10T09:29:15.434Z"
 last_activity: 2026-11-10
-state_head: c9e437125756164f778edb3b0acfacc86ba1de55
+last_activity_desc: Phase 54 execution started
+state_head: c7fefc0faaccd6c299a45813e08f6f1c706ec79a
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
   completed_plans: 0
-last_activity_desc: Phase 54 planning ported from the feat/export worktree (10 commits, 11 artifacts)
 ---
 
 # STATE.md
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 - **Project:** Projects Studio — self-hosted PM workspace, zero-config default, `{ pg }` only runtime dep
 
 **Core value:** real auth, real multitenancy, real localization, real notifications — no decorative state
-**Current focus:** Phase 54 — Project export (Excel report, MSPDI XML and CSV)
+**Current focus:** Phase 54 — Project export — Excel report, MSPDI XML and CSV
 
 ## Current Position
 
-Phase: 54 (Project export — Excel report, MSPDI XML and CSV) — READY TO EXECUTE
-Plan: —
-Status: Executing — 5 plans ready, wave 1 next (ported onto main 2026-11-10)
-Last activity: 2026-11-10
+Phase: 54 (Project export — Excel report, MSPDI XML and CSV) — EXECUTING
+Plan: 4 of 5
+Status: Ready to execute
+Last activity: 2026-11-10 — Phase 54 execution started
 
 ## v2.1 Phase 54 Plan Order (authored 2026-11-09, ported onto main 2026-11-10)
 
@@ -111,8 +111,8 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 
 ## Session Continuity
 
-**Last session:** 2026-11-10T00:00:00Z
-**Stopped at:** Phase 54 planning ported to main — 5 plans ready to execute
+**Last session:** 2026-11-10T09:27:32.395Z
+**Stopped at:** Completed 54-01-PLAN.md
 **Resume file:** None
 
 ### Last completed
@@ -139,6 +139,7 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 | Phase 53 P03 | 110 min | 3 tasks | 9 files |
 | Phase 53 P04 | 10 min | 2 tasks | 8 files |
 | Phase 53 P05 | 40 min | 3 tasks | 10 files |
+| Phase 54 P01 | 29 min | 3 tasks | 15 files |
 
 ## Decisions
 
@@ -160,3 +161,5 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
   shipped first) rather than a new milestone — its artifacts carry no milestone identity,
   and `54-01` builds on post-53 code. Drift caveat recorded: the plans reference
   `src/pages/project.js:73-80` (pre-53 header with avatar stack + labeled Share).
+- [Phase 54]: Export model is DOM-free (zero imports); all writers receive machine fields so they never re-read the document
+- [Phase 54]: Export route reads only docForClient; hidden-private and nonexistent ids return byte-identical 404s (no enumeration)
