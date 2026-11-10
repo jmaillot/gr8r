@@ -468,6 +468,8 @@ export function createMcp(deps) {
         description: { t: 's', max: 2000 },
         status: { t: 'enum', values: MCP_PROJECT_STATUSES, def: 'active' },
         private: { t: 'b', def: false },
+        start: { t: 's', re: DUE_RE, nullable: true },
+        due: { t: 's', re: DUE_RE, nullable: true },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
@@ -496,6 +498,8 @@ export function createMcp(deps) {
           desc: a.description || '',
           status: a.status || 'active',
           private: !!a.private,
+          start: a.start || null,
+          due: a.due || null,
           members: a.private && me ? [me.id] : [],
           teams: [],
           lead: me?.id || null,
@@ -516,13 +520,15 @@ export function createMcp(deps) {
       },
     },
     update_project: {
-      description: 'Update a project: name, description, or lifecycle status (planning/active/risk/hold/complete).',
+      description: 'Update a project: name, description, dates (start/due), or lifecycle status (planning/active/risk/hold/complete).',
       write: true,
       schema: {
         project: { t: 's', req: true },
         name: { t: 's', max: 60 },
         description: { t: 's', max: 2000 },
         status: { t: 'enum', values: MCP_PROJECT_STATUSES },
+        start: { t: 's', re: DUE_RE, nullable: true },
+        due: { t: 's', re: DUE_RE, nullable: true },
       },
       run: async (ctx, a) => {
         canWrite(ctx);
@@ -539,7 +545,9 @@ export function createMcp(deps) {
             logActivity(d, ctx, 'projectStatusChanged', null, { kind: 'projStatusSet', value: a.status }, p.id);
             p.status = a.status;
           }
-          result = { id: p.id, key: p.key, name: p.name, description: p.desc, status: p.status };
+          if (a.start !== undefined) p.start = a.start;
+          if (a.due !== undefined) p.due = a.due;
+          result = { id: p.id, key: p.key, name: p.name, description: p.desc, status: p.status, start: p.start ?? null, due: p.due ?? null };
         });
         return { updated: true, project: result };
       },
