@@ -170,6 +170,8 @@ export function makeDoc() {
       assignee: 'm_lead',
       labels: [],
       estimate: '',
+      start: '2026-01-06',
+      due: '2026-01-14',
       subtasks: [
         { title: 'Child one', done: true },
         { title: 'Child two', done: false },
@@ -732,6 +734,8 @@ export function makeMspdiDoc() {
       T('t_x1', 'MSP-1', 'Linked one', 1, { start: '2026-03-02', due: '2026-03-02', assignee: 'm_lead' }),
       T('t_x2', 'MSP-2', 'Linked two', 2, { start: '2026-03-05', due: '2026-03-06', assignee: 'm_plain', deps: ['t_x1', 't_x8'] }),
       T('t_x3', 'MSP-3', 'Subtasked task', 3, {
+        start: '2026-03-04',
+        due: '2026-03-10',
         subtasks: [
           { title: 'Child one', done: true },
           { title: 'Child two', done: false },

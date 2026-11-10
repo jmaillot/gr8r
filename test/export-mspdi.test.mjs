@@ -46,7 +46,7 @@ const PROJECT_ORDER = [
   'Assignments',
 ];
 
-const TASK_ORDER = ['UID', 'ID', 'Name', 'Type', 'Start', 'Finish', 'Duration', 'DurationFormat', 'Milestone', 'Summary', 'PercentComplete'];
+const TASK_ORDER = ['UID', 'ID', 'Name', 'Type', 'Start', 'Finish', 'Duration', 'DurationFormat', 'Milestone', 'Summary', 'PercentComplete']; /* OutlineLevel sits between Type and Start on child rows only — checked positionally in the inheritance test */
 
 /* Slice the raw XML for one task by its Name value. */
 function taskSlice(xml, name) {
@@ -133,6 +133,24 @@ test('task-level children appear in the documented schema order', () => {
       if (at !== -1) assert.ok(at > slice.indexOf('<PercentComplete>'), `${el} after PercentComplete in ${name}`);
     }
   }
+});
+
+test('child tasks inherit the parent start/finish and nest via OutlineLevel (owner 2026-11-10)', () => {
+  const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
+  for (const name of ['Child one', 'Child two']) {
+    const slice = taskSlice(subXml, name);
+    /* OutlineLevel sits exactly between Type and Start on a child row */
+    const typeAt = slice.indexOf('<Type>');
+    const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');
+    const startAt = slice.indexOf('<Start>');
+    assert.ok(olAt > typeAt && olAt < startAt, `${name}: OutlineLevel after Type, before Start`);
+    assert.ok(slice.includes('<Start>2026-03-04T08:00:00</Start>'), `${name} starts with the PARENT task's start, not the project start`);
+    assert.ok(slice.includes('<Finish>2026-03-10T17:00:00</Finish>'), `${name} finishes with the parent task's due`);
+  }
+  /* the parent itself stays top level with its OWN dates */
+  const parent = taskSlice(subXml, 'Subtasked task');
+  assert.ok(!parent.includes('<OutlineLevel>'), 'the parent carries no OutlineLevel (top level)');
+  assert.ok(parent.includes('<Start>2026-03-04T08:00:00</Start>') && parent.includes('<Finish>2026-03-10T17:00:00</Finish>'), 'the parent keeps its own span');
 });
 
 test('task count equals exported rows only — milestones excluded (owner 2026-11-10)', () => {

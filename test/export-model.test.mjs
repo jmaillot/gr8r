@@ -96,6 +96,11 @@ test('default columns and rows omit description, comments and thread; toggles ad
   assert.deepEqual(children.map(c => c.key), ['ALPHA-9.1', 'ALPHA-9.2']);
   assert.deepEqual(children.map(c => c.progress), [100, 0]);
   assert.deepEqual(children.map(c => c.statusId), ['done', 'todo']);
+  /* Owner request 2026-11-10: a subtask carries its PARENT task's start
+     and due — never blank (a blank start made MS Project fall back to the
+     PROJECT start on every subtask line). */
+  assert.deepEqual(children.map(c => c.start), ['2026-01-06', '2026-01-06'], 'subtask start = parent task start');
+  assert.deepEqual(children.map(c => c.due), ['2026-01-14', '2026-01-14'], 'subtask due = parent task due');
   assert.equal(topRows(sub).length, topRows(def).length, 'children are not extra top rows');
 });
 
@@ -106,7 +111,7 @@ test('child rows are excluded from kpis (D-54-10)', () => {
 
 test('overdue uses the injected now, never the wall clock (D-54-16)', () => {
   const m = build(makeDoc(), 'p_alpha', { scope: 'all' });
-  assert.equal(m.kpis.overdue, 1, 't_a8 is due 2026-01-01, before the injected 2026-02-01, and not done');
+  assert.equal(m.kpis.overdue, 2, 't_a8 (2026-01-01) and t_a9 (2026-01-14, the subtasked task gained dates with the owner subtask-inheritance fix) are both before the injected 2026-02-01 and not done');
   const later = build(makeDoc(), 'p_alpha', { scope: 'all' }, { now: new Date(2025, 0, 1) });
   assert.equal(later.kpis.overdue, 0, 'a 2025 export date finds nothing overdue');
   assert.equal(later.exportDateISO, '2025-01-01');
@@ -116,7 +121,7 @@ test('kpis count top-level exported rows: total, open, done', () => {
   const m = build(makeDoc(), 'p_alpha', { scope: 'all' });
   const n = topRows(m).length;
   const done = topRows(m).filter(r => r.statusId === 'done').length;
-  assert.deepEqual(m.kpis, { total: n, open: n - done, done, overdue: 1 });
+  assert.deepEqual(m.kpis, { total: n, open: n - done, done, overdue: 2 });
 });
 
 test('exportDateISO is the local date, built from the injected Date', () => {
@@ -291,7 +296,7 @@ test('summary kpis: four labelled entries equal to the row counts', () => {
   const done = topRows(m).filter(r => r.statusId === 'done').length;
   assert.deepEqual(m.summary.kpis.map(k => k.key), ['total', 'open', 'done', 'overdue']);
   assert.deepEqual(m.summary.kpis.map(k => k.label), ['T:export.kpi.total', 'T:export.kpi.open', 'T:export.kpi.done', 'T:export.kpi.overdue']);
-  assert.deepEqual(m.summary.kpis.map(k => k.value), [n, n - done, done, 1]);
+  assert.deepEqual(m.summary.kpis.map(k => k.value), [n, n - done, done, 2]);
 });
 
 test('status and priority charts tally exported top rows and ignore child rows (D-54-10)', () => {

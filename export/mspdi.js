@@ -152,7 +152,10 @@ function calendarsBlock() {
    YYYY-MM-DD or ''; estimate the stored ASCII form; progress 0-100. */
 function taskSchedule(row, fallbackStartISO) {
   const startISO = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) ? row.start : fallbackStartISO;
-  const minutes = parseEstimate(row.estimate) ?? workingDaysInclusive(row.start, row.due) * 480;
+  /* The duration derives from the RESOLVED span, not the raw row: child
+     rows inherit their parent's dates (owner 2026-11-10), so a blank
+     row.start must not zero the estimate-derived duration. */
+  const minutes = parseEstimate(row.estimate) ?? workingDaysInclusive(startISO, row.due) * 480;
   let finishISO;
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(row.due))) {
     finishISO = row.due;
@@ -239,7 +242,7 @@ export function buildMspdi(model) {
     const notes = options.descriptions && row.description ? `<Notes>${esc(row.description)}</Notes>` : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type><Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${links}${attrs}${notes}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${row.parent ? '<OutlineLevel>1</OutlineLevel>' : ''}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${links}${attrs}${notes}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

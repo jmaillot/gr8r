@@ -169,7 +169,11 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
 
     /* D-54-9: child rows ride under their parent, keyed PARENT.n; D-54-10:
        they are excluded from kpis and never outlive a filtered-out parent
-       (they are built from the same filtered `ordered` list). */
+       (they are built from the same filtered `ordered` list).
+       Owner request 2026-11-10: a subtask carries its parent's start and
+       due — never blank, which made MS Project fall back to the PROJECT
+       start on every subtask line. The parent's own values are already
+       resolved on `t` (the same fallback the writers apply to a row). */
     if (options.subtasks && Array.isArray(t.subtasks)) {
       t.subtasks.forEach((s, i) => {
         const done = !!s?.done;
@@ -181,8 +185,8 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
           assignee: translate('export.unassigned'),
           assigneeName: translate('export.unassigned'),
           assigneeId: '',
-          start: '',
-          due: '',
+          start: t.start || '',
+          due: t.due || '',
           progress: done ? 100 : 0,
           labels: '',
           estimate: '',
