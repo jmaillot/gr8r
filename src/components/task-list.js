@@ -170,6 +170,8 @@ export const VERB_KEYS = {
   assignedASubtaskOn: 'act.verb.assignedASubtaskOn',
   'set a subtask due date on': 'act.verb.setASubtaskDueDateOn',
   setASubtaskDueDateOn: 'act.verb.setASubtaskDueDateOn',
+  'set a subtask start date on': 'act.verb.setASubtaskStartDateOn',
+  setASubtaskStartDateOn: 'act.verb.setASubtaskStartDateOn',
   'completed subtask on': 'act.verb.completedSubtaskOn',
   completedSubtaskOn: 'act.verb.completedSubtaskOn',
   'reopened subtask on': 'act.verb.reopenedSubtaskOn',

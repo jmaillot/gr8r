@@ -454,15 +454,17 @@ A.ctxBtn = el => {
 A.popPick = el => {
   const p = S.ui.pop;
   let v = el.dataset.v;
-  if (p.type === 'date' && p.field === 'subdue') {
+  if (p.type === 'date' && (p.field === 'subdue' || p.field === 'substart')) {
     const t = task(p.id);
     const sb = t?.subtasks[p.i];
     if (!sb) return;
     const v = el.dataset.v || null;
+    const isStart = p.field === 'substart';
     S.ui.pop = null;
     mutate(() => {
-      sb.due = v;
-      logAct('setASubtaskDueDateOn', t, v ? { kind: 'dateSet', value: v } : { kind: 'dateCleared' });
+      if (isStart) sb.start = v;
+      else sb.due = v;
+      logAct(isStart ? 'setASubtaskStartDateOn' : 'setASubtaskDueDateOn', t, v ? { kind: 'dateSet', value: v } : { kind: 'dateCleared' });
     });
     return;
   }

@@ -57,7 +57,7 @@ export function openPop(el, extra = {}) {
   };
   if (d.pop === 'date') {
     const tk = task(d.id);
-    const cur = S.ui.pop.id === '__form' ? S.ui.form[d.field] : d.field === 'subdue' ? tk?.subtasks[+d.i]?.due : tk?.[d.field];
+    const cur = S.ui.pop.id === '__form' ? S.ui.form[d.field] : d.field === 'subdue' ? tk?.subtasks[+d.i]?.due : d.field === 'substart' ? tk?.subtasks[+d.i]?.start : tk?.[d.field];
     S.ui.pop.m = iso(cur ? parse(cur) : TODAY);
   }
   render();
@@ -182,7 +182,7 @@ export function popHtml(p) {
       break;
     }
     case 'date': {
-      const val = p.field === 'subdue' ? t?.subtasks[p.i]?.due : t?.[p.field];
+      const val = p.field === 'subdue' ? t?.subtasks[p.i]?.due : p.field === 'substart' ? t?.subtasks[p.i]?.start : t?.[p.field];
       const q = [
         [tMsg('common.today'), 0],
         [tMsg('common.tomorrow'), 1],

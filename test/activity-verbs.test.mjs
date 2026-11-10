@@ -172,6 +172,7 @@ const MACHINE_VERBS = [
   'convertedASubtaskOf',
   'assignedASubtaskOn',
   'setASubtaskDueDateOn',
+  'setASubtaskStartDateOn',
   'completedSubtaskOn',
   'reopenedSubtaskOn',
   'projectStatusChanged',

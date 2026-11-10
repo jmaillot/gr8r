@@ -199,7 +199,7 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
           assignees: sjoined,
           assigneeName: sjoined,
           assigneeIds: [...sids],
-          start: t.start || '',
+          start: s.start || t.start || '',
           due: t.due || '',
           progress: done ? 100 : 0,
           labels: '',

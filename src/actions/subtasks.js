@@ -66,6 +66,7 @@ A.promoteSub = el => {
         status: s.done ? 'done' : 'todo',
         assignees: s.assignees?.length ? [...s.assignees] : [...(t.assignees || [])],
         priority: t.priority,
+        start: s.start || t.start || null,
         due: s.due || t.due || null,
         labels: [...t.labels],
         desc: s.note ? `<p>${esc(s.note)}</p>` : '',
