@@ -316,6 +316,15 @@ export function hasPendingChanges() {
   return dirty;
 }
 
+/* 55-08 409 recovery: after hydrateFromServer adopts the server revision,
+   clear the pending flag so pollNotifs' hasPendingChanges() guard passes
+   again — applyDoc replaces S.data wholesale (hydrate wins), so there is no
+   surviving payload to replay; post-recovery edits flow through save() as
+   fresh changes. Not exported as the mutable flag itself. */
+export function resetDirty() {
+  dirty = false;
+}
+
 export function clearLocalCache() {
   try {
     localStorage.removeItem(STORE_KEY);

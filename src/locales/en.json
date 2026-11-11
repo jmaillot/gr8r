@@ -1751,7 +1751,6 @@
   "err.invalidScope": "Scope must be read or write",
   "err.invalidExpiry": "Choose a validity period for this key",
   "err.keyNotFound": "API key not found",
-  "act.reload": "Reload",
   "act.retry": "Retry",
   "project.template.blank.name": "Blank project",
   "project.template.blank.desc": "Start from scratch",

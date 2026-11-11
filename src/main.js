@@ -55,7 +55,7 @@ import './features/archive.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
-import { S, D, hydrateFromServer, save, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee } from './core/store.js';
+import { S, D, hydrateFromServer, resetDirty, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee } from './core/store.js';
 import { api } from './core/api.js';
 import { A, hydrateNotifPrefs, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
@@ -122,20 +122,40 @@ addEventListener('projects:save-error', e => {
   }
   if (status === 403) return toast(error || tk('err.readOnlyAccess'), { kind: 'err', ms: 6000 });
   if (status === 409) {
+    /* 55-08: recover instead of dead-locking — the stale toast's only escape
+       used to be location.reload(), and while S.ui.conflict stood the 30s poll
+       hydrate (the roster refresh channel) stayed disabled. Hydrate wins:
+       applyDoc adopts the server revision and clears the conflict; resetDirty
+       lets both pollNotifs guards pass again. Unsaved local edits at conflict
+       time are dropped (no surviving payload to replay). A failing hydrate
+       keeps the conflict state (network down must not silently clear it). */
     return toast(tk('err.workspaceChanged'), {
       kind: 'err',
       ms: 9000,
-      action: tk('act.reload'),
-      onAction: () => location.reload(),
+      action: tk('act.retry'),
+      onAction: async () => {
+        const slug = api.workspace?.slug;
+        if (!slug) return;
+        const res = await hydrateFromServer(slug);
+        if (!res.ok) return; // conflict stays; user can retry
+        await hydrateNotifPrefs(); // G-34-6 pin: every hydrate success site adopts prefs
+        resetDirty();
+      },
     });
   }
   toast(tk('err.saveNotSynced'), {
     kind: 'err',
     ms: 8000,
     action: tk('act.retry'),
-    onAction: () => {
-      S.ui.conflict = false;
-      save();
+    onAction: async () => {
+      /* 55-08: re-hydrate BEFORE any write — re-saving the same stale revision
+         is the dead 409 loop. Same hydrate-wins recovery as the 409 branch. */
+      const slug = api.workspace?.slug;
+      if (!slug) return;
+      const res = await hydrateFromServer(slug);
+      if (!res.ok) return; // conflict stays; unsaved edits still exist
+      await hydrateNotifPrefs(); // G-34-6 pin: every hydrate success site adopts prefs
+      resetDirty();
     },
   });
 });

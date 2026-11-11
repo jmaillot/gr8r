@@ -1751,7 +1751,6 @@
   "err.invalidScope": "La permission doit être lecture ou lecture+écriture",
   "err.invalidExpiry": "Choisissez une durée de validité pour cette clé",
   "err.keyNotFound": "Clé API introuvable",
-  "act.reload": "Recharger",
   "act.retry": "Réessayer",
   "project.template.blank.name": "Projet vierge",
   "project.template.blank.desc": "Partir de zéro",
