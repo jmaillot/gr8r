@@ -19,3 +19,16 @@ tasks: 3
 **i18n:** modal.scopeFixedHint + modal.teamsHint deleted (dead); scan 0/0.
 **Pins:** data-a 488→486, data-v 82→80, catalogue 1821→1819 (all annotated).
 **Tests:** npm test 0 fail (11 pre-existing skips); node --check ok; i18n:scan 0 dead.
+
+## Round 2 (owner feedback 2026-11-11)
+1. **Assignee picker** — back to one member per line (owner preference over the
+   pill row): compact `opt` rows with explicit checkbox box on the right
+   (flex-direction:row override; the `.opt` class is column by default — that
+   was the original space hog).
+2. Member-edit teams-only: confirmed good.
+3. **Invite access limits removed** — the scope section (Projects-they-can-see +
+   Teams pickers, guest toggle, hints) left the invite form; Guest role removed
+   from INVITE_ROLE_OPTIONS (guest invites required a scope pick). submitInvite
+   already degrades absent scope to workspace-wide. Dead actions invProjToggle/
+   invScopeTeamToggle/invGuest removed; 9 dead i18n keys removed.
+Pins: data-a 486→485, data-v 80→79, catalogue 1819→1810. Suite 0 fail, i18n 0/0.
