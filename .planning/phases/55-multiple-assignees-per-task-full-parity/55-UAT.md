@@ -25,9 +25,8 @@ result: pass
 ### 3. Assignee cap hint
 
 expected: Try to add a 6th assignee. The picker blocks it and shows a visible hint (`page.field.assigneeCap`), in EN and FR locales.
-result: issue
-reported: "i just invited 3 test accounts to the workspace + project, but i can only assign to the members that were in the project before the boot"
-severity: major
+result: pass
+note: "re-tested after 55-08 fix — new member appears as picker candidate without reload; gap G-55-3 closed. Original issue report retained for history: 'i just invited 3 test accounts to the workspace + project, but i can only assign to the members that were in the project before the boot' (severity major)"
 
 ### 4. Removed-assignee notification
 
