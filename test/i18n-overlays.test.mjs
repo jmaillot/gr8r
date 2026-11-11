@@ -312,8 +312,6 @@ const TASK2_ORACLE = [
   ['modal.emailAddresses', undefined, 'Email addresses'],
   ['modal.emailHint', undefined, 'Separate multiple addresses with commas.'],
   ['modal.role', undefined, 'Role'],
-  ['modal.guests', undefined, 'Guests'],
-  ['modal.guestsHint', undefined, "can only see projects they're added to and can't create projects."],
   ['modal.inviteLinks', undefined, 'Invite links'],
   ['modal.sent', undefined, 'Sent'],
   ['modal.notSent', undefined, 'Not sent'],

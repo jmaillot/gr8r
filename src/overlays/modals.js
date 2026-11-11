@@ -406,36 +406,14 @@ export function exportModal(m, H) {
 }
 /* The invite form's role options (29-04) — display labels stored as picker
    state; api.js bridges them to the API roles via its own map. */
-const INVITE_ROLE_OPTIONS = ['Member', 'Admin', 'Guest'];
+const INVITE_ROLE_OPTIONS = ['Member', 'Admin'];
 export function inviteModal(m, H) {
   const err = S.ui.errors.invite;
   const links = S.ui.inviteLinks || [];
-  /* SCOPE-05/06 (Phase 29, D-09/D-10): the role select is the scope section's
-     gate — admin/owner invites are workspace-wide by definition (D-04), so the
-     scope section renders only for Member/Guest. The state rides
-     S.ui.inviteScope; the Guest path (D-13) is a viewer + exactly one project. */
+  /* [2026-11-11 owner request] Access limits left the invite form — invites
+     are email + role + teams, all workspace-wide. Guest invites required a
+     scope pick, so Guest left INVITE_ROLE_OPTIONS with the scope section. */
   const role = S.ui.inviteRole || INVITE_ROLE_OPTIONS[0];
-  const scope = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
-  const guest = role === 'Guest';
-  /* [2026-11-09 INVT-02] The Projects chips list PROJECTS (visibleProjects),
-     not teams — the picker previously rendered teamsList() for both rows, so
-     the "Projects they can see" chips toggled team ids into
-     S.ui.inviteScope.projects. The Teams row keeps teamsList(). */
-  const scopePicker = (kind, list, action, icon) => {
-    const items = kind === 'proj' ? visibleProjects() : teamsList();
-    return `<div class="tmpls" role="group" aria-label="${t('modal.scopeSection')}">${items
-      .map(
-        it =>
-          `<button type="button" role="checkbox" aria-checked="${list.includes(it.id)}" class="opt ${list.includes(it.id) ? 'on' : ''}" data-a="${action}" data-v="${it.id}" style="padding:8px">${ic(icon, 14)}<b style="font-size:12.5px">${esc(it.name)}</b>${list.includes(it.id) ? ic('check', 13) : ''}</button>`,
-      )
-      .join('')}</div>`;
-  };
-  /* [2026-11-09 D-06] The guest invariant expressed as disable+hint, never a
-     silent clamp or role downgrade: with the Guest role and ≠1 project the
-     send button is disabled and the localized hint shows. Chip toggles
-     re-render, so this state re-evaluates on every toggle; the email draft
-     is the only silent field (INVT-01). */
-  const guestNeedsProject = guest && scope.projects.length !== 1;
   return `${H(t('modal.inviteTo', { name: esc(D().ws.name) }), api.mailEnabled ? t('modal.inviteMailHint') : api.enabled ? t('modal.inviteLinkHint') : t('modal.inviteLocalHint'))}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" data-in="inviteDraft" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
@@ -449,13 +427,8 @@ export function inviteModal(m, H) {
     ${
       role === 'Admin'
         ? ''
-        : `<div class="field"><span class="label">${t('modal.scopeSection')}</span>
-    <div class="field" style="margin:0"><span class="hint" style="margin:0 0 4px">${t('modal.scopeProjectsLabel')}</span>${scopePicker('proj', scope.projects, 'invProjToggle', 'folder')}</div>
-    <div class="field" style="margin:0"><span class="hint" style="margin:8px 0 4px">${t('modal.scopeTeamsLabel')}</span>${scopePicker('team', scope.teams, 'invScopeTeamToggle', 'users')}</div>
-    <label class="row" style="gap:8px;font-size:12.5px;color:var(--text-2);cursor:pointer;margin-top:8px"><input type="checkbox" class="toggle" data-in="invGuest" ${guest ? 'checked' : ''}>${t('modal.guestToggle')}</label>
-    <span class="hint">${guest ? t('modal.guestHint') : t('modal.workspaceWideHint')}</span></div>`
+        : ''
     }
-    <div class="alert info">${ic('info', 14)}<span><b>${t('modal.guests')}</b> ${t('modal.guestsHint')}</span></div>
     ${
       links.length
         ? `<div class="field"><span class="label">${t('modal.inviteLinks')}</span>${links
@@ -469,7 +442,7 @@ export function inviteModal(m, H) {
         : ''
     }
   </form>
-  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button>${guestNeedsProject ? `<span class="hint" role="status">${t('modal.inviteGuestNeedsProject')}</span>` : ''}<button class="btn btn-primary" data-a="submitInvite" id="inv-submit" ${guestNeedsProject ? 'disabled' : ''}>${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button></div>`;
+  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button></div>`;
 }
 /* [55-04 D-55-6] The assignee picker modal — the invite modal's chip pattern
    applied to assignment: the draft rides S.ui.assigneePick so a full
@@ -506,13 +479,13 @@ export function assigneePickModal(m, H) {
         : ''
     }
     ${atCap ? `<div class="alert info" style="margin:0">${ic('circle-alert', 14)}<span>${t('page.field.assigneeCap', { n: ASSIGNEE_CAP })}</span></div>` : ''}
-    <div class="row" style="flex-wrap:wrap;gap:4px;max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:6px">
+    <div class="col" style="gap:2px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:4px">
       ${
         cands
           .map(mm => {
             const on = st.draft.includes(mm.id);
             const blocked = !on && atCap;
-            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:3px 8px;border-radius:999px;display:inline-flex;gap:5px;align-items:center">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${mm.id === D().me ? `<span class="faint" style="font-weight:400">${t('common.youSuffix').trim()}</span>` : ''}${on ? ic('check', 13) : ''}</button>`;
+            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:6px 8px;flex-direction:row;align-items:center;gap:8px;border-radius:var(--r)">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${mm.id === D().me ? `<span class="faint" style="font-weight:400">${t('common.youSuffix').trim()}</span>` : ''}<span class="cbox" style="margin-left:auto;width:15px;height:15px;border:1.5px solid var(--border);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0${on ? ';background:var(--accent);border-color:var(--accent)' : ''}">${on ? ic('check', 11) : ''}</span></button>`;
           })
           .join('') || `<div class="mi faint" style="cursor:default">${t('modal.assigneeNoMatches')}</div>`
       }

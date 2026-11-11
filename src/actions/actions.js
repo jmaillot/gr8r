@@ -2261,23 +2261,9 @@ A.invTeamToggle = el => {
   S.ui.inviteTeams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
   render();
 };
-/* SCOPE-05/06 (29-04, D-09/D-10): the invite form's scope pickers — both
-   multi-select for every role. [2026-11-09 D-06] The guest single-select
-   clamp that used to live here is GONE: the invalid state (guest with ≠1
-   project) is expressed by the disable+hint on inv-submit, never by
-   silently replacing the selection. */
-A.invProjToggle = el => {
-  const st = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
-  const id = el.dataset.v;
-  st.projects = st.projects.includes(id) ? st.projects.filter(x => x !== id) : [...st.projects, id];
-  render();
-};
-A.invScopeTeamToggle = el => {
-  const st = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
-  const id = el.dataset.v;
-  st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
-  render();
-};
+/* SCOPE-05/06 invite scope pickers retired 2026-11-11 (access limits left the
+   invite form — invites are workspace-wide; submitInvite degrades an absent
+   scope to null = workspace-wide, D-01). */
 /* [2026-11-09 INVT-01] Silent-state draft binding (NO render() — a full
    re-render here re-creates the wipe bug the binding exists to fix; Pitfall 4).
    The textarea renders esc(S.ui.inviteDraft), so background polls and chip
@@ -2285,16 +2271,9 @@ A.invScopeTeamToggle = el => {
 IN.inviteDraft = el => {
   S.ui.inviteDraft = el.value;
 };
-/* The role select re-renders the form: the scope section is D-04-gated on
-   admin, and the guest toggle follows the Guest role. */
+/* The role select re-renders the form. */
 IN.invRole = el => {
   S.ui.inviteRole = el.value;
-  render();
-};
-/* The guest checkbox is the role select's mirror — switching it on selects
-   the Guest role (viewer + one project, D-13), off returns to Member. */
-IN.invGuest = el => {
-  S.ui.inviteRole = el.checked ? ROLE_GUEST_UI : (S.ui.inviteRole || ROLE_MEMBER_UI) === ROLE_GUEST_UI ? ROLE_MEMBER_UI : S.ui.inviteRole || ROLE_MEMBER_UI;
   render();
 };
 A.copyInviteLink = async () => {
