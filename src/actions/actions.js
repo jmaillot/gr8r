@@ -1595,13 +1595,9 @@ A.pformSet = el => {
   }
   render();
 };
-/* P3 multi-team: toggle one team id inside the form's teams[] array. */
-A.pformTeamToggle = el => {
-  const id = el.dataset.v;
-  const cur = Array.isArray(S.ui.pform.teams) ? S.ui.pform.teams : [];
-  S.ui.pform.teams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
-  render();
-};
+/* P3 multi-team: pformTeamToggle retired 2026-11-11 (create form dropped its
+   team chips — teams link via the Access tab); invite forms keep their own
+   toggle actions. */
 export function makeKey(name) {
   let k = name
     .split(/\s+/)
@@ -2357,25 +2353,9 @@ A.mteamToggle = el => {
   st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
   render();
 };
-/* SCOPE-01 (29-04, D-09/D-10): the member modal's scope pickers — touching
-   either marks the scope dirty so the submit PUTs it; untouched submits never
-   write scope. */
-A.mScopeProjToggle = el => {
-  const st = S.ui.memberTeams;
-  if (!st?.scope) return;
-  const id = el.dataset.v;
-  st.scope.projects = st.scope.projects.includes(id) ? st.scope.projects.filter(x => x !== id) : [...st.scope.projects, id];
-  st.scopeTouched = true;
-  render();
-};
-A.mScopeTeamToggle = el => {
-  const st = S.ui.memberTeams;
-  if (!st?.scope) return;
-  const id = el.dataset.v;
-  st.scope.teams = st.scope.teams.includes(id) ? st.scope.teams.filter(x => x !== id) : [...st.scope.teams, id];
-  st.scopeTouched = true;
-  render();
-};
+/* SCOPE-01 member-modal scope pickers retired 2026-11-11 (scope editor left
+   the member-edit modal — teams only); invite-form scope toggles are separate
+   actions (invProjToggle / invScopeTeamToggle). */
 A.submitMemberTeams = async () => {
   const st = S.ui.memberTeams;
   const m = mem(st?.id);

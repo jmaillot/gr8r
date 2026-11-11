@@ -77,26 +77,9 @@ export function modalHtml(m) {
       return wrap('', teamModal(m, H));
     case 'memberTeams': {
       const st = S.ui.memberTeams || { teams: [], scope: { teams: [], projects: [] } };
-      /* SCOPE-01 (Phase 29, D-09/D-10): the member edit modal gains the scope
-         editor — the same multi-selects as the invite form, PUT to
-         /members/:uid/scope on submit. D-04: admin/owner targets are always
-         workspace-wide, so they get a fixed note instead of an editor. The
-         editor starts untouched — submitting without touching the pickers
-         never writes scope (a blind clear would wipe an invite-carried scope
-         the acting admin cannot read back: D-05 keeps the payload silent). */
-      const target = mem(st.id);
-      const adminTarget = !!target && (target.role === 'Admin' || target.role === 'Owner');
-      const sc = st.scope || { teams: [], projects: [] };
-      const scopePicker = (list, action, icon) =>
-        `<div class="tmpls" role="group" aria-label="${t('modal.scopeSection')}">${teamsList()
-          .map(
-            tm =>
-              `<button type="button" role="checkbox" aria-checked="${list.includes(tm.id)}" class="opt ${list.includes(tm.id) ? 'on' : ''}" data-a="${action}" data-v="${tm.id}" style="padding:8px">${ic(icon, 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${list.includes(tm.id) ? ic('check', 13) : ''}</button>`,
-          )
-          .join('')}</div>`;
-      const scopeBlock = adminTarget
-        ? `<fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('modal.scopeSection')}</legend><span class="hint">${t('modal.scopeFixedHint')}</span></fieldset>`
-        : `<fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('modal.scopeSection')}</legend><div class="field" style="margin:0"><span class="hint" style="margin:0 0 4px">${t('modal.scopeProjectsLabel')}</span>${scopePicker(sc.projects, 'mScopeProjToggle', 'folder')}</div><div class="field" style="margin:0"><span class="hint" style="margin:8px 0 4px">${t('modal.scopeTeamsLabel')}</span>${scopePicker(sc.teams, 'mScopeTeamToggle', 'users')}</div><span class="hint">${t('modal.workspaceWideHint')}</span></fieldset>`;
+      /* SCOPE-01 scope editor retired from this modal (2026-11-11 owner
+         request — teams only). D-05's payload-silence contract still holds
+         trivially: submitMemberTeams never writes scope. */
       return wrap(
         'sm',
         `${H(t('act.editTeams'), esc(st.name || ''))}<form class="modal-b" data-submit="submitMemberTeams"><fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.team')}</legend><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
@@ -173,16 +156,11 @@ export function settingsGeneralFields(m) {
   const err = S.ui.errors.pname;
   const leadLocked = !!m.edit && !canManageProject(proj(m.edit));
   /* [2026-11-09 owner ruling] Team selection lives ONLY in the Access tab on
-     edit — the General-tab chips duplicated it and their submit would clobber
-     Access-tab links. The create form keeps the chips (initial teaming). */
-  const teamsField = m.edit
-    ? ''
-    : `<div class="field" style="flex:1;min-width:150px"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group">${teamsList()
-        .map(
-          tm =>
-            `<button type="button" role="checkbox" aria-checked="${f.teams.includes(tm.id)}" class="opt ${f.teams.includes(tm.id) ? 'on' : ''}" data-a="pformTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${f.teams.includes(tm.id) ? ic('check', 13) : ''}</button>`,
-        )
-        .join('')}</div><span class="hint">${t('modal.teamsHint')}</span></div>`;
+     edit. [2026-11-11 owner request] The create form dropped its chips too —
+     new projects start unlinked; teams connect afterwards via the Access tab.
+     createProject still writes f.teams (now always the seeded default) — the
+     submit path is unchanged. */
+  const teamsField = '';
   return `<div class="row" style="gap:10px;align-items:flex-start">
       <button type="button" class="picon lg" style="--c:${PCOLORS[f.color]};cursor:default;flex-shrink:0;margin-top:22px" aria-hidden="true" tabindex="-1">${ic(f.icon, 18)}</button>
       <div class="field grow"><label class="label" for="p-name">${t('modal.projectName')}</label><input class="input ${err ? 'is-error' : ''}" id="p-name" data-in="pform" data-f="name" value="${esc(f.name)}" placeholder="${t('modal.projectNamePlaceholder')}" autofocus aria-invalid="${!!err}">${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
@@ -528,13 +506,13 @@ export function assigneePickModal(m, H) {
         : ''
     }
     ${atCap ? `<div class="alert info" style="margin:0">${ic('circle-alert', 14)}<span>${t('page.field.assigneeCap', { n: ASSIGNEE_CAP })}</span></div>` : ''}
-    <div class="col" style="gap:2px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:4px">
+    <div class="row" style="flex-wrap:wrap;gap:4px;max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:6px">
       ${
         cands
           .map(mm => {
             const on = st.draft.includes(mm.id);
             const blocked = !on && atCap;
-            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:8px">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${mm.id === D().me ? `<span class="faint" style="font-weight:400">${t('common.youSuffix').trim()}</span>` : ''}${on ? ic('check', 13) : ''}</button>`;
+            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:3px 8px;border-radius:999px;display:inline-flex;gap:5px;align-items:center">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${mm.id === D().me ? `<span class="faint" style="font-weight:400">${t('common.youSuffix').trim()}</span>` : ''}${on ? ic('check', 13) : ''}</button>`;
           })
           .join('') || `<div class="mi faint" style="cursor:default">${t('modal.assigneeNoMatches')}</div>`
       }
