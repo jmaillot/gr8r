@@ -216,7 +216,7 @@ export const SQLITE_SCHEMA = `
   create table if not exists invites (
     token_hash   text primary key,
     email        text,
-    role         text not null check (role in ('admin','member','viewer')),
+    role         text not null check (role in ('owner','admin','member','viewer')),
     team         text,
     teams        text,
     workspace_id text references workspaces(id) on delete cascade,

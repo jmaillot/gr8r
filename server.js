@@ -320,7 +320,7 @@ const SCHEMA = `
   create table if not exists invites (
     token_hash   text primary key,
     email        text,
-    role         text not null check (role in ('admin','member','viewer')),
+    role         text not null check (role in ('owner','admin','member','viewer')),
     team         text,
     teams        text,
     workspace_id text references workspaces(id) on delete cascade,
@@ -454,6 +454,39 @@ async function initDb() {
   // nullable, set only on the member path (admin/owner invites stay
   // workspace-scoped).
   await adapterEnsureColumn('invites', 'project', 'text');
+  /* [2026-11-11 second-owner invites, owner request] The invites role CHECK
+     originally excluded 'owner' (INV-01's belt-and-braces). SQLite cannot
+     alter a CHECK in place — rebuild the table when the stored definition
+     predates the widened constraint (sqliteOnly: sqlite_master is a SQLite
+     concept; pg tables are created fresh from the variant schema each boot).
+     Additive-safe: every column and index is carried verbatim; legacy
+     'guest' rows pre-normalize to 'viewer' so the strict CHECK holds. */
+  await sqliteOnly(async () => {
+    const invTbl = await db.get("select sql from sqlite_master where type = 'table' and name = 'invites'");
+    if (invTbl?.sql && !invTbl.sql.includes("role in ('owner'")) {
+      await db.run(`create table invites_rebuild (
+    token_hash   text primary key,
+    email        text,
+    role         text not null check (role in ('owner','admin','member','viewer')),
+    team         text,
+    teams        text,
+    workspace_id text references workspaces(id) on delete cascade,
+    created_by   text not null references users(id) on delete cascade,
+    created_at   integer not null,
+    expires_at   integer not null,
+    used_at      integer,
+    used_by      text,
+    scope        text,
+    project      text
+  )`);
+      await db.run(
+        "insert into invites_rebuild (token_hash, email, role, team, teams, workspace_id, created_by, created_at, expires_at, used_at, used_by, scope, project) select token_hash, email, case when role = 'guest' then 'viewer' else role end, team, teams, workspace_id, created_by, created_at, expires_at, used_at, used_by, scope, project from invites",
+      );
+      await db.run('drop table invites');
+      await db.run('alter table invites_rebuild rename to invites');
+      await db.run('create index if not exists invites_expiry on invites(expires_at)');
+    }
+  }, 'invites role-CHECK widening rebuild');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -3415,7 +3448,10 @@ function appBase(req) {
 /* UI labels map to the API's membership roles. */
 function inviteRole(value) {
   const role = String(value || '').toLowerCase();
-  if (role === 'admin' || role === 'member' || role === 'viewer') return role;
+  /* [2026-11-11 second-owner invites, owner request] 'owner' is now a real
+     invite role — but only an owner-tier inviter gets past the raw-body gate
+     below; for everyone else the gate fires before this coercion matters. */
+  if (role === 'owner' || role === 'admin' || role === 'member' || role === 'viewer') return role;
   if (role === 'guest') return 'viewer';
   return 'member';
 }
@@ -5617,16 +5653,20 @@ async function handleApi(req, res, url) {
 
     const body = await readJson(req);
     const role = inviteRole(body?.role);
-    /* INV-01 (D-50-4, first enforcement point): ownership is transferred by
-       an owner via the members route, never invited. Checked on the RAW body
+    /* INV-01, revised [2026-11-11 second-owner invites, owner request]: an
+       owner-role invite is allowed ONLY from an owner-tier inviter —
+       admins/members still hit the keyed refusal. Checked on the RAW body
        value — inviteRole() would silently coerce 'owner' to 'member' and
-       mint a member invite where an escalation was attempted. */
+       mint a member invite where an escalation was attempted. HARD-02 still
+       forbids a link-only owner invite (email required, enforced below and
+       re-checked at accept). */
     if (
       String(body?.role || '')
         .trim()
-        .toLowerCase() === 'owner'
+        .toLowerCase() === 'owner' &&
+      ROLE_RANK[ctx.membership.role] < ROLE_RANK.owner
     ) {
-      return fail(res, 403, 'ownerInviteForbidden', 'Ownership is transferred by an owner, never invited');
+      return fail(res, 403, 'ownerInviteForbidden', 'Only an owner can invite another owner');
     }
     /* VIS-04 member-tier validation (T-50-05): viewer role only, a real
        project on the CURRENT doc, toggle ON. Each cause carries its own

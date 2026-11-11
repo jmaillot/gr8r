@@ -90,13 +90,16 @@ after(async () => {
 });
 
 describe('INV-01 — the owner-only-owner hierarchy at its three points', () => {
-  test('create point: an owner-role invite is refused at every rank; unknown roles coerce to member explicitly', async () => {
+  test('create point: an owner invite is refused below owner tier, allowed FOR an owner; unknown roles coerce to member explicitly', async () => {
     const asAdmin = await inviteRefusal(admin, { role: 'owner' });
     assert.equal(asAdmin.status, 403);
     assert.equal(asAdmin.code, 'ownerInviteForbidden');
-    const asOwner = await inviteRefusal(owner, { role: 'owner' });
-    assert.equal(asOwner.status, 403, 'even an owner cannot INVITE ownership — it is transferred');
-    assert.equal(asOwner.code, 'ownerInviteForbidden');
+
+    /* [2026-11-11 second-owner invites, owner request] INV-01 revised: an
+       OWNER may now mint an owner invite (email required — HARD-02). */
+    const asOwner = await owner.post(`/api/workspaces/${VIS_WS.slug}/invites`, { role: 'owner', emails: ['second-owner@visfix.local'] });
+    assert.equal(asOwner.status, 201, 'an owner can invite a second owner');
+    assert.equal(asOwner.data.invites[0].role, 'owner');
 
     /* Flagged-edge cell (INV-01/empty+encoding): an unknown role coerces to
        'member' via inviteRole() — pinned as explicit behavior, not silent. */
@@ -104,14 +107,15 @@ describe('INV-01 — the owner-only-owner hierarchy at its three points', () => 
     assert.equal(coerced.status, 201);
     assert.equal(coerced.data.invites[0].role, 'member');
 
-    /* Belt-and-braces: the invites table CHECK makes an owner row
-       unrepresentable even if the route were bypassed. */
+    /* Belt-and-braces: the invites table CHECK still makes an unknown-role
+       row unrepresentable even if the route were bypassed ('owner' is now a
+       legal stored role — the route gate is the enforcement point). */
     const userId = withDb(server.dbPath, db => db.prepare('select id from users limit 1').get().id);
     assert.throws(() =>
       withDb(server.dbPath, db =>
         db
           .prepare(
-            "insert into invites (token_hash, email, role, teams, workspace_id, created_by, created_at, expires_at) values ('rawownerhash', null, 'owner', '[]', ?, ?, 1, 2)",
+            "insert into invites (token_hash, email, role, teams, workspace_id, created_by, created_at, expires_at) values ('rawownerhash', null, 'superowner', '[]', ?, ?, 1, 2)",
           )
           .run(VIS_WS.id, userId),
       ),

@@ -2129,7 +2129,9 @@ A.invite = () => {
 const API_ROLE = { Owner: 'owner', Admin: 'admin', Member: 'member', Guest: 'viewer' };
 /* The invite form's role options and their named UI keys (29-04): the display
    labels double as the stored picker state; API_ROLE bridges them to the API
-   roles. Owner is not an invitable role. */
+   roles. [2026-11-11 owner request] Owner IS invitable now — owner-tier
+   inviter only, enforced server-side (INV-01 revised; HARD-02 still forbids
+   a link-only owner invite). */
 /* [2026-11-09 fix] The destructure order used to be (MEMBER, ADMIN, GUEST),
    binding ROLE_MEMBER_UI='Admin' and ROLE_ADMIN_UI='Member' — every invite
    defaulted to the Admin role and member invites sent scope:null, so the
@@ -2170,18 +2172,17 @@ A.submitInvite = () => {
   S.ui.inviteDraft = raw;
   const role = S.ui.inviteRole || $('#inv-role')?.value || ROLE_MEMBER_UI;
   const teams = [...new Set(S.ui.inviteTeams || [])];
-  /* SCOPE-05/D-04 (29-04): the scope section only ever holds data for
-     Member/Guest roles — an admin/owner invite sends no scope at all. An
-     all-empty picker state degrades to no scope (workspace-wide, D-01). */
+  /* SCOPE-05/D-04 (29-04), narrowed [2026-11-11 owner request]: the scope
+     rides ONLY a Guest invite (viewer + exactly one project, D-13 — the
+     picker replaced the teams field); Member/Admin/Owner invites are
+     workspace-wide, no scope at all (D-01 degrade). */
   const scope =
-    role === ROLE_ADMIN_UI
-      ? null
-      : (() => {
-          const st = S.ui.inviteScope || { teams: [], projects: [] };
-          const scopeTeams = [...new Set(st.teams || [])];
-          const scopeProjects = [...new Set(st.projects || [])];
-          return scopeTeams.length || scopeProjects.length ? { teams: scopeTeams, projects: scopeProjects } : null;
-        })();
+    role === ROLE_GUEST_UI
+      ? (() => {
+          const st = S.ui.inviteScope || { projects: [] };
+          return st.projects.length ? { teams: [], projects: [...new Set(st.projects)] } : null;
+        })()
+      : null;
   const list = raw
     .split(/[\s,;]+/)
     .map(s => s.trim())
@@ -2194,6 +2195,14 @@ A.submitInvite = () => {
   }
   if (bad.length) {
     S.ui.errors.invite = `${bad[0]} isn't a valid email address`;
+    render();
+    return;
+  }
+  /* D-13 guest invariant, client enforcement point: a Guest invite carries
+     exactly one project — the button is already disabled, this guards the
+     Enter-key submit path. */
+  if (role === ROLE_GUEST_UI && !(S.ui.inviteScope?.projects || []).length) {
+    S.ui.errors.invite = tErr('err.inviteGuestProjectRequired');
     render();
     return;
   }
@@ -2274,6 +2283,13 @@ IN.inviteDraft = el => {
 /* The role select re-renders the form. */
 IN.invRole = el => {
   S.ui.inviteRole = el.value;
+  render();
+};
+/* [2026-11-11] The Guest role's single-project picker (D-13): selecting a
+   project REPLACES the pick — exactly one, never more. */
+A.invGuestProject = el => {
+  const st = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
+  st.projects = [el.dataset.v];
   render();
 };
 A.copyInviteLink = async () => {

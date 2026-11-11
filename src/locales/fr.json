@@ -1869,5 +1869,8 @@
   "kanban.section.addCardHere": "Ajouter une carte ici",
   "kanban.section.rowLabel": "Ligne",
   "kanban.section.rowHeader": "Déplacer vers la ligne",
-  "kanban.section.rowEmpty": "ligne vide — glissez des cartes ici"
+  "kanban.section.rowEmpty": "ligne vide — glissez des cartes ici",
+  "modal.guestProjectLabel": "Projet visible par l’invité",
+  "modal.guestProjectHint": "Les invités voient exactement un projet et ne peuvent pas en créer.",
+  "modal.inviteGuestNeedsProject": "Choisissez d’abord un projet pour l’invité."
 }

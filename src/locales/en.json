@@ -1868,5 +1868,8 @@
   "kanban.section.addCardHere": "Add card here",
   "kanban.section.rowLabel": "Row",
   "kanban.section.rowHeader": "Move to row",
-  "kanban.section.rowEmpty": "empty row — drag cards here"
+  "kanban.section.rowEmpty": "empty row — drag cards here",
+  "modal.guestProjectLabel": "Project the guest can see",
+  "modal.guestProjectHint": "Guests see exactly one project and can't create projects.",
+  "modal.inviteGuestNeedsProject": "Pick one project for the guest first."
 }

@@ -404,31 +404,38 @@ export function exportModal(m, H) {
   </div>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="exportSubmit" data-id="${p.id}" ${count === 0 ? 'disabled' : ''}>${ic('download', 14)}${t('export.submit')}</button></div>`;
 }
-/* The invite form's role options (29-04) — display labels stored as picker
-   state; api.js bridges them to the API roles via its own map. */
-const INVITE_ROLE_OPTIONS = ['Member', 'Admin'];
+/* The invite form's role options — display labels stored as picker state;
+   api.js bridges them to the API roles via its own map. [2026-11-11 owner
+   request] Guest is back (viewer + exactly one project, D-13 — the project
+   picker replaces the teams field when Guest is selected) and Owner joins:
+   an owner may now invite a second owner (server INV-01 revised). */
+const INVITE_ROLE_OPTIONS = ['Member', 'Admin', 'Guest', 'Owner'];
 export function inviteModal(m, H) {
   const err = S.ui.errors.invite;
   const links = S.ui.inviteLinks || [];
-  /* [2026-11-11 owner request] Access limits left the invite form — invites
-     are email + role + teams, all workspace-wide. Guest invites required a
-     scope pick, so Guest left INVITE_ROLE_OPTIONS with the scope section. */
   const role = S.ui.inviteRole || INVITE_ROLE_OPTIONS[0];
+  const guest = role === 'Guest';
+  /* [2026-11-09 D-06, revived] The guest invariant expressed as disable+hint,
+     never a silent clamp: with the Guest role and ≠1 project the send button
+     is disabled and the localized hint shows. */
+  const scope = S.ui.inviteScope || (S.ui.inviteScope = { teams: [], projects: [] });
+  const guestNeedsProject = guest && scope.projects.length !== 1;
+  const projectPicker = `<div class="field"><span class="label">${t('modal.guestProjectLabel')}</span><div class="tmpls" role="group" aria-label="${t('modal.guestProjectLabel')}">${visibleProjects()
+    .map(p => {
+      const on = scope.projects.includes(p.id);
+      return `<button type="button" role="radio" aria-checked="${on}" class="opt ${on ? 'on' : ''}" data-a="invGuestProject" data-v="${p.id}" style="padding:8px">${ic('folder', 14)}<b style="font-size:12.5px">${esc(p.name)}</b>${on ? ic('check', 13) : ''}</button>`;
+    })
+    .join('')}</div><span class="hint">${t('modal.guestProjectHint')}</span></div>`;
   return `${H(t('modal.inviteTo', { name: esc(D().ws.name) }), api.mailEnabled ? t('modal.inviteMailHint') : api.enabled ? t('modal.inviteLinkHint') : t('modal.inviteLocalHint'))}
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" data-in="inviteDraft" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
     <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role" data-in="invRole">${INVITE_ROLE_OPTIONS.map(r => `<option ${role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
-    <div class="field"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
+    ${guest ? projectPicker : `<div class="field"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
       .map(tm => {
         const on = (S.ui.inviteTeams || []).includes(tm.id);
         return `<button type="button" role="checkbox" aria-checked="${on}" class="opt ${on ? 'on' : ''}" data-a="invTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${on ? ic('check', 13) : ''}</button>`;
       })
-      .join('')}</div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>
-    ${
-      role === 'Admin'
-        ? ''
-        : ''
-    }
+      .join('')}</div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>`}
     ${
       links.length
         ? `<div class="field"><span class="label">${t('modal.inviteLinks')}</span>${links
@@ -442,7 +449,7 @@ export function inviteModal(m, H) {
         : ''
     }
   </form>
-  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit">${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button></div>`;
+  <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit" ${guestNeedsProject ? 'disabled' : ''}>${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button>${guestNeedsProject ? `<span class="hint" role="status">${t('modal.inviteGuestNeedsProject')}</span>` : ''}</div>`;
 }
 /* [55-04 D-55-6] The assignee picker modal — the invite modal's chip pattern
    applied to assignment: the draft rides S.ui.assigneePick so a full
