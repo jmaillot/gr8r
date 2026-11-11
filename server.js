@@ -2252,13 +2252,22 @@ function stripMember(doc, memberId, userId = null) {
      caller in the same transaction. */
 }
 
-/* Read-modify-write the workspace document inside the caller's transaction. */
-async function updateDoc(workspaceId, edit) {
+/* Read-modify-write the workspace document inside the caller's transaction.
+   bumpRevision:false is reserved for server-owned housekeeping writes that
+   must not charge the revision the clients still hold (e.g. the project-scoped
+   invite-accept grant, like the restart repair at the teamLink restoration) —
+   the document is still persisted under the same serialization. */
+async function updateDoc(workspaceId, edit, { bumpRevision = true } = {}) {
   const row = await db.get('select doc from workspaces where id = ?', [workspaceId]);
   if (!row) throw httpError(404, 'Workspace not found', 'workspaceNotFound');
   const doc = JSON.parse(row.doc);
   await edit(doc); // D-05 ripple: callbacks may be async (ensureMember facade await)
-  await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(doc), now(), workspaceId]);
+  await db.run(
+    bumpRevision
+      ? 'update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?'
+      : 'update workspaces set doc = ?, updated_at = ? where id = ?',
+    [JSON.stringify(doc), now(), workspaceId],
+  );
   return doc;
 }
 
@@ -5951,7 +5960,11 @@ async function handleApi(req, res, url) {
           ? existingMembership.member_id || (await memberIdFor(ws.id, user))
           : await ensureMember(doc, user, invite.role, ws.id);
         if (memberId && Array.isArray(p.members) && !p.members.includes(memberId)) p.members.push(memberId);
-      });
+        /* Accept-must-not-move-revision contract (invite-revision.test.mjs):
+           the membership row is the source of truth and syncProfiles completes
+           the roster on read; this mirrored-profile write must not charge the
+           revision the inviter's client still holds. */
+      }, { bumpRevision: false });
     }
     // Links sent to a specific address are single-use; joining clears every pending one for that address.
     if (invite.email) {
