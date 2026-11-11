@@ -184,3 +184,9 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 ### Roadmap Evolution
 
 - Phase 55 added: Multiple assignees per task (full parity)
+
+## Quick Tasks Completed
+
+| Date | Task | Notes |
+|------|------|-------|
+| 2026-11-11 | ui-simplifications | Assignee picker inline chips; member edit teams-only (scope editor removed); new project without team chips |
