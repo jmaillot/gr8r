@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 
 import { buildWorkbook } from '../export/xlsx.js';
 import { buildExportModel } from '../src/export/model.js';
-import { makeDoc, makeZeroChartDoc, makeChartDoc, makeEmptyLaneDoc, makeMilestoneDoc } from './fixtures/export-fixtures.mjs';
+import { makeDoc, makeZeroChartDoc, makeChartDoc, makeEmptyLaneDoc } from './fixtures/export-fixtures.mjs';
 import { textEntries } from './helpers/unzip.mjs';
 import { assertWellFormed, tags } from './helpers/xml.mjs';
 

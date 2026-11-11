@@ -14,7 +14,6 @@ const GOOD = 'password-1234';
 let server;
 let admin;
 let alice;
-let bob;
 
 /* Read the current served doc + revision for a client. */
 const read = c => c.get('/api/workspaces/acme').then(r => {
@@ -57,7 +56,7 @@ before(async () => {
 
   const joined = [];
   alice = await joinMember('alice-tz@test.local', 'Alice', joined);
-  bob = await joinMember('bob-tz@test.local', 'Bob', joined);
+  await joinMember('bob-tz@test.local', 'Bob', joined);
 
   /* Joined members reach the STORED doc only through backfillMemberships at
      boot; within a live server the roster is repaired on read. Seed the stored
@@ -175,7 +174,6 @@ test('admin PUT keeps the pinned-field block intact (id/userId/email/role/status
     me.tz = 'Asia/Tokyo';
   });
   assert.equal(res.status, 200);
-  const after = await read(admin);
   const storedBob = byEmail(storedMembers(), 'bob-tz@test.local');
   assert.equal(storedBob.role, 'Member', 'admin cannot rename a role through the doc (pinned to membership)');
   assert.equal(storedBob.email, 'bob-tz@test.local', 'email pinned');

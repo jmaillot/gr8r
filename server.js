@@ -1677,7 +1677,7 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
    no claim, no doc write, no revision bump on any idle tick before 08:00).
    ======================================================================= */
 
-import { localParts, resolveTz, TZ_BY_LABEL } from './tz.js';
+import { localParts, resolveTz } from './tz.js';
 
 /* REM-04 + RESEARCH Pitfall 4: one predicate for every offset. Mirrors the
    client's isOver (t.due && status !== 'done') plus archived-task and
@@ -2019,7 +2019,9 @@ async function docFromClient(incoming, stored, ws, role, membership, refusals = 
   for (const r of refusals) {
     try {
       logInfo(`doc write refused (${r.code || 'unknown'}) project "${r.project || '-'}" by ${membership?.member_id || 'unknown'} [${ws?.slug || 'ws'}]`);
-    } catch {}
+    } catch {
+      /* refusal logging is best-effort */
+    }
   }
   delete next.data.workspaces;
   next.data.me = null;

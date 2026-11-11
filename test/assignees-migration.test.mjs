@@ -18,7 +18,6 @@ import { ADMIN, login, startServer, withDb } from './helpers/server.mjs';
 let server;
 let owner;
 
-const M = ['mA', 'mB', 'mC', 'mD', 'mE'];
 const memberProfile = id => ({ id, name: `Member ${id.slice(1)}`, email: `${id}@test.local`, role: 'Member', status: 'active', last: 0, tz: '' });
 
 function craftedDoc() {

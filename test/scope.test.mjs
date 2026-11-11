@@ -317,8 +317,8 @@ test('send-time guards: an assignee off the private access list is never reminde
       assert.ok([200, 201].includes(joined.status), `${email} joined`);
       return (await ownerMail.get('/api/workspaces/acme/members')).data.members.find(m => m.email === email);
     };
-    const onList = await join('onlist@test.local');
-    const offList = await join('offlist@test.local');
+    await join('onlist@test.local');
+    await join('offlist@test.local');
 
     const wsRow = withDb(mail.dbPath, db => db.prepare('select id from workspaces where slug = ?').get('acme'));
     const mids = withDb(mail.dbPath, db =>

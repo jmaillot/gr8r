@@ -68,13 +68,6 @@ function decode(raw) {
   return { to: (raw.match(/^To: <([^>]+)>/m) || [])[1] || '', subject, text: parts[0] || '', html: parts[1] || '' };
 }
 
-const waitFor = async (smtp, n, label) => {
-  const start = smtp.payloads.length;
-  const deadline = Date.now() + 10_000;
-  while (smtp.payloads.length < start + n && Date.now() < deadline) await new Promise(r => setTimeout(r, 100));
-  assert.ok(smtp.payloads.length >= start + n, `${label}: expected ≥${n} new emails, got ${smtp.payloads.length - start}`);
-  return smtp.payloads.slice(start).map(decode);
-};
 
 const mailerFor = smtp =>
   createMailer({
@@ -129,6 +122,7 @@ test('SUBJ-03 tracer: CRLF workspace name through the full digest builder yields
 test('D-09: encodeWord strips CRLF injection — no second header line possible', () => {
   const out = encodeWord('name\r\nBcc: victim@x');
   assert.ok(!out.includes('\r\nBcc'), 'no CRLF injection survives');
+  // eslint-disable-next-line no-control-regex -- the assertion checks FOR control chars
   assert.ok(!/[\x00-\x1F]/.test(out), 'no C0 control char in output');
 });
 
@@ -145,6 +139,7 @@ test('D-09: 200+ char emoji-heavy name — no stray C0, round-trip preserves ful
   const name = 'A'.repeat(200) + '😀'.repeat(200);
   const out = encodeWord(name);
   /* Folding inserts legitimate \r\n SP between encoded-words — exclude it. */
+  // eslint-disable-next-line no-control-regex -- the assertion checks FOR control chars
   assert.ok(!/[\x00-\x1F]/.test(out.replace(/\r\n /g, '')), 'no stray C0 control char in output');
   const decoded = [...out.matchAll(/=\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/g)]
     .map(m => Buffer.from(m[1], 'base64').toString('utf8'))
@@ -189,5 +184,6 @@ test('D-13/D-14: truncate over cap returns cap chars + single U+2026', () => {
 test('D-13: truncate normalizes CR/LF via text() before capping', () => {
   const out = truncate('bad\r\nname', 80);
   assert.equal(out, 'bad name', 'CRLF collapsed to spaces by text()');
+  // eslint-disable-next-line no-control-regex -- the assertion checks FOR control chars
   assert.ok(!/[\x00-\x1F]/.test(out), 'no control chars survive');
 });

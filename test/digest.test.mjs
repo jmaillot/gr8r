@@ -394,7 +394,7 @@ test('D-01/D-02: missed 08:00 → 14:00 catch-up delivers once, with content com
 /* Reminder rows + emails flow normally here: due_reminder/past_due/email_reminder
    all ride the (true) defaults — the ONLY stored key is the digest opt-in. */
 test('DIGEST-02: digest user loses reminder emails at the fan-out — inbox rows + revision intact (D-09/D-10)', async () => {
-  const { ws, email, memberId, tasks } = await makeWorkspace(
+  const { ws, tasks } = await makeWorkspace(
     m => [task(m, { key: 'K-S1', title: 'Suppressed today', due: '2026-03-02' }), task(m, { key: 'K-S2', title: 'Suppressed late', due: '2026-03-01' })],
     { email_digest: true },
   );
@@ -527,7 +527,7 @@ test('DIGEST-03: undefined-falsy and stored-false are OFF, stored true still opt
 /* ---------------- Idle-tick purity (mirrors the reminder pin) ---------------- */
 
 test('idle tick before the 08:00 window: no email, no claim, revision unchanged', async () => {
-  const { ws, email } = await makeWorkspace(m => [task(m, { key: 'K-I1', due: '2026-02-10' })], DIGEST_ONLY);
+  const { ws } = await makeWorkspace(m => [task(m, { key: 'K-I1', due: '2026-02-10' })], DIGEST_ONLY);
   const revisionBefore = revisionOf(ws.slug);
 
   await trigger(at7('2026-02-10'));

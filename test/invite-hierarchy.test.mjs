@@ -69,8 +69,6 @@ const inviteRefusal = async (who, body) => {
   return { status: res.status, code: res.data?.code };
 };
 
-const acceptsSoFar = [];
-
 before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-invite-hierarchy-'));
   createVisibilityFixtureDb(dataDir);

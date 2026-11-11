@@ -54,6 +54,7 @@ function encodeWord(value) {
      the encode decision — user-controlled workspace/project/task names must
      never break SMTP header framing. text() only collapses CR/LF runs; tabs,
      NULs and DEL would otherwise survive the pure-ASCII fast path. */
+  // eslint-disable-next-line no-control-regex -- strips C0 control chars by design
   const input = text(value).replace(/[\x00-\x1F\x7F]/g, '');
   if (!/[^\x20-\x7E]/.test(input)) return input;
   const chunks = [];

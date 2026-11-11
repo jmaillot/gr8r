@@ -89,7 +89,7 @@ export function modalHtml(m) {
           )
           .join(
             '',
-          )}</div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset>${scopeBlock}</form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
+          )}</div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
       );
     }
     case 'filePreview':

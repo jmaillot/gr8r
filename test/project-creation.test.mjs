@@ -26,7 +26,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { createVisibilityFixtureDb, VIS_PASSWORD, VIS_WS } from './helpers/visibility-fixture.mjs';
-import { client, login, startServer, withDb } from './helpers/server.mjs';
+import { login, startServer, withDb } from './helpers/server.mjs';
 
 let dataDir;
 let server;

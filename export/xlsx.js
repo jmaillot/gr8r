@@ -171,7 +171,6 @@ function fillTimeline(wb, ws, model) {
   while (c < axis.columns) {
     let end = c;
     while (end + 1 < axis.columns && monthOf(end + 1) === monthOf(c)) end += 1;
-    const first = colLetter(4 + c);
     const label = months[monthOf(c)] || '';
     setCell(ws, 1, 4 + c, label);
     if (end > c) {

@@ -12,8 +12,14 @@ export default [
     /* e2e specs are Node at the module level (the Playwright import and the
        fixture plumbing) and browser inside the test bodies, so they carry
        both environments' globals. */
-    files: ['vite.config.js', 'eslint.config.js', 'server.js', 'mailer.js', 'totp.js', 'oidc.js', 'mcp.js', 'export/**/*.js', 'scripts/**/*.mjs', 'test/**/*.mjs'],
+    files: ['vite.config.js', 'eslint.config.js', 'server.js', 'mailer.js', 'totp.js', 'oidc.js', 'mcp.js', 'db-adapter.mjs', 'export/**/*.js', 'scripts/**/*.mjs', 'test/**/*.mjs'],
     languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    /* Tests exercise client-side code paths (DOM globals in assertions,
+       source-scraping regexes over browser modules) on top of Node. */
+    files: ['test/**/*.mjs'],
+    languageOptions: { globals: { ...globals.browser } },
   },
   {
     /* Vendored third-party dist source (D-15): linted as Node but its

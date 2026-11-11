@@ -675,7 +675,7 @@ test('create_task: start date, inline subtasks and top position', async () => {
   const session = (await rpc(writeKey, 'initialize', INIT_PARAMS, null)).session;
   const call = (name, args) => callTool(writeKey, name, args, session);
 
-  const bottom = await call('create_task', { project: 'TEST', title: 'Bottom dweller' });
+  await call('create_task', { project: 'TEST', title: 'Bottom dweller' });
   const t = await call('create_task', {
     project: 'TEST',
     title: 'Full shape',
@@ -852,19 +852,9 @@ const parRpcInit = async key => {
     body: JSON.stringify({ jsonrpc: '2.0', id: ++RPC_ID.n, method: 'initialize', params: INIT_PARAMS }),
   });
   assert.equal(res.status, 200);
-  const type = res.headers.get('content-type') || '';
-  const id = RPC_ID.n;
-  let data;
-  if (type.includes('text/event-stream')) {
-    const raw = await res.text();
-    data = raw
-      .split('\n')
-      .filter(l => l.startsWith('data:'))
-      .map(l => JSON.parse(l.slice(5).trim()))
-      .find(m => m.id === id);
-  } else {
-    data = await res.json();
-  }
+  /* The handshake only needs the session header — drain the SSE/JSON body
+     (the SSE data lines were parsed here historically; nothing used them). */
+  await res.text();
   const session = res.headers.get('mcp-session-id');
   parKeys.__initKey = key;
   await fetch(`${parServer.base}/mcp`, {

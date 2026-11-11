@@ -355,7 +355,7 @@ test('reminder resume (Phase 38 semantics): the flip merges into the stored row 
 test('badge-placement pin (D-11/D-12/48-02): the derived browser-blocked badge decorates exactly the three push rows — functional rows untouched', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../src/pages/settings.js', import.meta.url), 'utf8');
-  const pushCase = src.match(/case 'notif-push':\s*\{[\s\S]*?(?=\n    case )/);
+  const pushCase = src.match(/case 'notif-push':\s*\{[\s\S]*?(?=\n {4}case )/);
   assert.ok(pushCase, "the 'notif-push' case exists in settings.js");
   const block = pushCase[0];
   // 48-02 (D-48-4): the badge is DERIVED per render — one blocked expression,
@@ -364,7 +364,7 @@ test('badge-placement pin (D-11/D-12/48-02): the derived browser-blocked badge d
   assert.match(block, /settings\.notif\.pushBrowserBlocked/, 'the badge label comes from the catalogue (T-48-06)');
   assert.ok(!block.includes('pushComingSoon'), 'the Coming-soon badge is gone (D-48-3)');
   assert.ok((block.match(/bad/g) || []).length >= 3, 'the three push rows share the derived badge slot');
-  for (const [row, key] of [['push_mention', 'pushBrowserBlocked'], ['push_assign', 'pushBrowserBlocked'], ['push_comment', 'pushBrowserBlocked']]) {
+  for (const [row] of [['push_mention', 'pushBrowserBlocked'], ['push_assign', 'pushBrowserBlocked'], ['push_comment', 'pushBrowserBlocked']]) {
     const re = new RegExp(`srow\\([^\\n]*tog\\('${row}'`);
     assert.match(block, re, `the ${row} row keeps its toggle`);
   }

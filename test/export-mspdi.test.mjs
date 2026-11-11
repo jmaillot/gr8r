@@ -466,7 +466,7 @@ test('multi-assignee MSPDI (b): a member shared by two tasks appears once in Res
   const out = buildMultiMspdi();
   assert.equal(resourceNames(out).filter(n => n === 'Ada One').length, 1, 'exactly one Ada One resource');
   const pairs = assignmentPairs(out);
-  assert.equal(pairs.filter(([, t, r]) => r === 1).length, 2, 'resource UID 1 assigned on both of its tasks');
+  assert.equal(pairs.filter(([, , r]) => r === 1).length, 2, 'resource UID 1 assigned on both of its tasks');
   assert.deepEqual(pairs.filter(([, t]) => t === 2).map(([, , r]) => r), [1], 'the solo task pairs with the shared member');
 });
 

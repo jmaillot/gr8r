@@ -25,7 +25,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { startServer, client, login, signup, withPg, dropPgSchema, ROOT } from './helpers/server.mjs';
+import { startServer, login, signup, withPg, dropPgSchema, ROOT } from './helpers/server.mjs';
 
 /* D-08 gate idiom — the whole matrix is opt-in. */
 const url = process.env.POSTGRES_TEST_URL;
