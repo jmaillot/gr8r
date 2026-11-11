@@ -56,3 +56,12 @@ Assignee picker candidates now use the exact Teams-picker visual: `.tmpls`
 3-column card grid, `.opt` cards (avatar + bold name, check icon when on,
 padding 8px) instead of the one-per-line checkbox rows. Search, cap-block,
 draft chips and toggle semantics unchanged.
+
+## Round 5 (owner feedback 2026-11-11)
+1. **Owner self-promotion audit** — already safe: PATCH /members/:uid blocks
+   self-modification (removeSelfViaLeave), owner grant requires an owner actor
+   (ownerTransferOnly), admins can't touch admin/owner targets
+   (ownerManagedRoles), last owner demote refused (needOwner). No change needed.
+2. **Assignee picker** — back to one-per-line rows styled like the member-edit
+   Teams list (`.opt` row buttons: avatar + bold name + check, padding 8px,
+   row direction), replacing the round-4 card grid per owner preference.
