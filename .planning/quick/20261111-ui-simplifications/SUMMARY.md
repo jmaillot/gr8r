@@ -32,3 +32,21 @@ tasks: 3
    already degrades absent scope to workspace-wide. Dead actions invProjToggle/
    invScopeTeamToggle/invGuest removed; 9 dead i18n keys removed.
 Pins: data-a 486→485, data-v 80→79, catalogue 1819→1810. Suite 0 fail, i18n 0/0.
+
+## Round 3 (owner feedback 2026-11-11)
+1. **Guest role restored** in the invite form — selecting Guest swaps the Teams
+   field for a single-project picker (radios, D-13 invariant: exactly one
+   project). Send button disabled + hint until a project is picked; submitInvite
+   guards the Enter path; scope rides guest invites only ({teams:[],projects:[id]}).
+   New actions: invGuestProject. Re-added i18n keys: modal.guestProjectLabel/
+   guestProjectHint/inviteGuestNeedsProject.
+2. **Second Owner invitable** — server INV-01 revised: the ownerInviteForbidden
+   gate now fires only for sub-owner inviters (admin/member); an owner may mint
+   an owner invite (email required — HARD-02 unchanged, link-only owner invites
+   still impossible; accept path already applies invite.role verbatim).
+   invites role CHECK widened to include 'owner' with a boot table-rebuild
+   migration for existing DBs (sqliteOnly-gated; legacy 'guest' rows
+   pre-normalize to 'viewer' during the copy). Unknown roles still CHECK-reject.
+   invite-hierarchy tests updated (owner invite 201/role owner; admin still 403).
+Pins: data-a 485→486, data-v 79→80, catalogue 1810→1813. Suite 1385/0 fail,
+i18n scan 0/0. Also touched: db-adapter.mjs SQLITE_SCHEMA mirror.
