@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v2.1
-milestone_name: Member & Project Experience
-current_phase: 55
-current_phase_name: Multiple assignees per task (full parity)
-status: phase_complete
+status: Awaiting next milestone
 stopped_at: Phase 55 verified (8/8) + UAT complete (12/12, G-55-3 closed by 55-08) — v2.1 ready to ship
-last_updated: "2026-11-10T16:09:01.148Z"
-last_activity: 2026-11-10
-last_activity_desc: Phase 54 execution started
-state_head: 564fd53ff3c6a7b439d3634708e9accee22ad28b
+last_updated: "2026-11-11T21:42:25.644Z"
+last_activity: 2026-11-11
+last_activity_desc: Milestone v2.1 completed and archived
+state_head: 57cc1a35d65a56ccfce7253b8ade01567c69473b
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 7
   completed_plans: 7
+milestone_name: Member & Project Experience
+current_phase: 55
+current_phase_name: Multiple assignees per task (full parity)
 ---
 
 # STATE.md
@@ -30,11 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: 55 (Multiple assignees per task (full parity)) — COMPLETE
-Plan: 8 of 8 executed (55-01..55-07 + gap closure 55-08)
-Status: Verified (55-VERIFICATION.md passed 8/8) · UAT 12/12 · v2.1 shippable
-Closeout: override_closeout — v2.1 closed 2026-11-11 with 5 acknowledged deferred items (see ## Deferred Items); lint 0 errors, 1385 unit tests / 0 fail, e2e 109/109
-Last activity: 2026-11-11 — G-55-3 fixed (invite-accept revision contract + 409 recovery); suite 1385 tests / 0 fail
+Phase: Milestone v2.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-11 — Milestone v2.1 completed and archived
 
 ## v2.1 Phase 54 Plan Order (authored 2026-11-09, ported onto main 2026-11-10)
 
@@ -203,3 +202,7 @@ Disclosure record for items acknowledged at the v2.1 close (2026-11-11) via `aud
 | 2026-11-11 | 54 | Wave-2 gate observations — server.js lint remnants | Resolved since: server.js TZ_BY_LABEL + empty-block fixed at the v2.1 close |
 | 2026-11-11 | 54 | OPEN UAT — human Project/workbook check (54-05) | Owner-acknowledged skip: no Microsoft Project machine available (2026-11-10/11). Mechanical suite (27/27 mspdi + route + client) is the verification of record; check remains open for the first Project-equipped machine |
 | 2026-11-11 | 55 | 55-08 execution notes — pre-existing lint + accept-grant overwrite behaviour | Lint resolved since; accept-grant overwrite documented as accepted behaviour (membership row is source of truth) |
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

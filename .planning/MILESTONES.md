@@ -1,5 +1,30 @@
 # Milestones
 
+## v2.1 Member & Project Experience + Export + Multi-assignee parity (Shipped: 2026-11-11)
+
+**Phases completed:** 3 phases, 18 plans, 19 tasks
+
+**Key accomplishments:**
+- Per-team permission levels stored as `p.perms['team:'+teamId]` keys, enforced server-side through the doc-PUT funnel by `projectPermFor` on every content write, with the visibility oracle + client/MCP mirrors proven in lockstep.
+- Invite email draft bound with a silent `data-in` binding, Projects chips feeding the invite scope, and the guest = exactly-one-project invariant enforced by one shared server validator across create/edit/accept — with D-06 disable+hint in EN+FR and the MCP invite-tool ceiling pinned by test.
+- One `projectSettings` modal (General + Access tabs) replaces both projectModal and shareModal — per-team perm dropdowns on `p.perms['team:']`, full data-in discipline with per-field survival e2e in EN+FR, and honest concurrent-edit conflict surfacing.
+- Projects table gains a Members count column and a per-row settings gear to the unified modal's General tab; the project page is reduced to exactly one labeled Share button opening the Access tab, with dead keys pruned and pins bumped in the same commits.
+- Edit Team members box gains foldForSearch accent-insensitive search that never loses checked state; the owner's multi-team hint replaces the primary-team wording in EN+FR; the team page loses its invite button; the milestone i18n gate closes at 0 dead / 0 stale with the unit suite fully green.
+- Ordered MSPDI XML serializer (exact schema order, five Text field IDs, estimate-grammar durations, resolvable finish-to-start links) wired into the route and modal with EN+FR catalogue; Microsoft Project open check left open as UAT per owner skip verdict.
+- Read-time normalize migrates every task/subtask scalar `assignee` to an invariant-enforced `assignees[]` array (dedupe, junk/non-member strip, cap 5, scalar deleted), the write-guard re-derives `memberCanReadProject` per member over tasks AND subtasks, member removal sweeps arrays (empties stay `[]`), the reminder/digest passes read arrays per member, and assignment event logging is diff-based.
+- Per-assignee reminder fan-out proven by test — five multi-assignee fixtures (mixed-TZ windows, prefs-off isolation, replay exactly-once, private-project read-check isolation, subtask-exclusion) over the fan-out loop 55-01 landed; server-side scalar `assignee` reads verified gone (only normalize migration input remains).
+- Every client membership predicate, filter, group-by, sort and drag-drop path now speaks the `assignees[]` array — `includes(me)` membership everywhere, any-of filtering with an explicit `'none'`→empty-array sentinel, multi-assignee tasks land in every member's group, drag-drop replaces the array, and `assignableInProject` takes the array for the picker.
+- The single-assignee pop is replaced everywhere by a chip-pattern search modal (draft in `S.ui.assigneePick`, data-in-bound search, `assignableInProject` candidate filter, cap-5 block with EN+FR hint), the confirm applies the whole draft as one array write, and removed assignees now get the `notif.assignRemoved` notification while untouched members are never pinged.
+- The export model carries the full `assigneeIds` array per task/subtask row with comma-joined name cells (one row per task everywhere), per-member KPI/Members counts count a shared task once per member, and MSPDI emits one Resource per member plus one Assignment row per task×assignee pair in task-major order.
+- Subtasks render and write `assignees[]` through the shared picker modal (avStack rows, first-name +N label, scalar reads gone), and subtask `start` dates work end-to-end — detail-view Start row, `substart` date pop with inherited tips EN+FR, promotion inherit, and export model rows writing `s.start || t.start` for MS Project.
+- avStack(ids, 3) with an always-on overflow-chip tooltip replaces every scalar `av(t.assignee, …)` render across board/table/timeline/calendar/task-list/home/search/recents, with the 55-04 picker wiring and empty-assignee behavior preserved.
+- Project-scoped invite accept no longer moves the workspace revision (bumpRevision:false), 409s recover by re-hydrating + resetDirty instead of dead-locking the 30s poll, and assignableInProject offers p.members grantees — the assignee-picker roster is live without reboot.
+
+**Verification:** all 3 phases re-verified passed post-fix (53: 17/17 with 2 owner overrides · 54: 13/13 · 55: 8/8); requirements 13/13.
+**Known verification overrides:** 5 newly acknowledged, 7 carried forward. Closeout type: override_closeout — the human Microsoft Project/xlsx visual check (54-05) remains open, owner-acknowledged ("no Project machine"), carried to the backlog alongside the round-3 UI-spec adjustments recorded in 53-VERIFICATION.md.
+
+---
+
 ## v2.0 Project-level Permissions & Invitations (Shipped: 2026-11-09)
 
 **Phases completed:** 4 phases, 17 plans, 10 tasks

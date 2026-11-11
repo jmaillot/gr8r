@@ -1,38 +1,31 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-10 after Phase 54 planning port (v2.1)*
+*Last updated: 2026-11-11 — v2.1 milestone shipped*
 
-## Current Milestone: v2.1 Member & Project Experience — Phase 53 SHIPPED (2026-11-09), Phase 54 in progress
+## Current Milestone: none — v2.1 Member & Project Experience SHIPPED (2026-11-11)
 
-**Goal:** make the everyday surfaces — invite modal, team editing, project settings,
-projects table — match how people actually use workspaces.
+**Shipped:** 3 phases, 18 plans, 13/13 requirements. Per-team permission levels on
+projects (`p.perms['team:'+id]`, server-first `projectPermFor` gating); one unified
+`projectSettings` modal (General + Access) replacing projectModal + shareModal; invite
+modal round-3 (draft survives re-renders, guest = exactly-one-project radio picker,
+Owner invitable by owners, Member/Admin invites workspace-wide); projects table Members
+count + PSTAT status/target columns; teams polish (accent-insensitive member search,
+multi-team wording, team-page invite removed); project export (six-sheet Excel workbook
+with native charts + Gantt, ordered MSPDI XML with real task links and custom fields,
+flat CSV); multi-assignee full parity (`assignees[]` arrays end-to-end — migration,
+per-assignee reminder fan-out, chip-pattern picker modal, subtask assignees + start
+dates, avStack everywhere, export model rows); invite-accept revision fix (55-08: no
+revision bump on project-scoped grant, 409 hydrate-wins recovery). Verification: 53
+17/17 · 54 13/13 · 55 8/8, all re-verified post-fix. Gates: 1385 unit tests / 0 fail,
+e2e 109/109, lint 0 errors, i18n gate 0 dead / 0 stale. Known override: the human
+Microsoft Project/xlsx visual check (54-05) is owner-acknowledged as skipped (no
+Project machine); the mechanical suite is the verification of record. Full record:
+`milestones/v2.1-ROADMAP.md`, `milestones/v2.1-REQUIREMENTS.md`,
+`milestones/v2.1-phases/`.
 
-**Target features:**
-- Invite modal: email draft survives role/team changes (`data-in` state-binding fix);
-  Projects multi-select chips below Team selection; guest = exactly one project
-- Teams: searchable members box in Edit Team (`foldForSearch` pattern); replace the wrong
-  primary-team hint with multi-team wording; remove "Invite to workspace" from the team
-  detail page (invites only via Workspace > Members)
-- Unified project settings modal: General (desc/icon/color/lead/target date) + Access
-  (Teams with per-team perms view/comment/edit/full, Individual Members, General Access) —
-  replaces both the current projectModal and the Share modal, same settings on
-  Workspace > Projects and the project page
-- Projects table columns: Lead / Teams / Members (count) / Status (PSTAT pill +
-  task-based progress) / Target date; single Share button on the project page
-  (remove user+ icon and avatar-stack duplicates)
-
-**Shipped:** one ordered phase (53) delivering 13 requirements across 5 plans —
-per-team permission levels stored inside `p.perms['team:'+id]` and enforced server-first
-through `projectPermFor` on every content write (VISIBILITY_MODEL oracle + server/MCP/client
-mirror parity pinned by test); invite modal with a surviving draft (`data-in`), Projects
-chips, and one shared server validator enforcing guest = exactly one project across
-create/edit/accept; one unified `projectSettings` modal (General + Access) replacing both
-`projectModal` and `shareModal`, with per-team perm dropdowns and honest 409 conflict
-handling; projects table Members count + status/target columns and a single Share entry
-point; teams polish (accent-insensitive member search, multi-team ownership wording,
-team-page invite button removed) with the EN+FR i18n gate at 0 dead / 0 stale.
-Verification 17/17 must-haves; 1164 unit tests, 20 phase e2e in EN+FR, zero new runtime
-dependencies, zero migrations.
+**Next milestone:** not yet planned — open items carried to the backlog: the MS
+Project/Excel visual checks on the first Project-equipped machine; UI round-3 invite
+follow-ups recorded in 53-VERIFICATION.md.
 
 ### v2.1 milestone decisions (owner-validated 2026-11-09)
 
@@ -43,19 +36,6 @@ dependencies, zero migrations.
 - M-11 Date column = target date (p.due)
 - M-12 one unified settings modal replaces projectModal + share modal
 - M-13 one Share button on the project page (keep the labeled one)
-
-### Phase 54 — Project export (planned 2026-11-09, ready to execute)
-
-**Goal:** a member can export a project — current filtered view or whole project — as a
-formatted six-sheet Excel workbook with native charts and a Gantt carrying dependency
-arrows, as a Microsoft Project MSPDI XML file that opens with real task links, or as a
-flat CSV on the static demo. Requirements live in
-`.planning/phases/54-project-export-excel-report-mspdi-xml-and-csv/54-SPEC.md`
-(13 locked, ambiguity 0.11).
-
-**Caveat:** the plan artifacts were authored against a pre-Phase-53 tree
-(`src/pages/project.js` header still had the avatar stack and labeled Share button);
-line refs need a drift check before executing 54-01.
 
 ### v2.1 phase decisions (Phase 53, 2026-11-09)
 
