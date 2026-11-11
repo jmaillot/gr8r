@@ -1,5 +1,5 @@
 ---
-status: complete
+status: testing
 phase: 55-multiple-assignees-per-task-full-parity
 source: [55-01-SUMMARY.md, 55-02-SUMMARY.md, 55-03-SUMMARY.md, 55-04-SUMMARY.md, 55-05-SUMMARY.md, 55-06-SUMMARY.md, 55-07-SUMMARY.md]
 started: 2026-11-11T00:00:00Z
@@ -8,59 +8,75 @@ updated: 2026-11-11T12:00:00Z
 
 ## Current Test
 
-[testing complete]
+number: 3
+name: Assignee cap hint
+expected: |
+  Re-test after the 55-08 fix: invite a NEW test account to workspace + project, and while staying on the same page (no reload), open the assignee picker. The new member appears as a candidate immediately; also try assigning 6 members to see the cap hint (page.field.assigneeCap).
+awaiting: user response
 
 ## Tests
 
 ### 1. Cold Start Smoke Test
+
 expected: Kill any running server. Start the app from scratch. Server boots without errors, the read-time assignee migration runs cleanly, and a primary query (health check, homepage load, or login) returns live data with no migration errors in the log.
 result: pass
 
 ### 2. Assign multiple members to a task
+
 expected: Open the assignee picker (board card, table cell, task drawer, or context menu). It is a search modal listing project members filtered by who can be assigned. Pick 2–3 members — the task now shows an avatar stack (up to 3 + overflow count), and the drawer lists all of them with first names + "+N".
 result: pass
 
 ### 3. Assignee cap hint
+
 expected: Try to add a 6th assignee. The picker blocks it and shows a visible hint (`page.field.assigneeCap`), in EN and FR locales.
 result: issue
 reported: "i just invited 3 test accounts to the workspace + project, but i can only assign to the members that were in the project before the boot"
 severity: major
 
 ### 4. Removed-assignee notification
+
 expected: With members A and B assigned, remove B via the picker. B receives an inbox notification ("removed from task", Assignments category); A is not re-notified; untouched members never get pinged.
 result: pass
 
 ### 5. Any-of assignee filter
+
 expected: On board/table, filter by an assignee — tasks where ANY of the assigned members match appear. Filter by "none"/unassigned shows only tasks with an empty assignees array. Group-by-assignee puts a shared task under each of its assignees.
 result: pass
 note: group-by-assignee confirmed in List view; board intentionally disables grouping (project.js:109), user initially looked for it on the board toolbar
 
 ### 6. Drag-drop assignee replace
+
 expected: Drag a task card onto an assignee column/section. The assignees array is replaced by that single member (`[X]`), not appended. Dropping on unassigned clears the array.
 result: pass
 
 ### 7. My-Tasks membership & counts
+
 expected: After multi-assignment, My-Tasks shows the task for EACH assignee; Home stats, Overview, Members-page counts, layout badge and command palette all count the task once per member via includes.
 result: pass
 
 ### 8. Reminder fan-out per assignee
+
 expected: With a task due and 2+ assignees in different timezones/pref states, the reminder pass sends one reminder per assignee — each in their own TZ window, honoring their prefs (opted-out member gets none), and the ledger records exactly one row per member (no duplicates on re-run).
 result: pass
 
 ### 9. Exports carry all assignees
+
 expected: CSV and XLSX exports have a single joined "Assignees" column listing all members per task row. MSPDI export creates one resource per member and task-assignment pairs so MS Project shows all assignees. Per-member KPIs/Members sheet count shared tasks once per member.
 result: pass
 note: initial "one assignee in xlsx" report traced to a stale Docker container (pre-55 build); code path verified end-to-end via workbook probe (Tasks!E2/Board!E4 = joined names); passes after rebuild
 
 ### 10. Subtask assignees & start dates
+
 expected: A subtask can carry its own assignee set (picker in subtask mode, avatar stack on drawer rows). Subtask detail and drawer show a Start row defaulting to the parent task's start, overridable; export writes `s.start || t.start` so subtasks no longer fall back to the project start in MS Project.
 result: pass
 
 ### 11. Avatar stacks across all surfaces
+
 expected: Board cards, table cells (incl. mobile card), timeline, calendar, task-list mobile row, home rows, search results and recents popover all render 3-avatar + overflow stacks; hovering the +N chip names the remaining members. Single-assignee tasks render a single avatar, empty tasks stay Unassigned.
 result: pass
 
 ### 12. Member removal sweep
+
 expected: Remove a member from the workspace. Their id is stripped from every task and subtask assignees array (empty arrays preserved); no orphaned avatars or broken counts anywhere.
 result: pass
 
