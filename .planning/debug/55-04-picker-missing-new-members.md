@@ -1,8 +1,8 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Phase 55 assignee picker only offers members who were in the project before the last server boot; members invited+added to the project after boot are absent until a reboot."
 created: 2026-11-11T00:00:00Z
-updated: 2026-11-11T00:00:00Z
+updated: 2026-11-11 — resolved: root cause fixed by 55-08 (invite-accept no longer bumps revision; client 409 recovery hydrate-wins + resetDirty); UAT re-tested pass
 ---
 
 ## Current Focus
