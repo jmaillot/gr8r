@@ -4,8 +4,8 @@ milestone: v2.1
 milestone_name: Member & Project Experience
 current_phase: 55
 current_phase_name: Multiple assignees per task (full parity)
-status: executing_phase
-stopped_at: Phase 55 all 7 plans executed — verification next
+status: phase_complete
+stopped_at: Phase 55 verified (8/8) + UAT complete (12/12, G-55-3 closed by 55-08) — v2.1 ready to ship
 last_updated: "2026-11-10T16:09:01.148Z"
 last_activity: 2026-11-10
 last_activity_desc: Phase 54 execution started
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: 55 (Multiple assignees per task (full parity)) — PLANS COMPLETE, PENDING VERIFICATION
-Plan: 7 of 7 executed (Waves 1→5: 55-01; 55-02+55-05+55-03; 55-04; 55-06; 55-07)
-Status: Awaiting phase verification (/gsd:verify-work)
-Last activity: 2026-11-10 — All 7 plans executed; suite 1382 tests / 0 fail / 11 skips
+Phase: 55 (Multiple assignees per task (full parity)) — COMPLETE
+Plan: 8 of 8 executed (55-01..55-07 + gap closure 55-08)
+Status: Verified (55-VERIFICATION.md passed 8/8) · UAT 12/12 · v2.1 shippable
+Last activity: 2026-11-11 — G-55-3 fixed (invite-accept revision contract + 409 recovery); suite 1385 tests / 0 fail
 
 ## v2.1 Phase 54 Plan Order (authored 2026-11-09, ported onto main 2026-11-10)
 

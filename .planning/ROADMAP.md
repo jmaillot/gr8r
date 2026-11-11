@@ -14,7 +14,7 @@
 - ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
 - ✅ **v1.10 Extensions & Adapters** — Phases 45-48 (shipped 2026-11-07)
 - ✅ **v2.0 Project-level Permissions & Invitations** — Phases 49-52 (shipped 2026-11-09)
-- 🚧 **v2.1 Member & Project Experience** — Phase 53 shipped 2026-11-09; Phase 54 shipped 2026-11-10 (open UAT: MS Project/Excel visual checks)
+- ✅ **v2.1 Member & Project Experience** — Phases 53-55 (shipped 2026-11-11; open UAT carried to backlog: Phase 54 MS Project/Excel visual checks)
 
 ## Phases
 
@@ -174,7 +174,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 </details>
 
-### Phase 55: Multiple assignees per task (full parity)
+### Phase 55: Multiple assignees per task (full parity) — VERIFIED & COMPLETE (2026-11-11, 55-VERIFICATION.md passed 8/8; UAT 12/12, G-55-3 closed by 55-08)
 
 **Goal:** Tasks carry multiple assignees with full parity — schema (`assignee` → `assignees[]` with doc migration), UI everywhere (avatar stacks on board/list/table/timeline, multi-select assignee picker, "any of" filters, My-Tasks membership), server fan-out (one reminder per assignee with their own TZ + prefs, per-member write-guard and `assigneeOutOfScope`), and exports carrying all assignees.
 
@@ -182,7 +182,7 @@ Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
 
 **Requirements:** ASSIG-1, ASSIG-2, ASSIG-3, ASSIG-4, ASSIG-5, ASSIG-6
 **Depends on:** Phase 54
-**Plans:** 7 plans
+**Plans:** 8 plans (incl. gap closure 55-08)
 
 Plans:
 **Wave 1**
@@ -201,3 +201,6 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [x] 55-07-PLAN.md — Avatar stacks across all render surfaces
+
+**Gap closure** *(after UAT — G-55-3)*
+- [x] 55-08-PLAN.md — Invite-accept revision contract + client 409 recovery + p.members assignability
