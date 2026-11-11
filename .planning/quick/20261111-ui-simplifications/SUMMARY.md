@@ -50,3 +50,9 @@ Pins: data-a 486→485, data-v 80→79, catalogue 1819→1810. Suite 0 fail, i18
    invite-hierarchy tests updated (owner invite 201/role owner; admin still 403).
 Pins: data-a 485→486, data-v 79→80, catalogue 1810→1813. Suite 1385/0 fail,
 i18n scan 0/0. Also touched: db-adapter.mjs SQLITE_SCHEMA mirror.
+
+## Round 4 (owner feedback 2026-11-11)
+Assignee picker candidates now use the exact Teams-picker visual: `.tmpls`
+3-column card grid, `.opt` cards (avatar + bold name, check icon when on,
+padding 8px) instead of the one-per-line checkbox rows. Search, cap-block,
+draft chips and toggle semantics unchanged.

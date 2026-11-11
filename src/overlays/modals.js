@@ -486,15 +486,15 @@ export function assigneePickModal(m, H) {
         : ''
     }
     ${atCap ? `<div class="alert info" style="margin:0">${ic('circle-alert', 14)}<span>${t('page.field.assigneeCap', { n: ASSIGNEE_CAP })}</span></div>` : ''}
-    <div class="col" style="gap:2px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:4px">
+    <div class="tmpls" role="group" aria-label="${t('act.assignTo')}">
       ${
         cands
           .map(mm => {
             const on = st.draft.includes(mm.id);
             const blocked = !on && atCap;
-            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:6px 8px;flex-direction:row;align-items:center;gap:8px;border-radius:var(--r)">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${mm.id === D().me ? `<span class="faint" style="font-weight:400">${t('common.youSuffix').trim()}</span>` : ''}<span class="cbox" style="margin-left:auto;width:15px;height:15px;border:1.5px solid var(--border);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0${on ? ';background:var(--accent);border-color:var(--accent)' : ''}">${on ? ic('check', 11) : ''}</span></button>`;
+            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:8px">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${on ? ic('check', 13) : ''}</button>`;
           })
-          .join('') || `<div class="mi faint" style="cursor:default">${t('modal.assigneeNoMatches')}</div>`
+          .join('') || `<div class="mi faint" style="cursor:default;grid-column:1/-1">${t('modal.assigneeNoMatches')}</div>`
       }
     </div>
   </div>
