@@ -617,7 +617,8 @@ Object.defineProperty(globalThis, 'navigator', {
 const { register } = await import('node:module');
 register(new URL('./virtual-icons-loader.mjs', import.meta.url), import.meta.url);
 
-const { applyDoc, D, memberInProjectTeams, memberTeams, assignableInProject } = await import('../src/core/store.js');
+const { applyDoc, D, S, memberInProjectTeams, memberTeams, assignableInProject, hasPendingChanges, resetDirty, hydrateFromServer, save } = await import('../src/core/store.js');
+const { api } = await import('../src/core/api.js');
 const { emitMentions } = await import('../src/actions/actions.js');
 
 function memberDoc(members, teams, projects = []) {
@@ -694,6 +695,71 @@ test('TEAM-04: the picker predicate assignableInProject filters picker options',
   assert.equal(assignableInProject(inSet, { id: 'p1', teams: [] }, null), true, 'an unscoped project (empty teams[]) keeps everyone assignable');
   assert.equal(assignableInProject({ id: 'm1', team: 't1' }, scoped, null), true, 'legacy scalar member shape tolerated');
   assert.equal(assignableInProject(null, scoped, null), false, 'a null member is tolerated');
+});
+
+/* 55-08 (G-55-3, same-surface secondary): a member granted to a team-scoped
+   project DIRECTLY — their id in p.members (Share's push, the project-scoped
+   invite-accept grant) — is assignable, even with zero team overlap. */
+test('TEAM-04 (55-08): a p.members grantee of a team-scoped project is assignable', () => {
+  const scoped = { id: 'p1', teams: ['t1'], members: ['m_grant'] };
+  const grantee = { id: 'm_grant', teams: ['t9'] };
+  const stranger = { id: 'm9', teams: ['t9'] };
+  const teammate = { id: 'm1', teams: ['t1'] };
+  assert.equal(assignableInProject(grantee, scoped, null), true, 'a p.members grantee of a team-scoped project is offered');
+  assert.equal(assignableInProject(stranger, scoped, null), false, 'a member outside teams, p.members and current assignees is excluded');
+  assert.equal(assignableInProject(teammate, scoped, null), true, 'the team-intersection term is untouched (D-55-11 assignees term aside)');
+  const unscoped = { id: 'p2', teams: [], members: [] };
+  assert.equal(assignableInProject(grantee, unscoped, null), true, 'an unscoped project (empty teams[]) keeps the broad-access branch');
+});
+
+/* 55-08: the 409 recovery contract at the store level — simulate the conflict
+   (S.ui.conflict + a pending change), recover via hydrateFromServer (applyDoc
+   adopts the server copy and clears the conflict) plus the resetDirty helper,
+   then assert BOTH pollNotifs guards (main.js S.ui.conflict + hasPendingChanges)
+   pass: the 30s poll hydration is unblocked post-recovery. Hydrate wins — the
+   pending payload is gone after applyDoc replaces S.data. */
+test('55-08 recovery: applyDoc + resetDirty clear both pollNotifs guards after a 409', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async path => {
+    const json = body => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+    if (path === '/api/config') return json({ app: 'projects', signup: true, mail: false });
+    if (path === '/api/auth/login') {
+      return json({ user: { id: 'u_boss', email: ADMIN.email, name: 'Boss', workspaces: [{ id: 'w1', name: 'Acme', slug: 'acme', role: 'owner' }] } });
+    }
+    if (path === '/api/workspaces/acme') {
+      return json({
+        id: 'w1', name: 'Acme', slug: 'acme', role: 'owner', revision: 7,
+        doc: { data: { me: 'm_boss', members: [{ id: 'm_boss', name: 'Boss', status: 'active' }], teams: [], projects: [], projOrder: [], tasks: [], comments: [], notifs: [], activity: [] }, views: {} },
+      });
+    }
+    return { ok: false, status: 404, text: async () => '{}' };
+  };
+  try {
+    assert.equal(await api.init(), true, 'the api enables against the mock config');
+    const signedIn = await api.login(ADMIN.email, 'whatever');
+    assert.equal(signedIn.ok, true, 'the mock login adopts the account');
+
+    /* A pending change: save() marks dirty while the api is enabled, signed in
+       and NOT in conflict. */
+    S.ui.conflict = false;
+    save();
+    assert.equal(hasPendingChanges(), true, 'a change is pending');
+
+    /* The 409 lands: the conflict flag locks both save and the 30s poll. */
+    S.ui.conflict = true;
+    assert.equal(hasPendingChanges(), true, 'the pending change survives the conflict (no dirty reset yet)');
+
+    /* The recovery path: hydrateFromServer → applyDoc (adopts the server
+       revision, clears the conflict), then resetDirty(). */
+    const res = await hydrateFromServer('acme');
+    assert.equal(res.ok, true, 'the hydrate succeeds against the mock server');
+    assert.equal(S.ui.conflict, false, 'applyDoc cleared S.ui.conflict (guard 1 passes)');
+    resetDirty();
+    assert.equal(hasPendingChanges(), false, 'resetDirty cleared the pending flag (guard 2 passes)');
+    assert.equal(api.revision, 7, 'the adopted server revision is live for the next write');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 /* TEAM-02..05 composite (Phase 28 close-out): one member, one team set — the
