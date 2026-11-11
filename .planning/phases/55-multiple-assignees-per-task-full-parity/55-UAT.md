@@ -75,7 +75,9 @@ skipped: 0
 
 - gap_id: G-55-3
   truth: "Newly invited members appear as assignee candidates in the picker after joining workspace + project"
-  status: failed
+  status: resolved
+  resolved_by: 55-08
+  resolved_at: 2026-11-11
   reason: "User reported: invited 3 test accounts to workspace + project, but can only assign to members that were in the project before the boot"
   severity: major
   test: 3
