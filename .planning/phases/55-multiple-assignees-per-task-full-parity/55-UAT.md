@@ -1,5 +1,5 @@
 ---
-status: testing
+status: complete
 phase: 55-multiple-assignees-per-task-full-parity
 source: [55-01-SUMMARY.md, 55-02-SUMMARY.md, 55-03-SUMMARY.md, 55-04-SUMMARY.md, 55-05-SUMMARY.md, 55-06-SUMMARY.md, 55-07-SUMMARY.md]
 started: 2026-11-11T00:00:00Z
@@ -8,11 +8,7 @@ updated: 2026-11-11T12:00:00Z
 
 ## Current Test
 
-number: 3
-name: Assignee cap hint
-expected: |
-  Re-test after the 55-08 fix: invite a NEW test account to workspace + project, and while staying on the same page (no reload), open the assignee picker. The new member appears as a candidate immediately; also try assigning 6 members to see the cap hint (page.field.assigneeCap).
-awaiting: user response
+[testing complete]
 
 ## Tests
 
