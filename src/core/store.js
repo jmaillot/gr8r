@@ -523,14 +523,16 @@ export function memberInProjectTeams(m, p) {
 /* TEAM-04: assignment-picker predicate — every assignee/subassignee option
    source filters through this. A project with an empty teams[] is unscoped:
    every member stays assignable (mirrors canSee's broad-access semantics).
-   Takes the task's CURRENT `assignees[]` array (D-55-11) — members already in
-   the array are always offered so existing state is never silently hidden
-   from the picker. A legacy scalar third argument (subtask popover until
+   A member granted to a team-scoped project directly — their id in p.members
+   (Share's push, the project-scoped invite-accept grant, 55-08) — is also
+   assignable. Takes the task's CURRENT `assignees[]` array (D-55-11) — members
+   already in the array are always offered so existing state is never silently
+   hidden from the picker. A legacy scalar third argument (subtask popover until
    Plans 55-04/55-06 migrate) is tolerated as a one-element array. */
 export function assignableInProject(m, p, currentAssignees) {
   const cur = Array.isArray(currentAssignees) ? currentAssignees : currentAssignees ? [currentAssignees] : [];
   if (!p || projTeams(p).length === 0) return true;
-  return cur.includes(m?.id) || memberInProjectTeams(m, p);
+  return cur.includes(m?.id) || memberInProjectTeams(m, p) || (Array.isArray(p.members) && p.members.includes(m?.id));
 }
 /* Phase 29 SCOPE-04 (A4): send-time emit eligibility for notification
    targets. D-05 forbids projecting scope details, so this derives from the
