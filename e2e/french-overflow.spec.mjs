@@ -513,7 +513,10 @@ async function frenchMarker(page, route, extra) {
   if (route !== 'join' && route !== 'auth') await expect(page.locator('.content')).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
   if (route === 'auth') {
-    await expect(page.getByRole('heading', { name: fmt('page.auth.welcomeBack') })).toBeVisible();
+    /* [2026-11-11] the auth redesign dropped the 'Welcome back' heading —
+       the honest French marker is the Sign in button, straight from the
+       catalogue. */
+    await expect(page.getByRole('button', { name: fmt('page.auth.signIn') })).toBeVisible();
   } else if (route === 'join') {
     await expect(page.getByRole('heading', { name: fmt('page.auth.joinTitle', { name: `Locale sweep ${sweep.run}` }) })).toBeVisible();
   } else if (route === 'project') {

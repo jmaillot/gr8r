@@ -44,9 +44,10 @@ async function signIn(page, account, lang) {
 }
 
 /* The full interaction sequence that used to wipe the draft: two role
-   changes (each re-renders — the scope section is D-04-gated on Admin),
-   a team chip toggle and a project chip toggle (each re-renders).
-   Requires ≥1 project in the workspace so the Projects chip exists. */
+   changes and a team chip toggle — every one of them re-renders the
+   modal. [2026-11-11 round 3] the multi-project scope chips are retired
+   (SCOPE-01): the only scope picker left is the Guest single-project
+   radio row, exercised by the dedicated D-13 tests below. */
 async function interactAndSurvive(page) {
   await page.locator('#inv-emails').fill(`${EMAIL_ONE}, ${EMAIL_TWO}`);
 
@@ -55,7 +56,6 @@ async function interactAndSurvive(page) {
   await role.selectOption({ label: 'Member' });
 
   await page.locator('button[data-a="invTeamToggle"]').first().click();
-  await page.locator('button[data-a="invProjToggle"]').first().click();
 
   /* A settle window so a background poll re-render — if one fires — has
      its chance to wipe the unbound draft. */
@@ -66,7 +66,7 @@ async function interactAndSurvive(page) {
   expect(value, 'the typed emails must survive every re-render').toContain(EMAIL_TWO);
 }
 
-test('typed invite emails survive role changes, team chip toggles and project chip toggles (EN) (INVT-01)', async ({ browser }) => {
+test('typed invite emails survive role changes and team chip toggles (EN) (INVT-01)', async ({ browser }) => {
   const run = newRunId();
   const { account, client } = await createAccount(BASE_URL, run, 'draft-en', 'Draft EN Owner', { locale: 'en', workspace: `draft-en-${run}` });
   await addNamedProjects(client, account.slug, [{ id: 'p_draft_a', key: 'draft-a', name: 'Draft Alpha' }]);
@@ -129,10 +129,11 @@ async function addNamedProjects(client, slug, defs) {
   if (put.status !== 200) throw new Error(`doc PUT failed with HTTP ${put.status}`);
 }
 
-/* The guest D-06 state: with the Guest role selected and ≠1 project the
-   send button is disabled and the localized hint shows; selecting exactly
-   one project re-enables the send. Chip toggles re-render, so the state
-   re-evaluates on every toggle. */
+/* The guest D-13 state [2026-11-11 round 3]: with the Guest role selected
+   and ≠1 project the send button is disabled and the localized hint shows;
+   the single-project picker is a radio row (A.invGuestProject REPLACES the
+   pick — exactly one, never more), so picking one project re-enables the
+   send and the pick cannot grow past one. */
 async function assertGuestDisableHint(page, hint) {
   const role = page.locator('#inv-role');
   await role.selectOption({ label: 'Guest' });
@@ -140,15 +141,18 @@ async function assertGuestDisableHint(page, hint) {
   await expect(submit, 'send disabled with zero projects for a guest').toBeDisabled();
   await expect(page.getByText(hint), 'the localized hint is visible').toBeVisible();
 
-  // Toggle the first PROJECT chip on, then off (multi-select preserved for
-  // every role — the invalid state is disable+hint, never a clamp).
-  await page.locator('button[data-a="invProjToggle"]').first().click();
+  // Pick the first project: exactly one replaces the empty pick and the
+  // send re-enables (disable+hint, never a clamp — picking is the fix).
+  await page.locator('button[data-a="invGuestProject"]').first().click();
   await expect(submit, 'one project enables the send').toBeEnabled();
   await expect(page.getByText(hint)).toHaveCount(0);
 
-  await page.locator('button[data-a="invProjToggle"]').first().click();
-  await expect(submit, 'deselecting the only project disables again').toBeDisabled();
-  await expect(page.getByText(hint), 'the hint returns on the invalid state').toBeVisible();
+  // Radio semantics: picking a second project REPLACES the first — still
+  // exactly one, still enabled.
+  await page.locator('button[data-a="invGuestProject"]').nth(1).click();
+  await expect(submit, 'the pick replaces, never grows past one').toBeEnabled();
+  const picked = await page.locator('button[data-a="invGuestProject"][aria-checked="true"]').count();
+  expect(picked, 'exactly one project radio is checked').toBe(1);
 
   await role.selectOption({ label: 'Member' });
   await expect(submit, 'a non-guest role is never disabled by the guest rule').toBeEnabled();
@@ -157,13 +161,16 @@ async function assertGuestDisableHint(page, hint) {
 test('guest role with zero projects disables send with an English hint; one project enables it (D-06, INVT-03)', async ({ browser }) => {
   const run = newRunId();
   const { account, client } = await createAccount(BASE_URL, run, 'guest-en', 'Guest EN Owner', { locale: 'en', workspace: `guest-en-${run}` });
-  await addNamedProjects(client, account.slug, [{ id: 'p_guest_a', key: 'guest-a', name: 'Guest Alpha' }]);
+  await addNamedProjects(client, account.slug, [
+    { id: 'p_guest_a', key: 'guest-a', name: 'Guest Alpha' },
+    { id: 'p_guest_b', key: 'guest-b', name: 'Guest Bravo' },
+  ]);
   const context = await browser.newContext({ baseURL: BASE_URL, locale: 'en-US', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
   const page = await context.newPage();
   try {
     await signIn(page, account, 'en');
     await openInviteModal(page);
-    await assertGuestDisableHint(page, 'Guests need exactly one project');
+    await assertGuestDisableHint(page, 'Pick one project for the guest first.');
   } finally {
     await context.close();
   }
@@ -172,22 +179,25 @@ test('guest role with zero projects disables send with an English hint; one proj
 test('guest role with zero projects disables send with a French hint; one project enables it (D-06, INVT-03)', async ({ browser }) => {
   const run = newRunId();
   const { account, client } = await createAccount(BASE_URL, run, 'guest-fr', 'Guest FR Owner', { locale: 'fr', workspace: `guest-fr-${run}` });
-  await addNamedProjects(client, account.slug, [{ id: 'p_guest_fr', key: 'guest-fr', name: 'Invité Alpha' }]);
+  await addNamedProjects(client, account.slug, [
+    { id: 'p_guest_fr', key: 'guest-fr', name: 'Invité Alpha' },
+    { id: 'p_guest_fr2', key: 'guest-fr2', name: 'Invité Bravo' },
+  ]);
   const context = await browser.newContext({ baseURL: BASE_URL, locale: 'fr-FR', extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
   const page = await context.newPage();
   try {
     await signIn(page, account, 'fr');
     await openInviteModal(page);
-    await assertGuestDisableHint(page, 'Les invités ont besoin d’exactement un projet');
+    await assertGuestDisableHint(page, 'Choisissez d’abord un projet pour l’invité.');
   } finally {
     await context.close();
   }
 });
 
-test('project chips feed the invite scope: toggling two project chips sends both ids (INVT-02)', async ({ browser }) => {
+test('the guest single-project pick feeds the invite scope: exactly one id rides the POST (INVT-02) [round 3]', async ({ browser }) => {
   const run = newRunId();
   const { account, client } = await createAccount(BASE_URL, run, 'chips', 'Chips Owner', { locale: 'en', workspace: `chips-${run}` });
-  // Two named projects in the workspace doc, so the Projects chips have
+  // Two named projects in the workspace doc, so the guest picker has
   // distinguishable labels to click.
   await addNamedProjects(client, account.slug, [
     { id: 'p_chips_a', key: 'chips-a', name: 'Chips Alpha' },
@@ -199,22 +209,19 @@ test('project chips feed the invite scope: toggling two project chips sends both
   try {
     await signIn(page, account, 'en');
     await openInviteModal(page);
-    // The modal opens with the Admin role selected (the scope section is
-    // D-04-gated on Admin); switch to Member to reveal the scope pickers.
-    await page.locator('#inv-role').selectOption({ label: 'Member' });
-    // The Projects chips row (scopeProjectsLabel) now lists PROJECTS, not teams.
-    const projChips = page.locator('button[data-a="invProjToggle"]');
-    await expect(page.getByText('Projects they can see')).toBeVisible();
-    await projChips.filter({ hasText: 'Chips Alpha' }).click();
-    await projChips.filter({ hasText: 'Chips Bravo' }).click();
+    // [2026-11-11 round 3] the scope rides ONLY a Guest invite (D-13):
+    // pick exactly one project through the radio row, then send.
+    await page.locator('#inv-role').selectOption({ label: 'Guest' });
+    await expect(page.getByText('Project the guest can see')).toBeVisible();
+    await page.locator('button[data-a="invGuestProject"]').filter({ hasText: 'Chips Bravo' }).click();
+    await expect(page.locator('#inv-submit')).toBeEnabled();
 
     const reqPromise = page.waitForRequest(r => r.url().endsWith('/invites') && r.method() === 'POST');
     await page.locator('#inv-emails').fill('chips-scope@example.com');
     await page.locator('#inv-submit').click();
     const req = await reqPromise;
     const body = req.postDataJSON();
-    const ids = (body.scope?.projects || []).sort();
-    expect(ids, 'both toggled project ids ride the POST scope').toEqual(['p_chips_a', 'p_chips_b']);
+    expect(body.scope?.projects, 'the picked project id rides the POST scope').toEqual(['p_chips_b']);
   } finally {
     await context.close();
   }

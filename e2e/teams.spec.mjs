@@ -21,8 +21,6 @@ import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, newRunId } from
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
 
-const CATALOGUE = { en, fr };
-
 /* A member fixture: signup → owner invite → accept. Each account presents
    its own run-unique IP so the per-IP throttles never cross. */
 async function addMember(base, ownerClient, slug, run, tag, name) {

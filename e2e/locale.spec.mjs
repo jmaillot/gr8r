@@ -86,11 +86,11 @@ const flashed = page => page.evaluate(() => window.__flash);
 
 test('a French browser sees the unauthenticated surfaces in French on first paint (D-08, LOC-06)', async ({ browser }) => {
   const context = await newContext(browser, alice, 'fr-FR');
-  await recordPaints(context, ['Welcome back', 'Sign in', 'Email']);
+  await recordPaints(context, ['Sign in', 'Email', 'Password']);
   const page = await context.newPage();
   try {
     await page.goto('/');
-    await expect(page.getByText('Bon retour')).toBeVisible();
+    await expect(page.getByLabel('Mot de passe', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Se connecter' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('fr');
     expect(await flashed(page), 'English painted before the negotiated French').toEqual([]);
@@ -110,7 +110,7 @@ test('a signed-in account boots in its own language from the first paint, whatev
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('fr');
 
     /* A fresh load: from here on no English word may ever paint. */
-    await recordPaints(context, ['Projects', 'My tasks', 'Welcome back']);
+    await recordPaints(context, ['Projects', 'My tasks', 'Sign out']);
     await page.reload();
     await expect(page.getByRole('button', { name: 'Projets' }).first()).toBeVisible();
     expect(await flashed(page), 'English painted before the account language').toEqual([]);
@@ -170,7 +170,7 @@ test('the selector switches the interface instantly without a reload and the cho
     /* Sign-out falls back to the negotiated language (D-10); sign-in brings the account's back. */
     await page.getByRole('button', { name: 'Menu du compte' }).click();
     await page.getByRole('button', { name: 'Se déconnecter' }).click();
-    await expect(page.getByText('Welcome back')).toBeVisible();
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
     await signInPage(page, carol, LOGIN.en);
     await expect(page.getByRole('button', { name: 'Projets' }).first()).toBeVisible();

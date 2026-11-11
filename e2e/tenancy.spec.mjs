@@ -49,7 +49,7 @@ test("a foreign workspace slug falls back to the owner's own workspace", async (
     await expect(page.getByRole('heading', { name: fixtures.keys.betaProjectName })).toHaveCount(0);
 
     await page.goto(`/w/${fixtures.slugs.acme}/project/${fixtures.keys.betaProject}`);
-    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Project not found' })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -69,7 +69,7 @@ test('tenant two sees Beta, and never the Acme document', async ({ browser }) =>
     await expect(page.getByRole('heading', { name: fixtures.keys.publicProjectName })).toHaveCount(0);
 
     await page.goto(`/w/${fixtures.slugs.acme}/project/${fixtures.keys.publicProject}`);
-    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Project not found' })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -93,7 +93,7 @@ test('a private project is invisible to a member who is not on it, and reachable
 
     /* The deep link answers the generic 404 and still leaks nothing. */
     await page.goto(`/w/${fixtures.slugs.acme}/project/${fixtures.keys.privateProject}`);
-    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Project not found' })).toBeVisible();
     await expect(page.getByText(fixtures.keys.privateProjectName)).toHaveCount(0);
   } finally {
     await carol.context.close();
@@ -118,7 +118,9 @@ test('a role change does not lock the workspace out of writing', async ({ browse
     await page.getByRole('button', { name: 'Members', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Members', level: 1 })).toBeVisible();
 
-    const carol = page.getByRole('row').filter({ hasText: 'Carol Member' });
+    /* Filter by the run-unique email — display names are shared across the
+       fixture members (and substring matching would hit every row). */
+    const carol = page.getByRole('row').filter({ hasText: fixtures.accounts.carol.email });
     await carol.getByRole('button', { name: 'Member', exact: true }).click();
     await page.getByRole('button', { name: /^Admin Manage members/ }).click();
     await expect(page.getByText(/Carol Member is now an Admin/)).toBeVisible();
