@@ -2,6 +2,7 @@
 ## 54-02 — deferred (out of scope, pre-existing on main before this plan)
 
 - `npm run lint` fails on HEAD (50 errors across unrelated files: db-adapter.mjs no-undef process/console ×10, test/browser-push.test.mjs no-undef document/localStorage/Notification, mailer.js no-control-regex, e2e/teams.spec.mjs + several test files no-unused-vars, server.js TZ_BY_LABEL/empty block, context-menu.js canManageProject no-undef). Verified pre-existing by running eslint on db-adapter.mjs with the HEAD config (same 10 errors). Not caused by 54-02; the touched files (eslint.config.js, test/dependencies.test.mjs, test/export-prohibition.test.mjs, test/helpers/*.mjs) lint clean and export/**/*.js node globals are recognised.
+  status: acknowledged
 
 ## Wave-2 gate observations (2026-11-10, orchestrator)
 
@@ -11,6 +12,7 @@
   the fr.json NBSP fixes (export.title guillemets, export.notice.staticMode colon).
 - The pre-existing server.js lint errors (TZ_BY_LABEL, empty block) recorded by the 54-02
   executor remain — out of phase scope, untouched.
+  status: acknowledged
 
 ## OPEN UAT ENTRY — human Project/workbook check (54-05 Task 3, 2026-11-10)
 
@@ -33,3 +35,4 @@ Run `node test/make-export-samples.mjs`, then:
    the six sheets, the three charts, the Gantt bars and at least one dependency arrow render.
 
 Closes R8 acceptance on confirmation.
+  status: acknowledged

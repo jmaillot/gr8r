@@ -33,6 +33,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 55 (Multiple assignees per task (full parity)) — COMPLETE
 Plan: 8 of 8 executed (55-01..55-07 + gap closure 55-08)
 Status: Verified (55-VERIFICATION.md passed 8/8) · UAT 12/12 · v2.1 shippable
+Closeout: override_closeout — v2.1 closed 2026-11-11 with 5 acknowledged deferred items (see ## Deferred Items); lint 0 errors, 1385 unit tests / 0 fail, e2e 109/109
 Last activity: 2026-11-11 — G-55-3 fixed (invite-accept revision contract + 409 recovery); suite 1385 tests / 0 fail
 
 ## v2.1 Phase 54 Plan Order (authored 2026-11-09, ported onto main 2026-11-10)
@@ -190,3 +191,15 @@ migrations; full suite green; EN+FR i18n gate (server keys included).
 | Date | Task | Notes |
 |------|------|-------|
 | 2026-11-11 | ui-simplifications | Assignee picker inline chips; member edit teams-only (scope editor removed); new project without team chips |
+
+## Deferred Items
+
+Disclosure record for items acknowledged at the v2.1 close (2026-11-11) via `audit-open acknowledge`. Suppression lapses if the artifact's state changes again.
+
+| Date | Phase | Item | Acknowledgement |
+|------|-------|------|-----------------|
+| 2026-11-11 | 53 | DEPLOY.md ENOENT in totp-rewrap tests + 11 pre-existing e2e failures | Resolved since: DEPLOY.md relocated to docs/DEPLOY.md (5e4d954); the 11 e2e failures fixed at the v2.1 close (109/109 green) |
+| 2026-11-11 | 54 | 54-02: pre-existing lint errors on HEAD (50) | Resolved since: lint 55→0 at the v2.1 close (globals config, dead vars, control-regex disables) |
+| 2026-11-11 | 54 | Wave-2 gate observations — server.js lint remnants | Resolved since: server.js TZ_BY_LABEL + empty-block fixed at the v2.1 close |
+| 2026-11-11 | 54 | OPEN UAT — human Project/workbook check (54-05) | Owner-acknowledged skip: no Microsoft Project machine available (2026-11-10/11). Mechanical suite (27/27 mspdi + route + client) is the verification of record; check remains open for the first Project-equipped machine |
+| 2026-11-11 | 55 | 55-08 execution notes — pre-existing lint + accept-grant overwrite behaviour | Lint resolved since; accept-grant overwrite documented as accepted behaviour (membership row is source of truth) |
