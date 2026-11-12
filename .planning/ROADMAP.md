@@ -187,3 +187,13 @@ D-05 owner rulings arriving during execution
 | 59. Browser Push | 0/? | Not started | - |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
 | 61. Notification Trim | 0/? | Not started | - |
+
+## Backlog
+
+### Phase 999.1: Follow-up — Phase 57 deferred UAT follow-up: Test 1 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 57 verification
+**Source phase:** 57
+**Deferred at:** 2026-11-12 during /gsd-verify-work 57 session completion
+**Follow-ups:**
+- [ ] Test 1: Affichage sur téléphone fortement tronqué avec le bouton colonnes (layout mobile de la table des tâches) (deferred 2026-11-12)
