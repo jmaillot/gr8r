@@ -36,7 +36,7 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 - [ ] **VIEW-03**: General Access can be set beyond private/public — at minimum per-workspace default visibility rules (owner-configurable; precise granularity locked at discuss-phase)
 
 ## Delivery Infrastructure
-- [ ] **DELIV-01**: The e2e server refuses to serve a stale dist/ (mtime or manifest-hash check, fail-closed) so spec failures never mask source bugs
+- [x] **DELIV-01**: The e2e server refuses to serve a stale dist/ (mtime or manifest-hash check, fail-closed) so spec failures never mask source bugs
 - [ ] **DELIV-02**: Vite build produces no chunk over 500 kB (dynamic imports for locales and heavy pages), with the EN base catalogue kept in the entry chunk so locale chunks cannot race first paint
 - [ ] **I18N-01**: The locale registry/loaders/gate accept a new locale by adding one JSON file (no code change), proven by a fixture locale test — no new shipped language in this milestone
 
@@ -58,7 +58,7 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 ## Traceability
 | REQ | Phase | Status |
 |-----|-------|--------|
-| DELIV-01 | Phase 56 | Pending |
+| DELIV-01 | Phase 56 | Complete |
 | DELIV-02 | Phase 56 | Pending |
 | I18N-01 | Phase 56 | Pending |
 | VIEW-01 | Phase 57 | Pending |
