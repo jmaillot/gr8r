@@ -1,3 +1,20 @@
+---
+gsd_state_version: "1.0"
+milestone: v2.2
+milestone_name: Notifications, Search & Delivery
+current_phase: 56
+current_phase_name: Delivery Infrastructure
+status: roadmap created, awaiting approval → `/gsd-plan-phase 56`
+stopped_at: discuss complete — ready for /gsd-plan-phase 56
+last_updated: "2026-11-12T08:40:18.727Z"
+state_head: 48e4bf7325371f65dbbdb93e8ae4de79fb1f5aa3
+progress:
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # STATE.md
 
 ## Project Reference
@@ -37,18 +54,21 @@ dashboards) without breaking the zero-dependency discipline
 ## Accumulated Context
 
 ### Locked decisions (do not re-open)
+
 - **D-12 amended ×2 (2026-11-12):** `web-push@4.0.0` is runtime dep #2 (pg precedent)
 - Saved views/columns live in a server `saved_views` table (Phase 34 notif_prefs precedent)
 - Admin dashboard is power-admin: private projects fully visible to admins in aggregates (DASH-04)
 - v2.1 decisions M-09..M-13 and phase decisions D-53-1..4 remain in force
 
 ### Sequencing rationale (from research SUMMARY.md)
+
 - Phase 56 first: every later phase's e2e runs on the dist guard + split build
 - Phase 58 (FTS) before Phase 59 (push): the doc-PUT funnel `newNotifs` diff site is
   edited once per concern, never concurrently
 - Phase 61 last: gated on D-05 owner rulings arriving during execution
 
 ### Known flags for planning
+
 - Phase 58: FTS5 needs Node ≥ 22.16 in `node:sqlite` — probe at boot, LIKE fallback if
   absent; tokenizer decision locks at table creation (needs `--research-phase`)
 - Phase 59: needs `--research-phase` (RFC 8291/VAPID, real-device Safari/iOS UAT)
@@ -58,6 +78,7 @@ dashboards) without breaking the zero-dependency discipline
   means admins see private content — members never see the dashboard at all, 403)
 
 ### Standing constraints (every phase)
+
 - Full suite green; EN+FR i18n gate (server keys included); lint clean
 - Phase 38 suppression + no-double-send invariants pass unmodified
 - Zero migrations where feasible; additive rows use the Phase 34 guarded recipe
@@ -66,6 +87,10 @@ dashboards) without breaking the zero-dependency discipline
   redaction funnels, byte-level leak tests
 
 ## Session Continuity
+
+**Last session:** 2026-11-12T08:40:18.709Z
+**Stopped at:** discuss complete — ready for /gsd-plan-phase 56
+**Resume file:** /tmp/opencode/56-resume.txt
 
 **Last action:** created v2.2 roadmap (Phases 56–61) + traceability in REQUIREMENTS.md
 **Next action:** orchestrator presents roadmap → owner approval → `/gsd-plan-phase 56`
