@@ -251,9 +251,7 @@ test('a member never receives a private project or anything that references it',
   for (const needle of ['p_sec', 't_sec', 'c_sec', 'f_sec', 'a_sec', 'n_sec', 'e_sec', 'sv_sec', 'Classified Nebula', 'Secret task']) {
     assert.equal(jsonHas(bobView.doc, needle), false, `Bob's document has no ${needle}`);
   }
-  assert.equal(bobView.doc.views['p:p_sec'], undefined, 'hidden project view state removed');
-  assert.equal(bobView.doc.views['sv:sv_sec'], undefined, 'hidden saved-view state removed');
-  assert.deepEqual(bobView.doc.views.tasks.filters, [{ f: 'project', v: ['p_pub'] }], 'project filter values are scrubbed');
+  assert.equal(bobView.doc.views, undefined, 'the doc is never a view-state carrier — per-user view state lives in saved_views rows (Phase 57, D-05/D-06)');
   assert.equal(proj(bobView.doc, 'p_cust'), undefined, 'custodian-only project is hidden from Bob');
   assert.equal(proj(bobView.doc, 'p_ownerblind'), undefined, 'Owner Blind is hidden from Bob');
   assert.ok(proj(bobView.doc, 'p_legacy'), 'the retired access spelling reads as public (D-49-4)');
@@ -319,7 +317,7 @@ test('a write cannot forge, delete or extract hidden projects', async () => {
   tampered.data.files.find(f => f.id === 'f_pub').project = 'p_sec';
   tampered.data.events.push({ id: 'e_evil', project: 'p_sec', name: 'Injected event' });
   tampered.data.savedViews.push({ id: 'sv_evil', project: 'p_sec', name: 'Injected view', type: 'board', filters: [] });
-  tampered.views['p:p_sec'] = { filters: [], sort: { f: 'manual', dir: 1 } };
+  tampered.views = { 'p:p_sec': { filters: [], sort: { f: 'manual', dir: 1 } } };
   tampered.data.projects.push({
     id: 'p_inj',
     key: 'inj',
@@ -373,6 +371,7 @@ test('a write cannot forge, delete or extract hidden projects', async () => {
     false,
     'saved view injected on a hidden project is dropped',
   );
+  assert.equal(afterBob.doc.views, undefined, 'the forged views entry cannot resurrect into the stored doc (Phase 57, D-06)');
   assert.equal(afterBob.doc.data.activity.filter(a => a.id === 'a_sec').length, 1, 'hidden activity is not duplicated');
   assert.ok(proj(afterBob.doc, 'p_inj'), 'Bob can create a new private project');
   /* [2026-11-08 D-51-17] The creator becomes the per-project lead — server-enforced:

@@ -820,6 +820,11 @@ function normalizeDoc(doc, meta) {
      stale or crafted document carrying notifPrefs is stripped on every read;
      the D-27-5 read-side default merge is retired with the doc field itself. */
   delete out.data.notifPrefs;
+  /* VIEWS (Phase 57, D-05/D-06): per-user view state lives in the saved_views
+     table — the document is never a view-state carrier again. A stale or
+     crafted document carrying the top-level views field is stripped on every
+     read; migrateUserViews moved the legacy blobs into rows at boot. */
+  delete out.views;
   /* [Phase 55, D-55-1..4] Read-time assignee migration: every task and subtask
      leaves this function carrying `assignees` as an array — the one canonical
      shape (D-55-3, array-only reads). Old scalar `assignee` docs self-heal to
@@ -1431,24 +1436,12 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
     hiddenProjects.size > 0,
   );
 
-  // Per-user view state: hidden keys stay from storage, hidden project ids leave filter values.
-  const hiddenViewIds = new Set((storedData.savedViews || []).filter(v => v?.id && hiddenProjects.has(v.project)).map(v => v.id));
-  const mergedViews = {};
-  for (const [key, value] of Object.entries(stored?.views || {})) {
-    const projectId = key.startsWith('p:') ? key.slice(2) : null;
-    const viewId = key.startsWith('sv:') ? key.slice(3) : null;
-    if ((projectId && hiddenProjects.has(projectId)) || (viewId && hiddenViewIds.has(viewId))) mergedViews[key] = value;
-  }
-  for (const [key, value] of Object.entries(next.views || {})) {
-    const projectId = key.startsWith('p:') ? key.slice(2) : null;
-    const viewId = key.startsWith('sv:') ? key.slice(3) : null;
-    if ((projectId && hiddenProjects.has(projectId)) || (viewId && hiddenViewIds.has(viewId))) continue;
-    if (value && typeof value === 'object' && Array.isArray(value.filters)) {
-      value.filters = scrubProjectFilters(value.filters, hiddenProjects);
-    }
-    mergedViews[key] = value;
-  }
-  next.views = mergedViews;
+  /* VIEWS (Phase 57, D-05/D-06): per-user view state lives in the saved_views
+     table — a stale client's top-level views copy must never merge back into
+     a stored document (the notifPrefs Pitfall-3 resurrection failure mode).
+     The whole views merge funnel is retired with the doc field; stripped
+     here (write) and in normalizeDoc (read), notifPrefs-style. */
+  delete next.views;
   /* [2026-11-08 T-51-01, Pitfall 3] A below-admin doc PUT never rewrites the
      workspace creation restriction — the stored value wins no matter what the
      client ships in its prefs copy. Admin/owner pref writes (the settings
@@ -2455,6 +2448,12 @@ async function bootstrap(opts) {
      load-bearing, Pitfall 2 discipline). */
   await migrateTotpFactors();
   await migrateTotpReWrap();
+  /* VIEWS (Phase 57, D-06): one-time doc.views → saved_views rows sweep.
+     AFTER migrateTotpReWrap — the same load-bearing-order discipline: it
+     reads the memberships authority rows that earlier migrations guarantee
+     (Pitfall 2), and it must land before the first doc read so no client
+     ever sees the legacy field. */
+  await migrateUserViews();
   /* D-50-6/D-50-10 (Phase 50, Plan 02): the reverse-sweep restoration and the
      legacy guest normalization. The Phase 49 materialization sweep stays
      RETIRED — restoreTeamLinks() only ever ADDS p.teams back from a
@@ -2599,6 +2598,79 @@ async function migrateUserNotifPrefs() {
          copies, so a crashed boot can never leave rows and doc disagreeing. */
       const stripped = { ...ws.doc, data: { ...ws.doc.data } };
       delete stripped.data.notifPrefs;
+      await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(stripped), ws.id]);
+    }
+  });
+}
+
+/*
+ * VIEWS (Phase 57, D-05/D-06): one-time guarded sweep of the legacy
+ * top-level doc.views blobs into saved_views rows. The authority now lives
+ * in saved_views keyed (workspace_id, user_id, key, name) — the live row
+ * uses the sentinel name ''. Structural clone of migrateUserNotifPrefs:
+ * JS guard (the field lives inside the doc JSON — SQL can't see it) →
+ * pre-migration backup → one transaction that inserts a live row per
+ * views[key] snapshot and deletes the field from the stored doc in the SAME
+ * transaction (rows and doc can never disagree). doc.views carries no
+ * author, so every migrated row is attributed to the workspace OWNER — the
+ * owner ruling accepted this caveat (D-06). insert or ignore keeps any
+ * newer per-user row the user already set. A corrupt doc blob parses as {}
+ * and is skipped — it can never crash the boot. The guard is field
+ * presence, never "table empty": after the strip, later boots are
+ * byte-identical no-ops.
+ *
+ * No backup = no mutation (the migrateUserNotifPrefs / D-74 discipline).
+ */
+async function migrateUserViews() {
+  const eligible = [];
+  for (const row of await db.all('select id, doc from workspaces')) {
+    let doc = {};
+    try {
+      doc = JSON.parse(row.doc);
+    } catch {
+      /* unreadable document: never crash the boot — the row is skipped */
+      continue;
+    }
+    const views = doc?.views;
+    if (!views || typeof views !== 'object' || Array.isArray(views)) continue;
+    const keys = Object.keys(views).filter(k => views[k] && typeof views[k] === 'object' && !Array.isArray(views[k]));
+    if (keys.length === 0) continue;
+    eligible.push({ id: row.id, doc, views, keys });
+  }
+  if (eligible.length === 0) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backup = path.join(DATA_DIR, `projects-pre-user-views-${stamp}.db`);
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+    await sqliteOnly(async () => {
+      await db.run('pragma wal_checkpoint(truncate)');
+      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
+    }, `pre-migration backup ${backup}`);
+    logInfo(`  pre-migration backup: ${backup}`);
+  } catch (err) {
+    logError(`  pre-migration backup failed: ${err.message}`);
+    return;
+  }
+  await db.tx(async () => {
+    for (const ws of eligible) {
+      /* D-06 attribution: the workspace OWNER owns the migrated rows.
+         Fall back to the first membership row if the owner role is absent
+         (a crafted doc) — attribution stays deterministic either way. */
+      const owner = await db.get(
+        "select user_id from memberships where workspace_id = ? order by case when role = 'owner' then 0 else 1 end, user_id limit 1",
+        [ws.id],
+      );
+      if (!owner?.user_id) continue;
+      for (const key of ws.keys) {
+        await db.run(
+          'insert or ignore into saved_views (workspace_id, user_id, key, name, blob, schema_version) values (?,?,?,?,?,?)',
+          [ws.id, owner.user_id, key, '', JSON.stringify(ws.views[key]), VIEW_SCHEMA_VERSION],
+        );
+      }
+      /* The doc-field delete lives in the SAME transaction as the row
+         copies, so a crashed boot can never leave rows and doc disagreeing. */
+      const stripped = { ...ws.doc };
+      delete stripped.views;
       await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(stripped), ws.id]);
     }
   });
