@@ -1,12 +1,12 @@
 /* =====================================================================
    SETTINGS · AUTH · ONBOARDING · DESIGN SYSTEM · SYSTEM STATES
-   ===================================================================== */
-import { availableLocales, formatDate, formatTime, getLocale, isAutoDateFmt, t } from '../core/i18n.js';
+   ===================================================================== */import { availableLocales, formatDate, formatTime, getLocale, isAutoDateFmt, t } from '../core/i18n.js';
 import { ago, clamp, dOff, deviceLabel, esc, foldForSearch, fmtDate } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { D, S, isMemberAdmin, me, projTeams, team } from '../core/store.js';
 import { api } from '../core/api.js';
 import { renderQrSvg } from '../lib/qr.js';
+import { toast } from '../ui/toast.js';
 import { av, pIcon } from '../ui/helpers.js';
 import { teamsGrid } from './members.js';
 import { page404 } from './errors.js';
@@ -32,6 +32,25 @@ const ACCENT_TIPS = {
   graphite: 'settings.accent.graphite',
 };
 const DENSITY_LABELS = { comfortable: 'settings.density.comfortable', compact: 'settings.density.compact' };
+
+/* DELIV-02 (D-03): the QR SVG now renders asynchronously through the lazy
+   vendor chunk (import('./vendor/qrcode.js') auto-split in src/lib/qr.js).
+   The stage markup carries a spinner placeholder that the awaited
+   renderQrSvg() replaces in place; on chunk-load failure the error toast
+   fires (D-03) and qr.js resets its cached promise so the next click
+   retries. No idle preloading anywhere. */
+function tfaQrFill(id) {
+  setTimeout(() => {
+    const slot = document.getElementById(id);
+    if (!slot) return;
+    renderQrSvg(S.ui.tfaOtpauth || '')
+      .then(svg => {
+        if (document.getElementById(id) === slot) slot.innerHTML = svg;
+      })
+      .catch(() => toast(t('toast.qrLoadFailed'), { kind: 'err' }));
+  }, 0);
+  return '';
+}
 
 export const SET_NAV = [
   [
@@ -666,7 +685,7 @@ export function settingsBody(sec, title) {
             : '') +
           (stage === 'addVerify'
             ? `<div class="sblock" style="margin-top:14px"><div class="col" style="gap:14px;max-width:400px">
-                <div class="field"><span class="label">${t('settings.tfa.scan')} — ${esc(S.ui.tfaLabel || '')}</span><div style="margin-top:8px">${renderQrSvg(S.ui.tfaOtpauth || '')}</div><span class="hint">${t('settings.tfa.appHint')}</span></div>
+                <div class="field"><span class="label">${t('settings.tfa.scan')} — ${esc(S.ui.tfaLabel || '')}</span><div style="margin-top:8px"><span id="tfa-add-qr" class="tfa-qr-spin" role="status" aria-busy="true"></span></div><span class="hint">${t('settings.tfa.appHint')}</span></div>
                 <div class="field"><label class="label" for="tfa-add-secret">${t('settings.tfa.cantScan')}</label><div class="row" style="gap:0"><input class="input" id="tfa-add-secret" readonly value="${esc(S.ui.tfaSecret || '')}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.tfaSecret || '')}">${t('settings.tfa.copy')}</button></div></div>
                 <form data-submit="tfaAddFactorVerify" class="col" style="gap:14px">
                   ${fld('tfa-add-code', t('settings.tfa.enterCode'), 'tfaAddCode', 'autocomplete="one-time-code" inputmode="numeric"')}
@@ -674,6 +693,7 @@ export function settingsBody(sec, title) {
                 </form>
               </div></div>`
             : '') +
+          tfaQrFill('tfa-add-qr') +
           /* TOTP2 (D-19/D-16): the per-factor remove confirm — an in-place
              staged form echoing the factor's name, password + live code. No
              picker anywhere (the factor's own id opens the form, D-16's
@@ -694,11 +714,14 @@ export function settingsBody(sec, title) {
            client never rebuilds it (T-16-12). The QR is rendered only through
            src/lib/qr.js wrapping the vendored encoder; the secret fallback is
            monospace, read-only, copyable, with the "can't scan?" hint. */
-        const qr = renderQrSvg(S.ui.tfaOtpauth || '');
+        /* DELIV-02 (D-03): the QR renders asynchronously into the spinner
+           placeholder above — the initiating enroll click already shows its
+           loading state, and the spinner stays until the lazy chunk resolves. */
+        tfaQrFill('tfa-qr');
         return (
           H(t('settings.tfa.lead')) +
           `<div class="sblock" style="margin-top:0"><div class="col" style="gap:14px;max-width:400px">
-            <div class="field"><span class="label">${t('settings.tfa.scan')}</span><div style="margin-top:8px">${qr}</div><span class="hint">${t('settings.tfa.appHint')}</span></div>
+            <div class="field"><span class="label">${t('settings.tfa.scan')}</span><div style="margin-top:8px"><span id="tfa-qr" class="tfa-qr-spin" role="status" aria-busy="true"></span></div><span class="hint">${t('settings.tfa.appHint')}</span></div>
             <div class="field"><label class="label" for="tfa-secret">${t('settings.tfa.cantScan')}</label><div class="row" style="gap:0"><input class="input" id="tfa-secret" readonly value="${esc(S.ui.tfaSecret || '')}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.tfaSecret || '')}">${t('settings.tfa.copy')}</button></div></div>
             <form data-submit="tfaVerify" class="col" style="gap:14px">
               ${fld('tfa-code', t('settings.tfa.enterCode'), 'tfaCode', 'autocomplete="one-time-code" inputmode="numeric"')}

@@ -157,6 +157,17 @@
     transform: rotate(360deg);
   }
 }
+/* DELIV-02 (D-03): the 2FA QR placeholder spinner — shown at the initiating
+   click while the lazy vendor chunk resolves. */
+.tfa-qr-spin {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--text-2);
+  border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
 
 /* tooltip */
 [data-tip] {

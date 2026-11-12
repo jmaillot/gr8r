@@ -213,6 +213,7 @@
   "toast.reconnected": "Reconnecté. Toutes les modifications sont synchronisées.",
   "toast.demoResetLocal": "Les données de démo ne peuvent être réinitialisées qu’en mode démo locale.",
   "toast.demoRestored": "Données de démo restaurées",
+  "toast.qrLoadFailed": "Impossible de charger le code QR. Réessayez.",
   "toast.saved": "Enregistré",
   "toast.retrying": "Nouvel essai…",
   "toast.loadedSuccessfully": "Chargement réussi",

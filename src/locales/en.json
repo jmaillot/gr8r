@@ -212,6 +212,7 @@
   "toast.reconnected": "Reconnected. All changes are synced.",
   "toast.demoResetLocal": "Demo data can only be reset in local demo mode.",
   "toast.demoRestored": "Demo data restored",
+  "toast.qrLoadFailed": "Couldn't load the QR code. Try again.",
   "toast.saved": "Saved",
   "toast.retrying": "Retrying…",
   "toast.loadedSuccessfully": "Loaded successfully",
