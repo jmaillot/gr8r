@@ -1,7 +1,7 @@
 ---
 phase: 57-views-columns-general-access
 verified: 2026-11-12T18:38:28Z
-status: human_needed
+status: passed
 score: 7/7 must-haves verified
 covered_files:
   - .planning/phases/57-views-columns-general-access/57-01-PLAN.md
@@ -30,6 +30,7 @@ covered_files:
   - test/saved-views.test.mjs
   - test/views-columns.test.mjs
   - test/views-migration.test.mjs
+
 covered_digest: "v2:sha256:a9801c4cf6337e83e3c2c774ffadcdb8b7a4cce8759b4fc130f004cd2af6bb03"
 behavior_unverified: 0
 overrides_applied: 0
