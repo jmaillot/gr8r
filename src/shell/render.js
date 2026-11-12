@@ -164,6 +164,19 @@ export function tryFocus(key) {
   }
   return false;
 }
+/* Shared focus restore used by render() (CR-01): re-focus the control
+   addressed by id and re-apply its caret selection after a DOM swap. Callers
+   guard on a truthy fid. */
+export function restoreFocus(fid, s0, s1) {
+  const el = document.getElementById(fid);
+  if (!el || el === document.activeElement) return;
+  el.focus({ preventScroll: true });
+  try {
+    if (s0 != null) el.setSelectionRange(s0, s1);
+  } catch {
+    /* not supported here; safe to skip */
+  }
+}
 export function pageTitle() {
   const u = S.ui;
   if (u.auth) return t('app.name');
@@ -224,17 +237,7 @@ export function render() {
       el.scrollLeft = l;
     }
   });
-  if (fid) {
-    const el = document.getElementById(fid);
-    if (el && el !== document.activeElement) {
-      el.focus({ preventScroll: true });
-      try {
-        if (s0 != null) el.setSelectionRange(s0, s1);
-      } catch {
-        /* not supported here; safe to skip */
-      }
-    }
-  }
+  if (fid) restoreFocus(fid, s0, s1);
   // Return focus to whatever opened a surface that just closed; otherwise keep the control that had it.
   const lost = () => !document.activeElement || document.activeElement === document.body;
   if (prevOv.modals > ov.modals) {

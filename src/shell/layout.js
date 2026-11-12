@@ -30,70 +30,78 @@ import { pageArchive } from '../features/archive.js';
    has painted skeleton() into #main-content, which fillPage() then replaces
    (async-render contract the remaining splits reuse). Keep the P[r] || 404
    fallback semantics: the 404 page resolves synchronously. */
-const ASYNC_ROUTES = new Set(['settings', 'members', 'member', 'teams', 'team', 'system', 'states', 'activity', 'search']);
+/* Lazy page loader (DELIV-02): dynamic-imports a page module, stashes a
+   zero-arg render closure on the loader (f.mod) once loaded, and returns the
+   page HTML. After the first visit renderPageSync() renders the route
+   synchronously from f.mod — no skeleton, no fillPage swap — so re-renders
+   (per-keystroke inputs included) keep render()'s focus/caret restore intact
+   (CR-01). An unloadable module never sets f.mod: every render paints the
+   skeleton and fillPage retries (built-in retry affordance). f.lazy marks a
+   loader as lazy — an unset f.mod means the module still needs a first fill. */
+const lazy = (imp, mk) => {
+  const f = () => imp().then(m => (f.mod = m[mk].bind(m))());
+  f.lazy = true;
+  return f;
+};
 const P = {
   home: () => pageHome(),
   inbox: () => pageInbox(),
   mytasks: () => pageMyTasks(),
   favorites: () => pageFavorites(),
   notifications: () => pageNotifications(),
-  search: () => import('../pages/search.js').then(m => m.pageSearch()),
+  search: lazy(() => import('../pages/search.js'), 'pageSearch'),
   overview: () => pageOverview(),
   projects: () => pageProjects(),
   project: () => pageProject(),
   tasks: () => pageTasks(),
   calendar: () => pageWsCalendar(),
   timeline: () => pageWsTimeline(),
-  members: () => import('../pages/members.js').then(m => m.pageMembers()),
-  member: () => import('../pages/members.js').then(m => m.pageMember()),
-  teams: () => import('../pages/members.js').then(m => m.pageTeams()),
-  team: () => import('../pages/members.js').then(m => m.pageTeam()),
-  activity: () => import('../pages/activity.js').then(m => m.pageActivity()),
-  settings: () => import('../pages/settings.js').then(m => m.pageSettings()),
-  system: () => import('../pages/design-system.js').then(m => m.pageSystem()),
-  states: () => import('../pages/design-system.js').then(m => m.pageStates()),
+  members: lazy(() => import('../pages/members.js'), 'pageMembers'),
+  member: lazy(() => import('../pages/members.js'), 'pageMember'),
+  teams: lazy(() => import('../pages/members.js'), 'pageTeams'),
+  team: lazy(() => import('../pages/members.js'), 'pageTeam'),
+  activity: lazy(() => import('../pages/activity.js'), 'pageActivity'),
+  settings: lazy(() => import('../pages/settings.js'), 'pageSettings'),
+  system: lazy(() => import('../pages/design-system.js'), 'pageSystem'),
+  states: lazy(() => import('../pages/design-system.js'), 'pageStates'),
   archive: () => pageArchive(),
 };
 const NOT_FOUND = () => page404();
 
-/* Synchronous page HTML for the shell template. Returns null for async-loader
-   routes — the caller paints skeleton() as the loading state and fillPage()
-   replaces it when the dynamic import resolves. */
+/* Synchronous page HTML for the shell template. A loaded lazy route renders
+   synchronously and fresh from its stashed module (CR-01); an unloaded one
+   returns null so the caller paints skeleton() and fillPage() replaces it on
+   first visit. */
 export function renderPageSync() {
   const r = S.ui.route;
-  if (ASYNC_ROUTES.has(r)) return null;
+  const l = P[r];
+  if (l?.lazy && !l.mod) return null;
   try {
-    return (P[r] || NOT_FOUND)();
+    return l ? (l.mod ? l.mod() : l()) : NOT_FOUND();
   } catch (e) {
     console.error(e);
     return stateFailed();
   }
 }
 
-/* The awaited form of the same loader map. A rejected page import surfaces
-   stateFailed() — never a permanently stuck skeleton. */
-export async function renderPage() {
-  const r = S.ui.route;
-  try {
-    return await (P[r] || NOT_FOUND)();
-  } catch (e) {
-    console.error(e);
-    return stateFailed();
-  }
-}
-
-/* Async fill for async-loader routes: after render() has painted the shell with
-   the skeleton in #main-content, await the loader and swap in the page HTML.
-   A monotonic sequence guards against a stale fill overwriting a newer render,
-   and a rejected import falls back to stateFailed() in the same slot. */
+/* Async fill for lazy routes: runs only on FIRST visit to a route whose module
+   is not loaded yet (after render() has painted the shell with the skeleton in
+   #main-content). Later re-renders paint synchronously from the stashed module
+   and return immediately. A monotonic sequence guards against a stale fill
+   overwriting a newer render, and a rejected import falls back to stateFailed()
+   in the same slot — never a permanently stuck skeleton (and every render
+   retries, since f.mod stays unset). Focus needs no re-apply here: on a first
+   visit focus sits on the nav control that triggered the route, outside
+   #main-content. */
 let _fillSeq = 0;
 export async function fillPage() {
   if (S.ui.auth || S.ui.loading) return;
   const r = S.ui.route;
-  if (!ASYNC_ROUTES.has(r)) return;
+  const l = P[r];
+  if (!l?.lazy || l.mod) return;
   const seq = ++_fillSeq;
   try {
-    const html = await renderPage();
+    const html = await (l || NOT_FOUND)();
     if (seq !== _fillSeq || S.ui.auth || S.ui.route !== r || S.ui.loading) return;
     const el = document.getElementById('main-content');
     if (el) el.innerHTML = html;

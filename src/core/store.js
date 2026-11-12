@@ -77,13 +77,20 @@ function emptyState() {
 
 let seedPromise = null;
 /* Explicitly pull the lazy seed chunk and apply the demo data to the store.
-   Memoized so repeated calls (boot + demo-reset paths) fetch the chunk once. */
+   Memoized so repeated calls (boot + demo-reset paths) fetch the chunk once.
+   WR-02: a rejected import is not memoized — the slot resets so the next call
+   retries — and the failure is logged, not thrown: boot and demo-reset both
+   proceed on the emptyState() store instead of bricking the session. */
 export async function ensureSeedData() {
-  if (!seedPromise) {
-    seedPromise = import('../data/seed.js').then(m => {
-      S.data = m.seed();
-    });
-  }
+  if (!seedPromise)
+    seedPromise = import('../data/seed.js')
+      .then(m => {
+        S.data = m.seed();
+      })
+      .catch(e => {
+        seedPromise = null;
+        console.error(e);
+      });
   await seedPromise;
 }
 export const saved = load();

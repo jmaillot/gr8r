@@ -288,7 +288,9 @@ async function seedLegacyLocale() {
   /* Seed-lazy boot (DELIV-02): a fresh demo boot mirrors today's behavior — every
      local boot without saved data received the demo seed synchronously. The seed now
      rides a lazy chunk, so pull it explicitly before the first render. Server mode
-     hydrates from the workspace document instead (hydrateFromServer below). */
+     hydrates from the workspace document instead (hydrateFromServer below).
+     WR-02: ensureSeedData logs and recovers on a failed chunk fetch — the store
+     already holds emptyState(), so boot continues with an empty workspace. */
   if (!withServer && !saved?.data) await ensureSeedData();
   const joinToken = (location.pathname.match(/^\/join\/([A-Za-z0-9_-]{16,128})\/?$/) || [])[1];
   const slugFromPath = (location.pathname.match(/^\/w\/([a-z0-9-]{2,40})(?:\/|$)/) || [])[1];
