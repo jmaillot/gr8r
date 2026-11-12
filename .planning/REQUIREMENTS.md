@@ -32,7 +32,7 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 
 ## Views & Columns
 - [x] **VIEW-01**: A member can show/hide table columns on the tasks table, and the choice persists across sessions and devices
-- [ ] **VIEW-02**: A member can save a named view (filters + columns + sort) and re-apply or delete it from any device
+- [x] **VIEW-02**: A member can save a named view (filters + columns + sort) and re-apply or delete it from any device
 - [ ] **VIEW-03**: General Access can be set beyond private/public — at minimum per-workspace default visibility rules (owner-configurable; precise granularity locked at discuss-phase)
 
 ## Delivery Infrastructure
@@ -62,7 +62,7 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 | DELIV-02 | Phase 56 | Complete |
 | I18N-01 | Phase 56 | Complete |
 | VIEW-01 | Phase 57 | Complete (57-01) |
-| VIEW-02 | Phase 57 | Pending |
+| VIEW-02 | Phase 57 | Complete (57-02) |
 | VIEW-03 | Phase 57 | Pending |
 | SEARCH-01 | Phase 58 | Pending |
 | SEARCH-02 | Phase 58 | Pending |
