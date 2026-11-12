@@ -117,15 +117,16 @@ export async function saveNamedView(workspaceId, key, name) {
 }
 
 /* Apply a named view: the whole live viewOf(key) state is replaced IN PLACE
-   (D-11/D-15) except the transient search text `q`, which stays — applying a
-   view re-shapes the table, it does not erase what the member is looking at.
-   The whitelist intersection is lenient: unknown fields from an older/newer
-   schema version intersect away (D-12). The normal write-through persists the
-   applied state (the caller triggers it like any other view edit). */
+   (D-11/D-15) except the two live-only keys the snapshot can never carry —
+   the transient search text `q` and the render `mode` (list/board/table),
+   which belong to the session, not the snapshot. The whitelist intersection
+   is lenient: unknown fields from an older/newer schema version intersect
+   away (D-12). The normal write-through persists the applied state (the
+   caller triggers it like any other view edit). */
 export function applyNamedView(key, blob) {
   const v = viewOf(key);
   const clean = sanitizeViewBlob(blob);
-  for (const k of Object.keys(v)) if (k !== 'q' && !(k in clean)) delete v[k];
+  for (const k of Object.keys(v)) if (k !== 'q' && k !== 'mode' && !(k in clean)) delete v[k];
   Object.assign(v, clean);
 }
 
