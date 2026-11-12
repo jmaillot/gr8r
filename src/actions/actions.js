@@ -3828,7 +3828,7 @@ async function finishLogin(em, done) {
       const joined = await hydrateFromServer(joinSlug);
       if (joined.ok) {
         await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
-  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
+        await hydrateViews(); // Phase 57: adopt the live view rows before the first render
         history.replaceState(null, '', `/w/${joinSlug}`);
         enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
         reportRecoveryBurn();
@@ -4038,7 +4038,7 @@ A.doJoin = () => {
       return;
     }
     await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
-  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
+    await hydrateViews(); // Phase 57: adopt the live view rows before the first render
     S.ui.pwNew = '';
     history.replaceState(null, '', `/w/${slug}`);
     enterApp(t('toast.welcomeUser', { name: nm }));
@@ -4101,7 +4101,7 @@ A.doSignup = () => {
       return;
     }
     await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
-  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
+    await hydrateViews(); // Phase 57: adopt the live view rows before the first render
     history.replaceState(null, '', `/w/${slug}`);
     S.ui.af.pw = '';
     enterApp(t('toast.welcomeUser', { name: nm }));
