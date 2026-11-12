@@ -78,7 +78,7 @@ beyond the private/public binary.
   4. An owner sets General Access beyond private/public — at minimum per-workspace
      default visibility rules — and members see exactly the resulting visibility
      (precise granularity locked at discuss-phase) (VIEW-03)
-**Plans**: 3 plans
+**Plans**: 3/3 plans executed
 
 Plans:
 **Wave 1**
@@ -86,7 +86,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 57-02-PLAN.md — VIEW-02: named saved views (caps D-12, lenient schemaVersion load), collision-free save/apply/delete actions + popover UI *(complete: 3 commits, full chain green — unit 1429, e2e 110, lint, i18n, chunk gate 499,885 B)*
-- [ ] 57-03-PLAN.md — VIEW-03: `prefs.defaultPrivate` owner setting (D-03/D-04), createProject seed, Access-tab hint
+- [x] 57-03-PLAN.md — VIEW-03: `prefs.defaultPrivate` owner setting (D-03/D-04), createProject seed, Access-tab hint
+
 **UI hint**: yes
 
 ### Phase 58: Full-Text Search
@@ -181,7 +182,7 @@ D-05 owner rulings arriving during execution
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
-| 57. Views, Columns & General Access | 0/3 | Not started | - |
+| 57. Views, Columns & General Access | 3/3 | Complete 2026-11-12 |  |
 | 58. Full-Text Search | 0/? | Not started | - |
 | 59. Browser Push | 0/? | Not started | - |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |

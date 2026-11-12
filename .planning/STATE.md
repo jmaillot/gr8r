@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 57
 current_phase_name: Views, Columns & General Access
 status: executing
-stopped_at: Phase 57 context gathered
-last_updated: "2026-11-12T15:36:39.420Z"
-state_head: 076e8f3f44cd882fcb176a2f84dc0f6507e10d88
+stopped_at: Completed 57-03-PLAN.md
+last_updated: "2026-11-12T18:29:02.526Z"
+state_head: d552aeac6df6be47e217e04d2bc9fe0b3d5df445
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 7
 ---
 
 # STATE.md
@@ -26,9 +26,9 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 57 (Views, Columns & General Access) — EXECUTING
+**Phase:** 57 (Views, Columns & General Access) — COMPLETE (all 3 plans executed)
 **Plan:** 3 of 3
-**Status:** 57-01, 57-02 complete (substrate + named saved views); 57-03 next
+**Status:** 57-01, 57-02, 57-03 complete — ready for `/gsd-verify-work 57`
 
 **Progress:**[███░░░░░░░] 24%
 
@@ -39,7 +39,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase | Name | Status |
 |-------|------|--------|
 | 56 | Delivery Infrastructure | Not started |
-| 57 | Views, Columns & General Access | In progress (2/3 plans) |
+| 57 | Views, Columns & General Access | Complete (3/3 plans) |
 | 58 | Full-Text Search | Not started |
 | 59 | Browser Push | Not started |
 | 60 | Admin Dashboard & Member Self-View | Not started |
@@ -50,6 +50,12 @@ dashboards) without breaking the zero-dependency discipline
 - v2.1 close: 1385 unit tests, e2e 109/109, lint clean, i18n gate 0 dead/0 stale
 - Runtime dependencies: `{ pg }` + web-push@4.0.0 landing in Phase 59 (dep #2, owner-approved)
 - Requirement coverage: 24/24 mapped across Phases 56–61
+
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 57 P03 | 65 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -88,12 +94,12 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-12T17:37:00.000Z
-**Stopped at:** Completed 57-02-PLAN.md
+**Last session:** 2026-11-12T18:29:02.483Z
+**Stopped at:** Completed 57-03-PLAN.md
 **Resume file:** None
 
-**Last action:** executed 57-02 — named saved views (server caps D-12, lenient load SC-3, DELETE route, lazy savedViewsUi popover, D-14 server reset); full chain green (1429 unit + 110 e2e)
-**Next action:** `/gsd-execute-phase 57` plan 03 (default visibility)
+**Last action:** executed 57-03 — defaultPrivate workspace default (owner toggle, Access-tab hint, createProject seed + server seeding parity, funnel untouched); full chain green (1426 unit, e2e green modulo 2 isolation-verified flakes); [Rule 3] export/model went lazy (index 493.4 kB)
+**Next action:** `/gsd-verify-work 57`, then `/gsd-plan-phase 58` (FTS needs `--research-phase`)
 
 ### Blockers
 
@@ -106,3 +112,8 @@ dashboards) without breaking the zero-dependency discipline
 - 57-02: index chunk had ~900 B headroom — all views UI went into a NEW lazy savedViewsUi chunk; download.js + export/csv.js made lazy (async-only call sites); api.deleteView seam dropped for viewSync deleteViewRow (index 499,885 B)
 - 57-02: live-row PUTs merge, named-row PUTs replace — a snapshot is the whole view; overwrite only after explicit confirm (D-12)
 - 57-02: applyNamedView preserves `q` AND the render `mode` beside the whitelist — both are session state the snapshot never carries (found by the new e2e)
+
+## Decisions
+
+- [Phase 57]: 57-03: seeding evidence captured BEFORE normalizeProjects — stored pref seeds private:true only on new (!prev) rows, explicit private always wins (D-04); funnel untouched
+- [Phase 57]: 57-03: [Rule 3] export/model.js went lazy (DELIV-02 gate, third application) — S.ui.expMod seam + constants.js DEFAULT_OPTIONS drift pin; index 493.4 kB (~6.6 kB headroom)
