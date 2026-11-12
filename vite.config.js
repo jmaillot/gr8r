@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'vite';
 import { lucideIconNames, lucideIconMarkup } from './scripts/icons.mjs';
-import { localeCodes } from './scripts/locales.mjs';
+import { localeCodes, localeNames } from './scripts/locales.mjs';
 
 /* The base locale. It is the catalogue every other one falls back to (D-08), so it ships in
    EVERY build: a build without it would leave the interface without a language. */
@@ -38,6 +38,33 @@ function lucideSubset() {
       const out = {};
       for (const name of lucideIconNames('src')) out[name] = lucideIconMarkup(name);
       return `export const ICONS = ${JSON.stringify(out)};`;
+    },
+  };
+}
+
+/* The registry's native-name map (src/core/locale-names.js) is shared with the node-side
+   consumers (scripts/locales.mjs), which need the FULL map. The browser build only ever
+   names the codes the glob keys name — the shipped files — so this plugin inlines a subset
+   built from those codes, with the same D-07 fallback. The DELIV-02 500 kB entry gate
+   (test/build-chunk-size.test.mjs) has no headroom for the full map's bytes. */
+function localeNamesSubset() {
+  const ID = '\0virtual:locale-names';
+  return {
+    name: 'locale-names-subset',
+    /* enforce: 'pre' is required: Vite's own resolver resolves relative imports
+       (`./locale-names.js`) before normal user plugins run, so without it this
+       resolveId never fires and the full map reaches the entry. */
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source.endsWith('locale-names.js') && importer && importer.endsWith('core/i18n.js')) return ID;
+      return null;
+    },
+    load(id) {
+      if (id !== ID) return null;
+      const names = localeNames();
+      const out = {};
+      for (const code of localeCodes('src')) out[code] = names[code] || code;
+      return `export const LOCALE_NAME_MAP = Object.freeze(${JSON.stringify(out)});`;
     },
   };
 }
@@ -97,7 +124,7 @@ function buildStamp() {
 
 export default defineConfig({
   build: { manifest: true },
-  plugins: [lucideSubset(), localeSubset(), buildStamp()],
+  plugins: [lucideSubset(), localeNamesSubset(), localeSubset(), buildStamp()],
   server: {
     port: 5173,
     /* `npm start` serves the API on 8080. Without it, /api fails and the app stays

@@ -636,7 +636,12 @@ test('every static t() key of the three files resolves in the catalogue', () => 
    registry, the registry agrees with the catalogue files the build ships, and no removed
    language label survives anywhere in src/ outside the catalogues. */
 test('the language selector derives its two options from the registry (LOC-02)', async () => {
-  const { LOCALES } = await import('../src/core/i18n.js');
+  const i18n = await import('../src/core/i18n.js');
+  /* The registry is derived (56-04): bare Node has no glob, so registering the shipped
+     catalogues puts them in the registry — the same thing the browser's glob does. The
+     namespace object is read at assertion time: the registry is a live, growing export. */
+  i18n.registerCatalogue('fr', {});
+  const { LOCALES } = i18n;
   const src = read('src/pages/settings.js');
   assert.ok(/availableLocales\(\)\s*\.map\(l => `<option value="\$\{l\.code\}"/.test(src), 'options derive from availableLocales()');
   assert.ok(src.includes('data-in="langSel"'), 'the language row carries its dedicated input key');
@@ -650,13 +655,18 @@ test('the language selector derives its two options from the registry (LOC-02)',
 });
 
 test('registry codes, locale catalogue files and the selector agree one-to-one (LOC-02)', async () => {
-  const { LOCALES } = await import('../src/core/i18n.js');
+  const i18n = await import('../src/core/i18n.js');
   const files = fs
     .readdirSync(path.join(ROOT, 'src/locales'))
     .filter(f => f.endsWith('.json'))
     .map(f => f.replace(/\.json$/, ''))
     .sort();
-  assert.deepEqual(LOCALES.map(l => l.code).sort(), files, 'registry codes match the catalogue files');
+  /* The registry is derived (56-04): the build's glob puts every shipped code in it; bare
+     Node grows it by registration instead — registering each catalogue file (a fixture's
+     included) must reproduce exactly the files on disk. Read at assertion time: the
+     registry is a live, growing export. */
+  for (const code of files) i18n.registerCatalogue(code, {});
+  assert.deepEqual(i18n.LOCALES.map(l => l.code).sort(), files, 'registry codes match the catalogue files');
 });
 
 test('the language handler writes only the account locale (T-8-07)', () => {
@@ -674,9 +684,14 @@ test('no removed language label survives anywhere in src/ outside the catalogues
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
+        /* src/locales holds the catalogues. */
         if (full === path.join(ROOT, 'src/locales')) continue;
         walk(full);
       } else {
+        /* src/core/locale-names.js is the shared native-name map the derived registry
+           (56-04) reads — a language's name is its own name, and the map is its one
+           legitimate home outside the catalogues. */
+        if (full === path.join(ROOT, 'src/core/locale-names.js')) continue;
         const text = fs.readFileSync(full, 'utf8');
         for (const b of banned) if (text.includes(b)) hits.push(`${path.relative(ROOT, full)}: ${b}`);
       }

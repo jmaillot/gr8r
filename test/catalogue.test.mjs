@@ -8,10 +8,20 @@ import path from 'node:path';
 import { test } from 'node:test';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
-import { BASE_LOCALE, LOCALES } from '../src/core/i18n.js';
+import { BASE_LOCALE, LOCALES, registerCatalogue } from '../src/core/i18n.js';
 import { ROOT } from './helpers/server.mjs';
 
+
 const LOCALES_DIR = path.join(ROOT, 'src', 'locales');
+
+/* The registry is derived (56-04): the build-shipped codes (the glob keys) plus the base,
+   grown by every registered catalogue. Bare Node has no glob, so registering each catalogue
+   file is what puts the shipped locales in the registry here — the same thing the browser's
+   glob does and server.js does at boot. Registration also keeps these assertions honest
+   while a fixture locale is momentarily on disk under a parallel test run. */
+for (const name of catalogueFiles()) {
+  registerCatalogue(name.replace(/\.json$/, ''), readCatalogue(name));
+}
 const BASE_FILE = `${BASE_LOCALE}.json`;
 
 /* D-10: the three characters a catalogue value may never carry. The call sites splice the value

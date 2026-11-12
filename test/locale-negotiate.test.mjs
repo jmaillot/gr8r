@@ -10,7 +10,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { getLocale, negotiate, primeLocale, setLocale } from '../src/core/i18n.js';
+import { getLocale, negotiate, primeLocale, registerCatalogue, setLocale } from '../src/core/i18n.js';
+import fr from '../src/locales/fr.json' with { type: 'json' };
+
+/* The registry is derived (56-04): bare Node has no glob, so registering the French
+   catalogue is what makes 'fr' a known code here — the same thing the browser's glob does
+   and server.js does at boot. */
+registerCatalogue('fr', fr);
 
 const ROOT = path.join(import.meta.dirname, '..');
 const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');

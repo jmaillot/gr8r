@@ -1,15 +1,14 @@
 /* =====================================================================
    core: i18n — the leaf layer over the JSON catalogues.
    It imports the catalogues and nothing else from the app, so the dependency graph
-   stays acyclic: the renderer never enters this module.
+   stays acyclic: the renderer never enters this module. The LOCALES registry is
+   derived from the glob keys (the build's own locale set) plus the base locale —
+   never hardcoded.
    ===================================================================== */
 import en from '../locales/en.json' with { type: 'json' };
+import { LOCALE_NAME_MAP } from './locale-names.js';
 
 export const BASE_LOCALE = 'en';
-export const LOCALES = Object.freeze([
-  { code: 'en', name: 'English' },
-  { code: 'fr', name: 'Français' },
-]);
 
 /* The locale is a module-level mutable singleton, read at call time and never threaded
    through a signature — the house pattern of dateFormat in core/utils.js. */
@@ -26,8 +25,29 @@ try {
   loaders = {};
 }
 
+/* The locale registry is DERIVED (D-07), from the build's own source of truth: the codes
+   the glob keys name — one chunk per locale — plus the base locale, which every build and
+   every plain-Node process must have. Names come from the shared native-name map; a code
+   the map does not know falls back to the raw code. Outside a bundler the glob is
+   unavailable, so registerCatalogue grows the registry with every catalogue registered
+   after boot — that is how server.js teaches plain Node fr at boot, and how a fixture
+   stays outside the registry until it is actually loadable. The export is reassigned as a
+   fresh frozen array, so the import binding every consumer holds is live. */
+function registryEntry(code) {
+  return { code, name: LOCALE_NAME_MAP[code] || code };
+}
+
+const loaderCodes = Object.keys(loaders)
+  .map(key => key.split('/').pop().replace(/\.json$/, ''))
+  .sort();
+
+export let LOCALES = Object.freeze([registryEntry(BASE_LOCALE), ...loaderCodes.map(registryEntry)]);
+
 export function registerCatalogue(code, data) {
   catalogues.set(code, data || {});
+  if (!LOCALES.some(l => l.code === code)) {
+    LOCALES = Object.freeze([...LOCALES, registryEntry(code)]);
+  }
   return code;
 }
 

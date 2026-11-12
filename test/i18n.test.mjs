@@ -43,8 +43,10 @@ test('the layer is a leaf: it imports the catalogues and nothing else', () => {
   const specifiers = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1]);
   assert.ok(specifiers.length > 0, 'the module has at least one import specifier');
   for (const specifier of specifiers) {
-    assert.ok(specifier.startsWith('../locales/'), `${specifier} points at the locales directory`);
-    assert.ok(specifier.endsWith('.json'), `${specifier} points at a JSON catalogue`);
+    /* The shared native-name map (56-04) is pure data with no imports of its own —
+       leaf-compatible: the dependency graph stays acyclic, the renderer never enters. */
+    const leafSibling = specifier === './locale-names.js';
+    assert.ok(leafSibling || (specifier.startsWith('../locales/') && specifier.endsWith('.json')), `${specifier} is the name map or points at the locales directory`);
   }
 });
 

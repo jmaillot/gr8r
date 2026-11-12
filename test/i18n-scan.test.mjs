@@ -101,7 +101,7 @@ const MACHINE_INSTANCES = [
 
 /* ---------- the module contract ---------- */
 
-test('the scanner exports its contract and imports nothing but node:fs, node:path and node:url', () => {
+test('the scanner exports its contract and imports nothing but node:fs, node:path, node:url and ./locales.mjs', () => {
   assert.equal(typeof scanTree, 'function');
   assert.equal(typeof scanSource, 'function');
   assert.equal(typeof main, 'function');
@@ -109,7 +109,11 @@ test('the scanner exports its contract and imports nothing but node:fs, node:pat
   assert.deepEqual([...EXCLUDED_FILES].sort(), ['src/data/seed.js', 'src/lib/timezones.js', 'src/lib/vendor/qrcode.js']);
   const source = fs.readFileSync(path.join(REPO_ROOT, 'scripts/i18n-scan.mjs'), 'utf8');
   const imports = [...source.matchAll(/^import\s+(?:.*?from\s+)?'([^']+)'/gm)].map(m => m[1]);
-  assert.deepEqual([...new Set(imports)].sort(), ['node:fs', 'node:path', 'node:url']);
+  /* './locales.mjs' is the shared locale scan: the scanner's LOCALE_NAMES are derived
+     from it (the build's source of truth), so one scan can never diverge from the
+     registry the build ships. It is pure data + fs, leaf-compatible like the i18n
+     layer's own './locale-names.js' sibling. */
+  assert.deepEqual([...new Set(imports)].sort(), ['./locales.mjs', 'node:fs', 'node:path', 'node:url']);
 });
 
 test('the scanner walks a tree and reports one finding per occurrence', () => {
