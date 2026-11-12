@@ -1218,6 +1218,23 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
   const next = incoming && typeof incoming === 'object' ? JSON.parse(JSON.stringify(incoming)) : {};
   next.data = next.data && typeof next.data === 'object' ? next.data : {};
   normalizeProjects(stored);
+  /* [Phase 57 VIEW-03, A3/T-57-07] Default-visibility seeding evidence:
+     which incoming NEW projects carry NO explicit private key — captured
+     BEFORE normalizeProjects fills `private: false` on every row and
+     destroys the "absent" evidence. Only read when the STORED pref is on
+     (same stored-doc read as permCreate below — never the incoming blob).
+     An explicit private (true or false) always wins over the pref (D-04). */
+  const seedPrivateIds = new Set();
+  if (stored?.prefs?.defaultPrivate === true && Array.isArray(next.data?.projects)) {
+    const storedIds = new Set(
+      (Array.isArray(stored?.data?.projects) ? stored.data.projects : []).map(p => p?.id),
+    );
+    for (const p of next.data.projects) {
+      if (p && typeof p === 'object' && p.id && !storedIds.has(p.id) && !('private' in p)) {
+        seedPrivateIds.add(p.id);
+      }
+    }
+  }
   normalizeProjects(next);
   /* [Phase 55, D-55-1/D-55-4] Every incoming doc normalizes to the canonical
      `assignees[]` shape before any downstream consumer (merge gates, the
@@ -1372,6 +1389,13 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
       if (!Array.isArray(p.members)) p.members = [];
       if (!p.members.includes(memberId)) p.members.push(memberId);
     }
+    /* [Phase 57 VIEW-03, A3] Creation-time seeding from the STORED workspace
+       pref — the server parity of the client createProject seed, so the
+       guarantee does not depend on which surface created the project. No
+       new permission semantics: the per-project binary stays the authority,
+       the pref never retro-applies (only `!prev` rows), and the visibility
+       funnel (projectIsPrivate/hiddenFor) is untouched (D-01/D-02). */
+    if (!prev && seedPrivateIds.has(p.id)) p.private = true;
     if (prev && !canManageProject(prev, memberId, role)) {
       // Access fields belong to a manager even when the project is visible.
       p.private = prev.private;
@@ -1450,7 +1474,16 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
     next.prefs = {
       ...(next.prefs && typeof next.prefs === 'object' ? next.prefs : {}),
       permCreate: stored?.prefs?.permCreate,
+      /* [Phase 57 VIEW-03, T-57-07] The workspace default visibility is read
+         from the STORED document for non-managers — the client's prefs copy
+         is never trusted (same D-51-15/16 convention as permCreate above). */
+      defaultPrivate: stored?.prefs?.defaultPrivate === true,
     };
+  } else if (next.prefs && typeof next.prefs === 'object') {
+    /* [Phase 57 VIEW-03, T-57-07] Even an owner/admin prefs write is coerced
+       fail-closed — a non-boolean defaultPrivate can never smuggle truthiness
+       into the stored doc. */
+    next.prefs.defaultPrivate = next.prefs.defaultPrivate === true;
   }
   /* [2026-11-07 D-49-3, authority-not-advisory] A document write can never
      assign a member to a task whose project the assignee cannot read — this

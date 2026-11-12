@@ -1653,6 +1653,12 @@ export function createProject(f, tmplId) {
        lead unless the form carries one — the server enforces the same grant
        (51-01 mergeClientDoc), this keeps the local optimistic copy honest. */
     lead: f.lead || D().me,
+    /* [Phase 57 VIEW-03] Default workspace visibility seeds the initial
+       private flag at creation only: an explicit form choice wins, the pref
+       is on, the field is ABSENT (absent = non-private, exactly the
+       projectIsPrivate shape). The server mirrors the seed from the STORED
+       pref — never retro-applied to existing projects (D-02/D-04). */
+    ...(f.private === true || S.prefs?.defaultPrivate === true ? { private: true } : {}),
     due: f.due || dOff(30),
     start: dOff(0),
     fav: false,

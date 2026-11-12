@@ -317,6 +317,7 @@ export function settingsBody(sec, title) {
       <div class="field"><label class="label" for="ws-url">${t('common.wsUrl')}</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? t('settings.ws.urlWarning') : t('settings.ws.urlReadonly')}</span></div>
       ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">${t('settings.ws.saveChanges')}</button></div>` : ''}</div></div></form>
       <div class="sblock">${srow(t('settings.perms.create'), '', tog('permCreate', P.permCreate === true))}</div>
+      <div class="sblock">${srow(t('settings.perms.defaultPrivate'), t('settings.perms.defaultPrivateDesc'), tog('defaultPrivate', P.defaultPrivate === true))}</div>
       ${
         api.enabled
           ? `<div class="sblock"><h2 style="color:var(--red)">${t('settings.ws.dangerZone')}</h2>

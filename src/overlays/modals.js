@@ -315,7 +315,8 @@ export function accessBody(m) {
         .join('')}
     </div>
     <div style="border-top:1px solid var(--divider);padding-top:12px"><div class="eyebrow" style="margin-bottom:8px">${t('modal.generalAccess')}</div>
-      <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(p.private ? 'lock' : 'building-2', 14)}</span><div class="grow"><label class="row" style="gap:10px;font-size:12.5px;font-weight:500"><input type="checkbox" class="toggle" data-in="shareAccess" data-id="${p.id}" aria-label="${t('modal.generalAccess')}" ${p.private ? 'checked' : ''} ${canManage ? '' : 'disabled'}>${p.private ? t('modal.onlyInvited') : t('modal.everyoneAt', { name: esc(D().ws.name) })}</label><div class="faint" style="font-size:11.5px;padding-left:4px">${p.private ? t('modal.privateHint') : t('modal.workspaceHint')}</div></div></div></div>`;
+      <div class="row" style="gap:10px"><span class="ftype" style="--c:var(--text-2)">${ic(p.private ? 'lock' : 'building-2', 14)}</span><div class="grow"><label class="row" style="gap:10px;font-size:12.5px;font-weight:500"><input type="checkbox" class="toggle" data-in="shareAccess" data-id="${p.id}" aria-label="${t('modal.generalAccess')}" ${p.private ? 'checked' : ''} ${canManage ? '' : 'disabled'}>${p.private ? t('modal.onlyInvited') : t('modal.everyoneAt', { name: esc(D().ws.name) })}</label><div class="faint" style="font-size:11.5px;padding-left:4px">${p.private ? t('modal.privateHint') : t('modal.workspaceHint')}</div></div></div>
+      <div class="faint" style="font-size:11px;padding-left:26px;margin-top:6px">${t(S.prefs?.defaultPrivate === true ? 'modal.defaultPrivateOn' : 'modal.defaultPrivateOff')}</div></div>`;
 }
 /* [53-03 D-04/D-05] The unified project settings modal: one modal, two tabs.
    General hosts the former project-modal edit fields (settingsGeneralFields,
