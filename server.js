@@ -387,6 +387,25 @@ const SCHEMA = `
     prefs        text not null,
     primary key (workspace_id, user_id)
   );
+  /* VIEWS (Phase 57, D-05/D-12): per-user saved views AND live column state —
+     one row per (workspace, user, table key, view name). The document is never
+     a view-state carrier again (normalizeDoc / mergeClientDoc strip the
+     top-level views field in both directions; migrateUserViews moved legacy
+     doc.views blobs here at boot). The LIVE/CURRENT row uses the sentinel
+     name '' — named views (Phase 57 plan 02) use their name; names are unique
+     per (user, key) case-insensitively, so the sentinel can never collide
+     (D-12). blob carries a whitelisted viewOf() snapshot; schema_version
+     enables the lenient-load intersection (unknown fields dropped, no hard
+     failure). The composite PK needs no extra index and no FK. */
+  create table if not exists saved_views (
+    workspace_id   text not null,
+    user_id        text not null,
+    key            text not null,
+    name           text not null,
+    blob           text not null,
+    schema_version integer not null,
+    primary key (workspace_id, user_id, key, name)
+  );
   /* MCP-01: personal API keys for the /mcp endpoint. One key = one user on
      ONE workspace (D-KEY-SCOPE), with a mandatory expiry (no permanent
      keys) and a read/write scope. Only the sha256 hash is stored — the
@@ -1509,6 +1528,20 @@ const NOTIF_PREF_KEYS = [
   'assign_status',
   'assign_over',
 ];
+
+/* VIEWS (Phase 57, D-11/D-12): the viewOf() snapshot whitelist — a saved blob
+   captures filters + columns (hidden + widths) + sort + group + showDone.
+   The transient free-text `q` and every `_`-prefixed transient key are never
+   stored; unknown fields intersect away silently (lenient load, no hard
+   failure). Shared by the routes, the PUT merge and migrateUserViews. */
+const VIEW_BLOB_KEYS = ['filters', 'sort', 'group', 'hidden', 'colW', 'showDone'];
+const VIEW_SCHEMA_VERSION = 1;
+function sanitizeViewBlob(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const k of VIEW_BLOB_KEYS) if (raw[k] !== undefined) out[k] = raw[k];
+  return out;
+}
 
 const NOTIF_PREF_DEFAULTS = {
   email_mention: true,
@@ -4106,6 +4139,68 @@ async function handleApi(req, res, url) {
     for (const key of Object.keys(incoming)) prefs[key] = Boolean(incoming[key]);
     await db.run('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [ws.id, user.id, JSON.stringify(prefs)]);
     return json(res, 200, { prefs: await getUserNotifPrefs(user.id, ws.id) });
+  }
+
+  /* ------------------- per-user saved views (Phase 57, VIEW-01, D-05/D-07) ------------------- */
+
+  if (pathname === '/api/me/views' && method === 'GET') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const wsId = String(url.searchParams.get('workspace') || '');
+    const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
+    const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
+    // No-oracle: a workspace the caller is not a member of reads as not-found.
+    if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    const key = String(url.searchParams.get('key') || '');
+    if (!key || key.length > 120) return fail(res, 400, 'invalidViewKey', 'Invalid view key');
+    const row = await db.get('select blob from saved_views where workspace_id = ? and user_id = ? and key = ? and name = ?', [ws.id, user.id, key, '']);
+    let live = null;
+    try {
+      const parsed = JSON.parse(row ? row.blob : 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) live = sanitizeViewBlob(parsed);
+    } catch {
+      /* corrupt stored blob: read as no live state — viewOf() defaults apply */
+    }
+    /* named views (Phase 57 plan 02) extend the named list; the live row is
+       the only shape VIEW-01 consumes. */
+    return json(res, 200, { views: { live, named: [] } });
+  }
+
+  if (pathname === '/api/me/views' && method === 'PUT') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    // Only body.workspace, body.key and body.blob are read; user_id always
+    // comes from the session — never the body (mass-assignment discipline,
+    // same as the notif-prefs PUT above). Revision-free per D-07: a view save
+    // can never 409 against a concurrent doc save.
+    const key = String(body?.key || '');
+    const incoming = body?.blob;
+    if (!key || key.length > 120) return fail(res, 400, 'invalidViewKey', 'Invalid view key');
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+      return fail(res, 400, 'invalidViewBlob', 'Invalid view blob');
+    }
+    const wsId = String(body?.workspace || '');
+    const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
+    const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
+    if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    // Merge into the existing row instead of replacing it (D-14 prohibition):
+    // a partial body must never erase blob keys the caller omits. Corrupt
+    // stored JSON starts clean; the whitelist intersection applies to the
+    // MERGED object so a stored legacy key cannot survive forever either.
+    const existingRow = await db.get('select blob from saved_views where workspace_id = ? and user_id = ? and key = ? and name = ?', [ws.id, user.id, key, '']);
+    let existing = {};
+    try {
+      const parsed = JSON.parse(existingRow ? existingRow.blob : '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed;
+    } catch {
+      /* corrupt stored blob: start from a clean object rather than crash */
+    }
+    const clean = sanitizeViewBlob({ ...existing, ...incoming });
+    await db.run('insert or replace into saved_views (workspace_id, user_id, key, name, blob, schema_version) values (?,?,?,?,?,?)', [ws.id, user.id, key, '', JSON.stringify(clean), VIEW_SCHEMA_VERSION]);
+    return json(res, 200, { views: { live: clean, named: [] } });
   }
 
   /* ----------------------- password change (PASS-01/02) ----------------------- */

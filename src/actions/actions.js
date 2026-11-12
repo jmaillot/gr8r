@@ -44,7 +44,6 @@ import { PERMS, TEMPLATES, closeModal, openModal, permLabel } from '../overlays/
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
-import { blockedToastOnce } from '../core/push.js';
 import { DEFAULT_OPTIONS, buildExportModel } from '../export/model.js';
 import { toCsv } from '../export/csv.js';
 import { download, saveBlob } from '../core/download.js';
@@ -1377,14 +1376,28 @@ A.toggleCol2 = el => {
   const c = el.dataset.v;
   v.hidden = v.hidden.includes(c) ? v.hidden.filter(x => x !== c) : [...v.hidden, c];
   save();
+  if (el.dataset.key) import('../core/viewSync.js').then(m => m.persistLiveView(el.dataset.key));
   render();
 };
+/* Phase 57 (D-14): "Reset columns" deletes the member's live view state for
+   this table key so the hardcoded viewOf() defaults return. The localStorage
+   entry goes too (local-mode half of the reset); in server mode the live-row
+   DELETE half lands with Phase 57 plan 02's DELETE route — the defaults
+   re-apply here regardless. */
 A.resetCols = el => {
-  viewOf(el.dataset.key).colW = {};
+  delete S.views[el.dataset.key];
+  const wsId = api.enabled ? api.workspace?.id : D().ws.url;
+  import('../core/viewSync.js').then(m => m.removeLocalSavedView(wsId, el.dataset.key)); // local-mode half of the D-14 reset
+  viewOf(el.dataset.key); // re-apply the D-13 defaults
   S.ui.pop = null;
   save();
   render();
 };
+/* Per-user view write-through + hydration live in the lazy viewSync chunk
+   (Phase 57, D-05/D-07 — DELIV-02 index-gate split). hydrateViews keeps the
+   call sites unchanged; the chunk is fetched at the first view write or the
+   first workspace entry. */
+export const hydrateViews = () => import('../core/viewSync.js').then(m => m.hydrateViews());
 IN.viewQ = el => {
   viewOf(el.dataset.key).q = el.value;
   render();
@@ -3148,7 +3161,7 @@ IN.npToggle = async el => {
     window.Notification.permission === 'default'
   ) {
     const p = await window.Notification.requestPermission();
-    if (p === 'denied') blockedToastOnce();
+    if (p === 'denied') import('../core/push.js').then(m => m.blockedToastOnce());
   }
   S.notifPrefs[el.dataset.k] = el.checked;
   const wsId = api.enabled ? api.workspace?.id : D().ws.url;
@@ -3725,6 +3738,7 @@ export async function openWorkspace(slug) {
   const res = await hydrateFromServer(slug);
   if (!res.ok) return res;
   await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
+  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
   history.replaceState(null, '', `/w/${slug}`);
   S.ui.route = 'home';
   S.ui.params = {};
@@ -3785,6 +3799,7 @@ async function finishLogin(em, done) {
       const joined = await hydrateFromServer(joinSlug);
       if (joined.ok) {
         await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
+  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
         history.replaceState(null, '', `/w/${joinSlug}`);
         enterApp(t('toast.welcomeTo', { name: api.workspace?.name || joinSlug }));
         reportRecoveryBurn();
@@ -3807,6 +3822,7 @@ async function finishLogin(em, done) {
     return;
   }
   await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
+  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
   history.replaceState(null, '', `/w/${slug}`);
   S.ui.wantedSlug = null;
   enterApp(t('toast.signedInAs', { name: api.user?.name || em }));
@@ -3993,6 +4009,7 @@ A.doJoin = () => {
       return;
     }
     await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
+  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
     S.ui.pwNew = '';
     history.replaceState(null, '', `/w/${slug}`);
     enterApp(t('toast.welcomeUser', { name: nm }));
@@ -4055,6 +4072,7 @@ A.doSignup = () => {
       return;
     }
     await hydrateNotifPrefs(); // G-34-4: adopt the stored prefs before the first render
+  await hydrateViews(); // Phase 57: adopt the live view rows before the first render
     history.replaceState(null, '', `/w/${slug}`);
     S.ui.af.pw = '';
     enterApp(t('toast.welcomeUser', { name: nm }));

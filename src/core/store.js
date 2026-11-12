@@ -97,7 +97,12 @@ export const saved = load();
 export const S = {
   data: saved?.data || emptyState(),
   prefs: stripLegacyLang(Object.assign({}, DEFAULT_PREFS, saved?.prefs || {})),
-  views: saved?.views || {},
+  /* Per-user view state (Phase 57, D-05/D-08): never on the document. The map
+     starts empty — viewOf() creates the hardcoded defaults per key on demand
+     (D-13) — and hydrateViews() adopts the per-workspace localStorage mirror
+     (local mode) or the saved_views live rows (server mode) before the first
+     table render. */
+  views: {},
   /* Per-user notif prefs (Phase 34 D-01): never on the document. Local mode
      hydrates from the per-workspace localStorage key; API mode adopts the
      server row's canonical merge on the first toggle. */
@@ -160,10 +165,13 @@ let changeSeq = 0;
 /* Phase 34 Pitfall 3: docSnapshot must never include notifPrefs — belt-and-braces
    on top of the load-time strip, so a legacy field that somehow reached S.data
    (an old hydrate path, a restored backup) can never ride a save back into
-   workspaces.doc. Deleting in place keeps the snapshot allocation-free. */
+   workspaces.doc. Deleting in place keeps the snapshot allocation-free.
+   Phase 57 (D-05/D-06): the same prohibition now covers view state — the
+   snapshot simply never carries the top-level views field; per-user view
+   state lives in saved_views rows / the localStorage mirror, never the doc. */
 const docSnapshot = () => {
   delete S.data.notifPrefs;
-  return { data: S.data, prefs: S.prefs, views: S.views, collapsed: S.ui.collapsed };
+  return { data: S.data, prefs: S.prefs, collapsed: S.ui.collapsed };
 };
 
 function notify(detail) {
@@ -305,7 +313,13 @@ export function applyDoc(doc, revision) {
   /* P4-a: notifications are per-recipient — rows without `to` are pre-P4 legacy/demo and purged. */
   if (Array.isArray(S.data.notifs)) S.data.notifs = S.data.notifs.filter(n => n && typeof n.to === 'string' && n.to);
   S.prefs = stripLegacyLang(Object.assign({}, DEFAULT_PREFS, doc.prefs || {}));
-  S.views = doc.views || {};
+  /* Phase 57 (D-05/D-06): the document is never a view-state carrier again.
+     A stale server copy (or a doc snapshot saved by a pre-migration client)
+     must not resurrect the top-level views field into app state — strip it
+     here (hydration site) the same way docSnapshot strips it at save time.
+     Per-key state re-enters via hydrateViews() from saved_views rows. */
+  delete doc.views;
+  S.views = {};
   S.ui.collapsed = !!doc.collapsed;
   S.ui.conflict = false;
   if (Number.isInteger(revision)) api.revision = revision;

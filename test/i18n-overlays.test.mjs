@@ -430,7 +430,7 @@ const TASK3_ORACLE = [
   ['sort.groupBy', undefined, 'Group by'],
   ['sort.none', undefined, 'No grouping'],
   ['popover.visibleColumns', undefined, 'Visible columns'],
-  ['popover.resetWidths', undefined, 'Reset widths'],
+  ['popover.resetColumns', undefined, 'Reset columns'],
   ['popover.openProject', undefined, 'Open project'],
   ['a11y.react', { e: '👍' }, 'React 👍'],
   ['filter.and', undefined, 'and'],

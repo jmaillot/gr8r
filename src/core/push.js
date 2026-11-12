@@ -36,11 +36,17 @@ export function setToastSink(fn) {
 
 /* One-time explanatory toast when a permission request comes back 'denied'
    (48-02, D-48-4): at most ONE per browser session, module-scoped — the user
-   has already been told; re-toggling never spams the same explanation. */
+   has already been told; re-toggling never spams the same explanation.
+   Phase 57: the module now rides the lazy push chunk (DELIV-02 index gate),
+   so the latched state is exposed as a live binding for the D-48-4 test —
+   the handler resolves a DIFFERENT module instance than a static test
+   import would see. */
 let _blockedToastShown = false;
+export let blockedToastFired = false;
 export function blockedToastOnce() {
   if (_blockedToastShown) return;
   _blockedToastShown = true;
+  blockedToastFired = true;
   showToast(t('toast.pushBrowserBlocked'), { kind: 'err', ms: 9000 });
 }
 

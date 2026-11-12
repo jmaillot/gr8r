@@ -40,7 +40,10 @@ let pool = null; // pg Pool (pg backend)
 // pg needs an explicit conflict target for ON CONFLICT DO UPDATE. The only
 // `insert or replace` sites in server.js target user_notif_prefs, whose
 // composite PK is (workspace_id, user_id) — server.js SCHEMA.
-const PG_CONFLICT_TARGETS = { user_notif_prefs: '(workspace_id, user_id)' };
+const PG_CONFLICT_TARGETS = {
+  user_notif_prefs: '(workspace_id, user_id)',
+  saved_views: '(workspace_id, user_id, key, name)',
+};
 
 // Split `sql` into literal (single-quoted) and rewriteable spans.
 function splitLiterals(sql) {
@@ -269,6 +272,17 @@ export const SQLITE_SCHEMA = `
     user_id      text not null,
     prefs        text not null,
     primary key (workspace_id, user_id)
+  );
+  /* Phase 57 (D-05): per-user saved views + live column state, sentinel name ''
+     for the live row — mirrors server.js SCHEMA verbatim. */
+  create table if not exists saved_views (
+    workspace_id   text not null,
+    user_id        text not null,
+    key            text not null,
+    name           text not null,
+    blob           text not null,
+    schema_version integer not null,
+    primary key (workspace_id, user_id, key, name)
   );
   /* Phase 46 (MCP): API keys for external clients. Mirrors server.js SCHEMA —
      hash-at-rest, prefix for display, mandatory expiry, read/write scope. */

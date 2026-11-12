@@ -299,6 +299,10 @@ test("a missing Notification API degrades to a silent no-op — no throw", async
 /* reset the module-level session state each expansion run relies on */
 const notifPrefsStored = () => JSON.parse(localStorage.getItem('projects.notifPrefs.acme'));
 const toggle = (k, checked = true) => actions.IN.npToggle({ checked, dataset: { k } });
+/* Phase 57: blockedToastOnce rides the lazy push chunk (DELIV-02 index gate),
+   so the one-time-toast module state the D-48-4 assertion reads must come
+   from the same dynamic import the npToggle handler resolves. */
+const pushChunk = () => import('../src/core/push.js');
 
 test('permission default + toggle-ON of a push_* key: requestPermission fires exactly once and the pref still persists (D-48-3)', async () => {
   Notification.permission = 'default';
@@ -319,6 +323,7 @@ test('permission denied after the request: the blocked toast fires exactly ONCE 
   Notification.requestPermission = async () => 'denied';
   await toggle('push_assign');
   await toggle('push_comment');
+  assert.equal((await pushChunk()).blockedToastFired, true, 'the blocked-toast once-guard latched (D-48-4)');
   assert.equal(toasts.length, 1, 'the explanatory toast is one-time per session');
   assert.ok(toasts[0].length > 0, 'the toast carries the catalogue line');
   assert.equal(notifPrefsStored().push_assign, true, 'the pref saves despite denial (fall-through)');

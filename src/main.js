@@ -51,12 +51,14 @@ import './actions/subtasks.js';
 import './actions/archive.js';
 import { S, D, hydrateFromServer, resetDirty, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee, ensureSeedData, saved } from './core/store.js';
 import { api } from './core/api.js';
-import { A, hydrateNotifPrefs, refreshMembers } from './actions/actions.js';
+import { A, hydrateNotifPrefs, hydrateViews, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
 import { ROUTE_IDS, render, go } from './shell/render.js';
 import { $ } from './core/utils.js';
-import { notifyNewEvents, permChanged } from './core/push.js';
 import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale } from './core/i18n.js';
+/* notifyNewEvents/permChanged ride the lazy push chunk (DELIV-02 index gate):
+   both call sites sit inside the async 30s poll, never on the boot path. */
+const pushMod = () => import('./core/push.js');
 
 /* The locale change re-renders the app: one listener, one re-render, never
    batched or debounced (D-01). The loop guard in applyPrefs() keeps this from
@@ -82,6 +84,7 @@ const pollNotifs = async () => {
   if (!res.ok) return;
   const unread = myNotifs().filter(n => !n.read).length;
   const perm = pollPerm();
+  const { permChanged, notifyNewEvents } = await pushMod();
   if (unread !== _pollUnread || permChanged(perm, _pollPerm)) {
     _pollUnread = unread;
     _pollPerm = perm;
@@ -133,6 +136,7 @@ addEventListener('projects:save-error', e => {
         const res = await hydrateFromServer(slug);
         if (!res.ok) return; // conflict stays; user can retry
         await hydrateNotifPrefs(); // G-34-6 pin: every hydrate success site adopts prefs
+        await hydrateViews(); // Phase 57: adopt the live view rows alongside the prefs
         resetDirty();
       },
     });
@@ -149,6 +153,7 @@ addEventListener('projects:save-error', e => {
       const res = await hydrateFromServer(slug);
       if (!res.ok) return; // conflict stays; unsaved edits still exist
       await hydrateNotifPrefs(); // G-34-6 pin: every hydrate success site adopts prefs
+      await hydrateViews(); // Phase 57: adopt the live view rows alongside the prefs
       resetDirty();
     },
   });
@@ -376,7 +381,7 @@ async function seedLegacyLocale() {
       return;
     }
     if (!ws.ok) toast(tk('err.wsLoadFailed'), { kind: 'err', ms: 8000 });
-    else { await seedLegacyLocale(); await hydrateNotifPrefs(); } // G-34-6: adopt the stored prefs before the first render
+    else { await seedLegacyLocale(); await hydrateNotifPrefs(); await hydrateViews(); } // G-34-6: adopt the stored prefs before the first render
     deepLink = restFromPath;
   }
 

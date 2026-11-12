@@ -78,6 +78,11 @@ test('the build emits a lazy seed chunk', () => {
 });
 
 /* 56-02 final edge set: design-system, members, activity, search. */
+
+test('the build emits a lazy viewSync chunk (57-01: the per-user view substrate)', () => {
+  const chunks = chunksByPrefix('viewSync');
+  assert.ok(chunks.length > 0, `no viewSync-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
 test('the build emits a lazy design-system chunk', () => {
   const chunks = chunksByPrefix('design-system');
   assert.ok(chunks.length > 0, `no design-system-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);

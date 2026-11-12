@@ -56,7 +56,7 @@ export function registerAuthRevokedHandler(fn) {
   revokedHandler = fn;
 }
 
-async function call(method, path, body, { keepalive = false } = {}) {
+export async function call(method, path, body, { keepalive = false } = {}) {
   let res;
   try {
     res = await fetch(path, {
@@ -298,6 +298,11 @@ export const api = {
   async putNotifPrefs(workspaceId, prefs) {
     return call('PUT', '/api/me/notif-prefs', { workspace: workspaceId, prefs });
   },
+  /* Per-user saved views & live column state (Phase 57, VIEW-01, D-05/D-07):
+     the GET/PUT helpers live in the lazy viewSync chunk (DELIV-02 index-gate
+     split) directly over the exported call() — the row shape mirrors
+     notifPrefs above (workspace id + table key ride the request, the session
+     supplies the user_id; blobs whitelisted server-side, PUT merges). */
   /* Auth-scoped session management (SESS-01/02): /api/auth/* endpoints take no
      workspace slug, so these follow the login/logout pattern above — no slug guard. */
   async sessions() {

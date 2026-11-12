@@ -314,7 +314,7 @@ export function popHtml(p) {
               `<label class="mi" style="cursor:pointer"><input type="checkbox" class="check" data-a="toggleCol2" data-key="${p.key}" data-v="${c[0]}" ${v.hidden.includes(c[0]) ? '' : 'checked'}>${tMsg(c[1])}</label>`,
           )
           .join('') +
-        `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${p.key}">${ic('rotate-ccw', 14)}${tMsg('popover.resetWidths')}</button>`;
+        `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${p.key}">${ic('rotate-ccw', 14)}${tMsg('popover.resetColumns')}</button>`;
       break;
     }
     case 'filter':
