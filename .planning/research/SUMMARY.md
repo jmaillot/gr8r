@@ -1,159 +1,166 @@
 # Project Research Summary
 
-**Project:** gr8r / Projects Studio — Milestone v2.1 Member & Project Experience
-**Domain:** Project-management workspace UI/UX (modals, pickers, permission surfaces, table columns) on a security-hardened vanilla-stack codebase
-**Researched:** 2026-11-09
-**Confidence:** HIGH (code-verified file:line anchors across all four research documents)
+**Project:** Projects Studio (gr8r) — milestone v2.2 Notifications, Search & Delivery
+**Domain:** Self-hosted project-management workspace (Node monolith, JSON workspace docs, dual SQLite/pg, vanilla-JS SPA)
+**Researched:** 2026-11-12
+**Confidence:** HIGH (architecture & pitfalls codebase-grounded at HEAD; stack versions verified against npm/Node/Vite docs; feature UX from canonical product behaviors)
 
 ## Executive Summary
 
-v2.1 is a UI refactor/polish batch on top of a v2.0 permission system whose defining trait is a **single, hand-guarded visibility funnel** (`canSeeProject` / `memberCanReadProject`, server.js:800-865) with five+ consumers and a hand-maintained MCP mirror. The research conclusion is unusually clean: **zero new stack dependencies** (STACK.md verdict), every feature reuses proven in-repo patterns (`data-in` silent state binding, `foldForSearch`, immediate-action share controls, chip pickers), and the only genuinely new server surface is **per-team permission tiers** (M-09) — which is also where nearly all the risk lives.
+v2.2 adds nine features to an already-disciplined system, and the research converges on one controlling fact: **everything data-bearing either hooks the single doc-PUT funnel or follows the Phase 34 authority-rows precedent**. The recommended approach is: deliver infrastructure first (e2e dist guard + Vite code-splitting, so every later phase's verification runs on it), then doc-model client work (saved views + column show/hide), then the two new server surfaces that share the funnel diff (FTS search and push fan-out), then read-only views (dashboard, TRN-02), and last the owner-blocked NOTIF-TRIM. No architectural novelty is required anywhere — only discipline in reusing four proven patterns: diff-at-the-funnel, additive authority rows, env-gated feature absence, and the `memberCanReadProject` redaction funnel.
 
-The recommended approach has one hard ordering: **server perm semantics before UI**. Per-team perms must (a) live as namespaced keys inside the existing `p.perms` object (`p.perms['team:'+teamId]`) — not a new field — so every existing sink (merge pin block, removal sweep, normalize) works unchanged; (b) keep `canSeeProject` a boolean visibility predicate and tier *capabilities* via a new `projectPermFor` helper applied in write routes; and (c) ship in one lockstep commit across the funnel + `projectAccessReason` + the mcp.js mirror. The rest — invite-draft fix, projects chips, guest-one-project clamp, searchable members box, unified settings modal, table columns, Share-button dedup — is LOW/MEDIUM render work consuming already-shipped data (`p.lead`, `p.teams`, `progressOf`, PSTAT).
+The stack story is minimal by design: **one candidate new runtime dep (`web-push@4.0.0`)** and one hard runtime constraint (**Node ≥ 22.16 for FTS5 in `node:sqlite`**, with a boot probe + LIKE fallback). Everything else is built-ins: Vite native dynamic imports for splitting, `unicode61`/`remove_diacritics` for FR accent tolerance, and an extended `public/sw.js` that stays out of the build pipeline. A spike should verify the deployment Node actually ships FTS5 before the search phase plans anything.
 
-The key risk is **funnel/mirror divergence**: the pinned-test doctrine ("never edit the funnel") can push implementers toward building a second predicate beside the funnel — the exact anti-pattern the one-funnel doctrine forbids. This is no longer hypothetical: **on the day of research (commit 09a9c41, 2026-11-09) the client `canSee` in src/core/store.js lacked the live-team term the server funnel had, so team-granted projects rendered in lists but 404'd on open** — a production bug, same failure class as the Phase 50 `remindable()` miss. Every phase that touches access must treat client-mirror parity as an empirical, tested concern, not an assumption.
+The risks are all known classes with in-house precedents: push subscription churn (404/410 sweep, never retry), VAPID key loss on restart (persist like MASTER_KEY — the v1.5 keyring lesson), FTS index drift from non-funnel write paths (single chokepoint hook + boot rebuild + consistency count), privacy leaks in search/dashboard/self-view results (everything routes `memberCanReadProject` or its dedicated redaction funnel, tested byte-level), and locale-chunk races at first paint (EN base catalogue in the entry chunk, boot-gated await).
 
 ## Key Findings
 
-### Recommended Stack
+### Recommended Stack (STACK.md)
 
-**Verdict: ZERO additions.** No runtime deps, no dev deps, no build-config change (PROJECT.md:152 zero-dep constraint holds untouched). Installation step: nothing.
+The only possible new runtime dependency is `web-push@4.0.0` (ESM, deps dropped, 0 vulnerabilities). FTS5 comes free inside `node:sqlite` on Node ≥ 22.16 (not 22.14/22.15, not any 23.x — and distro builds may strip it: probe at boot, don't trust). Vite already emits every `import()` as a chunk; no splitting plugin is wanted. Nothing else is added.
 
-**Core technologies (all existing):**
-- Vanilla ES modules + Vite ^6.4.4 — every feature is DOM templating + event wiring already done everywhere
-- Hand-made `t()` i18n — ~20-40 new EN+FR keys; `scripts/i18n-scan.mjs` prebuild gate enforces parity
-- `data-a` action pinning — new rows/buttons keep e2e and delegation stable
-- `node:sqlite`/`pg` adapter — only data change is a doc-field extension (`p.perms` team keys); **zero migrations**
+**Core technologies:**
+- **`web-push@4.0.0`**: RFC 8291 payload encryption + VAPID signing from `server.js` — the `pg`-precedent scoped dep (D-12 amendment); hand-rolled fallback (~300–500 lines crypto, the riskiest hand-rolled piece the project would own) only if the owner vetoes
+- **Service Worker + Push API (browser natives)**: extend the existing Phase 48 `public/sw.js` in place — no workbox, no `vite-plugin-pwa`, never through the Vite pipeline
+- **VAPID keys as env vars** (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`): MASTER_KEY custody pattern, DEPLOY.md section, fail-closed when absent
+- **SQLite FTS5 via `node:sqlite`**: engine floor `>=22.16` (recommend 24 LTS) + boot probe on `:memory:` + parameterized-LIKE fallback; never `better-sqlite3` (native dep) and never an external engine (breaks single-image self-hosting)
+- **Vite native code-splitting**: dynamic `import()` for locales and heavy views; keep `chunkSizeWarningLimit` at 500 kB — that warning is the milestone's acceptance gate; `build.manifest: true` feeds the e2e dist guard
 
-**Do NOT add** (hard): UI framework, component library, state-management lib, search/autocomplete lib, i18n framework, date-picker lib, new tooling — each measured as larger than the in-repo pattern it would replace.
+### Expected Features (FEATURES.md)
 
-### Expected Features
+**Must have (table stakes):**
+- Browser push for mentions + assignments only — settings-surface opt-in, deep-link click-through to `/w/:slug/task/:key`, prefs-gated (`push_mention`/`push_assignment`), per-device test button
+- FTS5 search over titles + descriptions, permission-filtered, grouped palette results + "see all" results page, accent-insensitive (FR is first-class), highlighting
+- Admin dashboard with the **4 fixed widgets** (overdue per project, workload per member — per-assignee since v2.1 `assignees[]`, upcoming dues, recent activity) — anti-builder
+- TRN-02 member self-view: pure re-surface of TRN-01's `memberCanReadProject` + reason codes, strictly self-scoped
+- NOTIF-TRIM: apply the already-written D-05-ruling-gated audit recommendations + generalize RFC 8058 one-click unsubscribe to all notification emails
+- Column show/hide per user (highest-value, lowest-risk slice of saved views)
 
-**Must have (table stakes — P1):**
-- Invite modal: `data-in` draft-persistence fix + projects chips + guest = exactly one project (enforced server-side too)
-- Unified project settings modal (General + Access) — the keystone; absorbs projectModal + shareModal (M-12)
-- Single labeled Share button; user+ icon and avatar-stack duplicates removed (M-13)
-- Per-team permission dropdowns (view/comment/edit/full ladder — same ladder as per-person, M-09)
+**Should have (competitive differentiators):**
+- Saved views as named bundles ({filters, sort, visible columns}) with reset/manage — one "saved filter" primitive shared with search and dashboard drill-downs
+- Watch/unwatch (GitHub's best trim idea; auto-watch already exists), quiet hours, burst coalescing, per-type digest routing
+- General-Access granularity riding the existing `p.perms` model — zero new stack
 
-**Should have (P2):**
-- Searchable members box in Edit Team (reuse `foldForSearch`) + multi-team plural wording
-- Projects table columns: Lead / Teams (chips +N overflow) / Members count (+tooltip, not avatar stack) / Status pill + progress bar / Target date
+**Defer (v2.x+):**
+- Search operators/saved searches (hidden-by-default), cross-project/workspace saved views, shared views, "request access" flow, access-change history (each needs an owner ruling), comment/attachment search, dashboard builder, NL date queries
 
-**Defer (v1.x / v2+):** live-roster hint in Access tab; searchable pattern rolled into other pickers; past-due red emphasis; per-project member drawer; General-Access granularity beyond private/public; column show/hide + saved views.
+**Hard anti-features:** push for low-intent events, per-notification email actions, fully shareable view URLs, per-project velocity/burndown (needs untracked task history).
 
-**Anti-features to reject:** avatar stacks in the table; a second "Share…" quick-action; binary team perms (splits the mental model); inline member management in table rows; spray-searching every picker at once; per-project perms editable at invite time.
+### Architecture Approach (ARCHITECTURE.md)
 
-### Architecture Approach
+Everything integrates through three precedents: per-user state goes in **rows** (Phase 34), side-effect fan-out hooks the **doc-PUT diff site** fire-and-forget after commit (P4-f email fan-out), and the SW stays a **minimal dependency-free click router** (Phase 48). The FTS index is a shadow `task_fts` projection table maintained transactionally inside the doc-PUT tx (triggers can't diff JSON; a full rebuild per PUT breaks the funnel's one-diff shape) behind an adapter seam `db.searchTasks()` so both backends pass the same suite, healed by a boot sweep. Push subscriptions are a `push_subscriptions` table with fan-out at **two** sites (doc-PUT `newNotifs` diff + `runReminderPass`); payloads are pre-localized tickers (`{url, title, body}` via `tFor`), the SW keeps zero strings. Dashboard is **client-computed** from the already-hydrated doc (pure functions, no server aggregate route). TRN-02 branches the TRN-01 route on role — one funnel, one test matrix. The e2e dist guard lives inside `e2e/server.mjs` beside the existing dist check, failing loudly rather than auto-rebuilding.
 
-The architecture makes this milestone cheap **if** the per-team perms decision is followed: namespaced keys inside `p.perms` (flat `p.perms['team:'+tid]`) require zero changes to mergeClientDoc (:1094 restores it wholesale), normalizeProjects (:899 accepts any object), and the removal sweep (:1948-1958). The one genuine server change: a new `projectPermFor(p, memberId, memberTeams)` helper that resolves effective perm (member entry > best linked-team entry; defaults mirroring modals.js:275), applied to **write routes** — visibility stays boolean. Build order: server perms helper + write gating + funnel/mirror/reason lockstep **before** the settings modal ships team-perm pickers, otherwise the UI writes values nothing enforces.
+### Critical Pitfalls (PITFALLS.md)
 
-**Major components:**
-1. **Server perm layer** (server.js ~:800-900) — `projectPermFor`, team-key validation in normalize, write-route gating; lockstep with `projectAccessReason` (:828) and mcp.js `canReadProject` (:183)
-2. **Unified settings modal** (modals.js) — merges projectModal (form+submit) + shareModal (immediate-action controls); net code *reduction*; `IN.teamPerm` mirrors `IN.sharePerm`
-3. **Invite modal** (modals.js:312 + actions.js) — `data-in="inviteDraft"` + `IN.inviteDraft`; projects chips ride the already-wired `S.ui.inviteScope` payload; guest clamp needs a server-side role check at server.js:5196+
-4. **Render-only surfaces** — projects.js table columns, project.js:74-76 button cleanup, teams.js search box; all consume existing data
+1. **Push subscription churn** — treat `404`/`410` as authoritative and sweep dead rows in the same pass as the fan-out; re-subscribe replaces, never accumulates. Never retry them.
+2. **VAPID keys not persisted** — every restart would silently orphan all subscriptions; persist in `/data` like MASTER_KEY, never regenerate when stored, restart-integration test required (the MASTER_KEY/keyring lesson, verbatim).
+3. **FTS index drift** — non-funnel write paths (MCP mirror, bulk PUT, boot migrations, pg copy) silently break search; hook the **one real write chokepoint** (the doc-PUT funnel diff site, same site as email fan-out), rebuild on boot, log consistency counts, test the bulk/MCP paths.
+4. **Transparency self-view leaking others' data** — reusing the admin TRN-01 path as-is leaks team rosters/leads/invitees; a separate self-scoped redaction funnel with byte-level response-shape tests per role (Phase 29 404-matrix style).
+5. **Permission leaks in dashboard aggregates** — admin-gated ≠ sufficient; each aggregate item routes `memberCanReadProject`/`hiddenFor`; count-only leaks are still leaks. Private-project collapse-vs-hide is an owner decision for discuss-phase.
 
-**Patterns to follow:** `data-in` silent binding (mutate `S.ui`, no render in handler); immediate-action controls for access edits; manager-guarded pin block protection inherited free by living inside `p.perms`.
-
-**Anti-patterns:** a new `p.teamPerms` top-level field (three changed sinks instead of zero); tiered visibility inside `canSeeProject` (forks a 10+-call-site predicate); a second predicate beside the funnel.
-
-### Critical Pitfalls
-
-1. **Funnel/mirror divergence (CRITICAL — now empirically proven).** Per-team perms must become a term *inside* the funnel, edited in place, in one lockstep commit across server funnel + `projectAccessReason` + mcp.js mirror — never a parallel helper. Extend the `VISIBILITY_MODEL` oracle (anti-tautology, test/helpers/visibility-fixture.mjs:5-8) with team-perm cells. **Live validation: commit 09a9c41 (2026-11-09) fixed exactly this bug class — client `canSee` lacked the live-team term; team-granted projects listed but 404'd.** A fifth consumer now exists: the client store mirror. Client-mirror parity must be a tested fixture cell, not "true by construction."
-2. **Pin-block omission silently mass-revokes.** Any new access field must join the `mergeClientDoc` pin block (server.js:1090-1101) in its introduction commit, with a stale-PUT regression test (T-50-01 pattern). Living inside `p.perms` avoids this entirely — a strong argument for the namespaced-key design.
-3. **Unified modal stale-doc writes.** One PUT now carries General (lead-editable) + Access (manager-only) fields. Modal must mutate live store state (never a frozen open-time copy), adopt revisions, and gate the Access section client-side with the *shared* `canManageProject` — else non-managers see silent no-op saves and concurrent admins silently revert each other.
-4. **Full re-render wiping unsaved input at scale.** The invite-draft bug will be reintroduced by the unified modal unless *every* keystroke-able field gets a `data-in` binding as a plan-level checklist item; dynamic per-team rows key state by team id; per-field survives-interaction e2e in both locales.
-5. **Guest invariant enforced client-side only.** Behavior-only by design (D-50-11), so every new write path must re-derive it: one shared server validator across invite create/edit/accept + MCP tool; decide the zero-projects-guest lifecycle this milestone.
-
-Moderate: i18n dead keys from removed modals (prune in-phase, narrow allowlist entries only, deliberate catalogue-pin bump); `data-a` pin drift during modal consolidation (reuse `submitProject` where semantics match); table columns leaking access data (coarse reason codes only, no rosters/perm levels in tooltips — T-52-03 doctrine).
+Moderate: push payload ≤ 4096 octets (ticker, never task bodies — size test with worst-case FR titles); FTS5 MATCH injection + tokenizer locked at table creation (`remove_diacritics` decision is unchangeable without full rebuild); saved-view schema versioning with lenient-load intersect; locale chunk race at first paint (EN base in entry chunk); dist guard staleness via content-hash stamp inside `dist/`.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure (5 phases):
+Based on research, suggested phase structure (ordering follows ARCHITECTURE's dependency-respecting build order):
 
-### Phase 1: Per-Team Perms — Server Model
-**Rationale:** The only genuinely new server surface and the keystone everything else writes through; shipping UI first would create pickers that write values nothing enforces.
-**Delivers:** `projectPermFor` helper; team-key normalization + validation in `normalizeProjects`; write-route gating for comment/edit; read/write semantics decided with owner (team "Full access" ≠ `canManageProject` unless ruled otherwise).
-**Addresses:** M-09 server half.
-**Avoids:** Pitfalls 1, 2, 9 — funnel edit in place, lockstep with `projectAccessReason` + mcp.js mirror + client `canSee` store mirror (all in one commit), `VISIBILITY_MODEL` oracle cells, pinned tests extended in-phase.
+### Phase 1: Delivery infrastructure — e2e dist guard + code-splitting + i18n infra
+**Rationale:** every later phase's e2e runs on this; splitting changes the bundle shape for all subsequent verification. Small, low-risk, no dependencies.
+**Delivers:** content-hash staleness guard in `e2e/server.mjs` (refuse-to-start, fail-closed); dynamic-import locales + heavy views (no >500 kB chunk, warning limit untouched); i18n catalogue-loader contract so every later phase adds keys under the new regime.
+**Addresses:** e2e guard, Vite splitting, i18n infrastructure (milestone targets).
+**Avoids:** Pitfall 9 (locale chunk race), 10 (stale/rebuild-every-run guard), 11 (over-splitting).
 
-### Phase 2: Invite Modal — Draft Persistence, Projects Chips, Guest Clamp
-**Rationale:** Independent, small, zero dependency on Phase 1's server model; fixes the headline UX bug and the guest invariant while it's cheap.
-**Delivers:** `data-in="inviteDraft"` + `IN.inviteDraft`; projects chips on existing `S.ui.inviteScope` payload; guest = exactly one project enforced server-side (role-based check at server.js:5196+) + client single-select degradation; shared server validator across create/edit/accept/MCP.
-**Addresses:** M-01-adjacent invite UX, guest invariant.
-**Avoids:** Pitfalls 4, 5.
+### Phase 2: Saved views + column show/hide + General-Access granularity
+**Rationale:** doc-only client work, no server deps; exercises the doc-PUT normalizer before bigger server changes land.
+**Delivers:** column picker, named view bundles with reset/manage, General-Access via existing `p.perms['team:'+id]`.
+**Addresses:** column show/hide, saved views, General-Access granularity.
+**Avoids:** Pitfall 8 (versioned schema + lenient-load), 15 (doc-sink bloat).
+**⚠ Owner decision:** saved views storage — see Gaps.
 
-### Phase 3: Unified Project Settings Modal (General + Access)
-**Rationale:** The keystone; depends on Phase 1's server perm model (team-perm dropdowns need something enforcing them). Net code reduction — two modals deleted, one ~300-line renderer replaces them.
-**Delivers:** Single `settings` modal with General (form+submit) and Access (immediate-action, incl. `IN.teamPerm` team dropdowns); dispatcher/entry-point retargets; live store-state mutation + revision adoption; dead i18n keys pruned in-phase.
-**Addresses:** M-12, M-09 UI half.
-**Avoids:** Pitfalls 2 (re-verify Phase 1's pin), 3, 4, 6, 7 — the stale-doc write matrix {manager, lead, team-edit-member, member, guest} × {open, edit general, edit access, save} and the concurrent-edit UAT scenario are this phase's core tests.
+### Phase 3: FTS5 full-text search
+**Rationale:** depends on Phase 1 for verified e2e; new adapter seam + funnel diff + boot sweep + redacted search route + Ctrl-K integration.
+**Delivers:** `task_fts` shadow table behind `db.searchTasks()`, transactional diff sync at the doc-PUT funnel (same site as email fan-out), boot rebuild sweep, `GET /api/workspaces/:slug/search?q=` filtered through `memberCanReadProject`, grouped palette results + results page.
+**Addresses:** full-text search wired into Ctrl-K.
+**Avoids:** Pitfall 3 (drift), 7 (MATCH injection; tokenizer decision as a logged phase decision), plus the dual-backend suite gate.
+**Flag:** needs `--research-phase` if boot probe reveals the deployment Node lacks FTS5 (LIKE fallback path changes the plan).
 
-### Phase 4: Projects Table Columns + Share Button Dedup
-**Rationale:** Pure render work on existing data; naturally pairs with the modal (Share button opens its Access tab) and shares the i18n-prune concern.
-**Delivers:** Lead / Teams chips (+N) / Members count + tooltip / Status pill + progress bar (hidden when no tasks) / Target date columns; project.js:74-76 duplicate affordances removed.
-**Addresses:** M-10, M-11, M-13.
-**Avoids:** Pitfalls 6 (shared strings), 8 (disclosure doctrine — coarse codes only), 10 (explicit PSTAT key map).
+### Phase 4: Server push fan-out (mentions + assignments)
+**Rationale:** lands after Phase 3 so the `newNotifs` diff site isn't edited twice mid-milestone; notification pipeline already exists (Phase 36/38 + Phase 48 UX foundation).
+**Delivers:** `push_subscriptions` table, VAPID env + DEPLOY.md section, `sendPushFor()` beside `queueNotifEmails` (fire-and-forget, post-commit), `push` handler in `sw.js`, per-device test, 404/410 sweep, ticker payloads.
+**Addresses:** browser push for mentions + assignments.
+**Avoids:** Pitfall 1 (churn), 2 (VAPID persistence), 6 (payload size), 12 (SW staleness), 13 (prompt only on explicit intent — never page-load).
+**⚠ Owner decision:** `web-push@4.0.0` vs hand-rolled RFC 8291 — see Gaps. Needs `--research-phase` (RFC 8291/VAPID crypto + Safari/iOS real-device UAT).
 
-### Phase 5: Searchable Members Box + Wording Polish
-**Rationale:** Fully independent, lowest risk; a clean close-out phase and a proving ground for the `foldForSearch` pattern before it spreads to other pickers in v1.x.
-**Delivers:** `foldForSearch`-based search in teamModal members fieldset (`S.ui.teamMembersQ`); multi-team plural wording fix (EN+FR).
-**Addresses:** remaining P2 items.
-**Avoids:** Pitfall 4 (same survives-interaction e2e applied).
+### Phase 5: Admin dashboard + TRN-02 self-view
+**Rationale:** read-only client/funnel work, no ordering risk; benefits from Phase 1 i18n infra; can absorb NOTIF-TRIM UI outcomes.
+**Delivers:** 4 fixed widgets (client-computed pure functions), TRN-02 self-scoped redaction funnel with byte-level response-shape tests.
+**Addresses:** admin dashboard, TRN-02 member transparency.
+**Avoids:** Pitfall 4 (self-view leak), 5 (aggregate leaks — funnel per item).
+**⚠ Owner decision:** private-project contributions in dashboard — collapsed "N more private" count vs hidden entirely.
+
+### Phase 6: NOTIF-TRIM
+**Rationale:** blocked on owner D-05 rulings by design; can run in parallel with Phases 4–5 once rulings arrive.
+**Delivers:** decided default matrix applied, one-click unsubscribe generalized, Phase 38 suppression + no-double-send invariants re-run unmodified.
+**Addresses:** NOTIF-TRIM.
+**Avoids:** Pitfall 14 (no speculative trims before rulings).
 
 ### Phase Ordering Rationale
 
-- **1 → 3 is a hard dependency** (server-before-client): the team-perm UI is meaningless without enforcement, and Pitfall 1's lockstep commit must precede any surface that writes team keys.
-- **2 is independent** of 1 and 3 — slot early for quick value; its server clamp is 30 lines.
-- **4 and 5 are independent and parallelizable**; 4 pairs with 3 (Share button targets the new modal, shared i18n cleanup), so it follows 3.
-- Architecture research's own build order (ARCHITECTURE.md "Recommended build order") maps 1:1 onto this phase structure: 1→2→3→(5,6) with 2,5,6 parallelizable.
+- **Infrastructure → doc-model → server surfaces → read-only views → owner-blocked.** Phases 3–4 share the funnel diff site, so they are sequenced to edit it once each, not concurrently.
+- **Push is the most self-contained item** (Phase 48 foundation done); saved views is the most entangled — hence Phase 2 lands it early while the doc normalizer is the only thing changing.
+- **Every phase must respect the convergent hard rules:** search/dashboard/TRN-02 results all route `memberCanReadProject` or their dedicated redaction funnel (a bypass is a security regression, not a shortcut); push payloads are tickers ≤ 4096 octets, never task bodies; FTS sync lives at the doc-PUT funnel diff site (same site as email fan-out) plus a boot rebuild; VAPID keys persist server-side (MASTER_KEY lesson); permission prompts fire only on explicit intent.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1 (per-team perms server):** the read/write semantics decision (does team "Full access" grant `canManageProject`?) is an explicit owner ruling, not an implementation choice; also verify how `createInvites` flattens `scope.projects` into the POST body, and confirm the MCP invite tool's guest ceiling coverage.
-- **Phase 3 (unified modal):** plan-level checklist of every `data-in` binding before interaction code; concurrent-edit/stale-PUT test matrix needs explicit design.
+- **Phase 4 (push):** RFC 8291/VAPID crypto spike (hand-roll feasibility, ~150 lines vs `web-push` import), Safari/iOS push on real device, endpoint-404/410 semantics testing.
+- **Phase 3 (FTS):** FTS5 availability probe on the actual deployment Node; tokenizer (`remove_diacritics 2` vs input-side NFC+lowercase normalization) — creation-time constant, decide before table creation; pg-side parity query shape.
+- **Phase 1 (splitting):** confirm project's Vite major (8.x → `advancedChunks`; ≤7 → `manualChunks`); SW/chunk-hash contract must settle here before push ships.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (invite modal):** every wire point mapped to file:line; the fix is 2 bindings + 1 server check.
-- **Phase 4 (table columns):** all cell renderers exist elsewhere in the repo; column-insert + label tweak.
-- **Phase 5 (search box):** copy an existing pattern used in 4+ surfaces.
+- **Phase 2 (saved views):** established Phase 34 rows pattern + plain-DOM client state; only the storage-location owner decision needs resolving in discuss-phase.
+- **Phase 5 (dashboard + TRN-02):** pure re-surface of existing funnels and hydrated-doc computation; no new technology.
+- **Phase 6 (NOTIF-TRIM):** doc/audit-driven execution of already-cited recommendations.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Zero-addition verdict from direct repo reads (package.json, every cited helper verified at file:line) |
-| Features | HIGH | Established multi-year-stable competitor conventions (Asana/Linear/Notion/Monday/ClickUp); only soft spot: web search partially degraded, competitor rows rest on long-stable documented behavior rather than fresh captures |
-| Architecture | HIGH | Direct code reads of server.js, modals.js, actions.js, events.js, pages/, mcp.js; every claim anchored; build order derived from concrete dependency analysis |
-| Pitfalls | HIGH | All anchored to live file:line reads plus v2.0 phase artifacts; **Pitfall 1's failure mode has now been empirically validated in production (commit 09a9c41, 2026-11-09)** — client `canSee` store mirror diverged from the server funnel; team-granted projects rendered in lists but 404'd on open |
+| Stack | HIGH | Versions verified against npm/Node/Vite docs 2026-11-10..12; FTS5 availability floor verified against nodejs/node PRs; Safari/iOS push MEDIUM — verify in real-device UAT |
+| Features | HIGH | All six comparator products' behaviors are documented, canonical, and stable; gr8r ground truth codebase-verified |
+| Architecture | HIGH | Every claim verified against `server.js`, `src/core/push.js`, `public/sw.js`, `vite.config.js`, `e2e/server.mjs`, `db-adapter.mjs` at HEAD |
+| Pitfalls | HIGH | RFC/SQLite canonical sources + this codebase's own incident history (Phase 34 leak, MASTER_KEY keyring) |
 
-**Overall confidence:** HIGH — unusually so, because v2.1 builds on a codebase the research read line-by-line, and its central risk already materialized once and was fixed the same day.
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Read-vs-write semantics for team "Full access"**: owner decision required in Phase 1 planning before any code (does it ever grant access-list editing? default: no).
-- **Invite payload shape**: server reads flat `body.project`, client sends `scope.projects[]` — read `createInvites` in src/core/api.js during Phase 2 planning to pick where the "exactly one" clamp lives.
-- **Client-mirror parity testing**: commit 09a9c41 proves the client `canSee` (src/core/store.js) is a real funnel consumer that can drift. Add it to the `VISIBILITY_MODEL` oracle fixture set and to the lockstep-commit rule alongside server.js and mcp.js.
-- **Zero-projects-guest lifecycle**: reachable via the new picker's un-select UX; define behavior (downgrade? inert invite?) in Phase 2/3.
-- **MCP invite-tool guest coverage**: flagged as "verify at plan time" — confirm the MCP tool routes through the shared validator.
-- **Catalogue size pin**: the 1711-key pin needs a deliberate, documented bump when modals are merged.
+- **Saved views storage — owner decision (researchers diverged):** STACK recommends server rows (`saved_views(workspace_id, user_id, name, view_json)` via db-adapter, following the Phase 34 `notif_prefs` precedent: multi-device sync for free, no revision churn, no redaction complexity). ARCHITECTURE recommends the existing doc-synced `S.views` (no new table/sync discipline; the 409 hydrate-wins recovery already proven in Phase 55). Trade-off: server rows win on multi-device correctness and avoid revision churn + `mergeClientDoc` whitelisting; doc fields win on zero new plumbing but churn the shared revision on every personal tweak and leak other members' views if not stripped. **Resolve in discuss-phase with the owner; the Phase 34 precedent is the recommended default.**
+- **`web-push@4.0.0` vs hand-rolled RFC 8291 — owner decision (researchers diverged):** STACK recommends the dep (second D-12 amendment, like `pg`; the hand-roll is the single riskiest piece of hand-rolled crypto the project would own). ARCHITECTURE flags the hand-roll option (ECDH P-256 + HKDF + AES-GCM all in `node:crypto`, ~150 lines, Phase 30 RS256/JWKS precedent; if chosen, isolate in `push-crypto.mjs` like `oidc.js` so it can swap for `web-push` later). **Both viable; owner ruling in discuss-phase; either way the phase needs the crypto spike.**
+- **Private-project contributions in admin dashboard aggregates** — collapsed "N more private" count vs hidden entirely: owner decision, discuss-phase (Pitfall 5).
+- **FTS tokenizer** — `remove_diacritics 2` (creation-time constant) vs input-side NFC+lowercase normalization only: small phase decision with an accent-pair test matrix ("elodie" ↔ "Élodie"); decide before table creation since changing it requires a full rebuild.
+- **Deployment Node FTS5 availability** — probe at boot; if the runtime can't be floored to ≥22.16, the documented LIKE fallback over the projection table is the answer, not `better-sqlite3`.
+- **Vite major line** — verify 8.x vs ≤7 in the repo to pick `advancedChunks` vs `manualChunks` and confirm the `manifest` option before wiring the dist guard to it.
+- **Exact current setting labels/limits in comparator products** — LOW-authority (live search degraded during FEATURES research); not load-bearing for verdicts, irrelevant to implementation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct repo inspection this session: server.js (800-865, 1041-1159, 1935-1963, 5185-5314, :2850-2894), mcp.js (176-218), src/overlays/modals.js (41-344), src/actions/actions.js (1736-2050), src/actions/events.js (40-79), src/pages/{projects,project,overview,home,settings}.js, src/features/teams.js, src/core/{utils,store,constants}.js, scripts/i18n-scan.mjs
-- `.planning/PROJECT.md` — v2.1 targets, M-09..M-13 decisions (owner-validated 2026-11-09), standing constraints (:152, :183, :317-324, :364-367)
-- v2.0 phase artifacts: 50-REVIEW.md (remindable() parity failure), 52-PATTERNS.md:93 (funnel pin doctrine), 52-REVIEW.md (`?? 'member'` masking), test/helpers/visibility-fixture.mjs (anti-tautology contract), RETROSPECTIVE.md:256
-- **Live validation:** commit 09a9c41 (2026-11-09) — client canSee funnel divergence, production bug fixed same day
+- npm `web-push` v4.0.0 release notes / Snyk / GitHub releases — ESM migration, dep drop, 0 vulnerabilities
+- nodejs/node#56476 + PR #57621 (cjihrig comments) — FTS5 in `node:sqlite` from Node 22.16.0
+- Node.js v26 `node:sqlite` docs (stability 1.2 RC); Vite docs `build-options` + v8.3.8 changelog
+- RFC 8291 (≤4096 octets), RFC 8030 (push status semantics), RFC 8058 (one-click unsubscribe), SQLite FTS5 source (`ext/fts5`)
+- Codebase at HEAD: `server.js` (doc-PUT tx, `newNotifs` diff, reminder pass), `src/core/push.js`, `public/sw.js`, `vite.config.js`, `e2e/server.mjs`, `db-adapter.mjs`; PROJECT.md phase records (27/29/32/34/36/38/39/45/48/52/55)
+- Linear / GitHub / Asana / Trello / Todoist / Basecamp / Airtable / Notion product docs — canonical, stable UX patterns
 
 ### Secondary (MEDIUM confidence)
-- Linear docs (linear.app/docs/members-roles), verified 2026-11-09
-- Asana / Notion / Monday / ClickUp conventions from long-stable documented behavior (search partially degraded during research; see FEATURES.md Sources)
+- SQLite FTS5 external-content/contentless field guides (community, cross-checked with SQLite docs)
+- Hand-roll RFC 8291 feasibility over `node:crypto` (assessed, needs the phase spike)
+- Safari 16.4+ / iOS 16.4+ home-screen Web Push availability (verify in UAT)
 
 ### Tertiary (LOW confidence)
-- None material; the only forward-looking unverified item (MCP invite-tool guest check) is flagged for plan-time verification, not asserted
+- Live web search during FEATURES research (degraded by engine rate limits) — used only to confirm no contradiction; comparator setting labels/limits not relied upon
 
 ---
-*Research completed: 2026-11-09*
+*Research completed: 2026-11-12*
 *Ready for roadmap: yes*

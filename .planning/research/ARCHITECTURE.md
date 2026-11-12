@@ -1,150 +1,258 @@
-# Architecture Patterns
+# Architecture Patterns — v2.2 feature integration into the existing stack
 
-**Domain:** v2.1 UI/UX batch — invite modal persistence + project chips, searchable team members, unified project settings modal with per-team perms, projects table columns
-**Researched:** 2026-11-09
-**Method:** direct codebase investigation (server.js, src/overlays/modals.js, src/actions/actions.js, src/pages/, src/core/)
+**Project:** Projects Studio (gr8r) — milestone v2.2 Notifications, Search & Delivery
+**Researched:** 2026-11-12
+**Mode:** Integration architecture (codebase-grounded; confidence HIGH — every claim below was verified against `server.js`, `src/core/push.js`, `public/sw.js`, `vite.config.js`, `e2e/server.mjs` at HEAD)
 
----
+## Recommended Architecture
 
-## Part 1 — Per-TEAM project perms: storage/keying decision
+The controlling fact: **tasks, notifs, views and prefs-adjacent state live inside one JSON
+workspace document** written through a single funnel — `PUT /api/workspaces/:slug` →
+`docFromClient`/`mergeClientDoc` → `db.tx()` with revision check. Every new feature either
+(a) hooks that funnel, (b) adds authority rows outside the doc (the established pattern for
+per-user state), or (c) is pure client state riding the doc. Three precedents decide where
+new state goes:
 
-### How access works today (the funnel)
+| Precedent | Established by | Rule it implies |
+|-----------|---------------|-----------------|
+| Per-user prefs out of the doc | Phase 34 (`user_notif_prefs` rows, doc strip + boot sweep) | Anything per-user and structurally indexed goes in **rows**, never doc blobs |
+| Email fan-out off the doc diff | P4-f: `newNotifs` diffed stored-vs-next inside the same tx, sent fire-and-forget **after** commit | Any side-effect fan-out hooks the **same diff site**, never blocks the response |
+| Service worker = minimal click router | Phase 48 (`public/sw.js`, no fetch handler, zero strings) | Server push extends this file, does not redesign it |
 
-One read funnel governs every access decision:
+### Component Boundaries (new vs modified)
 
-- `canSeeProject(p, memberId, memberTeams)` — **server.js:800-805**. Short-circuit order: public (`!projectIsPrivate`) → `p.members.includes(memberId)` → `p.teams` ∩ `memberTeams` ≠ ∅.
-- `memberCanReadProject(p, wsId, memberId)` — **server.js:813-818**. Async wrapper that resolves the caller's live teams via `teamsOfMember(wsId, memberId, …)` (**server.js:816**, also :857) then re-enters `canSeeProject`. Consumed by: `hiddenFor` (:851-865 via :860), reminder pass (:1466), email mirror (:1580), digest scope (:1360), MCP transparency view (:4996).
-- Label mirror `projectAccessReason(p, memberId, memberTeams)` — **server.js:828-835** (Phase 52 transparency view). **Must be updated in lockstep** if the predicate gains a term, or reason labels will diverge from reality.
-
-### How `p.perms` works today
-
-- `p.perms` is a **member-id-keyed plain object** with values from `PERMS = ['Can view','Can comment','Can edit','Full access']` (client constant **src/overlays/modals.js:195**; stored strings, display translated via `permLabel` :200-201).
-- It is **display/permission-tier only today — it does NOT gate visibility**. `canSeeProject` never reads `p.perms`; a member in `p.members` gets read access regardless of their perm tier. The share modal writes `p.perms[mid]` through `IN.sharePerm` (**src/actions/actions.js:1833**).
-- Sanitized on member removal: **server.js:1948-1958** (`Object.fromEntries(Object.entries(p.perms).filter(([k]) => !hit(k)))`).
-- Guarded on write: non-manager doc-PUTs get `p.perms = prev.perms` restored — **server.js:1094** (inside the `canManageProject` block :1090-1102, which also pins `private/members/lead/teams/allowInviteGuests`).
-- Validated loosely on normalize: **server.js:899** (`if (p.perms && typeof p.perms !== 'object') delete p.perms`).
-
-### Decision: `p.perms` gains a team-keyed sub-object — NO new field
-
-Reuse `p.perms` with a **namespaced sub-key** `team:<teamId>` (or an inner map `p.perms.teams = { [teamId]: perm }`). Recommendation: **flat `p.perms['team:'+teamId]`**, because:
-
-1. Every existing sink treats `p.perms` as an opaque id→perm object: the removal sweep at server.js:1950 filters by key without interpreting it (works unchanged), the write guard at :1094 copies it whole (works unchanged), normalize at :899 accepts any object (works unchanged). A flat map requires **zero changes** to mergeClientDoc, normalizeProjects, or the removal path.
-2. Member keys and team keys can never collide if team ids are namespaced (`team:` prefix), so `Object.entries` consumers stay safe.
-3. No migration: the field already exists in stored docs; absent team keys = "no team override".
-
-### What server changes ARE required
-
-The critical finding: **per-team perms must change `canSeeProject`'s contract, not just add a field.** Today team access is binary (member of a linked team ⇒ full read). To make `view/comment/edit/full` real, the predicate that answers "what can this member do" needs the team tier:
-
-1. **New helper** `projectPermFor(p, memberId, memberTeams)` (server.js, near :805): resolve effective perm — lead/membership `p.perms[memberId]` takes precedence over team entry `p.perms['team:'+teamId]` for the best (highest-rank) linked team; default tier for members is `Can edit` (mirrors share modal's default at modals.js:275: lead='Full access', members='Can edit', guests='Can comment'), team-only members default to their team entry or 'Can edit'.
-2. **`canSeeProject` stays a visibility predicate** (server.js:800-805) — per-team perms do NOT remove read access; they only tier it. This keeps `memberCanReadProject`, `hiddenFor`, and all 10 call sites untouched. The gate changes live in **write paths** (task edit/comment/board-move routes) which currently only check read; those need `projectPermFor` checks (e.g. comment/edit require ≥ 'Can edit').
-3. **`projectAccessReason`** (server.js:828-835): add a team-perm reason only if the transparency view should distinguish tiers — otherwise leave as-is (M-09 says "reuse the existing per-person perms model — no new role concept", so coarse reasons can stay).
-4. **Validation on doc-PUT**: extend server.js:899 normalize to whitelist team-key shape (`/^team:/` keys must reference known team ids; values ∈ PERMS). Cheap, fail-loud on garbage.
-5. **mergeClientDoc needs NO change** — :1094 already restores `p.perms` wholesale for non-managers; a manager's client doc writes it through the normal doc-PUT path (**server.js:1700** → mergeClientDoc).
-
-**Build order consequence: server perm-resolution helper + write-route gating BEFORE the settings modal UI ships the team-perm pickers** — otherwise the UI writes values nothing enforces.
+| Component | New/Modified | Responsibility | Communicates With |
+|-----------|--------------|----------------|-------------------|
+| `task_fts` shadow table + `searchDoc` seam in `db-adapter.mjs` | **New** (adapter-level) | Maintains a searchable projection of task titles+descriptions; answers queries | doc-PUT funnel (writes), Ctrl-K client (reads via new GET route) |
+| `push_subscriptions` table + `/api/me/push-subscriptions` routes | **New** | Per-user Web Push endpoint/keys rows, VAPID config | push fan-out (reads), settings UI (writes) |
+| Server Web Push fan-out (`sendPushFor()` beside `queueNotifEmails`) | **New** | Delivers `web-push`-protocol payloads (hand-rolled `node:crypto` per D-12 constraint) for mention/assign rows | doc-PUT `newNotifs` diff site; `runReminderPass` |
+| `public/sw.js` `push` event handler | **Modified** | Receives server push payloads, shows pre-localized notification, reuses existing `notificationclick` router | server fan-out |
+| Dashboard | **New client page only** | Overdue/load/upcoming/activity computed from the already-hydrated doc | existing `D` store; no new server route |
+| TRN-02 member self-view | **Modified** TRN-01 route | Same `memberCanReadProject`+reason funnel, self-scoped | transparency page |
+| Saved views + column show/hide | **Modified** store | `S.views` / column state already syncs through the doc — persist as doc fields, no rows | doc-PUT (free) |
+| `e2e/server.mjs` dist guard | **Modified** | mtime/staleness check beside the existing `dist/index.html` existence check | npm scripts |
+| Vite config | **Modified** | dynamic `import()` for locales (extension of existing `localeSubset` plugin) and heavy pages | build |
 
 ---
 
-## Part 2 — Invite modal: email persistence + projects chips
+## (1) FTS index — where it lives and how it stays in sync
 
-### The persistence bug and its fix
+**Verdict: a shadow table maintained by the doc-PUT transaction, in the adapter — not triggers,
+not rebuild-on-write of the whole doc.**
 
-- The email textarea at **src/overlays/modals.js:312** renders `esc(S.ui.inviteDraft || '')` but carries **no `data-in` attribute** — so keystrokes never update state, and any `render()` triggered by role/team/scope interaction (e.g. `A.invProjToggle` at actions.js:2025, `IN.invRole` at :2040) re-renders the full DOM via `wrap()` at modals.js:45 and **wipes the unsaved draft**. (`S.ui.inviteDraft` is set at open — actions.js:1880 — and only captured on submit at :1927-1928.)
-- Fix, matching the existing two-path binding dispatch:
-  - **src/actions/events.js:56-60** handles non-change `input` events (`IN[el.dataset.in]?.(el, e)` when `!isChangeEl(el)`); :61-65 handles `change` events for selects/checkboxes. A textarea rides the `input` path.
-  - Add `data-in="inviteDraft"` to the textarea (modals.js:312) and a handler **`IN.inviteDraft = el => { S.ui.inviteDraft = el.value; }`** next to the other IN handlers in **src/actions/actions.js** (IN.sharePerm :1833, IN.shareAccess :1854, IN.invRole :2040, IN.invGuest :2046). **No render() call in the handler** — that's the whole point; state updates silently and re-renders restore the value from store.
-- `A.invite` (actions.js:1879-1890) already resets `S.ui.inviteDraft = ''` on open — no change needed there.
+- Tasks live in `doc.data.tasks[]` inside the JSON blob; no per-task rows exist, so SQLite
+  triggers on `workspaces` would fire on every doc write with no diff knowledge. Triggers
+  cannot diff JSON; the server already does.
+- The doc-PUT funnel already diffs `storedDoc` vs `next` for exactly this purpose (the
+  `newNotifs` / `storedFileIds` pattern at the `db.tx()` body, server.js ~5064–5075). Extend
+  the same pass: diff task ids, then within the same transaction upsert/delete rows in
+  `task_fts(workspace_id, task_id, title, body)` (FTS5 virtual table on SQLite; a plain
+  indexed table on Postgres with ILIKE or tsvector — keep it behind an adapter seam like
+  `db.searchTasks(wsId, q)` so both backends pass the same suite, matching the DBA-01..04
+  contract).
+- **Rebuild sweep at boot** (the `migrateTotpReWrap`-style one-pass pattern): converges any
+  drift (crashed PUT, manual DB edit, copy-sqlite-to-pg). Cheap — one full-doc parse per
+  workspace at boot, idempotent.
+- Reads: new admin-free but membership-gated route `GET /api/workspaces/:slug/search?q=`
+  that filters results through `memberCanReadProject` before returning — **search must
+  inherit the redaction funnel** (a private-project task title leaking through FTS is the
+  one security trap here; the client-side tokenizer from SEARCH-01 only redacts recent
+  searches, not index contents).
+- Client: Ctrl-K currently searches in-memory; wire it to prefer the server route when the
+  doc is large, fall back to local for offline/demo mode.
 
-### Projects chips ride the existing scope payload — mostly wiring, little plumbing
+Why not rebuild-on-write of the full doc index: doc PUTs are frequent and diffing is already
+required for emails; a whole-index rebuild per PUT duplicates work and would break the
+"one transaction, one diff" shape the funnel is built around. Why not in the client only:
+push mentions and MCP mirror also need to find tasks; and search must be server-side to
+respect redaction.
 
-The payload already carries project scope end-to-end:
+## (2) Push subscriptions and fan-out
 
-1. Client state: `S.ui.inviteScope = { teams: [], projects: [] }` — **actions.js:1885**.
-2. Picker state: `A.invProjToggle` — **actions.js:2025-2039** (renders scope project chips via `scopePicker('proj', scope.projects, 'invProjToggle', 'folder')` at **modals.js:324** — the chips UI already exists).
-3. Payload build: `A.submitInvite` — **actions.js:1934-1942** — dedupes `st.projects` into `scope.projects` and sends for Member/Guest roles (null for Admin, :1934-1936).
-4. API call: `api.createInvites(list, API_ROLE[role], teams, scope)` — **actions.js:1983**.
-5. Server: `POST /api/workspaces/:slug/invites` — **server.js:5187**. For member-tier callers, `body.project` is validated (existence + `allowInviteGuests === true`, **server.js:5217-5226**) and stored as the invite's `project` column (**server.js:5300**, insert with `scope: null` + `project`; the VIS-04 comment at :5306 notes only the member guest path scopes an invite to a project).
+**Verdict: new `push_subscriptions` table; fan-out at the same two sites that emit notif
+rows.**
 
-**Gap to close — "guest = exactly one project" (M decision):** today the server enforces project only for **member-tier** callers (server.js:5213 gate). An **admin/owner** Guest invite with zero projects currently sails through. Changes:
+- **Storage:** `push_subscriptions(workspace_id, user_id, endpoint unique, p256dh, auth,
+  created_at)` — structural clone of the `user_notif_prefs` migration (additive
+  `ensureTable`, pre-backup, byte-identical second boot). Rows not doc: subscriptions are
+  per-browser, per-user, high-churn — exactly the shape Phase 34 ruled belongs in rows.
+  One user may hold several rows (desktop + phone); delete on 404/410 from the push service
+  (standard subscription-expiry hygiene).
+- **Keys:** VAPID keys from env (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`),
+  same fail-absent pattern as SMTP/MASTER_KEY: unconfigured → feature absent (existing
+  client push-toasts keep working; no new server push). Generating a keypair is a one-time
+  deploy step documented in DEPLOY.md.
+- **Protocol dependency conflict to resolve early:** real Web Push payload encryption
+  (aes128gcm, RFC 8291) is significant hand-rolled crypto. The zero-runtime-dependency
+  constraint (D-12) was amended once for `pg` with owner approval — either hand-roll RFC
+  8291 + JWT (VAPID) over `node:crypto` (feasible: ECDH P-256 + HKDF + AES-GCM are all
+  built-in, ~150 lines, and Phase 30 already hand-rolled RS256/JWKS) or seek a second
+  owner-approved exception for `web-push`. **Recommendation: hand-roll**, following the
+  oidc.js precedent; flag as phase-specific research.
+- **Fan-out sites (both, not one):**
+  1. The doc-PUT `newNotifs` diff — right beside `queueNotifEmails` (fire-and-forget,
+     response never waits). Mention/assign/comment rows only; gated by the existing
+     `push_mention`/`push_assign`/`push_comment` prefs (`PUSH_TYPE_PREF` in
+     `src/core/push.js` already names them — server reads them via the same
+     `user_notif_prefs` accessor).
+  2. `runReminderPass` — due reminders ride the same row pipeline; push there respects the
+     Phase 38 suppression/digest invariants (inbox rows never suppressed; push, like inbox,
+     flows for digest users).
+- Payload: `{ url, title, body }` pre-localized per-recipient via `tFor` (the I18N-01
+  pattern) — the SW holds zero strings by design (T-48-02), keep that contract.
+- The 30s poll + `notifyNewEvents()` foreground path stays untouched (D-48-2): server push
+  covers the *tab-closed* case; the seen-set discipline prevents double-notify when both
+  fire (SW notification only when no visible client, or dedupe by notif id in the seen set).
 
-- Server (**server.js:5196+**, after role resolution): when `role === 'viewer'`, require exactly one project regardless of caller tier — validate `body.project` (or `body.scope.projects` length === 1) exists, reuse the same keyed refusals (`inviteMemberProjectRequired` :5218, new `inviteGuestProjectRequired` if needed).
-- Client (`A.submitInvite`, actions.js:1934-1942): when `role === ROLE_GUEST_UI`, degrade scope to exactly `{ projects: [one] }` — client-side validation toast if 0 or >1 selected (mirror of the server keys). The scope picker may need a radio-like behavior for Guest (selecting a second project replaces the first), reusing `A.invProjToggle`.
-- Note the server reads a flat `body.project`, while the client sends `scope.projects[]` — check `src/core/api.js` `createInvites` for how scope flattens into the POST body before choosing where the "exactly one" clamp lives.
+## (3) Dashboard — computed on read, client-side
 
-### Searchable members box in teamModal (`foldForSearch`)
+**Verdict: no new aggregation path. Compute in the client from the already-hydrated doc.**
 
-- `teamModal` lives in **src/features/teams.js:11**; the members fieldset hint is at :45.
-- The pattern to copy is the **share modal member search**: needle from `S.ui.shareQ` folded through `foldForSearch` (modals.js:203), filter over `D().members` (:226-233), bound input `data-in="shareQ"` (:218) with no render in the IN handler. `foldForSearch` is **src/core/utils.js:22** (accent/token folding; same family used in pages/members.js:35, pages/settings.js:144-145).
-- New state `S.ui.teamMembersQ` + `IN.teamMembersQ` handler; filter the roster inside the teamModal fieldset. Pure client feature — no server change.
+- The SPA hydrates the *entire* workspace document; an admin sees all of it. Overdue per
+  project, load per member, upcoming dues, recent activity are all derivable from
+  `D.data.tasks/projects/notifs/activity` with the same pure functions used elsewhere
+  (`progressOf`, due-date helpers). Zero server work, zero staleness, free EN+FR via t().
+- Anti-pattern to avoid: a server `GET /dashboard` that re-reads and aggregates the doc —
+  it duplicates redaction logic, adds a second read path to keep in sync with the funnel,
+  and buys nothing at this scale (single Node process, doc already in memory per request).
+- If a later milestone needs cross-workspace or scheduled reporting, revisit; the client
+  compute functions should be written as pure module exports (e.g. `src/features/dashboard/compute.js`)
+  so a server route could reuse them in Node without a rewrite.
 
----
+## (4) TRN-02 — redaction boundary for the member self-view
 
-## Part 3 — Unified project settings modal (replaces projectModal + shareModal)
+**Verdict: same funnel, strictly self-scoped, admin route gains a self variant.**
 
-### Today's two modals
+- TRN-01 (Phase 52) already computes "exactly what a member can access" live through
+  `memberCanReadProject` with coarse reason codes + team name, admin-gated keyed 404 route.
+  TRN-02 reuses the computation unchanged — the boundary work is *who may call it for whom*:
+  - A member may request the view for **their own id only** (`ctx.user.id === :uid` or 404).
+  - The response for a self-view redacts cross-member information: **no other members'
+    grants, no other members' emails/roles beyond what the member list already exposes**,
+    and per-project rows limited to *their* effective access + reason. Team names may show
+    (they explain the "why") but the roster of the team should render only through the
+    existing team visibility the member already has.
+  - Admins keep the full any-member view; the route branches on role, not a second route —
+    one funnel, one test matrix.
+- The security property to pin in tests: a member's self-view contains no row their own
+  session cannot otherwise derive — transparency, not escalation.
 
-| Modal | Location | Renders | Save path |
-|---|---|---|---|
-| `projectModal` | **src/overlays/modals.js:156-194** | name/desc/icon/color/teams/lead/due (+template on create) via `S.ui.pform`, `data-in="pform"` fields | `data-submit="submitProject"` form (:161), footer `data-a="submitProject"` (:193) — rides the doc-PUT optimistic path |
-| `shareModal` | **src/overlays/modals.js:202-289** | member search+invite (:216-238), Teams section (:247-268, live-link semantics per D-50-5), People-with-access with per-member perm selects (:270-284, `data-in="sharePerm"`), General Access toggle (:285-286, `data-in="shareAccess"`) | **no form submit — every control is an immediate-action** (`A.shareInvite`, `A.shareAdd`, `A.shareTeamInvite/Remove`, `IN.sharePerm` actions.js:1833, `IN.shareAccess` :1854 — each pushes the doc itself with snapshot-revert) |
+## (5) Saved views — client state in the doc, no server rows
 
-Dispatcher: **src/overlays/modals.js:41-43** — `case 'project' → projectModal`, `case 'share' → shareModal` inside the central modal `wrap()`. `canManageProject` client-side (modals.js:159, :206) mirrors server.js:837-840.
+**Verdict: doc state. `S.views` (and column show/hide) already round-trip through the
+workspace document; persist there.**
 
-### Render/state impact — LOW, the architecture makes it cheap
+- The store's doc-sync already carries client state blobs (the store S/D sync writes the
+  doc; `mergeClientDoc` normalizes on write). Saved views are per-user UI preference but
+  workspace-scoped and small — the doc is the established carrier for exactly this
+  (S.views is already synced per the milestone context).
+- Adding server rows would require a new table + sync discipline for data the doc sync
+  already transports, for zero isolation benefit. The one real risk — doc-PUT revision
+  conflicts when two tabs save views concurrently — is the existing 409
+  hydrate-wins recovery, already proven (Phase 55).
+- Constraint to respect: keep view blobs whitelisted/normalized in `mergeClientDoc` (the
+  notifPrefs strip shows what happens when a doc field escapes its validator). Cap count
+  and size (e.g. ≤20 views, ≤2 kB each) in the normalizer.
 
-1. **One case label changes**: merge into a single `case 'settings'` (or keep `project` and fold share content in) at modals.js:41-43. Both `data-a="share"` and `data-a="newProject"/"editProject"` entry points retarget to the same modal type.
-2. **Two interaction models coexist naturally**: the General section keeps the form+submit model (`pform` state, `S.ui.pform` at modals.js:157); the Access section keeps immediate-action controls (sharePerm/shareAccess handlers). The unified modal is a `<form>` body whose footer Save commits General fields, while Access controls keep acting inline (they already each `render()` and `pushNow()` independently). No conflict — the share controls don't touch `pform`.
-3. **New state slots**: `S.ui.settingsTab` ('general' | 'access') if sectioned by tabs, or none if stacked sections; `S.ui.shareQ` reused as-is for the member search; team perm selects add `IN.teamPerm` (mirror of `IN.sharePerm` at actions.js:1833, writing `p.perms['team:'+tid]`).
-4. **Net component count goes DOWN**: `projectModal` (156-194) and `shareModal` (202-289) are deleted; one new renderer (~300 lines) replaces them. Footer, dispatcher case, and entry-point actions (`A.share`, `A.editProject`) retarget.
-5. **Server impact of the merge: zero beyond Part 1.** Both modals already write through the same doc-PUT path; per-team perms ride `p.perms` (guarded at server.js:1094 for non-managers, normalized at :899).
+## (6) Service worker — location, build, routing
 
-### Projects table + Share button (mostly exists)
+- **Lives at `public/sw.js`** — Vite copies `public/` verbatim to `dist/`, so it ships
+  un-minified and un-versioned; the server serves it no-cache (already true). No build
+  integration is needed *or wanted*: the SW must stay dependency-free (no imports) per
+  T-48-02 — do not be tempted to run it through the Vite pipeline.
+- v2.2 change: **add a `push` event listener** only. Parse the payload (pre-localized,
+  server-supplied), `showNotification` with `data.url`, done. The existing
+  `notificationclick` handler (origin-checked URL, focus-or-openWindow) already handles
+  click-through routing — **push payloads must carry the same `/w/:slug/task/:key`
+  deep-link shape as email** (LINK-01) so the router is unchanged.
+- Push subscription registration joins the existing settings-page permission UX (Phase 48
+  UI already has permission state + blocked badge); `pushManager.subscribe` needs the VAPID
+  public key from a small `GET /api/push-config` (env-gated absent → UI hides the toggle).
+- Registration path (`/sw.js`) must not be affected by code-splitting: keep the SW
+  registration in `src/core/push.js`, not in any lazily-loaded chunk (a chunk that never
+  loads = a browser that never registers = silent push loss).
 
-- Table columns at **src/pages/projects.js:56-64**: Project / Status (`pStatus`) / **Lead** (:61, `av(p.lead)`) / **Teams** (:61, `projTeams(p)`) / Progress / Tasks / Start / **Due** (:61, `fmtDate(p.due)`) / Last activity. Missing: **Members count** column (add `p.members.length` next to Teams — the v2.1 decision says count, not avatar stack). Status labels come from `PSTAT` (projects.js:70-73) — M-10 wants the pill + task-based `progressOf` (:51, :61 already do exactly this). Mostly a column-insert + label tweak, no architecture change.
-- Project page header buttons at **src/pages/project.js:74-76**: avatar-stack `data-a="share"` (:74), `user-plus` icon `data-a="share"` (:75), labeled Share `data-a="share"` (:76). M-13 = delete :74-75, keep :76; all three already point at the same action, so the unified modal swap is transparent to them. Also `src/views/project-overview.js:43` renders an `avStack` pill (leave or align per spec).
+## (7) E2E dist guard — inside `e2e/server.mjs`, not a pretest hook
 
----
+**Verdict: extend the check that already exists in `e2e/server.mjs`.**
 
-## Recommended build order (server-before-client dependency)
+- `e2e/server.mjs` already refuses to boot without `dist/index.html` ("run `npm run build`
+  before `npm run e2e`"). Add the staleness comparison at the same site: newest mtime under
+  `src/`, `public/`, `index.html`, `vite.config.js` vs `dist/index.html` mtime → exit with
+  the same loud message. Single enforcement point; runs for every config and every direct
+  invocation of the e2e server, including `npm run e2e` and Playwright's `webServer`.
+- Why not a package.json `pretest` hook: it only covers one script invocation, can drift
+  from how e2e is actually launched, and a build inside pretest would *mask* staleness
+  instead of failing loudly — the guard's job is to fail, not to auto-fix.
 
-1. **Server perms model first**: `projectPermFor` helper + team-key normalization (server.js:899 area) + write-route gating + lockstep check on `projectAccessReason` (server.js:828-835). No UI depends on it yet; everything downstream writes through it.
-2. **Invite modal fix** (independent, small): `data-in="inviteDraft"` (modals.js:312) + `IN.inviteDraft` (actions.js, near :2040) — ships alone, zero server change.
-3. **Guest-one-project clamp**: server.js:5196+ role-based validation + client scope clamp in `A.submitInvite` (actions.js:1934-1942) — depends on reading `createInvites` in src/core/api.js to pick the payload shape.
-4. **Unified settings modal UI** (depends on 1): merge projectModal+shareModal (modals.js:156-289), add `IN.teamPerm`, retarget `A.share`/`A.editProject` and dispatcher (modals.js:41-43).
-5. **Team modal search + wording** (independent): `foldForSearch` box in teams.js:11 fieldset.
-6. **Projects table columns + Share-button cleanup** (independent): projects.js:56-64, project.js:74-76.
+## Data Flow (new paths)
 
-Steps 2, 5, 6 are parallelizable; 1 → 4 is a hard ordering; 3 is small and independent of 1/4.
-
----
+```
+doc-PUT tx ──▶ newNotifs diff ──▶ queueNotifEmails (existing, post-commit, fire-and-forget)
+            │                  └──▶ sendPushFor()   (new, same shape, same gating)
+            └──▶ task diff ──▶ task_fts upsert/delete   (new, inside the tx)
+boot ──▶ fts rebuild sweep (new)   |   boot ──▶ push_subscriptions ensureTable (new)
+SW push event ──▶ showNotification ──▶ notificationclick (existing router)
+Ctrl-K ──▶ GET /search?q= ──▶ memberCanReadProject filter ──▶ results
+```
 
 ## Patterns to Follow
 
-### Pattern 1: data-in silent-state binding (no render in handler)
-**What:** `IN.x` handlers mutate `S.ui` only; re-renders read state back into value attributes.
-**Where:** IN.sharePerm (actions.js:1833), IN.invRole (:2040); dispatch at events.js:56-65.
-**Why:** full-DOM `render()` on any state change means any handler that re-renders loses focus/draft — the invite-draft bug is exactly this missing binding.
+### Pattern: diff-at-the-funnel (P4-f)
+Every side effect of a doc write derives from the stored-vs-next diff computed once inside
+the `db.tx()` body, executed after commit, fire-and-forget. FTS sync and push fan-out are
+two more consumers of the *same* diff — not new pipelines.
 
-### Pattern 2: immediate-action share controls (no form submit)
-**What:** Access-level edits push the doc per-control with snapshot revert (IN.shareAccess at actions.js:1854, snapshot-revert shape noted at :1736).
-**When:** reuse for team-perm selects in the unified modal.
+### Pattern: additive authority rows (Phase 34/45)
+Per-user, per-browser state → own table + `ensureTable`/`ensureColumn` migration with
+pre-backup and byte-identical second boot. Never a doc blob for structurally indexed data.
 
-### Pattern 3: manager-guarded access fields on doc-PUT
-**What:** non-managers can never alter access fields — server restores them (server.js:1090-1102).
-**Consequence:** per-team perms inherit this protection for free by living inside `p.perms`.
+### Pattern: env-gated feature absence
+No VAPID config → server push routes 404 and UI hides the toggle (MCP-01 pattern). No
+behavior change for existing installs unless configured.
 
 ## Anti-Patterns to Avoid
 
-### Adding a new top-level project field for team perms
-**Why bad:** a `p.teamPerms` field would need its own restore line at server.js:1090-1102, its own sanitize in the removal sweep (:1948-1958), and its own normalize branch — three changed sinks instead of zero.
-**Instead:** namespaced keys inside `p.perms`.
+- **SQLite triggers on the JSON doc** for FTS — triggers see the blob, not tasks; drift and
+  stale entries guaranteed.
+- **A server-side dashboard aggregate route** — duplicates redaction and read paths.
+- **Saved views as new server rows** — duplicates the doc sync that already exists.
+- **Running `public/sw.js` through Vite** — breaks the zero-dependency, zero-string SW
+  contract and adds a cache/poisoning surface.
+- **Push fan-out that suppresses or filters inbox rows** — Phase 38 invariant: email is the
+  only suppressed channel; inbox and push always flow.
 
-### Gating visibility per perm tier
-**Why bad:** `canSeeProject` (server.js:800-805) is the single visibility term consumed by 10+ call sites; tiered visibility would fork it.
-**Instead:** keep visibility boolean; tier **capabilities** in write routes via the new helper.
+## Build Order (dependency-respecting)
+
+1. **Delivery infrastructure first** — e2e dist guard + Vite code-splitting (locales via
+   the existing `localeSubset` extension + heavy-page dynamic imports; SW registration kept
+   eager). Rationale: every later phase's e2e runs on this; code-splitting changes what the
+   bundle looks like for all subsequent verification. Small, low-risk.
+2. **Saved views + column show/hide + General-Access granularity** — doc-only client work;
+   no server deps; exercises the doc-PUT normalizer before bigger changes land.
+3. **FTS search** — depends on (1) for verified e2e and (2)-adjacent store wiring; new
+   adapter seam + funnel diff + boot sweep + redacted search route + Ctrl-K integration.
+4. **Server push** — depends on nothing new being built first except the notification
+   pipeline (exists), but lands after (3) so the `newNotifs` diff site isn't edited twice
+   mid-milestone; needs the phase-specific RFC 8291/VAPID hand-roll spike first.
+5. **Dashboard + TRN-02** — read-only, client/funnel work, no ordering risk; late because
+   they benefit from i18n infra (1) and can absorb NOTIF-TRIM UI outcomes.
+6. **NOTIF-TRIM** — doc/audit-driven, blocked on owner D-05 rulings; can execute in
+   parallel with 4–5 once rulings arrive.
+7. **i18n infrastructure** — technically a (1)-companion (dead-key gate exists in
+   `scripts/i18n-scan.mjs`); do it with phase 1 so every later phase adds keys under the
+   new regime rather than migrating later.
+
+Ordering rationale: build/verification infrastructure → doc-model changes → new server
+surfaces (FTS, push share the funnel diff) → read-only views → owner-blocked items last.
 
 ## Sources
 
-- Direct file reads: server.js (800-865, 1041-1119, 1935-1963, 5185-5314), src/overlays/modals.js (156-344), src/actions/actions.js (1868-2050, 1736-1858), src/actions/events.js (40-79), src/pages/projects.js (20-75), src/pages/project.js (74-76), src/features/teams.js, src/core/utils.js
-- PROJECT.md milestone decisions M-09..M-13 (.planning/PROJECT.md:26-33)
+- Code read directly at HEAD (HIGH confidence): `server.js` (doc-PUT tx, newNotifs diff,
+  notif prefs pipeline, runReminderPass), `src/core/push.js` (client push, PUSH_TYPE_PREF,
+  seen-set), `public/sw.js` (click router contract), `vite.config.js` (localeSubset, public/
+  copying), `e2e/server.mjs` (existing dist check), `db-adapter.mjs` structure.
+- PROJECT.md v2.2 milestone target features and standing constraints (zero runtime deps,
+  zero migrations, EN+FR i18n gate, Phase 38 invariants).
+- RFC 8291/8292 (Web Push encryption, VAPID) — hand-roll feasibility assessed against
+  `node:crypto` surface and the oidc.js precedent (MEDIUM confidence — needs a phase spike).

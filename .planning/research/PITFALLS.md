@@ -1,179 +1,119 @@
-# Domain Pitfalls — v2.1 UI/UX features on the v2.0 permission system
+# Domain Pitfalls — v2.2 Notifications, Search & Delivery
 
-**Domain:** Adding per-team perms, an invite-modal projects picker, and a unified settings modal to an app whose security posture is a hard-won single visibility funnel (`memberCanReadProject`), whole-doc PUT with `mergeClientDoc` field pinning, and keyed refusals.
-**Researched:** 2026-11-09 (direct code reads of server.js, mcp.js, src/overlays/modals.js, src/actions/actions.js, scripts/i18n-scan.mjs, plus v2.0 phase artifacts)
-**Overall confidence:** HIGH — every claim below is anchored to a live file:line read this session; no speculative APIs assumed.
+**Domain:** Adding browser push, FTS5 search, dashboards, transparency self-view, saved views, i18n infra, e2e guard and code-splitting to an existing Node monolith (JSON workspace docs + revision-based optimistic concurrency + dual SQLite/pg adapter, vanilla-JS SPA).
+**Researched:** 2026-11-12
+**Overall confidence:** HIGH (specs/canonical docs: RFC 8291/8030, SQLite FTS5 source, web.dev push docs; integration pitfalls derived from this codebase's own architecture — PROJECT.md, Phases 45/48/52 records)
+
+Every pitfall below is written for *adding the feature to this system*, not generic advice. Each has an owner-phase recommendation since phases don't exist yet.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Per-team perms widen the visibility funnel — and the funnel has five consumers, not one
+### Pitfall 1: Push subscription churn — server keeps pushing to dead endpoints
+**What goes wrong:** Endpoints die constantly: browsers rotate push endpoints, Chrome re-issues them, users clear site data, devices expire subscriptions. A server that treats every `sendNotification()` failure as a retryable error accumulates dead subscriptions, retriggers exponential-backoff loops, and inflates push-send latency on every mention/assignment fan-out.
+**Why it happens:** The web-push response codes are easy to ignore — `404` and `410` mean *this subscription is gone forever* (410 additionally carries a reason header when the user revoked permission). Everything else (429, 5xx) is retryable.
+**Consequences:** Silent notification loss (the worst failure for a "mentions + assignments" feature), a growing `push_subscriptions` table full of corpses, fan-out that takes seconds.
+**Prevention:** On push send, treat `404`/`410` as authoritative: delete the subscription row **in the same pass as the fan-out** (mirrors the Phase 27 `reminders_sent` transactional-claim pattern — claim, send, sweep dead rows atomically). Keep one subscription row per (user, device) keyed by endpoint hash; a re-subscribe to a new endpoint replaces rather than accumulates. Do NOT retry 404/410.
+**Detection:** `push_subscriptions` count grows monotonically; fan-out duration grows; unit test asserting dead-endpoint sweep after a mocked 410.
+**Phase:** Push fan-out phase (the mentions/assignments delivery phase — NOT the Phase 48 continuation, which only did subscription UX). Should be a plan-level acceptance criterion.
 
-**What goes wrong:** Per-team perms introduce a *new access-grant dimension* (`p.teamPerms[teamId] → view/comment/edit/full`). The visibility predicate `canSeeProject` (server.js:800-805) — `public ∨ memberId ∈ p.members ∨ member's team ∈ p.teams` — must gain a team-perm term, but the same predicate is consumed through **five doors**, and v2.0 already produced the exact failure mode once:
+### Pitfall 2: VAPID keys not persisted — every restart silently orphans all subscriptions
+**What goes wrong:** VAPID keys are the server's push identity. If generated at boot (or regenerated on redeploy because they weren't stored), every existing browser subscription becomes invalid — signed claims fail, deliveries 404, and users who granted permission never re-prompt because the browser still shows "granted".
+**Why it happens:** Keys look like any other crypto ephemeral; nothing at boot warns they're identity, not secret material. This project has a strong precedent for boot-generated material going wrong (MASTER_KEY handling needed an entire keyring milestone, v1.5 Phase 25/26).
+**Consequences:** Push silently dead after first Docker restart; debugging is nasty because the failure is asymmetric (server thinks it sent).
+**Prevention:** Generate once at first use, persist in `/data` (same durability class as `projects.db`), and treat like the keyring: document in DEPLOY.md §16 alongside MASTER_KEY custody, env-overridable for reproducible deploys. Never regenerate when a stored key exists; log loudly at boot if none exists yet.
+**Detection:** A restart integration test: subscribe → restart server → push still delivers (mocked push service).
+**Phase:** Push phase (same phase as Pitfall 1). DEPLOY.md section is part of the phase's definition of done, mirroring the Phase 26 runbook pattern.
 
-- The Phase 50 review caught `remindable()` calling the *synchronous* `canSeeProject` without the team term while every other consumer used the async `memberCanReadProject` — team-granted members were silently dropped from due-date reminders (50-REVIEW.md line 101). The parity claim was "true by construction" and false in fact.
-- The MCP mirror `canReadProject` (mcp.js:183-197) is a **hand-maintained copy** (comment: "Mirror of memberCanReadProject… without the server import"). If `teamPerms` is added to server.js and not mirrored in the same commit, MCP clients get an over- or under-permissive window that the UI never shows.
-- `projectAccessReason` (server.js:828-835) mirrors the short-circuit order for labels; if it lags, the transparency view (Phase 52) labels team-perm grants as `'member'` or omits them — and its `?? 'member'` fallback (server.js:4997 area, flagged in 52-REVIEW.md) would **silently mask the divergence** instead of surfacing it.
-- `hiddenFor` (server.js:851-865) resolves the member's teams once per evaluation; the team-perm term must resolve the *perm level* for those same teams, not just existence.
-- Send-time consumers: reminder pass, email mirror, digest (server.js:1195, 1360, 1466, 1580) all funnel through `memberCanReadProject` — they inherit the term for free **only if** the term lives inside the funnel, not beside it.
+### Pitfall 3: FTS index drift — JSON docs written outside the adapter break search silently
+**What goes wrong:** Tasks live inside the workspace JSON document (`workspaces.doc`), not rows. An external-content FTS table over "tasks" has no task table to point at; a shadow mirror table will drift whenever the doc is written by anything that doesn't run the sync: `mergeClientDoc` restores, boot migrations, the MCP server, the pg copy script, `PUT /api/workspaces/:slug` bulk writes, future endpoints.
+**Why it happens:** Every existing write path already goes through doc-merge; a new sync hook must be inserted at exactly one chokepoint, and it's tempting to sync "where convenient" instead. The system's single biggest integration risk in this milestone.
+**Consequences:** Users search a task title that exists and get nothing — or worse, search returns a task that was deleted. Drift is invisible until someone notices.
+**Prevention:** (a) Hook the rebuild at the **one real write chokepoint** — after each `pushNow()`/doc commit in the shared persistence funnel, not per-endpoint. (b) Include a **full rebuild** path (drop and re-index from the current doc) invoked on boot and exposed to an admin/maintenance route — drift recovery is mandatory, not optional. (c) A periodic or per-boot consistency count (`doc tasks vs index rows`) logged loudly on mismatch. (d) Tests that write the doc through the bulk PUT and MCP paths and assert the index follows. (e) Verify the pg adapter keeps parity — the mirror table DDL must exist in both schema variants with the pg bigint-epoch convention respected.
+**Detection:** Boot-time count mismatch log; Ctrl-K returning stale results; test matrix includes pg (the standing dual-backend suite rule covers this automatically if the mirror is tested at all).
+**Phase:** FTS5 search phase. The rebuild-on-boot + chokepoint decision should be a phase decision logged in the phase record (like D-53-1).
 
-**Why it happens:** The pinned-test doctrine says "never edit `canSeeProject`/`memberCanReadProject`/`hiddenFor`/`normalizeProjects`" (52-PATTERNS.md line 93) — a implementer reading that literally will build a *second* predicate beside the funnel instead of editing it, which is precisely the anti-pattern the one-funnel doctrine exists to prevent (RETROSPECTIVE.md line 256: "never a second pipeline").
+### Pitfall 4: Transparency self-view leaks other members' data through the member's own row
+**What goes wrong:** TRN-02 mirrors the admin TRN-01 view for each member. The admin version legitimately shows team names, role reasoning, and access paths of *other* members (e.g. "via team X where Y is also a member", lead names, invite grants). Reusing the TRN-01 computation server-side and merely hiding admin chrome in the UI would leak: which teams other people belong to, who is project lead, private-project invitee identities, scope grants.
+**Why it happens:** The obvious implementation reuses `memberCanReadProject` + the TRN-01 reason-code path — but that path was designed for an admin's eyes.
+**Consequences:** Privacy breach through a "transparency" feature; this project's bar is redaction *server-side*, not CSS (`redactDoc()` precedent from v1.1; Phase 34 closed a recent-search leak caused by exactly this class of bug).
+**Prevention:** A separate redaction funnel for the self-view: the member sees only their own access rows, coarse reason codes (same as TRN-01), and **never** other members' identity except what they'd see anyway (public rosters). Compute on a keyed route authorized to the caller only (owner-only TRN-01 route must stay distinct). Table-driven tests per role × per project shape asserting absent fields are literally absent from the response body — byte-level, in the Phase 32 "404 matrix" style.
+**Detection:** Any `members`/`lead`/team-roster key appearing in a member's self-view response for data they don't already see.
+**Phase:** Transparency self-view phase. Make the response-shape test suite a must-have in the plan.
 
-**Consequences:** A team granted "Can view" that can't actually see the project (invisible rows, 404s for legitimate users), or worse, the mirror divergence — MCP agents see projects the UI hides. Both are silent; nothing crashes.
-
-**Prevention:**
-1. **Edit the funnel in place** — `teamPerms` becomes a fourth term inside `canSeeProject`/`memberCanReadProject`; do NOT create a parallel `teamPermCanRead()` helper.
-2. **One lockstep commit** for server.js funnel + `projectAccessReason` + mcp.js `canReadProject`, exactly the Phase 50 pattern (50-01-PLAN: "MCP mirror… no over/under-permissive window").
-3. **Extend the pinned tests, don't bypass them** — the Phase 49/50 behavior pins must be updated *in the same phase* as the funnel edit, or the suite blocks the change (which is the pins working, not failing).
-4. **Update the hand-derived oracle** `VISIBILITY_MODEL` in test/helpers/visibility-fixture.mjs with new fixture cells (team-perm-view-only, team-perm-revoked, dangling team id) — respecting its anti-tautology contract (:5-8): expectations are never derived from the code under test.
-5. **Decide read-vs-write semantics before coding:** a team with "Can edit"/"Full access" gains *visibility + task write rights*, but must NOT gain `canManageProject` rights (server.js:837-840 — lead/admin/owner only). If per-team "Full access" is meant to allow access-list editing, that is an explicit semantic decision the owner must rule on, not an implementation accident.
-
-**Detection:** grep-diff in the phase summary confirming zero edits *outside* the funnel + mirror; fixture cell "m_teamperm (team-perm only) sees p_teamperm through every door (doc GET, MCP list, reminder, digest, transparency)".
-
-**Phase:** the server/funnel phase (per-team perms, server half) — this is the phase's core, not a cleanup.
-
----
-
-### Pitfall 2: Forgetting `p.teamPerms` in the `mergeClientDoc` pin block — a stale PUT silently revokes a whole team's grant
-
-**What goes wrong:** `mergeClientDoc` (server.js:1041) pins manager-owned access fields for non-managers at :1090-1101:
-
-```js
-if (prev && !canManageProject(prev, memberId, role)) {
-  p.private = prev.private; p.members = prev.members; p.perms = prev.perms;
-  p.lead = prev.lead; p.teams = prev.teams; p.allowInviteGuests = prev.allowInviteGuests;
-}
-```
-
-This pin list is the security posture (T-50-01: a stale non-manager PUT "can never delete p.teams — which would silently revoke a whole team"). Adding `teamPerms` without adding it to this block means a member whose client doc predates an admin's team grant can PUT and **delete the entire teamPerms map** — silently revoking every team grant at once, with no refusal, no 409 (their revision may be current), and no visible symptom until the team reports losing access.
-
-**Why it happens:** The pin list is an imperative sequence of field assignments, not a data-driven rule — every new access field must be *remembered* into it. The same field must also be considered in the `wasPrivate` re-add logic (:1103-1107) and `normalizeProjects` (:872-889, which validates members/lead but must learn to validate team ids in `teamPerms` — dangling team ids after a team deletion must be swept, following the p.teams precedent).
-
-**Consequences:** Silent mass-revocation; the exact class of bug the v2.0 milestone spent four phases eliminating.
-
-**Prevention:**
-1. Every new manager-owned access field (`teamPerms`, plus anything the unified Access section introduces, e.g. a general-access enum if it replaces the boolean) is added to the pin block **in the same commit** as the field's introduction, with a test: non-manager PUT carrying a stale/missing `teamPerms` → stored value survives byte-identical.
-2. Mirror the D-51-15/16 lesson (server.js:1048-1053): any server-authoritative value read during merge (perm levels for enforcement) comes from the **STORED** doc, never the incoming one.
-3. If the milestone decides to restructure access fields (e.g. folding `perms` + `teamPerms` into one object), that restructuring must go through `normalizeProjects` + a boot sweep like Phase 49's — not a free-form client write.
-
-**Detection:** pin-block grep (`p.private = prev.private` region) reviewed in code review; regression test named after the T-50-01 pattern (e.g. T-XX-01 "stale non-manager PUT cannot delete teamPerms").
-
-**Phase:** the server half of per-team perms AND the unified-settings phase — both touch this block; the second phase must re-verify the first's pin rather than assume it.
-
----
-
-### Pitfall 3: The unified settings modal writes access fields from a client doc that was redacted or stale — pinning breaks in the *other* direction
-
-**What goes wrong:** Today the Share modal edits access fields per-project from a freshly-read project (`proj(m.id)` at shareModal, modals.js:204). The unified modal merges General + Access into ONE write path replacing two — meaning one PUT now carries both lead-editable General fields (desc/icon/color/due) and manager-only Access fields (private/members/perms/teams/teamPerms/allowInviteGuests). Three distinct failure modes:
-
-- **Manager-of-target but not workspace-manager, stale doc:** the client's doc snapshot predates another admin's change (e.g. a new team link). The PUT is not pinned (caller IS a manager of that project) — it *legitimately* overwrites and silently reverts the other admin's grant. Revision 409 only helps if the modal actually adopted the latest revision after its own refetch; a modal built once at open-time and submitted minutes later is a stale-PUT machine.
-- **Non-manager lead confusion:** per-team perms M-09 means a team member with "Can edit" opens the unified modal and sees the Access section. If the modal renders it editable client-side, the PUT carries modified access fields — the server pins them (Pitfall 2), so the user's edit silently vanishes on save with a success toast. The client must render the Access section read-only using the same `canManageProject` semantics as the server (it already imports it — modals.js:159).
-- **Redacted-doc write:** the settings modal is reachable from both Workspace > Projects and the project page. A guest/viewer opening it on the projects table must not build a PUT from a doc where the project row exists but its access fields are manager-owned values they shouldn't echo back — the merge tolerates it, but only if the pin list is complete (circular dependency with Pitfall 2).
-
-**Why it happens:** The whole-doc PUT model means "the modal saves" is really "the modal edits the in-memory doc and the app pushes the whole document." Any modal that caches a doc slice at open-time instead of mutating live store state reintroduces the stale snapshot.
-
-**Consequences:** Silent permission reverts between admins; silent save-failure for non-managers; possible 409 loops.
-
-**Prevention:**
-1. The modal mutates **live store state** (`S.ui.*` form objects, the `pform`/`data-in` pattern) and the submit path reads the doc at push time — never a frozen copy captured at open.
-2. After opening, refetch (or adopt the pushed revision) before allowing save if the store's revision moved — the existing "every endpoint reports the new revision and the client adopts it" contract (PROJECT.md:323-324) is the mechanism; the modal must not break it.
-3. Client-side `canManageProject` gate on the Access section, matching server.js:837-840 exactly — one shared helper, not a re-implementation.
-4. Test matrix mirroring the 404-matrix tradition: {manager, lead, team-edit-member, plain member, guest} × {open modal, edit general, edit access, save} with assertions on which fields actually persisted.
-
-**Detection:** a UAT scenario "two admins edit the same project's settings concurrently — second save must 409, not silently win".
-
-**Phase:** the unified settings modal phase (this is *the* risk of that phase).
-
----
-
-### Pitfall 4: Full re-render wiping unsaved modal input — the bug being fixed will be reintroduced by the unified modal, and other modals share the disease
-
-**What goes wrong:** Modals are template-string functions of state (modals.js:41-43, 156, 202) re-rendered on state change. Inputs survive only when bound via `data-in`/`data-f` to persistent state (`pform.name` etc.). The v2.1 headline bug is exactly the miss: the invite email draft doesn't survive role/team changes because its binding or its state slot resets. The unified settings modal is a much larger multi-section form — the blast radius of one missed binding is bigger: description textarea, target date, per-team perm dropdowns (one per linked team — dynamically generated rows are the classic miss), member search input, general-access radio group.
-
-**Why it happens:** Any state change that re-renders the open modal — role select change, team chip toggle, `shareQ` typing driving a filtered list re-render (shareModal:203-224 re-renders on every keystroke of the search), a background 30s notif poll triggering a store update, or a post-save revision adoption — wipes unbound input. The `shareQ` pattern (`data-in="shareQ"` at modals.js:218) is the proven fix; the invite draft bug proves it's easy to forget on new fields.
-
-**Consequences:** Users lose typed text mid-form; worst in the Access section where a lost team-perm edit might be re-saved wrong.
-
-**Prevention:**
-1. **Every keystroke-able field in the unified modal gets a `data-in` binding to a durable state slot** before any interaction logic is written — this is a plan-level checklist item, not a code-review hope.
-2. Dynamically generated rows (per-team perm selects) key their state by team id (`S.ui.settingsForm.teamPerms[teamId]`), not by DOM position.
-3. Gate background re-renders: a poll/push-driven store update must not re-render an open modal mid-typing (or must merge through the data-in bindings, which it does only if they exist).
-4. Chromium e2e in both locales: type into every field → toggle role/team/search/select → assert all values survived. Mirror the existing invite-modal e2e (Phase 10 covered it) and extend it to the new picker.
-5. Sweep the *other* modals while in there: Edit Team's searchable members box (`foldForSearch` pattern is cited in the milestone plan) and any modal with a search input should get the same survives-interaction e2e — the bug class is shared even when the specific fix is scoped to the invite modal.
-
-**Detection:** e2e assertion per field; a review rule "new modal input without data-in = blocking".
-
-**Phase:** the invite-modal phase introduces the fix pattern; the unified-modal phase applies it at scale; a small sweep item belongs to whichever phase ships last.
-
----
-
-### Pitfall 5: Guest one-project invariant enforced client-side only on the NEW picker paths
-
-**What goes wrong:** The guest = viewer + exactly one project invariant is currently enforced at three server points: member-tier invite requires a project and caps the role (`inviteMemberRoleCeiling`/`inviteMemberProjectRequired`, server.js:5215-5218), the accept path re-derives `allowInviteGuests` fail-closed (:5411 region), and the legacy-role boot normalization (:2850-2894). Client-side, the picker "degrades to single-select on the guest path" (actions.js:2023-2029) — and the role checkbox mirrors the Guest role (:2044-2045). The v2.1 picker + unified modal add **new write paths** that can break the invariant if they only re-implement the client rule:
-
-- **Invite edit path:** M-02 "everything editable post-invite" — changing an existing invite's role Member→Guest must now *require* a project server-side. If the edit route predates the per-project model or only re-checks role at creation, a guest invite with zero projects slips through.
-- **Role flip on the stored invite:** Guest→Member must be allowed to keep/drop the project deliberately; Member→Guest with multiple selected projects must be refused (or coerced) **server-side**, not just de-selected in the UI.
-- **MCP invite tools:** the MCP server shares "the same permission funnel" (PROJECT.md:193-194) — its invite tool must carry the same guest ceiling and project requirement, or an agent creates the invite the UI would have refused.
-- **Lifecycle drift:** removing the guest's only project (project member removal, project archive/delete, team unlink) leaves a guest with zero projects — define the behavior (downgrade? invite stays but inert?) before the picker makes it easy to trigger.
-
-**Why it happens:** The invariant is behavior-only by design (D-50-11: guest "specialness survives via behavior only — viewer-role checks"); there is no schema constraint backing it, so every new write path must re-derive it by hand.
-
-**Consequences:** A guest account with workspace-wide read (viewer role, no project) — a real privilege escalation relative to the documented model, invisible in the UI.
-
-**Prevention:**
-1. One shared server-side validation helper (e.g. `validateGuestInviteShape(role, projects)`) called from create, edit, and accept paths — not three inline copies.
-2. MCP invite tool routes through the same helper; add a fixture to test/mcp.test.mjs.
-3. Client single-select degradation stays (UX), but is treated as cosmetic — tests assert the server refuses, not that the UI prevents.
-4. Decide and document the zero-projects-guest lifecycle in this milestone (it becomes reachable via the new picker's un-select UX).
-
-**Detection:** server test: PUT/POST invite edit {role: guest, projects: []} → keyed refusal; MCP tool test for the same.
-
-**Phase:** the invite-modal picker phase (server half); the unified settings modal phase for the lifecycle decision.
+### Pitfall 5: Permission leaks in dashboard aggregates
+**What goes wrong:** The admin dashboard computes overdue-tasks-per-project and load-per-member. Admin-gated is necessary but not sufficient: an admin of *this workspace* may still not read a private project they're not invited to — `memberCanReadProject` is the single funnel for visibility, admins included (v2.0 model). Aggregate queries that iterate the doc and skip the funnel leak counts and names from private projects; "count-only" leaks are still leaks (task counts, member load patterns).
+**Why it happens:** Dashboard code wants one big pass over the doc; permission checks feel like UI concerns. Also: the redaction funnel restores hidden rows from storage on write, so a naive read of the *stored* doc sees everything.
+**Consequences:** Admin sees a private project's overdue counts and member names they can't open; violates R5's spirit and the Phase 29 send-time filtering discipline.
+**Prevention:** Server-side enforcement at the aggregate level: each dashboard data item passes through `memberCanReadProject`/`hiddenFor` before aggregation, with private-project contributions either excluded or collapsed to an explicit "N more private" count for admins (owner decision to make during discuss-phase). Render the dashboard server-side (endpoint computes the payload), never ship raw doc + client-side rollup.
+**Detection:** Dashboard endpoint test with a private project the calling admin isn't in — assert zero leakage of its name/tasks in the response.
+**Phase:** Admin dashboard phase (decision about private-project collapse belongs in discuss-phase with the owner).
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 6: i18n gate — dead keys from removed modals, and the dead-key allowlist accidentally killing future checks
+### Pitfall 6: Push payload size limit (≤ 4096 bytes, encrypted) — silent drops on rich notifications
+**What goes wrong:** RFC 8291 caps the encrypted payload at 4096 octets; stuffing task description, project name, avatar URLs and FR text into the payload intermittently fails per message, and Chrome enforces its own ~3 KB quirk for some cases. Failure surfaces as `413` from the push service mid-fan-out.
+**Prevention:** Push payloads carry a **ticker, not the letter**: `{type, taskKey, wsSlug, shortTitle}` — the service worker fetches detail on click (deep-link route already exists from Phase 23, `/w/:slug/task/:key` with `?next=`). Assert payload size in tests with worst-case FR titles. Localized text for the notification body: prefer the user's locale catalogue server-side (the `tFor()` funnel already exists from Phase 36) but keep it short.
+**Detection:** `413` in push send logs; a payload-size unit test with pathological strings.
+**Phase:** Push fan-out phase.
 
-**What goes wrong:** Replacing projectModal + shareModal with one unified modal orphans keys (`modal.shareTitle`, `modal.shareLockHint`, `modal.teamsHint`, `modal.projectHint`…). The dead-key family (scripts/i18n-scan.mjs:1258-1356) fails the build on them — which is correct behavior, but the temptation is to add prefixes to `DEAD_KEY_ALLOWLIST` (:1270, "extend, never replace — an entry added here hides a real dead key, T-51-09"). A broad prefix like `'modal.'` would permanently blind the gate to every future dead modal key. Conversely, the *new* modal's keys must exist in EN **and** FR with matching placeholders (catalogue-key family :1115-1195, EN↔FR parity enforced), and PROJECT.md pins the catalogue at 1711 keys — the pin test needs a deliberate bump, not a surprise failure.
+### Pitfall 7: Query injection via FTS5 MATCH
+**What goes wrong:** User search text passed raw into `MATCH` breaks on FTS5 syntax — quotes, `NEAR`, `*`, `AND`/`OR`, column filters (`title:drop table`) — producing SQL errors (500s) or, with careless string concatenation, actual injection. Accented FR text adds a second failure: default `unicode61` tokenizer keeps diacritics, so "elodie" won't match "Élodie".
+**Prevention:** (a) Escape/quote user input into a quoted FTS phrase with `""` doubled, or tokenize into bare terms and join with implicit AND — never interpolate raw. (b) Set the tokenizer with `remove_diacritics 2` (`unicode61` option) **at table creation** — it's a creation-time constant, changing it later requires a rebuild; decide now since the app is EN/FR. Note this differs from the accent-*insensitive matching* the v1.2 recent-search matcher does (tokenized NFC+lowercase in `redaction.js`) — reuse the same normalization philosophy for the search input side (NFC+lowercase before querying) and `remove_diacritics` on the index side. (c) Careful: `remove_diacritics 2` handles Latin accents but the input normalization must match, or queries miss.
+**Detection:** Unit table of hostile MATCH strings (`"`, `NEAR(`, `*`, `:`, `OR`) all returning results or clean empty sets, never 500; accent-pair test ("elodie" ↔ "Élodie").
+**Phase:** FTS5 phase — tokenizer choice must be a phase decision (it's unchangeable without full rebuild).
 
-**Why it happens:** Deleting a modal deletes its `t()` call sites; the catalogue entries become dead. People "fix" the build by allowlisting instead of pruning.
+### Pitfall 8: Saved views schema drift — stored views referencing dead columns
+**What goes wrong:** Saved views store column sets/filters/ordering. When columns change (this milestone adds General-Access granularity and show/hide itself), stored views reference unknown columns or miss new ones; loading them renders broken tables or throws.
+**Prevention:** Version the saved-view schema (`v: 1`); on load, intersect stored columns with the current live column set and drop unknowns (lenient-load), never trust stored ids; validate server-side on save too since views may live in the workspace doc (then `mergeClientDoc`/normalize sweeps must know the new sink — the D-53-1 lesson: prefer a shape that needs no new doc sink). Migrate on read, not with a destructive boot migration — zero-migrations constraint holds.
+**Detection:** A saved view created before the show/hide feature loads after it; unit test with a synthetic old-format view.
+**Phase:** Saved views / General-Access phase; lenient-load rule in the plan's must-haves.
 
-**Prevention:** Delete dead keys in the same phase that removes the modal (the Phase 51 dead-key gate exists precisely for this — UX-01 criterion 5 precedent). Add only *narrow* allowlist entries with a comment each. Update the catalogue-size pin intentionally, in the phase summary.
+### Pitfall 9: Locale catalogue chunk races with first paint
+**What goes wrong:** Code-splitting locales into dynamic chunks means the first paint can happen with `t()` resolving against an empty catalogue — English flash, untranslated strings, or promise rejections. Worse: the i18n build gate (Phase 11) can't see keys that fail to load at runtime.
+**Prevention:** Keep the **base (EN) catalogue in the entry chunk** synchronously; dynamic-import only *additional* locales. Await the locale chunk before first render (a tiny "boot gate" in the SPA's init), with the base catalogue as fallback so a failed chunk fetch degrades to English instead of a blank screen. Cache the resolved chunk (browser HTTP cache + in-memory module cache). Keep `t()` synchronous after boot — never make call sites async.
+**Detection:** e2e in FR asserting zero English leak **on cold cache with throttled network** (the existing French-sweep test from Phase 10, rerun with `page.route` delays).
+**Phase:** Code-splitting + i18n infrastructure phase (do i18n infra first or same phase — the catalogue loader contract must exist before splitting, or splitting will be redone).
 
-**Detection:** `node scripts/i18n-scan.mjs` exit 0 with 0 dead / 0 stale; diff of the allowlist reviewed in code review.
-
-**Phase:** the unified settings modal phase; the projects-table phase if it removes the duplicate Share affordances' strings.
-
-### Pitfall 7: `data-a` action-name pin drift during the modal consolidation
-
-**What goes wrong:** Action names wired through event delegation (`data-a="pformSet"`, `"pformTeamToggle"`, `"shareInvite"`, `"closeModal"`, `"submitProject"`) are behaviorally pinned by Chromium e2e and the i18n scanner's position logic (i18n-scan.mjs:145 documents the modals.js catalogue-key patterns). Merging two modals invites renaming handlers ("submitSettings" instead of "submitProject") — which breaks delegation silently if the dispatcher's switch isn't updated in the same commit, and breaks e2e pins.
-
-**Prevention:** Rename in one commit with the dispatcher + all data-a attributes + e2e selectors; grep `data-a="` and the handler map before declaring done. Prefer *reusing* existing action names where semantics match (submitProject already handles create+edit — the unified modal can extend it).
-
-**Phase:** unified settings modal phase.
-
-### Pitfall 8: Projects-table columns leaking data the funnel redacts
-
-**What goes wrong:** New columns Lead / Teams / Members (count) / Status / Target date render data the client already has — but for a *member who cannot manage* a project, `p.members`, `p.teams` and `p.perms` are manager-owned fields they can *see* (redaction removes whole projects, not fields). Rendering member counts and team names is fine; rendering per-team perm levels or the access list in a tooltip is a disclosure decision, and the transparency doctrine (T-52-03: coarse codes, never rosters) should govern it. Also the guest's table view: guests see exactly one project — the table must not render sibling-project hints via column aggregates.
-
-**Prevention:** Columns render only fields that pass through `hiddenFor` on the read side; no new field joins the doc without a redaction consideration. Tooltip content follows the reason-code doctrine.
-
-**Phase:** projects-table phase.
+### Pitfall 10: e2e dist guard — either rebuilds every run (slow) or trusts a stale build (wrong)
+**What goes wrong:** Naive guard: always `vite build` before e2e (adds ~30–60s × 100+ test runs to every cycle) or never rebuild (tests validate yesterday's code and pass against bugs fixed since).
+**Prevention:** Staleness detection: hash the current `src/`/`public/`/`index.html` content (mtime lies in git worktrees and CI) and compare to a stamp written at last build (`dist/.build-stamp`); rebuild only on mismatch. The e2e server **refuses to start** on mismatch rather than auto-rebuilding — the failure message tells the developer to run the build, keeping test runs fast and correctness enforced loudly (matches the project's fail-closed style). Stamp lives inside `dist/` so `rm -rf dist` forces a rebuild. Test stamp computation itself (it's the one piece of logic in the guard).
+**Detection:** CI run where e2e passes but the built dist predates a source change — the guard test proves refusal.
+**Phase:** E2E dist guard phase (small, standalone, can ship early — no dependency on other phases).
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 9: `normalizeProjects` and legacy docs vs the new `teamPerms` field
+### Pitfall 11: Over-splitting a small vanilla-JS SPA
+**What goes wrong:** Chunking per-view in a ~19k-line SPA produces dozens of tiny chunks whose waterfall latency exceeds the single-bundle cost; also complicates the service worker precache list (push feature's SW must now track hashed chunks or updates break).
+**Prevention:** Split only where weight is proven (heaviest views + locales); one shared vendor-less entry; SW update strategy must be coordinated — precache the entry, network-first for chunks, or stale chunks 404 after deploy and break navigation. Milestone goal is "no chunk >500 kB", not "chunk everything".
+**Detection:** Chunk count / build-size diff in CI; SW navigation failure after redeploy.
+**Phase:** Code-splitting phase, coordinated with the SW work in the push phase (order matters: SW + chunk contract should be settled in code-splitting or SW breaks).
 
-Old documents (and crafted ones) lack `teamPerms` or carry dangling team ids after team deletion. `normalizeProjects` must treat it like `members`: default absent → `{}`, drop ids pointing at deleted teams (the doc is the source of truth; a deleted team's id must not silently grant anything through the funnel's new term). **Prevention:** normalize on every read (the function is already called in mergeClientDoc on both copies, :1044-1045) + a boot sweep decision only if cleanup matters. **Phase:** per-team perms server phase.
+### Pitfall 12: Service worker update staleness after deploys
+**What goes wrong:** SW byte-compare makes old SWs linger; a deployed new SW with changed notification-click routing keeps the old routing for returning users (or worse: old SW + new chunk hashes → dead notification clicks).
+**Prevention:** `skipWaiting` + `clients.claim` with a deliberate update-on-message pattern; notification click routing resolves URLs at click time, never baked-in hashes; version the SW and log current version. Test: deploy a new SW → push notification click lands on the new route.
+**Phase:** Push phase (SW is born there) with code-splitting phase respecting the contract.
 
-### Pitfall 10: PSTAT pill + progress column double-painting i18n
+### Pitfall 13: Permission-prompt UX — prompt-on-load burns the permission permanently
+**What goes wrong:** Asking `Notification.requestPermission()` on page load (or before any user intent) gets blocked-and-remembered by Chrome/Safari; the user then must dig into site settings. The project already has the Phase 48 "Browser blocked" badge + explanatory toast foundation — regressing to auto-prompt when adding mention/assignment push would undo it.
+**Prevention:** Prompt only from an explicit settings affordance or an in-context first-mention moment ("enable push to get notified when mentioned" button). Keep the derived blocked-badge state. Never re-prompt when `denied`.
+**Phase:** Push phase (Phase 48 continuation).
 
-PSTAT labels (planning/active/risk/hold/complete) are new catalogue keys with `common.perm.*`-style derived naming opportunity — reuse the PERM_KEYS lowercase-bridging pattern (modals.js:195-201) so stored values map to keys without quoting tokens; a missing mapping currently falls back to the first perm silently (:201) — the same silent fallback on a status value would render wrong labels without an error. **Prevention:** explicit map + test that every stored PSTAT value resolves. **Phase:** projects-table phase.
+### Pitfall 14: Notification trim recommendations acting before owner rulings
+**What goes wrong:** NOTIF-TRIM requires D-05 owner rulings during execution; implementing trims speculatively violates the Phase 39 discipline (all rows `proposed` until ruled) and the standing Phase 38 no-double-send + suppression invariants.
+**Prevention:** The trim phase produces *recommendations + D-05 ruling gates*; actual suppression changes only after rulings land, and every trim re-runs the Phase 38 invariants unmodified (standing constraint).
+**Phase:** NOTIF-TRIM phase (gate the phase's definition of done on D-05 rulings).
+
+### Pitfall 15: Doc-sink bloat — new feature state stuffed into the workspace JSON doc
+**What goes wrong:** Push subscriptions, saved views, dashboard prefs are tempting to put in the doc — but the doc is revision-locked (409 on mismatch), redacted on read, merged on write, and every added field must survive `mergeClientDoc`/normalize/removal sweeps. Phase 34 already moved notif prefs *out* to real rows for exactly these reasons.
+**Prevention:** Push subscriptions and saved views belong in their own tables (additive migration, pre-backup, byte-identical second boot — the established migration pattern from Phases 14/28/34). Only genuinely workspace-shared display state (e.g. default column visibility) goes in the doc, following D-53-1 (no new top-level field when a keyed pattern fits).
+**Detection:** Review gate question: "does this state need optimistic concurrency and redaction?" If no → own table.
+**Phase:** Every phase; call it out explicitly in push and saved-views phases.
 
 ---
 
@@ -181,28 +121,27 @@ PSTAT labels (planning/active/risk/hold/complete) are new catalogue keys with `c
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Per-team perms (server) | Funnel consumers diverge (reminder/digest/MCP/transparency) — the Phase 50 `remindable()` lesson | Edit `canSeeProject` in place, mirror mcp.js:183 in the same commit, extend `VISIBILITY_MODEL` oracle with team-perm cells |
-| Per-team perms (server) | `p.teamPerms` missing from the mergeClientDoc pin block (:1090-1101) | Add field + pin + stale-PUT regression test in one commit |
-| Per-team perms (server) | Team "Can edit" accidentally granting `canManageProject` | Decide read/write semantics with the owner first; keep access-list editing manager-only unless ruled otherwise |
-| Unified settings modal | Stale doc snapshot at open-time → silent revert of another admin's grants (Pitfall 3) | Mutate live store state; adopt revision; concurrent-edit UAT scenario |
-| Unified settings modal | Non-manager sees editable Access section, save silently no-ops | Client gate via shared `canManageProject`; render read-only |
-| Unified settings modal | Missed `data-in` binding wipes input on any re-render (Pitfall 4) | Bind every field first; per-field e2e; dynamic rows keyed by team id |
-| Unified settings modal | Dead i18n keys + broad allowlist entry (Pitfall 6) | Prune keys in-phase; narrow allowlist entries only; bump catalogue pin deliberately |
-| Invite modal picker | Guest single-select enforced client-side only (Pitfall 5) | Shared server validator across invite create/edit/accept/MCP; zero-projects-guest lifecycle decided |
-| Projects table columns | Access-field disclosure beyond the reason-code doctrine (Pitfall 8) | Coarse values only; no rosters/perm levels in tooltips |
-
----
+| Push fan-out (mentions/assignments) | Dead-endpoint churn; 413 payload drops; VAPID key loss on restart | 404/410 sweep in send pass; ticker payload + size test; persisted VAPID + DEPLOY.md §16 |
+| Push UX (Phase 48 continuation) | Auto-prompt regression; SW staleness after deploys | Explicit-intent prompting only; SW version + click-time routing |
+| FTS5 search | Index drift via MCP/bulk-PUT paths; MATCH injection; tokenizer locks accents in | Chokepoint hook + boot rebuild; quoted/normalized input; `remove_diacritics 2` decision as phase decision |
+| Admin dashboard | Private-project leakage in aggregates; N+1 doc parses | Funnel per aggregate item; single server-side computation pass (doc parsed once per request, endpoints keyed + admin-gated like TRN-01) |
+| Transparency self-view | TRN-01 computation reuse leaks others' data | Separate redaction funnel; byte-level response-shape tests per role |
+| Saved views / General-Access | Stored views vs live columns drift; new doc sinks | Versioned schema + lenient-load intersect; own table, not doc fields |
+| NOTIF-TRIM | Acting without D-05 rulings; breaking Phase 38 invariants | Ruling gates; re-run suppression + no-double-send invariants |
+| i18n infra + code-splitting | Locale chunk race at first paint; `t()` made async | EN base in entry chunk; boot-gate locale await; runtime FR e2e with cold cache |
+| Code-splitting | Over-splitting; SW/chunk hash mismatch | Split proven-heavy views only; settle SW chunk contract before push ships |
+| E2E dist guard | Rebuild-every-run slowness or silent staleness | Content-hash stamp inside `dist/`; refuse-to-start fail-closed |
+| All phases | pg/SQLite parity for any new table or FTS mirror | Dual-backend test matrix (standing constraint) catches it — if tested |
 
 ## Sources
 
-- server.js:771-865 (projectIsPrivate / teamsOfMember / canSeeProject / memberCanReadProject / projectAccessReason / canManageProject / hiddenFor / normalizeProjects) — read this session
-- server.js:1041-1159 (mergeClientDoc pin block, D-51-15/16 stored-doc rule, create refusal) — read this session
-- mcp.js:176-218 (canReadProject mirror, visibleProjects, readableProjectIds) — read this session
-- server.js:5215-5218, :5411 (guest invite ceiling, fail-closed accept re-derivation), :2850-2894 (guest role normalization) — read this session
-- src/overlays/modals.js:156-225 (projectModal, shareModal, data-in bindings, PERM_KEYS derived keys) — read this session
-- src/actions/actions.js:2023-2045 (guest single-select degradation, role-checkbox mirror) — read this session
-- scripts/i18n-scan.mjs:10-19, 1258-1356 (gate families, dead-key allowlist doctrine) — read this session
-- .planning/PROJECT.md (v2.1 targets, M-09..M-13 decisions, standing constraints) — read this session
-- .planning/milestones/v2.0-phases/50-*/50-REVIEW.md (the `remindable()` parity failure — the canonical consumer-divergence post-mortem), 52-PATTERNS.md:93 (funnel pin doctrine), 52-REVIEW.md (`?? 'member'` fallback masking), test/helpers/visibility-fixture.mjs:5-8 (anti-tautology contract) — via grep, line-quoted
+- SQLite FTS5 external-content semantics & integrity-check (sqlite/sqlite source, ext/fts5 — via Context7, HIGH)
+- RFC 8291 (payload ≤ 4096 octets), RFC 8030 (push protocol status semantics), web.dev push 404/410 handling (HIGH, well-established)
+- Codebase architecture: PROJECT.md — doc redaction/merge funnel, revision concurrency, adapter, Phase 27/34/36/45/48/52 precedents (HIGH, first-party)
+- Phase 38/39 notification invariants & D-05 ruling discipline (first-party, HIGH)
 
-**Confidence: HIGH** — code-verified file:line anchors throughout; the one forward-looking item (MCP invite-tool guest check) is flagged as "verify at plan time" rather than asserted.
+## Gaps to Address
+
+- Whether private-project contributions appear in admin dashboards as collapsed counts or are hidden entirely — owner decision, discuss-phase.
+- Whether saved views live in the doc or a table — owner decision with the Phase 34 precedent as the recommended default (table).
+- Exact tokenizer trade-off (`remove_diacritics 2` vs input-side normalization only) — small phase-level decision with a test matrix.
