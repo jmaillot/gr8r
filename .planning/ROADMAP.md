@@ -49,7 +49,7 @@ stale build, the bundle stays lean, and a new locale lands by adding one JSON fi
      locale test; no new shipped language (I18N-01)
   4. The full unit suite, e2e suite and i18n gate stay green on the split build
      (standing constraint)
-**Plans**: 3 plans
+**Plans**: 0/3 plans executed
 
 Plans:
 **Wave 1**
@@ -171,7 +171,7 @@ D-05 owner rulings arriving during execution
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 56. Delivery Infrastructure | 0/? | Not started | - |
+| 56. Delivery Infrastructure | 0/3 | Planned    |  |
 | 57. Views, Columns & General Access | 0/? | Not started | - |
 | 58. Full-Text Search | 0/? | Not started | - |
 | 59. Browser Push | 0/? | Not started | - |
