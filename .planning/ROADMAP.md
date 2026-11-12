@@ -22,7 +22,7 @@ the Phase 34 guarded-migration recipe when needed), full suite green, EN+FR i18n
 
 ## Phases
 
-- [ ] **Phase 56: Delivery Infrastructure** - e2e anti-stale-dist guard, Vite code-splitting, i18n-ready locale infrastructure
+- [x] **Phase 56: Delivery Infrastructure** - e2e anti-stale-dist guard, Vite code-splitting, i18n-ready locale infrastructure (completed 2026-11-12)
 - [ ] **Phase 57: Views, Columns & General Access** - column show/hide, saved views in server rows, General-Access granularity beyond private/public
 - [ ] **Phase 58: Full-Text Search** - FTS5 over task titles + descriptions, permission-filtered, wired into Ctrl-K
 - [ ] **Phase 59: Browser Push** - server push fan-out for mentions + assignments via web-push@4.0.0
@@ -49,16 +49,16 @@ stale build, the bundle stays lean, and a new locale lands by adding one JSON fi
      locale test; no new shipped language (I18N-01)
   4. The full unit suite, e2e suite and i18n gate stay green on the split build
      (standing constraint)
-**Plans**: 0/3 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 **Wave 1**
-- [ ] 56-01-PLAN.md — DELIV-02: 500 kB build gate test (D-02), async renderPage tracer, strengthMeter decoupling, settings split (revised D-01)
-- [ ] 56-03-PLAN.md — DELIV-01: manifest + sha256 build stamp, fail-closed stale-dist guard in e2e/server.mjs, three-case guard test
+- [x] 56-01-PLAN.md — DELIV-02: 500 kB build gate test (D-02), async renderPage tracer, strengthMeter decoupling, settings split (revised D-01)
+- [x] 56-03-PLAN.md — DELIV-01: manifest + sha256 build stamp, fail-closed stale-dist guard in e2e/server.mjs, three-case guard test
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 56-02-PLAN.md — DELIV-02: finish the split below the gate (design-system/members, seed-lazy emptyState/ensureSeedData contract, residual edges by measurement), full unit + e2e proof
-- [ ] 56-04-PLAN.md — I18N-01: derived locale registry (glob keys ∪ base), shared localeCodes scan, scan name-map sync, fixture-locale proof test (D-08)
+- [x] 56-02-PLAN.md — DELIV-02: finish the split below the gate (design-system/members, seed-lazy emptyState/ensureSeedData contract, residual edges by measurement), full unit + e2e proof
+- [x] 56-04-PLAN.md — I18N-01: derived locale registry (glob keys ∪ base), shared localeCodes scan, scan name-map sync, fixture-locale proof test (D-08)
 
 ### Phase 57: Views, Columns & General Access
 
@@ -172,7 +172,7 @@ D-05 owner rulings arriving during execution
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 56. Delivery Infrastructure | 0/3 | Planned    |  |
+| 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
 | 57. Views, Columns & General Access | 0/? | Not started | - |
 | 58. Full-Text Search | 0/? | Not started | - |
 | 59. Browser Push | 0/? | Not started | - |
