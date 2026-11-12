@@ -42,7 +42,7 @@ import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { applyView, viewOf } from '../shell/view-engine.js';
 import { PERMS, TEMPLATES, closeModal, openModal, permLabel } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
-import { strengthMeter } from '../pages/settings.js';
+import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
 import { blockedToastOnce } from '../core/push.js';
 import { DEFAULT_OPTIONS, buildExportModel } from '../export/model.js';

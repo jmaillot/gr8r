@@ -42,7 +42,6 @@ import './overlays/modals.js';
 import './overlays/popovers.js';
 import './overlays/context-menu.js';
 import './overlays/palette.js';
-import './pages/settings.js';
 import './pages/auth.js';
 import './pages/design-system.js';
 import './actions/actions.js';

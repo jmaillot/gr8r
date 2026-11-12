@@ -23,9 +23,92 @@ import { page404, stateFailed } from '../pages/errors.js';
 import { pageProject } from '../pages/project.js';
 import { pageWsCalendar } from '../views/calendar.js';
 import { pageWsTimeline } from '../views/timeline.js';
-import { pageSettings } from '../pages/settings.js';
 import { pageStates, pageSystem } from '../pages/design-system.js';
 import { pageArchive } from '../features/archive.js';
+
+/* Page loaders (DELIV-02 split): every route resolves through P. First-paint
+   routes stay synchronous — their page module is statically imported above and
+   the loader returns its HTML without a network fetch, so home (and every
+   entry-resident route) keeps today's first paint exactly. Heavy non-first-paint
+   modules return a dynamic import; the loader's promise resolves after the shell
+   has painted skeleton() into #main-content, which fillPage() then replaces
+   (async-render contract the remaining splits reuse). Keep the P[r] || 404
+   fallback semantics: the 404 page resolves synchronously. */
+const ASYNC_ROUTES = new Set(['settings']);
+const P = {
+  home: () => pageHome(),
+  inbox: () => pageInbox(),
+  mytasks: () => pageMyTasks(),
+  favorites: () => pageFavorites(),
+  notifications: () => pageNotifications(),
+  search: () => pageSearch(),
+  overview: () => pageOverview(),
+  projects: () => pageProjects(),
+  project: () => pageProject(),
+  tasks: () => pageTasks(),
+  calendar: () => pageWsCalendar(),
+  timeline: () => pageWsTimeline(),
+  members: () => pageMembers(),
+  member: () => pageMember(),
+  teams: () => pageTeams(),
+  team: () => pageTeam(),
+  activity: () => pageActivity(),
+  settings: () => import('../pages/settings.js').then(m => m.pageSettings()),
+  system: () => pageSystem(),
+  states: () => pageStates(),
+  archive: () => pageArchive(),
+};
+const NOT_FOUND = () => page404();
+
+/* Synchronous page HTML for the shell template. Returns null for async-loader
+   routes — the caller paints skeleton() as the loading state and fillPage()
+   replaces it when the dynamic import resolves. */
+export function renderPageSync() {
+  const r = S.ui.route;
+  if (ASYNC_ROUTES.has(r)) return null;
+  try {
+    return (P[r] || NOT_FOUND)();
+  } catch (e) {
+    console.error(e);
+    return stateFailed();
+  }
+}
+
+/* The awaited form of the same loader map. A rejected page import surfaces
+   stateFailed() — never a permanently stuck skeleton. */
+export async function renderPage() {
+  const r = S.ui.route;
+  try {
+    return await (P[r] || NOT_FOUND)();
+  } catch (e) {
+    console.error(e);
+    return stateFailed();
+  }
+}
+
+/* Async fill for async-loader routes: after render() has painted the shell with
+   the skeleton in #main-content, await the loader and swap in the page HTML.
+   A monotonic sequence guards against a stale fill overwriting a newer render,
+   and a rejected import falls back to stateFailed() in the same slot. */
+let _fillSeq = 0;
+export async function fillPage() {
+  if (S.ui.auth || S.ui.loading) return;
+  const r = S.ui.route;
+  if (!ASYNC_ROUTES.has(r)) return;
+  const seq = ++_fillSeq;
+  try {
+    const html = await renderPage();
+    if (seq !== _fillSeq || S.ui.auth || S.ui.route !== r || S.ui.loading) return;
+    const el = document.getElementById('main-content');
+    if (el) el.innerHTML = html;
+  } catch (e) {
+    console.error(e);
+    if (seq === _fillSeq) {
+      const el = document.getElementById('main-content');
+      if (el) el.innerHTML = stateFailed();
+    }
+  }
+}
 
 export function renderShell() {
   const u = S.ui;
@@ -35,44 +118,11 @@ export function renderShell() {
     <main class="main" id="main">
       ${renderTopbar()}
       ${u.offline ? `<div class="offline-bar" role="alert">${ic('wifi-off', 15)}<span><b>${t('nav.offlineTitle')}</b> ${t('nav.offlineBody')}</span><span class="sp"></span><button class="btn btn-sm btn-secondary" data-a="retryOnline">${t('toast.tryAgain')}</button></div>` : ''}
-      <div class="content ${u.fx.route ? 'fx-route' : ''}" id="main-content" tabindex="-1" data-keep="c:${u.route}:${u.params.id || ''}:${u.params.tab || ''}:${u.params.sec || ''}">${u.loading ? skeleton() : renderPage()}</div>
+      <div class="content ${u.fx.route ? 'fx-route' : ''}" id="main-content" tabindex="-1" data-keep="c:${u.route}:${u.params.id || ''}:${u.params.tab || ''}:${u.params.sec || ''}">${u.loading ? skeleton() : (renderPageSync() ?? skeleton())}</div>
     </main>
     ${renderBottomNav()}
   </div>`;
 }
-export function renderPage() {
-  const r = S.ui.route;
-  try {
-    const P = {
-      home: pageHome,
-      inbox: pageInbox,
-      mytasks: pageMyTasks,
-      favorites: pageFavorites,
-      notifications: pageNotifications,
-      search: pageSearch,
-      overview: pageOverview,
-      projects: pageProjects,
-      project: pageProject,
-      tasks: pageTasks,
-      calendar: pageWsCalendar,
-      timeline: pageWsTimeline,
-      members: pageMembers,
-      member: pageMember,
-      teams: pageTeams,
-      team: pageTeam,
-      activity: pageActivity,
-      settings: pageSettings,
-      system: pageSystem,
-      states: pageStates,
-      archive: pageArchive,
-    };
-    return (P[r] || page404)();
-  } catch (e) {
-    console.error(e);
-    return stateFailed();
-  }
-}
-
 export function sItem(route, label, icon, opt = {}) {
   const on = S.ui.route === route && (!opt.id || S.ui.params.id === opt.id);
   return `<button class="sitem ${on ? 'on' : ''}" data-a="${opt.act || 'go'}" data-r="${route}" ${opt.id ? `data-id="${opt.id}"` : ''} ${S.ui.collapsed ? `data-tip="${esc(label)}" data-tip-pos="right"` : ''} ${on ? 'aria-current="page"' : ''}>${ic(icon, 16)}<span class="trunc">${esc(label)}</span>${opt.ct ? `<span class="ct ${opt.dot ? 'dotc' : ''}">${opt.ct}</span>` : ''}${opt.kbd ? `<span class="ct hide-m"><kbd>${opt.kbd}</kbd></span>` : ''}</button>`;

@@ -7,7 +7,7 @@ import { D, S, canSee, mem, proj, task, team } from '../core/store.js';
 import { api } from '../core/api.js';
 import { applyPrefs } from '../core/theme.js';
 import { enhanceSelects, selectMenu } from '../ui/select.js';
-import { renderShell } from './layout.js';
+import { fillPage, renderShell } from './layout.js';
 import { ptabs } from '../pages/project.js';
 import { tlAfter } from '../views/timeline.js';
 import { renderLayer } from '../overlays/drawer.js';
@@ -211,6 +211,10 @@ export function render() {
   }
   const keep = $$('[data-keep]').map(el => [el.dataset.keep, el.scrollTop, el.scrollLeft]);
   $('#app').innerHTML = S.ui.auth ? renderAuth() : renderShell();
+  /* DELIV-02 async-render contract: for async-loader routes the shell painted
+     skeleton() into #main-content; fillPage() awaits the loader and swaps the
+     page HTML in. Sync routes return from fillPage immediately. */
+  fillPage();
   $('#layer').innerHTML = renderLayer();
   makeFocusable();
   keep.forEach(([k, t, l]) => {

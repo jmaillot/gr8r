@@ -6,7 +6,7 @@ import { D, S } from '../core/store.js';
 import { api } from '../core/api.js';
 import { effectiveDark } from '../core/theme.js';
 import { TEMPLATES } from '../overlays/modals.js';
-import { strengthMeter } from './settings.js';
+import { strengthMeter } from '../ui/strength.js';
 
 /* The onboarding's view lookup: the stored team value is the machine id
    (data-v), the display reads the catalogue. */
