@@ -4370,6 +4370,12 @@ async function handleApi(req, res, url) {
       /* corrupt stored blob: start from a clean object rather than crash */
     }
     const clean = sanitizeViewBlob({ ...existing, ...incoming });
+    // WR-03: the whitelist constrains KEYS, not VALUES — the merged live blob
+    // needs the same byte cap as a named row (the plan's own threat model:
+    // "the client can never be the guard", T-57-04).
+    if (Buffer.byteLength(JSON.stringify(clean), 'utf8') > NAMED_VIEW_BLOB_MAX_BYTES) {
+      return fail(res, 413, 'viewBlobTooLarge', 'Saved view is too large (2 kB max)');
+    }
     await db.run('insert or replace into saved_views (workspace_id, user_id, key, name, blob, schema_version) values (?,?,?,?,?,?)', [ws.id, user.id, key, '', JSON.stringify(clean), VIEW_SCHEMA_VERSION]);
     return json(res, 200, await viewsBody(ws.id, user.id, key));
   }
