@@ -109,7 +109,12 @@ funnel diff site is edited once per concern, not concurrently twice
      index behaves identically on SQLite (FTS5) and pg (SEARCH-03)
   4. "elodie" finds "Élodie" — French accented text is searchable with the tokenizer
      decision locked at table creation (SEARCH-04)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 58-01-PLAN.md — SEARCH-01/02/03: server FTS core — task_fts index, adapter seam (syncTaskFts/searchTasks/ftsSweep), funnel + MCP tx sync, membership-gated search route, byte-level leak tests
+- [ ] 58-02-PLAN.md — SEARCH-03/04: pg parity — task_search_projection folded projection, dialect-complete seam, DBA suite "elodie→Élodie" rows
+- [ ] 58-03-PLAN.md — SEARCH-01/02: client hybrid — debounced/abortable search-server helper, palette merge, /search page merge, i18n + chunk gates
 
 ### Phase 59: Browser Push
 
