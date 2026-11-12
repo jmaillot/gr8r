@@ -27,8 +27,8 @@ dashboards) without breaking the zero-dependency discipline
 ## Current Position
 
 **Phase:** 57 (Views, Columns & General Access) — EXECUTING
-**Plan:** 2 of 3
-**Status:** 57-01 complete (per-user view persistence substrate); 57-02 next
+**Plan:** 3 of 3
+**Status:** 57-01, 57-02 complete (substrate + named saved views); 57-03 next
 
 **Progress:**[███░░░░░░░] 24%
 
@@ -39,7 +39,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase | Name | Status |
 |-------|------|--------|
 | 56 | Delivery Infrastructure | Not started |
-| 57 | Views, Columns & General Access | In progress (1/3 plans) |
+| 57 | Views, Columns & General Access | In progress (2/3 plans) |
 | 58 | Full-Text Search | Not started |
 | 59 | Browser Push | Not started |
 | 60 | Admin Dashboard & Member Self-View | Not started |
@@ -88,12 +88,12 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-12T16:35:00.000Z
-**Stopped at:** Completed 57-01-PLAN.md
+**Last session:** 2026-11-12T17:37:00.000Z
+**Stopped at:** Completed 57-02-PLAN.md
 **Resume file:** None
 
-**Last action:** executed 57-01 — saved_views substrate (routes, routes tests), doc.views boot sweep, three-site strip; full chain green (1418 unit + 109 e2e)
-**Next action:** `/gsd-execute-phase 57` plan 02 (named views)
+**Last action:** executed 57-02 — named saved views (server caps D-12, lenient load SC-3, DELETE route, lazy savedViewsUi popover, D-14 server reset); full chain green (1429 unit + 110 e2e)
+**Next action:** `/gsd-execute-phase 57` plan 03 (default visibility)
 
 ### Blockers
 
@@ -103,3 +103,6 @@ dashboards) without breaking the zero-dependency discipline
 
 - 57-01: index chunk had 80 B headroom under the DELIV-02 500 kB gate — view-sync code and push.js split into lazy chunks (the 56-02 remedy); chunk gate green again
 - 57-01: memberships.role is lowercase in the DB — migration owner attribution queries `role = 'owner'` with a user_id tiebreaker (rowid is pg-unsafe, static-db-audit pinned)
+- 57-02: index chunk had ~900 B headroom — all views UI went into a NEW lazy savedViewsUi chunk; download.js + export/csv.js made lazy (async-only call sites); api.deleteView seam dropped for viewSync deleteViewRow (index 499,885 B)
+- 57-02: live-row PUTs merge, named-row PUTs replace — a snapshot is the whole view; overwrite only after explicit confirm (D-12)
+- 57-02: applyNamedView preserves `q` AND the render `mode` beside the whitelist — both are session state the snapshot never carries (found by the new e2e)

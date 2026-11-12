@@ -85,7 +85,7 @@ Plans:
 - [x] 57-01-PLAN.md — VIEW-01: `saved_views` substrate + per-user column persistence tracer (D-05/D-07/D-08), doc.views boot sweep + three-site strip (D-06) *(complete: 2 commits, full chain green — unit 1418, e2e 109, lint, i18n)*
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 57-02-PLAN.md — VIEW-02: named saved views (caps D-12, lenient schemaVersion load), collision-free save/apply/delete actions + popover UI
+- [x] 57-02-PLAN.md — VIEW-02: named saved views (caps D-12, lenient schemaVersion load), collision-free save/apply/delete actions + popover UI *(complete: 3 commits, full chain green — unit 1429, e2e 110, lint, i18n, chunk gate 499,885 B)*
 - [ ] 57-03-PLAN.md — VIEW-03: `prefs.defaultPrivate` owner setting (D-03/D-04), createProject seed, Access-tab hint
 **UI hint**: yes
 
