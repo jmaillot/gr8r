@@ -11,6 +11,30 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { signup, startServer, withDb } from './helpers/server.mjs';
+import { NAMED_VIEW_BLOB_MAX_BYTES, NAMED_VIEW_KEYS, NAMED_VIEW_MAX, VIEW_BLOB_KEYS } from '../src/core/savedViews.js';
+
+/* IN-02 drift pin (57-04): the view whitelist/cap constants are hand-duplicated
+   between server.js and src/core/savedViews.js (the NO-IMPORTS client/server
+   split forbids a shared module). This string-scan pins them the same way
+   export-client.test.mjs pins DEFAULT_OPTIONS: a one-sided edit must fail a
+   test, not ship a silent guardrail drift. */
+const serverSrc = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+const serverConst = name => {
+  const m = serverSrc.match(new RegExp(`(?:const|let) ${name} = (.+?);`, 's'));
+  assert.ok(m, `server.js declares ${name}`);
+  return m[1];
+};
+
+test('server.js view constants mirror the client savedViews exports (drift pin)', () => {
+  assert.deepEqual(JSON.parse(serverConst('VIEW_BLOB_KEYS').replace(/'/g, '"')), VIEW_BLOB_KEYS);
+  assert.equal(serverConst('NAMED_VIEW_MAX'), String(NAMED_VIEW_MAX));
+  assert.equal(serverConst('NAMED_VIEW_BLOB_MAX_BYTES'), String(NAMED_VIEW_BLOB_MAX_BYTES));
+  // client NAMED_VIEW_KEYS is a plain array; server declares a Set — compare
+  // the inner list, quote-style normalized
+  const inner = serverConst('NAMED_VIEW_KEYS').match(/new Set\(\[(.*?)\]\)/s);
+  assert.ok(inner, 'server.js NAMED_VIEW_KEYS is a Set of a literal array');
+  assert.deepEqual(JSON.parse(`[${inner[1].replace(/'/g, '"')}]`), NAMED_VIEW_KEYS);
+});
 
 const PASSWORD = 'views-named-password-1';
 
