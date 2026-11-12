@@ -260,6 +260,9 @@ const CLIENT_ONLY_ERR_CODES = [
   'code403', // static error-page copy in pages/errors.js
   'notifPrefsSaveFailed', // toast composed by IN.npToggle when the prefs PUT fails (34-04)
   'projectSaveFailed', // toast composed by submitProject's edit branch when the settings PUT fails (2026-11-09 WR-01)
+  'viewNameRequired', // toast composed by savedViewsUi when the prompt is submitted empty (57-02)
+  'viewSaveFailed', // fallback when the named-view PUT answers no keyed code (57-02)
+  'viewDeleteFailed', // fallback when the view DELETE answers no keyed code (57-02)
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {

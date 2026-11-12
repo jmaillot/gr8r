@@ -225,6 +225,7 @@ export function viewToolbar(key, opt = {}) {
     <button class="btn btn-ghost" data-a="pop" data-pop="sort" data-key="${key}">${ic('arrow-up-down', 14)}<span class="hide-m">${t('page.sortLabel')}</span> ${sortName}</button>
     ${opt.group !== false ? `<button class="btn btn-ghost" data-a="pop" data-pop="group" data-key="${key}">${ic('rows-3', 14)}<span class="hide-m">${t('page.groupLabel')}</span> ${{ status: t('page.field.status'), priority: t('page.field.priority'), assignee: t('page.field.assignee'), project: t('page.field.project'), due: t('page.field.due'), none: t('common.none') }[v.group]}</button>` : ''}
     ${opt.cols ? `<button class="btn btn-ghost" data-a="pop" data-pop="cols" data-key="${key}">${ic('columns-3', 14)}${t('act.columns')}</button>` : ''}
+    ${opt.views ? `<button class="btn btn-ghost" data-a="pop" data-pop="views" data-key="${key}">${ic('star', 14)}<span class="hide-m">${t('popover.savedViews')}</span></button>` : ''}
     ${opt.extra || ''}
     <span class="sp"></span>
     ${opt.right || ''}

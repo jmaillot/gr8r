@@ -45,9 +45,9 @@ import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
 import { DEFAULT_OPTIONS, buildExportModel } from '../export/model.js';
-import { toCsv } from '../export/csv.js';
-import { download, saveBlob } from '../core/download.js';
-
+/* toCsv rides the lazy chunk (DELIV-02 index gate, 57-02): the only call site is the async static-mode export below. */
+/* download/saveBlob ride the lazy chunk (DELIV-02 index gate, 57-02): the
+   only call sites are the async export paths below. */
 /* The preference value is written the way the user chose it: the 'auto'
    sentinel must reach the bag as the string 'auto', so it is still read as
    the sentinel on the next render. The helper lives in core/prefs.js —
@@ -430,6 +430,13 @@ A.pop = el => {
      open the assignee picker modal instead, from the same placements. */
   if (d.pop === 'assignee' || d.pop === 'subassignee') {
     A.assigneePickOpen(el);
+    return;
+  }
+  if (d.pop === 'views') {
+    /* Named saved views (57-02): the body is built by the lazy savedViewsUi
+       chunk after it refreshes the member's named rows (DELIV-02 gate). */
+    openPop(el);
+    import('../views/savedViewsUi.js').then(m => m.refreshViewsPop());
     return;
   }
   const p = S.ui.pop;
@@ -1387,12 +1394,17 @@ A.toggleCol2 = el => {
 A.resetCols = el => {
   delete S.views[el.dataset.key];
   const wsId = api.enabled ? api.workspace?.id : D().ws.url;
-  import('../core/viewSync.js').then(m => m.removeLocalSavedView(wsId, el.dataset.key)); // local-mode half of the D-14 reset
+  // The D-14 reset via the lazy chunk: server mode DELETEs the live name='' row, local mode clears the mirror (57-01/57-02 halves).
+  import('../core/viewSync.js').then(m => m.deleteViewRow(wsId, el.dataset.key, ''));
   viewOf(el.dataset.key); // re-apply the D-13 defaults
   S.ui.pop = null;
   save();
   render();
 };
+/* Named saved views (Phase 57 plan 02, VIEW-02): the handlers live in the
+   lazy savedViewsUi chunk (DELIV-02 index-gate split, the 57-01 pattern). */
+for (const fn of ['saveTableView', 'applyTableView', 'deleteTableView', 'updateTableView'])
+  A[fn] = el => import('../views/savedViewsUi.js').then(m => m[fn](el));
 /* Per-user view write-through + hydration live in the lazy viewSync chunk
    (Phase 57, D-05/D-07 — DELIV-02 index-gate split). hydrateViews keeps the
    call sites unchanged; the chunk is fetched at the first view write or the
@@ -1906,6 +1918,7 @@ A.exportSubmit = async el => {
      exactly the code path the server route uses (R9: no charts, no arrows,
      no multi-sheet pretence — CSV only). */
   if (!api.enabled) {
+    const [{ saveBlob }, { toCsv }] = await Promise.all([import('../core/download.js'), import('../export/csv.js')]);
     const model = buildExportModel(D(), p.id, { scope, ids, options }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() });
     const csv = toCsv(model);
     saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeExportStem(p.key)}-${model.exportDateISO}.csv`);
@@ -1920,6 +1933,7 @@ A.exportSubmit = async el => {
       body.ids = ids;
     }
   }
+  const { download, saveBlob } = await import('../core/download.js');
   const r = await download(`/api/workspaces/${encodeURIComponent(D().ws.url)}/projects/${p.id}/export`, body);
   if (!r.ok) return toast(r.error || t('err.exportFailed'), { kind: 'err' });
   saveBlob(r.blob, r.filename);

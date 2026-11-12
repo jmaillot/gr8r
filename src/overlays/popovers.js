@@ -317,6 +317,13 @@ export function popHtml(p) {
         `<div class="msep"></div><button class="mi" data-a="resetCols" data-key="${p.key}">${ic('rotate-ccw', 14)}${tMsg('popover.resetColumns')}</button>`;
       break;
     }
+    case 'views':
+      /* Named saved views (57-02, VIEW-02): the body is built by the lazy
+         savedViewsUi chunk (DELIV-02 index gate) — A.pop('views') refreshes
+         the member's rows and fills p.html right after this empty render. */
+      inner = p.html || '';
+      style = 'width:240px';
+      break;
     case 'filter':
       inner = filterBuilder(p);
       cls = 'fbuild';

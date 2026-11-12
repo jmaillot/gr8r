@@ -74,3 +74,90 @@ export function setLocalSavedViews(workspaceId, key, blob) {
 export function removeLocalSavedView(workspaceId, key) {
   setLocalSavedViews(workspaceId, key, null);
 }
+
+/* ---------- named views (Phase 57 plan 02, VIEW-02, D-10/D-12) ----------
+   The cap constants are shared client/server (the client pre-checks for
+   honest errors; the server enforces — the client is never the guard). */
+export const NAMED_VIEW_KEYS = ['tasks', 'mytasks'];
+export const NAMED_VIEW_MAX = 20;
+export const NAMED_VIEW_BLOB_MAX_BYTES = 2048;
+
+export const isNamedViewKey = key => NAMED_VIEW_KEYS.includes(key);
+
+/* Local-mode named storage, its own per-workspace key beside the live mirror
+   (D-08): { tableKey: { normalizedName: { name, blob } } }. Server mode never
+   touches it — the saved_views rows are the store there. */
+const NAMED_LOCAL_PREFIX = 'projects.savedViewsNamed.';
+
+const namedStorageKey = workspaceId => NAMED_LOCAL_PREFIX + (workspaceId || 'local');
+
+function readNamedMap(workspaceId) {
+  const parsed = JSON.parse(localStorage.getItem(namedStorageKey(workspaceId)));
+  const out = {};
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    for (const [key, rows] of Object.entries(parsed)) {
+      if (!rows || typeof rows !== 'object' || Array.isArray(rows)) continue;
+      const map = {};
+      for (const [ln, row] of Object.entries(rows)) {
+        if (row && typeof row === 'object' && row.name && typeof row.blob === 'object' && row.blob) map[ln] = { name: String(row.name), blob: sanitizeViewBlob(row.blob) };
+      }
+      if (Object.keys(map).length) out[key] = map;
+    }
+  }
+  return out;
+}
+
+/* The member's named views for one table key, insertion order preserved
+   (lowercase-name map keyed internally, list ordered by first save). */
+export function getLocalNamedViews(workspaceId, key) {
+  try {
+    const map = readNamedMap(workspaceId)[key];
+    return map ? Object.values(map) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setLocalNamedView(workspaceId, key, name, blob) {
+  try {
+    const map = readNamedMap(workspaceId);
+    const rows = map[key] || {};
+    rows[name.toLowerCase()] = { name, blob: sanitizeViewBlob(blob) };
+    map[key] = rows;
+    localStorage.setItem(namedStorageKey(workspaceId), JSON.stringify(map));
+  } catch {
+    /* storage blocked or full */
+  }
+}
+
+export function removeLocalNamedView(workspaceId, key, name) {
+  try {
+    const map = readNamedMap(workspaceId);
+    if (map[key]) {
+      delete map[key][name.toLowerCase()];
+      if (!Object.keys(map[key]).length) delete map[key];
+      localStorage.setItem(namedStorageKey(workspaceId), JSON.stringify(map));
+    }
+  } catch {
+    /* storage blocked */
+  }
+}
+
+/* In-memory cache of the signed-in member's named views, refreshed when the
+   views popover opens (server GET / local mirror read). Lives here — NOT in
+   the lazy viewSync chunk — so popovers.js can read it statically without
+   pulling the chunk into the DELIV-02-gated index bundle. */
+const namedCache = { ws: null, lists: {} };
+
+export function cachedNamedViews(workspaceId, key) {
+  return namedCache.ws === (workspaceId || 'local') ? namedCache.lists[key] || [] : [];
+}
+
+export function setNamedViewsCache(workspaceId, key, list) {
+  const ws = workspaceId || 'local';
+  if (namedCache.ws !== ws) {
+    namedCache.ws = ws;
+    namedCache.lists = {};
+  }
+  namedCache.lists[key] = Array.isArray(list) ? list : [];
+}

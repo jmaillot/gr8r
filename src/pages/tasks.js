@@ -28,7 +28,7 @@ export function pageTasks() {
   else body = `<div class="list-wrap">${listHtml(groupTasks(ts, v.group), key, { cols: ['status', 'assignee', 'priority', 'due', 'project'] })}</div>`;
   return `<div class="page flush">
     <div class="ph"><div><h1>${t('nav.route.tasks')}</h1><p>${t('page.tasks.subtitle', { n: visibleProjects().filter(canSee).length })}</p></div><div class="acts"><button class="btn btn-primary" data-a="newTask">${ic('plus', 14)}${t('act.newTask')}</button></div></div>
-    ${viewToolbar(key, { right, cols: v.mode === 'table', group: v.mode !== 'board' })}
+    ${viewToolbar(key, { right, cols: v.mode === 'table', views: v.mode === 'table' && (key === 'tasks' || key === 'mytasks'), group: v.mode !== 'board' })}
     ${body}
   </div>`;
 }

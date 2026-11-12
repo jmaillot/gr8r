@@ -224,5 +224,5 @@ test('the view engine keeps its machine keys — the sort field ids and the data
   assert.ok(src.includes("sort: { f: 'manual', dir: 1 }"), 'the default sort moved');
   assert.ok(src.includes("hidden: ['start', 'created', 'deps']"), 'the hidden columns moved');
   const actions = [...src.matchAll(/data-a="([^"]*)"/g)].map(m => m[1]);
-  assert.deepEqual(actions, ['pop', 'rmFilter', 'pop', 'clearFilters', 'pop', 'pop', 'pop', 'pop'], 'the action keys moved');
+  assert.deepEqual(actions, ['pop', 'rmFilter', 'pop', 'clearFilters', 'pop', 'pop', 'pop', 'pop', 'pop'], 'the action keys moved'); // +1 tail 'pop': the saved-views popover button (57-02, data-pop="views" — reuses the pop action)
 });
