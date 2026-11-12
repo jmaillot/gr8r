@@ -53,11 +53,12 @@ stale build, the bundle stays lean, and a new locale lands by adding one JSON fi
 
 Plans:
 **Wave 1**
-- [ ] 56-01-PLAN.md — DELIV-02: dynamic-import split (vendor/qrcode + seed), QR spinner/toast UX (D-03), 500 kB build gate test (D-02)
-- [ ] 56-02-PLAN.md — DELIV-01: manifest + sha256 build stamp, fail-closed stale-dist guard in e2e/server.mjs, three-case guard test
+- [ ] 56-01-PLAN.md — DELIV-02: 500 kB build gate test (D-02), async renderPage tracer, strengthMeter decoupling, settings split (revised D-01)
+- [ ] 56-03-PLAN.md — DELIV-01: manifest + sha256 build stamp, fail-closed stale-dist guard in e2e/server.mjs, three-case guard test
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 56-03-PLAN.md — I18N-01: derived locale registry (glob keys ∪ base), shared localeCodes scan, scan name-map sync, fixture-locale proof test (D-08)
+- [ ] 56-02-PLAN.md — DELIV-02: finish the split below the gate (design-system/members, seed-lazy emptyState/ensureSeedData contract, residual edges by measurement), full unit + e2e proof
+- [ ] 56-04-PLAN.md — I18N-01: derived locale registry (glob keys ∪ base), shared localeCodes scan, scan name-map sync, fixture-locale proof test (D-08)
 
 ### Phase 57: Views, Columns & General Access
 
