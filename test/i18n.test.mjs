@@ -8,6 +8,11 @@ import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
 import { BASE_LOCALE, LOCALES, availableLocales, escHtml, getLocale, registerCatalogue, setLocale, t } from '../src/core/i18n.js';
 
+/* The derived registry (56-04) knows only the build-shipped locales (the glob keys) plus the
+   base; bare Node has no glob, so registering the French catalogue is what puts fr in the
+   registry here — the same thing server.js does at boot. */
+registerCatalogue('fr', fr);
+
 test('a base catalogue key returns the string carried by the English catalogue file', () => {
   assert.equal(t('nav.projects'), 'Projects');
   assert.equal(t('nav.projects'), en['nav.projects'], 'the string comes from the catalogue file, not from the module');
@@ -153,4 +158,15 @@ test('an unknown locale code resolves to the base locale and still announces the
   assert.equal(events.length, 1, 'the change is announced');
   assert.equal(events[0].type, 'projects:locale');
   assert.equal(events[0].detail.code, 'en');
+});
+
+/* The registry is DERIVED (56-04, D-07): the build-shipped codes (the glob keys) plus the
+   base, grown by every catalogue registered after boot — that growth is how plain Node and
+   the server learn about a locale the glob cannot name. */
+test('registering a catalogue for a locale outside the registry extends the registry', () => {
+  registerCatalogue('xx', { 'test.hello': 'Xxhello' });
+  const entry = LOCALES.find(l => l.code === 'xx');
+  assert.ok(entry, 'the registry grew to include the registered code');
+  assert.equal(entry.name, 'xx', 'a code the name map does not know falls back to the raw code (D-07)');
+  assert.ok(Object.isFrozen(LOCALES), 'the registry stays frozen after the growth');
 });
