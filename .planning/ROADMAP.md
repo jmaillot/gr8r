@@ -48,7 +48,12 @@ stale build, the bundle stays lean, and a new locale lands by adding one JSON fi
      locale test; no new shipped language (I18N-01)
   4. The full unit suite, e2e suite and i18n gate stay green on the split build
      (standing constraint)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 56-01-PLAN.md — DELIV-02: dynamic-import split (vendor/qrcode + seed), QR spinner/toast UX (D-03), 500 kB build gate test (D-02)
+- [ ] 56-02-PLAN.md — DELIV-01: manifest + sha256 build stamp, fail-closed stale-dist guard in e2e/server.mjs, three-case guard test
+- [ ] 56-03-PLAN.md — I18N-01: derived locale registry (glob keys ∪ base), shared localeCodes scan, scan name-map sync, fixture-locale proof test (D-08)
 
 ### Phase 57: Views, Columns & General Access
 **Goal**: Members shape their own table experience per user — visible columns, named
