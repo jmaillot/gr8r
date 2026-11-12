@@ -71,3 +71,8 @@ test('the build emits a lazy settings chunk', () => {
   const chunks = chunksByPrefix('settings');
   assert.ok(chunks.length > 0, `no settings-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
 });
+
+test('the build emits a lazy seed chunk', () => {
+  const chunks = chunksByPrefix('seed');
+  assert.ok(chunks.length > 0, `no seed-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
