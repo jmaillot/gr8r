@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.1
-status: Awaiting next milestone
-stopped_at: Phase 55 verified (8/8) + UAT complete (12/12, G-55-3 closed by 55-08) — v2.1 ready to ship
-last_updated: "2026-11-11T21:42:25.644Z"
-last_activity: 2026-11-11
-last_activity_desc: Milestone v2.1 completed and archived
-state_head: 57cc1a35d65a56ccfce7253b8ade01567c69473b
+milestone: v2.2
+milestone_name: Notifications, Search & Delivery
+status: planning
+last_updated: "2026-11-12T07:08:36.993Z"
+last_activity: 2026-11-12
 progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
-milestone_name: Member & Project Experience
-current_phase: 55
-current_phase_name: Multiple assignees per task (full parity)
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -30,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 
 ## Current Position
 
-Phase: Milestone v2.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-11 — Milestone v2.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-12 — Milestone v2.2 started
 
 ## v2.1 Phase 54 Plan Order (authored 2026-11-09, ported onto main 2026-11-10)
 

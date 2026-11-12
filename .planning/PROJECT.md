@@ -1,8 +1,29 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-11 — v2.1 milestone shipped*
+*Last updated: 2026-11-12 — v2.2 milestone started*
 
-## Current Milestone: none — v2.1 Member & Project Experience SHIPPED (2026-11-11)
+## Current Milestone: v2.2 Notifications, Search & Delivery
+
+**Goal:** make the workspace alive outside the tab (browser push), findable at
+scale (full-text search, admin dashboard) and cheap to keep building (e2e build
+guard, code-splitting, i18n-ready infrastructure).
+
+**Target features:**
+- Browser push for mentions + assignments (service worker; extends the Phase 48
+  badge/permission foundation) — notifications reach the user with no open tab
+- Full-text search over task titles + descriptions via FTS5, wired into Ctrl-K
+- Admin-only workspace dashboard: overdue tasks per project, load per member,
+  upcoming due dates, recent activity
+- TRN-02: every member sees their own (redacted) access-transparency view
+- NOTIF-TRIM: notification-audit trim recommendations (requires owner D-05
+  rulings during execution)
+- General-Access granularity beyond private/public; column show/hide + saved views
+- i18n infrastructure ready for a new locale without shipping one
+- E2E anti-stale-dist guard: the e2e server never serves a stale build
+- Vite code-splitting: dynamic imports for locales and heavy pages (no >500 kB chunk)
+
+<details>
+<summary>Milestone v2.1 Member & Project Experience — shipped record (2026-11-11)</summary>
 
 **Shipped:** 3 phases, 18 plans, 13/13 requirements. Per-team permission levels on
 projects (`p.perms['team:'+id]`, server-first `projectPermFor` gating); one unified
@@ -23,9 +44,7 @@ Project machine); the mechanical suite is the verification of record. Full recor
 `milestones/v2.1-ROADMAP.md`, `milestones/v2.1-REQUIREMENTS.md`,
 `milestones/v2.1-phases/`.
 
-**Next milestone:** not yet planned — open items carried to the backlog: the MS
-Project/Excel visual checks on the first Project-equipped machine; UI round-3 invite
-follow-ups recorded in 53-VERIFICATION.md.
+</details>
 
 ### v2.1 milestone decisions (owner-validated 2026-11-09)
 
@@ -662,11 +681,12 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-- **Phase 54 — Project export** (v2.1 continuation): planning ported from the
-  `feat/export` worktree on 2026-11-10 (11 artifacts, 5 plans, 4 checker rounds).
-  Execution pending a drift check of the plan line refs against the post-53 tree.
-- **Backlog:** UI/UX polish batch — scoped in session, needs `/gsd-new-milestone`
-  after v2.1 closes.
+- **v2.2 Notifications, Search & Delivery** — browser push (mentions + assignments),
+  FTS5 search over titles + descriptions, admin dashboard, TRN-02 member transparency,
+  NOTIF-TRIM (needs D-05 owner rulings), General-Access granularity + saved views,
+  i18n infrastructure, e2e dist guard, Vite code-splitting. See Current Milestone.
+- **Backlog:** MS Project/xlsx visual checks (first Project-equipped machine);
+  UI round-3 invite follow-ups (53-VERIFICATION.md); searchable token-chip pickers.
 
 ### Out of scope
 
