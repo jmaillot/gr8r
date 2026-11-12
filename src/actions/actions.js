@@ -3,7 +3,7 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
-import { ASSIGNEE_CAP, PR, PSTAT, LB } from '../core/constants.js';
+import { ASSIGNEE_CAP, DEFAULT_OPTIONS, PR, PSTAT, LB } from '../core/constants.js';
 import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
   D,
@@ -44,7 +44,9 @@ import { PERMS, TEMPLATES, closeModal, openModal, permLabel } from '../overlays/
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
-import { DEFAULT_OPTIONS, buildExportModel } from '../export/model.js';
+/* [Phase 57-03 Rule 3] buildExportModel lives in a LAZY chunk (DELIV-02
+   index gate): A.exportOpen loads it before the modal opens and stashes the
+   module on S.ui.expMod; the submit path awaits the same import. */
 /* toCsv rides the lazy chunk (DELIV-02 index gate, 57-02): the only call site is the async static-mode export below. */
 /* download/saveBlob ride the lazy chunk (DELIV-02 index gate, 57-02): the
    only call sites are the async export paths below. */
@@ -1865,10 +1867,13 @@ A.settingsTab = el => {
    saved-view tab ('v:<id>') exports that saved view ('sv:<id>'); a task tab
    exports the project's project-view; overview/files/activity have no task
    view — the modal disables the view scope there. */
-A.exportOpen = el => {
+A.exportOpen = async el => {
   const id = el.dataset.id;
   const p = proj(id);
   if (!p || !canManageProject(p)) return;
+  /* [Phase 57-03 Rule 3] The model chunk is loaded BEFORE the modal opens —
+     the modal's scope count derives from buildExportModel synchronously. */
+  S.ui.expMod = await import('../export/model.js');
   const tab = S.ui.params.tab || 'board';
   S.ui.expOptions = { ...DEFAULT_OPTIONS };
   S.ui.expScope = 'all';
@@ -1904,7 +1909,7 @@ const exportViewIds = p => {
   return applyView(tasksOf(p.id), v).map(t => t.id);
 };
 const exportCount = p =>
-  (buildExportModel(D(), p.id, { scope: S.ui.expScope === 'view' ? 'view' : 'all', ids: exportViewIds(p), options: S.ui.expOptions }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() })?.rows || []).length;
+  (S.ui.expMod?.buildExportModel?.(D(), p.id, { scope: S.ui.expScope === 'view' ? 'view' : 'all', ids: exportViewIds(p), options: S.ui.expOptions }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() })?.rows || []).length;
 /* Static-mode filename helper (D-54-2): the same allow-list as the server —
    every character outside A-Z a-z 0-9 dot underscore hyphen becomes a hyphen. */
 const safeExportStem = value =>
@@ -1918,6 +1923,7 @@ A.exportSubmit = async el => {
   const count = exportCount(p);
   if (count === 0) return toast(t('export.scope.count', { n: 0 }), { kind: 'info' });
   const options = { ...(S.ui.expOptions || DEFAULT_OPTIONS) };
+  const exp = S.ui.expMod || (await import('../export/model.js'));
   const scope = S.ui.expScope === 'view' && S.ui.expViewKey ? 'view' : 'all';
   const ids = scope === 'view' ? exportViewIds(p) : undefined;
   /* STATIC MODE (54-01): no server — the model and writer run in the browser,
@@ -1925,7 +1931,7 @@ A.exportSubmit = async el => {
      no multi-sheet pretence — CSV only). */
   if (!api.enabled) {
     const [{ saveBlob }, { toCsv }] = await Promise.all([import('../core/download.js'), import('../export/csv.js')]);
-    const model = buildExportModel(D(), p.id, { scope, ids, options }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() });
+    const model = exp.buildExportModel(D(), p.id, { scope, ids, options }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() });
     const csv = toCsv(model);
     saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${safeExportStem(p.key)}-${model.exportDateISO}.csv`);
     closeModal();

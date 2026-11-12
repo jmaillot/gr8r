@@ -14,6 +14,21 @@ import { DEFAULT_OPTIONS } from '../src/export/model.js';
 
 const read = rel => fs.readFileSync(path.resolve(import.meta.dirname, '..', rel), 'utf8');
 
+/* [Phase 57-03 Rule 3] Drift pin: the export model went into a LAZY chunk
+   and actions.js reads its include defaults from the synchronous constants.js
+   copy — the two must never diverge. */
+test('constants.js DEFAULT_OPTIONS mirrors export/model.js DEFAULT_OPTIONS (lazy-chunk drift pin)', () => {
+  const constants = fs.readFileSync(path.resolve(import.meta.dirname, '..', 'src/core/constants.js'), 'utf8');
+  const block = constants.slice(constants.indexOf('export const DEFAULT_OPTIONS'));
+  const constOpts = block.slice(0, block.indexOf('});'));
+  for (const [k, v] of Object.entries(DEFAULT_OPTIONS)) {
+    assert.ok(constOpts.includes(`${k}: ${v}`), `constants.js DEFAULT_OPTIONS carries ${k}: ${v}`);
+  }
+  const keys = Object.keys(DEFAULT_OPTIONS).sort().join(',');
+  assert.ok(constOpts.includes('descriptions') && constOpts.includes('archived'), 'all five keys present');
+  assert.equal(keys, 'archived,comments,completed,descriptions,subtasks');
+});
+
 test('project.js renders exactly one exportOpen entry point, guarded by canManageProject', () => {
   const src = read('src/pages/project.js');
   assert.equal(src.split('data-a="exportOpen"').length - 1, 1, 'exactly one exportOpen in the header');

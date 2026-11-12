@@ -77,6 +77,11 @@ test('the build emits a lazy seed chunk', () => {
   assert.ok(chunks.length > 0, `no seed-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
 });
 
+test('the build emits a lazy export-model chunk', () => {
+  const chunks = chunksByPrefix('model');
+  assert.ok(chunks.length > 0, `no model-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
+
 /* 56-02 final edge set: design-system, members, activity, search. */
 
 test('the build emits a lazy viewSync chunk (57-01: the per-user view substrate)', () => {

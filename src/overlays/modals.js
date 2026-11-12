@@ -3,7 +3,7 @@ import { $$, ago, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
 import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { ASSIGNEE_CAP, PCOLORS, PICONS, LB } from '../core/constants.js';
-import { buildExportModel } from '../export/model.js';
+
 import { applyView, viewOf } from '../shell/view-engine.js';
 import { D, S, assignableInProject, canManageProject, mem, pColor, proj, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -370,7 +370,13 @@ export function exportModal(m, H) {
   const hasView = !!S.ui.expViewKey;
   const scope = hasView ? S.ui.expScope || 'all' : 'all';
   const ids = scope === 'view' && hasView ? applyView(tasksOf(p.id), viewOf(S.ui.expViewKey)).map(x => x.id) : undefined;
-  const model = buildExportModel(D(), p.id, { scope, ids, options: opts }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() });
+  /* [Phase 57-03 Rule 3] The model chunk went lazy (DELIV-02 index gate);
+     A.exportOpen loads it into S.ui.expMod BEFORE this modal opens — the
+     count derives from buildExportModel itself, never a raw length. */
+  const buildExportModel = S.ui.expMod?.buildExportModel;
+  const model = buildExportModel
+    ? buildExportModel(D(), p.id, { scope, ids, options: opts }, { translate: t, labelName: id => LB[id]?.name || id, now: new Date() })
+    : null;
   const count = (model?.rows || []).length;
   const radio = (name, value, label, icon, checked, disabled = false) =>
     `<label class="opt ${checked ? 'on' : ''}${disabled ? ' off' : ''}" ${disabled ? 'aria-disabled="true"' : ''} style="${disabled ? 'opacity:.5' : ''}"><input type="radio" name="${name}" value="${value}" data-in="${name === 'expScope' ? 'exportScope' : 'exportFormat'}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>${ic(icon, 14)}${label}</label>`;

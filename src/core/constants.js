@@ -288,6 +288,19 @@ export const PICONS = [
   'sparkles',
 ];
 export const ROLES = ['Owner', 'Admin', 'Member', 'Guest'];
+
+/* [Phase 57-03 Rule 3] Browser-side copy of the export include defaults —
+   the export model went into a LAZY chunk (DELIV-02 index gate; same remedy
+   as download/csv in 57-02) and the export actions need the defaults
+   synchronously. Pinned against src/export/model.js DEFAULT_OPTIONS by the
+   drift check in test/export-client.test.mjs. */
+export const DEFAULT_OPTIONS = Object.freeze({
+  descriptions: false,
+  comments: false,
+  subtasks: false,
+  completed: true,
+  archived: false,
+});
 export const TEAMS_SEED = [
   { id: 'design', name: 'Design', icon: 'palette', c: '#8662C9', desc: 'Product design, brand, and research' },
   { id: 'eng', name: 'Engineering', icon: 'code', c: '#3B82C4', desc: 'Web, mobile, and platform engineering' },
