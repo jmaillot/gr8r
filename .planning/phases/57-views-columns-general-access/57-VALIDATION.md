@@ -40,7 +40,14 @@ created: "2026-11-12"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 57-01-01 | 01 | 1 | VIEW-01 | — | N/A | unit | `node --test test/views.test.mjs` | ❌ W0 | ⬜ pending |
+| 57-01-1 | 01 | 1 | VIEW-01 | T-57-01, T-57-03 | user_id from session; blob whitelist/merge | unit | `node --test test/views-columns.test.mjs` | ❌ W0 | ⬜ pending |
+| 57-01-2 | 01 | 1 | VIEW-01 | T-57-02 | three-site strip / no doc.views resurrection | unit | `node --test test/views-migration.test.mjs` | ❌ W0 | ⬜ pending |
+| 57-01-3 | 01 | 1 | VIEW-01 | — | — | full chain | `node --test test/build-chunk-size.test.mjs && npm test && npm run lint && node scripts/i18n-scan.mjs && npm run e2e` | ✅ | ⬜ pending |
+| 57-02-1 | 02 | 2 | VIEW-02 | T-57-04, T-57-05 | caps (20/2 kB), name uniqueness, member-boundary | unit | `node --test test/saved-views.test.mjs` | ❌ W0 | ⬜ pending |
+| 57-02-2 | 02 | 2 | VIEW-02 | T-57-06 | snapshot whitelist (no `q`/`_` transients) | unit + gates | `npm test && node scripts/i18n-scan.mjs && npm run lint` | ✅ | ⬜ pending |
+| 57-02-3 | 02 | 2 | VIEW-02 | — | — | full chain + e2e | `node --test test/build-chunk-size.test.mjs && npm test && npm run lint && node scripts/i18n-scan.mjs && npm run e2e` | ✅ | ⬜ pending |
+| 57-03-1 | 03 | 2 | VIEW-03 | T-57-07 | stored-doc-only pref read; fail-closed normalize | unit | `node --test test/default-private.test.mjs` | ❌ W0 | ⬜ pending |
+| 57-03-2 | 03 | 2 | VIEW-03 | — | — | full chain + e2e | `node --test test/build-chunk-size.test.mjs && npm test && npm run lint && node scripts/i18n-scan.mjs && npm run e2e` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,8 +57,10 @@ created: "2026-11-12"
 
 ## Wave 0 Requirements
 
-- [ ] `test/views.test.mjs` — stubs for VIEW-01/VIEW-02 (view state strip, per-user rows merge)
-- [ ] `test/general-access.test.mjs` — stub for VIEW-03 (default visibility resolution)
+- [ ] `test/views-columns.test.mjs` — sanitize/merge/live-row contract (VIEW-01, tracer)
+- [ ] `test/views-migration.test.mjs` — doc.views → owner rows sweep + strip (VIEW-01)
+- [ ] `test/saved-views.test.mjs` — caps, uniqueness, lenient load, DELETE (VIEW-02)
+- [ ] `test/default-private.test.mjs` — stored-doc pref read + createProject seed (VIEW-03)
 - [ ] Existing suite: `npm test` covers build gates + i18n scan from Phase 56
 
 *If none: "Existing infrastructure covers all phase requirements."*
