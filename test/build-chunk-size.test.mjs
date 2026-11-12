@@ -62,6 +62,15 @@ test('every emitted .js chunk is <= 500000 bytes', () => {
 
 /* ---------- split-existence assertions ---------- */
 
+/* IN-05 pin (57-04): the DELIV-02 gate caps every chunk, but nothing asserted
+   the ENTRY chunk itself — pin its existence and its place under the same
+   500 kB gate so the index bundle can't silently regress. */
+test('the build emits an entry index chunk within the 500 kB gate', () => {
+  const entry = chunksByPrefix('index');
+  assert.ok(entry.length > 0, `no index-*.js entry chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+  for (const c of entry) assert.ok(c.bytes <= MAX_CHUNK_BYTES, `entry chunk ${c.name}: ${c.bytes} bytes > ${MAX_CHUNK_BYTES}`);
+});
+
 test('the build emits a lazy qrcode chunk', () => {
   const chunks = chunksByPrefix('qrcode');
   assert.ok(chunks.length > 0, `no qrcode-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
