@@ -246,11 +246,11 @@ Legacy `doc.savedViews` (project-scoped named filters) deliberately NOT migrated
 | A3 | Server-side symmetric seeding of `private` from stored pref at project-create merge is desirable but optional | Critical fact 4 | Client-only seeding is spoofable by a crafted PUT; parity is one mergeClientDoc clause |
 | A4 | `q` exclusion from snapshots (D-11) plus `_`-prefix transient exclusion covers all render-time mutations | Pitfalls 3 | A future transient field could leak into blobs |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Fate of legacy `doc.savedViews`.** What we know: it exists (actions.js:1448+, server merge/redaction, seed), is project-scoped, and D-06 only names `doc.views`. Unclear: migrate now, coexist, or defer. Recommendation: coexist untouched this phase, note for cleanup; flag at plan review.
-2. **Live-row vs named-row table shape.** Sentinel-name row vs `is_current` flag — discretion per CONTEXT; planner picks, both work with the adapter's `insert or replace` translation.
-3. **Route path shape.** `/api/me/views?workspace=&key=` (notifPrefs style, recommended — reuses requireUser + workspace resolution) vs `/api/workspaces/:slug/views`. Discretion per CONTEXT.
+1. **Fate of legacy `doc.savedViews`.** What we know: it exists (actions.js:1448+, server merge/redaction, seed), is project-scoped, and D-06 only names `doc.views`. (RESOLVED → coexist untouched this phase; flagged assumption in 57-01/57-02 must_haves; new action names avoid the `saveView` collision.)
+2. **Live-row vs named-row table shape.** Sentinel-name row vs `is_current` flag — discretion per CONTEXT. (RESOLVED → one table, PK `(workspace_id, user_id, key, name)`, sentinel `name=''` for the live row; 57-01 tracer + 57-02 flagged assumption.)
+3. **Route path shape.** `/api/me/views?workspace=&key=` (notifPrefs style) vs `/api/workspaces/:slug/views`. (RESOLVED → `/api/me/views` notifPrefs style with `requireUser` + workspace membership; 57-01 tracer / 57-02 named rows + DELETE.)
 
 ## Sources
 
