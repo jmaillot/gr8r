@@ -29,6 +29,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
+import { localeNames } from './locales.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
@@ -178,8 +179,10 @@ const STORED_VALUES = new Set([
 const DEMO_VALUES = new Set(['Tanjim Islam', 'Website Launch']);
 
 /* The native names of the registered locales: the name of a language is the
-   language's own name, never translated (src/core/i18n.js LOCALES). */
-const LOCALE_NAMES = new Set(['English', 'Français']);
+   language's own name, never translated. Derived from the shared name map
+   (src/core/locale-names.js, via scripts/locales.mjs), so a newly registered
+   locale's name — or a fixture's — is whitelisted automatically (D-07). */
+const LOCALE_NAMES = new Set(Object.values(localeNames()));
 
 /* Every set whose values are excluded wherever they appear. */
 const VALUE_EXCLUSIONS = new Set([...STORED_VOCABULARY, ...STORED_VALUES, ...DEMO_VALUES, ...LOCALE_NAMES]);

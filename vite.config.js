@@ -3,19 +3,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'vite';
 import { lucideIconNames, lucideIconMarkup } from './scripts/icons.mjs';
+import { localeCodes } from './scripts/locales.mjs';
 
 /* The base locale. It is the catalogue every other one falls back to (D-08), so it ships in
    EVERY build: a build without it would leave the interface without a language. */
 const BASE_LOCALE = 'en';
 
-/* The build's locale set, read from the environment at config load time. The default ships every
-   locale; LOCALES=en is the English-only build. No build script may change the default. */
+/* The build's locale set, read from the environment at config load time. The default ships
+   EVERY locale present in src/locales/ — the shared scan in scripts/locales.mjs reads the
+   same directory the i18n.js glob does, so one JSON file is one shipped locale (D-09) and
+   the build can never diverge from the app's registry. LOCALES, when set, is the explicit
+   opt-out list (LOCALES=en is the English-only build). No build script may change the default. */
 const BUILD_LOCALES = new Set([
   BASE_LOCALE,
-  ...(process.env.LOCALES || 'en,fr')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean),
+  ...(process.env.LOCALES
+    ? process.env.LOCALES.split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+    : localeCodes()),
 ]);
 
 /* `virtual:icons` exports only the Lucide icons the source actually names, as inline SVG markup,
