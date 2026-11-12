@@ -66,3 +66,8 @@ test('the build emits a lazy qrcode chunk', () => {
   const chunks = chunksByPrefix('qrcode');
   assert.ok(chunks.length > 0, `no qrcode-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
 });
+
+test('the build emits a lazy settings chunk', () => {
+  const chunks = chunksByPrefix('settings');
+  assert.ok(chunks.length > 0, `no settings-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
