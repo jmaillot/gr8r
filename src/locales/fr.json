@@ -156,6 +156,7 @@
   "toast.linkCopied": "Lien copié",
   "toast.copyUnavailable": "La copie n’est pas disponible ici — {link}",
   "toast.copiedToClipboard": "Copié dans le presse-papiers",
+  "toast.errGeneric": "Une erreur est survenue — réessayez",
   "toast.emailCopied": "E-mail copié",
   "toast.inviteLinkCopied": "Lien d’invitation copié",
   "toast.emailFailedLinkCopied": "Échec de l’envoi — nouveau lien d’invitation copié",

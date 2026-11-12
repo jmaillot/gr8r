@@ -7,7 +7,6 @@ import './core/utils.js';
 import './core/i18n.js';
 import './core/icons.js';
 import './core/constants.js';
-import './data/seed.js';
 import './core/store.js';
 import './ui/helpers.js';
 import './core/theme.js';
@@ -52,7 +51,7 @@ import './features/archive.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
 import './actions/archive.js';
-import { S, D, hydrateFromServer, resetDirty, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee } from './core/store.js';
+import { S, D, hydrateFromServer, resetDirty, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee, ensureSeedData, saved } from './core/store.js';
 import { api } from './core/api.js';
 import { A, hydrateNotifPrefs, refreshMembers } from './actions/actions.js';
 import { toast } from './ui/toast.js';
@@ -288,6 +287,11 @@ async function seedLegacyLocale() {
   const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding', 'tfa', 'invitations'];
   const withServer = await api.init();
   if (!withServer) await primeLocale(readStoredLocale() || negotiated);
+  /* Seed-lazy boot (DELIV-02): a fresh demo boot mirrors today's behavior — every
+     local boot without saved data received the demo seed synchronously. The seed now
+     rides a lazy chunk, so pull it explicitly before the first render. Server mode
+     hydrates from the workspace document instead (hydrateFromServer below). */
+  if (!withServer && !saved?.data) await ensureSeedData();
   const joinToken = (location.pathname.match(/^\/join\/([A-Za-z0-9_-]{16,128})\/?$/) || [])[1];
   const slugFromPath = (location.pathname.match(/^\/w\/([a-z0-9-]{2,40})(?:\/|$)/) || [])[1];
   const restFromPath = (location.pathname.match(/^\/w\/[a-z0-9-]{2,40}\/(.+?)\/?$/) || [])[1] || '';

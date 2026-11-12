@@ -15,6 +15,10 @@ Object.defineProperty(globalThis, 'navigator', {
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 
 const { seed } = await import('../src/data/seed.js');
+const store = await import('../src/core/store.js');
+/* Seed-lazy migration (56-02): the store boots emptyState(); apply the demo
+   doc explicitly so workspaceList() exercises the real seeded shape. */
+store.S.data = seed();
 const { D, currentSlug, workspaceList } = await import('../src/core/store.js');
 
 test('the demo seed carries no workspace array', () => {

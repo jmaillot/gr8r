@@ -104,6 +104,10 @@ const push = await import('../src/core/push.js');
 const actions = await import('../src/actions/actions.js');
 const { S, D } = store;
 
+/* Seed-lazy migration (56-02): the store no longer falls back to seed() —
+   the suite applies the demo doc explicitly in setup. */
+S.data = (await import('../src/data/seed.js')).seed();
+
 /* Seed the workspace doc: one unread mention row for the current member. */
 const d = D();
 d.ws = { url: 'acme', name: 'Acme', c: '#5A67D8' };

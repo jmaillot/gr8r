@@ -155,6 +155,7 @@
   "toast.linkCopied": "Link copied",
   "toast.copyUnavailable": "Copy isn't available here — {link}",
   "toast.copiedToClipboard": "Copied to clipboard",
+  "toast.errGeneric": "Something went wrong — try again",
   "toast.emailCopied": "Email copied",
   "toast.inviteLinkCopied": "Invite link copied",
   "toast.emailFailedLinkCopied": "Email failed — new invite link copied",

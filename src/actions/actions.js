@@ -4,7 +4,6 @@
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { ASSIGNEE_CAP, PR, PSTAT, LB } from '../core/constants.js';
-import { seed } from '../data/seed.js';
 import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
   D,
@@ -27,6 +26,7 @@ import {
   proj,
   projTeams,
   pushNow,
+  ensureSeedData,
   roleLabel,
   save,
   task,
@@ -3045,8 +3045,8 @@ A.resetDemo = () => {
     ok: t('act.resetData'),
     danger: true,
     icon: 'rotate-ccw',
-    run: () => {
-      S.data = seed();
+    run: async () => {
+      await ensureSeedData();
       S.views = {};
       S.prefs = { ...DEFAULT_PREFS, theme: S.prefs.theme };
       S.ui.drawer = null;
@@ -3100,7 +3100,12 @@ A.confirmOk = () => {
   S.ui.modals.pop();
   S.ui.confirmText = '';
   render();
-  m.run && m.run();
+  /* Seed-lazy runs are async; confirmDlg ignores the returned promise, so a
+     rejected run surfaces as an error toast instead of silently vanishing. */
+  Promise.resolve(m.run && m.run()).catch(e => {
+    console.error(e);
+    toast(e?.message || t('toast.errGeneric'), { kind: 'err' });
+  });
 };
 IN.confirmText = el => {
   S.ui.confirmText = el.value;
@@ -3285,8 +3290,8 @@ A.delWorkspace = () => {
     ok: t('act.deleteWorkspace'),
     danger: true,
     typeName: D().ws.name,
-    run: () => {
-      S.data = seed();
+    run: async () => {
+      await ensureSeedData();
       S.views = {};
       save();
       S.ui.auth = 'login';

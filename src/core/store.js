@@ -2,7 +2,6 @@
 import { TODAY, diffD, iso, parse, uid } from './utils.js';
 import { t } from './i18n.js';
 import { PCOLORS, TEAMS_SEED } from './constants.js';
-import { seed } from '../data/seed.js';
 import { getLocalNotifPrefs } from './notifPrefs.js';
 import { api } from './api.js';
 
@@ -51,9 +50,45 @@ export function load() {
   }
   return null;
 }
+/* ---------- seed-lazy migration (DELIV-02 D-01 revised): seed.js no longer
+   rides the entry chunk. The boot fallback stays synchronous but tiny —
+   emptyState() mirrors seed()'s top-level structure minus the demo content,
+   so a fresh store never boots null (corruption-fallback behavior preserved).
+   The demo content arrives explicitly via ensureSeedData(), which dynamic-
+   imports the lazy seed chunk; main.js awaits it on fresh demo boots and the
+   demo-reset/delete actions call it after their own render. */
+function emptyState() {
+  return {
+    ws: { name: t('app.name'), url: 'projectsstudio', c: '#1D1C1A', brand: true },
+    me: null,
+    members: [],
+    projects: [],
+    tasks: [],
+    comments: [],
+    activity: [],
+    notifs: [],
+    files: [],
+    events: [],
+    projOrder: [],
+    savedViews: [],
+    recentSearches: [],
+  };
+}
+
+let seedPromise = null;
+/* Explicitly pull the lazy seed chunk and apply the demo data to the store.
+   Memoized so repeated calls (boot + demo-reset paths) fetch the chunk once. */
+export async function ensureSeedData() {
+  if (!seedPromise) {
+    seedPromise = import('../data/seed.js').then(m => {
+      S.data = m.seed();
+    });
+  }
+  await seedPromise;
+}
 export const saved = load();
 export const S = {
-  data: saved?.data || seed(),
+  data: saved?.data || emptyState(),
   prefs: stripLegacyLang(Object.assign({}, DEFAULT_PREFS, saved?.prefs || {})),
   views: saved?.views || {},
   /* Per-user notif prefs (Phase 34 D-01): never on the document. Local mode

@@ -137,6 +137,9 @@ test('the five search call sites still call hl(text, query) with the same signat
 /* ---------- the global search folds both sides ---------- */
 
 const store = await import('../src/core/store.js');
+/* Seed-lazy migration (56-02): apply the demo doc explicitly — no implicit
+   seed fallback in the store anymore. */
+store.S.data = (await import('../src/data/seed.js')).seed();
 const { searchAll } = await import('../src/pages/search.js');
 
 /* The suite seeds one accented fixture of each kind, once. The queries the other
