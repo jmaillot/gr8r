@@ -58,4 +58,27 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 ## Traceability
 | REQ | Phase | Status |
 |-----|-------|--------|
-| (filled by roadmap) | | |
+| DELIV-01 | Phase 56 | Pending |
+| DELIV-02 | Phase 56 | Pending |
+| I18N-01 | Phase 56 | Pending |
+| VIEW-01 | Phase 57 | Pending |
+| VIEW-02 | Phase 57 | Pending |
+| VIEW-03 | Phase 57 | Pending |
+| SEARCH-01 | Phase 58 | Pending |
+| SEARCH-02 | Phase 58 | Pending |
+| SEARCH-03 | Phase 58 | Pending |
+| SEARCH-04 | Phase 58 | Pending |
+| PUSH-01 | Phase 59 | Pending |
+| PUSH-02 | Phase 59 | Pending |
+| PUSH-03 | Phase 59 | Pending |
+| PUSH-04 | Phase 59 | Pending |
+| PUSH-05 | Phase 59 | Pending |
+| DASH-01 | Phase 60 | Pending |
+| DASH-02 | Phase 60 | Pending |
+| DASH-03 | Phase 60 | Pending |
+| DASH-04 | Phase 60 | Pending |
+| TRN-01 | Phase 60 | Pending |
+| TRN-02 | Phase 60 | Pending |
+| NOTIF-01 | Phase 61 | Pending |
+| NOTIF-02 | Phase 61 | Pending |
+| NOTIF-03 | Phase 61 | Pending |

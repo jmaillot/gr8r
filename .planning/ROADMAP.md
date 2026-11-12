@@ -1,206 +1,165 @@
-# Roadmap: gr8r
+# Roadmap: Projects Studio
+
+🚧 **v2.2 Notifications, Search & Delivery** — started 2026-11-12
+
+**Goal:** make the workspace alive outside the tab (browser push), findable at scale
+(FTS5 search, admin dashboard) and cheap to keep building (e2e dist guard, Vite
+code-splitting, i18n-ready infrastructure).
+
+**Owner decisions locked (2026-11-12):** `web-push@4.0.0` as runtime dep #2 (D-12
+precedent); saved views/columns in a server `saved_views` table (Phase 34 notif_prefs
+precedent); admin dashboard is power-admin (private projects fully visible in aggregates).
+These are baked into phase goals — do not re-open them.
+
+**Standing constraints:** zero-migration discipline where feasible (additive rows follow
+the Phase 34 guarded-migration recipe when needed), full suite green, EN+FR i18n gate
+(server keys included), Phase 38 suppression + no-double-send invariants pass unmodified.
 
 ## Milestones
 
-- ✅ **v1.0 MVP** — Phases 1-9 (shipped 2025-11-27)
-- ✅ **v1.1 Security** — Phases 10-15 (shipped 2026-01)
-- ✅ **v1.2 Authentication (SSO/OIDC)** — Phases 16-20 (shipped 2026-03)
-- ✅ **v1.3 Invitations & Onboarding** — Phases 21-24 (shipped 2026-05)
-- ✅ **v1.4 Admin Experience** — Phases 25-27 (shipped 2026-06)
-- ✅ **v1.5 Integrations & Email** — Phases 28-30 (shipped 2026-09)
-- ✅ **v1.6 Membership Refinement** — Phase 31 (shipped 2026-11-02)
-- ✅ **v1.7 Team Visibility & Hardening** — Phases 32-35 (shipped 2026-11-04)
-- ✅ **v1.8 Notification Sanity** — Phases 36-39 (shipped 2026-11-05)
-- ✅ **v1.9 Digest Context & One-Click Unsubscribe** — Phases 40-44 (shipped 2026-11-07)
-- ✅ **v1.10 Extensions & Adapters** — Phases 45-48 (shipped 2026-11-07)
-- ✅ **v2.0 Project-level Permissions & Invitations** — Phases 49-52 (shipped 2026-11-09)
-- ✅ **v2.1 Member & Project Experience** — Phases 53-55 (shipped 2026-11-11; open UAT carried to backlog: Phase 54 MS Project/Excel visual checks)
+- 🚧 **v2.2 Notifications, Search & Delivery** (current)
+- ✅ v2.1 Member & Project Experience (shipped 2026-11-11 — Phases 53–55)
 
 ## Phases
 
-- [x] **Phase 53: Member & Project Experience** - One ordered phase covering all v2.1 requirements: per-team perms (server first), invite modal, unified project settings, projects table & Share dedup, teams polish — executed plan-by-plan in the dependency order below (completed 2026-11-09)
-- [x] **Phase 54: Project export — Excel report, MSPDI XML and CSV** - One export model, three writers (xlsx / MSPDI / CSV), scoped to the current filtered view or the whole project — shipped 2026-11-10; the MS Project import + Excel visual checks remain open UAT entries (owner skipped, no Project machine)
+- [ ] **Phase 56: Delivery Infrastructure** - e2e anti-stale-dist guard, Vite code-splitting, i18n-ready locale infrastructure
+- [ ] **Phase 57: Views, Columns & General Access** - column show/hide, saved views in server rows, General-Access granularity beyond private/public
+- [ ] **Phase 58: Full-Text Search** - FTS5 over task titles + descriptions, permission-filtered, wired into Ctrl-K
+- [ ] **Phase 59: Browser Push** - server push fan-out for mentions + assignments via web-push@4.0.0
+- [ ] **Phase 60: Admin Dashboard & Member Self-View** - power-admin workspace dashboard + TRN-02 member transparency self-view
+- [ ] **Phase 61: Notification Trim** - D-05-ruling-gated trim application, one-click suppression, burst coalescing
 
 ## Phase Details
 
-### Phase 53: Member & Project Experience
-
-**Goal**: The everyday surfaces — invite modal, team editing, project settings, projects
-table — match how people actually use workspaces, with per-team permissions enforced
-server-first through the one existing funnel.
-
-**Depends on**: Nothing (first phase of v2.1)
-
-**Requirements**: PSET-02, PSET-03, INVT-01, INVT-02, INVT-03, PSET-01, PSET-04,
-PROJ-01, PROJ-02, TEAM-01, TEAM-02, TEAM-03, UX-01
-
-**Plans:** 5/5 plans complete
-
-Plans:
-**Wave 1**
-- [x] 53-01-PLAN.md — Per-team perms server model (`p.perms['team:']`, `projectPermFor` write gates, lockstep mirrors, oracle + pin regression)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-- [x] 53-02-PLAN.md — Invite modal: draft `data-in` fix, Projects chips, shared guest validator (create/edit/accept) + D-06 UX
-
-**Wave 3** *(blocked on Wave 2 completion)*
-- [x] 53-03-PLAN.md — Unified project settings modal (General + Access) replacing projectModal + Share modal, per-team perm dropdowns
-
-**Wave 4** *(blocked on Wave 3 completion)*
-- [x] 53-04-PLAN.md — Projects table columns (Lead/Teams/Members/Status/Target) + one labeled Share → Access tab
-
-**Wave 5** *(blocked on Wave 4 completion)*
-- [x] 53-05-PLAN.md — Teams polish (searchable members box, hint, invite removal) + milestone i18n close-out
-
-**Execution order** (plans are built and executed in this order; each plan is
-self-contained and commits atomically):
-
-1. **53-01 Per-team perms — server model** (PSET-02, PSET-03): team-keyed levels in
-   `p.perms['team:'+teamId]`, one shared `projectPermFor` helper gating write routes,
-   lockstep across server funnel + `projectAccessReason` + mcp.js mirror + client
-   `canSee` store mirror, `mergeClientDoc` pin block + `normalizeProjects` coverage,
-   VISIBILITY_MODEL oracle extension. Visibility stays boolean.
-2. **53-02 Invite modal** (INVT-01, INVT-02, INVT-03): `data-in="inviteDraft"` fix,
-   Projects chip multi-select below Team, guest = exactly one project (client clamp +
-   server validator on create and edit; MCP coverage verified).
-3. **53-03 Unified project settings modal** (PSET-01, PSET-04): General + Access
-   replaces projectModal and Share modal; per-team perm dropdowns backed by 53-01;
-   every field `data-in`-bound; stale/concurrent-edit honesty; dead keys pruned.
-4. **53-04 Projects table columns & Share dedup** (PROJ-01, PROJ-02): Lead / Teams /
-   Members count / Status (PSTAT + progress) / Target date; exactly one labeled Share
-   button opening the Access section of the unified modal.
-5. **53-05 Teams polish & i18n close-out** (TEAM-01, TEAM-02, TEAM-03, UX-01):
-   searchable Edit Team members box (`foldForSearch`, checked-state preserved), correct
-   multi-team hint (EN+FR), team-page invite button removed with its dead keys, final
-   milestone i18n gate sweep.
-
+### Phase 56: Delivery Infrastructure
+**Goal**: Every later phase verifies on honest rails — the e2e server never serves a
+stale build, the bundle stays lean, and a new locale lands by adding one JSON file.
+**Depends on**: Nothing (first phase)
+**Requirements**: DELIV-01, DELIV-02, I18N-01
 **Success Criteria** (what must be TRUE):
-
-1. An admin can set a per-team permission level (Can view / Can comment / Can edit /
-   Full access) on a project; the value persists in `p.perms['team:'+teamId]` with zero
-   migrations, and write routes enforce it server-side through `projectPermFor` — a
-   member whose only access comes from a "Can view" team cannot edit or comment.
-2. The server funnel, `projectAccessReason`, the mcp.js mirror and the client `canSee`
-   store mirror agree on every actor shape (VISIBILITY_MODEL oracle extended,
-   client-mirror parity a tested fixture — the 09a9c41 bug class cannot recur); a stale
-   client PUT cannot un-hide a project or wipe team-perm keys (pin-block regression test).
-3. The invite modal survives interaction: typed emails never vanish when role/teams/
-   projects change; Projects chips feed the invite scope; a guest invite carries exactly
-   one project enforced on create AND edit.
-4. One unified settings modal (General + Access) opens identically from
-   Workspace > Projects and the project page; both old modals are gone; every
-   keystroke-able field has a `data-in` binding; concurrent-edit conflicts surface
-   honestly (no silent no-op saves).
-5. The projects table shows Lead / Teams / Members count / Status (PSTAT pill +
-   task-based progress) / Target date; the project page has exactly one Share button
-   opening the modal's Access section.
-6. The Edit Team members box is accent-insensitive searchable without losing checked
-   state; the team hint shows correct multi-team wording (EN+FR); the team detail page
-   has no invite button.
-7. `npm run i18n:scan` passes across the whole milestone (0 dead / 0 stale), dead keys
-   from removed UI deleted in the commits that remove them, catalogue-size and data-a
-   pins updated in the same commits; full suite green; zero new runtime dependencies.
-
+  1. An operator running e2e against a stale `dist/` sees the e2e server refuse to
+     start with a loud staleness error (mtime or manifest-hash check, fail-closed) —
+     a spec failure can never mask a source bug (DELIV-01)
+  2. A fresh `vite build` emits no chunk over 500 kB: locale catalogues and heavy
+     pages load via dynamic import, while the EN base catalogue stays in the entry
+     chunk so the app renders identically at first paint (DELIV-02)
+  3. A developer drops a new locale JSON file in the registry and the app loads it —
+     locale switcher and gate accept it with zero code change, proven by a fixture
+     locale test; no new shipped language (I18N-01)
+  4. The full unit suite, e2e suite and i18n gate stay green on the split build
+     (standing constraint)
 **Plans**: TBD
 
-**UI hint**: yes (plans 53-02, 53-03, 53-04, 53-05)
+### Phase 57: Views, Columns & General Access
+**Goal**: Members shape their own table experience per user — visible columns, named
+saved views synced across devices — and owners set workspace-wide default visibility
+beyond the private/public binary.
+**Depends on**: Phase 56 (runs verification on the guarded e2e + split build)
+**Requirements**: VIEW-01, VIEW-02, VIEW-03
+**Success Criteria** (what must be TRUE):
+  1. A member hides/shows tasks-table columns and the choice is still applied after
+     sign-in on a different device (VIEW-01)
+  2. A member saves a named view (filters + columns + sort), re-applies it from
+     another device, and deletes it; the view lands in the server `saved_views` table
+     (owner decision, Phase 34 precedent) (VIEW-02)
+  3. A view saved under an older schema version still loads leniently (unknown fields
+     intersected away, no hard failure) (VIEW-02)
+  4. An owner sets General Access beyond private/public — at minimum per-workspace
+     default visibility rules — and members see exactly the resulting visibility
+     (precise granularity locked at discuss-phase) (VIEW-03)
+**Plans**: TBD
+**UI hint**: yes
 
-### Phase 54: Project export — Excel report, MSPDI XML and CSV
+### Phase 58: Full-Text Search
+**Goal**: Members find any task they can read by plain keywords — titles and
+descriptions, English or French, accents folded — from the existing Ctrl-K palette.
+**Depends on**: Phase 56 (guarded e2e); sequenced BEFORE Phase 59 so the doc-PUT
+funnel diff site is edited once per concern, not concurrently twice
+**Requirements**: SEARCH-01, SEARCH-02, SEARCH-03, SEARCH-04
+**Success Criteria** (what must be TRUE):
+  1. A member types plain keywords in the existing Ctrl-K palette and sees matching
+     task titles/descriptions grouped, with a results page for the full list — no
+     query syntax required (SEARCH-01)
+  2. A member never sees tasks from projects they cannot read: search results are
+     filtered server-side through `memberCanReadProject`, proven by byte-level leak
+     tests (SEARCH-02)
+  3. A task created or edited through any write path (doc-PUT funnel, bulk, MCP
+     mirror) is findable immediately after; a boot rebuild sweep heals drift, and the
+     index behaves identically on SQLite (FTS5) and pg (SEARCH-03)
+  4. "elodie" finds "Élodie" — French accented text is searchable with the tokenizer
+     decision locked at table creation (SEARCH-04)
+**Plans**: TBD
 
-**Goal**: A member can export a project's data — scoped to the current filtered view or the whole project — as a formatted Excel report with native charts and a Gantt carrying dependency arrows, as a Microsoft Project MSPDI XML file that opens with real task links, or as a flat CSV on the static demo.
+### Phase 59: Browser Push
+**Goal**: The workspace reaches members with the tab closed — a browser push arrives
+when they are mentioned or assigned, honoring prefs, deep-linking to the task.
+**Depends on**: Phase 58 (funnel diff site edits sequenced); Phase 56 (SW/chunk-hash
+contract); extends the Phase 48 badge/permission foundation
+**Requirements**: PUSH-01, PUSH-02, PUSH-03, PUSH-04, PUSH-05
+**Success Criteria** (what must be TRUE):
+  1. A member enables browser notifications from Settings via an explicit opt-in
+     prompt (never on page load), reusing the Phase 48 permission surface, with a
+     working per-device test push (PUSH-01)
+  2. With the tab closed, a member who is mentioned or assigned receives a browser
+     push; a member with prefs off for that type receives none (PUSH-02)
+  3. The push shows a ticker (title + project/task reference, ≤4096 octets, never
+     task bodies) and clicking it opens the exact task deep link (PUSH-03)
+  4. A dead subscription (endpoint 404/410) is swept on send failure — the
+     `push_subscriptions` table never grows stale rows (PUSH-04)
+  5. VAPID keys persist server-side across restarts (env/config in /data, MASTER_KEY
+     custody pattern) with the DEPLOY.md runbook documented; a restart does not
+     orphan existing subscriptions (PUSH-05)
+**Plans**: TBD
 
-**Depends on**: Phase 53 (v2.1) — no hard code dependency, but the plan line refs
-were authored before Phase 53 landed and need a drift check at execute time
+### Phase 60: Admin Dashboard & Member Self-View
+**Goal**: Admins get one honest workspace overview (overdue, load, upcoming, activity
+— private projects fully visible per the power-admin ruling) and every member can see
+their own redacted access picture.
+**Depends on**: Phase 56 (i18n infra + split build)
+**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, TRN-01, TRN-02
+**Success Criteria** (what must be TRUE):
+  1. An admin opens the workspace dashboard and sees overdue tasks grouped per
+     project (DASH-01)
+  2. An admin sees workload per member counting the `assignees[]` array — a shared
+     task counts once per member (DASH-02)
+  3. An admin sees tasks due within the next 7 days and recent workspace activity
+     (DASH-03)
+  4. A member hitting the dashboard route gets 403 server-side, while admins see full
+     private-project content in aggregates (power-admin, owner ruling 2026-11-12)
+     (DASH-04)
+  5. A member opens their own access view — reachable projects with reason codes
+     (private+invite, team link, non-private, per-person/per-team grant) — and the
+     response never exposes other members' access rows (cross-member grants appear
+     without names), proven by byte-level shape tests per role (TRN-01, TRN-02)
+**Plans**: TBD
+**UI hint**: yes
 
-**Requirements**: See `54-SPEC.md` (13 locked requirements, ambiguity 0.11)
+### Phase 61: Notification Trim
+**Goal**: The notification surface shrinks by owner ruling, not by guess — decided
+trims applied one-click, burst floods coalesced, with the Phase 38 invariants intact.
+**Depends on**: Phase 60 (notification pipeline + settings surface stable); gated on
+D-05 owner rulings arriving during execution
+**Requirements**: NOTIF-01, NOTIF-02, NOTIF-03
+**Success Criteria** (what must be TRUE):
+  1. The notification audit produces concrete trim recommendations (suppression and
+     burst candidates) for the owner to rule on — no speculative trims before rulings
+     (NOTIF-01)
+  2. An owner applies a trim ruling from the settings surface in one click; the
+     suppressed notification class lands in `notif_prefs` and members stop receiving
+     it (NOTIF-02)
+  3. Rapid successive notifications on the same task coalesce so the inbox shows a
+     burst summary instead of flooding (NOTIF-03)
+  4. The Phase 38 suppression + no-double-send invariants pass unmodified after all
+     trims (standing constraint)
+**Plans**: TBD
 
-**Plans:** 5 plans
+## Progress
 
-Plans:
-**Wave 1**
-- [x] 54-01-PLAN.md — CSV end-to-end tracer: model, CSV writer, gated export route, download helper, modal and both entry points
-
-**Wave 2** *(blocked on Wave 1 completion)*
-- [x] 54-02-PLAN.md — Pinned workbook writer behind a legitimacy checkpoint, repository gates, unzip/XML helpers and the six-sheet shell with the Tasks sheet
-
-**Wave 3** *(blocked on Wave 2 completion)*
-- [x] 54-03-PLAN.md — Summary meta, KPIs and charts 1-2; Board snapshot; Members with chart 3; Milestones sheet (complete 2026-11-10)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-- [x] 54-04-PLAN.md — Adaptive Gantt geometry, Timeline bars, diamonds and dependency connectors, Today column, shape cap and responsiveness
-
-**Wave 5** *(blocked on Wave 4 completion)*
-- [x] 54-05-PLAN.md — MSPDI serializer, Excel/Project format wiring, EN+FR catalogue and the human Microsoft Project check (complete 2026-11-10; Project open check OPEN as UAT — owner skipped, no Project machine)
-
-## Milestone-Wide Invariants (pinned per plan)
-
-- **UX-01** applies to EVERY plan: any commit that removes UI deletes its dead keys in
-  the same commit; any commit that alters catalogue size or data-a pins updates the
-  pins in the same commit.
-- **Funnel lockstep**: any plan touching visibility or access semantics (53-01, 53-03)
-  ships server funnel + `projectAccessReason` + mcp.js mirror + client `canSee` store
-  mirror in one lockstep change, with client-mirror parity as a tested fixture.
-- **Zero new runtime dependencies**; **zero migrations** (doc-field extensions only);
-  **full suite green**; **EN+FR i18n gate (server keys included)**.
-
-## Progress Table
-
-| Plan | Status | Completed |
-|------|--------|-----------|
-| 53-01 Per-team perms (server model) | Complete | 2026-11-09 |
-| 53-02 Invite modal (draft, chips, guest clamp) | Complete | 2026-11-09 |
-| 53-03 Unified project settings modal | Complete | 2026-11-09 |
-| 53-04 Projects table columns & Share dedup | Complete | 2026-11-09 |
-| 53-05 Teams polish & i18n close-out | Complete | 2026-11-09 |
-| 54-01 CSV end-to-end tracer | Complete | 2026-11-10 |
-| 54-02 Workbook writer + six-sheet shell (Tasks) | Complete | 2026-11-10 |
-| 54-03 Summary, KPIs, charts, Board/Members/Milestones | Complete | 2026-11-10 |
-| 54-04 Gantt geometry + dependency connectors | Complete | 2026-11-10 |
-| 54-05 MSPDI serializer + i18n close-out | Complete (UAT caveat) | 2026-11-10 |
-
-## Backlog
-
-- **TRN-02** Member self-view of the transparency data (v3 candidate, carried from v2.0)
-- **NOTIF-TRIM** Notification audit trim recommendations (needs D-05 owner rulings)
-- Per-person perms editing during invite (invite assigns scope; perms edited later in
-  the Access tab — M-02 consistency, research anti-feature)
-- Searchable token-chip pickers beyond the invite modal; spray-fitting search into every picker
-- General-Access granularity beyond private/public; column show/hide + saved views
-
-<details>
-<summary>✅ v1.8 Notification Sanity (Phases 36-39) — SHIPPED 2026-11-05</summary>
-
-Details: [.planning/milestones/v1.8-ROADMAP.md](milestones/v1.8-ROADMAP.md)
-
-</details>
-
-### Phase 55: Multiple assignees per task (full parity) — VERIFIED & COMPLETE (2026-11-11, 55-VERIFICATION.md passed 8/8; UAT 12/12, G-55-3 closed by 55-08)
-
-**Goal:** Tasks carry multiple assignees with full parity — schema (`assignee` → `assignees[]` with doc migration), UI everywhere (avatar stacks on board/list/table/timeline, multi-select assignee picker, "any of" filters, My-Tasks membership), server fan-out (one reminder per assignee with their own TZ + prefs, per-member write-guard and `assigneeOutOfScope`), and exports carrying all assignees.
-
-**Folded in (owner decision 2026-11-10):** subtask start dates — add `start` to the subtask schema with parent-start inheritance, overridable per subtask (mirrors the subtask due pattern, `page.subtask.inheritedDue`); subtask drawer gains a Start row; exports (MSPDI + XLSX model) write `s.start || t.start` so subtasks stop falling through to the project start date in MS Project.
-
-**Requirements:** ASSIG-1, ASSIG-2, ASSIG-3, ASSIG-4, ASSIG-5, ASSIG-6
-**Depends on:** Phase 54
-**Plans:** 8 plans (incl. gap closure 55-08)
-
-Plans:
-**Wave 1**
-- [x] 55-01-PLAN.md — Schema migration + server core (normalize invariants, guard, stripMember, event-log diff)
-- [x] 55-03-PLAN.md — Client membership predicates + any-of filters/group/sort + drag-drop
-
-**Wave 2** *(blocked on Wave 1 completion)*
-- [x] 55-02-PLAN.md — Reminder fan-out per assignee + digest/mirror membership
-- [x] 55-05-PLAN.md — Exports carry all assignees
-
-**Wave 3** *(blocked on Wave 2 completion)*
-- [x] 55-04-PLAN.md — Assignee picker search modal + diff-based notifications
-
-**Wave 4** *(blocked on Wave 3 completion)*
-- [x] 55-06-PLAN.md — Subtask assignees[] parity + subtask start dates (folded in)
-
-**Wave 5** *(blocked on Wave 4 completion)*
-- [x] 55-07-PLAN.md — Avatar stacks across all render surfaces
-
-**Gap closure** *(after UAT — G-55-3)*
-- [x] 55-08-PLAN.md — Invite-accept revision contract + client 409 recovery + p.members assignability
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 56. Delivery Infrastructure | 0/? | Not started | - |
+| 57. Views, Columns & General Access | 0/? | Not started | - |
+| 58. Full-Text Search | 0/? | Not started | - |
+| 59. Browser Push | 0/? | Not started | - |
+| 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
+| 61. Notification Trim | 0/? | Not started | - |
