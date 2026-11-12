@@ -440,7 +440,7 @@ register(new URL('./virtual-icons-loader.mjs', import.meta.url), import.meta.url
 
 const { applyDoc: applyClientDoc, D: CD, memberScopeEligible } = await import('../src/core/store.js');
 const { createTask: clientCreateTask, emitMentions: clientEmitMentions, taskWatchers: clientTaskWatchers } = await import('../src/actions/actions.js');
-const { searchAll: clientSearchAll } = await import('../src/pages/search.js');
+const { searchAll: clientSearchAll } = await import('../src/core/searchall.js');
 
 function clientDoc() {
   applyClientDoc(

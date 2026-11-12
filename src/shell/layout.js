@@ -16,8 +16,6 @@ import { pageInbox } from '../pages/inbox.js';
 import { pageNotifications } from '../pages/notifications.js';
 import { pageFavorites } from '../pages/favorites.js';
 import { pageProjects } from '../pages/projects.js';
-import { pageActivity } from '../pages/activity.js';
-import { pageSearch } from '../pages/search.js';
 import { page404, stateFailed } from '../pages/errors.js';
 import { pageProject } from '../pages/project.js';
 import { pageWsCalendar } from '../views/calendar.js';
@@ -32,14 +30,14 @@ import { pageArchive } from '../features/archive.js';
    has painted skeleton() into #main-content, which fillPage() then replaces
    (async-render contract the remaining splits reuse). Keep the P[r] || 404
    fallback semantics: the 404 page resolves synchronously. */
-const ASYNC_ROUTES = new Set(['settings', 'members', 'member', 'teams', 'team', 'system', 'states']);
+const ASYNC_ROUTES = new Set(['settings', 'members', 'member', 'teams', 'team', 'system', 'states', 'activity', 'search']);
 const P = {
   home: () => pageHome(),
   inbox: () => pageInbox(),
   mytasks: () => pageMyTasks(),
   favorites: () => pageFavorites(),
   notifications: () => pageNotifications(),
-  search: () => pageSearch(),
+  search: () => import('../pages/search.js').then(m => m.pageSearch()),
   overview: () => pageOverview(),
   projects: () => pageProjects(),
   project: () => pageProject(),
@@ -50,7 +48,7 @@ const P = {
   member: () => import('../pages/members.js').then(m => m.pageMember()),
   teams: () => import('../pages/members.js').then(m => m.pageTeams()),
   team: () => import('../pages/members.js').then(m => m.pageTeam()),
-  activity: () => pageActivity(),
+  activity: () => import('../pages/activity.js').then(m => m.pageActivity()),
   settings: () => import('../pages/settings.js').then(m => m.pageSettings()),
   system: () => import('../pages/design-system.js').then(m => m.pageSystem()),
   states: () => import('../pages/design-system.js').then(m => m.pageStates()),

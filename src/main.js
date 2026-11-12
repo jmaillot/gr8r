@@ -25,8 +25,6 @@ import './pages/inbox.js';
 import './pages/notifications.js';
 import './pages/favorites.js';
 import './pages/projects.js';
-import './pages/activity.js';
-import './pages/search.js';
 import './pages/errors.js';
 import './pages/project.js';
 import './views/project-overview.js';

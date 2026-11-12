@@ -140,7 +140,7 @@ const store = await import('../src/core/store.js');
 /* Seed-lazy migration (56-02): apply the demo doc explicitly — no implicit
    seed fallback in the store anymore. */
 store.S.data = (await import('../src/data/seed.js')).seed();
-const { searchAll } = await import('../src/pages/search.js');
+const { searchAll } = await import('../src/core/searchall.js');
 
 /* The suite seeds one accented fixture of each kind, once. The queries the other
    assertions use are distinctive enough that these fixtures cannot leak into their
@@ -225,7 +225,7 @@ test('a query that matched nothing before still matches nothing', () => {
 });
 
 test('the query is folded ONCE before the filter runs, and the search never sorts', () => {
-  const s = source('src/pages/search.js');
+  const s = source('src/core/searchall.js');
   assert.ok(s.includes("const needle = foldForSearch((q || '').trim()).text;"), 'the query must be folded once, before the filter — the trim() stays');
   assert.ok(s.includes('const has = s => foldForSearch(s).text.includes(needle);'), 'every candidate must be folded as it is tested');
   assert.ok(!/\.sort\(|localeCompare|Collator/.test(s), 'the search must not sort — the order is untouched (D-06)');
