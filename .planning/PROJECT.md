@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-12 — v2.2 milestone started*
+*Last updated: 2026-11-12 after Phase 57 — VIEW-01/02/03 shipped (per-user views, saved views, workspace default visibility)*
 
 ## Current Milestone: v2.2 Notifications, Search & Delivery
 
@@ -683,7 +683,7 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 - **v2.2 Notifications, Search & Delivery** — browser push (mentions + assignments),
   FTS5 search over titles + descriptions, admin dashboard, TRN-02 member transparency,
-  NOTIF-TRIM (needs D-05 owner rulings), General-Access granularity + saved views,
+  NOTIF-TRIM (needs D-05 owner rulings),
   i18n infrastructure, e2e dist guard, Vite code-splitting. See Current Milestone.
 - **Backlog:** MS Project/xlsx visual checks (first Project-equipped machine);
   UI round-3 invite follow-ups (53-VERIFICATION.md); searchable token-chip pickers.

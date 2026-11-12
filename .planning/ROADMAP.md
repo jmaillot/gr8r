@@ -23,7 +23,7 @@ the Phase 34 guarded-migration recipe when needed), full suite green, EN+FR i18n
 ## Phases
 
 - [x] **Phase 56: Delivery Infrastructure** - e2e anti-stale-dist guard, Vite code-splitting, i18n-ready locale infrastructure (completed 2026-11-12)
-- [ ] **Phase 57: Views, Columns & General Access** - column show/hide, saved views in server rows, General-Access granularity beyond private/public
+- [x] **Phase 57: Views, Columns & General Access** - column show/hide, saved views in server rows, General-Access granularity beyond private/public (completed 2026-11-12)
 - [ ] **Phase 58: Full-Text Search** - FTS5 over task titles + descriptions, permission-filtered, wired into Ctrl-K
 - [ ] **Phase 59: Browser Push** - server push fan-out for mentions + assignments via web-push@4.0.0
 - [ ] **Phase 60: Admin Dashboard & Member Self-View** - power-admin workspace dashboard + TRN-02 member transparency self-view
@@ -78,7 +78,7 @@ beyond the private/public binary.
   4. An owner sets General Access beyond private/public — at minimum per-workspace
      default visibility rules — and members see exactly the resulting visibility
      (precise granularity locked at discuss-phase) (VIEW-03)
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -182,7 +182,7 @@ D-05 owner rulings arriving during execution
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
-| 57. Views, Columns & General Access | 3/3 | Complete 2026-11-12 |  |
+| 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
 | 58. Full-Text Search | 0/? | Not started | - |
 | 59. Browser Push | 0/? | Not started | - |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
