@@ -32,7 +32,7 @@ export function popHtml(key) {
     ? named
         .map(
           x =>
-            `<div class="mi" style="display:flex;align-items:center;gap:4px;padding:0 4px 0 0"><button class="mi grow" style="min-height:30px" data-a="applyTableView" data-key="${key}" data-name="${esc(x.name)}"><span class="trunc">${esc(x.name)}</span></button><button class="ibtn ibtn-xs" data-a="deleteTableView" data-key="${key}" data-name="${esc(x.name)}" aria-label="${t('a11y.deleteTableView', { name: x.name })}">${ic('trash-2', 13)}</button></div>`,
+            `<div class="mi" style="display:flex;align-items:center;gap:4px;padding:0 4px 0 0"><button class="mi grow" style="min-height:30px" data-a="applyTableView" data-key="${key}" data-name="${esc(x.name)}"><span class="trunc">${esc(x.name)}</span></button><button class="ibtn ibtn-xs" data-a="deleteTableView" data-key="${key}" data-name="${esc(x.name)}" aria-label="${esc(t('a11y.deleteTableView', { name: x.name }))}">${ic('trash-2', 13)}</button></div>`,
         )
         .join('')
     : `<div style="padding:6px 8px;font-size:12px;color:var(--text-2);line-height:1.5">${t('popover.noSavedViews')}</div>`;
@@ -83,7 +83,7 @@ export function updateTableView(el) {
   if (!name || !isNamedViewKey(key)) return saveTableView(el);
   confirmDlg({
     title: t('popover.updateView'),
-    body: t('modal.updateTableViewConfirm', { name: name }),
+    body: esc(t('modal.updateTableViewConfirm', { name: name })),
     ok: t('popover.updateView'),
     icon: 'history',
     run: () => doSave(key, name),
@@ -97,7 +97,7 @@ async function doSave(key, name) {
        truth) overwrites only after an explicit confirm. */
     confirmDlg({
       title: t('modal.replaceTableView'),
-      body: t('modal.saveTableViewReplace', { name: name }),
+      body: esc(t('modal.saveTableViewReplace', { name: name })),
       ok: t('act.replaceView'),
       icon: 'star',
       run: async () => finishSave(key, name, await vs().then(m => m.saveNamedView(wsId(), key, name))),
