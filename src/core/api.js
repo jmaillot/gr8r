@@ -303,6 +303,10 @@ export const api = {
      split) directly over the exported call() — the row shape mirrors
      notifPrefs above (workspace id + table key ride the request, the session
      supplies the user_id; blobs whitelisted server-side, PUT merges). */
+  /* VIEW-02 (57-02): named-view row delete — name='' is the D-14 live-row reset. */
+  async deleteView(workspaceId, key, name) {
+    return call('DELETE', `/api/me/views?workspace=${encodeURIComponent(workspaceId || '')}&key=${encodeURIComponent(key || '')}&name=${encodeURIComponent(name || '')}`);
+  },
   /* Auth-scoped session management (SESS-01/02): /api/auth/* endpoints take no
      workspace slug, so these follow the login/logout pattern above — no slug guard. */
   async sessions() {

@@ -1529,6 +1529,15 @@ const NOTIF_PREF_KEYS = [
    failure). Shared by the routes, the PUT merge and migrateUserViews. */
 const VIEW_BLOB_KEYS = ['filters', 'sort', 'group', 'hidden', 'colW', 'showDone'];
 const VIEW_SCHEMA_VERSION = 1;
+/* Named views (Phase 57 plan 02, VIEW-02/D-10/D-12): they exist only for the
+   two static table keys; the caps and uniqueness are enforced server-side
+   because the client can never be the guard (T-57-04). SQLite's NOCASE
+   collation is stripped by the pg adapter, so the case-insensitive compare is
+   done in JS over lowercase names — portable across both backends. */
+const NAMED_VIEW_KEYS = new Set(['tasks', 'mytasks']);
+const NAMED_VIEW_MAX = 20;
+const NAMED_VIEW_BLOB_MAX_BYTES = 2048;
+const NAMED_VIEW_NAME_MAX = 100;
 function sanitizeViewBlob(raw) {
   const out = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
@@ -4213,7 +4222,51 @@ async function handleApi(req, res, url) {
     return json(res, 200, { prefs: await getUserNotifPrefs(user.id, ws.id) });
   }
 
-  /* ------------------- per-user saved views (Phase 57, VIEW-01, D-05/D-07) ------------------- */
+  /* ------------------- per-user saved views (Phase 57, VIEW-01/VIEW-02, D-05/D-07) ------------------- */
+
+  /* The canonical GET body builder, shared by GET/PUT/DELETE so all three
+     routes answer with the same shape: { views: { live, named: [{name, blob}] } }.
+     Every stored blob is parsed leniently — corrupt JSON and old-schema blobs
+     whitelist-intersect to the current field set instead of failing (D-12,
+     ROADMAP SC-3) — and a stored row whose blob or schema_version normalizes
+     is written back so the read path is also the migration path. Named rows
+     are only listed for the D-10 key family (tasks/mytasks); project keys
+     read live state only, and a named write there is rejected at the PUT. */
+  const viewsBody = async (wsId, userId, key) => {
+    const liveRow = await db.get('select blob from saved_views where workspace_id = ? and user_id = ? and key = ? and name = ?', [wsId, userId, key, '']);
+    let live = null;
+    let liveChanged = false;
+    try {
+      const parsed = JSON.parse(liveRow ? liveRow.blob : 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        live = sanitizeViewBlob(parsed);
+        liveChanged = JSON.stringify(live) !== liveRow.blob;
+      }
+    } catch {
+      /* corrupt stored blob: read as no live state — viewOf() defaults apply */
+    }
+    if (liveRow && liveChanged) await db.run('update saved_views set blob = ?, schema_version = ? where workspace_id = ? and user_id = ? and key = ? and name = ?', [JSON.stringify(live), VIEW_SCHEMA_VERSION, wsId, userId, key, '']);
+    const named = [];
+    if (NAMED_VIEW_KEYS.has(key)) {
+      const rows = await db.all("select name, blob, schema_version from saved_views where workspace_id = ? and user_id = ? and key = ? and name != ''", [wsId, userId, key]);
+      for (const row of rows) {
+        let blob = {};
+        let changed = false;
+        try {
+          const parsed = JSON.parse(row.blob);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            blob = sanitizeViewBlob(parsed);
+            changed = JSON.stringify(blob) !== row.blob;
+          } else changed = true;
+        } catch {
+          changed = true; /* corrupt blob: normalized to the empty whitelist blob */
+        }
+        if (changed) await db.run('update saved_views set blob = ?, schema_version = ? where workspace_id = ? and user_id = ? and key = ? and name = ?', [JSON.stringify(blob), VIEW_SCHEMA_VERSION, wsId, userId, key, row.name]);
+        named.push({ name: row.name, blob });
+      }
+    }
+    return { views: { live, named } };
+  };
 
   if (pathname === '/api/me/views' && method === 'GET') {
     const user = await requireUser(req, res);
@@ -4226,17 +4279,7 @@ async function handleApi(req, res, url) {
     if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     const key = String(url.searchParams.get('key') || '');
     if (!key || key.length > 120) return fail(res, 400, 'invalidViewKey', 'Invalid view key');
-    const row = await db.get('select blob from saved_views where workspace_id = ? and user_id = ? and key = ? and name = ?', [ws.id, user.id, key, '']);
-    let live = null;
-    try {
-      const parsed = JSON.parse(row ? row.blob : 'null');
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) live = sanitizeViewBlob(parsed);
-    } catch {
-      /* corrupt stored blob: read as no live state — viewOf() defaults apply */
-    }
-    /* named views (Phase 57 plan 02) extend the named list; the live row is
-       the only shape VIEW-01 consumes. */
-    return json(res, 200, { views: { live, named: [] } });
+    return json(res, 200, await viewsBody(ws.id, user.id, key));
   }
 
   if (pathname === '/api/me/views' && method === 'PUT') {
@@ -4254,10 +4297,33 @@ async function handleApi(req, res, url) {
     if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
       return fail(res, 400, 'invalidViewBlob', 'Invalid view blob');
     }
+    // A `name` turns the PUT into a NAMED snapshot (replace semantics — the
+    // caller sends the whole view); no name is the live-row merge from VIEW-01.
+    const name = body?.name == null ? '' : String(body.name).trim();
+    if (name.length > NAMED_VIEW_NAME_MAX) return fail(res, 400, 'invalidViewName', 'Invalid view name');
+    // D-10: named views exist only for the tasks/mytasks keys.
+    if (name && !NAMED_VIEW_KEYS.has(key)) return fail(res, 400, 'viewKeyNotNamed', 'Named views are only available on the tasks tables');
     const wsId = String(body?.workspace || '');
     const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
     const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
     if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    if (name) {
+      // Server-side guardrails (T-57-04, D-12): caps and case-insensitive
+      // uniqueness. Overwriting the caller's OWN exact-same-name row is
+      // allowed by the route even at the cap — the confirm gate is client UX.
+      const clean = sanitizeViewBlob(incoming);
+      const blobStr = JSON.stringify(clean);
+      if (Buffer.byteLength(blobStr, 'utf8') > NAMED_VIEW_BLOB_MAX_BYTES) {
+        return fail(res, 413, 'viewBlobTooLarge', 'Saved view is too large (2 kB max)');
+      }
+      const rows = await db.all("select name from saved_views where workspace_id = ? and user_id = ? and key = ? and name != ''", [ws.id, user.id, key]);
+      const lower = name.toLowerCase();
+      const dup = rows.find(r => r.name.toLowerCase() === lower);
+      if (dup && dup.name !== name) return fail(res, 409, 'viewNameConflict', 'A view with this name already exists');
+      if (!dup && rows.length >= NAMED_VIEW_MAX) return fail(res, 413, 'viewLimitReached', 'Saved view limit reached (20 max)');
+      await db.run('insert or replace into saved_views (workspace_id, user_id, key, name, blob, schema_version) values (?,?,?,?,?,?)', [ws.id, user.id, key, name, blobStr, VIEW_SCHEMA_VERSION]);
+      return json(res, 200, await viewsBody(ws.id, user.id, key));
+    }
     // Merge into the existing row instead of replacing it (D-14 prohibition):
     // a partial body must never erase blob keys the caller omits. Corrupt
     // stored JSON starts clean; the whitelist intersection applies to the
@@ -4272,7 +4338,28 @@ async function handleApi(req, res, url) {
     }
     const clean = sanitizeViewBlob({ ...existing, ...incoming });
     await db.run('insert or replace into saved_views (workspace_id, user_id, key, name, blob, schema_version) values (?,?,?,?,?,?)', [ws.id, user.id, key, '', JSON.stringify(clean), VIEW_SCHEMA_VERSION]);
-    return json(res, 200, { views: { live: clean, named: [] } });
+    return json(res, 200, await viewsBody(ws.id, user.id, key));
+  }
+
+  /* Named-row + live-row DELETE (Phase 57 plan 02, VIEW-02/D-14): revision-free
+     like the PUT (D-07), addressed by (workspace, session-user, key, name) so a
+     member can only ever delete their own rows (T-57-05). name='' is the D-14
+     reset half — deleting the sentinel live row so viewOf() defaults return. */
+  if (pathname === '/api/me/views' && method === 'DELETE') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const wsId = String(url.searchParams.get('workspace') || '');
+    const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
+    const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
+    if (!ws || !member) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    const key = String(url.searchParams.get('key') || '');
+    if (!key || key.length > 120) return fail(res, 400, 'invalidViewKey', 'Invalid view key');
+    const name = String(url.searchParams.get('name') || '');
+    if (name.length > NAMED_VIEW_NAME_MAX) return fail(res, 400, 'invalidViewName', 'Invalid view name');
+    if (name && !NAMED_VIEW_KEYS.has(key)) return fail(res, 400, 'viewKeyNotNamed', 'Named views are only available on the tasks tables');
+    await db.run('delete from saved_views where workspace_id = ? and user_id = ? and key = ? and name = ?', [ws.id, user.id, key, name]);
+    return json(res, 200, await viewsBody(ws.id, user.id, key));
   }
 
   /* ----------------------- password change (PASS-01/02) ----------------------- */
