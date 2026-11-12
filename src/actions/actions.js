@@ -438,7 +438,10 @@ A.pop = el => {
     /* Named saved views (57-02): the body is built by the lazy savedViewsUi
        chunk after it refreshes the member's named rows (DELIV-02 gate). */
     openPop(el);
-    import('../views/savedViewsUi.js').then(m => m.refreshViewsPop());
+    /* IN-01 (57-04): a failed chunk load (offline flake, deploy invalidating
+       the hash) must not reject unhandled and leave an empty popover — it
+       degrades silently like the other lazy seams. */
+    import('../views/savedViewsUi.js').then(m => m.refreshViewsPop()).catch(() => {});
     return;
   }
   const p = S.ui.pop;
@@ -1406,12 +1409,12 @@ A.resetCols = el => {
 /* Named saved views (Phase 57 plan 02, VIEW-02): the handlers live in the
    lazy savedViewsUi chunk (DELIV-02 index-gate split, the 57-01 pattern). */
 for (const fn of ['saveTableView', 'applyTableView', 'deleteTableView', 'updateTableView'])
-  A[fn] = el => import('../views/savedViewsUi.js').then(m => m[fn](el));
+  A[fn] = el => import('../views/savedViewsUi.js').then(m => m[fn](el)).catch(() => {});
 /* Per-user view write-through + hydration live in the lazy viewSync chunk
    (Phase 57, D-05/D-07 — DELIV-02 index-gate split). hydrateViews keeps the
    call sites unchanged; the chunk is fetched at the first view write or the
    first workspace entry. */
-export const hydrateViews = () => import('../core/viewSync.js').then(m => m.hydrateViews());
+export const hydrateViews = () => import('../core/viewSync.js').then(m => m.hydrateViews()).catch(() => {});
 IN.viewQ = el => {
   viewOf(el.dataset.key).q = el.value;
   render();
