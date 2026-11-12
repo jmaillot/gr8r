@@ -4275,7 +4275,11 @@ async function handleApi(req, res, url) {
      Every stored blob is parsed leniently — corrupt JSON and old-schema blobs
      whitelist-intersect to the current field set instead of failing (D-12,
      ROADMAP SC-3) — and a stored row whose blob or schema_version normalizes
-     is written back so the read path is also the migration path. Named rows
+     is written back so the read path is also the migration path.
+     INVARIANT (IN-03): this makes GET non-idempotent — it can UPDATE stored
+     blobs (deliberate: it converges after the first request). If a
+     read-replica or caching layer is ever introduced in front of these
+     routes, the migration write-back must move off the GET path first. Named rows
      are only listed for the D-10 key family (tasks/mytasks); project keys
      read live state only, and a named write there is rejected at the PUT. */
   const viewsBody = async (wsId, userId, key) => {
