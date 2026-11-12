@@ -7,6 +7,7 @@
    touches a developer database, a running dev server or port 8080.
    ===================================================================== */
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,6 +20,36 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-e2e-'));
 /* The suite serves the built app; a missing build is a setup error, not a test failure. */
 if (!fs.existsSync(path.join(ROOT, 'dist', 'index.html'))) {
   console.error('e2e: dist/index.html is missing — run `npm run build` before `npm run e2e`.');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+  process.exit(1);
+}
+
+/* The suite serves the built app; a STALE build is the same setup error wearing a subtler
+   disguise (src changed, build forgotten, e2e fails on misleading symptoms). The build
+   records a sha256 stamp of dist/.vite/manifest.json at build time (vite.config.js
+   buildStamp plugin, D-04); the guard recomputes and compares. mtime is never read (D-04):
+   git checkout and touch both rewrite mtimes without touching content. Fail-closed (D-05):
+   no auto-rebuild, no env opt-out — the message names the exact fix. A dist built before
+   the manifest option existed carries no stamp file at all, so it refuses too (fail-closed
+   on missing evidence, not just on mismatch). */
+const manifestPath = path.join(ROOT, 'dist', '.vite', 'manifest.json');
+const stampPath = path.join(ROOT, 'dist', '.vite', 'build-stamp.json');
+/* A pre-phase dist built without the manifest option carries no manifest and cannot be
+   trusted: refuse it with the same stale message rather than crashing on a read. */
+if (!fs.existsSync(manifestPath)) {
+  console.error('e2e: dist/ stale — run `npm run build`.');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+  process.exit(1);
+}
+const recompute = createHash('sha256').update(fs.readFileSync(manifestPath)).digest('hex');
+let stamp = null;
+try {
+  stamp = JSON.parse(fs.readFileSync(stampPath, 'utf8'));
+} catch {
+  /* a corrupt/missing stamp is stale evidence, not a crash */
+}
+if (!stamp || stamp.hash !== recompute) {
+  console.error('e2e: dist/ stale — run `npm run build`.');
   fs.rmSync(dataDir, { recursive: true, force: true });
   process.exit(1);
 }
