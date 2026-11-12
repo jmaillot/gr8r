@@ -2661,7 +2661,9 @@ async function migrateUserNotifPrefs() {
  * presence, never "table empty": after the strip, later boots are
  * byte-identical no-ops.
  *
- * No backup = no mutation (the migrateUserNotifPrefs / D-74 discipline).
+ * No backup = no mutation on sqlite (the migrateUserNotifPrefs / D-74
+ * discipline). pg has no sqlite backup to take (WR-04) — there the
+ * migration runs without one rather than silently discarding doc.views.
  */
 async function migrateUserViews() {
   const eligible = [];
@@ -2680,18 +2682,29 @@ async function migrateUserViews() {
     eligible.push({ id: row.id, doc, views, keys });
   }
   if (eligible.length === 0) return;
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backup = path.join(DATA_DIR, `projects-pre-user-views-${stamp}.db`);
-  try {
-    fs.mkdirSync(path.dirname(backup), { recursive: true });
-    await sqliteOnly(async () => {
-      await db.run('pragma wal_checkpoint(truncate)');
-      await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
-    }, `pre-migration backup ${backup}`);
-    logInfo(`  pre-migration backup: ${backup}`);
-  } catch (err) {
-    logError(`  pre-migration backup failed: ${err.message}`);
-    return;
+  /* WR-04: the sqlite-only backup (wal_checkpoint + vacuum into) can never
+     run on the pg backend — gating the strip behind it meant legacy doc.views
+     was silently discarded on pg (normalizeDoc/mergeClientDoc strip it on the
+     first read/write) with no rows ever created. On pg the migration proceeds
+     WITHOUT the file backup: the row-insert + doc-strip still run as ONE
+     transaction (rows and doc can never disagree), which completes the D-06
+     migration on both backends instead of degrading to "strip and lose". */
+  if (backendKind !== 'pg') {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backup = path.join(DATA_DIR, `projects-pre-user-views-${stamp}.db`);
+    try {
+      fs.mkdirSync(path.dirname(backup), { recursive: true });
+      await sqliteOnly(async () => {
+        await db.run('pragma wal_checkpoint(truncate)');
+        await db.run(`vacuum into '${backup.replaceAll("'", "''")}'`);
+      }, `pre-migration backup ${backup}`);
+      logInfo(`  pre-migration backup: ${backup}`);
+    } catch (err) {
+      logError(`  pre-migration backup failed: ${err.message}`);
+      return;
+    }
+  } else {
+    logInfo('  views migration: pg backend — proceeding without a sqlite file backup (rows + doc strip in one transaction)');
   }
   await db.tx(async () => {
     for (const ws of eligible) {
