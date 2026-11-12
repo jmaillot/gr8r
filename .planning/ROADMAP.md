@@ -32,6 +32,7 @@ the Phase 34 guarded-migration recipe when needed), full suite green, EN+FR i18n
 ## Phase Details
 
 ### Phase 56: Delivery Infrastructure
+
 **Goal**: Every later phase verifies on honest rails — the e2e server never serves a
 stale build, the bundle stays lean, and a new locale lands by adding one JSON file.
 **Depends on**: Nothing (first phase)
@@ -51,11 +52,15 @@ stale build, the bundle stays lean, and a new locale lands by adding one JSON fi
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 56-01-PLAN.md — DELIV-02: dynamic-import split (vendor/qrcode + seed), QR spinner/toast UX (D-03), 500 kB build gate test (D-02)
 - [ ] 56-02-PLAN.md — DELIV-01: manifest + sha256 build stamp, fail-closed stale-dist guard in e2e/server.mjs, three-case guard test
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 56-03-PLAN.md — I18N-01: derived locale registry (glob keys ∪ base), shared localeCodes scan, scan name-map sync, fixture-locale proof test (D-08)
 
 ### Phase 57: Views, Columns & General Access
+
 **Goal**: Members shape their own table experience per user — visible columns, named
 saved views synced across devices — and owners set workspace-wide default visibility
 beyond the private/public binary.
@@ -76,6 +81,7 @@ beyond the private/public binary.
 **UI hint**: yes
 
 ### Phase 58: Full-Text Search
+
 **Goal**: Members find any task they can read by plain keywords — titles and
 descriptions, English or French, accents folded — from the existing Ctrl-K palette.
 **Depends on**: Phase 56 (guarded e2e); sequenced BEFORE Phase 59 so the doc-PUT
@@ -96,6 +102,7 @@ funnel diff site is edited once per concern, not concurrently twice
 **Plans**: TBD
 
 ### Phase 59: Browser Push
+
 **Goal**: The workspace reaches members with the tab closed — a browser push arrives
 when they are mentioned or assigned, honoring prefs, deep-linking to the task.
 **Depends on**: Phase 58 (funnel diff site edits sequenced); Phase 56 (SW/chunk-hash
@@ -117,6 +124,7 @@ contract); extends the Phase 48 badge/permission foundation
 **Plans**: TBD
 
 ### Phase 60: Admin Dashboard & Member Self-View
+
 **Goal**: Admins get one honest workspace overview (overdue, load, upcoming, activity
 — private projects fully visible per the power-admin ruling) and every member can see
 their own redacted access picture.
@@ -140,6 +148,7 @@ their own redacted access picture.
 **UI hint**: yes
 
 ### Phase 61: Notification Trim
+
 **Goal**: The notification surface shrinks by owner ruling, not by guess — decided
 trims applied one-click, burst floods coalesced, with the Phase 38 invariants intact.
 **Depends on**: Phase 60 (notification pipeline + settings surface stable); gated on
