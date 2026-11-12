@@ -52,7 +52,13 @@ export async function hydrateViews() {
   let unauthorized = false;
   for (const key of keys) {
     const r = await getViews(wsId, key);
-    if (r.ok && r.data?.views?.live) S.views[key] = sanitizeViewBlob(r.data.views.live);
+    /* WR-02: an empty whitelisted blob is truthy but carries no fields —
+       adopting it as-is would bypass viewOf()'s defaults (D-13) and crash
+       downstream consumers that dereference hidden/filters/sort/group. Only
+       a NON-empty blob is adopted, merged over viewOf(key) so the defaults
+       survive any field the blob omits. */
+    const live = r.ok ? sanitizeViewBlob(r.data?.views?.live) : null;
+    if (live && Object.keys(live).length) S.views[key] = { ...viewOf(key), ...live };
     else if (r.status === 401) unauthorized = true;
   }
   if (unauthorized) {
