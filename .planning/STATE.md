@@ -12,7 +12,7 @@ progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # STATE.md
@@ -27,10 +27,10 @@ dashboards) without breaking the zero-dependency discipline
 ## Current Position
 
 **Phase:** 57 (Views, Columns & General Access) — EXECUTING
-**Plan:** 1 of 3
-**Status:** Executing Phase 57
+**Plan:** 2 of 3
+**Status:** 57-01 complete (per-user view persistence substrate); 57-02 next
 
-**Progress:**[██░░░░░░░░] 17%
+**Progress:**[███░░░░░░░] 24%
 
 ```
 [##########]----------  0/6 phases
@@ -39,7 +39,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase | Name | Status |
 |-------|------|--------|
 | 56 | Delivery Infrastructure | Not started |
-| 57 | Views, Columns & General Access | Not started |
+| 57 | Views, Columns & General Access | In progress (1/3 plans) |
 | 58 | Full-Text Search | Not started |
 | 59 | Browser Push | Not started |
 | 60 | Admin Dashboard & Member Self-View | Not started |
@@ -88,13 +88,18 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-12T14:40:13.949Z
-**Stopped at:** Phase 57 context gathered
-**Resume file:** .planning/phases/57-views-columns-general-access/57-CONTEXT.md
+**Last session:** 2026-11-12T16:35:00.000Z
+**Stopped at:** Completed 57-01-PLAN.md
+**Resume file:** None
 
-**Last action:** created v2.2 roadmap (Phases 56–61) + traceability in REQUIREMENTS.md
-**Next action:** orchestrator presents roadmap → owner approval → `/gsd-plan-phase 56`
+**Last action:** executed 57-01 — saved_views substrate (routes, routes tests), doc.views boot sweep, three-site strip; full chain green (1418 unit + 109 e2e)
+**Next action:** `/gsd-execute-phase 57` plan 02 (named views)
 
 ### Blockers
 
 - 56-01 Task 2 blocked: 500 kB chunk gate unreachable without page-level splitting (measured entry ~606 kB); user decision B = replan DELIV-02 with honest chunk accounting. Task 1 (lazy QR + D-03 UX) committed: 7e45d82, 7d6da16. Task 2 uncommitted changes reverted.
+
+### Execution decisions (Phase 57)
+
+- 57-01: index chunk had 80 B headroom under the DELIV-02 500 kB gate — view-sync code and push.js split into lazy chunks (the 56-02 remedy); chunk gate green again
+- 57-01: memberships.role is lowercase in the DB — migration owner attribution queries `role = 'owner'` with a user_id tiebreaker (rowid is pg-unsafe, static-db-audit pinned)
