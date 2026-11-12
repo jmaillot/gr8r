@@ -76,3 +76,24 @@ test('the build emits a lazy seed chunk', () => {
   const chunks = chunksByPrefix('seed');
   assert.ok(chunks.length > 0, `no seed-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
 });
+
+/* 56-02 final edge set: design-system, members, activity, search. */
+test('the build emits a lazy design-system chunk', () => {
+  const chunks = chunksByPrefix('design-system');
+  assert.ok(chunks.length > 0, `no design-system-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
+
+test('the build emits a lazy members chunk', () => {
+  const chunks = chunksByPrefix('members');
+  assert.ok(chunks.length > 0, `no members-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
+
+test('the build emits a lazy activity chunk', () => {
+  const chunks = chunksByPrefix('activity');
+  assert.ok(chunks.length > 0, `no activity-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
+
+test('the build emits a lazy search chunk', () => {
+  const chunks = chunksByPrefix('search');
+  assert.ok(chunks.length > 0, `no search-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});
