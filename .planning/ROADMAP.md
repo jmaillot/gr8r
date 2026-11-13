@@ -170,7 +170,10 @@ their own redacted access picture.
      (private+invite, team link, non-private, per-person/per-team grant) — and the
      response never exposes other members' access rows (cross-member grants appear
      without names), proven by byte-level shape tests per role (TRN-01, TRN-02)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 60-01-PLAN.md — Server routes: admin-gated dashboard aggregate (raw doc, 403 gate) + self-visibility endpoint, with gate/aggregate/byte-shape test suites (DASH-01..04, TRN-01/02)
+- [ ] 60-02-PLAN.md — Client: lazy dashboard page (4 panels, poll, deep links), Settings › My access section, i18n EN+FR, e2e spec (DASH-01..04, TRN-01)
 **UI hint**: yes
 
 ### Phase 61: Notification Trim
