@@ -62,7 +62,8 @@ function burstRow(g) {
      member's plain row instead of crashing the summary (Pitfall 4 posture). */
   if (!tk) return inboxItem(first, false);
   const p = proj(tk.project);
-  const keyName = 'notif.burst.' + first.type;
+  const tName = ({ due_reminder: 'dueReminder', past_due: 'pastDue' })[first.type] || first.type;
+  const keyName = 'notif.burst.' + tName;
   const label = has(keyName) ? t(keyName, { n: g.members.length }) : t('notif.burst.generic', { n: g.members.length });
   const expTip = g.open ? t('notif.burst.collapse') : t('notif.burst.expand');
   const readTip = t('page.inbox.markRead');

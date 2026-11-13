@@ -13,14 +13,16 @@ import { pageOverview } from '../pages/overview.js';
 import { pageMyTasks } from '../pages/my-tasks.js';
 import { pageTasks } from '../pages/tasks.js';
 import { pageInbox } from '../pages/inbox.js';
-import { pageNotifications } from '../pages/notifications.js';
 import { pageFavorites } from '../pages/favorites.js';
+/* [61-02 chunk-gate remedy, 57-03 precedent] The notifications + archive routes are
+   low-frequency: they load via the existing lazy() contract (skeleton + fillPage
+   swap on first visit) instead of riding the entry chunk, freeing the headroom
+   the burst summary row needs. Re-renders stay synchronous via f.mod (CR-01). */
 import { pageProjects } from '../pages/projects.js';
 import { page404, stateFailed } from '../pages/errors.js';
 import { pageProject } from '../pages/project.js';
 import { pageWsCalendar } from '../views/calendar.js';
 import { pageWsTimeline } from '../views/timeline.js';
-import { pageArchive } from '../features/archive.js';
 
 /* Page loaders (DELIV-02 split): every route resolves through P. First-paint
    routes stay synchronous — their page module is statically imported above and
@@ -48,7 +50,7 @@ const P = {
   inbox: () => pageInbox(),
   mytasks: () => pageMyTasks(),
   favorites: () => pageFavorites(),
-  notifications: () => pageNotifications(),
+  notifications: lazy(() => import('../pages/notifications.js'), 'pageNotifications'),
   search: lazy(() => import('../pages/search.js'), 'pageSearch'),
   overview: () => pageOverview(),
   dashboard: lazy(() => import('../pages/dashboard.js'), 'pageDashboard'),
@@ -65,7 +67,7 @@ const P = {
   settings: lazy(() => import('../pages/settings.js'), 'pageSettings'),
   system: lazy(() => import('../pages/design-system.js'), 'pageSystem'),
   states: lazy(() => import('../pages/design-system.js'), 'pageStates'),
-  archive: () => pageArchive(),
+  archive: lazy(() => import('../features/archive.js'), 'pageArchive'),
 };
 const NOT_FOUND = () => page404();
 
