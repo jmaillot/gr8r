@@ -360,12 +360,7 @@ export const api = {
   async dashboard(activityWindow, { signal } = {}) {
     const slug = state.workspace?.slug;
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
-    return call(
-      'GET',
-      `/api/workspaces/${encodeURIComponent(slug)}/dashboard${activityWindow ? `?activityWindow=${encodeURIComponent(activityWindow)}` : ''}`,
-      undefined,
-      { signal },
-    );
+    return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/dashboard${activityWindow ? `?activityWindow=${encodeURIComponent(activityWindow)}` : ''}`, undefined, { signal });
   },
   /* AUD-02 (phase 24): the workspace-admin tier — revoke a member's sessions
      from the members surface. D-R1 locks the /api/w/ prefix even though the

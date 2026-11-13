@@ -9,9 +9,10 @@ import { renderQrSvg } from '../lib/qr.js';
 import { toast } from '../ui/toast.js';
 import { av, pIcon } from '../ui/helpers.js';
 import { strengthMeter } from '../ui/strength.js';
-import { teamsGrid } from './members.js';
+import { teamsGrid, visReasonLabel } from './members.js';
 import { page404 } from './errors.js';
 import { SHORTCUTS } from '../overlays/modals.js';
+import { render } from '../shell/render.js';
 import { TIMEZONES } from '../lib/timezones.js';
 import { resolveTz } from '../../tz.js';
 
@@ -77,6 +78,7 @@ export const SET_NAV = [
       ['profile', 'settings.nav.profile', 'user'],
       ['preferences', 'settings.nav.preferences', 'sliders-horizontal'],
       ['shortcuts', 'settings.nav.shortcuts', 'keyboard'],
+      ['my-access', 'settings.nav.myAccess', 'shield-check'],
     ],
   ],
   [
@@ -100,6 +102,20 @@ export const SET_NAV = [
 export function srow(t, d, ctl) {
   return `<div class="srow"><div><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div><div class="row">${ctl}</div></div>`;
 }
+/* Phase 60 (TRN-01/D-11): the Settings › My access self-view — the calling
+   member's own reachable-projects list, read on section render (server ground
+   truth, nothing cached across sections) and re-read when re-entered. The
+   in-render kick (not just the A.go hook) covers a boot-time deep link to
+   ?sec=my-access. No role gate — every member incl. admins. */
+async function refreshMyAccess() {
+  const res = await api.myVisibility();
+  if (res.ok) {
+    S.ui.myAccessData = res.data;
+    S.ui.myAccessErr = null;
+  } else S.ui.myAccessErr = res.status;
+  render();
+}
+
 export const tog = (k, on, src = 'pref') =>
   `<input type="checkbox" class="toggle" data-in="${src}Toggle" data-k="${k}" ${on ? 'checked' : ''} aria-label="${k}">`;
 export const sel = (k, opts, v) =>
@@ -509,6 +525,25 @@ export function settingsBody(sec, title) {
         `<div class="sblock"><h2>${t('settings.projects.active')}</h2>${activeRows}</div>` +
         `<div class="sblock"><h2>${t('settings.projects.archived')}</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">${t('act.restore')}</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">${t('act.delete')}</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">${t('settings.projects.noArchived')}</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}${t('settings.projects.openArchive')}</button></div></div>`
       );
+    }
+    case 'my-access': {
+      /* Phase 60 (TRN-01/D-11): every member's self-view — rows reuse the
+         members.js expander markup + label vocabulary verbatim (D-12/D-14).
+         The list comes ONLY from the server response — never from
+         visibleProjects() (T-60-05; the redacted client doc is not the
+         truth-teller here either). */
+      if (api.enabled && !S.ui.myAccessData && !S.ui.myAccessErr) refreshMyAccess();
+      const data = S.ui.myAccessData;
+      let body;
+      if (!api.enabled) body = `<p class="hint">${t('settings.myAccess.local')}</p>`;
+      else if (S.ui.myAccessErr) body = `<p class="hint">${t('settings.myAccess.error')}</p>`;
+      else if (!data) body = `<p class="hint" aria-busy="true">${t('settings.myAccess.loading')}</p>`;
+      else if (!data.projects.length) body = `<p class="hint">${t('settings.myAccess.empty')}</p>`;
+      else
+        body = data.projects
+          .map(p => `<div class="row" style="gap:8px">${pIcon(p, '', 14)}<span>${esc(p.name || p.id)}</span><span class="badge">${visReasonLabel(p)}</span></div>`)
+          .join('');
+      return H(t('settings.myAccess.lead')) + `<div class="sblock" style="margin-top:0">${body}</div>`;
     }
     case 'notif-email':
       return (
