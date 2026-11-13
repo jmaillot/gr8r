@@ -170,10 +170,10 @@ their own redacted access picture.
      (private+invite, team link, non-private, per-person/per-team grant) — and the
      response never exposes other members' access rows (cross-member grants appear
      without names), proven by byte-level shape tests per role (TRN-01, TRN-02)
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 Plans:
 **Wave 1**
-- [ ] 60-01-PLAN.md — Server routes: admin-gated dashboard aggregate (raw doc, 403 gate) + self-visibility endpoint, with gate/aggregate/byte-shape test suites (DASH-01..04, TRN-01/02)
+- [x] 60-01-PLAN.md — Server routes: admin-gated dashboard aggregate (raw doc, 403 gate) + self-visibility endpoint, with gate/aggregate/byte-shape test suites (DASH-01..04, TRN-01/02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 60-02-PLAN.md — Client: lazy dashboard page (4 panels, poll, deep links), Settings › My access section, i18n EN+FR, e2e spec (DASH-01..04, TRN-01)
@@ -208,7 +208,7 @@ D-05 owner rulings arriving during execution
 | 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
 | 58. Full-Text Search | 4/4 | Complete    | 2026-11-13 |
 | 59. Browser Push | 3/3 | Complete    | 2026-11-13 |
-| 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
+| 60. Admin Dashboard & Member Self-View | 1/2 | In Progress|  |
 | 61. Notification Trim | 0/? | Not started | - |
 
 ## Backlog

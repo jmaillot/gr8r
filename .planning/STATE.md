@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 60
 current_phase_name: Admin Dashboard & Member Self-View
 status: executing
-stopped_at: Phase 60 context gathered
-last_updated: "2026-11-13T16:54:02.191Z"
-state_head: 377266b17910d51dff4f55a6bc66a09cbf006620
+stopped_at: Completed 60-01-PLAN.md
+last_updated: "2026-11-13T17:15:23.013Z"
+state_head: bd818120cdbc8832fecf3ead51f73b12088f1a0b
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # STATE.md
@@ -22,12 +22,12 @@ progress:
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core Value:** simple, predictable access + a workspace that reaches you (push, search,
 dashboards) without breaking the zero-dependency discipline
-**Current Focus:** Phase 59 — Browser Push
+**Current Focus:** Phase 60 — Admin Dashboard & Member Self-View
 
 ## Current Position
 
-**Phase:** 60 (Admin Dashboard & Member Self-View) — READY TO EXECUTE
-**Plan:** Not started
+**Phase:** 60 (Admin Dashboard & Member Self-View) — EXECUTING
+**Plan:** 2 of 2
 
 **Progress:**[███████░░░] 67%
 
@@ -60,6 +60,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 58 P03 | 41 min | 3 tasks | 8 files |
 | Phase 59 P01 | 75 min | 3 tasks | 16 files |
 | Phase 59 P02 | 50 min | 3 tasks | 5 files |
+| Phase 60 P01 | 15m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -100,9 +101,9 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T16:24:32.795Z
-**Stopped at:** Phase 60 context gathered
-**Resume file:** .planning/phases/60-admin-dashboard-member-self-view/60-CONTEXT.md
+**Last session:** 2026-11-13T17:15:22.947Z
+**Stopped at:** Completed 60-01-PLAN.md
+**Resume file:** None
 
 **Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
 **Next action:** `/gsd-discuss-phase 60` — Phase 60: Admin Dashboard & Member Self-View (phase 59 complete 3/3)
@@ -134,3 +135,4 @@ dashboards) without breaking the zero-dependency discipline
 - [Phase 58]: 58-03: the debounced dispatcher lives in core (node-testable abort/dedupe semantics), palette only wires it; api.js call() gained a signal passthrough rather than a raw fetch fork
 - [Phase 58]: 58-03: page-fetch orchestration sits in A.searchPageServer (actions layer owns render(); page modules never import render.js); zero new i18n keys — server hits join the existing Tasks section
 - [Phase 58]: 58-03: frozen pins maintained without new names — neutral fallback is inline-SVG stIcon('backlog'); data-a pin annotated 491→492 (server row reuses data-a="openTask")
+- [Phase 60]: Self-view endpoint gated 'viewer' (any-member per D-11/acceptance); dashboard raw-doc read is the sanctioned power-admin inversion; server date anchor = tz.js localParts default zone
