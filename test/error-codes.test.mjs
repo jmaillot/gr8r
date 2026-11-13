@@ -209,6 +209,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'cannotChangeAccess', // permission toast composed in actions.js before the call
   'inviteFirst', // guard toast in actions.js — nothing to revoke yet
   'lastMember', // guard toast in actions.js — leave blocked before the call
+  'pushSubscribeFailed', // 59-03 enablePush failure toast in actions.js — subscribe/save failures, never a server code
   'inviteLink', // toast composed in actions.js from the created invite row
   'newInvite', // toast composed in actions.js from the created invite row
   'revokeInvite', // toast composed in api.js after a successful DELETE of an invite

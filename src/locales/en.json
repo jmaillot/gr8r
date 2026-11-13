@@ -1715,6 +1715,7 @@
   "err.crossOriginRejected": "Cross-origin request rejected",
   "err.unknownLocale": "Unknown locale",
   "err.unknownPrefKey": "Unknown preference key",
+  "err.pushSubscribeFailed": "Could not subscribe this device to push — try again or check the server configuration.",
   "err.pushUnavailable": "Browser push is not configured",
   "err.invalidSubscription": "Invalid push subscription",
   "err.invalidViewKey": "Invalid view key",

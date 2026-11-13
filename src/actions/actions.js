@@ -2536,6 +2536,10 @@ IN.pushEnable = async () => {
   if (r.ok) toast(t('toast.pushEnabled'), { ms: 2000 });
   else if (r.code === 'unavailable') toast(t('err.pushUnavailable'), { kind: 'err', ms: 6000 });
   else if (r.code === 'denied') m.blockedToastOnce(); // the one-time explanatory toast (D-48-4)
+  else if (r.code === 'dismissed') { /* user closed the prompt — no nag, the toggle stays OFF */ }
+  /* 59-UAT fix: subscribe/error were silent — a failed subscription (bad key,
+     SW reject, save POST failure) gave zero feedback and looked like a dead button. */
+  else toast(t('err.pushSubscribeFailed'), { kind: 'err', ms: 6000 });
   await refreshPushState();
   return r;
 };
