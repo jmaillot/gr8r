@@ -262,3 +262,64 @@ test('an MCP writeDoc task is findable via the search route immediately (D-10, S
   assert.ok(hit, 'MCP-written task must be indexed in-tx');
   assert.equal(hit.projectId, 'p_open');
 });
+
+/* ---------------- D. boot sweep (D-08) --------------------------------- */
+
+test('ftsSweep heals drift: a directly deleted row is restored on the next sweep', async () => {
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fts-sweep-')), 'projects.db');
+  await adapter.connectDb({ dbPath });
+  await adapter.ensureSearchIndex();
+  const doc = { data: { tasks: [{ id: 't9', project: 'p9', title: 'Heal me élodie', desc: 'sweep body', status: 'todo' }] } };
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', null, doc));
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('heal'))).map(h => h.task_id), ['t9']);
+
+  /* Simulate drift: the index row vanishes outside any write path. */
+  await adapter.run('delete from task_fts where task_id = ?', ['t9']);
+  assert.deepEqual(await adapter.searchTasks('ws1', searchTerms('heal')), []);
+
+  /* Marker row now disagrees with the live doc → the sweep rebuilds. */
+  const swept = await adapter.ftsSweep('ws1', doc);
+  assert.equal(swept, 1);
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('heal'))).map(h => h.task_id), ['t9']);
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+});
+
+test('ftsSweep is a no-op on a healthy workspace (cheap happy path, no rewrites)', async () => {
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fts-sweep-')), 'projects.db');
+  await adapter.connectDb({ dbPath });
+  await adapter.ensureSearchIndex();
+  const doc = { data: { tasks: [{ id: 't1', project: 'p1', title: 'Healthy élodie', desc: 'untouched body', status: 'todo' }] } };
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', null, doc));
+  const rowidBefore = (await adapter.get('select rowid from task_fts where task_id = ?', ['t1'])).rowid;
+  const countBefore = (await adapter.get('select count(*) as n from task_fts where ws_id = ?', ['ws1'])).n;
+
+  const swept = await adapter.ftsSweep('ws1', doc);
+  assert.equal(swept, 0, 'healthy index → no rebuild');
+  const rowidAfter = (await adapter.get('select rowid from task_fts where task_id = ?', ['t1'])).rowid;
+  assert.equal(rowidAfter, rowidBefore, 'rowid stability proves no delete+insert rewrite');
+  const countAfter = (await adapter.get('select count(*) as n from task_fts where ws_id = ?', ['ws1'])).n;
+  assert.equal(countAfter, countBefore);
+  /* Marker row agrees with the live doc. */
+  const meta = await adapter.get('select task_count as n from fts_meta where workspace_id = ?', ['ws1']);
+  assert.equal(meta.n, countAfter);
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+});
+
+test('a real boot heals a corrupted index before the route serves results (D-08 end-to-end)', async () => {
+  /* Drift the fixture server's index directly in its database, reboot
+     against the SAME dataDir, and confirm the sweep restored findability. */
+  withDb(server.dbPath, db => db.prepare('delete from task_fts where task_id = ?').run('t_open'));
+  const before = await fetch(server.base + searchRoute('open'), { headers: { cookie: owner.cookie() } });
+  assert.deepEqual((await before.json()).tasks.filter(t => t.id === 't_open'), [], 'drifted row is unfindable pre-reboot');
+  await server.stop();
+  server = await startServer({ dataDir });
+  const o = await login(server.base, 'owner@visfix.local', VIS_PASSWORD);
+  assert.equal(o.status, 200);
+  owner = o.client;
+  const m = await login(server.base, 'plain@visfix.local', VIS_PASSWORD);
+  assert.equal(m.status, 200);
+  plain = m.client;
+  const res = await owner.get(searchRoute('open'));
+  assert.equal(res.status, 200);
+  assert.ok(res.data.tasks.some(t => t.id === 't_open'), 'boot sweep restored the drifted row');
+});

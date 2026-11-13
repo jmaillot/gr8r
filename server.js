@@ -83,6 +83,7 @@ import {
   ensureSearchIndex,
   syncTaskFts,
   searchTasks,
+  ftsSweep,
 } from './db-adapter.mjs';
 import { searchTerms, foldForSearch } from './search-terms.mjs';
 /* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
@@ -2521,11 +2522,27 @@ async function bootstrap(opts) {
      ever sees the legacy field. */
   await migrateUserViews();
   /* SEARCH (Phase 58, D-08): the task_fts shadow index must exist before
-     the first funnel write or search read touches it — created here at
-     boot (SQLite; pg parity lands in 58-02). AFTER migrateUserViews —
-     the same load-bearing-order discipline as the Phase 57 sweep:
-     migration order is load-bearing (Pitfall 2). */
+     the first funnel write or search read touches it, then a per-workspace
+     conditional sweep heals drift (missing marker row, empty index with a
+     nonzero doc, count mismatch) WITHOUT rebuilding healthy workspaces —
+     the same cheap-guard discipline as stampInstanceAdmin above. AFTER
+     migrateUserViews — the same load-bearing-order discipline as the
+     Phase 57 sweep: migration order is load-bearing (Pitfall 2), and the
+     index must be healed before the first search route read serves
+     results. pg parity lands in 58-02 (the sweep no-ops there). */
   await ensureSearchIndex();
+  /* T-34-05 discipline: a corrupt doc blob is skipped, never crashing the
+     boot — the same per-row guard the prefs backfill pins. */
+  for (const ws of await dbAll('select id, doc from workspaces')) {
+    let doc = null;
+    try {
+      doc = JSON.parse(ws.doc);
+    } catch {
+      logWarn(`  [bootstrap] fts sweep: corrupt doc skipped for workspace ${ws.id}`);
+      continue;
+    }
+    await ftsSweep(ws.id, doc);
+  }
   /* D-50-6/D-50-10 (Phase 50, Plan 02): the reverse-sweep restoration and the
      legacy guest normalization. The Phase 49 materialization sweep stays
      RETIRED — restoreTeamLinks() only ever ADDS p.teams back from a
