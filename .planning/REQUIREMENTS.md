@@ -8,7 +8,7 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 - [ ] **PUSH-02**: A member receives a browser push notification (tab closed) when they are mentioned or assigned, honoring their per-member notification preferences (prefs-off = no push)
 - [ ] **PUSH-03**: Push payloads carry a ticker (title + project/task reference, ≤4096 octets), never task bodies; clicking deep-links to the task
 - [ ] **PUSH-04**: Dead push subscriptions are swept on send failure (404/410) so the table never grows stale
-- [ ] **PUSH-05**: VAPID keys persist server-side across restarts (env/config in /data, DEPLOY.md runbook documented)
+- [x] **PUSH-05**: VAPID keys persist server-side across restarts (env/config in /data, DEPLOY.md runbook documented)
 
 ## Full-Text Search
 
@@ -78,11 +78,11 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 | SEARCH-02 | Phase 58 | Complete |
 | SEARCH-03 | Phase 58 | Complete |
 | SEARCH-04 | Phase 58 | Complete |
-| PUSH-01 | Phase 59 | Pending |
-| PUSH-02 | Phase 59 | Pending |
+| PUSH-01 | Phase 59 | Partial (59-01 storage/API half; UI + test push in 59-03) |
+| PUSH-02 | Phase 59 | Partial (59-01 pref plumbing; fan-out in 59-02) |
 | PUSH-03 | Phase 59 | Pending |
 | PUSH-04 | Phase 59 | Pending |
-| PUSH-05 | Phase 59 | Pending |
+| PUSH-05 | Phase 59 | Complete (59-01; restart-proven custody) |
 | DASH-01 | Phase 60 | Pending |
 | DASH-02 | Phase 60 | Pending |
 | DASH-03 | Phase 60 | Pending |

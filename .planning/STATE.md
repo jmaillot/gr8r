@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 59
 current_phase_name: Browser Push
 status: executing
-stopped_at: Phase 59 context gathered
-last_updated: "2026-11-13T11:09:52.383Z"
-state_head: c4a3dbd8f7b4237c7454df99ea075a00a219b831
+stopped_at: 59-01 executed (Plan 2 of 3 next)
+last_updated: "2026-11-13T12:35:00.000Z"
+state_head: 0d34fc0
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 14
+  completed_plans: 12
 ---
 
 # STATE.md
@@ -26,8 +26,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 59 — Browser Push
-**Plan:** Not started
+**Phase:** 59 (Browser Push) — EXECUTING
+**Plan:** 2 of 3
 
 **Progress:**[█████░░░░░] 50%
 
@@ -40,7 +40,7 @@ dashboards) without breaking the zero-dependency discipline
 | 56 | Delivery Infrastructure | Complete |
 | 57 | Views, Columns & General Access | Complete (3/3 plans) |
 | 58 | Full-Text Search | Complete (4/4 plans incl. gap closure) |
-| 59 | Browser Push | Not started |
+| 59 | Browser Push | Executing (1/3 plans) |
 | 60 | Admin Dashboard & Member Self-View | Not started |
 | 61 | Notification Trim | Not started |
 
@@ -58,6 +58,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 58 P01 | 18 min | 3 tasks | 6 files |
 | Phase 58 P02 | 9 min | 2 tasks | 2 files |
 | Phase 58 P03 | 41 min | 3 tasks | 8 files |
+| Phase 59 P01 | 75 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -96,12 +97,12 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T11:09:52.319Z
-**Stopped at:** Phase 59 context gathered
-**Resume file:** .planning/phases/59-browser-push/59-CONTEXT.md
+**Last session:** 2026-11-13T12:35:00.000Z
+**Stopped at:** 59-01 executed (push infra: schema/custody/routes + web-push pin + push_due live)
+**Resume file:** .planning/phases/59-browser-push/59-01-SUMMARY.md
 
-**Last action:** executed 58-03 — hybrid search client: searchTasksServer (demo-gated, abortable, silent-degrading) + createDebouncedSearch in core, palette server merge (palServerSearch ← IN.palQ), /search page merge (A.searchPageServer, existing mini rows + hl() titles + plain-text snippets); full suite 1465/0, chunk gate green, e2e green modulo the 57-03 flake pair (isolation-verified)
-**Next action:** `/gsd-verify-work 58`, then `/gsd-discuss-phase 59` (Browser Push needs `--research-phase`)
+**Last action:** executed 59-01 — push_subscriptions dual-backend mirror + endpoint upsert, VAPID custody (env > DATA_DIR/vapid-keys.json > generate-once, restart-proven), /api/me/push-config + push-subscriptions GET/POST/DELETE fail-absent routes, web-push@4.0.0 exact pin (dep #3, pins amended in three test files), push_due re-livened per D-09 (server + client whitelist parity, five G-37-2 pins flipped), DEPLOY.md §16; full suite 1470/0, lint clean. Rule 3 deviations: SCHEMA comment semicolon vs statement splitter, client notifPrefs.js parity omitted from plan files, +2 i18n keys; Rule 1: label byte-cap bug.
+**Next action:** `/gsd-execute-phase 59` plan 02 (fan-out + sweep + sendPushFor)
 
 ### Blockers
 
@@ -117,6 +118,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Decisions
 
+- [Phase 59]: 59-01: client whitelist parity — push_due joined src/core/notifPrefs.js defaults (D-09 plumbing); foreground PUSH_TYPE_PREF untouched
+- [Phase 59]: 59-01: push routes read workspace from ?workspace= so the client POSTs the canonical subscription.toJSON() body verbatim; re-POST replaces the endpoint row and preserves created_at (D-03)
 - [Phase 57]: 57-03: seeding evidence captured BEFORE normalizeProjects — stored pref seeds private:true only on new (!prev) rows, explicit private always wins (D-04); funnel untouched
 - [Phase 57]: 57-03: [Rule 3] export/model.js went lazy (DELIV-02 gate, third application) — S.ui.expMod seam + constants.js DEFAULT_OPTIONS drift pin; index 493.4 kB (~6.6 kB headroom)
 - [Phase 58]: fts_meta is the shared sweep marker on both backends; one ftsSweep logic — keeps the sweep dialect-neutral (D-08/D-09); pg creates it in ensureSearchIndex

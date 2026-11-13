@@ -200,7 +200,7 @@ D-05 owner rulings arriving during execution
 | 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
 | 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
 | 58. Full-Text Search | 4/4 | Complete    | 2026-11-13 |
-| 59. Browser Push | 0/? | Not started | - |
+| 59. Browser Push | 1/3 | Executing | - |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
 | 61. Notification Trim | 0/? | Not started | - |
 
