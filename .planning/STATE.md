@@ -40,7 +40,7 @@ dashboards) without breaking the zero-dependency discipline
 | 56 | Delivery Infrastructure | Complete |
 | 57 | Views, Columns & General Access | Complete (3/3 plans) |
 | 58 | Full-Text Search | Complete (4/4 plans incl. gap closure) |
-| 59 | Browser Push | Executing (2/3 plans) |
+| 59 | Browser Push | Complete (3/3 plans) |
 | 60 | Admin Dashboard & Member Self-View | Not started |
 | 61 | Notification Trim | Not started |
 
@@ -69,6 +69,8 @@ dashboards) without breaking the zero-dependency discipline
 - Saved views/columns live in a server `saved_views` table (Phase 34 notif_prefs precedent)
 - Admin dashboard is power-admin: private projects fully visible to admins in aggregates (DASH-04)
 - v2.1 decisions M-09..M-13 and phase decisions D-53-1..4 remain in force
+- Phase 59: SW-only best-effort open-tab suppression via clients.matchAll — no page↔SW handshake (D-12/D-13); payload stays ticker-only (D-16/D-17)
+- Phase 59 wiring lessons: IN.* handlers dispatch only on input/change, A.* on click — data-a buttons must register on A.push*; the service worker must register AFTER api.init() or the module-eval enabled gate keeps api.enabled=false forever on server deployments
 
 ### Sequencing rationale (from research SUMMARY.md)
 
@@ -100,10 +102,10 @@ dashboards) without breaking the zero-dependency discipline
 
 **Last session:** 2026-11-13T12:35:00.000Z
 **Stopped at:** 59-02 executed (fan-out: sendPushFor + gates + sweep + budget + per-device test-send route)
-**Resume file:** .planning/phases/59-browser-push/59-02-SUMMARY.md
+**Resume file:** .planning/phases/59-browser-push/59-03-SUMMARY.md
 
-**Last action:** executed 59-01 — push_subscriptions dual-backend mirror + endpoint upsert, VAPID custody (env > DATA_DIR/vapid-keys.json > generate-once, restart-proven), /api/me/push-config + push-subscriptions GET/POST/DELETE fail-absent routes, web-push@4.0.0 exact pin (dep #3, pins amended in three test files), push_due re-livened per D-09 (server + client whitelist parity, five G-37-2 pins flipped), DEPLOY.md §16; full suite 1470/0, lint clean. Rule 3 deviations: SCHEMA comment semicolon vs statement splitter, client notifPrefs.js parity omitted from plan files, +2 i18n keys; Rule 1: label byte-cap bug.
-**Next action:** `/gsd-execute-phase 59` plan 03 (SW push handler + client subscribe + Settings Push tab + phase gate)
+**Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
+**Next action:** `/gsd-discuss-phase 60` — Phase 60: Admin Dashboard & Member Self-View (phase 59 complete 3/3)
 
 ### Blockers
 

@@ -4,9 +4,9 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 
 ## Push Notifications
 
-- [ ] **PUSH-01**: A member can enable browser notifications from Settings with an explicit opt-in prompt (never on page load), reusing the Phase 48 permission surface
-- [ ] **PUSH-02**: A member receives a browser push notification (tab closed) when they are mentioned or assigned, honoring their per-member notification preferences (prefs-off = no push)
-- [ ] **PUSH-03**: Push payloads carry a ticker (title + project/task reference, ≤4096 octets), never task bodies; clicking deep-links to the task
+- [x] **PUSH-01**: A member can enable browser notifications from Settings with an explicit opt-in prompt (never on page load), reusing the Phase 48 permission surface
+- [x] **PUSH-02**: A member receives a browser push notification (tab closed) when they are mentioned or assigned, honoring their per-member notification preferences (prefs-off = no push)
+- [x] **PUSH-03**: Push payloads carry a ticker (title + project/task reference, ≤4096 octets), never task bodies; clicking deep-links to the task
 - [x] **PUSH-04**: Dead push subscriptions are swept on send failure (404/410) so the table never grows stale
 - [x] **PUSH-05**: VAPID keys persist server-side across restarts (env/config in /data, DEPLOY.md runbook documented)
 
@@ -78,9 +78,9 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 | SEARCH-02 | Phase 58 | Complete |
 | SEARCH-03 | Phase 58 | Complete |
 | SEARCH-04 | Phase 58 | Complete |
-| PUSH-01 | Phase 59 | Partial (59-01 storage/API + 59-02 test-send route; Settings UI in 59-03) |
-| PUSH-02 | Phase 59 | Complete (59-02 server fan-out + gates; SW display contract in 59-03) |
-| PUSH-03 | Phase 59 | Complete (59-02 server payload/ticker ≤4096; SW display + click in 59-03) |
+| PUSH-01 | Phase 59 | Complete (59-01 storage/API, 59-02 test-send route, 59-03 Settings opt-in + device list — owner UAT passed 6/6) |
+| PUSH-02 | Phase 59 | Complete (59-02 server fan-out + gates; 59-03 SW display — owner UAT passed, incl. tab-closed delivery) |
+| PUSH-03 | Phase 59 | Complete (59-02 ticker ≤4096; 59-03 SW display + deep-link click — owner UAT passed) |
 | PUSH-04 | Phase 59 | Complete (59-02; 404/410 same-pass sweep, proven by the 429-keeps-row test) |
 | PUSH-05 | Phase 59 | Complete (59-01; restart-proven custody) |
 | DASH-01 | Phase 60 | Pending |
