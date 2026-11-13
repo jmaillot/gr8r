@@ -357,6 +357,13 @@ A.back = () => {
   else go('home');
 };
 A.reload = () => render();
+/* Phase 60 (dashboard): retry after a non-403 dashboard fetch failure —
+   clears the error state and refills. */
+A.dashRetry = () => {
+  S.ui.dashErr = null;
+  S.ui.dashData = null;
+  render();
+};
 A.openProject = el => go('project', { id: el.dataset.id, tab: S.prefs.defaultTab || 'board' });
 A.set = el => {
   const k = el.dataset.k;

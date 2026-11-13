@@ -345,6 +345,28 @@ export const api = {
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/members/${encodeURIComponent(userId)}/visibility`);
   },
+  /* Phase 60 (TRN-01): the member's own self-view of the Phase 52 funnel —
+     the calling membership row scopes the read server-side; nothing is
+     cached here (same D-52-3 posture as memberVisibility). */
+  async myVisibility() {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/me/visibility`);
+  },
+  /* Phase 60 (DASH-01): the admin aggregate dashboard — overdue/load/upcoming/
+     activity in one payload. The activityWindow preset rides the query string
+     only when provided (the server whitelists it); poll refreshes abort the
+     previous in-flight read through call()'s signal passthrough (Phase 58). */
+  async dashboard(activityWindow, { signal } = {}) {
+    const slug = state.workspace?.slug;
+    if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
+    return call(
+      'GET',
+      `/api/workspaces/${encodeURIComponent(slug)}/dashboard${activityWindow ? `?activityWindow=${encodeURIComponent(activityWindow)}` : ''}`,
+      undefined,
+      { signal },
+    );
+  },
   /* AUD-02 (phase 24): the workspace-admin tier — revoke a member's sessions
      from the members surface. D-R1 locks the /api/w/ prefix even though the
      sibling member routes use /api/workspaces/. The slug resolves from the

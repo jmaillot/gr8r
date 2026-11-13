@@ -2,7 +2,7 @@
 import { TODAY, diffD, esc, modKey, parse } from '../core/utils.js';
 import { ic, wsLogo } from '../core/icons.js';
 import { PSTAT } from '../core/constants.js';
-import { D, S, allTasks, mem, myNotifs, pColor, proj, team, teamsList, visibleProjects } from '../core/store.js';
+import { D, S, allTasks, isMemberAdmin, mem, myNotifs, pColor, proj, team, teamsList, visibleProjects } from '../core/store.js';
 import { api } from '../core/api.js';
 import { av } from '../ui/helpers.js';
 import { t } from '../core/i18n.js';
@@ -51,6 +51,7 @@ const P = {
   notifications: () => pageNotifications(),
   search: lazy(() => import('../pages/search.js'), 'pageSearch'),
   overview: () => pageOverview(),
+  dashboard: lazy(() => import('../pages/dashboard.js'), 'pageDashboard'),
   projects: () => pageProjects(),
   project: () => pageProject(),
   tasks: () => pageTasks(),
@@ -169,6 +170,8 @@ export function renderSidebar() {
       <div class="sgroup">
         <div class="sgroup-h">${t('common.workspace')}</div>
         ${sItem('overview', routeName('overview'), 'layout-dashboard')}
+        ${/* Phase 60 (D-01/D-52-4): UX gate only — the server 403 is the control. */ ''}
+        ${isMemberAdmin() ? sItem('dashboard', routeName('dashboard'), 'gauge') : ''}
         ${sItem('projects', routeName('projects'), 'folder-kanban')}
         ${sItem('tasks', routeName('tasks'), 'list-checks')}
         ${sItem('calendar', routeName('calendar'), 'calendar')}

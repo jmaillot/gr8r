@@ -26,6 +26,7 @@ export const ROUTE_IDS = [
   'notifications',
   'search',
   'overview',
+  'dashboard',
   'projects',
   'tasks',
   'calendar',
@@ -49,6 +50,7 @@ export const ROUTE_ICONS = {
   notifications: 'bell',
   search: 'search',
   overview: 'layout-dashboard',
+  dashboard: 'gauge',
   projects: 'folder-kanban',
   tasks: 'list-checks',
   calendar: 'calendar',
@@ -62,12 +64,20 @@ export const ROUTE_ICONS = {
   archive: 'archive',
 };
 
+/* Phase 60 (D-05): per-route teardown registry. A lazy page with a running
+   cycle (the dashboard's 30 s poll) registers its cleanup under its route id
+   at module load; go() invokes it whenever navigation LEAVES that route. The
+   registry lives here — never an import of the page module in the entry
+   chunk (DELIV-02) — so the page keeps its own teardown in its own chunk. */
+export const ROUTE_TEARDOWN = {};
+
 export function go(route, params = {}, opt = {}) {
   if (route === 'project' && !params.tab) params.tab = 'board';
   if (!opt.back && !opt.noHistory && !opt.replace) S.ui.history.push({ route: S.ui.route, params: S.ui.params });
   /* [2026-11-09 IN-03] jsonEqual — a re-navigated params object with the
      same keys in a different insertion order is the SAME route. */
   const same = S.ui.route === route && jsonEqual(S.ui.params, params);
+  if (!same) ROUTE_TEARDOWN[S.ui.route]?.(); // the poll cycle dies with the view (Phase 60, D-05)
   S.ui.route = route;
   S.ui.params = params;
   S.ui.mnav = false;
