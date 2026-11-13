@@ -378,6 +378,6 @@ test('badge-placement pin (D-11/D-12/48-02): the derived browser-blocked badge d
     );
   }
   // D-12: the toggles stay rendered and clickable — data-in="np" handler wiring unchanged, no disabled attribute
-  assert.equal((block.match(/tog\('push_/g) || []).length, 3, 'the three push toggles are still rendered via tog()');
+  assert.equal((block.match(/tog\('push_/g) || []).length, 4, 'the three push toggles + the push_due row (59-03 D-09) are rendered via tog()');
   assert.ok(!block.includes('disabled'), 'no toggle is disabled (D-12)');
 });
