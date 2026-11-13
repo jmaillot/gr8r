@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { foldForSearch } from './search-terms.mjs';
 
 /* ---- LOG_LEVEL ladder — mirrors server.js conventions (debug|info|warn|error) ---- */
 const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -442,6 +443,137 @@ export async function tx(fn) {
   if (backendKind === 'pg') return pgTx(fn);
   return sqliteTx(() => sqliteTxScope(fn));
 }
+
+/* ---- full-text search seam (Phase 58, SEARCH-01/03, D-07/D-09/D-11) ----
+   The shadow `task_fts` index is maintained EXPLICITLY by the adapter
+   (D-09: no SQLite triggers — one code path for both backends, proven by
+   test). Sync is called IN-TRANSACTION by both write sites (server.js
+   doc-PUT funnel + mcp.js writeDoc, D-07/D-10) and receives the TX SCOPE
+   as its first argument — on pg, module-level run() inside a tx body
+   would land OUTSIDE the checked-out client (Pitfall 2), so every index
+   write goes through `scope.run`. The pg branch no-ops until 58-02 (pg
+   parity via a JS-folded tsvector projection, D-12) — searchTasks
+   answers [] on pg meanwhile, never an error. */
+
+/* The HTML-strip idiom shared with src/core/searchall.js (D-06 snippet
+   model) — one space per tag so adjacent words never fuse into one
+   FTS token. */
+const stripTags = s => String(s ?? '').replace(/<[^>]+>/g, ' ');
+
+/* D-11: the tokenizer is LOCKED at table-creation time (unicode61 +
+   remove_diacritics 2 — "elodie" finds "Élodie"); changing it later
+   requires dropping and rebuilding task_fts for every workspace.
+   ws_id is an UNINDEXED column so per-workspace deletes/rebuilds
+   (ftsSweep, D-08) and per-workspace queries can filter without
+   touching the match layer. */
+export async function ensureSearchIndex() {
+  if (backendKind !== 'sqlite') return; // pg parity lands in 58-02 (D-12)
+  await run(`create virtual table if not exists task_fts using fts5(
+  ws_id UNINDEXED, task_id UNINDEXED, project_id UNINDEXED, title, body,
+  tokenize = 'unicode61 remove_diacritics 2'
+)`);
+  await run('create table if not exists fts_meta (workspace_id text primary key, task_count integer not null default 0)');
+}
+
+/* In-tx diff sync (D-07): derives the index writes from the stored-vs-next
+   task diff keyed by t.id — the same Set/Map shape as the funnel's
+   storedFileIds diff. No-op when no task id/title/desc/project changed.
+   Contentless-safe: plain FTS5 delete + insert per changed row. */
+export async function syncTaskFts(scope, wsId, storedDoc, next) {
+  if (backendKind !== 'sqlite') return; // pg parity lands in 58-02 (D-12)
+  const stored = new Map(
+    (Array.isArray(storedDoc?.data?.tasks) ? storedDoc.data.tasks : [])
+      .map(t => [t?.id, t])
+      .filter(([id]) => id),
+  );
+  const upcoming = new Map(
+    (Array.isArray(next?.data?.tasks) ? next.data.tasks : [])
+      .map(t => [t?.id, t])
+      .filter(([id]) => id),
+  );
+  let moved = 0;
+  for (const [id, t] of stored) {
+    const nt = upcoming.get(id);
+    if (nt && nt.title === t.title && nt.desc === t.desc && nt.project === t.project) continue; // unchanged → index untouched (SEARCH-03 empty edge)
+    await scope.run('delete from task_fts where ws_id = ? and task_id = ?', [wsId, id]);
+    if (nt) {
+      await scope.run('insert into task_fts (ws_id, task_id, project_id, title, body) values (?,?,?,?,?)', [
+        wsId,
+        id,
+        String(nt.project ?? ''),
+        foldForSearch(nt.title).text,
+        foldForSearch(stripTags(nt.desc)).text,
+      ]);
+    }
+    moved++;
+  }
+  for (const [id, t] of upcoming) {
+    if (stored.has(id)) continue; // new task → insert
+    await scope.run('insert into task_fts (ws_id, task_id, project_id, title, body) values (?,?,?,?,?)', [
+      wsId,
+      id,
+      String(t.project ?? ''),
+      foldForSearch(t.title).text,
+      foldForSearch(stripTags(t.desc)).text,
+    ]);
+    moved++;
+  }
+  if (!moved) return;
+  const counted = await scope.get('select count(*) as n from task_fts where ws_id = ?', [wsId]);
+  await scope.run(
+    'insert into fts_meta (workspace_id, task_count) values (?, ?) on conflict(workspace_id) do update set task_count = excluded.task_count',
+    [wsId, counted.n],
+  );
+}
+
+/* Terms arrive ALREADY SANITIZED (searchTerms output — [a-z0-9]+ tokens);
+   the adapter is the only site that builds the match expression: implicit
+   AND of prefix tokens (`tok* tok2*`, D-13), bm25 rank order with a
+   task_id tiebreak for deterministic ordering. */
+export async function searchTasks(wsId, terms, limit = 30) {
+  if (backendKind !== 'sqlite' || !Array.isArray(terms) || !terms.length) return [];
+  const match = terms.map(t => `${t}*`).join(' ');
+  return all('select task_id, project_id from task_fts where task_fts match ? and ws_id = ? order by rank, task_id limit ?', [
+    match,
+    wsId,
+    limit,
+  ]);
+}
+
+/* D-08 boot sweep: cheap staleness check (marker row + live count vs
+   indexed count) — rebuild this workspace's rows only when stale,
+   missing or empty. Boot runs OUTSIDE any tx, so module-level run/get
+   here is correct (no scope threading). Returns the workspaces swept. */
+export async function ftsSweep(wsId, doc) {
+  if (backendKind !== 'sqlite') return 0;
+  const tasks = (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).filter(t => t?.id);
+  const marker = await get('select task_count as n from fts_meta where workspace_id = ?', [wsId]);
+  const indexed = await get('select count(*) as n from task_fts where ws_id = ?', [wsId]);
+  if (marker && marker.n === tasks.length && indexed.n === tasks.length) return 0; // healthy — no rewrites
+  await run('begin immediate');
+  try {
+    await run('delete from task_fts where ws_id = ?', [wsId]);
+    for (const t of tasks) {
+      await run('insert into task_fts (ws_id, task_id, project_id, title, body) values (?,?,?,?,?)', [
+        wsId,
+        t.id,
+        String(t.project ?? ''),
+        foldForSearch(t.title).text,
+        foldForSearch(stripTags(t.desc)).text,
+      ]);
+    }
+    await run(
+      'insert into fts_meta (workspace_id, task_count) values (?, ?) on conflict(workspace_id) do update set task_count = excluded.task_count',
+      [wsId, tasks.length],
+    );
+    await run('commit');
+    return tasks.length;
+  } catch (err) {
+    await run('rollback');
+    throw err;
+  }
+}
+
 
 /* ---- capability gate (D-09): pragma / wal_checkpoint / vacuum into are
    SQLite-only. On pg they no-op with one info line — never ported. ------ */

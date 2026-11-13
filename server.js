@@ -80,7 +80,11 @@ import {
   ensureColumn as adapterEnsureColumn,
   runSchema as adapterRunSchema,
   backendKind,
+  ensureSearchIndex,
+  syncTaskFts,
+  searchTasks,
 } from './db-adapter.mjs';
+import { searchTerms, foldForSearch } from './search-terms.mjs';
 /* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
    snapshots READ-ONLY (never through the adapter — they are historical files,
    not the live handle). Sole direct node:sqlite use in server.js. */
@@ -930,6 +934,26 @@ async function memberCanReadProject(p, wsId, memberId) {
   if (!Array.isArray(p?.teams) || !p.teams.length || !wsId || !memberId) return false;
   const memberTeams = await teamsOfMember(wsId, memberId, null);
   return canSeeProject(p, memberId, memberTeams);
+}
+
+/* SEARCH (Phase 58, D-06): plain-text snippet around the first folded term
+   match in the task description — the searchall HTML-strip treatment, no
+   FTS5 snippet()/highlight() markup (no server-generated HTML surface).
+   The fold's original-index map lands the slice on the ORIGINAL string so
+   accented characters stay intact. Title-only matches answer the head of
+   the description (or '') — the client renders hl() on the title itself. */
+function searchSnippet(task, terms) {
+  const plain = String(task?.desc ?? '').replace(/<[^>]+>/g, ' ');
+  const { text: folded, map } = foldForSearch(plain);
+  let at = -1;
+  for (const term of terms) {
+    const i = folded.indexOf(term);
+    if (i !== -1 && (at === -1 || i < at)) at = i;
+  }
+  if (at === -1) return plain.slice(0, 140).trim();
+  const start = Math.max(0, (map[at] ?? 0) - 40);
+  const end = Math.min(plain.length, (map[Math.min(at + 80, folded.length - 1)] ?? plain.length) + 1);
+  return (start > 0 ? '…' : '') + plain.slice(start, end).trim() + (end < plain.length ? '…' : '');
 }
 
 /* [2026-11-08 Phase 52, D-52-5/D-52-6] The transparency LABEL helper — a pure
@@ -2496,6 +2520,12 @@ async function bootstrap(opts) {
      (Pitfall 2), and it must land before the first doc read so no client
      ever sees the legacy field. */
   await migrateUserViews();
+  /* SEARCH (Phase 58, D-08): the task_fts shadow index must exist before
+     the first funnel write or search read touches it — created here at
+     boot (SQLite; pg parity lands in 58-02). AFTER migrateUserViews —
+     the same load-bearing-order discipline as the Phase 57 sweep:
+     migration order is load-bearing (Pitfall 2). */
+  await ensureSearchIndex();
   /* D-50-6/D-50-10 (Phase 50, Plan 02): the reverse-sweep restoration and the
      legacy guest normalization. The Phase 49 materialization sweep stays
      RETIRED — restoreTeamLinks() only ever ADDS p.teams back from a
@@ -5336,6 +5366,47 @@ async function handleApi(req, res, url) {
     return json(res, 201, { workspace: workspacePayload(ws, await membershipOf(ws.id, user.id)) });
   }
 
+  /* SEARCH (Phase 58, SEARCH-01/02, D-14): plain-keyword task search.
+     Membership-gated, sameOrigin; the raw query never reaches MATCH —
+     searchTerms folds/tokenizes/whitelists server-side (D-13/D-15). Every
+     hit is resolved in the FULL doc and filtered through
+     memberCanReadProject BEFORE the payload is built and BEFORE the 30
+     cap is applied (fetch 60 pre-filter so private hits never consume
+     the result budget — Pitfall 5). The response shape is constant:
+     always { tasks: [...] }, plain strings only, no counts/totals —
+     nothing a member can probe private-project existence through. */
+  const wsSearchMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/search$/);
+  if (wsSearchMatch && method === 'GET') {
+    const ctx = await requireWorkspace(req, res, wsSearchMatch[1], 'member');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const terms = searchTerms(url.searchParams.get('q'));
+    if (!terms.length) return json(res, 200, { tasks: [] }); // D-15: <2 folded chars → empty
+    const hits = await searchTasks(ctx.ws.id, terms, 60); // pre-filter over-fetch (Pitfall 5)
+    const doc = JSON.parse(ctx.ws.doc);
+    const tasks = new Map((Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).map(t => [t?.id, t]).filter(([id]) => id));
+    const projects = new Map((Array.isArray(doc?.data?.projects) ? doc.data.projects : []).map(p => [p?.id, p]).filter(([id]) => id));
+    const out = [];
+    for (const hit of hits) {
+      const task = tasks.get(hit.task_id);
+      const project = task ? projects.get(task.project) : null;
+      if (!task || !project) continue;
+      /* SEARCH-02: server-side only — the client's doc is redacted, never
+         trusted. A dropped hit reveals nothing: the shape stays a plain
+         tasks array either way. */
+      if (!(await memberCanReadProject(project, ctx.ws.id, ctx.membership.member_id))) continue;
+      out.push({
+        id: String(task.id),
+        key: String(task.key ?? ''),
+        title: String(task.title ?? ''),
+        snippet: searchSnippet(task, terms),
+        projectId: String(task.project ?? ''),
+      });
+      if (out.length >= 30) break; // D-14: top-30 AFTER filtering
+    }
+    return json(res, 200, { tasks: out });
+  }
+
   const wsMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})$/);
   if (wsMatch && method === 'GET') {
     const ctx = await requireWorkspace(req, res, wsMatch[1]);
@@ -5370,7 +5441,7 @@ async function handleApi(req, res, url) {
     const createRefusals = [];
     let outcome = null;
     try {
-      outcome = await db.tx(async () => {
+      outcome = await db.tx(async scope => {
         const row = await db.get('select * from workspaces where id = ?', [ctx.ws.id]);
         if (!row) {
           refusal.code = 'workspaceNotFound';
@@ -5399,6 +5470,13 @@ async function handleApi(req, res, url) {
          neither carry nor clobber membership. */
         const t = now();
         await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(next), t, row.id]);
+        /* SEARCH (Phase 58, D-07): task_fts diff sync runs INSIDE this same
+           transaction through the tx scope — a task written through the
+           funnel is findable via db.searchTasks the moment this tx commits,
+           with no findability window. Unlike the email fan-out below (which
+           is deliberately post-commit), index writes must roll back with
+           the doc write. */
+        await syncTaskFts(scope, row.id, storedDoc, next);
         return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t };
       });
     } catch (err) {
