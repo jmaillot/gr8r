@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 58
 current_phase_name: Full-Text Search
 status: executing
-stopped_at: Completed 58-01-PLAN.md
-last_updated: "2026-11-13T06:53:32.870Z"
-state_head: 09fb58ac7e9bb94e1e8c7d0f708133058c5da928
+stopped_at: Completed 58-02-PLAN.md
+last_updated: "2026-11-13T07:07:41.039Z"
+state_head: e334b80939400b8eb569745b6588b507cb915394
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # STATE.md
@@ -27,7 +27,7 @@ dashboards) without breaking the zero-dependency discipline
 ## Current Position
 
 **Phase:** 58 (Full-Text Search) — EXECUTING
-**Plan:** 2 of 3
+**Plan:** 3 of 3
 **Status:** Ready to execute
 
 **Progress:**[███░░░░░░░] 33%
@@ -57,6 +57,7 @@ dashboards) without breaking the zero-dependency discipline
 |------|----------|-------|-------|
 | Phase 57 P03 | 65 min | 2 tasks | 12 files |
 | Phase 58 P01 | 18 min | 3 tasks | 6 files |
+| Phase 58 P02 | 9 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -95,8 +96,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T06:53:32.823Z
-**Stopped at:** Completed 58-01-PLAN.md
+**Last session:** 2026-11-13T07:07:13.039Z
+**Stopped at:** Completed 58-02-PLAN.md
 **Resume file:** None
 
 **Last action:** executed 57-03 — defaultPrivate workspace default (owner toggle, Access-tab hint, createProject seed + server seeding parity, funnel untouched); full chain green (1426 unit, e2e green modulo 2 isolation-verified flakes); [Rule 3] export/model went lazy (index 493.4 kB)
@@ -118,3 +119,5 @@ dashboards) without breaking the zero-dependency discipline
 
 - [Phase 57]: 57-03: seeding evidence captured BEFORE normalizeProjects — stored pref seeds private:true only on new (!prev) rows, explicit private always wins (D-04); funnel untouched
 - [Phase 57]: 57-03: [Rule 3] export/model.js went lazy (DELIV-02 gate, third application) — S.ui.expMod seam + constants.js DEFAULT_OPTIONS drift pin; index 493.4 kB (~6.6 kB headroom)
+- [Phase 58]: fts_meta is the shared sweep marker on both backends; one ftsSweep logic — keeps the sweep dialect-neutral (D-08/D-09); pg creates it in ensureSearchIndex
+- [Phase 58]: toPgSql ?→$n counter fixed to span quoted literals (Rule 1, pre-existing facade bug) — a ? after a single-quoted literal renumbered to $1 causing pg bind-count mismatch (08P01)

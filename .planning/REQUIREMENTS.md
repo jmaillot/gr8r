@@ -14,8 +14,8 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 
 - [ ] **SEARCH-01**: A member can search task titles and descriptions with plain keywords from the existing Ctrl-K palette (no query syntax required)
 - [ ] **SEARCH-02**: Search results only include tasks the member can read (memberCanReadProject enforced server-side, byte-level leak tests)
-- [ ] **SEARCH-03**: The search index stays in sync with every task write (funnel diff sync + boot rebuild sweep), on both SQLite (FTS5) and pg (equivalent behavior through db-adapter.mjs)
-- [ ] **SEARCH-04**: French/English accented text is searchable (tokenizer decision locked at table creation, accent-insensitive matching)
+- [x] **SEARCH-03**: The search index stays in sync with every task write (funnel diff sync + boot rebuild sweep), on both SQLite (FTS5) and pg (equivalent behavior through db-adapter.mjs)
+- [x] **SEARCH-04**: French/English accented text is searchable (tokenizer decision locked at table creation, accent-insensitive matching)
 
 ## Admin Dashboard
 
@@ -76,8 +76,8 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 | VIEW-03 | Phase 57 | Complete |
 | SEARCH-01 | Phase 58 | Pending |
 | SEARCH-02 | Phase 58 | Pending |
-| SEARCH-03 | Phase 58 | Pending |
-| SEARCH-04 | Phase 58 | Pending |
+| SEARCH-03 | Phase 58 | Complete |
+| SEARCH-04 | Phase 58 | Complete |
 | PUSH-01 | Phase 59 | Pending |
 | PUSH-02 | Phase 59 | Pending |
 | PUSH-03 | Phase 59 | Pending |
