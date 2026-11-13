@@ -6138,6 +6138,61 @@ async function handleApi(req, res, url) {
     return json(res, 200, { member: targetMemberId, projects });
   }
 
+  /* Phase 60 (DASH-01..04, D-04): the admin aggregate dashboard — overdue,
+     load, upcoming and activity in ONE payload computed server-side over the
+     RAW stored doc. Power-admin ruling (2026-11-12): this route deliberately
+     INVERTS the export route's docForClient rule — admins see full
+     private-project content here; the requireWorkspace('admin') gate below is
+     the only protection (D-52-4: the server gate is the control). Gate order
+     copied verbatim from the Phase 52 route above: regex match →
+     requireWorkspace → if (!ctx) return → sameOrigin → fail() exits, all
+     BEFORE any doc parse. Read-copy posture: normalizeProjects on the parsed
+     copy, the stored bytes are never written. */
+  const wsDashboardMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/dashboard$/);
+  if (wsDashboardMatch && method === 'GET') {
+    const ctx = await requireWorkspace(req, res, wsDashboardMatch[1], 'admin');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    /* Server date anchor: the due-reminder funnel's own date helper (tz.js
+       localParts through resolveTz — D-06: windows are server-side, one
+       definition; the '' zone label rides the resolveTz default-zone
+       fallback the whole app shares). Due dates are 'YYYY-MM-DD' strings —
+       the same string compares the reminder pass uses. */
+    const today = localParts('', new Date()).date;
+    const addDaysIso = (iso, n) => {
+      const d = new Date(`${iso}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const doc = JSON.parse(ctx.ws.doc);
+    normalizeProjects(doc);
+    const projectsById = new Map((doc?.data?.projects || []).map(p => [p?.id, p]));
+    const tasks = doc?.data?.tasks || [];
+    /* DASH-01/D-10: overdue groups per project, oldest group first, tasks
+       within groups by dueDate ascending — mirroring store.js isOver's
+       semantic (due && status !== 'done' && due < today). */
+    const isOverdue = t => t?.due && !t.archived && t.status !== 'done' && today > t.due;
+    const groups = new Map();
+    for (const t of tasks) {
+      if (!isOverdue(t)) continue;
+      const g = groups.get(t.project) || {
+        projectId: t.project,
+        projectName: projectsById.get(t.project)?.name || t.project || '',
+        tasks: [],
+      };
+      g.tasks.push({ key: t.key || t.id, name: t.title || t.key || t.id, due: t.due });
+      groups.set(t.project, g);
+    }
+    const overdue = [...groups.values()]
+      .map(g => ({ ...g, tasks: g.tasks.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0)) }))
+      .sort((a, b) => {
+        const aMin = a.tasks[0].due;
+        const bMin = b.tasks[0].due;
+        return aMin < bMin ? -1 : aMin > bMin ? 1 : 0;
+      });
+    return json(res, 200, { overdue, load: [], upcoming: [], activity: [] });
+  }
+
   /* -------------------- project membership & the guest toggle --------------------
      Phase 50 (INV-02 / VIS-04, D-50-1/2/4/7): the post-invite edit surface.
      Scope (p.members add/remove) and status (in/out via the same list) are
