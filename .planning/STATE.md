@@ -5,15 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 60
 current_phase_name: Admin Dashboard & Member Self-View
 status: executing
-stopped_at: Phase 59 complete, ready to plan Phase 60
-last_updated: "2026-11-13T15:52:16.404Z"
-state_head: 3ac2a691e60c6204fb443e6f53efc2796f52f4c5
+stopped_at: Phase 60 context gathered
+last_updated: "2026-11-13T16:24:32.864Z"
+state_head: 918f24909bcd357f3c709d3d0f178076fd4d6a73
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 14
   completed_plans: 14
-  percent: 67
 ---
 
 # STATE.md
@@ -101,9 +100,9 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T12:35:00.000Z
-**Stopped at:** Phase 59 complete, ready to plan Phase 60
-**Resume file:** .planning/phases/59-browser-push/59-03-SUMMARY.md
+**Last session:** 2026-11-13T16:24:32.795Z
+**Stopped at:** Phase 60 context gathered
+**Resume file:** .planning/phases/60-admin-dashboard-member-self-view/60-CONTEXT.md
 
 **Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
 **Next action:** `/gsd-discuss-phase 60` — Phase 60: Admin Dashboard & Member Self-View (phase 59 complete 3/3)
