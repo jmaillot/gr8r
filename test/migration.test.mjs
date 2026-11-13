@@ -522,7 +522,6 @@ const EXPECTED_DEFAULTS = {
   push_comment: true,
   push_due: true,
   mention_all: true,
-  assign_self: true,
 };
 
 test('a later workspace joiner reads the all-default prefs, never the stale workspace object (D-11)', async () => {

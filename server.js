@@ -1569,14 +1569,19 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
    HTTP response and their failures are logged, not surfaced. */
 /* REM-05: reminder emails ride the same pipeline — both reminder notif types
    gate on the single `email_reminder` pref (D-27-5). */
-/* PREFS (Phase 34, D-03/D-09): the exact 17-key whitelist and the 13-key
+/* PREFS (Phase 34, D-03/D-09): the exact 13-key whitelist and the 11-key
    default layer (emptyDoc's set; email_comment is the ONLY false). The legacy
    push toggle for due dates was removed with gap G-37-2 — D-09 (Phase 59)
    amends that standing ruling: push_due is LIVE again as the reminder-push
-   pref, read by the Plan 02 reminder fan-out. The 4 extra
-   keys (mention_team, mention_ws, assign_status, assign_over) have NO default —
-   undefined-falsy preserves the D-09 zero-change switch-over; a PUT upsert
-   writes them explicitly once toggled. */
+   pref, read by the Plan 02 reminder fan-out. D-04 (Phase 61, 2026-11-13)
+   removed the 4 dead keys — no reader and no settings toggle since
+   projectsstudio#18, see docs/notification-audit.md for the per-key rulings —
+   from both the whitelist and (for the one dead key that still carried a
+   default) the default layer, following the push_due Phase 37 precedent. A PUT
+   carrying a removed key gets 400 unknownPrefKey (the accepted migration);
+   legacy stored rows holding the keys are silently dropped by
+   getStoredNotifPrefs' whitelist filter below — read-side absorption, no data
+   task. */
 const NOTIF_PREF_KEYS = [
   'email_mention',
   'email_assign',
@@ -1591,10 +1596,6 @@ const NOTIF_PREF_KEYS = [
   'past_due',
   'mention_all',
   'mention_team',
-  'mention_ws',
-  'assign_self',
-  'assign_status',
-  'assign_over',
 ];
 
 /* VIEWS (Phase 57, D-11/D-12): the viewOf() snapshot whitelist — a saved blob
@@ -1632,7 +1633,6 @@ const NOTIF_PREF_DEFAULTS = {
   push_comment: true,
   push_due: true,
   mention_all: true,
-  assign_self: true,
 };
 
 async function getStoredNotifPrefs(userId, workspaceId) {
@@ -1661,7 +1661,7 @@ async function getStoredNotifPrefs(userId, workspaceId) {
 /* PREFS (Phase 34, D-04): the ONLY reader of per-user notification prefs —
    one prepared SELECT, JSON.parse with a try/catch backstop (malformed or
    unreadable rows read as {}), merged over the defaults. `=== false` disables;
-   everything else (including the 4 undefined-falsy keys) stays on. */
+   everything else (including mention_team, the one undefined-falsy key) stays on. */
 async function getUserNotifPrefs(userId, workspaceId) {
   return { ...NOTIF_PREF_DEFAULTS, ...(await getStoredNotifPrefs(userId, workspaceId)) };
 }

@@ -6,20 +6,20 @@
    precedent, D-05): the workspace document is never a prefs carrier again (D-01). */
 export const NOTIF_PREFS_KEY_PREFIX = 'projects.notifPrefs.';
 
-/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 12 keys, email_comment
+/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 11 keys, email_comment
    the ONLY false. The legacy push toggle for due dates was removed with gap
    G-37-2 and RESTORED by D-09 (Phase 59) on BOTH sides (whitelist parity
    preserved) — push_due is the live reminder-push pref; the foreground toast
-   path in core/push.js still never maps due rows (server-side only). The
-   settings UI row for push_due lands in Phase 59 plan 03 (with i18n keys).
-   email_digest,
-   mention_team, mention_ws, assign_status, assign_over read undefined-falsy —
+   path in core/push.js still never maps due rows (server-side only).
    email_digest is a real OPT-IN as of Phase 38 (D-14: stored true = on,
    undefined/false = off; the digest replaces individual reminder emails) — the
-   same shape the server accessor produces for a user with no row. Since
-   projectsstudio#18 the mention_ws and assign_* toggles no longer RENDER in
-   the settings UI (no emission-code reader — notification-audit), but the
-   keys stay whitelisted on both sides so legacy stored rows round-trip. */
+   same shape the server accessor produces for a user with no row; it reads
+   undefined-falsy, as does mention_team. D-04 (Phase 61, 2026-11-13) removed
+   the 4 dead keys — no reader, no settings toggle since projectsstudio#18,
+   see docs/notification-audit.md — from the defaults and the whitelist on
+   BOTH sides (parity rule), following the push_due Phase 37 precedent.
+   Legacy blobs holding the keys are dropped by sanitize below — read-side
+   absorption, no migration. */
 export const NOTIF_PREF_DEFAULTS = {
   email_mention: true,
   email_assign: true,
@@ -32,19 +32,16 @@ export const NOTIF_PREF_DEFAULTS = {
   push_comment: true,
   push_due: true,
   mention_all: true,
-  assign_self: true,
 };
 
-/* The 17 keys the settings UI can toggle — the server PUT whitelist plus the
-   four undefined-falsy extras. Read-side validation drops anything else, so a
-   tampered or stale blob cannot inject arbitrary keys into app state. */
+/* The 13 keys the settings UI can toggle — the server PUT whitelist plus
+   email_digest and mention_team (the two undefined-falsy extras). Read-side
+   validation drops anything else, so a tampered or stale blob cannot inject
+   arbitrary keys into app state. */
 export const NOTIF_PREF_KEYS = [
   ...Object.keys(NOTIF_PREF_DEFAULTS),
   'email_digest', // opt-in key (Phase 38, D-14): toggleable but NOT defaulted — undefined-falsy
   'mention_team',
-  'mention_ws',
-  'assign_status',
-  'assign_over',
 ];
 
 export const notifPrefsKey = workspaceId => NOTIF_PREFS_KEY_PREFIX + (workspaceId || 'local');

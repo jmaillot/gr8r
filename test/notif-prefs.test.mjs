@@ -20,9 +20,11 @@ let ws; // { id, slug }
 let stranger; // signed up, never a member
 let bob; // invited member (test i)
 
-/* The 12-key default layer the accessor must reproduce (email_comment the ONLY false;
+/* The 11-key default layer the accessor must reproduce (email_comment the ONLY false;
    email_digest is an opt-in — undefined-falsy since Phase 38's default inversion, D-14;
-   push_due live again per the D-09 G-37-2 amendment, Phase 59). */
+   push_due live again per the D-09 G-37-2 amendment, Phase 59). assign_self was removed
+   with the other three dead keys per D-04 (Phase 61, 2026-11-13) — the default layer
+   carries only keys with live readers. */
 const DEFAULTS = {
   email_mention: true,
   email_assign: true,
@@ -35,7 +37,6 @@ const DEFAULTS = {
   push_comment: true,
   push_due: true,
   mention_all: true,
-  assign_self: true,
 };
 
 const prefsRows = () =>
@@ -91,6 +92,43 @@ test('PUT with an unknown key is rejected with 400', async () => {
   assert.equal(res.status, 400, `unknown key rejected ${res.status}`);
   assert.equal(res.data.code, 'unknownPrefKey');
   assert.equal(prefsRows().length, 1, 'the rejected PUT wrote nothing');
+});
+
+/* ------------------- (b2) removed dead keys reject 400 (D-04, Phase 61) ------------------- */
+
+test('PUT carrying a removed dead key is rejected 400 unknownPrefKey (D-04, Phase 61)', async () => {
+  for (const key of ['mention_ws', 'assign_self', 'assign_status', 'assign_over']) {
+    const res = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { [key]: true } });
+    assert.equal(res.status, 400, `${key} PUT rejected ${res.status}`);
+    assert.equal(res.data.code, 'unknownPrefKey', `${key} rejected as unknown`);
+  }
+  assert.equal(prefsRows().length, 1, 'the rejected PUTs wrote nothing');
+  const got = await owner.get(`/api/me/notif-prefs?workspace=${ws.id}`);
+  assert.equal('assign_self' in got.data.prefs, false, 'no assign_self in accessor output — the default layer dropped it (D-04)');
+});
+
+test('GET drops legacy stored keys — the read filter absorbs removed keys, no migration (D-04)', async () => {
+  // Plant the legacy shape directly in the stored row: removed keys ride along
+  // with the legitimate stored state. getStoredNotifPrefs whitelist-filters at
+  // the single read point, so the row itself needs no migration (D-04).
+  const raw = withDb(server.dbPath, db => db.prepare('select prefs from user_notif_prefs where workspace_id = ?').get(ws.id));
+  const legacy = JSON.parse(raw.prefs);
+  legacy.mention_ws = true;
+  legacy.assign_self = false;
+  legacy.assign_status = true;
+  legacy.assign_over = false;
+  withDb(server.dbPath, db =>
+    db.prepare('update user_notif_prefs set prefs = ? where workspace_id = ?').run(JSON.stringify(legacy), ws.id),
+  );
+
+  const got = await owner.get(`/api/me/notif-prefs?workspace=${ws.id}`);
+  assert.equal(got.status, 200, `GET legacy row ${got.status}`);
+  for (const k of ['mention_ws', 'assign_self', 'assign_status', 'assign_over']) {
+    assert.equal(k in got.data.prefs, false, `${k} absent from accessor output`);
+  }
+  assert.equal(got.data.prefs.email_reminder, false, 'the surviving stored keys still read back');
+  // Stored state at this point (from (a)): email_reminder=false, push_comment=false.
+  assert.deepEqual(got.data.prefs, { ...DEFAULTS, email_reminder: false, push_comment: false }, 'legacy row reads exactly as defaults + surviving stored state');
 });
 
 /* ------------------- (c) values coerced to boolean ------------------- */
@@ -175,7 +213,7 @@ test('a user with no row reads the all-ON defaults — empty stored prefs read a
   const freshWs = withDb(server.dbPath, db => db.prepare('select id from workspaces where slug = ?').get('defaults-ws'));
   const got = await owner.get(`/api/me/notif-prefs?workspace=${freshWs.id}`);
   assert.equal(got.status, 200);
-  assert.deepEqual(got.data.prefs, DEFAULTS, 'no row → the exact 12-key default set');
+  assert.deepEqual(got.data.prefs, DEFAULTS, 'no row → the exact 11-key default set');
 
   // An empty stored prefs object reads as defaults too.
   await owner.put('/api/me/notif-prefs', { workspace: freshWs.id, prefs: {} });
@@ -194,7 +232,7 @@ test('two users with exactly equal prefs remain two distinct rows, accessor outp
 
   // Same prefs, deliberately different key insertion order. Under WR-01 merge
   // semantics both rows carry every earlier stored key, so both users write
-  // the same FULL 12-key object — equality is then well-defined per key.
+  // the same FULL 11-key object — equality is then well-defined per key.
   const full = { ...DEFAULTS, email_reminder: false, email_mention: false };
   const a = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_reminder: false, email_mention: false, ...full } });
   const b = await bob.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { email_mention: false, email_reminder: false, ...full } });

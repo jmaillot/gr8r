@@ -25,7 +25,7 @@ test('(a) an absent key reads the all-ON defaults (email_comment the only false)
   backing.clear();
   const prefs = getLocalNotifPrefs('ws-a');
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
-  assert.equal(Object.keys(prefs).length, 12);
+  assert.equal(Object.keys(prefs).length, 11);
   assert.equal(prefs.email_comment, false);
   for (const [k, v] of Object.entries(prefs)) {
     if (k !== 'email_comment') assert.equal(v, true, `${k} defaults ON`);
@@ -93,15 +93,17 @@ test('(e) storage exceptions are swallowed in both directions', async () => {
   }
 });
 
-/* The 17-key whitelist surface the read-side sanitizer enforces (12 defaults +
-   email_digest (opt-in, D-14) + the 4 undefined-falsy extras — push_due live
-   again per the D-09 G-37-2 amendment, Phase 59). */
-test('whitelist is the 12 defaults plus the 4 undefined-falsy extras', () => {
-  assert.equal(NOTIF_PREF_KEYS.length, 17);
+/* The 13-key whitelist surface the read-side sanitizer enforces (11 defaults +
+   email_digest (opt-in, D-14) + mention_team — the two undefined-falsy extras;
+   push_due live again per the D-09 G-37-2 amendment, Phase 59; the 4 dead keys
+   removed per D-04, Phase 61). */
+test('whitelist is the 11 defaults plus the 2 undefined-falsy extras', () => {
+  assert.equal(NOTIF_PREF_KEYS.length, 13);
   assert.ok(NOTIF_PREF_KEYS.includes('push_due'), 'push_due whitelisted again (D-09)');
   assert.ok(NOTIF_PREF_KEYS.includes('email_digest'), 'email_digest stays whitelisted (opt-in, D-14)');
-  for (const k of ['mention_team', 'mention_ws', 'assign_status', 'assign_over']) {
-    assert.ok(NOTIF_PREF_KEYS.includes(k), `${k} whitelisted`);
+  assert.ok(NOTIF_PREF_KEYS.includes('mention_team'), 'mention_team whitelisted');
+  for (const k of ['mention_ws', 'assign_self', 'assign_status', 'assign_over']) {
+    assert.equal(NOTIF_PREF_KEYS.includes(k), false, `${k} removed from the whitelist (D-04, Phase 61)`);
   }
 });
 
