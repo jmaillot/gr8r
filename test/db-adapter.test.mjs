@@ -15,7 +15,8 @@ import { spawnSync } from 'node:child_process';
 import url from 'node:url';
 
 import * as adapter from '../db-adapter.mjs';
-import { startServer } from './helpers/server.mjs';
+import { searchTerms } from '../search-terms.mjs';
+import { startServer, withDb, withPg } from './helpers/server.mjs';
 
 const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
@@ -188,6 +189,13 @@ test('toPgSql never sees parameter values (pure SQL-text transform, T-45-01)', (
   // The function signature takes only SQL text; assert it is string-in/string-out.
   assert.equal(adapter.toPgSql.length, 1);
   assert.equal(typeof adapter.toPgSql('select 1'), 'string');
+});
+
+test('toPgSql: ? AFTER a quoted literal continues the $n sequence (58-02 regression pin)', () => {
+  // The counter must span literal parts: a ? placed after a single-quoted
+  // literal once renumbered back to $1 → bind-count mismatch (08P01).
+  const out = adapter.toPgSql("insert into t (a, b) values (?, to_tsvector('simple', ?))");
+  assert.match(out, /values \(\$1, to_tsvector\('simple', \$2\)\)/);
 });
 
 /* ---- sqliteOnly capability gate (D-09) ------------------------------- */
@@ -412,8 +420,110 @@ test('connectDb refuses a non-postgres:// DB_URL loudly (D-04 spirit)', async ()
   );
 });
 
-/* ---- dependencies pin (D-02 amendment of D-12, 54-02 amendment) -------- */
-test('package.json runtime dependencies are exactly { pg, @office-kit/xlsx } (D-12 as amended)', () => {
+/* ---- FTS parity suite (Phase 58, SEARCH-03/04, D-11/D-12/D-13) ---------
+   One scenario driver, run against BOTH backends: SQLite always, pg via
+   the opt-in POSTGRES_TEST_URL gate (pg-matrix D-08 idiom — skipped,
+   exit 0, when the variable is unset). Every row goes through the
+   exported adapter seam; the only raw SQL is fixture setup the suite
+   already performs (direct index-row corruption for the sweep-heal
+   case). ---------------------------------------------------------------- */
+
+function ftsFixtureDoc() {
+  return {
+    data: {
+      tasks: [
+        { id: 't-elo', project: 'p1', title: 'Élodie fiche carte', desc: 'Livraison rapide', status: 'todo' },
+        { id: 't-other', project: 'p1', title: 'Autre chose', desc: 'wrap body', status: 'todo' },
+      ],
+    },
+  };
+}
+
+async function ftsParityScenario(kind, connectOpts) {
+  await adapter.connectDb(connectOpts);
+  assert.equal(adapter.backendKind, kind);
+  await adapter.ensureSearchIndex();
+  const ws = `parity-${kind}`;
+  /* Clean slate from any prior run against the same database. */
+  await adapter.run(kind === 'pg' ? 'delete from task_search_projection where workspace_id = ?' : 'delete from task_fts where ws_id = ?', [ws]);
+  await adapter.run('delete from fts_meta where workspace_id = ?', [ws]);
+
+  const doc = ftsFixtureDoc();
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, ws, null, doc));
+  const ids = q => adapter.searchTasks(ws, searchTerms(q)).then(h => h.map(r => r.task_id));
+
+  /* Accent-folded match, both query sides (D-11/D-12, SEARCH-04). */
+  assert.deepEqual(await ids('elodie'), ['t-elo']);
+  assert.deepEqual(await ids('Élodie'), ['t-elo']);
+  /* Prefix (D-13). */
+  assert.deepEqual(await ids('elo'), ['t-elo']);
+  /* Implicit AND, positive and negative. */
+  assert.deepEqual(await ids('fiche carte'), ['t-elo']);
+  assert.deepEqual(await ids('fiche absentmot'), []);
+
+  /* Edit via syncTaskFts: old terms unindexed, new ones indexed. */
+  const renamed = { data: { tasks: [{ ...doc.data.tasks[0], title: 'Renamed zut' }, doc.data.tasks[1]] } };
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, ws, doc, renamed));
+  assert.deepEqual(await ids('elodie'), []);
+  assert.deepEqual(await ids('zut'), ['t-elo']);
+
+  /* Delete via syncTaskFts: nothing left to find (SEARCH-03 empty edge). */
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, ws, renamed, { data: { tasks: [renamed.data.tasks[1]] } }));
+  assert.deepEqual(await ids('zut'), []);
+
+  /* Corrupt the index directly; the boot sweep must heal it (D-08). */
+  if (kind === 'pg') {
+    await withPg(PG_URL, async pool => {
+      await pool.query('delete from task_search_projection where workspace_id = $1', [ws]);
+    });
+  } else {
+    withDb(connectOpts.dbPath, db => db.prepare('delete from task_fts where ws_id = ?').run(ws));
+  }
+  const swept = await adapter.ftsSweep(ws, ftsFixtureDoc());
+  assert.equal(swept, 2, 'the sweep must rebuild the corrupted workspace');
+  assert.deepEqual(await ids('elodie'), ['t-elo']);
+  /* A healthy workspace is a cheap no-op on repeat. */
+  assert.equal(await adapter.ftsSweep(ws, ftsFixtureDoc()), 0);
+
+  /* Deterministic tie ordering: identical titles → task_id tiebreak,
+     stable across repeated runs (SEARCH-03 ordering edge). */
+  const tieWs = `parity-tie-${kind}`;
+  const tie = {
+    data: {
+      tasks: [
+        { id: 'a1', project: 'p1', title: 'Same titre', desc: 'same body' },
+        { id: 'a2', project: 'p1', title: 'Same titre', desc: 'same body' },
+      ],
+    },
+  };
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, tieWs, null, tie));
+  const o1 = (await adapter.searchTasks(tieWs, searchTerms('same'))).map(h => h.task_id);
+  const o2 = (await adapter.searchTasks(tieWs, searchTerms('same'))).map(h => h.task_id);
+  assert.deepEqual(o1, ['a1', 'a2']);
+  assert.deepEqual(o1, o2);
+
+  await adapter.close();
+}
+
+test('FTS parity on SQLite: elodie→Élodie, prefix, implicit AND, update, delete, sweep heal, deterministic ties (SEARCH-03/04)', async () => {
+  const dbPath = tmpDbPath();
+  try {
+    await ftsParityScenario('sqlite', { dbPath });
+  } finally {
+    fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+  }
+});
+
+/* pg sibling — POSTGRES_TEST_URL-gated (pg-matrix D-08 idiom): runbook
+   docker run -d --name pg-matrix -p 127.0.0.1:5433:5432 \
+     -e POSTGRES_PASSWORD=postgres postgres:17-alpine */
+const PG_URL = process.env.POSTGRES_TEST_URL;
+const pgMaybe = PG_URL ? test : test.skip;
+pgMaybe('FTS parity on pg: same scenario, same results as SQLite (SEARCH-03/04, D-12 folded projection)', async () => {
+  await ftsParityScenario('pg', { dbUrl: PG_URL });
+});
+
+/* ---- dependencies pin (D-02 amendment of D-12, 54-02 amendment) -------- */test('package.json runtime dependencies are exactly { pg, @office-kit/xlsx } (D-12 as amended)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies, 'dependencies key required — pg presence is fail-closed (D-04)');
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@office-kit/xlsx', 'pg']); // +@office-kit/xlsx: the workbook writer, exact pin 0.26.1 approved through the blocking-human package-legitimacy checkpoint (54-02, T-54-SC)
