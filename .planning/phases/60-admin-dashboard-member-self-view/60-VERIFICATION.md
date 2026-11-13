@@ -6,7 +6,7 @@ score: 14/14 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 covered_files: [".planning/phases/60-admin-dashboard-member-self-view/60-01-PLAN.md", ".planning/phases/60-admin-dashboard-member-self-view/60-02-PLAN.md", ".planning/phases/60-admin-dashboard-member-self-view/60-03-PLAN.md", ".planning/phases/60-admin-dashboard-member-self-view/60-01-SUMMARY.md", ".planning/phases/60-admin-dashboard-member-self-view/60-02-SUMMARY.md", ".planning/phases/60-admin-dashboard-member-self-view/60-03-SUMMARY.md", "server.js", "src/pages/dashboard.js", "src/pages/settings.js", "src/pages/members.js", "src/shell/render.js", "src/shell/layout.js", "src/core/api.js", "src/locales/en.json", "src/locales/fr.json", "test/dashboard.test.mjs", "test/dashboard-client.test.mjs", "test/self-visibility.test.mjs", "test/helpers/dashboard-client-loader.mjs", "e2e/dashboard.spec.mjs"]
-covered_digest: "v4:sha256:31d401f685bf3da8aeaf8fc65d6283322be7776af471aa9c6aeb9f85f2df8022"
+covered_digest: "v2:sha256:5c8bfeccfa1e49a81e0de95cfee577f9d40cb7e9c745366b7372a4d0540b20f0"
 re_verification:
   previous_status: gaps_found
   previous_score: 12/14

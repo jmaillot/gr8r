@@ -26,7 +26,7 @@ the Phase 34 guarded-migration recipe when needed), full suite green, EN+FR i18n
 - [x] **Phase 57: Views, Columns & General Access** - column show/hide, saved views in server rows, General-Access granularity beyond private/public (completed 2026-11-12)
 - [x] **Phase 58: Full-Text Search** - FTS5 over task titles + descriptions, permission-filtered, wired into Ctrl-K (completed 2026-11-13)
 - [x] **Phase 59: Browser Push** - server push fan-out for mentions + assignments via web-push@4.0.0 (completed 2026-11-13)
-- [ ] **Phase 60: Admin Dashboard & Member Self-View** - power-admin workspace dashboard + TRN-02 member transparency self-view
+- [x] **Phase 60: Admin Dashboard & Member Self-View** - power-admin workspace dashboard + TRN-02 member transparency self-view (completed 2026-11-13)
 - [ ] **Phase 61: Notification Trim** - D-05-ruling-gated trim application, one-click suppression, burst coalescing
 
 ## Phase Details
@@ -170,7 +170,7 @@ their own redacted access picture.
      (private+invite, team link, non-private, per-person/per-team grant) — and the
      response never exposes other members' access rows (cross-member grants appear
      without names), proven by byte-level shape tests per role (TRN-01, TRN-02)
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 Plans:
 - [x] 60-03-PLAN.md
 
@@ -210,7 +210,7 @@ D-05 owner rulings arriving during execution
 | 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
 | 58. Full-Text Search | 4/4 | Complete    | 2026-11-13 |
 | 59. Browser Push | 3/3 | Complete    | 2026-11-13 |
-| 60. Admin Dashboard & Member Self-View | 3/3 | In Progress|  |
+| 60. Admin Dashboard & Member Self-View | 3/3 | Complete    | 2026-11-13 |
 | 61. Notification Trim | 0/? | Not started | - |
 
 ## Backlog

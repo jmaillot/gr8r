@@ -2,17 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v2.2
 milestone_name: Notifications, Search & Delivery
-current_phase: 60
-current_phase_name: Admin Dashboard & Member Self-View
+current_phase: 61
+current_phase_name: Notification Trim
 status: executing
-stopped_at: Completed 60-03-PLAN.md (gap closure)
-last_updated: "2026-11-13T19:17:18.490Z"
-state_head: d5ebf5c3b79f4334b5330358ec156f807748980b
+stopped_at: Phase 60 complete, ready to plan Phase 61
+last_updated: "2026-11-13T19:26:54.982Z"
+state_head: 5feb1a7a0730d638ea520bf36d5fd0fe932d5c99
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 17
   completed_plans: 17
+  percent: 83
 ---
 
 # STATE.md
@@ -26,10 +27,10 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 60 (Admin Dashboard & Member Self-View) — EXECUTING
-**Plan:** 3 of 3
+**Phase:** 61 — Notification Trim
+**Plan:** Not started
 
-**Progress:**[███████░░░] 67%
+**Progress:**[████████░░] 83%
 
 ```
 [##########]----------  0/6 phases
@@ -105,7 +106,7 @@ dashboards) without breaking the zero-dependency discipline
 ## Session Continuity
 
 **Last session:** 2026-11-13T19:17:11.143Z
-**Stopped at:** Completed 60-03-PLAN.md (gap closure)
+**Stopped at:** Phase 60 complete, ready to plan Phase 61
 **Resume file:** None
 
 **Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
