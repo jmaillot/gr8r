@@ -139,7 +139,15 @@ contract); extends the Phase 48 badge/permission foundation
   5. VAPID keys persist server-side across restarts (env/config in /data, MASTER_KEY
      custody pattern) with the DEPLOY.md runbook documented; a restart does not
      orphan existing subscriptions (PUSH-05)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+- [ ] 59-01-PLAN.md — web-push@4.0.0 dep + push_subscriptions dual-backend SCHEMA mirror [BLOCKING] + VAPID /data custody + push routes + D-09 push_due re-livening + DEPLOY.md §16 (PUSH-05, PUSH-01 server half)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 59-02-PLAN.md — sendPushFor fan-out beside queueNotifEmails at both sites, D-11 gates, ≤4096 payload budget, 404/410 sweep, per-device test-send route (PUSH-02/03/04)
+- [ ] 59-03-PLAN.md — SW push handler (D-12 suppression, zero-strings contract), client subscribe helpers, Settings master toggle + device list + per-device test push, i18n EN+FR, phase gate + real-device UAT checkpoint (PUSH-01/03)
 
 ### Phase 60: Admin Dashboard & Member Self-View
 
