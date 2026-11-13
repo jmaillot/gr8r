@@ -35,6 +35,7 @@ import {
   visibleProjects,
 } from '../core/store.js';
 import { api, applyUser, registerAuthRevokedHandler } from '../core/api.js';
+import { searchTasksServer } from '../core/search-server.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
 import { mutate, toast } from '../ui/toast.js';
@@ -2980,6 +2981,29 @@ A.palRun = el => {
 IN.searchQ = el => {
   S.ui.searchQ = el.value;
   render();
+};
+/* Phase 58 (D-05): one abortable server search per /search query. The page render
+   calls this with the current query on every pass (all entry paths covered —
+   keystroke, palette "view all", deep link); the q guard makes it one fetch per
+   query, a newer query aborts the prior request, and searchTasksServer silently
+   degrades so nothing ever surfaces an error. Results land in S.ui.searchServer
+   and re-render. */
+let searchPageCtrl = null;
+let searchPageQ = '';
+A.searchPageServer = q => {
+  if (!api.enabled || !q) return;
+  if (searchPageQ === q) return;
+  searchPageCtrl?.abort();
+  searchPageCtrl = new AbortController();
+  const mine = searchPageCtrl;
+  searchPageQ = q;
+  searchTasksServer(q, mine.signal)
+    .then(res => {
+      if (searchPageQ !== q) return; // stale — discard
+      S.ui.searchServer = { q, tasks: res.tasks || [] };
+      render();
+    })
+    .catch(() => {});
 };
 A.setSearch = el => {
   S.ui.searchQ = el.dataset.q;
