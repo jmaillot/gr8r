@@ -74,6 +74,8 @@ function splitLiterals(sql) {
 export function toPgSql(sql) {
   const parts = splitLiterals(sql);
   let pgConflict = null; // 'nothing' | { target, sets: [col, ...] }
+  let n = 0; // GLOBAL ? → $n counter — must span literal parts, else a ?
+  // placed after a quoted literal renumbers from $1 (bind-count mismatch).
 
   const rewritten = parts.map(({ lit, text }) => {
     if (lit) return text;
@@ -112,8 +114,7 @@ export function toPgSql(sql) {
     // remaining col collate nocase → lower(col) (order by / bare references)
     out = out.replace(/([A-Za-z_][\w.]*)\s+collate\s+nocase/gi, (_m, col) => `lower(${col})`);
 
-    // ? → $1..$n in order
-    let n = 0;
+    // ? → $1..$n in order (global across literal parts — see hoisted counter)
     out = out.replace(/\?/g, () => `$${++n}`);
     return out;
   });
@@ -444,16 +445,21 @@ export async function tx(fn) {
   return sqliteTx(() => sqliteTxScope(fn));
 }
 
-/* ---- full-text search seam (Phase 58, SEARCH-01/03, D-07/D-09/D-11) ----
+/* ---- full-text search seam (Phase 58, SEARCH-01/03/04, D-07/D-09/D-11/D-12)
    The shadow `task_fts` index is maintained EXPLICITLY by the adapter
    (D-09: no SQLite triggers — one code path for both backends, proven by
    test). Sync is called IN-TRANSACTION by both write sites (server.js
    doc-PUT funnel + mcp.js writeDoc, D-07/D-10) and receives the TX SCOPE
    as its first argument — on pg, module-level run() inside a tx body
    would land OUTSIDE the checked-out client (Pitfall 2), so every index
-   write goes through `scope.run`. The pg branch no-ops until 58-02 (pg
-   parity via a JS-folded tsvector projection, D-12) — searchTasks
-   answers [] on pg meanwhile, never an error. */
+   write goes through `scope.run`.
+
+   pg parity (58-02, D-12): a `task_search_projection` table carries the
+   JS-folded plain text (foldForSearch — the SAME folding as the SQLite
+   index, so accent parity holds by construction) plus a tsvector built
+   with to_tsvector('simple', …) over a GIN index. NO dictionary/trigram
+   extension anywhere — folding happens in JS before the projection is
+   stored (D-12). fts_meta is the shared sweep marker on both backends. */
 
 /* The HTML-strip idiom shared with src/core/searchall.js (D-06 snippet
    model) — one space per tag so adjacent words never fuse into one
@@ -467,7 +473,18 @@ const stripTags = s => String(s ?? '').replace(/<[^>]+>/g, ' ');
    (ftsSweep, D-08) and per-workspace queries can filter without
    touching the match layer. */
 export async function ensureSearchIndex() {
-  if (backendKind !== 'sqlite') return; // pg parity lands in 58-02 (D-12)
+  if (backendKind === 'pg') {
+    // D-12: folded projection + 'simple' tsvector over GIN — no extension deps.
+    await run(`create table if not exists task_search_projection (
+    workspace_id text not null, task_id text not null, project_id text not null,
+    folded text not null, projection tsvector not null,
+    primary key (workspace_id, task_id)
+  )`);
+    await run('create index if not exists task_search_projection_ts on task_search_projection using gin (projection)');
+    // fts_meta is the shared sweep marker on BOTH backends (one ftsSweep logic).
+    await run('create table if not exists fts_meta (workspace_id text primary key, task_count integer not null default 0)');
+    return;
+  }
   await run(`create virtual table if not exists task_fts using fts5(
   ws_id UNINDEXED, task_id UNINDEXED, project_id UNINDEXED, title, body,
   tokenize = 'unicode61 remove_diacritics 2'
@@ -478,9 +495,13 @@ export async function ensureSearchIndex() {
 /* In-tx diff sync (D-07): derives the index writes from the stored-vs-next
    task diff keyed by t.id — the same Set/Map shape as the funnel's
    storedFileIds diff. No-op when no task id/title/desc/project changed.
-   Contentless-safe: plain FTS5 delete + insert per changed row. */
+   The diff loop is shared; only the row write statements branch per
+   dialect (D-09). Contentless-safe: plain FTS5 delete + insert per
+   changed row. pg: every write goes through the passed tx scope
+   (Pitfall 2) into task_search_projection via an on-conflict upsert. */
 export async function syncTaskFts(scope, wsId, storedDoc, next) {
-  if (backendKind !== 'sqlite') return; // pg parity lands in 58-02 (D-12)
+  if (!backendKind) return;
+  const pg = backendKind === 'pg';
   const stored = new Map(
     (Array.isArray(storedDoc?.data?.tasks) ? storedDoc.data.tasks : [])
       .map(t => [t?.id, t])
@@ -491,35 +512,47 @@ export async function syncTaskFts(scope, wsId, storedDoc, next) {
       .map(t => [t?.id, t])
       .filter(([id]) => id),
   );
+  const remove = (id) =>
+    pg
+      ? scope.run('delete from task_search_projection where workspace_id = ? and task_id = ?', [wsId, id])
+      : scope.run('delete from task_fts where ws_id = ? and task_id = ?', [wsId, id]);
+  const insert = (id, t) => {
+    const foldedTitle = foldForSearch(t.title).text;
+    const foldedBody = foldForSearch(stripTags(t.desc)).text;
+    return pg
+      ? scope.run(
+          `insert into task_search_projection (workspace_id, task_id, project_id, folded, projection)
+           values (?, ?, ?, ?, to_tsvector('simple', ?))
+           on conflict (workspace_id, task_id) do update set
+             project_id = excluded.project_id, folded = excluded.folded,
+             projection = to_tsvector('simple', excluded.folded)`,
+          [wsId, id, String(t.project ?? ''), `${foldedTitle} ${foldedBody}`, `${foldedTitle} ${foldedBody}`],
+        )
+      : scope.run('insert into task_fts (ws_id, task_id, project_id, title, body) values (?,?,?,?,?)', [
+          wsId,
+          id,
+          String(t.project ?? ''),
+          foldedTitle,
+          foldedBody,
+        ]);
+  };
   let moved = 0;
   for (const [id, t] of stored) {
     const nt = upcoming.get(id);
     if (nt && nt.title === t.title && nt.desc === t.desc && nt.project === t.project) continue; // unchanged → index untouched (SEARCH-03 empty edge)
-    await scope.run('delete from task_fts where ws_id = ? and task_id = ?', [wsId, id]);
-    if (nt) {
-      await scope.run('insert into task_fts (ws_id, task_id, project_id, title, body) values (?,?,?,?,?)', [
-        wsId,
-        id,
-        String(nt.project ?? ''),
-        foldForSearch(nt.title).text,
-        foldForSearch(stripTags(nt.desc)).text,
-      ]);
-    }
+    await remove(id);
+    if (nt) await insert(id, nt);
     moved++;
   }
   for (const [id, t] of upcoming) {
     if (stored.has(id)) continue; // new task → insert
-    await scope.run('insert into task_fts (ws_id, task_id, project_id, title, body) values (?,?,?,?,?)', [
-      wsId,
-      id,
-      String(t.project ?? ''),
-      foldForSearch(t.title).text,
-      foldForSearch(stripTags(t.desc)).text,
-    ]);
+    await insert(id, t);
     moved++;
   }
   if (!moved) return;
-  const counted = await scope.get('select count(*) as n from task_fts where ws_id = ?', [wsId]);
+  const counted = pg
+    ? await scope.get('select count(*) as n from task_search_projection where workspace_id = ?', [wsId])
+    : await scope.get('select count(*) as n from task_fts where ws_id = ?', [wsId]);
   await scope.run(
     'insert into fts_meta (workspace_id, task_count) values (?, ?) on conflict(workspace_id) do update set task_count = excluded.task_count',
     [wsId, counted.n],
@@ -528,10 +561,21 @@ export async function syncTaskFts(scope, wsId, storedDoc, next) {
 
 /* Terms arrive ALREADY SANITIZED (searchTerms output — [a-z0-9]+ tokens);
    the adapter is the only site that builds the match expression: implicit
-   AND of prefix tokens (`tok* tok2*`, D-13), bm25 rank order with a
-   task_id tiebreak for deterministic ordering. */
+   AND of prefix tokens (`tok* tok2*` on SQLite / `tok:* & tok2:*` on pg,
+   D-13), ranked order with a task_id tiebreak for deterministic ordering.
+   pg: ts_rank desc over the folded projection (A4 accepts ts_rank quality
+   for this scale); parameterized only (T-58-04). */
 export async function searchTasks(wsId, terms, limit = 30) {
-  if (backendKind !== 'sqlite' || !Array.isArray(terms) || !terms.length) return [];
+  if (!Array.isArray(terms) || !terms.length) return [];
+  if (backendKind === 'pg') {
+    const tsq = terms.map(t => `${t}:*`).join(' & ');
+    return all(
+      `select task_id, project_id, folded from task_search_projection
+       where workspace_id = ? and projection @@ to_tsquery('simple', ?)
+       order by ts_rank(projection, to_tsquery('simple', ?)) desc, task_id limit ?`,
+      [wsId, tsq, tsq, limit],
+    );
+  }
   const match = terms.map(t => `${t}*`).join(' ');
   return all('select task_id, project_id from task_fts where task_fts match ? and ws_id = ? order by rank, task_id limit ?', [
     match,
@@ -543,13 +587,40 @@ export async function searchTasks(wsId, terms, limit = 30) {
 /* D-08 boot sweep: cheap staleness check (marker row + live count vs
    indexed count) — rebuild this workspace's rows only when stale,
    missing or empty. Boot runs OUTSIDE any tx, so module-level run/get
-   here is correct (no scope threading). Returns the workspaces swept. */
+   here is correct (no scope threading) on both backends. pg rebuild is
+   plain delete+insert runs (no explicit tx needed in boot's single
+   process); copy-sqlite-to-pg.mjs compatibility is not required — the
+   boot sweep heals a copied-but-empty projection table (RESEARCH A2).
+   Returns the workspaces swept. */
 export async function ftsSweep(wsId, doc) {
-  if (backendKind !== 'sqlite') return 0;
+  if (!backendKind) return 0;
   const tasks = (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).filter(t => t?.id);
+  const pg = backendKind === 'pg';
   const marker = await get('select task_count as n from fts_meta where workspace_id = ?', [wsId]);
-  const indexed = await get('select count(*) as n from task_fts where ws_id = ?', [wsId]);
+  const indexed = pg
+    ? await get('select count(*) as n from task_search_projection where workspace_id = ?', [wsId])
+    : await get('select count(*) as n from task_fts where ws_id = ?', [wsId]);
   if (marker && marker.n === tasks.length && indexed.n === tasks.length) return 0; // healthy — no rewrites
+  if (pg) {
+    await run('delete from task_search_projection where workspace_id = ?', [wsId]);
+    for (const t of tasks) {
+      const foldedTitle = foldForSearch(t.title).text;
+      const foldedBody = foldForSearch(stripTags(t.desc)).text;
+      await run(
+        `insert into task_search_projection (workspace_id, task_id, project_id, folded, projection)
+         values (?, ?, ?, ?, to_tsvector('simple', ?))
+         on conflict (workspace_id, task_id) do update set
+           project_id = excluded.project_id, folded = excluded.folded,
+           projection = to_tsvector('simple', excluded.folded)`,
+        [wsId, t.id, String(t.project ?? ''), `${foldedTitle} ${foldedBody}`, `${foldedTitle} ${foldedBody}`],
+      );
+    }
+    await run(
+      'insert into fts_meta (workspace_id, task_count) values (?, ?) on conflict(workspace_id) do update set task_count = excluded.task_count',
+      [wsId, tasks.length],
+    );
+    return tasks.length;
+  }
   await run('begin immediate');
   try {
     await run('delete from task_fts where ws_id = ?', [wsId]);
