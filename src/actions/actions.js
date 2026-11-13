@@ -2530,9 +2530,22 @@ export async function refreshPushState() {
   render();
   return st;
 }
+/* D-04: Enable opens the client-chosen naming step (prefilled suggestion) —
+   the actual subscribe fires from pushEnableConfirm's own user gesture. */
 A.pushEnable = async () => {
   const m = await import('../core/push.js');
-  const r = await m.enablePush();
+  S.ui.pushNaming = m.defaultPushLabel();
+  render();
+};
+A.pushEnableCancel = () => {
+  S.ui.pushNaming = null;
+  render();
+};
+A.pushEnableConfirm = async () => {
+  const label = $('#push-name')?.value?.trim() || '';
+  S.ui.pushNaming = null;
+  const m = await import('../core/push.js');
+  const r = await m.enablePush(label);
   if (r.ok) toast(t('toast.pushEnabled'), { ms: 2000 });
   else if (r.code === 'unavailable') toast(t('err.pushUnavailable'), { kind: 'err', ms: 6000 });
   else if (r.code === 'denied') m.blockedToastOnce(); // the one-time explanatory toast (D-48-4)

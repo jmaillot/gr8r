@@ -1375,6 +1375,7 @@
   "settings.notif.pushBrowserBlocked": "Browser blocked",
   "settings.notif.pushEnable": "Push on this device",
   "settings.notif.pushEnableDesc": "Ask the browser for permission and subscribe this device to notifications.",
+  "settings.notif.pushNameLabel": "Name this device",
   "settings.notif.pushTurnOn": "Enable",
   "settings.notif.pushDue": "Due-date pushes",
   "settings.notif.pushDueDesc": "OS notification pushes when a task comes due or overdue — the two toggles below gate the inbox reminders.",

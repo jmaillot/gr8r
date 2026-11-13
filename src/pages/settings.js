@@ -533,6 +533,16 @@ export function settingsBody(sec, title) {
       const cfg = S.ui.pushConfig;
       const devices = S.ui.pushDevices || [];
       const localOn = !!S.ui.pushLocalEndpoint;
+      /* D-04: the label is CLIENT-CHOSEN at subscribe time — Enable opens an
+         inline naming step prefilled with the UA-derived suggestion, so two
+         identical setups don't collide as identical rows (59-03 UAT finding). */
+      const naming = cfg && !localOn && S.ui.pushNaming
+        ? `<div class="sblock" style="padding:8px 0"><div class="row" style="gap:8px;flex-wrap:wrap">
+             <input class="input" id="push-name" style="max-width:280px" value="${esc(S.ui.pushNaming)}" aria-label="${t('settings.notif.pushNameLabel')}">
+             <button class="btn btn-primary btn-sm" data-a="pushEnableConfirm">${t('common.save')}</button>
+             <button class="btn btn-secondary btn-sm" data-a="pushEnableCancel">${t('common.cancel')}</button>
+           </div></div>`
+        : '';
       const master = cfg
         ? srow(
             t('settings.notif.pushEnable'),
@@ -565,7 +575,8 @@ export function settingsBody(sec, title) {
         srow(t('settings.notif.pushDue'), t('settings.notif.pushDueDesc'), tog('push_due', np.push_due, 'np')) +
         srow(t('settings.notif.dueReminder'), t('settings.notif.dueReminderDesc'), tog('due_reminder', np.due_reminder, 'np')) +
         srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np')) +
-        deviceRows
+        deviceRows +
+        naming
       );
     }
     case 'notif-mentions':

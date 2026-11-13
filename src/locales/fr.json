@@ -1375,6 +1375,7 @@
   "settings.notif.pushBrowserBlocked": "Navigateur bloqué",
   "settings.notif.pushEnable": "Push sur cet appareil",
   "settings.notif.pushEnableDesc": "Demander la permission au navigateur et abonner cet appareil aux notifications.",
+  "settings.notif.pushNameLabel": "Nommez cet appareil",
   "settings.notif.pushTurnOn": "Activer",
   "settings.notif.pushDue": "Push d’échéance",
   "settings.notif.pushDueDesc": "Notifications système quand une tâche arrive à échéance ou est en retard — les deux réglages ci-dessous concernent les rappels de la boîte de réception.",
