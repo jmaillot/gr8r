@@ -413,7 +413,50 @@ after(async () => {
   await sink?.stop();
 });
 
-/* ------------------- (e) restart: identical keys load, subscriptions survive ------------------- */
+/* ------------------- (g) reminder-pass fan-out (Plan 02 Task 2, D-09/D-10) ------------------- */
+
+const triggerPass = nowIso =>
+  fetch(`${sink.base}/api/internal/reminder-pass`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-reminder-token': SINK_TOKEN },
+    body: JSON.stringify({ now: nowIso }),
+  }).then(async r => {
+    assert.equal(r.status, 200, `reminder pass ${r.status}`);
+    return (await r.json()).emitted;
+  });
+
+test('reminder pass pushes for a DIGEST user (D-10) with the inbox row untouched; push_due=false suppresses only the push (D-09)', async () => {
+  await sinkServer();
+  const DUE = '2027-01-20';
+  const AT8 = '2027-01-20T08:00:00Z';
+  // (a) digest user still gets the reminder push, inbox row written.
+  const fxDigest = await sinkWorkspace({
+    prefs: { email_digest: true },
+    tasks: m => [{ id: 'tr1', key: 'PUSH-3', title: 'Digest reminder', project: 'p1', due: DUE, assignees: [m], status: 'todo' }],
+  });
+  await subscribe(fxDigest.client, fxDigest.ws.id, 'https://push.example.com/send/g1');
+  const emitted = await triggerPass(AT8);
+  assert.equal(emitted.filter(n => n.task === 'tr1').length, 1, 'reminder emitted exactly once (reminders_sent claim)');
+  const send = sinkSends().filter(s => s.endpoint === 'https://push.example.com/send/g1').at(-1);
+  assert.ok(send, 'digest user received the reminder push (push never digest-suppressed)');
+  assert.equal(send.payload.title, 'Task due', 'D-16 reminder title carries no sender');
+  assert.equal(send.payload.body, 'PUSH-3 Digest reminder');
+  const docRow = withDb(sink.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(fxDigest.ws.id));
+  assert.match(docRow.doc, /"tr1"/, 'task present');
+  assert.match(docRow.doc, /due_reminder/, 'inbox notif row written unconditionally (Phase 38 invariant)');
+  // (b) push_due=false → no push, inbox row still written.
+  const fxOff = await sinkWorkspace({
+    prefs: { push_due: false },
+    tasks: m => [{ id: 'tr2', key: 'PUSH-4', title: 'No push', project: 'p1', due: DUE, assignees: [m], status: 'todo' }],
+  });
+  const before = sinkSends().length;
+  await triggerPass(AT8);
+  assert.equal(sinkSends().length, before, 'push_due=false produced zero pushes');
+  const docOff = withDb(sink.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(fxOff.ws.id));
+  assert.match(docOff.doc, /due_reminder/, 'inbox row survives the push gate');
+});
+
+
 
 test('restart with no env loads the SAME persisted keys and keeps subscriptions (PUSH-05 tracer proof)', async () => {
   const keysBefore = storedKeys();
