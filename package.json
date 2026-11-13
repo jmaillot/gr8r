@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@office-kit/xlsx": "0.26.1",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "web-push": "4.0.0"
   }
 }

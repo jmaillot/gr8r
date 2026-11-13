@@ -18,6 +18,14 @@
    human package-legitimacy checkpoint — server-only workbook writer,
    imported only from the repository-root export/ directory, never from
    src/. The runtime image ships export/ beside src/.
+
+   Phase 59 (2026-11-13, D-12 amended ×2): web-push joins the runtime
+   dependencies as an EXACT pin (4.0.0, no caret) — the second runtime
+   dependency — for RFC 8292 VAPID signing and RFC 8291 payload
+   encryption of browser push. Legitimacy verified pre-lock on record
+   (STATE.md D-12 amendment, 2026-11-12): canonical web-push-libs repo,
+   13.7M weekly downloads, no postinstall scripts. Imported only from
+   server.js VAPID custody and the push fan-out; never from src/.
    ===================================================================== */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,21 +37,26 @@ import pkg from '../package.json' with { type: 'json' };
 
 const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
-test('package.json runtime dependencies are exactly { @office-kit/xlsx, pg } (D-12 as amended by Phase 45 D-02 + Phase 54)', () => {
+test('package.json runtime dependencies are exactly { @office-kit/xlsx, pg, web-push } (D-12 as amended by Phase 45 D-02 + Phase 54 + Phase 59)', () => {
   assert.ok(
     pkg.dependencies,
     'package.json lost the "dependencies" key — pg must be a REQUIRED runtime dependency (Phase 45 D-02): optionalDependencies would let a broken install silently vanish, defeating D-04 fail-closed boot',
   );
   assert.deepEqual(
     Object.keys(pkg.dependencies).sort(),
-    ['@office-kit/xlsx', 'pg'],
-    `package.json runtime dependencies must be exactly { @office-kit/xlsx, pg } (Phase 45 D-02, Phase 54 T-54-SC) — found: ${Object.keys(pkg.dependencies).join(' | ')}`,
+    ['@office-kit/xlsx', 'pg', 'web-push'],
+    `package.json runtime dependencies must be exactly { @office-kit/xlsx, pg, web-push } (Phase 45 D-02, Phase 54 T-54-SC, Phase 59 D-12 ×2) — found: ${Object.keys(pkg.dependencies).join(' | ')}`,
   );
   assert.match(pkg.dependencies.pg, /^\^8\./, 'pg must stay on the 8.x line (D-01 pin)');
   assert.equal(
     pkg.dependencies['@office-kit/xlsx'],
     '0.26.1',
     '@office-kit/xlsx must be pinned EXACTLY at 0.26.1 (Phase 54 T-54-SC): no caret range — the approved version was human-verified; a floating range would silently pull an unvetted release',
+  );
+  assert.equal(
+    pkg.dependencies['web-push'],
+    '4.0.0',
+    'web-push must be pinned EXACTLY at 4.0.0 (Phase 59 D-12 amendment): no caret range — the approved version was owner-verified pre-lock; a floating range would silently pull an unvetted release',
   );
 });
 
