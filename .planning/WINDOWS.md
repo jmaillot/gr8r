@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 6
+open_count: 8
 waived_count: 0
 fixed_count: 0
-total_count: 6
-last_updated: 2026-11-01T21:04:05.746Z
+total_count: 8
+last_updated: 2026-11-13T21:32:50.162Z
 ---
 
 # Broken Windows Ledger
@@ -21,6 +21,8 @@ last_updated: 2026-11-01T21:04:05.746Z
 | 4 | 13 | unmet-truth | .planning/phases/13-investigation-invariant-pinning/13-DECISIONS.md |  | D-04 landing-phase contradiction + D-13 copy-scope ambiguity (VERIFICATION gaps, fix via gap closure) | open |  | 2026-10-26T11:23:47.982Z |  |
 | 5 | 31 | deviation | server.js |  | Interim replay-guard divergence: disable/regen step-ups still verify against users.two_fa_last_step until Plan 02 converts them to verifyTotpAgainstFactors (D-10) | open |  | 2026-11-01T20:01:00.340Z |  |
 | 6 | 31 | deviation | test/totp-rewrap.test.mjs |  | Pre-existing lint debt (13 errors) cleared by 31-03 to make the phase gate green; verified identical at pre-phase 47367c6d | open |  | 2026-11-01T21:04:05.746Z |  |
+| 7 | 61 | deviation | src/pages/dashboard.js | 36 | pre-existing Phase 60 lint error: lastRequestedWindow unused (deferred, out of 61-01 scope) | open |  | 2026-11-13T21:32:49.924Z |  |
+| 8 | 61 | deviation | test/dashboard-client.test.mjs | 17 | pre-existing Phase 60 lint error: fileURLToPath unused (deferred, out of 61-01 scope) | open |  | 2026-11-13T21:32:50.162Z |  |
 
 ````json
 [
@@ -101,6 +103,32 @@ last_updated: 2026-11-01T21:04:05.746Z
     "recorded_at": "2026-11-01T21:04:05.746Z",
     "resolved_at": null,
     "milestone": "v1.6"
+  },
+  {
+    "id": 7,
+    "kind": "deviation",
+    "phase": "61",
+    "file": "src/pages/dashboard.js",
+    "line": 36,
+    "description": "pre-existing Phase 60 lint error: lastRequestedWindow unused (deferred, out of 61-01 scope)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-13T21:32:49.924Z",
+    "resolved_at": null,
+    "milestone": "v2.2"
+  },
+  {
+    "id": 8,
+    "kind": "deviation",
+    "phase": "61",
+    "file": "test/dashboard-client.test.mjs",
+    "line": 17,
+    "description": "pre-existing Phase 60 lint error: fileURLToPath unused (deferred, out of 61-01 scope)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-13T21:32:50.162Z",
+    "resolved_at": null,
+    "milestone": "v2.2"
   }
 ]
 ````
