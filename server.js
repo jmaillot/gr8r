@@ -392,6 +392,22 @@ const SCHEMA = `
     prefs        text not null,
     primary key (workspace_id, user_id)
   );
+  /* PUSH (Phase 59, PUSH-01/PUSH-05): one row per browser push subscription,
+     endpoint UNIQUE so a re-subscribe replaces the row (insert or replace on
+     endpoint, pg conflict target '(endpoint)' in db-adapter.mjs). user_id and
+     workspace_id always come from the session (mass-assignment guard):
+     p256dh/auth are unpacked from the canonical body keys.p256dh/keys.auth
+     (subscription.toJSON() shape, POSTed verbatim by the client). */
+  create table if not exists push_subscriptions (
+    workspace_id text not null,
+    user_id      text not null,
+    endpoint     text not null unique,
+    p256dh       text not null,
+    auth         text not null,
+    label        text not null default '',
+    created_at   integer,
+    last_seen_at integer
+  );
   /* VIEWS (Phase 57, D-05/D-12): per-user saved views AND live column state —
      one row per (workspace, user, table key, view name). The document is never
      a view-state carrier again (normalizeDoc / mergeClientDoc strip the
@@ -1647,6 +1663,94 @@ async function getStoredNotifPrefs(userId, workspaceId) {
 async function getUserNotifPrefs(userId, workspaceId) {
   return { ...NOTIF_PREF_DEFAULTS, ...(await getStoredNotifPrefs(userId, workspaceId)) };
 }
+
+/* ------------------- browser push (Phase 59, PUSH-01/PUSH-05) -------------------
+
+   VAPID key custody: env (VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY) overrides the
+   persisted file (DATA_DIR/vapid-keys.json); a missing pair is generated ONCE
+   and written to the file — never regenerated over an existing file (PUSH-05
+   idempotency: a second boot loads identical keys). Unconfigured-and-
+   unpersistable = feature absent (PUSH.enabled false, routes fail-absent 404).
+   THREAT T-59-03: key VALUES never cross a log line or a route — presence,
+   source and the public key only. web-push is imported inside this function
+   (dynamic import) so the dependency stays off the hot path and test suites
+   can mock.module the seam. */
+let webpush = null;
+const PUSH = { enabled: false, publicKey: '', subject: '' };
+
+const PUSH_ENDPOINT_MAX = 2048;
+const PUSH_KEY_MAX = 512;
+const PUSH_LABEL_MAX_BYTES = 200;
+const pushEndpointOk = s => typeof s === 'string' && s.length > 0 && s.length <= PUSH_ENDPOINT_MAX && /^https:\/\//.test(s);
+const pushKeyOk = s => typeof s === 'string' && s.length > 0 && s.length <= PUSH_KEY_MAX && /^[A-Za-z0-9_-]+$/.test(s);
+
+async function initPushCustody() {
+  PUSH.enabled = false;
+  PUSH.publicKey = '';
+  try {
+    const mod = await import('web-push');
+    webpush = mod.default ?? mod;
+  } catch (err) {
+    logWarn(`push: web-push unavailable (${err.message}) — browser push disabled`);
+    return;
+  }
+  const envPub = String(process.env.VAPID_PUBLIC_KEY || '');
+  const envPriv = String(process.env.VAPID_PRIVATE_KEY || '');
+  let pub = envPub && envPriv ? envPub : '';
+  let priv = envPub && envPriv ? envPriv : '';
+  let source = pub ? 'env' : '';
+  const keyFile = path.join(DATA_DIR, 'vapid-keys.json');
+  if (!pub) {
+    try {
+      if (fs.existsSync(keyFile)) {
+        const stored = JSON.parse(fs.readFileSync(keyFile, 'utf8'));
+        if (stored?.publicKey && stored?.privateKey) {
+          pub = String(stored.publicKey);
+          priv = String(stored.privateKey);
+          source = 'file';
+        }
+      }
+    } catch (err) {
+      logWarn(`push: unreadable ${keyFile} (${err.message}) — treating as absent`);
+    }
+  }
+  if (!pub) {
+    try {
+      const generated = webpush.generateVAPIDKeys();
+      pub = String(generated.publicKey);
+      priv = String(generated.privateKey);
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(keyFile, `${JSON.stringify({ publicKey: pub, privateKey: priv }, null, 2)}\n`, { mode: 0o600 });
+      source = 'generated';
+      logWarn('push: generated a new VAPID keypair — persisted to vapid-keys.json in DATA_DIR');
+      logWarn('push: keep that file (or pin VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY): losing the keys orphans every existing subscription');
+    } catch (err) {
+      logWarn(`push: could not persist VAPID keys (${err.message}) — browser push stays disabled`);
+      return;
+    }
+  }
+  let subject = String(process.env.VAPID_SUBJECT || '');
+  if (!subject) {
+    try {
+      subject = `mailto:operator@${new URL(APP_URL).host}`;
+    } catch {
+      subject = 'mailto:operator@localhost';
+    }
+  }
+  try {
+    webpush.setVapidDetails(subject, pub, priv);
+  } catch (err) {
+    logWarn(`push: VAPID details rejected (${err.message}) — browser push disabled`);
+    return;
+  }
+  PUSH.enabled = true;
+  PUSH.publicKey = pub;
+  PUSH.subject = subject;
+  logInfo(`push: VAPID keys loaded (source: ${source}) — browser push enabled`);
+}
+
+/* sendPushFor lives in Plan 02 — the fan-out site. Plan 01 lands custody,
+   storage and the self-service routes only. */
 
 const NOTIF_EMAIL_KIND = {
   mention: 'email_mention',
@@ -4313,6 +4417,96 @@ async function handleApi(req, res, url) {
     for (const key of Object.keys(incoming)) prefs[key] = Boolean(incoming[key]);
     await db.run('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [ws.id, user.id, JSON.stringify(prefs)]);
     return json(res, 200, { prefs: await getUserNotifPrefs(user.id, ws.id) });
+  }
+
+  /* ------------------- browser push subscriptions (Phase 59, PUSH-01/PUSH-05) ------------------- */
+
+  /* Shared guard ladder, cloned from /api/me/notif-prefs: requireUser →
+     sameOrigin → workspace/member 404 no-oracle. Rows are only ever created,
+     read or deleted for the SESSION user_id (T-59-02 — body-supplied ids are
+     ignored; mass-assignment forbidden). */
+  async function pushSubscriptionWorkspace(req, res, user, bodyWorkspace) {
+    const wsId = String(url.searchParams.get('workspace') || bodyWorkspace || '');
+    const ws = wsId ? await db.get('select id from workspaces where id = ?', [wsId]) : null;
+    const member = ws ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]) : null;
+    if (!ws || !member) {
+      fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+      return null;
+    }
+    return ws;
+  }
+
+  /* PUSH-05 fail-absent: the client hides the whole Push surface when this
+     404s (MCP-01 pattern). Only the PUBLIC key ever crosses the wire (T-59-03). */
+  if (pathname === '/api/me/push-config' && method === 'GET') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    if (!PUSH.enabled) return fail(res, 404, 'pushUnavailable', 'Browser push is not configured');
+    return json(res, 200, { vapidPublicKey: PUSH.publicKey });
+  }
+
+  if (pathname === '/api/me/push-subscriptions' && method === 'GET') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const ws = await pushSubscriptionWorkspace(req, res, user);
+    if (!ws) return;
+    const rows = await db.all(
+      'select endpoint, label, created_at, last_seen_at from push_subscriptions where workspace_id = ? and user_id = ? order by created_at',
+      [ws.id, user.id],
+    );
+    return json(res, 200, { subscriptions: rows });
+  }
+
+  if (pathname === '/api/me/push-subscriptions' && method === 'POST') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req);
+    /* CANONICAL body shape {endpoint, keys:{p256dh, auth}, label} — the exact
+       shape pushManager.subscribe().toJSON() yields, so the client POSTs it
+       verbatim. Whitelist-validate every field (T-59-01): endpoint https URL,
+       p256dh/auth base64url, label byte-capped; user_id always from the
+       session. Re-subscribing an existing endpoint REPLACES the row and
+       preserves its original created_at (device-list creation date, D-03). */
+    const endpoint = body?.endpoint;
+    const keys = body?.keys;
+    if (!pushEndpointOk(endpoint) || !keys || !pushKeyOk(keys.p256dh) || !pushKeyOk(keys.auth)) {
+      return fail(res, 400, 'invalidSubscription', 'Invalid push subscription');
+    }
+    let label = '';
+    if (typeof body?.label === 'string') {
+      // Byte-cap (never byte-count) — multi-byte chars must not half-overflow.
+      for (const ch of String(body.label)) {
+        if (Buffer.byteLength(label + ch, 'utf8') > PUSH_LABEL_MAX_BYTES) break;
+        label += ch;
+      }
+    }
+    const ws = await pushSubscriptionWorkspace(req, res, user, body?.workspace);
+    if (!ws) return;
+    const t = now();
+    const existing = await db.get('select created_at from push_subscriptions where endpoint = ?', [endpoint]);
+    const createdAt = existing?.created_at ?? t;
+    await db.run(
+      'insert or replace into push_subscriptions (workspace_id, user_id, endpoint, p256dh, auth, label, created_at, last_seen_at) values (?,?,?,?,?,?,?,?)',
+      [ws.id, user.id, endpoint, keys.p256dh, keys.auth, label, createdAt, t],
+    );
+    return json(res, 200, { ok: true });
+  }
+
+  if (pathname === '/api/me/push-subscriptions' && method === 'DELETE') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const body = await readJson(req).catch(() => null);
+    const endpoint = url.searchParams.get('endpoint') || body?.endpoint;
+    if (!pushEndpointOk(endpoint)) return fail(res, 400, 'invalidSubscription', 'Invalid push subscription');
+    const ws = await pushSubscriptionWorkspace(req, res, user, body?.workspace);
+    if (!ws) return;
+    // Caller-owned rows only — endpoint alone can never address another user's row.
+    await db.run('delete from push_subscriptions where workspace_id = ? and user_id = ? and endpoint = ?', [ws.id, user.id, endpoint]);
+    return json(res, 200, { ok: true });
   }
 
   /* ------------------- per-user saved views (Phase 57, VIEW-01/VIEW-02, D-05/D-07) ------------------- */
@@ -7190,6 +7384,9 @@ async function main() {
   }
 
   await bootstrap();
+  /* PUSH-05: VAPID custody runs after the migrations so DATA_DIR is settled —
+     env → persisted file → generate-once ladder (feature absent on failure). */
+  await initPushCustody();
   logInfo(`boot complete in ${Date.now() - BOOT_STARTED}ms (schema migrations + sweeps)`);
   /* HARD-02 (D-02): legacy link-only admin/owner invites are neutralized at
      boot — UPDATE only (the row is an audit trail, never destroyed), no

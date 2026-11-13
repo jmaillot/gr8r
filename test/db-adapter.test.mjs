@@ -135,6 +135,14 @@ test('toPgSql: insert or replace → upsert on conflict do update with excluded 
   assert.match(out, /^insert into user_notif_prefs \(workspace_id, user_id, prefs\) values \(\$1,\$2,\$3\) on conflict \(workspace_id, user_id\) do update set workspace_id = excluded\.workspace_id, user_id = excluded\.user_id, prefs = excluded\.prefs$/);
 });
 
+test('toPgSql: push_subscriptions insert or replace upserts on the endpoint conflict target (Phase 59)', () => {
+  const out = adapter.toPgSql(
+    'insert or replace into push_subscriptions (workspace_id, user_id, endpoint, p256dh, auth, label, created_at, last_seen_at) values (?,?,?,?,?,?,?,?)',
+  );
+  assert.match(out, /^insert into push_subscriptions \(workspace_id, user_id, endpoint, p256dh, auth, label, created_at, last_seen_at\) values \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8\) on conflict \(endpoint\) do update set/);
+  assert.match(out, /p256dh = excluded\.p256dh/);
+});
+
 test('toPgSql: begin immediate → begin', () => {
   assert.equal(adapter.toPgSql('begin immediate'), 'begin');
 });
@@ -256,9 +264,10 @@ const TABLES = [
   'audit_log',
   'reminders_sent',
   'user_notif_prefs',
+  'push_subscriptions',
 ];
 
-test('pgSchemaVariant: all 14 tables, zero collate nocase, zero pragma, functional nocase index', () => {
+test('pgSchemaVariant: all 15 tables, zero collate nocase, zero pragma, functional nocase index', () => {
   const variant = adapter.pgSchemaVariant();
   for (const table of TABLES) {
     assert.match(variant, new RegExp(`create table if not exists ${table} \\(`), `table ${table} missing from pg variant`);
@@ -293,7 +302,7 @@ test('pgSchemaVariant: epoch-ms columns become bigint; booleans/counters stay in
 
 /* ---- runSchema (D-10): dialect-owned schema execution ----------------- */
 
-test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 14 tables)', async () => {
+test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 15 tables)', async () => {
   const dbPath = tmpDbPath();
   await adapter.connectDb({ dbPath });
   assert.equal(adapter.backendKind, 'sqlite');
@@ -367,7 +376,7 @@ test('the invites scalar→teams backfill is sqliteOnly-gated (D-09: SQLite-only
 
 /* ---- seed portability (D-07) ------------------------------------------ */
 
-test('seed is portable: two fresh boots produce identical row counts across all 14 tables (D-07)', async () => {
+test('seed is portable: two fresh boots produce identical row counts across all 15 tables (D-07)', async () => {
   const bootCounts = async () => {
     const server = await startServer({ env: { SEED_DATA: 'true' } });
     try {
@@ -523,10 +532,11 @@ pgMaybe('FTS parity on pg: same scenario, same results as SQLite (SEARCH-03/04, 
   await ftsParityScenario('pg', { dbUrl: PG_URL });
 });
 
-/* ---- dependencies pin (D-02 amendment of D-12, 54-02 amendment) -------- */test('package.json runtime dependencies are exactly { pg, @office-kit/xlsx } (D-12 as amended)', () => {
+/* ---- dependencies pin (D-02 amendment of D-12, 54-02 amendment, 59-01 web-push) -------- */test('package.json runtime dependencies are exactly { pg, @office-kit/xlsx, web-push } (D-12 as amended)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies, 'dependencies key required — pg presence is fail-closed (D-04)');
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@office-kit/xlsx', 'pg']); // +@office-kit/xlsx: the workbook writer, exact pin 0.26.1 approved through the blocking-human package-legitimacy checkpoint (54-02, T-54-SC)
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@office-kit/xlsx', 'pg', 'web-push']); // +@office-kit/xlsx: the workbook writer, exact pin 0.26.1 (54-02, T-54-SC); +web-push: browser push, exact pin 4.0.0 (Phase 59, owner pre-lock)
   assert.equal(pkg.dependencies['@office-kit/xlsx'], '0.26.1'); // exact approved pin — no range drift
+  assert.equal(pkg.dependencies['web-push'], '4.0.0'); // exact approved pin — no range drift
   assert.match(pkg.dependencies.pg, /^\^8\./);
 });

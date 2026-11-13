@@ -44,6 +44,7 @@ let pool = null; // pg Pool (pg backend)
 const PG_CONFLICT_TARGETS = {
   user_notif_prefs: '(workspace_id, user_id)',
   saved_views: '(workspace_id, user_id, key, name)',
+  push_subscriptions: '(endpoint)',
 };
 
 // Split `sql` into literal (single-quoted) and rewriteable spans.
@@ -274,6 +275,18 @@ export const SQLITE_SCHEMA = `
     user_id      text not null,
     prefs        text not null,
     primary key (workspace_id, user_id)
+  );
+  /* Phase 59 (PUSH-01): browser push subscriptions, endpoint UNIQUE for the
+     replace-on-resubscribe — mirrors server.js SCHEMA verbatim. */
+  create table if not exists push_subscriptions (
+    workspace_id text not null,
+    user_id      text not null,
+    endpoint     text not null unique,
+    p256dh       text not null,
+    auth         text not null,
+    label        text not null default '',
+    created_at   integer,
+    last_seen_at integer
   );
   /* Phase 57 (D-05): per-user saved views + live column state, sentinel name ''
      for the live row — mirrors server.js SCHEMA verbatim. */

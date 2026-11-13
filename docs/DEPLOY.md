@@ -1300,3 +1300,67 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://projects.example.com/mc
 
 When MCP is not configured (no API key issued) the endpoint still exists but rejects every
 request with 401 — there is no env flag to disable it; not issuing keys is the off switch.
+
+## 16. Browser push: VAPID key custody (Phase 59)
+
+Browser push is signed with a VAPID keypair (RFC 8292). The server owns the
+custody at boot — no CLI step is required to enable push.
+
+### How keys are created
+
+On the first boot with no keys configured, the server generates a keypair with
+`web-push` and writes it to:
+
+```
+/data/vapid-keys.json        # chmod 0600, JSON { publicKey, privateKey }
+```
+
+The generation is logged loudly:
+
+```
+WARN push: generated a new VAPID keypair — persisted to vapid-keys.json in DATA_DIR
+WARN push: keep that file (or pin VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY): losing the keys orphans every existing subscription
+```
+
+**Never delete or regenerate this file on a live instance.** A subscription is
+bound to the server's public key; a new keypair silently invalidates every
+existing subscription (the push service rejects the requests). Members would
+have to re-subscribe from Settings.
+
+### Restart behavior
+
+Every subsequent boot loads the same file (`source: file` in the boot log) —
+restarts never orphan subscriptions. The file is only written when absent.
+
+### Environment override
+
+Setting both variables overrides the file entirely (rotation-in-place, secrets
+managers, multi-instance with shared env):
+
+| Variable | Meaning |
+|----------|---------|
+| `VAPID_PUBLIC_KEY` | base64url public key (paired with the private key) |
+| `VAPID_PRIVATE_KEY` | base64url private key — **secret**: never log it, never commit it |
+| `VAPID_SUBJECT` | optional `mailto:` contact sent with each push; defaults to `mailto:operator@<APP_URL host>` |
+
+When the env pair is set, `vapid-keys.json` is ignored (not deleted).
+
+### Fail-absent
+
+If neither env nor a persistable file is available (read-only or broken
+`DATA_DIR`), the server boots fine and push is simply **absent**: the client
+gets a 404 from `/api/me/push-config` and hides the Push settings surface.
+No boot failure, no error loop.
+
+### Rotation
+
+Rotation = switching to a new keypair (new file or new env). All existing
+subscriptions become undeliverable; members re-subscribe from Settings ›
+Notifications › Push. The 404/410 sweep prunes dead rows at the next send pass.
+
+### Single instance only
+
+The key-file custody assumes the documented single-instance deployment: two
+server instances booting simultaneously against one `/data` could race the
+first-time key generation. Deploy exactly one instance per `/data` volume, as
+with the SQLite database itself.
