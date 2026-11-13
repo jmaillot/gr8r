@@ -21,7 +21,6 @@ import { login, startServer, withDb } from './helpers/server.mjs';
 import {
   createVisibilityFixtureDb,
   VIS_PASSWORD,
-  VIS_USER_IDS,
   VIS_WS,
 } from './helpers/visibility-fixture.mjs';
 

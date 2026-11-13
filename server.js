@@ -6229,6 +6229,40 @@ async function handleApi(req, res, url) {
     return json(res, 200, { overdue, load, upcoming, activity });
   }
 
+  /* Phase 60 (TRN-01/TRN-02, D-11/D-13): the member self-view — the Phase 52
+     transparency funnel scoped to the CALLING member. Exactly three changes
+     vs. the route above: the gate is any workspace member (viewer included —
+     self-view is "any member", D-11), there is no target-member param (myId
+     comes from the caller's own membership row — no 404 branch), and the
+     response carries NO member echo (TRN-02: { projects } and nothing else).
+     The funnel loop, the single-teamName block (T-52-03) and the
+     ?? 'member' fallback are copied verbatim. teamsOfMember resolves ONCE
+     per request from the caller's membership row — never memoized (D-50-3). */
+  const wsSelfVisibilityMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/me\/visibility$/);
+  if (wsSelfVisibilityMatch && method === 'GET') {
+    const ctx = await requireWorkspace(req, res, wsSelfVisibilityMatch[1], 'viewer');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const myId = ctx.membership.member_id || null;
+    const doc = JSON.parse(ctx.ws.doc);
+    normalizeProjects(doc);
+    const memberTeams = await teamsOfMember(ctx.ws.id, myId, ctx.membership);
+    const projects = [];
+    for (const p of doc?.data?.projects || []) {
+      if (!p?.id) continue;
+      if (!(await memberCanReadProject(p, ctx.ws.id, myId))) continue;
+      const reason = projectAccessReason(p, myId, memberTeams) ?? 'member';
+      const entry = { id: p.id, name: p.name || p.id, reason };
+      if (reason === 'team') {
+        const tid = memberTeams.find(t => Array.isArray(p.teams) && p.teams.includes(t));
+        const tName = (Array.isArray(doc?.data?.teams) ? doc.data.teams : []).find(tm => tm?.id === tid)?.name;
+        if (tName) entry.teamName = String(tName);
+      }
+      projects.push(entry);
+    }
+    return json(res, 200, { projects });
+  }
+
   /* -------------------- project membership & the guest toggle --------------------
      Phase 50 (INV-02 / VIS-04, D-50-1/2/4/7): the post-invite edit surface.
      Scope (p.members add/remove) and status (in/out via the same list) are
