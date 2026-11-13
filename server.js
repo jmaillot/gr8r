@@ -1569,11 +1569,11 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
    HTTP response and their failures are logged, not surfaced. */
 /* REM-05: reminder emails ride the same pipeline — both reminder notif types
    gate on the single `email_reminder` pref (D-27-5). */
-/* PREFS (Phase 34, D-03/D-09): the exact 16-key whitelist and the 12-key
+/* PREFS (Phase 34, D-03/D-09): the exact 17-key whitelist and the 13-key
    default layer (emptyDoc's set; email_comment is the ONLY false). The legacy
-   push toggle for due dates was removed with gap G-37-2 — its pref key was
-   never read by any emission gate, so historical stored values are inert.
-   The 4 extra
+   push toggle for due dates was removed with gap G-37-2 — D-09 (Phase 59)
+   amends that standing ruling: push_due is LIVE again as the reminder-push
+   pref, read by the Plan 02 reminder fan-out. The 4 extra
    keys (mention_team, mention_ws, assign_status, assign_over) have NO default —
    undefined-falsy preserves the D-09 zero-change switch-over; a PUT upsert
    writes them explicitly once toggled. */
@@ -1586,6 +1586,7 @@ const NOTIF_PREF_KEYS = [
   'push_mention',
   'push_assign',
   'push_comment',
+  'push_due',
   'due_reminder',
   'past_due',
   'mention_all',
@@ -1629,6 +1630,7 @@ const NOTIF_PREF_DEFAULTS = {
   push_mention: true,
   push_assign: true,
   push_comment: true,
+  push_due: true,
   mention_all: true,
   assign_self: true,
 };

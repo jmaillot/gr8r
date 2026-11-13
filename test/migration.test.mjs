@@ -520,6 +520,7 @@ const EXPECTED_DEFAULTS = {
   push_mention: true,
   push_assign: true,
   push_comment: true,
+  push_due: true,
   mention_all: true,
   assign_self: true,
 };

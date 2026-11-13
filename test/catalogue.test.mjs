@@ -384,25 +384,32 @@ test('both catalogues are importable by bare Node with the json import attribute
   assert.ok(Object.keys(fr).length > 0, 'the French catalogue is not empty');
 });
 
-test('the project declares exactly the approved runtime dependencies { pg, @office-kit/xlsx }', () => {
+test('the project declares exactly the approved runtime dependencies { pg, @office-kit/xlsx, web-push }', () => {
   /* The zero-runtime-dependency identity was an invariant (D-12); Phase 45 (2026-11-07, D-02)
      amends it: `pg` is the first runtime dependency, loaded via dynamic import only
      when DB_URL is a postgres:// URL. Phase 54 (2026-11-10, 54-02) amends it again:
      @office-kit/xlsx joins at the EXACT pin 0.26.1, approved by the owner through the
      blocking-human package-legitimacy checkpoint (T-54-SC) — the only writer that can
-     produce real charts and connectors. The devDependencies are build-time tools and
-     stay: this guard says nothing about them. */
+     produce real charts and connectors. Phase 59 (2026-11-13, D-12 amended ×2): web-push
+     joins at the EXACT pin 4.0.0 — RFC 8292 VAPID signing + RFC 8291 payload encryption
+     for browser push, legitimacy pre-locked on record (STATE.md D-12 amendment). The
+     devDependencies are build-time tools and stay: this guard says nothing about them. */
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const dependencies = manifest.dependencies || {};
   assert.deepEqual(
     Object.keys(dependencies).sort(),
-    ['@office-kit/xlsx', 'pg'],
-    `package.json must carry exactly the approved runtime dependencies (found ${Object.keys(dependencies).join(', ')}) (D-02 as amended by 54-02)`,
+    ['@office-kit/xlsx', 'pg', 'web-push'],
+    `package.json must carry exactly the approved runtime dependencies (found ${Object.keys(dependencies).join(', ')}) (D-02 as amended by 54-02 + Phase 59 D-12)`,
   );
   assert.equal(
     dependencies['@office-kit/xlsx'],
     '0.26.1',
     'the workbook writer stays at the exact approved pin 0.26.1 (T-54-SC) — no caret/tilde drift',
+  );
+  assert.equal(
+    dependencies['web-push'],
+    '4.0.0',
+    'web-push stays at the exact approved pin 4.0.0 (Phase 59 D-12) — no caret/tilde drift',
   );
 });
 

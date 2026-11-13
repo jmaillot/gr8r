@@ -6,9 +6,13 @@
    precedent, D-05): the workspace document is never a prefs carrier again (D-01). */
 export const NOTIF_PREFS_KEY_PREFIX = 'projects.notifPrefs.';
 
-/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 11 keys, email_comment
+/* Mirror of the server's NOTIF_PREF_DEFAULTS (D-27-5): 12 keys, email_comment
    the ONLY false. The legacy push toggle for due dates was removed with gap
-   G-37-2 on BOTH sides (whitelist parity preserved). email_digest,
+   G-37-2 and RESTORED by D-09 (Phase 59) on BOTH sides (whitelist parity
+   preserved) — push_due is the live reminder-push pref; the foreground toast
+   path in core/push.js still never maps due rows (server-side only). The
+   settings UI row for push_due lands in Phase 59 plan 03 (with i18n keys).
+   email_digest,
    mention_team, mention_ws, assign_status, assign_over read undefined-falsy —
    email_digest is a real OPT-IN as of Phase 38 (D-14: stored true = on,
    undefined/false = off; the digest replaces individual reminder emails) — the
@@ -26,11 +30,12 @@ export const NOTIF_PREF_DEFAULTS = {
   push_mention: true,
   push_assign: true,
   push_comment: true,
+  push_due: true,
   mention_all: true,
   assign_self: true,
 };
 
-/* The 16 keys the settings UI can toggle — the server PUT whitelist plus the
+/* The 17 keys the settings UI can toggle — the server PUT whitelist plus the
    four undefined-falsy extras. Read-side validation drops anything else, so a
    tampered or stale blob cannot inject arbitrary keys into app state. */
 export const NOTIF_PREF_KEYS = [

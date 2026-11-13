@@ -1702,6 +1702,8 @@
   "err.crossOriginRejected": "Requête cross-origin rejetée",
   "err.unknownLocale": "Locale inconnue",
   "err.unknownPrefKey": "Clé de préférence inconnue",
+  "err.pushUnavailable": "Notifications push navigateur non configurées",
+  "err.invalidSubscription": "Abonnement push invalide",
   "err.invalidViewKey": "Clé de vue invalide",
   "err.invalidViewBlob": "Contenu de vue invalide",
   "err.tooManyAttempts": "Trop de tentatives. Réessayez plus tard.",

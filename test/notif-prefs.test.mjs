@@ -20,8 +20,9 @@ let ws; // { id, slug }
 let stranger; // signed up, never a member
 let bob; // invited member (test i)
 
-/* The 11-key default layer the accessor must reproduce (email_comment the ONLY false;
-   email_digest is an opt-in — undefined-falsy since Phase 38's default inversion, D-14). */
+/* The 12-key default layer the accessor must reproduce (email_comment the ONLY false;
+   email_digest is an opt-in — undefined-falsy since Phase 38's default inversion, D-14;
+   push_due live again per the D-09 G-37-2 amendment, Phase 59). */
 const DEFAULTS = {
   email_mention: true,
   email_assign: true,
@@ -32,6 +33,7 @@ const DEFAULTS = {
   push_mention: true,
   push_assign: true,
   push_comment: true,
+  push_due: true,
   mention_all: true,
   assign_self: true,
 };
@@ -74,11 +76,12 @@ test('PUT whitelisted prefs then GET returns them merged over defaults', async (
   assert.equal(prefsRows().length, 1, 'exactly one row stored');
 });
 
-test('PUT carrying the retired push toggle key is rejected 400 (G-37-2 — removed from the whitelist, never echoed back)', async () => {
+test('PUT carrying push_due stores it — the pref is live again (D-09, G-37-2 amendment)', async () => {
   const res = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { push_due: false } });
-  assert.equal(res.status, 400, `retired key rejected ${res.status}`);
-  assert.equal(res.data.code, 'unknownPrefKey');
-  assert.equal(prefsRows().length, 1, 'the rejected PUT wrote nothing');
+  assert.equal(res.status, 200, `push_due PUT accepted ${res.status}`);
+  assert.equal(res.data.prefs.push_due, false, 'stored value echoed through the defaults merge');
+  const restore = await owner.put('/api/me/notif-prefs', { workspace: ws.id, prefs: { push_due: true } });
+  assert.equal(restore.status, 200);
 });
 
 /* ------------------- (b) unknown key → 400 (D-03 whitelist) ------------------- */

@@ -25,7 +25,7 @@ test('(a) an absent key reads the all-ON defaults (email_comment the only false)
   backing.clear();
   const prefs = getLocalNotifPrefs('ws-a');
   assert.deepEqual(prefs, NOTIF_PREF_DEFAULTS);
-  assert.equal(Object.keys(prefs).length, 11);
+  assert.equal(Object.keys(prefs).length, 12);
   assert.equal(prefs.email_comment, false);
   for (const [k, v] of Object.entries(prefs)) {
     if (k !== 'email_comment') assert.equal(v, true, `${k} defaults ON`);
@@ -52,9 +52,9 @@ test('(c) two workspace ids produce two isolated keys — no bleed (D-08)', () =
   assert.equal(getLocalNotifPrefs('ws-a').email_reminder, false);
   assert.equal(getLocalNotifPrefs('ws-a').push_comment, true, 'ws-b write did not bleed into ws-a');
   assert.equal(getLocalNotifPrefs('ws-b').email_reminder, true, 'ws-a write did not bleed into ws-b');
-  // G-37-2: the legacy push toggle pref is off the whitelist — a stored value is dropped outright
+  // D-09 (Phase 59, G-37-2 amendment): push_due is LIVE again — a stored value is kept, defaulted to true
   setLocalNotifPrefs('ws-b', { push_due: false });
-  assert.equal('push_due' in getLocalNotifPrefs('ws-b'), false, 'a stored push toggle value is DROPPED, never defaulted');
+  assert.equal(getLocalNotifPrefs('ws-b').push_due, false, 'a stored push_due value is KEPT (whitelisted, D-09)');
 });
 
 test('(d) non-whitelisted keys and non-boolean values are rejected on read', () => {
@@ -65,7 +65,7 @@ test('(d) non-whitelisted keys and non-boolean values are rejected on read', () 
   );
   const prefs = getLocalNotifPrefs('ws-a');
   assert.equal(prefs.evil_key, undefined, 'unknown key dropped');
-  assert.equal('push_due' in prefs, false, 'the legacy push toggle pref dropped outright — not whitelisted, no default (G-37-2)');
+  assert.equal(prefs.push_due, true, "push_due whitelisted (D-09) — a non-boolean stored value drops → the default 'true'");
   assert.equal(prefs.email_mention, true, 'non-boolean value dropped → default');
   assert.equal(prefs.mention_team, false, 'whitelisted extra key with a boolean survives');
   assert.equal(prefs.email_reminder, false, 'legitimate stored value survives');
@@ -93,11 +93,12 @@ test('(e) storage exceptions are swallowed in both directions', async () => {
   }
 });
 
-/* The 16-key whitelist surface the read-side sanitizer enforces (11 defaults +
-   email_digest (opt-in, D-14) + the 4 undefined-falsy extras — the legacy push
-   toggle pref left with G-37-2). */
-test('whitelist is the 11 defaults plus the 4 undefined-falsy extras', () => {
-  assert.equal(NOTIF_PREF_KEYS.length, 16);
+/* The 17-key whitelist surface the read-side sanitizer enforces (12 defaults +
+   email_digest (opt-in, D-14) + the 4 undefined-falsy extras — push_due live
+   again per the D-09 G-37-2 amendment, Phase 59). */
+test('whitelist is the 12 defaults plus the 4 undefined-falsy extras', () => {
+  assert.equal(NOTIF_PREF_KEYS.length, 17);
+  assert.ok(NOTIF_PREF_KEYS.includes('push_due'), 'push_due whitelisted again (D-09)');
   assert.ok(NOTIF_PREF_KEYS.includes('email_digest'), 'email_digest stays whitelisted (opt-in, D-14)');
   for (const k of ['mention_team', 'mention_ws', 'assign_status', 'assign_over']) {
     assert.ok(NOTIF_PREF_KEYS.includes(k), `${k} whitelisted`);

@@ -1702,6 +1702,8 @@
   "err.crossOriginRejected": "Cross-origin request rejected",
   "err.unknownLocale": "Unknown locale",
   "err.unknownPrefKey": "Unknown preference key",
+  "err.pushUnavailable": "Browser push is not configured",
+  "err.invalidSubscription": "Invalid push subscription",
   "err.invalidViewKey": "Invalid view key",
   "err.invalidViewBlob": "Invalid view blob",
   "err.tooManyAttempts": "Too many attempts. Try again later.",
