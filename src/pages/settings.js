@@ -538,8 +538,8 @@ export function settingsBody(sec, title) {
             t('settings.notif.pushEnable'),
             t('settings.notif.pushEnableDesc'),
             localOn
-              ? `<button class="btn btn-danger-ghost btn-sm" data-in="pushDisable">${t('act.turnOff')}</button>`
-              : `<button class="btn btn-primary btn-sm" data-in="pushEnable">${t('settings.notif.pushTurnOn')}</button>`,
+              ? `<button class="btn btn-danger-ghost btn-sm" data-a="pushDisable">${t('act.turnOff')}</button>`
+              : `<button class="btn btn-primary btn-sm" data-a="pushEnable">${t('settings.notif.pushTurnOn')}</button>`,
           )
         : '';
       const deviceRows =
@@ -550,7 +550,7 @@ export function settingsBody(sec, title) {
                 srow(
                   `<span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(dev.label || t('settings.notif.pushUnnamed'))}</span>`,
                   dev.created_at ? ago(dev.created_at) : '—',
-                  `<button class="btn btn-secondary btn-sm" data-in="pushTest" data-id="${esc(dev.endpoint)}">${t('settings.notif.pushTest')}</button><button class="btn btn-danger-ghost btn-sm" data-in="pushUnsub" data-id="${esc(dev.endpoint)}">${t('act.delete')}</button>`,
+                  `<button class="btn btn-secondary btn-sm" data-a="pushTest" data-id="${esc(dev.endpoint)}">${t('settings.notif.pushTest')}</button><button class="btn btn-danger-ghost btn-sm" data-a="pushUnsub" data-id="${esc(dev.endpoint)}">${t('act.delete')}</button>`,
                 ),
               )
               .join('')

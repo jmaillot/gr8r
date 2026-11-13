@@ -2530,7 +2530,7 @@ export async function refreshPushState() {
   render();
   return st;
 }
-IN.pushEnable = async () => {
+A.pushEnable = async () => {
   const m = await import('../core/push.js');
   const r = await m.enablePush();
   if (r.ok) toast(t('toast.pushEnabled'), { ms: 2000 });
@@ -2543,19 +2543,19 @@ IN.pushEnable = async () => {
   await refreshPushState();
   return r;
 };
-IN.pushDisable = async () => {
+A.pushDisable = async () => {
   const m = await import('../core/push.js');
   await m.disablePush();
   toast(t('toast.pushDisabled'), { ms: 2000 });
   await refreshPushState();
 };
-IN.pushTest = async el => {
+A.pushTest = async el => {
   const m = await import('../core/push.js');
   const r = await m.sendTestPush(el.dataset.id);
   if (r.ok) toast(t('toast.pushTestSent'), { ms: 2000 });
   else toast(t('toast.pushTestFailed'), { kind: 'err', ms: 6000 });
 };
-IN.pushUnsub = async el => {
+A.pushUnsub = async el => {
   const m = await import('../core/push.js');
   await m.unsubscribeDevice(el.dataset.id);
   toast(t('toast.pushDisabled'), { ms: 2000 });
