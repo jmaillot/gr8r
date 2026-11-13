@@ -42,7 +42,7 @@ dashboards) without breaking the zero-dependency discipline
 | 57 | Views, Columns & General Access | Complete (3/3 plans) |
 | 58 | Full-Text Search | Complete (4/4 plans incl. gap closure) |
 | 59 | Browser Push | Complete (3/3 plans) |
-| 60 | Admin Dashboard & Member Self-View | Not started |
+| 60 | Admin Dashboard & Member Self-View | Complete (3/3 plans incl. gap closure) |
 | 61 | Notification Trim | Not started |
 
 ## Performance Metrics
@@ -109,8 +109,8 @@ dashboards) without breaking the zero-dependency discipline
 **Stopped at:** Phase 60 complete, ready to plan Phase 61
 **Resume file:** None
 
-**Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
-**Next action:** `/gsd-discuss-phase 60` — Phase 60: Admin Dashboard & Member Self-View (phase 59 complete 3/3)
+**Last action:** Phase 60 gap closure executed (60-03): CR-01/WR-01/WR-02 fixed test-first (RED commits 7ca2397, 299197e; fixes 290bb36, cc75a38), re-review confirmed all three closed (0 critical), re-verification passed 14/14 (digest refreshed to v2 after the v4-prefix staleness false-positive), phase marked complete.
+**Next action:** `/gsd-discuss-phase 61` — Phase 61: Notification Trim (gated on D-05 owner rulings arriving during execution)
 
 ### Blockers
 

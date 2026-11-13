@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-13 after Phase 58 — SEARCH-01..04 shipped (FTS + redacted route + hybrid Ctrl-K merge)*
+*Last updated: 2026-11-13 after Phase 60 — DASH-01..04 + TRN-02 shipped (admin dashboard + member self-view, gap closure verified 14/14)*
 
 ## Current Milestone: v2.2 Notifications, Search & Delivery
 
@@ -686,6 +686,12 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   Phase 58 (4/4 plans incl. gap closure 58-04; verification 4/4 passed, UAT 3/3 with the
   cmd-mode dispatch gap re-verified live; review CR-01 pg tx-atomicity advisory open in
   58-REVIEW-DISPOSITION.md)
+- ✓ **DASH-01..04, TRN-02** — Admin dashboard (power-admin aggregates over the raw stored
+  doc per DASH-04, four panels, 30 s poll with abort+teardown on route exit) + member
+  self-view (Settings › My access, caller-scoped Phase 52 funnel, zero identity exposure)
+  — Phase 60 (3/3 plans incl. gap closure 60-03; verification 14/14 re-run passed with the
+  CR-01/WR-01/WR-02 gaps closed test-first; review disposition ledger 3 fixed, WR-03 + info
+  advisories open)
 
 ### Active
 
