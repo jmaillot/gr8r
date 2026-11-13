@@ -203,3 +203,62 @@ test('deleted tasks leave the index through the funnel (SEARCH-03 delete edge)',
   assert.equal(res.status, 200);
   assert.equal(res.data.tasks.some(t => t.id === 't_fts_elodie'), false);
 });
+
+/* ---------------- C. MCP mirror write path (D-10, Pitfall 1) ------------
+   A task created through the MCP endpoint (writeDoc, NOT the doc-PUT
+   funnel) must be findable via the route the moment the tx resolves. */
+
+const MCP_RPC_ID = { n: 1000 };
+const mcpRpc = async (key, method, params, session) => {
+  const res = await fetch(`${server.base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${key}`,
+      ...(session ? { 'mcp-session-id': session } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++MCP_RPC_ID.n, method, params }),
+  });
+  assert.equal(res.status, 200);
+  const type = res.headers.get('content-type') || '';
+  let data;
+  if (type.includes('text/event-stream')) {
+    const raw = await res.text();
+    const line = raw
+      .split('\n')
+      .filter(l => l.startsWith('data:'))
+      .map(l => JSON.parse(l.slice(5).trim()))
+      .find(m => m.id === MCP_RPC_ID.n);
+    data = line;
+  } else {
+    data = await res.json();
+  }
+  return { session: res.headers.get('mcp-session-id'), data };
+};
+
+test('an MCP writeDoc task is findable via the search route immediately (D-10, SEARCH-03)', async () => {
+  /* Write-scoped API key for the owner on the fixture workspace. */
+  const keyRes = await owner.post('/api/keys', { label: 'fts-mcp', scope: 'write', workspaceId: VIS_WS.id, days: 30 });
+  assert.equal(keyRes.status, 201);
+  const key = keyRes.data.key;
+
+  const init = await mcpRpc(key, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fts-test', version: '0.0.0' } }, null);
+  const sid = init.session;
+  assert.ok(sid, 'mcp session id on initialize');
+  await fetch(`${server.base}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${key}`, 'mcp-session-id': sid },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+  });
+
+  const call = await mcpRpc(key, 'tools/call', { name: 'create_task', arguments: { project: 'p_open', title: 'Zorblat mcp snapshot', description: 'Created through the mirror path' } }, sid);
+  assert.equal(call.data?.result?.isError, undefined, `create_task must succeed: ${call.data?.result?.content?.[0]?.text ?? ''}`);
+
+  /* Same tick as the tx resolution: the owner's next search finds it. */
+  const res = await owner.get(searchRoute('zorblat'));
+  assert.equal(res.status, 200);
+  const hit = res.data.tasks.find(t => t.title === 'Zorblat mcp snapshot');
+  assert.ok(hit, 'MCP-written task must be indexed in-tx');
+  assert.equal(hit.projectId, 'p_open');
+});

@@ -27,6 +27,7 @@
    read and written as one opaque JSON column, exactly like server.js.
    ===================================================================== */
 import crypto from 'node:crypto';
+import { syncTaskFts } from './db-adapter.mjs';
 
 /* The stored vocabulary (src/core/constants.js STATUSES / PRIOS ids). The ids
    are what the document holds — this module reads and writes them verbatim,
@@ -173,14 +174,21 @@ export function createMcp(deps) {
 
   /* The same shape as server.js's PUT path: one immediate transaction,
      one JSON parse of the CURRENT row, one revision bump. Never a blind
-     overwrite of a row read outside the transaction. */
+     overwrite of a row read outside the transaction.
+     SEARCH (Phase 58, D-10/Pitfall 1): the MCP mirror write path syncs the
+     task_fts shadow index INSIDE this same transaction through the tx scope
+     — without this call, every MCP-created/edited task would be invisible
+     to search. storedDoc is snapshotted BEFORE the edit mutates the parsed
+     doc in place, otherwise the diff would compare the doc with itself. */
   async function writeDoc(ws, edit) {
-    return await db.tx(async () => {
+    return await db.tx(async scope => {
       const row = await db.get('select doc from workspaces where id = ?', [ws.id]);
       if (!row) throw new Error('Workspace not found');
       const doc = JSON.parse(row.doc);
+      const storedDoc = JSON.parse(JSON.stringify(doc));
       await edit(doc);
       await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(doc), now(), ws.id]);
+      await syncTaskFts(scope, ws.id, storedDoc, doc);
       return doc;
     });
   }
