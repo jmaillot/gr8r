@@ -56,11 +56,12 @@ const dash = (cl, slug = VIS_WS.slug, query = '') =>
 
 let server;
 let dir;
+let dbPath;
 const S = {};
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-dashboard-'));
-  const dbPath = createVisibilityFixtureDb(dir);
+  dbPath = createVisibilityFixtureDb(dir);
   /* Seed dashboard rows INTO the fixture doc (hand-derived expectations
      below key off these rows). Dates are computed at seed time from the
      same anchor the server recomputes per request. */
@@ -225,6 +226,40 @@ test('activity: an invalid window value fails 400 with the keyed body BEFORE any
   const res = await dash(S.m_admin, VIS_WS.slug, '?activityWindow=1h');
   assert.equal(res.status, 400);
   assert.equal(res.data.code, 'badActivityWindow');
+});
+
+/* 60-03 WR-02: the whitelist must precede the doc parse BEHAVIORALLY —
+   corrupt the stored doc so a parse would throw; an invalid window must
+   still answer the keyed 400, never a 500/parse crash (T-60-03 invariant). */
+test('invariant: invalid activityWindow fails keyed 400 BEFORE any doc work (T-60-03)', async () => {
+  let original;
+  withDb(dbPath, db => {
+    original = db.prepare('select doc from workspaces where id = ?').get(VIS_WS.id).doc;
+    db.prepare('update workspaces set doc = ? where id = ?').run('{not json', VIS_WS.id);
+  });
+  try {
+    const res = await dash(S.m_admin, VIS_WS.slug, '?activityWindow=bogus');
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'badActivityWindow');
+  } finally {
+    withDb(dbPath, db => {
+      db.prepare('update workspaces set doc = ? where id = ?').run(original, VIS_WS.id);
+    });
+  }
+});
+
+/* Belt-and-braces: the fix is also pinned in SOURCE ORDER inside the route
+   block — the badActivityWindow return sits above the doc parse. */
+test('source order: badActivityWindow check sits above JSON.parse(ctx.ws.doc) in server.js', async () => {
+  const src = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const start = src.indexOf('const wsDashboardMatch');
+  const end = src.indexOf('the member self-view — the Phase 52', start);
+  assert.ok(start > -1 && end > start, 'dashboard route block located');
+  const block = src.slice(start, end);
+  assert.ok(
+    block.indexOf('badActivityWindow') < block.indexOf('JSON.parse(ctx.ws.doc)'),
+    'whitelist precedes doc parse in code order',
+  );
 });
 
 /* ---- 6. Payload scaffolding: the four-panel shape (DASH-04 single payload) ---- */
