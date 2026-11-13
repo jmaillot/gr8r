@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 milestone: v2.2
 milestone_name: Notifications, Search & Delivery
 current_phase: 60
-current_phase_name: admin-dashboard-member-self-view
+current_phase_name: Admin Dashboard & Member Self-View
 status: executing
-stopped_at: Completed 60-02-PLAN.md
-last_updated: "2026-11-13T18:56:39.474Z"
-state_head: 24ead0e76b74c66ec8b0077f845066019dd7f760
+stopped_at: Completed 60-03-PLAN.md (gap closure)
+last_updated: "2026-11-13T19:17:18.490Z"
+state_head: d5ebf5c3b79f4334b5330358ec156f807748980b
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # STATE.md
@@ -26,8 +26,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 60 (admin-dashboard-member-self-view) — READY TO EXECUTE
-**Plan:** 2 of 2
+**Phase:** 60 (Admin Dashboard & Member Self-View) — EXECUTING
+**Plan:** 3 of 3
 
 **Progress:**[███████░░░] 67%
 
@@ -63,6 +63,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 60 P01 | 15m | 3 tasks | 6 files |
 | Phase 60 P02 | ~75 min | 3 tasks | 14 files |
 | Phase 60 P02 | ~75 min | 3 tasks | 14 files |
+| Phase 60 P03 | 35 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -103,8 +104,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T18:27:04.593Z
-**Stopped at:** Completed 60-02-PLAN.md
+**Last session:** 2026-11-13T19:17:11.143Z
+**Stopped at:** Completed 60-03-PLAN.md (gap closure)
 **Resume file:** None
 
 **Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
@@ -139,3 +140,4 @@ dashboards) without breaking the zero-dependency discipline
 - [Phase 58]: 58-03: frozen pins maintained without new names — neutral fallback is inline-SVG stIcon('backlog'); data-a pin annotated 491→492 (server row reuses data-a="openTask")
 - [Phase 60]: Self-view endpoint gated 'viewer' (any-member per D-11/acceptance); dashboard raw-doc read is the sanctioned power-admin inversion; server date anchor = tz.js localParts default zone
 - [Phase 60]: Dashboard poll teardown rides a ROUTE_TEARDOWN registry in render.js; page renders only from the 60-01 payload; Task 2 poll co-implemented in the tracer slice
+- [Phase 60]: 60-03 gap closure: lastRequestedWindow up-front claim + !dashErr kick guard (CR-01); poll entry if (!timer) startPoll() survives route re-entry (WR-01, D-05); activityWindow whitelist hoisted above JSON.parse (WR-02) — all three pinned by failing-first regression tests

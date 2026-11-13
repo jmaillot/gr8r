@@ -19,15 +19,15 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 
 ## Admin Dashboard
 
-- [ ] **DASH-01**: An admin sees overdue tasks grouped per project on a workspace dashboard
-- [ ] **DASH-02**: An admin sees workload per member (task counts honoring the assignees[] array — a shared task counts once per member)
-- [ ] **DASH-03**: An admin sees tasks due within the next 7 days and recent workspace activity
-- [ ] **DASH-04**: The dashboard is admin/owner-only server-side (403 for members) and shows full private-project content (power-admin, owner ruling 2026-11-12)
+- [x] **DASH-01**: An admin sees overdue tasks grouped per project on a workspace dashboard
+- [x] **DASH-02**: An admin sees workload per member (task counts honoring the assignees[] array — a shared task counts once per member)
+- [x] **DASH-03**: An admin sees tasks due within the next 7 days and recent workspace activity
+- [x] **DASH-04**: The dashboard is admin/owner-only server-side (403 for members) and shows full private-project content (power-admin, owner ruling 2026-11-12)
 
 ## Transparency Self-View (TRN-02)
 
-- [ ] **TRN-01**: A member can open their own access view: which projects they can reach and why (private+invite, team link, non-private, per-person/per-team grant) — redacted self-scope of the admin transparency view
-- [ ] **TRN-02**: The member self-view never exposes other members' access rows (cross-member grants appear without names; byte-level shape tests)
+- [x] **TRN-01**: A member can open their own access view: which projects they can reach and why (private+invite, team link, non-private, per-person/per-team grant) — redacted self-scope of the admin transparency view
+- [x] **TRN-02**: The member self-view never exposes other members' access rows (cross-member grants appear without names; byte-level shape tests)
 
 ## Notifications Trim (NOTIF-TRIM)
 
@@ -83,12 +83,12 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 | PUSH-03 | Phase 59 | Complete (59-02 ticker ≤4096; 59-03 SW display + deep-link click — owner UAT passed) |
 | PUSH-04 | Phase 59 | Complete (59-02; 404/410 same-pass sweep, proven by the 429-keeps-row test) |
 | PUSH-05 | Phase 59 | Complete (59-01; restart-proven custody) |
-| DASH-01 | Phase 60 | Gaps Found |
-| DASH-02 | Phase 60 | Gaps Found |
-| DASH-03 | Phase 60 | Gaps Found |
-| DASH-04 | Phase 60 | Gaps Found |
-| TRN-01 | Phase 60 | Gaps Found |
-| TRN-02 | Phase 60 | Gaps Found |
+| DASH-01 | Phase 60 | Complete |
+| DASH-02 | Phase 60 | Complete |
+| DASH-03 | Phase 60 | Complete |
+| DASH-04 | Phase 60 | Complete |
+| TRN-01 | Phase 60 | Complete |
+| TRN-02 | Phase 60 | Complete |
 | NOTIF-01 | Phase 61 | Pending |
 | NOTIF-02 | Phase 61 | Pending |
 | NOTIF-03 | Phase 61 | Pending |
