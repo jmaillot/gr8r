@@ -25,7 +25,7 @@ the Phase 34 guarded-migration recipe when needed), full suite green, EN+FR i18n
 - [x] **Phase 56: Delivery Infrastructure** - e2e anti-stale-dist guard, Vite code-splitting, i18n-ready locale infrastructure (completed 2026-11-12)
 - [x] **Phase 57: Views, Columns & General Access** - column show/hide, saved views in server rows, General-Access granularity beyond private/public (completed 2026-11-12)
 - [x] **Phase 58: Full-Text Search** - FTS5 over task titles + descriptions, permission-filtered, wired into Ctrl-K (completed 2026-11-13)
-- [ ] **Phase 59: Browser Push** - server push fan-out for mentions + assignments via web-push@4.0.0
+- [x] **Phase 59: Browser Push** - server push fan-out for mentions + assignments via web-push@4.0.0 (completed 2026-11-13)
 - [ ] **Phase 60: Admin Dashboard & Member Self-View** - power-admin workspace dashboard + TRN-02 member transparency self-view
 - [ ] **Phase 61: Notification Trim** - D-05-ruling-gated trim application, one-click suppression, burst coalescing
 
@@ -139,14 +139,14 @@ contract); extends the Phase 48 badge/permission foundation
   5. VAPID keys persist server-side across restarts (env/config in /data, MASTER_KEY
      custody pattern) with the DEPLOY.md runbook documented; a restart does not
      orphan existing subscriptions (PUSH-05)
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
 **Wave 1**
 - [x] 59-01-PLAN.md — web-push@4.0.0 dep + push_subscriptions dual-backend SCHEMA mirror [BLOCKING] + VAPID /data custody + push routes + D-09 push_due re-livening + DEPLOY.md §16 (PUSH-05, PUSH-01 server half) ✅ 59-01-SUMMARY.md (2026-11-13)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 59-02-PLAN.md — sendPushFor fan-out beside queueNotifEmails at both sites, D-11 gates, ≤4096 payload budget, 404/410 sweep, per-device test-send route (PUSH-02/03/04) ✅ 59-02-SUMMARY.md (2026-11-13)
+- [x] 59-02-PLAN.md — sendPushFor fan-out beside queueNotifEmails at both sites, D-11 gates, ≤4096 payload budget, 404/410 sweep, per-device test-send route (PUSH-02/03/04) ✅ 59-02-SUMMARY.md (2026-11-13)
 - [x] 59-03-PLAN.md — SW push handler (D-12 suppression, zero-strings contract), client subscribe helpers, Settings master toggle + device list + per-device test push, i18n EN+FR, phase gate + real-device UAT checkpoint (PUSH-01/03) ✅ 59-03-SUMMARY.md (2026-11-13)
 
 ### Phase 60: Admin Dashboard & Member Self-View
@@ -200,7 +200,7 @@ D-05 owner rulings arriving during execution
 | 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
 | 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
 | 58. Full-Text Search | 4/4 | Complete    | 2026-11-13 |
-| 59. Browser Push | 3/3 | Complete | 2026-11-13 |
+| 59. Browser Push | 3/3 | Complete    | 2026-11-13 |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
 | 61. Notification Trim | 0/? | Not started | - |
 

@@ -2,17 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v2.2
 milestone_name: Notifications, Search & Delivery
-current_phase: 59
-current_phase_name: Browser Push
+current_phase: 60
+current_phase_name: Admin Dashboard & Member Self-View
 status: executing
-stopped_at: 59-02 executed (Plan 3 of 3 next)
-last_updated: "2026-11-13T14:10:00.000Z"
-state_head: 0d34fc0
+stopped_at: Phase 59 complete, ready to plan Phase 60
+last_updated: "2026-11-13T15:52:16.404Z"
+state_head: 3ac2a691e60c6204fb443e6f53efc2796f52f4c5
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
+  percent: 67
 ---
 
 # STATE.md
@@ -26,10 +27,10 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 59 (Browser Push) — EXECUTING
-**Plan:** 3 of 3
+**Phase:** 60 — Admin Dashboard & Member Self-View
+**Plan:** Not started
 
-**Progress:**[█████░░░░░] 50%
+**Progress:**[███████░░░] 67%
 
 ```
 [##########]----------  0/6 phases
@@ -101,7 +102,7 @@ dashboards) without breaking the zero-dependency discipline
 ## Session Continuity
 
 **Last session:** 2026-11-13T12:35:00.000Z
-**Stopped at:** 59-02 executed (fan-out: sendPushFor + gates + sweep + budget + per-device test-send route)
+**Stopped at:** Phase 59 complete, ready to plan Phase 60
 **Resume file:** .planning/phases/59-browser-push/59-03-SUMMARY.md
 
 **Last action:** executed 59-03 — SW push handler (D-12 open-client suppression, zero-strings contract intact, deep-link via unchanged notificationclick router), client subscribe helpers + Settings Push tab (gesture-only master toggle, push_due row, device list with per-device test push, EN+FR i18n), phase gate green (1489 tests / 0 fail, lint clean, i18n 0 dead/0 stale, e2e 111/111), owner UAT passed 6/6 on production. Post-checkpoint orchestrator fixups: Dockerfile search-terms.mjs (36bf788), VAPID fixture (a2bca20), SW registration after api.init() (687bbe3), A.push* click-dispatch wiring (040f57d + 94774e4), err.pushSubscribeFailed toast (26a7644).
