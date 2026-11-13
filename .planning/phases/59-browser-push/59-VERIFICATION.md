@@ -4,7 +4,7 @@ verified: 2026-11-13T00:00:00Z
 status: passed
 score: 12/12 must-haves verified
 covered_files: ["server.js", "db-adapter.mjs", "public/sw.js", "src/core/push.js", "src/pages/settings.js", "src/actions/actions.js", "src/main.js", "src/locales/en.json", "src/locales/fr.json", "docs/DEPLOY.md", "package.json", "test/push-server.test.mjs", "test/browser-push.test.mjs", ".planning/phases/59-browser-push/59-01-PLAN.md", ".planning/phases/59-browser-push/59-02-PLAN.md", ".planning/phases/59-browser-push/59-03-PLAN.md", ".planning/phases/59-browser-push/59-01-SUMMARY.md", ".planning/phases/59-browser-push/59-02-SUMMARY.md", ".planning/phases/59-browser-push/59-03-SUMMARY.md"]
-covered_digest: "v4:sha256:5ff52314413b6de3122f50794f59ecd18ad9a6313e2f93de979342a84cb494e3"
+covered_digest: "v2:sha256:d384b1be7923d051338767cefe7b373020201d37ffe7dee1276291628a6cf806"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
