@@ -3883,6 +3883,10 @@ export function enterApp(msg) {
   S.ui.errors = {};
   go(S.prefs.home || 'home');
   toast(msg);
+  /* CR-02 (59-REVIEW): a SPA password login never re-fires main.js's boot/load
+     SW registration — register here too, or enablePush hangs on
+     serviceWorker.ready until the next full page load. */
+  import('../core/push.js').then(m => m.registerSw()).catch(() => {});
 }
 
 /* D-75 (TFA-05): verify success lands through the exact same post-success

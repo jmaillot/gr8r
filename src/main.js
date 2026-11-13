@@ -103,12 +103,10 @@ addEventListener('projects:notifs', () => pollNotifs());
    the poll + email channels remain the delivery guarantee.
    59-UAT fix: the old gate (`api.enabled` && register-on-load) was evaluated
    at module-eval time, BEFORE init()'s api.init() flipped api.enabled — so the
-   service worker never registered on any server deployment. One idempotent
-   helper, called both from boot (after api.init() resolves) and from load. */
-const registerSw = () => {
-  if (!('serviceWorker' in navigator) || !api.enabled) return;
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-};
+   service worker never registered on any server deployment. The helper now
+   lives in push.js (registerSw) so enterApp can re-fire it after SPA logins
+   (CR-02) — boot and load both funnel into the same lazy import. */
+const registerSw = () => import('./core/push.js').then(m => m.registerSw()).catch(() => {});
 addEventListener('load', registerSw);
 
 addEventListener('projects:save-error', e => {

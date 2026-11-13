@@ -154,6 +154,23 @@ export function setPushWorkspace(fn) {
 /* D-04: the device label is client-chosen once at subscribe time — derived
    from the browser/OS (the same builder the sessions table uses), never
    asked for twice. */
+/* One idempotent SW registration, callable from anywhere (boot in main.js AND
+   every SPA login path via enterApp — CR-02: a password login with no reload
+   never re-fired the boot-time registration, leaving serviceWorker.ready
+   hanging and enablePush unusable until the next full page load). */
+export const registerSw = () => {
+  if (!('serviceWorker' in navigator) || !api.enabled) return;
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+};
+
+/* CR-02: serviceWorker.ready hangs forever when no SW is registered yet —
+   every waiter must be bounded so failures surface as toasts, not dead UI. */
+const swReady = () =>
+  Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('swUnavailable')), 8000)),
+  ]);
+
 export const defaultPushLabel = () => {
   try {
     return deviceLabel(navigator.userAgent) || t('settings.notif.pushUnnamed');
@@ -182,7 +199,7 @@ export async function readPushState() {
   const devices = await fetchPushDevices();
   let localEndpoint = null;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await swReady();
     const sub = await reg.pushManager.getSubscription();
     localEndpoint = sub?.endpoint || null;
   } catch {
@@ -207,7 +224,7 @@ export async function enablePush(label) {
       const p = await window.Notification.requestPermission();
       if (p !== 'granted') return { ok: false, code: p === 'denied' ? 'denied' : 'dismissed' };
     }
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await swReady();
     const raw = Uint8Array.from(atob(String(cfg.vapidPublicKey).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
     /* CANONICAL body: subscription.toJSON() verbatim + the client-chosen
@@ -230,7 +247,7 @@ export async function enablePush(label) {
 export async function disablePush() {
   let endpoint = null;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await swReady();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
       endpoint = sub.endpoint;

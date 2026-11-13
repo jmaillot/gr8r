@@ -4606,7 +4606,22 @@ async function handleApi(req, res, url) {
     const ws = await pushSubscriptionWorkspace(req, res, user, body?.workspace);
     if (!ws) return;
     const t = now();
-    const existing = await db.get('select created_at from push_subscriptions where endpoint = ?', [endpoint]);
+    /* CR-01 (59-REVIEW): endpoint is globally UNIQUE, so the old unscoped
+       lookup + insert-or-replace let any member who learned another member's
+       endpoint URL hijack the row (reparent + key swap → silent victim
+       unsubscribe). Replacement is now scoped to THIS member's own row; a
+       row owned by someone else is never reparented — honest 409, keyed. */
+    const existing = await db.get(
+      'select workspace_id, user_id, created_at from push_subscriptions where endpoint = ? and workspace_id = ? and user_id = ?',
+      [endpoint, ws.id, user.id],
+    );
+    const foreign = await db.get('select user_id from push_subscriptions where endpoint = ?', [endpoint]);
+    /* Any pre-existing row this session does not own in THIS workspace is
+       refused (another member's row, or your own row under another
+       workspace — the old replace silently clobbered it cross-workspace). */
+    if (!existing && foreign) {
+      return fail(res, 409, 'pushEndpointOwned', 'Push endpoint belongs to another member');
+    }
     const createdAt = existing?.created_at ?? t;
     await db.run(
       'insert or replace into push_subscriptions (workspace_id, user_id, endpoint, p256dh, auth, label, created_at, last_seen_at) values (?,?,?,?,?,?,?,?)',

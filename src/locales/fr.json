@@ -1716,6 +1716,7 @@
   "err.crossOriginRejected": "Requête cross-origin rejetée",
   "err.unknownLocale": "Locale inconnue",
   "err.unknownPrefKey": "Clé de préférence inconnue",
+  "err.pushEndpointOwned": "Cet appareil est déjà abonné sous un autre membre ou un autre espace.",
   "err.pushSubscribeFailed": "Impossible d’abonner cet appareil aux push — réessayez ou vérifiez la configuration du serveur.",
   "err.pushUnavailable": "Notifications push navigateur non configurées",
   "err.invalidSubscription": "Abonnement push invalide",
