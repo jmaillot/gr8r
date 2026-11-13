@@ -192,7 +192,7 @@ export function paletteItems() {
           srv.map(st => {
             const local = task(st.id);
             return {
-              html: local ? stIcon(local.status) : ic('circle', 15),
+              html: local ? stIcon(local.status) : stIcon('backlog', 15),
               name: st.title,
               sub: (st.snippet || '').slice(0, 80),
               r: st.key,

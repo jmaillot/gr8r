@@ -12,7 +12,7 @@
 
 import { api, call } from './api.js';
 
-/* The one client entry point to the server search route. `signal` is an
+/* The one client entry point to the server search route. The signal argument is an
    optional AbortSignal — a newer keystroke aborts the in-flight request
    (D-02). Never throws. */
 export async function searchTasksServer(q, signal) {
