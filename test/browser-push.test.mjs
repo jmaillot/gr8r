@@ -593,9 +593,9 @@ test('the Push tab renders the master enable affordance, per-type rows including
   S.ui.pushDevices = [{ endpoint: 'https://push.example/ep1', label: 'Mac — Chrome', created_at: Date.now() }];
   S.ui.pushLocalEndpoint = 'https://push.example/ep1';
   const html = settings.settingsBody('notif-push', 'Push');
-  assert.ok(html.includes('data-a="pushDisable"'), 'master OFF affordance when this device is subscribed (D-07)');
+  assert.ok(html.includes('data-in="pushDisable"'), 'master OFF affordance when this device is subscribed (D-07)');
   assert.ok(html.includes('data-k="push_due"'), 'the push_due row is present (D-09)');
-  assert.ok(html.includes('data-a="pushTest"'), 'a per-device send-test action exists (D-05)');
+  assert.ok(html.includes('data-in="pushTest"'), 'a per-device send-test action exists (D-05)');
   assert.ok(html.includes('data-id="https://push.example/ep1"'), 'the action targets the exact device endpoint');
   assert.ok(html.includes('Mac — Chrome'), 'the device label renders (D-03)');
   assert.ok(html.includes('data-k="push_mention"'), 'per-type rows stay (D-02)');
@@ -605,11 +605,11 @@ test('the master enable affordance shows when the device is not yet subscribed, 
   setFetchRoute(configRoute);
   S.ui.pushConfig = { vapidPublicKey: 'x' };
   S.ui.pushLocalEndpoint = null;
-  assert.ok(settings.settingsBody('notif-push', 'Push').includes('data-a="pushEnable"'), 'OFF state offers enable');
+  assert.ok(settings.settingsBody('notif-push', 'Push').includes('data-in="pushEnable"'), 'OFF state offers enable');
   S.ui.pushConfig = null; /* 404 config → feature absent */
   const html = settings.settingsBody('notif-push', 'Push');
-  assert.ok(!html.includes('data-a="pushEnable"'), 'no master enable when unconfigured');
-  assert.ok(!html.includes('data-a="pushDisable"'), 'no master off when unconfigured');
+  assert.ok(!html.includes('data-in="pushEnable"'), 'no master enable when unconfigured');
+  assert.ok(!html.includes('data-in="pushDisable"'), 'no master off when unconfigured');
   S.ui.pushConfig = { vapidPublicKey: 'x' };
 });
 
