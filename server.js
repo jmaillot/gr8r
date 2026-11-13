@@ -1696,6 +1696,16 @@ async function initPushCustody() {
     logWarn(`push: web-push unavailable (${err.message}) — browser push disabled`);
     return;
   }
+  /* Test seam (PUSH_SINK_MODULE): the node:test fan-out suite stubs the
+     sender so sends are recorded, never networked. Load failures fall back
+     to the real sender — the seam is never a silent send suppressor. */
+  if (process.env.PUSH_SINK_MODULE) {
+    try {
+      pushSender = (await import(process.env.PUSH_SINK_MODULE)).sendNotification || null;
+    } catch (err) {
+      logWarn(`push: PUSH_SINK_MODULE unavailable (${err.message}) — using the real push sender`);
+    }
+  }
   const envPub = String(process.env.VAPID_PUBLIC_KEY || '');
   const envPriv = String(process.env.VAPID_PRIVATE_KEY || '');
   let pub = envPub && envPriv ? envPub : '';
@@ -1751,8 +1761,111 @@ async function initPushCustody() {
   logInfo(`push: VAPID keys loaded (source: ${source}) — browser push enabled`);
 }
 
-/* sendPushFor lives in Plan 02 — the fan-out site. Plan 01 lands custody,
-   storage and the self-service routes only. */
+/* ------------------- browser push fan-out (Phase 59 Plan 02, PUSH-02/03/04) -------------------
+
+   PUSH_NOTIF_KIND clones NOTIF_EMAIL_KIND onto the push_* prefs (D-08). The
+   per-notif gate order mirrors queueNotifEmails exactly (D-11) — self
+   suppression → per-type pref → memberCanReadProject at send time — with NO
+   digest-suppression branch (D-10: push, like inbox rows, is never
+   suppressed). Gated on PUSH.enabled (VAPID presence) only, never
+   MAILER.enabled. Payload is pre-localized per recipient via tFor (D-16:
+   sender display name + action title; D-17: task key + title only, never a
+   body/description; D-18: title truncated to 120 chars and a whole-payload
+   budget assert so 413 can never reach the push service).
+
+   Test seam (node:test harness): PUSH_SINK_MODULE names a module exporting
+   sendNotification(sub, payload) — the fan-out tests record sends and
+   simulate push-service failures without touching the network. Unset → the
+   real web-push sender. */
+const PUSH_NOTIF_KIND = {
+  mention: 'push_mention',
+  assign: 'push_assign',
+  comment: 'push_comment',
+  due_reminder: 'push_due',
+  past_due: 'push_due',
+};
+const PUSH_TITLE_MAX_CHARS = 120;
+const PUSH_PAYLOAD_MAX_OCTETS = 4096;
+let pushSender = null;
+
+function pushTitle(locale, n, senderName) {
+  if (n.type === 'mention') return tFor(locale, 'notif.push.mentioned', { name: senderName });
+  if (n.type === 'assign') return tFor(locale, 'notif.push.assigned', { name: senderName });
+  if (n.type === 'comment') return tFor(locale, 'notif.push.commented', { name: senderName });
+  return tFor(locale, 'notif.push.due');
+}
+
+async function sendPushFor(wsRow, nextDoc, newNotifs, isTest = false, onlyEndpoint = null) {
+  if (!PUSH.enabled || !webpush) return;
+  const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
+  const projectById = new Map((Array.isArray(nextDoc?.data?.projects) ? nextDoc.data.projects : []).filter(p => p?.id).map(p => [p.id, p]));
+  const authority = new Map(
+    (
+      await db.all('select m.member_id, m.user_id, u.name, u.email, u.locale from memberships m join users u on u.id = m.user_id where m.workspace_id = ?', [
+        wsRow.id,
+      ])
+    ).map(r => [r.member_id, r]),
+  );
+  for (const n of newNotifs) {
+    try {
+      if (!isTest && n.by === n.to) continue; // never push the author about their own action (D-11)
+      const prefKey = PUSH_NOTIF_KIND[n.type];
+      if (!prefKey) continue;
+      /* A test push is the caller exercising their own device (D-05/D-06): the
+         recipient IS the caller and no notif row exists — the pref gate and
+         the self-skip above are bypassed, everything else is identical. */
+      if (!isTest) {
+        const prefs = await getUserNotifPrefs(authority.get(n.to)?.user_id || n.to, wsRow.id);
+        if (prefs[prefKey] === false) continue;
+      }
+      const task = n.task ? (nextDoc?.data?.tasks || []).find(x => x?.id === n.task) : null;
+      /* D-11 send-time re-check (T-59-07): visibility against the NEXT doc's
+         project map — a recipient who lost access after the notif row was
+         written gets no push. Underivable → keep flowing (email parity). */
+      const projectId = n.project || task?.project || null;
+      if (projectId && !(await memberCanReadProject(projectById.get(projectId), wsRow.id, n.to))) continue;
+      const recipientLocale = authority.get(n.to)?.locale === 'fr' ? 'fr' : 'en';
+      let title = pushTitle(recipientLocale, n, authority.get(n.by)?.name || profiles.get(n.by)?.name || 'Un membre');
+      if (isTest) title = `${tFor(recipientLocale, 'notif.push.test')} · ${title}`;
+      /* D-17/D-18: body = task key + truncated title, never a task body. A
+         notif with no resolvable task (the test push) localizes a fixed body. */
+      const rawTitle = (task?.title || '').slice(0, PUSH_TITLE_MAX_CHARS) || tFor(recipientLocale, 'notif.push.testBody');
+      const body = task?.key ? `${task.key} ${rawTitle}` : rawTitle;
+      const url = task?.key ? `${APP_URL}/w/${wsRow.slug}/task/${encodeURIComponent(task.key)}` : `${APP_URL}/w/${wsRow.slug}/`;
+      const payload = JSON.stringify({ url, title, body, test: !!isTest });
+      const octets = Buffer.byteLength(payload, 'utf8');
+      if (octets > PUSH_PAYLOAD_MAX_OCTETS) throw new Error(`push payload budget exceeded: ${octets} > ${PUSH_PAYLOAD_MAX_OCTETS} octets`);
+      const send = pushSender || webpush.sendNotification.bind(webpush);
+      /* D-14: one push per notif row per subscribed device — no aggregation. */
+      const rows = onlyEndpoint
+        ? await db.all('select * from push_subscriptions where workspace_id = ? and user_id = ? and endpoint = ?', [
+            wsRow.id,
+            authority.get(n.to)?.user_id || n.to,
+            onlyEndpoint,
+          ])
+        : await db.all('select * from push_subscriptions where workspace_id = ? and user_id = ?', [wsRow.id, authority.get(n.to)?.user_id || n.to]);
+      for (const row of rows) {
+        try {
+          await send({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload);
+          await db.run('update push_subscriptions set last_seen_at = ? where endpoint = ?', [now(), row.endpoint]);
+        } catch (err) {
+          /* PUSH-04 (Pitfall 1): 404/410 are authoritative dead-endpoint
+             signals — the row is deleted in the SAME send pass, never
+             retried. Everything else (429/5xx/network) keeps the row and only
+             logs; the next natural fan-out is the retry. */
+          if (err?.statusCode === 404 || err?.statusCode === 410) {
+            await db.run('delete from push_subscriptions where endpoint = ?', [row.endpoint]);
+          } else {
+            logWarn(`push send ${n.id} → ${String(row.endpoint).slice(0, 48)}: ${err.message}`);
+          }
+        }
+      }
+    } catch (err) {
+      logWarn(`push fan-out ${n?.id}: ${err.message}`);
+    }
+  }
+}
+
 
 const NOTIF_EMAIL_KIND = {
   mention: 'email_mention',
@@ -1997,10 +2110,15 @@ async function runReminderPass({ now: at = new Date() } = {}) {
             if (!claimed) continue;
             emitted.push(notif);
             /* Post-commit fan-out — NEVER inside the transaction (a hung SMTP
-               server would hold the SQLite write lock). Uses the post-write doc. */
-            if (MAILER.enabled) {
+               server would hold the SQLite write lock). Uses the post-write doc.
+               One parse, two consumers (RESEARCH open question 3): the push
+               fan-out reuses the same parse. Push is gated on PUSH.enabled
+               ONLY — never inside the MAILER gate (D-09/D-10: a digest user
+               still gets reminder pushes, inbox rows stay untouched). */
+            if (MAILER.enabled || PUSH.enabled) {
               const nextDoc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ws.id])).doc);
-              await queueNotifEmails(ws, nextDoc, [notif]);
+              if (MAILER.enabled) await queueNotifEmails(ws, nextDoc, [notif]);
+              if (PUSH.enabled) await sendPushFor(ws, nextDoc, [notif]);
             }
           }
         }
@@ -4511,6 +4629,42 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true });
   }
 
+  /* ------------------- per-device test send (Phase 59, D-05/D-06, PUSH-01) -------------------
+
+     EXACT literal route, body-carried endpoint (matching the DELETE route's
+     no-:id family). T-59-08: no arbitrary content is accepted — the notif
+     object is built SERVER-side and rides the SAME payload-shaping path as a
+     real fan-out (isTest=true tags the title). Only the caller's OWN device
+     row in the caller's own workspace is addressable: user_id comes from the
+     session, never the body. */
+  if (pathname === '/api/me/push-subscriptions/test' && method === 'POST') {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    if (!PUSH.enabled) return fail(res, 404, 'pushUnavailable', 'Browser push is not configured');
+    const body = await readJson(req).catch(() => null);
+    const endpoint = body?.endpoint;
+    if (!pushEndpointOk(endpoint)) return fail(res, 400, 'invalidSubscription', 'Invalid push subscription');
+    const ws = await pushSubscriptionWorkspace(req, res, user, body?.workspace);
+    if (!ws) return;
+    const membership = await db.get('select member_id from memberships where workspace_id = ? and user_id = ?', [ws.id, user.id]);
+    if (!membership) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
+    const row = await db.get('select endpoint from push_subscriptions where workspace_id = ? and user_id = ? and endpoint = ?', [ws.id, user.id, endpoint]);
+    if (!row) return fail(res, 404, 'notFound', 'Not found');
+    const nextDoc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ws.id])).doc);
+    const testNotif = {
+      id: `test-${uid()}`,
+      type: 'mention',
+      to: membership.member_id,
+      by: membership.member_id, // self — the isTest path bypasses the self-skip by design
+      task: null,
+      at: Date.now(),
+      read: true,
+    };
+    await sendPushFor(ws, nextDoc, [testNotif], true, endpoint);
+    return json(res, 200, { ok: true });
+  }
+
   /* ------------------- per-user saved views (Phase 57, VIEW-01/VIEW-02, D-05/D-07) ------------------- */
 
   /* The canonical GET body builder, shared by GET/PUT/DELETE so all three
@@ -5707,6 +5861,10 @@ async function handleApi(req, res, url) {
       /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
          server delays nothing: errors logged, response already flushed. */
       if (MAILER.enabled && newNotifs.length) await queueNotifEmails(row, next, newNotifs);
+      /* P4-f push twin (Phase 59, PUSH-02): same collected-in-tx / sent-after-
+         commit shape, gated on PUSH.enabled (VAPID presence) — never on
+         MAILER.enabled (D-10: no digest suppression, D-11: same gate order). */
+      if (PUSH.enabled && newNotifs.length) await sendPushFor(row, next, newNotifs);
       /* After the commit succeeds: missing file at unlink time is success
          (idempotent); unlink errors are logged and swallowed — the doc write
          is already committed and must not be failed by a filesystem hiccup. */
