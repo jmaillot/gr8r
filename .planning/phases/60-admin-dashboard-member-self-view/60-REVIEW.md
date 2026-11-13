@@ -1,117 +1,98 @@
 ---
 phase: 60-admin-dashboard-member-self-view
-reviewed: 2026-11-13T12:00:00Z
+reviewed: 2026-11-13T16:10:00Z
 depth: standard
-files_reviewed: 12
+files_reviewed: 5
 files_reviewed_list:
-  - server.js
   - src/pages/dashboard.js
-  - src/pages/settings.js
-  - src/pages/members.js
-  - src/shell/render.js
-  - src/shell/layout.js
-  - src/core/api.js
-  - src/actions/actions.js
-  - src/locales/en.json
-  - src/locales/fr.json
+  - server.js
+  - test/helpers/dashboard-client-loader.mjs
+  - test/dashboard-client.test.mjs
   - test/dashboard.test.mjs
-  - test/self-visibility.test.mjs
-  - e2e/dashboard.spec.mjs
 findings:
-  critical: 1
-  warning: 2
-  info: 3
-  total: 6
+  critical: 0
+  warning: 1
+  info: 4
+  total: 5
 status: issues_found
 ---
 
-# Phase 60: Code Review Report
+# Phase 60: Code Review Report (RE-REVIEW after gap-closure plan 60-03)
 
-**Reviewed:** 2026-11-13T12:00:00Z
+**Reviewed:** 2026-11-13T16:10:00Z
 **Depth:** standard
-**Files Reviewed:** 13 (12 substantive + 2 locale files as one i18n check)
-**Status:** issues_found
+**Files Reviewed:** 5 (60-03 changed files) + re-read of the open Info findings' targets
+**Status:** issues_found (no criticals; all three targeted findings CLOSED)
 
 ## Summary
 
-Reviewed the Phase 60 server routes (admin dashboard aggregate, member self-view), the client dashboard page with its poll lifecycle, the Settings › My access section, the shared `visReasonLabel` refactor, the api seams, and the new unit/e2e tests. The server gates are correctly ordered (regex → requireWorkspace → sameOrigin → fail before doc parse for the *gate*), the whitelist on `activityWindow` is present, self-view redaction is byte-tested, and client rendering is escaped consistently.
+Re-review after gap-closure plan 60-03. The three findings from the previous review are all genuinely closed, each with a regression test that fails against the pre-fix code (RED commit `7ca2397` per 60-03-SUMMARY) and passes now:
 
-The main defect is in the dashboard page's fill loop: a failed fetch while a different activity window is selected produces an unbounded fetch/render ping-pong. Two warnings follow: the poll timer dies permanently after the first route exit, and the server's `400 badActivityWindow` check runs **after** the full doc parse and aggregation, contradicting the route comment, the SUMMARY, and the test's own title ("BEFORE any doc work") — a claim no test can actually observe.
+- **CR-01 (fetch/render ping-pong) — CLOSED.** `fill()` claims the window up-front (`src/pages/dashboard.js:42`) and the kick guard at line 101 carries `!S.ui.dashErr`. I traced the failure path end-to-end: a network error returns `{ok:false, status:0}` (`src/core/api.js:72–73`), `dashErr` is set to a truthy object, both fullstate early-returns are skipped (status 0 is falsy) so cached panels render, and the kick is suppressed — no re-entry into `fill()` from `render()`. Aborted in-flight fills drop on the `my !== fillSeq` check before any render. Pinned by `test/dashboard-client.test.mjs:46–59` (exactly 1 call across 6 renders).
+- **WR-01 (dead poll after route exit) — CLOSED.** `if (!timer) startPoll()` at `src/pages/dashboard.js:105` runs unconditionally of `loading`; `startPoll()` re-registers `ROUTE_TEARDOWN.dashboard` on every entry, so there is no stale-closure entry. Re-entry with cached data restarts the 30 s rhythm; repeated entry/exit cycles cannot stack intervals (`if (timer) return`). Pinned by `test/dashboard-client.test.mjs:79–136` with `mock.timers`.
+- **WR-02 (whitelist after doc parse) — CLOSED.** The `windowParam`/`WINDOW_MS`/`badActivityWindow` check now sits at `server.js:6172–6174`, above `JSON.parse(ctx.ws.doc)` at line 6175. The invariant is now pinned **behaviorally**, not just by title: `test/dashboard.test.mjs:234–249` corrupts the stored doc so a parse would throw and asserts the keyed 400 still answers; a belt-and-braces source-order pin follows at lines 253–263.
 
-## Critical Issues
+Live run: `node --test test/dashboard.test.mjs test/dashboard-client.test.mjs test/self-visibility.test.mjs` → 27 pass / 0 fail.
 
-### CR-01: Infinite fetch/render loop when a window-switch fetch fails
-
-**File:** `src/pages/dashboard.js:93` (with `fill()` at 34–46)
-**Issue:** `pageDashboard` kicks `fill()` whenever `S.ui.dashDataWindow !== w`. `fill()` only advances `dashDataWindow` **on success** (line 42). If the user switches the activity window (e.g. 7d → 24h) and the fetch fails, `dashErr` is set with `status` 0 (network error from `call()`, `src/core/api.js:67`), which is falsy, so both error early-returns at lines 84 and 86 are skipped; `loading` is false (stale `dashData` present); `dashDataWindow` still differs from `w`; `fill()` calls `render()` — which re-enters `pageDashboard`, which re-kicks `fill()`. Result: an unbounded, immediate fetch→render→fetch loop that hammers the server until navigation away. The route guard (`S.ui.route !== 'dashboard'`) is the only thing that eventually stops it.
-
-**Fix:**
-```js
-// In fill(): claim the window up-front so a failure can't re-trigger the kick
-async function fill() {
-  const my = ++fillSeq;
-  const w = S.ui.dashWindow || '7d';
-  inflight?.abort();
-  inflight = new AbortController();
-  S.ui.dashDataWindow = w;            // claim before awaiting
-  const res = await api.dashboard(w, { signal: inflight.signal });
-  ...
-}
-// and in pageDashboard, guard the kick:
-if ((loading || S.ui.dashDataWindow !== w) && !S.ui.dashErr) fill();
-```
-(or track a separate `lastRequestedWindow` so the kick fires once per window selection, not once per render.)
+The test harness (`test/helpers/dashboard-client-loader.mjs`) loads the real client module with data-URL stubs by resolved-path suffix — sound pattern, no dependency added (zero-dependency discipline respected). The new server-side corrupt-doc probe restores the original doc in a `finally`. No new criticals found. One new warning and four info items below.
 
 ## Warnings
 
-### WR-01: Poll lifecycle dies permanently after the first route exit
+### WR-03: `windowParam in WINDOW_MS` passes the whitelist for inherited Object prototype keys
 
-**File:** `src/pages/dashboard.js:52–62, 93–94`
-**Issue:** `startPoll()` is only invoked under `if (loading)`. On route exit, `ROUTE_TEARDOWN.dashboard` clears the timer, bumps `fillSeq`, aborts and nulls `inflight` — but `S.ui.dashData` is retained. Re-entering `/w/:slug/dashboard` later: `loading` is false (data cached), `dashDataWindow === w`, so neither `fill()` nor `startPoll()` runs. The 30 s poll is silently dead for the rest of the session; the page shows indefinitely stale data with no indication. Additionally, `ROUTE_TEARDOWN.dashboard` remains a stale entry (a re-enter via deep link with no `go()` call leaves the registry entry pointing at a no-op closure).
-
-**Fix:** register the teardown at module load, and restart the poll on entry:
+**File:** `server.js:6172–6174`
+**Issue:** `in` walks the prototype chain. `?activityWindow=constructor` (also `toString`, `valueOf`, `hasOwnProperty`, …) passes the whitelist check, then `WINDOW_MS[windowParam]` resolves to the inherited `Object` function; `Date.now() - fn` is `NaN`, so the activity filter (`a?.at >= NaN`) rejects every row and the route answers `200` with an empty activity panel instead of the documented keyed `400 badActivityWindow` ("any other value fails 400"). No injection — the value never reaches the doc or a sink — but it silently violates the whitelisting contract the route comment and tests pin.
+**Fix:**
 ```js
-ROUTE_TEARDOWN.dashboard = () => { if (timer) clearInterval(timer); timer = null; fillSeq++; inflight?.abort(); inflight = null; };
-// in pageDashboard, regardless of loading state:
-if (!timer) startPoll();
+if (!Object.hasOwn(WINDOW_MS, windowParam))
+  return fail(res, 400, 'badActivityWindow', 'activityWindow must be one of 24h, 7d, 30d');
 ```
-
-### WR-02: `400 badActivityWindow` fires AFTER full doc parse and aggregation — contradicts the documented T-60-03 mitigation
-
-**File:** `server.js:6183–6190` (dashboard route block, added lines); `test/dashboard.test.mjs:224`
-**Issue:** The route comment, the 60-01 SUMMARY ("other values → keyed `400 badActivityWindow` before any doc work"), and the test title all claim the invalid-window 400 happens **before** any doc work. The code does the opposite: `JSON.parse(ctx.ws.doc)`, `normalizeProjects`, the full overdue grouping/sorting, the load counting, and the upcoming scan all execute first; the whitelist check (`if (!(windowParam in WINDOW_MS)) return fail(res, 400, ...)`) sits below all of it. The test only asserts status and code — it cannot observe evaluation order, so the claim is untested. The whitelist still holds (no injection), but the documented threat-mitigation invariant is not honored, and every malformed request pays a full doc parse of an arbitrarily large document.
-
-**Fix:** hoist the two lines above `const doc = JSON.parse(ctx.ws.doc);`:
-```js
-const windowParam = String(url.searchParams.get('activityWindow') || '7d');
-const WINDOW_MS = { '24h': 864e5, '7d': 6048e5, '30d': 2592e6 };
-if (!(windowParam in WINDOW_MS)) return fail(res, 400, 'badActivityWindow', 'activityWindow must be one of 24h, 7d, 30d');
-```
+(or a plain `switch` / `Set`). Add `'constructor'` to the invalid-window test matrix.
 
 ## Info
 
-### IN-01: Unknown visibility reason rendered unescaped (defense-in-depth gap)
+### IN-01: Unknown visibility reason rendered unescaped (defense-in-depth gap) — OPEN, unchanged
 
-**File:** `src/pages/members.js:30–38`
-**Issue:** In `visReasonLabel`, an unknown `p.reason` is interpolated into the i18n key `page.members.visReason.${p.reason}`; `t()` returns the raw key string when the catalogue lacks it (`src/core/i18n.js:228+` fallback returns `key`), and the callers (`members.js:96`, `settings.js:my-access` rows) render the label into `${label}` **without** `esc()`. `projectAccessReason` currently emits a fixed vocabulary, so this is not exploitable today, but any future server-side reason value with HTML metacharacters would flow to the DOM unescaped.
-**Fix:** in the unknown branch, escape before composing: `esc(t(\`page.members.visReason.${p.reason}\`))` — or drop the interpolation and render `esc(String(p.reason))` for anything not in `VIS_REASON_KNOWN`.
+**File:** `src/pages/members.js:38`
+**Issue:** Carried from the previous review — not in 60-03's scope, still present. An unknown `p.reason` is interpolated into the i18n key `page.members.visReason.${p.reason}` and the result is rendered into the badge without `esc()`. Not exploitable today (fixed server-side vocabulary), but a future reason value with metacharacters would reach the DOM unescaped.
+**Fix:** escape the fallback: `esc(t(\`page.members.visReason.${p.reason}\`))`.
 
-### IN-02: My-access section never re-reads and has no error retry, contradicting its own comment
+### IN-02: My-access section cached forever, sticky error, no retry — OPEN, unchanged
 
-**File:** `src/pages/settings.js:105–113, 529–547`
-**Issue:** The comment says the list is "re-read when re-entered", but the guard `if (api.enabled && !S.ui.myAccessData && !S.ui.myAccessErr)` means once data (or an error) is cached for the session, `refreshMyAccess()` never runs again — access changes made after first view are invisible until a full reload. The error state (`settings.myAccess.error`) has no retry affordance.
-**Fix:** re-read on every section entry (or add a seq/staleness guard), and add a retry row wired to a small action that clears `S.ui.myAccessErr`/`myAccessData`.
+**File:** `src/pages/settings.js`
+**Issue:** Carried from the previous review — not in 60-03's scope, still present. Once `myAccessData`/`myAccessErr` is set, `refreshMyAccess()` never re-runs for the session; no retry affordance on error.
+**Fix:** re-read on every section entry, or add a retry action clearing the cached state.
 
-### IN-03: e2e fixture dates use UTC while the server anchors on the workspace timezone
+### IN-03: e2e fixture dates use UTC while the server anchors on the workspace timezone — OPEN, unchanged
 
-**File:** `e2e/dashboard.spec.mjs:16–19`
-**Issue:** `isoDay()` computes `new Date().toISOString()` (UTC day) while the server's overdue/upcoming windows anchor on `localParts('', ...)` (resolveTz default, Europe/Paris per the unit test). Around the UTC/Paris midnight boundary the fixture's `-3d`/`+2d` offsets can shift a day relative to the server's "today", flipping an overdue row into upcoming (or off-panel) and flaking the assertions.
-**Fix:** derive fixture dates with the same Europe/Paris `Intl.DateTimeFormat('en-CA')` math the unit tests use (as `test/dashboard.test.mjs:29–38` already does).
+**File:** `e2e/dashboard.spec.mjs`
+**Issue:** Carried from the previous review — not in 60-03's scope, still present. `isoDay()` uses UTC day math while the server anchors on `resolveTz`'s default zone; midnight-boundary flake risk.
+**Fix:** derive fixture dates with the same `Intl.DateTimeFormat('en-CA')` zone math the unit tests use.
+
+### IN-04: `lastRequestedWindow` is write-only dead state
+
+**File:** `src/pages/dashboard.js:36, 42`
+**Issue:** The 60-03 fix declares and assigns `lastRequestedWindow` but nothing ever reads it — the actual ping-pong suppression comes from the up-front window claim in `S.ui.dashDataWindow` semantics plus the `!S.ui.dashErr` guard (and, more precisely, from the error screen's early-returns plus the guard). The variable is dead code that suggests a mechanism it does not provide, and will mislead the next reader of the CR-01 fix.
+**Fix:** delete the declaration and its assignment, or actually use it in the kick guard if the intent was one-kick-per-selection.
+
+### IN-05: A status-0 (network) failure shows stale panels with no error UI — dashRetry unreachable until the poll recovers
+
+**File:** `src/pages/dashboard.js:49, 91–101`
+**Issue:** On a network failure `dashErr = { status: 0 }`; both fullstate early-returns key on the falsy `status`, so the cached panels render with no failure indication and the `dashRetry` button is not mounted. Recovery rides the still-running 30 s poll (which clears `dashErr` on success). This is deliberate (pinned by `test/dashboard-client.test.mjs:61–77`'s "cached panels still render" assertion) and is bounded, so it is info-only — but the user gets zero signal that a window switch failed for up to 30 s.
+**Fix:** when `dashErr` is set with a falsy status while cached data exists, render a thin inline banner (e.g. reuse `page.loadFailedBody`) with the existing `dashRetry` action instead of silently showing stale panels.
 
 ---
 
-Additional observations (no finding): the e2e fixture sets `assignees: [memberUserId]` (auth user id) while project `members`/`lead` use the doc membership id — the server's load panel counts via the doc-members map, so these id spaces must remain identical for the Load panel to show the member; the e2e only asserts panel headers, not row contents, so a future divergence would go unnoticed there. The unit tests already cover it (`byId.m_team.count === 2`), so this is a coverage note only.
+## Findings Closed This Round (verified)
 
-_Reviewed: 2026-11-13T12:00:00Z_
+| ID | Title | Verdict | Evidence |
+|----|-------|---------|----------|
+| CR-01 | Infinite fetch/render loop on window-switch failure | **CLOSED** | dashboard.js:42/101; regression test dashboard-client.test.mjs:46–59 (RED→GREEN per 60-03-SUMMARY) |
+| WR-01 | Poll lifecycle dies after first route exit | **CLOSED** | dashboard.js:105 + startPoll re-registration; tests dashboard-client.test.mjs:79–136 |
+| WR-02 | 400 badActivityWindow after doc parse | **CLOSED** | server.js:6172–6174 above 6175; behavioral corrupt-doc probe dashboard.test.mjs:234–249 + source-order pin 253–263 |
+
+---
+
+_Reviewed: 2026-11-13T16:10:00Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
