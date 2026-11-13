@@ -23,7 +23,7 @@ covered_files:
   - test/search-fts.test.mjs
   - test/search-server.test.mjs
   - test/search-terms-drift.test.mjs
-covered_digest: "v4:sha256:b455015f0b19b5e6ceb96149efd1c3a9dd30de463e30ddc283112f9654c0dd86"
+covered_digest: "v2:sha256:a9f6572b1b3703f506ba933473263fb8980d9fafe460c10b4a2763535dfd7e79"
 overrides_applied: 0
 behavior_unverified: 0
 behavior_unverified_items: []
