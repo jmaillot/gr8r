@@ -100,10 +100,16 @@ addEventListener('projects:notifs', () => pollNotifs());
 /* D-48-1: the minimal notification-click service worker. Absolute '/sw.js'
    scope only — a relative URL from a routed deep link would register a
    bogus sub-scope (Pitfall 1). Registration failure is silently ignored:
-   the poll + email channels remain the delivery guarantee. */
-if ('serviceWorker' in navigator && api.enabled) {
-  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
+   the poll + email channels remain the delivery guarantee.
+   59-UAT fix: the old gate (`api.enabled` && register-on-load) was evaluated
+   at module-eval time, BEFORE init()'s api.init() flipped api.enabled — so the
+   service worker never registered on any server deployment. One idempotent
+   helper, called both from boot (after api.init() resolves) and from load. */
+const registerSw = () => {
+  if (!('serviceWorker' in navigator) || !api.enabled) return;
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+};
+addEventListener('load', registerSw);
 
 addEventListener('projects:save-error', e => {
   const { status, error } = e.detail || {};
@@ -289,6 +295,7 @@ async function seedLegacyLocale() {
      survive a mid-challenge refresh (Pitfall 9). */
   const authRoutes = ['login', 'signup', 'forgot', 'reset', 'verify', 'onboarding', 'tfa', 'invitations'];
   const withServer = await api.init();
+  registerSw(); // 59-UAT fix: register after api.enabled can be true (idempotent; no-ops in demo mode)
   if (!withServer) await primeLocale(readStoredLocale() || negotiated);
   /* Seed-lazy boot (DELIV-02): a fresh demo boot mirrors today's behavior — every
      local boot without saved data received the demo seed synchronously. The seed now
