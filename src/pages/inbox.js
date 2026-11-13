@@ -4,6 +4,9 @@ import { ic } from '../core/icons.js';
 import { S, commentsOf, mem, myNotifs, pColor, proj, task } from '../core/store.js';
 import { t, has } from '../core/i18n.js';
 import { av, empty, fmtComment } from '../ui/helpers.js';
+import { groupBursts } from '../core/inboxBursts.js';
+
+export { groupBursts, burstUnreadIds } from '../core/inboxBursts.js';
 import { cellAssignee, cellDue, cellPrio, cellStatus } from '../components/task-list.js';
 import { commentHtml } from '../overlays/drawer.js';
 
@@ -28,6 +31,10 @@ export function pageInbox() {
   ns = ns.filter(n => cat === 'all' || inCat(n, cat));
   if (S.ui.inboxUnread) ns = ns.filter(n => !n.read);
   const sel = myNotifs().find(n => n.id === S.ui.inboxSel) || null;
+  /* [61-02 D-10/D-11] Render-only burst coalescing: unread rows sharing task +
+     type collapse into one summary row. Counts above stay computed from the RAW
+     filtered list — grouping only shapes what is rendered (tab badges exact). */
+  const rows = groupBursts(ns, S.ui.inboxBurstOpen);
   return `<div class="page flush">
     <div style="display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);flex:1;min-height:0" class="inbox-grid">
       <style>@media(max-width:900px){.inbox-grid{grid-template-columns:minmax(0,1fr)!important}.inbox-prev{display:${sel ? 'flex' : 'none'}!important;position:fixed;inset:0;z-index:48;background:var(--surface)}}</style>
@@ -37,11 +44,38 @@ export function pageInbox() {
           <button class="ibtn ibtn-sm" data-a="markAllRead" data-tip="${t('page.inbox.markAllRead')}" aria-label="${t('page.inbox.markAllRead')}">${ic('check-check', 15)}</button></div>
         <div class="tabs inbox-tabs" role="tablist">${cats.map(([k, n]) => `<button role="tab" aria-selected="${cat === k}" class="tab ${cat === k ? 'on' : ''}" data-a="set" data-k="inboxCat" data-v="${k}">${n}${count(k) ? `<span class="cnt">${count(k)}</span>` : ''}</button>`).join('')}</div>
         <div class="inbox-list" data-keep="inbox-list">
-          ${ns.length ? ns.map(n => inboxItem(n, sel && sel.id === n.id)).join('') : empty('inbox', t('page.states.caughtUp'), S.ui.inboxUnread ? t('page.inbox.emptyUnread') : t('page.inbox.emptyBody'), '', 'sm')}
+          ${rows.length ? rows.map(it => (it.burst ? burstRow(it) : inboxItem(it, sel && sel.id === it.id))).join('') : empty('inbox', t('page.states.caughtUp'), S.ui.inboxUnread ? t('page.inbox.emptyUnread') : t('page.inbox.emptyBody'), '', 'sm')}
         </div>
       </div>
       <div class="inbox-prev" style="display:flex;flex-direction:column;min-height:0;overflow-y:auto">${sel ? inboxPreview(sel) : `<div class="fullstate"><div class="box"><div class="empty-state" style="padding:0"><div class="glyph">${ic('mail-open', 20)}</div><h2 class="es-h">${t('page.inbox.selectTitle')}</h2><p>${t('page.inbox.selectBody')}</p></div></div></div>`}</div>
     </div>
+  </div>`;
+}
+/* ---------- INBOX burst coalescing (Phase 61, D-10..D-13) ----------
+   groupBursts/burstUnreadIds live in src/core/inboxBursts.js (zero imports —
+   shared with the actions chunk without Phase 56 chunk-coupling) and are
+   re-exported above. This page owns only the summary-row markup (D-13). */
+function burstRow(g) {
+  const first = g.members[0];
+  const tk = task(first.task);
+  /* Defensive: a notif whose task vanished from the store renders as its newest
+     member's plain row instead of crashing the summary (Pitfall 4 posture). */
+  if (!tk) return inboxItem(first, false);
+  const p = proj(tk.project);
+  const keyName = 'notif.burst.' + first.type;
+  const label = has(keyName) ? t(keyName, { n: g.members.length }) : t('notif.burst.generic', { n: g.members.length });
+  const expTip = g.open ? t('notif.burst.collapse') : t('notif.burst.expand');
+  const readTip = t('page.inbox.markRead');
+  /* Summary row (D-13): count-by-type + task key + title, NEVER notifText() of a
+     member (legacy rows carry stored English prose). Primary click navigates to
+     the task drawer via openTask — it never touches S.ui.inboxSel (Pitfall 3);
+     expand/collapse is a separate chevron (innermost data-a wins the click). */
+  return `<div class="row" style="padding:12px var(--gutter);border-bottom:1px solid var(--divider);cursor:pointer;background:var(--surface-2)" data-a="openTask" data-id="${first.task}" role="button" tabindex="0">
+    ${notifIcon(first)}
+    <div class="grow" style="font-size:13px;line-height:1.45"><div>${label} <span class="faint mono">${esc(tk.key)}</span> <b style="font-weight:500">${esc(tk.title)}</b></div>
+      <div class="row" style="gap:6px;margin-top:5px;font-size:11.5px;color:var(--text-3)">${p ? `<span class="pdot" style="--c:${pColor(p)};width:6px;height:6px"></span>${esc(p.name)}` : ''}<span>·</span><span>${ago(first.at)}</span></div></div>
+    <button class="ibtn ibtn-xs" data-a="burstRead" data-gk="${g.gk}" data-tip="${readTip}" aria-label="${readTip}">${ic('check-check', 13)}</button>
+    <button class="ibtn ibtn-xs" data-a="toggleBurst" data-gk="${g.gk}" aria-expanded="${g.open}" data-tip="${expTip}" aria-label="${expTip}">${ic(g.open ? 'chevron-down' : 'chevron-right', 13)}</button>
   </div>`;
 }
 export function notifText(n) {

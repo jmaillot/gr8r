@@ -123,7 +123,17 @@ function buildStamp() {
 }
 
 export default defineConfig({
-  build: { manifest: true },
+  build: {
+    manifest: true,
+    /* [61-02, Rule 3] Entry-chunk headroom for the burst feature: the inbox page
+       module (now carrying the burst summary row) and its sibling notifications
+       page move into their own statically-imported chunk. Semantics unchanged —
+       manualChunks only re-slots bytes; the entry still imports the chunk
+       synchronously at startup, so first-paint routes keep today's render
+       contract (layout.js). This is what lets the DELIV-02 500 kB entry gate
+       stay green with the D-13 burst row + EN burst keys on board. */
+    rollupOptions: { output: { manualChunks: { inbox: ['./src/pages/inbox.js', './src/pages/notifications.js'] } } },
+  },
   plugins: [lucideSubset(), localeNamesSubset(), localeSubset(), buildStamp()],
   server: {
     port: 5173,

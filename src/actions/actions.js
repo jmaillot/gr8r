@@ -35,6 +35,7 @@ import {
   visibleProjects,
 } from '../core/store.js';
 import { api, applyUser, registerAuthRevokedHandler } from '../core/api.js';
+import { burstUnreadIds } from '../core/inboxBursts.js';
 import { searchTasksServer } from '../core/search-server.js';
 import { fileType, fsize } from '../ui/helpers.js';
 import { effectiveDark } from '../core/theme.js';
@@ -2990,6 +2991,27 @@ A.selNotif = el => {
 A.toggleRead = el => {
   const n = D().notifs.find(x => x.id === el.dataset.id);
   n.read = !n.read;
+  save();
+  render();
+};
+/* [61-02 D-11] Burst group expand/collapse — dedicated Set in S.ui (transient,
+   inboxCat/inboxSel precedent); not routed through the generic `set` handler. */
+A.toggleBurst = el => {
+  const gk = el.dataset.gk;
+  if (!S.ui.inboxBurstOpen) S.ui.inboxBurstOpen = new Set();
+  if (S.ui.inboxBurstOpen.has(gk)) S.ui.inboxBurstOpen.delete(gk);
+  else S.ui.inboxBurstOpen.add(gk);
+  render();
+};
+/* Group mark-read: fans toggleRead semantics to every unread member of the
+   group key (D-11 same task + type), via the pure helper the unit test pins. */
+A.burstRead = el => {
+  const ids = burstUnreadIds(D().notifs, el.dataset.gk);
+  if (!ids.length) return;
+  const set = new Set(ids);
+  D().notifs.forEach(x => {
+    if (set.has(x.id)) x.read = true;
+  });
   save();
   render();
 };
