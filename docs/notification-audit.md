@@ -8,17 +8,18 @@
 ## Changements majeurs depuis l'audit Phase 39
 
 1. **Push est vivant** (Phase 59) : `sendPushFor` (server.js:1798) + `PUSH_NOTIF_KIND`
-   (server.js:1770-1776) consomment `push_mention` / `push_assign` / `push_comment` / `push_due`.
-   Les lignes push ne sont plus inertes — les recommandations de trim Phase 39 « trim push » sont
+   (server.js:1780-1785) consomment `push_mention` / `push_assign` / `push_comment` / `push_due`.   Les lignes push ne sont plus inertes — les recommandations de trim Phase 39 « trim push » sont
    **obsolètes** : ces clés ont maintenant un lecteur et un défaut `true` délibéré.
 2. **`push_due` est restauré et vivant** (Phase 59 D-09) : les notifs `due_reminder`/`past_due`
    pushent désormais (server.js:1784-1785), toggle présent dans Settings › Push (settings.js:610).
    Le précédent de retrait Phase 37 est inversé.
 3. **Les toggles morts ne rendent plus** (cleanup propriétaire `projectsstudio#18`) :
    `mention_ws`, `assign_status`, `assign_over` ont disparu de l'UI settings ;
-   `assign_self` n'a plus de toggle non plus. Les 4 clés restent **whitelistées des deux côtés**
-   (server.js:1583-1601 ; src/core/notifPrefs.js:42-48) pour que les rows legacy round-trippent —
-   mais `assign_self` traîne encore un défaut `true` (server.js:1635, notifPrefs.js:35) sans lecteur.
+   `assign_self` n'a plus de toggle non plus. **D-04 appliqué (Phase 61, 2026-11-13)** :
+   les 4 clés sont **retirées des deux whitelist** (server.js:1585-1599 ;
+   src/core/notifPrefs.js:41-45) et `assign_self` ne porte plus de défaut — un PUT
+   portant une clé retirée reçoit `400 unknownPrefKey`, les rows legacy sont absorbées
+   au point de lecture (filtre whitelist `getStoredNotifPrefs` / `sanitize`), sans migration.
 4. **RFC 8058 implémenté** : `List-Unsubscribe` + `List-Unsubscribe-Post: One-Click` sur les
    digests (mailer.js:754), tokens signés + endpoint de désabonnement qui re-merge
    `email_digest=false` (server.js:7421-7468). Les deux rows Phase 39 sont **résolues** — sorties
@@ -46,15 +47,15 @@ Les mentions @membre et @équipe sont émises côté client par `emitMentions`
 (src/actions/actions.js:155-186) : `mention_all` gate le fan-out membres (actions.js:159),
 `mention_team` gate le fan-out équipes (actions.js:160). Les emails passent par `NOTIF_EMAIL_KIND`
 → `email_mention` (server.js:1870-1876, gate :1919-1921), les pushs par `PUSH_NOTIF_KIND` →
-`push_mention` (server.js:1770-1776).
+`push_mention` (server.js:1780-1785).
 
 | Channel | Pref key | Current default | Live ? (consumed by) | Trim recommendation | Status | Source |
 |---------|----------|-----------------|----------------------|---------------------|--------|--------|
-| Email | `email_mention` | `true` (server.js:1630) | oui — emails de mention | **keep** (canal principal) | proposed | server.js:1870-1876, :1921 |
-| Push | `push_mention` | `true` (server.js:1635) | **oui depuis Phase 59** — push de mention | **keep** (défaut true délibéré, Phase 59) | proposed | server.js:1770-1776 ; src/core/push.js:29 |
-| Inbox | `mention_all` | `true` (server.js:1639) | oui — gate fan-out membres | **keep** | proposed | src/actions/actions.js:159 |
-| Inbox | `mention_team` | undefined-falsy = ON (server.js:1577) | oui — gate fan-out @équipe | **keep** (gate lit `!== false`) | proposed | src/actions/actions.js:160 |
-| Inbox | `mention_ws` | undefined-falsy (server.js:1577) | **non** — aucun lecteur (toggle ne rend plus depuis #18 ; grep src/ + server.js 2026-11-13 : whitelist/défauts uniquement) | **ruling D-04** : trim-to-default (retirer de la whitelist client) OU suppression complète (les 2 whitelist + i18n résiduels ; précédent `push_due` Phase 37 pour le retrait end-to-end avec PUT 400) | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | server.js:1594 ; src/core/notifPrefs.js:45 ; grep 2026-11-13 |
+| Email | `email_mention` | `true` (server.js:1625) | oui — emails de mention | **keep** (canal principal) | proposed | server.js:1870-1876, :1917 |
+| Push | `push_mention` | `true` (server.js:1631) | **oui depuis Phase 59** — push de mention | **keep** (défaut true délibéré, Phase 59) | proposed | server.js:1780-1785 ; src/core/push.js:29 |
+| Inbox | `mention_all` | `true` (server.js:1635) | oui — gate fan-out membres | **keep** | proposed | src/actions/actions.js:159 |
+| Inbox | `mention_team` | undefined-falsy = ON (server.js:1572-1584) | oui — gate fan-out @équipe | **keep** (gate lit `!== false`) | proposed | src/actions/actions.js:160 |
+| Inbox | `mention_ws` | ~~undefined-falsy~~ — **retirée 2026-11-13** | ~~non~~ — clé supprimée (D-04 appliqué ; PUT → 400 unknownPrefKey) | **ruling D-04** : suppression complète — **appliquée** · validated-by: owner, 2026-11-13 | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | ex server.js:1594 / notifPrefs.js:45 (retirées) ; grep 2026-11-13 |
 
 ## Assignments
 
@@ -63,11 +64,11 @@ changement d'assignée (actions.js:249). Emails via `email_assign`, pushs via `p
 
 | Channel | Pref key | Current default | Live ? | Trim recommendation | Status | Source |
 |---------|----------|-----------------|--------|---------------------|--------|--------|
-| Email | `email_assign` | `true` (server.js:1631) | oui | **keep** | proposed | server.js:1870-1876, :1921 |
-| Push | `push_assign` | `true` (server.js:1636) | **oui depuis Phase 59** | **keep** | proposed | server.js:1770-1776 |
-| Inbox | `assign_self` | `true` (server.js:1635 ; notifPrefs.js:35) | **non** — aucun lecteur, plus de toggle | **ruling D-04** : trim-to-default OU suppression complète des 2 whitelist. ⚠️ c'est la seule des 4 clés mortes qui porte encore un **défaut** : elle pollue `getUserNotifPrefs`/GET pour tous | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | server.js:1583-1601, :1635 ; src/core/notifPrefs.js:35, :47 ; grep 2026-11-13 |
-| Inbox | `assign_status` | undefined-falsy | **non** — aucun lecteur, plus de toggle | **ruling D-04** : trim-to-default OU suppression complète. NB : le type `update` (section ci-dessous) est le vrai canal des changements de statut, sans lecteur de pref | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | server.js:1596 ; src/core/notifPrefs.js:46 |
-| Inbox | `assign_over` | undefined-falsy | **non** — aucun lecteur, plus de toggle (les retards = `past_due`, qui lit `prefs.past_due`, server.js:2075) | **ruling D-04** : trim-to-default OU suppression complète | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | server.js:1597 ; src/core/notifPrefs.js:47 |
+| Email | `email_assign` | `true` (server.js:1626) | oui | **keep** | proposed | server.js:1870-1876, :1917 |
+| Push | `push_assign` | `true` (server.js:1632) | **oui depuis Phase 59** | **keep** | proposed | server.js:1780-1785 |
+| Inbox | `assign_self` | ~~`true`~~ — **défaut retiré 2026-11-13** | ~~non~~ — clé supprimée (D-04 appliqué) | **ruling D-04** : suppression complète — **appliquée** (les 2 whitelist + défaut) · validated-by: owner, 2026-11-13 | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | ex server.js:1583-1601, :1635 / notifPrefs.js:35, :47 (retirées) ; grep 2026-11-13 |
+| Inbox | `assign_status` | ~~undefined-falsy~~ — **retirée 2026-11-13** | ~~non~~ — clé supprimée (D-04 appliqué) ; le type `update` (section ci-dessous) reste le vrai canal des changements de statut | **ruling D-04** : suppression complète — **appliquée** · validated-by: owner, 2026-11-13 | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | ex server.js:1596 / notifPrefs.js:46 (retirées) |
+| Inbox | `assign_over` | ~~undefined-falsy~~ — **retirée 2026-11-13** | ~~non~~ — clé supprimée (D-04 appliqué) ; les retards = `past_due`, qui lit `prefs.past_due` (server.js:2075) | **ruling D-04** : suppression complète — **appliquée** · validated-by: owner, 2026-11-13 | **validated** — full removal (option A) · validated-by: owner, 2026-11-13 | ex server.js:1597 / notifPrefs.js:47 (retirées) |
 
 ## Commentaires
 
@@ -76,8 +77,8 @@ Un commentaire notifie d'abord les @mentionnés (actions.js:1263), puis les watc
 
 | Channel | Pref key | Current default | Live ? | Trim recommendation | Status | Source |
 |---------|----------|-----------------|--------|---------------------|--------|--------|
-| Email | `email_comment` | **`false`** (server.js:1632) — le SEUL défaut false | oui | **keep** (opt-in volontaire d'un canal bruyant) | proposed | server.js:1872, :1921 |
-| Push | `push_comment` | `true` (server.js:1637) | **oui depuis Phase 59** | **keep** | proposed | server.js:1772 ; src/core/push.js:29 |
+| Email | `email_comment` | **`false`** (server.js:1627) — le SEUL défaut false | oui | **keep** (opt-in volontaire d'un canal bruyant) | proposed | server.js:1872, :1917 |
+| Push | `push_comment` | `true` (server.js:1633) | **oui depuis Phase 59** | **keep** | proposed | server.js:1782 ; src/core/push.js:29 |
 | Inbox | — (pas de clé) | — | oui — rows `comment` sans gate de pref | n/a (pas de clé) ; **candidat burst NOTIF-03** (voir section Burst) | proposed | src/actions/actions.js:1263-1265 |
 
 ## Mises à jour (update) — recommandation de gating (D-06)
@@ -100,10 +101,10 @@ désormais **une row inbox + un email (`email_reminder`) + un push (`push_due`)*
 
 | Channel | Pref key | Current default | Live ? | Trim recommendation | Status | Source |
 |---------|----------|-----------------|--------|---------------------|--------|--------|
-| Inbox | `due_reminder` | `true` (server.js:1633) | oui — offset morning_of (gate `!== false`, server.js:2073) | **keep** | proposed | server.js:2073 |
-| Inbox | `past_due` | `true` (server.js:1634) | oui — offset past_due (server.js:2075) | **keep** | proposed | server.js:2075 |
-| Email | `email_reminder` | `true` (server.js:1630) | oui — les deux offsets mappent sur `email_reminder` ; **supprimé si digest opt-in** (stored `email_digest === true`, server.js:1929) | **keep** | proposed | server.js:1874-1875, :1921, :1929 |
-| Push | `push_due` | `true` (server.js:1638) | **oui depuis Phase 59** — les deux offsets (server.js:1784-1785) | **keep** (restauré Phase 59 D-09, toggle Settings › Push settings.js:610). NB : le push reminder n'a **pas** de branche de suppression digest (D-10 : push jamais supprimé) | proposed | server.js:1770-1776, :1784-1785 ; src/core/notifPrefs.js:12-14 |
+| Inbox | `due_reminder` | `true` (server.js:1629) | oui — offset morning_of (gate `!== false`, server.js:2073) | **keep** | proposed | server.js:2073 |
+| Inbox | `past_due` | `true` (server.js:1630) | oui — offset past_due (server.js:2075) | **keep** | proposed | server.js:2075 |
+| Email | `email_reminder` | `true` (server.js:1628) | oui — les deux offsets mappent sur `email_reminder` ; **supprimé si digest opt-in** (stored `email_digest === true`, server.js:1929) | **keep** | proposed | server.js:1874-1875, :1917, :1929 |
+| Push | `push_due` | `true` (server.js:1634) | **oui depuis Phase 59** — les deux offsets (server.js:1784-1785) | **keep** (restauré Phase 59 D-09, toggle Settings › Push settings.js:610). NB : le push reminder n'a **pas** de branche de suppression digest (D-10 : push jamais supprimé) | proposed | server.js:1780-1785, :1784-1785 ; src/core/notifPrefs.js:12-14 |
 
 ## Digest
 
