@@ -5,8 +5,8 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 61
 current_phase_name: Notification Trim
 status: executing
-stopped_at: Phase 61 context gathered
-last_updated: "2026-11-13T20:56:54.200Z"
+stopped_at: Phase 61 rulings collected (D-05 gate cleared)
+last_updated: "2026-11-13T21:02:46.000Z"
 state_head: f81deb6773225b247fe2592991ab72624f7bbd32
 progress:
   total_phases: 6
@@ -105,11 +105,11 @@ dashboards) without breaking the zero-dependency discipline
 ## Session Continuity
 
 **Last session:** 2026-11-13T20:56:54.120Z
-**Stopped at:** Phase 61 context gathered
+**Stopped at:** Phase 61 rulings collected (D-05 gate cleared)
 **Resume file:** .planning/phases/61-notification-trim/61-CONTEXT.md
 
-**Last action:** Phase 60 gap closure executed (60-03): CR-01/WR-01/WR-02 fixed test-first (RED commits 7ca2397, 299197e; fixes 290bb36, cc75a38), re-review confirmed all three closed (0 critical), re-verification passed 14/14 (digest refreshed to v2 after the v4-prefix staleness false-positive), phase marked complete.
-**Next action:** `/gsd-discuss-phase 61` — Phase 61: Notification Trim (gated on D-05 owner rulings arriving during execution)
+**Last action:** Phase 61 ruling session: audit v2 written to docs/notification-audit.md (D-01, all citations re-verified 2026-11-13); owner ruled D-04 (full removal ×4 dead keys), D-06 (update type untouched), D-05 (coalesce comments+update+mentions+reminders — reminders override); Status cells updated + mirrored above.
+**Next action:** `/gsd-plan-phase 61` — planning sees only validated trims
 
 ### Blockers
 
@@ -124,6 +124,12 @@ dashboards) without breaking the zero-dependency discipline
 - 57-02: applyNamedView preserves `q` AND the render `mode` beside the whitelist — both are session state the snapshot never carries (found by the new e2e)
 
 ## Decisions
+
+- [Phase 61]: 2026-11-13 ruling session (D-05 gate, avant plan-phase) — audit v2 reconstruit à docs/notification-audit.md (D-01), toutes citations re-vérifiées post-Phase-60
+- [Phase 61]: D-04 validated — full removal des 4 clés mortes `mention_ws`/`assign_self`/`assign_status`/`assign_over` (option A : les 2 whitelist + défauts, précédent push_due Phase 37 ; 400 unknownPrefKey accepté) · owner, 2026-11-13
+- [Phase 61]: D-06 validated — le type `update` reste tel quel (pas de gating, pas de suppression) ; le burst est traité par NOTIF-03 · owner, 2026-11-13
+- [Phase 61]: D-05 validated — coalescing inbox pour comments + update + mentions en rafale, ET rappels morning_of/past_due (override propriétaire de la recommandation « ne pas coalescer ») · owner, 2026-11-13
+- [Phase 61]: push_* rows (mention/assign/comment/due) recommandées **keep** — vivantes depuis Phase 59, défauts true délibérés ; digest asymmetry + unsubscribe one-click résolus, hors ruling
 
 - [Phase 59]: 59-02: PUSH_SINK_MODULE boot seam — the spawned-server harness records sends / simulates failures via endpoint markers; load failure degrades to the real sender
 - [Phase 59]: 59-02: test-send route builds the notif SERVER-side (task:null, test-tagged) — no body-carried content (T-59-08); isTest bypasses only the pref gate + self-skip
