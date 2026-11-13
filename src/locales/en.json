@@ -1726,6 +1726,7 @@
   "err.nameRequired": "Enter your name",
   "err.passwordTooWeak": "Use at least 10 characters, including a number or symbol",
   "err.adminOnly": "Only workspace admins can do that",
+  "err.badActivityWindow": "The activity window must be one of 24h, 7d or 30d",
   "err.operatorOnly": "Only the instance operator can do that",
   "err.ownerImmune": "Owner accounts are immune to operator revocation",
   "err.workspaceNotFound": "Workspace not found",
