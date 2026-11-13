@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 58
 current_phase_name: Full-Text Search
 status: executing
-stopped_at: Completed 58-02-PLAN.md
-last_updated: "2026-11-13T07:07:41.039Z"
-state_head: e334b80939400b8eb569745b6588b507cb915394
+stopped_at: Completed 58-03-PLAN.md
+last_updated: "2026-11-13T07:56:00.000Z"
+state_head: ee2d589
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # STATE.md
@@ -26,11 +26,10 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 58 (Full-Text Search) — EXECUTING
-**Plan:** 3 of 3
-**Status:** Ready to execute
+**Phase:** 58 (Full-Text Search) — plans complete, ready for /gsd-verify-work 58
+**Plan:** 3 of 3 (complete)
 
-**Progress:**[███░░░░░░░] 33%
+**Progress:**[████░░░░░░] 50%
 
 ```
 [##########]----------  0/6 phases
@@ -38,9 +37,9 @@ dashboards) without breaking the zero-dependency discipline
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 56 | Delivery Infrastructure | Not started |
+| 56 | Delivery Infrastructure | Complete |
 | 57 | Views, Columns & General Access | Complete (3/3 plans) |
-| 58 | Full-Text Search | Not started |
+| 58 | Full-Text Search | Complete (3/3 plans) |
 | 59 | Browser Push | Not started |
 | 60 | Admin Dashboard & Member Self-View | Not started |
 | 61 | Notification Trim | Not started |
@@ -58,6 +57,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 57 P03 | 65 min | 2 tasks | 12 files |
 | Phase 58 P01 | 18 min | 3 tasks | 6 files |
 | Phase 58 P02 | 9 min | 2 tasks | 2 files |
+| Phase 58 P03 | 41 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -96,12 +96,12 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T07:07:13.039Z
-**Stopped at:** Completed 58-02-PLAN.md
+**Last session:** 2026-11-13T07:56:00.000Z
+**Stopped at:** Completed 58-03-PLAN.md
 **Resume file:** None
 
-**Last action:** executed 57-03 — defaultPrivate workspace default (owner toggle, Access-tab hint, createProject seed + server seeding parity, funnel untouched); full chain green (1426 unit, e2e green modulo 2 isolation-verified flakes); [Rule 3] export/model went lazy (index 493.4 kB)
-**Next action:** `/gsd-verify-work 57`, then `/gsd-plan-phase 58` (FTS needs `--research-phase`)
+**Last action:** executed 58-03 — hybrid search client: searchTasksServer (demo-gated, abortable, silent-degrading) + createDebouncedSearch in core, palette server merge (palServerSearch ← IN.palQ), /search page merge (A.searchPageServer, existing mini rows + hl() titles + plain-text snippets); full suite 1465/0, chunk gate green, e2e green modulo the 57-03 flake pair (isolation-verified)
+**Next action:** `/gsd-verify-work 58`, then `/gsd-discuss-phase 59` (Browser Push needs `--research-phase`)
 
 ### Blockers
 
@@ -121,3 +121,6 @@ dashboards) without breaking the zero-dependency discipline
 - [Phase 57]: 57-03: [Rule 3] export/model.js went lazy (DELIV-02 gate, third application) — S.ui.expMod seam + constants.js DEFAULT_OPTIONS drift pin; index 493.4 kB (~6.6 kB headroom)
 - [Phase 58]: fts_meta is the shared sweep marker on both backends; one ftsSweep logic — keeps the sweep dialect-neutral (D-08/D-09); pg creates it in ensureSearchIndex
 - [Phase 58]: toPgSql ?→$n counter fixed to span quoted literals (Rule 1, pre-existing facade bug) — a ? after a single-quoted literal renumbered to $1 causing pg bind-count mismatch (08P01)
+- [Phase 58]: 58-03: the debounced dispatcher lives in core (node-testable abort/dedupe semantics), palette only wires it; api.js call() gained a signal passthrough rather than a raw fetch fork
+- [Phase 58]: 58-03: page-fetch orchestration sits in A.searchPageServer (actions layer owns render(); page modules never import render.js); zero new i18n keys — server hits join the existing Tasks section
+- [Phase 58]: 58-03: frozen pins maintained without new names — neutral fallback is inline-SVG stIcon('backlog'); data-a pin annotated 491→492 (server row reuses data-a="openTask")

@@ -117,7 +117,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 58-02-PLAN.md — SEARCH-03/04: pg parity — task_search_projection folded projection, dialect-complete seam, DBA suite "elodie→Élodie" rows
-- [ ] 58-03-PLAN.md — SEARCH-01/02: client hybrid — debounced/abortable search-server helper, palette merge, /search page merge, i18n + chunk gates
+- [x] 58-03-PLAN.md — SEARCH-01/02: client hybrid — debounced/abortable search-server helper, palette merge, /search page merge, i18n + chunk gates
 
 ### Phase 59: Browser Push
 
@@ -191,7 +191,7 @@ D-05 owner rulings arriving during execution
 |-------|----------------|--------|-----------|
 | 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
 | 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
-| 58. Full-Text Search | 2/3 | In Progress|  |
+| 58. Full-Text Search | 3/3 | Complete    | 2026-11-13 |
 | 59. Browser Push | 0/? | Not started | - |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
 | 61. Notification Trim | 0/? | Not started | - |
