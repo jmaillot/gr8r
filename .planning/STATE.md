@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 61
 current_phase_name: Notification Trim
 status: executing
-stopped_at: Phase 61 planned + plan-check passed
-last_updated: "2026-11-13T21:16:01.000Z"
-state_head: f81deb6773225b247fe2592991ab72624f7bbd32
+stopped_at: Completed 61-01-PLAN.md
+last_updated: "2026-11-13T21:32:33.169Z"
+state_head: 709b5bc0f928f0aab28c3944aa8fc37992363cab
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 19
+  completed_plans: 18
 ---
 
 # STATE.md
@@ -64,6 +64,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 60 P02 | ~75 min | 3 tasks | 14 files |
 | Phase 60 P02 | ~75 min | 3 tasks | 14 files |
 | Phase 60 P03 | 35 min | 3 tasks | 5 files |
+| Phase 61 P01 | 15 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -104,9 +105,9 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T20:56:54.120Z
-**Stopped at:** Phase 61 planned + plan-check passed
-**Resume file:** .planning/phases/61-notification-trim/61-CONTEXT.md
+**Last session:** 2026-11-13T21:32:33.092Z
+**Stopped at:** Completed 61-01-PLAN.md
+**Resume file:** None
 
 **Last action:** `/gsd-plan-phase 61` complete: research (61-RESEARCH.md), pattern map (61-PATTERNS.md), 2 plans committed (7f666ac; 61-01 = D-04 removal + gates, 61-02 = groupBursts render-only), checker PASSED (0 blocker/0 warning, 1 info fixed: Open Questions marked RESOLVED). COVERAGE.md = no external API; threat models T-61-01/02/SC.
 **Next action:** `/gsd-execute-phase 61`
@@ -147,3 +148,4 @@ dashboards) without breaking the zero-dependency discipline
 - [Phase 60]: Self-view endpoint gated 'viewer' (any-member per D-11/acceptance); dashboard raw-doc read is the sanctioned power-admin inversion; server date anchor = tz.js localParts default zone
 - [Phase 60]: Dashboard poll teardown rides a ROUTE_TEARDOWN registry in render.js; page renders only from the 60-01 payload; Task 2 poll co-implemented in the tracer slice
 - [Phase 60]: 60-03 gap closure: lastRequestedWindow up-front claim + !dashErr kick guard (CR-01); poll entry if (!timer) startPoll() survives route re-entry (WR-01, D-05); activityWindow whitelist hoisted above JSON.parse (WR-02) — all three pinned by failing-first regression tests
+- [Phase 61]: 61-01: D-04 applied in one parity commit (d950f5a) — 13-key whitelists both tiers, defaults minus assign_self, PUT 400 per removed key pinned, legacy rows read-absorbed; owning comments carry no literal key names (verify-grep constraint)

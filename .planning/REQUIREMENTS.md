@@ -31,8 +31,8 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 
 ## Notifications Trim (NOTIF-TRIM)
 
-- [ ] **NOTIF-01**: The notification audit produces trim recommendations (suppression candidates, burst candidates) for the owner to rule on
-- [ ] **NOTIF-02**: An owner can apply a trim ruling from the settings surface (one-click suppression of a notification class), and it lands in notif_prefs
+- [x] **NOTIF-01**: The notification audit produces trim recommendations (suppression candidates, burst candidates) for the owner to rule on
+- [x] **NOTIF-02**: An owner can apply a trim ruling from the settings surface (one-click suppression of a notification class), and it lands in notif_prefs
 - [ ] **NOTIF-03**: Rapid successive notifications on the same task coalesce (burst handling) so the inbox doesn't flood
 
 ## Views & Columns
@@ -89,6 +89,6 @@ Owner decisions baked in (2026-11-12): `web-push@4.0.0` as runtime dep #2 (D-12 
 | DASH-04 | Phase 60 | Complete |
 | TRN-01 | Phase 60 | Complete |
 | TRN-02 | Phase 60 | Complete |
-| NOTIF-01 | Phase 61 | Pending |
-| NOTIF-02 | Phase 61 | Pending |
+| NOTIF-01 | Phase 61 | Complete |
+| NOTIF-02 | Phase 61 | Complete |
 | NOTIF-03 | Phase 61 | Pending |
