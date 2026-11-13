@@ -21,6 +21,8 @@ COPY --from=build /app/mcp.js ./mcp.js
 # Phase 45 (2026-11-07, D-03): single pg-enabled image — node_modules + db-adapter.mjs join the runtime stage so DB_URL postgres mode works; SQLite default unchanged.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/db-adapter.mjs ./db-adapter.mjs
+# Phase 58 (D-13): db-adapter.mjs and server.js import this root module — it must ship in the runtime stage.
+COPY --from=build /app/search-terms.mjs ./search-terms.mjs
 COPY --from=build /app/src ./src
 COPY --from=build /app/export ./export
 COPY --from=build /app/oidc.js ./oidc.js
