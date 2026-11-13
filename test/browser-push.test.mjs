@@ -503,7 +503,7 @@ push.setPushWorkspace(() => 'ws-1');
 const configRoute = () => ({
   ok: true,
   status: 200,
-  body: { vapidPublicKey: '_-s=' }, /* base64url of bytes [255, 251] — exercises the -/_ decode */
+  body: { vapidPublicKey: '__s' }, /* base64url of bytes [255, 251] — exercises the -/_ decode */
 });
 
 test('enablePush fetches the config, requests permission from the gesture, subscribes with the decoded key and POSTs the canonical body verbatim (D-01/D-04)', async () => {
