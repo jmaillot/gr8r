@@ -376,9 +376,10 @@ timer = setInterval(refresh, 30000); // align with the 30 s notification poll rh
 | A3 | `pushActivity` row shape `{ id, by, verb, task, project, at, extra }` read from store.js ~492 — assumed stable across the server-written activity rows too (server may write rows in the same shape); executor verifies one server-side activity write site before filtering | Code Examples | Activity panel filter key mismatch — caught by first test run |
 | A4 | `api.call()` accepts `{ signal }` via the Phase 58 passthrough — recorded in STATE.md/58-03 decisions; exact parameter position (options object) to be confirmed at implementation | Code Examples | Poll abort no-op; harmless |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Server-side "today" definition for overdue/upcoming** — due-reminders already made this decision somewhere in server.js; the executor should reuse that exact helper/anchor (midnight UTC vs server-local). Recommendation: mirror the reminder pass; if ambiguous, plan a 5-min probe task reading the reminder site before writing the reducer.
+   **RESOLVED:** reuse the due-reminder pass date anchor per 60-01 Task 1 probe (grep-first, never invent a date function); A2 backstop verification covers the residual midnight-UTC vs server-local ambiguity.
 
 ## Environment Availability
 

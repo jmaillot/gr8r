@@ -172,8 +172,12 @@ their own redacted access picture.
      without names), proven by byte-level shape tests per role (TRN-01, TRN-02)
 **Plans**: 2 plans
 Plans:
+**Wave 1**
 - [ ] 60-01-PLAN.md — Server routes: admin-gated dashboard aggregate (raw doc, 403 gate) + self-visibility endpoint, with gate/aggregate/byte-shape test suites (DASH-01..04, TRN-01/02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 60-02-PLAN.md — Client: lazy dashboard page (4 panels, poll, deep links), Settings › My access section, i18n EN+FR, e2e spec (DASH-01..04, TRN-01)
+
 **UI hint**: yes
 
 ### Phase 61: Notification Trim
