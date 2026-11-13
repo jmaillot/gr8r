@@ -26,3 +26,23 @@ self.addEventListener('notificationclick', (e) => {
     await self.clients.openWindow(url);
   })());
 });
+self.addEventListener('push', (e) => {
+  e.waitUntil((async () => {
+    /* D-12/D-13: any open window client of this origin means the visible-tab
+       poll path owns delivery — the OS notification is skipped. Best-effort
+       inside the worker only: no page handshake, a rare duplicate while
+       switching tabs is accepted. The payload arrives pre-localized from the
+       server (T-48-02); a malformed or empty payload degrades to silence. */
+    const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (cs.length) return;
+    let p = {};
+    try { p = e.data ? e.data.json() : {}; } catch { /* malformed payload → silence */ }
+    if (!p.title) return;
+    await self.registration.showNotification(p.title, {
+      body: p.body || '',
+      tag: p.tag || 'gr8r-push',
+      icon: '/favicon.svg',
+      data: { url: p.url || '/' },
+    });
+  })());
+});
