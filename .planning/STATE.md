@@ -23,7 +23,7 @@ progress:
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core Value:** simple, predictable access + a workspace that reaches you (push, search,
 dashboards) without breaking the zero-dependency discipline
-**Current Focus:** Phase 58 — Full-Text Search
+**Current Focus:** Phase 59 — Browser Push
 
 ## Current Position
 
@@ -40,7 +40,7 @@ dashboards) without breaking the zero-dependency discipline
 |-------|------|--------|
 | 56 | Delivery Infrastructure | Complete |
 | 57 | Views, Columns & General Access | Complete (3/3 plans) |
-| 58 | Full-Text Search | Complete (3/3 plans) |
+| 58 | Full-Text Search | Complete (4/4 plans incl. gap closure) |
 | 59 | Browser Push | Not started |
 | 60 | Admin Dashboard & Member Self-View | Not started |
 | 61 | Notification Trim | Not started |
@@ -97,8 +97,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T07:56:00.000Z
-**Stopped at:** Phase 58 complete, ready to plan Phase 59
+**Last session:** 2026-11-13T09:50:00.000Z
+**Stopped at:** Phase 58 complete (verified 4/4, UAT 3/3, gap G-58-2 closed), ready to plan Phase 59
 **Resume file:** None
 
 **Last action:** executed 58-03 — hybrid search client: searchTasksServer (demo-gated, abortable, silent-degrading) + createDebouncedSearch in core, palette server merge (palServerSearch ← IN.palQ), /search page merge (A.searchPageServer, existing mini rows + hl() titles + plain-text snippets); full suite 1465/0, chunk gate green, e2e green modulo the 57-03 flake pair (isolation-verified)

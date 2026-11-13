@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-12 after Phase 57 — VIEW-01/02/03 shipped (per-user views, saved views, workspace default visibility)*
+*Last updated: 2026-11-13 after Phase 58 — SEARCH-01..04 shipped (FTS + redacted route + hybrid Ctrl-K merge)*
 
 ## Current Milestone: v2.2 Notifications, Search & Delivery
 
@@ -678,6 +678,14 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   (shared `gPending` G-nav map, query-typing guard, initials-across-words filter
   behaviorally pinned by test/palette-filter.test.mjs) — Phase 47 (branch fix/commands
   merged 62b1826; verification 2/2; UAT recorded 5fe7f67)
+- ✓ **SEARCH-01..04** — Full-text search: server-side FTS over task titles + descriptions
+  (SQLite FTS5 / pg equivalent through db-adapter.mjs), redacted route
+  `/api/workspaces/:slug/search` through `memberCanReadProject` with byte-level leak tests,
+  funnel diff sync + boot sweep, accent-insensitive matching, `/search` page, hybrid Ctrl-K
+  palette merge (cmd+search modes; graceful local-only degrade when the server is down) —
+  Phase 58 (4/4 plans incl. gap closure 58-04; verification 4/4 passed, UAT 3/3 with the
+  cmd-mode dispatch gap re-verified live; review CR-01 pg tx-atomicity advisory open in
+  58-REVIEW-DISPOSITION.md)
 
 ### Active
 
