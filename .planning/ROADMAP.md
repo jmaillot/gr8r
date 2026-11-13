@@ -200,7 +200,12 @@ D-05 owner rulings arriving during execution
      burst summary instead of flooding (NOTIF-03)
   4. The Phase 38 suppression + no-double-send invariants pass unmodified after all
      trims (standing constraint)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+**Wave 1** (both plans independent — zero file overlap)
+- [ ] 61-01-PLAN.md — NOTIF-01/02: D-04 validated removal of the 4 dead pref keys (both whitelists + defaults, one commit-parity move, comment rewrite, hardened prefs tests); NO new Settings apply buttons (Tension Resolution); audit-doc citation freshness (NOTIF-01 residual)
+- [ ] 61-02-PLAN.md — NOTIF-03: render-only burst coalescing in inbox.js — groupBursts pure export, D-13 summary row (count/type/key/title, EN+FR plurals), S.ui.inboxBurstOpen expand, group mark-read; server untouched (D-10/D-12)
 
 ## Progress
 
