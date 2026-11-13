@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 61
 current_phase_name: Notification Trim
 status: executing
-stopped_at: Completed 61-01-PLAN.md
-last_updated: "2026-11-13T21:32:33.169Z"
-state_head: 709b5bc0f928f0aab28c3944aa8fc37992363cab
+stopped_at: Completed 61-02-PLAN.md
+last_updated: "2026-11-13T22:42:00.309Z"
+state_head: 64bbdc6db5500731e220cc959bffb2bcd0089228
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # STATE.md
@@ -65,6 +65,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 60 P02 | ~75 min | 3 tasks | 14 files |
 | Phase 60 P03 | 35 min | 3 tasks | 5 files |
 | Phase 61 P01 | 15 min | 2 tasks | 7 files |
+| Phase 61 P02 | 67 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -105,8 +106,8 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Session Continuity
 
-**Last session:** 2026-11-13T21:32:33.092Z
-**Stopped at:** Completed 61-01-PLAN.md
+**Last session:** 2026-11-13T22:42:00.232Z
+**Stopped at:** Completed 61-02-PLAN.md
 **Resume file:** None
 
 **Last action:** `/gsd-plan-phase 61` complete: research (61-RESEARCH.md), pattern map (61-PATTERNS.md), 2 plans committed (7f666ac; 61-01 = D-04 removal + gates, 61-02 = groupBursts render-only), checker PASSED (0 blocker/0 warning, 1 info fixed: Open Questions marked RESOLVED). COVERAGE.md = no external API; threat models T-61-01/02/SC.
@@ -149,3 +150,4 @@ dashboards) without breaking the zero-dependency discipline
 - [Phase 60]: Dashboard poll teardown rides a ROUTE_TEARDOWN registry in render.js; page renders only from the 60-01 payload; Task 2 poll co-implemented in the tracer slice
 - [Phase 60]: 60-03 gap closure: lastRequestedWindow up-front claim + !dashErr kick guard (CR-01); poll entry if (!timer) startPoll() survives route re-entry (WR-01, D-05); activityWindow whitelist hoisted above JSON.parse (WR-02) — all three pinned by failing-first regression tests
 - [Phase 61]: 61-01: D-04 applied in one parity commit (d950f5a) — 13-key whitelists both tiers, defaults minus assign_self, PUT 400 per removed key pinned, legacy rows read-absorbed; owning comments carry no literal key names (verify-grep constraint)
+- [Phase 61]: 61-02: burst grouping is key-based over the whole unread list (not adjacency — D-11 has no time window); group mark-read fans via A.burstRead; entry-chunk gate remedied 57-03-style by lazy-loading the notifications+archive routes (manualChunks rejected: it hoisted the EN catalogue out of the entry chunk)
