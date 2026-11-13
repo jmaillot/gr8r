@@ -65,6 +65,7 @@ Object.defineProperty(globalThis, 'navigator', {
 });
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, addListener() {} });
+globalThis.window = globalThis; // theme.js effectiveDark() reads window.matchMedia when render() paints
 globalThis.addEventListener = () => {};
 
 /* fetch() stub keyed on the route: /api/config enables server mode,

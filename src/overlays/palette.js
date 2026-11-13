@@ -75,7 +75,7 @@ const NAV_CMDS = new Set(['c-home', 'c-inbox', 'c-my', 'c-projs', 'c-cal', 'c-tl
    unknown one gets the neutral circle. */
 const dispatchServerSearch = createDebouncedSearch(async (q, signal, isCurrent) => {
   const pl = S.ui.palette;
-  if (!pl || pl.mode !== 'search') return;
+  if (!pl || pl.mode === 'ws') return; // G-58-2: cmd + search dispatch; ws never does
   const res = await searchTasksServer(q, signal);
   if (!isCurrent() || S.ui.palette !== pl || pl.q !== q) return; // stale — discard
   pl.serverTasks = res.tasks || [];
