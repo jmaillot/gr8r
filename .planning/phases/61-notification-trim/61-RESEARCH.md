@@ -234,10 +234,10 @@ ${open ? members.map(m => inboxItem(m, false)).join('') : ''}
 | A2 | `S.ui` transient state (not persisted) is acceptable for expand/collapse | Pattern 1 | LOW — matches inboxCat/inboxSel precedent; collapse state resetting on navigation is standard app behavior |
 | A3 | No Phase 38 invariant test file exists under a specific name — invariants live in `test/digest.test.mjs`, `test/due-reminders.test.mjs`, `test/notif-prefs.test.mjs`, `test/notif-hydration.test.mjs`; full suite (`npm test`) is the gate | Validation | LOW — SC4 says "pass unmodified"; running the full suite covers it |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does the owner want ANY visible Settings representation of the trims?** (see Tension Resolution) — Recommendation: none; the audit doc Status cells are the record. If a trace is wanted, a passive "recently applied trims" info block in Settings › Notifications (read-only, no prefs write) is the only coherent option. **Planner should default to none** and flag at plan-review if desired.
-2. **Expanded group: per-member `toggleRead` vs whole-group toggle** — agent's discretion per CONTEXT; recommend both (per-row buttons still work via `inboxItem`; group summary click navigates, chevron expands, and a "mark all read" affordance inside the expanded group if trivially cheap).
+1. **Does the owner want ANY visible Settings representation of the trims?** — **(RESOLVED)** Planner defaulted to **none** as recommended; verified in both plans (no Settings buttons; existing per-type toggles named as the suppression surface).
+2. **Expanded group: per-member `toggleRead` vs whole-group toggle** — **(RESOLVED)** Decided in 61-02 Task 2 per delegated discretion: per-row toggleRead still works + group mark-read fan-out; summary click navigates, chevron expands.
 
 ## Tension Resolution: D-07/D-09 vs what the owner actually ruled (REQUIRED reading for planner)
 
