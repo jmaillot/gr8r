@@ -6164,6 +6164,14 @@ async function handleApi(req, res, url) {
       d.setUTCDate(d.getUTCDate() + n);
       return d.toISOString().slice(0, 10);
     };
+    /* DASH-03/D-06: activity window — the preset selector param is
+       WHITELISTED (T-60-03: never passed through raw); any other value fails
+       400 BEFORE any doc work — the check sits above the JSON.parse below, so
+       malformed requests never pay doc-parse cost (60-03 WR-02: this ordering
+       is pinned behaviorally by the corrupt-doc probe in dashboard.test.mjs). */
+    const windowParam = String(url.searchParams.get('activityWindow') || '7d');
+    const WINDOW_MS = { '24h': 24 * 60 * 60 * 1000, '7d': 7 * 24 * 60 * 60 * 1000, '30d': 30 * 24 * 60 * 60 * 1000 };
+    if (!(windowParam in WINDOW_MS)) return fail(res, 400, 'badActivityWindow', 'activityWindow must be one of 24h, 7d, 30d');
     const doc = JSON.parse(ctx.ws.doc);
     normalizeProjects(doc);
     const projectsById = new Map((doc?.data?.projects || []).map(p => [p?.id, p]));
@@ -6212,15 +6220,10 @@ async function handleApi(req, res, url) {
       .filter(t => t?.due && isOpen(t) && t.due >= today && t.due <= horizon)
       .map(t => ({ key: t.key || t.id, name: t.title || t.key || t.id, due: t.due, projectId: t.project }))
       .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
-    /* DASH-03/D-06: activity window — the preset selector param is
-       WHITELISTED (T-60-03: never passed through raw); any other value fails
-       400 before any doc work. Rows are the store.js pushActivity shape
+    /* DASH-03/D-06: activity — rows are the store.js pushActivity shape
        { id, by, verb, task, project, at, extra }; machine verbs stay on the
        wire (labels render client-side per the Phase 9 rules). Sorted `at`
-       descending. */
-    const windowParam = String(url.searchParams.get('activityWindow') || '7d');
-    const WINDOW_MS = { '24h': 24 * 60 * 60 * 1000, '7d': 7 * 24 * 60 * 60 * 1000, '30d': 30 * 24 * 60 * 60 * 1000 };
-    if (!(windowParam in WINDOW_MS)) return fail(res, 400, 'badActivityWindow', 'activityWindow must be one of 24h, 7d, 30d');
+       descending. The WINDOW_MS lookup above already validated the param. */
     const sinceMs = Date.now() - WINDOW_MS[windowParam];
     const activity = (doc?.data?.activity || [])
       .filter(a => a?.at >= sinceMs)
