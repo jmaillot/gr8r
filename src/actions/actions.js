@@ -42,6 +42,7 @@ import { autosize, focusKey, fxSet, go, render } from '../shell/render.js';
 import { applyView, viewOf } from '../shell/view-engine.js';
 import { PERMS, TEMPLATES, closeModal, openModal, permLabel } from '../overlays/modals.js';
 import { closePop, openPop, tgt } from '../overlays/popovers.js';
+import { palServerSearch } from '../overlays/palette.js'; // Phase 58 D-01: debounced server search behind the palette input
 import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
 /* [Phase 57-03 Rule 3] buildExportModel lives in a LAZY chunk (DELIV-02
@@ -2966,6 +2967,7 @@ A.palScope = el => {
 IN.palQ = el => {
   S.ui.palette.q = el.value;
   S.ui.palette.hl = 0;
+  palServerSearch(el.value); // Phase 58 D-01/D-02: debounced, abortable server merge
   render();
 };
 A.palRun = el => {

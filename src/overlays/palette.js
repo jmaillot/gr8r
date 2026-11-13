@@ -10,6 +10,7 @@ import { effectiveDark } from '../core/theme.js';
 import { go, render } from '../shell/render.js';
 import { sortTasks } from '../shell/view-engine.js';
 import { searchAll } from '../core/searchall.js';
+import { createDebouncedSearch, searchTasksServer, serverOnlyTasks } from '../core/search-server.js';
 import { openModal } from './modals.js';
 import { A } from '../actions/actions.js';
 
@@ -61,6 +62,33 @@ export function commands() {
 /* The navigation command ids: the machine keys the Navigation group filters on —
    the display names are catalogue values, so the filter reads the ids. */
 const NAV_CMDS = new Set(['c-home', 'c-inbox', 'c-my', 'c-projs', 'c-cal', 'c-tl', 'c-mem']);
+
+/* ---------------- HYBRID SERVER MERGE (Phase 58, D-01/D-02/D-03) ----------------
+   The palette shows instant local searchAll results; server task results from
+   58-01's route merge into the SAME tasks group ~250 ms later. The debounced
+   dispatcher (createDebouncedSearch, in core) aborts the prior request on each
+   newer keystroke and drops stale responses; searchTasksServer silently
+   degrades to { tasks: [] } in demo mode or on any failure, so nothing here
+   ever surfaces an error. Server-only hits map onto the exact item shape the
+   local tasks group uses; their status icon degrades — the route payload has
+   no status field (58-01), so a locally-known id reuses its real icon and an
+   unknown one gets the neutral circle. */
+const dispatchServerSearch = createDebouncedSearch(async (q, signal, isCurrent) => {
+  const pl = S.ui.palette;
+  if (!pl || pl.mode !== 'search') return;
+  const res = await searchTasksServer(q, signal);
+  if (!isCurrent() || S.ui.palette !== pl || pl.q !== q) return; // stale — discard
+  pl.serverTasks = res.tasks || [];
+  pl.serverQ = q;
+  render();
+}, 250);
+
+/* The palette input handler (actions.js IN.palQ) calls this on every keystroke;
+   demo mode never dispatches (D-03 byte-identical local-only behavior). */
+export function palServerSearch(q) {
+  if (!api.enabled || !q) return;
+  dispatchServerSearch(q);
+}
 export function paletteItems() {
   const pl = S.ui.palette;
   const q = pl.q.trim();
@@ -150,13 +178,30 @@ export function paletteItems() {
     return groups;
   }
   if (!q) return groups;
-  if (sc === 'all' || sc === 'tasks')
+  if (sc === 'all' || sc === 'tasks') {
+    /* D-01 dedupe: local tasks keep their position; server-only hits (invisible to the
+       redacted local doc) append after, mapped onto the same item shape. Snippets are
+       plain text (58-01 strips HTML server-side) and esc() runs in paletteHtml (T-58-06). */
+    const srv = pl.serverQ === q ? serverOnlyTasks(r.tasks, pl.serverTasks || []) : [];
     groups.push({
       name: t('nav.route.tasks'),
       items: r.tasks
         .slice(0, lim)
-        .map(t => ({ html: stIcon(t.status), name: t.title, sub: proj(t.project).name, r: t.key, run: () => A.openTask({ dataset: { id: t.id } }) })),
+        .map(t => ({ html: stIcon(t.status), name: t.title, sub: proj(t.project).name, r: t.key, run: () => A.openTask({ dataset: { id: t.id } }) }))
+        .concat(
+          srv.map(st => {
+            const local = task(st.id);
+            return {
+              html: local ? stIcon(local.status) : ic('circle', 15),
+              name: st.title,
+              sub: (st.snippet || '').slice(0, 80),
+              r: st.key,
+              run: () => A.openTask({ dataset: { id: st.id } }),
+            };
+          }),
+        ),
     });
+  }
   if (sc === 'all' || sc === 'projects')
     groups.push({
       name: t('nav.route.projects'),

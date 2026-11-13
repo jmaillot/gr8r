@@ -56,13 +56,16 @@ export function registerAuthRevokedHandler(fn) {
   revokedHandler = fn;
 }
 
-export async function call(method, path, body, { keepalive = false } = {}) {
+export async function call(method, path, body, { keepalive = false, signal } = {}) {
   let res;
   try {
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
       keepalive,
+      /* Phase 58 (D-02): the palette's debounced server search aborts the
+         in-flight request when a newer keystroke supersedes it. */
+      signal,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
