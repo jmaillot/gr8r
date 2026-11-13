@@ -6171,7 +6171,8 @@ async function handleApi(req, res, url) {
     /* DASH-01/D-10: overdue groups per project, oldest group first, tasks
        within groups by dueDate ascending — mirroring store.js isOver's
        semantic (due && status !== 'done' && due < today). */
-    const isOverdue = t => t?.due && !t.archived && t.status !== 'done' && today > t.due;
+    const isOpen = t => !t.archived && t.status !== 'done';
+    const isOverdue = t => t?.due && isOpen(t) && today > t.due;
     const groups = new Map();
     for (const t of tasks) {
       if (!isOverdue(t)) continue;
@@ -6190,7 +6191,42 @@ async function handleApi(req, res, url) {
         const bMin = b.tasks[0].due;
         return aMin < bMin ? -1 : aMin > bMin ? 1 : 0;
       });
-    return json(res, 200, { overdue, load: [], upcoming: [], activity: [] });
+    /* DASH-02/D-07: load = OPEN tasks only, each member counted once per task
+       they appear in assignees[] (the v2.1 array — read ONLY the array, never
+       a scalar). Doc members only; sorted count descending (D-10). */
+    const memberName = new Map((doc?.data?.members || []).map(m => [m?.id, m?.name || m?.id]));
+    const counts = new Map();
+    for (const t of tasks) {
+      if (!isOpen(t)) continue;
+      for (const mid of Array.isArray(t.assignees) ? t.assignees : []) {
+        if (!mid || !memberName.has(mid)) continue;
+        counts.set(mid, (counts.get(mid) || 0) + 1);
+      }
+    }
+    const load = [...counts.entries()]
+      .map(([memberId, count]) => ({ memberId, name: memberName.get(memberId), count }))
+      .sort((a, b) => b.count - a.count);
+    /* DASH-03/D-06: upcoming = today..+7d, not done — flat, dueDate ascending. */
+    const horizon = addDaysIso(today, 7);
+    const upcoming = tasks
+      .filter(t => t?.due && isOpen(t) && t.due >= today && t.due <= horizon)
+      .map(t => ({ key: t.key || t.id, name: t.title || t.key || t.id, due: t.due, projectId: t.project }))
+      .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
+    /* DASH-03/D-06: activity window — the preset selector param is
+       WHITELISTED (T-60-03: never passed through raw); any other value fails
+       400 before any doc work. Rows are the store.js pushActivity shape
+       { id, by, verb, task, project, at, extra }; machine verbs stay on the
+       wire (labels render client-side per the Phase 9 rules). Sorted `at`
+       descending. */
+    const windowParam = String(url.searchParams.get('activityWindow') || '7d');
+    const WINDOW_MS = { '24h': 24 * 60 * 60 * 1000, '7d': 7 * 24 * 60 * 60 * 1000, '30d': 30 * 24 * 60 * 60 * 1000 };
+    if (!(windowParam in WINDOW_MS)) return fail(res, 400, 'badActivityWindow', 'activityWindow must be one of 24h, 7d, 30d');
+    const sinceMs = Date.now() - WINDOW_MS[windowParam];
+    const activity = (doc?.data?.activity || [])
+      .filter(a => a?.at >= sinceMs)
+      .map(a => ({ id: a.id, by: a.by, verb: a.verb, task: a.task, project: a.project, at: a.at }))
+      .sort((a, b) => b.at - a.at);
+    return json(res, 200, { overdue, load, upcoming, activity });
   }
 
   /* -------------------- project membership & the guest toggle --------------------

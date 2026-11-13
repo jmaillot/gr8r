@@ -158,19 +158,81 @@ test('overdue: groups sorted by oldest dueDate, tasks within groups by dueDate (
 
 test('overdue: the due-today task is NOT overdue (boundary), and done tasks appear in NO panel', async () => {
   const res = await dash(S.m_admin);
+  const overdueWire = JSON.stringify(res.data.overdue);
+  assert.equal(overdueWire.includes('"today"'), false, 'due-today task absent from overdue');
+  assert.ok(res.data.upcoming.some(t => t.key === 'today'), 'due-today task lands in upcoming');
   const wire = JSON.stringify(res.data);
-  assert.equal(wire.includes('"today"'), false, 'due-today task absent from overdue (it belongs to upcoming)');
-  for (const needle of ['"done"', 'Already done']) {
-    assert.equal(wire.includes(needle), false, `done task invisible: ${needle}`);
+  assert.equal(wire.includes('Already done'), false, 'done task invisible');
+  for (const panel of ['overdue', 'load', 'upcoming']) {
+    assert.equal(JSON.stringify(res.data[panel]).includes('"done"'), false, `done task key absent from ${panel}`);
   }
 });
 
-/* ---- 3. Payload scaffolding: the four-panel shape (DASH-04 single payload) ---- */
+/* ---- 3. Load (DASH-02, D-07): assignees[] counting, done excluded ---- */
 
-test('payload: exactly the four aggregate keys, scaffolding arrays present', async () => {
+test('load: shared task counts 1 per assignee; done task does not inflate', async () => {
+  const res = await dash(S.m_admin);
+  assert.equal(res.status, 200);
+  const byId = Object.fromEntries(res.data.load.map(e => [e.memberId, e]));
+  /* Open tasks with assignees: t_odhidden + t_today (m_admin ×2),
+     t_up1 + t_up2 (m_plain, m_team ×2 each). The done task (m_plain) must
+     NOT add a third count. */
+  assert.equal(byId.m_plain.count, 2, 'm_plain: 2 open tasks — done excluded');
+  assert.equal(byId.m_team.count, 2, 'shared task +1 per member');
+  assert.equal(byId.m_admin.count, 2, 'overdue AND upcoming open tasks both count');
+  for (const e of res.data.load) {
+    assert.deepEqual(Object.keys(e).sort(), ['count', 'memberId', 'name']);
+    assert.equal(typeof e.name, 'string', 'doc member name resolved');
+  }
+});
+
+test('load: sorted count descending (D-10)', async () => {
+  const res = await dash(S.m_admin);
+  const counts = res.data.load.map(e => e.count);
+  for (let i = 1; i < counts.length; i++) assert.ok(counts[i - 1] >= counts[i], 'non-increasing counts');
+});
+
+/* ---- 4. Upcoming (DASH-03, D-06): today..+7d window ---- */
+
+test('upcoming: due-today included (boundary), sorted due ascending, flat entries', async () => {
+  const res = await dash(S.m_admin);
+  assert.deepEqual(res.data.upcoming.map(t => t.key), ['today', 'up1', 'up2']);
+  for (const t of res.data.upcoming) {
+    assert.deepEqual(Object.keys(t).sort(), ['due', 'key', 'name', 'projectId']);
+  }
+  const wire = JSON.stringify(res.data);
+  assert.equal(wire.includes('"up1"'), true, 'within-window task present');
+  /* A beyond-horizon task never appears: t_nodue has no due date at all and
+     od* are past — covered by the exact key list above. */
+});
+
+/* ---- 5. Activity windows (DASH-03, D-06, T-60-03) ---- */
+
+test('activity: default window 7d — includes the 3-day row, excludes the 40-day row, newest first', async () => {
+  const res = await dash(S.m_admin);
+  assert.deepEqual(res.data.activity.map(a => a.id), ['a_new', 'a_3d']);
+  for (const a of res.data.activity) assert.deepEqual(Object.keys(a).sort(), ['at', 'by', 'id', 'project', 'task', 'verb']);
+});
+
+test('activity: 24h excludes the 3-day-old row; 30d includes it and still excludes 40d', async () => {
+  const d24 = await dash(S.m_admin, VIS_WS.slug, '?activityWindow=24h');
+  assert.equal(d24.status, 200);
+  assert.deepEqual(d24.data.activity.map(a => a.id), ['a_new']);
+  const d30 = await dash(S.m_admin, VIS_WS.slug, '?activityWindow=30d');
+  assert.deepEqual(d30.data.activity.map(a => a.id), ['a_new', 'a_3d']);
+});
+
+test('activity: an invalid window value fails 400 with the keyed body BEFORE any doc work', async () => {
+  const res = await dash(S.m_admin, VIS_WS.slug, '?activityWindow=1h');
+  assert.equal(res.status, 400);
+  assert.equal(res.data.code, 'badActivityWindow');
+});
+
+/* ---- 6. Payload scaffolding: the four-panel shape (DASH-04 single payload) ---- */
+
+test('payload: exactly the four aggregate keys in one single-payload call (DASH-04)', async () => {
   const res = await dash(S.m_admin);
   assert.deepEqual(Object.keys(res.data).sort(), ['activity', 'load', 'overdue', 'upcoming']);
-  assert.deepEqual(res.data.load, []);
-  assert.deepEqual(res.data.upcoming, []);
-  assert.deepEqual(res.data.activity, []);
+  assert.ok(res.data.overdue.length > 0 && res.data.load.length > 0 && res.data.upcoming.length > 0 && res.data.activity.length > 0,
+    'all four panels filled by one endpoint call');
 });
