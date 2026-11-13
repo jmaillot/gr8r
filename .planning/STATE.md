@@ -5,14 +5,14 @@ milestone_name: Notifications, Search & Delivery
 current_phase: 59
 current_phase_name: Browser Push
 status: executing
-stopped_at: 59-01 executed (Plan 2 of 3 next)
-last_updated: "2026-11-13T12:35:00.000Z"
+stopped_at: 59-02 executed (Plan 3 of 3 next)
+last_updated: "2026-11-13T14:10:00.000Z"
 state_head: 0d34fc0
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # STATE.md
@@ -27,7 +27,7 @@ dashboards) without breaking the zero-dependency discipline
 ## Current Position
 
 **Phase:** 59 (Browser Push) — EXECUTING
-**Plan:** 2 of 3
+**Plan:** 3 of 3
 
 **Progress:**[█████░░░░░] 50%
 
@@ -40,7 +40,7 @@ dashboards) without breaking the zero-dependency discipline
 | 56 | Delivery Infrastructure | Complete |
 | 57 | Views, Columns & General Access | Complete (3/3 plans) |
 | 58 | Full-Text Search | Complete (4/4 plans incl. gap closure) |
-| 59 | Browser Push | Executing (1/3 plans) |
+| 59 | Browser Push | Executing (2/3 plans) |
 | 60 | Admin Dashboard & Member Self-View | Not started |
 | 61 | Notification Trim | Not started |
 
@@ -59,6 +59,7 @@ dashboards) without breaking the zero-dependency discipline
 | Phase 58 P02 | 9 min | 2 tasks | 2 files |
 | Phase 58 P03 | 41 min | 3 tasks | 8 files |
 | Phase 59 P01 | 75 min | 3 tasks | 16 files |
+| Phase 59 P02 | 50 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -98,11 +99,11 @@ dashboards) without breaking the zero-dependency discipline
 ## Session Continuity
 
 **Last session:** 2026-11-13T12:35:00.000Z
-**Stopped at:** 59-01 executed (push infra: schema/custody/routes + web-push pin + push_due live)
-**Resume file:** .planning/phases/59-browser-push/59-01-SUMMARY.md
+**Stopped at:** 59-02 executed (fan-out: sendPushFor + gates + sweep + budget + per-device test-send route)
+**Resume file:** .planning/phases/59-browser-push/59-02-SUMMARY.md
 
 **Last action:** executed 59-01 — push_subscriptions dual-backend mirror + endpoint upsert, VAPID custody (env > DATA_DIR/vapid-keys.json > generate-once, restart-proven), /api/me/push-config + push-subscriptions GET/POST/DELETE fail-absent routes, web-push@4.0.0 exact pin (dep #3, pins amended in three test files), push_due re-livened per D-09 (server + client whitelist parity, five G-37-2 pins flipped), DEPLOY.md §16; full suite 1470/0, lint clean. Rule 3 deviations: SCHEMA comment semicolon vs statement splitter, client notifPrefs.js parity omitted from plan files, +2 i18n keys; Rule 1: label byte-cap bug.
-**Next action:** `/gsd-execute-phase 59` plan 02 (fan-out + sweep + sendPushFor)
+**Next action:** `/gsd-execute-phase 59` plan 03 (SW push handler + client subscribe + Settings Push tab + phase gate)
 
 ### Blockers
 
@@ -117,6 +118,10 @@ dashboards) without breaking the zero-dependency discipline
 - 57-02: applyNamedView preserves `q` AND the render `mode` beside the whitelist — both are session state the snapshot never carries (found by the new e2e)
 
 ## Decisions
+
+- [Phase 59]: 59-02: PUSH_SINK_MODULE boot seam — the spawned-server harness records sends / simulates failures via endpoint markers; load failure degrades to the real sender
+- [Phase 59]: 59-02: test-send route builds the notif SERVER-side (task:null, test-tagged) — no body-carried content (T-59-08); isTest bypasses only the pref gate + self-skip
+- [Phase 59]: 59-02: reminder site fans out from ONE post-write doc parse (two consumers); push gated on PUSH.enabled beside — never inside — the MAILER gate
 
 - [Phase 59]: 59-01: client whitelist parity — push_due joined src/core/notifPrefs.js defaults (D-09 plumbing); foreground PUSH_TYPE_PREF untouched
 - [Phase 59]: 59-01: push routes read workspace from ?workspace= so the client POSTs the canonical subscription.toJSON() body verbatim; re-POST replaces the endpoint row and preserves created_at (D-03)

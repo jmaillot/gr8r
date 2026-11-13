@@ -146,7 +146,7 @@ Plans:
 - [ ] 59-01-PLAN.md — web-push@4.0.0 dep + push_subscriptions dual-backend SCHEMA mirror [BLOCKING] + VAPID /data custody + push routes + D-09 push_due re-livening + DEPLOY.md §16 (PUSH-05, PUSH-01 server half)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 59-02-PLAN.md — sendPushFor fan-out beside queueNotifEmails at both sites, D-11 gates, ≤4096 payload budget, 404/410 sweep, per-device test-send route (PUSH-02/03/04)
+- [ ] 59-02-PLAN.md — sendPushFor fan-out beside queueNotifEmails at both sites, D-11 gates, ≤4096 payload budget, 404/410 sweep, per-device test-send route (PUSH-02/03/04) ✅ 59-02-SUMMARY.md (2026-11-13)
 - [ ] 59-03-PLAN.md — SW push handler (D-12 suppression, zero-strings contract), client subscribe helpers, Settings master toggle + device list + per-device test push, i18n EN+FR, phase gate + real-device UAT checkpoint (PUSH-01/03)
 
 ### Phase 60: Admin Dashboard & Member Self-View
@@ -200,7 +200,7 @@ D-05 owner rulings arriving during execution
 | 56. Delivery Infrastructure | 4/4 | Complete    | 2026-11-12 |
 | 57. Views, Columns & General Access | 3/3 | Complete    | 2026-11-12 |
 | 58. Full-Text Search | 4/4 | Complete    | 2026-11-13 |
-| 59. Browser Push | 1/3 | Executing | - |
+| 59. Browser Push | 2/3 | Executing | - |
 | 60. Admin Dashboard & Member Self-View | 0/? | Not started | - |
 | 61. Notification Trim | 0/? | Not started | - |
 
