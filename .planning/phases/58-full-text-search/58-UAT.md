@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 58-full-text-search
 source: [58-VERIFICATION.md]
 started: 2026-11-13T00:00:00Z
@@ -43,5 +43,10 @@ blocked: 0
   reason: "User reported: Ctrl-K palette (default cmd mode) never dispatches the server search — server-only tasks only appear after pressing Tab to switch to search mode (or on the /search page)."
   severity: major
   test: 2
-  artifacts: []
-  missing: []
+  root_cause: "Implementation gap: dispatchServerSearch in src/overlays/palette.js:78 early-returns on pl.mode !== 'search', silently discarding every cmd-mode dispatch before any fetch. No plan/commit/context doc justifies cmd-mode exclusion (58-03-PLAN wires the merge through IN.palQ with no mode restriction; D-01 claims merge into the same palette results). Render path already cmd-ready (tasks group renders with sc='all'; merge hook at line 185 is mode-independent; stale-discard handles Tab mid-flight)."
+  artifacts:
+    - path: "src/overlays/palette.js"
+      issue: "line 78 mode guard contradicts D-01/58-03-PLAN/SUMMARY"
+  missing:
+    - "Dispatch the debounced server search in cmd mode too (e.g. early-return only on mode 'ws'); keep 250ms debounce, AbortController, stale-discard, demo gate untouched"
+  debug_session: ".planning/debug/ctrlk-palette-server-merge.md"
