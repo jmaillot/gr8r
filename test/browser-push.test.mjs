@@ -141,6 +141,71 @@ test('public/sw.js resolves data.url through the URL constructor, never openWind
   assert.ok(sw.includes('openWindow(url)'), 'openWindow only ever receives the resolved href');
 });
 
+/* ---------- expansion (59-03): the push event handler (D-12/D-13, PUSH-03) ----------
+   sw.js is a dependency-free plain script, so it evaluates as-is inside a
+   STANDALONE self stub built with new Function — no module machinery involved.
+   D-12: any open window client of the origin means the visible-tab poll path
+   owns delivery; the OS notification is skipped. D-13: best-effort inside the
+   worker only — a malformed payload degrades to silence, never a throw. */
+const loadSw = () => {
+  const handlers = {};
+  const shown = [];
+  let windowClients = [];
+  const selfStub = {
+    location: { origin: 'https://gr8r.test' },
+    registration: {
+      showNotification: async (title, options) => shown.push({ title, options }),
+    },
+    clients: {
+      matchAll: async () => windowClients,
+      openWindow: async () => {},
+    },
+  };
+  selfStub.addEventListener = (type, fn) => { handlers[type] = fn; };
+  new Function('self', source('public/sw.js'))(selfStub);
+  const firePush = async data => {
+    const waits = [];
+    await handlers.push({ data, waitUntil: p => waits.push(p) });
+    await Promise.all(waits);
+  };
+  return { shown, firePush, setClients: c => { windowClients = c; } };
+};
+const payload = v => ({ json: () => v });
+
+test('public/sw.js owns exactly one push listener and displays the pre-localized ticker (PUSH-03)', () => {
+  const sw = source('public/sw.js');
+  assert.equal(sw.split("addEventListener('push'").length - 1, 1, 'exactly one push listener');
+  assert.ok(sw.includes('showNotification'), 'the push handler displays the ticker');
+});
+
+test('a push with an open window client of the origin shows NO OS notification (D-12/D-13)', async () => {
+  const sw = loadSw();
+  sw.setClients([{ url: 'https://gr8r.test/w/acme' }]);
+  await sw.firePush(payload({ title: 'Élodie mentioned you', body: 'ELN-1 Website launch', url: '/w/acme/task/ELN-1' }));
+  assert.equal(sw.shown.length, 0, 'the visible-tab path owns delivery when any client exists');
+});
+
+test('a push with zero window clients displays the ticker with title, body, icon and data.url', async () => {
+  const sw = loadSw();
+  sw.setClients([]);
+  await sw.firePush(payload({ title: 'Élodie mentioned you', body: 'ELN-1 Website launch', url: '/w/acme/task/ELN-1' }));
+  assert.equal(sw.shown.length, 1, 'tab-closed delivery shows the notification');
+  const c = sw.shown[0];
+  assert.equal(c.title, 'Élodie mentioned you', 'the title arrives pre-localized from the server (T-48-02)');
+  assert.equal(c.options.body, 'ELN-1 Website launch');
+  assert.equal(c.options.icon, '/favicon.svg');
+  assert.equal(c.options.data.url, '/w/acme/task/ELN-1', 'the click data rides the existing notificationclick router');
+});
+
+test('a malformed push payload never throws; an empty title is never displayed (best-effort, D-13)', async () => {
+  const sw = loadSw();
+  sw.setClients([]);
+  await sw.firePush({ json: () => { throw new Error('bad json'); } });
+  await sw.firePush(null);
+  await sw.firePush(payload({ body: 'no title here' }));
+  assert.equal(sw.shown.length, 0, 'malformed / empty payloads degrade to silence');
+});
+
 /* ---------- the tracer: hidden-tab mention → SW notification ---------- */
 
 test('the first notifyNewEvents call of a session primes the seen-set and notifies nothing', async () => {
