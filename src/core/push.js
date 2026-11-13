@@ -11,7 +11,8 @@
    WORKSPACE, deliberately outside the projects.v2 blob (D-01). The first call
    of a session PRIMES the set silently, so login never toasts a backlog. */
 import { S, D, myNotifs, mem, task } from './store.js';
-import { api } from './api.js';
+import { api, call } from './api.js';
+import { deviceLabel } from './utils.js';
 import { t } from './i18n.js';
 import { toast } from '../ui/toast.js';
 
@@ -135,4 +136,124 @@ export async function notifyNewEvents() {
       /* dispatch failed: the poll is the delivery guarantee, email is the backstop */
     }
   }
+}
+
+/* ================= Settings Push tab client helpers (Phase 59, D-01..D-07) =================
+   Subscribe/unsubscribe/device-list helpers. They ride the lazy push chunk
+   (DELIV-02) — the SW registration itself stays eager elsewhere. D-01: the
+   ONLY permission request in the codebase fires inside enablePush, reached
+   exclusively from the Settings master-toggle click (never page load, never
+   first mention). The workspace id rides a seam (the setToastSink pattern)
+   so the node harness can pin it while production reads api state. */
+
+export let pushWorkspace = () => (api.enabled ? api.workspace?.id || '' : '');
+export function setPushWorkspace(fn) {
+  pushWorkspace = fn || (() => (api.enabled ? api.workspace?.id || '' : ''));
+}
+
+/* D-04: the device label is client-chosen once at subscribe time — derived
+   from the browser/OS (the same builder the sessions table uses), never
+   asked for twice. */
+export const defaultPushLabel = () => {
+  try {
+    return deviceLabel(navigator.userAgent) || t('settings.notif.pushUnnamed');
+  } catch {
+    return t('settings.notif.pushUnnamed');
+  }
+};
+
+/* Fail-absent (MCP-01 pattern): an unconfigured server answers 404 — the
+   caller receives null and the UI hides the master toggle entirely. */
+export async function fetchPushConfig() {
+  const r = await call('GET', '/api/me/push-config');
+  return r.ok ? r.data : null;
+}
+
+export async function fetchPushDevices() {
+  const r = await call('GET', `/api/me/push-subscriptions?workspace=${encodeURIComponent(pushWorkspace())}`);
+  return r.ok ? r.data?.subscriptions || [] : null;
+}
+
+/* One read of everything the Push tab renders (the refreshSessions pattern):
+   server config, this member's device rows, and this browser's local
+   subscription endpoint — the master toggle's ON/OFF state. */
+export async function readPushState() {
+  const config = await fetchPushConfig();
+  const devices = await fetchPushDevices();
+  let localEndpoint = null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    localEndpoint = sub?.endpoint || null;
+  } catch {
+    /* no SW registration yet: nothing local to report */
+  }
+  return { config, devices: devices || [], localEndpoint };
+}
+
+let _enabling = false;
+
+/* The master enable path (D-01/D-02): the caller is the user gesture. The
+   permission request fires HERE and nowhere else. Double-clicks are guarded
+   by the in-flight flag; a re-subscribe to the same endpoint replaces the
+   row server-side (59-01 insert-or-replace), so enable stays idempotent. */
+export async function enablePush(label) {
+  if (_enabling) return { ok: false, code: 'busy' };
+  _enabling = true;
+  try {
+    const cfg = await fetchPushConfig();
+    if (!cfg) return { ok: false, code: 'unavailable' };
+    if (typeof window.Notification !== 'undefined' && window.Notification.permission === 'default') {
+      const p = await window.Notification.requestPermission();
+      if (p !== 'granted') return { ok: false, code: p === 'denied' ? 'denied' : 'dismissed' };
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const raw = Uint8Array.from(atob(String(cfg.vapidPublicKey).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
+    /* CANONICAL body: subscription.toJSON() verbatim + the client-chosen
+       label (D-04) — exactly the shape the 59-01 route whitelist validates;
+       no reshaping that could drop a field the server expects. */
+    const body = { ...sub.toJSON(), label: label || defaultPushLabel(), workspace: pushWorkspace() };
+    const r = await call('POST', '/api/me/push-subscriptions', body);
+    if (!r.ok) return { ok: false, code: 'subscribe' };
+    return { ok: true, endpoint: sub.endpoint };
+  } catch {
+    /* subscribe can reject (no SW, bad key, browser refusal): honest refusal */
+    return { ok: false, code: 'error' };
+  } finally {
+    _enabling = false;
+  }
+}
+
+/* Master OFF (D-07 discretion): unsubscribe this browser AND delete its row —
+   enable/disable symmetry; the row would otherwise linger until the sweep. */
+export async function disablePush() {
+  let endpoint = null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      endpoint = sub.endpoint;
+      await sub.unsubscribe();
+    }
+  } catch {
+    /* no SW/subscription: still delete the server row below */
+  }
+  const body = { workspace: pushWorkspace() };
+  if (endpoint) body.endpoint = endpoint;
+  await call('DELETE', '/api/me/push-subscriptions', body);
+  return { ok: true, endpoint };
+}
+
+/* Per-row unsubscribe from the device list (D-07 discretion): row delete
+   only — this browser's SW subscription is untouched. Caller-owned row
+   server-side (the DELETE route constrains to the session user). */
+export async function unsubscribeDevice(endpoint) {
+  return call('DELETE', '/api/me/push-subscriptions', { endpoint, workspace: pushWorkspace() });
+}
+
+/* Per-device test push (D-05/D-06): the real payload/display path server-side,
+   tagged as a test — the owner's acceptance instrument for PUSH-01. */
+export async function sendTestPush(endpoint) {
+  return call('POST', '/api/me/push-subscriptions/test', { endpoint, workspace: pushWorkspace() });
 }

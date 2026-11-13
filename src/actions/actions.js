@@ -349,6 +349,7 @@ A.go = el => {
     }
     if (p.sec === 'apikeys') refreshApiKeys(); // MCP-01: the key rows re-read the server
   }
+  if (r === 'settings' && p.sec === 'notif-push' && api.enabled) refreshPushState(); // Phase 59 (D-03): device list + master toggle re-read the server
 };
 A.back = () => {
   const h = S.ui.history.pop();
@@ -2511,6 +2512,52 @@ export async function refreshApiKeys() {
   render();
   return res.data;
 }
+
+/* ---------- Phase 59 (PUSH-01, D-01..D-07): the Settings Push tab ----------
+   Server ground truth loaded on mount (the A.go hook above, the sessions
+   pattern) and re-read after every state change. The enable/disable/test
+   actions themselves ride the LAZY push chunk (DELIV-02) — this file only
+   wires state, toasts and render. D-01: the only requestPermission call
+   lives inside push.js enablePush, reached exclusively from the pushEnable
+   click; nothing here prompts on load. */
+export async function refreshPushState() {
+  if (!api.enabled) return null;
+  const m = await import('../core/push.js');
+  const st = await m.readPushState();
+  S.ui.pushConfig = st.config;
+  S.ui.pushDevices = st.devices;
+  S.ui.pushLocalEndpoint = st.localEndpoint;
+  render();
+  return st;
+}
+IN.pushEnable = async () => {
+  const m = await import('../core/push.js');
+  const r = await m.enablePush();
+  if (r.ok) toast(t('toast.pushEnabled'), { ms: 2000 });
+  else if (r.code === 'unavailable') toast(t('err.pushUnavailable'), { kind: 'err', ms: 6000 });
+  else if (r.code === 'denied') m.blockedToastOnce(); // the one-time explanatory toast (D-48-4)
+  await refreshPushState();
+  return r;
+};
+IN.pushDisable = async () => {
+  const m = await import('../core/push.js');
+  await m.disablePush();
+  toast(t('toast.pushDisabled'), { ms: 2000 });
+  await refreshPushState();
+};
+IN.pushTest = async el => {
+  const m = await import('../core/push.js');
+  const r = await m.sendTestPush(el.dataset.id);
+  if (r.ok) toast(t('toast.pushTestSent'), { ms: 2000 });
+  else toast(t('toast.pushTestFailed'), { kind: 'err', ms: 6000 });
+};
+IN.pushUnsub = async el => {
+  const m = await import('../core/push.js');
+  await m.unsubscribeDevice(el.dataset.id);
+  toast(t('toast.pushDisabled'), { ms: 2000 });
+  await refreshPushState();
+};
+
 
 /* A.apiKeyCreate — the staged create form's submit (data-submit + button). */
 A.apiKeyCreate = () => {

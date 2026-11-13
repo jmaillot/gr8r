@@ -524,13 +524,48 @@ export function settingsBody(sec, title) {
          never stored — a later grant clears it on the next poll re-render. */
       const blocked = typeof window.Notification !== 'undefined' && window.Notification.permission === 'denied';
       const bad = blocked ? `<span class="badge red">${t('settings.notif.pushBrowserBlocked')}</span>` : '';
+      /* Phase 59 (D-01..D-05, D-09): server ground truth loaded by the A.go
+         hook through readPushState — S.ui.pushConfig is null until loaded and
+         stays null after a 404 (fail-absent: the master toggle hides when
+         push is not configured on the server). Master ON = this browser has
+         a live pushManager subscription; OFF unsubscribes + deletes the row
+         (D-07). Per-type toggles below gate delivery only. */
+      const cfg = S.ui.pushConfig;
+      const devices = S.ui.pushDevices || [];
+      const localOn = !!S.ui.pushLocalEndpoint;
+      const master = cfg
+        ? srow(
+            t('settings.notif.pushEnable'),
+            t('settings.notif.pushEnableDesc'),
+            localOn
+              ? `<button class="btn btn-danger-ghost btn-sm" data-a="pushDisable">${t('act.turnOff')}</button>`
+              : `<button class="btn btn-primary btn-sm" data-a="pushEnable">${t('settings.notif.pushTurnOn')}</button>`,
+          )
+        : '';
+      const deviceRows =
+        `<div class="sblock"><h2>${t('settings.notif.pushDevices')}</h2>` +
+        (devices.length
+          ? devices
+              .map(dev =>
+                srow(
+                  `<span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(dev.label || t('settings.notif.pushUnnamed'))}</span>`,
+                  dev.created_at ? ago(dev.created_at) : '—',
+                  `<button class="btn btn-secondary btn-sm" data-a="pushTest" data-id="${esc(dev.endpoint)}">${t('settings.notif.pushTest')}</button><button class="btn btn-danger-ghost btn-sm" data-a="pushUnsub" data-id="${esc(dev.endpoint)}">${t('act.delete')}</button>`,
+                ),
+              )
+              .join('')
+          : `<p class="faint" style="padding:12px 0">${t('settings.notif.pushNoDevices')}</p>`) +
+        `</div>`;
       return (
         H(t('settings.notif.pushLead')) +
+        master +
         srow(t('settings.notif.mentions'), bad, tog('push_mention', np.push_mention, 'np')) +
         srow(t('settings.notif.assignments'), bad, tog('push_assign', np.push_assign, 'np')) +
         srow(t('settings.notif.comments'), bad, tog('push_comment', np.push_comment, 'np')) +
+        srow(t('settings.notif.pushDue'), t('settings.notif.pushDueDesc'), tog('push_due', np.push_due, 'np')) +
         srow(t('settings.notif.dueReminder'), t('settings.notif.dueReminderDesc'), tog('due_reminder', np.due_reminder, 'np')) +
-        srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np'))
+        srow(t('settings.notif.pastDue'), t('settings.notif.pastDueDesc'), tog('past_due', np.past_due, 'np')) +
+        deviceRows
       );
     }
     case 'notif-mentions':
