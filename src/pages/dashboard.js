@@ -30,11 +30,16 @@ import { ROUTE_TEARDOWN, render } from '../shell/render.js';
 let fillSeq = 0;
 let timer = null;
 let inflight = null;
+/* CR-01: the requested window is CLAIMED up-front, before the fetch — a
+   failing fetch can therefore never leave the window unclaimed and re-kick
+   fill() on every render (the fetch/render ping-pong). */
+let lastRequestedWindow = null;
 
 async function fill() {
   const my = ++fillSeq;
   inflight?.abort();
   inflight = new AbortController();
+  lastRequestedWindow = S.ui.dashWindow || '7d';
   const res = await api.dashboard(S.ui.dashWindow || '7d', { signal: inflight.signal });
   if (my !== fillSeq || S.ui.route !== 'dashboard') return;
   if (res.ok) {
@@ -89,9 +94,15 @@ export function pageDashboard() {
   const d = S.ui.dashData;
   const loading = !d;
   /* First visit (no payload yet) or a window switch still in flight: kick the
-     fetch — the panels below render busy placeholders until it lands. */
-  if (loading || S.ui.dashDataWindow !== w) fill();
-  if (loading) startPoll();
+     fetch — the panels below render busy placeholders until it lands. CR-01:
+     while an error state is set the kick is suppressed (the failed window was
+     claimed up-front); recovery goes through the explicit dashRetry action,
+     never an automatic per-render re-kick. */
+  if ((loading || S.ui.dashDataWindow !== w) && !S.ui.dashErr) fill();
+  /* D-05/WR-01: the poll entry is independent of `loading` — with cached data
+     after a route exit, the 30 s rhythm restarts on re-entry (the teardown
+     cleared the timer; `!timer` also makes repeated entries un-stackable). */
+  if (!timer) startPoll();
 
   const overdue = d?.overdue || [];
   const load = d?.load || [];
