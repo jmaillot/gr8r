@@ -457,3 +457,166 @@ test('main.js wires the permission memo into the poll render condition (source c
   );
   assert.ok(src.includes("_pollPerm = perm;"), 'the memo updates when the condition fires');
 });
+
+/* ---------- expansion (59-03): client helpers + the Settings Push tab ----------
+   D-01: the ONLY requestPermission call lives inside enablePush, reached
+   exclusively from the Settings master-toggle click. D-04: the subscribe body
+   is the canonical toJSON() shape verbatim + the client-chosen label — the
+   exact shape the 59-01 route whitelist validates. Fail-absent: a 404 config
+   means no prompt and no subscribe. */
+
+/* fetch recorder + route table — call() in api.js reads globalThis.fetch at
+   call time, so stubbing here covers every helper without touching api.js. */
+const fetchCalls = [];
+let fetchRoute = () => ({ ok: false, status: 404, body: {} });
+globalThis.fetch = async (path, opts = {}) => {
+  fetchCalls.push({ path: String(path), opts });
+  const r = fetchRoute();
+  return { ok: r.ok, status: r.status, text: async () => JSON.stringify(r.body) };
+};
+const setFetchRoute = fn => { fetchRoute = fn; };
+const lastCall = (path, method) => [...fetchCalls].reverse().find(c => c.path === path && c.opts.method === method);
+const resetFetchCalls = () => { fetchCalls.length = 0; };
+
+/* pushManager stub: subscribe records its options, getSubscription is a
+   mutable slot so the disable/unsubscribe cases can control it. */
+let pushGetSub = null;
+const subscribeCalls = [];
+const pushReg = {
+  pushManager: {
+    subscribe: async opts => {
+      subscribeCalls.push(opts);
+      return {
+        endpoint: 'https://push.example/ep1',
+        toJSON: () => ({ endpoint: 'https://push.example/ep1', keys: { p256dh: 'k1', auth: 'a1' } }),
+      };
+    },
+    getSubscription: async () => pushGetSub,
+  },
+};
+globalThis.navigator.serviceWorker.ready = Promise.resolve(pushReg);
+
+/* The api seam: push helpers read the workspace through the exported seam so
+   the harness (local mode, api.enabled getter-bound) can pin it. */
+push.setPushWorkspace(() => 'ws-1');
+
+const configRoute = () => ({
+  ok: true,
+  status: 200,
+  body: { vapidPublicKey: '_-s=' }, /* base64url of bytes [255, 251] — exercises the -/_ decode */
+});
+
+test('enablePush fetches the config, requests permission from the gesture, subscribes with the decoded key and POSTs the canonical body verbatim (D-01/D-04)', async () => {
+  setFetchRoute(configRoute);
+  Notification.permission = 'granted';
+  resetFetchCalls();
+  const r = await push.enablePush('MacBook — Chrome');
+  assert.equal(r.ok, true, 'the happy path succeeds');
+  assert.deepEqual(subscribeCalls[0], {
+    userVisibleOnly: true,
+    applicationServerKey: new Uint8Array([255, 251]), /* base64url '-/_' decoded */
+  });
+  const post = lastCall('/api/me/push-subscriptions', 'POST');
+  assert.ok(post, 'the subscription is POSTed');
+  assert.deepEqual(JSON.parse(post.opts.body), {
+    endpoint: 'https://push.example/ep1',
+    keys: { p256dh: 'k1', auth: 'a1' },
+    label: 'MacBook — Chrome',
+    workspace: 'ws-1',
+  }, 'the canonical toJSON() shape verbatim + the client-chosen label (D-04)');
+});
+
+test('enablePush asks for permission exactly once when it is still default (D-01)', async () => {
+  setFetchRoute(configRoute);
+  Notification.permission = 'default';
+  let rp = 0;
+  Notification.requestPermission = async () => {
+    rp++;
+    return 'granted';
+  };
+  resetFetchCalls();
+  subscribeCalls.length = 0;
+  await push.enablePush();
+  assert.equal(rp, 1, 'one request, inside the toggle gesture');
+  assert.equal(subscribeCalls.length, 1, 'granted → subscribe proceeds');
+});
+
+test('a 404 push-config answers fail-absent: no permission request, no subscribe (MCP-01 pattern)', async () => {
+  setFetchRoute(() => ({ ok: false, status: 404, body: { code: 'pushUnavailable' } }));
+  Notification.permission = 'default';
+  let rp = 0;
+  Notification.requestPermission = async () => {
+    rp++;
+    return 'granted';
+  };
+  resetFetchCalls();
+  subscribeCalls.length = 0;
+  const r = await push.enablePush();
+  assert.equal(r.ok, false, 'the enable is refused');
+  assert.equal(rp, 0, 'no permission request when push is unconfigured');
+  assert.equal(subscribeCalls.length, 0, 'no subscribe when push is unconfigured');
+});
+
+test('disablePush unsubscribes the local subscription and DELETEs this device row (D-07)', async () => {
+  let unsub = 0;
+  pushGetSub = {
+    endpoint: 'https://push.example/ep1',
+    unsubscribe: async () => {
+      unsub++;
+    },
+  };
+  resetFetchCalls();
+  await push.disablePush();
+  assert.equal(unsub, 1, 'pushManager.unsubscribe runs');
+  const del = lastCall('/api/me/push-subscriptions', 'DELETE');
+  assert.ok(del, 'the device row is DELETEd');
+  assert.deepEqual(JSON.parse(del.opts.body), { endpoint: 'https://push.example/ep1', workspace: 'ws-1' });
+  pushGetSub = null;
+});
+
+test('sendTestPush hits the per-device test-send route with the body-carried endpoint (D-05/D-06)', async () => {
+  resetFetchCalls();
+  setFetchRoute(() => ({ ok: true, status: 200, body: { ok: true } }));
+  await push.sendTestPush('https://push.example/ep1');
+  const post = lastCall('/api/me/push-subscriptions/test', 'POST');
+  assert.ok(post, 'the exact literal pinned in Plan 02');
+  assert.deepEqual(JSON.parse(post.opts.body), { endpoint: 'https://push.example/ep1', workspace: 'ws-1' });
+});
+
+/* ---------- the Settings Push tab render (D-02/D-03/D-05, D-09) ---------- */
+
+const settings = await import('../src/pages/settings.js');
+
+test('the Push tab renders the master enable affordance, per-type rows including push_due, and the device list with per-device test buttons', () => {
+  setFetchRoute(configRoute);
+  S.ui.pushConfig = { vapidPublicKey: 'x' };
+  S.ui.pushDevices = [{ endpoint: 'https://push.example/ep1', label: 'Mac — Chrome', created_at: Date.now() }];
+  S.ui.pushLocalEndpoint = 'https://push.example/ep1';
+  const html = settings.settingsBody('notif-push', 'Push');
+  assert.ok(html.includes('data-a="pushDisable"'), 'master OFF affordance when this device is subscribed (D-07)');
+  assert.ok(html.includes('data-k="push_due"'), 'the push_due row is present (D-09)');
+  assert.ok(html.includes('data-a="pushTest"'), 'a per-device send-test action exists (D-05)');
+  assert.ok(html.includes('data-id="https://push.example/ep1"'), 'the action targets the exact device endpoint');
+  assert.ok(html.includes('Mac — Chrome'), 'the device label renders (D-03)');
+  assert.ok(html.includes('data-k="push_mention"'), 'per-type rows stay (D-02)');
+});
+
+test('the master enable affordance shows when the device is not yet subscribed, and hides entirely when push is unconfigured (fail-absent)', () => {
+  setFetchRoute(configRoute);
+  S.ui.pushConfig = { vapidPublicKey: 'x' };
+  S.ui.pushLocalEndpoint = null;
+  assert.ok(settings.settingsBody('notif-push', 'Push').includes('data-a="pushEnable"'), 'OFF state offers enable');
+  S.ui.pushConfig = null; /* 404 config → feature absent */
+  const html = settings.settingsBody('notif-push', 'Push');
+  assert.ok(!html.includes('data-a="pushEnable"'), 'no master enable when unconfigured');
+  assert.ok(!html.includes('data-a="pushDisable"'), 'no master off when unconfigured');
+  S.ui.pushConfig = { vapidPublicKey: 'x' };
+});
+
+test('no requestPermission call exists outside a user-gesture handler path (T-59-13)', () => {
+  const settingsSrc = source('src/pages/settings.js');
+  assert.ok(!settingsSrc.includes('requestPermission'), 'settings.js never touches the permission API directly');
+  const pushSrc = source('src/core/push.js');
+  assert.equal(pushSrc.split('requestPermission').length - 1, 1, 'exactly one requestPermission call, inside enablePush (D-01)');
+});
+
