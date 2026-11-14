@@ -12,6 +12,15 @@
    address for the same reason.
    ===================================================================== */
 import { createHash } from 'node:crypto';
+/* Phase 62 (D-03): the two Settings helpers below are the first Playwright
+   imports in this file — the helpers drive the real UI (navigation + the two
+   waits), while every assertion stays in the specs (D-04). The option/tab
+   labels are read from the locale catalogues, never transcribed. */
+import { test, expect } from '@playwright/test';
+import en from '../../src/locales/en.json' with { type: 'json' };
+import frCatalogue from '../../src/locales/fr.json' with { type: 'json' };
+
+const cat = (lang, key) => ({ en, fr: frCatalogue })[lang]?.[key];
 
 export const BASE_URL = `http://127.0.0.1:${process.env.E2E_PORT || 4317}`;
 
@@ -56,6 +65,59 @@ export function clientIp(run, tag) {
 
 export function newRunId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/* =====================================================================
+   PHASE 62 (D-03/D-05/D-08): the two composable Settings helpers.
+
+   Exactly one place (this file) knows the lazy-chunk contract
+   (src/shell/layout.js: `settings: lazy(() => import('../pages/settings.js'))`)
+   and the design-system select contract (src/ui/select.js: the native
+   <select> is enhanced into a trigger button (`aria-haspopup="listbox"`,
+   accessible name = the current option label) + a `role="listbox"` menu of
+   `role="option"` items; the native control is aria-hidden, so no element
+   carries role="combobox"). Specs never hand-roll either wait (D-05);
+   helpers own navigation and waits only — assertions stay spec-side (D-04).
+   ===================================================================== */
+
+/* Navigate to Settings and wait for the lazy chunk by its rendered content —
+   a role-based, auto-retrying expect() on the Language tab affordance, never
+   a sleep. With `tab: 'language'`, clicks the Language tab and waits for its
+   level-1 heading (the arrival signal for the language row). */
+export async function openSettings(page, { tab } = {}) {
+  /* The Settings entry affordance is the shell nav button; its accessible
+     name is catalogue-driven, so resolve it from the catalogue of the
+     language the document currently renders (label-from-catalogue, never
+     transcribed). */
+  const lang = await page.evaluate(() => document.documentElement.lang || 'en');
+  const settingsLabel = cat(lang, 'nav.route.settings') || cat('en', 'nav.route.settings');
+  await page.getByRole('button', { name: settingsLabel }).click();
+  const languageLabel = cat(lang, 'settings.language.title') || cat('en', 'settings.language.title');
+  /* THE lazy-chunk wait (D-05): the tab buttons only exist once the Settings
+     chunk has rendered. */
+  await expect(page.getByRole('button', { name: languageLabel, exact: true })).toBeVisible();
+  if (tab === 'language') {
+    await page.getByRole('button', { name: languageLabel, exact: true }).click();
+    await expect(page.getByRole('heading', { name: languageLabel, level: 1 })).toBeVisible();
+  }
+}
+
+/* Drive the enhanced language select to `lang` and await the real write path:
+   the account locale PATCH /api/auth/me (src/actions/actions.js IN.langSel →
+   api.patchMe). The option label is read from the DOM's own native <select>
+   (label-from-DOM — never transcribed); the PATCH wait is armed BEFORE the
+   option click so the network completion can never be missed (D-08). Returns
+   the response — the caller asserts its status spec-side (D-04). */
+export async function selectLanguage(page, lang) {
+  const label = await page.evaluate(l => {
+    const opt = [...document.querySelectorAll('select[data-in="langSel"] option')].find(o => o.value === l);
+    if (!opt) throw new Error(`selectLanguage: no option with value "${l}" in select[data-in="langSel"]`);
+    return opt.text;
+  }, lang);
+  const saved = page.waitForResponse(r => r.url().endsWith('/api/auth/me') && r.request().method() === 'PATCH');
+  await page.locator('.set-body .select-btn').click();
+  await page.getByRole('option', { name: label }).click();
+  return saved;
 }
 
 /* Cookie-bearing API client; the server sets `projects_session` on sign-in and signup.

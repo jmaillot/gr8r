@@ -11,7 +11,7 @@
    visibility claim rests on them.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, inviteToken, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, PASSWORD, apiClient, clientIp, createAccount, inviteToken, newRunId, openSettings, selectLanguage } from './helpers/setup.mjs';
 import en from '../src/locales/en.json' with { type: 'json' };
 import frCatalogue from '../src/locales/fr.json' with { type: 'json' };
 
@@ -141,49 +141,55 @@ test('switching the selector to Français re-renders without a reload and settle
     await page.goto(`/w/${fr.account.slug}/mytasks`);
     await expect(page.getByText('Overflow probe').first()).toBeVisible();
 
-    /* The real D-01 selector path: settings → language row → Français. */
-    await page.getByRole('button', { name: 'Settings' }).click();
-    await page.getByRole('button', { name: 'Language', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Language', level: 1 })).toBeVisible();
+    /* The real D-01 selector path, through the shared helpers (phase 62
+       D-03/D-05/D-08): openSettings owns the lazy-chunk wait, selectLanguage
+       owns the trigger click and the PATCH /api/auth/me wait — no sleeps. */
+    await openSettings(page, { tab: 'language' });
     await page.evaluate(() => {
       window.__survived = 'no-reload';
     });
-    /* The honest selector: two options, labelled in their own names. The
-       change persists through the account PATCH, awaited below. */
-    const language = page.getByRole('button', { name: 'Language', exact: true, expanded: false });
-    await language.click();
-    await expect(page.getByRole('option')).toHaveText(['English', 'Français']);
-    const saved = page.waitForResponse(r => r.url().endsWith('/api/auth/me') && r.request().method() === 'PATCH');
-    await page.getByRole('option', { name: 'Français' }).click();
-
-    /* The document language follows (D-02), the shell re-rendered in
-       French, and nothing was reloaded to get there. */
-    await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
-    await expect(page.getByRole('heading', { name: 'Langue', level: 1 })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Projets' }).first()).toBeVisible();
-    expect(await page.evaluate(() => window.__survived), 'the switch re-rendered in place').toBe('no-reload');
-
-    /* Loop safety (07-RESEARCH risk 1): after the switch the interface
-       settles. A MutationObserver on the render root must count zero
-       mutations over 1.5 s — a render loop would rewrite #app every
-       cycle — and two DOM snapshots 500 ms apart are identical. */
-    await page.waitForTimeout(300);
+    /* The honest selector: two options, labelled in their own names — read
+       from the native select the enhanced menu is built from. The change
+       persists through the account PATCH, awaited below. */
+    const optionLabels = await page.evaluate(() => [...document.querySelectorAll('select[data-in="langSel"] option')].map(o => o.text));
+    expect(optionLabels, 'the language select exposes both languages').toEqual(['English', 'Français']);
+    /* The render-loop observer is installed BEFORE the option click (07-
+       RESEARCH risk 1, restructured sleep-free per phase 62 Pitfall 3): the
+       re-render itself lands in the counter, which is reset after the French
+       re-render is asserted; the bounded polls below then prove nothing
+       keeps mutating. */
     await page.evaluate(() => {
       window.__mutations = 0;
       new MutationObserver(entries => {
         window.__mutations += entries.length;
       }).observe(document.getElementById('app'), { childList: true, subtree: true, attributes: true, characterData: true });
     });
-    const before = await page.evaluate(() => document.getElementById('app').innerHTML);
-    await page.waitForTimeout(500);
-    const after = await page.evaluate(() => document.getElementById('app').innerHTML);
-    expect(after, 'the rendered interface drifts after the switch').toBe(before);
-    await page.waitForTimeout(1000);
-    expect(await page.evaluate(() => window.__mutations), 'the interface keeps re-rendering after the switch (render loop)').toBe(0);
+    const saved = await selectLanguage(page, 'fr');
 
-    /* Persistence: the account PATCH answered 200, so a fresh boot comes up
-       French from users.locale — the same path every later test relies on. */
+    /* The document language follows (D-02), the shell re-rendered in
+       French, the PATCH answered 200, and nothing was reloaded to get
+       there. */
+    await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
+    await expect(page.getByRole('heading', { name: 'Langue', level: 1 })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Projets' }).first()).toBeVisible();
     expect((await saved).status(), 'the account locale write failed').toBe(200);
+    expect(await page.evaluate(() => window.__survived), 'the switch re-rendered in place').toBe('no-reload');
+
+    /* Loop safety (07-RESEARCH risk 1), sleep-free: the interface settles.
+       With the counter reset after the re-render, a bounded poll on zero
+       mutations fails on any render loop (the counter would keep climbing)
+       and returns immediately when the page is quiet; the innerHTML
+       equality poll replaces the two-snapshot comparison. */
+    await page.evaluate(() => {
+      window.__mutations = 0;
+    });
+    const before = await page.evaluate(() => document.getElementById('app').innerHTML);
+    await expect.poll(() => page.evaluate(() => window.__mutations), { timeout: 1500 }).toBe(0);
+    await expect.poll(() => page.evaluate(() => document.getElementById('app').innerHTML), { timeout: 1500 }).toBe(before);
+
+    /* Persistence: the locale write is already proven 200 above; a fresh
+       boot comes up French from users.locale — the same path every later
+       test relies on. */
     await page.reload();
     await frenchShell(page);
   } finally {
