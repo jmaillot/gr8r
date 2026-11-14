@@ -166,12 +166,15 @@ test('save, apply, update and delete a named view on the tasks table (VIEW-02)',
      popHtml) — two async writers for the same popover html. Awaiting the
      open-time GETs before the delete, then the DELETE + its post-delete
      refresh GETs before asserting, guarantees the last writer is the
-     post-delete rebuild (63-TRIAGE §4.6 ordering race). */
-  await page.getByRole('button', { name: fmt('popover.savedViews') }).click();
+     post-delete rebuild (63-TRIAGE §4.6 ordering race). D-08 arm-before-act:
+     the open-GET listeners attach BEFORE the click — under parallel load the
+     two refetch-on-open GETs can settle during the awaited click() itself,
+     and arming after it hangs the wait to the 30s timeout (63-03 D-02). */
   const openGets = [
     page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'GET'),
     page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'GET'),
   ];
+  await page.getByRole('button', { name: fmt('popover.savedViews') }).click();
   await Promise.all(openGets); /* refetch-on-open (NAMED_VIEW_KEYS) settled */
   const deleted = page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'DELETE');
   const postDeleteGets = [
