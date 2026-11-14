@@ -116,6 +116,22 @@
   .only-m .panel * {
     overflow-wrap: anywhere;
   }
+  /* Phase 64 D-05: card polish classes — repeated inline styles extracted (byte-lean) */
+  .only-m .mcard {
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  .only-m .mch {
+    margin-bottom: 8px;
+  }
+  .only-m .mch b {
+    font-weight: 500;
+  }
+  .only-m .mcm {
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 12px;
+  }
 }
 @media (max-width: 640px) {
   :root {
