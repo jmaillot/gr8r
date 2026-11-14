@@ -1,270 +1,176 @@
-# Feature Research — v2.2 Feature Landscape vs Comparable Products
+# Feature Landscape — v2.3 Consolidation & Hardening
 
-**Domain:** Self-hosted project-management workspace (Projects Studio / gr8r)
-**Researched:** 2026-11-12
-**Confidence:** HIGH on UX patterns (all six products publish and have stable, widely-replicated behaviors); MEDIUM on exact current settings names/limits (products evolve; live web search was degraded during this run — treated as LOW-authority and not relied upon for verdicts)
-
-## Feature Landscape
-
-Six categories requested. For each: how comparable products behave, then the table-stakes / differentiator / anti-feature breakdown with complexity and dependencies on existing gr8r surfaces.
+**Domain:** Self-hosted PM workspace — consolidation (e2e repair, mobile table layout, flaky-test stabilization). No new features.
+**Researched:** 2026-11-14
+**Overall confidence:** HIGH — grounded in the actual specs (`e2e/french-overflow.spec.mjs`, `e2e/locale.spec.mjs:122`, `e2e/saved-views.spec.mjs`), the actual table code (`src/views/table.js`), the actual CSS (`src/styles/responsive.css`, `src/styles/views/table.css`), and the actual Playwright config (`e2e/playwright.config.mjs`), cross-checked against Playwright official docs (locators/actionability/webServer).
 
 ---
 
-### 1. Browser Push Notifications (mentions + assignments only)
+## Target CONS-01 — Repair 9 failing e2e specs (lazy-chunk Settings drift)
 
-**How comparable products behave:**
+### What "good" looks like (expected behavior)
 
-- **Linear** (the strongest reference — web app with real push): push is opt-in per channel, not per event. The notification arrives as an OS notification with a short title ("Mentioned in FOO-123"), one-line body, and clicking it deep-links to the exact issue, focusing an existing tab or opening a new one. Mentions and assignments are the highest-priority channels; everything else (status changes, comments-not-on-you) stays in the in-app inbox by default. Linear never prompts for permission at first page load — permission is requested from a settings surface after the user has context.
-- **GitHub** (web notifications): browser notification permission is requested from the notifications settings page / notification tray, never a page-load interstitial. Clicking a web notification navigates to the conversation. GitHub deliberately keeps browser notifications to a coarse on/off per "participating / watching" model — no per-event granularity — because fine-grained prefs live in the email/inbox channels.
-- **Trello**: opt-in prompt with an explanatory pre-prompt ("Get notified when cards are added/assigned to you") before the browser permission dialog — the classic two-step ask. Per-device toggle so a user can silence one machine.
-- **Asana**: push is bundled under one "browser notifications" toggle; in-app toasts handle most events, push only for direct ones.
-- **Basecamp**: the anti-reference for over-pushing — famous for "honor the user's quiet hours" and aggressive batching; their philosophy is that every notification competes with the user's attention and mentions/assignments are the only truly urgent events. (Direct validation of gr8r's "mentions + assignments only" scope.)
-- **Todoist**: push is per-device with a small set of coarse categories (task reminders, comments, mentions), never per-project.
+The 9 failures share one root cause: Phase 56 split Settings into a lazy Vite chunk. The affected specs navigate to Settings and immediately click inside it (`page.getByRole('button', { name: 'Settings' }).click()` → `Language` → options). Before 56, Settings markup was in the entry bundle and rendered synchronously; now the first click lands while the chunk is still fetching/parsing, and the follow-up locator either times out or binds to a DOM node the re-render then replaces.
 
-**Convergent pattern:** (a) permission requested from a settings/context surface, never on page load; (b) deep-link click-through to the exact task, reusing/focusing an existing tab where possible (gr8r's Phase 48 service worker already handles notificationclick/focus); (c) per-device enable/disable in addition to per-type prefs; (d) only high-intent events (mention, assignment) push — lower-intent events stay in the inbox.
+"Good" for an e2e spec facing lazy-loaded routes:
 
-| Feature | Tier | Why | Complexity | Notes |
-|---|---|---|---|---|
-| Settings-surface opt-in flow with pre-prompt + "Browser blocked" state | Table stakes | Every product asks from settings, never cold; silent-denied permission is the #1 push failure | LOW | Phase 48 already ships this (derived badge + explanatory toast). Extend, don't rebuild |
-| Push rows gated on existing notif_prefs (`push_mention`, `push_assignment`) + server-side Web Push send alongside email mirror | Table stakes | Users expect the push toggle to actually gate sends, not just permission | MEDIUM | New: server-side `web-push` send on the `tFor()` core; gr8r constraint = zero runtime deps → hand-roll VAPID signing over `node:crypto` (already proven by OIDC/JWKS work in v1.6) or vendor a tiny MIT signer |
-| Deep-link click-through to `/w/:slug/task/:key` with focus-or-open tab logic | Table stakes | Universal click-through behavior; broken click-through = push turned off immediately | LOW | SW already routes notificationclick; deep-link path pattern already exists from v1.5 LINK-01..04 |
-| Per-device notification test ("Send test notification") button | Table stakes | Cheap, expected sanity check; GitHub/Linear both let users verify a subscription | LOW | Server route + button in settings |
-| Suppress push when a tab of that workspace is focused/active (in-app toast instead) | Differentiator | Basecamp principle; Linear does this; prevents the double-hit of toast + OS notification | MEDIUM | Server can't know tab focus reliably → client-side suppression heartbeat or accept the tradeoff; simplest honest version: SW checks `clients.matchAll({type:'window'})` visibility and skips display if a visible gr8r tab exists |
-| Quiet hours / per-workspace push mute | Differentiator | Basecamp's signature respect-the-user stance; valued, rarely copied fully | MEDIUM | Extend notif_prefs rows (whitelisted keys pattern exists) |
-| Push for comments, due dates, status changes | Anti-feature | Scope creep; every product that pushed everything got push disabled en masse; gr8r already scoped this milestone to mentions+assignments deliberately | — | Lower-intent events stay inbox/email per existing prefs |
+1. **Locator auto-waiting already handles most of it** (HIGH confidence, Playwright docs): `getByRole(...).click()` re-resolves via `_retryWithProgressIfNotConnected` until the element is actionable — so the *first* interaction is usually fine. What breaks is **locators bound before a re-render** (stale element) and **non-auto-retrying reads** (`locator.evaluate()`, `isChecked()`, `innerText()` — single-attempt). The fix pattern: keep everything as web-first assertions (`expect(locator).toBeVisible()`, `toHaveText`, `toHaveAttribute`) which auto-retry, and convert single-attempt reads into `expect.poll()` where the value must settle.
+2. **Wait for a post-chunk symptom, never for the chunk itself.** Don't poll for `import()` or network idle. Wait for the *rendered result* of the lazy chunk — e.g. `await expect(page.getByRole('heading', { name: fmt('settings.language') })).toBeVisible()` before interacting inside it. That is chunk-agnostic (works even if Settings stops being lazy) and mirrors what the existing `frenchShell(page)` helper already does for the shell.
+3. **The spec's own `__survived` no-reload probe (french-overflow line 148–164) is sound** and should survive: the mutation-observer settle check runs *after* the language switch is confirmed, so it is not affected by load-time chunking — only the *entry* into Settings needs the added wait.
 
-**Dependencies:** Phase 48 service worker + VAPID subscription storage; `notif_prefs` 17-key whitelist (additive migration pattern proven in Phase 34); `tFor()` per-locale payload text (i18n gate applies to SW payloads too); inbox rows already keyed per recipient.
+### Table Stakes (must ship for CONS-01 to be done)
 
----
+| Feature | Why Expected | Complexity | Notes / Dependency on existing code |
+|---|---|---|---|
+| Await the lazy Settings render before interacting, in all 9 failing specs | Specs click into Settings faster than the chunk loads post-56 | Low | One `expect(...).toBeVisible()` per spec at the Settings entry point. Touches: `french-overflow.spec.mjs` (language-switch test + teams-tab test + the `settings` route inside the 16-route overflow loop and 21-route sweep), `locale.spec.mjs:122` onward. The route-level tests (`goto('/settings')` + `frenchShell`) likely need `expect.poll` on a Settings-specific marker, not just the shell |
+| Convert single-attempt reads that follow lazy renders into auto-retrying assertions | `isChecked()`, `evaluate()`, `innerText()` don't retry; they fail if the node was replaced mid-chunk-load | Low | In french-overflow: `chromeBoxes()` and `leakScan()` are `page.evaluate` calls but they run after `frenchShell()`/`frenchMarker()` settled — audit, don't blanket-rewrite. In saved-views: `await box.isChecked()` inside `setColumn()` is a single-attempt read on popover content — also relevant to VIEW-02 |
+| e2e suite back to 111/111 green | Milestone gate | Low | Pure repair; standing gates (chunk gate 11/11, i18n gate) must stay green |
 
-### 2. Full-Text Search (titles + descriptions, FTS5, wired into Ctrl-K)
+### Differentiators (valued, optional)
 
-**How comparable products behave:**
+| Feature | Value Proposition | Complexity | Notes |
+|---|---|---|---|
+| A shared `openSettings(page, tab)` helper | One place knows how to wait for the lazy chunk; the 9 specs stop duplicating entry choreography | Low | Follows the existing helper convention (`frenchShell`, `signIn`, `openTasksTable` in the same suite) |
+| A "lazy-route ready" marker convention (each lazy route exposes a stable rendered heading to await) | Future route splits can't re-break the suite | Med | Needs agreement on one marker per lazy route; keep it a *rendered* symptom, not a DOM/data attribute on the bundle |
 
-- **Linear**: Cmd-K palette IS the search. Zero query syntax by default; plain substring/token matching with fuzzy tolerance and accent-insensitive matching; results grouped by type (issues, projects, people, actions); search-as-you-type with highlighting of matched tokens; keyboard-navigable. Advanced filters live on views, not in the palette.
-- **GitHub**: search with a rich qualifier syntax (`repo:`, `is:open`, `assignee:@me`) but it lives in the *dedicated search page*; the quick palette (Cmd-K) is fuzzy and syntax-free. Highlighting only on the results page. Results grouped by type with counts.
-- **Asana**: top-bar search → full results page grouped by task/project/message tabs, with saved searches (custom fields as filters). No query syntax typed by users.
-- **Trello**: card search with operator-ish tokens (`@member`, `label:`, `due:week`) — one of the few PM tools with real inline operators, and users mostly don't know they exist.
-- **Todoist**: natural-ish operators (`#project`, `@label`, `today`, `p1`) — powerful, famously underused.
-- **Basecamp**: famously *no operators* — plain search, deliberately simple.
+### Anti-Features (explicitly NOT to build)
 
-**Convergent pattern:** the palette stays syntax-free; rich queries (if any) live on a results page; grouping by type; highlighting matched substrings; recent searches + keyboard nav. Nobody expects operators in a self-hosted workspace of this size. FTS5 with trigram/unicode61 tokenizer over titles+descriptions is well past sufficient.
+| Anti-Feature | Why Avoid | What to Do Instead |
+|---|---|---|
+| `page.waitForTimeout(...)` sleeps before Settings interactions | The classic flake re-importer: too short = flaky, too long = slow suite; masks the real async contract | Auto-retrying `expect(locator)...` on a rendered symptom |
+| Un-splitting Settings (reverting Phase 56 code-splitting) | Breaks the D-02 500 kB chunk gate and ships slower first paint | Await the lazy render in tests |
+| `networkidle` waits | Deprecated advice; SPA polling (30s notif poll) makes it unreliable | Web-first assertions |
 
-| Feature | Tier | Why | Complexity | Notes |
-|---|---|---|---|---|
-| FTS5 index over task title+description, project-scoped and permission-filtered | Table stakes | Ctrl-K currently searches titles only; scale requires descriptions; missing description search feels incomplete vs Linear/GitHub | MEDIUM | FTS5 virtual table + triggers or rebuild-on-write through the existing write funnel; **must filter results through `memberCanReadProject`** — a search that leaks private project titles is a security bug, not a UX bug (redaction funnel pattern from v1.7 SEARCH-01) |
-| Result grouping (Tasks / Projects / Actions) in the palette | Table stakes | Every product groups; flat mixed results feel broken | LOW | Palette already lists tasks + commands; add section headers |
-| Match highlighting in result rows | Table stakes | Linear/GitHub/Asana all highlight; cheap expectation | LOW | Tokenized matcher already exists in `src/lib/redaction.js` (NFC+lowercase) — reuse |
-| Results page (palette → "See all results") with filters + highlighting | Table stakes | Palette is for jump-to; deep search needs a page (GitHub model) | MEDIUM | New route + server search endpoint; permission funnel reuse |
-| Recent searches persisted per user | Table stakes | All products do it; gr8r already tracks recent-search tokens | LOW | Extend existing recent-search rows (Phase 34) |
-| Accent-insensitive + fuzzy matching | Table stakes (given FR is a first-class locale) | Already an owner-validated v1.2 decision for member search; users expect parity in task search | LOW | FTS5 needs `remove_diacritics=1` (unicode61) or a normalized column; pg variant needs its own answer (pg_trgm or unaccent) |
-| Inline query operators (`assignee:@me`, `project:`, `is:overdue`) | Differentiator | Trello/Todoist have them; genuinely useful; few self-hosted tools bother | MEDIUM | Cheap on FTS5 via prefix-query augmentation; but keep them invisible-by-default (document, don't advertise) |
-| Saved searches | Differentiator | Asana's saved searches are loved; overlaps with saved views (§6) — build once, share the mechanism | MEDIUM | **Coordinate with saved views: one "saved filter" primitive serves both** |
-| Natural-language date queries ("due next week") | Anti-feature | Needs NLP parsing, high maintenance, i18n-explosive in FR; Todoist is the only one doing it credibly | — | Operators cover the need |
-| Search across comments/attachments/files | Anti-feature (for now) | Scope explosion; description search is the milestone scope; GitHub's universality took a decade | — | Defer; design FTS schema so a comments table can be added later |
+### Dependencies
 
-**Dependencies:** Ctrl-K palette (surface), `memberCanReadProject` funnel (mandatory), redaction.js token matcher (highlighting + recent-search dedup), FTS5 in `node:sqlite` **and a pg-side equivalent through `db-adapter.mjs`** (DBA seam — this is the biggest hidden complexity: two backends must pass the same suite per standing constraint).
+- Phase 56 loaders (`src/` lazy import of Settings) — read-only; do not modify.
+- `e2e/playwright.config.mjs` — already correct (`webServer.url` = `/api/health`, 120 s timeout, `gracefulShutdown`). The existing **dist staleness guard** (Phase 56) is fail-closed — keep intact.
+- `retries: CI ? 1 : 0` — with retries on, local runs are the honest signal; verify fixes pass with `retries=0` locally, not just in CI.
 
 ---
 
-### 3. Admin Workspace Dashboard (overdue per project, load per member, upcoming dues, recent activity)
+## Target CONS-02 — Mobile layout of the tasks table with the columns button
 
-**How comparable products behave:**
+### What "good" looks like (expected behavior)
 
-- **Linear**: Insights/roadmap views per project (scope %, velocity); the "my issues" workload is per-person; admins get an insights page with initiative/project progress bars. Widgets are simple: count + trend + drill-down into a filtered view.
-- **Asana**: Portfolios + dashboards: widgets are charts (bar/pie of tasks by status/assignee/section), plus "upcoming" and "overdue" numeric lists. Layout = drag-and-drop widget grid. The universal widget set: tasks-by-status, tasks-by-assignee (workload), upcoming due, overdue, project progress.
-- **Trello**: no real admin dashboard (Enterprise reporting is thin) — weak reference.
-- **GitHub**: org dashboards list open PRs/issues, contribution activity; simple tables + trend sparklines.
-- **Basecamp**: Hill Charts per project + "what's due next" rollup on the home page — the rollup of upcoming dues across projects is the pattern that matters.
-- **Todoist**: productivity overview for self; workspace reporting only in Business.
+The codebase already made the architectural choice (HIGH confidence, `src/views/table.js:83-91` + `responsive.css`): the desktop `<table>` is `.hide-m` (display:none under 640px) and mobile renders a **card stack** (`.only-m` panels: status icon, title, key, priority pill, assignee avatars, due, estimate, progress bar). That is the correct pattern — **card-stacking**, which is the ecosystem's recommended answer for data tables on phones (horizontal scroll at 390px is unusable for a wide PM table; priority-column pruning loses too much).
 
-**Convergent pattern:** four widget archetypes cover 90% of value: (1) **overdue count per project** (table/bar with drill-down), (2) **workload per member** (bar of open assigned tasks, ideally "due this week" split), (3) **upcoming due dates** (7–14 day list), (4) **recent activity feed** (gr8r already has the activity log + machine verbs from ACT-01/02). Layout = responsive card grid, each card drill-down-clickable into a pre-filtered list view. Everything respects the admin's own permission view — an admin dashboard is admin-UI, but data should still come from the same funnels (admins already see all non-private projects through `memberCanReadProject`).
+The reported bug: "strongly truncated when using the columns button." Root cause analysis from the code:
 
-| Feature | Tier | Why | Complexity | Notes |
-|---|---|---|---|---|
-| Overdue-per-project widget with drill-down | Table stakes | Present in every serious reporting surface; the admin's #1 question is "what's slipping" | MEDIUM | Server aggregate route + click-through to project filtered by overdue |
-| Workload-per-member widget (open tasks / due-this-week split) | Table stakes | Asana workload, Linear my-issues; the #2 admin question | MEDIUM | Aggregation over assignees[] (multi-assignee parity shipped in v2.1 — must aggregate per-assignee, not per-task) |
-| Upcoming due dates (next 7–14 days) rollup | Table stakes | Basecamp home rollup; cheap, high value | LOW | Shared query shape with the reminder pass; respect visibility |
-| Recent activity feed widget | Table stakes | Activity log exists (machine verbs, ACT-01/02) — a widget over it is pure UI | LOW | Reuse activity endpoint; filters classify verbs already |
-| Permission-respecting data source (admin sees same funnel, not a bypass) | Table stakes | Security: a dashboard must not become a private-project oracle | LOW | Route through `memberCanReadProject`; admin role already broad |
-| Time-range selector on widgets (this week / month) | Differentiator | Asana has it; useful; cheap once aggregates exist | LOW | Parameterized queries |
-| Export dashboard to CSV/PNG | Differentiator | Requests happen; gr8r already has export muscle | LOW | CSV of the aggregate rows is enough |
-| Custom/drag-drop widget layout, custom charts, saved dashboard configs | Anti-feature | Asana's full dashboard builder is a product of its own; huge surface for a self-hosted app of this size; nobody needs 8 widgets configurable on day one | — | Fixed responsive grid of the 4 widgets; revisit only on explicit demand |
-| Per-project deep dashboards (velocity, burndown) | Anti-feature (for now) | Needs task-history/time-series data that gr8r doesn't track; building history for charts is a hidden multi-milestone cost | — | Defer; note the missing `task_history` prerequisite explicitly |
+- The **columns popover** (`act.columns` button, `.pop.floating` with checkboxes) writes `v.hidden[]`, which drives `TCOLS.filter(...)` for the *desktop table only*. The mobile card stack **hardcodes** its fields and ignores `v.hidden` — so hiding columns has no visible effect on mobile, and *showing* hidden columns changes nothing either. Meanwhile the column *widths* (`v.colW`, `style="width:${totalW}px"`) and the popover's own layout are desktop-tuned.
+- "Truncated" likely means: opening the columns popover on mobile clips it (popover positioned for desktop, `.pop.floating` overflowing the 390px viewport — the same class of bug the inbox-tabs fix already addressed for `.tabs`), and/or the card stack's second `.row` with `flex-wrap` renders a truncated/overlapping field set. Either way the mobile experience of a column-management affordance is broken because the affordance targets a table that isn't rendered.
 
-**Dependencies:** activity log (exists), multi-assignee assignees[] model (v2.1), `memberCanReadProject`, existing filtered list views for drill-down targets.
+Expected behavior matrix ("good"):
 
----
+| Mobile width | Table view behavior |
+|---|---|
+| ≤640px | Card stack renders; columns button either (a) is hidden, or (b) filters the *card* fields — never a clipped popover over a hidden table |
+| >640px | Current desktop table + popover unchanged |
 
-### 4. Member Self-View of Access Transparency (TRN-02)
+### Table Stakes (must ship for CONS-02)
 
-**How comparable products behave:**
+| Feature | Why Expected | Complexity | Notes / Dependency on existing code |
+|---|---|---|---|
+| Decide and implement the mobile contract for the columns button: hide it on mobile OR make it drive the card stack's fields | A control that mutates an invisible table is broken UX; this is the core of CONS-02 | Low–Med | Simplest honest fix: hide the columns/sort/saved-views toolbar buttons under the `hide-m`/`only-m` regime (mobile already has the card stack with its own fixed fields). Making the popover drive card fields is the richer option but touches `tableHtml()`'s mobile template and saved-view blobs |
+| Columns popover never overflows the 390px viewport when opened | Truncation reported at UAT (Phase 57, 2026-11-12) | Low | If kept visible on mobile: clamp `.pop.floating` with `max-width: min(360px, calc(100vw - 24px))` + internal scroll — the pattern `components.css:748` already uses (360px cap) and overlays.css (720px cap) |
+| Mobile card stack respects the same "truncation-free" bar the suite already enforces | The french-overflow spec already asserts `scrollWidth ≤ clientWidth` and unclipped chrome at 390px for the `tasks` route — it must keep passing | Low | The overflow proof is the regression harness; no new spec framework needed |
+| An e2e proof: at 390px, open the columns popover (if kept) and assert every checkbox row is fully inside the viewport | "Good" = pinned outcome, both viewports — the inbox-tabs spec is the exact template | Low | Model on french-overflow's inbox-tabs test (box math on the popover + operability after layout change) |
 
-- **GitHub**: the strongest pattern — every repo shows the member *their own* access level ("You have write access to this repository because you're a maintainer of…"), and org members can see org membership; the "why am I seeing this" reason line is the gold standard.
-- **Linear**: teams show you which teams you're on; the "you're a guest in this workspace" banner is the honest-access pattern.
-- **Google Drive / Notion** (adjacent): share modal shows "you have view access" with the grant reason; Notion shows how access was inherited.
-- **Asana/Trello**: weak — you infer your access from what you can see. Trello at least shows board membership explicitly.
-- **Basecamp**: permissions explained in prose per project ("You're on this project as a participant").
+### Differentiators (valued, optional)
 
-**Convergent pattern:** the member-facing version is *smaller* than the admin version (TRN-01, shipped): a per-project "why can I see this" reason label (direct invite / team membership / public workspace / project lead), and a compact "my access" summary. Critically, the computation must go through the exact same `memberCanReadProject` funnel with the same reason codes TRN-01 already computes — this is a re-surface of existing logic, not new permission code.
+| Feature | Value Proposition | Complexity | Notes |
+|---|---|---|---|
+| Card stack fields follow `v.hidden` | Column choices apply everywhere, saved views mean the same thing on phone and desktop | Med | Requires mapping hidden columns → card field suppression; saved-view blobs already carry `hidden[]` so persistence is free |
+| Priority-column awareness documented | Industry patterns offer "priority columns" (keep 2–3 key columns visible, scroll the rest) as the middle path | — | Rejected as over-engineering here: the card stack already IS the priority-column answer |
 
-| Feature | Tier | Why | Complexity | Notes |
-|---|---|---|---|---|
-| Per-project access line for the viewing member ("Can edit · via team Engineering") | Table stakes | GitHub's pattern; removes the "why can I see this?" support question; the whole point of transparency | LOW | TRN-01 reason codes + funnel already compute this; render in project settings/page for self |
-| "My access" summary view (teams, roles, guest scope, per-project list) | Table stakes | Linear/Notion pattern; one honest page | LOW | Same funnel, filtered to caller; keyed route like TRN-01's |
-| Guest sees exactly-one-project explanation | Table stakes | The guest invariant (D-53-2) is already enforced server-side; surfacing it prevents confusion | LOW | Pure UI over existing validator output |
-| Redaction self-consistency (self-view shows only what the funnel grants, including private-to-them) | Table stakes | A self-view that shows more than the funnel grants = information leak | LOW | Same computation path; test the 404/hidden matrix against Phase 29's named matrix |
-| "Request access" button on hidden projects | Differentiator | GitHub/Drive pattern; genuinely useful but needs a request surface + notification to someone with grant rights | MEDIUM | New notification type + owner/admin target resolution — defer unless demand exists |
-| Access-change history for members ("who changed my access when") | Differentiator | Audit trail exists (Phase 24); exposing to members is a policy decision, not tech | MEDIUM | Privacy-sensitive: owners may not want members seeing grant history — needs an owner ruling (like D-05) |
-| Showing other members' access to non-admins | Anti-feature | Privacy; TRN-01 deliberately made this admin-only; member version must be self-only | — | Hard-gate: member self-view NEVER exposes other members' access rows |
+### Anti-Features
 
-**Dependencies:** TRN-01 (admin transparency, reason labels, keyed route pattern), `memberCanReadProject` + reason codes, guest validator, audit trail (only for the deferred history item).
+| Anti-Feature | Why Avoid | What to Do Instead |
+|---|---|---|
+| Horizontal-scroll table on mobile (`overflow-x: auto` under 640px) | A PM tasks table at 390px needs ~900px+; horizontal scroll for primary data is the known-bad pattern; also conflicts with the spec's document-overflow assertion | Keep/repair the card stack |
+| A third responsive regime (table+priority columns) | Three rendering paths triple the e2e surface for zero new capability | Two regimes: cards ≤640px, table >640px |
+| Any new runtime dependency (responsive table library) | Standing zero-dependency constraint | Hand CSS, as everywhere else |
+
+### Dependencies
+
+- `src/views/table.js` `tableHtml()` — the mobile card template is inline in the same export; edits are surgical.
+- `src/styles/responsive.css` (`hide-m`/`only-m` breakpoints at 640px) and `components.css` popover styles.
+- Saved views (`saved_views` blobs) — if card fields start honoring `hidden[]`, verify the blob shape is unchanged (it is; `hidden` already exists) so VIEW-01/02 remain byte-compatible.
+- CONS-01's repaired french-overflow specs are the regression net for this work — **sequence CONS-01 before CONS-02**.
 
 ---
 
-### 5. Notification Digest / Trim (NOTIF-TRIM)
+## Target CONS-03 — Stabilize the flaky VIEW-02 spec
 
-**How comparable products behave:**
+### What "good" looks like (expected behavior)
 
-- **GitHub**: the canonical trim model — email notification *reasons* (participating, watching, mentions, team mentions, CI) each individually toggleable, plus "Only monitor for issue/PR state changes" coarse mode; watching vs participating distinction is the single best trim idea in the industry.
-- **Linear**: per-channel (Inbox / Email / Push / Slack) × per-type matrix in settings; defaults are already minimal (mentions + assignments on, rest off or inbox-only).
-- **Slack**: batched/digest notifications for mobile at set intervals; per-channel mute overrides — the "schedule/quiet hours + digest batching" combo.
-- **Basecamp**: "Brewery"/activity digest — a daily rollup email is a first-class citizen, not an afterthought; individual pings only for @mentions and assignments.
-- **Asana**: digest email for activity, immediate only for direct mentions; notification settings page lists every type × channel explicitly in a matrix.
-- **Todoist**: coarse per-category toggles only.
+Flaky-test triage methodology (standard practice, applicable directly):
 
-**Convergent pattern:** a **type × channel matrix** is the standard settings shape (gr8r already has the 17-key prefs whitelist ≈ this matrix). Trim work is about *defaults and consolidation*, not new channels: (a) collapse redundant sends (update-batch: one notification per task per actor per burst, not per field change); (b) move low-intent types to digest-only by default; (c) give each default a stated rationale (the notification-audit doc already exists from Phase 39 with trim recommendations all `proposed` pending D-05 owner rulings — NOTIF-TRIM is *executing* those rulings).
+1. **Reproduce with retries off, in a loop.** `retries: 0` locally is already the config default; run the single spec repeatedly (`--repeat-each` or a loop) until it fails, with `trace: retain-on-failure` (already on) — the trace is the diagnosis artifact.
+2. **Classify the flake**: timing/async, shared-state, or ordering. This spec has all three candidate classes visible in its code.
+3. **Fix the cause in the spec or the app's async contract, never add a sleep.** Then prove stability: green across N consecutive runs locally, and green in CI (where `workers: 1, retries: 1` — note CI retries currently *mask* the flake, which is why it's "known flaky" rather than failing).
 
-| Feature | Tier | Why | Complexity | Notes |
-|---|---|---|---|---|
-| Owner-ruled default matrix (D-05 rulings applied as shipped defaults) | Table stakes | Every product ships opinionated minimal defaults; gr8r's audit doc already enumerates them with citations | LOW | Apply `proposed` → decided in the audit doc; change defaults in one place; regression-pin Phase 38 no-double-send invariant |
-| Burst coalescing (one notification per task per actor within a window, superseding edits) | Table stakes | Linear/Slack do this; without it, watchers get 6 notifications for one task edit | MEDIUM | Server-side debounce window on notification emission; interacts with the 30s polling + row insert path |
-| "Watching vs participating" distinction (auto-watch on assign/mention only, explicit watch/unwatch per task) | Differentiator | GitHub's best idea; gr8r already auto-watches creators (v1.5) and has watchers — extend the model with unwatch | MEDIUM | Watchers exist; add unwatch UI + exclude-unwatched filtering in send funnel |
-| Per-type digest routing (low-intent types land only in the 09:00 digest) | Differentiator | Asana/Basecamp model; gr8r's digest (Phase 38) already suppresses individual reminders for digest users — extend routing to other types | LOW | Prefs keys + digest builder already exist |
-| Quiet hours (suppress non-mention push/email outside hours) | Differentiator | Slack/Basecamp; valued | MEDIUM | Per-user tz exists since v1.9 — schedule window check is straightforward |
-| One-click unsubscribe on ALL notification emails (RFC 8058 for every type, not just digest) | Table stakes | GitHub does this everywhere; deliverability + legal (post-2024 one-click-unsubscribe norms); audit doc already recommends the digest one | MEDIUM | HMAC token route exists (UNSUB-01..03); generalize to all notification email types |
-| Per-notification inline actions in email (mark done from email) | Anti-feature | Complexity + security (authenticated actions from mail); GitHub keeps actions = click-through; nobody expects it from gr8r | — | Deep-link only (already shipped LINK-01..04) |
-| Notification "snooze" / "remind me later" on inbox rows | Anti-feature (for now) | Linear has it but it's a mature-workflow nicety; inbox trim has higher value-per-effort first | — | Defer to backlog |
+Candidate root causes found by reading the spec (opinionated ranking):
 
-**Dependencies:** notif_prefs rows + whitelist (Phase 34), digest builder + suppression invariant (Phase 38), notification-audit doc + D-05 rulings (Phase 39 — **explicitly requires an owner ruling during execution**), send funnel + no-double-send invariant (Phase 36/38), HMAC unsubscribe route (v1.9).
+1. **Debounced write-through race (most likely).** Column show/hide is "debounced write-through" (Phase 56/57 record). `setColumn()` toggles a checkbox and immediately dismisses the popover; the *next* step saves the view. If the debounce hasn't flushed when the save reads live state — or the apply-refetch lands while assertions run — the saved blob or re-applied state can miss a column. Fix: make the spec await the network effect (`page.waitForResponse(r => ...'/api/me/views')`) or await a rendered symptom of the applied state, instead of trusting wall-clock.
+2. **Coordinate-based popover dismissal** — `page.mouse.click(5, 400)` (a raw viewport coordinate, used 3×) is brittle: if the popover renders at that spot, the click toggles content instead of dismissing. Fix: `page.keyboard.press('Escape')` or click the known backdrop element.
+3. **Shared OWNER/acme workspace.** The spec reuses the seeded OWNER account in the shared `acme` workspace (run-unique view names prevent name collisions, but toolbar state — live hidden columns, sort — is mutated in a workspace other specs/parallel fixtures also read). Fix: a dedicated throwaway account+workspace with API-seeded tasks (the french-overflow sweep pattern is the proven template), or accept and pin ordering (`fullyParallel: false` already serializes).
+4. **Toast-based assertions** (`expect(page.locator('.toast', ...))`) — toasts are transient; if one expires between steps, the assertion can miss it. Auto-retrying `expect` mostly covers this; keep toast windows in mind when sequencing.
 
----
+### Table Stakes
 
-### 6. Column Show/Hide + Saved Views
+| Feature | Why Expected | Complexity | Notes |
+|---|---|---|---|
+| Root-cause the flake from a retained trace (retries off, repeated local run) | Triage step zero; without a reproduced failure any "fix" is a guess | Low | Config already retains traces on failure; `workers:1` in CI, undefined locally |
+| Remove coordinate-based dismissal (`mouse.click(5,400)`) from `setColumn()` and friends | Deterministic dismissal: Escape or a named backdrop; coordinates silently change meaning when layout shifts | Low | 3 occurrences in saved-views.spec.mjs |
+| Await the debounce/write network effect before asserting saved state | The debounced write-through is an async contract the spec currently doesn't await | Low | `waitForResponse` on `/api/me/views` PUT/POST around the save/apply steps |
+| VIEW-02 green across N≥10 consecutive local runs with retries=0 | The definition of "stabilized"; CI retry=1 currently masks the flake | Low | Document the N in the phase verification |
+| Isolate VIEW-02 fixtures from the shared OWNER workspace (or prove ordering safety) | Shared mutable live-view state is a classic inter-spec coupling | Low–Med | Throwaway account + API-seeded workspace follows the sweep-account precedent; alternatively document why serialization suffices |
 
-**How comparable products behave:**
+### Differentiators (optional)
 
-- **Linear**: views are first-class: every filter combination can be saved, named, shared, starred; saved views live in the sidebar. Column show/hide + reorder + sizing on list/board views, persisted per user per view.
-- **Asana**: projects have Views (tabs) — add view, choose layout (list/board/table/calendar), add filter+sort+group, save. "Custom fields as columns" with per-view show/hide.
-- **Airtable** (the extreme reference): grid views with per-view field (column) visibility, order, width, filters, sorts, groups — everything per view, shareable.
-- **GitHub Projects**: per-view field visibility, saved views, group-by, sort — the newest and cleanest implementation of exactly this feature set; per-user layout persistence server-side.
-- **Trello**: weakest — one table view, no saved views.
-- **Jira**: saved filters + per-user column config — the enterprise pattern, but heavy.
+| Feature | Value Proposition | Complexity | Notes |
+|---|---|---|---|
+| A suite-wide popover-helper (`openPopover(page, label)` with Escape-dismiss) | Removes the coordinate-dismiss pattern everywhere it appears | Low | Generalizes `setColumn()`; benefits projects-table spec too |
+| CI flake detector job (repeat VIEW-02 ×5 on main) | Catches regressions before they're "known flaky" | Med | Optional; costs CI minutes |
 
-**Convergent pattern:** (a) column visibility is per *view*, persisted per user (not global per table); (b) a saved view = named bundle of {layout, filters, sort, group, visible columns}; (c) views are personal by default, shareable optionally; (d) a "reset to default" affordance is mandatory; (e) show/hide lives in a column-picker dropdown on the table header, not buried in settings.
+### Anti-Features
 
-| Feature | Tier | Why | Complexity | Notes |
-|---|---|---|---|---|
-| Column show/hide via header column-picker, per user persisted | Table stakes | GitHub Projects/Asana/Airtable all have it; wide tables are unusable without it | LOW–MEDIUM | Persist per-user per-context (localStorage acceptable v1; server persistence better given multi-device expectations) |
-| Saved views: named {filters, sort, visible columns} per project, personal | Table stakes | Linear/GitHub/Asana all core; the natural companion to filters | MEDIUM | New storage (doc field or rows through existing funnel); view switcher UI on table view |
-| Reset-to-default + manage (rename/delete) views | Table stakes | Without reset, a hidden column becomes an unrecoverable trap | LOW | Standard |
-| View-level default sort + group | Differentiator | GitHub Projects group-by is loved; gr8r table view likely has fixed sort | MEDIUM | Composes with saved views — build into the view bundle from day one |
-| Shared/team views (publish a view to the project) | Differentiator | Linear shared views; high coordination value for leads | MEDIUM | Permission question: who may publish (lead?); defer unless asked |
-| Cross-project saved views ("my overdue everywhere") | Differentiator | Linear's strongest views are workspace-level; overlaps with §2 saved searches and §3 dashboard — one primitive could serve all three | HIGH | Build the per-project version first; the primitive should be designed so workspace-scope can come later |
-| Drag-to-reorder + resize columns | Differentiator | Expected in grown products but not day-one; persists per user like visibility | MEDIUM | Plain-DOM drag is doable in gr8r's no-framework frontend but fiddly |
-| Fully shareable view URLs with encoded state | Anti-feature | Encodes growing state into URLs → brittle, i18n + escaping pain; named views serve sharing better | — | Named saved views + normal route state instead |
-| Dashboard-style view aggregation (charts inside table views) | Anti-feature | Overlaps §3; Airtable's interface designer is a separate product | — | Dashboard phase owns charts |
+| Anti-Feature | Why Avoid | What to Do Instead |
+|---|---|---|
+| `waitForTimeout` before toast/popover assertions | Converts a flake into a slower flake | `waitForResponse` / auto-retrying expects |
+| Raising `retries` to hide the flake | Masks the symptom; CI would pass while local devs see failures | Fix the async contract; keep retries at 1 for genuine network jitter only |
+| Deleting VIEW-02 coverage to "stabilize" | Loses the only e2e proof of saved-view round-trip (SC-2) | Repair the spec |
 
-**Dependencies:** table view (exists), filter/sort UI on views, per-user settings storage pattern (Phase 34 rows), possibly the FTS/saved-search primitive (§2) — **recommend one "saved view/filter" primitive shared by table views, search page, and dashboard drill-downs**.
+### Dependencies
+
+- Phase 57 saved-views app code (debounced write-through, `saved_views` rows, popover/modal components) — read-only unless triage proves an app bug rather than a spec bug (in which case fix the app's async contract; that's a legitimate outcome).
+- `e2e/playwright.config.mjs` — untouched; trace retention and retries=0-local already support triage.
+- Sequencing: **run CONS-03 triage independently but land after CONS-01** so the suite is green and any VIEW-02 fix is measured against a stable baseline.
 
 ---
 
 ## Feature Dependencies
 
 ```
-[notif_prefs matrix (Phase 34)] ──requires──> [push gating] ──requires──> [browser push v2.2]
-[Phase 48 service worker + VAPID] ──requires-for──> [browser push v2.2]
-[tFor() i18n send core] ──requires-for──> [push payload text + digest routing]
-[D-05 owner rulings (Phase 39 audit doc)] ──blocks──> [NOTIF-TRIM default changes]
-[HMAC unsubscribe route (v1.9)] ──requires-for──> [one-click unsubscribe on all types]
-[digest builder (Phase 38)] ──enhances──> [per-type digest routing]
-[Ctrl-K palette] ──requires-for──> [FTS5 palette results]
-[memberCanReadProject funnel] ──requires-for──> [FTS5 results filtering, dashboard aggregates, TRN-02 self-view]
-[FTS5 index] ──requires──> [pg-adapter equivalent through db-adapter.mjs]  ← hidden prerequisite
-[TRN-01 reason codes + funnel] ──requires-for──> [TRN-02 self-view]
-[multi-assignee assignees[] (v2.1)] ──requires-for──> [workload-per-member widget]
-[activity log (ACT-01/02)] ──requires-for──> [recent-activity widget]
-[saved-view primitive] ──enhances──> [table views, search results page, dashboard drill-downs]
-[FTS5 results page] ──conflicts-with──> [saved searches] if built as two primitives — unify
+CONS-01 (9 spec repairs) → CONS-02 (mobile table)   [overflow proof specs are the regression net]
+CONS-01 → CONS-03 landing                           [stabilize against a green baseline]
+CONS-03 triage ∥ CONS-01 execution                  [triage/reproduce can start in parallel]
+CONS-02 popover fix ↔ saved-views blob shape        [must stay byte-compatible: VIEW-01/02]
 ```
 
-### Dependency Notes
+## MVP Recommendation
 
-- **Everything data-bearing routes through `memberCanReadProject`:** search results, dashboard aggregates, and the TRN-02 self-view must never bypass the funnel — a bypass is a security regression, not a shortcut.
-- **NOTIF-TRIM is blocked on D-05 owner rulings by design** — the audit doc made all trim recommendations `proposed`; the roadmap should schedule the owner-ruling step as part of the phase, not a surprise.
-- **The dual-backend constraint (SQLite + Postgres) is the silent dependency for FTS5 and any aggregate SQL:** every search/aggregate query must work on both `node:sqlite` FTS5 and a pg equivalent, per the standing "both backends pass the same suite" gate.
-- **Push is the most self-contained item** (Phase 48 foundation is done); saved views is the most entangled (touches table views, search, dashboard).
+Prioritize:
+1. **CONS-01** — cheapest, unblocks everything; the suite is the verification instrument for the other two targets.
+2. **CONS-03** — diagnose (trace + reproduce) early because its root cause might be an app bug; land after CONS-01.
+3. **CONS-02** — the only user-visible change; do it last, protected by the repaired overflow specs.
 
-## MVP Definition
-
-### Launch With (v2.2 core)
-
-- [ ] Browser push for mentions + assignments, gated on notif_prefs, settings-surface opt-in, deep-link click-through — foundation exists; smallest path to "workspace alive outside the tab"
-- [ ] FTS5 search over titles+descriptions, permission-filtered, grouped palette results + "see all" page — scale prerequisite
-- [ ] Admin dashboard with the 4 fixed widgets (overdue/project, workload/member, upcoming dues, recent activity) — all data exists
-- [ ] TRN-02 member self-view over the existing TRN-01 funnel — smallest feature, pure re-surface
-- [ ] NOTIF-TRIM: apply D-05 rulings + one-click unsubscribe generalization — debt with citations already written
-- [ ] Column show/hide per user on table view — highest-value, lowest-risk slice of saved views
-
-### Add After Validation (v2.x)
-
-- [ ] Full saved views (named bundles, manage/reset) — trigger: column prefs alone feel insufficient
-- [ ] Burst coalescing + quiet hours + watch/unwatch — trigger: notification volume complaints
-- [ ] Search operators + saved searches on the unified primitive — trigger: power-user demand
-- [ ] Per-device push test button, tab-focus suppression polish
-
-### Future Consideration (v3+)
-
-- [ ] Cross-project/workspace-level saved views — needs the primitive hardened per-project first
-- [ ] Shared views, "request access" flow, member access-change history — each needs an owner policy ruling
-- [ ] Comment/attachment search — needs index expansion beyond milestone scope
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---|---|---|---|
-| Browser push (mentions+assignments) | HIGH | MEDIUM | P1 |
-| FTS5 palette + results page (perm-filtered) | HIGH | MEDIUM | P1 |
-| Admin dashboard (4 widgets) | HIGH | MEDIUM | P1 |
-| TRN-02 member self-view | MEDIUM | LOW | P1 |
-| NOTIF-TRIM defaults + unsubscribe (post D-05) | MEDIUM | LOW–MEDIUM | P1 |
-| Column show/hide | MEDIUM | LOW | P1 |
-| Saved views full | MEDIUM | MEDIUM | P2 |
-| Burst coalescing / quiet hours / watch-unwatch | MEDIUM | MEDIUM | P2 |
-| Search operators + saved searches | LOW–MEDIUM | MEDIUM | P2 |
-| Digest routing per type | MEDIUM | LOW | P2 |
-| Shared views / request access / access history | LOW (today) | MEDIUM | P3 |
-| Custom dashboard builder / view URLs | LOW | HIGH | P3 |
-
-## Competitor Feature Analysis
-
-| Feature | Linear | GitHub | Asana | Basecamp | Our Approach |
-|---|---|---|---|---|---|
-| Push scope | Mentions/assignments by default | Coarse participating/watching | Direct events | Mentions/assignments only ("ping") | Same as Basecamp/Linear — matches milestone scope; validate, don't widen |
-| Permission prompt | Settings surface | Settings surface | Settings surface | Pre-prompt then browser dialog | Settings surface (Phase 48 already) |
-| Search | Palette, syntax-free | Palette fuzzy + page with qualifiers | Page + tabs + saved searches | Plain, no operators | Palette syntax-free; operators deferred/hidden; page for deep search |
-| Admin dashboard | Insights per project | Org tables | Drag-drop widget grid | Hill charts + due rollup | Fixed 4-widget grid; anti-builder |
-| Access transparency | Team/guest banners | "You have X access because…" | Inferred | Prose per project | GitHub reason-label pattern over TRN-01 funnel |
-| Trim | Minimal defaults, matrix | Reasons + watch model | Matrix + digest | Digest-first philosophy | Execute the existing audited matrix; GitHub watch/unwatch as the differentiator |
-| Saved views | First-class, shareable | Per-view columns, saved views | View tabs | — | Personal views on table first; one primitive shared with search |
+Defer: card-stack-follows-hidden-columns (Med complexity, real design question about what saved views mean on mobile) — the hide-the-button-on-mobile contract satisfies the UAT finding; the richer contract deserves its own owner discussion.
 
 ## Sources
 
-- Product UX behaviors: Linear, GitHub, Asana, Trello, Todoist, Basecamp, Airtable, Notion, Slack — official docs and long-stable, widely-replicated product behaviors (HIGH confidence; these are documented, canonical patterns)
-- Live web verification attempted (searxng) — degraded by engine rate limits during this run; used only to confirm nothing contradicted, not as a primary source (flagged LOW authority, not load-bearing)
-- gr8r internal ground truth: PROJECT.md (Phases 34/36/38/39/48, TRN-01, v1.5 LINK/REM, v1.9 digest/unsub, v2.1 multi-assignee), `docs/notification-audit.md` (Phase 39), Phase 34 SEARCH-01 redaction matcher — HIGH confidence (codebase-verified)
-- Unverified gaps flagged: exact current setting labels in Linear/Asana settings pages; FTS5 trigram tokenizer availability inside `node:sqlite` vs `better-sqlite3` builds — needs a phase-specific spike (dual-backend FTS)
-
----
-*Feature research for: self-hosted project-management workspace — v2.2 Notifications, Search & Delivery*
-*Researched: 2026-11-12*
+- `e2e/french-overflow.spec.mjs`, `e2e/locale.spec.mjs`, `e2e/saved-views.spec.mjs`, `e2e/playwright.config.mjs` — repo, HIGH
+- `src/views/table.js` (mobile card template, `hide-m`/`only-m`), `src/styles/responsive.css` (640px/900px breakpoints), `src/styles/components.css` (360px popover cap) — repo, HIGH
+- Playwright official docs via Context7: locators (web-first, auto-retry + `_retryWithProgressIfNotConnected`), actionability (auto-retrying assertions), `expect.poll` (deadline-based re-resolution for lazy rendering), webServer (`url` readiness, `reuseExistingServer`, timeouts) — HIGH
+- PROJECT.md v2.2/v2.3 records (Phase 56 lazy-chunk split, Phase 57 UAT deferral, VIEW-02 flaky-at-baseline note) — HIGH

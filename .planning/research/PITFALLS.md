@@ -1,147 +1,170 @@
-# Domain Pitfalls — v2.2 Notifications, Search & Delivery
+# Domain Pitfalls — v2.3 Consolidation & Hardening Repairs
 
-**Domain:** Adding browser push, FTS5 search, dashboards, transparency self-view, saved views, i18n infra, e2e guard and code-splitting to an existing Node monolith (JSON workspace docs + revision-based optimistic concurrency + dual SQLite/pg adapter, vanilla-JS SPA).
-**Researched:** 2026-11-12
-**Overall confidence:** HIGH (specs/canonical docs: RFC 8291/8030, SQLite FTS5 source, web.dev push docs; integration pitfalls derived from this codebase's own architecture — PROJECT.md, Phases 45/48/52 records)
+**Domain:** Post-refactor e2e repair, frameworkless responsive tables, spec de-flaking (zero-dep vanilla-JS SPA, Playwright suite, D-02/i18n/Phase-38 gates)
+**Researched:** 2026-11-14
+**Overall confidence:** HIGH (codebase-verified — specs, config, lazy-route map and gate scripts read directly; plus established Playwright/Playwright-config community wisdom)
 
-Every pitfall below is written for *adding the feature to this system*, not generic advice. Each has an owner-phase recommendation since phases don't exist yet.
+Scope: pitfalls for exactly the three repair targets (CONS-01, CONS-02, CONS-03) on THIS codebase, including cross-repair integration pitfalls and the standing constraints (zero new runtime deps, 500 kB chunk gate, EN+FR i18n gate, Phase 38 suppression invariants, byte-level redaction/leak tests green).
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Push subscription churn — server keeps pushing to dead endpoints
-**What goes wrong:** Endpoints die constantly: browsers rotate push endpoints, Chrome re-issues them, users clear site data, devices expire subscriptions. A server that treats every `sendNotification()` failure as a retryable error accumulates dead subscriptions, retriggers exponential-backoff loops, and inflates push-send latency on every mention/assignment fan-out.
-**Why it happens:** The web-push response codes are easy to ignore — `404` and `410` mean *this subscription is gone forever* (410 additionally carries a reason header when the user revoked permission). Everything else (429, 5xx) is retryable.
-**Consequences:** Silent notification loss (the worst failure for a "mentions + assignments" feature), a growing `push_subscriptions` table full of corpses, fan-out that takes seconds.
-**Prevention:** On push send, treat `404`/`410` as authoritative: delete the subscription row **in the same pass as the fan-out** (mirrors the Phase 27 `reminders_sent` transactional-claim pattern — claim, send, sweep dead rows atomically). Keep one subscription row per (user, device) keyed by endpoint hash; a re-subscribe to a new endpoint replaces rather than accumulates. Do NOT retry 404/410.
-**Detection:** `push_subscriptions` count grows monotonically; fan-out duration grows; unit test asserting dead-endpoint sweep after a mocked 410.
-**Phase:** Push fan-out phase (the mentions/assignments delivery phase — NOT the Phase 48 continuation, which only did subscription UX). Should be a plan-level acceptance criterion.
+### Pitfall 1: "Fixing" drifted specs by weakening assertions into tautologies (CONS-01)
 
-### Pitfall 2: VAPID keys not persisted — every restart silently orphans all subscriptions
-**What goes wrong:** VAPID keys are the server's push identity. If generated at boot (or regenerated on redeploy because they weren't stored), every existing browser subscription becomes invalid — signed claims fail, deliveries 404, and users who granted permission never re-prompt because the browser still shows "granted".
-**Why it happens:** Keys look like any other crypto ephemeral; nothing at boot warns they're identity, not secret material. This project has a strong precedent for boot-generated material going wrong (MASTER_KEY handling needed an entire keyring milestone, v1.5 Phase 25/26).
-**Consequences:** Push silently dead after first Docker restart; debugging is nasty because the failure is asymmetric (server thinks it sent).
-**Prevention:** Generate once at first use, persist in `/data` (same durability class as `projects.db`), and treat like the keyring: document in DEPLOY.md §16 alongside MASTER_KEY custody, env-overridable for reproducible deploys. Never regenerate when a stored key exists; log loudly at boot if none exists yet.
-**Detection:** A restart integration test: subscribe → restart server → push still delivers (mocked push service).
-**Phase:** Push phase (same phase as Pitfall 1). DEPLOY.md section is part of the phase's definition of done, mirroring the Phase 26 runbook pattern.
+**What goes wrong:** The 9 failing specs (`french-overflow.spec.mjs` ×7 + `locale.spec.mjs:122`) drifted when 56-01 made Settings a lazy chunk (`src/shell/layout.js:67` — `settings: lazy(() => import('../pages/settings.js'), 'pageSettings')`). Under time pressure, the tempting fix is to soften each failing assertion: swap `expect(x).toBeVisible()` for `expect(x).toBeTruthy()`, catch the error and pass, count elements with `> 0`, or delete the assertion that fails and keep the navigation.
 
-### Pitfall 3: FTS index drift — JSON docs written outside the adapter break search silently
-**What goes wrong:** Tasks live inside the workspace JSON document (`workspaces.doc`), not rows. An external-content FTS table over "tasks" has no task table to point at; a shadow mirror table will drift whenever the doc is written by anything that doesn't run the sync: `mergeClientDoc` restores, boot migrations, the MCP server, the pg copy script, `PUT /api/workspaces/:slug` bulk writes, future endpoints.
-**Why it happens:** Every existing write path already goes through doc-merge; a new sync hook must be inserted at exactly one chokepoint, and it's tempting to sync "where convenient" instead. The system's single biggest integration risk in this milestone.
-**Consequences:** Users search a task title that exists and get nothing — or worse, search returns a task that was deleted. Drift is invisible until someone notices.
-**Prevention:** (a) Hook the rebuild at the **one real write chokepoint** — after each `pushNow()`/doc commit in the shared persistence funnel, not per-endpoint. (b) Include a **full rebuild** path (drop and re-index from the current doc) invoked on boot and exposed to an admin/maintenance route — drift recovery is mandatory, not optional. (c) A periodic or per-boot consistency count (`doc tasks vs index rows`) logged loudly on mismatch. (d) Tests that write the doc through the bulk PUT and MCP paths and assert the index follows. (e) Verify the pg adapter keeps parity — the mirror table DDL must exist in both schema variants with the pg bigint-epoch convention respected.
-**Detection:** Boot-time count mismatch log; Ctrl-K returning stale results; test matrix includes pg (the standing dual-backend suite rule covers this automatically if the mirror is tested at all).
-**Phase:** FTS5 search phase. The rebuild-on-boot + chokepoint decision should be a phase decision logged in the phase record (like D-53-1).
+**Why it happens:** The specs are gatekeeping specs by design — `french-overflow` measures the French interface at 1280 px AND 390 px across 16 routes; `locale.spec.mjs:122` asserts a role on the Settings language row. When the underlying element simply doesn't exist *yet* (chunk loading), every fix that "makes the test pass" looks equivalent, and the weakest one is the easiest.
 
-### Pitfall 4: Transparency self-view leaks other members' data through the member's own row
-**What goes wrong:** TRN-02 mirrors the admin TRN-01 view for each member. The admin version legitimately shows team names, role reasoning, and access paths of *other* members (e.g. "via team X where Y is also a member", lead names, invite grants). Reusing the TRN-01 computation server-side and merely hiding admin chrome in the UI would leak: which teams other people belong to, who is project lead, private-project invitee identities, scope grants.
-**Why it happens:** The obvious implementation reuses `memberCanReadProject` + the TRN-01 reason-code path — but that path was designed for an admin's eyes.
-**Consequences:** Privacy breach through a "transparency" feature; this project's bar is redaction *server-side*, not CSS (`redactDoc()` precedent from v1.1; Phase 34 closed a recent-search leak caused by exactly this class of bug).
-**Prevention:** A separate redaction funnel for the self-view: the member sees only their own access rows, coarse reason codes (same as TRN-01), and **never** other members' identity except what they'd see anyway (public rosters). Compute on a keyed route authorized to the caller only (owner-only TRN-01 route must stay distinct). Table-driven tests per role × per project shape asserting absent fields are literally absent from the response body — byte-level, in the Phase 32 "404 matrix" style.
-**Detection:** Any `members`/`lead`/team-roster key appearing in a member's self-view response for data they don't already see.
-**Phase:** Transparency self-view phase. Make the response-shape test suite a must-have in the plan.
+**Consequences:** The suite returns to 111/111 while silently no longer proving anything: a real role regression (e.g. the language `<select>` losing its accessible role — exactly the current `locale.spec.mjs:122` failure mode, where the spec expects a `<button>` role on a native `<select>`), a real a11y regression, or a real French overflow would ship undetected. The suite becomes worse than no suite, because it *claims* coverage. This is the single biggest risk of the milestone.
 
-### Pitfall 5: Permission leaks in dashboard aggregates
-**What goes wrong:** The admin dashboard computes overdue-tasks-per-project and load-per-member. Admin-gated is necessary but not sufficient: an admin of *this workspace* may still not read a private project they're not invited to — `memberCanReadProject` is the single funnel for visibility, admins included (v2.0 model). Aggregate queries that iterate the doc and skip the funnel leak counts and names from private projects; "count-only" leaks are still leaks (task counts, member load patterns).
-**Why it happens:** Dashboard code wants one big pass over the doc; permission checks feel like UI concerns. Also: the redaction funnel restores hidden rows from storage on write, so a naive read of the *stored* doc sees everything.
-**Consequences:** Admin sees a private project's overdue counts and member names they can't open; violates R5's spirit and the Phase 29 send-time filtering discipline.
-**Prevention:** Server-side enforcement at the aggregate level: each dashboard data item passes through `memberCanReadProject`/`hiddenFor` before aggregation, with private-project contributions either excluded or collapsed to an explicit "N more private" count for admins (owner decision to make during discuss-phase). Render the dashboard server-side (endpoint computes the payload), never ship raw doc + client-side rollup.
-**Detection:** Dashboard endpoint test with a private project the calling admin isn't in — assert zero leakage of its name/tasks in the response.
-**Phase:** Admin dashboard phase (decision about private-project collapse belongs in discuss-phase with the owner).
+**Prevention:**
+- Classify each of the 9 failures FIRST as either (a) spec drift — spec waits on an element that now arrives after the lazy chunk loads — or (b) genuine app regression introduced by the split. Never edit an assertion until the classification is written down per spec.
+- The repair for class (a) is *better waiting*, never *weaker expectation*: assert the lazy route has settled before asserting on its content. The codebase already exposes the settle contract — `layout.js` renders `null` for an unloaded lazy route and fills on first visit (`f.lazy && !l.mod`); so the correct pattern is to wait for the concrete user-visible element you were going to assert anyway, via `expect(...).toBeVisible()` (auto-retries), NOT a weakened check.
+- Keep every role/text/overflow assertion at its original strength. A spec whose assertions you downgraded must be rejected in review — diff the assertion strength, not just pass/fail.
+- For `locale.spec.mjs:122` specifically: first verify against 56-01's pre-split behavior what the correct role IS. If the lazy Settings chunk changed what renders (native `<select>` vs custom button), decide with the owner whether the app or the spec is wrong — do not let the spec's expectation define the app's a11y contract by accident.
+- Re-run the affected specs against the pre-split commit (56-02 already did this bisect: same 9 fail at 7ce7521) to keep the "these are drift, not new regressions" claim honest — a worktree bisect is cheap and already has precedent in `56-02-SUMMARY.md`.
+
+**Detection (warning signs you're doing it wrong):** a diff that deletes `.toBeVisible()` / role checks / `expect(page).toHaveURL(...)` lines; new `try { ... } catch {}` or `|| {}` around assertions; a spec that goes green without any `await` added before the failing assertion (nothing changed about timing, so the only other way it went green is that the assertion stopped measuring).
+
+---
+
+### Pitfall 2: The ECONNREFUSED webServer race — "fixing" flake by adding retries that mask real failures (CONS-01/CONS-03 interaction)
+
+**What goes wrong:** Playwright's `webServer.url` readiness probe (`/api/health` in `e2e/playwright.config.mjs:35`) can pass while the first serial-group test still hits `ECONNREFUSED 127.0.0.1:4317` — documented twice (`56-02-SUMMARY.md` line 205, `deferred-items.md` lines 18–19). The instinctive fixes are: bump `retries` globally, add `test.setTimeout`, wrap the first navigation in a retry loop, or set `reuseExistingServer: true` everywhere.
+
+**Why it happens:** `webServer.url` polling succeeds once the socket accepts; the SPA's first XHR can race a still-warming server (SQLite open, seed check, route registration). Because it's timing-shaped, everyone reaches for timing knobs instead of the readiness contract.
+
+**Consequences:** Global `retries: 2` locally hides REAL flake (VIEW-02 work in CONS-03 becomes unverifiable — you can no longer tell a fixed race from a retried one); `reuseExistingServer: true` by default violates the suite's own fail-closed design (`reuseExistingServer` is deliberately opt-in via `E2E_REUSE_SERVER=true` — Phase 04 review explicitly removed the old `!process.env.CI` default because a developer's preview server contaminated fixtures); a retry loop around the first navigation makes every future first-navigation failure ambiguous.
+
+**Prevention:**
+- Fix the readiness contract, not the retries: point `webServer.url` at an endpoint that only answers when the server is genuinely able to serve API traffic (e.g. confirm `/api/health` performs a real DB touch, or keep the URL probe but note the race lives in the *first test's first request*, and give the FIRST navigation in each spec a single explicit `page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })` warm-up with an API ping via `helpers/setup.mjs`'s `apiClient` — fail the *setup* fast and clearly, not the assertion).
+- Keep `retries: 0` locally. The suite's value for CONS-03 depends on flake being visible. If the ECONNREFUSED race needs tolerance, make it ONE targeted, loudly-commented mechanism at the webServer/health level — never a global retry budget.
+- Never touch `reuseExistingServer` semantics; the E2E_REUSE_SERVER opt-in and `gracefulShutdown` (config lines 36–39) are load-bearing (temp DATA_DIR cleanup depends on graceful SIGTERM).
+- Also remember the standing invocation trap (Phase 12/53 notes): `npx playwright test <spec>` without `--config e2e/playwright.config.mjs` boots NO webServer and fails with ECONNREFUSED by design — that's an invocation error, not the race. Verify how you launched before diagnosing.
+
+**Detection:** a diff that changes `retries`, `timeout`, or `reuseExistingServer` defaults in `playwright.config.mjs` without a justification paragraph; a spec that "passes" only when run with `E2E_REUSE_SERVER=true`.
+
+---
+
+### Pitfall 3: De-flaking VIEW-02 by adding timeouts that hide the race instead of removing it (CONS-03)
+
+**What goes wrong:** VIEW-02 (`e2e/saved-views.spec.mjs`) has several intrinsic race sources: (1) column show/hide writes through a **debounced** `persistLiveView` (`actions.js:1402` — `import('../core/viewSync.js').then(...)`), so a save can land after the spec has already moved on; (2) the views/columns bodies are **lazy chunks** (`savedViewsUi.js`, `viewSync.js` — imported with `.catch(() => {})` that silently swallows failures, `actions.js:455`); (3) the popover dismiss is a **coordinate click** (`page.mouse.click(5, 400)`), which can land on whatever happens to be at that pixel; (4) the OWNER/acme workspace is **shared mutable state** across concurrent spec files. The tempting fix: sprinkle `page.waitForTimeout(500)`, increase global timeouts, add `retries`.
+
+**Why it happens:** `.catch(() => {})` on lazy imports and debounce windows are invisible in the spec; the failure manifests downstream as "the row wasn't there" and reads like a UI bug, so the spec author buys time instead of awaiting the write.
+
+**Consequences:** A `waitForTimeout` flake-fix de-flakes THIS run and re-flakes on a slower CI machine; worse, it converts a genuine product bug (a dropped view write, a swallowed chunk-load failure) into an intermittent green. The Phase 38 lesson applies at spec scale: suppression/waiver mechanics that hide symptoms outlive their diagnosis.
+
+**Prevention:**
+- Replace every sleep with an awaited *condition that is the actual completion signal*: after toggling a column, await the `PUT /api/me/views` response (`page.waitForResponse`) or await the server row via `apiClient` — the spec already fixtures through the real API and asserts the `saved_views` table row (D-05); extend that same server-side truth to the write-through path.
+- For lazy-chunk surfaces, wait for the concrete rendered artifact (the popover option, the row) with `toBeVisible()` auto-retry rather than timing the import.
+- Replace the coordinate dismiss (`mouse.click(5,400)`) with the app's own close path (a real close button, or `Escape` if the app handles it) — a pixel click on shared chrome is a flake generator and can misfire into a destructive action.
+- Diagnose before treating: run the spec repeatedly against a pre-warmed server (`E2E_REUSE_SERVER=true`) and with `--repeat-each=10` to classify the flake (write-race vs chunk-race vs shared-fixture collision) BEFORE writing the fix. Keep `retries: 0` locally during diagnosis.
+- If the shared OWNER account is the culprit (other specs mutating acme concurrently), the fix is run-unique fixtures following the file's own convention ("run-unique view names to never collide"), not cross-file locking.
+
+**Detection:** any `waitForTimeout` appearing in the diff; a flake that disappears when `retries: 1` is set and reappears at 0 (that means the race is still there, you bought silence).
+
+---
+
+### Pitfall 4: Mobile tasks-table layout breaking the desktop layout or the column show/hide feature (CONS-02)
+
+**What goes wrong:** Making the tasks table mobile-friendly without a framework means hand-rolled responsive CSS. The classic mistakes: (a) adding `overflow-x: auto` + `min-width` on the table so mobile scrolls but desktop regains a horizontal scrollbar it never had; (b) restyling the `<table>` into stacked cards with `display: block` globally instead of under a media query, silently changing desktop DOM rendering semantics; (c) implementing mobile truncation as a *separate render path* that reads the visible-columns list differently than the desktop path — so `setColumn` show/hide (Phase 57, debounced write-through) works on desktop and is ignored, duplicated, or stale on mobile; (d) fixing mobile with inline styles generated in JS, bypassing the stylesheet the overflow spec measures.
+
+**Why it happens:** There is no framework grid to lean on; the temptation is a second code path for mobile. But the column show/hide feature IS the state contract (`prefs` + `saved_views`, D-09/D-10), and a second path forks the contract.
+
+**Consequences:** Column visibility on mobile silently disagrees with the saved view; the columns popover (which the saved-views spec drives) breaks; desktop gets a regression that no mobile-only test catches; the spec `french-overflow` at 390 px starts measuring a different DOM than 1280 px.
+
+**Prevention:**
+- One render path, one source of truth: the mobile treatment (truncated rendering with the columns button, per the deferred Phase 57 UAT item) must consume the SAME visible-columns state the desktop table consumes. Hide/reorder via the same CSS classes the show/hide feature toggles (`hidden` class driven by the existing state), not a parallel data structure.
+- Gate every change under the existing breakpoint media query; verify desktop is untouched by running the desktop-view e2e specs (projects-table, saved-views, french-overflow@1280) before/after — a visual diff of the desktop screenshot is the cheapest tripwire.
+- Respect the app's own convention visible in this codebase: structural selectors exist in specs for layout roots ONLY (`.side`, `.topbar`, `.modal-f` — french-overflow header). If the mobile fix adds new structural classes the specs will need, catalogue them deliberately like the existing ones, or better, fix within the existing roots.
+- Mobile here is the *table view's* layout; the 390 px proof in french-overflow already passes today — do not widen the mobile fix beyond the tasks table or the 390 px assertions of other routes will need re-baselining.
+
+**Detection:** a diff touching table CSS outside a `@media` block; a new mobile-specific column list or per-column inline `style.width` computed in JS; the `projects-table` or `saved-views` specs needing selector changes (they drive the columns popover — if THEY break, the feature contract broke, and that's a stop-and-reconsider signal, not a selector update).
+
+---
+
+### Pitfall 5: CSS bloat blowing the 500 kB chunk gate, and new literals blowing the i18n gate (CONS-02 hard gates)
+
+**What goes wrong:** The mobile fix is the one CONS item that ships user-facing UI, so it's the one that can break the two standing gates: (a) the D-02 gate — entry is at 499,780 B against the 500,000 B limit (`56-02-SUMMARY.md` line 214) with **220 bytes of headroom**; any new CSS/JS that lands in the entry chunk fails the build; (b) the i18n scan gate — any new uncatalogued user-facing literal ("No columns", truncated-label aria text, mobile empty-state copy) fails `scripts/i18n-scan.mjs` unless catalogued EN+FR.
+
+**Why it happens:** 220 B is invisible headroom; a single new utility class string repeated in markup, or one `aria-label` hardcoded in English, passes locally and fails the gate.
+
+**Consequences:** Blocked builds late in the plan; worse, the tempting remedy — *raising the gate threshold* — destroys the very invariant the milestone is standing on ("threshold never weakened" is an explicit 56-02 acceptance criterion).
+
+**Prevention:**
+- Mobile CSS changes go in the existing stylesheet (CSS is currently small relative to JS, but verify with the chunk-size test `test/build-chunk-size.test.mjs` after EVERY task, not at phase end).
+- If entry headroom is the binding constraint, the fix follows the established pattern (56-02/57-01/61-02): move a low-frequency module to the lazy map — one map entry + import removal — never a gate bump.
+- Any user-visible string introduced by the mobile layout gets an EN+FR catalogue key in the same commit; `aria-label`s count (the suite's own selectors read `fmt('act.columns')`, `fmt('a11y.mainNav')` etc. from the catalogue — hardcoded strings would also break those selectors' language-independence).
+- Run `npm run build` + chunk test + `scripts/i18n-scan.mjs` as the plan's per-task verification triad, mirroring how 56-02 gated itself.
+
+**Detection:** a diff adding a literal string in a template or `aria-label` without a matching `en.json`/`fr.json` pair; any edit to `test/build-chunk-size.test.mjs`'s threshold constant (rejection-worthy without an owner ruling).
+
+---
+
+### Pitfall 6: Dist staleness / temp-dir contamination producing phantom e2e failures across all three CONS items
+
+**What goes wrong:** The suite is fail-closed on dist staleness (content-hash manifest check from 56, "fail-closed spawn test"). Repair sessions that rebuild dist mid-stream, leave leftover webServers on ports 4317/4318, or leave stale `test-results/` produce failures that look like the bug being repaired (documented: two concurrent playwright runs raced `test-results/` → ENOENT trace failures; leftover servers → "port already used"; Phase 12/53 notes the no-config invocation trap). In a consolidation milestone whose entire exit criterion is "suite green", phantom failures are maximally damaging — they either stop the work or get "fixed" with the wrong change.
+
+**Why it happens:** Multiple spec runs in one session, worktree bisects (the 56-02 precedent), and demo-config vs main-config ports share state.
+
+**Consequences:** A bisect that "proves" the wrong commit introduced a failure; a CONS-03 fix written against a phantom; hours lost misdiagnosing.
+
+**Prevention:**
+- Every e2e run in the repair plans goes through `npm run e2e -- <spec>` (the wired command with config + webServer), never bare `npx playwright test`.
+- Between diagnosis runs, clean ports and `test-results/`; one run at a time; the 56-02 bisect-in-a-throwaway-worktree pattern is the model (it cleaned up after itself — copy that, including cleanup).
+- After any CSS/src change relevant to CONS-02, rebuild dist before trusting a spec result — the staleness guard will (correctly) fail otherwise; treat that failure as a reminder, not a bug.
+
+**Detection:** ECONNREFUSED with no config change in the diff; ENOENT under `test-results/`; "port already used" — all three are environment signatures, stop and clean before touching specs.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 6: Push payload size limit (≤ 4096 bytes, encrypted) — silent drops on rich notifications
-**What goes wrong:** RFC 8291 caps the encrypted payload at 4096 octets; stuffing task description, project name, avatar URLs and FR text into the payload intermittently fails per message, and Chrome enforces its own ~3 KB quirk for some cases. Failure surfaces as `413` from the push service mid-fan-out.
-**Prevention:** Push payloads carry a **ticker, not the letter**: `{type, taskKey, wsSlug, shortTitle}` — the service worker fetches detail on click (deep-link route already exists from Phase 23, `/w/:slug/task/:key` with `?next=`). Assert payload size in tests with worst-case FR titles. Localized text for the notification body: prefer the user's locale catalogue server-side (the `tFor()` funnel already exists from Phase 36) but keep it short.
-**Detection:** `413` in push send logs; a payload-size unit test with pathological strings.
-**Phase:** Push fan-out phase.
+### Pitfall 7: French specs double as overflow regression — spec updates must not change what they measure
+The 7 french-overflow failures are ALSO the suite's only 390 px overflow proof. Repairing them by skipping the 390 px viewport ("just test 1280 for now") or dropping routes from the `ROUTES` array removes the only mobile-overflow coverage right before CONS-02 CHANGES the mobile layout. **Prevention:** keep the full 16-route × 2-viewport matrix; if CONS-02 lands first, the repaired french-overflow specs are the acceptance test for it — sequence accordingly (see Phase-Specific Warnings).
 
-### Pitfall 7: Query injection via FTS5 MATCH
-**What goes wrong:** User search text passed raw into `MATCH` breaks on FTS5 syntax — quotes, `NEAR`, `*`, `AND`/`OR`, column filters (`title:drop table`) — producing SQL errors (500s) or, with careless string concatenation, actual injection. Accented FR text adds a second failure: default `unicode61` tokenizer keeps diacritics, so "elodie" won't match "Élodie".
-**Prevention:** (a) Escape/quote user input into a quoted FTS phrase with `""` doubled, or tokenize into bare terms and join with implicit AND — never interpolate raw. (b) Set the tokenizer with `remove_diacritics 2` (`unicode61` option) **at table creation** — it's a creation-time constant, changing it later requires a rebuild; decide now since the app is EN/FR. Note this differs from the accent-*insensitive matching* the v1.2 recent-search matcher does (tokenized NFC+lowercase in `redaction.js`) — reuse the same normalization philosophy for the search input side (NFC+lowercase before querying) and `remove_diacritics` on the index side. (c) Careful: `remove_diacritics 2` handles Latin accents but the input normalization must match, or queries miss.
-**Detection:** Unit table of hostile MATCH strings (`"`, `NEAR(`, `*`, `:`, `OR`) all returning results or clean empty sets, never 500; accent-pair test ("elodie" ↔ "Élodie").
-**Phase:** FTS5 phase — tokenizer choice must be a phase decision (it's unchangeable without full rebuild).
+### Pitfall 8: Silent `.catch(() => {})` lazy seams vs honest failures
+The codebase's lazy-chunk error policy is deliberate silent degradation (`actions.js:452–455` — "degrades silently like the other lazy seams"). When diagnosing CONS-01/CONS-03, a swallowed chunk failure looks like "element never appeared". **Prevention:** during diagnosis, temporarily surface these (or use Playwright trace/console capture) — but do NOT change the app's silent-degradation policy as a "fix"; it's a shipped design decision (CR-02/T-56-01). Fix the spec's waiting, not the app's error policy.
 
-### Pitfall 8: Saved views schema drift — stored views referencing dead columns
-**What goes wrong:** Saved views store column sets/filters/ordering. When columns change (this milestone adds General-Access granularity and show/hide itself), stored views reference unknown columns or miss new ones; loading them renders broken tables or throws.
-**Prevention:** Version the saved-view schema (`v: 1`); on load, intersect stored columns with the current live column set and drop unknowns (lenient-load), never trust stored ids; validate server-side on save too since views may live in the workspace doc (then `mergeClientDoc`/normalize sweeps must know the new sink — the D-53-1 lesson: prefer a shape that needs no new doc sink). Migrate on read, not with a destructive boot migration — zero-migrations constraint holds.
-**Detection:** A saved view created before the show/hide feature loads after it; unit test with a synthetic old-format view.
-**Phase:** Saved views / General-Access phase; lenient-load rule in the plan's must-haves.
+### Pitfall 9: Touching Phase 38 suppression / no-double-send invariants while refactoring shared modules
+CONS-01/02 repairs will edit shared files (`actions.js`, popovers, layout) that the suppression invariants and byte-level redaction/leak tests also exercise. A "harmless" reorder can break suppression ordering or redaction byte-identity. **Prevention:** the byte-level redaction/leak tests and Phase 38 suites must run in every task's verification, unmodified; a diff that edits the redaction/suppression test files themselves is rejection-worthy in this milestone (the constraint says untouched).
 
-### Pitfall 9: Locale catalogue chunk races with first paint
-**What goes wrong:** Code-splitting locales into dynamic chunks means the first paint can happen with `t()` resolving against an empty catalogue — English flash, untranslated strings, or promise rejections. Worse: the i18n build gate (Phase 11) can't see keys that fail to load at runtime.
-**Prevention:** Keep the **base (EN) catalogue in the entry chunk** synchronously; dynamic-import only *additional* locales. Await the locale chunk before first render (a tiny "boot gate" in the SPA's init), with the base catalogue as fallback so a failed chunk fetch degrades to English instead of a blank screen. Cache the resolved chunk (browser HTTP cache + in-memory module cache). Keep `t()` synchronous after boot — never make call sites async.
-**Detection:** e2e in FR asserting zero English leak **on cold cache with throttled network** (the existing French-sweep test from Phase 10, rerun with `page.route` delays).
-**Phase:** Code-splitting + i18n infrastructure phase (do i18n infra first or same phase — the catalogue loader contract must exist before splitting, or splitting will be redone).
-
-### Pitfall 10: e2e dist guard — either rebuilds every run (slow) or trusts a stale build (wrong)
-**What goes wrong:** Naive guard: always `vite build` before e2e (adds ~30–60s × 100+ test runs to every cycle) or never rebuild (tests validate yesterday's code and pass against bugs fixed since).
-**Prevention:** Staleness detection: hash the current `src/`/`public/`/`index.html` content (mtime lies in git worktrees and CI) and compare to a stamp written at last build (`dist/.build-stamp`); rebuild only on mismatch. The e2e server **refuses to start** on mismatch rather than auto-rebuilding — the failure message tells the developer to run the build, keeping test runs fast and correctness enforced loudly (matches the project's fail-closed style). Stamp lives inside `dist/` so `rm -rf dist` forces a rebuild. Test stamp computation itself (it's the one piece of logic in the guard).
-**Detection:** CI run where e2e passes but the built dist predates a source change — the guard test proves refusal.
-**Phase:** E2E dist guard phase (small, standalone, can ship early — no dependency on other phases).
-
----
+### Pitfall 10: Fixing mobile layout by feature-detecting touch/UA instead of viewport
+UA/touch sniffing breaks on desktop touchscreens and emulator-based specs. The suite drives `devices['Desktop Chrome']` and explicit viewports (1280/390). **Prevention:** media queries / container queries keyed to viewport width only — matching how the specs exercise the app.
 
 ## Minor Pitfalls
 
-### Pitfall 11: Over-splitting a small vanilla-JS SPA
-**What goes wrong:** Chunking per-view in a ~19k-line SPA produces dozens of tiny chunks whose waterfall latency exceeds the single-bundle cost; also complicates the service worker precache list (push feature's SW must now track hashed chunks or updates break).
-**Prevention:** Split only where weight is proven (heaviest views + locales); one shared vendor-less entry; SW update strategy must be coordinated — precache the entry, network-first for chunks, or stale chunks 404 after deploy and break navigation. Milestone goal is "no chunk >500 kB", not "chunk everything".
-**Detection:** Chunk count / build-size diff in CI; SW navigation failure after redeploy.
-**Phase:** Code-splitting phase, coordinated with the SW work in the push phase (order matters: SW + chunk contract should be settled in code-splitting or SW breaks).
+### Pitfall 11: New structural classes colliding with spec selectors
+If CONS-02 renames or adds classes inside `.side`/`.topbar`-adjacent chrome, `french-overflow`'s structural measurements shift. Prevention: prefer styling over existing classes; if new roots are unavoidable, update the spec's banner comment (its own convention documents which selectors are structural).
 
-### Pitfall 12: Service worker update staleness after deploys
-**What goes wrong:** SW byte-compare makes old SWs linger; a deployed new SW with changed notification-click routing keeps the old routing for returning users (or worse: old SW + new chunk hashes → dead notification clicks).
-**Prevention:** `skipWaiting` + `clients.claim` with a deliberate update-on-message pattern; notification click routing resolves URLs at click time, never baked-in hashes; version the SW and log current version. Test: deploy a new SW → push notification click lands on the new route.
-**Phase:** Push phase (SW is born there) with code-splitting phase respecting the contract.
+### Pitfall 12: FR typography rules in new mobile strings
+New French catalogue strings for the mobile layout must follow the house style (no-break space before `:`, narrow no-break space before `?`, curly apostrophe, NFC) — the i18n scan and FR reviewers catch this late otherwise. Prevention: copy an existing adjacent key's punctuation pattern.
 
-### Pitfall 13: Permission-prompt UX — prompt-on-load burns the permission permanently
-**What goes wrong:** Asking `Notification.requestPermission()` on page load (or before any user intent) gets blocked-and-remembered by Chrome/Safari; the user then must dig into site settings. The project already has the Phase 48 "Browser blocked" badge + explanatory toast foundation — regressing to auto-prompt when adding mention/assignment push would undo it.
-**Prevention:** Prompt only from an explicit settings affordance or an in-context first-mention moment ("enable push to get notified when mentioned" button). Keep the derived blocked-badge state. Never re-prompt when `denied`.
-**Phase:** Push phase (Phase 48 continuation).
-
-### Pitfall 14: Notification trim recommendations acting before owner rulings
-**What goes wrong:** NOTIF-TRIM requires D-05 owner rulings during execution; implementing trims speculatively violates the Phase 39 discipline (all rows `proposed` until ruled) and the standing Phase 38 no-double-send + suppression invariants.
-**Prevention:** The trim phase produces *recommendations + D-05 ruling gates*; actual suppression changes only after rulings land, and every trim re-runs the Phase 38 invariants unmodified (standing constraint).
-**Phase:** NOTIF-TRIM phase (gate the phase's definition of done on D-05 rulings).
-
-### Pitfall 15: Doc-sink bloat — new feature state stuffed into the workspace JSON doc
-**What goes wrong:** Push subscriptions, saved views, dashboard prefs are tempting to put in the doc — but the doc is revision-locked (409 on mismatch), redacted on read, merged on write, and every added field must survive `mergeClientDoc`/normalize/removal sweeps. Phase 34 already moved notif prefs *out* to real rows for exactly these reasons.
-**Prevention:** Push subscriptions and saved views belong in their own tables (additive migration, pre-backup, byte-identical second boot — the established migration pattern from Phases 14/28/34). Only genuinely workspace-shared display state (e.g. default column visibility) goes in the doc, following D-53-1 (no new top-level field when a keyed pattern fits).
-**Detection:** Review gate question: "does this state need optimistic concurrency and redaction?" If no → own table.
-**Phase:** Every phase; call it out explicitly in push and saved-views phases.
+### Pitfall 13: `workers` default locally means spec files CAN run concurrently
+`workers: 1` only on CI (`playwright.config.mjs:16`). Local diagnosis of VIEW-02 with default workers can hit shared-fixture collisions that never occur in CI — misdiagnosis risk. Prevention: diagnose with `--workers=1` to match CI semantics.
 
 ---
 
 ## Phase-Specific Warnings
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Push fan-out (mentions/assignments) | Dead-endpoint churn; 413 payload drops; VAPID key loss on restart | 404/410 sweep in send pass; ticker payload + size test; persisted VAPID + DEPLOY.md §16 |
-| Push UX (Phase 48 continuation) | Auto-prompt regression; SW staleness after deploys | Explicit-intent prompting only; SW version + click-time routing |
-| FTS5 search | Index drift via MCP/bulk-PUT paths; MATCH injection; tokenizer locks accents in | Chokepoint hook + boot rebuild; quoted/normalized input; `remove_diacritics 2` decision as phase decision |
-| Admin dashboard | Private-project leakage in aggregates; N+1 doc parses | Funnel per aggregate item; single server-side computation pass (doc parsed once per request, endpoints keyed + admin-gated like TRN-01) |
-| Transparency self-view | TRN-01 computation reuse leaks others' data | Separate redaction funnel; byte-level response-shape tests per role |
-| Saved views / General-Access | Stored views vs live columns drift; new doc sinks | Versioned schema + lenient-load intersect; own table, not doc fields |
-| NOTIF-TRIM | Acting without D-05 rulings; breaking Phase 38 invariants | Ruling gates; re-run suppression + no-double-send invariants |
-| i18n infra + code-splitting | Locale chunk race at first paint; `t()` made async | EN base in entry chunk; boot-gate locale await; runtime FR e2e with cold cache |
-| Code-splitting | Over-splitting; SW/chunk hash mismatch | Split proven-heavy views only; settle SW chunk contract before push ships |
-| E2E dist guard | Rebuild-every-run slowness or silent staleness | Content-hash stamp inside `dist/`; refuse-to-start fail-closed |
-| All phases | pg/SQLite parity for any new table or FTS mirror | Dual-backend test matrix (standing constraint) catches it — if tested |
+| Repair | Likely Pitfall | Mitigation |
+|--------|---------------|------------|
+| CONS-01 (e2e repair) | Weakened assertions (Pitfall 1) | Per-failure drift-vs-regression classification first; assertion-strength diff review; no fix without better waiting |
+| CONS-01 | webServer race "fixed" via retries/reuseExistingServer (Pitfall 2) | Fix readiness contract; keep `retries: 0` locally; leave config defaults alone |
+| CONS-02 (mobile table) | Parallel mobile render path forking column state (Pitfall 4) | One render path, same visible-columns state, media-query-gated; projects-table/saved-views specs as tripwire |
+| CONS-02 | 500 kB gate (220 B headroom) + i18n literals (Pitfall 5) | Per-task triad: build + chunk-size test + i18n scan; lazy-map remedy not threshold bump |
+| CONS-03 (VIEW-02 de-flake) | waitForTimeout masking the debounce/chunk race (Pitfall 3) | Await `waitForResponse`/server row; replace coordinate dismiss; classify flake with `--repeat-each` first |
+| All | Phantom failures from stale dist/ports/test-results (Pitfall 6) | Always `npm run e2e --`; clean between runs; worktree bisects self-cleaning |
+
+## Recommended Phase/Plan Order
+
+1. **CONS-01 first.** The repaired specs are the verification instrument for everything else: CONS-02 needs `french-overflow@390px` as its acceptance test, and CONS-03 needs a green baseline suite (retries stay 0) to prove de-flaking worked. Doing CONS-01 last would mean validating the mobile change and the flake fix against a red suite.
+2. **Within CONS-01, land the ECONNREFUSED readiness fix (Pitfall 2) as its own small plan** before the 9-spec repair, so the spec work runs against a stable launcher.
+3. **CONS-02 second**, in small plans each ending on the verification triad (build + chunk gate + i18n scan + desktop specs + repaired french-overflow). Small plans protect the 220 B headroom — a big-bang mobile plan is where gates get quietly raised.
+4. **CONS-03 last.** De-flaking benefits from every other spec being green (no cross-file noise on the shared OWNER fixture) and from CONS-01's established awaiting patterns. Diagnosis plan (`--repeat-each`, pre-warmed server, workers=1) as a separate plan from the fix plan.
 
 ## Sources
 
-- SQLite FTS5 external-content semantics & integrity-check (sqlite/sqlite source, ext/fts5 — via Context7, HIGH)
-- RFC 8291 (payload ≤ 4096 octets), RFC 8030 (push protocol status semantics), web.dev push 404/410 handling (HIGH, well-established)
-- Codebase architecture: PROJECT.md — doc redaction/merge funnel, revision concurrency, adapter, Phase 27/34/36/45/48/52 precedents (HIGH, first-party)
-- Phase 38/39 notification invariants & D-05 ruling discipline (first-party, HIGH)
-
-## Gaps to Address
-
-- Whether private-project contributions appear in admin dashboards as collapsed counts or are hidden entirely — owner decision, discuss-phase.
-- Whether saved views live in the doc or a table — owner decision with the Phase 34 precedent as the recommended default (table).
-- Exact tokenizer trade-off (`remove_diacritics 2` vs input-side normalization only) — small phase-level decision with a test matrix.
+- Codebase-verified (HIGH): `e2e/playwright.config.mjs`, `e2e/french-overflow.spec.mjs`, `e2e/saved-views.spec.mjs`, `src/shell/layout.js` (lazy map), `src/actions/actions.js` (debounced viewSync writes, `.catch(()=>{})` seams), `56-02-SUMMARY.md` (bisect of the 9 failures, ECONNREFUSED note, gate headroom), `deferred-items.md`, Phase 04/12/53 config-evolution notes (reuseExistingServer opt-in rationale, no-config invocation trap).
+- Playwright community wisdom (MEDIUM-HIGH): webServer readiness vs first-request race; `waitForTimeout` as flake laundering; retries masking flake; coordinate clicks as flake sources; debounced writes needing awaited completion signals.

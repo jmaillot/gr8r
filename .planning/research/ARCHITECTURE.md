@@ -1,258 +1,270 @@
-# Architecture Patterns — v2.2 feature integration into the existing stack
+# Architecture Research — v2.3 Consolidation & Hardening (integration map)
 
-**Project:** Projects Studio (gr8r) — milestone v2.2 Notifications, Search & Delivery
-**Researched:** 2026-11-12
-**Mode:** Integration architecture (codebase-grounded; confidence HIGH — every claim below was verified against `server.js`, `src/core/push.js`, `public/sw.js`, `vite.config.js`, `e2e/server.mjs` at HEAD)
+**Domain:** e2e/test-harness repair + mobile responsive table, inside an existing no-framework ES-module SPA + single-file Node server
+**Researched:** 2026-11-14
+**Confidence:** HIGH (all integration points verified in the live tree; zero web research needed — this is a read-our-own-code milestone)
 
-## Recommended Architecture
+## Standard Architecture (as it exists — nothing structural is being built)
 
-The controlling fact: **tasks, notifs, views and prefs-adjacent state live inside one JSON
-workspace document** written through a single funnel — `PUT /api/workspaces/:slug` →
-`docFromClient`/`mergeClientDoc` → `db.tx()` with revision check. Every new feature either
-(a) hooks that funnel, (b) adds authority rows outside the doc (the established pattern for
-per-user state), or (c) is pure client state riding the doc. Three precedents decide where
-new state goes:
+The v2.3 repairs are **additive fixes to existing seams**, not new architecture. The relevant layers:
 
-| Precedent | Established by | Rule it implies |
-|-----------|---------------|-----------------|
-| Per-user prefs out of the doc | Phase 34 (`user_notif_prefs` rows, doc strip + boot sweep) | Anything per-user and structurally indexed goes in **rows**, never doc blobs |
-| Email fan-out off the doc diff | P4-f: `newNotifs` diffed stored-vs-next inside the same tx, sent fire-and-forget **after** commit | Any side-effect fan-out hooks the **same diff site**, never blocks the response |
-| Service worker = minimal click router | Phase 48 (`public/sw.js`, no fetch handler, zero strings) | Server push extends this file, does not redesign it |
+```
+┌─────────────────────────── e2e harness ─────────────────────────────┐
+│ playwright.config.mjs (webServer, en-US pin, workers/retries)       │
+│   └─ webServer: node e2e/server.mjs (mkdtemp DATA_DIR, port 4317,   │
+│      dist staleness guard, /api/health readiness)                   │
+│ helpers/setup.mjs (BASE_URL, fixtures, apiClient)                   │
+│ locale.spec.mjs · french-overflow.spec.mjs · saved-views.spec.mjs   │
+├─────────────────────────── app (src/) ──────────────────────────────┤
+│ pages/settings.js  (lazy chunk since Phase 56 — langSel select)     │
+│ shell/view-engine.js (viewToolbar, cols/views popovers, hide-m)     │
+│ styles/views/table.css · styles/responsive.css (breakpoints)        │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-### Component Boundaries (new vs modified)
+### Component Responsibilities (v2.3 scope)
 
-| Component | New/Modified | Responsibility | Communicates With |
-|-----------|--------------|----------------|-------------------|
-| `task_fts` shadow table + `searchDoc` seam in `db-adapter.mjs` | **New** (adapter-level) | Maintains a searchable projection of task titles+descriptions; answers queries | doc-PUT funnel (writes), Ctrl-K client (reads via new GET route) |
-| `push_subscriptions` table + `/api/me/push-subscriptions` routes | **New** | Per-user Web Push endpoint/keys rows, VAPID config | push fan-out (reads), settings UI (writes) |
-| Server Web Push fan-out (`sendPushFor()` beside `queueNotifEmails`) | **New** | Delivers `web-push`-protocol payloads (hand-rolled `node:crypto` per D-12 constraint) for mention/assign rows | doc-PUT `newNotifs` diff site; `runReminderPass` |
-| `public/sw.js` `push` event handler | **Modified** | Receives server push payloads, shows pre-localized notification, reuses existing `notificationclick` router | server fan-out |
-| Dashboard | **New client page only** | Overdue/load/upcoming/activity computed from the already-hydrated doc | existing `D` store; no new server route |
-| TRN-02 member self-view | **Modified** TRN-01 route | Same `memberCanReadProject`+reason funnel, self-scoped | transparency page |
-| Saved views + column show/hide | **Modified** store | `S.views` / column state already syncs through the doc — persist as doc fields, no rows | doc-PUT (free) |
-| `e2e/server.mjs` dist guard | **Modified** | mtime/staleness check beside the existing `dist/index.html` existence check | npm scripts |
-| Vite config | **Modified** | dynamic `import()` for locales (extension of existing `localeSubset` plugin) and heavy pages | build |
+| Component | Responsibility | v2.3 role |
+|-----------|----------------|-----------|
+| `e2e/french-overflow.spec.mjs` (728 lines) | FR overflow sweep over 9 pages incl. settings | **modify** — Settings role/timing drift ×7 |
+| `e2e/locale.spec.mjs` (268 lines) | LOC-01/03/06 language-switch proofs | **modify** — line 122 block uses the collapsed-button contract |
+| `e2e/saved-views.spec.mjs` (133 lines) | VIEW-02 named views on the tasks table | **modify** — de-flake |
+| `e2e/playwright.config.mjs` | webServer config, serial-group race home | **modify (small)** — readiness race |
+| `e2e/server.mjs` | throwaway server on 4317, health URL | **read/possibly adjust** — the ECONNREFUSED lives in config-vs-server handshake, not the server logic |
+| `e2e/helpers/setup.mjs` | `BASE_URL` (`http://127.0.0.1:${E2E_PORT\|\|4317}`, line 16), fixture/login helpers | **extend** — shared `openSettings()` / lazy-chunk wait helper lives here |
+| `src/pages/settings.js` | `langSel()` at **line 131-134**: native `<select class="select" data-in="langSel" aria-label="${t('settings.language.title')}">` | **do NOT change** — the code is correct; the specs are stale |
+| `src/shell/view-engine.js` | `viewToolbar()` line 227: Columns button `data-a="pop" data-pop="cols"`; `hide-m` spans already used for labels | **modify** — mobile toolbar/table behavior |
+| `src/styles/views/table.css` (111 lines) | table view styles, `overflow: auto` (line 5), `min-width: 100%` (line 14) | **modify** — mobile layout |
+| `src/styles/responsive.css` | existing breakpoints at **1100px** (line 4), **900px** (line 16), **640px** (line 99) | **modify/extend** — CONS-02 breakpoint lives here |
 
 ---
 
-## (1) FTS index — where it lives and how it stays in sync
+## CONS-01 — The 9 failing e2e specs: role/timing drift + webServer race
 
-**Verdict: a shadow table maintained by the doc-PUT transaction, in the adapter — not triggers,
-not rebuild-on-write of the whole doc.**
+### Root cause 1: the Settings contract changed under the specs
 
-- Tasks live in `doc.data.tasks[]` inside the JSON blob; no per-task rows exist, so SQLite
-  triggers on `workspaces` would fire on every doc write with no diff knowledge. Triggers
-  cannot diff JSON; the server already does.
-- The doc-PUT funnel already diffs `storedDoc` vs `next` for exactly this purpose (the
-  `newNotifs` / `storedFileIds` pattern at the `db.tx()` body, server.js ~5064–5075). Extend
-  the same pass: diff task ids, then within the same transaction upsert/delete rows in
-  `task_fts(workspace_id, task_id, title, body)` (FTS5 virtual table on SQLite; a plain
-  indexed table on Postgres with ILIKE or tsvector — keep it behind an adapter seam like
-  `db.searchTasks(wsId, q)` so both backends pass the same suite, matching the DBA-01..04
-  contract).
-- **Rebuild sweep at boot** (the `migrateTotpReWrap`-style one-pass pattern): converges any
-  drift (crashed PUT, manual DB edit, copy-sqlite-to-pg). Cheap — one full-doc parse per
-  workspace at boot, idempotent.
-- Reads: new admin-free but membership-gated route `GET /api/workspaces/:slug/search?q=`
-  that filters results through `memberCanReadProject` before returning — **search must
-  inherit the redaction funnel** (a private-project task title leaking through FTS is the
-  one security trap here; the client-side tokenizer from SEARCH-01 only redacts recent
-  searches, not index contents).
-- Client: Ctrl-K currently searches in-memory; wire it to prefer the server route when the
-  doc is large, fall back to local for offline/demo mode.
+Phase 56 made Settings a lazy chunk **and** (from 56-01) the language row now renders a
+native `<select data-in="langSel" aria-label="Language">` (combobox role,
+`src/pages/settings.js:131-134`). The specs still encode the pre-56 contract — a collapsed
+`<button>` named "Language" that you click to expand:
 
-Why not rebuild-on-write of the full doc index: doc PUTs are frequent and diffing is already
-required for emails; a whole-index rebuild per PUT duplicates work and would break the
-"one transaction, one diff" shape the funnel is built around. Why not in the client only:
-push mentions and MCP mirror also need to find tasks; and search must be server-side to
-respect redaction.
+- `e2e/french-overflow.spec.mjs:144-153` — `getByRole('button', { name: 'Language', exact: true }).click()` and the `expanded: false` assertion.
+- `e2e/locale.spec.mjs:122` block — identical collapsed-button pattern (`expanded: false`, "English" containment, `getByRole('option')` after a click).
 
-## (2) Push subscriptions and fan-out
+Two failure modes compound:
 
-**Verdict: new `push_subscriptions` table; fan-out at the same two sites that emit notif
-rows.**
+1. **Role mismatch** — there is no `button` named "Language", only a `combobox` (the select). `getByRole` never resolves → timeout.
+2. **Lazy-chunk timing** — even with the right selector, the first navigation to `/w/:slug/settings` must download + execute the Settings chunk before the language row exists. Specs that go straight from "click Settings nav button" to "expect Language row" race the dynamic `import()`.
 
-- **Storage:** `push_subscriptions(workspace_id, user_id, endpoint unique, p256dh, auth,
-  created_at)` — structural clone of the `user_notif_prefs` migration (additive
-  `ensureTable`, pre-backup, byte-identical second boot). Rows not doc: subscriptions are
-  per-browser, per-user, high-churn — exactly the shape Phase 34 ruled belongs in rows.
-  One user may hold several rows (desktop + phone); delete on 404/410 from the push service
-  (standard subscription-expiry hygiene).
-- **Keys:** VAPID keys from env (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`),
-  same fail-absent pattern as SMTP/MASTER_KEY: unconfigured → feature absent (existing
-  client push-toasts keep working; no new server push). Generating a keypair is a one-time
-  deploy step documented in DEPLOY.md.
-- **Protocol dependency conflict to resolve early:** real Web Push payload encryption
-  (aes128gcm, RFC 8291) is significant hand-rolled crypto. The zero-runtime-dependency
-  constraint (D-12) was amended once for `pg` with owner approval — either hand-roll RFC
-  8291 + JWT (VAPID) over `node:crypto` (feasible: ECDH P-256 + HKDF + AES-GCM are all
-  built-in, ~150 lines, and Phase 30 already hand-rolled RS256/JWKS) or seek a second
-  owner-approved exception for `web-push`. **Recommendation: hand-roll**, following the
-  oidc.js precedent; flag as phase-specific research.
-- **Fan-out sites (both, not one):**
-  1. The doc-PUT `newNotifs` diff — right beside `queueNotifEmails` (fire-and-forget,
-     response never waits). Mention/assign/comment rows only; gated by the existing
-     `push_mention`/`push_assign`/`push_comment` prefs (`PUSH_TYPE_PREF` in
-     `src/core/push.js` already names them — server reads them via the same
-     `user_notif_prefs` accessor).
-  2. `runReminderPass` — due reminders ride the same row pipeline; push there respects the
-     Phase 38 suppression/digest invariants (inbox rows never suppressed; push, like inbox,
-     flows for digest users).
-- Payload: `{ url, title, body }` pre-localized per-recipient via `tFor` (the I18N-01
-  pattern) — the SW holds zero strings by design (T-48-02), keep that contract.
-- The 30s poll + `notifyNewEvents()` foreground path stays untouched (D-48-2): server push
-  covers the *tab-closed* case; the seen-set discipline prevents double-notify when both
-  fire (SW notification only when no visible client, or dedupe by notif id in the seen set).
+**Integration decision: fix the specs, not the app.** The `<select>` with a localized
+`aria-label` is the *more* accessible contract (native combobox, keyboard-free). Do not
+revert to the collapsed-button widget just to please old tests. The canonical pattern is
+already proven in the codebase: `e2e/demo-locale.spec.mjs:96` reads the select with
+`document.querySelectorAll('select[data-in="langSel"] option')`.
 
-## (3) Dashboard — computed on read, client-side
+### Recommended pattern — one shared Settings helper in `e2e/helpers/setup.mjs`
 
-**Verdict: no new aggregation path. Compute in the client from the already-hydrated doc.**
-
-- The SPA hydrates the *entire* workspace document; an admin sees all of it. Overdue per
-  project, load per member, upcoming dues, recent activity are all derivable from
-  `D.data.tasks/projects/notifs/activity` with the same pure functions used elsewhere
-  (`progressOf`, due-date helpers). Zero server work, zero staleness, free EN+FR via t().
-- Anti-pattern to avoid: a server `GET /dashboard` that re-reads and aggregates the doc —
-  it duplicates redaction logic, adds a second read path to keep in sync with the funnel,
-  and buys nothing at this scale (single Node process, doc already in memory per request).
-- If a later milestone needs cross-workspace or scheduled reporting, revisit; the client
-  compute functions should be written as pure module exports (e.g. `src/features/dashboard/compute.js`)
-  so a server route could reuse them in Node without a rewrite.
-
-## (4) TRN-02 — redaction boundary for the member self-view
-
-**Verdict: same funnel, strictly self-scoped, admin route gains a self variant.**
-
-- TRN-01 (Phase 52) already computes "exactly what a member can access" live through
-  `memberCanReadProject` with coarse reason codes + team name, admin-gated keyed 404 route.
-  TRN-02 reuses the computation unchanged — the boundary work is *who may call it for whom*:
-  - A member may request the view for **their own id only** (`ctx.user.id === :uid` or 404).
-  - The response for a self-view redacts cross-member information: **no other members'
-    grants, no other members' emails/roles beyond what the member list already exposes**,
-    and per-project rows limited to *their* effective access + reason. Team names may show
-    (they explain the "why") but the roster of the team should render only through the
-    existing team visibility the member already has.
-  - Admins keep the full any-member view; the route branches on role, not a second route —
-    one funnel, one test matrix.
-- The security property to pin in tests: a member's self-view contains no row their own
-  session cannot otherwise derive — transparency, not escalation.
-
-## (5) Saved views — client state in the doc, no server rows
-
-**Verdict: doc state. `S.views` (and column show/hide) already round-trip through the
-workspace document; persist there.**
-
-- The store's doc-sync already carries client state blobs (the store S/D sync writes the
-  doc; `mergeClientDoc` normalizes on write). Saved views are per-user UI preference but
-  workspace-scoped and small — the doc is the established carrier for exactly this
-  (S.views is already synced per the milestone context).
-- Adding server rows would require a new table + sync discipline for data the doc sync
-  already transports, for zero isolation benefit. The one real risk — doc-PUT revision
-  conflicts when two tabs save views concurrently — is the existing 409
-  hydrate-wins recovery, already proven (Phase 55).
-- Constraint to respect: keep view blobs whitelisted/normalized in `mergeClientDoc` (the
-  notifPrefs strip shows what happens when a doc field escapes its validator). Cap count
-  and size (e.g. ≤20 views, ≤2 kB each) in the normalizer.
-
-## (6) Service worker — location, build, routing
-
-- **Lives at `public/sw.js`** — Vite copies `public/` verbatim to `dist/`, so it ships
-  un-minified and un-versioned; the server serves it no-cache (already true). No build
-  integration is needed *or wanted*: the SW must stay dependency-free (no imports) per
-  T-48-02 — do not be tempted to run it through the Vite pipeline.
-- v2.2 change: **add a `push` event listener** only. Parse the payload (pre-localized,
-  server-supplied), `showNotification` with `data.url`, done. The existing
-  `notificationclick` handler (origin-checked URL, focus-or-openWindow) already handles
-  click-through routing — **push payloads must carry the same `/w/:slug/task/:key`
-  deep-link shape as email** (LINK-01) so the router is unchanged.
-- Push subscription registration joins the existing settings-page permission UX (Phase 48
-  UI already has permission state + blocked badge); `pushManager.subscribe` needs the VAPID
-  public key from a small `GET /api/push-config` (env-gated absent → UI hides the toggle).
-- Registration path (`/sw.js`) must not be affected by code-splitting: keep the SW
-  registration in `src/core/push.js`, not in any lazily-loaded chunk (a chunk that never
-  loads = a browser that never registers = silent push loss).
-
-## (7) E2E dist guard — inside `e2e/server.mjs`, not a pretest hook
-
-**Verdict: extend the check that already exists in `e2e/server.mjs`.**
-
-- `e2e/server.mjs` already refuses to boot without `dist/index.html` ("run `npm run build`
-  before `npm run e2e`"). Add the staleness comparison at the same site: newest mtime under
-  `src/`, `public/`, `index.html`, `vite.config.js` vs `dist/index.html` mtime → exit with
-  the same loud message. Single enforcement point; runs for every config and every direct
-  invocation of the e2e server, including `npm run e2e` and Playwright's `webServer`.
-- Why not a package.json `pretest` hook: it only covers one script invocation, can drift
-  from how e2e is actually launched, and a build inside pretest would *mask* staleness
-  instead of failing loudly — the guard's job is to fail, not to auto-fix.
-
-## Data Flow (new paths)
-
-```
-doc-PUT tx ──▶ newNotifs diff ──▶ queueNotifEmails (existing, post-commit, fire-and-forget)
-            │                  └──▶ sendPushFor()   (new, same shape, same gating)
-            └──▶ task diff ──▶ task_fts upsert/delete   (new, inside the tx)
-boot ──▶ fts rebuild sweep (new)   |   boot ──▶ push_subscriptions ensureTable (new)
-SW push event ──▶ showNotification ──▶ notificationclick (existing router)
-Ctrl-K ──▶ GET /search?q= ──▶ memberCanReadProject filter ──▶ results
+```js
+// e2e/helpers/setup.mjs (extend)
+export async function openSettings(page, slug, slugOk) {
+  await page.goto(`/w/${slug}/settings`);
+  // Lazy chunk (Phase 56): wait for the chunk to be loaded & painted,
+  // not for a fixed timeout.
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.getByRole('heading', { name: /…/ })).toBeVisible(); // settings chrome
+}
+export function langSelect(page) {
+  // Role-stable selector that survives chunk load: the select's accessible
+  // name comes from the catalogue key settings.language.title.
+  return page.getByRole('combobox', { name: /* t('settings.language.title') */ 'Language' });
+}
 ```
 
-## Patterns to Follow
+Then all 8 spec sites swap to:
 
-### Pattern: diff-at-the-funnel (P4-f)
-Every side effect of a doc write derives from the stored-vs-next diff computed once inside
-the `db.tx()` body, executed after commit, fire-and-forget. FTS sync and push fan-out are
-two more consumers of the *same* diff — not new pipelines.
+```js
+await langSelect(page).selectOption('fr');
+```
 
-### Pattern: additive authority rows (Phase 34/45)
-Per-user, per-browser state → own table + `ensureTable`/`ensureColumn` migration with
-pre-backup and byte-identical second boot. Never a doc blob for structurally indexed data.
+**Why a helper and not 8 inline fixes:** the `settings.language.title` catalogue key is
+shared by both locales (the aria-label is `t()`-bound), so a single helper gives a
+single place to update if the Settings IA changes again — exactly the drift this
+milestone exists to close. Spec-side assertions like
+`await expect(langSelect(page)).toHaveValue('fr')` replace the `expanded: false` /
+`toContainText('English')` button checks in `locale.spec.mjs:128-133` and the
+`french-overflow.spec.mjs:153` line.
 
-### Pattern: env-gated feature absence
-No VAPID config → server push routes 404 and UI hides the toggle (MCP-01 pattern). No
-behavior change for existing installs unless configured.
+### Root cause 2: ECONNREFUSED 127.0.0.1:4317 in the serial group
+
+Documented at 56-02 (`milestones/v2.2-phases/56-delivery-infrastructure/56-02-SUMMARY.md:205`):
+when Playwright manages its own `webServer`, the first serial-group test can fire before
+the server finishes binding — `/api/health` readiness wins the race but a serial-group
+test's first request can still land in the gap (same 100/109 result against a pre-warmed
+server, so it is a launch-ordering artifact, not server boot slowness).
+
+**Integration points (pick, do not stack):**
+
+| Option | File | Verdict |
+|--------|------|---------|
+| A. Add `webServer.url` retry tolerance — keep `/api/health` but give Playwright a longer, polling-friendly window | `e2e/playwright.config.mjs:32-40` | Partial: Playwright already polls the URL; the race is *after* readiness, in test code that assumes a warm connection pool |
+| B. A `setup.mjs` shared `waitReady()` (fetch `/api/health` until 200) called at the top of the serial-group spec's first test | `e2e/helpers/setup.mjs` | **Recommended** — cheap, no config semantics change, deterministic |
+| C. `reuseExistingServer: true` in CI | config line 36 | Rejected — breaks the fresh-DB-per-run guarantee the suite is built on |
+
+Option B keeps `e2e/server.mjs` untouched: its health route and lifecycle (mkdtemp,
+SIGTERM graceful shutdown wired in config line 39) are load-bearing and verified
+(04-VERIFICATION). **`e2e/server.mjs` is NOT an integration point** for this fix.
+
+---
+
+## CONS-02 — Mobile tasks-table truncation with the columns button
+
+### What the code says today
+
+- The Columns button renders in `viewToolbar()` (`src/shell/view-engine.js:227`), only when `opt.cols` — which is the table view's toolbar.
+- Column visibility rides the same view state as saved views (`data-pop="cols"` popover, shared with the `views` popover gated at `opt.views`, line 230).
+- The table view already has `overflow: auto` and `min-width: 100%` (`src/styles/views/table.css:5,14`) — a horizontally scrolling table is the desktop answer.
+- Existing responsive scaffolding: `src/styles/responsive.css` with `@media (max-width: 1100px)`, `(max-width: 900px)` (line 16), `(max-width: 640px)` (line 99), and `hide-m` utility spans already used inside `viewToolbar` (lines 222, 227, 230) — the infrastructure for mobile-scoped chrome already exists.
+
+The defect (deferred at Phase 57 UAT, 2026-11-12): on a narrow viewport, using the
+Columns button toggles column visibility but the table keeps its desktop column model —
+cells clip (`overflow: hidden; text-overflow: ellipsis` at table.css:61-62) and content
+truncates instead of reflowing. The columns popover itself (`max-width` overlays,
+`src/styles/overlays.css`) can also overflow a phone-width screen.
+
+### Recommended approach — two small, seamed changes (no new architecture)
+
+1. **CSS-first (primary):** add a mobile contract to `src/styles/views/table.css` /
+   `src/styles/responsive.css` under the **existing 640px breakpoint** (do not invent a
+   new one — three breakpoints already exist; a fourth breaks the mental model):
+
+   - Let the table's scroll container own the width: keep `overflow-x: auto` on the
+     wrapper, drop per-cell ellipsis clipping at mobile width so the horizontal scroll
+     is honest rather than truncated-in-place.
+   - Ensure the `cols`/`views` popover buttons stay reachable (toolbar wraps; `hide-m`
+     spans already collapse the labels — verify the *button* itself is not hidden, only
+     its text span).
+   - Cap the `.pop.floating` popover (`src/styles/overlays.css`) at mobile width with
+     internal scroll so the Columns checkbox list never overflows the screen.
+
+2. **No JS re-architecture.** Do NOT build a card/list mobile re-render of the table —
+   that is a feature, and v2.3 is explicitly "no new features" (PROJECT.md:95-96).
+   The owner-facing fix is "nothing is truncated / everything is reachable by scroll",
+   which CSS delivers.
+
+### New e2e coverage — viewport-scoped, not viewport-split
+
+Add assertions to the existing mobile-adjacent spec surface rather than a new config:
+
+- A small **new spec** `e2e/mobile-tasks-table.spec.mjs` using Playwright's per-test
+  `page.setViewportSize({ width: 390, height: 844 })` (or `use: { viewport: ... }`) on
+  the main config — **no second Playwright project, no second webServer**. The
+  precedent for "one extra config file" (demo.playwright.config.mjs) exists for a
+  *different server*, which is not the case here.
+- Assert: after toggling a column off via the Columns button at 390px, no cell is
+  clipped behind the container edge without scroll (`scrollWidth >= clientWidth` /
+  element-bounding-box checks), and the popover fits the viewport.
+
+---
+
+## CONS-03 — De-flaking VIEW-02
+
+`e2e/saved-views.spec.mjs` flakiness candidates, in likelihood order (read from the spec):
+
+1. **Debounced write-through race** (Phase 57: "column show/hide with debounced
+   write-through"). `setColumn()` (line 52-61) toggles a checkbox and immediately closes
+   the popover with a coordinate click `page.mouse.click(5, 400)`; the debounced save to
+   `/api/me/views` may not have landed when the spec's later steps (apply/reload the
+   view) read state. **Prevention:** assert on the network response —
+   `await page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() !== 'GET')`
+   — or make the popover-close path an app-owned `data-a` click instead of coordinates.
+2. **Coordinate-based dismissal** (`page.mouse.click(5, 400)`, spec lines 58, 68): a
+   click at a fixed point can land on different UI depending on popover position/chrome.
+   Replace with `page.keyboard.press('Escape')` or a click on a stable backdrop locator
+   (the app already asserts `.pop.floating` count → 0, keep that as the effect check).
+3. **Shared mutable fixture:** the spec signs in as the shared `OWNER` of the seeded
+   `acme` workspace (line 31-36) — the same account other serial specs may touch.
+   Run-unique `VIEW_NAME` (line 20) already guards names, but sort/column *live view
+   state* on the shared account is mutated; if any other spec or a retry reads it,
+   ordering matters. Keep the test in the serial group; consider resetting live view
+   state at the start (navigate with a clean `?` state) instead of trusting the previous
+   test's leftovers.
+4. **Toast assertions** (line 84): `.toast` visibility timing — standard
+   `toHaveVisible` wait already applies; only becomes flaky if the save raced (covered
+   by fix 1).
+
+**Integration points:** `e2e/saved-views.spec.mjs` only (helper `setColumn`, dismissal
+clicks, save/apply waits). No app code change unless the de-flake reveals the debounced
+write-through has no flush signal for e2e — in that case the *minimal* app change is an
+exposed awaitable on the debounce flush, decided at plan time, not now.
+
+---
+
+## Data-flow assertion (unchanged)
+
+All three items leave the product data flow untouched:
+
+- **CONS-01:** server.js, `langSel` write path (`actions.js IN.langSel` → account locale
+  PATCH, per demo-locale.spec.mjs:87 comment), locale registry — unchanged. Only
+  **test-side** selectors/waiting change.
+- **CONS-02:** view state model, `saved_views` rows, column visibility keys — unchanged.
+  CSS + toolbar reachability only.
+- **CONS-03:** `/api/me/views` API, blob shape, debounce behavior — unchanged (unless a
+  flush-signal hook is approved at plan time).
+
+Standing gates are untouched by all three: chunk gate (no new chunks — Settings stays
+lazy; the mobile spec adds no bundle weight), i18n gate (no new user-facing strings
+unless popover fixes add copy — keep any new string catalogued EN+FR), lint, and the
+1524-test unit suite (pure e2e/CSS work; expect zero unit-test churn).
+
+## Suggested Build Order (dependency-driven)
+
+1. **CONS-01 first (spec repair + webServer race).** Rationale: it restores the suite
+   to a green baseline that everything else is verified against. CONS-02 and CONS-03
+   both end with "e2e proves it" — a red baseline poisons that. It is also the
+   lowest-risk change (test-only).
+   - 1a. `e2e/helpers/setup.mjs` — add `openSettings()`/`langSelect()` helper +
+     `waitReady()`.
+   - 1b. Rewrite the 8 stale selector sites (`french-overflow.spec.mjs:144-153` and its
+     6 siblings; `locale.spec.mjs:105-140` block).
+   - 1c. Serial-group readiness fix. Gate: `npm run e2e` → 111/111 (minus the known
+     VIEW-02 flake).
+2. **CONS-03 second (de-flake VIEW-02).** It is e2e-only and independent of CONS-02,
+   but doing it before CONS-02 means the mobile spec (step 3) is written against a
+   suite with zero known flakes — clean signal. Gate: VIEW-02 green across repeated
+   runs (e.g. 10× `--repeat-each`).
+3. **CONS-02 last (mobile CSS + viewport-scoped spec).** Depends on nothing from 1–2
+   functionally, but its *verification* does: it needs a green suite to prove no
+   regression, and possibly reuses the readiness fix. Also the only item touching
+   product CSS (`table.css`, `responsive.css`, `overlays.css` popover caps), so it
+   carries the only real regression risk — keep it isolated so a revert is one commit.
+   - 3a. CSS breakpoint work under the existing 640px rule.
+   - 3b. New `e2e/mobile-tasks-table.spec.mjs` (main config, `setViewportSize`).
+   - 3c. i18n gate re-check if any popover copy changed.
 
 ## Anti-Patterns to Avoid
 
-- **SQLite triggers on the JSON doc** for FTS — triggers see the blob, not tasks; drift and
-  stale entries guaranteed.
-- **A server-side dashboard aggregate route** — duplicates redaction and read paths.
-- **Saved views as new server rows** — duplicates the doc sync that already exists.
-- **Running `public/sw.js` through Vite** — breaks the zero-dependency, zero-string SW
-  contract and adds a cache/poisoning surface.
-- **Push fan-out that suppresses or filters inbox rows** — Phase 38 invariant: email is the
-  only suppressed channel; inbox and push always flow.
-
-## Build Order (dependency-respecting)
-
-1. **Delivery infrastructure first** — e2e dist guard + Vite code-splitting (locales via
-   the existing `localeSubset` extension + heavy-page dynamic imports; SW registration kept
-   eager). Rationale: every later phase's e2e runs on this; code-splitting changes what the
-   bundle looks like for all subsequent verification. Small, low-risk.
-2. **Saved views + column show/hide + General-Access granularity** — doc-only client work;
-   no server deps; exercises the doc-PUT normalizer before bigger changes land.
-3. **FTS search** — depends on (1) for verified e2e and (2)-adjacent store wiring; new
-   adapter seam + funnel diff + boot sweep + redacted search route + Ctrl-K integration.
-4. **Server push** — depends on nothing new being built first except the notification
-   pipeline (exists), but lands after (3) so the `newNotifs` diff site isn't edited twice
-   mid-milestone; needs the phase-specific RFC 8291/VAPID hand-roll spike first.
-5. **Dashboard + TRN-02** — read-only, client/funnel work, no ordering risk; late because
-   they benefit from i18n infra (1) and can absorb NOTIF-TRIM UI outcomes.
-6. **NOTIF-TRIM** — doc/audit-driven, blocked on owner D-05 rulings; can execute in
-   parallel with 4–5 once rulings arrive.
-7. **i18n infrastructure** — technically a (1)-companion (dead-key gate exists in
-   `scripts/i18n-scan.mjs`); do it with phase 1 so every later phase adds keys under the
-   new regime rather than migrating later.
-
-Ordering rationale: build/verification infrastructure → doc-model changes → new server
-surfaces (FTS, push share the funnel diff) → read-only views → owner-blocked items last.
+| Anti-pattern | Why bad here | Instead |
+|--------------|--------------|---------|
+| Changing `src/pages/settings.js` back to a collapsed button to appease specs | Reverts an accessibility improvement made in 56-01 and re-opens the lazy-chunk design | Fix spec selectors to the combobox role |
+| A second Playwright project/config for mobile | Doubles webServer boots for what is a per-test viewport concern | `setViewportSize` inside the main config's specs |
+| A new breakpoint (e.g. 480px) for the tasks table | Four breakpoints fragment the responsive model | Use the existing 640px rule in `responsive.css` |
+| Replacing coordinate dismissal with `waitForTimeout` | Masks the race, slows the suite | `waitForResponse` on the debounced write or an app-owned close action |
+| Touching `e2e/server.mjs` lifecycle for the ECONNREFUSED | Its health route + graceful shutdown are verified and load-bearing | Fix wait/ordering in config/helpers |
 
 ## Sources
 
-- Code read directly at HEAD (HIGH confidence): `server.js` (doc-PUT tx, newNotifs diff,
-  notif prefs pipeline, runReminderPass), `src/core/push.js` (client push, PUSH_TYPE_PREF,
-  seen-set), `public/sw.js` (click router contract), `vite.config.js` (localeSubset, public/
-  copying), `e2e/server.mjs` (existing dist check), `db-adapter.mjs` structure.
-- PROJECT.md v2.2 milestone target features and standing constraints (zero runtime deps,
-  zero migrations, EN+FR i18n gate, Phase 38 invariants).
-- RFC 8291/8292 (Web Push encryption, VAPID) — hand-roll feasibility assessed against
-  `node:crypto` surface and the oidc.js precedent (MEDIUM confidence — needs a phase spike).
+- Live code: `e2e/playwright.config.mjs:32-40` (webServer), `e2e/helpers/setup.mjs:16`
+  (BASE_URL), `e2e/french-overflow.spec.mjs:144-153`, `e2e/locale.spec.mjs:105-140`,
+  `e2e/saved-views.spec.mjs:37-84`, `e2e/demo-locale.spec.mjs:87,96` (proven
+  select-based pattern)
+- Live code: `src/pages/settings.js:131-134` (`langSel` native select),
+  `src/shell/view-engine.js:222-230` (`viewToolbar`, cols/views popovers, `hide-m`),
+  `src/styles/views/table.css:5,14,61-62`, `src/styles/responsive.css:4,16,99`
+  (existing breakpoints), `src/styles/overlays.css:25-45` (popover widths)
+- Project record: `.planning/PROJECT.md:93-111` (v2.3 goals/constraints),
+  `milestones/v2.2-phases/56-delivery-infrastructure/56-02-SUMMARY.md:205` (ECONNREFUSED
+  diagnosis), `milestones/v2.2-phases/56-delivery-infrastructure/deferred-items.md:18-19`
+
+---
+*Architecture research for: gr8r v2.3 Consolidation & Hardening*
+*Researched: 2026-11-14*

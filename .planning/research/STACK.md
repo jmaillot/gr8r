@@ -1,133 +1,106 @@
-# Stack Research
+# Technology Stack — v2.3 Consolidation & Hardening (repair/de-flake tooling)
 
-**Domain:** Self-hosted PM app — v2.2 additions (browser push, FTS5 search, code-splitting, saved views)
-**Researched:** 2026-11-12
-**Confidence:** HIGH (versions verified against npm/Node docs/Vite docs, 2026-11-10..12)
+**Project:** Projects Studio (gr8r) — v2.3 CONS-01/02/03
+**Researched:** 2026-11-14
+**Overall confidence:** HIGH (verified against installed versions and Playwright official docs via Context7)
 
-## Recommended Stack
+## Verdict up front
 
-### Core Technologies (additions for v2.2)
+**Zero new packages are needed — not even dev-dependencies.** All three items are repairable with the already-installed `@playwright/test@^1.64.1`, `vite@^6.4.4` (already used only at dev time), plain CSS (including container queries, supported in the pinned Chromium), and config edits in `e2e/playwright.config.mjs`. The milestone's real "stack work" is **API choices and config hygiene**, not installs.
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `web-push` (npm) | **4.0.0** (released 2026-11-10) | RFC 8291 Web Push payload encryption + VAPID JWT signing for sending push messages from `server.js` | The only mature Node implementation of the Web Push protocol (137k weekly downloads, 11 years maintained, MPL-2.0). Hand-rolling VAPID + RFC 8291 ECDH/AES128GCM encryption over `node:crypto` is feasible but a multi-week, error-prone detour — this is exactly the precedent set by `pg` (v1.10, D-12): one scoped runtime dep where a protocol demands it. v4.0.0 just dropped `mkdirp`/`del`, migrated to ESM + class syntax, and has 0 known vulnerabilities — the dependency footprint is now minimal |
-| Service Worker + Push API (browser natives) | — | Receiving/decrypting push, showing notifications, click routing | Already half-built: Phase 48 shipped `sw.js` (badge/permission, notificationclick/focus handling) as a plain file in `public/` with **zero build-time SW tooling**. This milestone only extends it: `push` event handler → `registration.showNotification()` → click routes to `/w/:slug/task/:key`. No library exists or is needed on the client side |
-| VAPID keys | — | Server identity for push subscriptions | `web-push` CLI: `npx web-push generate-vapid-keys` → two env vars (`VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`, like `MASTER_KEY` — documented in DEPLOY.md, fail-closed/no-oracle when absent, mirroring the OIDC/MCP unconfigured-feature-absent pattern). Subject should be a `mailto:` on the operator's domain — v4.0.0 explicitly warns against localhost subjects |
-| SQLite FTS5 via `node:sqlite` | Node ≥ 22.16 / 24+ | Full-text index over task titles + descriptions | **FTS5 is compiled into upstream `node:sqlite` only from Node 22.16.0+** (nodejs/node PR #57621; Node 22.14/22.15 and all of v23 lack it — verified against nodejs/node#56476 and maintainer cjihrig's comments, Feb–Mar 2026). Older/distro-packaged Node builds silently lack it. Mandate a Node version floor AND ship a startup behavior probe (below) |
-| Vite (existing, do not upgrade blindly) | project uses Vite; latest line is **8.3.x** (rolldown-based, `advancedChunks` replaced `manualChunks`) | Code-splitting via dynamic `import()` | Vite already emits every `import()` as its own chunk; `build.chunkSizeWarningLimit` defaults to 500 kB, matching the milestone goal exactly. If the project is on Vite 8, use `build.rolldownOptions.output.advancedChunks`; on Vite ≤7, `manualChunks`. No new packages |
+## Current Stack (unchanged — verified from `package.json`)
 
-### Supporting Libraries
+| Tool | Installed Version | Role | Status |
+|------|-------------------|------|--------|
+| `@playwright/test` | ^1.64.1 | e2e suite (`e2e/playwright.config.mjs`, Chromium only, serial workers) | KEEP — all needed APIs present in this version |
+| `vite` | ^6.4.4 | dev/build bundler, code-splitting (Settings lazy chunk from Phase 56) | KEEP — no config change needed for the repairs |
+| `eslint` / `prettier` | ^9.39.5 / ^3.9.9 | lint/format gates | KEEP |
+| `node:test` (built-in) | Node ≥24 | 1524-test unit suite | KEEP |
+| Runtime deps | `pg`, `web-push@4.0.0` | DB adapter, push | UNTOUCHED (standing zero-new-runtime-dep constraint holds trivially) |
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| *none for FTS5* | — | — | FTS5 is in-box on a compliant Node. Do NOT add `better-sqlite3` just for FTS5 — it drags a native compiled module into a zero-native-deps project. If the runtime Node can't be floored to 22.16+, the LIKE fallback (below) is the answer, not a dependency |
-| *none for saved views* | — | — | A small `saved_views` table through the existing `db-adapter.mjs` facade. No library |
-| *none for i18n splitting* | — | — | Vite handles JSON chunks natively: `import(\`./locales/${locale}.json\`)` produces one chunk per locale. No `import.meta.glob` plugin needed beyond Vite built-ins |
+## CONS-01 — Lazy-chunk-drifted e2e specs (french-overflow ×7, locale.spec.mjs:122)
 
-## Feature-by-Feature Stack Decisions
+**Root cause (confirmed in source):** the specs target the *pre-Phase-56* UI shape — `getByRole('button', { name: 'Language', exact: true })` (a collapsed disclosure button) — while the code now renders a native `<select class="select" data-in="langSel" aria-label="Language title">` (`src/pages/settings.js:131`). A native `<select>` has ARIA role **combobox**, not button, so every role-based lookup fails identically at baseline and HEAD. Nothing about Vite chunking needs to change; only the spec selectors do.
 
-### 1. Browser push (mentions + assignments)
+**Tooling needed: Playwright APIs only (all present in 1.64):**
 
-- **Protocol, not platform:** this is the standard Web Push protocol (Push API + service worker + VAPID), not a vendor SDK. Works on Chrome/Edge/Firefox/Safari 16.4+ (Safari 16.4 added Web Push for installed web apps/macOS; iOS 16.4+ for home-screen apps — worth a docs note since guests on iOS Safari must add to home screen).
-- **Server:** `web-push@4.0.0` — first **new runtime dependency since `pg`**. Owner-approved precedent exists (D-12 amendment). Integration seam: a `push_subs` table (additive migration, pg mirrored in the pg schema), subscription store/delete routes alongside the Phase 48 permission UX, and a `sendPush(userId, payload)` fire-and-forget helper in the notification emit path — same call site as the SMTP mirror, respecting the Phase 38 suppression + no-double-send invariants and per-type notif_prefs gating (a `push` channel key in the 17-key whitelist).
-- **Client:** extend existing `public/sw.js` (NOT processed by Vite — plain file, no workbox, no build plugin). `push` event → `self.registration.showNotification(data.title, {...})`; click → `clients.openWindow('/w/:slug/task/:key')`.
-- **VAPID keys:** env-var custody like `MASTER_KEY`, one-time generation documented in DEPLOY.md. Endpoint: store the public key where the settings page can read it (existing Phase 48 settings UX already derives "Browser blocked" badges — this extends to subscription).
-- **Fallback if owner refuses a 2nd runtime dep:** hand-rolled VAPID (ES256 JWT via `node:crypto`) + RFC 8291 encryption is ~300–500 lines and testable against real endpoints, but it is the single riskiest piece of hand-rolled crypto the project would own. Recommendation: take the dep.
+| API | Purpose | Why it's the right fix |
+|-----|---------|------------------------|
+| `page.getByRole('combobox', { name: … })` | Target the native `<select>` via its accessible name (its `aria-label`) | Role queries are the resilient layer across UI refactors; the drift happened precisely because a role/shape changed |
+| `locator.selectOption({ label: 'Français' })` | Replace the old "click button → click option" listbox dance | `selectOption` is the purpose-built API for native selects — auto-waits, no expanded/collapsed state machine, immune to chunk-load timing |
+| `expect(locator).toBeVisible()` / `expect.poll(() => document.documentElement.lang)` | Keep the existing first-paint and language assertions | Already used in the file; `expect.poll` (web-first assertion) is the documented anti-flake pattern vs `waitForTimeout` |
 
-### 2. FTS5 full-text search
+Integration point: the specs already navigate Settings through a "Settings" button before hitting the Language control (`e2e/locale.spec.mjs:121-126`). If the Settings page itself now loads as a lazy chunk, the ONLY timing requirement is Playwright's default auto-wait on the locator — no explicit `waitForResponse`/`waitForLoadState('networkidle')` should be added (those are documented flake sources). If a spec ever must wait on the chunk fetch itself, prefer `page.waitForURL` or a `waitForResponse` on the specific `.js` chunk URL over networkidle.
 
-- **Availability (verified):** upstream Node builds enable `SQLITE_ENABLE_FTS5` from **Node 22.16.0 / 24+**. The project must (a) pin/declare `engines >= 22.16` or better `>=24`, and (b) probe at boot:
-  ```js
-  // in db-adapter.mjs, once, on :memory:
-  db.exec('CREATE VIRTUAL TABLE _fts5_probe USING fts5(x)');
-  ```
-  Cache the verdict; fall back to a parameterized `LIKE` scan over the same projection table when absent (documented limitation, not a silent lie — precedent: Phase 34's documented free-text limitation).
-- **External-content vs contentless vs standard:** use **external-content** (`content='tasks_projection'`, `content_rowid=id`) only if tasks become rows — **they are not**. Tasks live inside the workspace JSON doc blob, so no SQLite trigger can watch them. The right shape here is a **derived projection table**:
-  - `task_fts(workspace_id, task_key, title, description)` (regular columns on SQLite; the FTS5 virtual table indexes those columns via external-content on SQLite only).
-  - Maintained **transactionally inside the same write as the doc push** in `server.js` (same commit that bumps the revision), computed as a diff of the changed tasks — not a full rebuild per save.
-  - One **rebuild-on-boot sweep** (idempotent, like the Phase 33/34 boot sweeps) heals drift; expose nothing for it — it just runs.
-- **Multi-accent/French content:** `tokenize='unicode61'` folds diacritics (the accent-insensitive matching precedent from v1.2 M-16). Do not add porter stemming casually — it changes what tests expect; decide in phase.
-- **Postgres backend:** FTS5 does not exist there. The projection table is mirrored through `db-adapter.mjs`; search on pg uses `ILIKE` over the projection (or `websearch_to_tsquery` on a generated tsvector column **only if** the pg search quality gap is proven in phase — recommend starting with ILIKE to keep the two backends behaviorally identical and the tests shared).
-- **Permission funnel:** search results MUST pass `memberCanReadProject`/`hiddenFor` before reaching the client — query the projection, filter by project visibility in the same pass (never trust the client to filter).
-- **Ctrl-K wiring:** new keyed endpoint (e.g. `GET /api/workspaces/:slug/search?q=`), 404-matrix per family, like every other surface.
+**Do NOT:** add `@testing-library` locator helpers, `axe-playwright`, or any selector-robustness package — `getByRole` + `data-in` attribute selectors (`page.locator('[data-in="langSel"]')`) already give two stable targeting layers.
 
-### 3. Vite code-splitting
+### CONS-01b — ECONNREFUSED 127.0.0.1:4317 webServer-binding race (serial group)
 
-- **Dynamic imports:** the SPA's views/panels become `import('./views/dashboard.js')` style lazy modules; Vite splits each into its own chunk automatically. Locale JSON catalogues: `const cat = await import(\`./locales/${locale}.json\`)` — one chunk per locale (~1 711 keys today), removes them from the entry bundle. **Vite 8 warns on named imports from JSON modules** — import the default and destructure.
-- **Config:** `build.chunkSizeWarningLimit` stays at the 500 kB default — that warning IS the milestone's acceptance gate. If a chunk is still over: Vite 8 → `rolldownOptions.output.advancedChunks` groups with `maxSize`; Vite 7 → `manualChunks`. Raising the limit is explicitly the wrong move (it hides, not fixes).
-- **Anti-stale-dist guard (companion):** emit `.vite/manifest.json` (`build.manifest: true`) — it maps entry → hashed filenames and is the natural anti-stale signal source for the e2e server guard (compare served dist against manifest mtime/hash, refuse to serve a dist older than the built manifest). No extra dependency.
-- **Service worker note:** `public/sw.js` is copied verbatim by Vite (`copyPublicDir`) and never chunk-split — keep it out of any splitting strategy; only its consumers change.
+Verified config (`e2e/playwright.config.mjs:32-40`): Playwright already waits on `url: ${BASE_URL}/api/health` before running tests, and `gracefulShutdown` (present and documented in current Playwright) handles the SIGTERM cleanup. The remaining race window is the gap between the port accepting TCP and `/api/health` being routable, plus any spec or wrapper code connecting to the literal `4317` instead of `baseURL`. Zero-dep fixes, in order of preference:
 
-### 4. Saved views (column show/hide + view presets)
+1. **Never hardcode `4317` in spec code** — derive from `baseURL` (`page.goto('/')`, `request.get('/api/…')`) so `E2E_PORT` actually relocates the suite when the default port is occupied (the usual trigger of this race in serial groups: a stale server from a previous run holding the port).
+2. **Make the wrapper's readiness wait retry-tolerant**: `e2e/server.mjs` should bind with retry/backoff on `EADDRINUSE` and only then signal readiness; Playwright's `url` poll (250 ms interval by default) absorbs the rest.
+3. Optionally set `reuseExistingServer: !process.env.CI` — the common idiom — instead of the opt-in `E2E_REUSE_SERVER` env flag, so local reruns after a crash don't race a zombie listener.
 
-- **Server-side rows, not the workspace doc:** storing views inside the workspace JSON doc would (a) bump the shared revision on every personal view tweak → optimistic-concurrency churn and cross-user conflicts, and (b) leak other members' views through `redactDoc`/`mergeClientDoc`. Follow the **Phase 34 `notif_prefs` precedent exactly**: additive migration creating `saved_views(workspace_id, user_id, name, view_json, created_at)` with a keyed GET/PUT/DELETE route family behind `requireWorkspace`, whitelist-validated `view_json`. Multi-device correctness for free; matches the project's per-user-preference pattern.
-- **Client:** views are plain objects in `src/`; localStorage is explicitly NOT used (Phase 34 removed doc-based prefs for exactly this class of problem — don't reintroduce it).
-- **General-Access granularity** rides the existing `p.perms['team:'+id]` / per-person perms model (M-09/D-53-1) — no stack addition at all.
+**Do NOT:** add `wait-on`, `portfinder`, or `get-port` — Playwright's webServer `url` polling is exactly this feature, built in.
+
+## CONS-02 — Mobile tasks-table truncation (columns button)
+
+**No library.** This is a plain-CSS fix validated by Playwright's device emulation. Recommended zero-dep toolkit:
+
+| Capability | Where it lives | Use |
+|------------|---------------|-----|
+| CSS container queries (`@container`) | Plain CSS; supported in Chromium ≥105 (the suite's pinned browser) and all evergreen mobile browsers | Size queries on the table wrapper so the layout reacts to the *table's* width, not the window — correct even when columns toggling changes width |
+| `table-layout: fixed` + `min-width: 0` + `overflow-wrap: anywhere` / `word-break` on cells | Plain CSS | The classic truncation cause is auto table layout giving long content infinite preferred width; `fixed` + `minmax(0, …)` grid/flex containers stop the blowout |
+| Horizontal-scroll wrapper (`overflow-x: auto` on a container div, table keeps `min-width`) | Plain CSS | The honest fallback for genuinely wide tables on phones; keeps all columns reachable instead of clipping |
+| Hidden-columns feature (Phase 57) as the mobile default | Existing app code | On small screens, auto-collapse low-priority columns rather than shrinking every cell — reuses shipped functionality, no new mechanism |
+
+Verification tooling (Playwright, already installed):
+
+- A dedicated mobile project or `test.use({ viewport: { width: 390, height: 844 } })` (iPhone-ish) — `devices['Desktop Chrome']` is the only project today, so add a **project entry in `e2e/playwright.config.mjs`**, not a package.
+- `expect(locator).toBeInViewport({ ratio: … })` — verified available (added in Playwright 1.31, well within 1.64) — to assert truncated/hidden cells are *deliberately* out of view while key cells (task title, status) remain ≥ ratio visible.
+- `expect(locator).toHaveScreenshot()` is available but **not recommended** here: pixel snapshots flake across font/DPR environments; prefer structural assertions (viewport ratios, `boundingBox()` width > 0) for a stability-focused milestone.
+
+**Do NOT:** pull in a CSS framework, `react-window`-style virtualizers (no framework anyway), or responsive-table JS libraries (`.tablesaw`, `footable`-style) — the DOM is already column-toggleable; CSS decides the layout.
+
+## CONS-03 — De-flake VIEW-02 (saved-views.spec.mjs)
+
+Zero new deps. Playwright-native stabilization kit, in the order to apply:
+
+1. **Web-first assertions everywhere** — replace any `waitForTimeout`/sleep with `expect(locator).toBeVisible()` / `toContainText` auto-retry. This is the single highest-yield de-flaking move (Playwright docs' own first recommendation).
+2. **`expect.configure({ timeout: 10_000 })` (or per-assertion `timeout` option)** for the two or three slow spots (view save round-trips `/api/me/views`); lengthen the *assertion*, never add sleeps.
+3. **Wait on the network contract, not the UI side effect**: `page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'PUT')` around save/update/delete clicks — the spec already uses this idiom for `/api/auth/me` PATCH in `locale.spec.mjs`, so it's a proven in-repo pattern.
+4. **`test.describe.configure({ mode: 'serial' })` semantics check** (verified in docs): serial mode retries the *group* from the start — if VIEW-02 shares a page/context fixture chain with neighbors, confirm a group retry won't double-apply view mutations; prefer independent fixtures (fresh context per test) over serial+retry.
+5. **`retries: process.env.CI ? 1 : 0` is already set** — consider `retries: 1` locally too *while diagnosing*, and use the HTML report's retry diff to identify the actual race; then fix the race, don't keep the retry.
+6. `trace: 'retain-on-failure'` is already configured — use the existing traces; no `@trace` viewer tooling or `playwright-trace-reporter` package needed.
+
+**Do NOT:** add `jest-extended`, `expect-playwright`, custom retry plugins, or MSW-style network mocking — Playwright's route/response APIs cover interception if ever needed.
+
+## Alternatives Considered
+
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Selector strategy | `getByRole('combobox')` + `data-in` attributes | Testing Library / `data-testid` convention package | Existing `data-in` convention is already the project's test hook; a second convention adds nothing |
+| Select interaction | `locator.selectOption()` | Click-to-open listbox emulation | `selectOption` is the documented API for native `<select>`; emulation re-introduces the exact timing drift being repaired |
+| Mobile layout | Container queries + `table-layout: fixed` + scroll wrapper | Responsive-table npm libs | Zero-dep constraint; libs also fight the existing show/hide columns feature |
+| De-flaking | Web-first assertions + `waitForResponse` | Retries + sleeps, `networkidle` waits | Sleeps/networkidle are the documented *causes* of flake; retries mask rather than fix |
+| Visual regression | Structural viewport assertions | `toHaveScreenshot()` snapshots | Pixel diffs flake across environments — wrong tool for a stability milestone |
+| Server-readiness | webServer `url` polling + wrapper retry | `wait-on` / `portfinder` devDeps | Built-in polling already does the job; extra deps add startup race surface, not remove it |
 
 ## Installation
 
 ```bash
-# The ONLY new runtime dependency in this milestone
-npm install web-push@^4.0.0
-
-# Dev: nothing new. (If bundle inspection is wanted during the splitting phase:)
-npm install -D rollup-plugin-visualizer
+# Nothing to install. Existing tooling covers every item:
+#   @playwright/test ^1.64.1 (already)  — roles, selectOption, toBeInViewport,
+#     expect.poll/configure, waitForResponse, webServer url/gracefulShutdown
+#   vite ^6.4.4 (already, dev-only)     — no config change required for repairs
+#   plain CSS                           — container queries, table-layout, overflow-x
+# Runtime deps remain exactly { pg, web-push@4.0.0 }.
 ```
 
-Env additions (DEPLOY.md): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:). Node engine floor: `>=22.16` (recommend `>=24` LTS).
-
-## Alternatives Considered
-
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| `web-push@4.0.0` runtime dep | Hand-rolled VAPID + RFC 8291 over `node:crypto` | Only if owner vetoes the second runtime dep; budget 300–500 lines of crypto + interop testing against Chrome/Firefox/Apple endpoints |
-| `web-push` | Firebase Cloud Messaging SDK (`firebase-admin`) | Never — it drags a Firebase account, vendor lock-in and a huge dep tree for what is one HTTP call |
-| FTS5 + LIKE fallback in `node:sqlite` | `better-sqlite3` (bundles FTS5) | Only if forced onto Node <22.16 permanently; it's a native compiled module — breaks the zero-native-deps Docker story |
-| FTS5 | External search engine (Meilisearch, Typesense) | Never for this milestone — a second stateful service contradicts the single-image self-hosted model |
-| Projection table + transactional diff | Contentless FTS5 table rebuilt on boot | Never: contentless tables store only the index (can't recover text), so drift heals require re-reading the doc anyway |
-| Server-side `saved_views` rows | localStorage / workspace-doc field | localStorage: multi-device loss + doc drift; doc field: revision churn + redaction complexity |
-| Vite native dynamic import | `workbox-*` / `vite-plugin-pwa` | Only if the SW grows precaching ambitions; today's SW is hand-maintained by design (Phase 48, zero tooling) |
-| pg `ILIKE` on projection | pg tsvector / `websearch_to_tsquery` | If pg search quality is proven worse in phase testing — keep backends behaviorally identical until then |
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `vite-plugin-pwa`, workbox | Build-time SW generation would rewrite the hand-built Phase 48 `sw.js` and add tooling the project explicitly avoids | Plain `public/sw.js`, extended in place |
-| `better-sqlite3` (solely for FTS5) | Native addon, node-gyp/ABI churn, contradicts `node:sqlite` default | Node engine floor (≥22.16) + boot probe + LIKE fallback |
-| Trigger-based FTS sync | Tasks are JSON-blob fields, not rows — no trigger ever fires | Transactional projection diff inside the doc-push commit |
-| localStorage for saved views | Multi-device loss; project already moved prefs server-side in Phase 34 | `saved_views` table via db-adapter |
-| Raising `chunkSizeWarningLimit` | Hides the problem; the 500 kB warning is this milestone's gate | Split the chunk (dynamic import / `advancedChunks`), keep 500 |
-| Named imports from JSON (`import { x } from './a.json'`) | Vite 8 warns; destructure the default instead | `const cat = await import(...); cat.default` |
-
-## Stack Patterns by Variant
-
-**If the deployment Node is < 22.16:** search degrades to `LIKE` over the projection table (probe-verified at boot, logged loudly); no dependency added, UX difference documented (no stemming/ranking, substring matching).
-
-**If the owner accepts `web-push` (recommended):** push ships as a normal feature phase — subs table, VAPID env, emit-path hook, sw.js extension, DEPLOY.md section.
-
-**If the owner vetoes `web-push`:** make push its own phase with the hand-rolled crypto isolated in one module (`push-crypto.mjs`, like `oidc.js`) so it can be swapped for `web-push` later; phase must include interop tests against at least Chrome + Firefox + Web Push from a real endpoint.
-
-**If Vite is on v8 (rolldown):** use `advancedChunks` and the manifest-based dist guard; if on ≤ v7: `manualChunks`, and verify `manifest` option exists in that line before wiring the guard to it.
-
-## Version Compatibility
-
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `web-push@4.0.0` | Node ≥ 20 (ESM-native, class API; CLI via `npx`) | Major bump from 3.6.7 (Jan 2024) — ESM migration means import style changes if any docs show `require()`; check API surface (`sendNotification`, `generateVAPIDKeys`) still exported |
-| FTS5 in `node:sqlite` | Node ≥ 22.16.0, all 24.x, 25.x (RC stability), 26.x | NOT in 22.14/22.15, not in any 23.x (v23 EOL May 2025); distro-packaged Node may still strip it — probe, don't trust `pragma_compile_options` |
-| Vite 8.3.x | Node ≥ 20.19 / 22.12+ (rolldown-based) | `advancedChunks` replaces `manualChunks`; JSON named imports warned |
-| `pg` (existing) | unchanged | No new pg-native features required for any v2.2 feature |
+Only *config* additions contemplated: a mobile viewport project entry in `e2e/playwright.config.mjs`, and possibly `reuseExistingServer: !process.env.CI`.
 
 ## Sources
 
-- npm `web-push` — v4.0.0 released 2026-11-10, ESM migration, dep drop (mkdirp/del), 0 vulnerabilities (npm/Snyk/GitHub releases) — HIGH
-- nodejs/node#56476 + nodejs/node PR #57621, comments by cjihrig (Feb–Mar 2026): FTS5 enabled in Node ≥ 22.16.0 / 24+ — HIGH
-- Node.js v26.13.1 `node:sqlite` docs (stability 1.2 RC, Database options) — HIGH
-- Vite docs `build-options` (chunkSizeWarningLimit default 500, manifest, target `baseline-widely-available` 2026) + vite CHANGELOG v8.3.8 (2026-11-11) — HIGH
-- SQLite FTS5 external-content/contentless semantics (community-verified, dev.to field guides Oct 2026 cross-checked with SQLite docs) — MEDIUM-HIGH
-- Safari/iOS Web Push availability (Safari 16.4+ / iOS 16.4+ home-screen requirement) — MEDIUM, verify in phase UAT on a real device
-
----
-*Stack research for: gr8r v2.2 — Notifications, Search & Delivery*
-*Researched: 2026-11-12*
+- Playwright official docs via Context7 (`/microsoft/playwright`): webServer config incl. `gracefulShutdown` and `url` polling; `test.describe.configure` serial semantics; `toBeInViewport` assertion (HIGH — current official docs, cross-checked against installed ^1.64.1)
+- In-repo evidence (HIGH — read directly): `e2e/playwright.config.mjs`, `e2e/locale.spec.mjs:121-140`, `e2e/french-overflow.spec.mjs:146-153`, `src/pages/settings.js:131-132` (`langSel` native `<select>`), `e2e/saved-views.spec.mjs` (VIEW-02), `vite.config.js`, `package.json`
