@@ -19,20 +19,20 @@ created: "2026-11-14"
 
 | Property | Value |
 |----------|-------|
-| **Framework** | {pytest 7.x / jest 29.x / vitest / go test / other} |
-| **Config file** | {path or "none — Wave 0 installs"} |
-| **Quick run command** | `{quick command}` |
-| **Full suite command** | `{full command}` |
-| **Estimated runtime** | ~{N} seconds |
+| **Framework** | node:test unit suite (1524 tests) + @playwright/test 1.64 e2e |
+| **Config file** | `e2e/playwright.config.mjs` |
+| **Quick run command** | `npx playwright test --config e2e/playwright.config.mjs e2e/french-overflow.spec.mjs e2e/locale.spec.mjs` |
+| **Full suite command** | `npm run e2e` (after `npm run build` — stale-dist guard is fail-closed) |
+| **Estimated runtime** | ~60 s quick; ~5 min full suite |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** Run `{quick run command}`
-- **After every plan wave:** Run `{full suite command}`
-- **Before `/gsd-verify-work`:** Full suite must be green
-- **Max feedback latency:** {N} seconds
+- **After every task commit:** Run targeted spec: `npx playwright test --config e2e/playwright.config.mjs <file>` + `npm run lint`
+- **After every plan wave:** Run `npm test` + `npm run build` + full `npm run e2e`
+- **Before `/gsd-verify-work`:** Full suite must be green (62-03 Task 2 gate)
+- **Max feedback latency:** ~60 s per task; ~5 min per wave
 
 ---
 
@@ -40,7 +40,12 @@ created: "2026-11-14"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| {N}-01-01 | 01 | 1 | REQ-{XX} | T-{N}-01 / — | {expected secure behavior or "N/A"} | unit | `{command}` | ✅ / ❌ W0 | ⬜ pending |
+| 62-01-01 | 01 | 1 | E2E-01 | T-62-01/T-62-02 | N/A (loopback probe; throwaway keys) | e2e (repro) | `npm run build && npm run e2e` + grep log for ECONNREFUSED | ✅ | ⬜ pending |
+| 62-01-02 | 01 | 1 | E2E-01 | T-62-01 | assert-once fail-fast guard, no retry amplification | e2e/unit | `git diff e2e/playwright.config.mjs` empty + `node --eval` import check + `npm run lint` | ✅ | ⬜ pending |
+| 62-02-01 | 02 | 2 | E2E-02 | T-62-04 | no weakened assertions; label-from-DOM | e2e | `npx playwright test --config e2e/playwright.config.mjs e2e/french-overflow.spec.mjs --grep "<spec>"` | ✅ | ⬜ pending |
+| 62-02-02 | 02 | 2 | E2E-02 | T-62-03/T-62-04 | per-account isolation, run-unique clientIp | e2e | `npx playwright test --config e2e/playwright.config.mjs e2e/french-overflow.spec.mjs` (7/7) | ✅ | ⬜ pending |
+| 62-03-01 | 03 | 3 | E2E-02 | T-62-04 | fallback assertions preserved | e2e | `npx playwright test --config e2e/playwright.config.mjs e2e/locale.spec.mjs` | ✅ | ⬜ pending |
+| 62-03-02 | 03 | 3 | E2E-01, E2E-02 | T-62-05 | gate evidence verbatim | e2e/gates | `npm run build && npm test && npm run lint && npm run e2e` + grep log | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -48,21 +53,13 @@ created: "2026-11-14"
 
 ## Wave 0 Requirements
 
-- [ ] `{tests/test_file.py}` — stubs for REQ-{XX}
-- [ ] `{tests/conftest.py}` — shared fixtures
-- [ ] `{framework install}` — if no framework detected
-
-*If none: "Existing infrastructure covers all phase requirements."*
+Existing infrastructure covers all phase requirements — no Wave 0 scaffolding (the e2e suite is itself the subject).
 
 ---
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| {behavior} | REQ-{XX} | {reason} | {steps} |
-
-*If none: "All phase behaviors have automated verification."*
+All phase behaviors have automated verification.
 
 ---
 
@@ -72,7 +69,7 @@ created: "2026-11-14"
 - [ ] Sampling continuity: no 3 consecutive tasks without automated verify
 - [ ] Wave 0 covers all MISSING references
 - [ ] No watch-mode flags
-- [ ] Feedback latency < {N}s
+- [ ] Feedback latency < 300 s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** {pending / approved YYYY-MM-DD}
+**Approval:** pending

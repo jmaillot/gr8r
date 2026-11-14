@@ -25,7 +25,12 @@ experience of the tasks table — no new features.
   2. All 7 `french-overflow.spec.mjs` specs and `locale.spec.mjs:122` pass against HEAD via role-based queries (native `<select>` asserted by its real combobox role) and auto-retrying waits on the lazy Settings chunk — no sleeps, no `networkidle`, no weakened expectations (assertion strength diffed in review)
   3. Shared `openSettings()` / language-select helpers exist in `e2e/helpers/setup.mjs` so exactly one place knows the lazy-chunk contract — no per-spec duplicated wait logic
   4. The standing gates stay green throughout: 1524-test unit suite, lint clean, 500 kB chunk gate (only ~220 B headroom), EN+FR i18n gate
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 62-01-PLAN.md — readiness: reproduce ECONNREFUSED emitter + D-02 assert-once guard (E2E-01)
+- [ ] 62-02-PLAN.md — openSettings/selectLanguage helpers + 7 french-overflow specs (E2E-02)
+- [ ] 62-03-PLAN.md — locale.spec.mjs:122 repair + phase gate: full e2e green, gates green (E2E-02)
 
 ### Phase 63: VIEW-02 De-Flake
 **Goal**: VIEW-02 stops being a coin flip — its root cause is proven with evidence and the spec passes deterministically, fixing any app async-contract bug the triage exposes
