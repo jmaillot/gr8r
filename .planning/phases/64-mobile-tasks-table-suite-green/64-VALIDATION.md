@@ -40,9 +40,12 @@ created: "2026-11-14"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (to be filled by planner) | | | MOB-01 | — | N/A | e2e | mobile-viewport spec (`setViewportSize` + `toBeHidden()`) | ❌ W0 | ⬜ pending |
-| (to be filled by planner) | | | MOB-02 | — | N/A | e2e | card-stack overflow spec (390×844, bounding boxes) | ❌ W0 | ⬜ pending |
-| (to be filled by planner) | | | E2E-03 | — | N/A | e2e | full suite green run | ✅ | ⬜ pending |
+| 64-01 T1 | 01 | 1 | MOB-01 | — | N/A | e2e | `npm run e2e -- e2e/mobile-tasks-table.spec.mjs --workers=1 --retries=0` (band/boundary tests; spec is created by this task) | ✅ after T1 | ⬜ pending |
+| 64-01 T2 | 01 | 1 | MOB-01 | — | N/A | e2e | `npm run e2e -- e2e/french-overflow.spec.mjs e2e/projects-table.spec.mjs e2e/saved-views.spec.mjs --workers=1 --retries=0` (unmodified specs) | ✅ | ⬜ pending |
+| 64-02 T1 | 02 | 2 | MOB-02 | — | N/A | e2e | `npm run e2e -- e2e/mobile-tasks-table.spec.mjs --workers=1 --retries=0` (390×844 truncation tests; extends the 64-01 spec) | ✅ | ⬜ pending |
+| 64-03 T1 | 03 | 3 | E2E-03 | T-64-04 | N/A | e2e | `npm run e2e` (full parallel close run; evidence → 64-CLOSE.md) | ✅ | ⬜ pending |
+| 64-03 T2 | 03 | 3 | E2E-03 | T-64-05 | N/A | unit+gates | `npm test` + `npm run lint` + `npm run build` (prebuild i18n-scan, chunk gate) + `npm run build:en` (EN i18n gate) | ✅ | ⬜ pending |
+| 64-03 T3 | 03 | 3 | E2E-03 | T-64-05 | N/A | e2e | `npm run e2e` (re-run after any D-16 fix; skipped if T1-T2 fully green) | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,8 +53,8 @@ created: "2026-11-14"
 
 ## Wave 0 Requirements
 
-- [ ] new mobile-viewport e2e spec stub (following `french-overflow.spec.mjs` precedent)
-- [ ] Existing infrastructure covers all other phase requirements
+- [x] new mobile-viewport e2e spec — covered by 64-01 Task 1 (creates `e2e/mobile-tasks-table.spec.mjs`, French-overflow precedent); no separate Wave 0 stub needed since the spec is the phase's own deliverable (research: "Wave 0 Gaps — None")
+- [x] Existing infrastructure covers all other phase requirements
 
 ---
 

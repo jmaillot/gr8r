@@ -241,14 +241,17 @@ Not applicable — CSS presentation + e2e only. No auth, input, crypto surface c
 | A1 | Reading D-04 literally implies the `.only-m` flip should move to 900px (Option B in Summary) | Critical Finding | Boundary e2e asserts the wrong band state; cheap to re-scope but needs the planner/user to pick A or B |
 | A2 | No existing spec uses a viewport <900px and clicks Columns | Pitfall 4 | A close-run spec failure — handled in-phase per D-16 anyway |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Band behavior 641–900px (A vs B in Summary)** — the only real planning decision.
-   Recommendation: honor D-04's wording → Option B (flip `.only-m` at 900px via one rule
-   in responsive.css's 900px tier, overriding base.css's 640px flip; byte-cheap). Confirm
-   at plan checkpoint.
-2. **`french-overflow.spec.mjs` at 390px** — confirm it never clicks a Columns button
-   (quick grep before the CSS task; the close run proves it regardless).
+1. **Band behavior 641–900px (A vs B in Summary)** — **(RESOLVED: Option B).** Per D-04's
+   locked wording ("columns hidden below 900px"), Option B is the compliant reading.
+   Implemented in 64-01: one rule per selector in responsive.css's 900px tier
+   (`.hide-m { display: none !important; }` + `.only-m { display: block; }`),
+   overriding base.css's 640px flip; boundary pinned by 64-01 Task 1's e2e band tests.
+2. **`french-overflow.spec.mjs` at 390px** — **(RESOLVED: safe).** It enumerates routes
+   and never clicks a Columns button (verified by grep in 64-01 Task 2's read-first
+   step, and proven by 64-01 Task 2 running it unmodified at --workers=1 --retries=0
+   plus the 64-03 full close run).
 
 ## Sources
 
