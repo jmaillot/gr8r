@@ -12,7 +12,7 @@
    tenancy suite.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, createAccount, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, createAccount, newRunId, openSettings, selectLanguage } from './helpers/setup.mjs';
 
 let run;
 let alice; // workspace owner, account locale 'fr'
@@ -128,38 +128,48 @@ test('the selector switches the interface instantly without a reload and the cho
     await signInPage(page, carol, LOGIN.en);
     await expect(page.getByRole('button', { name: 'Projects' }).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Settings' }).click();
-    await page.getByRole('button', { name: 'Language', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Language', level: 1 })).toBeVisible();
+    /* The selector path through the shared helpers (phase 62 D-03/D-05/D-08):
+       openSettings owns the lazy-chunk wait, selectLanguage owns the trigger
+       click and the PATCH /api/auth/me wait — no sleeps. */
+    await openSettings(page, { tab: 'language' });
 
-    /* The honest selector: exactly two options, each in its own name, the negotiated
-       language shown as selected while the account has not chosen (D-13, D-14). */
-    const language = page.getByRole('button', { name: 'Language', exact: true, expanded: false });
-    await expect(language).toContainText('English');
-    await language.click();
-    await expect(page.getByRole('option')).toHaveText(['English', 'Français']);
+    /* The honest selector: exactly two options, labelled in their own names —
+       read from the native select the enhanced menu is built from (D-13, D-14).
+       The change persists through the account PATCH, awaited below. */
+    const optionLabels = await page.evaluate(() => [...document.querySelectorAll('select[data-in="langSel"] option')].map(o => o.text));
+    expect(optionLabels, 'the language select exposes both languages').toEqual(['English', 'Français']);
 
     await page.evaluate(() => {
       window.__survived = 'no-reload';
     });
-    const saved = page.waitForResponse(r => r.url().endsWith('/api/auth/me') && r.request().method() === 'PATCH');
-    await page.getByRole('option', { name: 'Français' }).click();
-
-    await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
-    await expect(page.getByRole('heading', { name: 'Langue', level: 1 })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Projets' }).first()).toBeVisible();
-    expect(await page.evaluate(() => window.__survived), 'the switch re-rendered in place').toBe('no-reload');
-
-    /* Loop safety: after the switch the interface settles. */
-    await page.waitForTimeout(300);
+    /* The render-loop observer is installed BEFORE the option click (phase 62
+       Pitfall 3): the re-render itself lands in the counter, which is reset
+       after the French re-render is asserted; the bounded polls below then
+       prove nothing keeps mutating. */
     await page.evaluate(() => {
       window.__mutations = 0;
       new MutationObserver(entries => {
         window.__mutations += entries.length;
       }).observe(document.getElementById('app'), { childList: true, subtree: true, attributes: true, characterData: true });
     });
-    await page.waitForTimeout(1500);
-    expect(await page.evaluate(() => window.__mutations), 'the interface keeps re-rendering after the switch (render loop)').toBe(0);
+    const saved = await selectLanguage(page, 'fr');
+
+    await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('fr');
+    await expect(page.getByRole('heading', { name: 'Langue', level: 1 })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Projets' }).first()).toBeVisible();
+    expect(await page.evaluate(() => window.__survived), 'the switch re-rendered in place').toBe('no-reload');
+
+    /* Loop safety, sleep-free: after the switch the interface settles. With
+       the counter reset after the re-render, a bounded poll on zero mutations
+       fails on any render loop (the counter would keep climbing) and returns
+       immediately when the page is quiet; the innerHTML equality poll replaces
+       the two-snapshot comparison. */
+    await page.evaluate(() => {
+      window.__mutations = 0;
+    });
+    const before = await page.evaluate(() => document.getElementById('app').innerHTML);
+    await expect.poll(() => page.evaluate(() => window.__mutations), { timeout: 1500 }).toBe(0);
+    await expect.poll(() => page.evaluate(() => document.getElementById('app').innerHTML), { timeout: 1500 }).toBe(before);
 
     /* LOC-03: the account write answered, a reload keeps French. */
     expect((await saved).status(), 'the account locale write failed').toBe(200);
