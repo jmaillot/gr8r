@@ -27,3 +27,7 @@ Results:
 - **EN i18n gate:** `npm run build:en` → `✓ built in 1.43s`, exit 0, no missing-translation output; `prebuild:en` i18n scan passed.
 
 All standing gates green; no threshold edits, no config changes.
+
+## Task 3: Conditional D-16 — no failures — skipped
+
+Tasks 1-2 were fully green on the first pass (115/115 e2e, zero failed/flaky; all standing gates green). Per the task precondition and D-16, no fixes are required: **zero known failures, zero waivers**. Milestone closes green.
