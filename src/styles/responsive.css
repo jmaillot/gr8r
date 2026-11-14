@@ -95,6 +95,16 @@
   .proj-h {
     padding-top: 16px;
   }
+  /* Phase 64 D-01..D-04: Columns hidden ≤900px, card stack shown (Option B band) */
+  [data-pop='cols'] {
+    display: none !important;
+  }
+  .only-m {
+    display: block;
+  }
+  .hide-m {
+    display: none !important;
+  }
 }
 @media (max-width: 640px) {
   :root {
