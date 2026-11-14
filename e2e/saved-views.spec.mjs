@@ -94,7 +94,9 @@ test('save, apply, update and delete a named view on the tasks table (VIEW-02)',
   await expect(nameInput).toBeVisible();
   await nameInput.fill(VIEW_NAME);
   await page.getByRole('button', { name: fmt('common.save'), exact: true }).click();
-  await expect(page.locator('.toast', { hasText: fmt('toast.savedTableView', { name: VIEW_NAME }) })).toBeVisible();
+  /* Phase 63 SC-3: scope to the newest toast (63-TRIAGE verdict — the save
+     toast at the first save can still be alive in fast serial runs). */
+  await expect(page.locator('.toast', { hasText: fmt('toast.savedTableView', { name: VIEW_NAME }) }).last()).toBeVisible();
 
   /* SC-2 proof: the named row is in the server saved_views table (read back
      through the API as the same user — rows are per-user, D-09). */
@@ -122,16 +124,28 @@ test('save, apply, update and delete a named view on the tasks table (VIEW-02)',
   await setColumn(page, fmt('page.field.status'), true);
   await setColumn(page, fmt('page.field.priority'), true);
   await page.getByRole('button', { name: fmt('popover.savedViews') }).click();
+  /* Phase 63 SC-3: apply re-arms the 450 ms persistLiveView debounce
+     (savedViewsUi.js applyTableView → persistLiveView) — arm the live-PUT
+     waiter BEFORE the row click so the applied state's write-through is
+     awaited before any later toggle can mis-bind a stale in-flight PUT. */
+  const appliedPut = page.waitForResponse(r =>
+    r.url().endsWith('/api/me/views') &&
+    r.request().method() === 'PUT' &&
+    !JSON.parse(r.request().postData() || '{}').name);
   await page.locator('.pop.floating').getByRole('button', { name: VIEW_NAME, exact: true }).click();
-  await expect(page.locator('.toast', { hasText: fmt('toast.appliedTableView', { name: VIEW_NAME }) })).toBeVisible();
+  /* Phase 63 SC-3: scope to the newest toast — the unscoped locator matched
+     any live toast with this text and raced the app's 4200 ms toast
+     lifetime under fast serial runs (63-TRIAGE verdict). */
+  await expect(page.locator('.toast', { hasText: fmt('toast.appliedTableView', { name: VIEW_NAME }) }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(`${fmt('page.sortLabel')}\\s*${fmt('page.field.due')}`) })).toBeVisible();
+  await appliedPut;
   await page.getByRole('button', { name: fmt('act.columns') }).click();
   const statusBox = page
     .locator('.pop.floating label')
     .filter({ hasText: fmt('page.field.status') })
     .getByRole('checkbox');
   await expect(statusBox).not.toBeChecked();
-  await page.mouse.click(5, 400);
+  await page.keyboard.press('Escape'); /* Phase 63 SC-3 / D-04: semantic dismissal */
   await expect(page.locator('.pop.floating')).toHaveCount(0);
 
   /* Update with explicit confirm (D-12): show Status again, then Update. */
@@ -140,12 +154,34 @@ test('save, apply, update and delete a named view on the tasks table (VIEW-02)',
   await page.locator('.pop.floating').getByRole('button', { name: fmt('popover.updateView') }).click();
   await expect(page.locator('.modal', { hasText: fmt('modal.updateTableViewConfirm', { name: VIEW_NAME }) })).toBeVisible();
   await page.locator('.modal').getByRole('button', { name: fmt('popover.updateView') }).click();
-  await expect(page.locator('.toast', { hasText: fmt('toast.savedTableView', { name: VIEW_NAME }) })).toBeVisible();
+  /* Phase 63 SC-3: scope to the newest toast — THE triage-confirmed root
+     cause: the identical first-save toast is still alive (< 4.2 s in fast
+     serial runs) and the unscoped locator resolved to 2 elements. */
+  await expect(page.locator('.toast', { hasText: fmt('toast.savedTableView', { name: VIEW_NAME }) }).last()).toBeVisible();
 
   /* Delete: the trash icon in the views popover row; the list empties back to
-     the PROBE VIEW-02 empty state — no row until the first explicit save. */
+     the PROBE VIEW-02 empty state — no row until the first explicit save.
+     Phase 63 SC-3: the views popover refreshes on open (refreshNamedViews,
+     D-52) AND rebuilds after the delete (deleteTableView's post-delete
+     popHtml) — two async writers for the same popover html. Awaiting the
+     open-time GETs before the delete, then the DELETE + its post-delete
+     refresh GETs before asserting, guarantees the last writer is the
+     post-delete rebuild (63-TRIAGE §4.6 ordering race). */
   await page.getByRole('button', { name: fmt('popover.savedViews') }).click();
+  const openGets = [
+    page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'GET'),
+    page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'GET'),
+  ];
+  await Promise.all(openGets); /* refetch-on-open (NAMED_VIEW_KEYS) settled */
+  const deleted = page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'DELETE');
+  const postDeleteGets = [
+    page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'GET'),
+    page.waitForResponse(r => r.url().includes('/api/me/views') && r.request().method() === 'GET'),
+  ];
   await page.locator(`.pop.floating [aria-label="${fmt('a11y.deleteTableView', { name: VIEW_NAME })}"]`).click();
-  await expect(page.locator('.toast', { hasText: fmt('toast.deletedTableView', { name: VIEW_NAME }) })).toBeVisible();
+  await deleted;
+  await Promise.all(postDeleteGets); /* post-delete rebuild is the last writer */
+  /* Phase 63 SC-3: scope to the newest toast (stale toasts live 4.2 s). */
+  await expect(page.locator('.toast', { hasText: fmt('toast.deletedTableView', { name: VIEW_NAME }) }).last()).toBeVisible();
   await expect(page.locator('.pop.floating').getByText(fmt('popover.noSavedViews'))).toBeVisible();
 });
