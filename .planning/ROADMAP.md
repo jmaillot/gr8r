@@ -50,7 +50,12 @@ Plans:
   3. Coordinate-click popover dismissal (`mouse.click(5,400)` ×3) is replaced by a semantic dismissal (Escape/backdrop) and the debounced view write is awaited on its real completion signal (`waitForResponse` on `/api/me/views` PUT/POST) — not on a timeout
   4. If triage proves an app-side async-contract bug, it is fixed in the app (not laundered in the spec) and pinned by a regression test
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 63-01-PLAN.md — Triage: trace-protocol evidence rounds + 63-TRIAGE.md hypothesis × evidence verdict (FLAKY-01)
+- [ ] 63-02-PLAN.md — Spec fix: Escape dismissal + awaited live-PUT waits; D-01 10× proof (FLAKY-02)
+- [ ] 63-03-PLAN.md — Conditional D-03 app fix + regression test; D-02 full-suite gate (FLAKY-02)
 
 ### Phase 64: Mobile Tasks Table & Suite Green
 
