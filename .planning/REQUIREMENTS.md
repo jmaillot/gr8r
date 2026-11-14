@@ -26,7 +26,7 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 
 ### Flaky Stabilization (CONS-03)
 
-- [ ] **FLAKY-01**: The VIEW-02 flake root cause is diagnosed with evidence
+- [x] **FLAKY-01**: The VIEW-02 flake root cause is diagnosed with evidence
   (repeated-run trace with retries=0, pre-warmed server, `--workers=1`) — leading
   hypotheses: debounced `persistLiveView` write-through race, coordinate-click
   popover dismissal, shared OWNER/acme live-state coupling
@@ -66,7 +66,7 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 | E2E-01 | Phase 62 | Complete |
 | E2E-02 | Phase 62 | Complete |
 | E2E-03 | Phase 64 | Pending |
-| FLAKY-01 | Phase 63 | Pending |
+| FLAKY-01 | Phase 63 | Complete |
 | FLAKY-02 | Phase 63 | Pending |
 | MOB-01 | Phase 64 | Pending |
 | MOB-02 | Phase 64 | Pending |
