@@ -1,5 +1,5 @@
 ---
-status: resolved (fix shipped in 58-04, commit 6f87399 — G-58-2 GREEN: cmd mode dispatches the palette server search; verified 2026-11-14 at milestone v2.2 close)
+status: resolved
 trigger: "Ctrl-K palette (default cmd mode) never dispatches the server search — server-only tasks only appear after Tab to search mode"
 created: 2026-11-13T00:00:00Z
 updated: 2026-11-13T00:00:00Z
@@ -11,7 +11,7 @@ goal: find_root_cause_only
 hypothesis: CONFIRMED — the `pl.mode !== 'search'` guard in dispatchServerSearch is an implementation gap, not a design decision.
 test: Static trace + git archaeology (done by orchestrator + this session)
 expecting: n/a
-next_action: (diagnose-only) plan-phase --gaps applies the fix
+next_action: n/a — fix shipped in 58-04 (commit 6f87399, G-58-2 GREEN); session closed at v2.2 milestone close 2026-11-14
 
 ## Symptoms
 

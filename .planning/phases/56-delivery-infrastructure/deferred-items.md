@@ -2,6 +2,8 @@
 
 ## 56-02
 
+status: acknowledged
+
 - **[pre-existing, out of scope] e2e: 9 specs fail identically at the 56-01 baseline (commit 7ce7521) and at HEAD.**
   Verified by building and running the full e2e subset in a throwaway worktree at 7ce7521: the
   exact same 9 specs fail (`french-overflow.spec.mjs` ×7, `locale.spec.mjs:122`), with the same
