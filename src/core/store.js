@@ -438,25 +438,37 @@ export function notifyMembers(ids, n) {
   const d = D();
   const now = Date.now();
   let added = false;
+  let changed = false;
   for (const to of new Set(ids)) {
     if (!to || to === n.by) continue;
     if (!d.members.some(m => m.id === to)) continue;
-    if (d.notifs.some(x => x.to === to && x.type === n.type && x.task === n.task && x.by === n.by && !x.read)) continue;
-    d.notifs.push({
-      id: uid('n'),
-      to,
-      type: n.type,
-      by: n.by ?? null,
-      task: n.task ?? null,
-      project: n.project ?? null,
-      snippet: n.snippet || '',
-      status: n.status ?? null,
-      at: now,
-      read: false,
-    });
-    added = true;
+    const existing = d.notifs.find(x => x.to === to && x.type === n.type && x.task === n.task && x.by === n.by && !x.read);
+    if (existing) {
+      /* [2026-11-14, owner ruling post-61 UAT] Refresh the unread row in place
+         instead of dropping the event: same id, fresh snippet + timestamp, so
+         the inbox row surfaces the latest activity. The server diffs notifs
+         by id for the e-mail/push fan-out (server.js newNotifs), so a refresh
+         never re-sends e-mail for the same task. */
+      existing.snippet = n.snippet || existing.snippet;
+      existing.at = now;
+      changed = true;
+    } else {
+      d.notifs.push({
+        id: uid('n'),
+        to,
+        type: n.type,
+        by: n.by ?? null,
+        task: n.task ?? null,
+        project: n.project ?? null,
+        snippet: n.snippet || '',
+        status: n.status ?? null,
+        at: now,
+        read: false,
+      });
+      added = true;
+    }
   }
-  if (added) {
+  if (added || changed) {
     // FIFO cap per recipient: keep the NOTIF_CAP newest rows addressed to each member.
     const byTo = new Map();
     for (const x of d.notifs) {
