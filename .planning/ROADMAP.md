@@ -54,7 +54,7 @@ Plans:
 
 Plans:
 - [x] 63-01-PLAN.md — Triage: trace-protocol evidence rounds + 63-TRIAGE.md hypothesis × evidence verdict (FLAKY-01)
-- [ ] 63-02-PLAN.md — Spec fix: Escape dismissal + awaited live-PUT waits; D-01 10× proof (FLAKY-02)
+- [x] 63-02-PLAN.md — Spec fix: Escape dismissal + awaited live-PUT waits; D-01 10× proof (FLAKY-02)
 - [ ] 63-03-PLAN.md — Conditional D-03 app fix + regression test; D-02 full-suite gate (FLAKY-02)
 
 ### Phase 64: Mobile Tasks Table & Suite Green
@@ -76,7 +76,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 62. E2E Baseline Repair | 3/3 | Complete    | 2026-11-14 |
-| 63. VIEW-02 De-Flake | 1/3 | In Progress|  |
+| 63. VIEW-02 De-Flake | 2/3 | In Progress|  |
 | 64. Mobile Tasks Table & Suite Green | 0/? | Not started | - |
 
 ## Milestone Notes
