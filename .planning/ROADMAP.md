@@ -17,6 +17,7 @@ experience of the tasks table — no new features.
 ## Phase Details
 
 ### Phase 62: E2E Baseline Repair
+
 **Goal**: The e2e suite becomes a trustworthy regression net again — no readiness races, and every spec asserts the real (post-Phase-56) Settings contract with stronger, never weaker, assertions
 **Depends on**: Nothing (first phase)
 **Requirements**: E2E-01, E2E-02
@@ -25,14 +26,21 @@ experience of the tasks table — no new features.
   2. All 7 `french-overflow.spec.mjs` specs and `locale.spec.mjs:122` pass against HEAD via role-based queries (native `<select>` asserted by its real combobox role) and auto-retrying waits on the lazy Settings chunk — no sleeps, no `networkidle`, no weakened expectations (assertion strength diffed in review)
   3. Shared `openSettings()` / language-select helpers exist in `e2e/helpers/setup.mjs` so exactly one place knows the lazy-chunk contract — no per-spec duplicated wait logic
   4. The standing gates stay green throughout: 1524-test unit suite, lint clean, 500 kB chunk gate (only ~220 B headroom), EN+FR i18n gate
+
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 62-01-PLAN.md — readiness: reproduce ECONNREFUSED emitter + D-02 assert-once guard (E2E-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 62-02-PLAN.md — openSettings/selectLanguage helpers + 7 french-overflow specs (E2E-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 62-03-PLAN.md — locale.spec.mjs:122 repair + phase gate: full e2e green, gates green (E2E-02)
 
 ### Phase 63: VIEW-02 De-Flake
+
 **Goal**: VIEW-02 stops being a coin flip — its root cause is proven with evidence and the spec passes deterministically, fixing any app async-contract bug the triage exposes
 **Depends on**: Phase 62 (fix measured on a stable green baseline; repaired specs are the tripwire)
 **Requirements**: FLAKY-01, FLAKY-02
@@ -41,9 +49,11 @@ Plans:
   2. VIEW-02 passes `--repeat-each N ×` locally with retries=0 — deterministic, no added sleeps, no `networkidle`, no raised global retries
   3. Coordinate-click popover dismissal (`mouse.click(5,400)` ×3) is replaced by a semantic dismissal (Escape/backdrop) and the debounced view write is awaited on its real completion signal (`waitForResponse` on `/api/me/views` PUT/POST) — not on a timeout
   4. If triage proves an app-side async-contract bug, it is fixed in the app (not laundered in the spec) and pinned by a regression test
+
 **Plans**: TBD
 
 ### Phase 64: Mobile Tasks Table & Suite Green
+
 **Goal**: The tasks table is honestly usable on a phone under the owner's hide-the-button ruling, and the whole e2e suite closes 111/111 green at milestone close
 **Depends on**: Phase 62 and Phase 63 (the repaired, de-flaked suite is this phase's acceptance instrument)
 **Requirements**: MOB-01, MOB-02, E2E-03
@@ -52,6 +62,7 @@ Plans:
   2. On a mobile viewport the card stack renders without truncation from the toolbar affordances, verified by a mobile-viewport e2e (`setViewportSize` + web-first assertions on the main config — no second Playwright project or webServer), not screenshots
   3. One render path, one source of truth for visible columns — the mobile treatment is media-query-gated, never a parallel render fork (Pitfall 4 tripwire specs stay green)
   4. The full e2e suite is 111/111 green at milestone close: 0 known failures, VIEW-02 stable per Phase 63, with every standing gate green (1524 unit tests, lint, chunk gate, i18n gate)
+
 **Plans**: TBD
 **UI hint**: yes
 
