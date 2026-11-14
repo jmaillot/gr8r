@@ -3,6 +3,12 @@
 ## v2.2 Notifications, Search & Delivery (Shipped: 2026-11-14)
 
 **Phases completed:** 6 phases, 19 plans, 14 tasks
+**Closeout:** override (2026-11-14) — init.manager stale bookkeeping on phases 56-60
+(STATE.md is source of truth, 6/6 Complete, each phase verified in session); no
+v2.2 milestone audit run; 1 newly acknowledged deferred item (56-02 e2e 9 specs),
+19 carried forward.
+**Post-close fix:** notifyMembers duplicate-unread refresh ruling shipped `c03404a`;
+lint baseline errors fixed `0ca7ff1` (lint fully clean at close).
 
 **Key accomplishments:**
 - D-02 500 kB build gate installed as a real-build test + async renderPage loader map splitting settings into its own chunk (entry 606,073 → 552,830 B)

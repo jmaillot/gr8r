@@ -1,26 +1,44 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-13 after Phase 60 — DASH-01..04 + TRN-02 shipped (admin dashboard + member self-view, gap closure verified 14/14)*
+*Last updated: 2026-11-14 after v2.2 milestone — Notifications, Search & Delivery shipped (6 phases, 19 plans, 24/24 requirements, 1524 tests green)*
 
-## Current Milestone: v2.2 Notifications, Search & Delivery
 
-**Goal:** make the workspace alive outside the tab (browser push), findable at
-scale (full-text search, admin dashboard) and cheap to keep building (e2e build
-guard, code-splitting, i18n-ready infrastructure).
+<details>
+<summary>Milestone v2.2 Notifications, Search & Delivery — shipped record (2026-11-14)</summary>
 
-**Target features:**
-- Browser push for mentions + assignments (service worker; extends the Phase 48
-  badge/permission foundation) — notifications reach the user with no open tab
-- Full-text search over task titles + descriptions via FTS5, wired into Ctrl-K
-- Admin-only workspace dashboard: overdue tasks per project, load per member,
-  upcoming due dates, recent activity
-- TRN-02: every member sees their own (redacted) access-transparency view
-- NOTIF-TRIM: notification-audit trim recommendations (requires owner D-05
-  rulings during execution)
-- General-Access granularity beyond private/public; column show/hide + saved views
-- i18n infrastructure ready for a new locale without shipping one
-- E2E anti-stale-dist guard: the e2e server never serves a stale build
-- Vite code-splitting: dynamic imports for locales and heavy pages (no >500 kB chunk)
+**Shipped:** 6 phases, 19 plans, 24/24 requirements. Delivery infrastructure (56): e2e
+dist staleness guard (fail-closed manifest hash), Vite code-splitting under the D-02
+500 kB gate (entry 606 kB → 498 kB), i18n-ready locale registry. Views & columns (57):
+column show/hide, saved views in a server `saved_views` table (`/api/me/views`),
+`prefs.defaultPrivate` owner toggle, General-Access granularity beyond private/public.
+Full-text search (58): contentless FTS5 shadow index + pg `task_search_projection`
+(byte-identical parity suite), membership-gated `/search` route, Ctrl-K hybrid palette
+merge (cmd+search), 250 ms debounced dispatcher. Browser push (59): `push_subscriptions`
+SQLite+pg mirror, /data-persisted VAPID custody, `sendPushFor()` mirroring the email
+gate order, service-worker handler with open-tab suppression + deep links, owner UAT
+6/6 on production. Admin dashboard & self-view (60): power-admin four-panel dashboard
+over the raw stored doc, byte-level-redacted member self-view (Settings › My access).
+Notifications trim (61): notification audit v2 with D-04/D-05/D-06 owner rulings, dead
+notif-prefs keys removed, inbox burst coalescing (render-only, D-11/D-12/D-13), UAT
+7/7 with live browse-MCP evidence. Gates at close: 1524 unit tests / 0 fail, e2e 111
+(+1 flaky VIEW-02 pre-existing), lint fully clean, chunk gate 11/11 green. Known
+overrides: no v2.2 milestone audit run (closeout override, 2026-11-14); init.manager
+stale bookkeeping on phases 56-60 (STATE.md is source of truth); 56-02's 9 pre-existing
+e2e spec failures acknowledged as deferred debt (dedicated plan later). Full record:
+`milestones/v2.2-ROADMAP.md`, `milestones/v2.2-REQUIREMENTS.md`,
+`milestones/v2.2-phases/`.
+
+</details>
+
+### v2.2 milestone decisions (owner-validated 2026-11-12 + during execution)
+
+- M-2.2 web-push@4.0.0 as runtime dep #2 (D-12 precedent amended, owner-approved)
+- M-2.2 saved views/columns live in a server `saved_views` table (Phase 34 notif_prefs precedent)
+- M-2.2 admin dashboard is power-admin: private projects fully visible in aggregates
+- D-05 rulings (2026-11-13): D-04 full removal of the 4 dead notif-prefs keys; D-06
+  `update` type unchanged; coalescing applies to comments + updates + mentions + reminders
+- Post-61 UAT ruling (2026-11-14): `notifyMembers` refreshes a duplicate unread row in
+  place (same id — no e-mail re-send) instead of dropping the event
 
 <details>
 <summary>Milestone v2.1 Member & Project Experience — shipped record (2026-11-11)</summary>
@@ -678,6 +696,29 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   (shared `gPending` G-nav map, query-typing guard, initials-across-words filter
   behaviorally pinned by test/palette-filter.test.mjs) — Phase 47 (branch fix/commands
   merged 62b1826; verification 2/2; UAT recorded 5fe7f67)
+- ✓ **PUSH-01..05** — Browser push v2: `push_subscriptions` SQLite+pg mirror with
+  endpoint-UNIQUE replace, env-overridable /data-persisted VAPID custody (restart
+  tracer test), `sendPushFor()` mirroring the email gate order with the 404/410
+  same-pass row sweep and the 4096-octet payload budget, service-worker push handler
+  with open-tab suppression + deep-link display, gesture-gated Settings opt-in with
+  device list + per-device test push — Phase 59 (3/3 plans; owner UAT 6/6 on production)
+- ✓ **DELIV-01/02, I18N-01** — Delivery infrastructure: e2e dist staleness guard
+  (content-hash manifest check, fail-closed spawn test), Vite code-splitting under
+  the D-02 500 kB gate (entry 606 kB → 498 kB), locale registry/loaders/gate
+  accepting a new locale by adding one JSON file (fixture-locale proven) — Phase 56
+  (4/4 plans; chunk gate 11/11 green)
+- ✓ **VIEW-01..03** — Views, columns & General Access: column show/hide with
+  debounced write-through, saved views in server `saved_views` rows behind
+  `/api/me/views` (≤20/member/key, 2 kB blobs, overwrite confirm),
+  `prefs.defaultPrivate` owner toggle, General-Access granularity beyond
+  private/public — Phase 57 (3/3 plans; VIEW-02 flaky noted pre-existing at baseline)
+- ✓ **NOTIF-01..03** — Notification trim: audit doc v2 (`docs/notification-audit.md`)
+  with D-04/D-05/D-06 owner rulings, the 4 dead notif-prefs keys removed end-to-end
+  (PUT 400 guard), inbox burst coalescing render-only (`groupBursts`, same
+  type+task among unread, D-11/D-12/D-13; summary row → task drawer; expand/
+  collapse; mark-group-read; EN/FR plurals) + post-UAT ruling: duplicate unread
+  rows refresh in place, never re-email — Phase 61 (2/2 plans; verification 4/4
+  passed; UAT 7/7 with live browse-MCP evidence)
 - ✓ **SEARCH-01..04** — Full-text search: server-side FTS over task titles + descriptions
   (SQLite FTS5 / pg equivalent through db-adapter.mjs), redacted route
   `/api/workspaces/:slug/search` through `memberCanReadProject` with byte-level leak tests,
@@ -695,12 +736,11 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Active
 
-- **v2.2 Notifications, Search & Delivery** — browser push (mentions + assignments),
-  FTS5 search over titles + descriptions, admin dashboard, TRN-02 member transparency,
-  NOTIF-TRIM (needs D-05 owner rulings),
-  i18n infrastructure, e2e dist guard, Vite code-splitting. See Current Milestone.
+- **Next milestone:** not yet planned — start with `/gsd-new-milestone`.
 - **Backlog:** MS Project/xlsx visual checks (first Project-equipped machine);
-  UI round-3 invite follow-ups (53-VERIFICATION.md); searchable token-chip pickers.
+  UI round-3 invite follow-ups (53-VERIFICATION.md); searchable token-chip pickers;
+  56-02's 9 pre-existing e2e spec failures (locale/french-overflow — dedicated plan);
+  999.1 Phase 57 mobile layout follow-up (ROADMAP Backlog).
 
 ### Out of scope
 
@@ -726,11 +766,17 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ## Context
 
-- Shipped v2.0 (2026-11-09) with 4 phases, 15/15 requirements; full suite 1152 tests
-  (1141 pass / 0 fail / 11 pre-existing skips); i18n catalogue pinned at 1711 keys.
-- ~19k+ lines of JavaScript across `server.js`, `mcp.js`, `db-adapter.mjs`, `oidc.js`,
-  `test/`, `public/` and `src/`; runtime dependencies: `{ pg }` only (dynamic import under
-  `DB_URL=postgres://`; SQLite default unchanged).
+- Shipped v2.2 (2026-11-14) with 6 phases, 24/24 requirements; full suite 1524 tests
+  / 0 fail; e2e 111 (+1 pre-existing flaky); lint fully clean; chunk gate 11/11 green.
+- ~25k+ lines of JavaScript across `server.js`, `mcp.js`, `db-adapter.mjs`, `oidc.js`,
+  `test/`, `public/` and `src/`; runtime dependencies: `{ pg, web-push }` only
+  (dynamic import under `DB_URL=postgres://`; SQLite default unchanged; web-push
+  exact-pinned, env-overridable VAPID keys in /data).
+- Search ground truth: `task_fts` shadow index (SQLite FTS5) + `task_search_projection`
+  (pg), one in-transaction `syncTaskFts` path, boot-sweep healing, membership-gated
+  `/api/workspaces/:slug/search`.
+- Push ground truth: `push_subscriptions` table (SQLite+pg), VAPID keys in /data,
+  service worker registered after `api.init()`, per-type pref gating mirrors email.
 - Auth ground truth: `sessions` / `login_challenges` / `recovery_codes` / `totp_factors`
   tables, `v2:` keyring envelopes, `team_members` authority rows with scope columns,
   `oidc_identities` + `oidc.js` (raw OIDC, `node:crypto` only), per-user `notif_prefs` rows,
@@ -738,8 +784,8 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 - Data ground truth: `db-adapter.mjs` async facade (SQLite `node:sqlite` default, `pg` via
   `DB_URL`), pg schema variant with bigint epoch columns, `scripts/copy-sqlite-to-pg.mjs`.
 - Known deferred items: ensureColumn defs stay `integer` on pg (harmless today — documented
-  in the phase 45 deferred-items); pre-existing lint errors in untouched files; carried
-  v1.5 debug-session unknowns — see STATE.md Deferred Items.
+  in the phase 45 deferred-items); 56-02's 9 pre-existing e2e spec failures (acknowledged
+  2026-11-14, dedicated plan later); carried v1.5 debug-session unknowns — see STATE.md.
 - Known issues are tracked in `CHANGELOG.md` (limits) and `DEPLOY.md`.
 
 ## Evolution

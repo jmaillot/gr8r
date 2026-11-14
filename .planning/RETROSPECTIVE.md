@@ -385,12 +385,57 @@
   fresh full-suite + integration pass is what actually carried the close.
 - Design pivots are safe when the access decision has exactly one doorway.
 
+## Milestone: v2.2 — Notifications, Search & Delivery
+
+**Shipped:** 2026-11-14
+**Phases:** 6 | **Plans:** 19
+
+### What Was Built
+
+- Delivery infrastructure (56): e2e dist staleness guard (content-hash manifest, fail-closed), Vite code-splitting under the D-02 500 kB gate (entry 606 kB → 498 kB), i18n-ready locale registry.
+- Views/columns/General-Access (57): saved views in a server `saved_views` table, column toggles, `prefs.defaultPrivate`, access granularity beyond private/public.
+- Full-text search (58): FTS5 + pg dialect-complete index (byte-identical parity suite), membership-gated `/search` route, Ctrl-K hybrid palette merge, /search page.
+- Browser push (59): `push_subscriptions` SQLite+pg, /data VAPID custody, `sendPushFor()` mirroring the email gate order, service-worker deep links, owner UAT 6/6 on production.
+- Admin dashboard & self-view (60): power-admin four-panel aggregate, byte-level-redacted member self-view.
+- Notification trim (61): audit v2 with D-04/D-05/D-06 rulings, dead prefs keys removed, inbox burst coalescing (render-only), UAT 7/7 with live browse-MCP evidence.
+
+### What Worked
+
+- Live UAT via browse MCP: server-truth checks through the authenticated page (`/api/workspaces/prod` notif diff) turned a false "major issue" (test 3) into a 5-minute diagnosis — the pre-existing `notifyMembers` dedupe was starving mono-author bursts, not a Phase 61 regression.
+- Research-derived phase ordering (56 first: dist guard + split build under every later phase's e2e) held with zero rework.
+- Standing gates (chunk 500 kB, i18n scan, lint) kept every phase honest; the 56-02 e2e baseline comparison pattern ("same 9 specs fail at baseline and HEAD") resolved a potential false regression instantly.
+
+### What Was Inefficient
+
+- Digest staleness again: init.manager reported phases 56-60 `open/stale` at close while STATE.md said 6/6 Complete — the close ran as override_closeout (same lesson as v1.3/v2.0; shared-file churn is structural).
+- The Phase 58 UAT cmd-mode gap was diagnosed (debug session) but only fixed in 58-04; the session file stayed `diagnosed` for a day and had to be closed at milestone time.
+- The 2 pre-existing lint errors from Phase 60 sat through Phase 61 and were only fixed at close (`0ca7ff1`).
+
+### Patterns Established
+
+- Notif rows are diff-by-id on the server: refreshing a row in place never re-fires e-mail/push — the safe shape for future notification changes (post-61 owner ruling).
+- Inbox coalescing is render-only (`groupBursts` transform at render time), so all read-state mutations keep operating on individual rows.
+- Postgres feature parity proven by a byte-for-byte behavior suite ("elodie" finds "Élodie" on both backends) before the feature ships.
+
+### Key Lessons
+
+1. UAT failures are diagnostic gold when you can diff server truth against the UI live — instrument the authenticated session first.
+2. Owner rulings mid-execution (D-05) unblocked Phase 61 same-day; ask early, record in the audit doc, mirror in STATE.md.
+3. Closeout bookkeeping (STATE.md phase table freshness) is the recurring milestone tax — keep the table updated per phase, not at close.
+
+### Cost Observations
+
+- Model mix: not tracked this milestone.
+- Sessions: ~8 substantive sessions over 3 days (2026-11-12 → 11-14).
+- Notable: 1524-test suite stayed green through all 6 phases; only post-close additions were the notifyMembers refresh fix + lint cleanup.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
 
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
+| v2.2 Notifications, Search & Delivery | 3 days | 6 | Override closeout again over stale bookkeeping (56-60 `open/stale` vs STATE.md 6/6 Complete); live browse-MCP UAT diffed server truth against the UI and turned a false major issue into a pre-existing-bug diagnosis. Lesson confirmed: keep the STATE.md phase table fresh per phase; closeout verification overrides are now the expected shape with shared server.js. |
 | v1.1 Multitenant | 2 days | 4 | Phase verification was produced for phase 4 only; the audit backfilled phases 1–3. Next milestone: verify every phase before it closes. |
 | v1.2 Localization | 2 days | 8 | Every phase verified before close (50/50 plans); the close still re-verified all 8 after close-out commits staled the digests. Next milestone: finish close-out edits BEFORE running verifiers, and never hand-write a covered digest. |
 | v1.3 Auth Hardening | 2 days | 6 | All 6 phases verified before close, but shared-file edits across phases staled 4 of 6 digests anyway; the close accepted overrides with final-tree evidence (Phase 18 + integration check). Lesson refined: with a shared server.js, per-phase digests cannot all stay fresh — verify the last phase and audit the final tree instead. |
@@ -403,6 +448,7 @@
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
+| v2.2 Notifications, Search & Delivery | 1524 node:test + 111 e2e | chunk-size gate (11/11 real-build), dist staleness spawn test, FTS pg parity suite (byte-identical), push payload budget + sweep, burst coalescing suite, burst UAT 7/7 live | 1 (runtime: `web-push@4.0.0`, owner-approved) |
 | v1.1 Multitenant | 48 node:test + 5 Chromium | server contract, migration, privacy matrix, browser tenancy | 1 (dev only: `@playwright/test`) |
 | v1.2 Localization | 446 node:test + 45 Chromium e2e | catalogue contract (23 pins), locale selector, 21-route fr sweep + build gate, uploads/previews byte-serving | 0 (runtime) / 1 (dev only: `@playwright/test`) |
 | v1.3 Auth Hardening | 526 node:test + 55 Chromium e2e | TOTP fixtures (RFC 4226/6238), migration second-boot parity, 401 anonymity matrix, honest-copy guards, i18n-scan build gate | 0 (runtime; vendored qrcode-generator source, no package) |

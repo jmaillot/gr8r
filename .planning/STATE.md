@@ -24,7 +24,7 @@ current_phase_name: Notification Trim
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core Value:** simple, predictable access + a workspace that reaches you (push, search,
 dashboards) without breaking the zero-dependency discipline
-**Current Focus:** Phase 60 — Admin Dashboard & Member Self-View
+**Current Focus:** Planning next milestone (v2.2 shipped 2026-11-14)
 
 ## Current Position
 
