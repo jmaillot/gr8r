@@ -71,8 +71,13 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 64-01-PLAN.md — Mobile CSS contract: generic Columns hide at ≤900px + Option B band alignment + boundary e2e (MOB-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 64-02-PLAN.md — Card stack polish + D-12 long-task truncation suite at 390×844 (MOB-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 64-03-PLAN.md — Milestone close: full parallel e2e run + standing gates, zero waivers (E2E-03)
 
 **Wave structure**: 64-01 (Wave 1) → 64-02 (Wave 2, blocked on 64-01) → 64-03 (Wave 3, blocked on both)
