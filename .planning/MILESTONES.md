@@ -1,5 +1,29 @@
 # Milestones
 
+## v2.2 Notifications, Search & Delivery (Shipped: 2026-11-14)
+
+**Phases completed:** 6 phases, 19 plans, 14 tasks
+
+**Key accomplishments:**
+- D-02 500 kB build gate installed as a real-build test + async renderPage loader map splitting settings into its own chunk (entry 606,073 → 552,830 B)
+- D-02 500 kB gate GREEN without touching the threshold: entry 552,830 → 499,780 B via design-system/members/activity/search lazy chunks + the seed-lazy migration (inline emptyState fallback, explicit async ensureSeedData)
+- Content-hash staleness detection: every `vite build` stamps sha256 of dist/.vite/manifest.json, and e2e/server.mjs refuses to boot a stale dist fail-closed with `e2e: dist/ stale — run \`npm run build\`.` — proven by a three-case spawn test on the real wrapper.
+- `saved_views` rows (sentinel name='') behind revision-free `/api/me/views` routes, a pure localStorage mirror for demo mode, debounced write-through on column toggle, and the idempotent boot sweep that moves legacy `doc.views` into owner-attributed rows and strips the field at all three sites — VIEW-01 proven end-to-end by 14 new tests.
+- Server-guarded named views (≤20/member/key, 2 kB blobs, case-insensitive unique names, lenient old-schema loads) behind the `/api/me/views` routes, a lazy savedViewsUi popover that saves/applies/updates/deletes them with an explicit overwrite confirm, and the D-14 live-row reset completed server-side.
+- `prefs.defaultPrivate` — an owner toggle that seeds `private: true` on newly created projects (client `createProject` + server `mergeClientDoc` parity, stored-doc reads only, explicit choice always wins), an informational Access-tab hint, zero changes to the visibility funnel, proven by 6 server pins and a full owner-story e2e.
+- Contentless task_fts shadow index (FTS5 unicode61 remove_diacritics 2) synced in-transaction from both write sites (doc-PUT funnel + MCP writeDoc), membership-gated GET /api/workspaces/:slug/search route with byte-level-leak-proof per-hit filtering, and a conditional boot sweep that heals drift.
+- Dialect-complete FTS on pg — `task_search_projection` (JS-folded plain text + `to_tsvector('simple')` + GIN) maintained by the same in-tx `syncTaskFts` path, implicit-AND prefix `to_tsquery` search with ts_rank + task_id tiebreak, boot-sweep healing — proven byte-for-byte behavior-identical to SQLite by the DBA parity suite ("elodie" finds "Élodie" on both backends), with zero extension dependencies (D-12).
+- Entry-chunk-safe `searchTasksServer` (demo-gated, abortable, silent-degrading) with a 250 ms debounced AbortController dispatcher merging server tasks into the Ctrl-K palette's instant local list (deduped by id, local-first), and the /search page merging server-only rows into the existing task-row markup with hl() titles and plain-text snippets — all standing gates green.
+- One-line guard fix releases the Ctrl-K palette's hybrid server merge into cmd mode, with a 5-case dispatch-matrix regression test locking the behavior (TDD RED→GREEN)
+- push_subscriptions mirrored on SQLite+pg with endpoint-UNIQUE replace, env-overridable /data-persisted VAPID custody proven by a restart tracer test, fail-absent push-config, self-service subscribe/list/delete routes, web-push@4.0.0 exact-pinned, push_due re-livened per D-09.
+- `sendPushFor()` mirrors the email gate order (self-suppression → per-type pref → memberCanReadProject at send time, never digest-suppressed, never MAILER-gated) at both fan-out sites, with the 404/410 same-pass row sweep, the 4096-octet payload budget proven with pathological FR titles, and a per-device test-send route riding the real payload path.
+- Service-worker push handler with open-tab suppression + deep-link display, gesture-gated Settings opt-in with device list and per-device test push, owner UAT passed 6/6 on production.
+- Two read-only routes in server.js — the admin-gated four-panel aggregate dashboard computed over the RAW stored doc (power-admin ruling, exact-403 matrix) and the member self-view of the Phase 52 visibility funnel (byte-level TRN-02 redaction) — locked by 34 new tests with hand-derived fixture expectations.
+- The admin-only `/w/:slug/dashboard` lazy page (four panels rendered verbatim from the 60-01 aggregate, skeleton-then-fill, 30 s poll with abort + route-exit teardown, deep-linking rows, 24h/7d/30d activity selector) plus the Settings › My access self-view section reusing the Phase 52 reason vocabulary, proven by a Chromium e2e that walks the per-role story end-to-end.
+- Test-first closure of all three Phase 60 verification gaps — bounded fetch kick (CR-01), poll re-entry restart (WR-01), and whitelist-before-parse ordering (WR-02) — each pinned by a regression test that failed on the pre-fix behavior.
+
+---
+
 ## v2.1 Member & Project Experience + Export + Multi-assignee parity (Shipped: 2026-11-11)
 
 **Phases completed:** 3 phases, 18 plans, 19 tasks

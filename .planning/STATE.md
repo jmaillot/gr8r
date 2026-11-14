@@ -2,17 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v2.2
 milestone_name: Notifications, Search & Delivery
-current_phase: 61
-current_phase_name: Notification Trim
-status: executing
+status: Awaiting next milestone
 stopped_at: Phase 61 executed + verified (PASSED, 4/4 SC)
-last_updated: "2026-11-13T22:48:36.000Z"
-state_head: 64bbdc6db5500731e220cc959bffb2bcd0089228
+last_updated: "2026-11-14T08:12:32.028Z"
+last_activity: 2026-11-14
+last_activity_desc: Milestone v2.2 completed and archived
+state_head: 4ae88bd16ff820ab121c338b06172e18fd04ed72
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 19
   completed_plans: 19
+current_phase: 61
+current_phase_name: Notification Trim
 ---
 
 # STATE.md
@@ -26,23 +28,10 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-**Phase:** 61 — Notification Trim
-**Plan:** Complete — 2/2 plans executed, verified (PASSED 4/4 SC)
-
-**Progress:**[█████████░] 83%
-
-```
-[##########]----------  0/6 phases
-```
-
-| Phase | Name | Status |
-|-------|------|--------|
-| 56 | Delivery Infrastructure | Complete |
-| 57 | Views, Columns & General Access | Complete (3/3 plans) |
-| 58 | Full-Text Search | Complete (4/4 plans incl. gap closure) |
-| 59 | Browser Push | Complete (3/3 plans) |
-| 60 | Admin Dashboard & Member Self-View | Complete (3/3 plans incl. gap closure) |
-| 61 | Notification Trim | Complete (2/2 plans, verified 4/4 SC) |
+Phase: Milestone v2.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-14 — Milestone v2.2 completed and archived
 
 ## Performance Metrics
 
@@ -151,3 +140,7 @@ dashboards) without breaking the zero-dependency discipline
 - [Phase 60]: 60-03 gap closure: lastRequestedWindow up-front claim + !dashErr kick guard (CR-01); poll entry if (!timer) startPoll() survives route re-entry (WR-01, D-05); activityWindow whitelist hoisted above JSON.parse (WR-02) — all three pinned by failing-first regression tests
 - [Phase 61]: 61-01: D-04 applied in one parity commit (d950f5a) — 13-key whitelists both tiers, defaults minus assign_self, PUT 400 per removed key pinned, legacy rows read-absorbed; owning comments carry no literal key names (verify-grep constraint)
 - [Phase 61]: 61-02: burst grouping is key-based over the whole unread list (not adjacency — D-11 has no time window); group mark-read fans via A.burstRead; entry-chunk gate remedied 57-03-style by lazy-loading the notifications+archive routes (manualChunks rejected: it hoisted the EN catalogue out of the entry chunk)
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
