@@ -4,7 +4,7 @@ verified: 2026-11-13T23:05:00Z
 status: passed
 score: 4/4 success criteria verified
 covered_files: [server.js, src/core/notifPrefs.js, src/core/inboxBursts.js, src/pages/inbox.js, src/actions/actions.js, src/locales/en.json, src/locales/fr.json, src/shell/layout.js, src/main.js, docs/notification-audit.md, test/notif-prefs.test.mjs, test/inbox-burst.test.mjs, test/local-prefs.test.mjs, test/migration.test.mjs, test/notif-hydration.test.mjs, test/i18n-toast.test.mjs, test/i18n-shell.test.mjs, test/i18n-core-features.test.mjs, .planning/phases/61-notification-trim/61-01-PLAN.md, .planning/phases/61-notification-trim/61-01-SUMMARY.md, .planning/phases/61-notification-trim/61-02-PLAN.md, .planning/phases/61-notification-trim/61-02-SUMMARY.md]
-covered_digest: "v4:sha256:309e86a6cf6acda08683063bf0aaaedc07e641e429681f8e8341c5a6379cae3c"
+covered_digest: "v2:sha256:e3f6074b51c32f133420c9981749ed8dd1972599982cb6926580f314c0367d6b"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
