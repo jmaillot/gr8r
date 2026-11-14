@@ -19,4 +19,11 @@ Summary line: **115/115 passed, zero failed, zero flaky.**
 - **Build + 500 kB chunk gate:** `npm run build` (prebuild i18n:scan FR included) — largest chunk `index-*.js` at 498.11 kB, under the 500 kB gate; threshold untouched.
 - **EN i18n gate:** `npm run build:en` (prebuild:en i18n scan + EN build)
 
-Results appended after execution.
+Results:
+
+- **Unit suite:** `npm test` → `ℹ tests 1536 / ℹ pass 1524 / ℹ fail 0 / ℹ cancelled 0 / ℹ skipped 12` (152.0s) — meets the ≥1524 green requirement.
+- **Lint:** `npm run lint` (eslint .) → exit 0, no output.
+- **FR build + chunk gate:** `npm run build` → `✓ built in 1.54s`, largest chunk `index-*.js` **498.11 kB** (< 500 kB gate); `prebuild` i18n:scan (FR) passed.
+- **EN i18n gate:** `npm run build:en` → `✓ built in 1.43s`, exit 0, no missing-translation output; `prebuild:en` i18n scan passed.
+
+All standing gates green; no threshold edits, no config changes.
