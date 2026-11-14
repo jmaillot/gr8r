@@ -74,6 +74,37 @@ test.beforeAll(async () => {
       fav: false,
     },
   ];
+  /* D-12 deterministic long task: 200+ char unbroken-ish title, 4 assignees
+     (the seeded owner repeated), estimate + due date present. Fixed ids/keys. */
+  const memberId = got.data.memberId;
+  doc.data.tasks = [
+    ...doc.data.tasks,
+    {
+      id: 't_mtask_long',
+      project: 'p_mtask_a',
+      title: `Longtask${run}Supercalifragilisticexpialidociousunbreakabletoken`.repeat(4),
+      key: 'MTASK-9',
+      status: 'inprogress',
+      assignees: [memberId, memberId, memberId, memberId],
+      priority: 'high',
+      due: '2031-01-15',
+      start: null,
+      labels: [
+        { id: 'l_mtask_a', name: 'wrap-probe-one', color: 'indigo' },
+        { id: 'l_mtask_b', name: 'wrap-probe-two', color: 'red' },
+      ],
+      subtasks: [],
+      attachments: [],
+      deps: [],
+      desc: '',
+      estimate: 3,
+      created: Date.now(),
+      updated: Date.now(),
+      creator: memberId,
+      order: 2,
+      fav: false,
+    },
+  ];
   const put = await client.put(`/api/workspaces/${acct.slug}`, { revision: got.data.revision, doc });
   if (put.status !== 200) throw new Error(`doc PUT failed with HTTP ${put.status}`);
 });
@@ -127,6 +158,53 @@ test('at 1280×720 the Columns button is visible (desktop unchanged)', async ({ 
   try {
     await openTasksTable(page, acct);
     await expect(page.locator('[data-pop="cols"]')).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+/* D-09..D-12 at 390×844: the deterministic long task renders on a fully
+   wrapped card (per-card overflow ≤ 2px, D-11 tolerance), the page itself
+   never overflows horizontally, and the toolbar controls stay visible
+   (D-07) while the stack renders. No image capture, no sleeps — scroll/
+   clientWidth measurement + computed styles only. */
+test('at 390px the long-task card wraps with zero overflow and the toolbar stays visible', async ({ browser }) => {
+  const { context, page } = await signIn(browser, acct, { width: 390, height: 844 });
+  try {
+    await openTasksTable(page, acct);
+
+    /* D-07: toolbar affordances all visible while the card stack renders. */
+    await expect(page.locator('.toolbar input.search-sm')).toBeVisible();
+    await expect(page.locator('[data-pop="sort"]').first()).toBeVisible();
+    await expect(page.locator('[data-a="newTask"]').first()).toBeVisible();
+
+    const card = page.locator('.only-m .panel[data-id="t_mtask_long"]');
+    await expect(card).toBeVisible();
+    const box = await card.boundingBox();
+    expect(box && box.width).toBeGreaterThan(0);
+
+    /* D-11: per-card horizontal overflow ≤ 2px, on every card (not just the fixture). */
+    const overs = await page
+      .locator('.only-m .panel')
+      .evaluateAll((els) => els.map((el) => el.scrollWidth - el.clientWidth));
+    expect(overs.length).toBeGreaterThan(0);
+    expect(overs.filter((o) => o > 2), `cards overflowing by >2px: ${overs.join(',')}`).toEqual([]);
+
+    /* D-08: the long title wraps — never nowrap, never ellipsis. */
+    const title = card.locator('b').first();
+    const cs = await title.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { whiteSpace: s.whiteSpace, textOverflow: s.textOverflow, overflowWrap: s.overflowWrap };
+    });
+    expect(cs.whiteSpace).not.toBe('nowrap');
+    expect(cs.textOverflow).not.toBe('ellipsis');
+
+    /* Document-level guard: the page itself never overflows horizontally at 390px. */
+    const doc = await page.evaluate(() => ({
+      sw: document.documentElement.scrollWidth,
+      cw: document.documentElement.clientWidth,
+    }));
+    expect(doc.sw).toBeLessThanOrEqual(doc.cw);
   } finally {
     await context.close();
   }

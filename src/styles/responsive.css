@@ -95,7 +95,12 @@
   .proj-h {
     padding-top: 16px;
   }
-  /* Phase 64 D-01..D-04: Columns hidden ≤900px, card stack shown (Option B band) */
+  /* Phase 64 D-01..D-04: Columns hidden ≤900px, card stack shown (Option B band).
+     D-07: .page.flush is a fixed-height flex column — without flex-shrink:0 the
+     wrapped 390px toolbar is squeezed to 44px and its tabs clip under the list. */
+  .toolbar {
+    flex-shrink: 0;
+  }
   [data-pop='cols'] {
     display: none !important;
   }
@@ -104,6 +109,12 @@
   }
   .hide-m {
     display: none !important;
+  }
+  /* Phase 64 D-08: wrap-everything on the card stack — long unbroken keys,
+     titles and estimates wrap instead of clipping. Scoped to .only-m .panel. */
+  .only-m .panel,
+  .only-m .panel * {
+    overflow-wrap: anywhere;
   }
 }
 @media (max-width: 640px) {
