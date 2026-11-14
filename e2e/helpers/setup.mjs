@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
    imports in this file — the helpers drive the real UI (navigation + the two
    waits), while every assertion stays in the specs (D-04). The option/tab
    labels are read from the locale catalogues, never transcribed. */
-import { test, expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 import en from '../../src/locales/en.json' with { type: 'json' };
 import frCatalogue from '../../src/locales/fr.json' with { type: 'json' };
 
@@ -75,9 +75,11 @@ export function newRunId() {
    and the design-system select contract (src/ui/select.js: the native
    <select> is enhanced into a trigger button (`aria-haspopup="listbox"`,
    accessible name = the current option label) + a `role="listbox"` menu of
-   `role="option"` items; the native control is aria-hidden, so no element
-   carries role="combobox"). Specs never hand-roll either wait (D-05);
-   helpers own navigation and waits only — assertions stay spec-side (D-04).
+   `role="option"` items; the native control is aria-hidden, so nothing in
+   the enhanced DOM answers that ARIA role — the D-03 wording is implemented
+   as driving the enhanced select by its verified DOM roles). Specs never
+   hand-roll either wait (D-05); helpers own navigation and waits only —
+   assertions stay spec-side (D-04).
    ===================================================================== */
 
 /* Navigate to Settings and wait for the lazy chunk by its rendered content —
