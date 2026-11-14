@@ -30,7 +30,7 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
   (repeated-run trace with retries=0, pre-warmed server, `--workers=1`) — leading
   hypotheses: debounced `persistLiveView` write-through race, coordinate-click
   popover dismissal, shared OWNER/acme live-state coupling
-- [ ] **FLAKY-02**: VIEW-02 passes deterministically (repeat-each N × locally green
+- [x] **FLAKY-02**: VIEW-02 passes deterministically (repeat-each N × locally green
   with retries=0) — no added sleeps, no `networkidle`, no raised global retries;
   app async-contract bug fixed if the triage proves it is one
 
@@ -67,7 +67,7 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 | E2E-02 | Phase 62 | Complete |
 | E2E-03 | Phase 64 | Pending |
 | FLAKY-01 | Phase 63 | Complete |
-| FLAKY-02 | Phase 63 | Pending |
+| FLAKY-02 | Phase 63 | Complete |
 | MOB-01 | Phase 64 | Pending |
 | MOB-02 | Phase 64 | Pending |
 
