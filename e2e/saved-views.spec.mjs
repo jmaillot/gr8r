@@ -45,16 +45,34 @@ async function openTasksTable(page) {
   await expect(page.getByRole('button', { name: fmt('popover.savedViews') })).toBeVisible();
 }
 
-/* The columns popover: force one column's checkbox to `checked`. Closes the
-   popover afterwards (a dismiss click outside, the app's closePop path). */
+/* The columns popover: force one column's checkbox to `checked`. The live
+   write-through is awaited on its real completion signal — the debounced
+   persistLiveView PUT (450 ms trailing, viewSync.js) whose postData has NO
+   `name` field, distinguishing the live row from a named PUT (putViews vs
+   putViewsNamed). The waiter is armed immediately before the single toggle
+   click (nothing re-arms the debounce inside this call), then Escape closes
+   the popover semantically (keyboard.js Escape → closePop) — replacing the
+   old coordinate click at (5, 400), which is viewport-dependent (Phase 63
+   SC-3 / D-04). The kept `.pop.floating` toHaveCount(0) assertion is the
+   genuine closePop completion proof: render() runs synchronously, so a
+   swallowed Escape fails fast and visibly. */
 async function setColumn(page, label, checked) {
   await page.getByRole('button', { name: fmt('act.columns') }).click();
   const box = page
     .locator('.pop.floating label')
     .filter({ hasText: label })
     .getByRole('checkbox');
-  if ((await box.isChecked()) !== checked) await box.click();
-  await page.mouse.click(5, 400);
+  if ((await box.isChecked()) !== checked) {
+    /* Phase 63 SC-3: arm the live-PUT completion signal BEFORE the trigger
+       (D-08 arm-before-act) — postData without `name` = the live row. */
+    const livePut = page.waitForResponse(r =>
+      r.url().endsWith('/api/me/views') &&
+      r.request().method() === 'PUT' &&
+      !JSON.parse(r.request().postData() || '{}').name);
+    await box.click();
+    await livePut;
+  }
+  await page.keyboard.press('Escape'); /* Phase 63 SC-3 / D-04: semantic dismissal */
   await expect(page.locator('.pop.floating')).toHaveCount(0);
 }
 
