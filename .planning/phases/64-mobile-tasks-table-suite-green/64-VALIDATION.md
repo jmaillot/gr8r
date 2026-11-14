@@ -19,7 +19,7 @@ created: "2026-11-14"
 
 | Property | Value |
 |----------|-------|
-| **Framework** | Vitest (unit) + Playwright (e2e, single main project) |
+| **Framework** | node --test via `npm test` (unit) + Playwright (e2e, single main project) |
 | **Config file** | project vitest/playwright configs (see RESEARCH.md) |
 | **Quick run command** | `npm run e2e -- e2e/<changed-spec>.spec.mjs --workers=1 --retries=0` |
 | **Full suite command** | full e2e suite (111/111 target) + `npm run lint` + unit suite + chunk gate + i18n gate |
@@ -43,6 +43,7 @@ created: "2026-11-14"
 | 64-01 T1 | 01 | 1 | MOB-01 | — | N/A | e2e | `npm run e2e -- e2e/mobile-tasks-table.spec.mjs --workers=1 --retries=0` (band/boundary tests; spec is created by this task) | ✅ after T1 | ⬜ pending |
 | 64-01 T2 | 01 | 1 | MOB-01 | — | N/A | e2e | `npm run e2e -- e2e/french-overflow.spec.mjs e2e/projects-table.spec.mjs e2e/saved-views.spec.mjs --workers=1 --retries=0` (unmodified specs) | ✅ | ⬜ pending |
 | 64-02 T1 | 02 | 2 | MOB-02 | — | N/A | e2e | `npm run e2e -- e2e/mobile-tasks-table.spec.mjs --workers=1 --retries=0` (390×844 truncation tests; extends the 64-01 spec) | ✅ | ⬜ pending |
+| 64-02 T2 | 02 | 2 | MOB-02 | T-64-02 | N/A | build+unit+e2e triad | `npm run build && npm test` + `npm run e2e -- e2e/mobile-tasks-table.spec.mjs --workers=1 --retries=0` (chunk gate + 1524+ unit green + mobile spec unchanged; see 64-02 T2 verify) | ✅ | ⬜ pending |
 | 64-03 T1 | 03 | 3 | E2E-03 | T-64-04 | N/A | e2e | `npm run e2e` (full parallel close run; evidence → 64-CLOSE.md) | ✅ | ⬜ pending |
 | 64-03 T2 | 03 | 3 | E2E-03 | T-64-05 | N/A | unit+gates | `npm test` + `npm run lint` + `npm run build` (prebuild i18n-scan, chunk gate) + `npm run build:en` (EN i18n gate) | ✅ | ⬜ pending |
 | 64-03 T3 | 03 | 3 | E2E-03 | T-64-05 | N/A | e2e | `npm run e2e` (re-run after any D-16 fix; skipped if T1-T2 fully green) | ✅ | ⬜ pending |
