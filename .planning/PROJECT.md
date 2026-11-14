@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-14 after v2.2 milestone — Notifications, Search & Delivery shipped (6 phases, 19 plans, 24/24 requirements, 1524 tests green)*
+*Last updated: 2026-11-14 — v2.3 Consolidation & Hardening started (e2e suite 111/111, mobile tasks-table layout, VIEW-02 flaky)*
 
 
 <details>
@@ -90,6 +90,31 @@ Project machine); the mechanical suite is the verification of record. Full recor
   text should be reconciled at milestone close. Recorded as an accepted override in
   53-VERIFICATION.md.
 
+## Current Milestone: v2.3 Consolidation & Hardening
+
+**Goal:** bring the whole verification suite back to 100% green and fix the mobile
+experience of the tasks table — no new features.
+
+**Target features:**
+- CONS-01 — Repair the 9 failing e2e specs (`french-overflow.spec.mjs` ×7 +
+  `locale.spec.mjs:122`, lazy-chunk Settings role/timing drift from 56-01);
+  e2e suite 111/111 at close
+- CONS-02 — Mobile layout of the tasks table (truncated rendering with the
+  columns button; deferred at Phase 57 UAT, 2026-11-12)
+- CONS-03 — Stabilize the pre-existing flaky VIEW-02 e2e spec
+
+**Constraints (standing):** zero new runtime dependencies; standing gates intact
+(500 kB chunk gate, EN+FR i18n gate incl. server keys, lint clean, Phase 38
+suppression + no-double-send invariants); 1524-test unit suite green throughout.
+
+**Out of scope:** MS Project/xlsx human visual check 54-05 (owner-accepted),
+SMTP no-retry semantics (accepted Phase 27).
+
+### v2.3 milestone decisions (owner-validated 2026-11-14)
+
+- M-2.3 Consolidation first: owner chose a hardening milestone over new features
+  (items 1, 2, 3 of the post-v2.2 debt scan only)
+
 ## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 
 **Goal:** make access simple and predictable — visibility is decided at the project level
@@ -148,9 +173,8 @@ suite green, i18n gate 0 dead/0 stale. Milestone audit: **passed** (12/12 requir
 
 </details>
 
-**Next milestone:** not yet planned — UI/UX polish batch (invite modal state fix,
-searchable team members, unified project settings modal with per-team permissions,
-projects table columns) awaiting `/gsd-new-milestone`.
+**Next milestone:** v2.3 Consolidation & Hardening — started 2026-11-14
+(see Current Milestone above).
 
 <details>
 <summary>Milestone v1.10 Extensions & Adapters (shipped 2026-11-07)</summary>
