@@ -228,7 +228,7 @@ No missing dependencies. No new packages installed.
 | A2 | Escape always reaches the `S.ui.pop` branch when a popover is open (palette closed) | Pattern 2 | Dismissal fails visibly — caught by the kept `toHaveCount(0)` assertion; low risk |
 | A3 | The 450 ms debounce value and lazy-import delay are the complete delay chain on the live PUT | H1 | Triage may reveal server-side latency coupling; trace will show it |
 
-## Open Questions
+## Open Questions (resolved by the triage plan 63-01 — owned, not dangling; verdicts recorded in 63-TRIAGE.md)
 
 1. **Which hypothesis actually fires?** Intentionally unresolved — the phase's first plan exists to answer it with trace evidence (D-05). Planning should NOT pre-commit fix order beyond the unconditional SC-3 spec fixes.
 2. **Is the apply-then-toggle coalescing (H1's silent-drop variant) an app bug or by-design debounce semantics?** — Triage decides; if bug, D-03 fix-in-phase applies.
