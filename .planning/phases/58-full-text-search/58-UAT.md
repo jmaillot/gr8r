@@ -1,5 +1,5 @@
 ---
-status: pass
+status: complete
 phase: 58-full-text-search
 source: [58-VERIFICATION.md]
 started: 2026-11-13T00:00:00Z

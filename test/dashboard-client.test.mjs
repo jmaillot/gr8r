@@ -14,7 +14,6 @@
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
 import { mock, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 
 register(new URL('./helpers/dashboard-client-loader.mjs', import.meta.url), import.meta.url);
 

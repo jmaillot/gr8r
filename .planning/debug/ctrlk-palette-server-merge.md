@@ -1,5 +1,5 @@
 ---
-status: diagnosed
+status: resolved (fix shipped in 58-04, commit 6f87399 — G-58-2 GREEN: cmd mode dispatches the palette server search; verified 2026-11-14 at milestone v2.2 close)
 trigger: "Ctrl-K palette (default cmd mode) never dispatches the server search — server-only tasks only appear after Tab to search mode"
 created: 2026-11-13T00:00:00Z
 updated: 2026-11-13T00:00:00Z

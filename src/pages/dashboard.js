@@ -30,16 +30,11 @@ import { ROUTE_TEARDOWN, render } from '../shell/render.js';
 let fillSeq = 0;
 let timer = null;
 let inflight = null;
-/* CR-01: the requested window is CLAIMED up-front, before the fetch — a
-   failing fetch can therefore never leave the window unclaimed and re-kick
-   fill() on every render (the fetch/render ping-pong). */
-let lastRequestedWindow = null;
 
 async function fill() {
   const my = ++fillSeq;
   inflight?.abort();
   inflight = new AbortController();
-  lastRequestedWindow = S.ui.dashWindow || '7d';
   const res = await api.dashboard(S.ui.dashWindow || '7d', { signal: inflight.signal });
   if (my !== fillSeq || S.ui.route !== 'dashboard') return;
   if (res.ok) {
