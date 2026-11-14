@@ -61,4 +61,15 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 
 ## Traceability
 
-*Filled by roadmap — maps each REQ to its phase.*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| E2E-01 | Phase 62 | Pending |
+| E2E-02 | Phase 62 | Pending |
+| E2E-03 | Phase 64 | Pending |
+| FLAKY-01 | Phase 63 | Pending |
+| FLAKY-02 | Phase 63 | Pending |
+| MOB-01 | Phase 64 | Pending |
+| MOB-02 | Phase 64 | Pending |
+
+Coverage: 7/7 mapped. E2E-03 (111/111 at milestone close) maps to Phase 64, the final
+phase, since it requires Phases 62–63 complete plus the mobile change landed.
