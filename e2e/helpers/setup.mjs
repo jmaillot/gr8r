@@ -15,6 +15,26 @@ import { createHash } from 'node:crypto';
 
 export const BASE_URL = `http://127.0.0.1:${process.env.E2E_PORT || 4317}`;
 
+/* Phase 62 (D-01/D-02): assert-once, fail-fast readiness guard. Per D-01 the
+   `webServer.url` probe in e2e/playwright.config.mjs is the single owner of
+   readiness — there is deliberately NO poll here. Helpers that need the
+   server call this once before their first network use: a single plain
+   fetch (setup.mjs stays plain-Node ESM, not page.request) that throws a
+   clear "server not ready" error instead of letting fixture calls die with
+   a raw ECONNREFUSED. No retries, no wait loop — race-free by construction. */
+let _serverAsserted = false;
+export async function assertServerUp(base = BASE_URL) {
+  if (_serverAsserted) return;
+  let res;
+  try {
+    res = await fetch(`${base}/api/health`);
+  } catch (e) {
+    throw new Error(`e2e server not ready at ${base}/api/health (webServer.url should have gated this): ${e.message}`);
+  }
+  if (!res.ok) throw new Error(`e2e server /api/health answered HTTP ${res.status} — server not ready`);
+  _serverAsserted = true;
+}
+
 export const OWNER = Object.freeze({ email: 'e2e-owner@e2e.local', password: 'e2e-owner-password', name: 'E2E Owner' });
 
 export const PASSWORD = 'e2e-password-1';
@@ -92,7 +112,7 @@ export function inviteToken(url) {
 }
 
 /* Phase 23 (post-merge gate fix): read-modify-write of the shared acme
-   document with revision-conflict retry. Parallel Playwright workers all
+   document with revision-conflict recovery. Parallel Playwright workers all
    append fixtures to the same seeded workspace, so the revision-guarded PUT
    can lose a race (409 workspaceChanged). Re-read and replay the mutation on
    the fresh revision instead of failing the fixture. */
@@ -143,6 +163,7 @@ function project({ id, key, name, members, lead, isPrivate }) {
  * clientIp(run, tag) so the per-IP throttles never cross accounts or runs.
  */
 export async function createAccount(base, run, tag, name, { locale, workspace } = {}) {
+  await assertServerUp(base);
   const account = { email: `${tag}-${run}@e2e.local`, password: PASSWORD, name, ip: clientIp(run, tag), slug: workspace };
   const client = apiClient(base, { name: tag, ip: account.ip });
   expectStatus(`${tag} signup`, await client.post('/api/auth/signup', { name, email: account.email, password: account.password }), [201]);
@@ -165,6 +186,7 @@ export async function createAccount(base, run, tag, name, { locale, workspace } 
  * workspace must keep accepting the open session's writes.
  */
 export async function acceptInvite(base, { email, role = 'member', inviterIp, joinerIp, name = 'Late Joiner' }) {
+  await assertServerUp(base);
   const inviter = apiClient(base, { name: 'inviter', ip: inviterIp });
   expectStatus('owner sign-in', await inviter.post('/api/auth/login', { email: OWNER.email, password: OWNER.password }), [200]);
 
@@ -177,6 +199,7 @@ export async function acceptInvite(base, { email, role = 'member', inviterIp, jo
 }
 
 export async function setupTenants(base = BASE_URL, run = newRunId()) {
+  await assertServerUp(base);
   const ownerClient = apiClient(base, { name: 'owner', ip: clientIp(run, 'owner') });
   expectStatus('owner sign-in', await ownerClient.post('/api/auth/login', { email: OWNER.email, password: OWNER.password }), [200]);
 
