@@ -11,7 +11,7 @@ experience of the tasks table — no new features.
 ## Phases
 
 - [x] **Phase 62: E2E Baseline Repair** - Fix the webServer readiness race and repair the 9 drifted specs against the lazy-chunk Settings contract (completed 2026-11-14)
-- [ ] **Phase 63: VIEW-02 De-Flake** - Diagnose the flaky VIEW-02 spec with evidence, then stabilize it deterministically with retries=0
+- [x] **Phase 63: VIEW-02 De-Flake** - Diagnose the flaky VIEW-02 spec with evidence, then stabilize it deterministically with retries=0
 - [ ] **Phase 64: Mobile Tasks Table & Suite Green** - Hide-the-columns-button mobile contract, honestly usable card stack, and the 111/111 e2e close
 
 ## Phase Details
@@ -55,7 +55,7 @@ Plans:
 Plans:
 - [x] 63-01-PLAN.md — Triage: trace-protocol evidence rounds + 63-TRIAGE.md hypothesis × evidence verdict (FLAKY-01)
 - [x] 63-02-PLAN.md — Spec fix: Escape dismissal + awaited live-PUT waits; D-01 10× proof (FLAKY-02)
-- [ ] 63-03-PLAN.md — Conditional D-03 app fix + regression test; D-02 full-suite gate (FLAKY-02)
+- [x] 63-03-PLAN.md — Conditional D-03 (ruled not-proven, recorded) + D-02 full-suite gate green (FLAKY-02)
 
 ### Phase 64: Mobile Tasks Table & Suite Green
 
@@ -76,7 +76,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 62. E2E Baseline Repair | 3/3 | Complete    | 2026-11-14 |
-| 63. VIEW-02 De-Flake | 2/3 | In Progress|  |
+| 63. VIEW-02 De-Flake | 3/3 | Complete    | 2026-11-14 |
 | 64. Mobile Tasks Table & Suite Green | 0/? | Not started | - |
 
 ## Milestone Notes
