@@ -82,3 +82,36 @@ Each run logs two `WARN login failed` lines (one from `127.0.0.1`, one from a `1
 Evidence citation (§3 H1 row and §6): the Round B forced-trace network extraction shows **every `/api/me/views` PUT completing HTTP 200 in normal sequence** — none dropped, none late, none mis-ordered (6 PUTs, 11:52:36.082Z → 11:52:39.579Z, the expected live+named cadence ~0.5–1.2 s after each trigger, consistent with the 450 ms trailing debounce, A3). The applyTableView→toggle clearTimeout coalescing variant is therefore ruled **by-design debounce semantics, not a bug** — the silent-drop window (last-armed write cancelled) was never observed to fire, and SC-4 forbids "fixing" an app bug that the evidence does not show exists (a behavior change smuggled as a fix, T-63-03). The 63-02 spec-side fix (scoped `.last()` toast assertions + awaited PUT/GET completion signals) resolved the reproduced failures without any app change, and D-01 held at 10/10.
 
 Constraints preserved by taking the skip path: `src/core/viewSync.js` silent-except-401 contract untouched, dynamic-import callers unchanged (500 kB chunk gate), no payload-construction change (sanitizeViewBlob).
+
+## 9. D-02 full parallel suite + full phase gate outcome (Plan 03, 2026-11-14)
+
+**D-02: PASS.** VIEW-02 green inside a full parallel run (all specs, default workers, retries=0) — the Phase 64 milestone-close conditions hold.
+
+Exact commands run:
+
+```bash
+# D-02 attempt 1 (pre-fix): 111 passed, 1 failed — VIEW-02 itself
+rm -rf test-results && npm run build && npm run e2e 2>&1 | tee /tmp/opencode/phase63-d02-attempt1.log
+#   VIEW-02 ✘ 30.9s: page.waitForResponse timeout at spec line 172 — openGets
+#   armed AFTER the awaited popover-open click (arm-after-act, D-08 violation
+#   in 63-02's delete-flow change); under 3-worker load both refetch-on-open
+#   GETs settle during the click round-trip and the post-armed listeners never
+#   fire. Fixed spec-side (Rule 1): listeners attach BEFORE the click
+#   (commit 1ee1e99). App-side D-03 still not implicated — no dropped write.
+
+# D-02 confirmation run (full suite from scratch, post-fix):
+rm -rf test-results && npm run e2e 2>&1 | tee /tmp/opencode/phase63-d02.log
+#   112 passed (6.1m), 0 failed, VIEW-02 ✓ 8.8s (#89), zero ECONNREFUSED.
+
+# Full phase gate (Phase 62 proven command, verbatim):
+rm -rf test-results && npm run build && npm test && npm run lint && npm run e2e 2>&1 | tee /tmp/opencode/phase63-gate.log
+#   build ✓ (i18n scan 0 literals; chunks: index 498.24 kB — 500 kB gate holds)
+#   unit: 1536 tests, 1524 pass, 0 fail, 12 skipped (pre-existing skips)
+#   lint ✓
+#   e2e: 112 passed (6.3m), 0 failed, VIEW-02 ✓ 8.7s (#92), zero ECONNREFUSED
+#   GATE_EXIT=0
+```
+
+**Honest interim note:** the post-fix D-02 confirmation run and an earlier full run of the same code state each observed one-off failures in two 2FA time-window specs (`flows.spec.mjs` 2FA-en next-step-code retry; `tfa-disable-cycle.spec.mjs` en 401-teardown wait) — both TOTP 30 s-step specs unrelated to saved-views and untouched this phase, passing in every other run including the final gate. Recorded as an out-of-scope flake observation for Phase 64 planning, not papered over: no retries, no timeouts, no isolation were added (standing constraints).
+
+**No `e2e/playwright.config.mjs` changes this phase** (D-02 acceptance: zero config edits — confirmed by `git log -- e2e/playwright.config.mjs`).
