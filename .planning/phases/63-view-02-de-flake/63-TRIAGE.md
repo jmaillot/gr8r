@@ -74,3 +74,11 @@ No sleeps, no isolation, no retries — assertions strengthened only (D-04, stan
 ## 7. Observation (out of scope, no action this phase)
 
 Each run logs two `WARN login failed` lines (one from `127.0.0.1`, one from a `10.x` pod IP) per OWNER sign-in even when the test proceeds successfully — appears to be a first-attempt rate-limit/bounce followed by a successful retry. Pre-existing, unrelated to the flake; recorded in the phase deferred register.
+
+## 8. D-03 app fix: not proven — ruling recorded (Plan 03, 2026-11-14)
+
+**D-03 app fix: NOT PROVEN — no app-side change lands.** Per the §6 verdict and the plan's branch gate, Plan 03 Task 1 takes the skip path: zero diff on `src/`.
+
+Evidence citation (§3 H1 row and §6): the Round B forced-trace network extraction shows **every `/api/me/views` PUT completing HTTP 200 in normal sequence** — none dropped, none late, none mis-ordered (6 PUTs, 11:52:36.082Z → 11:52:39.579Z, the expected live+named cadence ~0.5–1.2 s after each trigger, consistent with the 450 ms trailing debounce, A3). The applyTableView→toggle clearTimeout coalescing variant is therefore ruled **by-design debounce semantics, not a bug** — the silent-drop window (last-armed write cancelled) was never observed to fire, and SC-4 forbids "fixing" an app bug that the evidence does not show exists (a behavior change smuggled as a fix, T-63-03). The 63-02 spec-side fix (scoped `.last()` toast assertions + awaited PUT/GET completion signals) resolved the reproduced failures without any app change, and D-01 held at 10/10.
+
+Constraints preserved by taking the skip path: `src/core/viewSync.js` silent-except-401 contract untouched, dynamic-import callers unchanged (500 kB chunk gate), no payload-construction change (sanitizeViewBlob).
