@@ -13,11 +13,11 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 
 ### E2E Repair (CONS-01)
 
-- [ ] **E2E-01**: The e2e webServer readiness contract is race-free — no spec hits
+- [x] **E2E-01**: The e2e webServer readiness contract is race-free — no spec hits
   ECONNREFUSED 127.0.0.1:4317 from a shared helper-level readiness poll
   (fail-closed design preserved: no `reuseExistingServer` default change, global
   `retries` untouched, gracefulShutdown intact)
-- [ ] **E2E-02**: The 9 drifted specs pass against HEAD (`french-overflow.spec.mjs`
+- [x] **E2E-02**: The 9 drifted specs pass against HEAD (`french-overflow.spec.mjs`
   ×7 + `locale.spec.mjs:122`) via role-based queries and auto-retrying waits on the
   lazy Settings chunk — assertions are strengthened waiting, never weakened; the
   native `<select>` language control is asserted by its real combobox role
@@ -63,8 +63,8 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| E2E-01 | Phase 62 | Pending |
-| E2E-02 | Phase 62 | Pending |
+| E2E-01 | Phase 62 | Complete |
+| E2E-02 | Phase 62 | Complete |
 | E2E-03 | Phase 64 | Pending |
 | FLAKY-01 | Phase 63 | Pending |
 | FLAKY-02 | Phase 63 | Pending |

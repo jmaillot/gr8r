@@ -10,7 +10,7 @@ experience of the tasks table — no new features.
 
 ## Phases
 
-- [ ] **Phase 62: E2E Baseline Repair** - Fix the webServer readiness race and repair the 9 drifted specs against the lazy-chunk Settings contract
+- [x] **Phase 62: E2E Baseline Repair** - Fix the webServer readiness race and repair the 9 drifted specs against the lazy-chunk Settings contract (completed 2026-11-14)
 - [ ] **Phase 63: VIEW-02 De-Flake** - Diagnose the flaky VIEW-02 spec with evidence, then stabilize it deterministically with retries=0
 - [ ] **Phase 64: Mobile Tasks Table & Suite Green** - Hide-the-columns-button mobile contract, honestly usable card stack, and the 111/111 e2e close
 
@@ -27,17 +27,17 @@ experience of the tasks table — no new features.
   3. Shared `openSettings()` / language-select helpers exist in `e2e/helpers/setup.mjs` so exactly one place knows the lazy-chunk contract — no per-spec duplicated wait logic
   4. The standing gates stay green throughout: 1524-test unit suite, lint clean, 500 kB chunk gate (only ~220 B headroom), EN+FR i18n gate
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
-- [ ] 62-01-PLAN.md — readiness: reproduce ECONNREFUSED emitter + D-02 assert-once guard (E2E-01)
+- [x] 62-01-PLAN.md — readiness: reproduce ECONNREFUSED emitter + D-02 assert-once guard (E2E-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 62-02-PLAN.md — openSettings/selectLanguage helpers + 7 french-overflow specs (E2E-02)
+- [x] 62-02-PLAN.md — openSettings/selectLanguage helpers + 7 french-overflow specs (E2E-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 62-03-PLAN.md — locale.spec.mjs:122 repair + phase gate: full e2e green, gates green (E2E-02)
+- [x] 62-03-PLAN.md — locale.spec.mjs:122 repair + phase gate: full e2e green, gates green (E2E-02)
 
 ### Phase 63: VIEW-02 De-Flake
 
@@ -70,7 +70,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 62. E2E Baseline Repair | 0/? | Not started | - |
+| 62. E2E Baseline Repair | 3/3 | Complete    | 2026-11-14 |
 | 63. VIEW-02 De-Flake | 0/? | Not started | - |
 | 64. Mobile Tasks Table & Suite Green | 0/? | Not started | - |
 
