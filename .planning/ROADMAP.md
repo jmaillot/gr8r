@@ -68,7 +68,14 @@ Plans:
   3. One render path, one source of truth for visible columns — the mobile treatment is media-query-gated, never a parallel render fork (Pitfall 4 tripwire specs stay green)
   4. The full e2e suite is 111/111 green at milestone close: 0 known failures, VIEW-02 stable per Phase 63, with every standing gate green (1524 unit tests, lint, chunk gate, i18n gate)
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 64-01-PLAN.md — Mobile CSS contract: generic Columns hide at ≤900px + Option B band alignment + boundary e2e (MOB-01)
+- [ ] 64-02-PLAN.md — Card stack polish + D-12 long-task truncation suite at 390×844 (MOB-02)
+- [ ] 64-03-PLAN.md — Milestone close: full parallel e2e run + standing gates, zero waivers (E2E-03)
+
+**Wave structure**: 64-01 (Wave 1) → 64-02 (Wave 2, blocked on 64-01) → 64-03 (Wave 3, blocked on both)
 **UI hint**: yes
 
 ## Progress
