@@ -351,11 +351,11 @@ async function ssrfOk(urlStr) {
 | A5 | HMAC signature header name/semantics are agent-discretion | Code Examples | External consumers need the documented header name |
 | A6 | `oid` is available as an id_token claim from Entra by default | OIDC section | If tenant policies strip it, mention falls back to bold-name (D-14 already covers this) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Claim-table naming/sharing with POL-02** — Discretion (CONTEXT.md): design one generic claim table (e.g. `delivery_claims` with a `kind` column) vs two tables. Recommendation: one generic claim/delivery state machine module that Phase 68's SMTP retry reuses; Phase 67 implements it.
-2. **Retry driver timing** — Discretion: recommendation is a dedicated `.unref()`'d pass (30 s tick) shaped like runReminderPass (server.js:7825-7832), draining due rows — survives restarts, no in-memory state.
-3. **Where does `oid` live** — users column (D-13 says "champ serveur") vs a new `oidc_identities` extension (server.js:272-281 already maps issuer+subject→user). Recommendation: column on `users` per D-13's wording; the callback route at server.js:4253-4450 is the single write site.
+1. **Claim-table naming/sharing with POL-02** — RESOLVED in 67-01: one generic claim/delivery state machine on `webhook_deliveries` (UNIQUE `dedup_key` claim, guarded status UPDATE), Phase 68's SMTP retry reuses the shape. ✓
+2. **Retry driver timing** — RESOLVED in 67-01: dedicated `.unref()`'d 30s pass shaped like runReminderPass (server.js:7825-7832), draining due rows — survives restarts, no in-memory state; also carries the D-07 retention purge. ✓
+3. **Where does `oid` live** — RESOLVED in 67-02: nullable column on `users` per D-13's wording; the OIDC callback route (server.js:4253-4450) is the single write site. ✓
 
 ## Environment Availability
 
