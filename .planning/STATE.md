@@ -5,14 +5,14 @@ milestone_name: Automation & Productivity
 current_phase: 65
 current_phase_name: Subtask Tree
 status: executing
-stopped_at: Completed 65-03-PLAN.md
-last_updated: "2026-11-15T12:22:52.074Z"
-state_head: 81cda8c150bc2f4c366566e21fd1342b185b6891
+stopped_at: Completed 65-04-PLAN.md
+last_updated: "2026-11-15T13:07:03.411Z"
+state_head: c83fcf8e9a7c331bc7ae8d18fa9ddfd300975236
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # STATE.md
@@ -26,7 +26,7 @@ progress:
 ## Current Position
 
 **Phase:** 65 (Subtask Tree) — EXECUTING
-**Plan:** 4 of 5
+**Plan:** 5 of 5
 **Status:** Ready to execute
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
@@ -45,6 +45,7 @@ progress:
 | Phase 65 P65-01 | 302 | 3 tasks | 4 files |
 | Phase 65 P65-02 | 14min | 3 tasks | 10 files |
 | Phase 65 P65-03 | 33 | 3 tasks | 14 files |
+| Phase 65 P65-04 | 47 | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -74,8 +75,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T12:22:52.039Z
-**Stopped at:** Completed 65-03-PLAN.md
+**Last session:** 2026-11-15T13:07:03.377Z
+**Stopped at:** Completed 65-04-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -89,3 +90,4 @@ None.
 - [Phase 65]: 65-02: task-level completion cascade wired in applyPatch status:'done' — one site covers every completion surface; reopen cascades nothing (D-13)
 - [Phase 65]: 65-03: one shared recursive tree renderer (subTreeChecklistHtml) for drawer/list/board-popover; collapse state in session-only S.ui.subOpenNodes
 - [Phase 65]: 65-03: subtask detail view split to a lazy chunk (61-02 remedy) to restore chunk-gate headroom; subtree.leafEntries is the shared leaf-count definition
+- [Phase 65]: 65-04: re-parent targets are the moved subtask's siblings only (deterministic one-level set, cannot cycle); subtaskMatch attribution = folded substring scan in the search handler; chunk-gate remedy moved restructure actions + tree renderer + subtask popovers into pre-warmed lazy chunks behind treeChecklist/subPop registries
