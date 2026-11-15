@@ -272,16 +272,16 @@ function sanitizeTaskBody(body) {
 | A3 | Sanitizer never rejects — it silently drops junk (D-04) rather than throwing, so no new error codes are strictly needed; i18n additions are labels/hints only | Standard Stack | If a "template too large" style guard is wanted (doc-size safety), one error code + EN/FR keys must land the same commit |
 | A4 | Template bodies do not need FTS projection (templates are workspace-wide config-like doc data, not task content) | Architecture | If search should find templates, FTS sweep extension grows — new scope |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the sanitizer cap template count / body size?**
    - What we know: the doc is one JSON blob; templates are unbounded arrays like tasks. No precedent caps exist for doc arrays.
    - What's unclear: whether a cap (e.g., 100 templates) is wanted as doc-size hygiene.
-   - Recommendation: skip the cap (matches existing unbounded arrays); revisit only if the doc grows pathologically. [ASSUMED A3]
+   - RESOLVED: skip the cap (matches existing unbounded arrays); revisit only if the doc grows pathologically. [ASSUMED A3]
 
 2. **Does "Save as template" on a project copy its milestone rows / lead / members?**
    - What we know: D-14 fixes the captured set (name/description/status/teams + task tree); lead/members/milestones are NOT in the whitelist.
-   - Recommendation: strict D-14 whitelist; the form lets the author pick icon/color/name at save time.
+   - RESOLVED: strict D-14 whitelist; the form lets the author pick icon/color/name at save time.
 
 ## Environment Availability
 
