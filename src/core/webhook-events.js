@@ -39,6 +39,19 @@ export const WEBHOOK_EVENTS = Object.freeze([
 /* One event per (hook, event, subject) — the event object is the claim
    seed: { event, subjectId, occurredAt }. taskId aliases subjectId for
    task-shaped events (67-02). Timestamps are ISO 8601 UTC strings (D-04). */
+/* Tracer scope (67-01) expanded in 67-02: the full 8-event diff, per-event
+   whitelists and the envelope builder land with the 67-02 tasks. The skeleton
+   below exists so the RED phase imports resolve and the new assertions fail
+   on BEHAVIOR, not on a module error (TDD fail-fast rule). */
+
+export const EVENT_FIELDS = {};
+
+export function buildEnvelope(event, ctx) {
+  void event;
+  void ctx;
+  return null;
+}
+
 export function diffWebhookEvents(storedDoc, next, { memberIds } = {}) {
   void memberIds; // consumed by 67-02 (task.assigned assignee normalization)
   try {
