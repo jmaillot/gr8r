@@ -1,176 +1,155 @@
-# Feature Landscape — v2.3 Consolidation & Hardening
+# Feature Research — v2.4: Subtask Tree, Templates, Per-Project Webhooks (MS Teams)
 
-**Domain:** Self-hosted PM workspace — consolidation (e2e repair, mobile table layout, flaky-test stabilization). No new features.
-**Researched:** 2026-11-14
-**Overall confidence:** HIGH — grounded in the actual specs (`e2e/french-overflow.spec.mjs`, `e2e/locale.spec.mjs:122`, `e2e/saved-views.spec.mjs`), the actual table code (`src/views/table.js`), the actual CSS (`src/styles/responsive.css`, `src/styles/views/table.css`), and the actual Playwright config (`e2e/playwright.config.mjs`), cross-checked against Playwright official docs (locators/actionability/webServer).
+**Domain:** self-hosted PM workspace (gr8r / Projects Studio) — hierarchical subtasks, task/project templates, per-project outbound webhooks delivering MS Teams cards
+**Researched:** 2026-11-15
+**Confidence:** HIGH (Teams card format & connector retirement verified against Microsoft Learn + developer-blog sources; tool conventions verified against Vikunja/OpenProject docs)
 
----
+## Feature Landscape
 
-## Target CONS-01 — Repair 9 failing e2e specs (lazy-chunk Settings drift)
+### Table Stakes (Users Expect These)
 
-### What "good" looks like (expected behavior)
-
-The 9 failures share one root cause: Phase 56 split Settings into a lazy Vite chunk. The affected specs navigate to Settings and immediately click inside it (`page.getByRole('button', { name: 'Settings' }).click()` → `Language` → options). Before 56, Settings markup was in the entry bundle and rendered synchronously; now the first click lands while the chunk is still fetching/parsing, and the follow-up locator either times out or binds to a DOM node the re-render then replaces.
-
-"Good" for an e2e spec facing lazy-loaded routes:
-
-1. **Locator auto-waiting already handles most of it** (HIGH confidence, Playwright docs): `getByRole(...).click()` re-resolves via `_retryWithProgressIfNotConnected` until the element is actionable — so the *first* interaction is usually fine. What breaks is **locators bound before a re-render** (stale element) and **non-auto-retrying reads** (`locator.evaluate()`, `isChecked()`, `innerText()` — single-attempt). The fix pattern: keep everything as web-first assertions (`expect(locator).toBeVisible()`, `toHaveText`, `toHaveAttribute`) which auto-retry, and convert single-attempt reads into `expect.poll()` where the value must settle.
-2. **Wait for a post-chunk symptom, never for the chunk itself.** Don't poll for `import()` or network idle. Wait for the *rendered result* of the lazy chunk — e.g. `await expect(page.getByRole('heading', { name: fmt('settings.language') })).toBeVisible()` before interacting inside it. That is chunk-agnostic (works even if Settings stops being lazy) and mirrors what the existing `frenchShell(page)` helper already does for the shell.
-3. **The spec's own `__survived` no-reload probe (french-overflow line 148–164) is sound** and should survive: the mutation-observer settle check runs *after* the language switch is confirmed, so it is not affected by load-time chunking — only the *entry* into Settings needs the added wait.
-
-### Table Stakes (must ship for CONS-01 to be done)
-
-| Feature | Why Expected | Complexity | Notes / Dependency on existing code |
-|---|---|---|---|
-| Await the lazy Settings render before interacting, in all 9 failing specs | Specs click into Settings faster than the chunk loads post-56 | Low | One `expect(...).toBeVisible()` per spec at the Settings entry point. Touches: `french-overflow.spec.mjs` (language-switch test + teams-tab test + the `settings` route inside the 16-route overflow loop and 21-route sweep), `locale.spec.mjs:122` onward. The route-level tests (`goto('/settings')` + `frenchShell`) likely need `expect.poll` on a Settings-specific marker, not just the shell |
-| Convert single-attempt reads that follow lazy renders into auto-retrying assertions | `isChecked()`, `evaluate()`, `innerText()` don't retry; they fail if the node was replaced mid-chunk-load | Low | In french-overflow: `chromeBoxes()` and `leakScan()` are `page.evaluate` calls but they run after `frenchShell()`/`frenchMarker()` settled — audit, don't blanket-rewrite. In saved-views: `await box.isChecked()` inside `setColumn()` is a single-attempt read on popover content — also relevant to VIEW-02 |
-| e2e suite back to 111/111 green | Milestone gate | Low | Pure repair; standing gates (chunk gate 11/11, i18n gate) must stay green |
-
-### Differentiators (valued, optional)
-
-| Feature | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| A shared `openSettings(page, tab)` helper | One place knows how to wait for the lazy chunk; the 9 specs stop duplicating entry choreography | Low | Follows the existing helper convention (`frenchShell`, `signIn`, `openTasksTable` in the same suite) |
-| A "lazy-route ready" marker convention (each lazy route exposes a stable rendered heading to await) | Future route splits can't re-break the suite | Med | Needs agreement on one marker per lazy route; keep it a *rendered* symptom, not a DOM/data attribute on the bundle |
-
-### Anti-Features (explicitly NOT to build)
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|---|---|---|
-| `page.waitForTimeout(...)` sleeps before Settings interactions | The classic flake re-importer: too short = flaky, too long = slow suite; masks the real async contract | Auto-retrying `expect(locator)...` on a rendered symptom |
-| Un-splitting Settings (reverting Phase 56 code-splitting) | Breaks the D-02 500 kB chunk gate and ships slower first paint | Await the lazy render in tests |
-| `networkidle` waits | Deprecated advice; SPA polling (30s notif poll) makes it unreliable | Web-first assertions |
-
-### Dependencies
-
-- Phase 56 loaders (`src/` lazy import of Settings) — read-only; do not modify.
-- `e2e/playwright.config.mjs` — already correct (`webServer.url` = `/api/health`, 120 s timeout, `gracefulShutdown`). The existing **dist staleness guard** (Phase 56) is fail-closed — keep intact.
-- `retries: CI ? 1 : 0` — with retries on, local runs are the honest signal; verify fixes pass with `retries=0` locally, not just in CI.
-
----
-
-## Target CONS-02 — Mobile layout of the tasks table with the columns button
-
-### What "good" looks like (expected behavior)
-
-The codebase already made the architectural choice (HIGH confidence, `src/views/table.js:83-91` + `responsive.css`): the desktop `<table>` is `.hide-m` (display:none under 640px) and mobile renders a **card stack** (`.only-m` panels: status icon, title, key, priority pill, assignee avatars, due, estimate, progress bar). That is the correct pattern — **card-stacking**, which is the ecosystem's recommended answer for data tables on phones (horizontal scroll at 390px is unusable for a wide PM table; priority-column pruning loses too much).
-
-The reported bug: "strongly truncated when using the columns button." Root cause analysis from the code:
-
-- The **columns popover** (`act.columns` button, `.pop.floating` with checkboxes) writes `v.hidden[]`, which drives `TCOLS.filter(...)` for the *desktop table only*. The mobile card stack **hardcodes** its fields and ignores `v.hidden` — so hiding columns has no visible effect on mobile, and *showing* hidden columns changes nothing either. Meanwhile the column *widths* (`v.colW`, `style="width:${totalW}px"`) and the popover's own layout are desktop-tuned.
-- "Truncated" likely means: opening the columns popover on mobile clips it (popover positioned for desktop, `.pop.floating` overflowing the 390px viewport — the same class of bug the inbox-tabs fix already addressed for `.tabs`), and/or the card stack's second `.row` with `flex-wrap` renders a truncated/overlapping field set. Either way the mobile experience of a column-management affordance is broken because the affordance targets a table that isn't rendered.
-
-Expected behavior matrix ("good"):
-
-| Mobile width | Table view behavior |
-|---|---|
-| ≤640px | Card stack renders; columns button either (a) is hidden, or (b) filters the *card* fields — never a clipped popover over a hidden table |
-| >640px | Current desktop table + popover unchanged |
-
-### Table Stakes (must ship for CONS-02)
-
-| Feature | Why Expected | Complexity | Notes / Dependency on existing code |
-|---|---|---|---|
-| Decide and implement the mobile contract for the columns button: hide it on mobile OR make it drive the card stack's fields | A control that mutates an invisible table is broken UX; this is the core of CONS-02 | Low–Med | Simplest honest fix: hide the columns/sort/saved-views toolbar buttons under the `hide-m`/`only-m` regime (mobile already has the card stack with its own fixed fields). Making the popover drive card fields is the richer option but touches `tableHtml()`'s mobile template and saved-view blobs |
-| Columns popover never overflows the 390px viewport when opened | Truncation reported at UAT (Phase 57, 2026-11-12) | Low | If kept visible on mobile: clamp `.pop.floating` with `max-width: min(360px, calc(100vw - 24px))` + internal scroll — the pattern `components.css:748` already uses (360px cap) and overlays.css (720px cap) |
-| Mobile card stack respects the same "truncation-free" bar the suite already enforces | The french-overflow spec already asserts `scrollWidth ≤ clientWidth` and unclipped chrome at 390px for the `tasks` route — it must keep passing | Low | The overflow proof is the regression harness; no new spec framework needed |
-| An e2e proof: at 390px, open the columns popover (if kept) and assert every checkbox row is fully inside the viewport | "Good" = pinned outcome, both viewports — the inbox-tabs spec is the exact template | Low | Model on french-overflow's inbox-tabs test (box math on the popover + operability after layout change) |
-
-### Differentiators (valued, optional)
-
-| Feature | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| Card stack fields follow `v.hidden` | Column choices apply everywhere, saved views mean the same thing on phone and desktop | Med | Requires mapping hidden columns → card field suppression; saved-view blobs already carry `hidden[]` so persistence is free |
-| Priority-column awareness documented | Industry patterns offer "priority columns" (keep 2–3 key columns visible, scroll the rest) as the middle path | — | Rejected as over-engineering here: the card stack already IS the priority-column answer |
-
-### Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|---|---|---|
-| Horizontal-scroll table on mobile (`overflow-x: auto` under 640px) | A PM tasks table at 390px needs ~900px+; horizontal scroll for primary data is the known-bad pattern; also conflicts with the spec's document-overflow assertion | Keep/repair the card stack |
-| A third responsive regime (table+priority columns) | Three rendering paths triple the e2e surface for zero new capability | Two regimes: cards ≤640px, table >640px |
-| Any new runtime dependency (responsive table library) | Standing zero-dependency constraint | Hand CSS, as everywhere else |
-
-### Dependencies
-
-- `src/views/table.js` `tableHtml()` — the mobile card template is inline in the same export; edits are surgical.
-- `src/styles/responsive.css` (`hide-m`/`only-m` breakpoints at 640px) and `components.css` popover styles.
-- Saved views (`saved_views` blobs) — if card fields start honoring `hidden[]`, verify the blob shape is unchanged (it is; `hidden` already exists) so VIEW-01/02 remain byte-compatible.
-- CONS-01's repaired french-overflow specs are the regression net for this work — **sequence CONS-01 before CONS-02**.
-
----
-
-## Target CONS-03 — Stabilize the flaky VIEW-02 spec
-
-### What "good" looks like (expected behavior)
-
-Flaky-test triage methodology (standard practice, applicable directly):
-
-1. **Reproduce with retries off, in a loop.** `retries: 0` locally is already the config default; run the single spec repeatedly (`--repeat-each` or a loop) until it fails, with `trace: retain-on-failure` (already on) — the trace is the diagnosis artifact.
-2. **Classify the flake**: timing/async, shared-state, or ordering. This spec has all three candidate classes visible in its code.
-3. **Fix the cause in the spec or the app's async contract, never add a sleep.** Then prove stability: green across N consecutive runs locally, and green in CI (where `workers: 1, retries: 1` — note CI retries currently *mask* the flake, which is why it's "known flaky" rather than failing).
-
-Candidate root causes found by reading the spec (opinionated ranking):
-
-1. **Debounced write-through race (most likely).** Column show/hide is "debounced write-through" (Phase 56/57 record). `setColumn()` toggles a checkbox and immediately dismisses the popover; the *next* step saves the view. If the debounce hasn't flushed when the save reads live state — or the apply-refetch lands while assertions run — the saved blob or re-applied state can miss a column. Fix: make the spec await the network effect (`page.waitForResponse(r => ...'/api/me/views')`) or await a rendered symptom of the applied state, instead of trusting wall-clock.
-2. **Coordinate-based popover dismissal** — `page.mouse.click(5, 400)` (a raw viewport coordinate, used 3×) is brittle: if the popover renders at that spot, the click toggles content instead of dismissing. Fix: `page.keyboard.press('Escape')` or click the known backdrop element.
-3. **Shared OWNER/acme workspace.** The spec reuses the seeded OWNER account in the shared `acme` workspace (run-unique view names prevent name collisions, but toolbar state — live hidden columns, sort — is mutated in a workspace other specs/parallel fixtures also read). Fix: a dedicated throwaway account+workspace with API-seeded tasks (the french-overflow sweep pattern is the proven template), or accept and pin ordering (`fullyParallel: false` already serializes).
-4. **Toast-based assertions** (`expect(page.locator('.toast', ...))`) — toasts are transient; if one expires between steps, the assertion can miss it. Auto-retrying `expect` mostly covers this; keep toast windows in mind when sequencing.
-
-### Table Stakes
+**SUB — Subtask tree**
 
 | Feature | Why Expected | Complexity | Notes |
-|---|---|---|---|
-| Root-cause the flake from a retained trace (retries off, repeated local run) | Triage step zero; without a reproduced failure any "fix" is a guess | Low | Config already retains traces on failure; `workers:1` in CI, undefined locally |
-| Remove coordinate-based dismissal (`mouse.click(5,400)`) from `setColumn()` and friends | Deterministic dismissal: Escape or a named backdrop; coordinates silently change meaning when layout shifts | Low | 3 occurrences in saved-views.spec.mjs |
-| Await the debounce/write network effect before asserting saved state | The debounced write-through is an async contract the spec currently doesn't await | Low | `waitForResponse` on `/api/me/views` PUT/POST around the save/apply steps |
-| VIEW-02 green across N≥10 consecutive local runs with retries=0 | The definition of "stabilized"; CI retry=1 currently masks the flake | Low | Document the N in the phase verification |
-| Isolate VIEW-02 fixtures from the shared OWNER workspace (or prove ordering safety) | Shared mutable live-view state is a classic inter-spec coupling | Low–Med | Throwaway account + API-seeded workspace follows the sweep-account precedent; alternatively document why serialization suffices |
+|---------|--------------|------------|-------|
+| Multi-level nesting (unlimited or capped depth) | Every reference tool ships it; Jira's 1-level cap is a well-known complaint | MEDIUM | gr8r subtasks are flat today. Model: `parentId` + `order` (sibling sort key) on each task; one recursive render, no adjacency-list SQL gymnastics needed at expected scale. Cap display depth is not a substitute for real parentId chains. |
+| Aggregated progress rollup (parent % done = f(children)) | OpenProject, Vikunja, Asana, Azure DevOps all roll up; a parent that says 0% with all children done feels broken | MEDIUM | Convention: parent progress = weighted mean of children (Vikunja: percent-done or completed/total when unset). Recompute on completion toggle, walking up the chain. Store nothing derived or compute on read — gr8r's `progressOf` already computes progress from tasks, so extend that funnel. |
+| Indented tree rendering in list/table views | OpenProject & Atlassian render child rows indented with disclosure carets | LOW-MEDIUM | Row indent via padding-left(depth×step), expand/collapse caret per parent. gr8r board/table/list views need a consistent indent contract. |
+| Drag to reorder siblings | Standard in every tool | LOW-MEDIUM | Reorder within same parent only for v1 is acceptable; keep the `order` fractional/LexoRank-style key so inserts don't renumber siblings. |
+| Drag to reparent (move under another parent) | OpenProject & Jira Cloud support drag-reparent; users expect it once hierarchy exists | HIGH | Needs cycle detection (can't drop a node into its own subtree), permission check on target parent, and updated rollup on both old and new ancestor chains. Deferrable to a later plan within the phase. |
+| Promote/demote (indent/outdent) via keyboard or context menu | Cheap alternative to free drag-reparent; Taiga/Vikunja offer "move" affordances | LOW | Add-sibling/add-subtask buttons on hover are the minimal convention. |
+| Tree-aware notifications & permissions | A subtask is a task: assignees, reminders, notifs, redaction must keep working | LOW | gr8r multi-assignee subtasks already exist (v2.1); `parentId` must ride the same redaction/permission funnel (`memberCanReadProject`); deleting a parent must cascade or re-parent children explicitly (decide and pin). |
 
-### Differentiators (optional)
+**TMPL — Task & project templates**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Task template with a predefined subtask checklist | The killer use of templates in PM tools: "onboarding a client" spawns 8 named subtasks. With a subtask tree shipping in the same milestone, checklists are natural | LOW-MEDIUM | Template = saved task shape: title, description, assignee hints, due-offset days, ordered subtask list (title + offsets). Apply → instantiate real tasks. |
+| Project template (structure + starter tasks) | OpenProject/Taiga/Leantime all offer project-from-template; gr8r has repeatable project shapes (client onboarding, sprints) | MEDIUM | Template carries project name pattern, columns/labels if gr8r has them, and a task tree. Apply creates the project (respecting lead-on-create + permCreate rules from v2.0/v2.1). |
+| Template gallery / picker at creation time | Convention: templates offered in the "New task"/"New project" flow, not buried in settings | LOW | A section in the creation modal listing templates (name, task count). No separate admin page needed at v1. |
+| Template storage & CRUD | Templates are data, not document hacks | LOW | Server table (v2.2 `saved_views` precedent) or a document section behind the existing merge/normalize machinery. Create/edit/duplicate/delete; scope: workspace-wide list, creator-tagged. |
+| Placeholders / due-date offsets | Users expect `{+N days}` or "due = creation date + N" semantics | MEDIUM | Minimal convention: per-task/subtask `dueOffsetDays`; absolute dates in a template are a known trap (stale dates when applied months later). |
+
+**WHK — Per-project outbound webhooks**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Per-project webhook targets (URL + event filter) | Vikunja: webhook targets attached to a project with per-target event selection; Taiga similar. gr8r requirement already scopes this way (project-scoped, not team) | MEDIUM | New server table `webhooks(project_id, url, secret, events[], enabled)`; CRUD routes gated to owner/admin/project-leader (gr8r's `projectPermFor` funnel). |
+| Event catalog: task.created / task.updated / task.deleted / task.assignee / comment.created | These exact names are the Vikunja convention; Taiga uses `task.created`-style slugs too. Users wiring n8n/Power Automate recognize them | LOW | Map onto gr8r's existing server-side notification event points (assign/mention/comment/update paths already emit rows) — hook the same moments, don't invent a second event bus. |
+| HMAC signature header + per-hook secret | Standard (Vikunja signs with the target secret; GitHub-style `X-Signature` conventions are the ecosystem default) | LOW | `X-Gr8r-Signature: sha256=<hmac(secret, body)>`; secret shown once at creation, hash-stored like gr8r's `psk_live_` API keys. |
+| Payload envelope: event name, timestamp, project, task snapshot | Consumers (Power Automate parse-JSON) need a stable shape | LOW | `{ event, workspace, project: {id,key,name}, data: {task fields}, occurredAt }`. Deterministic field whitelist — see the Vikunja CVE pitfall in PITFALLS: never serialize with the triggering user's view. |
+| Send with retry/backoff + failure visibility | Fire-and-forget silently losing deliveries is the #1 webhook complaint | MEDIUM | gr8r already owns an SMTP retry semantics backlog item (v2.3 POL) — mirror the same fail-absent + logged-failure pattern; a per-hook "last delivery / last error" readback beats a dead-letter queue at this scale. |
+| Rate limiting per hook | Requirement already pinned (fail-absent + per-hook secret + rate-limit) | LOW | Simple token bucket or min-interval per target; skip-and-log on excess, never queue-bound. |
+
+**MS Teams specifics (verified HIGH confidence):**
+
+- The legacy Office 365 **incoming-webhook connector format (`MessageCard`, `@type: "MessageCard"` / `MessageOffice365`) is retired** — creation blocked Aug 2024, connectors disabled May 18–22 2026. Any "Teams webhook" feature built on MessageCard today is DOA for new setups.
+- The current path is a **Teams Workflows webhook** (Power Automate "Post to a channel when a webhook request is received"), which expects an **Adaptive Card**: `{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","contentUrl":null,"content":{...adaptive card...}}]}`. All native Adaptive Card schema elements are supported **except `Action.Submit`**.
+- However, per Microsoft message-center update **MC1181996**, Workflows webhooks also accept legacy **MessageCard payloads** for migration compatibility — so supporting BOTH envelopes is cheap and maximally compatible: detect target type per hook (a `format: teams-adaptive | teams-messagecard | raw-json` field on the webhook row) rather than hardcoding one.
+- Card content conventions: `TextBlock` heading + `FactSet` (Assignee, Due, Priority) + `Action.OpenUrl` deep link to `/w/:slug/task/:key` (gr8r already has deep links from emails — reuse the same URL builder). No HTML in Adaptive Cards — use markdown subset (`**bold**`, links). Keep cards ≤ ~28 KB (Teams card size limit).
+- Because payloads are raw JSON and any URL is user-supplied, gr8r's SSRF posture matters: the hand-rolled outbound fetch must be scheme-validated (https), and per the deployment profile the instance is self-hosted so internal-network policy is the operator's — document it in DEPLOY.md (Vikunja documents exactly this in its security-hardening page).
+
+### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
-|---|---|---|---|
-| A suite-wide popover-helper (`openPopover(page, label)` with Escape-dismiss) | Removes the coordinate-dismiss pattern everywhere it appears | Low | Generalizes `setColumn()`; benefits projects-table spec too |
-| CI flake detector job (repeat VIEW-02 ×5 on main) | Catches regressions before they're "known flaky" | Med | Optional; costs CI minutes |
+|---------|-------------------|------------|-------|
+| Tree + templates + webhooks all zero-dependency | No self-hosted PM tool offers this trio without a plugin/queue service; gr8r's hard constraint (no new runtime deps) is itself a differentiator | — | Pure `node:crypto` HMAC + `fetch` (undici) with AbortController timeout. |
+| Raw-JSON hook format alongside Teams formats | Lets gr8r webhooks feed n8n/Home Assistant/scripts, not just Teams — Vikunja users' top automation ask | LOW | The `format` field above costs one switch statement. |
+| Template apply preserves subtask tree structure | Templates instantiating nested hierarchies (not just flat checklists) are rare outside Jira/Asana | LOW | Falls out free once templates store `parentId` references among their subtask list. |
+| Per-hook delivery log + "send test event" button | Best-in-class webhook UX (Stripe-style); trivially buildable on the delivery log | LOW | One `POST …/test` route + a small read-only log panel in project settings. |
 
-### Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|---|---|---|
-| `waitForTimeout` before toast/popover assertions | Converts a flake into a slower flake | `waitForResponse` / auto-retrying expects |
-| Raising `retries` to hide the flake | Masks the symptom; CI would pass while local devs see failures | Fix the async contract; keep retries at 1 for genuine network jitter only |
-| Deleting VIEW-02 coverage to "stabilize" | Loses the only e2e proof of saved-view round-trip (SC-2) | Repair the spec |
-
-### Dependencies
-
-- Phase 57 saved-views app code (debounced write-through, `saved_views` rows, popover/modal components) — read-only unless triage proves an app bug rather than a spec bug (in which case fix the app's async contract; that's a legitimate outcome).
-- `e2e/playwright.config.mjs` — untouched; trace retention and retries=0-local already support triage.
-- Sequencing: **run CONS-03 triage independently but land after CONS-01** so the suite is green and any VIEW-02 fix is measured against a stable baseline.
-
----
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|--------------|-----------------|-------------|
+| Per-team webhooks | Teams already scope many things in gr8r | Explicitly out of scope this milestone (PROJECT.md); team→project is many-to-many so event scoping gets ambiguous | Project-scoped only; revisit when a real request exists. |
+| Bi-directional Teams (approve tasks from a card) | Looks magical | Requires bot framework, OAuth, and Interactive `Action.Submit` — which Teams incoming webhooks explicitly do NOT support | `Action.OpenUrl` deep links only. |
+| Nested-subtask progress edited by hand on parents | Users want to override rollup | Two sources of truth conflict constantly (OpenProject has the same fight with manual vs computed progress) | Computed-only rollup in v1; manual-override flag only if requested post-launch. |
+| Unlimited-depth drag-and-drop tree in board view | Kanban cards with subtrees | Board cards are compact; dragging nested trees across columns breaks the swimlane model in every tool that tried it (Trello only does flat checklists on cards) | Tree lives in list/table views; board cards show a child-count badge + progress bar, click-through to the tree. |
+| Template versioning/audit | Enterprise instinct | Overkill for a single-tenant-ish self-hosted workspace | Duplicate-then-edit is the convention (OpenProject does the same). |
+| Generic webhook plugin/transform system (arbitrary templating of payloads) | Power-user appeal | Template injection = XSS-adjacent payload bugs; Vikunja's CVE-2026-123524 class of webhook information disclosure comes from exactly this complexity | Fixed envelope + fixed card renderers (adaptive/messagecard/raw). |
 
 ## Feature Dependencies
 
 ```
-CONS-01 (9 spec repairs) → CONS-02 (mobile table)   [overflow proof specs are the regression net]
-CONS-01 → CONS-03 landing                           [stabilize against a green baseline]
-CONS-03 triage ∥ CONS-01 execution                  [triage/reproduce can start in parallel]
-CONS-02 popover fix ↔ saved-views blob shape        [must stay byte-compatible: VIEW-01/02]
+[SUB parentId + order model]
+    └──requires──> [tree render + indent]
+    └──requires──> [cycle-safe reparent]  (can ship after v1 render)
+    └──enables──> [progress rollup]  (extend existing progressOf)
+    └──enables──> [TMPL subtask-checklist templates]
+
+[TMPL templates storage]
+    └──requires──> [server-side template CRUD]  (saved_views table precedent)
+    └──requires──> SUB model  (checklist templates instantiate subtasks)
+
+[WHK webhooks]
+    └──requires──> [existing server event points]  (notification emit sites: assign/mention/comment/update)
+    └──requires──> [memberCanReadProject permission funnel]  (payload whitelisting)
+    └──independent of──> SUB and TMPL  (except: does deleting a task emit task.deleted? decide once)
 ```
 
-## MVP Recommendation
+### Dependency Notes
 
-Prioritize:
-1. **CONS-01** — cheapest, unblocks everything; the suite is the verification instrument for the other two targets.
-2. **CONS-03** — diagnose (trace + reproduce) early because its root cause might be an app bug; land after CONS-01.
-3. **CONS-02** — the only user-visible change; do it last, protected by the repaired overflow specs.
+- **SUB is the foundation:** templates that include subtask checklists only make sense once `parentId` exists; do SUB first.
+- **WHK is independent** and the lowest-risk feature — it hooks gr8r's existing server-side emit moments. Good candidate for a parallel phase.
+- **SUB conflicts with board-view UX** unless the board shows only flat cards + child badges (see anti-feature above).
+- **POL backlog items are fully independent** — schedule them anywhere.
 
-Defer: card-stack-follows-hidden-columns (Med complexity, real design question about what saved views mean on mobile) — the hide-the-button-on-mobile contract satisfies the UAT finding; the richer contract deserves its own owner discussion.
+## MVP Definition
+
+### Launch With (v2.4)
+
+- [ ] SUB: `parentId`+`order`, indented tree in list/table, add-subtask/sibling, aggregated progress, tree-aware delete policy — the core hierarchy
+- [ ] SUB: sibling drag-reorder; **reparent via drag OR promote/demote** (promote/demote is the cheaper honest v1)
+- [ ] TMPL: task templates with ordered subtask checklists + due offsets; project templates with starter task tree; picker in the creation flows
+- [ ] WHK: project-scoped CRUD (owner/admin/leader), event filter, HMAC-signed delivery, **Teams Adaptive Card + MessageCard + raw JSON formats**, rate limit, delivery-log readback, test-send
+- [ ] POL: the four v2.3 backlog items (mobile hidden[] fields, SMTP retry semantics — which the webhook retry design should mirror, WR-01 CSS, Nyquist reconciliation)
+
+### Add After Validation (v2.5+)
+
+- [ ] Full drag-reparent with cycle detection UI polish — trigger: reparent demand from real usage
+- [ ] Manual progress override on parents — trigger: user complaint that computed-only feels rigid
+- [ ] Per-team webhooks — trigger: explicit owner request
+- [ ] Template marketplace/import-export (JSON copy) — trigger: multi-workspace users
+
+### Future Consideration
+
+- [ ] Bi-directional Teams bot interactions — blocked on Adaptive Cards' Action.Submit being unsupported for incoming webhooks
+- [ ] Webhook dead-letter queue with replay — trigger: delivery volume that makes the log insufficient
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| SUB parentId + tree render + rollup | HIGH | MEDIUM | P1 |
+| SUB reparent (promote/demote first, drag second) | MEDIUM-HIGH | LOW→HIGH | P1 (demote) / P2 (drag) |
+| TMPL task + project templates w/ checklists | HIGH | MEDIUM | P1 |
+| WHK Teams webhooks (adaptive + messagecard) | HIGH | MEDIUM | P1 |
+| WHK raw-JSON format | MEDIUM | LOW | P2 |
+| WHK delivery log + test send | MEDIUM | LOW | P2 |
+| Board-view child badges | MEDIUM | LOW | P2 |
+| Drag-reparent full UX | MEDIUM | HIGH | P2/P3 |
+
+## Competitor Feature Analysis
+
+| Feature | Vikunja | OpenProject | Taiga | gr8r approach |
+|---------|---------|-------------|-------|----------------|
+| Subtask hierarchy | Unlimited nesting, aggregated percent-done | Work-package parent/child, drag-reparent, rollup, roadmap-level | Tree list, reorder | `parentId`+`order`, computed rollup via `progressOf` |
+| Templates | Saved filter views only (weak) | Work-package templates (Enterprise), project templates | Issue templates via plugins | Native task + project templates with subtask checklists — a real differentiator vs Vikunja |
+| Webhooks | Project-level targets, event filter, HMAC-signed, raw JSON | Enterprise webhooks (paid tier) | Webhooks on most objects (paid in some tiers) | Free in core, three payload formats incl. Teams cards |
+| Teams format | Raw JSON only (user wires their own flow) | MessageCard-era (legacy) | Legacy MessageCard | **Adaptive Card first** (connectors retired May 2026), MessageCard + raw JSON as alternates |
 
 ## Sources
 
-- `e2e/french-overflow.spec.mjs`, `e2e/locale.spec.mjs`, `e2e/saved-views.spec.mjs`, `e2e/playwright.config.mjs` — repo, HIGH
-- `src/views/table.js` (mobile card template, `hide-m`/`only-m`), `src/styles/responsive.css` (640px/900px breakpoints), `src/styles/components.css` (360px popover cap) — repo, HIGH
-- Playwright official docs via Context7: locators (web-first, auto-retry + `_retryWithProgressIfNotConnected`), actionability (auto-retrying assertions), `expect.poll` (deadline-based re-resolution for lazy rendering), webServer (`url` readiness, `reuseExistingServer`, timeouts) — HIGH
-- PROJECT.md v2.2/v2.3 records (Phase 56 lazy-chunk split, Phase 57 UAT deferral, VIEW-02 flaky-at-baseline note) — HIGH
+- Microsoft Learn — *Types of Cards & their Usage* (Teams): Adaptive Cards via incoming webhooks; Action.Submit unsupported — learn.microsoft.com/en-us/microsoftteams/platform/task-modules-and-cards/what-are-cards (HIGH)
+- Microsoft 365 dev blog — *Retirement of Office 365 connectors within Microsoft Teams* (Aug 2024) + message-center MC1181996 (connectors disabled May 18–22, 2026; Workflows webhooks accept MessageCard payloads) (HIGH)
+- Microsoft Support — *Send messages in Teams using incoming webhooks* (Workflows webhook, Adaptive Card envelope) (HIGH)
+- Vikunja docs — Webhooks API & help pages: project-level targets, per-target events, HMAC signing, raw payloads; security-hardening page on outbound requests (HIGH)
+- Rapid7 CVE-2026-123524 — Vikunja webhook payload built with the triggering user's permission context (information disclosure) (HIGH — pitfall evidence)
+- OpenProject community roadmap — child work-package progress rollup, drag & drop ordering/reparenting features (MEDIUM)
+- Atlassian Cloud changelogs — drag-reparent convention for hierarchical work items (MEDIUM)
+- gr8r `.planning/PROJECT.md` — v2.4 scope, constraints (zero deps), existing systems (progressOf, memberCanReadProject, notification emit sites, saved_views precedent)
+
+---
+*Feature research for: gr8r v2.4 Automation & Productivity*
+*Researched: 2026-11-15*
