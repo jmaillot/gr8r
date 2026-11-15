@@ -75,6 +75,10 @@ Plans:
   5. SSRF is mitigated at delivery time: https-only URLs, resolved-IP deny-list (loopback/RFC1918/169.254) re-checked per delivery, hook config in server mirror tables (`webhook_hooks`/`webhook_deliveries`) with SQLite+pg parity in the same commit; threat model runs with `threats_open: 0`
 
 **Plans**: TBD
+- [x] 67-01-PLAN.md
+- [ ] 67-02-PLAN.md
+- [ ] 67-03-PLAN.md
+- [ ] 67-04-PLAN.md
 
 ### Phase 68: Backlog Polish
 
@@ -118,7 +122,7 @@ Coverage: 16/16 requirements mapped ✓
 |-------|----------------|--------|-----------|
 | 65. Subtask Tree | 5/5 | In Progress|  |
 | 66. Task & Project Templates | 3/3 | In Progress|  |
-| 67. Project Webhooks | 0/0 | Not started | - |
+| 67. Project Webhooks | 1/4 | In Progress|  |
 | 68. Backlog Polish | 0/0 | Not started | - |
 
 ## Backlog
