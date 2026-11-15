@@ -8,14 +8,24 @@ import { ic } from '../core/icons.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task, taskProg, teamsList } from '../core/store.js';
 import { leafEntries } from '../core/subtree.js';
 import { FT, av, avStack, filePrev, fileType, fileTypeName, fmtComment, lbl, progBar } from '../ui/helpers.js';
-import { fxc } from '../shell/render.js';
+import { fxc, render } from '../shell/render.js';
 import { actExtraHtml, cellAssignee, cellDue, cellPrio, cellProject, cellStatus, verbLabel } from '../components/task-list.js';
 import { modalHtml } from './modals.js';
 import { popHtml, RECUR } from './popovers.js';
 /* The stored recur value's catalogue key. */
 const RECUR_KEY = Object.fromEntries(RECUR.map(x => [x.stored, x.key]));
 import { paletteHtml } from './palette.js';
-import { subtaskHtml, subTreeChecklistHtml } from '../features/subtasks.js';
+/* 65-03 chunk-gate remedy (61-02 precedent): the subtask DETAIL view rides its
+   own lazy chunk — pre-warmed at boot, rendered from the cached module. The
+   shared tree renderer stays synchronous (first paint needs it). */
+import { subTreeChecklistHtml } from '../features/subtasks.js';
+let subDetailMod = null;
+import('../features/subtask-detail.js')
+  .then(m => {
+    subDetailMod = m;
+    if (S.ui.subOpen) render();
+  })
+  .catch(() => {});
 
 export function renderLayer() {
   const u = S.ui;
@@ -74,7 +84,9 @@ export function drawerHtml(t) {
     </div>
     <div class="drawer-b" data-keep="drawer:${t.id}${sub ? ':' + sub.id : ''}">${
       sub
-        ? subtaskHtml(t, sub)
+        ? subDetailMod
+          ? subDetailMod.subtaskHtml(t, sub)
+          : ''
         : `
       ${t.status === 'done' ? `<div class="alert ok" style="margin-bottom:12px">${ic('circle-check', 15)}<span>${tMsg('act.completedAgo', { when: t.completedAt ? ago(t.completedAt) : '' })} <button class="link" data-a="toggleDone" data-id="${t.id}">${tMsg('act.reopenTask')}</button></span></div>` : isOver(t) ? `<div class="alert danger" style="margin-bottom:12px">${ic('clock-alert', 15)}<span>${tMsg('act.overdueBy', { n: -diffD(parse(t.due), TODAY) })} <button class="link" data-a="pop" data-pop="date" data-field="due" data-id="${t.id}">${tMsg('act.reschedule')}</button></span></div>` : ''}
       <textarea class="ttl-edit" id="d-title" rows="1" data-autosize data-blur="commitDrawerTitle" data-key-enter="blur" data-id="${t.id}" aria-label="${tMsg('a11y.taskTitle')}">${esc(t.title)}</textarea>

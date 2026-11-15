@@ -559,7 +559,6 @@
   "a11y.taskTitle": "Titre de la tâche",
   "a11y.repeats": "Se répète {freq}",
   "a11y.moreActions": "Plus d’actions",
-  "a11y.completeSubtask": "Terminer la sous-tâche",
   "a11y.completeTask": "Terminer {title}",
   "a11y.priorityTip": "Priorité {priority}",
   "a11y.composerPlaceholder": "Nom de la tâche — Entrée pour ajouter, Échap pour annuler",

@@ -558,7 +558,6 @@
   "a11y.taskTitle": "Task title",
   "a11y.repeats": "Repeats {freq}",
   "a11y.moreActions": "More actions",
-  "a11y.completeSubtask": "Complete subtask",
   "a11y.completeTask": "Complete {title}",
   "a11y.priorityTip": "{priority} priority",
   "a11y.composerPlaceholder": "Task name — press Enter to add, Esc to cancel",

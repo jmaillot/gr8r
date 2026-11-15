@@ -6,7 +6,9 @@ import { ago, esc, relDate } from '../core/utils.js';
 import { t as tMsg, formatDate, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
-import { D, S, commentsOf, isOver, mem, pColor, proj, task } from '../core/store.js';
+import { D, S, commentsOf, isOver, mem, pColor, proj, task, taskProg } from '../core/store.js';
+import { leafEntries, orderedSiblings } from '../core/subtree.js';
+import { subTreeChecklistHtml } from '../features/subtasks.js';
 import { av, avStack, dueHtml, empty, lbl, prIcon, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
@@ -45,12 +47,21 @@ export function cellProject(t) {
 }
 export const CELL = { status: cellStatus, assignee: cellAssignee, priority: cellPrio, due: cellDue, labels: cellLabels, project: cellProject };
 
+/* Phase 65 (65-03): the flat subrow strip is now the shared recursive
+   renderer (features/subtasks.js) in compact mode — sibling order via
+   subtree.orderedSiblings (D-03), per-node carets on the session-only
+   S.ui.subOpenNodes map (D-10, shared with the drawer), data-a/data-id/
+   data-sid contract preserved. */
 export function taskRow(t, cols, tpl, opt = {}) {
   const sel = S.ui.sel.has(t.id);
   const open = S.ui.openTasks[t.id];
   const editing = S.ui.editCell && S.ui.editCell.id === t.id && S.ui.editCell.f === 'title';
   const cc = commentsOf(t.id).length;
-  const sd = t.subtasks.filter(s => s.done).length;
+  /* Phase 65 (65-03): the chip is LEAF-ONLY — nested parents never
+     double-count (SUB-03 rollup rule); the bar reads the 65-02 rollup
+     through store.taskProg. */
+  const leaves = leafEntries(t.subtasks);
+  const lsd = leaves.filter(s => s.done).length;
   return `<div class="trow ${t.status === 'done' ? 'done' : ''} ${sel ? 'sel' : ''}${fxc('done', t.id)}${fxc('added', t.id)}" style="--cols:${tpl}" data-task-row="${t.id}" data-group="${opt.group || ''}" data-lkey="${opt.key || ''}" data-ctx="task" data-id="${t.id}">
     <div class="handle" draggable="${opt.drag !== false}" data-drag-row="${t.id}" aria-hidden="true">${opt.drag !== false ? ic('grip-vertical', 14) : ''}</div>
     <div class="c-check">${
@@ -63,13 +74,13 @@ export function taskRow(t, cols, tpl, opt = {}) {
       <span class="key">${t.key}</span>
       ${editing ? `<input class="inline-in" id="edit-title" data-in="noop" data-blur="commitTitle" data-key-enter="commitTitle" data-id="${t.id}" value="${esc(t.title)}" aria-label="${tMsg('a11y.taskTitle')}">` : `<span class="tt">${esc(t.title)}</span>`}
       ${t.recur ? `<span class="meta-mini" data-tip="${tMsg('a11y.repeats', { freq: esc(t.recur.toLowerCase()) })}">${ic('repeat', 11)}</span>` : ''}
-      ${t.subtasks.length ? `<span class="meta-mini">${ic('list-checks', 11)}${sd}/${t.subtasks.length}<span style="width:52px;display:inline-flex" data-tip="${tMsg('page.columns.progress')}">${progBar(Math.round((sd / t.subtasks.length) * 100), sd === t.subtasks.length ? 'green' : '')}</span></span>` : ''}
+      ${t.subtasks.length ? `<span class="meta-mini">${ic('list-checks', 11)}${lsd}/${leaves.length}<span style="width:52px;display:inline-flex" data-tip="${tMsg('page.columns.progress')}">${progBar(taskProg(t), lsd === leaves.length ? 'green' : '')}</span></span>` : ''}
       ${cc ? `<span class="meta-mini">${ic('message-square', 11)}${cc}</span>` : ''}
     </div>
     ${cols.map(c => `<div class="c-meta c-${c === 'labels' ? 'lbl' : c}">${CELL[c](t)}</div>`).join('')}
     <div class="c-more"><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="task" data-id="${t.id}" aria-label="${tMsg('a11y.moreActions')}">${ic('ellipsis', 15)}</button></div>
   </div>
-  ${open ? `<div class="subrows">${t.subtasks.map(s => `<div class="subrow ${s.done ? 'done' : ''}"><input type="checkbox" class="check" ${s.done ? 'checked' : ''} data-a="toggleSub" data-id="${t.id}" data-sid="${s.id}" aria-label="${tMsg('a11y.completeSubtask')}"><span>${esc(s.title)}</span></div>`).join('')}</div>` : ''}`;
+  ${open ? `<div class="subrows">${subTreeChecklistHtml(t, { compact: true, rowClass: 'subrow' })}</div>` : ''}`;
 }
 export function listHtml(groups, key, opt = {}) {
   const cols = opt.cols || ['status', 'assignee', 'priority', 'due', 'labels'];
