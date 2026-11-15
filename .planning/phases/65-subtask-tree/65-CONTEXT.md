@@ -2,6 +2,7 @@
 
 **Gathered:** 2026-11-15
 **Status:** Ready for planning
+**Revised:** 2026-11-15 — D-01/D-03 storage shape amended after execution halt at the 65-01 Task-0 checkpoint (owner flagged structure, irreversibility, sibling-order and concreteness concerns; re-decided in this session's amendment discussion)
 
 <domain>
 ## Phase Boundary
@@ -14,10 +15,12 @@ A task's subtasks form a real multi-level tree (max 5 subtask levels) that users
 ## Implementation Decisions
 
 ### Storage shape
-- **D-01:** Flat `t.subtasks[]` + `parentId` (owner ruling confirmed — resolves the STATE.md storage-shape conflict flag). Subtasks of subtasks are entries in the same single ordered array; only tasks carry a `subtasks[]` array. The tree is built by grouping the array on `parentId`. — **Reversibility:** one-way — the shape is written into every stored workspace doc and mirrored across mergeClientDoc whitelist, FTS projection, exports, and MCP; switching to a nested model later would need a doc migration and touches every consumer.
+- **D-01:** Flat `t.subtasks[]` array per task, each subtask a stable-id object with an explicit `parentId` (`null` = child of the task, otherwise the parent subtask's id — the task itself is the implicit level-0 root and never appears in `parentId`). Only tasks carry a `subtasks[]` array; all descendants are entries in that single array. — **Reversibility:** one-way — the shape is written into every stored workspace doc and mirrored across mergeClientDoc whitelist, FTS projection, exports, and MCP; switching to a nested model or a keyed map later would need a doc migration and touches every consumer.
+- **D-01a:** Root subtasks use `parentId: null` (owner-confirmed). Task ids never appear inside `subtasks[]` entries.
 - **D-02:** Each subtask object carries a stable id (uuid-style); `parentId` references the parent subtask's id, `null` for roots. Re-parenting and cycle checks rely on stable identity.
-- **D-03:** Sibling order = array order in the single `t.subtasks[]` array — no separate sibling-order field.
-- Note: `parentId` and subtask id MUST join the `mergeClientDoc` normalize whitelist or they are silently stripped (existing removal-sweep precedent at `server.js:2579` for subtask assignees).
+- **D-03:** Sibling order = explicit `position` integer field on each subtask (amended from array-order after execution halt — owner wanted moves to touch one node, not rewrite siblings). Tree rendering and export ordering sort by `position` within each `parentId` group; the array's storage order is irrelevant. Ties/missing position are normalized to array order by the funnel on write.
+- Note: `parentId`, subtask `id` and `position` MUST join the `mergeClientDoc` normalize whitelist or they are silently stripped (existing removal-sweep precedent at `server.js:2579` for subtask assignees).
+- Note (irreversibility rationale, owner-confirmed at the halt checkpoint): the one-way risk was accepted *within* the flat family — flat-array→keyed-map remains a purely mechanical migration with no semantic change; the genuinely one-way boundary is flat-vs-nested, and nested was rejected (recursive sweeps, chunk-gate risk).
 
 ### Depth cap and validation
 - **D-04:** Maximum 5 subtask nesting levels under a task (task = level 0). Unlimited children per node — depth is the only structural limit.
@@ -84,6 +87,8 @@ No external specs/ADRs exist — requirements fully captured in decisions above 
 
 - Depth semantics clarified with the owner during discussion: the cap is nesting levels (5 levels of subtasks under a task), not subtask count — count is unlimited.
 - Whole-move rejection on overflow/cycle: the UI must present the localized error without leaving the tree half-moved.
+- Amendment session (2026-11-15, post-halt): owner approved a concrete stored-doc example before locking — `{ id:"u1", parentId:null, position:0 }`, `parentId:"u2"` for a child of subtask u2, task implicit at level 0.
+- Owner's concern driving the amendment: moves under array-order semantics rewrite sibling entries; `position` localizes the diff to the moved node.
 
 </specifics>
 

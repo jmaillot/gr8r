@@ -126,3 +126,26 @@
 ## Deferred Ideas
 
 None — discussion stayed within phase scope.
+
+---
+
+## Amendment session — Storage shape (2026-11-15, post-halt)
+
+Execution halted at 65-01 Task-0 checkpoint; owner chose "Replan" and flagged four concerns: wrong structure, irreversibility risk, need for a concrete example, sibling order via array.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| A: flat array, order = sibling | As originally planned; moves rewrite the array | |
+| A′: flat array + position field | Explicit position per subtask; move touches one node; minimal consumer change | ✓ |
+| B: map keyed by id | Minimal diff too, but rewrites every consumer (funnel, sweeps, FTS, exports, MCP) | |
+| C: nested tree | Structural, but recursive diff/sweep/export logic | (rejected in original session too) |
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| null for roots | Task is implicit level 0; task ids never inside subtasks[] | ✓ |
+| Task id for roots | Uniform parent rule, but couples subtasks to task ids | |
+
+**User's choice:** A′ (array + position), `parentId: null` for roots
+**Notes:** Owner asked "the nested task parentId is always the task, is it clear?" — clarified with a 3-node example showing parentId references subtask ids, task implicit. Irreversibility concern resolved: flat→map is a mechanical migration; the true one-way boundary is flat-vs-nested (already rejected).
+
+**Plan impact:** 5 existing plans assume array-order siblings; a replan is required (position field joins the normalize whitelist, D-01a/D-03 changes ripple through subtree.js helpers, funnel validation, exports ordering).
