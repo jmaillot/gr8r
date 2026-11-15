@@ -676,3 +676,162 @@ test('funnel: a project template with an embedded task tree round-trips with off
     await server.stop();
   }
 });
+
+/* =====================================================================
+   66-02 task 2: the single-pass instantiation pin (D-15) + the landing
+   shape the action's ONE mutate produces. src/actions/templates.js is
+   DOM-coupled (render/toast/store) so the node suite pins the landing
+   logic through the pure landInstantiation + a real funnel PUT, and the
+   push discipline STRUCTURALLY (the action module carries exactly one
+   pushNow per action and zero createTask calls).
+   ===================================================================== */
+import { landInstantiation, templateFromItem } from '../src/core/templates.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+test('landInstantiation (project kind): one mutate lands project + all tasks + activity with nextKey-shaped keys', () => {
+  const data = {
+    projects: [],
+    tasks: [{ id: 'existing', order: 7 }],
+    projOrder: [],
+    activity: [],
+  };
+  const built = instantiateTemplate(
+    {
+      id: 'tpl',
+      kind: 'project',
+      name: 'P',
+      body: { name: 'P', tasks: [{ title: 'T1' }, { title: 'T2', subtasks: [{ id: 's1', parentId: null, position: 0, title: 'S' }] }] },
+    },
+    seqUid(),
+    '2026-06-01',
+    () => 'PX',
+  );
+  let actN = 0;
+  const p = landInstantiation(data, 'project', built, { me: 'm1', actId: () => 'act' + ++actN, now: 1000 });
+  assert.equal(data.projects.length, 1);
+  assert.equal(data.tasks.length, 3, 'the 2 new tasks + the pre-existing one');
+  assert.deepEqual(data.projOrder, [p.id], 'projOrder.unshift');
+  assert.equal(data.activity.length, 1, 'one activity row, not one per task');
+  assert.equal(data.activity[0].verb, 'createdProject');
+  assert.equal(data.activity[0].project, p.id);
+  assert.equal(p.lead, 'm1');
+  assert.deepEqual(p.members, ['m1']);
+  /* nextKey semantics: seq seeds 200, first key <key>-201 */
+  assert.equal(data.tasks[1].key, 'PX-201');
+  assert.equal(data.tasks[2].key, 'PX-202');
+  assert.deepEqual(data.tasks.map(t => t.order).sort((a, b) => a - b).slice(1), [8, 9], 'orders renumbered past the live max');
+  /* the tree survived landing: T2's subtask keeps its canonical shape */
+  const parent = data.tasks.find(t => t.title === 'T2');
+  assert.equal(parent.subtasks.length, 1);
+  assert.equal(parent.subtasks[0].parentId, null);
+});
+
+test('landInstantiation (task kind): one task row with the assigned project ref and a nextKey key', () => {
+  const data = { projects: [{ id: 'p1', key: 'AB', seq: 5 }], tasks: [], projOrder: [], activity: [] };
+  const built = instantiateTemplate({ id: 'tpl', kind: 'task', body: { title: 'T', subtasks: [] } }, seqUid(), '2026-06-01');
+  const tk = landInstantiation(data, 'task', built, { me: 'm1', project: 'p1', nextKey: () => 'AB-6', actId: () => 'a1', now: 1000 });
+  assert.equal(data.tasks.length, 1);
+  assert.equal(tk.project, 'p1');
+  assert.equal(tk.key, 'AB-6');
+  assert.equal(data.activity[0].verb, 'created');
+  assert.equal(data.activity[0].task, tk.id);
+});
+
+test('action module discipline: src/actions/templates.js has ZERO createTask calls and exactly one pushNow per action (D-15/TMPL-03)', () => {
+  const src = readFileSync(fileURLToPath(new URL('../src/actions/templates.js', import.meta.url)), 'utf8');
+  assert.ok(!src.includes('createTask'), 'no createTask anywhere in the instantiation path');
+  const pushCalls = src.match(/await pushNow\(\)/g) || [];
+  assert.equal(pushCalls.length, 2, 'exactly one settled pushNow per writing action (save/instantiate; saveAsTemplate only drafts)');
+  /* every writing action follows the snapshot/restore failure contract */
+  assert.equal((src.match(/snapshot\(\)/g) || []).length >= 2, true, 'snapshot before mutate');
+  assert.equal((src.match(/restore\(snap\)/g) || []).length >= 2, true, 'restore on failure');
+});
+
+test('funnel: instantiated rows from one builder pass ride ONE doc-PUT — one revision bump, all rows persist', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    assert.equal((await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password })).status, 200);
+    const before = await admin.get('/api/workspaces/acme');
+    const revBefore = before.data.revision;
+    /* build exactly what A.instantiateTemplate lands: builder output +
+       landInstantiation into a full doc data shape, ONE PUT */
+    const doc = before.data.doc;
+    const built = instantiateTemplate(
+      {
+        id: 'tplOne',
+        kind: 'project',
+        name: 'One-Pass',
+        body: {
+          name: 'One-Pass',
+          description: 'd',
+          status: 'planning',
+          teams: [],
+          tasks: [
+            { title: 'T1', dueOffsetDays: 5, subtasks: [{ id: 'sa', parentId: null, position: 0, title: 'A', dueOffsetDays: 2 }, { id: 'sb', parentId: 'sa', position: 1, title: 'B' }] },
+            { title: 'T2', dueOffsetDays: 0 },
+          ],
+        },
+      },
+      seqUid(),
+      '2026-06-01',
+      () => 'OP',
+    );
+    let actN = 0;
+    const p = landInstantiation(doc.data, 'project', built, { me: 'm1', actId: () => 'act' + ++actN });
+    const put = await admin.put('/api/workspaces/acme', { revision: revBefore, doc });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    const after = await admin.get('/api/workspaces/acme');
+    assert.equal(after.data.revision, revBefore + 1, 'exactly ONE revision bump for the whole instantiation (D-15)');
+    const data = after.data.doc.data;
+    assert.ok(data.projects.some(x => x.id === p.id), 'the project persisted');
+    assert.equal(data.tasks.filter(x => x.project === p.id).length, 2, 'both task rows persisted in the same pass');
+    const t1 = data.tasks.find(x => x.project === p.id && x.title === 'T1');
+    assert.equal(t1.due, '2026-06-06');
+    assert.equal(t1.key, 'OP-201');
+    assert.equal(t1.subtasks.length, 2, 'the subtask tree persisted — not flattened');
+    assert.equal(t1.subtasks[1].parentId, t1.subtasks[0].id, 'parentId survived the funnel (remapped, never healed to null)');
+    const t2 = data.tasks.find(x => x.project === p.id && x.title === 'T2');
+    assert.equal(t2.due, '2026-06-01');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('templateFromItem: the saveAsTemplate draft is the inverse of the builder, D-14 whitelist only (T-66-05)', () => {
+  const tk = {
+    id: 't1',
+    title: 'Weekly report',
+    notes: 'n',
+    priority: 'high',
+    assignees: ['m2'], /* never captured (D-14/T-66-05) */
+    lead: 'm3',
+    due: '2026-06-08',
+    start: '2026-06-01',
+    subtasks: [{ id: 's1', parentId: null, position: 0, title: 'A', done: true, note: 'nt', due: '2026-06-04' }],
+  };
+  const draft = templateFromItem('task', tk, '2026-06-01');
+  assert.equal(draft.kind, 'task');
+  assert.equal(draft.name, 'Weekly report');
+  assert.deepEqual(draft.body.subtasks, [{ id: 's1', parentId: null, position: 0, title: 'A', done: false, note: 'nt', dueOffsetDays: 3 }]);
+  /* the project flavor: offsets from each task's own due, member data out */
+  const p = { name: 'P', desc: 'd', status: 'active', teams: ['t1'], lead: 'm9', members: ['m9', 'm1'], milestones: [{}] };
+  const tasks = [
+    { title: 'T1', due: '2026-06-11', start: '2026-06-03', subtasks: [], assignees: ['m2'], priority: 'high', notes: 'n' },
+    { title: 'T2', subtasks: [{ id: 'x', parentId: null, position: 0, title: 'S' }] },
+  ];
+  const pdraft = templateFromItem('project', p, '2026-06-01', { tasks });
+  assert.equal(pdraft.kind, 'project');
+  assert.deepEqual(Object.keys(pdraft.body).sort(), ['description', 'name', 'status', 'tasks', 'teams']);
+  assert.deepEqual(pdraft.body.teams, ['t1']);
+  assert.equal(pdraft.body.tasks[0].dueOffsetDays, 10, 'due 2026-06-11 − today 2026-06-01');
+  assert.equal(pdraft.body.tasks[0].startOffsetDays, 2);
+  assert.equal(pdraft.body.tasks[0].priority, 'high');
+  assert.ok(!('lead' in pdraft.body) && !('members' in pdraft.body) && !('milestones' in pdraft.body), 'D-14 whitelist holds');
+  assert.ok(!('dueOffsetDays' in pdraft.body.tasks[1]), 'missing due → missing offset');
+  /* round-trip honesty: the draft re-instantiates to equivalent offsets */
+  const back = instantiateTemplate({ ...pdraft, id: 'tplX' }, seqUid(), '2026-06-01', () => 'PX');
+  assert.equal(back.tasks[0].due, '2026-06-11');
+  assert.equal(back.tasks[0].start, '2026-06-03');
+});

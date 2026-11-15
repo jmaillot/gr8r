@@ -73,6 +73,7 @@ function emptyState() {
     projOrder: [],
     savedViews: [],
     recentSearches: [],
+    templates: [],
   };
 }
 
@@ -300,6 +301,9 @@ export function applyDoc(doc, revision) {
   if (doc.data) S.data = doc.data;
   S.data.recentSearches = Array.isArray(S.data.recentSearches) ? S.data.recentSearches : [];
   S.data.savedViews = Array.isArray(S.data.savedViews) ? S.data.savedViews : [];
+  /* Phase 66: doc.templates[] (D-01) initializes alongside the other doc
+     arrays — the field rides the existing doc-PUT; no new sync logic. */
+  S.data.templates = Array.isArray(S.data.templates) ? S.data.templates : [];
   /* P3 multi-team: migrate the legacy scalar project.team to teams[] for any
      doc shape still carrying it (fresh server doc, localStorage snapshot). */
   if (Array.isArray(S.data.projects)) {

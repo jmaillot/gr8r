@@ -46,6 +46,9 @@ import './features/teams.js';
 import './features/subtasks.js';
 import './actions/teams.js';
 import './actions/subtasks.js';
+/* [66-02 D-13] the template actions ride a pre-warmed lazy chunk — the
+   65-03 subtask-move remedy; the entry chunk carries only this import. */
+import('./actions/templates.js').catch(() => {});
 import './actions/archive.js';
 import { S, D, hydrateFromServer, resetDirty, consumeLegacyLang, hasPendingChanges, myNotifs, proj, canSee, ensureSeedData, saved } from './core/store.js';
 import { api } from './core/api.js';

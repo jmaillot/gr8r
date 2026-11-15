@@ -207,6 +207,8 @@ const CLIENT_ONLY_ERR_CODES = [
   'taskNotFound', // deep-link toast composed in main.js for an unknown/hidden task key (23-01)
   'uploadOffline', // demo/offline branch in actions.js — no server call made
   'cannotChangeAccess', // permission toast composed in actions.js before the call
+  'templateSaveFailed', // 66-02 saveTemplate failure toast in actions/templates.js — push failure, never a server code
+  'templateInstantiateFailed', // 66-02 instantiateTemplate failure toast in actions/templates.js — push failure, never a server code
   'inviteFirst', // guard toast in actions.js — nothing to revoke yet
   'lastMember', // guard toast in actions.js — leave blocked before the call
   'pushSubscribeFailed', // 59-03 enablePush failure toast in actions.js — subscribe/save failures, never a server code
