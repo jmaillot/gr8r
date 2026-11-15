@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-15 — v2.3 Consolidation & Hardening SHIPPED (e2e 115/115, VIEW-02 deterministic, mobile tasks-table card stack)*
+*Last updated: 2026-11-15 — v2.4 Automation & Productivity started (subtask tree, templates, per-project webhooks → MS Teams, v2.3 backlog polish)*
 
 
 <details>
@@ -128,6 +128,28 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 _Not yet defined — start with `/gsd-new-milestone`. Deferred backlog candidates are
 listed in ROADMAP.md (mobile hidden[] card fields, SMTP retry semantics, WR-01 CSS
 scoping, Nyquist reconciliation)._
+
+## Current Milestone: v2.4 Automation & Productivity
+
+**Goal:** automate repetitive work — hierarchical subtasks, task/project templates,
+and per-project outbound webhooks delivering to Microsoft Teams — while clearing
+the v2.3 deferred backlog (mobile hidden[] card fields, SMTP retry semantics,
+WR-01 CSS scoping, Nyquist reconciliation).
+
+**Target features:**
+- SUB — Subtask tree: multi-level hierarchical subtasks with aggregated progress,
+  not the flat list
+- TMPL — Task & project templates: create tasks or whole projects from reusable templates
+- WHK — Per-project outbound webhooks: owner/admin/project-leader configurable,
+  Microsoft Teams incoming-webhook format, fail-absent + per-hook secret + rate-limit
+- POL — v2.3 backlog: mobile card fields driven by `hidden[]`, SMTP-down email retry
+  semantics, WR-01 `.page.flush .toolbar` CSS scoping, 64-VALIDATION Nyquist reconciliation
+
+**Constraints (standing):** zero new runtime or dev dependencies; standing gates
+intact (500 kB chunk gate, EN+FR i18n gate, lint, 1524+-test unit suite, e2e 115/115).
+
+**Out of scope:** real file storage (names/sizes only today), realtime collaboration,
+billing, time tracking, per-team webhooks (project-scoped only this milestone).
 
 ## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 

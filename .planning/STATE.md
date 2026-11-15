@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: none
-milestone_name: ""
-current_phase: none
-status: milestone_complete
-stopped_at: v2.3 shipped 2026-11-15 (verified_closeout, audit passed) — next milestone not yet defined
-last_updated: "2026-11-15T08:29:20.411Z"
+milestone: v2.4
+milestone_name: Automation & Productivity
+status: planning
+last_updated: "2026-11-15T08:46:47.192Z"
 last_activity: 2026-11-15
-last_activity_desc: Phase 64 complete
-state_head: ce6bbc07b6e425f2279a0b57c5845e84cb93997a
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -29,12 +25,10 @@ dashboards) without breaking the zero-dependency discipline
 
 ## Current Position
 
-Phase: 64
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-15 — Phase 64 complete
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-15 — Milestone v2.4 started
 
 ## Performance Metrics
 
