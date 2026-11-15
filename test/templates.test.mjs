@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import { ADMIN, client, login, startServer } from './helpers/server.mjs';
 import {
   normalizeTemplatesData,
+  sanitizeProjectBody,
   sanitizeTaskBody,
   sanitizeTemplate,
   sanitizeTemplateSubtask,
@@ -236,6 +237,214 @@ test('a stored doc with a non-array templates key reads back normalized to []', 
     await admin.put('/api/workspaces/acme', { revision: ws.data.revision, doc: { data: { templates: 'junk' } } });
     const read = await admin.get('/api/workspaces/acme');
     assert.deepEqual(read.data.doc.data.templates, []);
+  } finally {
+    await server.stop();
+  }
+});
+
+/* =====================================================================
+   66-01 task 2 (TDD): project-kind whitelist (D-14), D-03 position
+   normalization, embedded-tree wholesale gate, junk subtask heal.
+   ===================================================================== */
+
+test('sanitizeProjectBody whitelists exactly {name, description, status, teams} (D-14)', () => {
+  const out = sanitizeProjectBody({
+    name: 'New site',
+    description: 'Build it',
+    status: 'planning',
+    teams: ['t1', 42, null, 't2'],
+    lead: 'm1',
+    members: ['m2'],
+    milestones: [{}],
+    assignees: ['m3'],
+    customFields: { x: 1 },
+  });
+  assert.deepEqual(Object.keys(out).sort(), ['description', 'name', 'status', 'teams']);
+  assert.deepEqual(out.teams, ['t1', 't2']);
+  assert.ok(!('lead' in out));
+  assert.ok(!('members' in out));
+  assert.ok(!('milestones' in out));
+  assert.ok(!('assignees' in out));
+  assert.ok(!('customFields' in out));
+});
+
+test('sanitizeTemplate dispatches per kind: a project template never carries task-body fields', () => {
+  const p = sanitizeTemplate({ kind: 'project', body: { name: 'P', title: 'task-only', subtasks: [] } }, fakeUid, 0);
+  assert.deepEqual(Object.keys(p.body).sort(), ['name']);
+  const t = sanitizeTemplate({ kind: 'task', body: { title: 'T', name: 'project-only', teams: ['t1'] } }, fakeUid, 0);
+  assert.deepEqual(Object.keys(t.body).sort(), ['title']);
+});
+
+test('position ties/missing values normalize to distinct safe integers, rank-preserving (D-03)', () => {
+  const data = {
+    templates: [
+      { id: 'a', position: 2 },
+      { id: 'b' }, /* missing → storage order after the explicit ranks */
+      { id: 'c', position: 2 }, /* tie with 'a' → array order */
+      { id: 'd', position: 0 },
+      { id: 'e', position: 'junk' },
+    ],
+  };
+  normalizeTemplatesData(data, fakeUid);
+  const byId = Object.fromEntries(data.templates.map(t => [t.id, t.position]));
+  /* ranks: d(0,i3)→0, a(2,i0)→1, c(2,i2)→2, then the unpositioned in storage order: b(i1)→3, e(i4)→4 */
+  assert.deepEqual([byId.d, byId.a, byId.c, byId.b, byId.e], [0, 1, 2, 3, 4]);
+  const seen = new Set(data.templates.map(t => t.position));
+  assert.equal(seen.size, data.templates.length, 'positions are distinct');
+  /* idempotent: a repeat normalize of the normalized output is a no-op */
+  const snapshot = JSON.stringify(data.templates.map(t => [t.id, t.position]));
+  normalizeTemplatesData(data, fakeUid);
+  assert.equal(JSON.stringify(data.templates.map(t => [t.id, t.position])), snapshot);
+});
+
+test('junk embedded subtask entries are healed in place, never stripped', () => {
+  const data = {
+    templates: [
+      {
+        id: 'a',
+        kind: 'task',
+        body: {
+          title: 'T',
+          subtasks: [
+            { title: 'no id' }, /* missing id/parentId/position */
+            { id: 's2', position: 'junk', title: 'junk position' },
+          ],
+        },
+      },
+    ],
+  };
+  normalizeTemplatesData(data, fakeUid);
+  const subs = data.templates[0].body.subtasks;
+  assert.equal(subs.length, 2, 'entries are healed, not dropped');
+  assert.equal(subs[0].id, 'gen1');
+  assert.equal(subs[0].parentId, null);
+  assert.equal(subs[0].position, 0);
+  assert.equal(subs[1].id, 's2');
+  assert.equal(subs[1].parentId, null);
+  assert.equal(subs[1].position, 1);
+  assert.equal(subs[0].title, 'no id');
+});
+
+test('a self-parent cycle inside an embedded template tree is rejected wholesale with code subtaskCycle', () => {
+  const data = {
+    templates: [
+      {
+        id: 'a',
+        kind: 'task',
+        body: {
+          title: 'T',
+          subtasks: [{ id: 's1', parentId: 's1', position: 0, title: 'self', done: false }],
+        },
+      },
+    ],
+  };
+  assert.throws(() => normalizeTemplatesData(data, fakeUid), err => err.code === 'subtaskCycle' && err.status === 400);
+});
+
+test('a mutual cycle and a depth overflow in a template body reject with the stable codes', () => {
+  const mutual = {
+    templates: [
+      { id: 'a', kind: 'task', body: { subtasks: [
+        { id: 'x', parentId: 'y', position: 0 },
+        { id: 'y', parentId: 'x', position: 1 },
+      ] } },
+    ],
+  };
+  assert.throws(() => normalizeTemplatesData(mutual, fakeUid), err => err.code === 'subtaskCycle');
+  const six = {
+    templates: [
+      { id: 'a', kind: 'task', body: { subtasks: [
+        { id: 'd1', parentId: null, position: 0 },
+        { id: 'd2', parentId: 'd1', position: 0 },
+        { id: 'd3', parentId: 'd2', position: 0 },
+        { id: 'd4', parentId: 'd3', position: 0 },
+        { id: 'd5', parentId: 'd4', position: 0 },
+        { id: 'd6', parentId: 'd5', position: 0 },
+      ] } },
+    ],
+  };
+  assert.throws(() => normalizeTemplatesData(six, fakeUid), err => err.code === 'subtaskDepth');
+});
+
+test('gate=false (read path) heals instead of throwing: a stored cyclic template never breaks reads', () => {
+  const data = {
+    templates: [
+      {
+        id: 'a',
+        kind: 'task',
+        body: {
+          title: 'T',
+          subtasks: [{ id: 's1', parentId: 's1', position: 0, title: 'self', done: false }],
+        },
+      },
+    ],
+  };
+  normalizeTemplatesData(data, fakeUid, { gate: false });
+  assert.equal(data.templates[0].body.subtasks[0].parentId, null, 'self-parent healed to root');
+});
+
+test('funnel: a PUT carrying a cyclic template subtask tree is rejected 400 subtaskCycle, doc unchanged', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    assert.equal((await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password })).status, 200);
+    const ws = await admin.get('/api/workspaces/acme');
+    const put = await admin.put('/api/workspaces/acme', {
+      revision: ws.data.revision,
+      doc: {
+        data: {
+          templates: [
+            {
+              id: 'tplcyc',
+              kind: 'task',
+              name: 'Cyclic',
+              body: { title: 'T', subtasks: [{ id: 's1', parentId: 's1', position: 0, title: 'self', done: false }] },
+            },
+          ],
+        },
+      },
+    });
+    assert.equal(put.status, 400, JSON.stringify(put.data));
+    assert.equal(put.data.code, 'subtaskCycle');
+    /* tx rolled back: no template persisted */
+    const read = await admin.get('/api/workspaces/acme');
+    const templates = read.data.doc.data.templates || [];
+    assert.ok(!templates.some(t => t.id === 'tplcyc'), 'the cyclic template must not persist');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('funnel: a legal template PUT with embedded junk subtasks heals and persists', async () => {
+  const server = await startServer();
+  try {
+    const admin = client(server.base, 'admin');
+    await admin.post('/api/auth/login', { email: ADMIN.email, password: ADMIN.password });
+    const ws = await admin.get('/api/workspaces/acme');
+    const put = await admin.put('/api/workspaces/acme', {
+      revision: ws.data.revision,
+      doc: {
+        data: {
+          templates: [
+            {
+              id: 'tplheal',
+              kind: 'task',
+              name: 'Heals',
+              body: { title: 'T', subtasks: [{ title: 'no id' }, { id: 's2', position: 'junk', title: 'B' }] },
+            },
+          ],
+        },
+      },
+    });
+    assert.equal(put.status, 200, JSON.stringify(put.data));
+    const read = await admin.get('/api/workspaces/acme');
+    const tpl = read.data.doc.data.templates.find(t => t.id === 'tplheal');
+    assert.ok(tpl, 'the legal template persists');
+    const subs = tpl.body.subtasks;
+    assert.equal(subs.length, 2);
+    assert.ok(subs[0].id, 'the id-less entry was healed with a generated id');
+    assert.equal(subs[0].parentId, null);
+    assert.equal(subs[1].position, 1);
   } finally {
     await server.stop();
   }
