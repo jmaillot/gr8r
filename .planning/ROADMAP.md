@@ -77,7 +77,7 @@ Plans:
 **Plans**: TBD
 - [x] 67-01-PLAN.md
 - [x] 67-02-PLAN.md
-- [ ] 67-03-PLAN.md
+- [x] 67-03-PLAN.md
 - [ ] 67-04-PLAN.md
 
 ### Phase 68: Backlog Polish
@@ -122,7 +122,7 @@ Coverage: 16/16 requirements mapped ✓
 |-------|----------------|--------|-----------|
 | 65. Subtask Tree | 5/5 | In Progress|  |
 | 66. Task & Project Templates | 3/3 | In Progress|  |
-| 67. Project Webhooks | 2/4 | In Progress|  |
+| 67. Project Webhooks | 3/4 | In Progress|  |
 | 68. Backlog Polish | 0/0 | Not started | - |
 
 ## Backlog
