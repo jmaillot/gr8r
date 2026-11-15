@@ -4,15 +4,15 @@ milestone: v2.4
 milestone_name: Automation & Productivity
 current_phase: 66
 current_phase_name: Task & Project Templates
-status: executing
-stopped_at: Completed 66-02-PLAN.md
-last_updated: "2026-11-15T17:30:31.929Z"
-state_head: 10522a0b718dd1c3e18c0c67cf97263de6e0dbc4
+status: verifying
+stopped_at: Completed 66-03-PLAN.md
+last_updated: "2026-11-15T18:16:49.717Z"
+state_head: ce9a11ad919a36d6b4a189a2c7fdc0e0a1239582
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # STATE.md
@@ -27,7 +27,7 @@ progress:
 
 **Phase:** 66 (Task & Project Templates) — EXECUTING
 **Plan:** 3 of 3
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
 - [ ] Phase 65: Subtask Tree
@@ -49,6 +49,7 @@ progress:
 | Phase 65 P65-05 | 21m | 3 tasks | 11 files |
 | Phase 66 P01 | 13min | 3 tasks | 5 files |
 | Phase 66 P02 | 34min | 2 tasks | 9 files |
+| Phase 66 P03 | 75min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -78,8 +79,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T17:30:31.807Z
-**Stopped at:** Completed 66-02-PLAN.md
+**Last session:** 2026-11-15T18:16:49.585Z
+**Stopped at:** Completed 66-03-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -101,3 +102,4 @@ None.
 - [Phase 66]: 66-01: normalizeTemplatesData hooked at 3 sites — mergeClientDoc (gate on, 400 inside tx), normalizeDoc (gate:false, heal-only read path), mcp.js writeDoc (toolError with stable code); D-03 rank renumber is idempotent
 - [Phase 66]: 66-02: instantiation = pure builder (instantiateTemplate) + pure landing (landInstantiation) + thin lazy-chunk actions — exactly one pushNow per mutation, push discipline pinned structurally + one real revision-bump funnel pin
 - [Phase 66]: 66-02: template actions ride a lazy prewarm chunk (main.js dynamic import) after a static import blew the 500 kB entry gate; templateUi.openEditor registry is stub-safe until 66-03
+- [Phase 66]: 66-03: template surfaces are chunk-backed modals (templatePick/templateEdit) cached in S.ui.tplUi; editor edits a DRAFT via Phase 65 subtree validators; entry-gate remedy = assigneePick/filePreview moved to lazy chunks loaded before openModal

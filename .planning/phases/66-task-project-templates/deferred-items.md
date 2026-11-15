@@ -18,3 +18,8 @@
 - **Suggested resolution:** 66-03 (the lazy-UI plan, which owns the chunk budget) or a
   dedicated quick task should move ~600+ bytes out of the entry (candidate: another
   statically-imported module switched to a prewarmed lazy chunk) and re-run the gate.
+- **RESOLVED (66-03):** the two heaviest statically-imported modal renderers moved to lazy
+  chunks — assigneePickModal → `src/features/assignee-pick.js`, filePreviewModal →
+  `src/features/file-preview.js` (loaded before openModal via the S.ui.apMod / S.ui.fpMod
+  caches; lazyStub renders while a chunk loads). Entry chunk measured under the 500,000-byte
+  gate; `node --test test/build-chunk-size.test.mjs` green (1615/1615 unit tests, 0 fail).
