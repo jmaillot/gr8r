@@ -64,7 +64,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
 import { ssrfOk } from './webhook-ssrf.js';
 import { nextAttemptMs, isDead } from './webhook-retry.js';
-import { diffWebhookEvents, buildEnvelope } from './src/core/webhook-events.js';
+import { diffWebhookEvents, buildEnvelope, WEBHOOK_EVENTS } from './src/core/webhook-events.js';
 import { formatPayload, truncateToCap } from './webhook-formats.js';
 /* [Phase 66, 66-01] The ONE template-record sanitizer/funnel sink — the
    same pure module mergeClientDoc and normalizeDoc run below (T-65-11
@@ -2837,6 +2837,85 @@ function webhookTestFetch(spec = {}, calls = []) {
 
 function webhookTestLookup(map) {
   return async hostname => (map?.[hostname] || ['93.184.216.34']).map(a => ({ address: a, family: a.includes(':') ? 6 : 4 }));
+}
+
+/* =====================================================================
+   WEBHOOK HOOK CRUD — Phase 67 (67-03, WHK-01/D-06/D-10/D-11/D-12).
+   =====================================================================
+   Route family: GET/POST /api/workspaces/:slug/projects/:pid/webhooks,
+   PATCH/DELETE .../webhooks/:hookId, POST .../webhooks/:hookId/test.
+   Scoping follows the export-route precedent: the slug resolves ws +
+   membership via requireWorkspace, the project comes from the doc, and
+   canManageProject gates EVERY route (the server gate is the control,
+   T-52-02; T-67-07). The secret column NEVER rides a client response —
+   only the POST create body carries the raw secret (D-10). */
+
+const WEBHOOK_FORMATS = ['teams-adaptive', 'teams-messagecard', 'raw-json'];
+const WEBHOOK_URL_MAX = 2048;
+
+/* Client-safe projection: the projection IS the secret gate — build it
+   from the columns explicitly, never spread the row (T-67-08). */
+function webhookHookView(h, health) {
+  let events = [];
+  try {
+    events = JSON.parse(h.events || '[]');
+  } catch {
+    /* an unparseable filter reads as empty — never crash a list */
+  }
+  return {
+    id: h.id,
+    url: h.url,
+    format: h.format,
+    events: Array.isArray(events) ? events : [],
+    status: h.status,
+    health,
+    createdBy: h.created_by,
+    createdAt: h.created_at,
+  };
+}
+
+/* D-06 health badge computed from delivery rows: a disabled hook reads
+   'disabled'; any dead delivery inside the 7-day window reads 'failing';
+   otherwise 'active'. No in-app notification (D-06). */
+async function webhookHookHealth(hookId, status) {
+  if (status === 'disabled') return 'disabled';
+  const dead = await db.get("select count(*) as n from webhook_deliveries where hook_id = ? and status = 'dead' and created_at >= ?", [hookId, now() - WEBHOOK_RETENTION_MS]);
+  return dead?.n ? 'failing' : 'active';
+}
+
+/* Shared body validation for POST/PATCH. Returns { fields } on success or
+   { error: [code, message] }. Only url/format/events/status are ever read —
+   workspace_id, project_id and created_by come from the ctx below, never
+   the body (T-67-09 mass-assignment guard). */
+function webhookValidateBody(body, { requireUrl } = {}) {
+  const fields = {};
+  if (body?.url !== undefined || requireUrl) {
+    const u = String(body?.url ?? '').trim();
+    if (!u || u.length > WEBHOOK_URL_MAX) return { error: ['invalidWebhookUrl', 'Provide an https URL'] };
+    let parsed;
+    try {
+      parsed = new URL(u);
+    } catch {
+      return { error: ['invalidWebhookUrl', 'Provide a valid https URL'] };
+    }
+    if (parsed.protocol !== 'https:') return { error: ['invalidWebhookUrl', 'Webhook URLs must use https'] };
+    fields.url = u;
+  }
+  if (body?.format !== undefined) {
+    if (!WEBHOOK_FORMATS.includes(body.format)) return { error: ['invalidWebhookFormat', 'Format must be teams-adaptive, teams-messagecard or raw-json'] };
+    fields.format = body.format;
+  }
+  if (body?.events !== undefined) {
+    if (!Array.isArray(body.events) || !body.events.length || body.events.length > WEBHOOK_EVENTS.length || body.events.some(e => !WEBHOOK_EVENTS.includes(e))) {
+      return { error: ['invalidWebhookEvents', `Events must be a non-empty subset of: ${WEBHOOK_EVENTS.join(', ')}`] };
+    }
+    fields.events = body.events;
+  }
+  if (body?.status !== undefined) {
+    if (body.status !== 'active' && body.status !== 'disabled') return { error: ['invalidWebhookStatus', 'Status must be active or disabled'] };
+    fields.status = body.status;
+  }
+  return { fields };
 }
 
 async function docFromClient(incoming, stored, ws, role, membership, refusals = []) {
@@ -6081,13 +6160,176 @@ async function handleApi(req, res, url) {
     return json(res, 200, { revoked: true });
   }
 
+  /* =====================================================================
+     PROJECT WEBHOOKS — hook CRUD (67-03, WHK-01/D-08/D-10/D-11/D-12).
+     Funnel per route: requireWorkspace → sameOrigin → project from the
+     doc (404 parity) → canManageProject on EVERY route (the server gate
+     is the control, T-52-02; D-08 gates the whole section) → validate →
+     write. The Workflows URL is itself a bearer credential and the
+     secret signs deliveries — both stay server-side except the one D-10
+     create response; log lines carry hook id + host only, never URL or
+     secret (T-67-03/T-67-08). No MCP route exists for this family
+     (documented out of scope, WHK-01).
+     ===================================================================== */
+  const webhookProjectFor = async (ctx, projectId) => {
+    /* the docForClient read is the ONLY doc reference these routes make
+       (same discipline as the export funnel, D-54-1) */
+    const doc = await docForClient(JSON.parse(ctx.ws.doc), ctx.ws, ctx.membership);
+    return (Array.isArray(doc?.data?.projects) ? doc.data.projects : []).find(p => p?.id === projectId) || null;
+  };
+
+  const whListMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})\/webhooks$/);
+  if (whListMatch && (method === 'GET' || method === 'POST')) {
+    const ctx = await requireWorkspace(req, res, whListMatch[1], 'viewer');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const project = await webhookProjectFor(ctx, whListMatch[2]);
+    if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
+    if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
+      return fail(res, 403, 'webhookForbidden', 'You do not have permission to manage webhooks for this project');
+    }
+    if (method === 'GET') {
+      const rows = await db.all('select * from webhook_hooks where workspace_id = ? and project_id = ? order by created_at', [ctx.ws.id, project.id]);
+      const hooks = [];
+      for (const r of rows) hooks.push(webhookHookView(r, await webhookHookHealth(r.id, r.status)));
+      return json(res, 200, { hooks });
+    }
+    // POST — create. Each call creates a NEW hook (WHK-01 idempotency edge:
+    // there is no natural dedup key, no auto-merge). Creation always lands
+    // 'active' with the D-12 default format.
+    const body = await readJson(req);
+    /* T-67-09: the body is consulted for url/format/events ONLY —
+       workspace_id, project_id and created_by come from the ctx below. */
+    const v = webhookValidateBody(body, { requireUrl: true });
+    if (v.error) return fail(res, 400, v.error[0], v.error[1]);
+    const f = v.fields;
+    const id = uid();
+    const secret = crypto.randomBytes(32).toString('hex');
+    await db.run('insert into webhook_hooks (id, workspace_id, project_id, url, secret, format, events, status, created_by, created_at) values (?,?,?,?,?,?,?,?,?,?)', [
+      id,
+      ctx.ws.id,
+      project.id,
+      f.url,
+      secret,
+      f.format || 'teams-adaptive',
+      JSON.stringify(f.events),
+      'active',
+      ctx.membership.member_id || ctx.user.id,
+      now(),
+    ]);
+    logInfo(`webhook hook ${id} created for project ${project.id} in ws ${ctx.ws.id} (host ${new URL(f.url).host})`);
+    const row = await db.get('select * from webhook_hooks where id = ?', [id]);
+    /* D-10: the raw secret rides THIS response only — never a list/patch
+       response, never a log line, never the client doc. */
+    return json(res, 201, { hook: webhookHookView(row, 'active'), secret });
+  }
+
+  const whHookMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})\/webhooks\/([A-Za-z0-9_-]{1,64})$/);
+  if (whHookMatch && (method === 'PATCH' || method === 'DELETE')) {
+    const ctx = await requireWorkspace(req, res, whHookMatch[1], 'viewer');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const project = await webhookProjectFor(ctx, whHookMatch[2]);
+    if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
+    if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
+      return fail(res, 403, 'webhookForbidden', 'You do not have permission to manage webhooks for this project');
+    }
+    /* scope: workspace + project — a hook id from another ws/project 404s. */
+    const hook = await db.get('select * from webhook_hooks where id = ? and workspace_id = ? and project_id = ?', [whHookMatch[3], ctx.ws.id, project.id]);
+    if (!hook) return fail(res, 404, 'webhookNotFound', 'Webhook not found');
+    if (method === 'DELETE') {
+      /* Backstop: historical delivery rows stay (audit trail, D-06/POL-02);
+         the engine dead-letters any pending row for a missing hook. */
+      await db.run('delete from webhook_hooks where id = ?', [hook.id]);
+      logInfo(`webhook hook ${hook.id} deleted from project ${project.id} in ws ${ctx.ws.id}`);
+      return json(res, 200, { deleted: true });
+    }
+    // PATCH — validate only the provided fields; the last committed PATCH
+    // wins (last-write-wins concurrency edge — one statement, no merge).
+    const body = await readJson(req);
+    const v = webhookValidateBody(body);
+    if (v.error) return fail(res, 400, v.error[0], v.error[1]);
+    const f = v.fields;
+    await db.run('update webhook_hooks set url = ?, format = ?, events = ?, status = ? where id = ?', [
+      f.url ?? hook.url,
+      f.format ?? hook.format,
+      f.events !== undefined ? JSON.stringify(f.events) : hook.events,
+      f.status ?? hook.status,
+      hook.id,
+    ]);
+    const row = await db.get('select * from webhook_hooks where id = ?', [hook.id]);
+    return json(res, 200, { hook: webhookHookView(row, await webhookHookHealth(row.id, row.status)) });
+  }
+
+  const whTestMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/projects\/([A-Za-z0-9_-]{1,64})\/webhooks\/([A-Za-z0-9_-]{1,64})\/test$/);
+  if (whTestMatch && method === 'POST') {
+    const ctx = await requireWorkspace(req, res, whTestMatch[1], 'viewer');
+    if (!ctx) return;
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const project = await webhookProjectFor(ctx, whTestMatch[2]);
+    if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
+    if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
+      return fail(res, 403, 'webhookForbidden', 'You do not have permission to manage webhooks for this project');
+    }
+    const hook = await db.get('select * from webhook_hooks where id = ? and workspace_id = ? and project_id = ?', [whTestMatch[3], ctx.ws.id, project.id]);
+    if (!hook) return fail(res, 404, 'webhookNotFound', 'Webhook not found');
+    if (hook.status !== 'active') return fail(res, 409, 'webhookDisabled', 'Enable the hook before sending a test');
+    const body = await readJson(req);
+    const event = String(body?.event || '');
+    if (!WEBHOOK_EVENTS.includes(event)) return fail(res, 400, 'invalidWebhookEvent', 'Unknown webhook event');
+    /* D-11: fixed sample content (planner discretion) — the envelope
+       whitelist (EVENT_FIELDS) keeps only what the event needs. */
+    const sampleCtx = {
+      event,
+      taskId: 'sample-task-1',
+      title: 'Sample task',
+      status: 'todo',
+      done: false,
+      assignees: [],
+      commentId: 'sample-comment-1',
+      taskTitle: 'Sample task',
+      body: 'This is a test payload sent from gr8r.',
+      due: new Date(now()).toISOString(),
+      offset: 0,
+      projectId: project.id,
+      projectName: project.name || '',
+      authorName: ctx.user.name || null,
+    };
+    const sampleSubject = `test-${uid()}`; // D-11: per-call nonce — each button press sends (exempt from the exactly-once subject dedup)
+    try {
+      await db.tx(async () => {
+        await enqueueWebhookDelivery({ hookId: hook.id, workspaceId: ctx.ws.id, event, subjectId: sampleSubject, ctxJson: JSON.stringify(sampleCtx) });
+      });
+    } catch (err) {
+      logWarn(`webhook test enqueue hook ${hook.id}: ${err.message}`);
+      return fail(res, 500, 'webhookTestFailed', 'Could not enqueue the test delivery');
+    }
+    const delivery = await db.get('select * from webhook_deliveries where dedup_key = ?', [`${hook.id}:${event}:${sampleSubject}`]);
+    if (!delivery) return fail(res, 500, 'webhookTestFailed', 'Could not enqueue the test delivery');
+    /* T-67-10: the test rides the IDENTICAL guarded pipeline as real
+       events — deliverWebhook re-checks ssrfOk per attempt, signs with the
+       hook secret, and the fetch carries the same 10 s timeout. No bypass
+       path exists. Awaited here: the caller wants the immediate result. */
+    const tokenOk = process.env.WEBHOOK_TEST_TOKEN && req.headers['x-webhook-token'] === process.env.WEBHOOK_TEST_TOKEN;
+    const fetchFn = tokenOk && body?.fetch ? webhookTestFetch(body.fetch, []) : undefined;
+    const lookup = tokenOk && body?.lookup ? webhookTestLookup(body.lookup) : undefined;
+    const atMs = tokenOk && Number.isFinite(body?.now) ? body.now : now();
+    try {
+      await deliverWebhook(delivery, atMs, fetchFn || fetch, lookup);
+    } catch (err) {
+      logWarn(`webhook test delivery ${delivery.id}: ${err.message}`);
+    }
+    const after = await db.get('select status, last_status_code, last_error from webhook_deliveries where id = ?', [delivery.id]);
+    /* the test delivery row stays for the badge/audit; D-07 purges it. */
+    return json(res, 200, { ok: after?.status === 'delivered', statusCode: after?.last_status_code ?? null, error: after?.last_error || null });
+  }
+
   const sessionMatch = pathname.match(/^\/api\/auth\/sessions\/([0-9a-f]{12})$/);
   if (sessionMatch && method === 'DELETE') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = await requireUser(req, res);
     if (!user) return;
-    // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.
-    await db.run('delete from sessions where user_id = ? and token_hash like ?', [user.id, `${sessionMatch[1]}%`]);
+    // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.    await db.run('delete from sessions where user_id = ? and token_hash like ?', [user.id, `${sessionMatch[1]}%`]);
     return json(res, 204); // idempotent: an already-dead or foreign id is not an error (OQ4)
   }
 

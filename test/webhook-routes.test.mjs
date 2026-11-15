@@ -95,7 +95,7 @@ test('POST validation: http URL, unknown format, bogus event, empty/missing URL 
   for (const [body, code] of cases) {
     const r = await owner.post(hooksUrl, body);
     assert.equal(r.status, 400, `${code}: ${JSON.stringify(body)} → ${r.status}`);
-    assert.equal(r.data.error, code);
+    assert.equal(r.data.code, code);
   }
 });
 
@@ -190,9 +190,18 @@ const trigger = (payload = {}) =>
     body: JSON.stringify(payload),
   }).then(async r => ({ status: r.status, data: await r.json().catch(() => null) }));
 
+/* /test calls with the test-token header so the fetch/lookup injectables
+   are honored — ZERO network in the suite. */
+const postTest = (cl, path, body) =>
+  fetch(server.base + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: cl.cookie(), 'x-webhook-token': TOKEN },
+    body: JSON.stringify(body),
+  }).then(async r => ({ status: r.status, data: await r.json().catch(() => null) }));
+
 test('POST /test rides the real pipeline: 200 result, HMAC-signed fetch with the hook secret', async () => {
   const hook = insertHook({ id: 'wh-test', url: 'https://sendtest.logic.azure.com/w' });
-  const r = await owner.post(`/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, {
+  const r = await postTest(owner, `/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, {
     event: 'task.created',
     fetch: { statusCode: 200 },
     lookup: { 'sendtest.logic.azure.com': ['93.184.216.34'] },
@@ -205,7 +214,7 @@ test('POST /test rides the real pipeline: 200 result, HMAC-signed fetch with the
 
 test('POST /test: a denied resolved IP is refused BEFORE any HTTP call (ssrfOk invoked)', async () => {
   const hook = insertHook({ id: 'wh-test-ssrf', url: 'https://sendtest-ssrf.logic.azure.com/w' });
-  const r = await owner.post(`/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, {
+  const r = await postTest(owner, `/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, {
     event: 'task.created',
     fetch: { statusCode: 200 },
     lookup: { 'sendtest-ssrf.logic.azure.com': ['10.1.2.3'] },
@@ -221,8 +230,8 @@ test('POST /test: a denied resolved IP is refused BEFORE any HTTP call (ssrfOk i
 test('two rapid test calls → TWO delivery rows (nonce dedup exemption); a REAL event double-claim stays single-row', async () => {
   const hook = insertHook({ id: 'wh-test-nonce', url: 'https://sendtest2.logic.azure.com/w' });
   const body = { event: 'task.created', fetch: { statusCode: 200 }, lookup: { 'sendtest2.logic.azure.com': ['93.184.216.34'] }, now: NOW };
-  const a = await owner.post(`/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, body);
-  const b = await owner.post(`/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, body);
+  const a = await postTest(owner, `/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, body);
+  const b = await postTest(owner, `/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`, body);
   assert.equal(a.status, 200);
   assert.equal(b.status, 200);
   const rows = withDb(server.dbPath, db => db.prepare("select * from webhook_deliveries where hook_id = 'wh-test-nonce'").all());
@@ -241,7 +250,7 @@ test('POST /test with an unknown event → 400; as member → 403', async () => 
   const base = `/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`;
   const bad = await owner.post(base, { event: 'carrier.pigeon' });
   assert.equal(bad.status, 400);
-  assert.equal(bad.data.error, 'invalidWebhookEvent');
+  assert.equal(bad.data.code, 'invalidWebhookEvent');
   const denied = await member.post(base, { event: 'task.created' });
   assert.equal(denied.status, 403);
 });
