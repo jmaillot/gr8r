@@ -1,3 +1,20 @@
+---
+gsd_state_version: "1.0"
+milestone: v2.4
+milestone_name: Automation & Productivity
+current_phase: 65
+current_phase_name: Subtask Tree
+status: Roadmap created, awaiting planning
+stopped_at: Phase 65 context gathered
+last_updated: "2026-11-15T09:31:05.411Z"
+state_head: f6eba3255827c16ccdc1e164c0f13f2ff404e88a
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # STATE.md
 
 ## Project Reference
@@ -25,6 +42,7 @@
 ## Accumulated Context
 
 ### Decisions carried into v2.4
+
 - SUB storage shape: flat `t.subtasks[]` + `parentId` (ARCHITECTURE/PITFALLS over STACK) — owner ruling to confirm in the Phase 65 spec before UI code; `parentId` must join the mergeClientDoc normalize whitelist or it is silently stripped
 - Parent-done semantics: completing a parent auto-completes descendants (SUB-03); parent progress is computed rollup, never stored
 - FTS: subtask titles optional (owner ruling pending) — decides whether Phase 65 touches the dual-backend parity suite
@@ -34,17 +52,24 @@
 - WHK phase carries a threat model (`threats_open: 0`, Phase 30 pattern): SSRF deny-list re-validated per delivery, secrets show-once, never in client-visible doc or logs
 
 ### Standing constraints (every phase)
+
 - Zero new runtime or dev deps; 500 kB chunk gate ~2 kB headroom (D-02 lazy-load pattern); EN+FR keys same commit; SQLite+pg parity same commit; MCP parity for every funnel sink; e2e 115/115 green, no weakened assertions or gate edits
 
 ### Research flags
+
 - Phase 65 needs `/gsd-plan-phase --research-phase` (storage-shape conflict ruling)
 - Phase 67 needs `--research-phase` (SSRF threat model + delivery/claim design)
 - Phases 66/68: skip research (fully grounded in repo precedent)
 
 ### Blockers
+
 None.
 
 ## Session Continuity
+
+**Last session:** 2026-11-15T09:31:05.390Z
+**Stopped at:** Phase 65 context gathered
+**Resume file:** .planning/phases/65-subtask-tree/65-CONTEXT.md
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
 **Next step:** `/gsd-discuss-phase 65` or `/gsd-plan-phase 65` (with research).
