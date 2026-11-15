@@ -1,111 +1,50 @@
----
-gsd_state_version: "1.0"
-milestone: v2.4
-milestone_name: Automation & Productivity
-status: planning
-last_updated: "2026-11-15T08:46:47.192Z"
-last_activity: 2026-11-15
-progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
----
-
 # STATE.md
 
 ## Project Reference
 
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
-**Core Value:** simple, predictable access + a workspace that reaches you (push, search,
-dashboards) without breaking the zero-dependency discipline
-**Current Focus:** none — v2.3 shipped 2026-11-15; next milestone pending `/gsd-new-milestone`
-2026-11-14): 9 failing e2e specs, VIEW-02 flake, mobile tasks-table layout. No features.
+**Core value:** one workspace document pushed client→server through the `mergeClientDoc` funnel; every feature is an extension of that spine, zero new dependencies.
+**Milestone:** v2.4 Automation & Productivity — hierarchical subtasks, task/project templates, per-project outbound webhooks (MS Teams), v2.3 backlog polish.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-11-15 — Milestone v2.4 started
+**Phase:** 65 — Subtask Tree (first phase of v2.4; phases 65–68)
+**Plan:** none yet — run `/gsd-plan-phase 65`
+**Status:** Roadmap created, awaiting planning
+**Progress:** ▢▢▢▢ 0/4 phases complete
+
+- [ ] Phase 65: Subtask Tree
+- [ ] Phase 66: Task & Project Templates
+- [ ] Phase 67: Project Webhooks
+- [ ] Phase 68: Backlog Polish
 
 ## Performance Metrics
 
-- v2.2 close: 1524 unit tests / 0 fail, e2e 111 (9 drifted red + VIEW-02 flaky), lint clean, chunk gate 11/11
-- Chunk-gate headroom entering v2.3: ~220 B under the 500 kB gate
-- Runtime dependencies: pg + web-push@4.0.0 (dep #2, owner-approved) — zero new in v2.3
-- Requirement coverage: 7/7 mapped across Phases 62–64
-
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 63 P01 | 45min | 2 tasks | 1 files |
-| Phase 63 P02 | 12min | 2 tasks | 1 files |
-| Phase 63 P03 | 37min | 2 tasks | 2 files |
+**Unit tests:** 1524 baseline (grow, never shrink) · **e2e:** 115/115 baseline (0 flaky) · **lint:** clean · **chunk gate:** 498.11 kB < 500 kB (~2 kB headroom — lazy-load all new UI) · **i18n:** EN+FR gate green
 
 ## Accumulated Context
 
-### Milestone decisions (owner-validated 2026-11-14)
-
-- M-2.3 Consolidation first: hardening milestone over new features (repair-only)
-- Mobile columns-button contract = **hide-the-button** (owner ruling 2026-11-14);
-  richer `hidden[]`-driven card fields explicitly deferred to a later milestone
-- Anti-feature: no weakened assertions, no global `retries` increases, no timeout
-  inflation, no `reuseExistingServer` default change, no chunk-gate threshold edits
-
-### Sequencing rationale (research consensus, unanimous)
-
-- Phase 62 FIRST: red baseline poisons "e2e proves it" for both other targets.
-  Within 62: readiness (ECONNREFUSED) fix as its own small plan, then the 9-spec rewrite
-- Phase 63 next: fix measured on the stable green baseline; diagnosis may start in
-  parallel with 62 but landing waits
-- Phase 64 LAST: only product-CSS change (only real regression risk); repaired suite
-  is its acceptance instrument; ~220 B gate headroom exposure → small plans per task
-  (per-task triad: build + chunk test + i18n scan)
-
-### Known flags for planning
-
-- Phase 63 root cause unconfirmed: debounced `persistLiveView` write-through race is
-  the leading hypothesis — triage (trace, retries=0, workers=1) precedes the fix
-- Phase 63: confirm a VIEW-02 serial-group retry won't double-apply view mutations
-- Phase 62: fix pattern proven in-repo (`demo-locale.spec.mjs:96` combobox contract) —
-  standard patterns, skip `--research-phase`
-- Phase 64: mobile contract decided (hide-the-button) — no open design question left
-- Environmental trap across all phases: stale dist/ports/`test-results/` — always
-  `npm run e2e -- <spec>`, never bare `npx playwright test`; clean between runs
+### Decisions carried into v2.4
+- SUB storage shape: flat `t.subtasks[]` + `parentId` (ARCHITECTURE/PITFALLS over STACK) — owner ruling to confirm in the Phase 65 spec before UI code; `parentId` must join the mergeClientDoc normalize whitelist or it is silently stripped
+- Parent-done semantics: completing a parent auto-completes descendants (SUB-03); parent progress is computed rollup, never stored
+- FTS: subtask titles optional (owner ruling pending) — decides whether Phase 65 touches the dual-backend parity suite
+- Templates: doc-embedded `data.templates[]` + `sanitizeTemplateBody()` on read AND write; instantiation through the normal doc-PUT (no fourth write path, no MCP route)
+- Webhooks: `webhook_hooks`/`webhook_deliveries` server tables (SQLite+pg same commit), events via pure `diffWebhookEvents(storedDoc, next)` in-tx, delivery post-commit fire-and-forget; emission gated on revision bump; MCP webhook management explicitly out of scope
+- POL-02 (SMTP retry) and WHK-03 (delivery retry) share one claim-state-machine design — spec together, Phase 67 before/with 68
+- WHK phase carries a threat model (`threats_open: 0`, Phase 30 pattern): SSRF deny-list re-validated per delivery, secrets show-once, never in client-visible doc or logs
 
 ### Standing constraints (every phase)
+- Zero new runtime or dev deps; 500 kB chunk gate ~2 kB headroom (D-02 lazy-load pattern); EN+FR keys same commit; SQLite+pg parity same commit; MCP parity for every funnel sink; e2e 115/115 green, no weakened assertions or gate edits
 
-- 1524-test unit suite green; EN+FR i18n gate (server keys included); lint clean
-- 500 kB chunk gate holds at 500,000 B (~220 B headroom) — remedy is lazy-map moves,
-  never threshold bumps
-- Phase 38 suppression + no-double-send invariants pass unmodified
-- Zero new runtime or dev dependencies
-- Fail-closed e2e posture intact: `gracefulShutdown`, no `reuseExistingServer` default
-  change, global `retries` untouched
+### Research flags
+- Phase 65 needs `/gsd-plan-phase --research-phase` (storage-shape conflict ruling)
+- Phase 67 needs `--research-phase` (SSRF threat model + delivery/claim design)
+- Phases 66/68: skip research (fully grounded in repo precedent)
+
+### Blockers
+None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-14T16:20:35.583Z
-**Stopped at:** Phase 64 complete — all phases complete
-**Resume file:** .planning/phases/64-mobile-tasks-table-suite-green/64-CONTEXT.md
-
-**Last action:** Phase 63 closed — D-03 not-proven ruling recorded (§8), D-02 112/112 parallel + full gate green (§9); one spec-side Rule 1 fix (open-GET arm-before-act)
-**Next action:** `/gsd-discuss-phase 64` / `/gsd-plan-phase 64` (mobile product-CSS phase)
-
-### Blockers
-
-- (none)
-
-## Operator Next Steps
-
-- Review `.planning/ROADMAP.md` → `/gsd-plan-phase 62`
-
-## Decisions
-
-- [Phase 63]: VIEW-02 triage: root cause = unscoped toast locator vs 4200ms toast lifetime; H1/H2/H3 eliminated; D-03 NOT PROVEN — Plan 03 gates only
-- [Phase 63]: 63-02 fix stays spec-side (D-04): Escape dismissal, awaited live/named PUT signals, .last()-scoped toasts; VIEW-02 10× clean at retries=0
-- [Phase 63]: D-03 skip path confirmed (63-03) — zero src/ diff, ruling + evidence recorded in TRIAGE §8; SC-4 honored (bug neither laundered nor invented)
-- [Phase 63]: Phase 63 closed green — D-02 112/112 parallel with VIEW-02 inside, full gate (build/1524 unit/lint/e2e) exit 0; last spec-side fix: open-GETs armed before the popover click (D-08)
+**Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
+**Next step:** `/gsd-discuss-phase 65` or `/gsd-plan-phase 65` (with research).

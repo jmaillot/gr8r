@@ -53,9 +53,21 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01..04 | (roadmap) | Proposed |
-| TMPL-01..03 | (roadmap) | Proposed |
-| WHK-01..05 | (roadmap) | Proposed |
-| POL-01..04 | (roadmap) | Proposed |
+| SUB-01 | Phase 65 | Pending |
+| SUB-02 | Phase 65 | Pending |
+| SUB-03 | Phase 65 | Pending |
+| SUB-04 | Phase 65 | Pending |
+| TMPL-01 | Phase 66 | Pending |
+| TMPL-02 | Phase 66 | Pending |
+| TMPL-03 | Phase 66 | Pending |
+| WHK-01 | Phase 67 | Pending |
+| WHK-02 | Phase 67 | Pending |
+| WHK-03 | Phase 67 | Pending |
+| WHK-04 | Phase 67 | Pending |
+| WHK-05 | Phase 67 | Pending |
+| POL-01 | Phase 68 | Pending |
+| POL-02 | Phase 68 | Pending |
+| POL-03 | Phase 68 | Pending |
+| POL-04 | Phase 68 | Pending |
 
-Coverage: 16 requirements mapped (filled by roadmap).
+Coverage: 16/16 requirements mapped ✓
