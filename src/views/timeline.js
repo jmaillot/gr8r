@@ -3,6 +3,7 @@ import { $, TODAY, addD, diffD, esc, fmtDate, parse } from '../core/utils.js';
 import { monthName, t as tk } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { S, allTasks, canSee, pColor, proj, task, taskProg, visibleProjects } from '../core/store.js';
+import { leafEntries, orderedSiblings } from '../core/subtree.js';
 import { avStack, empty, stIcon } from '../ui/helpers.js';
 import { applyView, groupTasks, viewOf, viewToolbar } from '../shell/view-engine.js';
 import { startOfWeek } from './calendar.js';
@@ -35,6 +36,20 @@ export function timelineHtml(ts, key, p) {
     g === 'project' && p ? 'status' : g,
   ).filter(G => G.tasks.length);
   const rows = [];
+  /* Phase 65 (65-03 D-12): subtask bars render indented under the parent task,
+     collapsible — the top level rides the S.ui.openTasks precedent (shared
+     with the list view), nested levels ride the session-only S.ui.subOpenNodes
+     map. Sibling order is subtree.orderedSiblings (D-03). Bars without their
+     own dates inherit the parent's range (D-12). */
+  const pushSubs = t => {
+    const walk = (pid, depth) => {
+      for (const s of orderedSiblings(t.subtasks, pid)) {
+        rows.push({ type: 's', t, s, depth });
+        if (S.ui.subOpenNodes[s.id]) walk(s.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+  };
   const ms = p
     ? p.milestones || []
     : visibleProjects()
@@ -43,7 +58,10 @@ export function timelineHtml(ts, key, p) {
   if (ms.length) rows.push({ type: 'ms' });
   groups.forEach(G => {
     if (g !== 'none') rows.push({ type: 'g', G });
-    G.tasks.sort((a, b) => ((a.start || a.due) > (b.start || b.due) ? 1 : -1)).forEach(t => rows.push({ type: 't', t }));
+    G.tasks.sort((a, b) => ((a.start || a.due) > (b.start || b.due) ? 1 : -1)).forEach(t => {
+      rows.push({ type: 't', t });
+      if (t.subtasks.length && S.ui.openTasks[t.id]) pushSubs(t);
+    });
   });
   const RH = 36;
   const H = rows.length * RH;
@@ -87,6 +105,18 @@ export function timelineHtml(ts, key, p) {
       const y = i * RH;
       if (r.type === 'g') return `<div class="tl-rowbg g" style="top:${y}px"></div>`;
       if (r.type === 'ms') return `<div class="tl-rowbg" style="top:${y}px"></div>` + msLane(ms, X, dw, y);
+      if (r.type === 's') {
+        const s = r.s,
+          t = r.t;
+        const sdue = s.due || t.due;
+        const sstart = s.start || t.start;
+        const s0 = sstart && sstart <= sdue ? sstart : sdue;
+        const x = X(s0);
+        const w = Math.max(dw, (diffD(parse(sdue), parse(s0)) + 1) * dw);
+        const c = g === 'status' || g === 'none' ? pColor(proj(t.project)) : `var(--st-${t.status})`;
+        const inside = w > 110;
+        return `<div class="tl-rowbg" style="top:${y}px"></div><div class="bar ${s.done ? 'done' : ''}" style="--c:${c};left:${x}px;top:${y + 9}px;width:${w}px;height:18px;opacity:.85" data-bar="${s.id}" data-dw="${dw}" data-a="openSub" data-id="${t.id}" data-sid="${s.id}" data-ctx="sub" title="${esc(s.title)} · ${fmtDate(s0)} → ${fmtDate(sdue)}"><span class="pf" style="width:${s.done ? 100 : 0}%"></span>${inside ? `<span class="trunc">${esc(s.title)}</span>` : ''}</div>${inside ? '' : `<div class="bar-lbl" style="left:${x + w + 8}px;top:${y + 12}px">${esc(s.title)}</div>`}`;
+      }
       const t = r.t;
       const pp = proj(t.project);
       const s = t.start && t.start <= t.due ? t.start : t.due;
@@ -120,8 +150,12 @@ export function timelineHtml(ts, key, p) {
         return `<div class="tl-row g">${ic('diamond', 12)}${tk('page.project.milestones')}<span class="faint" style="font-weight:500">${ms.length}</span></div>`;
       if (r.type === 'g')
         return `<div class="tl-row g">${r.G.html || ''}${esc(r.G.name)}<span class="faint" style="font-weight:500">${r.G.tasks.length}</span></div>`;
+      if (r.type === 's')
+        return `<div class="tl-row" style="padding-left:${20 + r.depth * 16}px" data-a="openSub" data-id="${r.t.id}" data-sid="${r.s.id}" data-ctx="sub"><span class="trunc grow" style="${r.s.done ? 'color:var(--text-3)' : 'font-size:12.5px'}">${esc(r.s.title)}</span>${avStack(r.s.assignees || [], 3, 'sm')}</div>`;
       const t = r.t;
-      return `<div class="tl-row" data-a="openTask" data-id="${t.id}">${stIcon(t.status, 13)}<span class="trunc grow" style="${t.status === 'done' ? 'color:var(--text-3)' : ''}">${esc(t.title)}</span>${t.subtasks.length ? `<span class="faint num" style="font-size:11px">${t.subtasks.filter(s => s.done).length}/${t.subtasks.length}</span>` : ''}${avStack(t.assignees || [], 3, 'sm')}</div>`;
+      const tLeaves = leafEntries(t.subtasks);
+      const tLsd = tLeaves.filter(s => s.done).length;
+      return `<div class="tl-row" data-a="openTask" data-id="${t.id}">${t.subtasks.length ? `<span class="ibtn ibtn-xs" data-a="expandRow" data-id="${t.id}" aria-expanded="${!!S.ui.openTasks[t.id]}" aria-label="${S.ui.openTasks[t.id] ? tk('a11y.hideSubtasks') : tk('a11y.showSubtasks')}" style="margin-left:-6px;flex-shrink:0">${ic(S.ui.openTasks[t.id] ? 'chevron-down' : 'chevron-right', 12)}</span>` : ''}${stIcon(t.status, 13)}<span class="trunc grow" style="${t.status === 'done' ? 'color:var(--text-3)' : ''}">${esc(t.title)}</span>${t.subtasks.length ? `<span class="faint num" style="font-size:11px">${tLsd}/${tLeaves.length}</span>` : ''}${avStack(t.assignees || [], 3, 'sm')}</div>`;
     })
     .join('');
   if (!rows.length)

@@ -3,19 +3,25 @@ import { esc } from '../core/utils.js';
 import { t as tk } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, STATUSES } from '../core/constants.js';
-import { S, commentsOf, pColor, proj } from '../core/store.js';
+import { S, commentsOf, pColor, proj, taskProg } from '../core/store.js';
+import { leafEntries } from '../core/subtree.js';
 import { avStack, dueHtml, lbl, prIcon, progBar, stIcon } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
 export function kcard(t, opt = {}) {
   const cc = commentsOf(t.id).length;
   const ac = t.attachments.length;
-  const sd = t.subtasks.filter(s => s.done).length;
+  /* Phase 65 (65-03 D-11): the badge counts OPEN LEAVES — nested parents
+     never count themselves (SUB-03 leaf-only rule); the bar reads the 65-02
+     rollup through store.taskProg. Tapping opens the checklist popover. */
+  const leaves = leafEntries(t.subtasks);
+  const lsd = leaves.filter(s => s.done).length;
+  const openN = leaves.length - lsd;
   const p = proj(t.project);
   return `<div class="kcard ${t.status === 'done' ? 'done' : ''}${fxc('done', t.id)}${fxc('added', t.id)}${fxc('moved', t.id)}" draggable="true" data-drag-card="${t.id}" data-a="openTask" data-id="${t.id}" data-ctx="task" role="button" tabindex="0" aria-label="${esc(t.title)}">
     ${t.labels.length ? `<div class="labels">${t.labels.map(lbl).join('')}</div>` : ''}
     <div class="top">${t.status === 'done' ? `<span class="done-ic" style="margin:2px 7px 0 0;display:inline-flex" aria-label="${tk('act.done')}">${stIcon('done', 14)}</span>` : ''}<div class="title">${esc(t.title)}</div></div>
-    ${t.subtasks.length ? `<div class="subp">${ic('list-checks', 12)}<span class="num">${sd}/${t.subtasks.length}</span>${progBar(Math.round((sd / t.subtasks.length) * 100), sd === t.subtasks.length ? 'green' : '')}</div>` : ''}
+    ${t.subtasks.length ? `<div class="subp" data-a="pop" data-pop="subs" data-id="${t.id}" role="button" tabindex="0" aria-label="${tk('a11y.openSubtasks', { n: openN })}">${ic('list-checks', 12)}<span class="num">${openN}</span>${progBar(taskProg(t), lsd === leaves.length ? 'green' : '')}</div>` : ''}
     <div class="meta">
       ${opt.showProj ? `<span class="m" data-tip="${esc(p.name)}"><span class="pdot" style="--c:${pColor(p)}"></span></span>` : ''}
       <span class="key">${t.key}</span>

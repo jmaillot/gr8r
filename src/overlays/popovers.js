@@ -27,6 +27,7 @@ import { FIELDS, viewOf } from '../shell/view-engine.js';
 import { TCOLS } from '../views/table.js';
 import { startOfWeek } from '../views/calendar.js';
 import { ctxMenu } from './context-menu.js';
+import { subTreeChecklistHtml } from '../features/subtasks.js';
 
 /* The recurrence vocabulary: the STORED values the document holds and the
    catalogue keys their displays read — same treatment as the statuses. */
@@ -191,6 +192,15 @@ export function popHtml(p) {
       ];
       inner = `<div class="row" style="gap:4px;padding:4px;flex-wrap:wrap">${q.map(([n, d]) => `<button class="badge" data-a="popPick" data-v="${dOff(d)}" style="cursor:pointer">${n}</button>`).join('')}${val ? `<button class="badge" data-a="popPick" data-v="" style="cursor:pointer;color:var(--red)">${tMsg('common.clear')}</button>` : ''}</div><div class="msep"></div>${miniCal(p, val)}`;
       style = 'min-width:0';
+      break;
+    }
+    case 'subs': {
+      /* Phase 65 (65-03 D-11): the board card's subtask checklist — the same
+         recursive row shape as the drawer, in the existing popover pattern.
+         No per-subtask kanban cards. */
+      const st = task(p.id);
+      inner = `<div class="mh">${tMsg('popover.subtasksOf', { title: esc(st.title) })}</div>${subTreeChecklistHtml(st, { compact: true })}`;
+      style = 'width:320px;max-height:60vh;overflow:auto';
       break;
     }
     case 'pstatus': {

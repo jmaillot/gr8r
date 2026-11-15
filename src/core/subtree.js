@@ -251,7 +251,7 @@ export function cascadeDoneIds(list, parentId) {
 /* SUB-03 companion (65-03): the leaf set of the flat array — the subtasks
    WITHOUT descendants. The one definition the view counters (drawer header,
    list chip, board badge, timeline counter) and rollupProgress share, so no
-   surface re-derives "leaf" locally. */
+   surface re-derives the leaf set locally. */
 export function leafEntries(list) {
   const entries = (Array.isArray(list) ? list : []).filter(s => s && typeof s === 'object');
   return entries.filter(s => !entries.some(x => x && x.parentId === s.id));
