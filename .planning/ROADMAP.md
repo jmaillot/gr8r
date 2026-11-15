@@ -14,6 +14,7 @@
 ## Phase Details
 
 ### Phase 65: Subtask Tree
+
 **Goal**: A task's subtasks form a real multi-level tree that users can navigate, restructure, and that every existing surface — views, exports, search, MCP — renders consistently.
 **Depends on**: Nothing (first phase of v2.4)
 **Requirements**: SUB-01, SUB-02, SUB-03, SUB-04
@@ -22,15 +23,24 @@
   2. A user can promote, demote or re-parent a subtask one level at a time; a change that would create a cycle or exceed the depth cap is rejected by the server with a localized error, and deleting a parent removes its descendants per the owner cascade ruling
   3. Completing a parent task auto-completes all its open descendants; parent progress is a computed rollup that never double-counts nested progress
   4. The tree shape survives every surface: mergeClientDoc normalization/removal sweeps, FTS projection (optional subtask titles, symmetric SQLite+pg), MSPDI export OutlineLevel, xlsx/CSV rows — with MCP writeDoc round-trip parity proven by tests
+
 **Plans**: 5 plans
 Plans:
+**Wave 1**
 - [ ] 65-01-PLAN.md — Tracer: parentId round-trip through mergeClientDoc + shared subtree.js helpers + Wave-0 test harness (with D-01 storage-shape decision checkpoint)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 65-02-PLAN.md — Funnel authority: cycle/depth/dangling wholesale rejection, parent-done cascade, delete cascade, shared rollup refactor
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 65-03-PLAN.md — View surfaces: drawer recursive tree, table indent + carets, board open-count badge, timeline indented bars
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 65-04-PLAN.md — Restructure UX (promote/demote/re-parent one level, popover menus, pre-validation) + search subtask-hint + e2e spec
 - [ ] 65-05-PLAN.md — FTS subtask-title parity + backfill, nested export rows + MSPDI OutlineLevel, MCP parentId round-trip parity
 
 ### Phase 66: Task & Project Templates
+
 **Goal**: Users can save recurring task/project setups as workspace-wide templates and instantiate them in one action, dates derived from offsets.
 **Depends on**: Phase 65 (template bodies embed subtask trees)
 **Requirements**: TMPL-01, TMPL-02, TMPL-03
@@ -38,10 +48,12 @@ Plans:
   1. A user can create a task template with an ordered subtask checklist and `dueOffsetDays`; unknown fields are silently dropped by the template sanitizer (no invalid template state can be stored)
   2. A user can create a project template with a starter task tree and instantiate it — the new project contains the template's task tree with dates derived from the offsets, through the normal doc-PUT (no fourth write path)
   3. Templates are workspace-wide and available via the template picker in the existing creation modals, in both EN and FR, with the tree/webhook UI lazy-loaded so the entry chunk stays under the 500 kB gate
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 67: Project Webhooks
+
 **Goal**: Project owners/admins/leaders can register per-project webhooks that deliver MS Teams payloads for the 8-event vocabulary — async, exactly-once, SSRF-hardened.
 **Depends on**: Phase 65 (subtask.tree-changed event), Phase 66 (event vocabulary stable, template bulk-instantiation testable); delivery/claim design co-specced with POL-02 (Phase 68)
 **Requirements**: WHK-01, WHK-02, WHK-03, WHK-04, WHK-05
@@ -51,9 +63,11 @@ Plans:
   3. Delivery is fail-absent with bounded retries honoring Retry-After, exactly-once via the claim table (shared design with SMTP retry), with whitelisted-field envelopes built through `memberCanReadProject` respecting the 28 KB Teams cap
   4. The Teams formatter produces valid payloads for all three formats (teams-adaptive, teams-messagecard, raw-json) targeting `*.logic.azure.com` Workflows URLs; task.assigned mentions the assignee (real AAD mention when the `oid` claim is persisted at OIDC login, bold-name fallback otherwise)
   5. SSRF is mitigated at delivery time: https-only URLs, resolved-IP deny-list (loopback/RFC1918/169.254) re-checked per delivery, hook config in server mirror tables (`webhook_hooks`/`webhook_deliveries`) with SQLite+pg parity in the same commit; threat model runs with `threats_open: 0`
+
 **Plans**: TBD
 
 ### Phase 68: Backlog Polish
+
 **Goal**: The four v2.3 deferred items are cleared — mobile card fields honor hidden[], SMTP retry is claim-based, the WR-01 CSS leak is scoped, and the Phase 64 validation draft is reconciled.
 **Depends on**: Nothing for POL-01/03/04 (fully independent); POL-02 co-designed with Phase 67's claim-state machine (WHK before or same-design)
 **Requirements**: POL-01, POL-02, POL-03, POL-04
@@ -62,6 +76,7 @@ Plans:
   2. When SMTP is down, email notification retries run through a claim-state machine (never mark-then-send, never blanket re-drive) honoring the Phase 38 no-double-send invariant — the same claim design the webhook delivery uses
   3. The WR-01 CSS scoping (`.page.flush .toolbar` flex-shrink at ≤900px) is applied and board toolbar behavior is proven unchanged by the existing e2e suite
   4. The Phase 64 validation draft is reconciled or formally accepted per audit-milestone §5.5, with no open validation artifacts at milestone close
+
 **Plans**: TBD
 
 ## Coverage
