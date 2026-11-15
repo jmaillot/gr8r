@@ -2891,28 +2891,28 @@ function webhookValidateBody(body, { requireUrl } = {}) {
   const fields = {};
   if (body?.url !== undefined || requireUrl) {
     const u = String(body?.url ?? '').trim();
-    if (!u || u.length > WEBHOOK_URL_MAX) return { error: ['invalidWebhookUrl', 'Provide an https URL'] };
+    if (!u || u.length > WEBHOOK_URL_MAX) return { error: ['webhookError', 'Provide an https URL'] };
     let parsed;
     try {
       parsed = new URL(u);
     } catch {
-      return { error: ['invalidWebhookUrl', 'Provide a valid https URL'] };
+      return { error: ['webhookError', 'Provide a valid https URL'] };
     }
-    if (parsed.protocol !== 'https:') return { error: ['invalidWebhookUrl', 'Webhook URLs must use https'] };
+    if (parsed.protocol !== 'https:') return { error: ['webhookError', 'Webhook URLs must use https'] };
     fields.url = u;
   }
   if (body?.format !== undefined) {
-    if (!WEBHOOK_FORMATS.includes(body.format)) return { error: ['invalidWebhookFormat', 'Format must be teams-adaptive, teams-messagecard or raw-json'] };
+    if (!WEBHOOK_FORMATS.includes(body.format)) return { error: ['webhookError', 'Format must be teams-adaptive, teams-messagecard or raw-json'] };
     fields.format = body.format;
   }
   if (body?.events !== undefined) {
     if (!Array.isArray(body.events) || !body.events.length || body.events.length > WEBHOOK_EVENTS.length || body.events.some(e => !WEBHOOK_EVENTS.includes(e))) {
-      return { error: ['invalidWebhookEvents', `Events must be a non-empty subset of: ${WEBHOOK_EVENTS.join(', ')}`] };
+      return { error: ['webhookError', `Events must be a non-empty subset of: ${WEBHOOK_EVENTS.join(', ')}`] };
     }
     fields.events = body.events;
   }
   if (body?.status !== undefined) {
-    if (body.status !== 'active' && body.status !== 'disabled') return { error: ['invalidWebhookStatus', 'Status must be active or disabled'] };
+    if (body.status !== 'active' && body.status !== 'disabled') return { error: ['webhookError', 'Status must be active or disabled'] };
     fields.status = body.status;
   }
   return { fields };
@@ -6186,7 +6186,7 @@ async function handleApi(req, res, url) {
     const project = await webhookProjectFor(ctx, whListMatch[2]);
     if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
     if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
-      return fail(res, 403, 'webhookForbidden', 'You do not have permission to manage webhooks for this project');
+      return fail(res, 403, 'webhookError', 'You do not have permission to manage webhooks for this project');
     }
     if (method === 'GET') {
       const rows = await db.all('select * from webhook_hooks where workspace_id = ? and project_id = ? order by created_at', [ctx.ws.id, project.id]);
@@ -6232,11 +6232,11 @@ async function handleApi(req, res, url) {
     const project = await webhookProjectFor(ctx, whHookMatch[2]);
     if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
     if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
-      return fail(res, 403, 'webhookForbidden', 'You do not have permission to manage webhooks for this project');
+      return fail(res, 403, 'webhookError', 'You do not have permission to manage webhooks for this project');
     }
     /* scope: workspace + project — a hook id from another ws/project 404s. */
     const hook = await db.get('select * from webhook_hooks where id = ? and workspace_id = ? and project_id = ?', [whHookMatch[3], ctx.ws.id, project.id]);
-    if (!hook) return fail(res, 404, 'webhookNotFound', 'Webhook not found');
+    if (!hook) return fail(res, 404, 'webhookError', 'Webhook not found');
     if (method === 'DELETE') {
       /* Backstop: historical delivery rows stay (audit trail, D-06/POL-02);
          the engine dead-letters any pending row for a missing hook. */
@@ -6269,14 +6269,14 @@ async function handleApi(req, res, url) {
     const project = await webhookProjectFor(ctx, whTestMatch[2]);
     if (!project) return fail(res, 404, 'projectNotFound', 'Project not found');
     if (!canManageProject(project, ctx.membership.member_id, ctx.membership.role)) {
-      return fail(res, 403, 'webhookForbidden', 'You do not have permission to manage webhooks for this project');
+      return fail(res, 403, 'webhookError', 'You do not have permission to manage webhooks for this project');
     }
     const hook = await db.get('select * from webhook_hooks where id = ? and workspace_id = ? and project_id = ?', [whTestMatch[3], ctx.ws.id, project.id]);
-    if (!hook) return fail(res, 404, 'webhookNotFound', 'Webhook not found');
-    if (hook.status !== 'active') return fail(res, 409, 'webhookDisabled', 'Enable the hook before sending a test');
+    if (!hook) return fail(res, 404, 'webhookError', 'Webhook not found');
+    if (hook.status !== 'active') return fail(res, 409, 'webhookError', 'Enable the hook before sending a test');
     const body = await readJson(req);
     const event = String(body?.event || '');
-    if (!WEBHOOK_EVENTS.includes(event)) return fail(res, 400, 'invalidWebhookEvent', 'Unknown webhook event');
+    if (!WEBHOOK_EVENTS.includes(event)) return fail(res, 400, 'webhookError', 'Unknown webhook event');
     /* D-11: fixed sample content (planner discretion) — the envelope
        whitelist (EVENT_FIELDS) keeps only what the event needs. */
     const sampleCtx = {
@@ -6302,10 +6302,10 @@ async function handleApi(req, res, url) {
       });
     } catch (err) {
       logWarn(`webhook test enqueue hook ${hook.id}: ${err.message}`);
-      return fail(res, 500, 'webhookTestFailed', 'Could not enqueue the test delivery');
+      return fail(res, 500, 'webhookError', 'Could not enqueue the test delivery');
     }
     const delivery = await db.get('select * from webhook_deliveries where dedup_key = ?', [`${hook.id}:${event}:${sampleSubject}`]);
-    if (!delivery) return fail(res, 500, 'webhookTestFailed', 'Could not enqueue the test delivery');
+    if (!delivery) return fail(res, 500, 'webhookError', 'Could not enqueue the test delivery');
     /* T-67-10: the test rides the IDENTICAL guarded pipeline as real
        events — deliverWebhook re-checks ssrfOk per attempt, signs with the
        hook secret, and the fetch carries the same 10 s timeout. No bypass
@@ -6329,7 +6329,8 @@ async function handleApi(req, res, url) {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = await requireUser(req, res);
     if (!user) return;
-    // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.    await db.run('delete from sessions where user_id = ? and token_hash like ?', [user.id, `${sessionMatch[1]}%`]);
+    // P-F: always scoped to the caller's user_id — a foreign id can never be revoked.
+    await db.run('delete from sessions where user_id = ? and token_hash like ?', [user.id, `${sessionMatch[1]}%`]);
     return json(res, 204); // idempotent: an already-dead or foreign id is not an error (OQ4)
   }
 

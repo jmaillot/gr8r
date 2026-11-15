@@ -86,16 +86,17 @@ test('POST as plain member → 403; GET list as member → 403 (server gate is t
 
 test('POST validation: http URL, unknown format, bogus event, empty/missing URL → 400', async () => {
   const cases = [
-    [{ url: 'http://x.logic.azure.com/w', events: ['task.created'] }, 'invalidWebhookUrl'],
-    [{ url: '', events: ['task.created'] }, 'invalidWebhookUrl'],
-    [{ events: ['task.created'] }, 'invalidWebhookUrl'],
-    [{ url: 'https://out.logic.azure.com/w', format: 'carrier-pigeon', events: ['task.created'] }, 'invalidWebhookFormat'],
-    [{ url: 'https://out.logic.azure.com/w', events: ['task.created', 'bogus.event'] }, 'invalidWebhookEvents'],
+    { url: 'http://x.logic.azure.com/w', events: ['task.created'] },
+    { url: '', events: ['task.created'] },
+    { events: ['task.created'] },
+    { url: 'https://out.logic.azure.com/w', format: 'carrier-pigeon', events: ['task.created'] },
+    { url: 'https://out.logic.azure.com/w', events: ['task.created', 'bogus.event'] },
   ];
-  for (const [body, code] of cases) {
+  for (const body of cases) {
     const r = await owner.post(hooksUrl, body);
-    assert.equal(r.status, 400, `${code}: ${JSON.stringify(body)} → ${r.status}`);
-    assert.equal(r.data.code, code);
+    assert.equal(r.status, 400, `${JSON.stringify(body)} → ${r.status}`);
+    assert.equal(r.data.code, 'webhookError');
+    assert.ok(r.data.error, 'a specific English message rides beside the code');
   }
 });
 
@@ -250,7 +251,7 @@ test('POST /test with an unknown event → 400; as member → 403', async () => 
   const base = `/api/workspaces/${ws.slug}/projects/p1/webhooks/${hook.id}/test`;
   const bad = await owner.post(base, { event: 'carrier.pigeon' });
   assert.equal(bad.status, 400);
-  assert.equal(bad.data.code, 'invalidWebhookEvent');
+  assert.equal(bad.data.code, 'webhookError');
   const denied = await member.post(base, { event: 'task.created' });
   assert.equal(denied.status, 403);
 });
