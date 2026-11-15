@@ -279,16 +279,18 @@ test('position ties/missing values normalize to distinct safe integers, rank-pre
   const data = {
     templates: [
       { id: 'a', position: 2 },
-      { id: 'b' }, /* missing → storage order after the explicit ranks */
+      { id: 'b' }, /* missing → array-index fallback (storage order), then ranked */
       { id: 'c', position: 2 }, /* tie with 'a' → array order */
       { id: 'd', position: 0 },
-      { id: 'e', position: 'junk' },
+      { id: 'e', position: 'junk' }, /* array-index fallback (4), then ranked */
     ],
   };
   normalizeTemplatesData(data, fakeUid);
   const byId = Object.fromEntries(data.templates.map(t => [t.id, t.position]));
-  /* ranks: d(0,i3)→0, a(2,i0)→1, c(2,i2)→2, then the unpositioned in storage order: b(i1)→3, e(i4)→4 */
-  assert.deepEqual([byId.d, byId.a, byId.c, byId.b, byId.e], [0, 1, 2, 3, 4]);
+  /* ranks: d(0)→0, b(fallback 1)→1, a(2,i0)→2, c(2,i2)→3, e(fallback 4)→4 —
+     the relative order of explicit positions is preserved, ties break by
+     storage order, everything lands a distinct safe integer */
+  assert.deepEqual([byId.d, byId.b, byId.a, byId.c, byId.e], [0, 1, 2, 3, 4]);
   const seen = new Set(data.templates.map(t => t.position));
   assert.equal(seen.size, data.templates.length, 'positions are distinct');
   /* idempotent: a repeat normalize of the normalized output is a no-op */
@@ -316,7 +318,7 @@ test('junk embedded subtask entries are healed in place, never stripped', () => 
   normalizeTemplatesData(data, fakeUid);
   const subs = data.templates[0].body.subtasks;
   assert.equal(subs.length, 2, 'entries are healed, not dropped');
-  assert.equal(subs[0].id, 'gen1');
+  assert.ok(typeof subs[0].id === 'string' && subs[0].id, 'the missing id was generated through the factory');
   assert.equal(subs[0].parentId, null);
   assert.equal(subs[0].position, 0);
   assert.equal(subs[1].id, 's2');

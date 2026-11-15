@@ -7,7 +7,10 @@
    writeDoc mirror. Mirrors the src/core/subtree.js discipline: no DOM
    access, plain comparators only (never localeCompare) so ordering is
    byte-identical across hosts; uid factories are injected, never
-   imported.
+   imported. The ONLY import is the sibling zero-import subtree.js —
+   the embedded-tree gate and heal reuse the exact definitions the
+   Phase 65 funnel block and mcp.js writeDoc run (one validator, never
+   a second one).
 
    Stored shape (CONTEXT.md D-02): every record of doc.templates[]
    carries exactly
@@ -28,6 +31,7 @@
    normalized by the funnel, one-node moves (array storage order is
    irrelevant).
    ===================================================================== */
+import { normalizeTaskSubtasks, validateSubtree } from './subtree.js';
 
 /* The embedded-subtask whitelist (D-04). Entries are mutated in place;
    unknown keys are deleted, canonical shape keys survive. dueOffsetDays
@@ -106,26 +110,73 @@ export function sanitizeTemplate(record, uidFactory, index = 0) {
 }
 
 /* =====================================================================
-   [Phase 66, 66-01] The templates funnel sink — the mirror of
+   [Phase 66, 66-01 task 2] The templates funnel sink — the mirror of
    server.js's normalizeSubtasksData, run at every doc write/read site
-   (mergeClientDoc, normalizeDoc, and later the MCP writeDoc mirror —
-   one validator, several call sites, T-65-11 precedent). Rebuilds
-   data.templates per-record through sanitizeTemplate: unknown fields
-   drop by construction (D-04), missing positions take the array-index
-   fallback (D-03). A non-array or absent templates key normalizes to
-   [], matching the savedViews/recentSearches guards in normalizeDoc.
-   (The embedded-tree gate, in-place subtask heal and rank-preserving
-   position renumber land in 66-01 task 2 — the gate must run beside
-   the Phase 65 validateSubtree block, not before it exists.)
+   (mergeClientDoc, normalizeDoc, and the MCP writeDoc mirror — one
+   validator, several call sites, T-65-11 precedent). Per record:
+     1. sanitizeTemplate rebuilds the D-02 whitelisted shape (D-04);
+     2. (gate on) every embedded subtask tree is wholesale-validated
+        BEFORE the heal — a raw self-parenting or cyclic template body
+        must be REJECTED, never silently normalized (the 65-02 lesson:
+        the heal re-roots self-parents, so pre-heal validation is the
+        only gate that can reject them);
+     3. the embedded subtask arrays are healed IN PLACE via the shared
+        normalizeTaskSubtasks (junk healed, never stripped);
+     4. template-level positions are renumbered to distinct safe
+        integers, rank-preserving (D-03: explicit positions keep their
+        relative order, ties break by array storage order; idempotent
+        on repeat PUTs).
+   A non-array or absent templates key normalizes to [], matching the
+   savedViews/recentSearches guards in normalizeDoc.
+   opts.gate=false (the normalizeDoc read path) skips step 2 — a stored
+   doc that already slipped past the write gate is healed, never turned
+   into a read failure (the Phase 65 read path has the same asymmetry).
    ===================================================================== */
-export function normalizeTemplatesData(data, uidFactory) {
+export function normalizeTemplatesData(data, uidFactory, opts = {}) {
   if (!data || typeof data !== 'object') return;
+  const gate = opts.gate !== false;
   const list = Array.isArray(data.templates) ? data.templates : [];
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const rec = list[i];
     if (!rec || typeof rec !== 'object' || Array.isArray(rec)) continue;
-    out.push(sanitizeTemplate(rec, uidFactory, i));
+    const t = sanitizeTemplate(rec, uidFactory, i);
+    /* every embedded subtask array that exists — task bodies carry
+       `subtasks`; a project-kind body's task tree lands in 66-02's
+       builder, but the gate runs on whatever arrays exist */
+    const trees = [];
+    if (Array.isArray(t.body.subtasks)) trees.push(t.body.subtasks);
+    if (Array.isArray(t.body.tasks)) {
+      for (const bt of t.body.tasks) {
+        if (bt && typeof bt === 'object' && Array.isArray(bt.subtasks)) trees.push(bt.subtasks);
+      }
+    }
+    if (gate) {
+      for (const tree of trees) {
+        const verdict = validateSubtree(tree);
+        if (!verdict.ok) {
+          const err = new Error(
+            verdict.code === 'subtaskCycle'
+              ? 'That change would create a subtask cycle'
+              : 'Subtasks cannot nest deeper than five levels',
+          );
+          err.status = 400;
+          err.code = verdict.code;
+          throw err;
+        }
+      }
+    }
+    for (const tree of trees) normalizeTaskSubtasks({ subtasks: tree }, uidFactory);
+    out.push(t);
   }
-  data.templates = out;
+  /* D-03 position normalization: rank key = (position, array storage
+     order) — explicit positions keep their relative order, ties break
+     by storage order, everything renumbers to 0..n-1. */
+  const ranked = out
+    .map((t, i) => ({ t, i, key: Number.isSafeInteger(t.position) ? t.position : Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.key - b.key || a.i - b.i);
+  ranked.forEach((r, rank) => {
+    r.t.position = rank;
+  });
+  data.templates = ranked.map(r => r.t);
 }

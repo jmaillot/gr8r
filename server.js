@@ -867,9 +867,11 @@ function normalizeDoc(doc, meta) {
   normalizeSubtasksData(out.data, uid);
   /* [Phase 66, 66-01 D-01/D-02/D-04] Read-side templates pass — every
      template leaves this function carrying the whitelisted D-02 shape
-     (unknown fields dropped by construction, D-04). Mirrors the Phase 65
-     read-path asymmetry: heal-only, never a read failure. */
-  normalizeTemplatesData(out.data, uid);
+     (unknown fields dropped by construction, D-04), embedded subtask
+     trees healed. gate=false: heal-only — a stored doc that slipped
+     past the write gate must never become a read failure. Mirrors the
+     Phase 65 read-path asymmetry. */
+  normalizeTemplatesData(out.data, uid, { gate: false });
   return out;
 }
 
