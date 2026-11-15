@@ -46,14 +46,14 @@ export const WEBHOOK_EVENTS = Object.freeze([
    user-configurable fields exist, and no enriched project (description/
    members/teams) is included — only the D-03 minimal context trio. */
 export const EVENT_FIELDS = Object.freeze({
-  'task.created': Object.freeze(['taskId', 'title', 'status', 'projectName', 'projectId', 'authorName', 'occurredAt']),
-  'task.completed': Object.freeze(['taskId', 'title', 'done', 'projectName', 'projectId', 'authorName', 'occurredAt']),
-  'task.assigned': Object.freeze(['taskId', 'title', 'assignees', 'mentions', 'projectName', 'projectId', 'authorName', 'occurredAt']),
-  'task.deleted': Object.freeze(['taskId', 'title', 'projectName', 'projectId', 'authorName', 'occurredAt']),
-  'comment.added': Object.freeze(['commentId', 'taskId', 'taskTitle', 'body', 'authorName', 'projectName', 'projectId', 'occurredAt']),
-  'due.reminder': Object.freeze(['taskId', 'title', 'due', 'offset', 'projectName', 'projectId', 'occurredAt']),
-  'project.completed': Object.freeze(['projectId', 'projectName', 'authorName', 'occurredAt']),
-  'subtask.tree-changed': Object.freeze(['taskId', 'taskTitle', 'projectName', 'projectId', 'authorName', 'occurredAt']),
+  'task.created': Object.freeze(['event', 'taskId', 'title', 'status', 'projectName', 'projectId', 'authorName', 'occurredAt']),
+  'task.completed': Object.freeze(['event', 'taskId', 'title', 'done', 'projectName', 'projectId', 'authorName', 'occurredAt']),
+  'task.assigned': Object.freeze(['event', 'taskId', 'title', 'assignees', 'mentions', 'projectName', 'projectId', 'authorName', 'occurredAt']),
+  'task.deleted': Object.freeze(['event', 'taskId', 'title', 'projectName', 'projectId', 'authorName', 'occurredAt']),
+  'comment.added': Object.freeze(['event', 'commentId', 'taskId', 'taskTitle', 'body', 'authorName', 'projectName', 'projectId', 'occurredAt']),
+  'due.reminder': Object.freeze(['event', 'taskId', 'title', 'due', 'offset', 'projectName', 'projectId', 'occurredAt']),
+  'project.completed': Object.freeze(['event', 'projectId', 'projectName', 'authorName', 'occurredAt']),
+  'subtask.tree-changed': Object.freeze(['event', 'taskId', 'taskTitle', 'projectName', 'projectId', 'authorName', 'occurredAt']),
 });
 
 /* D-01 envelope builder — the single field gate. Copies ONLY the

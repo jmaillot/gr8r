@@ -64,7 +64,8 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
 import { ssrfOk } from './webhook-ssrf.js';
 import { nextAttemptMs, isDead } from './webhook-retry.js';
-import { diffWebhookEvents } from './src/core/webhook-events.js';
+import { diffWebhookEvents, buildEnvelope } from './src/core/webhook-events.js';
+import { formatPayload, truncateToCap } from './src/core/webhook-formats.js';
 /* [Phase 66, 66-01] The ONE template-record sanitizer/funnel sink — the
    same pure module mergeClientDoc and normalizeDoc run below (T-65-11
    discipline: one validator, several call sites). */
@@ -2251,6 +2252,7 @@ async function runReminderPass({ now: at = new Date() } = {}) {
                 event: 'due.reminder',
                 subjectId: `${t.id}:${offset}:${due}`,
                 ctxJson: JSON.stringify({
+                  event: 'due.reminder',
                   taskId: t.id,
                   title: t.title || '',
                   due,
@@ -2611,7 +2613,7 @@ async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName 
     const taskId = data.taskId || ev.subjectId;
     const projectId = data.projectId || projectOf.get(taskId);
     if (!projectId) continue;
-    const ctx = { ...data, projectId, projectName: data.projectName || projectNameOf.get(projectId) || '', authorName: authorName || null };
+    const ctx = { ...data, event: ev.event, projectId, projectName: data.projectName || projectNameOf.get(projectId) || '', authorName: authorName || null };
     if (ev.event === 'task.assigned') ctx.mentions = await resolveMentions(data.assignees);
     const ctxJson = JSON.stringify(ctx);
     claimed += await emitWebhookEvent(workspaceId, { projectId, event: ev.event, subjectId: ev.subjectId, ctxJson });
@@ -2619,35 +2621,43 @@ async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName 
   return claimed;
 }
 
-/* Tracer envelope (67-02 lands the full formatter + 28 KB cap): a minimal
-   teams-adaptive card rebuilt from the CURRENT doc at delivery time — the
-   delivery row carries no payload snapshot. Timestamps ISO 8601 UTC (D-04). */
-async function webhookBodyFor(workspaceId, event, subjectId) {
-  let title = '';
+/* WHK-04 (67-02): the envelope is built from the delivery row's ctx — the
+   diff-time event snapshot + D-03 context trio stored at enqueue — then
+   run through truncateToCap (28 KB cap, D-02: truncate the biggest field,
+   deliver anyway) and formatPayload(hook.format) (three Teams formats,
+   unknown value → teams-adaptive, D-12). raw-json signs the raw stringified
+   envelope. Fallback (rows enqueued without a ctx, e.g. the test harness):
+   a minimal context rebuilt from the CURRENT doc at delivery time. */
+async function webhookCtxFromDoc(workspaceId, event, subjectId) {
+  const ctx = { event };
   try {
     const row = await db.get('select doc from workspaces where id = ?', [workspaceId]);
     const doc = JSON.parse(row?.doc || '{}');
     const task = (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).find(x => x?.id === subjectId);
-    if (task) title = task.title || '';
+    if (task) {
+      ctx.taskId = task.id;
+      ctx.title = task.title || '';
+      ctx.projectId = task.project;
+      ctx.projectName = (Array.isArray(doc?.data?.projects) ? doc.data.projects : []).find(p => p?.id === task.project)?.name || '';
+    }
   } catch {
     /* fail-absent: the subject id still labels the event */
   }
-  const label = event === 'task.created' ? `Task created: ${title || subjectId}` : `${event}: ${title || subjectId}`;
-  return {
-    type: 'message',
-    attachments: [
-      {
-        contentType: 'application/vnd.microsoft.card.adaptive',
-        contentUrl: null,
-        content: {
-          $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-          type: 'AdaptiveCard',
-          version: '1.4',
-          body: [{ type: 'TextBlock', text: label, wrap: true }],
-        },
-      },
-    ],
-  };
+  return ctx;
+}
+
+async function webhookBodyFor(hook, d) {
+  let ctx = null;
+  try {
+    ctx = d.ctx ? JSON.parse(d.ctx) : null;
+  } catch {
+    ctx = null;
+  }
+  if (!ctx || typeof ctx !== 'object') ctx = await webhookCtxFromDoc(d.workspace_id, d.event, webhookSubjectKey(d));
+  if (!ctx.occurredAt) ctx.occurredAt = new Date().toISOString(); // D-04
+  const env = buildEnvelope(d.event, ctx) || buildEnvelope(d.event, { event: d.event, taskId: webhookSubjectKey(d), occurredAt: ctx.occurredAt });
+  const capped = truncateToCap(env, hook.format);
+  return JSON.stringify(formatPayload(hook.format, capped));
 }
 
 const webhookSubjectKey = d => {
@@ -2713,7 +2723,7 @@ async function deliverWebhook(d, atMs, fetchFn, lookup) {
 
   let bodyStr = '';
   try {
-    bodyStr = JSON.stringify(await webhookBodyFor(d.workspace_id, d.event, webhookSubjectKey(d)));
+    bodyStr = await webhookBodyFor(hook, d);
   } catch (err) {
     return await webhookFailDelivery(d, newAttempt, atMs, null, `envelope build: ${err.message}`, null, null);
   }

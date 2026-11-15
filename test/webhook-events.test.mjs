@@ -128,6 +128,7 @@ test('EVENT_FIELDS is a frozen whitelist for every event; buildEnvelope is the s
     assert.equal(Object.isFrozen(fields), true, `${ev} whitelist is frozen`);
   }
   const ctx = {
+    event: 'task.created',
     taskId: 't1',
     title: 'T',
     status: 'todo',
@@ -138,7 +139,7 @@ test('EVENT_FIELDS is a frozen whitelist for every event; buildEnvelope is the s
     occurredAt: '2026-11-15T12:00:00.000Z',
   };
   const env = buildEnvelope('task.created', ctx);
-  assert.deepEqual(Object.keys(env).sort(), ['authorName', 'occurredAt', 'projectId', 'projectName', 'status', 'taskId', 'title']);
+  assert.deepEqual(Object.keys(env).sort(), ['authorName', 'event', 'occurredAt', 'projectId', 'projectName', 'status', 'taskId', 'title']);
   assert.equal('secretField' in env, false, 'no field outside the whitelist ever enters a payload');
   assert.ok(!Number.isNaN(Date.parse(env.occurredAt)), 'occurredAt is ISO 8601 UTC');
 });

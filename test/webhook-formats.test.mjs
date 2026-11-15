@@ -96,9 +96,10 @@ test('a 40 KB comment body is TRUNCATED to the 28 KB cap and still delivered (D-
 
 test('an envelope whose full body is exactly 28672 bytes passes UNTRUNCATED (boundary)', () => {
   /* Build an envelope whose formatted body measures exactly the cap: start
-     small, pad the title with ASCII bytes (1 char = 1 UTF-8 byte) until the
-     full JSON body hits 28672 exactly. */
-  const env = { ...baseEnv('task.created'), taskId: 't1', title: '' };
+     with a NON-empty title (an empty one falls back to the taskId label and
+     breaks the linear padding math), then pad with ASCII bytes (1 char = 1
+     UTF-8 byte) until the full JSON body hits 28672 exactly. */
+  const env = { ...baseEnv('task.created'), taskId: 't1', title: 'X' };
   const start = byteLen(bodyOf(env));
   assert.ok(start < CAP, 'sanity: unpadded body is under the cap');
   env.title += 'A'.repeat(CAP - start);
