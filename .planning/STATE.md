@@ -5,14 +5,14 @@ milestone_name: Automation & Productivity
 current_phase: 65
 current_phase_name: Subtask Tree
 status: executing
-stopped_at: Completed 65-02-PLAN.md
-last_updated: "2026-11-15T11:48:15.473Z"
-state_head: 13d12970e57dfed29534171bea4e5d966196c472
+stopped_at: Completed 65-03-PLAN.md
+last_updated: "2026-11-15T12:22:52.074Z"
+state_head: 81cda8c150bc2f4c366566e21fd1342b185b6891
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # STATE.md
@@ -26,7 +26,7 @@ progress:
 ## Current Position
 
 **Phase:** 65 (Subtask Tree) — EXECUTING
-**Plan:** 3 of 5
+**Plan:** 4 of 5
 **Status:** Ready to execute
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
@@ -44,6 +44,7 @@ progress:
 |------|----------|-------|-------|
 | Phase 65 P65-01 | 302 | 3 tasks | 4 files |
 | Phase 65 P65-02 | 14min | 3 tasks | 10 files |
+| Phase 65 P65-03 | 33 | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -73,8 +74,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T11:48:15.440Z
-**Stopped at:** Completed 65-02-PLAN.md
+**Last session:** 2026-11-15T12:22:52.039Z
+**Stopped at:** Completed 65-03-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -86,3 +87,5 @@ None.
 - [Phase 65]: normalizeTaskSubtasks: self-referencing parentId cannot self-satisfy (x !== s check) and position requires Number.isSafeInteger
 - [Phase 65]: 65-02: funnel tree gate runs BEFORE the lazy heal (heal re-roots self-parents — pre-heal validation is the only gate that can reject them wholesale); whole-array validateSubtree beside validateMove
 - [Phase 65]: 65-02: task-level completion cascade wired in applyPatch status:'done' — one site covers every completion surface; reopen cascades nothing (D-13)
+- [Phase 65]: 65-03: one shared recursive tree renderer (subTreeChecklistHtml) for drawer/list/board-popover; collapse state in session-only S.ui.subOpenNodes
+- [Phase 65]: 65-03: subtask detail view split to a lazy chunk (61-02 remedy) to restore chunk-gate headroom; subtree.leafEntries is the shared leaf-count definition
