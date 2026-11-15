@@ -38,9 +38,9 @@ status: complete
 actuals:
   tokens: 24800
   tasks: 3
-  commits: 3
+  commits: 5
 plan_head_before: b68a2061d213dc54c1a7ba9eac9feb02dd24106a
-plan_head_after: 343a4609f4534f70c1a91db8a390f6b75df9b089
+plan_head_after: 19bade920fefb1a332a21b05fc361e7e50ea9c72
 estimate:
   tasks: 3
   tokens: 62000
@@ -52,7 +52,7 @@ Webhooks management tab (lazy chunk, show-once secret, EN/FR) with a 5-test e2e 
 
 ## What was built
 
-- **Task 1 — Webhooks tab** (`feat` commit f66965a): `src/overlays/webhooks-settings.js` is the lazy Webhooks section (list rows with health badge + test-event select + Send test / Edit / Enable-Disable / Delete, create/edit form with https-only URL, 8-event checkboxes, format radios, D-10 show-once secret dialog with Copy/Done). The tab is spread into the project-settings tab bar only for `canManageProject` users (modals.js:364); `A.settingsTab` pre-warms the chunk then `loadHooks()`. Entry chunk after: **499,198 B ≤ 500,000 gate**.
+- **Task 1 — Webhooks tab** (`feat` commits f66965a + 19bade9): `src/overlays/webhooks-settings.js` is the lazy Webhooks section (list rows with health badge + test-event select + Send test / Edit / Enable-Disable / Delete, create/edit form with https-only URL, 8-event checkboxes, format radios, D-10 show-once secret dialog with Copy/Done). The tab is spread into the project-settings tab bar only for `canManageProject` users (modals.js:364); the async `A.settingsTab` pre-warms the chunk then `loadHooks()`. Entry chunk after: **499,198 B ≤ 500,000 gate**.
 - **Task 2 — e2e** (`test` commit 5ddb9e8): `e2e/webhooks.spec.mjs` — 5 tests, all green: create + show-once secret (secret absent from DOM after dismissal AND after full reload), send-test ok/fail results (route-intercepted, no external network), EN + FR flows, member sees no tab + direct POST 403 (T-67-11).
 - **Task 3 — security register** (`docs` commit 343a460): `67-SECURITY.md` in Phase 52 format — T-67-01…T-67-13 + T-67-SC consolidated from the four plan threat models, every mitigation cited to verified file:line of the live tree, threats_open: 0, T-67-13 the single accepted risk.
 
@@ -89,5 +89,5 @@ None — the section's surface (modal forms, gated routes, show-once secret) is 
 ## Self-Check: PASSED
 
 - FOUND: src/overlays/webhooks-settings.js, src/overlays/webhooks-labels.json, e2e/webhooks.spec.mjs, .planning/phases/67-project-webhooks/67-SECURITY.md
-- FOUND: f66965a, 5ddb9e8, 343a460 (git log)
-- 3 commits measured from plan_head_before b68a206
+- FOUND: f66965a, 19bade9, 5ddb9e8, 343a460 (git log)
+- 5 commits measured from plan_head_before b68a206 (3 task commits + the f66965a staging amendment + the SUMMARY doc commit)
