@@ -18,6 +18,8 @@ export function subtaskHtml(task, s) {
     <div class="row" style="gap:10px;align-items:flex-start">
       <input type="checkbox" class="check round" style="margin-top:9px" ${s.done ? 'checked' : ''} data-a="toggleSub" data-id="${task.id}" data-sid="${s.id}" aria-label="${s.done ? t('a11y.subtaskMarkNotDone') : t('a11y.subtaskMarkDone')}">
       <textarea class="ttl-edit" id="s-title" rows="1" data-autosize data-blur="commitSubTitle" data-key-enter="blur" data-id="${task.id}" data-sid="${s.id}" aria-label="${t('a11y.subtaskTitle')}" style="${s.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${esc(s.title)}</textarea>
+      <span class="sp"></span>
+      <button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="sub" data-id="${task.id}" data-sid="${s.id}" aria-label="${t('nav.more')}">${ic('ellipsis', 15)}</button>
     </div>
     <div class="faint" style="font-size:12px;margin:4px 0 0 26px">${t('page.subtask.progress', { i: i + 1, n: task.subtasks.length })} · ${s.done ? t('page.subtask.done') : t('page.subtask.open')}</div>
     <dl class="kv" style="margin-top:16px">

@@ -27,7 +27,12 @@ import { FIELDS, viewOf } from '../shell/view-engine.js';
 import { TCOLS } from '../views/table.js';
 import { startOfWeek } from '../views/calendar.js';
 import { ctxMenu } from './context-menu.js';
-import { subTreeChecklistHtml } from '../features/subtasks.js';
+/* 65-04 chunk-gate remedy (61-02/65-03 precedent): the two subtask popovers —
+   the board-card checklist and the one-level re-parent picker — render through
+   a registry the pre-warmed lazy chunk populates, taking the recursive
+   checklist renderer's bytes out of the entry chunk. */
+import('../features/subtask-popovers.js').catch(() => {});
+export const subPop = {};
 
 /* The recurrence vocabulary: the STORED values the document holds and the
    catalogue keys their displays read — same treatment as the statuses. */
@@ -197,10 +202,19 @@ export function popHtml(p) {
     case 'subs': {
       /* Phase 65 (65-03 D-11): the board card's subtask checklist — the same
          recursive row shape as the drawer, in the existing popover pattern.
-         No per-subtask kanban cards. */
-      const st = task(p.id);
-      inner = `<div class="mh">${tMsg('popover.subtasksOf', { title: esc(st.title) })}</div>${subTreeChecklistHtml(st, { compact: true })}`;
+         No per-subtask kanban cards. 65-04 chunk-gate remedy: the two
+         subtask popovers render through the pre-warmed lazy registry (the
+         recursive checklist renderer leaves the entry chunk with them). */
+      inner = subPop.subs ? subPop.subs(p) : '';
       style = 'width:320px;max-height:60vh;overflow:auto';
+      break;
+    }
+    case 'subParent': {
+      /* 65-04 (D-09): the one-level re-parent picker — lazy registry, see
+         case 'subs'. The picker items keep data-a="reparentSubTo" with the
+         target id on data-v; the moved subtask comes from the popover's sid. */
+      inner = subPop.subParent ? subPop.subParent(p) : '';
+      style = 'width:280px;max-height:50vh;overflow:auto';
       break;
     }
     case 'pstatus': {

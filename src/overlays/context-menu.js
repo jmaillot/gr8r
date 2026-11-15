@@ -2,6 +2,7 @@
 import { ic } from '../core/icons.js';
 import { ST } from '../core/constants.js';
 import { D, mem, me, proj, task, visibleProjects, isMemberAdmin, canManageProject } from '../core/store.js';
+import { orderedSiblings } from '../core/subtree.js';
 /* ctxMenu's task variable is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg } from '../core/i18n.js';
 
@@ -30,6 +31,30 @@ export function ctxMenu(p) {
       I('archiveTask', 'archive', tMsg('act.archive')) +
       sep +
       I('delTask', 'trash-2', tMsg('act.delete'), 'danger', 'Del')
+    );
+  }
+  /* 65-04 (D-09): the per-subtask context menu — one-level promote/demote/
+     re-parent, deterministic. Impossible moves are ABSENT (no disabled
+     noise): a root has no promote, a first sibling has no demote, a task
+     with no other re-parent target has no re-parent entry. The re-parent
+     entry opens the picker popover (A.reparentSub → case 'subParent'). */
+  if (p.ctx === 'sub') {
+    const t = task(p.id);
+    const s = t?.subtasks.find(x => x.id === p.sid);
+    if (!t || !s) return '';
+    const Is = (act, icon, label) =>
+      `<button class="mi" data-a="${act}" data-id="${t.id}" data-sid="${s.id}">${ic(icon, 15)}${label}</button>`;
+    const sibs = orderedSiblings(t.subtasks, s.parentId ?? null);
+    const hasPrev = sibs.length > 1 && sibs[0].id !== s.id;
+    const targets = sibs.filter(x => x.id !== s.id);
+    return (
+      Is('openSub', 'panel-right-open', tMsg('toast.open')) +
+      sep +
+      (s.parentId != null ? Is('moveSubUp', 'arrow-up', tMsg('act.moveSubUp')) : '') +
+      (hasPrev ? Is('moveSubDown', 'arrow-down', tMsg('act.moveSubDown')) : '') +
+      (targets.length ? Is('reparentSub', 'corner-down-right', tMsg('act.reparentSub')) : '') +
+      ((s.parentId != null || hasPrev || targets.length) ? sep : '') +
+      `<button class="mi danger" data-a="rmSub" data-id="${t.id}" data-sid="${s.id}">${ic('trash-2', 15)}${tMsg('act.delete')}</button>`
     );
   }
   if (p.ctx === 'project') {

@@ -8,7 +8,7 @@ import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task, taskProg } from '../core/store.js';
 import { leafEntries, orderedSiblings } from '../core/subtree.js';
-import { subTreeChecklistHtml } from '../features/subtasks.js';
+import { treeChecklist } from '../features/subtasks.js';
 import { av, avStack, dueHtml, empty, lbl, prIcon, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 
@@ -80,7 +80,7 @@ export function taskRow(t, cols, tpl, opt = {}) {
     ${cols.map(c => `<div class="c-meta c-${c === 'labels' ? 'lbl' : c}">${CELL[c](t)}</div>`).join('')}
     <div class="c-more"><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="task" data-id="${t.id}" aria-label="${tMsg('a11y.moreActions')}">${ic('ellipsis', 15)}</button></div>
   </div>
-  ${open ? `<div class="subrows">${subTreeChecklistHtml(t, { compact: true, rowClass: 'subrow' })}</div>` : ''}`;
+  ${open ? `<div class="subrows">${treeChecklist.fn ? treeChecklist.fn(t, { compact: true, rowClass: 'subrow' }) : ''}</div>` : ''}`;
 }
 export function listHtml(groups, key, opt = {}) {
   const cols = opt.cols || ['status', 'assignee', 'priority', 'due', 'labels'];
@@ -179,6 +179,9 @@ export const VERB_KEYS = {
   addedSubtaskTo: 'act.verb.addedSubtaskTo',
   'converted a subtask of': 'act.verb.convertedASubtaskOf',
   convertedASubtaskOf: 'act.verb.convertedASubtaskOf',
+  promotedASubtaskOf: 'act.verb.promotedASubtaskOf',
+  demotedASubtaskOf: 'act.verb.demotedASubtaskOf',
+  movedASubtaskOf: 'act.verb.movedASubtaskOf',
   'assigned a subtask on': 'act.verb.assignedASubtaskOn',
   assignedASubtaskOn: 'act.verb.assignedASubtaskOn',
   'set a subtask due date on': 'act.verb.setASubtaskDueDateOn',
@@ -260,6 +263,7 @@ const EXTRA_VARS = {
   fileRemoved: { key: 'act.extra.value', vars: e => ({ value: e.value }) },
   subtaskAdded: { key: 'act.extra.quoted', vars: e => ({ value: e.value }) },
   subtaskConverted: { key: 'act.extra.into', vars: e => ({ value: e.value }) },
+  subtaskMoved: { key: 'act.extra.quoted', vars: e => ({ value: e.value }) },
   quoted: { key: 'act.extra.quoted', vars: e => ({ value: e.value }) },
   movedToProject: { key: 'act.extra.to', vars: e => ({ value: proj(e.value)?.name || e.value }) },
   projStatusSet: { key: 'act.extra.to', vars: e => ({ value: tMsg('project.status.' + e.value) }) },

@@ -48,7 +48,7 @@ document.addEventListener('contextmenu', e => {
   const el = e.target.closest('[data-ctx]');
   if (!el || e.target.closest('input,textarea,[contenteditable]')) return;
   e.preventDefault();
-  S.ui.pop = { type: 'ctx', ctx: el.dataset.ctx, id: el.dataset.id, key: el.dataset.key, vid: el.dataset.vid, x: e.clientX, y: e.clientY, top: e.clientY };
+  S.ui.pop = { type: 'ctx', ctx: el.dataset.ctx, id: el.dataset.id, sid: el.dataset.sid, key: el.dataset.key, vid: el.dataset.vid, x: e.clientX, y: e.clientY, top: e.clientY };
   if (el.dataset.ctx === 'column') S.ui.pop.key = el.dataset.key;
   render();
 });

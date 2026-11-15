@@ -18,7 +18,7 @@ import { paletteHtml } from './palette.js';
 /* 65-03 chunk-gate remedy (61-02 precedent): the subtask DETAIL view rides its
    own lazy chunk — pre-warmed at boot, rendered from the cached module. The
    shared tree renderer stays synchronous (first paint needs it). */
-import { subTreeChecklistHtml } from '../features/subtasks.js';
+import { treeChecklist } from '../features/subtasks.js';
 let subDetailMod = null;
 import('../features/subtask-detail.js')
   .then(m => {
@@ -119,7 +119,7 @@ export function drawerHtml(t) {
       </div>
 
       <div class="dsec"><div class="dsec-h"><h3>${tMsg('modal.subtasks')}</h3><span class="cnt num">${lsd}/${leaves.length}</span>${t.subtasks.length ? `<span style="width:90px;display:flex">${progBar(taskProg(t), lsd === leaves.length ? 'green' : '')}</span>` : ''}</div>
-        ${t.subtasks.length ? subTreeChecklistHtml(t, { fxc }) : ''}
+        ${t.subtasks.length ? (treeChecklist.fn ? treeChecklist.fn(t, { fxc }) : '') : ''}
         <div class="subt" style="color:var(--text-3)">${ic('plus', 15)}<input class="inline-in" id="d-sub" data-key-enter="addSub" data-id="${t.id}" placeholder="${tMsg('a11y.addSubtask')}" aria-label="${tMsg('a11y.addSubtask')}" style="font-size:13.5px"></div>
       </div>
 

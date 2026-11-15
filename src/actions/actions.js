@@ -484,7 +484,7 @@ A.ctxBtn = el => {
     closePop();
     return;
   }
-  S.ui.pop = { type: 'ctx', ctx: d.ctx, id: d.id, key: d.key, vid: d.vid, x: r.left, y: r.bottom + 4, top: r.top, w: r.width };
+  S.ui.pop = { type: 'ctx', ctx: d.ctx, id: d.id, sid: d.sid, key: d.key, vid: d.vid, x: r.left, y: r.bottom + 4, top: r.top, w: r.width };
   render();
 };
 A.popPick = el => {

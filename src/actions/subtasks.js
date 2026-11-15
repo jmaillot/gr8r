@@ -7,6 +7,9 @@ import { S, logAct, save, task } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
 import { A, BLUR, IN, createTask } from './actions.js';
+/* 65-04: the one-level restructure handlers (moveSubUp/moveSubDown/reparent*)
+   ride a pre-warmed lazy chunk — 61-02/65-03 remedy precedent, entry-chunk gate. */
+import('../features/subtask-move.js').catch(() => {});
 
 export const subOf = (t, sid) => t && t.subtasks.find(s => s.id === sid);
 A.openSub = el => {
