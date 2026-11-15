@@ -12,7 +12,7 @@ experience of the tasks table — no new features.
 
 - [x] **Phase 62: E2E Baseline Repair** - Fix the webServer readiness race and repair the 9 drifted specs against the lazy-chunk Settings contract (completed 2026-11-14)
 - [x] **Phase 63: VIEW-02 De-Flake** - Diagnose the flaky VIEW-02 spec with evidence, then stabilize it deterministically with retries=0
-- [ ] **Phase 64: Mobile Tasks Table & Suite Green** - Hide-the-columns-button mobile contract, honestly usable card stack, and the 111/111 e2e close
+- [x] **Phase 64: Mobile Tasks Table & Suite Green** - Hide-the-columns-button mobile contract, honestly usable card stack, and the 111/111 e2e close (completed 2026-11-15)
 
 ## Phase Details
 
@@ -68,17 +68,17 @@ Plans:
   3. One render path, one source of truth for visible columns — the mobile treatment is media-query-gated, never a parallel render fork (Pitfall 4 tripwire specs stay green)
   4. The full e2e suite is 111/111 green at milestone close: 0 known failures, VIEW-02 stable per Phase 63, with every standing gate green (1524 unit tests, lint, chunk gate, i18n gate)
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
 **Wave 1**
-- [ ] 64-01-PLAN.md — Mobile CSS contract: generic Columns hide at ≤900px + Option B band alignment + boundary e2e (MOB-01)
+- [x] 64-01-PLAN.md — Mobile CSS contract: generic Columns hide at ≤900px + Option B band alignment + boundary e2e (MOB-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 64-02-PLAN.md — Card stack polish + D-12 long-task truncation suite at 390×844 (MOB-02)
+- [x] 64-02-PLAN.md — Card stack polish + D-12 long-task truncation suite at 390×844 (MOB-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 64-03-PLAN.md — Milestone close: full parallel e2e run + standing gates, zero waivers (E2E-03)
+- [x] 64-03-PLAN.md — Milestone close: full parallel e2e run + standing gates, zero waivers (E2E-03)
 
 **Wave structure**: 64-01 (Wave 1) → 64-02 (Wave 2, blocked on 64-01) → 64-03 (Wave 3, blocked on both)
 **UI hint**: yes
@@ -89,7 +89,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 62. E2E Baseline Repair | 3/3 | Complete    | 2026-11-14 |
 | 63. VIEW-02 De-Flake | 3/3 | Complete    | 2026-11-14 |
-| 64. Mobile Tasks Table & Suite Green | 0/? | Not started | - |
+| 64. Mobile Tasks Table & Suite Green | 3/3 | Complete    | 2026-11-15 |
 
 ## Milestone Notes
 

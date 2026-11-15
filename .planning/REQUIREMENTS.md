@@ -21,7 +21,7 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
   ×7 + `locale.spec.mjs:122`) via role-based queries and auto-retrying waits on the
   lazy Settings chunk — assertions are strengthened waiting, never weakened; the
   native `<select>` language control is asserted by its real combobox role
-- [ ] **E2E-03**: The full e2e suite is 111/111 green at milestone close (0 known
+- [x] **E2E-03**: The full e2e suite is 111/111 green at milestone close (0 known
   failures, VIEW-02 stabilized per FLAKY-01/02)
 
 ### Flaky Stabilization (CONS-03)
@@ -36,11 +36,11 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 
 ### Mobile Tasks Table (CONS-02)
 
-- [ ] **MOB-01**: Under the mobile breakpoint the tasks-table Columns button is
+- [x] **MOB-01**: Under the mobile breakpoint the tasks-table Columns button is
   hidden (owner ruling 2026-11-14: hide-the-button contract) — no desktop behavior
   change, column show/hide and saved views untouched in desktop; saved-view blobs
   stay byte-compatible
-- [ ] **MOB-02**: The tasks table is honestly usable on a mobile viewport — card
+- [x] **MOB-02**: The tasks table is honestly usable on a mobile viewport — card
   stack renders without truncation from the toolbar affordances; verified by a
   mobile-viewport e2e (`setViewportSize`, web-first assertions), not screenshots
 
@@ -65,11 +65,11 @@ throughout; no weakened assertions or global retry/timeouts masking regressions.
 |-------------|-------|--------|
 | E2E-01 | Phase 62 | Complete |
 | E2E-02 | Phase 62 | Complete |
-| E2E-03 | Phase 64 | Pending |
+| E2E-03 | Phase 64 | Complete |
 | FLAKY-01 | Phase 63 | Complete |
 | FLAKY-02 | Phase 63 | Complete |
-| MOB-01 | Phase 64 | Pending |
-| MOB-02 | Phase 64 | Pending |
+| MOB-01 | Phase 64 | Complete |
+| MOB-02 | Phase 64 | Complete |
 
 Coverage: 7/7 mapped. E2E-03 (111/111 at milestone close) maps to Phase 64, the final
 phase, since it requires Phases 62–63 complete plus the mobile change landed.
