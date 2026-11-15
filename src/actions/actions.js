@@ -1929,9 +1929,16 @@ A.projectSettings = el => {
   openModal({ type: 'projectSettings', id, edit: id });
 };
 /* Tab clicks route through the data-a click pipeline (the tab buttons carry
-   the action name), so the handler lives in A, not IN. */
-A.settingsTab = el => {
-  S.ui.settingsTab = el.dataset.v === 'access' ? 'access' : 'general';
+   the action name), so the handler lives in A, not IN. [67-04 D-08] The
+   Webhooks tab pre-warms its lazy chunk BEFORE the render (the A.exportOpen
+   pattern — no webhook string rides the entry chunk) and fetches the
+   canManageProject-gated hook list from the 67-03 routes. */
+A.settingsTab = async el => {
+  S.ui.settingsTab = ['access', 'webhooks'].includes(el.dataset.v) ? el.dataset.v : 'general';
+  if (S.ui.settingsTab === 'webhooks' && !S.ui.whMod) {
+    S.ui.whMod = await import('../overlays/webhooks-settings.js');
+    await S.ui.whMod.loadHooks();
+  }
   render();
 };
 /* ==================== EXPORT (54-01, D-54-1/D-54-2, R1) ====================
