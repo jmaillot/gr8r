@@ -4,6 +4,9 @@
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
 import { ASSIGNEE_CAP, DEFAULT_OPTIONS, PR, PSTAT, LB } from '../core/constants.js';
+/* Phase 65 (65-01): subtask-tree ordering — new subtasks are born with
+   parentId:null and the next free position (D-01/D-02/D-03). */
+import { nextPosition } from '../core/subtree.js';
 import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
   D,
@@ -1100,7 +1103,9 @@ KEY.addSub = el => {
   const nid = uid('s');
   fxSet({ added: nid });
   mutate(() => {
-    t.subtasks.push({ id: nid, title: v, done: false });
+    /* Phase 65 (65-01 D-01/D-03): shape-conformant birth — root subtask with
+       an explicit integer position so moves stay one-node diffs. */
+    t.subtasks.push({ id: nid, parentId: null, position: nextPosition(t.subtasks, null), title: v, done: false });
     logAct('addedSubtaskTo', t, { kind: 'subtaskAdded', value: v });
   });
   setTimeout(() => $('#d-sub')?.focus(), 0);

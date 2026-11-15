@@ -59,6 +59,9 @@ import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRec
 import { referencesHidden } from './src/lib/redaction.js';
 import { createMcp, generateApiKey, API_KEY_DAYS, validKeyDays, validKeyScope } from './mcp.js';
 import { registerCatalogue, tFor } from './src/core/i18n.js';
+/* Phase 65 (65-01): the subtask-tree normalize/heal pass — one DOM-free
+   definition shared with the client bundle (D-01/D-01a/D-03). */
+import { normalizeTaskSubtasks } from './src/core/subtree.js';
 /* Phase 54 (54-01): the export funnel — one redacted-document read, one
    DOM-free model, one writer per format (T-54-01..T-54-06). 54-02 adds
    the server-only xlsx writer at the repository root (never under src/). */
@@ -855,6 +858,9 @@ function normalizeDoc(doc, meta) {
      — docForClient (after syncProfiles) and mergeClientDoc — so a raw stored
      doc with an incomplete roster is never destructively stripped on migration. */
   normalizeAssigneesData(out.data, []);
+  /* [Phase 65, 65-01] Read-side subtask-tree heal — every task leaves this
+     function carrying the canonical flat { id, parentId, position } shape. */
+  normalizeSubtasksData(out.data, uid);
   return out;
 }
 
@@ -897,6 +903,24 @@ function normalizeAssigneesData(data, memberIds = null) {
   for (const t of data.tasks) {
     if (!t || typeof t !== 'object') continue;
     normalizeTaskAssignees(t, ids);
+  }
+}
+
+/* [Phase 65, 65-01 D-01/D-01a/D-03] The subtask-tree normalize pass — the
+   mirror of normalizeAssigneesData above, recursing over every task's flat
+   subtasks[] array. Mutates in place via the shared DOM-free module:
+   legacy flat entries heal (parentId → null, junk position → array index),
+   non-object entries are spliced, missing ids are generated through the
+   server's uid() scheme, and any parentId not resolving INSIDE the same
+   task's array — dangling or a crafted cross-task reference — normalizes
+   to null so cross-task linkage never persists (T-65-02). Runs on every
+   read (normalizeDoc — docForClient delegates to it) and on every incoming
+   doc (mergeClientDoc), before the perm gates read tasks. */
+function normalizeSubtasksData(data, uidFactory) {
+  if (!data || !Array.isArray(data.tasks)) return;
+  for (const t of data.tasks) {
+    if (!t || typeof t !== 'object') continue;
+    normalizeTaskSubtasks(t, uidFactory);
   }
 }
 
@@ -1286,6 +1310,11 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
     ...((Array.isArray(stored?.data?.members) ? stored.data.members : []).map(m => m?.id)),
     ...((Array.isArray(next.data.members) ? next.data.members : []).map(m => m?.id)),
   ].filter(Boolean));
+  /* [Phase 65, 65-01 D-01/D-01a/D-03] The subtask-tree whitelist sink — runs
+     right after the assignee pass, BEFORE any perm gate reads tasks, so the
+     stored doc and every downstream consumer (FTS, exports, MCP) always see
+     the healed { id, parentId, position } shape (T-65-01/T-65-02). */
+  normalizeSubtasksData(next.data, uid);
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
   /* [2026-11-08 D-51-15/16, T-51-01] The project-creation restriction is read
