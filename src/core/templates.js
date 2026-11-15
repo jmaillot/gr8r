@@ -69,9 +69,22 @@ export function sanitizeTaskBody(body) {
   return out;
 }
 
-/* Project-kind body whitelist (D-14): name/description/status/teams only.
-   No assignees, no lead/members/milestones, no custom fields — the
-   sanitizer's silence IS the research resolution. */
+/* Project-kind body whitelist (D-14): name/description/status/teams + the
+   66-02 embedded task tree (ordered entries carrying full task-template
+   bodies with dueOffsetDays/startOffsetDays). No assignees, no lead/members/
+   milestones, no custom fields — the sanitizer's silence IS the research
+   resolution. */
+export function sanitizeProjectTaskEntry(e) {
+  /* the wrapper entry is rebuilt fresh (D-04 whitelist-drop), but its
+     subtask entries are whitelisted IN PLACE via sanitizeTaskBody — never
+     mapped to fresh objects (the Phase 65 identity trap). */
+  const out = sanitizeTaskBody(e);
+  const src = e && typeof e === 'object' ? e : {};
+  if (Number.isFinite(src.dueOffsetDays)) out.dueOffsetDays = src.dueOffsetDays;
+  if (Number.isFinite(src.startOffsetDays)) out.startOffsetDays = src.startOffsetDays;
+  return out;
+}
+
 export function sanitizeProjectBody(body) {
   const b = body && typeof body === 'object' ? body : {};
   const out = {};
@@ -79,6 +92,7 @@ export function sanitizeProjectBody(body) {
   if (typeof b.description === 'string') out.description = b.description;
   if (typeof b.status === 'string' && b.status) out.status = b.status;
   if (Array.isArray(b.teams)) out.teams = b.teams.filter(t => typeof t === 'string' && t);
+  if (Array.isArray(b.tasks)) out.tasks = b.tasks.filter(e => e && typeof e === 'object' && !Array.isArray(e)).map(sanitizeProjectTaskEntry);
   return out;
 }
 
@@ -179,4 +193,252 @@ export function normalizeTemplatesData(data, uidFactory, opts = {}) {
     r.t.position = rank;
   });
   data.templates = ranked.map(r => r.t);
+}
+
+/* =====================================================================
+   [Phase 66, 66-02 task 1] instantiateTemplate — the pure instantiation
+   builder. Zero new imports (the subtree.js discipline): the uid factory
+   and the instantiation day are INJECTED parameters, so tests pin a fixed
+   day and a deterministic id sequence. The action layer performs the D()
+   pushes (below, landInstantiation) — this function is push-free: it only
+   RETURNS funnel-ready rows.
+
+   Semantics (66-CONTEXT.md):
+     - D-16: every id is regenerated through uidFactory(prefix) — no id
+       sharing between template copies and live items, no cross-
+       instantiation collisions;
+     - D-05/D-06: every due = instantiation day + dueOffsetDays, plain
+       calendar days, no clamping, no business-day logic;
+     - D-07: subtask offsets are ABSOLUTE — each anchors to the same
+       captured day, never chained off a parent's computed due;
+     - D-08: a missing/non-numeric offset produces NO due field (never a
+       default); negative/zero offsets pass straight through;
+     - Pitfall 4: subtask parentId references are remapped through the
+       per-task old-id→new-id Map — without this the funnel's lazy heal
+       would re-root every reference and silently flatten the tree;
+     - ordering: tasks land in body order with position values from the
+       template (funnel-normalized by the 66-01 sink), sibling order
+       preserved via the carried position.
+
+   The returned rows use the createProject/createTask field vocabulary
+   (actions.js:1699–1741) so the funnel's existing normalizeProjects /
+   subtask gates accept them unchanged. The caller assigns the live-doc
+   fields that need D() access (lead/members, the key via keyFn, order
+   renumbering) — keyFn mirrors makeKey without importing it.
+   ===================================================================== */
+
+/* Import-free day math mirroring src/core/utils.js's iso/addD contract
+   (templates.js must not import the utils chain — it drags i18n/theme into
+   the server funnel). `today` is a Date or a 'YYYY-MM-DD' string; string
+   parsing is component-wise so timezone offsets can never shift the day. */
+const pad2 = n => String(n).padStart(2, '0');
+function capturedDay(today) {
+  let y, m, d;
+  if (today instanceof Date) {
+    y = today.getFullYear();
+    m = today.getMonth();
+    d = today.getDate();
+  } else if (typeof today === 'string') {
+    const parts = today.split('-').map(Number);
+    y = parts[0];
+    m = parts[1] - 1;
+    d = parts[2];
+  } else return null;
+  const x = new Date(y, m, d);
+  return isNaN(x.getTime()) ? null : x;
+}
+function offsetIso(today, off) {
+  const x = capturedDay(today);
+  if (!x) return undefined;
+  x.setDate(x.getDate() + off);
+  return `${x.getFullYear()}-${pad2(x.getMonth() + 1)}-${pad2(x.getDate())}`;
+}
+
+/* Regenerate one template subtask tree: fresh uid('s') ids, parentId
+   remapped through the old→new map built during the same pass, position
+   carried, due from the absolute offset (D-07/D-08). */
+function buildSubtaskRows(list, today, uidFactory) {
+  const src = Array.isArray(list) ? list : [];
+  const pairs = [];
+  const map = new Map();
+  for (const s of src) {
+    if (!s || typeof s !== 'object') continue;
+    const row = {
+      id: uidFactory('s'),
+      parentId: null,
+      position: Number.isSafeInteger(s.position) ? s.position : 0,
+      title: typeof s.title === 'string' ? s.title : '',
+      done: s.done === true,
+    };
+    if (typeof s.note === 'string') row.note = s.note;
+    if (Number.isFinite(s.dueOffsetDays)) row.due = offsetIso(today, s.dueOffsetDays);
+    if (typeof s.id === 'string' && s.id) map.set(s.id, row.id);
+    pairs.push([s, row]);
+  }
+  for (const [s, row] of pairs) {
+    /* only a reference INSIDE this same tree remaps; a dangling/cross-task
+       template id lands null — exactly what the funnel heal would do */
+    const np = typeof s.parentId === 'string' ? map.get(s.parentId) : null;
+    if (np) row.parentId = np;
+  }
+  return pairs.map(p => p[1]);
+}
+
+/* One task row per createTask's field vocabulary. `projectId` is null for
+   task-kind templates (the caller assigns the ref); `order` seeds the
+   doc-level ordering — the action renumbers against the live task list. */
+function buildTaskRow(entry, projectId, today, uidFactory, order) {
+  const e = entry && typeof entry === 'object' ? entry : {};
+  const row = {
+    id: uidFactory('t'),
+    project: projectId,
+    title: typeof e.title === 'string' ? e.title : '',
+    status: 'todo',
+    order,
+    subtasks: buildSubtaskRows(e.subtasks, today, uidFactory),
+  };
+  if (typeof e.notes === 'string') row.notes = e.notes;
+  if (typeof e.priority === 'string' && e.priority) row.priority = e.priority;
+  if (Number.isFinite(e.dueOffsetDays)) row.due = offsetIso(today, e.dueOffsetDays);
+  if (Number.isFinite(e.startOffsetDays)) row.start = offsetIso(today, e.startOffsetDays);
+  return row;
+}
+
+export function instantiateTemplate(tmpl, uidFactory, today, keyFn) {
+  const t = tmpl && typeof tmpl === 'object' ? tmpl : {};
+  const body = t.body && typeof t.body === 'object' ? t.body : {};
+  if (t.kind !== 'project')
+    return { project: null, tasks: [buildTaskRow(body, null, today, uidFactory, 1)] };
+  const p = {
+    id: uidFactory('p'),
+    name: typeof body.name === 'string' ? body.name : '',
+    icon: typeof t.icon === 'string' ? t.icon : '',
+    color: typeof t.color === 'string' ? t.color : '',
+    status: typeof body.status === 'string' && body.status ? body.status : 'planning',
+    teams: Array.isArray(body.teams) ? body.teams.filter(x => typeof x === 'string' && x) : [],
+    desc: typeof body.description === 'string' ? body.description : '',
+    milestones: [],
+    last: 0,
+    fav: false,
+  };
+  /* the key needs D()-aware uniqueness (makeKey) — injected, never imported */
+  if (typeof keyFn === 'function') p.key = keyFn(p.name);
+  const entries = (Array.isArray(body.tasks) ? body.tasks : []).filter(e => e && typeof e === 'object' && !Array.isArray(e));
+  return { project: p, tasks: entries.map((e, i) => buildTaskRow(e, p.id, today, uidFactory, i + 1)) };
+}
+
+/* =====================================================================
+   [Phase 66, 66-02 task 2] landInstantiation — the push-free landing
+   step the action calls inside ONE mutate. Pure doc-shaping: takes the
+   doc data object, the builder output, and injected identity helpers
+   (me / actId / nextKey / now) — no store, no DOM, so the node suite
+   pins the exact rows/orders/activity rows the single doc-PUT carries
+   (D-15: everything lands synchronously; the action then settles exactly
+   one pushNow). Key/seq semantics mirror nextKey: p.seq seeds at 200 and
+   the first task key is <key>-201.
+   ===================================================================== */
+export function landInstantiation(data, kind, built, opts = {}) {
+  if (!data || typeof data !== 'object' || !built) return null;
+  const now = typeof opts.now === 'number' ? opts.now : Date.now();
+  const me = typeof opts.me === 'string' && opts.me ? opts.me : null;
+  const actId = typeof opts.actId === 'function' ? opts.actId : () => 'a' + now.toString(36);
+  if (!Array.isArray(data.tasks)) data.tasks = [];
+  if (!Array.isArray(data.projects)) data.projects = [];
+  if (!Array.isArray(data.projOrder)) data.projOrder = [];
+  if (!Array.isArray(data.activity)) data.activity = [];
+  const maxOrder = data.tasks.reduce((m, x) => Math.max(m, x?.order || 0), 0);
+  if (kind === 'project' && built.project) {
+    const p = built.project;
+    /* the caller-neutral live fields the pure builder cannot know (the
+       createProject D-51-17 client default: creator is the lead) */
+    p.lead = me;
+    p.members = me ? [me] : [];
+    p.seq = 200;
+    let n = 0;
+    for (const tk of built.tasks || []) {
+      p.seq++;
+      tk.key = p.key ? p.key + '-' + p.seq : tk.id;
+      tk.order = maxOrder + ++n;
+      data.tasks.push(tk);
+    }
+    data.projects.push(p);
+    data.projOrder.unshift(p.id);
+    data.activity.unshift({ id: actId(), by: me, verb: 'createdProject', task: null, project: p.id, at: now, extra: {} });
+    return p;
+  }
+  const tk = built.tasks && built.tasks[0];
+  if (!tk) return null;
+  tk.project = typeof opts.project === 'string' && opts.project ? opts.project : null;
+  if (typeof opts.nextKey === 'function') tk.key = opts.nextKey();
+  else if (!tk.key) tk.key = tk.id;
+  tk.order = maxOrder + 1;
+  data.tasks.push(tk);
+  data.activity.unshift({ id: actId(), by: me, verb: 'created', task: tk.id, project: tk.project, at: now, extra: {} });
+  return tk;
+}
+
+/* =====================================================================
+   [Phase 66, 66-02 task 2] templateFromItem — the saveAsTemplate draft
+   builder: the INVERSE of instantiateTemplate, anchored to the item's own
+   due day (offset = item due − today). Extracts ONLY the D-14 whitelist
+   fields (no assignees/lead/members/milestones — the sanitizer would drop
+   them anyway, T-66-05); subtask trees carry their shape with dueOffsetDays
+   derived from live due dates; live start dates map to startOffsetDays on
+   task-tree entries. Live `desc` is rich text — carried as the body
+   description verbatim (the editor rewrites it).
+   For project kind, pass the live task rows via extra.tasks (the action
+   gathers them — this function stays store-free).
+   ===================================================================== */
+function dayDiff(today, isoDay) {
+  const a = capturedDay(today);
+  if (!a || typeof isoDay !== 'string') return undefined;
+  const parts = isoDay.split('-').map(Number);
+  const b = new Date(parts[0], parts[1] - 1, parts[2]);
+  if (isNaN(b.getTime())) return undefined;
+  return Math.round((b - a) / 864e5);
+}
+function subDrafts(list, today) {
+  return (Array.isArray(list) ? list : [])
+    .filter(s => s && typeof s === 'object')
+    .map(s => {
+      const d = { id: s.id, parentId: s.parentId === null ? null : s.parentId, position: Number.isSafeInteger(s.position) ? s.position : 0, title: typeof s.title === 'string' ? s.title : '', done: false };
+      if (typeof s.note === 'string') d.note = s.note;
+      const off = dayDiff(today, s.due);
+      if (off !== undefined) d.dueOffsetDays = off;
+      return d;
+    });
+}
+export function templateFromItem(kind, item, today, extra = {}) {
+  const it = item && typeof item === 'object' ? item : {};
+  if (kind === 'project') {
+    const tasks = (Array.isArray(extra.tasks) ? extra.tasks : [])
+      .filter(t => t && typeof t === 'object')
+      .map(t => {
+        const e = {
+          title: typeof t.title === 'string' ? t.title : '',
+          subtasks: subDrafts(t.subtasks, today),
+        };
+        if (typeof t.notes === 'string') e.notes = t.notes;
+        if (typeof t.priority === 'string' && t.priority) e.priority = t.priority;
+        const off = dayDiff(today, t.due);
+        if (off !== undefined) e.dueOffsetDays = off;
+        const soff = dayDiff(today, t.start);
+        if (soff !== undefined) e.startOffsetDays = soff;
+        return e;
+      });
+    const body = {
+      name: typeof it.name === 'string' ? it.name : '',
+      description: typeof it.desc === 'string' ? it.desc : '',
+      status: typeof it.status === 'string' && it.status ? it.status : 'planning',
+      teams: Array.isArray(it.teams) ? it.teams.filter(x => typeof x === 'string' && x) : [],
+      tasks,
+    };
+    return { id: null, kind: 'project', name: body.name, icon: '', color: '', body, position: null, createdBy: null, createdAt: null, updatedAt: null };
+  }
+  const body = {};
+  if (typeof it.title === 'string') body.title = it.title;
+  if (typeof it.notes === 'string') body.notes = it.notes;
+  if (typeof it.priority === 'string' && it.priority) body.priority = it.priority;
+  body.subtasks = subDrafts(it.subtasks, today);
+  return { id: null, kind: 'task', name: body.title || '', icon: '', color: '', body, position: null, createdBy: null, createdAt: null, updatedAt: null };
 }
