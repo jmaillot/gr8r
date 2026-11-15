@@ -84,10 +84,10 @@ const callsOf = r => (Array.isArray(r.data?.calls) ? r.data.calls : []);
 
 test('double enqueue with the same (hook, event, subject) claims exactly ONE row; one HTTP send', async () => {
   insertHook();
-  const first = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh1', event: 'task.created', subjectId: 't1' }] });
+  const first = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh1', event: 'task.created', subjectId: 't1', workspaceId: ws.id }] });
   assert.equal(first.status, 200, `trigger ${first.status} ${JSON.stringify(first.data)}`);
   assert.equal(first.data.claimed, 1);
-  const second = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh1', event: 'task.created', subjectId: 't1' }] });
+  const second = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh1', event: 'task.created', subjectId: 't1', workspaceId: ws.id }] });
   assert.equal(second.status, 200);
   assert.equal(second.data.claimed, 0, 'the second identical claim is a no-op (exactly-once)');
   const rows = withDb(server.dbPath, db => db.prepare("select * from webhook_deliveries where dedup_key = 'wh1:task.created:t1'").all());
@@ -99,7 +99,7 @@ test('double enqueue with the same (hook, event, subject) claims exactly ONE row
 
 test('delivery is HMAC-signed with the hook secret over the raw body', async () => {
   insertHook({ id: 'wh-sig' });
-  const r = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-sig', event: 'task.created', subjectId: 't1' }] });
+  const r = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-sig', event: 'task.created', subjectId: 't1', workspaceId: ws.id }] });
   const call = callsOf(r)[0];
   assert.ok(call, 'one recorded call');
   assert.equal(call.signature, `sha256=${createHmac('sha256', SECRET).update(call.body).digest('hex')}`);

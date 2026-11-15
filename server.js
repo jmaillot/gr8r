@@ -62,6 +62,8 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 /* Phase 65 (65-01): the subtask-tree normalize/heal pass — one DOM-free
    definition shared with the client bundle (D-01/D-01a/D-03). */
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
+import { ssrfOk } from './webhook-ssrf.js';
+import { nextAttemptMs, isDead } from './webhook-retry.js';
 /* [Phase 66, 66-01] The ONE template-record sanitizer/funnel sink — the
    same pure module mergeClientDoc and normalizeDoc run below (T-65-11
    discipline: one validator, several call sites). */
@@ -2450,6 +2452,257 @@ function logDocChanges(ws, storedDoc, next, actorName) {
   }
 }
 
+/* =====================================================================
+   WEBHOOK DELIVERY ENGINE — Phase 67 (WHK-03/WHK-05, T-67-01/02/03/04).
+   =====================================================================
+   Claim/delivery state machine over webhook_deliveries (POL-02 co-design,
+   Phase 68 reuses the shape):
+
+   - Exactly-once claim: the UNIQUE dedup_key IS the claim. The enqueue
+     (INSERT OR IGNORE) commits INSIDE the transaction that produced the
+     event; a duplicate (hook, event, subject) is a no-op — a re-run is
+     free (reminders_sent pattern).
+   - Never mark-then-send (Phase 38 invariant): the attempt is claimed with
+     a GUARDED update (attempt = attempt + 1 where attempt = seen) BEFORE
+     the fetch, so two concurrent passes cannot both send; the 'delivered'
+     status is written only AFTER the HTTP request returned 2xx.
+   - D-05: 5 attempts max (webhook-retry.js backoff table), Retry-After
+     (seconds or HTTP-date) honored when present. attempt ≥ 5 → 'dead'
+     (D-06 badge feeds 67-04).
+   - WHK-05/T-67-01: ssrfOk(hook.url) is re-checked EVERY attempt, BEFORE
+     fetch; fetch carries redirect:'error' (a redirect could point at an
+     internal address) and AbortSignal.timeout(10_000) (house rule,
+     oidc.js:28 — every outbound fetch carries it).
+   - T-67-03 log hygiene: log hook id + delivery id + status code + HOST
+     only — never the URL (the Workflows URL is itself a bearer secret:
+     its query carries the bearer) and never the signing secret.
+   - Fail-absent: every delivery error is caught inside the pass; one bad
+     row never kills the tick, and the pass never throws to its callers.
+   ===================================================================== */
+const WEBHOOK_MAX_ATTEMPTS = 5;
+/* D-07: deliveries older than 7 days are purged by the pass (piggybacks
+   the 30 s tick — no new timer; CONTEXT.md leaves the purge mechanism to
+   discretion). */
+const WEBHOOK_RETENTION_MS = 604_800_000;
+
+/* WHK-03 exactly-once claim. Called INSIDE the enqueue transaction; the
+   dedup key is {hookId}:{event}:{subjectKey} (subjectKey = taskId or
+   project id). Returns the claim result (changes = 1 → this caller owns
+   the delivery, 0 → already claimed). */
+function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId }) {
+  return db.run('insert or ignore into webhook_deliveries (id, workspace_id, hook_id, event, dedup_key, attempt, status, created_at) values (?, ?, ?, ?, ?, 0, ?, ?)', [
+    uid(),
+    workspaceId,
+    hookId,
+    event,
+    `${hookId}:${event}:${subjectId}`,
+    'pending',
+    now(),
+  ]);
+}
+
+/* Tracer envelope (67-02 lands the full formatter + 28 KB cap): a minimal
+   teams-adaptive card rebuilt from the CURRENT doc at delivery time — the
+   delivery row carries no payload snapshot. Timestamps ISO 8601 UTC (D-04). */
+async function webhookBodyFor(workspaceId, event, subjectId) {
+  let title = '';
+  try {
+    const row = await db.get('select doc from workspaces where id = ?', [workspaceId]);
+    const doc = JSON.parse(row?.doc || '{}');
+    const task = (Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []).find(x => x?.id === subjectId);
+    if (task) title = task.title || '';
+  } catch {
+    /* fail-absent: the subject id still labels the event */
+  }
+  const label = event === 'task.created' ? `Task created: ${title || subjectId}` : `${event}: ${title || subjectId}`;
+  return {
+    type: 'message',
+    attachments: [
+      {
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        contentUrl: null,
+        content: {
+          $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+          type: 'AdaptiveCard',
+          version: '1.4',
+          body: [{ type: 'TextBlock', text: label, wrap: true }],
+        },
+      },
+    ],
+  };
+}
+
+const webhookSubjectKey = d => {
+  const prefix = `${d.hook_id}:${d.event}:`;
+  return d.dedup_key?.startsWith(prefix) ? d.dedup_key.slice(prefix.length) : d.dedup_key;
+};
+
+/* Failure write-back, guarded by the attempt number (a concurrent pass
+   that already re-claimed a higher attempt must not be clobbered). */
+async function webhookFailDelivery(d, newAttempt, atMs, statusCode, errorText, retryAfterHeader, payloadHash) {
+  const lastError = String(errorText || '').slice(0, 500);
+  if (isDead(newAttempt)) {
+    await db.run("update webhook_deliveries set status = 'dead', last_status_code = ?, last_error = ?, payload_hash = coalesce(?, payload_hash), next_attempt_at = null where id = ? and attempt = ?", [
+      statusCode,
+      lastError,
+      payloadHash ?? null,
+      d.id,
+      newAttempt,
+    ]);
+    return { dead: 1 };
+  }
+  const nextAt = nextAttemptMs({ attempt: d.attempt, retryAfterHeader, now: atMs });
+  await db.run("update webhook_deliveries set status = 'failed', next_attempt_at = ?, last_status_code = ?, last_error = ?, payload_hash = coalesce(?, payload_hash) where id = ? and attempt = ?", [
+    nextAt,
+    statusCode,
+    lastError,
+    payloadHash ?? null,
+    d.id,
+    newAttempt,
+  ]);
+  return { failed: 1 };
+}
+
+/* One delivery attempt. Returns a tally fragment; never throws (the pass
+   wraps it anyway — fail-absent). */
+async function deliverWebhook(d, atMs, fetchFn, lookup) {
+  const hook = await db.get('select * from webhook_hooks where id = ?', [d.hook_id]);
+  if (!hook || hook.status !== 'active') {
+    /* The hook was deleted or disabled after enqueue — the claim row has
+       nowhere to go: dead with an explicit reason, never retried forever. */
+    await db.run("update webhook_deliveries set status = 'dead', last_error = ? where id = ?", ['hook removed or disabled', d.id]);
+    return { dead: 1 };
+  }
+  /* T-67-02 guarded attempt claim: bump BEFORE the fetch — a concurrent
+     pass racing on the same attempt number loses (changes = 0). Status
+     stays pending/failed during the HTTP call. */
+  const claimed = await db.run('update webhook_deliveries set attempt = attempt + 1 where id = ? and attempt = ? and status in (?, ?)', [d.id, d.attempt, 'pending', 'failed']);
+  if (!claimed.changes) return { skipped: 1 };
+  const newAttempt = d.attempt + 1;
+  let host = '?';
+  try {
+    host = new URL(hook.url).host;
+  } catch { /* logged as '?' — never the full URL (T-67-03) */ }
+
+  /* WHK-05 per-attempt SSRF re-check, BEFORE fetch. A refusal consumes the
+     attempt and reschedules per D-05 — the guard is re-evaluated on the
+     next attempt too (DNS rebinding between attempts is still caught). */
+  const guard = await ssrfOk(hook.url, { lookup });
+  if (!guard.ok) {
+    logWarn(`webhook delivery ${d.id} hook ${hook.id} refused by SSRF guard (host ${host}): ${guard.reason}`);
+    return await webhookFailDelivery(d, newAttempt, atMs, null, `ssrf refused (${guard.reason})`, null, null);
+  }
+
+  let bodyStr = '';
+  try {
+    bodyStr = JSON.stringify(await webhookBodyFor(d.workspace_id, d.event, webhookSubjectKey(d)));
+  } catch (err) {
+    return await webhookFailDelivery(d, newAttempt, atMs, null, `envelope build: ${err.message}`, null, null);
+  }
+  const signature = crypto.createHmac('sha256', hook.secret).update(bodyStr).digest('hex');
+  const payloadHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
+
+  let res = null;
+  let fetchErr = null;
+  try {
+    res = await fetchFn(hook.url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-gr8r-signature': `sha256=${signature}` },
+      body: bodyStr,
+      redirect: 'error', // T-67-01: a redirect could point at an internal address
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    fetchErr = err;
+  }
+
+  if (res && res.ok) {
+    await db.run("update webhook_deliveries set status = 'delivered', delivered_at = ?, last_status_code = ?, last_error = '', payload_hash = ? where id = ? and attempt = ?", [
+      atMs,
+      res.status,
+      payloadHash,
+      d.id,
+      newAttempt,
+    ]);
+    logInfo(`webhook delivery ${d.id} hook ${hook.id} delivered (status ${res.status}, host ${host}, attempt ${newAttempt})`);
+    return { delivered: 1 };
+  }
+  const statusCode = res ? res.status : null;
+  const errorText = fetchErr ? `${fetchErr?.name || 'fetch'}: ${fetchErr?.message}` : `http ${statusCode}`;
+  if (res) logWarn(`webhook delivery ${d.id} hook ${hook.id} not delivered (status ${statusCode}, host ${host}, attempt ${newAttempt})`);
+  else logWarn(`webhook delivery ${d.id} hook ${hook.id} transport error (host ${host}, attempt ${newAttempt})`);
+  /* Retry-After honored on 429/5xx only (Pitfall 7: seconds OR HTTP-date). */
+  const retryAfterHeader = res && (res.status === 429 || res.status >= 500) ? res.headers?.get?.('retry-after') : null;
+  return await webhookFailDelivery(d, newAttempt, atMs, statusCode, errorText, retryAfterHeader, payloadHash);
+}
+
+/*
+ * One delivery pass over webhook_deliveries. Injectable clock (`now`, an
+ * epoch-ms number or Date), fetch and DNS lookup — the test harness drives
+ * attempts without network or real timers. Starts with the D-07 retention
+ * purge, then drains due rows. Fail-absent: resolves even when every
+ * delivery throws. */
+async function runWebhookDeliveryPass({ now: at, fetch: fetchFn, lookup } = {}) {
+  const atMs = at instanceof Date ? at.getTime() : Number.isFinite(at) ? at : now();
+  const tally = { purged: 0, due: 0, delivered: 0, failed: 0, dead: 0, skipped: 0 };
+  try {
+    const purge = await db.run('delete from webhook_deliveries where created_at < ?', [atMs - WEBHOOK_RETENTION_MS]);
+    tally.purged = purge.changes || 0;
+    if (tally.purged) logInfo(`webhook delivery purge: ${tally.purged} row(s) older than 7 days`);
+  } catch (err) {
+    logWarn(`webhook purge: ${err.message}`);
+  }
+  let due = [];
+  try {
+    due = await db.all("select * from webhook_deliveries where status in ('pending', 'failed') and (next_attempt_at is null or next_attempt_at <= ?) order by created_at", [atMs]);
+  } catch (err) {
+    logWarn(`webhook drain select: ${err.message}`);
+    return tally;
+  }
+  tally.due = due.length;
+  for (const d of due) {
+    try {
+      const r = await deliverWebhook(d, atMs, fetchFn || fetch, lookup);
+      for (const k of ['delivered', 'failed', 'dead', 'skipped']) tally[k] += r?.[k] || 0;
+    } catch (err) {
+      /* fail-absent: one bad delivery never kills the pass (house rule) */
+      tally.failed += 1;
+      logWarn(`webhook delivery ${d.id}: ${err.message}`);
+    }
+  }
+  return tally;
+}
+
+/* Test-only injectable fetch + DNS lookup for the internal route — the
+   node:test harness pins claim/retry/SSRF/retention behavior with ZERO
+   network and ZERO real timers. Body contract:
+     fetch:   { statusCode, retryAfter, throw }  (a Response or a throw)
+     lookup:  { hostname: [ip, ...] }            (fake dns.lookup(all)) */
+function webhookTestFetch(spec = {}, calls = []) {
+  return async (url, init) => {
+    calls.push({
+      host: (() => {
+        try {
+          return new URL(url).host;
+        } catch {
+          return '?';
+        }
+      })(),
+      signature: init?.headers?.['x-gr8r-signature'] || null,
+      body: typeof init?.body === 'string' ? init.body : '',
+    });
+    if (spec.throw) throw new Error(String(spec.throw));
+    return new Response(spec.body ?? '', {
+      status: spec.statusCode ?? 200,
+      headers: spec.retryAfter != null ? { 'retry-after': String(spec.retryAfter) } : {},
+    });
+  };
+}
+
+function webhookTestLookup(map) {
+  return async hostname => (map?.[hostname] || ['93.184.216.34']).map(a => ({ address: a, family: a.includes(':') ? 6 : 4 }));
+}
+
 async function docFromClient(incoming, stored, ws, role, membership, refusals = []) {
   const next = await mergeClientDoc(incoming, stored, membership, ws.id, refusals);
   /* [2026-11-08 D-51-15] V7 audit: one INFO line per refused operation, best-effort.
@@ -4253,6 +4506,31 @@ async function handleApi(req, res, url) {
     const body = await readJson(req).catch(() => ({}));
     const { emitted, digests } = await runReminderPass({ now: body?.now ? new Date(body.now) : undefined });
     return json(res, 200, { emitted, digests });
+  }
+
+  /* Plan 67-01: test-only fetch/lookup/clock injection for the webhook
+     delivery engine. Exists ONLY while WEBHOOK_TEST_TOKEN is set (node:test
+     harness); unset in production the path 404s like any unknown route.
+     The pass is idempotent by construction (claim table + status machine). */
+  if (pathname === '/api/internal/webhook-pass' && method === 'POST') {
+    if (!process.env.WEBHOOK_TEST_TOKEN || req.headers['x-webhook-token'] !== process.env.WEBHOOK_TEST_TOKEN) {
+      return fail(res, 404, 'notFound', 'Not found');
+    }
+    const body = await readJson(req).catch(() => ({}));
+    const calls = [];
+    const fetchFn = body?.fetch ? webhookTestFetch(body.fetch, calls) : undefined;
+    const lookup = body?.lookup ? webhookTestLookup(body.lookup) : undefined;
+    let claimed = 0;
+    for (const e of Array.isArray(body?.enqueue) ? body.enqueue : []) {
+      try {
+        const r = await enqueueWebhookDelivery({ hookId: e.hookId, workspaceId: e.workspaceId || body?.workspaceId, event: e.event, subjectId: e.subjectId });
+        claimed += r?.changes || 0;
+      } catch (err) {
+        logWarn(`webhook test enqueue: ${err.message}`);
+      }
+    }
+    const pass = await runWebhookDeliveryPass({ now: body?.now, fetch: fetchFn, lookup });
+    return json(res, 200, { ...pass, claimed, calls });
   }
 
   if (pathname === '/api/config' && method === 'GET') {
@@ -7880,6 +8158,20 @@ async function main() {
   setInterval(() => {
     runReminderPass().catch(err => logWarn(`reminder tick: ${err.message}`));
   }, 60_000).unref();
+
+  /* WHK-03 (Phase 67): webhook delivery driver — same house rules as the
+     reminder tick: try/catch inside the interval callback AND a promise
+     .catch (an uncaught throw or rejection in a setInterval callback kills
+     the process), .unref() so the timer never holds the event loop open.
+     The pass carries the D-07 7-day retention purge, so the claim table
+     cannot grow unbounded. */
+  setInterval(() => {
+    try {
+      runWebhookDeliveryPass().catch(err => logWarn(`webhook tick: ${err.message}`));
+    } catch (err) {
+      logWarn(`webhook tick: ${err.message}`);
+    }
+  }, 30_000).unref();
 
   server.listen(PORT, HOST, () => {
     logInfo(`Projects Studio listening on http://${HOST}:${PORT}`);
