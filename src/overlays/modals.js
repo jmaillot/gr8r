@@ -353,10 +353,15 @@ export function accessBody(m) {
 export function projectSettingsModal(m, H) {
   const p = proj(m.id);
   if (!p) return H(t('err.projectNotFound'));
-  const tab = S.ui.settingsTab === 'access' ? 'access' : 'general';
+  const tab = S.ui.settingsTab === 'access' || S.ui.settingsTab === 'webhooks' ? S.ui.settingsTab : 'general';
+  const canManage = canManageProject(p);
   const tabBar = `<nav class="tabs" role="tablist" aria-label="${t('modal.settingsTabs')}">${[
     ['general', 'modal.settingsTabGeneral'],
     ['access', 'modal.settingsTabAccess'],
+    /* [67-04 D-08] the Webhooks tab renders only for managers — the
+       server route family is the control (T-52-02), the render-time
+       re-check is the Phase 55 UX guard (T-67-11). */
+    ...(canManage ? [['webhooks', 'modal.settingsTabWebhooks']] : []),
   ]
     .map(
       ([k, key]) =>
@@ -367,6 +372,15 @@ export function projectSettingsModal(m, H) {
     return `${H(t('modal.shareTitle', { name: esc(p.name) }))}${tabBar}
   <div class="modal-b">${accessBody(m)}</div>
   <div class="modal-f"><button class="btn btn-secondary" data-a="copyLink" data-pid="${p.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('act.done')}</button></div>`;
+  }
+  /* [67-04 D-08] The Webhooks tab renders through the lazy chunk
+     (S.ui.whMod, pre-warmed by A.settingsTab — the A.exportOpen
+     pattern); the stub shows only if a render races the import. */
+  if (tab === 'webhooks') {
+    const wh = S.ui.whMod;
+    if (!wh)
+      return `${H(t('act.projectSettings'))}${tabBar}<div class="modal-b"><p class="hint" aria-busy="true">${t('page.states.loading')}</p></div><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('act.done')}</button></div>`;
+    return wh.webhooksBody(p, tabBar, H);
   }
   return `${H(t('act.projectSettings'))}${tabBar}
   <form class="modal-b" data-submit="submitProject">${settingsGeneralFields(m)}</form>

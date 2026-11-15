@@ -137,6 +137,31 @@ function shippedIconKeys(assets) {
   return [...keys].sort();
 }
 
+/* ---------- the webhooks-labels contract (67-04) ---------- */
+
+/* The Webhooks tab's 31 section labels split across the lazy EN table
+   (src/overlays/webhooks-labels.json, shipped in every build) and the fr.json
+   catalogue's webhook.* keys (stripped from the English-only build by the
+   locale-subset plugin, like every French byte) — the 500 kB entry-chunk gate
+   has no headroom for them in the inlined en.json (67-04 Rule 3). The
+   standing EN+FR same-commit constraint still applies: parity asserted here,
+   the same parity the catalogue lint enforces on en.json/fr.json. Only the
+   tab-bar key (modal.settingsTabWebhooks) lives in the base EN catalogue. */
+test('the webhooks labels keep EN↔FR key parity and catalogue hygiene (67-04)', () => {
+  const labels = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'overlays', 'webhooks-labels.json'), 'utf8'));
+  const fr = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'locales', 'fr.json'), 'utf8'));
+  const frKeys = Object.keys(fr)
+    .filter(k => k.startsWith('webhook.'))
+    .map(k => k.slice('webhook.'.length))
+    .sort();
+  assert.deepEqual(Object.keys(labels).sort(), frKeys, 'every EN label has its webhook.* FR twin');
+  assert.equal(frKeys.length, 31, 'the label table carries the 31 section labels');
+  for (const [key, value] of Object.entries(labels)) {
+    assert.ok(!/[<>"]/.test(value), `the label en/${key} carries no forbidden character`);
+    assert.ok(!/[<>"]/.test(fr['webhook.' + key]), `the label fr/webhook.${key} carries no forbidden character`);
+  }
+});
+
 /* ---------- the builds ---------- */
 
 const BUILDS = { default: null, en: null, fr: null };

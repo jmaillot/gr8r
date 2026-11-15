@@ -45,7 +45,11 @@ import './actions/drag-drop.js';
 import './features/teams.js';
 import './features/subtasks.js';
 import './actions/teams.js';
-import './actions/subtasks.js';
+/* [67-04 Rule 3] the subtask actions ride a pre-warmed lazy chunk — the
+   66-02 template / 65-03 subtask-move remedy; the entry chunk carries
+   only this import (handlers register on arrival, long before boot's
+   first network round-trip resolves). */
+import('./actions/subtasks.js').catch(() => {});
 /* [66-02 D-13] the template actions ride a pre-warmed lazy chunk — the
    65-03 subtask-move remedy; the entry chunk carries only this import. */
 import('./actions/templates.js').catch(() => {});

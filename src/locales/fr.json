@@ -901,6 +901,7 @@
   "modal.settingsTabs": "Sections des paramètres",
   "modal.settingsTabGeneral": "Général",
   "modal.settingsTabAccess": "Accès",
+  "modal.settingsTabWebhooks": "Webhooks",
   "modal.teamPermFor": "Permission pour l’équipe {name}",
   "modal.settingsConflict": "Cette modification entre en conflit avec une édition récente d’une autre personne — les paramètres affichent la version enregistrée. Vérifiez et réappliquez votre modification.",
   "a11y.inviteByEmail": "Inviter par e-mail",
@@ -1881,14 +1882,38 @@
   "notif.taskDueToday": "est à échéance aujourd’hui",
   "notif.dueReminder": "arrive à échéance",
   "notif.pastDue": "est en retard",
-  "notif.burst.mention": { "one": "{n} mention —", "other": "{n} mentions —" },
-  "notif.burst.assign": { "one": "{n} assignation —", "other": "{n} assignations —" },
-  "notif.burst.assignRemoved": { "one": "{n} retrait —", "other": "{n} retraits —" },
-  "notif.burst.comment": { "one": "{n} nouveau commentaire —", "other": "{n} nouveaux commentaires —" },
-  "notif.burst.update": { "one": "{n} mise à jour —", "other": "{n} mises à jour —" },
-  "notif.burst.dueReminder": { "one": "{n} rappel d’échéance —", "other": "{n} rappels d’échéance —" },
-  "notif.burst.pastDue": { "one": "{n} alerte de retard —", "other": "{n} alertes de retard —" },
-  "notif.burst.generic": { "one": "{n} notification —", "other": "{n} notifications —" },
+  "notif.burst.mention": {
+    "one": "{n} mention —",
+    "other": "{n} mentions —"
+  },
+  "notif.burst.assign": {
+    "one": "{n} assignation —",
+    "other": "{n} assignations —"
+  },
+  "notif.burst.assignRemoved": {
+    "one": "{n} retrait —",
+    "other": "{n} retraits —"
+  },
+  "notif.burst.comment": {
+    "one": "{n} nouveau commentaire —",
+    "other": "{n} nouveaux commentaires —"
+  },
+  "notif.burst.update": {
+    "one": "{n} mise à jour —",
+    "other": "{n} mises à jour —"
+  },
+  "notif.burst.dueReminder": {
+    "one": "{n} rappel d’échéance —",
+    "other": "{n} rappels d’échéance —"
+  },
+  "notif.burst.pastDue": {
+    "one": "{n} alerte de retard —",
+    "other": "{n} alertes de retard —"
+  },
+  "notif.burst.generic": {
+    "one": "{n} notification —",
+    "other": "{n} notifications —"
+  },
   "notif.burst.expand": "Déplier le groupe",
   "notif.burst.collapse": "Replier le groupe",
   "notif.reminder.morningOf": "À échéance aujourd’hui : {title}",
@@ -1998,6 +2023,36 @@
   "templates.addTask": "Ajouter une tâche",
   "templates.deleteTitle": "Supprimer le modèle « {name} » ?",
   "templates.deleteBody": "Les tâches et projets déjà créés depuis ce modèle ne sont pas affectés.",
-  "templates.pickerEmpty": "Aucun modèle pour l’instant."
-
+  "templates.pickerEmpty": "Aucun modèle pour l’instant.",
+  "webhook.serverOnly": "Nécessite un serveur.",
+  "webhook.addTitle": "Nouveau webhook",
+  "webhook.url": "URL",
+  "webhook.urlHint": "https uniquement",
+  "webhook.events": "Événements",
+  "webhook.event.1": "Tâche créée",
+  "webhook.event.2": "Tâche terminée",
+  "webhook.event.3": "Tâche assignée",
+  "webhook.event.4": "Tâche supprimée",
+  "webhook.event.5": "Commentaire ajouté",
+  "webhook.event.6": "Rappel d’échéance",
+  "webhook.event.7": "Projet terminé",
+  "webhook.event.8": "Arborescence modifiée",
+  "webhook.format": "Format",
+  "webhook.format.1": "Carte adaptative",
+  "webhook.format.2": "Carte message",
+  "webhook.format.3": "JSON brut",
+  "webhook.secretTitle": "Copiez le secret maintenant",
+  "webhook.secretHint": "Affiché une seule fois, à conserver dès maintenant.",
+  "webhook.copy": "Copier",
+  "webhook.copied": "Copié",
+  "webhook.empty": "Aucun webhook pour l’instant",
+  "webhook.badge.active": "Actif",
+  "webhook.badge.failing": "En échec",
+  "webhook.badge.disabled": "Désactivé",
+  "webhook.test": "Envoyer un test",
+  "webhook.testOk": "Livré (HTTP {code})",
+  "webhook.testFail": "Échec (HTTP {code})",
+  "webhook.enable": "Activer",
+  "webhook.disable": "Désactiver",
+  "webhook.del": "Supprimer"
 }

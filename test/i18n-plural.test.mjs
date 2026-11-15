@@ -84,8 +84,12 @@ test('every plural value in the English catalogue is CLDR-shaped', () => {
 test('the French catalogue is still a strict subset of the English one', () => {
   /* D-02: fr.json is not touched in this phase — the French plural members
      arrive in phase 7. Nothing here may drift off the English base. The
-     contract.* namespace is the documented exception (the lint exempts it). */
-  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !Object.hasOwn(en, k));
+     contract.* namespace is the documented exception (the lint exempts it).
+     The webhook.* namespace is the 67-04 exception too: fr-only by design —
+     the EN twins live in src/overlays/webhooks-labels.json (the lazy chunk's
+     label table) so the 500,000-byte entry-chunk gate is not blown; parity
+     with that table is asserted by test/build-locales.test.mjs. */
+  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !k.startsWith('webhook.') && !Object.hasOwn(en, k));
   assert.deepEqual(extra, [], `every French key exists in English (${extra.join(', ')})`);
 });
 

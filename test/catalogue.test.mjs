@@ -54,6 +54,13 @@ const PLACEHOLDER = /\{(\w+)\}/g;
    contract.englishOnly exists only in English and contract.frenchOnly only in French; they exist
    precisely to prove the two directions of the lookup. */
 const CONTRACT_NAMESPACE = 'contract.';
+/* The webhook.* namespace is FR-ONLY BY DESIGN (67-04): the EN twins live in the
+   src/overlays/webhooks-labels.json table shipped with the lazy chunk, because the
+   entry chunk sits at its 500,000-byte hard gate and cannot carry 31 more EN labels.
+   fr.json is its own (non-entry) chunk, so the French twins ride there for free and
+   the wt() FR branch routes through t('webhook.' + key). Parity between the two
+   tables is asserted by test/build-locales.test.mjs (the 67-04 parity test). */
+const WEBHOOK_NAMESPACE = 'webhook.';
 
 /* ---------- the lint ---------- */
 
@@ -141,6 +148,9 @@ function lintAgainstBase(name, data, base) {
   if (name === BASE_FILE) return out;
   for (const key of Object.keys(data)) {
     if (key.startsWith(CONTRACT_NAMESPACE)) continue;
+    /* webhook.* is the 67-04 fr-only-by-design namespace (EN twins live in the
+       webhooks-labels.json lazy table — see the constant above). */
+    if (name !== BASE_FILE && key.startsWith(WEBHOOK_NAMESPACE)) continue;
     if (!Object.hasOwn(base, key)) {
       out.push(violation(name, key, 'english-base', 'the key', `the English catalogue carries no ${key}`));
     }
@@ -461,8 +471,11 @@ test('the French catalogue covers every English key outside the contract namespa
   assert.deepEqual(invalid, [], `invalid French values:\n${invalid.join('\n')}`);
 });
 
-test('the French catalogue carries no fr-only key outside the contract namespace', () => {
-  const stray = Object.keys(fr).filter(key => !key.startsWith(CONTRACT_NAMESPACE) && !Object.hasOwn(en, key));
+test('the French catalogue carries no fr-only key outside the contract and webhook namespaces', () => {
+  /* webhook.* is fr-only by design (67-04): the EN twins live in
+     src/overlays/webhooks-labels.json so the 500,000-byte entry-chunk gate is not
+     blown — parity with that table is asserted by test/build-locales.test.mjs. */
+  const stray = Object.keys(fr).filter(key => !key.startsWith(CONTRACT_NAMESPACE) && !key.startsWith(WEBHOOK_NAMESPACE) && !Object.hasOwn(en, key));
   assert.deepEqual(stray, [], `fr-only keys outside contract.* are a bug (${stray.map(key => `fr-only key: ${key}`).join(', ')})`);
 });
 
