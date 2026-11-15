@@ -61,7 +61,7 @@ import { createMcp, generateApiKey, API_KEY_DAYS, validKeyDays, validKeyScope } 
 import { registerCatalogue, tFor } from './src/core/i18n.js';
 /* Phase 65 (65-01): the subtask-tree normalize/heal pass — one DOM-free
    definition shared with the client bundle (D-01/D-01a/D-03). */
-import { normalizeTaskSubtasks } from './src/core/subtree.js';
+import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
 /* Phase 54 (54-01): the export funnel — one redacted-document read, one
    DOM-free model, one writer per format (T-54-01..T-54-06). 54-02 adds
    the server-only xlsx writer at the repository root (never under src/). */
@@ -1314,6 +1314,32 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
      right after the assignee pass, BEFORE any perm gate reads tasks, so the
      stored doc and every downstream consumer (FTS, exports, MCP) always see
      the healed { id, parentId, position } shape (T-65-01/T-65-02). */
+  /* [Phase 65, 65-02 D-04/D-05 T-65-04/T-65-05] Wholesale tree-shape reject —
+     runs BEFORE the lazy heal because the heal re-roots self-parents (a raw
+     self-parenting PUT must be rejected, never silently normalized). Only
+     tasks whose subtasks changed shape are validated (cheap serialized
+     id/parentId/position/done signature) — once per changed task, not per
+     read (T-65-05). A violation throws inside the funnel tx: db.tx rolls
+     back, the catch below maps the code to a 400 (fail()), and neither the
+     stored doc nor the FTS index changes. */
+  {
+    const storedTasks65 = new Map(
+      (Array.isArray(stored?.data?.tasks) ? stored.data.tasks : []).map(t => [t?.id, t]).filter(([id]) => id),
+    );
+    const subSig65 = list => JSON.stringify((Array.isArray(list) ? list : []).map(s => [s?.id, s?.parentId, s?.position, !!s?.done]));
+    for (const t of next.data.tasks || []) {
+      if (!t || typeof t !== 'object' || !Array.isArray(t.subtasks) || !t.subtasks.length) continue;
+      const prev65 = storedTasks65.get(t.id);
+      if (prev65 && subSig65(prev65.subtasks) === subSig65(t.subtasks)) continue;
+      const verdict = validateSubtree(t.subtasks);
+      if (!verdict.ok) {
+        const err = new Error(verdict.code === 'subtaskCycle' ? 'That change would create a subtask cycle' : 'Subtasks cannot nest deeper than five levels');
+        err.status = 400;
+        err.code = verdict.code;
+        throw err;
+      }
+    }
+  }
   normalizeSubtasksData(next.data, uid);
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
@@ -5894,6 +5920,11 @@ async function handleApi(req, res, url) {
       // SCOPE-04: the assignee write-guard rejects with an explicit 400 —
       // db.tx has already rolled the transaction back.
       if (err?.code === 'assigneeOutOfScope') return fail(res, 400, 'assigneeOutOfScope', 'Assignee cannot read the task project');
+      // [Phase 65, 65-02 D-05 T-65-04] Wholesale tree-shape rejects — same
+      // tx-rollback-then-400 shape; the stored doc and the FTS index (synced
+      // inside this same tx) are untouched after either reject.
+      if (err?.code === 'subtaskCycle') return fail(res, 400, 'subtaskCycle', 'That change would create a subtask cycle');
+      if (err?.code === 'subtaskDepth') return fail(res, 400, 'subtaskDepth', 'Subtasks cannot nest deeper than five levels');
       throw err;
     }
     if (refusal.code === 'workspaceNotFound') return fail(res, 404, 'workspaceNotFound', 'Workspace not found');

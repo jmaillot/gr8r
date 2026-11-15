@@ -239,6 +239,8 @@
   "err.viewNameRequired": "Donnez un nom à la vue",
   "err.invalidViewName": "Nom de vue invalide",
   "err.viewNameConflict": "Une vue portant ce nom existe déjà",
+  "err.subtaskCycle": "Cette modification créerait un cycle de sous-tâches",
+  "err.subtaskDepth": "Les sous-tâches ne peuvent pas s’imbriquer sur plus de cinq niveaux",
   "err.viewLimitReached": "Limite de vues enregistrées atteinte (20 max par tableau)",
   "err.viewBlobTooLarge": "Cette vue est trop volumineuse pour être enregistrée (2 ko max)",
   "err.viewKeyNotNamed": "Les vues enregistrées ne sont disponibles que sur les tableaux de tâches",

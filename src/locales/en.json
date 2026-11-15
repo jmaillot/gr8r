@@ -238,6 +238,8 @@
   "err.viewNameRequired": "Give the view a name",
   "err.invalidViewName": "Invalid view name",
   "err.viewNameConflict": "A view with this name already exists",
+  "err.subtaskCycle": "That change would create a subtask cycle",
+  "err.subtaskDepth": "Subtasks cannot nest deeper than five levels",
   "err.viewLimitReached": "Saved view limit reached (20 max per table)",
   "err.viewBlobTooLarge": "This view is too large to save (2 kB max)",
   "err.viewKeyNotNamed": "Saved views are only available on the tasks tables",
