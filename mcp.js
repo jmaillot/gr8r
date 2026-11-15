@@ -28,6 +28,9 @@
    ===================================================================== */
 import crypto from 'node:crypto';
 import { syncTaskFts } from './db-adapter.mjs';
+/* [65-05, T-65-11] The ONE tree validator/normalizer (the same module the
+   mergeClientDoc funnel uses) — MCP writes are not a trusted bypass. */
+import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
 
 /* The stored vocabulary (src/core/constants.js STATUSES / PRIOS ids). The ids
    are what the document holds — this module reads and writes them verbatim,
@@ -187,6 +190,24 @@ export function createMcp(deps) {
       const doc = JSON.parse(row.doc);
       const storedDoc = JSON.parse(JSON.stringify(doc));
       await edit(doc);
+      /* [65-05, T-65-11] MCP writes face the SAME tree authority as the
+         doc-PUT funnel — the shared whole-array gate rejects a cycle or a
+         depth overflow WHOLESALE (the throw rolls the tx back, so nothing
+         is written), then the shared lazy heal normalizes shape (dangling
+         parentId → root, missing/junk position → array index, legacy flat
+         entries gain id/parentId/position). No second validator: this is
+         subtree.validateSubtree/normalizeTaskSubtasks, the exact
+         definitions mergeClientDoc runs. */
+      for (const t of Array.isArray(doc?.data?.tasks) ? doc.data.tasks : []) {
+        if (!t || typeof t !== 'object') continue;
+        const verdict = validateSubtree(Array.isArray(t.subtasks) ? t.subtasks : []);
+        if (!verdict.ok) {
+          throw toolError(
+            `${verdict.code} — ${verdict.code === 'subtaskCycle' ? 'that change would create a subtask cycle' : 'subtasks cannot nest deeper than five levels'}`,
+          );
+        }
+        normalizeTaskSubtasks(t, () => uid('s'));
+      }
       await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(doc), now(), ws.id]);
       await syncTaskFts(scope, ws.id, storedDoc, doc);
       return doc;
@@ -304,7 +325,11 @@ export function createMcp(deps) {
 
   /* Local mirror of server.js stripMember (not in the deps): remove a member's
      profile and every reference from the document. Private projects must keep
-     at least one member and a lead (same lastPrivateMember guard). */
+     at least one member and a lead (same lastPrivateMember guard).
+     [65-05, T-65-13] The subtask walk covers the WHOLE flat t.subtasks[]
+     array — every descendant at any depth is an entry of that one array
+     (D-01) — and spread-preserves unknown fields, so id/parentId/position
+     survive the assignee strip (the whitelist trap, research Pitfall 1). */
   function mcpStripMember(doc, memberId, userId = null) {
     const d = doc?.data;
     if (!d) return;
@@ -314,9 +339,18 @@ export function createMcp(deps) {
     const hit = v => !!v && ids.has(v);
     d.members = (d.members || []).filter(m => !(userId && m.userId === userId) && !hit(m.id));
     d.tasks = (d.tasks || []).map(t => {
-      const next = hit(t.assignee) ? { ...t, assignee: null } : t;
-      if (Array.isArray(next.subtasks) && next.subtasks.some(s => hit(s?.assignee))) {
-        next.subtasks = next.subtasks.map(s => (hit(s?.assignee) ? { ...s, assignee: null } : s));
+      /* [65-05, T-65-13] Mirror of server.js stripMember's task branch:
+         assignments live in assignees ARRAYS (D-55-4) — the old mirror
+         checked the dead legacy scalar `s.assignee` and never stripped a
+         real subtask assignee. Filter every array, spread-preserve all
+         other fields so id/parentId/position survive. */
+      const next = { ...t };
+      if (Array.isArray(next.assignees)) next.assignees = next.assignees.filter(id => !hit(id));
+      if (hit(next.assignee)) next.assignee = null; // legacy scalar, if any
+      if (Array.isArray(next.subtasks) && next.subtasks.some(s => Array.isArray(s?.assignees) && s.assignees.some(hit))) {
+        next.subtasks = next.subtasks.map(s =>
+          Array.isArray(s?.assignees) ? { ...s, assignees: s.assignees.filter(id => !hit(id)) } : s,
+        );
       }
       return next;
     });

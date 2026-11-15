@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { login, startServer, withDb } from './helpers/server.mjs';
+import { login, signup, startServer, withDb } from './helpers/server.mjs';
 
 let server;
 let tempDir;
@@ -749,6 +749,140 @@ test('prompts: list and get round-trip; unknown prompt rejected', async () => {
   assert.equal(missing.data.error?.code, -32602);
   const reqd = await rpc(writeKey, 'prompts/get', { name: 'prepare-review', arguments: {} }, session);
   assert.equal(reqd.data.error?.code, -32602);
+});
+
+/* ---- 65-05: MCP tree round-trip, funnel-backed cycle reject, nested strip ----
+   writeDoc is the ONE write path MCP tools share; since 65-05 it runs the
+   SAME subtree gate + lazy heal the mergeClientDoc funnel runs (T-65-11),
+   and mcpStripMember spread-preserves tree fields (T-65-13). */
+
+const seedTree = (subtasks, extraTask = {}) => {
+  withDb(server.dbPath, db => {
+    const row = db.prepare('select doc from workspaces where id = ?').get(wsId);
+    const doc = JSON.parse(row.doc);
+    doc.data.tasks.push({
+      id: 't_tree65',
+      project: 'p1',
+      key: 'TEST-900',
+      title: 'Tree host 65',
+      status: 'todo',
+      priority: 'none',
+      assignees: [],
+      labels: [],
+      estimate: null,
+      subtasks,
+      deps: [],
+      order: 900,
+      ...extraTask,
+    });
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsId);
+  });
+};
+const unseedTree = () => {
+  withDb(server.dbPath, db => {
+    const row = db.prepare('select doc from workspaces where id = ?').get(wsId);
+    const doc = JSON.parse(row.doc);
+    doc.data.tasks = doc.data.tasks.filter(x => x.id !== 't_tree65');
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsId);
+  });
+};
+const storedTree = () => {
+  const doc = JSON.parse(withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(wsId)).doc);
+  return doc.data.tasks.find(x => x.id === 't_tree65');
+};
+
+test('65-05: MCP writeDoc round-trips a two-level tree — id/parentId/position intact (SUB-04)', async () => {
+  const key = (await createKey({ label: 'TreeRoundTrip65', scope: 'write', workspaceId: wsId, days: 30 })).data.key;
+  const session = (await rpc(key, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(key, name, args, session);
+  seedTree([
+    { id: 's_root1', parentId: null, position: 0, title: 'Root one', done: false },
+    { id: 's_nested', parentId: 's_root1', position: 0, title: 'Nested leaf', done: false },
+  ]);
+  try {
+    /* An MCP write on the nested subtask rides writeDoc — the legal tree
+       passes the shared gate untouched and the heal normalizes nothing. */
+    const renamed = await call('rename_subtask', { task: 't_tree65', subtask: 's_nested', title: 'Nested leaf renamed' });
+    assert.equal(renamed.isError, false, `rename must succeed: ${JSON.stringify(renamed.data)}`);
+    const t = storedTree();
+    assert.deepEqual(
+      t.subtasks.map(s => [s.id, s.parentId, s.position, s.title]),
+      [
+        ['s_root1', null, 0, 'Root one'],
+        ['s_nested', 's_root1', 0, 'Nested leaf renamed'],
+      ],
+      'id/parentId/position survive the MCP write path intact',
+    );
+    /* get_task exposes the renamed nested subtask with its stable id. */
+    const got = await call('get_task', { id: 't_tree65' });
+    assert.ok(got.data.subtasks.some(s => s.id === 's_nested' && s.title === 'Nested leaf renamed'));
+  } finally {
+    unseedTree();
+  }
+});
+
+test('65-05: a writeDoc that would land a cyclic tree is rejected with code subtaskCycle (T-65-11)', async () => {
+  const key = (await createKey({ label: 'TreeCycle65', scope: 'write', workspaceId: wsId, days: 30 })).data.key;
+  const session = (await rpc(key, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(key, name, args, session);
+  /* Seed a cycle DIRECTLY into the stored doc — simulating any write that
+     bypassed the funnel. The next MCP write must refuse wholesale: the gate
+     throws inside the tx, the revision never moves. */
+  seedTree([
+    { id: 's_c1', parentId: 's_c2', position: 0, title: 'Cycle one', done: false },
+    { id: 's_c2', parentId: 's_c1', position: 1, title: 'Cycle two', done: false },
+  ]);
+  const revisionBefore = withDb(server.dbPath, db => db.prepare('select revision from workspaces where id = ?').get(wsId)).revision;
+  try {
+    const res = await call('rename_subtask', { task: 't_tree65', subtask: 's_c1', title: 'Should never land' });
+    assert.equal(res.isError, true, 'the cyclic tree must be rejected through the MCP path');
+    assert.ok(String(res.data).includes('subtaskCycle'), `the funnel code must surface: ${JSON.stringify(res.data)}`);
+    /* Doc byte-unchanged: the tx rolled back. */
+    const t = storedTree();
+    assert.equal(t.subtasks.find(s => s.id === 's_c1').title, 'Cycle one', 'the rename never landed');
+    const revisionAfter = withDb(server.dbPath, db => db.prepare('select revision from workspaces where id = ?').get(wsId)).revision;
+    assert.equal(revisionAfter, revisionBefore, 'no revision bump on a wholesale reject');
+  } finally {
+    unseedTree();
+  }
+});
+
+test('65-05: a member strip removes a nested subtask assignee without disturbing tree fields (T-65-13)', async () => {
+  /* A REAL second member: signup → invite → accept (the REST invite path). */
+  await signup(server.base, { name: 'Sub Strip', email: 'substrip@test.local', password: 'password-1234' });
+  const slug = (await owner.client.get('/api/workspaces')).data.workspaces[0].slug;
+  const invite = await owner.client.post(`/api/workspaces/${slug}/invites`, { emails: ['substrip@test.local'], role: 'member' });
+  assert.equal(invite.status, 201, `invite failed: ${JSON.stringify(invite.data)}`);
+  const token = invite.data.invites[0].url.slice(invite.data.invites[0].url.lastIndexOf('/join/') + '/join/'.length);
+  const joiner = (await login(server.base, 'substrip@test.local', 'password-1234')).client;
+  const accepted = await joiner.post(`/api/invites/${token}/accept`, {});
+  assert.ok([200, 201].includes(accepted.status), `accept failed: ${JSON.stringify(accepted.data)}`);
+
+  /* The new member's roster id (member_id space). */
+  const key = (await createKey({ label: 'TreeStrip65', scope: 'write', workspaceId: wsId, days: 30 })).data.key;
+  const session = (await rpc(key, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(key, name, args, session);
+  const roster = await call('list_members');
+  const target = roster.data.members.find(m => m.email === 'substrip@test.local');
+  assert.ok(target, 'the joined member is on the roster');
+
+  seedTree([
+    { id: 's_root1', parentId: null, position: 0, title: 'Root one', done: false, assignees: [target.id] },
+    { id: 's_nested', parentId: 's_root1', position: 0, title: 'Nested leaf', done: false, assignees: [target.id] },
+  ]);
+  try {
+    const removed = await call('remove_member', { member: 'substrip@test.local' });
+    assert.equal(removed.isError, false, `remove must succeed: ${JSON.stringify(removed.data)}`);
+    const t = storedTree();
+    assert.deepEqual(t.subtasks.map(s => [s.id, s.parentId, s.position]), [
+      ['s_root1', null, 0],
+      ['s_nested', 's_root1', 0],
+    ], 'tree fields survive the strip intact');
+    assert.deepEqual(t.subtasks[0].assignees, [], 'the root subtask assignee is stripped');
+    assert.deepEqual(t.subtasks[1].assignees, [], 'the NESTED subtask assignee is stripped too (flat-array walk)');
+  } finally {
+    unseedTree();
+  }
 });
 
 /* ---- Phase 49 (49-03) server↔MCP parity harness ----
