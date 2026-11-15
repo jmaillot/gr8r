@@ -70,6 +70,9 @@ export const SET_NAV = [
       ['members', 'nav.route.members', 'users'],
       ['teams', 'nav.route.teams', 'users-round'],
       ['projects', 'nav.route.projects', 'folder-kanban'],
+      /* [66-03 D-09] the template CRUD home — the body rides the lazy
+         template-ui chunk (D-13); the nav entry itself is two words. */
+      ['templates', 'settings.nav.templates', 'folder-plus'],
     ],
   ],
   [
@@ -493,6 +496,23 @@ export function settingsBody(sec, title) {
       );
     case 'teams':
       return H(t('settings.teams.lead')) + teamsGrid();
+    case 'templates': {
+      /* [66-03 D-09/D-13] the template CRUD body rides the lazy chunk — the
+         section renders a loading stub until the dynamic import resolves,
+         then re-renders (the my-access async pattern, T-51-08's known-section
+         guard already covers the deep link since the nav id is registered). */
+      const mod = S.ui.tplUi;
+      if (!mod) {
+        import('../features/template-ui.js')
+          .then(m => {
+            S.ui.tplUi = m;
+            render();
+          })
+          .catch(() => {});
+        return H(t('settings.nav.templates')) + `<div class="sblock" style="margin-top:0"><p class="hint" aria-busy="true">${t('page.states.loading')}</p></div>`;
+      }
+      return H(t('settings.templates.lead')) + mod.renderTemplateSettings();
+    }
     case 'projects': {
       const arch = d.projects.filter(p => p.archived);
       const active = d.projects.filter(p => !p.archived);

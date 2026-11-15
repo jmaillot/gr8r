@@ -28,6 +28,10 @@ export function ctxMenu(p) {
       I('toggleFavTask', 'star', t.fav ? tMsg('act.removeFromFavorites') : tMsg('act.addToFavorites')) +
       I('copyLink', 'link', tMsg('act.copyLink')) +
       I('dupTask', 'copy', tMsg('act.duplicate')) +
+      /* [66-03 D-10] Save as template — beside the duplicate twin; the
+         handler rides the lazy actions/templates.js chunk (pre-warmed at
+         boot) and opens the lazy template editor pre-filled. */
+      I('saveTaskTemplate', 'folder-plus', tMsg('act.saveAsTemplate')) +
       I('archiveTask', 'archive', tMsg('act.archive')) +
       sep +
       I('delTask', 'trash-2', tMsg('act.delete'), 'danger', 'Del')
@@ -70,6 +74,8 @@ export function ctxMenu(p) {
       (canManageProject(pr) ? I('exportOpen', 'download', tMsg('export.action')) : '') +
       I('copyLink', 'link', tMsg('act.copyLink')) +
       I('dupProject', 'copy', tMsg('act.duplicate')) +
+      /* [66-03 D-10] the project twin — same lazy editor path. */
+      I('saveProjectTemplate', 'folder-plus', tMsg('act.saveAsTemplate')) +
       sep +
       (visibleProjects().indexOf(pr) > 0 ? I('projUp', 'arrow-up', tMsg('act.moveUpSidebar')) : '') +
       (visibleProjects().indexOf(pr) < visibleProjects().length - 1 ? I('projDown', 'arrow-down', tMsg('act.moveDownSidebar')) : '') +

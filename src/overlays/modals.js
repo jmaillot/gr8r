@@ -1,13 +1,13 @@
 /* ---------------- MODALS ---------------- */
-import { $$, ago, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
+import { $$, esc, fmtDate, foldForSearch, modKey } from '../core/utils.js';
 import { t, tErr } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { ASSIGNEE_CAP, PCOLORS, PICONS, LB } from '../core/constants.js';
+import { PCOLORS, PICONS, LB } from '../core/constants.js';
 
 import { applyView, viewOf } from '../shell/view-engine.js';
-import { D, S, assignableInProject, canManageProject, mem, pColor, proj, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
+import { D, S, canManageProject, mem, pColor, proj, task, tasksOf, teamsList, visibleProjects } from '../core/store.js';
 import { api } from '../core/api.js';
-import { FT, av, filePrev, lbl, prPill, stPill } from '../ui/helpers.js';
+import { FT, av, lbl, prPill, stPill } from '../ui/helpers.js';
 import { focusKey, render } from '../shell/render.js';
 import { teamModal } from '../features/teams.js';
 import { RECUR } from './popovers.js';
@@ -32,6 +32,10 @@ export function closeModal() {
   S.ui.pop = null;
   render();
 }
+/* The lazy-modal stub (66-03): chunk-backed modals show this while their
+   dynamic import resolves; the opener re-renders once the module lands. */
+const lazyStub = () =>
+  `<div class="modal-b"><p class="hint" aria-busy="true">${t('page.states.loading')}</p></div><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button></div>`;
 export function modalHtml(m) {
   const H = (title, sub = '') =>
     `<div class="modal-h"><div><h2 id="mt-${m.type}">${title}</h2>${sub ? `<div class="muted" style="font-size:12.5px;margin-top:2px">${sub}</div>` : ''}</div><button class="ibtn ibtn-sm" data-a="closeModal" aria-label="${t('a11y.close')}">${ic('x', 16)}</button></div>`;
@@ -50,10 +54,11 @@ export function modalHtml(m) {
       return wrap('', projectCreateModal(m, H));
     case 'invite':
       return wrap('', inviteModal(m, H));
-    /* [55-04 D-55-6] The assignee picker — the chip-pattern search modal that
-       replaced the single-assignee pop. */
+    /* [55-04 D-55-6] The assignee picker — the chip-pattern search modal, now
+       chunk-backed (66-03 gate remedy): S.ui.apMod holds the lazy module the
+       opener pre-loaded (actions.js); until it lands the stub renders. */
     case 'assigneePick':
-      return wrap('sm', assigneePickModal(m, H));
+      return wrap('sm', S.ui.apMod ? S.ui.apMod.assigneePickModal(m, H) : `${H(t('act.assignTo'))}${lazyStub()}`);
     case 'confirm':
       return wrap('sm', confirmModal(m, H));
     case 'recovery':
@@ -93,7 +98,24 @@ export function modalHtml(m) {
       );
     }
     case 'filePreview':
-      return wrap(m.file?.type === 'pdf' ? 'xl' : 'lg', filePreviewModal(m, H));
+      /* Chunk-backed (66-03 gate remedy) — S.ui.fpMod is the pre-loaded module. */
+      return wrap(
+        m.file?.type === 'pdf' ? 'xl' : 'lg',
+        S.ui.fpMod ? S.ui.fpMod.filePreviewModal(m, H) : `${H(esc(m.file?.name || ''), '')}${lazyStub()}`,
+      );
+    /* [66-03 D-11/D-12] The template surfaces — chunk-backed like the two
+       above. S.ui.tplUi holds src/features/template-ui.js; the opener
+       (A.openTemplatePicker / A.saveAsTemplate, actions/templates.js) loads
+       it BEFORE opening, so the stub shows only on a slow chunk. */
+    case 'templatePick':
+      return wrap('sm', S.ui.tplUi ? S.ui.tplUi.templatePickModal(m, H) : `${H(t('modal.fromTemplate'))}${lazyStub()}`);
+    case 'templateEdit':
+      return wrap(
+        'lg',
+        S.ui.tplUi
+          ? S.ui.tplUi.templateEditModal(m, H)
+          : `${H(esc(S.ui.tplEditor?.name || t('templates.editorNew')))}${lazyStub()}`,
+      );
     case 'saveView':
       return wrap(
         'sm',
@@ -113,6 +135,7 @@ export function taskModal(m, H) {
   <form class="modal-b" data-submit="submitTask" style="gap:12px">
     <div class="field"><label class="sr" for="f-title">${t('modal.taskName')}</label><input class="input input-lg ${err ? 'is-error' : ''}" id="f-title" data-in="form" data-f="title" value="${esc(f.title)}" placeholder="${t('modal.taskName')}" autofocus aria-invalid="${!!err}" aria-describedby="f-title-err" style="font-size:15px;font-weight:500">${err ? `<span class="err" id="f-title-err">${ic('circle-alert', 12)}${err}</span>` : ''}</div>
     <div class="field"><label class="sr" for="f-desc">${t('modal.description')}</label><textarea class="textarea" id="f-desc" data-in="form" data-f="desc" placeholder="${t('a11y.descOptional')}" rows="3">${esc(f.desc)}</textarea></div>
+    ${m.edit ? '' : `<div class="field" style="margin-top:-8px"><button type="button" class="btn btn-secondary btn-sm" data-a="openTemplatePicker" data-kind="task">${ic('layers', 14)}${t('modal.fromTemplate')}</button></div>`}
     <div class="row" style="flex-wrap:wrap;gap:6px">
       ${formChip('project', `<span class="pdot" style="--c:${pColor(p)}"></span>${esc(p?.name || t('page.field.project'))}`, t('page.field.project'))}
       ${formChip('status', stPill(f.status), t('page.field.status'))}
@@ -193,7 +216,7 @@ export function projectCreateModal(m, H) {
   return `${H(t('act.newProject'), t('modal.projectHint'))}
   <form class="modal-b" data-submit="submitProject">
     ${settingsGeneralFields(m)}
-    <div class="field"><span class="label">${t('modal.template')}</span><div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${S.ui.pform.tmpl === tp.id}" class="opt ${S.ui.pform.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>
+    <div class="field"><span class="label">${t('modal.template')}</span><div class="row" style="margin-bottom:8px"><button type="button" class="btn btn-secondary btn-sm" data-a="openTemplatePicker" data-kind="project">${ic('layers', 14)}${t('modal.fromTemplate')}</button><span class="hint">${t('modal.fromTemplateHint')}</span></div><div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${S.ui.pform.tmpl === tp.id}" class="opt ${S.ui.pform.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${t('palette.createProject')}</button></div>`;
 }
@@ -458,55 +481,8 @@ export function inviteModal(m, H) {
   </form>
   <div class="modal-f"><button class="btn btn-ghost" data-a="copyInviteLink">${ic('link', 14)}${t('act.copyInviteLink')}</button><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitInvite" id="inv-submit" ${guestNeedsProject ? 'disabled' : ''}>${api.mailEnabled ? t('act.sendInvites') : api.enabled ? t('act.createLinks') : t('act.sendInvites')}</button>${guestNeedsProject ? `<span class="hint" role="status">${t('modal.inviteGuestNeedsProject')}</span>` : ''}</div>`;
 }
-/* [55-04 D-55-6] The assignee picker modal — the invite modal's chip pattern
-   applied to assignment: the draft rides S.ui.assigneePick so a full
-   re-render never wipes the selection (STATE.md pitfall 4), the search input
-   is data-in bound with its value restored from state on every render,
-   candidates filter through the TEAM-04 assignableInProject predicate
-   (D-55-9 — members who cannot read the project are never offered, while
-   members already in the draft stay listed), and the cap (D-55-7) blocks a
-   6th add with a visible hint. Confirm applies the whole draft as ONE array
-   write — the diff-based notify lives in the action layer (D-55-13).
-   taskId '__form' targets the new/edit task form's S.ui.form.assignees;
-   subtaskIndex != null targets that subtask (D-55-5 — same predicate). */
-export function assigneePickModal(m, H) {
-  const st = S.ui.assigneePick || { taskId: null, subtaskIndex: null, draft: [], q: '' };
-  const isForm = st.taskId === '__form';
-  const tk = isForm ? null : task(st.taskId);
-  const p = proj(isForm ? S.ui.form.project : tk?.project);
-  const needle = foldForSearch(st.q || '').text;
-  const cands = (D().members || [])
-    .filter(mm => mm.status !== 'deactivated' && assignableInProject(mm, p, st.draft))
-    .filter(mm => !needle || foldForSearch(mm.name).text.includes(needle));
-  const atCap = st.draft.length >= ASSIGNEE_CAP;
-  return `${H(t('act.assignTo'), tk ? esc(tk.title) : '')}
-  <div class="modal-b" style="gap:10px">
-    <input class="input" id="ap-q" data-in="assigneePickQ" placeholder="${t('modal.assigneeSearch')}" value="${esc(st.q || '')}" autofocus aria-label="${t('modal.assigneeSearch')}">
-    ${
-      st.draft.length
-        ? `<div class="row" style="flex-wrap:wrap;gap:6px">${st.draft
-            .map(
-              id =>
-                `<span class="chip">${av(id, 'sm', false)}<b>${esc(mem(id)?.name || '')}</b><button type="button" class="ibtn" data-a="assigneePickToggle" data-v="${id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></span>`,
-            )
-            .join('')}</div>`
-        : ''
-    }
-    ${atCap ? `<div class="alert info" style="margin:0">${ic('circle-alert', 14)}<span>${t('page.field.assigneeCap', { n: ASSIGNEE_CAP })}</span></div>` : ''}
-    <div class="col" style="gap:2px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--r);padding:4px">
-      ${
-        cands
-          .map(mm => {
-            const on = st.draft.includes(mm.id);
-            const blocked = !on && atCap;
-            return `<button type="button" role="checkbox" aria-checked="${on}" aria-disabled="${blocked}" class="opt ${on ? 'on' : ''}${blocked ? ' off' : ''}" data-a="assigneePickToggle" data-v="${mm.id}" style="padding:8px;flex-direction:row;align-items:center;gap:8px;border-radius:var(--r)">${av(mm.id, 'sm', false)}<b style="font-size:12.5px">${esc(mm.name)}</b>${on ? ic('check', 13) : ''}</button>`;
-          })
-          .join('') || `<div class="mi faint" style="cursor:default">${t('modal.assigneeNoMatches')}</div>`
-      }
-    </div>
-  </div>
-  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="assigneePickApply">${t('act.done')}</button></div>`;
-}
+/* The assignee picker's renderer lives in its lazy chunk since 66-03
+   (features/assignee-pick.js) — reached through modalHtml's S.ui.apMod case. */
 export function confirmModal(m) {
   const needs = m.typeName;
   const ok = !needs || (S.ui.confirmText || '') === needs;
@@ -565,39 +541,5 @@ export const SHORTCUTS = [
 export function shortcutsModal(H) {
   return `${H(t('palette.keyboardShortcuts'))}<div class="modal-b" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">${SHORTCUTS.map(([g, list]) => `<div><div class="eyebrow" style="margin-bottom:6px">${t(g)}</div>${list.map(([n, k]) => `<div class="row" style="height:30px;font-size:13px;border-bottom:1px solid var(--divider)"><span class="grow">${t(n)}</span>${k.map((x, i) => `${i && k[0] === 'G' ? '<span class="faint" style="font-size:11px">then</span>' : ''}<kbd>${x === 'MOD' ? modKey() : x}</kbd>`).join('')}</div>`).join('')}</div>`).join('')}</div>`;
 }
-export function filePreviewModal(m, H) {
-  const f = m.file;
-  const ft = FT[f.type] || FT.other;
-  return `${H(esc(f.name), `${ft.n} · ${f.size} ${t('modal.uploadedBy', { name: esc(mem(f.by)?.name || 'you') })} ${ago(f.at)}`)}
-  <div class="modal-b"><div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden">${
-    /* D-03/D-09: images and PDFs render the real bytes from the serving route;
-       every other type keeps the icon-art download tile. Lists/grids are
-       untouched (D-10). User-controlled values escape with esc() (T-12-09).
-       G-12-4 (a): the PDF iframe swaps the old 16/9 clip for an explicit tall
-       in-iframe viewport — Firefox renders its built-in PDF toolbar
-       INSIDE the iframe and it was clipped by the ~296px 16/9 pane; the
-       surrounding overflow:hidden wrapper clips nothing because it grows with
-       the iframe. G-12-6: PDFs render in .modal.xl (900px) so the in-iframe
-       viewport is ≈866px — at or above pdf.js's 750px WIDTH breakpoint, below
-       which its @media rule hides the direct download/print buttons into the
-       '»' secondary menu; images and other types stay at 'lg', and the image
-       branch keeps aspect-ratio:16/9. */
-    f.type === 'img'
-      ? `<img src="/w/${D().ws.url}/file/${f.id}" alt="${esc(f.name)}" style="display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:var(--bg)">`
-      : f.type === 'pdf'
-        ? `<iframe src="/w/${D().ws.url}/file/${f.id}" title="${esc(f.name)}" style="display:block;width:100%;height:min(75vh,640px);border:0"></iframe>`
-        : filePrev(f).replace('class="fprev"', 'class="fprev" style="aspect-ratio:16/9"')
-  }</div>
-  ${m.tid ? `<div class="row faint" style="font-size:12.5px">${ic('link', 13)}${t('modal.attachedTo')} <button class="link" data-a="openTask" data-id="${m.tid}">${esc(task(m.tid)?.title)}</button></div>` : ''}</div>
-  <div class="modal-f">${
-    /* G-12-6 hardening: a PDF-only footer Download anchor — a viewer-independent
-       save affordance, so the download never depends on the embedded viewer's
-       toolbar width behaviour. Native same-origin navigation (no data-a): the
-       download attribute overrides the route's inline Content-Disposition
-       client-side, and the filename is esc()-escaped (T-12-18) since it is
-       user-controlled and lands in a double-quoted attribute. */
-    f.type === 'pdf'
-      ? `<a class="btn btn-secondary" href="/w/${D().ws.url}/file/${f.id}" download="${esc(f.name)}">${ic('download', 14)}${t('act.download')}</a>`
-      : ''
-  }<button class="btn btn-secondary" data-a="copyLink" data-fid="${f.id}">${ic('link', 14)}${t('act.copyLink')}</button><span class="sp"></span><button class="btn btn-primary" data-a="closeModal">${t('a11y.close')}</button></div>`;
-}
+/* The file preview renderer lives in its lazy chunk since 66-03
+   (features/file-preview.js) — reached through modalHtml's S.ui.fpMod case. */

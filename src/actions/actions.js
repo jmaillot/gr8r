@@ -617,7 +617,15 @@ A.assigneePickOpen = el => {
         : task(id)?.assignees || [];
   S.ui.assigneePick = { taskId: id, subtaskIndex: subI, draft: [...cur], q: '' };
   S.ui.pop = null;
-  openModal({ type: 'assigneePick' });
+  /* 66-03 gate remedy: the picker's bytes ride features/assignee-pick.js —
+     loaded before the modal opens (the S.ui.apMod cache is the modalHtml
+     case's renderer); a repeat open skips the import. */
+  if (S.ui.apMod) openModal({ type: 'assigneePick' });
+  else
+    import('../features/assignee-pick.js').then(m => {
+      S.ui.apMod = m;
+      openModal({ type: 'assigneePick' });
+    });
 };
 A.assigneePickToggle = el => {
   const st = S.ui.assigneePick;
@@ -1163,13 +1171,24 @@ A.rmAttach = el => {
 A.filePreview = el => {
   const t = task(el.dataset.tid);
   const f = t.attachments.find(a => a.id === el.dataset.aid);
-  openModal({ type: 'filePreview', file: f, tid: t.id });
+  openFilePreview(f, t.id);
 };
 A.previewFile = el => {
   const f = D().files.find(x => x.id === el.dataset.id);
   S.ui.pop = null;
-  if (f) openModal({ type: 'filePreview', file: f, tid: f.task });
+  if (f) openFilePreview(f, f.task);
 };
+/* 66-03 gate remedy: the preview's bytes ride features/file-preview.js —
+   loaded before the modal opens (the S.ui.fpMod cache is the modalHtml
+   case's renderer); a repeat open skips the import. */
+function openFilePreview(f, tid) {
+  if (S.ui.fpMod) openModal({ type: 'filePreview', file: f, tid });
+  else
+    import('../features/file-preview.js').then(m => {
+      S.ui.fpMod = m;
+      openModal({ type: 'filePreview', file: f, tid });
+    });
+}
 export function handleFiles(files, ctx) {
   if (!files || !files.length) return;
   if (S.ui.offline) {

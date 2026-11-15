@@ -116,3 +116,10 @@ test('the build emits a lazy search chunk', () => {
   const chunks = chunksByPrefix('search');
   assert.ok(chunks.length > 0, `no search-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
 });
+
+/* 66-03: the template surfaces (Settings CRUD card, the create-modal picker,
+   the template editor) are one lazy chunk — the D-13 entry-gate remedy. */
+test('the build emits a lazy template-ui chunk', () => {
+  const chunks = chunksByPrefix('template-ui');
+  assert.ok(chunks.length > 0, `no template-ui-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});

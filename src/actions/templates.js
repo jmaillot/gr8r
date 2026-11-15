@@ -12,9 +12,10 @@
    ===================================================================== */
 import { t } from '../core/i18n.js';
 import { TODAY, uid } from '../core/utils.js';
-import { D, proj, pushNow, task } from '../core/store.js';
+import { D, proj, pushNow, S, task } from '../core/store.js';
 import { mutate, toast } from '../ui/toast.js';
 import { render } from '../shell/render.js';
+import { openModal } from '../overlays/modals.js';
 import { A, makeKey, nextKey, restore, snapshot } from './actions.js';
 import { instantiateTemplate, landInstantiation, sanitizeTemplate, templateFromItem } from '../core/templates.js';
 
@@ -103,19 +104,55 @@ A.instantiateTemplate = async (templateId, context = {}) => {
 
 /* "Save as template" (D-10): build a whitelist-conformant draft from a
    live task/project (D-14 — offsets derived from the item's own due day,
-   the inverse of the builder), then open the lazy template editor via
-   the 66-03 registry pre-filled with the draft. The draft is NOT saved
-   here — the editor's submit calls A.saveTemplate. */
-A.saveAsTemplate = (kind, id) => {
+   the inverse of the builder), then open the lazy template editor
+   pre-filled with the draft. Accepts the dispatch element
+   (data-kind/data-id — the context-menu entry) or (kind, id) strings.
+   The draft is NOT saved here — the editor's submit calls A.saveTemplate.
+   The editor's bytes ride features/template-ui.js (66-03 gate remedy):
+   the import populates the templateUi.openEditor registry (the
+   treeChecklist pattern) and then opens. */
+A.saveAsTemplate = (...args) => {
+  const [src, strId] = args;
+  const kind = typeof src === 'string' ? src : src?.dataset?.kind;
+  const id = typeof src === 'string' ? strId : src?.dataset?.id;
+  if (kind !== 'task' && kind !== 'project') return;
+  let draft = null;
   if (kind === 'project') {
     const p = proj(id);
     if (!p) return;
-    const draft = templateFromItem('project', p, TODAY, { tasks: D().tasks.filter(x => x.project === p.id) });
-    if (templateUi.openEditor) templateUi.openEditor(draft);
-    return;
+    draft = templateFromItem('project', p, TODAY, { tasks: D().tasks.filter(x => x.project === p.id) });
+  } else {
+    const tk = task(id);
+    if (!tk) return;
+    draft = templateFromItem('task', tk, TODAY);
   }
-  const tk = task(id);
-  if (!tk) return;
-  const draft = templateFromItem('task', tk, TODAY);
-  if (templateUi.openEditor) templateUi.openEditor(draft);
+  S.ui.pop = null;
+  import('../features/template-ui.js')
+    .then(mod => {
+      templateUi.openEditor = mod.openTemplateEditor;
+      mod.openTemplateEditor(draft);
+    })
+    .catch(() => toast(t('err.templateSaveFailed'), { kind: 'err' }));
+};
+
+/* [66-03 D-10] The context-menu entries (beside the duplicate twins) — thin
+   kind-pinned dispatch to A.saveAsTemplate. */
+A.saveTaskTemplate = el => A.saveAsTemplate('task', el.dataset.id);
+A.saveProjectTemplate = el => A.saveAsTemplate('project', el.dataset.id);
+
+/* "From template…" (D-11): the create-modal entry point. The picker's bytes
+   ride features/template-ui.js (66-03 gate remedy); the import caches the
+   module in S.ui.tplUi — the modalHtml case's renderer — before the modal
+   opens, so the stub shows only on a slow chunk. */
+A.openTemplatePicker = el => {
+  const kind = el.dataset.kind === 'project' ? 'project' : 'task';
+  const open = () => openModal({ type: 'templatePick', kind });
+  if (S.ui.tplUi) open();
+  else
+    import('../features/template-ui.js')
+      .then(mod => {
+        S.ui.tplUi = mod;
+        open();
+      })
+      .catch(() => toast(t('err.templateInstantiateFailed'), { kind: 'err' }));
 };
