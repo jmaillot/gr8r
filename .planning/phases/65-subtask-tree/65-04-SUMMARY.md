@@ -105,3 +105,9 @@ None.
 ## Threat Flags
 
 None — no new surface beyond the plan's threat model; `subtaskMatch` leaks only titles from the same permissioned task the hit already exposes (T-65-10).
+
+## Self-Check: PASSED
+
+- SUMMARY.md exists at `.planning/phases/65-subtask-tree/65-04-SUMMARY.md`
+- Commits verified: 8f0543c, 8cfa9bc, a43a8c7 (3 plan commits via ledger 7419f501..a43a8c7), + metadata c83fcf8/ee62c32
+- All acceptance criteria re-run: prebuild 0 dead keys; unit suite 1557 pass / 0 fail; search-fts 14/14; chunk gate 11/11; e2e 120/120
