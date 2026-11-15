@@ -45,7 +45,7 @@ created: "2026-11-15"
 | 65-02-* | 02 | 2 | SUB-03 | — | Cascade + leaf-only rollup, never double-counts | unit | `node --test test/export-model.test.mjs test/subtask-tree.test.mjs` | ✅/❌ | ⬜ pending |
 | 65-03-* | 03 | 3 | SUB-01 | — | Depth-aware render, carets, badge | unit + e2e | `node --test test/subtask-tree.test.mjs` + e2e spec | ❌ W0 | ⬜ pending |
 | 65-04-* | 04 | 4 | SUB-01/02 | — | One-level restructure UX, pre-validation | unit + e2e | e2e spec + `node --test test/i18n-scan` | ❌/✅ | ⬜ pending |
-| 65-05-* | 05 | 4 | SUB-04 | T-65-03 | FTS parity, export rows, MCP round-trip | unit | `node --test test/search-fts.test.mjs test/copy-sqlite-to-pg.test.mjs test/export-mspdi.test.mjs test/export-xlsx.test.mjs test/export-csv.test.mjs test/mcp.test.mjs` | ✅ (extend) | ⬜ pending |
+| 65-05-* | 05 | 4 | SUB-04 | T-65-13 | FTS parity, export rows, MCP round-trip | unit | `node --test test/search-fts.test.mjs test/copy-sqlite-to-pg.test.mjs test/export-mspdi.test.mjs test/export-xlsx.test.mjs test/export-csv.test.mjs test/mcp.test.mjs` | ✅ (extend) | ⬜ pending |
 | gates | all | all | standing | — | chunk ≤500 kB, i18n EN+FR | unit | `node --test test/build-chunk-size.test.mjs` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
