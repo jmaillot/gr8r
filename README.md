@@ -2,6 +2,8 @@
 
 A calm, structured project management workspace: home dashboard, inbox, my tasks, projects with
 board / list / table / calendar / timeline / files views, members, teams, activity and settings.
+On screens 900px wide or narrower the tasks table collapses to a card stack (the desktop
+column show/hide control is hidden) and wraps long content instead of clipping it.
 
 Built with plain JavaScript ES modules and CSS, bundled by [Vite](https://vite.dev). There is no
 UI framework and no runtime dependency.
