@@ -167,6 +167,7 @@ test('task 1: the context menu action keys and icon names are byte-identical', (
     ['toggleFavTask', 'star'],
     ['copyLink', 'link'],
     ['dupTask', 'copy'],
+    ['saveTaskTemplate', 'folder-plus'], /* 66-03: Save-as-template beside the dup twin */
     ['archiveTask', 'archive'],
     ['delTask', 'trash-2'],
     ['openProject', 'arrow-up-right'],
@@ -176,6 +177,7 @@ test('task 1: the context menu action keys and icon names are byte-identical', (
     ['exportOpen', 'download'],
     ['copyLink', 'link'],
     ['dupProject', 'copy'],
+    ['saveProjectTemplate', 'folder-plus'], /* 66-03: Save-as-template beside the dup twin */
     ['projUp', 'arrow-up'],
     ['projDown', 'arrow-down'],
     ['archiveProject', 'archive'],

@@ -622,7 +622,14 @@ test('instantiateTemplate: output rows carry the createProject/createTask field 
   const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01', () => 'VX');
   assert.deepEqual(Object.keys(out.project).sort(), ['color', 'desc', 'fav', 'icon', 'id', 'key', 'last', 'milestones', 'name', 'status', 'teams']);
   const tk = out.tasks[0];
-  assert.deepEqual(Object.keys(tk).sort(), ['due', 'id', 'notes', 'order', 'priority', 'project', 'status', 'subtasks', 'title']);
+  /* 66-03: buildTaskRow carries the FULL createTask field vocabulary — the
+     client drawer/labels/deps/attachments surfaces read .length unguarded,
+     and a fresh instantiation must render without a reload (the funnel
+     refills these on the next server sync regardless). */
+  assert.deepEqual(Object.keys(tk).sort(), [
+    'assignees', 'attachments', 'created', 'creator', 'deps', 'desc', 'due', 'estimate', 'fav', 'id',
+    'labels', 'notes', 'order', 'priority', 'project', 'start', 'status', 'subtasks', 'title', 'updated',
+  ]);
   const s = tk.subtasks[0];
   assert.deepEqual(Object.keys(s).sort(), ['done', 'id', 'note', 'parentId', 'position', 'title']);
   assert.equal(s.done, true, 'done carried through from the template body');

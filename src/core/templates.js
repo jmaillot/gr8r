@@ -294,6 +294,23 @@ function buildTaskRow(entry, projectId, today, uidFactory, order) {
     project: projectId,
     title: typeof e.title === 'string' ? e.title : '',
     status: 'todo',
+    /* the createTask field vocabulary the client renders unguarded — the
+       drawer/labels/deps/attachments surfaces read .length directly, and a
+       fresh instantiation must render without a reload (66-03 e2e finding).
+       The funnel refills these on the next server sync regardless. */
+    assignees: [],
+    priority: 'none',
+    due: null,
+    start: null,
+    labels: [],
+    attachments: [],
+    deps: [],
+    desc: '',
+    estimate: null,
+    created: Date.now(),
+    updated: Date.now(),
+    creator: null,
+    fav: false,
     order,
     subtasks: buildSubtaskRows(e.subtasks, today, uidFactory),
   };

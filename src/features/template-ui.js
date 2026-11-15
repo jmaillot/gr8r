@@ -28,11 +28,11 @@ import { esc, uid } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PCOLORS, PICONS, PRIOS } from '../core/constants.js';
-import { D, S, pushNow, teamsList } from '../core/store.js';
+import { A, IN, KEY, confirmDlg, restore, snapshot } from '../actions/actions.js';
+import { mutate, toast } from '../ui/toast.js';
+import { canSee, D, proj, S, pushNow, teamsList } from '../core/store.js';
 import { closeModal, openModal } from '../overlays/modals.js';
 import { go, render } from '../shell/render.js';
-import { A, KEY, confirmDlg, restore, snapshot } from '../actions/actions.js';
-import { mutate, toast } from '../ui/toast.js';
 import { descendantsOf, nextPosition, orderedSiblings, validateMove } from '../core/subtree.js';
 import { templateUi } from '../actions/templates.js';
 
@@ -262,7 +262,7 @@ A.tplTeam = el => {
 /* ---------- actions: editor fields (IN handlers survive full re-renders) ---------- */
 IN; /* the IN registry is imported via actions.js below */
 
-import { IN } from '../actions/actions.js';
+IN; /* the IN registry rides the actions.js import above */
 
 IN.tplF = el => {
   const d = S.ui.tplEditor;
@@ -486,8 +486,13 @@ A.tplPick = async el => {
   if (!tm) return;
   closeModal();
   if (tm.kind === 'task') {
-    const landed = await A.instantiateTemplate(tm.id, { project: S.ui.form?.project });
-    if (landed) A.openTask({ dataset: { id: landed.id } });
+    /* Only a LIVE, visible project may anchor the landed task — the
+       create-form's 'p1' fallback would land a ghost-project ref the
+       drawer's canSee gate then silently refuses to open (66-03 e2e
+       finding). A missing/hidden project lands the task unfiled. */
+    const pid = S.ui.form?.project;
+    const landed = await A.instantiateTemplate(tm.id, { project: pid && proj(pid) ? pid : undefined });
+    if (landed && landed.project && canSee(proj(landed.project))) A.openTask({ dataset: { id: landed.id } });
   } else {
     const landed = await A.instantiateTemplate(tm.id);
     if (landed) go('project', { id: landed.id });
