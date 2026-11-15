@@ -117,7 +117,7 @@ Coverage: 16/16 requirements mapped ✓
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 65. Subtask Tree | 5/5 | In Progress|  |
-| 66. Task & Project Templates | 3/3 | In Progress | - |
+| 66. Task & Project Templates | 3/3 | In Progress|  |
 | 67. Project Webhooks | 0/0 | Not started | - |
 | 68. Backlog Polish | 0/0 | Not started | - |
 
