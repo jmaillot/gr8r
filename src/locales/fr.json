@@ -1649,6 +1649,7 @@
   "a11y.view": "Vue",
   "a11y.searchAll": "Rechercher tâches, projets, personnes, fichiers et commentaires",
   "page.search.recent": "Récent :",
+  "page.search.viaSubtask": "via la sous-tâche :",
   "page.search.on": "dans",
   "page.search.noMatch": "Rien ne correspond à « {q} ». Vérifiez l’orthographe ou essayez un terme plus large.",
   "page.overview.title": "Vue d’ensemble de l’espace de travail",

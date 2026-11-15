@@ -5832,12 +5832,31 @@ async function handleApi(req, res, url) {
          trusted. A dropped hit reveals nothing: the shape stays a plain
          tasks array either way. */
       if (!(await memberCanReadProject(project, ctx.ws.id, ctx.membership.member_id))) continue;
+      /* 65-04 (D-07): the subtask-hint. The FTS row text cannot attribute a
+         match to a subtask (one folded blob per task), so the handler runs a
+         folded substring scan over the task's own subtask titles — the same
+         foldForSearch the index uses — and attaches the FIRST matching
+         subtask title as a plain string. Precision improves when 65-05 folds
+         subtask titles into the index (a title-only hit then reaches this
+         handler at all); the field stays absent on plain hits. The title
+         comes from the same permissioned task the hit already exposes — no
+         new disclosure boundary (T-65-10). */
+      let subtaskMatch;
+      for (const st of Array.isArray(task.subtasks) ? task.subtasks : []) {
+        const title = String(st?.title ?? '');
+        const f = foldForSearch(title).text;
+        if (f && terms.some(term => f.includes(term))) {
+          subtaskMatch = title;
+          break;
+        }
+      }
       out.push({
         id: String(task.id),
         key: String(task.key ?? ''),
         title: String(task.title ?? ''),
         snippet: searchSnippet(task, terms),
         projectId: String(task.project ?? ''),
+        ...(subtaskMatch !== undefined ? { subtaskMatch: String(subtaskMatch) } : {}),
       });
       if (out.length >= 30) break; // D-14: top-30 AFTER filtering
     }

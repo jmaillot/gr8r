@@ -138,7 +138,7 @@ test('a task written through the doc-PUT funnel is findable via the route immedi
     title: 'Élodie fiche carte',
     desc: '<b>Livraison</b> rapide du colis',
     status: 'todo',
-    subtasks: [],
+    subtasks: [{ id: 'st_fts_1', parentId: null, position: 0, title: 'Dossier cartes 2026', done: false }],
   });
   const put = await owner.put(`/api/workspaces/${VIS_WS.slug}`, { revision: get.data.revision, doc });
   assert.equal(put.status, 200);
@@ -156,6 +156,25 @@ test('a task written through the doc-PUT funnel is findable via the route immedi
   /* Constant shape, no counts/totals (T-58-03). */
   assert.deepEqual(Object.keys(res.data), ['tasks']);
   assert.ok(res.data.tasks.length <= 30);
+  /* 65-04 (D-07): a PLAIN hit (no subtask title matches the terms) carries
+     no subtaskMatch field — the response grows only on subtask-title hits. */
+  assert.equal('subtaskMatch' in hit, false, 'plain hits must not carry a subtaskMatch field');
+});
+
+test('65-04: a hit whose terms also match a subtask title carries subtaskMatch (D-07)', async () => {
+  /* The FTS row itself matched via the TASK title ('elodie'); the handler's
+     folded substring scan over the task's subtask titles attributes the
+     'carte' token to the subtask and attaches its title as a plain string. */
+  const res = await owner.get(searchRoute('elodie carte'));
+  assert.equal(res.status, 200);
+  const hit = res.data.tasks.find(t => t.id === 't_fts_elodie');
+  assert.ok(hit, 'task must still be found');
+  assert.equal(hit.subtaskMatch, 'Dossier cartes 2026');
+  /* No deep-link surface: the hit is the parent task, same shape as before. */
+  assert.deepEqual(
+    Object.keys(hit).sort(),
+    ['id', 'key', 'projectId', 'snippet', 'subtaskMatch', 'title'].sort(),
+  );
 });
 
 test('implicit AND is enforced: one token missing → no hit', async () => {

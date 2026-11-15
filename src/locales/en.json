@@ -1649,6 +1649,7 @@
   "a11y.view": "View",
   "a11y.searchAll": "Search tasks, projects, people, files, and comments",
   "page.search.recent": "Recent:",
+  "page.search.viaSubtask": "via subtask:",
   "page.search.on": "on",
   "page.search.noMatch": "Nothing matches “{q}”. Check the spelling or try a broader term.",
   "page.overview.title": "Workspace overview",

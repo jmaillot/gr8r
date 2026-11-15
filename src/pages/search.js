@@ -48,6 +48,13 @@ export function pageSearch() {
         p ? `<span class="pj"><span class="pdot" style="--c:${pColor(p)}"></span>${esc(p.name)}</span>` : ''
       }${avStack(local?.assignees || [], 3, 'sm')}${
         snip ? `<span class="faint" style="font-size:12px;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(snip)}</span>` : ''
+      }${
+        /* 65-04 (D-07): the subtask-hint — the matched subtask title, highlighted
+           like the title span. The row keeps data-a="openTask": clicking opens the
+           parent task drawer, never a deep-link into the subtask. */
+        st.subtaskMatch
+          ? `<span class="faint" style="font-size:12px;flex-shrink:0">${esc(t('page.search.viaSubtask'))}</span><span class="tt">${hl(String(st.subtaskMatch), q)}</span>`
+          : ''
       }</div>`;
     })
     .join('');
