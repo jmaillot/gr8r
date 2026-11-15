@@ -153,6 +153,9 @@ export const SQLITE_SCHEMA = `
     created_at    integer not null,
     last_login_at integer,
     locale        text,
+    /* D-13 (Phase 67): Entra AAD object id, persisted at OIDC login —
+       server-only, never serialized to clients (mirrors server.js SCHEMA). */
+    oid           text,
     two_fa_enabled   integer not null default 0,
     two_fa_secret    text,
     two_fa_last_step integer not null default 0,

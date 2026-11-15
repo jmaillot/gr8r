@@ -2,13 +2,16 @@
    PURE module tests — no server, no imports in the module (subtree.js
    discipline, asserted). Shapes pinned against the 67-RESEARCH MS Learn
    payloads; the AAD mention shape (research assumption A1) is pinned by an
-   explicit assertion below. */
+   explicit assertion below. The module lives at the repo root beside
+   webhook-ssrf.js/webhook-retry.js (67-01): it is a SERVER-only module —
+   src/ is the browser bundle, whose i18n scan gate would (rightly) flag
+   its fixed English Teams copy as unlisted interface literals. */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { formatPayload, truncateToCap } from '../src/core/webhook-formats.js';
+import { formatPayload, truncateToCap } from '../webhook-formats.js';
 
 const CAP = 28672;
 const byteLen = s => Buffer.byteLength(s, 'utf8');
@@ -120,6 +123,6 @@ test('multi-byte text is measured in UTF-8 bytes, never code points', () => {
 });
 
 test('zero-import discipline: no import or require statements in the module', () => {
-  const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'core', 'webhook-formats.js'), 'utf8');
-  assert.equal(/^import |^const .*require\(/m.test(src), false, 'src/core/webhook-formats.js must have ZERO imports (subtree.js discipline)');
+  const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'webhook-formats.js'), 'utf8');
+  assert.equal(/^import |^const .*require\(/m.test(src), false, 'webhook-formats.js must have ZERO imports (subtree.js discipline)');
 });

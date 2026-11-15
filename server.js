@@ -65,7 +65,7 @@ import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
 import { ssrfOk } from './webhook-ssrf.js';
 import { nextAttemptMs, isDead } from './webhook-retry.js';
 import { diffWebhookEvents, buildEnvelope } from './src/core/webhook-events.js';
-import { formatPayload, truncateToCap } from './src/core/webhook-formats.js';
+import { formatPayload, truncateToCap } from './webhook-formats.js';
 /* [Phase 66, 66-01] The ONE template-record sanitizer/funnel sink — the
    same pure module mergeClientDoc and normalizeDoc run below (T-65-11
    discipline: one validator, several call sites). */
@@ -247,6 +247,11 @@ const SCHEMA = `
     created_at    integer not null,
     last_login_at integer,
     locale        text,
+    /* D-13 (Phase 67): the Entra AAD object id (oid claim), persisted at
+       OIDC login — the webhook formatter resolves real <at> mentions from
+       it (D-14). Server-only: nullable, additive, never serialized to any
+       client payload. */
+    oid           text,
     two_fa_enabled   integer not null default 0,
     two_fa_secret    text,
     two_fa_last_step integer not null default 0,
@@ -605,6 +610,9 @@ async function initDb() {
   // Phase 22 D-112: instance-operator privilege flag — def byte-identical to
   // the SCHEMA declaration (Pitfall P-B).
   await adapterEnsureColumn('users', 'is_instance_admin', 'integer not null default 0');
+  // Phase 67 (D-13): the Entra AAD object id on the user row — def
+  // byte-identical to the SCHEMA declaration (Pitfall P-B); idempotent boot.
+  await adapterEnsureColumn('users', 'oid', 'text');
   // Phase 67 (67-02): delivery ctx snapshot column — additive, byte-identical
   // to the SCHEMA declaration (Pitfall P-B); second boot is a no-op.
   await adapterEnsureColumn('webhook_deliveries', 'ctx', "text not null default ''");
@@ -4902,7 +4910,12 @@ async function handleApi(req, res, url) {
         ua,
         t, // a just-created session was seen at creation (D-25 need not apply to new rows)
       ]);
-      await db.run('update users set last_login_at = ? where id = ?', [t, row.id]);
+      /* D-13 (67-02): persist the AAD object id (oid claim) onto the user at
+         login — the SINGLE write site. Server-only: userPayload is a field
+         whitelist and never carries it, docForClient never sees the users
+         table — the oid is readable only by the webhook mention resolver. */
+      const oidClaim = typeof claims.oid === 'string' && claims.oid ? claims.oid : null;
+      await db.run('update users set last_login_at = ?, oid = ? where id = ?', [t, oidClaim, row.id]);
       await db.run('update oidc_identities set last_login_at = ? where issuer = ? and subject = ?', [t, OIDC.config.issuer, subject]);
       setSessionCookie(req, res, token);
       await logSecurity(row.id, 'sso_login');
