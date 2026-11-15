@@ -22,7 +22,13 @@
   2. A user can promote, demote or re-parent a subtask one level at a time; a change that would create a cycle or exceed the depth cap is rejected by the server with a localized error, and deleting a parent removes its descendants per the owner cascade ruling
   3. Completing a parent task auto-completes all its open descendants; parent progress is a computed rollup that never double-counts nested progress
   4. The tree shape survives every surface: mergeClientDoc normalization/removal sweeps, FTS projection (optional subtask titles, symmetric SQLite+pg), MSPDI export OutlineLevel, xlsx/CSV rows — with MCP writeDoc round-trip parity proven by tests
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+- [ ] 65-01-PLAN.md — Tracer: parentId round-trip through mergeClientDoc + shared subtree.js helpers + Wave-0 test harness (with D-01 storage-shape decision checkpoint)
+- [ ] 65-02-PLAN.md — Funnel authority: cycle/depth/dangling wholesale rejection, parent-done cascade, delete cascade, shared rollup refactor
+- [ ] 65-03-PLAN.md — View surfaces: drawer recursive tree, table indent + carets, board open-count badge, timeline indented bars
+- [ ] 65-04-PLAN.md — Restructure UX (promote/demote/re-parent one level, popover menus, pre-validation) + search subtask-hint + e2e spec
+- [ ] 65-05-PLAN.md — FTS subtask-title parity + backfill, nested export rows + MSPDI OutlineLevel, MCP parentId round-trip parity
 
 ### Phase 66: Task & Project Templates
 **Goal**: Users can save recurring task/project setups as workspace-wide templates and instantiate them in one action, dates derived from offsets.
