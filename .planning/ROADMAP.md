@@ -49,8 +49,18 @@ Plans:
   2. A user can create a project template with a starter task tree and instantiate it — the new project contains the template's task tree with dates derived from the offsets, through the normal doc-PUT (no fourth write path)
   3. Templates are workspace-wide and available via the template picker in the existing creation modals, in both EN and FR, with the tree/webhook UI lazy-loaded so the entry chunk stays under the 500 kB gate
 
-**Plans**: TBD
+**Plans**: 3 plans
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+- [ ] 66-01-PLAN.md — Tracer: template funnel substrate — per-kind whitelist sink (normalizeTemplatesData) in mergeClientDoc + normalizeDoc + MCP writeDoc, Wave-0 test/templates.test.mjs
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 66-02-PLAN.md — Instantiation builder (fresh ids, parentId remap, D-05–08 offset dates) + single doc-PUT CRUD actions
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 66-03-PLAN.md — Lazy template UI: Settings CRUD, picker in creation modals, Save-as-template ctx menu, drawer editor + i18n EN/FR + e2e + chunk gate
 
 ### Phase 67: Project Webhooks
 
