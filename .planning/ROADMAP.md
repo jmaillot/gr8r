@@ -111,6 +111,16 @@ Coverage: 16/16 requirements mapped ✓
 | 67. Project Webhooks | 0/0 | Not started | - |
 | 68. Backlog Polish | 0/0 | Not started | - |
 
+## Backlog
+
+### Phase 999.1: Follow-up — Phase 65 deferred UAT follow-up: Test 11 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 65 verification
+**Source phase:** 65
+**Deferred at:** 2026-11-15 during /gsd-verify-work 65 session completion
+**Follow-ups:**
+- [ ] Test 11: Vérifier les exports (xlsx/CSV en ordre d'arbre, MSPDI OutlineLevel/summary) — reporté à la fin du milestone, idéalement avec un import dans MS Project réel pour clore l'item A1 (deferred 2026-11-15)
+
 ## Standing Constraints (all phases)
 
 - Zero new runtime or dev dependencies (fetch/node:crypto/stdlib only)
