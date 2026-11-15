@@ -9,10 +9,10 @@
 
 ### Subtask Tree (SUB)
 
-- [ ] **SUB-01**: A task's subtasks render as a multi-level tree in list/table views — indent + collapse carets, board view shows a child-count badge (no nested kanban trees)
-- [ ] **SUB-02**: A task can be promoted/demoted/re-parented one level at a time; the server rejects cycles and depth overflow at the funnel; children follow their parent on delete per the owner cascade ruling
+- [x] **SUB-01**: A task's subtasks render as a multi-level tree in list/table views — indent + collapse carets, board view shows a child-count badge (no nested kanban trees)
+- [x] **SUB-02**: A task can be promoted/demoted/re-parented one level at a time; the server rejects cycles and depth overflow at the funnel; children follow their parent on delete per the owner cascade ruling
 - [ ] **SUB-03**: Completing a parent task auto-completes its open descendant subtasks (owner ruling: cascade auto-done); parent progress is a computed rollup (never double-counting nested progress)
-- [ ] **SUB-04**: The tree shape survives every existing surface: mergeClientDoc normalization/removal sweeps, FTS projection (optional subtask titles, symmetric SQLite+pg), MSPDI export `OutlineLevel`, xlsx/CSV rows — all with MCP writeDoc round-trip parity
+- [x] **SUB-04**: The tree shape survives every existing surface: mergeClientDoc normalization/removal sweeps, FTS projection (optional subtask titles, symmetric SQLite+pg), MSPDI export `OutlineLevel`, xlsx/CSV rows — all with MCP writeDoc round-trip parity
 
 ### Templates (TMPL)
 
@@ -53,10 +53,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01 | Phase 65 | Pending |
-| SUB-02 | Phase 65 | Pending |
+| SUB-01 | Phase 65 | Complete |
+| SUB-02 | Phase 65 | Complete |
 | SUB-03 | Phase 65 | Pending |
-| SUB-04 | Phase 65 | Pending |
+| SUB-04 | Phase 65 | Complete |
 | TMPL-01 | Phase 66 | Pending |
 | TMPL-02 | Phase 66 | Pending |
 | TMPL-03 | Phase 66 | Pending |

@@ -5,14 +5,14 @@ milestone_name: Automation & Productivity
 current_phase: 65
 current_phase_name: Subtask Tree
 status: executing
-stopped_at: "Phase 65 context amended (D-01/D-03: array + position)"
-last_updated: "2026-11-15T11:16:51.249Z"
-state_head: 69d51a073e464f6f5fe3de10133df199d8224320
+stopped_at: Completed 65-01-PLAN.md
+last_updated: "2026-11-15T11:25:37.270Z"
+state_head: 2d06d2e3113d08dca5ef70b47271de03012af2a0
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # STATE.md
@@ -26,8 +26,8 @@ progress:
 ## Current Position
 
 **Phase:** 65 (Subtask Tree) — EXECUTING
-**Plan:** 1 of 5
-**Status:** Executing Phase 65
+**Plan:** 2 of 5
+**Status:** Ready to execute
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
 - [ ] Phase 65: Subtask Tree
@@ -38,6 +38,11 @@ progress:
 ## Performance Metrics
 
 **Unit tests:** 1524 baseline (grow, never shrink) · **e2e:** 115/115 baseline (0 flaky) · **lint:** clean · **chunk gate:** 498.11 kB < 500 kB (~2 kB headroom — lazy-load all new UI) · **i18n:** EN+FR gate green
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 65 P65-01 | 302 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -67,9 +72,14 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T10:15:12.382Z
-**Stopped at:** Phase 65 context amended (D-01/D-03: array + position)
-**Resume file:** .planning/phases/65-subtask-tree/65-CONTEXT.md
+**Last session:** 2026-11-15T11:25:37.241Z
+**Stopped at:** Completed 65-01-PLAN.md
+**Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
 **Next step:** `/gsd-discuss-phase 65` or `/gsd-plan-phase 65` (with research).
+
+## Decisions
+
+- [Phase 65]: server.js imports src/core/subtree.js directly (ESM); read-side heal hooked in normalizeDoc alone since docForClient delegates
+- [Phase 65]: normalizeTaskSubtasks: self-referencing parentId cannot self-satisfy (x !== s check) and position requires Number.isSafeInteger

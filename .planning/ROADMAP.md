@@ -24,10 +24,10 @@
   3. Completing a parent task auto-completes all its open descendants; parent progress is a computed rollup that never double-counts nested progress
   4. The tree shape survives every surface: mergeClientDoc normalization/removal sweeps, FTS projection (optional subtask titles, symmetric SQLite+pg), MSPDI export OutlineLevel, xlsx/CSV rows — with MCP writeDoc round-trip parity proven by tests
 
-**Plans**: 5 plans
+**Plans**: 1/5 plans executed
 Plans:
 **Wave 1**
-- [ ] 65-01-PLAN.md — Tracer: parentId round-trip through mergeClientDoc + shared subtree.js helpers + Wave-0 test harness (with D-01 storage-shape decision checkpoint)
+- [x] 65-01-PLAN.md — Tracer: parentId round-trip through mergeClientDoc + shared subtree.js helpers + Wave-0 test harness (with D-01 storage-shape decision checkpoint)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 65-02-PLAN.md — Funnel authority: cycle/depth/dangling wholesale rejection, parent-done cascade, delete cascade, shared rollup refactor
@@ -106,7 +106,7 @@ Coverage: 16/16 requirements mapped ✓
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 65. Subtask Tree | 0/0 | Not started | - |
+| 65. Subtask Tree | 1/5 | In Progress|  |
 | 66. Task & Project Templates | 0/0 | Not started | - |
 | 67. Project Webhooks | 0/0 | Not started | - |
 | 68. Backlog Polish | 0/0 | Not started | - |
