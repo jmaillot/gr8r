@@ -64,6 +64,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
 import { ssrfOk } from './webhook-ssrf.js';
 import { nextAttemptMs, isDead } from './webhook-retry.js';
+import { diffWebhookEvents } from './src/core/webhook-events.js';
 /* [Phase 66, 66-01] The ONE template-record sanitizer/funnel sink — the
    same pure module mergeClientDoc and normalizeDoc run below (T-65-11
    discipline: one validator, several call sites). */
@@ -2499,6 +2500,38 @@ function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId }) {
     'pending',
     now(),
   ]);
+}
+
+/* WHK-02 emission: route diff events to the ACTIVE hooks subscribed to the
+   event, on the event's project. A doc PUT may span several projects, so
+   the project is resolved PER EVENT from the outgoing doc (a PUT-level
+   single projectId would misroute multi-project writes). Called INSIDE the
+   doc-PUT transaction — claims commit or roll back with the doc write.
+   Returns the number of claims made. */
+async function enqueueWebhookDeliveries(workspaceId, next, events) {
+  if (!Array.isArray(events) || !events.length) return 0;
+  const hooks = await db.all("select id, project_id, events from webhook_hooks where workspace_id = ? and status = 'active'", [workspaceId]);
+  if (!hooks.length) return 0;
+  const projectOf = new Map((Array.isArray(next?.data?.tasks) ? next.data.tasks : []).filter(t => t?.id).map(t => [t.id, t?.project]));
+  let claimed = 0;
+  for (const ev of events) {
+    const projectId = projectOf.get(ev.subjectId);
+    if (!projectId) continue;
+    for (const hook of hooks) {
+      if (hook.project_id !== projectId) continue;
+      let list = [];
+      try {
+        list = JSON.parse(hook.events);
+      } catch {
+        /* an unparseable filter subscribes to nothing */
+        list = [];
+      }
+      if (!Array.isArray(list) || !list.includes(ev.event)) continue;
+      const r = await enqueueWebhookDelivery({ hookId: hook.id, workspaceId, event: ev.event, subjectId: ev.subjectId });
+      claimed += r?.changes || 0;
+    }
+  }
+  return claimed;
 }
 
 /* Tracer envelope (67-02 lands the full formatter + 28 KB cap): a minimal
@@ -6278,7 +6311,18 @@ async function handleApi(req, res, url) {
            is deliberately post-commit), index writes must roll back with
            the doc write. */
         await syncTaskFts(scope, row.id, storedDoc, next);
-        return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t };
+        /* WHK-02 (Phase 67): webhook event diff + delivery claims, INSIDE
+           this same tx — both sides canonical (docFromClient returned
+           next; Pitfall 1). Claims commit or roll back with the doc write
+           (reminders_sent pattern). Fail-absent: a webhook error must
+           never fail the PUT. */
+        let webhookClaims = 0;
+        try {
+          webhookClaims = await enqueueWebhookDeliveries(row.id, next, diffWebhookEvents(storedDoc, next));
+        } catch (err) {
+          logWarn(`webhook enqueue: ${err.message}`);
+        }
+        return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t, webhookClaims };
       });
     } catch (err) {
       // SCOPE-04: the assignee write-guard rejects with an explicit 400 —
@@ -6295,7 +6339,7 @@ async function handleApi(req, res, url) {
     if (refusal.code === 'workspaceChanged') return fail(res, 409, 'workspaceChanged', 'Workspace changed elsewhere', { revision: refusal.revision });
     if (!outcome) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     {
-      const { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t } = outcome;
+      const { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t, webhookClaims } = outcome;
       logDocChanges(row, storedDoc, next, ctx.user?.name || ctx.user?.email || 'unknown');
       /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
          server delays nothing: errors logged, response already flushed. */
@@ -6304,6 +6348,11 @@ async function handleApi(req, res, url) {
          commit shape, gated on PUSH.enabled (VAPID presence) — never on
          MAILER.enabled (D-10: no digest suppression, D-11: same gate order). */
       if (PUSH.enabled && newNotifs.length) await sendPushFor(row, next, newNotifs);
+      /* P4-f webhook twin (Phase 67, WHK-02/WHK-03): delivery pass fired
+         POST-COMMIT and NEVER awaited into the response (T-67-04 DoS) —
+         a hanging hook endpoint delays nothing; errors are logged inside
+         the pass (fail-absent). Empty-claims edge skips the pass entirely. */
+      if (webhookClaims) runWebhookDeliveryPass().catch(err => logWarn(`webhook post-commit pass: ${err.message}`));
       /* After the commit succeeds: missing file at unlink time is success
          (idempotent); unlink errors are logged and swallowed — the doc write
          is already committed and must not be failed by a filesystem hiccup. */
