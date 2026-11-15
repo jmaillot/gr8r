@@ -5,14 +5,14 @@ milestone_name: Automation & Productivity
 current_phase: 65
 current_phase_name: Subtask Tree
 status: executing
-stopped_at: Completed 65-01-PLAN.md
-last_updated: "2026-11-15T11:25:37.270Z"
-state_head: 2d06d2e3113d08dca5ef70b47271de03012af2a0
+stopped_at: Completed 65-02-PLAN.md
+last_updated: "2026-11-15T11:48:15.473Z"
+state_head: 13d12970e57dfed29534171bea4e5d966196c472
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # STATE.md
@@ -26,7 +26,7 @@ progress:
 ## Current Position
 
 **Phase:** 65 (Subtask Tree) — EXECUTING
-**Plan:** 2 of 5
+**Plan:** 3 of 5
 **Status:** Ready to execute
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
@@ -43,6 +43,7 @@ progress:
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 65 P65-01 | 302 | 3 tasks | 4 files |
+| Phase 65 P65-02 | 14min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -72,8 +73,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T11:25:37.241Z
-**Stopped at:** Completed 65-01-PLAN.md
+**Last session:** 2026-11-15T11:48:15.440Z
+**Stopped at:** Completed 65-02-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -83,3 +84,5 @@ None.
 
 - [Phase 65]: server.js imports src/core/subtree.js directly (ESM); read-side heal hooked in normalizeDoc alone since docForClient delegates
 - [Phase 65]: normalizeTaskSubtasks: self-referencing parentId cannot self-satisfy (x !== s check) and position requires Number.isSafeInteger
+- [Phase 65]: 65-02: funnel tree gate runs BEFORE the lazy heal (heal re-roots self-parents — pre-heal validation is the only gate that can reject them wholesale); whole-array validateSubtree beside validateMove
+- [Phase 65]: 65-02: task-level completion cascade wired in applyPatch status:'done' — one site covers every completion surface; reopen cascades nothing (D-13)
