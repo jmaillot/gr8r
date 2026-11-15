@@ -554,6 +554,8 @@
   "a11y.selectTask": "Sélectionner {title}",
   "a11y.hideSubtasks": "Masquer les sous-tâches",
   "a11y.showSubtasks": "Afficher les sous-tâches",
+  "a11y.collapseSubtasks": "Réduire les sous-tâches imbriquées",
+  "a11y.expandSubtasks": "Développer les sous-tâches imbriquées",
   "a11y.taskTitle": "Titre de la tâche",
   "a11y.repeats": "Se répète {freq}",
   "a11y.moreActions": "Plus d’actions",

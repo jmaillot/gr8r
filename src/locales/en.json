@@ -553,6 +553,8 @@
   "a11y.selectTask": "Select {title}",
   "a11y.hideSubtasks": "Hide subtasks",
   "a11y.showSubtasks": "Show subtasks",
+  "a11y.collapseSubtasks": "Collapse nested subtasks",
+  "a11y.expandSubtasks": "Expand nested subtasks",
   "a11y.taskTitle": "Task title",
   "a11y.repeats": "Repeats {freq}",
   "a11y.moreActions": "More actions",

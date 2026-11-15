@@ -1142,6 +1142,13 @@ A.expandRow = el => {
   S.ui.openTasks[el.dataset.id] = !S.ui.openTasks[el.dataset.id];
   render();
 };
+/* Phase 65 (65-03 D-10): per-node collapse carets — a SESSION-ONLY S.ui map
+   keyed by subtask id, never persisted per user or in the doc. Shared by the
+   drawer checklist, the list/table subrows and the timeline. */
+A.toggleSubNode = el => {
+  S.ui.subOpenNodes[el.dataset.sid] = !S.ui.subOpenNodes[el.dataset.sid];
+  render();
+};
 
 /* attachments */
 A.rmAttach = el => {

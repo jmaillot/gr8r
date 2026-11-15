@@ -248,6 +248,15 @@ export function cascadeDoneIds(list, parentId) {
     .map(s => s.id);
 }
 
+/* SUB-03 companion (65-03): the leaf set of the flat array — the subtasks
+   WITHOUT descendants. The one definition the view counters (drawer header,
+   list chip, board badge, timeline counter) and rollupProgress share, so no
+   surface re-derives "leaf" locally. */
+export function leafEntries(list) {
+  const entries = (Array.isArray(list) ? list : []).filter(s => s && typeof s === 'object');
+  return entries.filter(s => !entries.some(x => x && x.parentId === s.id));
+}
+
 /* SUB-03: the leaf-only progress rollup — the ONE definition of "never
    double-count". Only subtasks WITHOUT descendants count toward the
    numerator/denominator (a parent's done state is implied by its leaves);
@@ -257,8 +266,7 @@ export function cascadeDoneIds(list, parentId) {
 export function rollupProgress(t, statusProgress) {
   if (t.status === 'done') return 100;
   const list = Array.isArray(t.subtasks) ? t.subtasks : [];
-  const entries = list.filter(s => s && typeof s === 'object');
-  const leaves = entries.filter(s => !entries.some(x => x && x.parentId === s.id));
+  const leaves = leafEntries(list);
   if (leaves.length) {
     return Math.round((leaves.filter(s => s.done).length / leaves.length) * 100);
   }

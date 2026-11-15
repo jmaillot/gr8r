@@ -133,6 +133,7 @@ export const S = {
     composer: null,
     editCell: null,
     openTasks: {},
+    subOpenNodes: {},
     collapsedGroups: {},
     calDate: iso(TODAY),
     calMode: 'month',

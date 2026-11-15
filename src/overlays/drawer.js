@@ -5,7 +5,8 @@ import { TODAY, ago, diffD, esc, fmtDate, modKey, parse, relDate } from '../core
 /* drawerHtml's task parameter is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { D, S, commentsOf, isOver, mem, pColor, proj, task, teamsList } from '../core/store.js';
+import { D, S, commentsOf, isOver, mem, pColor, proj, task, taskProg, teamsList } from '../core/store.js';
+import { leafEntries } from '../core/subtree.js';
 import { FT, av, avStack, filePrev, fileType, fileTypeName, fmtComment, lbl, progBar } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
 import { actExtraHtml, cellAssignee, cellDue, cellPrio, cellProject, cellStatus, verbLabel } from '../components/task-list.js';
@@ -14,7 +15,7 @@ import { popHtml, RECUR } from './popovers.js';
 /* The stored recur value's catalogue key. */
 const RECUR_KEY = Object.fromEntries(RECUR.map(x => [x.stored, x.key]));
 import { paletteHtml } from './palette.js';
-import { subtaskHtml } from '../features/subtasks.js';
+import { subtaskHtml, subTreeChecklistHtml } from '../features/subtasks.js';
 
 export function renderLayer() {
   const u = S.ui;
@@ -35,7 +36,11 @@ export function drawerHtml(t) {
   const p = proj(t.project);
   const u = S.ui;
   const cs = commentsOf(t.id);
-  const sd = t.subtasks.filter(s => s.done).length;
+  /* Phase 65 (65-03): the header counter is LEAF-ONLY — nested parents never
+     double-count (SUB-03 rollup rule); the bar reads the 65-02 rollup through
+     store.taskProg (status short-circuit and fallback preserved). */
+  const leaves = leafEntries(t.subtasks);
+  const lsd = leaves.filter(s => s.done).length;
   const acts = D().activity.filter(a => a.task === t.id);
   const tab = u.drawerTab;
   const prop = (icon, label, val) => `<dt>${ic(icon, 14)}${label}</dt><dd>${val}</dd>`;
@@ -101,8 +106,8 @@ export function drawerHtml(t) {
         <div class="rte"><div class="rte-body" id="d-desc" contenteditable="true" data-rte="${t.id}" data-ph="${tMsg('a11y.descPlaceholder')}" role="textbox" aria-multiline="true" aria-labelledby="d-desc-l">${t.desc}</div></div>
       </div>
 
-      <div class="dsec"><div class="dsec-h"><h3>${tMsg('modal.subtasks')}</h3><span class="cnt num">${sd}/${t.subtasks.length}</span>${t.subtasks.length ? `<span style="width:90px;display:flex">${progBar(Math.round((sd / t.subtasks.length) * 100), sd === t.subtasks.length ? 'green' : '')}</span>` : ''}</div>
-        ${t.subtasks.map(s => `<div class="subt ${s.done ? 'done' : ''}${fxc('added', s.id)}${fxc('done', s.id)}"><input type="checkbox" class="check" ${s.done ? 'checked' : ''} data-a="toggleSub" data-id="${t.id}" data-sid="${s.id}" aria-label="${s.done ? tMsg('a11y.subtaskReopen', { title: esc(s.title) }) : tMsg('a11y.subtaskComplete', { title: esc(s.title) })}"><button class="s" data-a="openSub" data-id="${t.id}" data-sid="${s.id}">${esc(s.title)}</button>${(() => { const due = s.due || t.due; return due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}" ${s.due ? '' : `data-tip="${esc(tMsg('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''; })()}${(() => { const st = s.start || t.start; return st ? `<span class="due" ${s.start ? '' : `data-tip="${esc(tMsg('page.subtask.inheritedStart'))}"`}>${ic('calendar-arrow-up', 12)}${relDate(st)}</span>` : ''; })()}${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : ''}<button class="ibtn ibtn-xs x" data-a="openSub" data-id="${t.id}" data-sid="${s.id}" aria-label="${tMsg('a11y.openSubtaskDetails')}" tabindex="-1">${ic('chevron-right', 14)}</button></div>`).join('')}
+      <div class="dsec"><div class="dsec-h"><h3>${tMsg('modal.subtasks')}</h3><span class="cnt num">${lsd}/${leaves.length}</span>${t.subtasks.length ? `<span style="width:90px;display:flex">${progBar(taskProg(t), lsd === leaves.length ? 'green' : '')}</span>` : ''}</div>
+        ${t.subtasks.length ? subTreeChecklistHtml(t, { fxc }) : ''}
         <div class="subt" style="color:var(--text-3)">${ic('plus', 15)}<input class="inline-in" id="d-sub" data-key-enter="addSub" data-id="${t.id}" placeholder="${tMsg('a11y.addSubtask')}" aria-label="${tMsg('a11y.addSubtask')}" style="font-size:13.5px"></div>
       </div>
 

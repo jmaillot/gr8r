@@ -1,9 +1,10 @@
 /* ---------- subtask detail view (inside the task drawer) ---------- */
-import { esc, relDate } from '../core/utils.js';
+import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
-import { mem } from '../core/store.js';
+import { S, mem } from '../core/store.js';
 import { av, avStack } from '../ui/helpers.js';
+import { orderedSiblings } from '../core/subtree.js';
 
 export function subtaskHtml(task, s) {
   const i = task.subtasks.indexOf(s);
@@ -30,4 +31,42 @@ export function subtaskHtml(task, s) {
       <button class="btn btn-sm btn-danger-ghost" data-a="rmSub" data-id="${task.id}" data-sid="${s.id}">${ic('trash-2', 13)}${t('act.delete')}</button>
     </div>
   </div>`;
+}
+
+/* =====================================================================
+   Phase 65 (65-03): the ONE recursive subtask-tree renderer — the drawer
+   checklist and the board card popover (D-11) share the exact same row
+   shape. Ordering is subtree.orderedSiblings alone — no per-surface
+   ordering logic (D-03). Collapse state is the session-only
+   S.ui.subOpenNodes map (D-10), keyed by subtask id, never persisted.
+   opt.fxc — the caller's flash-effect tagger (drawer passes shell/render's
+   fxc; the board popover omits it) — is injected rather than imported so
+   this module never reaches the render cycle.
+   ===================================================================== */
+export function subTreeChecklistHtml(t, opt = {}) {
+  const fx = opt.fxc || (() => '');
+  const openMap = S.ui.subOpenNodes || {};
+  const walk = (parentId, depth) =>
+    orderedSiblings(t.subtasks, parentId)
+      .map(s => {
+        const kids = orderedSiblings(t.subtasks, s.id);
+        const open = !!openMap[s.id];
+        const indent = depth ? `margin-left:${depth * 18}px;` : '';
+        const caret = kids.length
+          ? `<button class="ibtn ibtn-xs" data-a="toggleSubNode" data-id="${t.id}" data-sid="${s.id}" aria-expanded="${open}" aria-label="${open ? t('a11y.collapseSubtasks') : t('a11y.expandSubtasks')}" tabindex="-1">${ic(open ? 'chevron-down' : 'chevron-right', 13)}</button>`
+          : '';
+        const due = s.due || t.due;
+        const st = s.start || t.start;
+        const head =
+          `${caret}<input type="checkbox" class="check" ${s.done ? 'checked' : ''} data-a="toggleSub" data-id="${t.id}" data-sid="${s.id}" aria-label="${s.done ? t('a11y.subtaskReopen', { title: esc(s.title) }) : t('a11y.subtaskComplete', { title: esc(s.title) })}"><button class="s" data-a="openSub" data-id="${t.id}" data-sid="${s.id}">${esc(s.title)}</button>` +
+          (opt.compact
+            ? ''
+            : `${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}" ${s.due ? '' : `data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}${st ? `<span class="due" ${s.start ? '' : `data-tip="${esc(t('page.subtask.inheritedStart'))}"`}>${ic('calendar-arrow-up', 12)}${relDate(st)}</span>` : ''}${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : ''}<button class="ibtn ibtn-xs x" data-a="openSub" data-id="${t.id}" data-sid="${s.id}" aria-label="${t('a11y.openSubtaskDetails')}" tabindex="-1">${ic('chevron-right', 14)}</button>`);
+        return (
+          `<div class="subt ${s.done ? 'done' : ''}${fx('added', s.id)}${fx('done', s.id)}" data-ctx="sub" data-id="${t.id}" data-sid="${s.id}" style="${indent}">${head}</div>` +
+          (kids.length && open ? walk(s.id, depth + 1) : '')
+        );
+      })
+      .join('');
+  return walk(null, 0);
 }
