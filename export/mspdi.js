@@ -205,7 +205,18 @@ export function buildMspdi(model) {
   /* ---- summary flags (owner 2026-11-10): a row that parents child
      rows carries <Summary>1</Summary> — Project renders those tasks
      bold. Everything else is 0. ---- */
-  const summaryIds = new Set(rows.map(r => r?.parent).filter(Boolean));
+  /* [65-05] With nested rows the parent relation is positional: model rows
+     are a DFS walk, so a row's direct children IMMEDIATELY follow it — a row
+     is a Summary task iff the next row's depth is exactly one deeper (task
+     rows count as level -1, root subtask rows 0). This replaces the old
+     parent-id set, which could not distinguish two depth-0 siblings sharing
+     the task's row id. */
+  const summaryAt = new Set();
+  rows.forEach((r, i) => {
+    const d = typeof r?.depth === 'number' ? r.depth : -1;
+    const nd = typeof rows[i + 1]?.depth === 'number' ? rows[i + 1].depth : -1;
+    if (nd === d + 1) summaryAt.add(i);
+  });
 
   /* ---- schedule extremes for the project StartDate/FinishDate. ---- */
   let earliestStart = null;
@@ -221,8 +232,10 @@ export function buildMspdi(model) {
   /* ---- Tasks ---- */
   const tasksXml = [];
   let uid = 0;
+  let rowIndex65 = -1;
   for (const row of rows) {
     uid += 1;
+    rowIndex65 += 1;
     const isMilestone = false; /* model.rows carries tasks and child rows only */
     const { startISO, finishISO, minutes } = taskSchedule(row, fallbackStartISO);
     const start = formatDateTime(startISO, '08:00:00');
@@ -279,8 +292,15 @@ export function buildMspdi(model) {
         ? `<ConstraintType>4</ConstraintType><ConstraintDate>${start}</ConstraintDate>`
         : '';
 
+    /* 65-05 (SUB-04, Pattern 5): OutlineLevel rides the model's row depth —
+       a nested row at depth n emits n+1 (1-based; the existing contract
+       pins <OutlineLevel>1</OutlineLevel> on first-level child rows and is
+       preserved). Task rows emit nothing (top level, Project default 1).
+       Summary is the positional adjacency set computed above. */
+    const outline = typeof row.depth === 'number' ? `<OutlineLevel>${row.depth + 1}</OutlineLevel>` : '';
+
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${row.parent ? '<OutlineLevel>1</OutlineLevel>' : ''}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat>${manual}<Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${!row.parent && summaryIds.has(row.id) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat>${manual}<Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

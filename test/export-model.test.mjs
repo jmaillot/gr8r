@@ -104,6 +104,66 @@ test('default columns and rows omit description, comments and thread; toggles ad
   assert.equal(topRows(sub).length, topRows(def).length, 'children are not extra top rows');
 });
 
+test('65-05: nested rows walk the tree in (position, arrayIndex) order with per-level keys, parent ids and depth', () => {
+  const doc = {
+    members: [],
+    projects: [
+      {
+        id: 'p_tree',
+        key: 'tree',
+        name: 'Tree Project',
+        status: 'active',
+        lead: null,
+        members: [],
+        teams: [],
+        perms: {},
+      },
+    ],
+    tasks: [
+      {
+        id: 't_r',
+        project: 'p_tree',
+        key: 'TREE-1',
+        title: 'Root task',
+        status: 'todo',
+        priority: 'none',
+        assignees: [],
+        labels: [],
+        subtasks: [
+          /* Array order deliberately differs from position order (D-03). */
+          { id: 's_b', parentId: null, position: 1, title: 'Second root', done: false },
+          { id: 's_a2', parentId: 's_a', position: 0, title: 'Nested leaf', done: false },
+          { id: 's_a', parentId: null, position: 0, title: 'First root', done: true },
+        ],
+        deps: [],
+        order: 1,
+      },
+    ],
+    comments: [],
+  };
+  const m = build(doc, 'p_tree', { scope: 'all', options: { subtasks: true } });
+  /* DFS in (position, arrayIndex) per parentId group: s_a, its child, then s_b.
+     Row ids: depth-0 rows keep the CR-01 contract (the task's id — the MSPDI
+     UID map and assignment loop only see top-level rows), nested rows carry
+     the subtask's own stable id; `parent` always references the parent ROW's
+     id, so a nested row's parent is its depth-0 row's id (the task id). */
+  assert.deepEqual(
+    m.rows.map(r => [r.key, r.title, r.parent, r.depth, r.id]),
+    [
+      ['TREE-1', 'Root task', undefined, undefined, 't_r'],
+      ['TREE-1.1', 'First root', 't_r', 0, 't_r'],
+      ['TREE-1.1.1', 'Nested leaf', 't_r', 1, 's_a2'],
+      ['TREE-1.2', 'Second root', 't_r', 0, 't_r'],
+    ],
+  );
+  /* KPI exclusions hold: every nested row carries parent, topRows is untouched. */
+  assert.equal(m.kpis.total, 1);
+  assert.equal(topRows(m).length, 1);
+  /* The done root subtask's row keeps its own done flag (row math unchanged). */
+  const nestedParent = m.rows.find(r => r.key === 'TREE-1.1');
+  assert.equal(nestedParent.progress, 100);
+});
+
 test('child rows are excluded from kpis (D-54-10)', () => {
   const sub = build(makeDoc(), 'p_alpha', { scope: 'all', options: { subtasks: true } });
   assert.equal(sub.kpis.total, topRows(sub).length);

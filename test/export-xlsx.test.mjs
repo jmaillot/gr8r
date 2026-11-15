@@ -873,3 +873,23 @@ test('WR-01: the Timeline status column keeps the top-level row status — child
   assert.ok(barRow, 'the subtasked parent has a bar row on the Timeline');
   assert.equal(values.get('C' + barRow), parent.status, 'the status cell shows the parent status, not the last child status');
 });
+
+test('65-05: nested rows render on the Tasks sheet in model order (SUB-04)', async () => {
+  const doc = makeDoc();
+  const t = doc.tasks.find(x => x.id === 't_a9');
+  t.subtasks = [
+    { id: 's_c1', parentId: null, position: 0, title: 'Root child', done: false },
+    { id: 's_c2', parentId: 's_c1', position: 0, title: 'Nested child', done: false },
+  ];
+  const model = modelOf(doc, 'p_alpha', { options: { subtasks: true, descriptions: true, comments: true } });
+  const { parts } = await buildZip(model);
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(parts.get('xl/worksheets/sheet2.xml'), shared);
+  const rowOf = v => Number([...values.entries()].find(([, x]) => x === v)?.[0]?.slice(1));
+  const taskRow = rowOf('Subtasked task');
+  const rootRow = rowOf('ALPHA-9.1');
+  const nestedRow = rowOf('ALPHA-9.1.1');
+  assert.ok(taskRow > 0 && rootRow === taskRow + 1, 'the root subtask row directly follows its task');
+  assert.ok(nestedRow === rootRow + 1, 'the nested row directly follows its parent in model order');
+  assert.equal(values.get(`B${nestedRow}`), 'Nested child', 'the nested row carries its own title');
+});

@@ -116,3 +116,21 @@ test('static-mode Blob equivalent: Buffer from toCsv starts with the BOM and par
   const lines = text.replace(/^\uFEFF/, '').split('\r\n').filter(l => l !== '');
   assert.equal(lines.length, model.rows.length + 1, 'header plus one row per exported task');
 });
+
+test('65-05: nested rows appear in model order with per-level keys on the CSV (SUB-04)', () => {
+  const doc = makeDoc();
+  const t = doc.tasks.find(x => x.id === 't_a9');
+  t.subtasks = [
+    { id: 's_c1', parentId: null, position: 0, title: 'Root child', done: false },
+    { id: 's_c2', parentId: 's_c1', position: 0, title: 'Nested child', done: false },
+  ];
+  const m = buildExportModel(doc, 'p_alpha', { scope: 'all', options: { subtasks: true } }, { translate: k => k, labelName: id => 'L:' + id, now: NOW });
+  const lines = parseLines(toCsv(m));
+  const rowOf = key => lines.findIndex(l => l.startsWith(key + ';'));
+  const taskRow = rowOf('ALPHA-9');
+  const rootRow = rowOf('ALPHA-9.1');
+  const nestedRow = rowOf('ALPHA-9.1.1');
+  assert.ok(taskRow > 0 && rootRow === taskRow + 1, 'the root subtask row directly follows its task');
+  assert.ok(nestedRow === rootRow + 1, 'the nested row directly follows its parent in model order');
+  assert.ok(lines[nestedRow].includes('Nested child'), 'the nested row carries its own title');
+});

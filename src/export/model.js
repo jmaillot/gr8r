@@ -189,41 +189,65 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
        Owner request 2026-11-10: a subtask carries its parent's start and
        due — never blank, which made MS Project fall back to the PROJECT
        start on every subtask line. The parent's own values are already
-       resolved on `t` (the same fallback the writers apply to a row). */
+       resolved on `t` (the same fallback the writers apply to a row).
+       [Phase 65, 65-05 SUB-04] The emission is a recursive walk in
+       buildTree order — (position, arrayIndex) per parentId group,
+       depth-first — so nested rows appear in true hierarchy order. Row
+       identity per level: `key` gains a segment per level (PARENT.1.2),
+       `parent` is the parent ROW's id (the task id for roots, the parent
+       SUBTASK id for nested rows) and every row carries its `depth`
+       (0 for root subtask rows). The local import-free walk mirrors the
+       subtree.js comparator — this module stays dependency-free. */
     if (options.subtasks && Array.isArray(t.subtasks)) {
-      t.subtasks.forEach((s, i) => {
-        const done = !!s?.done;
-        /* D-55-5: subtasks carry their OWN assignees array — never the
-           hardcoded Unassigned scalars of Phase 54. */
-        const sids = Array.isArray(s?.assignees) ? s.assignees.filter(Boolean) : [];
-        const sjoined = sids.length
-          ? sids.map(id => memberName.get(id) || id).join(', ')
-          : translate('export.unassigned');
-        rows.push({
-          key: (t.key || '') + '.' + (i + 1),
-          title: s?.title || '',
-          status: translate('task.status.' + (done ? 'done' : 'todo')),
-          priority: translate('task.priority.none'),
-          assignees: sjoined,
-          assigneeName: sjoined,
-          assigneeIds: [...sids],
-          start: s.start || t.start || '',
-          due: t.due || '',
-          progress: done ? 100 : 0,
-          labels: '',
-          estimate: '',
-          description: options.descriptions ? plainText(s?.title) : undefined,
-          comments: options.comments ? 0 : undefined,
-          latestComment: options.comments ? '' : undefined,
-          thread: options.comments ? '' : undefined,
-          id: t.id,
-          statusId: done ? 'done' : 'todo',
-          priorityId: 'none',
-          deps: [],
-          archived: !!t.archived,
-          parent: t.id,
+      const emit = (parentId, parentKey, parentRowId, depth) => {
+        const kids = [];
+        for (let i = 0; i < t.subtasks.length; i++) {
+          const s = t.subtasks[i];
+          if (s && typeof s === 'object' && (s.parentId ?? null) === parentId) kids.push({ s, i });
+        }
+        kids.sort((a, b) => (a.s.position - b.s.position) || (a.i - b.i));
+        kids.forEach(({ s }, k) => {
+          const done = !!s?.done;
+          /* D-55-5: subtasks carry their OWN assignees array — never the
+             hardcoded Unassigned scalars of Phase 54. */
+          const sids = Array.isArray(s?.assignees) ? s.assignees.filter(Boolean) : [];
+          const sjoined = sids.length
+            ? sids.map(id => memberName.get(id) || id).join(', ')
+            : translate('export.unassigned');
+          const key = `${parentKey}.${k + 1}`;
+          rows.push({
+            key,
+            title: s?.title || '',
+            status: translate('task.status.' + (done ? 'done' : 'todo')),
+            priority: translate('task.priority.none'),
+            assignees: sjoined,
+            assigneeName: sjoined,
+            assigneeIds: [...sids],
+            start: s.start || t.start || '',
+            due: t.due || '',
+            progress: done ? 100 : 0,
+            labels: '',
+            estimate: '',
+            description: options.descriptions ? plainText(s?.title) : undefined,
+            comments: options.comments ? 0 : undefined,
+            latestComment: options.comments ? '' : undefined,
+            thread: options.comments ? '' : undefined,
+            /* Row id: depth-0 rows keep the CR-01 contract (the task's id —
+               the UID map and assignment loop only ever see top-level rows);
+               nested rows carry the subtask's own stable id so `parent`
+               references resolve to a unique row. */
+            id: depth === 0 ? t.id : (s.id ?? `${t.id}${key}`),
+            statusId: done ? 'done' : 'todo',
+            priorityId: 'none',
+            deps: [],
+            archived: !!t.archived,
+            parent: parentRowId,
+            depth,
+          });
+          emit(s.id, key, depth === 0 ? t.id : (s.id ?? `${t.id}${key}`), depth + 1);
         });
-      });
+      };
+      emit(null, t.key || '', t.id, 0);
     }
   }
 

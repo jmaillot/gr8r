@@ -490,3 +490,28 @@ test('multi-assignee MSPDI: the subtasked parent emits pairs on its OWN UID, the
   const pairsWithChildTaskUid = pairs.filter(([, t]) => t === 4);
   assert.equal(pairsWithChildTaskUid.length, 0, 'child rows never own an assignment pair');
 });
+
+test('65-05: OutlineLevel follows row depth; a nested subtask parent is a Summary task (SUB-04, A1)', () => {
+  const doc = makeMspdiDoc();
+  const host = doc.tasks.find(t => t.id === 't_x6');
+  host.subtasks = [
+    { id: 's_n1', parentId: null, position: 0, title: 'Root sub one', done: false },
+    { id: 's_n2', parentId: 's_n1', position: 0, title: 'Nested under one', done: false },
+    { id: 's_n3', parentId: null, position: 1, title: 'Root sub two', done: false },
+  ];
+  const out = buildMspdi(buildModel(doc, { subtasks: true }));
+  const one = taskSlice(out, 'Root sub one');
+  const nested = taskSlice(out, 'Nested under one');
+  const two = taskSlice(out, 'Root sub two');
+  /* A1 verified: OutlineLevel = row.depth + 1 — the EXISTING contract
+     (first-level child rows carry OutlineLevel 1) is preserved; a depth-1
+     row emits 2. Task rows emit nothing (top level). */
+  assert.ok(one.includes('<OutlineLevel>1</OutlineLevel>'), 'depth-0 row: OutlineLevel 1');
+  assert.ok(nested.includes('<OutlineLevel>2</OutlineLevel>'), 'depth-1 row: OutlineLevel 2');
+  assert.ok(two.includes('<OutlineLevel>1</OutlineLevel>'), 'second depth-0 row: OutlineLevel 1');
+  /* Positional Summary adjacency works at every depth. */
+  assert.ok(taskSlice(out, 'No dates task').includes('<Summary>1</Summary>'), 'the subtasked task is a Summary');
+  assert.ok(one.includes('<Summary>1</Summary>'), 'a nested subtask PARENT is a Summary task');
+  assert.ok(nested.includes('<Summary>0</Summary>'), 'a leaf subtask is not');
+  assert.ok(two.includes('<Summary>0</Summary>'), 'a childless subtask is not');
+});
