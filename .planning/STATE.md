@@ -4,15 +4,15 @@ milestone: v2.4
 milestone_name: Automation & Productivity
 current_phase: 65
 current_phase_name: Subtask Tree
-status: executing
-stopped_at: Completed 65-04-PLAN.md
-last_updated: "2026-11-15T13:07:03.411Z"
-state_head: c83fcf8e9a7c331bc7ae8d18fa9ddfd300975236
+status: verifying
+stopped_at: Completed 65-05-PLAN.md
+last_updated: "2026-11-15T13:36:47.158Z"
+state_head: da72898caafd5af735e470cc601ea76a1134c543
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # STATE.md
@@ -27,7 +27,7 @@ progress:
 
 **Phase:** 65 (Subtask Tree) — EXECUTING
 **Plan:** 5 of 5
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
 - [ ] Phase 65: Subtask Tree
@@ -46,6 +46,7 @@ progress:
 | Phase 65 P65-02 | 14min | 3 tasks | 10 files |
 | Phase 65 P65-03 | 33 | 3 tasks | 14 files |
 | Phase 65 P65-04 | 47 | 3 tasks | 18 files |
+| Phase 65 P65-05 | 21m | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -75,8 +76,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T13:07:03.377Z
-**Stopped at:** Completed 65-04-PLAN.md
+**Last session:** 2026-11-15T13:36:47.125Z
+**Stopped at:** Completed 65-05-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -91,3 +92,6 @@ None.
 - [Phase 65]: 65-03: one shared recursive tree renderer (subTreeChecklistHtml) for drawer/list/board-popover; collapse state in session-only S.ui.subOpenNodes
 - [Phase 65]: 65-03: subtask detail view split to a lazy chunk (61-02 remedy) to restore chunk-gate headroom; subtree.leafEntries is the shared leaf-count definition
 - [Phase 65]: 65-04: re-parent targets are the moved subtask's siblings only (deterministic one-level set, cannot cycle); subtaskMatch attribution = folded substring scan in the search handler; chunk-gate remedy moved restructure actions + tree renderer + subtask popovers into pre-warmed lazy chunks behind treeChecklist/subPop registries
+- [Phase 65]: 65-05: FTS folded subtask-title suffix computed once per task, fed to both dialects; ftsSweep rebuild uses the identical expression (byte-parity)
+- [Phase 65]: 65-05: MSPDI OutlineLevel = row.depth + 1 per the EXISTING pinned contract (first-level rows = 1, task rows emit nothing); A1 discrepancy recorded in the summary
+- [Phase 65]: 65-05: writeDoc did not ride mergeClientDoc — the shared validateSubtree gate + normalizeTaskSubtasks heal were added inside writeDoc (T-65-11); mcpStripMember fixed to the D-55-4 assignees arrays (T-65-13)

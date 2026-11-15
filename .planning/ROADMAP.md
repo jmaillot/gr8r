@@ -24,7 +24,7 @@
   3. Completing a parent task auto-completes all its open descendants; parent progress is a computed rollup that never double-counts nested progress
   4. The tree shape survives every surface: mergeClientDoc normalization/removal sweeps, FTS projection (optional subtask titles, symmetric SQLite+pg), MSPDI export OutlineLevel, xlsx/CSV rows — with MCP writeDoc round-trip parity proven by tests
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 Plans:
 **Wave 1**
 - [x] 65-01-PLAN.md — Tracer: parentId round-trip through mergeClientDoc + shared subtree.js helpers + Wave-0 test harness (with D-01 storage-shape decision checkpoint)
@@ -37,7 +37,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 65-04-PLAN.md — Restructure UX (promote/demote/re-parent one level, popover menus, pre-validation) + search subtask-hint + e2e spec
-- [ ] 65-05-PLAN.md — FTS subtask-title parity + backfill, nested export rows + MSPDI OutlineLevel, MCP parentId round-trip parity
+- [x] 65-05-PLAN.md — FTS subtask-title parity + backfill, nested export rows + MSPDI OutlineLevel, MCP parentId round-trip parity
 
 ### Phase 66: Task & Project Templates
 
@@ -106,7 +106,7 @@ Coverage: 16/16 requirements mapped ✓
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 65. Subtask Tree | 4/5 | In Progress|  |
+| 65. Subtask Tree | 5/5 | In Progress|  |
 | 66. Task & Project Templates | 0/0 | Not started | - |
 | 67. Project Webhooks | 0/0 | Not started | - |
 | 68. Backlog Polish | 0/0 | Not started | - |
