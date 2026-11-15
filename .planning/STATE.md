@@ -5,14 +5,14 @@ milestone_name: Automation & Productivity
 current_phase: 66
 current_phase_name: Task & Project Templates
 status: executing
-stopped_at: Completed 66-01-PLAN.md
-last_updated: "2026-11-15T17:01:27.551Z"
-state_head: c05531eb26f3894c6e3ace2e095dd082f6e4062e
+stopped_at: Completed 66-02-PLAN.md
+last_updated: "2026-11-15T17:30:31.929Z"
+state_head: 10522a0b718dd1c3e18c0c67cf97263de6e0dbc4
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # STATE.md
@@ -26,7 +26,7 @@ progress:
 ## Current Position
 
 **Phase:** 66 (Task & Project Templates) — EXECUTING
-**Plan:** 2 of 3
+**Plan:** 3 of 3
 **Status:** Ready to execute
 **Progress:** ▢▢▢▢ 0/4 phases complete
 
@@ -48,6 +48,7 @@ progress:
 | Phase 65 P65-04 | 47 | 3 tasks | 18 files |
 | Phase 65 P65-05 | 21m | 3 tasks | 11 files |
 | Phase 66 P01 | 13min | 3 tasks | 5 files |
+| Phase 66 P02 | 34min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -77,8 +78,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-15T17:01:27.435Z
-**Stopped at:** Completed 66-01-PLAN.md
+**Last session:** 2026-11-15T17:30:31.807Z
+**Stopped at:** Completed 66-02-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -98,3 +99,5 @@ None.
 - [Phase 65]: 65-05: writeDoc did not ride mergeClientDoc — the shared validateSubtree gate + normalizeTaskSubtasks heal were added inside writeDoc (T-65-11); mcpStripMember fixed to the D-55-4 assignees arrays (T-65-13)
 - [Phase 66]: 66-01: src/core/templates.js is the one template validator (sanitizeTemplate D-02 whitelist, per-kind bodies D-04/D-14, in-place subtask entries); its only import is the zero-import subtree.js so the embedded-tree gate reuses validateSubtree/normalizeTaskSubtasks
 - [Phase 66]: 66-01: normalizeTemplatesData hooked at 3 sites — mergeClientDoc (gate on, 400 inside tx), normalizeDoc (gate:false, heal-only read path), mcp.js writeDoc (toolError with stable code); D-03 rank renumber is idempotent
+- [Phase 66]: 66-02: instantiation = pure builder (instantiateTemplate) + pure landing (landInstantiation) + thin lazy-chunk actions — exactly one pushNow per mutation, push discipline pinned structurally + one real revision-bump funnel pin
+- [Phase 66]: 66-02: template actions ride a lazy prewarm chunk (main.js dynamic import) after a static import blew the 500 kB entry gate; templateUi.openEditor registry is stub-safe until 66-03

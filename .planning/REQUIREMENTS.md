@@ -17,8 +17,8 @@
 ### Templates (TMPL)
 
 - [x] **TMPL-01**: Users can create task templates with ordered subtask checklists and `dueOffsetDays` (never absolute dates); unknown fields are dropped by the template sanitizer
-- [ ] **TMPL-02**: Users can create project templates with starter task trees and instantiate them — the new project contains the template's task tree with dates derived from offsets
-- [ ] **TMPL-03**: Templates are workspace-wide (owner ruling: no per-template visibility); creation/edit lives in the existing creation modals via a template picker; instantiation goes through the normal doc-PUT (no fourth write path, no MCP route)
+- [x] **TMPL-02**: Users can create project templates with starter task trees and instantiate them — the new project contains the template's task tree with dates derived from offsets
+- [x] **TMPL-03**: Templates are workspace-wide (owner ruling: no per-template visibility); creation/edit lives in the existing creation modals via a template picker; instantiation goes through the normal doc-PUT (no fourth write path, no MCP route)
 
 ### Project Webhooks (WHK)
 
@@ -58,8 +58,8 @@
 | SUB-03 | Phase 65 | Complete |
 | SUB-04 | Phase 65 | Complete |
 | TMPL-01 | Phase 66 | Complete |
-| TMPL-02 | Phase 66 | Pending |
-| TMPL-03 | Phase 66 | Pending |
+| TMPL-02 | Phase 66 | Complete |
+| TMPL-03 | Phase 66 | Complete |
 | WHK-01 | Phase 67 | Pending |
 | WHK-02 | Phase 67 | Pending |
 | WHK-03 | Phase 67 | Pending |
