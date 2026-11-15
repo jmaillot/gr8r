@@ -34,9 +34,9 @@ test('172.32.0.1 passes — one step outside the 172.16/12 boundary', async () =
   assert.equal(r.ok, true);
 });
 
-test('172.15.255.255 is denied — one step inside the 172.16/12 lower edge', async () => {
+test('172.15.255.255 passes — one step below the 172.16/12 lower edge (block spans 172.16.0.0–172.31.255.255)', async () => {
   const r = await ssrfOk('https://host.example/hook', { lookup: resolve(['172.15.255.255']) });
-  assert.equal(r.ok, false);
+  assert.equal(r.ok, true);
 });
 
 test('IPv6 deny-list: ::1, unspecified, link-local, unique-local', async () => {
