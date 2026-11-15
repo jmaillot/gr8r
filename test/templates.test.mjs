@@ -9,7 +9,7 @@
    harness (test/subtask-tree.test.mjs structure). */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ADMIN, client, login, startServer } from './helpers/server.mjs';
+import { ADMIN, client, startServer } from './helpers/server.mjs';
 import {
   normalizeTemplatesData,
   sanitizeProjectBody,
