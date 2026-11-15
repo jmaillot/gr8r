@@ -37,6 +37,10 @@ A task's subtasks form a real multi-level tree (max 5 subtask levels) that users
 - **D-11:** Board card shows a count badge of open subtasks; tapping expands the checklist in the existing card popover pattern. No nested kanban (SUB-01).
 - **D-12:** Table/list views get the full indent + collapse caret tree; timeline/Gantt also renders subtask bars indented under the parent, collapsible — subtasks without dates inherit the parent's date range.
 
+### Cascade semantics (rulings pinned 2026-11-15, after research)
+- **D-13:** Reopening a completed parent leaves its descendants done — no re-cascade to open. Matches undo-minimalism; the user re-opens children individually if wanted. (Owner-confirmed; resolves the reopen-cascade open sub-question flagged in research.)
+- **D-14:** Cascade completion is symmetric at every level: completing a subtask that is itself a parent auto-completes its open children, exactly like top-level task completion (owner-confirmed).
+
 ### the agent's Discretion
 - Exact error-message keys and i18n wording (EN+FR same commit, per standing constraint).
 - Internal naming of tree-building helpers, validation function shape, and how the rollup `progressOf` is refactored to avoid double-counting nested progress.
