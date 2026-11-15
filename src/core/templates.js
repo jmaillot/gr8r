@@ -155,11 +155,11 @@ export function normalizeTemplatesData(data, uidFactory, opts = {}) {
       for (const tree of trees) {
         const verdict = validateSubtree(tree);
         if (!verdict.ok) {
-          const err = new Error(
-            verdict.code === 'subtaskCycle'
-              ? 'That change would create a subtask cycle'
-              : 'Subtasks cannot nest deeper than five levels',
-          );
+          /* the message carries ONLY the stable machine code — the client
+             translates subtaskCycle/subtaskDepth (ERR-01; both keys live in
+             the EN+FR catalogues) and the i18n scan gate keeps English prose
+             out of src/. mcp.js composes the human wording at its call site. */
+          const err = new Error(verdict.code);
           err.status = 400;
           err.code = verdict.code;
           throw err;
