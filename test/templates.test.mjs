@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ADMIN, client, startServer } from './helpers/server.mjs';
 import {
+  instantiateTemplate,
   normalizeTemplatesData,
   sanitizeProjectBody,
   sanitizeTaskBody,
@@ -447,6 +448,230 @@ test('funnel: a legal template PUT with embedded junk subtasks heals and persist
     assert.ok(subs[0].id, 'the id-less entry was healed with a generated id');
     assert.equal(subs[0].parentId, null);
     assert.equal(subs[1].position, 1);
+  } finally {
+    await server.stop();
+  }
+});
+
+/* =====================================================================
+   66-02 task 1 (TDD): instantiateTemplate — the pure builder. Fresh
+   ids everywhere (D-16), parentId remapped through the old→new map
+   (Pitfall 4 — no lazy-heal flattening), every date anchored to the
+   ONE captured instantiation day (D-05/D-07), neg/zero/missing offset
+   semantics (D-08), createProject/createTask row vocabulary.
+   ===================================================================== */
+
+/* deterministic prefix-aware factory: uidFactory(prefix) → prefix + n */
+const seqUid = () => {
+  let n = 0;
+  return prefix => prefix + ++n;
+};
+
+test('instantiateTemplate (project kind): one project row + one task row per tree entry, all ids fresh (D-16)', () => {
+  const tmpl = {
+    id: 'tplP',
+    kind: 'project',
+    name: 'Onboarding',
+    icon: 'rocket',
+    color: 'blue',
+    body: {
+      name: 'Onboarding',
+      description: 'Set the new hire up',
+      status: 'planning',
+      teams: ['t1', 42, null, 't2'],
+      tasks: [{ title: 'Setup' }, { title: 'Later' }],
+    },
+  };
+  const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01', () => 'ONB');
+  assert.ok(out.project, 'project kind returns a project row');
+  assert.equal(out.tasks.length, 2, 'one task row per template task tree entry');
+  assert.equal(out.project.id, 'p1');
+  assert.equal(out.project.key, 'ONB');
+  assert.equal(out.project.name, 'Onboarding');
+  assert.equal(out.project.desc, 'Set the new hire up');
+  assert.equal(out.project.status, 'planning');
+  assert.deepEqual(out.project.teams, ['t1', 't2']);
+  assert.equal(out.project.icon, 'rocket');
+  assert.equal(out.project.color, 'blue');
+  /* every id in the output differs from every template-era id (D-16) */
+  const ids = [out.project.id, ...out.tasks.map(t => t.id), ...out.tasks.flatMap(t => t.subtasks.map(s => s.id))];
+  assert.ok(!ids.includes('tplP'), 'no template id survives instantiation');
+  assert.equal(new Set(ids).size, ids.length, 'no id collisions');
+  /* task rows reference the NEW project id (createTask vocabulary) */
+  for (const tk of out.tasks) assert.equal(tk.project, out.project.id);
+});
+
+test('instantiateTemplate: every due anchors to the captured day — task AND subtask offsets are absolute (D-05/D-07)', () => {
+  const tmpl = {
+    id: 'tplD',
+    kind: 'project',
+    body: {
+      name: 'D',
+      tasks: [
+        {
+          title: 'Parent',
+          dueOffsetDays: 10,
+          startOffsetDays: 0,
+          subtasks: [
+            { id: 'sa', parentId: null, position: 0, title: 'A', dueOffsetDays: 3 },
+            { id: 'sb', parentId: 'sa', position: 1, title: 'B' },
+          ],
+        },
+      ],
+    },
+  };
+  const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01');
+  const tk = out.tasks[0];
+  assert.equal(tk.due, '2026-06-11', 'task due = today + 10');
+  assert.equal(tk.start, '2026-06-01', 'task start = today + 0');
+  const [a, b] = tk.subtasks;
+  assert.equal(a.due, '2026-06-04', 'subtask offset 3 anchors to the INSTANTIATION day, never the parent due (D-07)');
+  assert.ok(!('due' in b), 'missing offset produces NO due field (D-08)');
+});
+
+test('instantiateTemplate: negative/zero offsets pass straight through, no clamping (D-08)', () => {
+  const tmpl = {
+    id: 'tplN',
+    kind: 'project',
+    body: { name: 'N', tasks: [{ title: 'Past', dueOffsetDays: -2 }, { title: 'Today', dueOffsetDays: 0 }] },
+  };
+  const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01');
+  assert.equal(out.tasks[0].due, '2026-05-30');
+  assert.equal(out.tasks[1].due, '2026-06-01');
+});
+
+test('instantiateTemplate: subtask parentId values are remapped through the old→new map; ordering preserved (D-16/Pitfall 4)', () => {
+  const tmpl = {
+    id: 'tplM',
+    kind: 'project',
+    body: {
+      name: 'M',
+      tasks: [
+        {
+          title: 'T1',
+          subtasks: [
+            { id: 'old1', parentId: null, position: 0, title: 'Root A' },
+            { id: 'old2', parentId: 'old1', position: 1, title: 'Child of A' },
+            { id: 'old3', parentId: 'old2', position: 2, title: 'Grandchild' },
+          ],
+        },
+        { title: 'T2', subtasks: [{ id: 'old4', parentId: null, position: 0, title: 'Root B' }] },
+      ],
+    },
+  };
+  const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01');
+  const t1 = out.tasks[0];
+  const [na, nb, nc] = t1.subtasks;
+  assert.equal(na.parentId, null);
+  assert.equal(nb.parentId, na.id, 'child remapped to the NEW root id — the tree never flattens');
+  assert.equal(nc.parentId, nb.id);
+  assert.ok(![na.id, nb.id, nc.id].some(id => ['old1', 'old2', 'old3'].includes(id)), 'no template-era subtask id survives');
+  assert.deepEqual(t1.subtasks.map(s => s.position), [0, 1, 2], 'sibling ordering preserved');
+  assert.equal(out.tasks[1].subtasks[0].parentId, null);
+  /* stale/cross-task parent references land null (funnel-safe) */
+  const orphan = instantiateTemplate(
+    { id: 'x', kind: 'project', body: { name: 'X', tasks: [{ title: 'T', subtasks: [{ id: 'o', parentId: 'ghost', position: 0, title: 'B' }] }] } },
+    seqUid(),
+    '2026-06-01',
+  );
+  assert.equal(orphan.tasks[0].subtasks[0].parentId, null);
+});
+
+test('instantiateTemplate (task kind): one task row, subtasks regenerated + remapped, project ref null', () => {
+  const tmpl = {
+    id: 'tplT',
+    kind: 'task',
+    body: {
+      title: 'Weekly report',
+      notes: 'Friday',
+      priority: 'medium',
+      subtasks: [
+        { id: 'sa', parentId: null, position: 0, title: 'X', dueOffsetDays: 1 },
+        { id: 'sb', parentId: 'sa', position: 1, title: 'Y', dueOffsetDays: 5 },
+      ],
+    },
+  };
+  const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01');
+  assert.equal(out.project, null, 'task kind returns no project row — the caller assigns the ref');
+  assert.equal(out.tasks.length, 1);
+  const tk = out.tasks[0];
+  assert.equal(tk.project, null);
+  assert.equal(tk.title, 'Weekly report');
+  assert.equal(tk.notes, 'Friday');
+  assert.equal(tk.priority, 'medium');
+  assert.equal(tk.status, 'todo');
+  const [x, y] = tk.subtasks;
+  assert.equal(x.due, '2026-06-02');
+  assert.equal(y.due, '2026-06-06');
+  assert.equal(y.parentId, x.id);
+  assert.ok(![x.id, y.id].some(id => ['sa', 'sb'].includes(id)), 'subtask ids regenerated (D-16)');
+});
+
+test('instantiateTemplate: output rows carry the createProject/createTask field vocabulary (funnel gates accept unchanged)', () => {
+  const tmpl = {
+    id: 'tplV',
+    kind: 'project',
+    body: {
+      name: 'V',
+      description: 'd',
+      status: 'active',
+      teams: ['t1'],
+      tasks: [{ title: 'T', notes: 'n', priority: 'high', dueOffsetDays: 2, subtasks: [{ id: 's1', parentId: null, position: 0, title: 'S', done: true, note: 'nt' }] }],
+    },
+  };
+  const out = instantiateTemplate(tmpl, seqUid(), '2026-06-01', () => 'VX');
+  assert.deepEqual(Object.keys(out.project).sort(), ['color', 'desc', 'fav', 'icon', 'id', 'key', 'last', 'milestones', 'name', 'status', 'teams']);
+  const tk = out.tasks[0];
+  assert.deepEqual(Object.keys(tk).sort(), ['due', 'id', 'notes', 'order', 'priority', 'project', 'status', 'subtasks', 'title']);
+  const s = tk.subtasks[0];
+  assert.deepEqual(Object.keys(s).sort(), ['done', 'id', 'note', 'parentId', 'position', 'title']);
+  assert.equal(s.done, true, 'done carried through from the template body');
+});
+
+test('sanitizeProjectBody whitelists the embedded task tree with offsets (66-02 handoff from 66-01)', () => {
+  const out = sanitizeProjectBody({
+    name: 'P',
+    tasks: [
+      { title: 'T', notes: 'n', priority: 'high', dueOffsetDays: 3, startOffsetDays: 0, junk: 'x', subtasks: [{ id: 's1', parentId: null, position: 0, title: 'S', dueOffsetDays: 2, junk: 1 }] },
+      'junk-entry',
+      { title: 'No offsets' },
+    ],
+    notAnArray: 'keep-out',
+  });
+  assert.deepEqual(Object.keys(out).sort(), ['name', 'tasks']);
+  assert.equal(out.tasks.length, 2, 'non-object entries drop, real entries keep');
+  const [e1, e2] = out.tasks;
+  assert.deepEqual(Object.keys(e1).sort(), ['dueOffsetDays', 'notes', 'priority', 'startOffsetDays', 'subtasks', 'title']);
+  assert.equal(e1.dueOffsetDays, 3);
+  assert.equal(e1.startOffsetDays, 0);
+  assert.ok(!('junk' in e1));
+  assert.deepEqual(Object.keys(e1.subtasks[0]).sort(), ['done', 'dueOffsetDays', 'id', 'parentId', 'position', 'title']);
+  assert.ok(!('dueOffsetDays' in e2) && !('startOffsetDays' in e2), 'missing offsets stay absent');
+});
+
+test('funnel: a project template with an embedded task tree round-trips with offsets intact', async () => {
+  const { server, doc } = await workspaceWithTemplates([
+    {
+      id: 'tplProj',
+      kind: 'project',
+      name: 'Launch',
+      body: {
+        name: 'Launch',
+        description: 'd',
+        status: 'planning',
+        teams: ['t1'],
+        tasks: [{ title: 'T1', dueOffsetDays: 4, subtasks: [{ id: 's1', parentId: null, position: 0, title: 'S1', dueOffsetDays: 1 }] }],
+      },
+    },
+  ]);
+  try {
+    const tpl = doc?.data?.templates?.[0];
+    assert.ok(tpl, 'the project template survives');
+    assert.deepEqual(Object.keys(tpl.body).sort(), ['description', 'name', 'status', 'tasks', 'teams']);
+    const e = tpl.body.tasks[0];
+    assert.equal(e.dueOffsetDays, 4);
+    assert.equal(e.subtasks[0].dueOffsetDays, 1);
+    assert.equal(e.subtasks[0].parentId, null);
   } finally {
     await server.stop();
   }
