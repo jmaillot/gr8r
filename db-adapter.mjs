@@ -479,6 +479,49 @@ export async function tx(fn) {
    FTS token. */
 const stripTags = s => String(s ?? '').replace(/<[^>]+>/g, ' ');
 
+/* [Phase 65, 65-05 D-06] Subtask titles join the index text. Titles are
+   walked in buildTree order — (position, arrayIndex) per parentId group,
+   depth-first — by a local import-free walk (db-adapter mirrors the
+   subtree.js comparator rule; byte-parity is pinned by the FTS suites). */
+function orderedSubtaskTitles(t, fold) {
+  const list = (Array.isArray(t?.subtasks) ? t.subtasks : []).filter(
+    s => s && typeof s === 'object' && typeof s.title === 'string' && s.title,
+  );
+  const out = [];
+  const walk = parentId => {
+    const kids = [];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if ((s.parentId ?? null) === parentId) kids.push({ s, i });
+    }
+    kids.sort((a, b) => (a.s.position - b.s.position) || (a.i - b.i));
+    for (const { s } of kids) {
+      out.push(fold ? foldForSearch(s.title).text : s.title);
+      walk(s.id);
+    }
+  };
+  walk(null);
+  return out;
+}
+
+/* Cheap structure signature for the unchanged-check: RAW titles in tree
+   order — a retitle or a delete changes it, so the row re-indexes on the
+   task's next funnel write (D-08, no sweep). Empty subtree → '' — no
+   special case. */
+function subtaskTitleSignature(t) {
+  return orderedSubtaskTitles(t, false).join('\u0000');
+}
+
+/* The folded subtask-title suffix appended to the index body text —
+   computed ONCE per task and fed to BOTH dialects (symmetry rule:
+   byte-identical SQLite/pg parity, pinned by test/copy-sqlite-to-pg.test.mjs).
+   No hand-rolled normalization: the same foldForSearch the task title and
+   desc go through. */
+function foldedSubtaskSuffix(t) {
+  const folded = orderedSubtaskTitles(t, true);
+  return folded.length ? ' ' + folded.join(' ') : '';
+}
+
 /* D-11: the tokenizer is LOCKED at table-creation time (unicode61 +
    remove_diacritics 2 — "elodie" finds "Élodie"); changing it later
    requires dropping and rebuilding task_fts for every workspace.
@@ -531,7 +574,10 @@ export async function syncTaskFts(scope, wsId, storedDoc, next) {
       : scope.run('delete from task_fts where ws_id = ? and task_id = ?', [wsId, id]);
   const insert = (id, t) => {
     const foldedTitle = foldForSearch(t.title).text;
-    const foldedBody = foldForSearch(stripTags(t.desc)).text;
+    /* 65-05 (D-06): the folded subtask-title suffix is computed once here
+       and consumed by BOTH dialect branches below — one string, byte-identical
+       parity. */
+    const foldedBody = foldForSearch(stripTags(t.desc)).text + foldedSubtaskSuffix(t);
     return pg
       ? scope.run(
           `insert into task_search_projection (workspace_id, task_id, project_id, folded, projection)
@@ -552,7 +598,10 @@ export async function syncTaskFts(scope, wsId, storedDoc, next) {
   let moved = 0;
   for (const [id, t] of stored) {
     const nt = upcoming.get(id);
-    if (nt && nt.title === t.title && nt.desc === t.desc && nt.project === t.project) continue; // unchanged → index untouched (SEARCH-03 empty edge)
+    /* 65-05 (D-06/D-08, Pitfall 4): the unchanged-check also compares the
+       subtask-title signature — a retitle or delete of any subtask (at any
+       depth) re-indexes the row on the task's next funnel write. */
+    if (nt && nt.title === t.title && nt.desc === t.desc && nt.project === t.project && subtaskTitleSignature(nt) === subtaskTitleSignature(t)) continue; // unchanged → index untouched (SEARCH-03 empty edge)
     await remove(id);
     if (nt) await insert(id, nt);
     moved++;
@@ -618,7 +667,7 @@ export async function ftsSweep(wsId, doc) {
     await run('delete from task_search_projection where workspace_id = ?', [wsId]);
     for (const t of tasks) {
       const foldedTitle = foldForSearch(t.title).text;
-      const foldedBody = foldForSearch(stripTags(t.desc)).text;
+      const foldedBody = foldForSearch(stripTags(t.desc)).text + foldedSubtaskSuffix(t); // 65-05: same suffix as syncTaskFts insert — sweep parity
       await run(
         `insert into task_search_projection (workspace_id, task_id, project_id, folded, projection)
          values (?, ?, ?, ?, to_tsvector('simple', ?))
@@ -643,7 +692,7 @@ export async function ftsSweep(wsId, doc) {
         t.id,
         String(t.project ?? ''),
         foldForSearch(t.title).text,
-        foldForSearch(stripTags(t.desc)).text,
+        foldForSearch(stripTags(t.desc)).text + foldedSubtaskSuffix(t), // 65-05: same suffix as syncTaskFts insert — sweep parity
       ]);
     }
     await run(

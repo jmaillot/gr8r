@@ -102,6 +102,103 @@ test('operator-laden input never reaches MATCH: sanitized tokens only (D-13, T-5
   fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
 });
 
+/* ---------------- A2. subtask titles in the index (65-05, D-06/D-08) ---- */
+
+test('65-05: a task whose ONLY matchable text is a subtask title is found (D-06)', async () => {
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fts-subs-')), 'projects.db');
+  await adapter.connectDb({ dbPath });
+  await adapter.ensureSearchIndex();
+  const doc = {
+    data: {
+      tasks: [
+        {
+          id: 't_sub',
+          project: 'p1',
+          title: 'Parent opaque',
+          desc: '',
+          status: 'todo',
+          subtasks: [
+            { id: 's1', parentId: null, position: 0, title: 'Zorblat nested', done: false },
+            { id: 's2', parentId: 's1', position: 0, title: 'Deep leaf élodie', done: false },
+            { id: 's3', parentId: null, position: 1, title: 'Autre racine', done: false },
+          ],
+        },
+      ],
+    },
+  };
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', null, doc));
+
+  /* Title-only hits at depth 1 and depth 2. */
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('zorblat'))).map(h => h.task_id), ['t_sub']);
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('deep leaf'))).map(h => h.task_id), ['t_sub']);
+  /* Implicit AND across TWO different subtasks' titles. */
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('zorblat autre'))).map(h => h.task_id), ['t_sub']);
+  /* The parent's own text still matches; no cross-workspace bleed. */
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('opaque'))).map(h => h.task_id), ['t_sub']);
+  assert.deepEqual(await adapter.searchTasks('ws_other', searchTerms('zorblat')), []);
+
+  /* The index body carries the folded subtask titles in buildTree order —
+     (position, arrayIndex) per parentId group, depth-first: s1, s2 (its
+     child), then s3. Raw inspection of the stored row. */
+  const row = withDb(dbPath, db => db.prepare('select title, body from task_fts where task_id = ?').get('t_sub'));
+  assert.ok(row.body.includes('zorblat nested'), 'depth-1 title folded into the body');
+  assert.ok(row.body.includes('deep leaf elodie'), 'depth-2 title folded (accent folded)');
+  assert.ok(row.body.indexOf('zorblat nested') < row.body.indexOf('deep leaf elodie'), 'parent title precedes its child');
+  assert.ok(row.body.indexOf('deep leaf elodie') < row.body.indexOf('autre racine'), 'second root follows the first subtree');
+  assert.ok(!row.title.includes('zorblat'), 'the task title column is untouched');
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+});
+
+test('65-05: retitle and delete of a subtask reindex on the next sync (D-08, Pitfall 4)', async () => {
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fts-subs-')), 'projects.db');
+  await adapter.connectDb({ dbPath });
+  await adapter.ensureSearchIndex();
+  const doc = {
+    data: {
+      tasks: [
+        {
+          id: 't_sub',
+          project: 'p1',
+          title: 'Parent opaque',
+          desc: '',
+          status: 'todo',
+          subtasks: [
+            { id: 's1', parentId: null, position: 0, title: 'Zorblat nested', done: false },
+            { id: 's2', parentId: 's1', position: 0, title: 'Deep leaf élodie', done: false },
+          ],
+        },
+      ],
+    },
+  };
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', null, doc));
+
+  /* Task title/desc/project unchanged, ONLY a subtask retitle → the row must
+     be rewritten (the structure signature changed, Pitfall 4). Contentless
+     FTS5 reuses rowids on delete+insert of a single row, so the proof is the
+     BODY content, not the rowid. */
+  const retitled = JSON.parse(JSON.stringify(doc));
+  retitled.data.tasks[0].subtasks[1].title = 'Renamed feuille';
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', doc, retitled));
+  const bodyAfter = withDb(dbPath, db => db.prepare('select body from task_fts where task_id = ?').get('t_sub')).body;
+  assert.ok(bodyAfter.includes('renamed feuille'), 'the new subtask title is in the index');
+  assert.ok(!bodyAfter.includes('deep leaf'), 'the old subtask title is gone from the row');
+  assert.deepEqual(await adapter.searchTasks('ws1', searchTerms('deep')), [], 'old subtask title unindexed');
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('renamed feuille'))).map(h => h.task_id), ['t_sub']);
+
+  /* Deleting a subtask drops its title on the next funnel write (D-08). */
+  const pruned = JSON.parse(JSON.stringify(retitled));
+  pruned.data.tasks[0].subtasks = pruned.data.tasks[0].subtasks.filter(s => s.id !== 's2');
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', retitled, pruned));
+  assert.deepEqual(await adapter.searchTasks('ws1', searchTerms('renamed')), [], 'deleted subtask title dropped from the index');
+  assert.deepEqual((await adapter.searchTasks('ws1', searchTerms('zorblat'))).map(h => h.task_id), ['t_sub'], 'surviving subtree still indexed');
+
+  /* A byte-identical doc (same subtask signature) stays untouched. */
+  const rowidStable = withDb(dbPath, db => db.prepare('select rowid from task_fts where task_id = ?').get('t_sub')).rowid;
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws1', pruned, JSON.parse(JSON.stringify(pruned))));
+  assert.equal(withDb(dbPath, db => db.prepare('select rowid from task_fts where task_id = ?').get('t_sub')).rowid, rowidStable, 'unchanged tree → no rewrite');
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+});
+
 /* ---------------- B. real-server funnel + route + leak ----------------- */
 
 let server;
@@ -181,6 +278,21 @@ test('implicit AND is enforced: one token missing → no hit', async () => {
   const res = await owner.get(searchRoute('elodie zzzz'));
   assert.equal(res.status, 200);
   assert.equal(res.data.tasks.some(t => t.id === 't_fts_elodie'), false);
+});
+
+test('65-05: a search matching ONLY a subtask title returns the parent task (D-06/D-07)', async () => {
+  /* 'cartes 2026' matches only the subtask title 'Dossier cartes 2026' —
+     65-05 folded it into the index body, so the parent task is a hit; the
+     65-04 handler attributes the subtaskMatch hint from the same title. */
+  const res = await owner.get(searchRoute('cartes 2026'));
+  assert.equal(res.status, 200);
+  const hit = res.data.tasks.find(t => t.id === 't_fts_elodie');
+  assert.ok(hit, 'subtask-title-only terms must find the parent task');
+  assert.equal(hit.subtaskMatch, 'Dossier cartes 2026');
+  /* Implicit AND still holds: one token off a subtask title → no hit. */
+  const miss = await owner.get(searchRoute('cartes absentmot'));
+  assert.equal(miss.status, 200);
+  assert.equal(miss.data.tasks.some(t => t.id === 't_fts_elodie'), false);
 });
 
 test('BYTE-LEVEL leak test: a member querying a private task title gets zero occurrences in the body bytes (SEARCH-02)', async () => {

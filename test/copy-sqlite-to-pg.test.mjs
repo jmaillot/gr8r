@@ -22,6 +22,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import * as adapter from '../db-adapter.mjs';
+import { foldForSearch } from '../search-terms.mjs';
 import { dropPgSchema, ROOT, startServer, withDb, withPg } from './helpers/server.mjs';
 
 const PG_URL = process.env.POSTGRES_TEST_URL;
@@ -158,8 +160,7 @@ maybe('source immutability: source file hash is byte-identical after runs (D-14)
   }
 });
 
-maybe('no-secret-leak: child output never contains the connection string (T-45-09)', async () => {
-  const { dbPath, cleanup } = await buildSource();
+maybe('no-secret-leak: child output never contains the connection string (T-45-09)', async () => {  const { dbPath, cleanup } = await buildSource();
   try {
     await dropPgSchema(PG_URL);
     const first = await runCopy(dbPath);
@@ -171,4 +172,61 @@ maybe('no-secret-leak: child output never contains the connection string (T-45-0
   } finally {
     cleanup();
   }
+});
+
+/* 65-05 (D-06): byte-identical folded index text across backends. The same
+   two-level subtask fixture is synced through the adapter seam on SQLite and
+   on pg; the pg `folded` column must equal the SQLite row's title/body
+   composition byte for byte — the folded subtask-title suffix is computed
+   ONCE per task in db-adapter and fed to both dialects (symmetry rule). */
+maybe('FTS byte parity: identical folded text SQLite vs pg on a two-level subtask fixture (65-05, D-06)', async () => {
+  const doc = {
+    data: {
+      tasks: [
+        {
+          id: 't_par',
+          project: 'p1',
+          title: 'Élodie fiche carte',
+          desc: '<b>Livraison</b> rapide',
+          status: 'todo',
+          subtasks: [
+            { id: 's1', parentId: null, position: 0, title: 'Dossier cartes 2026', done: false },
+            { id: 's2', parentId: 's1', position: 0, title: 'Feuille Élodie', done: false },
+            { id: 's3', parentId: null, position: 1, title: 'Autre racine', done: false },
+          ],
+        },
+      ],
+    },
+  };
+
+  /* SQLite side: real temp db through the adapter, read the raw row. */
+  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'fts-parity-src-')), 'projects.db');
+  await adapter.connectDb({ dbPath });
+  assert.equal(adapter.backendKind, 'sqlite');
+  await adapter.ensureSearchIndex();
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws-par', null, doc));
+  const srow = withDb(dbPath, db => db.prepare('select title, body from task_fts where task_id = ?').get('t_par'));
+  await adapter.close();
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+
+  /* pg side: same doc, same seam. */
+  await adapter.connectDb({ dbUrl: PG_URL });
+  assert.equal(adapter.backendKind, 'pg');
+  await adapter.ensureSearchIndex();
+  await adapter.run('delete from task_search_projection where workspace_id = ?', ['ws-par']);
+  await adapter.run('delete from fts_meta where workspace_id = ?', ['ws-par']);
+  await adapter.tx(async scope => adapter.syncTaskFts(scope, 'ws-par', null, doc));
+  const prow = await adapter.get('select folded from task_search_projection where workspace_id = ? and task_id = ?', ['ws-par', 't_par']);
+  await adapter.close();
+
+  /* Byte-identical: pg folded === SQLite title + ' ' + body. */
+  assert.equal(prow.folded, `${srow.title} ${srow.body}`, 'pg folded text must be byte-identical to the SQLite row composition');
+  /* The subtask titles are IN the shared text, folded, in buildTree order. */
+  assert.ok(prow.folded.includes('dossier cartes 2026'), 'depth-1 subtask title folded in');
+  assert.ok(prow.folded.includes('feuille elodie'), 'depth-2 subtask title folded (accent folded)');
+  assert.ok(prow.folded.indexOf('dossier cartes 2026') < prow.folded.indexOf('feuille elodie'), 'parent title precedes child');
+  assert.ok(prow.folded.indexOf('feuille elodie') < prow.folded.indexOf('autre racine'), 'second root follows the first subtree');
+  /* And nothing but folding changed the words. */
+  const expectedSuffix = ['Dossier cartes 2026', 'Feuille Élodie', 'Autre racine'].map(x => foldForSearch(x).text).join(' ');
+  assert.ok(prow.folded.endsWith(expectedSuffix), 'the folded suffix rides the body verbatim');
 });
