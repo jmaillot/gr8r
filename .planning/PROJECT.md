@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-14 — v2.3 Consolidation & Hardening started (e2e suite 111/111, mobile tasks-table layout, VIEW-02 flaky)*
+*Last updated: 2026-11-15 — v2.3 Consolidation & Hardening SHIPPED (e2e 115/115, VIEW-02 deterministic, mobile tasks-table card stack)*
 
 
 <details>
@@ -90,30 +90,44 @@ Project machine); the mechanical suite is the verification of record. Full recor
   text should be reconciled at milestone close. Recorded as an accepted override in
   53-VERIFICATION.md.
 
-## Current Milestone: v2.3 Consolidation & Hardening
+<details>
+<summary>Milestone v2.3 Consolidation & Hardening — shipped record (2026-11-15)</summary>
 
-**Goal:** bring the whole verification suite back to 100% green and fix the mobile
-experience of the tasks table — no new features.
+**Shipped:** 3 phases (62–64), 9 plans, 7/7 requirements. E2E baseline repair (62):
+fail-closed webServer readiness contract race-free (`/api/health` sole readiness owner,
+`assertServerUp()` fail-fast in all 3 fixture paths), 9 drifted specs repaired via
+role-based queries + auto-retrying waits on the lazy Settings chunk (shared
+`openSettings`/`selectLanguage` helpers — no sleeps, no `networkidle`, no weakened
+assertions). VIEW-02 de-flake (63): root cause proven by trace evidence (coordinate-click
+dismissal + un-awaited debounced view PUT), replaced with semantic Escape dismissal +
+`waitForResponse` arm-before-act — passes deterministically at retries=0 (10× proof).
+Mobile tasks table (64): hide-the-button ruling shipped — Columns popover hidden ≤900px
+via generic `[data-pop='cols']` rule, card stack honestly usable (wrap-everything,
+zero-overflow at 390×844 proven red→green TDD), Option B band (641–900px), desktop
+byte-untouched. Close run: **115/115 e2e (0 failed, 0 flaky, VIEW-02 included),
+zero waivers**; unit 1524/1524, lint clean, chunk gate 498.11 kB < 500 kB (threshold
+untouched), EN+FR i18n green. Closeout: verified_closeout — milestone audit PASSED
+(7/7 requirements, 5/5 integration chains wired live, 0 open artifacts). Known notes:
+REQUIREMENTS E2E-03 "111/111" wording superseded by 115 (111 + 3 mobile + 1); WR-01
+CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full record:
+`milestones/v2.3-ROADMAP.md`, `milestones/v2.3-REQUIREMENTS.md`,
+`milestones/v2.3-phases/`; audit `v2.3-MILESTONE-AUDIT.md`.
 
-**Target features:**
-- CONS-01 — Repair the 9 failing e2e specs (`french-overflow.spec.mjs` ×7 +
-  `locale.spec.mjs:122`, lazy-chunk Settings role/timing drift from 56-01);
-  e2e suite 111/111 at close
-- CONS-02 — Mobile layout of the tasks table (truncated rendering with the
-  columns button; deferred at Phase 57 UAT, 2026-11-12)
-- CONS-03 — Stabilize the pre-existing flaky VIEW-02 e2e spec
-
-**Constraints (standing):** zero new runtime dependencies; standing gates intact
-(500 kB chunk gate, EN+FR i18n gate incl. server keys, lint clean, Phase 38
-suppression + no-double-send invariants); 1524-test unit suite green throughout.
-
-**Out of scope:** MS Project/xlsx human visual check 54-05 (owner-accepted),
-SMTP no-retry semantics (accepted Phase 27).
+</details>
 
 ### v2.3 milestone decisions (owner-validated 2026-11-14)
 
 - M-2.3 Consolidation first: owner chose a hardening milestone over new features
   (items 1, 2, 3 of the post-v2.2 debt scan only)
+- D-04 (Phase 64): the 641–900px band gets the card stack (not the desktop table)
+- D-04 (Phase 64): hide-the-button mobile contract — no second Playwright project,
+  no chunk-gate edits, zero waivers at close
+
+### Next Milestone Goals
+
+_Not yet defined — start with `/gsd-new-milestone`. Deferred backlog candidates are
+listed in ROADMAP.md (mobile hidden[] card fields, SMTP retry semantics, WR-01 CSS
+scoping, Nyquist reconciliation)._
 
 ## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 

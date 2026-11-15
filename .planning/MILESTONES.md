@@ -1,5 +1,22 @@
 # Milestones
 
+## v2.3 Consolidation & Hardening (Shipped: 2026-11-15)
+
+**Phases completed:** 3 phases (62–64), 9 plans
+**Closeout:** verified_closeout (2026-11-15) — milestone audit PASSED
+(`v2.3-MILESTONE-AUDIT.md`): 7/7 requirements satisfied, 5/5 cross-phase integration
+chains wired live, 0 conflicts, 0 open artifacts. Zero waivers at close.
+
+**Key accomplishments:**
+- E2E readiness contract race-free: `/api/health` is the sole readiness owner, `assertServerUp()` is a fail-fast single fetch wired into all three fixture paths — zero ECONNREFUSED 127.0.0.1:4317, `reuseExistingServer`/retries/`gracefulShutdown` untouched
+- The 9 drifted specs (french-overflow ×7 + locale:122) repaired against the lazy-chunk Settings contract via role-based queries (native `<select>` by its combobox role) and auto-retrying waits; shared `openSettings()`/`selectLanguage` helpers in setup.mjs so exactly one place knows the lazy-chunk contract
+- VIEW-02 flake root cause proven with trace evidence (coordinate-click popover dismissal + un-awaited debounced `persistLiveView` PUT) and fixed at both sites: semantic Escape dismissal + `waitForResponse` arm-before-act — deterministic at retries=0 (10× repeat proof)
+- Mobile hide-the-button contract: Columns popover hidden ≤900px by a generic `[data-pop='cols']` rule in the existing 900px tier; Option B band (641–900px card stack); desktop untouched (projects-table/saved-views specs green unmodified)
+- Honestly usable card stack: wrap-everything CSS, zero horizontal overflow at 390×844 proven red→green by TDD, long-task truncation suite, toolbar flex-shrink fix (mode tabs were clipped at 390px); card template polish under the 500 kB chunk gate (498.11 kB)
+- Close run: **115/115 e2e passed (6.9m), 0 failed, 0 flaky, VIEW-02 included**, unit 1524/1524, lint clean, chunk gate 498.11 kB < 500 kB (threshold untouched), EN+FR i18n green — zero waivers, zero D-16 fixes needed
+
+---
+
 ## v2.2 Notifications, Search & Delivery (Shipped: 2026-11-14)
 
 **Phases completed:** 6 phases, 19 plans, 14 tasks

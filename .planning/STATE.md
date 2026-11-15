@@ -1,10 +1,10 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.3
-milestone_name: Consolidation & Hardening
-current_phase: 64
-status: completed
-stopped_at: Phase 64 complete — all phases complete
+milestone: none
+milestone_name: ""
+current_phase: none
+status: milestone_complete
+stopped_at: v2.3 shipped 2026-11-15 (verified_closeout, audit passed) — next milestone not yet defined
 last_updated: "2026-11-15T08:29:20.411Z"
 last_activity: 2026-11-15
 last_activity_desc: Phase 64 complete
@@ -24,7 +24,7 @@ progress:
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core Value:** simple, predictable access + a workspace that reaches you (push, search,
 dashboards) without breaking the zero-dependency discipline
-**Current Focus:** Phase 64 — Mobile Tasks Table & Suite Green
+**Current Focus:** none — v2.3 shipped 2026-11-15; next milestone pending `/gsd-new-milestone`
 2026-11-14): 9 failing e2e specs, VIEW-02 flake, mobile tasks-table layout. No features.
 
 ## Current Position
