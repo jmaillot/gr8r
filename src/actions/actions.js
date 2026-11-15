@@ -6,7 +6,7 @@ import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale
 import { ASSIGNEE_CAP, DEFAULT_OPTIONS, PR, PSTAT, LB } from '../core/constants.js';
 /* Phase 65 (65-01): subtask-tree ordering — new subtasks are born with
    parentId:null and the next free position (D-01/D-02/D-03). */
-import { nextPosition } from '../core/subtree.js';
+import { cascadeDoneIds, descendantsOf, nextPosition } from '../core/subtree.js';
 import { mergeNotifPrefs, setLocalNotifPrefs } from '../core/notifPrefs.js';
 import {
   D,
@@ -212,6 +212,17 @@ export function applyPatch(t, patch) {
         t.prevStatus = old;
         logAct('completed', t, {});
         fxSet({ done: t.id });
+        /* [Phase 65, 65-02 D-14] Task-level completion cascades to every open
+           subtask at every level — same rule as subtask-parent completion.
+           D-13: reopening (any non-done status) cascades nothing. */
+        const subs65 = Array.isArray(t.subtasks) ? t.subtasks : [];
+        for (const sid of cascadeDoneIds(subs65, null)) {
+          const d = subs65.find(x => x.id === sid);
+          if (!d || d.done) continue;
+          d.done = true;
+          fxSet({ done: d.id });
+          logAct('completedSubtaskOn', t, { kind: 'quoted', value: d.title });
+        }
       } else logAct('moved', t, { kind: 'statusMoved', from: old, to: nv });
       /* P4-e: a status change notifies the task's watchers
          (author excluded inside taskWatchers/notifyMembers). */
@@ -1088,12 +1099,29 @@ A.toggleSub = el => {
   mutate(() => {
     s.done = !s.done;
     logAct(s.done ? 'completedSubtaskOn' : 'reopenedSubtaskOn', t, { kind: 'quoted', value: s.title });
+    /* [Phase 65, 65-02 D-14] Cascade completion is symmetric at every level:
+       completing a subtask that is itself a parent auto-completes its open
+       descendants — same rule as top-level task completion. D-13: the reopen
+       branch above deliberately does nothing to descendants (undo-minimalism
+       — the user reopens children individually). */
+    if (s.done) {
+      for (const sid of cascadeDoneIds(t.subtasks, s.id)) {
+        const d = t.subtasks.find(x => x.id === sid);
+        if (!d || d.done) continue;
+        d.done = true;
+        fxSet({ done: d.id });
+        logAct('completedSubtaskOn', t, { kind: 'quoted', value: d.title });
+      }
+    }
   });
 };
 A.rmSub = el => {
   const t = task(el.dataset.id);
   mutate(() => {
-    t.subtasks = t.subtasks.filter(x => x.id !== el.dataset.sid);
+    /* [Phase 65, 65-02 SUB-02] Children follow parent: the kill-set is the
+       target plus every transitive descendant — never an orphaned entry. */
+    const kill = new Set(descendantsOf(t.subtasks, el.dataset.sid).map(s => s.id).concat(el.dataset.sid));
+    t.subtasks = t.subtasks.filter(x => !kill.has(x.id));
   });
 };
 KEY.addSub = el => {

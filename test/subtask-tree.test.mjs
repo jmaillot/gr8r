@@ -476,6 +476,29 @@ test('rollupProgress: status done short-circuits to 100; empty/absent subtasks h
   assert.equal(rollupProgress({ status: 'weird' }, SP), 0);
 });
 
+/* ---------- 65-02 cascade wiring: the client actions consume the pure helpers ---------- */
+
+/* actions.js touches the DOM at module scope, so its wiring is pinned by the
+   house static-extraction pattern (same style as error-codes.test.mjs reads
+   server.js) — the behavior itself is pinned by the pure tests above. */
+test('actions wiring: toggleSub and task completion consume cascadeDoneIds; rmSub kills the subtree', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/actions/actions.js', import.meta.url), 'utf8');
+  const toggle = src.slice(src.indexOf('A.toggleSub'), src.indexOf('A.rmSub'));
+  const rm = src.slice(src.indexOf('A.rmSub'), src.indexOf('KEY.addSub'));
+  /* completing cascades; the reopen branch must NOT touch descendants (D-13) */
+  assert.match(toggle, /cascadeDoneIds\(/, 'toggleSub must consult the D-14 cascade');
+  assert.ok(
+    toggle.indexOf('cascadeDoneIds') > toggle.indexOf('if (s.done) {'),
+    'the cascade must live on the complete branch only (D-13: reopen cascades nothing)',
+  );
+  /* task-level completion cascades from the root (D-14 at the task level) */
+  assert.match(src, /cascadeDoneIds\((\w+),\s*null\)/, 'task completion must cascade from the null root');
+  /* rmSub removes the target AND all transitive descendants */
+  assert.match(rm, /descendantsOf\(/, 'rmSub must build its kill-set from descendantsOf');
+  assert.match(rm, /filter\(/, 'rmSub must filter the flat array by the kill-set');
+});
+
 /* ---------- reserved for later plans (placeholders, do not fill in 65-01) ---------- */
 
 /* 65-05: FTS subtask-title parity (SQLite + pg), MSPDI OutlineLevel depth
