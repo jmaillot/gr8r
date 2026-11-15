@@ -496,3 +496,36 @@ test('multi-assignee (d): subtask rows carry their OWN assignees arrays (D-55-5)
   assert.equal(child.assignees, 'Cal Three');
   assert.equal(child.key, 'MA-1.1', 'the child stays a child row, keyed under its parent');
 });
+
+/* ---------- Phase 65 (65-02 SUB-03): the leaf-only progress rollup ---------- */
+
+test('taskProgress is leaf-only: a done root parent with 2 open leaf children reads 0 (no double-count)', () => {
+  const t = {
+    status: 'todo',
+    subtasks: [
+      { id: 'r', parentId: null, done: true },
+      { id: 'c1', parentId: 'r', done: false },
+      { id: 'c2', parentId: 'r', done: false },
+    ],
+  };
+  assert.equal(taskProgress(t), 0);
+});
+
+test('taskProgress matches the subtree rollupProgress rule on a nested fixture (deliberate-duplicate equivalence)', async () => {
+  const { rollupProgress } = await import('../src/core/subtree.js');
+  const t = {
+    status: 'progress',
+    subtasks: [
+      { id: 'a', parentId: null, done: false },
+      { id: 'a1', parentId: 'a', done: true },
+      { id: 'a2', parentId: 'a', done: false },
+      { id: 'b', parentId: null, done: true },
+      { id: 'b1', parentId: 'b', done: false },
+    ],
+  };
+  /* leaves are a1(done), a2(open), b1(open) → 1/3 → 33 */
+  assert.equal(taskProgress(t), 33);
+  assert.equal(taskProgress(t), rollupProgress(t, { backlog: 0, todo: 5, progress: 45, review: 80 }));
+  assert.equal(taskProgress({ status: 'done', subtasks: [] }), 100);
+  assert.equal(taskProgress({ status: 'todo' }), 5);
+});

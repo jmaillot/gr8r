@@ -43,8 +43,16 @@ const STATUS_PROGRESS = { backlog: 0, todo: 5, progress: 45, review: 80, done: 1
 
 export function taskProgress(t) {
   if (t.status === 'done') return 100;
-  if (Array.isArray(t.subtasks) && t.subtasks.length) {
-    return Math.round((t.subtasks.filter(s => s && s.done).length / t.subtasks.length) * 100);
+  /* [Phase 65, 65-02 SUB-03] Leaf-only rollup — a subtask with descendants
+     contributes nothing itself, so nested parents are never double-counted
+     alongside their leaves. Local copy of subtree.rollupProgress's RULE
+     (this module must stay import-free; the equivalence test in
+     test/export-model.test.mjs pins the match against the shared module). */
+  const list = Array.isArray(t.subtasks) ? t.subtasks : [];
+  const entries = list.filter(s => s && typeof s === 'object');
+  const leaves = entries.filter(s => !entries.some(x => x && x.parentId === s.id));
+  if (leaves.length) {
+    return Math.round((leaves.filter(s => s.done).length / leaves.length) * 100);
   }
   return STATUS_PROGRESS[t.status] || 0;
 }

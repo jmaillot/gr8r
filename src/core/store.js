@@ -3,6 +3,7 @@ import { TODAY, diffD, iso, parse, uid } from './utils.js';
 import { t } from './i18n.js';
 import { PCOLORS, TEAMS_SEED } from './constants.js';
 import { getLocalNotifPrefs } from './notifPrefs.js';
+import { rollupProgress } from './subtree.js';
 import { api } from './api.js';
 
 export const STORE_KEY = 'projects.v2';
@@ -494,9 +495,13 @@ export function progressOf(pid) {
   return Math.round((ts.filter(t => t.status === 'done').length / ts.length) * 100);
 }
 export function taskProg(t) {
-  if (t.status === 'done') return 100;
-  if (t.subtasks.length) return Math.round((t.subtasks.filter(s => s.done).length / t.subtasks.length) * 100);
-  return { backlog: 0, todo: 5, progress: 45, review: 80 }[t.status] || 0;
+  /* [Phase 65, 65-02 SUB-03] Delegates to the ONE leaf-only rollup definition
+     in subtree.js: only subtasks without descendants count, so a nested
+     parent is never double-counted alongside its leaves. The status done
+     short-circuit and the STATUS_PROGRESS fallback shape are preserved
+     inside the helper (store.js may import the DOM-free module — model.js
+     keeps its own deliberate copy, equivalence-tested). */
+  return rollupProgress(t, { backlog: 0, todo: 5, progress: 45, review: 80 });
 }
 
 /* ---------- activity + notification helpers ---------- */

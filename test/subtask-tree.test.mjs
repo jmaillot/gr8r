@@ -497,6 +497,9 @@ test('actions wiring: toggleSub and task completion consume cascadeDoneIds; rmSu
   /* rmSub removes the target AND all transitive descendants */
   assert.match(rm, /descendantsOf\(/, 'rmSub must build its kill-set from descendantsOf');
   assert.match(rm, /filter\(/, 'rmSub must filter the flat array by the kill-set');
+  /* store.js taskProg delegates to the single leaf-only rollup definition */
+  const storeSrc = fs.readFileSync(new URL('../src/core/store.js', import.meta.url), 'utf8');
+  assert.match(storeSrc, /rollupProgress/, 'taskProg must delegate to subtree.rollupProgress (one definition, SUB-03)');
 });
 
 /* ---------- reserved for later plans (placeholders, do not fill in 65-01) ---------- */
