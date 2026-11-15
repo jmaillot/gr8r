@@ -130,6 +130,7 @@ test('EVENT_FIELDS is a frozen whitelist for every event; buildEnvelope is the s
   const ctx = {
     taskId: 't1',
     title: 'T',
+    status: 'todo',
     secretField: 'must-not-leak',
     projectName: 'P',
     projectId: 'p1',

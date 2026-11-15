@@ -491,13 +491,18 @@ const SCHEMA = `
      status is written only AFTER the HTTP request returned 2xx. Retention
      D-07: rows older than 7 days are purged by the delivery pass.
      pg twin: db-adapter.mjs SQLITE_SCHEMA + PG_CONFLICT_TARGETS
-     webhook_deliveries '(dedup_key)'. */
+     webhook_deliveries '(dedup_key)'.
+     'ctx' (67-02): the diff-time event snapshot + D-03 context trio as
+     JSON — the envelope is built from THIS at delivery time, so
+     task.deleted carries the last-known title and a 40 KB comment body
+     truncates from the original text (the doc may have moved on). */
   create table if not exists webhook_deliveries (
     id               text primary key,
     workspace_id     text not null,
     hook_id          text not null,
     event            text not null,
     dedup_key        text not null unique,
+    ctx              text not null default '',
     payload_hash     text not null default '',
     attempt          integer not null default 0,
     status           text not null default 'pending',
@@ -599,6 +604,9 @@ async function initDb() {
   // Phase 22 D-112: instance-operator privilege flag — def byte-identical to
   // the SCHEMA declaration (Pitfall P-B).
   await adapterEnsureColumn('users', 'is_instance_admin', 'integer not null default 0');
+  // Phase 67 (67-02): delivery ctx snapshot column — additive, byte-identical
+  // to the SCHEMA declaration (Pitfall P-B); second boot is a no-op.
+  await adapterEnsureColumn('webhook_deliveries', 'ctx', "text not null default ''");
   await db.run('create unique index if not exists workspaces_slug_idx on workspaces(slug)');
 }
 
@@ -2230,6 +2238,27 @@ async function runReminderPass({ now: at = new Date() } = {}) {
               await updateDoc(ws.id, d => {
                 d.data.notifs.push(notif);
               });
+              /* WHK-02 (67-02): due.reminder is the SECOND webhook emission
+                 site. The webhook claim rides THIS same transaction, gated on
+                 the reminders_sent dedup above — a reminder that already
+                 claimed cannot re-claim (Pitfall 3: no double-fire between
+                 the reminder dedup and the webhook claim). The webhook dedup
+                 key itself carries (task, offset, due), so multiple assignees
+                 on one task still produce exactly ONE delivery per hook.
+                 Fail-absent: webhook plumbing never fails the reminder. */
+              await emitWebhookEvent(ws.id, {
+                projectId: t.project,
+                event: 'due.reminder',
+                subjectId: `${t.id}:${offset}:${due}`,
+                ctxJson: JSON.stringify({
+                  taskId: t.id,
+                  title: t.title || '',
+                  due,
+                  offset,
+                  projectId: t.project,
+                  projectName: projects.get(t.project)?.name || '',
+                }),
+              });
               claimed = true;
             });
             if (!claimed) continue;
@@ -2489,36 +2518,36 @@ const WEBHOOK_RETENTION_MS = 604_800_000;
 /* WHK-03 exactly-once claim. Called INSIDE the enqueue transaction; the
    dedup key is {hookId}:{event}:{subjectKey} (subjectKey = taskId or
    project id). Returns the claim result (changes = 1 → this caller owns
-   the delivery, 0 → already claimed). */
-function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId }) {
-  return db.run('insert or ignore into webhook_deliveries (id, workspace_id, hook_id, event, dedup_key, attempt, status, created_at) values (?, ?, ?, ?, ?, 0, ?, ?)', [
+   the delivery, 0 → already claimed). `ctxJson` (67-02) is the diff-time
+   event snapshot + D-03 context trio stored on the row — the envelope is
+   built from THIS at delivery time (task.deleted keeps the last-known
+   title; a huge comment body truncates from the original text). */
+function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId, ctxJson }) {
+  return db.run('insert or ignore into webhook_deliveries (id, workspace_id, hook_id, event, dedup_key, ctx, attempt, status, created_at) values (?, ?, ?, ?, ?, ?, 0, ?, ?)', [
     uid(),
     workspaceId,
     hookId,
     event,
     `${hookId}:${event}:${subjectId}`,
+    ctxJson || '',
     'pending',
     now(),
   ]);
 }
 
-/* WHK-02 emission: route diff events to the ACTIVE hooks subscribed to the
-   event, on the event's project. A doc PUT may span several projects, so
-   the project is resolved PER EVENT from the outgoing doc (a PUT-level
-   single projectId would misroute multi-project writes). Called INSIDE the
-   doc-PUT transaction — claims commit or roll back with the doc write.
-   Returns the number of claims made. */
-async function enqueueWebhookDeliveries(workspaceId, next, events) {
-  if (!Array.isArray(events) || !events.length) return 0;
-  const hooks = await db.all("select id, project_id, events from webhook_hooks where workspace_id = ? and status = 'active'", [workspaceId]);
-  if (!hooks.length) return 0;
-  const projectOf = new Map((Array.isArray(next?.data?.tasks) ? next.data.tasks : []).filter(t => t?.id).map(t => [t.id, t?.project]));
+/* WHK-02 (67-02) shared emission — called from EXACTLY TWO sites: the
+   doc-PUT transaction (through enqueueWebhookDeliveries) and runReminderPass
+   (due.reminder). Routes ONE event to the ACTIVE hooks subscribed to it, on
+   the event's project. Claims commit inside the CALLER's transaction (doc-PUT
+   tx / reminder claim tx) — the reminders_sent-style INSERT OR IGNORE dedup
+   makes a re-emission a no-op, so reminder dedup + webhook claim can never
+   double-fire (Pitfall 3). Fail-absent: an enqueue error must never fail its
+   caller. Returns the number of claims made. */
+async function emitWebhookEvent(workspaceId, { projectId, event, subjectId, ctxJson }) {
   let claimed = 0;
-  for (const ev of events) {
-    const projectId = projectOf.get(ev.subjectId);
-    if (!projectId) continue;
+  try {
+    const hooks = await db.all("select id, events from webhook_hooks where workspace_id = ? and project_id = ? and status = 'active'", [workspaceId, projectId]);
     for (const hook of hooks) {
-      if (hook.project_id !== projectId) continue;
       let list = [];
       try {
         list = JSON.parse(hook.events);
@@ -2526,10 +2555,66 @@ async function enqueueWebhookDeliveries(workspaceId, next, events) {
         /* an unparseable filter subscribes to nothing */
         list = [];
       }
-      if (!Array.isArray(list) || !list.includes(ev.event)) continue;
-      const r = await enqueueWebhookDelivery({ hookId: hook.id, workspaceId, event: ev.event, subjectId: ev.subjectId });
+      if (!Array.isArray(list) || !list.includes(event)) continue;
+      const r = await enqueueWebhookDelivery({ hookId: hook.id, workspaceId, event, subjectId, ctxJson });
       claimed += r?.changes || 0;
     }
+  } catch (err) {
+    logWarn(`webhook emit ${event}: ${err.message}`);
+  }
+  return claimed;
+}
+
+/* WHK-02 emission: route diff events to the ACTIVE hooks subscribed to the
+   event, on the event's project. A doc PUT may span several projects, so
+   the project is resolved PER EVENT from the outgoing doc (a PUT-level
+   single projectId would misroute multi-project writes). Called INSIDE the
+   doc-PUT transaction — claims commit or roll back with the doc write.
+   The D-03 context trio (projectName, projectId, authorName) is captured
+   HERE, at diff time, and stored on the delivery row; task.assigned also
+   resolves D-14 mentions (oid when the assignee account carries one — the
+   users.oid column lands with Task 3 — bold-name fallback otherwise).
+   Returns the number of claims made. */
+async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName } = {}) {
+  if (!Array.isArray(events) || !events.length) return 0;
+  const hooks = await db.all("select id, project_id, events from webhook_hooks where workspace_id = ? and status = 'active'", [workspaceId]);
+  if (!hooks.length) return 0;
+  const projectOf = new Map((Array.isArray(next?.data?.tasks) ? next.data.tasks : []).filter(t => t?.id).map(t => [t.id, t?.project]));
+  const projectNameOf = new Map((Array.isArray(next?.data?.projects) ? next.data.projects : []).filter(p => p?.id).map(p => [p.id, p?.name || '']));
+  const docMemberName = new Map((Array.isArray(next?.data?.members) ? next.data.members : []).filter(m => m?.id).map(m => [m.id, m?.name || '']));
+  /* D-14 mention resolution: member_id → account name + oid. Defensive on
+     the oid column (users.oid is Task 3's additive migration — until it
+     exists the query still succeeds on name-only via the fallback below). */
+  const resolveMentions = async memberIds => {
+    const ids = (Array.isArray(memberIds) ? memberIds : []).filter(Boolean);
+    if (!ids.length) return undefined;
+    const byMember = new Map();
+    try {
+      const rows = await db.all(
+        `select m.member_id, u.name, u.oid from memberships m join users u on u.id = m.user_id
+           where m.workspace_id = ? and m.member_id in (${ids.map(() => '?').join(',')})`,
+        [workspaceId, ...ids],
+      );
+      for (const r of rows) byMember.set(r.member_id, r);
+    } catch (err) {
+      logWarn(`webhook mention resolve: ${err.message}`);
+    }
+    return ids.map(id => ({
+      memberId: id,
+      name: byMember.get(id)?.name || docMemberName.get(id) || id,
+      oid: byMember.get(id)?.oid || null,
+    }));
+  };
+  let claimed = 0;
+  for (const ev of events) {
+    const data = ev?.data || {};
+    const taskId = data.taskId || ev.subjectId;
+    const projectId = data.projectId || projectOf.get(taskId);
+    if (!projectId) continue;
+    const ctx = { ...data, projectId, projectName: data.projectName || projectNameOf.get(projectId) || '', authorName: authorName || null };
+    if (ev.event === 'task.assigned') ctx.mentions = await resolveMentions(data.assignees);
+    const ctxJson = JSON.stringify(ctx);
+    claimed += await emitWebhookEvent(workspaceId, { projectId, event: ev.event, subjectId: ev.subjectId, ctxJson });
   }
   return claimed;
 }
@@ -6318,7 +6403,9 @@ async function handleApi(req, res, url) {
            never fail the PUT. */
         let webhookClaims = 0;
         try {
-          webhookClaims = await enqueueWebhookDeliveries(row.id, next, diffWebhookEvents(storedDoc, next));
+          /* D-03: the event author (the PUT actor) is captured here, at diff
+             time, into every envelope's context trio. */
+          webhookClaims = await enqueueWebhookDeliveries(row.id, next, diffWebhookEvents(storedDoc, next), { authorName: ctx.user?.name || null });
         } catch (err) {
           logWarn(`webhook enqueue: ${err.message}`);
         }

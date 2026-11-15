@@ -333,13 +333,15 @@ export const SQLITE_SCHEMA = `
   );
   create index if not exists webhook_hooks_project on webhook_hooks(workspace_id, project_id);
   /* Phase 67 (WHK-03): exactly-once delivery claim — UNIQUE dedup_key IS the
-     claim (INSERT OR IGNORE / on-conflict do nothing); mirrors server.js. */
+     claim (INSERT OR IGNORE / on-conflict do nothing); mirrors server.js.
+     'ctx' (67-02): diff-time event snapshot JSON, mirrors server.js SCHEMA. */
   create table if not exists webhook_deliveries (
     id               text primary key,
     workspace_id     text not null,
     hook_id          text not null,
     event            text not null,
     dedup_key        text not null unique,
+    ctx              text not null default '',
     payload_hash     text not null default '',
     attempt          integer not null default 0,
     status           text not null default 'pending',
