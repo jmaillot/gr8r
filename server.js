@@ -62,6 +62,10 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 /* Phase 65 (65-01): the subtask-tree normalize/heal pass — one DOM-free
    definition shared with the client bundle (D-01/D-01a/D-03). */
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
+/* [Phase 66, 66-01] The ONE template-record sanitizer/funnel sink — the
+   same pure module mergeClientDoc and normalizeDoc run below (T-65-11
+   discipline: one validator, several call sites). */
+import { normalizeTemplatesData } from './src/core/templates.js';
 /* Phase 54 (54-01): the export funnel — one redacted-document read, one
    DOM-free model, one writer per format (T-54-01..T-54-06). 54-02 adds
    the server-only xlsx writer at the repository root (never under src/). */
@@ -861,6 +865,11 @@ function normalizeDoc(doc, meta) {
   /* [Phase 65, 65-01] Read-side subtask-tree heal — every task leaves this
      function carrying the canonical flat { id, parentId, position } shape. */
   normalizeSubtasksData(out.data, uid);
+  /* [Phase 66, 66-01 D-01/D-02/D-04] Read-side templates pass — every
+     template leaves this function carrying the whitelisted D-02 shape
+     (unknown fields dropped by construction, D-04). Mirrors the Phase 65
+     read-path asymmetry: heal-only, never a read failure. */
+  normalizeTemplatesData(out.data, uid);
   return out;
 }
 
@@ -1341,6 +1350,13 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
     }
   }
   normalizeSubtasksData(next.data, uid);
+  /* [Phase 66, 66-01 D-01/D-02/D-04] The templates whitelist sink — the
+     D-53-1/Phase 65 trap defense: doc.templates[] is rebuilt per-record
+     through sanitizeTemplate (unknown fields silently dropped, D-04),
+     beside the subtask pass and BEFORE any perm gate reads tasks, so
+     the stored doc and every downstream consumer (FTS, exports, MCP)
+     always see the canonical D-02 shape. */
+  normalizeTemplatesData(next.data, uid);
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
   /* [2026-11-08 D-51-15/16, T-51-01] The project-creation restriction is read
