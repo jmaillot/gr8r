@@ -54,11 +54,11 @@ const trigger = (payload = {}) =>
   }).then(async r => ({ status: r.status, data: await r.json().catch(() => null) }));
 
 function insertHook(h = {}) {
-  const hook = { id: 'wh1', url: 'https://hook.test/flows/abc', events: '["task.created"]', status: 'active', ...h };
+  const hook = { id: 'wh1', url: 'https://hook.test/flows/abc', events: '["task.created"]', status: 'active', format: 'teams-adaptive', ...h };
   withDb(server.dbPath, db =>
     db
       .prepare('insert into webhook_hooks (id, workspace_id, project_id, url, secret, format, events, status, created_by, created_at) values (?,?,?,?,?,?,?,?,?,?)')
-      .run(hook.id, ws.id, 'p1', hook.url, SECRET, 'teams-adaptive', hook.events, hook.status, 'u-wh', NOW),
+      .run(hook.id, ws.id, 'p1', hook.url, SECRET, hook.format, hook.events, hook.status, 'u-wh', NOW),
   );
   return hook;
 }
@@ -104,6 +104,27 @@ test('delivery is HMAC-signed with the hook secret over the raw body', async () 
   assert.ok(call, 'one recorded call');
   assert.equal(call.signature, `sha256=${createHmac('sha256', SECRET).update(call.body).digest('hex')}`);
   assert.ok(call.body.includes('Tracer task'), 'the envelope carries the task title from the doc');
+});
+
+test('a teams-messagecard hook delivers a MessageCard body (67-02 formatter wired)', async () => {
+  insertHook({ id: 'wh-mc', format: 'teams-messagecard' });
+  const r = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-mc', event: 'task.created', subjectId: 't1', workspaceId: ws.id }] });
+  const call = callsOf(r)[0];
+  assert.ok(call, 'one recorded call');
+  const payload = JSON.parse(call.body);
+  assert.equal(payload['@type'], 'MessageCard', 'the body is a MessageCard, not an adaptive card');
+  assert.equal(payload['@context'], 'http://schema.org/extensions');
+});
+
+test('a raw-json hook delivers the raw stringified envelope (no card wrapper)', async () => {
+  insertHook({ id: 'wh-raw', format: 'raw-json' });
+  const r = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-raw', event: 'task.created', subjectId: 't1', workspaceId: ws.id }] });
+  const call = callsOf(r)[0];
+  assert.ok(call, 'one recorded call');
+  const payload = JSON.parse(call.body);
+  assert.equal(payload.attachments, undefined, 'no card wrapper');
+  assert.equal(payload.event, 'task.created', 'the envelope itself rides the body');
+  assert.ok(!Number.isNaN(Date.parse(payload.occurredAt)), 'occurredAt is ISO 8601 UTC (D-04)');
 });
 
 test('two concurrent passes cannot both send the same delivery (guarded attempt claim)', async () => {
