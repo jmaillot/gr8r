@@ -885,6 +885,115 @@ test('65-05: a member strip removes a nested subtask assignee without disturbing
   }
 });
 
+/* ---- Phase 66 (66-01): MCP writeDoc templates parity — one validator,
+   two call sites (T-65-11 precedent). MCP-authored docs ride the SAME
+   normalizeTemplatesData sink: junk template fields drop, D-02 fields
+   survive, and a cyclic embedded template tree rejects wholesale. ---- */
+
+const seedTemplates = templates => {
+  withDb(server.dbPath, db => {
+    const row = db.prepare('select doc from workspaces where id = ?').get(wsId);
+    const doc = JSON.parse(row.doc);
+    doc.data.templates = templates;
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsId);
+  });
+};
+const unseedTemplates = () => {
+  withDb(server.dbPath, db => {
+    const row = db.prepare('select doc from workspaces where id = ?').get(wsId);
+    const doc = JSON.parse(row.doc);
+    delete doc.data.templates;
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsId);
+  });
+};
+const storedTemplates = () => {
+  const doc = JSON.parse(withDb(server.dbPath, db => db.prepare('select doc from workspaces where id = ?').get(wsId)).doc);
+  return doc.data.templates || [];
+};
+
+test('66-01: MCP writeDoc runs the templates sink — junk drops, D-02 fields survive', async () => {
+  const key = (await createKey({ label: 'TmplRoundTrip66', scope: 'write', workspaceId: wsId, days: 30 })).data.key;
+  const session = (await rpc(key, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(key, name, args, session);
+  seedTree([{ id: 's_root1', parentId: null, position: 0, title: 'Root one', done: false }]);
+  seedTemplates([
+    {
+      id: 'tplmcp1',
+      kind: 'task',
+      name: 'MCP template',
+      icon: 'clipboard',
+      color: 'blue',
+      body: { title: 'Write it', priority: 'medium', subtasks: [{ id: 's1', parentId: null, position: 0, title: 'Draft', done: false }] },
+      position: 0,
+      createdBy: 'm1',
+      createdAt: 1000,
+      updatedAt: 2000,
+      junk: 'never-persists',
+      assignees: ['m2'],
+    },
+  ]);
+  try {
+    /* ANY MCP write rides writeDoc — the templates sink runs beside the
+       Phase 65 task gate, before the JSON write. */
+    const renamed = await call('rename_subtask', { task: 't_tree65', subtask: 's_root1', title: 'Sink triggered' });
+    assert.equal(renamed.isError, false, `the write must succeed: ${JSON.stringify(renamed.data)}`);
+    const tpls = storedTemplates();
+    assert.equal(tpls.length, 1);
+    const t = tpls[0];
+    assert.deepEqual(Object.keys(t).sort(), [
+      'body', 'color', 'createdAt', 'createdBy', 'icon', 'id', 'kind', 'name', 'position', 'updatedAt',
+    ]);
+    assert.equal(t.id, 'tplmcp1');
+    assert.equal(t.kind, 'task');
+    assert.equal(t.name, 'MCP template');
+    assert.equal(t.createdBy, 'm1');
+    assert.ok(!('junk' in t), 'the junk record field must not survive');
+    assert.ok(!('assignees' in t), 'assignees are never whitelisted in template bodies');
+    assert.ok(!('junk' in t.body));
+    assert.equal(t.body.subtasks[0].id, 's1');
+    assert.equal(t.body.subtasks[0].parentId, null);
+    assert.equal(t.body.subtasks[0].position, 0);
+  } finally {
+    unseedTemplates();
+    unseedTree();
+  }
+});
+
+test('66-01: a writeDoc touching a doc with a cyclic embedded template tree is rejected with code subtaskCycle', async () => {
+  const key = (await createKey({ label: 'TmplCycle66', scope: 'write', workspaceId: wsId, days: 30 })).data.key;
+  const session = (await rpc(key, 'initialize', INIT_PARAMS, null)).session;
+  const call = (name, args) => callTool(key, name, args, session);
+  seedTree([{ id: 's_root1', parentId: null, position: 0, title: 'Root one', done: false }]);
+  /* Seed the cycle DIRECTLY into the stored doc — simulating a write that
+     bypassed the funnel. The next MCP write must refuse wholesale: the
+     templates gate throws inside the tx, the revision never moves. */
+  seedTemplates([
+    {
+      id: 'tplcyc',
+      kind: 'task',
+      name: 'Cyclic',
+      body: { title: 'T', subtasks: [
+        { id: 'c1', parentId: 'c2', position: 0, title: 'Cycle one', done: false },
+        { id: 'c2', parentId: 'c1', position: 1, title: 'Cycle two', done: false },
+      ] },
+    },
+  ]);
+  const revisionBefore = withDb(server.dbPath, db => db.prepare('select revision from workspaces where id = ?').get(wsId)).revision;
+  try {
+    const res = await call('rename_subtask', { task: 't_tree65', subtask: 's_root1', title: 'Should never land' });
+    assert.equal(res.isError, true, 'the cyclic template tree must be rejected through the MCP path');
+    assert.ok(String(res.data).includes('subtaskCycle'), `the funnel code must surface: ${JSON.stringify(res.data)}`);
+    /* Doc byte-unchanged: the tx rolled back. */
+    const tpls = storedTemplates();
+    assert.equal(tpls[0].body.subtasks.find(s => s.id === 'c1').title, 'Cycle one', 'the rename never landed');
+    const revisionAfter = withDb(server.dbPath, db => db.prepare('select revision from workspaces where id = ?').get(wsId)).revision;
+    assert.equal(revisionAfter, revisionBefore, 'no revision bump on a wholesale reject');
+  } finally {
+    unseedTemplates();
+    unseedTree();
+  }
+});
+
 /* ---- Phase 49 (49-03) server↔MCP parity harness ----
 
    One fixture workspace, every actor shape, two engines: the server predicate

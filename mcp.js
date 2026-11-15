@@ -31,6 +31,10 @@ import { syncTaskFts } from './db-adapter.mjs';
 /* [65-05, T-65-11] The ONE tree validator/normalizer (the same module the
    mergeClientDoc funnel uses) — MCP writes are not a trusted bypass. */
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
+/* [66-01] The ONE template sanitizer/funnel sink — the same module
+   mergeClientDoc/normalizeDoc run; MCP-authored docs are not a trusted
+   bypass for doc.templates[] either (T-66-02). */
+import { normalizeTemplatesData } from './src/core/templates.js';
 
 /* The stored vocabulary (src/core/constants.js STATUSES / PRIOS ids). The ids
    are what the document holds — this module reads and writes them verbatim,
@@ -207,6 +211,21 @@ export function createMcp(deps) {
           );
         }
         normalizeTaskSubtasks(t, () => uid('s'));
+      }
+      /* [66-01, T-66-02] Templates face the SAME sink — normalizeTemplatesData
+         is the one validator (sanitizeTemplate whitelist, embedded-tree gate,
+         D-03 position renumber); a cyclic embedded template tree rejects
+         wholesale (the throw rolls the tx back, so nothing is written). The
+         sink's funnel error is surfaced as a tool error, mirroring the
+         Phase 65 gate shape above. */
+      try {
+        normalizeTemplatesData(doc.data, () => uid('s'));
+      } catch (err) {
+        throw toolError(
+          err.code
+            ? `${err.code} — ${err.code === 'subtaskCycle' ? 'that change would create a subtask cycle' : 'subtasks cannot nest deeper than five levels'}`
+            : err.message,
+        );
       }
       await db.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(doc), now(), ws.id]);
       await syncTaskFts(scope, ws.id, storedDoc, doc);
