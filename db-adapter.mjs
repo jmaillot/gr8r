@@ -45,6 +45,7 @@ const PG_CONFLICT_TARGETS = {
   user_notif_prefs: '(workspace_id, user_id)',
   saved_views: '(workspace_id, user_id, key, name)',
   push_subscriptions: '(endpoint)',
+  webhook_deliveries: '(dedup_key)',
 };
 
 // Split `sql` into literal (single-quoted) and rewriteable spans.
@@ -316,6 +317,39 @@ export const SQLITE_SCHEMA = `
   );
   create index if not exists api_keys_user on api_keys(user_id);
   create index if not exists api_keys_ws on api_keys(workspace_id);
+  /* Phase 67 (WHK-05): webhook hook registry — mirrors server.js SCHEMA
+     verbatim. Mirror tables only; hook config never enters the doc (D-10). */
+  create table if not exists webhook_hooks (
+    id           text primary key,
+    workspace_id text not null,
+    project_id   text not null,
+    url          text not null,
+    secret       text not null,
+    format       text not null default 'teams-adaptive',
+    events       text not null default '[]',
+    status       text not null default 'active',
+    created_by   text not null,
+    created_at   integer not null
+  );
+  create index if not exists webhook_hooks_project on webhook_hooks(workspace_id, project_id);
+  /* Phase 67 (WHK-03): exactly-once delivery claim — UNIQUE dedup_key IS the
+     claim (INSERT OR IGNORE / on-conflict do nothing); mirrors server.js. */
+  create table if not exists webhook_deliveries (
+    id               text primary key,
+    workspace_id     text not null,
+    hook_id          text not null,
+    event            text not null,
+    dedup_key        text not null unique,
+    payload_hash     text not null default '',
+    attempt          integer not null default 0,
+    status           text not null default 'pending',
+    next_attempt_at  integer,
+    last_status_code integer,
+    last_error       text not null default '',
+    created_at       integer not null,
+    delivered_at     integer
+  );
+  create index if not exists webhook_deliveries_due on webhook_deliveries(status, next_attempt_at);
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);
@@ -332,6 +366,8 @@ const PG_EPOCH_COLUMNS = new Set([
   'last_seen_at',
   'last_login_at',
   'used_at',
+  'next_attempt_at',
+  'delivered_at',
 ]);
 
 export function pgSchemaVariant(schema = SQLITE_SCHEMA) {

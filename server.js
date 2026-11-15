@@ -456,6 +456,55 @@ const SCHEMA = `
   );
   create index if not exists api_keys_user on api_keys(user_id);
   create index if not exists api_keys_ws on api_keys(workspace_id);
+  /* =====================================================================
+     Phase 67 (WHK-05, D-10): webhook hook registry — server MIRROR tables
+     only. Hook config never enters the workspace document or docForClient:
+     the Workflows URL is itself a bearer credential and the secret signs
+     deliveries (HMAC), so both stay server-side. 'events' is a JSON array
+     over the 8-event vocabulary (src/core/webhook-events.js); 'status' is
+     'active' | 'disabled'. Unlike api_keys the plaintext secret MUST be
+     stored (the server signs each delivery); show-once applies to the
+     CLIENT surface only (D-10) — never in a log line (T-67-03).
+     ===================================================================== */
+  create table if not exists webhook_hooks (
+    id           text primary key,
+    workspace_id text not null,
+    project_id   text not null,
+    url          text not null,
+    secret       text not null,
+    format       text not null default 'teams-adaptive',
+    events       text not null default '[]',
+    status       text not null default 'active',
+    created_by   text not null,
+    created_at   integer not null
+  );
+  create index if not exists webhook_hooks_project on webhook_hooks(workspace_id, project_id);
+  /* WHK-03: exactly-once delivery claim + state machine (POL-02 co-design).
+     The UNIQUE dedup_key ({hookId}:{event}:{subjectKey}) IS the claim —
+     INSERT OR IGNORE inside the enqueue transaction is the whole
+     exactly-once mechanism (reminders_sent pattern): a re-enqueue of the
+     same (hook, event, subject) is a no-op. Never mark-then-send (Phase 38
+     invariant): the attempt bump is a guarded UPDATE and the delivered
+     status is written only AFTER the HTTP request returned 2xx. Retention
+     D-07: rows older than 7 days are purged by the delivery pass.
+     pg twin: db-adapter.mjs SQLITE_SCHEMA + PG_CONFLICT_TARGETS
+     webhook_deliveries '(dedup_key)'. */
+  create table if not exists webhook_deliveries (
+    id               text primary key,
+    workspace_id     text not null,
+    hook_id          text not null,
+    event            text not null,
+    dedup_key        text not null unique,
+    payload_hash     text not null default '',
+    attempt          integer not null default 0,
+    status           text not null default 'pending',
+    next_attempt_at  integer,
+    last_status_code integer,
+    last_error       text not null default '',
+    created_at       integer not null,
+    delivered_at     integer
+  );
+  create index if not exists webhook_deliveries_due on webhook_deliveries(status, next_attempt_at);
 `;
 
 async function initDb() {

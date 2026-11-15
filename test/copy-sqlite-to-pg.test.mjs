@@ -45,6 +45,8 @@ const TABLES = Object.freeze([
   'audit_log',
   'reminders_sent',
   'user_notif_prefs',
+  'webhook_hooks', /* Phase 67 (WHK-05) — mirror-table parity */
+  'webhook_deliveries', /* Phase 67 (WHK-03) — mirror-table parity */
 ]);
 
 /* Run the script as a real child process — the contract under test IS the CLI. */
