@@ -6,7 +6,7 @@
 
 ## Phases
 
-- [ ] **Phase 65: Subtask Tree** - Multi-level hierarchical subtasks survive every surface (views, funnel, FTS, exports, MCP)
+- [x] **Phase 65: Subtask Tree** - Multi-level hierarchical subtasks survive every surface (views, funnel, FTS, exports, MCP)
 - [ ] **Phase 66: Task & Project Templates** - Reusable task/project templates with offset-based dates, instantiated through the normal doc-PUT
 - [ ] **Phase 67: Project Webhooks** - Per-project outbound webhooks delivering MS Teams payloads with SSRF defense and bounded retry
 - [ ] **Phase 68: Backlog Polish** - v2.3 deferred items: mobile hidden[] card fields, SMTP retry claim-state machine, WR-01 CSS scoping, Nyquist reconciliation
