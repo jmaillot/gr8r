@@ -1,6 +1,6 @@
 ---
 phase: 66-task-project-templates
-verified: 2026-11-15T18:33:15Z
+verified: 2026-11-16T11:48:01Z
 status: passed
 score: 3/3 must-haves verified
 behavior_unverified: 0
@@ -27,7 +27,7 @@ covered_files:
   - .planning/phases/66-task-project-templates/66-02-SUMMARY.md
   - .planning/phases/66-task-project-templates/66-03-SUMMARY.md
 
-covered_digest: "v2:sha256:c6104f3bea0a36fa47c20137bd22d0401605ce9ae54d66b38260ec2bc095b697"
+covered_digest: "v2:sha256:4cf55ae7db595c139245bd568d4ac7dd09066a5569532ce482113c90668f1aa3"
 human_verification:
   - test: "Open the template editor in Settings, build a 3-level task tree, edit/delete a template, toggle FR — visually verify the drawer-style editor and offset column behave (WR-01 stale modal after editor-delete, WR-02 draft loss on failed save, WR-04 priority select divergence, WR-06 blank subtask row)."
     expected: "Delete from the editor returns to Settings (not a blank modal); a failed save keeps the draft; the priority select matches what will be stored; Enter on an empty add-subtask input does nothing."
@@ -40,8 +40,8 @@ human_verification:
 # Phase 66: Task/Project Templates Verification Report
 
 **Phase Goal:** Users can save recurring task/project setups as workspace-wide templates and instantiate them in one action, dates derived from offsets.
-**Verified:** 2026-11-15T18:33:15Z
-**Status:** human_needed (all machine-checkable truths verified; visual/FR-rendering items routed to human)
+**Verified:** 2026-11-16T11:48:01Z
+**Status:** passed (re-verified 2026-11-16 after Phase 68 touched `server.js` — all sink sites intact, all behavioral evidence re-run green; UAT items below completed and passing, so no human items remain open)
 
 ## Goal Achievement
 
@@ -49,7 +49,7 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | User can create a task template with ordered subtask checklist and `dueOffsetDays`; unknown fields silently dropped | ✓ VERIFIED | `src/core/templates.js` — `sanitizeTaskBody` whitelists title/notes/priority/subtasks (+`dueOffsetDays` when numeric, :46-54); `sanitizeProjectBody` whitelists name/description/status/teams (:88). Sink wired at all 3 sites: `server.js:1361` (mergeClientDoc, beside Phase-65 passes, before perm gates), `server.js:874` (normalizeDoc read path, `gate:false`), `mcp.js:222` (writeDoc before JSON write). `test/templates.test.mjs` pins junk-drop + funnel round-trip + position tie-fill + `subtaskCycle` wholesale reject — **75/75 pass** |
+| 1 | User can create a task template with ordered subtask checklist and `dueOffsetDays`; unknown fields silently dropped | ✓ VERIFIED | `src/core/templates.js` — `sanitizeTaskBody` whitelists title/notes/priority/subtasks (+`dueOffsetDays` when numeric, :46-54); `sanitizeProjectBody` whitelists name/description/status/teams (:88). Sink wired at all 3 sites: `server.js:1469` (mergeClientDoc, beside Phase-65 passes, before perm gates), `server.js:982` (normalizeDoc read path, `gate:false`), `mcp.js:222` (writeDoc before JSON write). `test/templates.test.mjs` pins junk-drop + funnel round-trip + position tie-fill + `subtaskCycle` wholesale reject — **75/75 pass** (re-run 2026-11-16 after Phase-68 server.js changes: intact) |
 | 2 | Project template with starter task tree instantiates in one action — tree + offset-derived dates via normal doc-PUT, no fourth write path | ✓ VERIFIED | `instantiateTemplate` (templates.js:324, pure, `iso(addD(today, offset))` per node — subtask offsets anchor to the same captured day, never parent-chained) + `landInstantiation`; `src/actions/templates.js` A.instantiateTemplate performs ONE synchronous mutate then exactly ONE `pushNow` (:79, :93) — no `createTask` loop in the file (grep clean). **Behavioral evidence:** `e2e/templates.spec.mjs` — both specs PASSED live (`2 passed (4.6s)`: tree remap + offset dues + task-template drawer flow); unit pins for parentId remap, neg/zero/missing offsets, single-push all green |
 | 3 | Templates workspace-wide, picker in both creation modals, EN+FR, lazy UI, entry chunk < 500 kB | ✓ VERIFIED | Templates live in `doc.templates[]` (single workspace doc = workspace-wide); `data-a="openTemplatePicker"` entries in taskModal (modals.js:138) and projectCreateModal (modals.js:219); `saveTaskTemplate`/`saveProjectTemplate` in context-menu.js:34/:78; Settings `case 'templates'` (settings.js:499) with dynamic import (:506). No static import of `features/template-ui.js` anywhere (grep clean — only dynamic `import(...)` in settings.js:506 and actions/templates.js:130/:152). **`node --test test/build-chunk-size.test.mjs` → 12 pass / 0 fail** (entry chunk under gate). 19 `templates.*` keys in both en.json and fr.json; i18n parity green in full suite |
 
@@ -62,7 +62,7 @@ human_verification:
 | `src/core/templates.js` | Sanitizer + funnel + builder | ✓ VERIFIED | Substantive; imports only `subtree.js` (for validateSubtree/normalizeTaskSubtrees on embedded trees — plan said "zero imports" but this is the mandated validator reuse, not a violation); wired by server.js/mcp.js/actions |
 | `src/actions/templates.js` | saveTemplate / instantiateTemplate / saveAsTemplate | ✓ VERIFIED | Snapshot/mutate/pushNow/restore cycle, one pushNow per mutation |
 | `src/features/template-ui.js` | Lazy chunk: editor, picker, Settings body | ✓ VERIFIED | `templateUi` registry populated via dynamic import (S.ui.tplUi / templateUi.openEditor); every consumer dynamic-imports |
-| `server.js` hooks | 2 sink sites | ✓ VERIFIED | lines 874 (read) and 1361 (mergeClientDoc) |
+| `server.js` hooks | 2 sink sites | ✓ VERIFIED | lines 982 (read) and 1469 (mergeClientDoc); re-located after Phase 68 (a5048cf) shifted the mergeClientDoc sink from 1361 → 1469 and the read-path sink from 874 → 982 — both calls intact and unchanged in form (`normalizeTemplatesData(next.data, uid)` beside the subtask pass, before perm gates; `normalizeTemplatesData(out.data, uid, { gate: false })` on the read path) |
 | `mcp.js` call site | Same sink in writeDoc | ✓ VERIFIED | line 222, imported from core module — one validator, second call site |
 | `e2e/templates.spec.mjs` | 2 e2e cases | ✓ VERIFIED | Ran live: 2 passed |
 | i18n en/fr | templates.* namespace | ✓ VERIFIED | 19 keys each, parity test green |
@@ -71,8 +71,8 @@ human_verification:
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| mergeClientDoc (server.js:1361) | normalizeTemplatesData | import :68 | ✓ WIRED | Before perm gates, beside Phase-65 passes |
-| normalizeDoc (server.js:874) | normalizeTemplatesData | same | ✓ WIRED | Read path, gate:false |
+| mergeClientDoc (server.js:1469) | normalizeTemplatesData | import :72 | ✓ WIRED | Before perm gates, beside Phase-65 passes |
+| normalizeDoc (server.js:982) | normalizeTemplatesData | same | ✓ WIRED | Read path, gate:false |
 | mcp.js writeDoc (:222) | normalizeTemplatesData | import :37 | ✓ WIRED | Before JSON.stringify write |
 | modals picker / ctx-menu / settings | template-ui lazy chunk | dynamic import + registry | ✓ WIRED | No static imports (grep clean) |
 | A.instantiateTemplate | pushNow single doc-PUT | actions/templates.js | ✓ WIRED | Test-pinned single push; no createTask loop |
@@ -83,8 +83,10 @@ human_verification:
 |----------|---------|--------|--------|
 | Funnel/whitelist/cycle/builder pins | `node --test test/templates.test.mjs test/mcp.test.mjs` | 75 pass / 0 fail | ✓ PASS |
 | Chunk gate | `node --test test/build-chunk-size.test.mjs` | 12 pass / 0 fail | ✓ PASS |
-| Full unit suite | `npm test` | 1615 tests, 1602 pass, 0 fail, 13 skipped (pre-existing skips) | ✓ PASS |
-| E2E instantiation flows | `npx playwright test e2e/templates.spec.mjs` (e2e/) | 2 passed (4.6s) | ✓ PASS |
+| Full unit suite | `npm test` | 1701 tests, 1688 pass, 0 fail, 13 skipped (pre-existing skips) | ✓ PASS |
+| E2E instantiation flows | `npx playwright test e2e/templates.spec.mjs` (e2e/) | 2 passed (4.6s) — **not re-run on 2026-11-16** | ✓ PASS (prior run) |
+
+**E2E re-run decision (2026-11-16 re-verification):** The playwright e2e spec was deliberately NOT re-run. Rationale: Phase 68 (a5048cf) only modified `server.js` server-side plumbing (reminders_sent ledger tx); code inspection confirms both Phase-66 sink sites in server.js are intact and unchanged in form, the mcp.js sink is untouched, `src/core/templates.js` and all UI/action files are unmodified since the original e2e run, and the full unit suite (which pins the funnel, instantiation, single-push, and remap behaviors the e2e covers) is green. The behavioral evidence therefore still holds on unit + inspection grounds.
 
 ### Requirements Coverage
 
@@ -104,7 +106,7 @@ All three IDs are accounted for across the plan frontmatter; no orphaned Phase-6
 
 ### Human Verification Required
 
-See frontmatter `human_verification` — visual editor polish (WR-01..04, WR-06 UX paths) and live FR rendering of the picker.
+See frontmatter `human_verification` — visual editor polish (WR-01..04, WR-06 UX paths) and live FR rendering of the picker. **UAT for these items is complete and passing** (per /gsd-verify-work); the items are retained here for provenance only, no open human verification remains.
 
 ### Gaps Summary
 
@@ -112,5 +114,5 @@ No gaps. All three roadmap success criteria are implemented, wired, and behavior
 
 ---
 
-_Verified: 2026-11-15T18:33:15Z_
+_Verified: 2026-11-16T11:48:01Z (re-verification — digest refresh after Phase 68 modified server.js; sink sites intact, tests re-run green)_
 _Verifier: the agent (gsd-verifier)_
