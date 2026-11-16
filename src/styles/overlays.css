@@ -267,7 +267,10 @@
   align-items: center;
   gap: 9px;
   min-height: 32px;
+  /* --ind (inline, from the tree renderer) adds on top of the 6px base —
+     an inline padding-left would REPLACE the base (65-05 indent fix). */
   padding: 0 6px;
+  padding-left: calc(6px + var(--ind, 0px));
   border-radius: var(--r-sm);
   font-size: var(--fs);
 }

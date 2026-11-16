@@ -42,7 +42,7 @@ export function subTreeChecklistHtml(task0, opt = {}) {
         const open = !!openMap[s.id];
         const tid = task0.id;
         const sid = s.id;
-        const indent = depth ? `padding-left:${depth * 16}px;` : '';
+        const indent = `--ind:${depth * 16}px;`;
         const caret = kids.length
           ? `<span class="ibtn ibtn-xs" data-a="toggleSubNode" data-id="${tid}" data-sid="${sid}" aria-expanded="${open}" aria-label="${t(open ? 'a11y.collapseSubtasks' : 'a11y.expandSubtasks')}">${ic(open ? 'chevron-down' : 'chevron-right', 13)}</span>`
           : '<span style="width:22px;flex-shrink:0"></span>';

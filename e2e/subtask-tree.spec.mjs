@@ -138,7 +138,13 @@ test('list view renders the tree: carets expand position-ordered subrows, nested
     await expect(kids).toHaveCount(2);
     await expect(kids.nth(0)).toContainText(`Child alpha ${RUN}`);
     await expect(kids.nth(1)).toContainText(`Child beta ${RUN}`);
-    await expect(kids.nth(0)).toHaveAttribute('style', /padding-left:16px/);
+    /* Indent rides --ind on top of the CSS base (65-05): the child's REAL
+       content box must sit strictly right of its parent's — an inline
+       padding-left replacing the base pulled children left (prod finding). */
+    await expect(kids.nth(0)).toHaveAttribute('style', /--ind:16px/);
+    const parentX = await subrows.nth(0).locator('span, input, button').first().evaluate(el => el.getBoundingClientRect().x);
+    const childX = await kids.nth(0).locator('span, input, button').first().evaluate(el => el.getBoundingClientRect().x);
+    expect(childX).toBeGreaterThan(parentX);
   } finally {
     await context.close();
   }
@@ -183,7 +189,7 @@ test('context menu demote moves a root subtask under its previous sibling', asyn
     await r1.locator('[data-a="toggleSubNode"]').click();
     const moved = page.locator(`.subrows [data-ctx="sub"][data-sid="st_r2"]`);
     await expect(moved).toBeVisible();
-    await expect(moved).toHaveAttribute('style', /padding-left:16px/);
+    await expect(moved).toHaveAttribute('style', /--ind:16px/);
     /* The server re-validates and persists (D-05): the round-tripped doc
        carries the one-node diff — r2's parentId/position, nothing else.
        The save is debounced client-side, so poll until the push lands. */

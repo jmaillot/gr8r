@@ -132,7 +132,10 @@
   align-items: center;
   gap: 8px;
   height: 32px;
-  padding-left: 64px;
+  /* Tree indent rides --ind (set inline by the renderer) ON TOP of the base —
+     an inline padding-left would REPLACE the 64px base and pull children left
+     of their parent. */
+  padding-left: calc(64px + var(--ind, 0px));
   border-bottom: 1px solid var(--divider);
   font-size: var(--fs-sm);
 }
