@@ -250,8 +250,11 @@ const SCHEMA = `
     /* D-13 (Phase 67): the Entra AAD object id (oid claim), persisted at
        OIDC login — the webhook formatter resolves real <at> mentions from
        it (D-14). Server-only: nullable, additive, never serialized to any
-       client payload. */
-    oid           text,
+       client payload. Named aad_oid, NOT oid: SQLite 3.54+ refuses
+       ALTER TABLE ADD COLUMN for reserved alias names with
+       "cannot add <name> alias" — the boot-time ensureColumn would crash
+       every fresh container (G-67-1 follow-up). */
+    aad_oid       text,
     two_fa_enabled   integer not null default 0,
     two_fa_secret    text,
     two_fa_last_step integer not null default 0,
@@ -612,7 +615,19 @@ async function initDb() {
   await adapterEnsureColumn('users', 'is_instance_admin', 'integer not null default 0');
   // Phase 67 (D-13): the Entra AAD object id on the user row — def
   // byte-identical to the SCHEMA declaration (Pitfall P-B); idempotent boot.
-  await adapterEnsureColumn('users', 'oid', 'text');
+  // Named aad_oid, NOT oid: SQLite 3.54+ refuses ADD COLUMN on reserved
+  // alias names ("cannot add <name> alias: oid") — crashes container boot.
+  // One-shot data migration below moves any pre-existing values over.
+  await adapterEnsureColumn('users', 'aad_oid', 'text');
+  // One-shot data migration: DBs created between Phase 67 and the aad_oid
+  // rename carry a legacy users.oid TEXT column (added by the pre-3.54
+  // ensureColumn). Copy any persisted values over once, then leave the old
+  // column alone — SQLite 3.54+ also refuses DROP COLUMN on aliases, and
+  // it is inert after this copy. Idempotent: the update matches only rows
+  // where aad_oid is still null.
+  try {
+    await db.run('update users set aad_oid = (select oid from users u2 where u2.id = users.id) where aad_oid is null and exists (select 1 from users u3 where u3.id = users.id and u3.oid is not null)');
+  } catch { /* legacy column absent — fresh DB, nothing to migrate */ }
   // Phase 67 (67-02): delivery ctx snapshot column — additive, byte-identical
   // to the SCHEMA declaration (Pitfall P-B); second boot is a no-op.
   await adapterEnsureColumn('webhook_deliveries', 'ctx', "text not null default ''");
@@ -2583,7 +2598,7 @@ async function emitWebhookEvent(workspaceId, { projectId, event, subjectId, ctxJ
    The D-03 context trio (projectName, projectId, authorName) is captured
    HERE, at diff time, and stored on the delivery row; task.assigned also
    resolves D-14 mentions (oid when the assignee account carries one — the
-   users.oid column lands with Task 3 — bold-name fallback otherwise).
+   users.aad_oid column (D-13) — bold-name fallback otherwise).
    Returns the number of claims made. */
 async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName } = {}) {
   if (!Array.isArray(events) || !events.length) return 0;
@@ -2592,8 +2607,8 @@ async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName 
   const projectOf = new Map((Array.isArray(next?.data?.tasks) ? next.data.tasks : []).filter(t => t?.id).map(t => [t.id, t?.project]));
   const projectNameOf = new Map((Array.isArray(next?.data?.projects) ? next.data.projects : []).filter(p => p?.id).map(p => [p.id, p?.name || '']));
   const docMemberName = new Map((Array.isArray(next?.data?.members) ? next.data.members : []).filter(m => m?.id).map(m => [m.id, m?.name || '']));
-  /* D-14 mention resolution: member_id → account name + oid. Defensive on
-     the oid column (users.oid is Task 3's additive migration — until it
+  /* D-14 mention resolution: member_id → account name + aad_oid. Defensive
+     on the column (users.aad_oid is the D-13 additive migration — until it
      exists the query still succeeds on name-only via the fallback below). */
   const resolveMentions = async memberIds => {
     const ids = (Array.isArray(memberIds) ? memberIds : []).filter(Boolean);
@@ -2601,7 +2616,7 @@ async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName 
     const byMember = new Map();
     try {
       const rows = await db.all(
-        `select m.member_id, u.name, u.oid from memberships m join users u on u.id = m.user_id
+        `select m.member_id, u.name, u.aad_oid from memberships m join users u on u.id = m.user_id
            where m.workspace_id = ? and m.member_id in (${ids.map(() => '?').join(',')})`,
         [workspaceId, ...ids],
       );
@@ -2612,7 +2627,7 @@ async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName 
     return ids.map(id => ({
       memberId: id,
       name: byMember.get(id)?.name || docMemberName.get(id) || id,
-      oid: byMember.get(id)?.oid || null,
+      oid: byMember.get(id)?.aad_oid || null,
     }));
   };
   let claimed = 0;
@@ -4994,7 +5009,7 @@ async function handleApi(req, res, url) {
          whitelist and never carries it, docForClient never sees the users
          table — the oid is readable only by the webhook mention resolver. */
       const oidClaim = typeof claims.oid === 'string' && claims.oid ? claims.oid : null;
-      await db.run('update users set last_login_at = ?, oid = ? where id = ?', [t, oidClaim, row.id]);
+      await db.run('update users set last_login_at = ?, aad_oid = ? where id = ?', [t, oidClaim, row.id]);
       await db.run('update oidc_identities set last_login_at = ? where issuer = ? and subject = ?', [t, OIDC.config.issuer, subject]);
       setSessionCookie(req, res, token);
       await logSecurity(row.id, 'sso_login');

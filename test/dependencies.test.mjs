@@ -90,9 +90,10 @@ test('the Dockerfile runtime stage stays bare node + su-exec with exactly the pi
   // Phase 45 (D-03) + Phase 46: single pg-enabled image ships node_modules + db-adapter.mjs, and mcp.js (MCP server) joins the runtime stage.
   // Phase 54: server.js imports export/ at runtime (server-only xlsx + MSPDI writers), so the image ships it too.
   // Phase 58 (D-13): db-adapter.mjs and server.js import search-terms.mjs at runtime, so the image ships it too (boot crash without it).
+  // Phase 67 (G-67-1): server.js imports webhook-ssrf.js / webhook-retry.js / webhook-formats.js at runtime — ship them too (boot crash without them).
   assert.deepEqual(
     copyTargets.sort(),
-    ['db-adapter.mjs', 'dist', 'export', 'mailer.js', 'mcp.js', 'node_modules', 'oidc.js', 'search-terms.mjs', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js'],
-    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, mcp.js, db-adapter.mjs, search-terms.mjs, node_modules, seed.json, src, export and dist — found: ${copyTargets.join(' | ')} (D-12 as amended by Phase 45 D-03 + Phase 46 + Phase 54 + Phase 58 D-13)`,
+    ['db-adapter.mjs', 'dist', 'export', 'mailer.js', 'mcp.js', 'node_modules', 'oidc.js', 'search-terms.mjs', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js', 'webhook-formats.js', 'webhook-retry.js', 'webhook-ssrf.js'],
+    `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, mcp.js, db-adapter.mjs, search-terms.mjs, webhook-ssrf.js, webhook-retry.js, webhook-formats.js, node_modules, seed.json, src, export and dist — found: ${copyTargets.join(' | ')} (D-12 as amended by Phase 45 D-03 + Phase 46 + Phase 54 + Phase 58 D-13 + Phase 67 G-67-1)`,
   );
 });

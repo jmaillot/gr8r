@@ -154,8 +154,10 @@ export const SQLITE_SCHEMA = `
     last_login_at integer,
     locale        text,
     /* D-13 (Phase 67): Entra AAD object id, persisted at OIDC login —
-       server-only, never serialized to clients (mirrors server.js SCHEMA). */
-    oid           text,
+       server-only, never serialized to clients (mirrors server.js SCHEMA).
+       Named aad_oid, NOT oid: SQLite 3.54+ refuses ADD COLUMN on reserved
+       alias names (mirror of the server.js rename rationale). */
+    aad_oid       text,
     two_fa_enabled   integer not null default 0,
     two_fa_secret    text,
     two_fa_last_step integer not null default 0,
