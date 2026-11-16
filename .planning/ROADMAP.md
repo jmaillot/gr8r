@@ -7,7 +7,7 @@
 ## Phases
 
 - [x] **Phase 65: Subtask Tree** - Multi-level hierarchical subtasks survive every surface (views, funnel, FTS, exports, MCP)
-- [ ] **Phase 66: Task & Project Templates** - Reusable task/project templates with offset-based dates, instantiated through the normal doc-PUT
+- [x] **Phase 66: Task & Project Templates** - Reusable task/project templates with offset-based dates, instantiated through the normal doc-PUT (completed 2026-11-16)
 - [x] **Phase 67: Project Webhooks** - Per-project outbound webhooks delivering MS Teams payloads with SSRF defense and bounded retry (completed 2026-11-16)
 - [x] **Phase 68: Backlog Polish** - v2.3 deferred items: mobile hidden[] card fields, SMTP retry claim-state machine, WR-01 CSS scoping, Nyquist reconciliation (completed 2026-11-16)
 
@@ -49,7 +49,7 @@ Plans:
   2. A user can create a project template with a starter task tree and instantiate it — the new project contains the template's task tree with dates derived from the offsets, through the normal doc-PUT (no fourth write path)
   3. Templates are workspace-wide and available via the template picker in the existing creation modals, in both EN and FR, with the tree/webhook UI lazy-loaded so the entry chunk stays under the 500 kB gate
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 **UI hint**: yes
 
 Plans:
@@ -132,7 +132,7 @@ Coverage: 16/16 requirements mapped ✓
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 65. Subtask Tree | 5/5 | In Progress|  |
-| 66. Task & Project Templates | 3/3 | In Progress|  |
+| 66. Task & Project Templates | 3/3 | Complete    | 2026-11-16 |
 | 67. Project Webhooks | 5/5 | Complete    | 2026-11-16 |
 | 68. Backlog Polish | 4/4 | Complete    | 2026-11-16 |
 

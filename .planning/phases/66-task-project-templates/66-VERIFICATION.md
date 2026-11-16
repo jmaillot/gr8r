@@ -1,6 +1,6 @@
 ---
 phase: 66-task-project-templates
-verified: 2026-11-16T11:48:01Z
+verified: 2026-11-16T13:02:08.864Z
 status: passed
 score: 3/3 must-haves verified
 behavior_unverified: 0
@@ -27,7 +27,14 @@ covered_files:
   - .planning/phases/66-task-project-templates/66-02-SUMMARY.md
   - .planning/phases/66-task-project-templates/66-03-SUMMARY.md
 
-covered_digest: "v2:sha256:4cf55ae7db595c139245bd568d4ac7dd09066a5569532ce482113c90668f1aa3"
+covered_digest: "v2:sha256:f29de8f5d30fcebf1a0cad0f94c61e2ab01b0acf3c021ab4a961e23be814c6e7"
+re_verification:
+  previous_status: passed
+  previous_score: 3/3
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
+  spot_check_basis: "Spot-check re-verification 2026-11-16 after c68171c (template Settings two-tab Tâches/Projet segmented control, covered file src/features/template-ui.js) and phase-67 completion commits. Diff c68171c~1..c68171c inspected: the change only (a) kind-filters renderTemplateSettings by S.ui.tplTab, (b) walks kind-filtered sequences in tplUp/tplDown (tplSwap unchanged), (c) adds session-state A.tplTab, (d) renames the empty-state locale key templates.empty → templates.emptyTab (1:1, {kind} param) in en.json/fr.json with no orphaned consumers. Template create/edit/instantiate (tplNew/tplEdit/tplPick), the single doc-PUT path, and the sanitizer in src/core/templates.js are untouched. UAT 66-UAT.md: 2/2 pass, 0 issues, status complete. Tests re-run: templates+mcp+chunk-gate 87/0, i18n-core-features+build-locales 24/0. No semantic regression; status remains passed."
 human_verification:
   - test: "Open the template editor in Settings, build a 3-level task tree, edit/delete a template, toggle FR — visually verify the drawer-style editor and offset column behave (WR-01 stale modal after editor-delete, WR-02 draft loss on failed save, WR-04 priority select divergence, WR-06 blank subtask row)."
     expected: "Delete from the editor returns to Settings (not a blank modal); a failed save keeps the draft; the priority select matches what will be stored; Enter on an empty add-subtask input does nothing."
@@ -40,7 +47,7 @@ human_verification:
 # Phase 66: Task/Project Templates Verification Report
 
 **Phase Goal:** Users can save recurring task/project setups as workspace-wide templates and instantiate them in one action, dates derived from offsets.
-**Verified:** 2026-11-16T11:48:01Z
+**Verified:** 2026-11-16T13:02:08.864Z
 **Status:** passed (re-verified 2026-11-16 after Phase 68 touched `server.js` — all sink sites intact, all behavioral evidence re-run green; UAT items below completed and passing, so no human items remain open)
 
 ## Goal Achievement
@@ -114,5 +121,5 @@ No gaps. All three roadmap success criteria are implemented, wired, and behavior
 
 ---
 
-_Verified: 2026-11-16T11:48:01Z (re-verification — digest refresh after Phase 68 modified server.js; sink sites intact, tests re-run green)_
+_Verified: 2026-11-16T13:02:08.864Z (spot-check re-verification #2 — digest refresh after c68171c two-tab template Settings filter; UAT complete, spot-check tests green, no regression to must-haves)_
 _Verifier: the agent (gsd-verifier)_
