@@ -22,11 +22,11 @@
 
 ### Project Webhooks (WHK)
 
-- [ ] **WHK-01**: A project owner, admin, or project leader can register, edit, and delete per-project webhook hooks (URL, secret, event filter, format) via the UI only — no MCP webhook management (documented); secrets are shown once at creation
-- [ ] **WHK-02**: Hooks fire on the 8-event vocabulary (task.created, task.completed, task.assigned, task.deleted, comment.added, due.reminder, project.completed, subtask.tree-changed), each hook filtering its own subset; events are computed as a pure `diffWebhookEvents(storedDoc, next)` at the funnel diff point and delivered post-commit fire-and-forget
-- [ ] **WHK-03**: Delivery is async and fail-absent with bounded retries honoring Retry-After, exactly-once via a claim table shared by design with the SMTP retry (B2); payloads are whitelisted-field envelopes built through `memberCanReadProject` (never caller-scoped serialization) and respect the 28 KB Teams cap
-- [ ] **WHK-04**: The Teams formatter produces valid MS Teams payloads — per-hook format `teams-adaptive | teams-messagecard | raw-json` targeting Workflows URLs (`*.logic.azure.com`); task.assigned payloads mention the assignee in Teams (real AAD mention when the user logs in via OIDC Entra and their `oid` claim is persisted at login, bold-name fallback otherwise)
-- [ ] **WHK-05**: SSRF is mitigated at delivery time: https-only URLs, resolved-IP deny-list (loopback, RFC1918, 169.254.0.0/16) checked per delivery, hook config lives only in server mirror tables (`webhook_hooks`/`webhook_deliveries`), never in the client-visible doc; SQLite+pg parity in the same commit
+- [x] **WHK-01**: A project owner, admin, or project leader can register, edit, and delete per-project webhook hooks (URL, secret, event filter, format) via the UI only — no MCP webhook management (documented); secrets are shown once at creation
+- [x] **WHK-02**: Hooks fire on the 8-event vocabulary (task.created, task.completed, task.assigned, task.deleted, comment.added, due.reminder, project.completed, subtask.tree-changed), each hook filtering its own subset; events are computed as a pure `diffWebhookEvents(storedDoc, next)` at the funnel diff point and delivered post-commit fire-and-forget
+- [x] **WHK-03**: Delivery is async and fail-absent with bounded retries honoring Retry-After, exactly-once via a claim table shared by design with the SMTP retry (B2); payloads are whitelisted-field envelopes built through `memberCanReadProject` (never caller-scoped serialization) and respect the 28 KB Teams cap
+- [x] **WHK-04**: The Teams formatter produces valid MS Teams payloads — per-hook format `teams-adaptive | teams-messagecard | raw-json` targeting Workflows URLs (`*.logic.azure.com`); task.assigned payloads mention the assignee in Teams (real AAD mention when the user logs in via OIDC Entra and their `oid` claim is persisted at login, bold-name fallback otherwise)
+- [x] **WHK-05**: SSRF is mitigated at delivery time: https-only URLs, resolved-IP deny-list (loopback, RFC1918, 169.254.0.0/16) checked per delivery, hook config lives only in server mirror tables (`webhook_hooks`/`webhook_deliveries`), never in the client-visible doc; SQLite+pg parity in the same commit
 
 ### v2.3 Backlog Polish (POL)
 
@@ -60,11 +60,11 @@
 | TMPL-01 | Phase 66 | Complete |
 | TMPL-02 | Phase 66 | Complete |
 | TMPL-03 | Phase 66 | Complete |
-| WHK-01 | Phase 67 | Pending |
-| WHK-02 | Phase 67 | Pending |
-| WHK-03 | Phase 67 | Pending |
-| WHK-04 | Phase 67 | Pending |
-| WHK-05 | Phase 67 | Pending |
+| WHK-01 | Phase 67 | Complete |
+| WHK-02 | Phase 67 | Complete |
+| WHK-03 | Phase 67 | Complete |
+| WHK-04 | Phase 67 | Complete |
+| WHK-05 | Phase 67 | Complete |
 | POL-01 | Phase 68 | Complete |
 | POL-02 | Phase 68 | Complete |
 | POL-03 | Phase 68 | Complete |
