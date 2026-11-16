@@ -33,7 +33,10 @@ const queueSource = serverSource.slice(fnStart, fnEnd);
    asserts the SHAPE the plan locks: APP_URL (never appBase(req)/Host),
    wsRow.slug, encodeURIComponent'd task key, workspace-root fallback. */
 function notifUrlBuilder() {
-  const m = queueSource.match(/const url =([\s\S]*?);\n\s*MAILER\.sendNotif/);
+  /* POL-02 (Phase 68): the direct MAILER.sendNotif call moved to the
+     outbox delivery pass — the url statement now ends at the transport
+     claim insert, so the extraction stops at the statement's own `;\n`. */
+  const m = queueSource.match(/const url =([\s\S]*?);\n/);
   assert.ok(m, 'queueNotifEmails no longer builds a per-notification url');
   return new Function('task', 'wsRow', 'APP_URL', `return (${m[1].trim()});`);
 }

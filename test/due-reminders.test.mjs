@@ -629,8 +629,10 @@ test('REM-05: email gate, deep link, by:null never self-skipped, failure isolati
   fs.rmSync(mailDir, { recursive: true, force: true });
 });
 
-test('REM-05: MAILER rejection is isolated — logged, never rethrown, process survives', async () => {
-  /* Dead SMTP port: connection refused → sendNotif rejects on the .catch path. */
+test('REM-05: MAILER rejection is isolated — the claim goes to retry, never rethrown, process survives', async () => {
+  /* Dead SMTP port: connection refused → the outbox row is claimed and the
+     delivery attempt fails into the D-06 retry state machine (POL-02:
+     SMTP-down no longer silently drops the email — it retries). */
   const dead = net.createServer();
   await new Promise(r => dead.listen(0, '127.0.0.1', r));
   const deadPort = dead.address().port;
@@ -641,6 +643,7 @@ test('REM-05: MAILER rejection is isolated — logged, never rethrown, process s
     env: {
       MASTER_KEY: 'projects-reminders-dead-key',
       REMINDER_TEST_TOKEN: TOKEN,
+      EMAIL_TEST_TOKEN: 'reminder-email-token',
       SMTP_HOST: '127.0.0.1',
       SMTP_PORT: String(deadPort),
       SMTP_REQUIRE_TLS: 'false',
@@ -652,9 +655,14 @@ test('REM-05: MAILER rejection is isolated — logged, never rethrown, process s
   const emitted = own(await trigger(at8('2026-01-15'), deadSrv));
   assert.equal(emitted.length, 1, 'in-app row written regardless of SMTP health');
   await new Promise(r => setTimeout(r, 300));
+  const rows = withDb(deadSrv.dbPath, db => db.prepare('select * from email_outbox').all());
+  assert.equal(rows.length, 1, 'the reminder email is claimed into the outbox');
+  assert.equal(rows[0].status, 'failed', 'the failed send is in the retry state (not dropped, not dead)');
+  assert.equal(rows[0].attempt, 1);
+  assert.ok(rows[0].next_attempt_at > 0, 'next attempt scheduled per D-06 backoff');
   const health = await fetch(`${deadSrv.base}/api/health`);
   assert.equal(health.status, 200, 'process survived the MAILER rejection');
-  assert.ok(deadSrv.output().includes('notif email'), 'failure logged via console.warn');
+  assert.ok(deadSrv.output().includes('email delivery'), 'failure logged via console.warn');
   await deadSrv.stop();
   fs.rmSync(deadDir, { recursive: true, force: true });
 });

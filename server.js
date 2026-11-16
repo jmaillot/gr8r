@@ -522,6 +522,30 @@ const SCHEMA = `
     delivered_at     integer
   );
   create index if not exists webhook_deliveries_due on webhook_deliveries(status, next_attempt_at);
+  /* Phase 68 (POL-02, D-05): email transport claim — mirrors
+     webhook_deliveries' exactly-once shape (UNIQUE dedup_key + INSERT OR
+     IGNORE) with the SAME retry state columns; webhook-retry.js math is
+     shared verbatim (D-06). 'ctx' carries everything the email rebuild
+     needs at delivery time (recipient, locale, kind, payload snapshot).
+     pg twin: db-adapter.mjs SQLITE_SCHEMA (byte-identical DDL — Pitfall
+     P-B); epoch columns reuse webhook names already registered in
+     PG_EPOCH_COLUMNS (created_at/next_attempt_at/delivered_at). */
+  create table if not exists email_outbox (
+    id               text primary key,
+    workspace_id     text not null,
+    dedup_key        text not null unique,
+    kind             text not null,
+    recipient        text not null,
+    ctx              text not null default '',
+    attempt          integer not null default 0,
+    status           text not null default 'pending',
+    next_attempt_at  integer,
+    last_status_code integer,
+    last_error       text not null default '',
+    created_at       integer not null,
+    delivered_at     integer
+  );
+  create index if not exists email_outbox_due on email_outbox(status, next_attempt_at);
 `;
 
 async function initDb() {
@@ -2038,6 +2062,12 @@ const NOTIF_EMAIL_KIND = {
    notif-email-link source-extraction tests keep evaluating that line standalone. */
 
 async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
+  /* POL-02 (Phase 68, D-04/D-05): this is now a CLAIM function — it resolves
+     the per-recipient email params (everything sendNotif needs) and inserts
+     one email_outbox transport claim per notification. Delivery moved to
+     runEmailDeliveryPass (30 s tick + post-commit kick). Returns the number
+     of claims made. */
+  let queued = 0;
   const wsName = wsRow.name || 'Projects Studio';
   const profiles = new Map((Array.isArray(nextDoc?.data?.members) ? nextDoc.data.members : []).map(m => [m?.id, m]));
   const emailByUserId = new Map((await db.all('select id, email from users')).map(u => [u.id, u.email]));
@@ -2114,17 +2144,24 @@ async function queueNotifEmails(wsRow, nextDoc, newNotifs) {
        an emailed link (T-23-01). A task deleted between the doc write and the
        email build falls back to the workspace root. */
     const url = task?.key ? `${APP_URL}/w/${wsRow.slug}/task/${encodeURIComponent(task.key)}` : `${APP_URL}/w/${wsRow.slug}/`;
-    MAILER.sendNotif({
+    /* POL-02 (Phase 68, D-04/D-05/D-06): claim-then-deliver — the outbox row
+       IS the transport claim (UNIQUE dedup_key + INSERT OR IGNORE). Rides the
+       caller's transaction (doc-PUT tx / reminders_sent claim tx) so claim +
+       semantic append commit together; delivery is post-commit via
+       runEmailDeliveryPass. dedup_key derives from n.id, the per-recipient
+       unique notification identity (A2) — a re-run can never duplicate. */
+    await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
+      uid(),
+      wsRow.id,
+      `notif:${n.id}`,
+      'notif',
       to,
-      workspace: wsName,
-      by,
-      task: taskTitle,
-      snippet: n.snippet || '',
-      kind: n.type,
-      url,
-      locale: recipientLocale,
-    }).catch(err => logWarn(`notif email ${n.id} → ${to}: ${err.message}`));
+      JSON.stringify({ type: 'notif', to, workspace: wsName, by, task: taskTitle, snippet: n.snippet || '', kind: n.type, url, locale: recipientLocale }),
+      now(),
+    ]);
+    queued++;
   }
+  return queued;
 }
 
 /* =======================================================================
@@ -2284,20 +2321,35 @@ async function runReminderPass({ now: at = new Date() } = {}) {
                   projectName: projects.get(t.project)?.name || '',
                 }),
               });
+              /* POL-02 (Phase 68, D-04): the email transport claim rides THIS
+                 same tx (D-07 articulation, webhook-claim pattern) — claim +
+                 reminders_sent + notif append commit together, a crash cannot
+                 lose or duplicate the email. Fail-absent: email plumbing
+                 never fails the reminder (the semantic claim stays intact). */
+              if (MAILER.enabled) {
+                try {
+                  await queueNotifEmails(ws, doc, [notif]);
+                } catch (err) {
+                  logWarn(`email outbox enqueue (reminder): ${err.message}`);
+                }
+              }
               claimed = true;
             });
             if (!claimed) continue;
             emitted.push(notif);
+            /* POL-02: post-commit delivery kick — NEVER inside the transaction
+               (a hung SMTP server would hold the SQLite write lock). The 30 s
+               tick is the safety net; this kick makes first delivery prompt. */
+            if (MAILER.enabled) runEmailDeliveryPass().catch(err => logWarn(`email post-commit pass: ${err.message}`));
             /* Post-commit fan-out — NEVER inside the transaction (a hung SMTP
                server would hold the SQLite write lock). Uses the post-write doc.
                One parse, two consumers (RESEARCH open question 3): the push
                fan-out reuses the same parse. Push is gated on PUSH.enabled
                ONLY — never inside the MAILER gate (D-09/D-10: a digest user
                still gets reminder pushes, inbox rows stay untouched). */
-            if (MAILER.enabled || PUSH.enabled) {
+            if (PUSH.enabled) {
               const nextDoc = JSON.parse((await db.get('select doc from workspaces where id = ?', [ws.id])).doc);
-              if (MAILER.enabled) await queueNotifEmails(ws, nextDoc, [notif]);
-              if (PUSH.enabled) await sendPushFor(ws, nextDoc, [notif]);
+              await sendPushFor(ws, nextDoc, [notif]);
             }
           }
         }
@@ -2819,6 +2871,117 @@ async function runWebhookDeliveryPass({ now: at, fetch: fetchFn, lookup } = {}) 
       /* fail-absent: one bad delivery never kills the pass (house rule) */
       tally.failed += 1;
       logWarn(`webhook delivery ${d.id}: ${err.message}`);
+    }
+  }
+  return tally;
+}
+
+/* =======================================================================
+   Email delivery engine (Phase 68, POL-02 / D-04..D-08) — the webhook
+   delivery engine's second consumer, same mental model (D-06: identical
+   retry policy via the shared webhook-retry.js math). Producers (notif
+   loop, digest loop) insert one email_outbox claim per email inside their
+   semantic-claim transaction; this pass drains due rows post-commit.
+   ======================================================================= */
+
+/* Failure write-back, guarded by the attempt number (a concurrent pass
+   that already re-claimed a higher attempt must not be clobbered).
+   D-06: 5 attempts max via isDead; D-08: dead rows purge after 7 days. */
+async function emailFailDelivery(d, newAttempt, atMs, errorText) {
+  const lastError = String(errorText || '').slice(0, 500);
+  if (isDead(newAttempt)) {
+    await db.run("update email_outbox set status = 'dead', last_status_code = null, last_error = ?, next_attempt_at = null where id = ? and attempt = ?", [
+      lastError,
+      d.id,
+      newAttempt,
+    ]);
+    return { dead: 1 };
+  }
+  await db.run("update email_outbox set status = 'failed', next_attempt_at = ?, last_status_code = null, last_error = ? where id = ? and attempt = ?", [
+    nextAttemptMs({ attempt: d.attempt, now: atMs }),
+    lastError,
+    d.id,
+    newAttempt,
+  ]);
+  return { failed: 1 };
+}
+
+/* One delivery attempt. Rebuilds the email from the row's ctx (the
+   diff-time snapshot) and hands it to the injected send (or MAILER).
+   Never throws (the pass wraps it anyway — fail-absent). */
+async function deliverEmail(d, atMs, sendFn) {
+  /* Guarded attempt claim (T-67-02 pattern): bump BEFORE the send — a
+     concurrent pass racing on the same attempt number loses. */
+  const claimed = await db.run('update email_outbox set attempt = attempt + 1 where id = ? and attempt = ? and status in (?, ?)', [d.id, d.attempt, 'pending', 'failed']);
+  if (!claimed.changes) return { skipped: 1 };
+  const newAttempt = d.attempt + 1;
+  let ctx = null;
+  try {
+    ctx = d.ctx ? JSON.parse(d.ctx) : null;
+  } catch {
+    ctx = null;
+  }
+  if (!ctx || typeof ctx !== 'object' || !ctx.type) {
+    /* Malformed row: dead with an explicit reason, never retried forever. */
+    await db.run("update email_outbox set status = 'dead', last_error = ? where id = ?", ['malformed ctx', d.id]);
+    return { dead: 1 };
+  }
+  const { type, ...args } = ctx;
+  const send =
+    sendFn ||
+    (async (kind, a) => {
+      if (kind === 'digest') return MAILER.sendDigest(a);
+      return MAILER.sendNotif(a);
+    });
+  try {
+    await send(type, args);
+    await db.run("update email_outbox set status = 'delivered', delivered_at = ?, last_status_code = null, last_error = '' where id = ? and attempt = ?", [
+      atMs,
+      d.id,
+      newAttempt,
+    ]);
+    return { delivered: 1 };
+  } catch (err) {
+    logWarn(`email delivery ${d.id} → ${d.recipient}: ${err?.message || err}`);
+    return await emailFailDelivery(d, newAttempt, atMs, `${err?.name || 'Error'}: ${err?.message}`);
+  }
+}
+
+/*
+ * One delivery pass over email_outbox — mirrors runWebhookDeliveryPass:
+ * D-08 retention purge (dead rows cannot accumulate), then drains due rows.
+ * Injectable clock (`now`, epoch-ms number or Date) and send fn (the test
+ * harness drives attempts without SMTP). MAILER-disabled servers return
+ * immediately — producers skip claiming, so the pass leaves any row
+ * untouched (open question 2: claim-based retry only matters when SMTP is
+ * configured but down). Fail-absent. */
+async function runEmailDeliveryPass({ now: at, send: sendFn } = {}) {
+  const atMs = at instanceof Date ? at.getTime() : Number.isFinite(at) ? at : now();
+  const tally = { purged: 0, due: 0, delivered: 0, failed: 0, dead: 0, skipped: 0 };
+  if (!MAILER.enabled) return tally;
+  try {
+    const purge = await db.run('delete from email_outbox where created_at < ?', [atMs - WEBHOOK_RETENTION_MS]);
+    tally.purged = purge.changes || 0;
+    if (tally.purged) logInfo(`email outbox purge: ${tally.purged} row(s) older than 7 days`);
+  } catch (err) {
+    logWarn(`email outbox purge: ${err.message}`);
+  }
+  let due = [];
+  try {
+    due = await db.all("select * from email_outbox where status in ('pending', 'failed') and (next_attempt_at is null or next_attempt_at <= ?) order by created_at", [atMs]);
+  } catch (err) {
+    logWarn(`email outbox drain select: ${err.message}`);
+    return tally;
+  }
+  tally.due = due.length;
+  for (const d of due) {
+    try {
+      const r = await deliverEmail(d, atMs, sendFn);
+      for (const k of ['delivered', 'failed', 'dead', 'skipped']) tally[k] += r?.[k] || 0;
+    } catch (err) {
+      /* fail-absent: one bad delivery never kills the pass (house rule) */
+      tally.failed += 1;
+      logWarn(`email delivery ${d.id}: ${err.message}`);
     }
   }
   return tally;
@@ -4763,6 +4926,27 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ...pass, claimed, calls });
   }
 
+  /* Plan 68-02: test-only clock + send injection for the email outbox
+     delivery engine (the webhook-pass pattern). Exists ONLY while
+     EMAIL_TEST_TOKEN is set (node:test harness); unset in production the
+     path 404s like any unknown route. The pass is idempotent by
+     construction (claim table + status machine). */
+  if (pathname === '/api/internal/email-pass' && method === 'POST') {
+    if (!process.env.EMAIL_TEST_TOKEN || req.headers['x-email-token'] !== process.env.EMAIL_TEST_TOKEN) {
+      return fail(res, 404, 'notFound', 'Not found');
+    }
+    const body = await readJson(req).catch(() => ({}));
+    const calls = [];
+    const sendFn = body?.send
+      ? async (type, args) => {
+          calls.push({ type, ...args });
+          if (body.send.fail) throw new Error(body.send.fail);
+        }
+      : undefined;
+    const pass = await runEmailDeliveryPass({ now: body?.now, send: sendFn });
+    return json(res, 200, { ...pass, calls });
+  }
+
   if (pathname === '/api/config' && method === 'GET') {
     return json(res, 200, {
       app: 'projects',
@@ -6690,7 +6874,18 @@ async function handleApi(req, res, url) {
         } catch (err) {
           logWarn(`webhook enqueue: ${err.message}`);
         }
-        return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t, webhookClaims };
+        /* POL-02 (Phase 68, D-04): notification email transport claims ride
+           THIS same tx (D-07, webhook-claim pattern) — claim + doc append
+           commit together. Fail-absent: email plumbing never fails the PUT. */
+        let emailClaims = 0;
+        if (MAILER.enabled && newNotifs.length) {
+          try {
+            emailClaims = await queueNotifEmails(row, next, newNotifs);
+          } catch (err) {
+            logWarn(`email outbox enqueue: ${err.message}`);
+          }
+        }
+        return { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t, webhookClaims, emailClaims };
       });
     } catch (err) {
       // SCOPE-04: the assignee write-guard rejects with an explicit 400 —
@@ -6707,11 +6902,13 @@ async function handleApi(req, res, url) {
     if (refusal.code === 'workspaceChanged') return fail(res, 409, 'workspaceChanged', 'Workspace changed elsewhere', { revision: refusal.revision });
     if (!outcome) return fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     {
-      const { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t, webhookClaims } = outcome;
+      const { row, storedDoc, next, storedFileIds, keptFileIds, newNotifs, t, webhookClaims, emailClaims } = outcome;
       logDocChanges(row, storedDoc, next, ctx.user?.name || ctx.user?.email || 'unknown');
-      /* P4-f: fire-and-forget email fan-out. Authored here so a hung SMTP
-         server delays nothing: errors logged, response already flushed. */
-      if (MAILER.enabled && newNotifs.length) await queueNotifEmails(row, next, newNotifs);
+      /* POL-02 (Phase 68, D-04): email claims committed with the doc — the
+         delivery pass fires POST-COMMIT and is never awaited into the
+         response (webhook twin below, T-67-04). The 30 s tick is the
+         safety net for anything the kick misses (retries included). */
+      if (emailClaims) runEmailDeliveryPass().catch(err => logWarn(`email post-commit pass: ${err.message}`));
       /* P4-f push twin (Phase 59, PUSH-02): same collected-in-tx / sent-after-
          commit shape, gated on PUSH.enabled (VAPID presence) — never on
          MAILER.enabled (D-10: no digest suppression, D-11: same gate order). */
@@ -8585,6 +8782,10 @@ async function main() {
   setInterval(() => {
     try {
       runWebhookDeliveryPass().catch(err => logWarn(`webhook tick: ${err.message}`));
+      /* POL-02 (Phase 68, D-04): email delivery pass piggybacks the same
+         30 s tick — drain + D-08 purge, same house rules (try/catch AND a
+         promise .catch, .unref()). */
+      runEmailDeliveryPass().catch(err => logWarn(`email tick: ${err.message}`));
     } catch (err) {
       logWarn(`webhook tick: ${err.message}`);
     }

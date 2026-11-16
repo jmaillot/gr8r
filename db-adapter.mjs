@@ -357,6 +357,26 @@ export const SQLITE_SCHEMA = `
     delivered_at     integer
   );
   create index if not exists webhook_deliveries_due on webhook_deliveries(status, next_attempt_at);
+  /* Phase 68 (POL-02, D-05): email transport claim — mirrors webhook_deliveries'
+     exactly-once shape (UNIQUE dedup_key + INSERT OR IGNORE) with the SAME
+     retry state columns; webhook-retry.js math is shared verbatim (D-06).
+     'ctx' carries everything the email rebuild needs at delivery time. */
+  create table if not exists email_outbox (
+    id               text primary key,
+    workspace_id     text not null,
+    dedup_key        text not null unique,
+    kind             text not null,
+    recipient        text not null,
+    ctx              text not null default '',
+    attempt          integer not null default 0,
+    status           text not null default 'pending',
+    next_attempt_at  integer,
+    last_status_code integer,
+    last_error       text not null default '',
+    created_at       integer not null,
+    delivered_at     integer
+  );
+  create index if not exists email_outbox_due on email_outbox(status, next_attempt_at);
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);
