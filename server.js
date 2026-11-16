@@ -6502,7 +6502,7 @@ async function handleApi(req, res, url) {
       assignees: [],
       commentId: 'sample-comment-1',
       taskTitle: 'Sample task',
-      body: 'This is a test payload sent from gr8r.',
+      body: 'This is a test payload sent from Projects Studio.',
       due: new Date(now()).toISOString(),
       offset: 0,
       projectId: project.id,
