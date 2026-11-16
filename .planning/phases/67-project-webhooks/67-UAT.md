@@ -3,7 +3,8 @@ status: testing
 phase: 67-project-webhooks
 source: [67-VERIFICATION.md]
 started: 2026-11-15T23:55:00Z
-updated: 2026-11-16T00:10:00Z
+updated: 2026-11-16T00:20:00Z
+note: "Deferred by user — UAT postponed until after Phase 68 (known issue G-67-1: Dockerfile missing webhook modules); resume with /gsd-verify-work 67"
 ---
 
 ## Current Test
