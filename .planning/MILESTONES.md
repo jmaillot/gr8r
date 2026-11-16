@@ -1,5 +1,24 @@
 # Milestones
 
+## v2.4 Automation & Productivity (Shipped: 2026-11-16)
+
+**Phases completed:** 4 phases, 17 plans, 1 tasks
+
+**Key accomplishments:**
+- Proved the D-01/D-03 flat subtask-tree storage shape end-to-end — `{ id, parentId, position }` round-trips byte-identical through the mergeClientDoc whitelist sink, legacy docs heal lazily, crafted cross-task linkage never persists — with the shared DOM-free `subtree.js` module and the Wave-0 test harness all later plans extend.
+- The server now owns tree legality — cycle/depth-violating restructures are rejected wholesale at the mergeClientDoc funnel with tx-atomic rollback and localized `subtaskCycle`/`subtaskDepth` codes — while completion cascades symmetrically at every level (D-14, reopen cascades nothing per D-13), deletion removes whole subtrees, and parent progress became a leaf-only rollup with zero double-counting at both duplicated definition sites.
+- The multi-level subtask tree is now user-visible everywhere — drawer checklist, list/table subrows, board open-leaf badge with a popover checklist, and indented collapsible timeline bars with date inheritance — all through ONE shared recursive renderer ordered by the single `orderedSiblings` comparator, all progress leaf-based via the 65-02 rollup, collapse state session-only in `S.ui` (D-10).
+- The subtask tree now survives every non-view surface — subtask titles are searchable on both backends through one byte-identical folded suffix and forget deleted ones on the next funnel write, exports walk the tree in (position, arrayIndex) order with per-level keys, true depth and MSPDI OutlineLevel, and MCP writeDoc faces the same subtree gate as the funnel while stripping members without losing tree shape.
+- Exactly-once webhook delivery substrate — UNIQUE dedup_key claim, SSRF-guarded HMAC-signed fetch (redirect:'error' + 10s timeout), D-05 5-strike retry with Retry-After, D-07 7-day purge, and task.created wired doc-PUT → diff → in-tx claim → post-commit fire-and-forget.
+- All 8 webhook events fire from their two emission sites (doc-PUT diff + runReminderPass, dedup-shared, no double-fire), whitelisted envelopes format into teams-adaptive / teams-messagecard / raw-json under a UTF-8-byte-measured 28 KB cap with truncate-and-deliver, real AAD `<at>` mentions resolve from `users.oid` persisted at Entra login.
+- Owner/admin/leader-gated hook CRUD (create/list/edit/delete) with a server-generated secret returned exactly once, https/format/event-filter validation, D-06 health derived from dead deliveries, and a D-11 send-test endpoint riding the identical SSRF-guarded, HMAC-signed, 10 s-timeout delivery pipeline with an immediate visible result.
+- Test webhook payload body rebranded from « gr8r » to « Projects Studio » in server.js, closing gap G-67-2 with green webhook suites (23/23)
+- Scoped the WR-01 squeeze fix to `.page.flush .toolbar` ≤900px (POL-03/D-09) with a byte-level Wave-0 test, and formally accepted 64-VALIDATION.md per audit-milestone §5.5 (POL-04/D-10).
+- Notification and digest emails moved from fire-and-forget to the Phase 67 claim-then-deliver machinery — a new `email_outbox` transport-claim table (byte-identical on SQLite+pg), claim inserts inside the semantic-claim transactions, and a `runEmailDeliveryPass` drain with webhook-identical backoff (1m→5m→30m→2h→8h), dead-state and 7-day silent purge.
+- The mobile card stack (.mcard, ≤900px) now renders priority/due/estimate/progress as a pure function of the existing hidden[] view state — driven by the re-enabled cols popover — with status/title/key/assignees structurally exempt (minimum identity), proven by a dedicated 390×844 e2e.
+
+---
+
 ## v2.3 Consolidation & Hardening (Shipped: 2026-11-15)
 
 **Phases completed:** 3 phases (62–64), 9 plans

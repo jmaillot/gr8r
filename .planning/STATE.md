@@ -2,17 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v2.4
 milestone_name: Automation & Productivity
-current_phase: 66
-status: executing
+status: Awaiting next milestone
 stopped_at: Phase 66 complete — all phases complete
-last_updated: "2026-11-16T13:02:56.470Z"
-state_head: 67a4e93e9e387116583e911e0d90b3b950eb5a77
+last_updated: "2026-11-16T13:58:21.550Z"
+last_activity: 2026-11-16
+last_activity_desc: Milestone v2.4 completed and archived
+state_head: 52ecd932552d861bd1e9dae3c8cf69a946864070
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
   completed_plans: 17
-  percent: 75
+current_phase: 66
 ---
 
 # STATE.md
@@ -25,14 +26,10 @@ progress:
 
 ## Current Position
 
-**Phase:** 66
-**Plan:** Not started
-**Progress:** [████████░░] 75%
-
-- [ ] Phase 65: Subtask Tree
-- [ ] Phase 66: Task & Project Templates
-- [ ] Phase 67: Project Webhooks
-- [ ] Phase 68: Backlog Polish
+Phase: Milestone v2.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-16 — Milestone v2.4 completed and archived
 
 ## Performance Metrics
 
@@ -81,6 +78,12 @@ progress:
 
 None.
 
+## Deferred Items
+
+| Milestone | Phase | Item | Status |
+|---|---|---|---|
+| v2.4 | 66 | Chunk-size gate overage at 66-02 start (pre-existing) — resolved in 66-03; acknowledged at milestone close | acknowledged (resolved) |
+
 ## Session Continuity
 
 **Last session:** 2026-11-16T12:03:11.457Z
@@ -111,3 +114,7 @@ None.
 - [Phase 68]: POL-01: .mcard hideable fields are a pure render-time read of v.hidden keyed on TCOLS ids (priority/due/estimate/progress verified verbatim); D-01 exemption is structural (.mch row + assignees sit outside every gate); A3 confirmed — the 899px popover-hidden assertion was inverted deliberately per D-02
 - [Phase 68]: 68-04 phase gate: unit 1701/1688 green (13 skips all pre-existing env gates), e2e 129/129 green after clearing lingering server.js processes — e2e 'server not ready' failures are contention flakes, not regressions
 - [Phase 67]: G-67-2 gap closure: test webhook payload body rebranded to Projects Studio; x-gr8r-signature protocol header intentionally unchanged
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

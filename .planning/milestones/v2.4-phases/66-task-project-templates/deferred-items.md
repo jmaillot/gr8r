@@ -23,3 +23,4 @@
   `src/features/file-preview.js` (loaded before openModal via the S.ui.apMod / S.ui.fpMod
   caches; lazyStub renders while a chunk loads). Entry chunk measured under the 500,000-byte
   gate; `node --test test/build-chunk-size.test.mjs` green (1615/1615 unit tests, 0 fail).
+  status: acknowledged

@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-15 — v2.4 Automation & Productivity started (subtask tree, templates, per-project webhooks → MS Teams, v2.3 backlog polish)*
+*Last updated: 2026-11-16 after v2.4 milestone — Automation & Productivity shipped (subtask tree, task/project templates, per-project webhooks → MS Teams, v2.3 backlog polish)*
 
 
 <details>
@@ -129,7 +129,33 @@ _Not yet defined — start with `/gsd-new-milestone`. Deferred backlog candidate
 listed in ROADMAP.md (mobile hidden[] card fields, SMTP retry semantics, WR-01 CSS
 scoping, Nyquist reconciliation)._
 
-## Current Milestone: v2.4 Automation & Productivity
+## Current Milestone: v2.4 Automation & Productivity — SHIPPED (2026-11-16)
+
+**Shipped:** 4 phases, 17 plans, 16/16 requirements, all phases verified. Archived to
+`.planning/milestones/v2.4-ROADMAP.md` (details) and `v2.4-REQUIREMENTS.md` (outcomes).
+
+- SUB — Subtask tree ✓: multi-level `{id, parentId, position}` trees; cycle/depth rejected at the
+  mergeClientDoc funnel (localized `subtaskCycle`/`subtaskDepth`); completion cascade + leaf-only
+  progress rollups; tree survives views, FTS (both dialects), MSPDI/xlsx/CSV exports, MCP writeDoc
+- TMPL — Task & project templates ✓: workspace-wide templates with `dueOffsetDays`, pure
+  `instantiateTemplate` builder riding the normal doc-PUT; lazy-chunk picker/editor UI
+- WHK — Per-project webhooks ✓: 8-event vocabulary diffed at the funnel, claim-once delivery,
+  SSRF-guarded HMAC-signed fetch (redirect:'error', pinned addresses), 5-strike retry honoring
+  Retry-After, 7-day purge; Teams adaptive/messagecard/raw-json under the 28 KB cap; real AAD
+  mentions from persisted `users.oid`
+- POL — v2.3 backlog ✓: mobile card fields driven by `hidden[]` (cols popover re-enabled ≤900px),
+  email claim-then-deliver on the webhook machinery (`email_outbox`, identical backoff), WR-01 CSS
+  scoping, 64-VALIDATION Nyquist reconciliation accepted
+
+**Notable decisions:** D-01 flat tree storage shape; D-13 reopen cascades nothing; D-14 template
+kinds; dedup_key carries diff `occurredAt` (CR-01); `pinnedFetch` closes the within-attempt DNS
+rebinding window (WR-01-fix).
+
+**Next milestone:** goals not yet defined — start with `/gsd-new-milestone`. Open backlog item:
+Phase 999.1 (Phase 65 UAT Test 11 — exports in MS Project).
+
+<details>
+<summary>v2.4 planning record (pre-ship) — kept for context</summary>
 
 **Goal:** automate repetitive work — hierarchical subtasks, task/project templates,
 and per-project outbound webhooks delivering to Microsoft Teams — while clearing
@@ -150,6 +176,8 @@ intact (500 kB chunk gate, EN+FR i18n gate, lint, 1524+-test unit suite, e2e 115
 
 **Out of scope:** real file storage (names/sizes only today), realtime collaboration,
 billing, time tracking, per-team webhooks (project-scoped only this milestone).
+
+</details>
 
 ## Current Milestone: v2.0 Project-level Permissions & Invitations — SHIPPED (2026-11-09)
 
