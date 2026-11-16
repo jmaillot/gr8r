@@ -1,6 +1,6 @@
 ---
 created: "2026-11-16T13:00:00Z"
-status: doing
+status: completed
 area: ui
 severity: minor
 resolves_phase: ""
