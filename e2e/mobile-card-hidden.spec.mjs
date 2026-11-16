@@ -189,3 +189,50 @@ test('at 390×844 the cols popover opens and the priority toggle hides/shows the
     await context.close();
   }
 });
+
+/* Task 2 toggle matrix: every hideable field (due, estimate, progress —
+   priority covered above) follows hidden[] both directions; a no-equivalent
+   entry (labels) is togglable but inert for the card (D-03); minimum
+   identity (D-01) survives every combination. */
+test('at 390×844 every hideable card field follows hidden[] both ways and no-equivalent toggles are inert', async ({ browser }) => {
+  const { context, page } = await signIn(browser);
+  try {
+    await openTasksTable(page);
+    await expectAllFields(page);
+    await expectMinIdentity(page);
+
+    /* due: hide → card .due gone; re-show → back. */
+    await toggleCol(page, 'due');
+    await expect(rich(page).locator('.mcm .due')).toHaveCount(0);
+    await expectMinIdentity(page);
+    await toggleCol(page, 'due');
+    await expect(rich(page).locator('.mcm .due')).toBeVisible();
+
+    /* estimate: hide → "3d" gone; re-show → back. */
+    await toggleCol(page, 'estimate');
+    await expect(rich(page).locator('.mcm')).not.toContainText('3d');
+    await expectMinIdentity(page);
+    await toggleCol(page, 'estimate');
+    await expect(rich(page).locator('.mcm')).toContainText('3d');
+
+    /* progress: hide → .prog bar gone; re-show → back. */
+    await toggleCol(page, 'progress');
+    await expect(rich(page).locator('.mcm .prog')).toHaveCount(0);
+    await expectMinIdentity(page);
+    await toggleCol(page, 'progress');
+    await expect(rich(page).locator('.mcm .prog')).toBeVisible();
+
+    /* D-03 no-equivalent: labels has no card rendering — toggling it must
+       not change the card at all (still fully rendered) and must not error. */
+    await toggleCol(page, 'labels');
+    await expectAllFields(page);
+    await expectMinIdentity(page);
+    await toggleCol(page, 'labels');
+    await expectAllFields(page);
+
+    /* D-01: every minimum-identity element still present after all toggles. */
+    await expectMinIdentity(page);
+  } finally {
+    await context.close();
+  }
+});
