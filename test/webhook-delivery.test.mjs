@@ -97,6 +97,21 @@ test('double enqueue with the same (hook, event, subject) claims exactly ONE row
   assert.equal(totalCalls, 1, 'the endpoint was contacted exactly once');
 });
 
+test('CR-01 fix (v2.4 audit): a repeat event with a NEW occurrence claims a second delivery — the dedup key carries the occurrence component', async () => {
+  insertHook({ id: 'wh-occ' });
+  const occ1 = '2026-11-15T12:00:00.000Z';
+  const occ2 = '2026-11-15T13:30:00.000Z';
+  const first = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-occ', event: 'task.created', subjectId: 't1', workspaceId: ws.id, occurrence: occ1 }] });
+  assert.equal(first.data.claimed, 1, `first occurrence claims ${JSON.stringify(first.data)}`);
+  const dup = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-occ', event: 'task.created', subjectId: 't1', workspaceId: ws.id, occurrence: occ1 }] });
+  assert.equal(dup.data.claimed, 0, 'the SAME occurrence stays exactly-once');
+  const second = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-occ', event: 'task.created', subjectId: 't1', workspaceId: ws.id, occurrence: occ2 }] });
+  assert.equal(second.data.claimed, 1, 'a NEW real-world occurrence is no longer dropped forever');
+  const rows = withDb(server.dbPath, db => db.prepare("select dedup_key, status from webhook_deliveries where dedup_key like 'wh-occ:task.created:t1:%' order by dedup_key").all());
+  assert.deepEqual(rows.map(r => r.dedup_key), [`wh-occ:task.created:t1:${occ1}`, `wh-occ:task.created:t1:${occ2}`]);
+  assert.equal(rows[1].status, 'delivered', 'the repeat occurrence was actually delivered');
+});
+
 test('delivery is HMAC-signed with the hook secret over the raw body', async () => {
   insertHook({ id: 'wh-sig' });
   const r = await trigger({ now: NOW, fetch: { statusCode: 200 }, lookup: LOOKUP, enqueue: [{ hookId: 'wh-sig', event: 'task.created', subjectId: 't1', workspaceId: ws.id }] });

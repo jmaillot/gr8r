@@ -150,6 +150,18 @@ export function normalizeTemplatesData(data, uidFactory, opts = {}) {
   if (!data || typeof data !== 'object') return;
   const gate = opts.gate !== false;
   const list = Array.isArray(data.templates) ? data.templates : [];
+  /* subSig65 mirror (v2.4 audit tech-debt fix): records whose sanitized
+     body is byte-identical to the stored one skip the wholesale
+     validateSubtree walk — a template the client did not touch cannot
+     introduce a NEW poisoned tree (it is already stored), so re-walking
+     it on every doc-PUT only burns cycles on large catalogues. The heal
+     below still runs unconditionally, exactly like the task-tree path
+     (validate skipped for unchanged, normalizeSubtasksData always). */
+  const storedById = new Map(
+    (Array.isArray(opts.storedTemplates) ? opts.storedTemplates : [])
+      .filter(r => r && typeof r === 'object' && !Array.isArray(r) && typeof r.id === 'string' && r.id)
+      .map(r => [r.id, r]),
+  );
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const rec = list[i];
@@ -166,17 +178,28 @@ export function normalizeTemplatesData(data, uidFactory, opts = {}) {
       }
     }
     if (gate) {
-      for (const tree of trees) {
-        const verdict = validateSubtree(tree);
-        if (!verdict.ok) {
-          /* the message carries ONLY the stable machine code — the client
-             translates subtaskCycle/subtaskDepth (ERR-01; both keys live in
-             the EN+FR catalogues) and the i18n scan gate keeps English prose
-             out of src/. mcp.js composes the human wording at its call site. */
-          const err = new Error(verdict.code);
-          err.status = 400;
-          err.code = verdict.code;
-          throw err;
+      /* unchanged-body skip: the sanitized stored record is compared
+         canonical-form to canonical-form — a raw client resend that only
+         reorders JSON keys still matches (both sides run the same
+         sanitizer), while any body delta (new tree, new subtask, changed
+         field) falls through to full validation. */
+      const prev = storedById.get(t.id);
+      const unchanged =
+        !!prev &&
+        JSON.stringify(sanitizeTemplate(prev, null, i)?.body ?? null) === JSON.stringify(t.body);
+      if (!unchanged) {
+        for (const tree of trees) {
+          const verdict = validateSubtree(tree);
+          if (!verdict.ok) {
+            /* the message carries ONLY the stable machine code — the client
+               translates subtaskCycle/subtaskDepth (ERR-01; both keys live in
+               the EN+FR catalogues) and the i18n scan gate keeps English prose
+               out of src/. mcp.js composes the human wording at its call site. */
+            const err = new Error(verdict.code);
+            err.status = 400;
+            err.code = verdict.code;
+            throw err;
+          }
         }
       }
     }

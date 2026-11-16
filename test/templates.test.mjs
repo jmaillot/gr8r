@@ -344,6 +344,22 @@ test('a self-parent cycle inside an embedded template tree is rejected wholesale
   assert.throws(() => normalizeTemplatesData(data, fakeUid), err => err.code === 'subtaskCycle' && err.status === 400);
 });
 
+test('subSig65 mirror (v2.4 audit): an unchanged sanitized body skips the wholesale gate — a resend of a stored cyclic tree is healed in place instead of hard-400ing (WR-05 asymmetry)', () => {
+  const poisoned = [{ id: 'a', kind: 'task', name: 'T', body: { title: 'T', subtasks: [{ id: 's1', parentId: 's1', position: 0, title: 'self', done: false }] } }];
+  const data = { templates: [{ id: 'a', kind: 'task', body: { title: 'T', subtasks: [{ id: 's1', parentId: 's1', position: 0, title: 'self', done: false }] } }] };
+  normalizeTemplatesData(data, fakeUid, { storedTemplates: poisoned });
+  assert.equal(data.templates[0].body.subtasks[0].parentId, null, 'heal still runs on unchanged trees — self-parent re-rooted');
+});
+
+test('subSig65 mirror: a body delta re-validates — a cycle introduced on top of a stored template still rejects subtaskCycle', () => {
+  const stored = [{ id: 'a', kind: 'task', name: 'T', body: { title: 'T', subtasks: [{ id: 's1', parentId: null, position: 0, title: 'ok', done: false }] } }];
+  const changed = { templates: [{ id: 'a', kind: 'task', body: { title: 'T', subtasks: [
+    { id: 'x', parentId: 'y', position: 0 },
+    { id: 'y', parentId: 'x', position: 1 },
+  ] } }] };
+  assert.throws(() => normalizeTemplatesData(changed, fakeUid, { storedTemplates: stored }), err => err.code === 'subtaskCycle');
+});
+
 test('a mutual cycle and a depth overflow in a template body reject with the stable codes', () => {
   const mutual = {
     templates: [

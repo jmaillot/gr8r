@@ -232,17 +232,18 @@ test('a doc-PUT creating a task with one subscribed hook yields exactly one pend
   insertHook();
   const saved = await putWithTask('t-new');
   assert.equal(saved.status, 200, `PUT ${saved.status} ${JSON.stringify(saved.data)}`);
-  const rows = hookRows().filter(r => r.dedup_key === 'wh-e:task.created:t-new');
+  const rows = hookRows().filter(r => r.dedup_key?.startsWith('wh-e:task.created:t-new'));
   assert.equal(rows.length, 1, 'exactly one claim row');
   assert.equal(rows[0].status, 'pending');
   assert.equal(rows[0].event, 'task.created');
   assert.equal(rows[0].hook_id, 'wh-e');
+  assert.ok(rows[0].dedup_key.split(':').length >= 4, 'the doc-PUT claim key carries the occurrence component (CR-01 fix)');
 });
 
 test('the same PUT replayed claims nothing new (exactly-once, diff-based)', async () => {
   const saved = await putWithTask('t-new');
   assert.equal(saved.status, 200);
-  const rows = hookRows().filter(r => r.dedup_key === 'wh-e:task.created:t-new');
+  const rows = hookRows().filter(r => r.dedup_key?.startsWith('wh-e:task.created:t-new'));
   assert.equal(rows.length, 1, 'still exactly one row');
 });
 

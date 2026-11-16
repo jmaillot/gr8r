@@ -62,7 +62,7 @@ import { registerCatalogue, tFor } from './src/core/i18n.js';
 /* Phase 65 (65-01): the subtask-tree normalize/heal pass — one DOM-free
    definition shared with the client bundle (D-01/D-01a/D-03). */
 import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
-import { ssrfOk } from './webhook-ssrf.js';
+import { ssrfOk, pinnedFetch } from './webhook-ssrf.js';
 import { nextAttemptMs, isDead } from './webhook-retry.js';
 import { diffWebhookEvents, buildEnvelope, WEBHOOK_EVENTS } from './src/core/webhook-events.js';
 import { formatPayload, truncateToCap } from './webhook-formats.js';
@@ -1465,8 +1465,10 @@ async function mergeClientDoc(incoming, stored, membership, wsId, refusals = [])
      through sanitizeTemplate (unknown fields silently dropped, D-04),
      beside the subtask pass and BEFORE any perm gate reads tasks, so
      the stored doc and every downstream consumer (FTS, exports, MCP)
-     always see the canonical D-02 shape. */
-  normalizeTemplatesData(next.data, uid);
+     always see the canonical D-02 shape. The stored templates ride along
+     so unchanged bodies skip the wholesale validateSubtree walk (the
+     subSig65 semantics — v2.4 audit tech-debt fix). */
+  normalizeTemplatesData(next.data, uid, { storedTemplates: stored?.data?.templates });
   const memberId = membership?.member_id || null;
   const role = membership?.role || 'member';
   /* [2026-11-08 D-51-15/16, T-51-01] The project-creation restriction is read
@@ -2594,7 +2596,13 @@ function logDocChanges(ws, storedDoc, next, actorName) {
    - WHK-05/T-67-01: ssrfOk(hook.url) is re-checked EVERY attempt, BEFORE
      fetch; fetch carries redirect:'error' (a redirect could point at an
      internal address) and AbortSignal.timeout(10_000) (house rule,
-     oidc.js:28 — every outbound fetch carries it).
+     oidc.js:28 — every outbound fetch carries it). WR-01 fix (v2.4
+     audit): when no test fetch is injected, the send goes through
+     pinnedFetch — the TLS connect resolves the hostname THROUGH the
+     guard-validated address set, closing the within-attempt rebinding
+     window (ssrfOk validated one resolution; the old plain fetch
+     resolved the name AGAIN, and a rebinding attacker could flip DNS in
+     between).
    - T-67-03 log hygiene: log hook id + delivery id + status code + HOST
      only — never the URL (the Workflows URL is itself a bearer secret:
      its query carries the bearer) and never the signing secret.
@@ -2609,18 +2617,29 @@ const WEBHOOK_RETENTION_MS = 604_800_000;
 
 /* WHK-03 exactly-once claim. Called INSIDE the enqueue transaction; the
    dedup key is {hookId}:{event}:{subjectKey} (subjectKey = taskId or
-   project id). Returns the claim result (changes = 1 → this caller owns
+   project id), plus the event's occurredAt as the OCCURRENCE component
+   when the caller provides one (CR-01 fix, v2.4 audit): the doc-PUT diff
+   stamps occurredAt per diff-call, so a repeat real-world event for the
+   same subject (task completed → reopened → completed again) claims a
+   NEW row instead of being silently no-op'd forever by the old 3-part
+   key. Callers without an occurrence (the test nonce, the reminder site
+   — its subjectId already encodes offset:due) keep the 3-part key.
+   Returns the claim result (changes = 1 → this caller owns
    the delivery, 0 → already claimed). `ctxJson` (67-02) is the diff-time
    event snapshot + D-03 context trio stored on the row — the envelope is
    built from THIS at delivery time (task.deleted keeps the last-known
    title; a huge comment body truncates from the original text). */
-function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId, ctxJson }) {
+function webhookDedupKey(hookId, event, subjectId, occurrence) {
+  const base = `${hookId}:${event}:${subjectId}`;
+  return occurrence == null || occurrence === '' ? base : `${base}:${occurrence}`;
+}
+function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId, occurrence, ctxJson }) {
   return db.run('insert or ignore into webhook_deliveries (id, workspace_id, hook_id, event, dedup_key, ctx, attempt, status, created_at) values (?, ?, ?, ?, ?, ?, 0, ?, ?)', [
     uid(),
     workspaceId,
     hookId,
     event,
-    `${hookId}:${event}:${subjectId}`,
+    webhookDedupKey(hookId, event, subjectId, occurrence),
     ctxJson || '',
     'pending',
     now(),
@@ -2635,7 +2654,7 @@ function enqueueWebhookDelivery({ hookId, workspaceId, event, subjectId, ctxJson
    makes a re-emission a no-op, so reminder dedup + webhook claim can never
    double-fire (Pitfall 3). Fail-absent: an enqueue error must never fail its
    caller. Returns the number of claims made. */
-async function emitWebhookEvent(workspaceId, { projectId, event, subjectId, ctxJson }) {
+async function emitWebhookEvent(workspaceId, { projectId, event, subjectId, occurrence, ctxJson }) {
   let claimed = 0;
   try {
     const hooks = await db.all("select id, events from webhook_hooks where workspace_id = ? and project_id = ? and status = 'active'", [workspaceId, projectId]);
@@ -2648,7 +2667,7 @@ async function emitWebhookEvent(workspaceId, { projectId, event, subjectId, ctxJ
         list = [];
       }
       if (!Array.isArray(list) || !list.includes(event)) continue;
-      const r = await enqueueWebhookDelivery({ hookId: hook.id, workspaceId, event, subjectId, ctxJson });
+      const r = await enqueueWebhookDelivery({ hookId: hook.id, workspaceId, event, subjectId, occurrence, ctxJson });
       claimed += r?.changes || 0;
     }
   } catch (err) {
@@ -2706,7 +2725,7 @@ async function enqueueWebhookDeliveries(workspaceId, next, events, { authorName 
     const ctx = { ...data, event: ev.event, projectId, projectName: data.projectName || projectNameOf.get(projectId) || '', authorName: authorName || null };
     if (ev.event === 'task.assigned') ctx.mentions = await resolveMentions(data.assignees);
     const ctxJson = JSON.stringify(ctx);
-    claimed += await emitWebhookEvent(workspaceId, { projectId, event: ev.event, subjectId: ev.subjectId, ctxJson });
+    claimed += await emitWebhookEvent(workspaceId, { projectId, event: ev.event, subjectId: ev.subjectId, occurrence: ev.occurredAt, ctxJson });
   }
   return claimed;
 }
@@ -2822,8 +2841,13 @@ async function deliverWebhook(d, atMs, fetchFn, lookup) {
 
   let res = null;
   let fetchErr = null;
+  /* WR-01 fix: the default transport is pinnedFetch bound to the address
+     set ssrfOk just validated; an injected fetchFn (test harness, the
+     test route) keeps its old contract. redirect:'error' is moot on the
+     pinned path — node:https never follows redirects. */
+  const send = fetchFn || ((u, o) => pinnedFetch(u, { addresses: guard.addresses, ...o }));
   try {
-    res = await fetchFn(hook.url, {
+    res = await send(hook.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-gr8r-signature': `sha256=${signature}` },
       body: bodyStr,
@@ -2880,7 +2904,7 @@ async function runWebhookDeliveryPass({ now: at, fetch: fetchFn, lookup } = {}) 
   tally.due = due.length;
   for (const d of due) {
     try {
-      const r = await deliverWebhook(d, atMs, fetchFn || fetch, lookup);
+      const r = await deliverWebhook(d, atMs, fetchFn, lookup);
       for (const k of ['delivered', 'failed', 'dead', 'skipped']) tally[k] += r?.[k] || 0;
     } catch (err) {
       /* fail-absent: one bad delivery never kills the pass (house rule) */
@@ -4931,7 +4955,7 @@ async function handleApi(req, res, url) {
     let claimed = 0;
     for (const e of Array.isArray(body?.enqueue) ? body.enqueue : []) {
       try {
-        const r = await enqueueWebhookDelivery({ hookId: e.hookId, workspaceId: e.workspaceId || body?.workspaceId, event: e.event, subjectId: e.subjectId });
+        const r = await enqueueWebhookDelivery({ hookId: e.hookId, workspaceId: e.workspaceId || body?.workspaceId, event: e.event, subjectId: e.subjectId, occurrence: e.occurrence });
         claimed += r?.changes || 0;
       } catch (err) {
         logWarn(`webhook test enqueue: ${err.message}`);
@@ -6529,7 +6553,7 @@ async function handleApi(req, res, url) {
     const lookup = tokenOk && body?.lookup ? webhookTestLookup(body.lookup) : undefined;
     const atMs = tokenOk && Number.isFinite(body?.now) ? body.now : now();
     try {
-      await deliverWebhook(delivery, atMs, fetchFn || fetch, lookup);
+      await deliverWebhook(delivery, atMs, fetchFn, lookup);
     } catch (err) {
       logWarn(`webhook test delivery ${delivery.id}: ${err.message}`);
     }
