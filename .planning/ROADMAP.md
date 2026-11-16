@@ -91,7 +91,17 @@ Plans:
   3. The WR-01 CSS scoping (`.page.flush .toolbar` flex-shrink at ≤900px) is applied and board toolbar behavior is proven unchanged by the existing e2e suite
   4. The Phase 64 validation draft is reconciled or formally accepted per audit-milestone §5.5, with no open validation artifacts at milestone close
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+- [ ] 68-01-PLAN.md — Tracer: WR-01 CSS scoping (.page.flush .toolbar) + Wave-0 css-assert test; POL-04 Formal Acceptance in 64-VALIDATION.md
+
+**Wave 2** *(blocked on Wave 1 per the 68-VALIDATION per-task map; no file overlap between 02 and 03)*
+- [ ] 68-02-PLAN.md — POL-02: email_outbox claim table (SQLite+pg same commit) + notif/digest claim-then-deliver + runEmailDeliveryPass on the 30 s tick + Wave-0 test/email-outbox.test.mjs
+- [ ] 68-03-PLAN.md — POL-01: .mcard fields driven by hidden[] via cols popover (D-02 unhide), minimum-identity exempt (D-01), e2e at 390×844
+
+**Wave 3** *(blocked on Waves 1-2)*
+- [ ] 68-04-PLAN.md — Phase gate: full npm test + npm run e2e (POL-03 non-regression proof + Wave-0 presence)
 
 ## Coverage
 
