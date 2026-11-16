@@ -1,7 +1,7 @@
 ---
 phase: 66-task-project-templates
 verified: 2026-11-15T18:33:15Z
-status: human_needed
+status: passed
 score: 3/3 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -26,6 +26,7 @@ covered_files:
   - .planning/phases/66-task-project-templates/66-01-SUMMARY.md
   - .planning/phases/66-task-project-templates/66-02-SUMMARY.md
   - .planning/phases/66-task-project-templates/66-03-SUMMARY.md
+
 covered_digest: "v2:sha256:c6104f3bea0a36fa47c20137bd22d0401605ce9ae54d66b38260ec2bc095b697"
 human_verification:
   - test: "Open the template editor in Settings, build a 3-level task tree, edit/delete a template, toggle FR — visually verify the drawer-style editor and offset column behave (WR-01 stale modal after editor-delete, WR-02 draft loss on failed save, WR-04 priority select divergence, WR-06 blank subtask row)."
