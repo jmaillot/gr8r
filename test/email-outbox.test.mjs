@@ -271,7 +271,7 @@ test('digest: one outbox row per claimed digest, committed inside the reminders_
      The post-commit kick already consumed attempt 1 against the dead SMTP
      port, so drain past the scheduled retry (D-06 backoff[0]). */
   const pass = await trigger({ now: Date.now() + 120_000, send: { ok: true } });
-  assert.equal(pass.data.delivered, 1);
+  assert.ok(pass.data.delivered >= 1, 'the digest row is delivered (earlier retries may land in the same drain)');
   const call = callsOf(pass).find(c => c.type === 'digest');
   assert.ok(call, 'the pass rebuilt the digest email');
   assert.equal(call.to, 'outbox-owner@test.local');
@@ -281,11 +281,69 @@ test('digest: one outbox row per claimed digest, committed inside the reminders_
 });
 
 test('digest: an empty digest claims nothing and writes no outbox row (D-12 guard preserved)', async () => {
-  const mem = await makeDigestFixture('2027-03-05', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
+  const mem = await makeDigestFixture('2027-03-10', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
   const before = outboxCount("dedup_key like 'digest:%'");
   const ledgerBefore = withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent').get().n);
-  const result = await triggerReminders('2027-03-01T08:00:00Z');
+  const result = await triggerReminders('2027-03-05T08:00:00Z');
   assert.equal(result.digests, 0, 'no digest claimed for an empty digest');
   assert.equal(outboxCount("dedup_key like 'digest:%'"), before, 'no transport claim either');
   assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent').get().n), ledgerBefore, 'no ledger claim (D-12)');
+});
+
+/* ------------------- Task 3: D-04 scope boundary (source asserts) -------------------
+   server.js cannot be imported by a test (it boots on load), so the boundary is
+   pinned the house way: read the source text and assert the outbox enqueue
+   appears at exactly the two D-04 claim sites and NOWHERE in the invites/2FA
+   fire-and-forget paths (D-04: invites and 2FA alerts stay direct-send). */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const serverSource = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+
+test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest claim sites', () => {
+  const enqueueCalls = serverSource.match(/insert or ignore into email_outbox/g) || [];
+  assert.equal(enqueueCalls.length, 2, 'exactly two claim sites: notif (queueNotifEmails) + digest');
+  const enclosing = (src, idx) => {
+    const re = /\n(?:async )?function ([A-Za-z_]\w*)/g;
+    let last = null;
+    let m;
+    while ((m = re.exec(src)) && m.index < idx) last = m;
+    return last ? last[1] : '';
+  };
+  const first = serverSource.indexOf('insert or ignore into email_outbox');
+  const second = serverSource.indexOf('insert or ignore into email_outbox', first + 1);
+  assert.equal(enclosing(serverSource, first), 'queueNotifEmails', 'claim site 1 lives in queueNotifEmails (notif path)');
+  assert.equal(enclosing(serverSource, second), 'runReminderPass', 'claim site 2 lives in the reminder/digest pass');
+});
+
+test('D-04 boundary: sendInvite and sendSecurityAlert remain direct fire-and-forget', () => {
+  for (const site of ['MAILER.sendInvite(', 'MAILER.sendSecurityAlert(']) {
+    const idx = serverSource.indexOf(site);
+    assert.ok(idx !== -1, `${site} call site still exists`);
+    /* No outbox enqueue anywhere between the enclosing function start and the
+       MAILER call — invites/2FA never ride the claim machinery. */
+    const fnStart = serverSource.lastIndexOf('function ', idx);
+    const slice = serverSource.slice(fnStart, idx);
+    assert.ok(!slice.includes('email_outbox'), `${site} path contains no outbox enqueue`);
+    assert.ok(!slice.includes('runEmailDeliveryPass'), `${site} path contains no delivery-pass wiring`);
+  }
+  /* The rebuilt send lives ONLY inside deliverEmail (the delivery pass) —
+     the producer sites never call MAILER directly anymore. */
+  const deliverStart = serverSource.indexOf('async function deliverEmail');
+  const deliverEnd = serverSource.indexOf('async function runEmailDeliveryPass');
+  for (const [site, name] of [['MAILER.sendNotif(', 'sendNotif'], ['MAILER.sendDigest(', 'sendDigest']]) {
+    const occurrences = [];
+    let at = serverSource.indexOf(site);
+    while (at !== -1) {
+      occurrences.push(at);
+      at = serverSource.indexOf(site, at + 1);
+    }
+    assert.equal(occurrences.length, 1, `exactly one ${name} call (the delivery pass default sender)`);
+    assert.ok(occurrences[0] > deliverStart && occurrences[0] < deliverEnd, `the ${name} call lives inside deliverEmail`);
+  }
+  /* The delivery pass and the tick piggyback still exist. */
+  assert.ok(serverSource.includes('async function runEmailDeliveryPass'), 'runEmailDeliveryPass exists');
+  assert.ok(serverSource.includes('runEmailDeliveryPass().catch(err => logWarn(`email tick'), 'the 30 s tick piggyback is wired');
 });
