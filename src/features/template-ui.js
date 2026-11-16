@@ -56,8 +56,13 @@ function nodeAt(d, ti, sid) {
 }
 
 /* ---------- the Settings CRUD body (D-09) ---------- */
+/* Two tabs (Tâches / Projet, owner ruling 2026-11-16): the list is
+   filtered by kind, and reordering (tplUp/tplDown) walks the SAME
+   kind-filtered sequence — templates of the other kind can never interleave. */
 export function renderTemplateSettings() {
-  const list = [...(D().templates || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const tab = S.ui.tplTab === 'project' ? 'project' : 'task';
+  const all = [...(D().templates || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const list = all.filter(x => x.kind === tab);
   const del = S.ui.tplDelId;
   const preview = x => {
     const n = x.kind === 'project' ? (x.body?.tasks?.length || 0) : (x.body?.subtasks?.length || 0);
@@ -73,10 +78,12 @@ export function renderTemplateSettings() {
       }</div></div>`;
     })
     .join('');
-  return `<div class="sblock" style="margin-top:0"><div class="row" style="margin-bottom:12px"><button class="btn btn-primary" data-a="tplNew">${ic('plus', 14)}${t('templates.new')}</button></div>${
+  return `<div class="sblock" style="margin-top:0"><div class="row" style="margin-bottom:12px"><div class="seg" style="flex:1">${['task', 'project']
+    .map(k => `<button class="${tab === k ? 'on' : ''}" style="flex:1;justify-content:center" data-a="tplTab" data-v="${k}" aria-pressed="${tab === k}">${t(k === 'project' ? 'templates.kindProject' : 'templates.kindTask')}</button>`)
+    .join('')}</div><button class="btn btn-primary" data-a="tplNew">${ic('plus', 14)}${t('templates.new')}</button></div>${
     list.length
       ? rows
-      : `<p class="hint">${t('templates.empty')}</p>`
+      : `<p class="hint">${t('templates.emptyTab', { kind: t(tab === 'project' ? 'templates.kindProject' : 'templates.kindTask').toLowerCase() })}</p>`
   }</div>`;
 }
 
@@ -470,14 +477,24 @@ async function tplSwap(a, b) {
   render();
 }
 A.tplUp = el => {
-  const list = [...(D().templates || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const tab = S.ui.tplTab === 'project' ? 'project' : 'task';
+  const list = [...(D().templates || [])].filter(x => x.kind === tab).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const i = list.findIndex(x => x.id === el.dataset.id);
   if (i > 0) tplSwap(list[i], list[i - 1]);
 };
 A.tplDown = el => {
-  const list = [...(D().templates || [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const tab = S.ui.tplTab === 'project' ? 'project' : 'task';
+  const list = [...(D().templates || [])].filter(x => x.kind === tab).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const i = list.findIndex(x => x.id === el.dataset.id);
   if (i >= 0 && i < list.length - 1) tplSwap(list[i], list[i + 1]);
+};
+/* Settings tab switch (Tâches / Projet). Session-only state like the other
+   S.ui registry entries; a stale tab is harmless — an empty kind-list just
+   shows templates.emptyTab. */
+A.tplTab = el => {
+  S.ui.tplTab = el.dataset.v === 'project' ? 'project' : 'task';
+  S.ui.tplDelId = null;
+  render();
 };
 
 /* ---------- actions: the picker pick (D-11 → the 66-02 single doc-PUT) ---------- */

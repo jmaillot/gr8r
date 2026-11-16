@@ -2007,7 +2007,7 @@
   "settings.nav.templates": "Modèles",
   "settings.templates.lead": "Modèles de tâches et de projets réutilisables pour cet espace.",
   "templates.new": "Nouveau modèle",
-  "templates.empty": "Aucun modèle pour l’instant — enregistrez une tâche ou un projet comme modèle pour commencer.",
+  "templates.emptyTab": "Aucun modèle {kind} pour l’instant — créez-en un, ou enregistrez une tâche/un projet comme modèle.",
   "templates.kindLabel": "Type",
   "templates.kindTask": "Tâche",
   "templates.kindProject": "Projet",

@@ -1982,7 +1982,7 @@
   "settings.nav.templates": "Templates",
   "settings.templates.lead": "Reusable task and project templates for this workspace.",
   "templates.new": "New template",
-  "templates.empty": "No templates yet — save a task or a project as a template to get started.",
+  "templates.emptyTab": "No {kind} templates yet — create one, or save a task/project as a template.",
   "templates.kindLabel": "Kind",
   "templates.kindTask": "Task",
   "templates.kindProject": "Project",
