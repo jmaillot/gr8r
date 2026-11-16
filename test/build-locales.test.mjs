@@ -162,7 +162,7 @@ test('the webhooks labels keep EN↔FR key parity and catalogue hygiene (67-04)'
   }
 });
 
-/* ---------- the template-md-labels contract (67-06) ---------- */
+/* ---------- the template-md-labels contract (67-06/07) ---------- */
 
 /* The Settings templates toolbar's import labels split across the lazy EN
    table (src/features/template-md-labels.json) and the fr.json catalogue's
@@ -170,15 +170,15 @@ test('the webhooks labels keep EN↔FR key parity and catalogue hygiene (67-04)'
    subtlety the mdt() caller encodes: the label key is importBtn (NOT
    'import' — a bare quoted Lucide icon name rides the icon scanner into
    the entry chunk, and the gate has no headroom for that either). */
-test('the template-md labels keep EN↔FR key parity and catalogue hygiene (67-06)', () => {
+test('the template-md labels keep EN↔FR key parity and catalogue hygiene (67-06/07)', () => {
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'features', 'template-md-labels.json'), 'utf8'));
   const fr = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'locales', 'fr.json'), 'utf8'));
   const frKeys = Object.keys(fr)
-    .filter(k => k.startsWith('templates.import'))
+    .filter(k => k.startsWith('templates.import') || k.startsWith('templates.hide'))
     .map(k => k.slice('templates.'.length))
     .sort();
   assert.deepEqual(Object.keys(labels).sort(), frKeys, 'every EN label has its templates.import* FR twin');
-  assert.equal(frKeys.length, 5, 'the label table carries the 5 import labels');
+  assert.equal(frKeys.length, 8, 'the label table carries the 6 import labels + the 2 hideStarters keys (67-07)');
   for (const [key, value] of Object.entries(labels)) {
     assert.ok(!/[<>"]/.test(value), `the label en/${key} carries no forbidden character`);
     assert.ok(!/[<>"]/.test(fr['templates.' + key]), `the label fr/templates.${key} carries no forbidden character`);

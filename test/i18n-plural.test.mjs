@@ -91,7 +91,7 @@ test('the French catalogue is still a strict subset of the English one', () => {
      with that table is asserted by test/build-locales.test.mjs. The
      templates.import* namespace is the 67-06 exception on the same terms —
      the EN twins live in src/features/template-md-labels.json. */
-  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !k.startsWith('webhook.') && !k.startsWith('templates.import') && !Object.hasOwn(en, k));
+  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !k.startsWith('webhook.') && !k.startsWith('templates.import') && !k.startsWith('templates.hide') && !Object.hasOwn(en, k));
   assert.deepEqual(extra, [], `every French key exists in English (${extra.join(', ')})`);
 });
 

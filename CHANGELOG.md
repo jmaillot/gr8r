@@ -15,11 +15,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instantiates on click. The `fav` flag rides the template sanitizer.
 - **Template import from a Markdown file (67-06).** Settings → Templates gains an
   **Import .md** control (plus a downloadable example): the pure parser
-  (`src/core/template-md.js`) turns front matter (`kind`/`name`/`icon`/`color`),
-  `##` headings (subtasks for task kind, embedded tasks for project kind, `###`
-  nesting) and `+Nd` due offsets into a draft that opens the **ordinary editor** —
-  nothing saves until the user reviews and hits Save. Format documented in
-  `docs/project-templates.md` §3.
+  (`src/core/template-md.js`) turns front matter (`kind`/`name`/`icon`/`color`/`priority`),
+  `##` headings and `+Nd` due offsets into a draft that opens the **ordinary editor** —
+  nothing saves until the user reviews and hits Save. `###`/`####` headings nest (2 levels
+  for task kind, 3 for project kind; orphan deep headings drop). Two complete examples
+  download client-side, one per kind. Format documented in `docs/project-templates.md` §3.
+- **Hide the built-in starter projects (67-07).** A workspace-level toggle in
+  Settings → Templates (`prefs.hideStarters`) removes the six themed starters from the
+  create-project modal; "Blank project" always stays.
 
 ### Fixed
 

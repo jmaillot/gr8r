@@ -279,12 +279,18 @@ test('md import: a Markdown file opens the editor draft and saves through the fu
     const importBtn = toolbar.locator('label').filter({ hasText: mdLabels.importBtn });
     await expect(importBtn).toBeVisible();
 
-    /* The example download works client-side (Blob, no server route). */
-    const [download] = await Promise.all([
+    /* The example downloads work client-side (Blob, no server route): two
+       buttons, one complete example per kind. */
+    const [d1] = await Promise.all([
       page.waitForEvent('download'),
-      toolbar.locator('button[data-a="tplImportExample"]').click(),
+      toolbar.locator('button[data-a="tplImportExample"][data-v="task"]').click(),
     ]);
-    expect(download.suggestedFilename()).toBe('template-example.md');
+    expect(d1.suggestedFilename()).toBe('template-example-task.md');
+    const [d2] = await Promise.all([
+      page.waitForEvent('download'),
+      toolbar.locator('button[data-a="tplImportExample"][data-v="project"]').click(),
+    ]);
+    expect(d2.suggestedFilename()).toBe('template-example-project.md');
 
     /* Import the example file itself: parse → editor modal, never a blind save. */
     const md = [
@@ -324,6 +330,50 @@ test('md import: a Markdown file opens the editor draft and saves through the fu
     expect(subs[0].dueOffsetDays).toBe(2);
     expect(subs[0].note).toBe('with a note');
     expect('dueOffsetDays' in subs[1]).toBe(false);
+  } finally {
+    await context.close();
+  }
+});
+
+/* (5) 67-07: the hideStarters toggle — a workspace pref that removes the six
+   themed starters from the create-project modal; "Blank project" always stays. */
+test('hideStarters toggle removes the themed starters from the create modal, blank stays', async ({ browser }) => {
+  const { context, page } = await signIn(browser);
+  try {
+    /* The default create modal carries all 7 starter options. */
+    await page.goto(`/w/${acct.slug}/projects`);
+    await page.locator('button[data-a="newProject"]').first().click();
+    const modal = page.locator('.modal');
+    await expect(modal.locator('.tmpls [role="radio"]')).toHaveCount(7);
+    await modal.locator('.modal-h button[data-a="closeModal"]').click();
+
+    /* Flip the toggle in Settings → Templates — the write lands through the
+       real funnel (prefToggle → S.prefs → doc PUT). */
+    await openSettings(page);
+    await page.getByRole('button', { name: en['settings.nav.templates'] }).click();
+    const toggle = page.locator('input.toggle[data-k="hideStarters"]');
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    const saved = page.waitForResponse(r => r.url().includes('/api/workspaces/') && r.request().method() === 'PUT');
+    await expect(toggle).toBeChecked();
+    await saved;
+
+    /* The create modal now shows blank only. */
+    await page.goto(`/w/${acct.slug}/projects`);
+    await page.locator('button[data-a="newProject"]').first().click();
+    await expect(page.locator('.modal .tmpls [role="radio"]')).toHaveCount(1);
+    await expect(page.locator('.modal .tmpls [role="radio"]')).toContainText(en['project.template.blank.name']);
+
+    /* Flip back through the same funnel (the doc-PUT client), then reload —
+       the modal restores all seven. */
+    const got2 = await client.get(`/api/workspaces/${acct.slug}`);
+    const doc2 = got2.data.doc;
+    delete doc2.prefs.hideStarters;
+    const put2 = await client.put(`/api/workspaces/${acct.slug}`, { revision: got2.data.revision, doc: doc2 });
+    expect(put2.status).toBe(200);
+    await page.goto(`/w/${acct.slug}/projects`);
+    await page.locator('button[data-a="newProject"]').first().click();
+    await expect(page.locator('.modal .tmpls [role="radio"]')).toHaveCount(7);
   } finally {
     await context.close();
   }

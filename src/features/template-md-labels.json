@@ -1,7 +1,10 @@
 {
   "importBtn": "Import .md",
   "importTip": "Import from a Markdown file — review before saving.",
-  "importExample": "Example",
+  "importTaskTip": "Download the example task-template .md",
+  "importProjectTip": "Download the example project-template .md",
   "importEmpty": "No template found — check the name and ## headings.",
-  "importFailed": "The file could not be read."
+  "importFailed": "The file could not be read.",
+  "hideStarters": "Hide built-in starters",
+  "hideStartersDesc": "Remove the six themed starter projects from the create-project modal. Blank stays."
 }

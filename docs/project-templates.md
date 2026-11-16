@@ -107,15 +107,16 @@ Exemple « event » :
 "project.template.event.task.5": "Day-of checklist"
 ```
 
-## 3. Import depuis un fichier MD (67-06)
+## 3. Import depuis un fichier MD (67-06, étendu 67-07)
 
-La toolbar Réglages → Modèles porte deux contrôles : **Importer .md** (input fichier,
-filtre `.md/.markdown/.txt`) et **Exemple** (télécharge un fichier d'exemple via Blob
-client — aucune route serveur). Le parseur (`src/core/template-md.js`, pur et sans DOM)
-transforme le fichier en **draft** qui s'ouvre dans l'éditeur ordinaire : rien n'est
+La toolbar Réglages → Modèles porte trois contrôles : **Importer .md** (input fichier,
+filtre `.md/.markdown/.txt`), **deux boutons Exemple** (tâche / projet — téléchargent un
+exemple complet par kind via Blob client, aucune route serveur), et le **toggle Masquer
+les gabarits intégrés** (voir §3.3). Le parseur (`src/core/template-md.js`, pur et sans
+DOM) transforme le fichier en **draft** qui s'ouvre dans l'éditeur ordinaire : rien n'est
 enregistré avant review + Save, et le funnel re-valide comme pour une saisie manuelle.
 
-### Format
+### 3.1 Format
 
 ```markdown
 ---
@@ -123,33 +124,49 @@ kind: task              ← ou `project` (défaut : task)
 name: Rapport hebdo
 icon: clipboard         ← nom Lucide, défaut : layers
 color: blue             ← clé de palette, optionnel
+priority: high          ← task seulement, optionnel
 ---
 Notes du gabarit.       ← task : notes de la tâche / project : description
 
-## +2d Collecter les chiffres    ← ## = sous-tâche ; +Nd = dueOffsetDays
+## +2d Collecter les chiffres    ← task : sous-tâche racine ; project : tâche
   Note de la sous-tâche.         ← ligne indentée sous le titre
+### +2d Pipeline commercial      ← ### = enfant du dernier ## (2 niveaux)
 ## +3d Rédiger le résumé
 ## Envoyer                       ← pas d'offset = pas de date (D-08)
 ```
 
-Kind **project** : les `##` sont les tâches intégrées, les `###` leurs sous-tâches,
-la prose devient la description ; chaque tâche accepte le même préfixe `+Nd`.
+**Imbrication (les deux kinds)** : `###` devient enfant du dernier `##`, `####` enfant
+du dernier `###` (3 niveaux pour le kind project : `##` = tâche, `###` = sous-tâche
+racine, `####` = enfant). Un `###`/`####` orphelin (aucun `##` au-dessus) est abandonné.
+Les `####` consécutifs sont **frères** (tous enfants du dernier `###`).
 
-### Sémantique des offsets
+### 3.2 Sémantique des offsets
 
 - `+3d` / `-1d` / `7` → `dueOffsetDays` relatif (ancrage absolu à l'instanciation,
-  D-05/D-07) ; le même préfixe marche sur `##` et `###`.
+  D-05/D-07) ; le même préfixe marche sur `##`, `###` et `####`.
 - Offset absent → **aucune date** (D-08 — jamais de défaut inventé).
 - Titre `##` vide → la ligne est abandonnée (best-effort, jamais de nœud vide).
 
-### Extension : ne pas casser la gate 500 kB
+### 3.3 Le toggle « Masquer les gabarits intégrés »
 
-Les libellés d'import sont EN dans la table lazy `src/features/template-md-labels.json`
-(consumée par le `mdt()` de `template-ui.js`) et FR sous les clés `templates.import*` de
-`fr.json` — le split Rule-3 de 67-04 (parité assertée par `test/build-locales.test.mjs`).
-⚠️ Le scanner d'icônes (`scripts/icons.mjs`) capture tout token quoted kebab-lowercase
-qui existe dans Lucide : la clé d'label **ne doit pas** s'appeler `import` (nom d'icône
-Lucide → l'icône entière entre dans l'entry chunk). D'où `importBtn`.
+Les 6 gabarits projet thématiques du modal de création (Product, Website, Marketing,
+Design, Software, Personal — catalogue du code `TEMPLATES` dans `modals.js`, pas des
+records) peuvent être masqués : toggle dans Réglages → Modèles, pref workspace
+`prefs.hideStarters === true` (convention flag-stocké de `permCreate`). **Projet vierge**
+(blank) reste toujours visible. Ça masque l'affichage, pas les données — le catalogue
+intégré reste dans le code et l'onboarding (qui s'exécute avant l'existence du workspace).
+
+### 3.4 Extension : ne pas casser la gate 500 kB
+
+Les libellés d'import et du toggle sont EN dans la table lazy
+`src/features/template-md-labels.json` (consumée par le `mdt()` de `template-ui.js`) et FR
+sous les clés `templates.import*` / `templates.hide*` de `fr.json` — le split Rule-3 de
+67-04 (parité assertée par `test/build-locales.test.mjs`).
+⚠️ Deux pièges : le scanner d'icônes (`scripts/icons.mjs`) capture tout token quoted
+kebab-lowercase qui existe dans Lucide — la clé de label **ne doit pas** s'appeler
+`import` (nom d'icône Lucide → l'icône entière entre dans l'entry chunk). D'où
+`importBtn`. Et les exemples téléchargeables sont EN uniquement : un jumeau FR inlinerait
+des octets français dans le chunk template-ui (gate « aucun octet français » du build EN).
 
 ## Pièges à éviter
 

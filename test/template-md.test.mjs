@@ -13,6 +13,7 @@ const TASK_MD = [
   'name: Weekly report',
   'icon: clipboard',
   'color: blue',
+  'priority: high',
   '---',
   'The template notes.',
   '',
@@ -37,7 +38,7 @@ const PROJECT_MD = [
   '## Launch',
 ].join('\n');
 
-test('task kind: front matter drives name/icon/color, headings become subtasks with offsets', () => {
+test('task kind: front matter drives name/icon/color/priority, headings become subtasks with offsets', () => {
   const d = parseTemplateMarkdown(TASK_MD);
   assert.equal(d.kind, 'task');
   assert.equal(d.name, 'Weekly report');
@@ -45,6 +46,7 @@ test('task kind: front matter drives name/icon/color, headings become subtasks w
   assert.equal(d.color, 'blue');
   assert.equal(d.body.title, 'Weekly report');
   assert.equal(d.body.notes, 'The template notes.');
+  assert.equal(d.body.priority, 'high');
   assert.equal(d.body.subtasks.length, 3);
   const [s1, s2, s3] = d.body.subtasks;
   assert.equal(s1.title, 'Collect the numbers');
@@ -99,13 +101,51 @@ test('a heading without a title is dropped, not invented as an empty subtask', (
   assert.deepEqual(d.body.subtasks.map(s => s.title), ['Real one']);
 });
 
-test('templateExampleText returns parseable example markdown for both locales', () => {
-  for (const locale of ['en', 'fr']) {
-    const text = templateExampleText(locale);
-    assert.ok(text.includes('kind:'), `${locale} example carries front matter`);
+test('templateExampleText returns parseable example markdown for both kinds', () => {
+  for (const which of ['task', 'project']) {
+    const text = templateExampleText(which);
+    assert.ok(text.includes('kind:'), `${which} example carries front matter`);
     const d = parseTemplateMarkdown(text);
-    assert.equal(d.kind, 'task');
+    assert.equal(d.kind, which);
     assert.ok(d.name.length > 0);
-    assert.ok(d.body.subtasks.length > 0);
+    const tree = which === 'task' ? d.body.subtasks : d.body.tasks.flatMap(x => x.subtasks || []);
+    assert.ok(d.body[which === 'task' ? 'subtasks' : 'tasks'].length > 0);
+    assert.ok(tree.some(s => s.parentId), `${which} example exercises nesting`);
+    /* every child links to a real parent in the same tree */
+    const ids = new Set(tree.map(s => s.id));
+    assert.ok(tree.filter(s => s.parentId).every(s => ids.has(s.parentId)), `${which} child parentId links resolve`);
   }
+});
+
+test('nesting: ### nests under the last ## for task kind', () => {
+  const md = '## Root one\n  root note\n### Child of one\n  child note\n### Second child\n## Root two\n### Child of two\n#### Grandchild';
+  const d = parseTemplateMarkdown(md);
+  const [r1, r2] = d.body.subtasks.filter(s => !s.parentId);
+  const kids = d.body.subtasks.filter(s => s.parentId === r1.id);
+  assert.deepEqual(kids.map(s => s.title), ['Child of one', 'Second child']);
+  assert.equal(kids[0].note, 'child note');
+  const grand = d.body.subtasks.find(s => s.title === 'Grandchild');
+  const kid2 = d.body.subtasks.find(s => s.title === 'Child of two');
+  assert.equal(grand.parentId, kid2.id);
+  assert.deepEqual(kids.map(s => s.position), [0, 1]);
+  /* r2 has one direct child; the Grandchild is a grandchild under it */
+  assert.deepEqual(d.body.subtasks.filter(s => s.parentId === r2.id).map(s => s.position), [0]);
+});
+
+test('nesting: #### nests under the last ### for project kind, orphan deep headings drop', () => {
+  const md = ['---', 'kind: project', 'name: P', '---', '## Task A', '### Sub root', '#### Sub child', '#### Sub child two', '## Task B', '#### Orphan — no ### above'].join('\n');
+  const d = parseTemplateMarkdown(md);
+  const [ta, tb] = d.body.tasks;
+  const root = ta.subtasks.find(s => !s.parentId);
+  assert.equal(root.title, 'Sub root');
+  const kids = ta.subtasks.filter(s => s.parentId === root.id);
+  assert.deepEqual(kids.map(s => s.title), ['Sub child', 'Sub child two']);
+  assert.deepEqual(kids.map(s => s.position), [0, 1]);
+  /* Task B carries no subtasks — the orphan #### dropped (no ### anchor) */
+  assert.deepEqual(tb.subtasks, []);
+});
+
+test('orphan ### in task kind (no ## above) drops rather than inventing a parent', () => {
+  const d = parseTemplateMarkdown('### Orphan child\n## Real root');
+  assert.deepEqual(d.body.subtasks.map(s => s.title), ['Real root']);
 });

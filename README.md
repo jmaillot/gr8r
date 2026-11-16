@@ -121,4 +121,6 @@ with French content — so the shipped image is verified to carry the French cat
 - [`docs/MCP.md`](docs/MCP.md) — MCP server: API keys and the 35-tool manual
 - [`integrations/`](integrations/) — connect an agent (OpenCode, [CC], [DSH])
 - [`docs/i18n-fr-glossary.md`](docs/i18n-fr-glossary.md) — French terminology choices
+- [`docs/project-templates.md`](docs/project-templates.md) — templates: the two systems, the
+  Markdown import format (with downloadable examples) and the built-in starters toggle
 - [`CHANGELOG.md`](CHANGELOG.md) — release history

@@ -81,7 +81,13 @@ export function renderTemplateSettings() {
     .join('');
   return `<div class="sblock" style="margin-top:0"><div class="row" style="margin-bottom:12px"><div class="seg" style="flex:1">${['task', 'project']
     .map(k => `<button class="${tab === k ? 'on' : ''}" style="flex:1;justify-content:center" data-a="tplTab" data-v="${k}" aria-pressed="${tab === k}">${t(k === 'project' ? 'templates.kindProject' : 'templates.kindTask')}</button>`)
-    .join('')}</div><button class="btn btn-primary" data-a="tplNew">${ic('plus', 14)}${t('templates.new')}</button><label class="btn btn-secondary" style="cursor:pointer" data-tip="${mdt('importTip')}" aria-label="${mdt('importBtn')}"><input type="file" hidden accept=".md,.markdown,.txt" data-in="tplImportFile">${ic('upload', 14)}${mdt('importBtn')}</label><button class="btn btn-secondary" data-a="tplImportExample" aria-label="${mdt('importExample')}">${ic('download', 14)}</button></div>${
+    .join('')}</div><button class="btn btn-primary" data-a="tplNew">${ic('plus', 14)}${t('templates.new')}</button><label class="btn btn-secondary" style="cursor:pointer" data-tip="${mdt('importTip')}" aria-label="${mdt('importBtn')}"><input type="file" hidden accept=".md,.markdown,.txt" data-in="tplImportFile">${ic('upload', 14)}${mdt('importBtn')}</label><button class="btn btn-secondary" data-a="tplImportExample" data-v="task" data-tip="${mdt('importTaskTip')}" aria-label="${mdt('importTaskTip')}">${ic('download', 14)}</button><button class="btn btn-secondary" data-a="tplImportExample" data-v="project" data-tip="${mdt('importProjectTip')}" aria-label="${mdt('importProjectTip')}">${ic('download', 14)}</button></div>${
+    /* [67-07] the built-in starter catalogue's visibility switch: workspace-level
+       pref (S.prefs.hideStarters, the permCreate stored-flag convention) read by
+       the project-create modal; "Projet vierge" (blank) always shows. The
+       IN.prefToggle handler (entry) owns the write — no new wiring. */
+    `<div class="sblock" style="border-top:1px solid var(--divider);padding-top:10px;margin-top:4px"><div class="srow"><div class="row" style="cursor:default"><div><div class="t">${mdt('hideStarters')}</div><div class="d">${mdt('hideStartersDesc')}</div></div></div><input type="checkbox" class="toggle" data-in="prefToggle" data-k="hideStarters" ${S.prefs?.hideStarters === true ? 'checked' : ''} aria-label="${mdt('hideStarters')}"></div></div>`
+  }${
     list.length
       ? rows
       : `<p class="hint">${t('templates.emptyTab', { kind: t(tab === 'project' ? 'templates.kindProject' : 'templates.kindTask').toLowerCase() })}</p>`
@@ -284,14 +290,20 @@ IN.tplImportFile = el => {
   reader.readAsText(file);
 };
 
-/* The example download: a client-side blob (no server route, no new
-   endpoint) carrying the documented format. */
-A.tplImportExample = () => {
-  const lang = document.documentElement.lang === 'fr' ? 'fr' : 'en';
-  const blob = new Blob([templateExampleText(lang)], { type: 'text/markdown' });
+/* The example download: two client-side blobs (no server route, no new
+   endpoint) — one COMPLETE example per kind, named so the two files are
+   distinguishable once downloaded. */
+/* The example download: one client-side blob (no server route, no new
+   endpoint) — the button carries its kind in data-v (task/project; 67-07:
+   one COMPLETE example per kind). Two separate buttons rather than one
+   firing two downloads: browsers coalesce/deny same-gesture programmatic
+   downloads. */
+A.tplImportExample = el => {
+  const which = el.dataset.v === 'project' ? 'project' : 'task';
+  const blob = new Blob([templateExampleText(which)], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'template-example.md';
+  a.download = `template-example-${which}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
 };
