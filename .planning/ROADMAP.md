@@ -94,7 +94,7 @@ Plans:
 **Plans**: 4 plans
 Plans:
 **Wave 1**
-- [ ] 68-01-PLAN.md — Tracer: WR-01 CSS scoping (.page.flush .toolbar) + Wave-0 css-assert test; POL-04 Formal Acceptance in 64-VALIDATION.md
+- [x] 68-01-PLAN.md — Tracer: WR-01 CSS scoping (.page.flush .toolbar) + Wave-0 css-assert test; POL-04 Formal Acceptance in 64-VALIDATION.md
 
 **Wave 2** *(blocked on Wave 1 per the 68-VALIDATION per-task map; no file overlap between 02 and 03)*
 - [ ] 68-02-PLAN.md — POL-02: email_outbox claim table (SQLite+pg same commit) + notif/digest claim-then-deliver + runEmailDeliveryPass on the 30 s tick + Wave-0 test/email-outbox.test.mjs
@@ -133,7 +133,7 @@ Coverage: 16/16 requirements mapped ✓
 | 65. Subtask Tree | 5/5 | In Progress|  |
 | 66. Task & Project Templates | 3/3 | In Progress|  |
 | 67. Project Webhooks | 4/4 | In Progress|  |
-| 68. Backlog Polish | 0/0 | Not started | - |
+| 68. Backlog Polish | 1/4 | In progress | 68-01 |
 
 ## Backlog
 
