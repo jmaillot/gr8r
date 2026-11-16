@@ -22,7 +22,8 @@ current_phase: 66
 
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core value:** one workspace document pushed client→server through the `mergeClientDoc` funnel; every feature is an extension of that spine, zero new dependencies.
-**Milestone:** v2.4 Automation & Productivity — hierarchical subtasks, task/project templates, per-project outbound webhooks (MS Teams), v2.3 backlog polish.
+**Milestone:** v2.4 Automation & Productivity — SHIPPED 2026-11-16 (see `.planning/milestones/v2.4-ROADMAP.md`).
+**Current focus:** Next milestone — not yet planned; run `/gsd-new-milestone`. Open backlog: Phase 999.1 (Phase 65 UAT Test 11 — exports/MS Project).
 
 ## Current Position
 
