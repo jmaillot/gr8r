@@ -79,3 +79,22 @@ created: "2026-11-14"
 - [ ] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
+
+---
+
+## Formal Acceptance
+
+**Status:** accepted
+
+**Rationale:** Per audit-milestone §5.5 (#2117), no retroactive re-validation is
+performed: Phases 65, 66 and 67 changed the code since v2.3 shipped, so re-running
+the suite today would produce results that say nothing about the v2.3 milestone as
+originally shipped. This formal acceptance closes the last open v2.3 validation
+artifact instead of fabricating evidence the milestone can never have.
+
+**Evidence (as of v2.3 close):**
+- Full e2e suite green at milestone close: **115/115**.
+- Integration audit: **5/5 chains** wired, 0 orphaned, 0 missing, no blockers.
+
+The evidence above reflects the suite and audit state at v2.3 close only — not the
+current, since-grown suite (Phase 68 research Pitfall 6).
