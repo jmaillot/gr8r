@@ -1,6 +1,7 @@
 ---
 phase: 67-project-webhooks
 reviewed: 2026-11-15T00:00:00Z
+incremental_reviewed: 2026-11-16T12:30:00Z
 depth: standard
 files_reviewed: 13
 files_reviewed_list:
@@ -138,3 +139,36 @@ await db.run("update webhook_deliveries set status = 'dead', last_error = ? wher
 _Reviewed: 2026-11-15_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+# Incremental Review — post-67-05 (gap closure G-67-2) — 2026-11-16
+
+**Diff base:** `5e357fa..c7a27ca` — single commit `c7a27ca`, one line changed in `server.js`.
+**Scope:** plan 67-05 only; Phase 68 files (db-adapter.mjs, src/views/table.js, responsive.css, e2e/mobile-*.spec.mjs) were reviewed in 68-REVIEW.md and are out of scope. Prior findings CR-01 / WR-01..WR-04 / IN-01..IN-04 above are **not re-reported** and remain open as filed.
+
+```yaml
+incremental:
+  files_reviewed_list:
+    - server.js
+  findings:
+    critical: 0
+    warning: 0
+    info: 0
+    total: 0
+  status: clean
+```
+
+## Incremental Findings
+
+None. The pass is **clean** (0 critical / 0 warning / 0 info).
+
+### What was verified
+
+- **The change itself (`server.js:6505`):** `sampleCtx.body` now reads `This is a test payload sent from Projects Studio.` — exactly the G-67-2 gap closure, no side effects. `sampleCtx` is a fixed sample envelope for the test-send endpoint (`POST …/webhooks/:id/test`, ~server.js:6460-6540); the string only flows into the formatted payload body via `webhook-formats.js` (`formatTeamsAdaptive` / `formatSlack`), is JSON-serialized and HMAC-signed like any real body — a text swap cannot break signing, field whitelisting, or the 28 KB cap (81-byte sample, orders of magnitude under the cap).
+- **No other legacy-name occurrences in the payload path:** `grep -i "gr8r"` across `server.js` (excluding `x-gr8r-*` headers), `webhook-formats.js`, `webhooks-labels.json`, `en.json`, `fr.json` → zero user-visible matches. The only remaining occurrences are the wire-contract header `x-gr8r-signature` (server.js:2828, plus the test-harness read at 3020) — intentionally unchanged, correct per the 67-05 diagnosis (header naming is a protocol identifier, renaming it would silently break consumers that verify signatures).
+- **No test pins the payload text:** `grep -rn "sent from gr8r|sent from Projects Studio" server.js test/` → exactly one match, the changed line itself. The 67-05 claim (23/23 webhook suites green, no pinned string) is consistent with the repo state.
+- **Surrounding handler re-checked:** the test-send endpoint is unchanged apart from the string — role gating (`canManageProject`), hook scoping by `(workspace_id, project_id)`, 409 on inactive hook, `WEBHOOK_EVENTS` whitelist on `body.event`, per-call nonce `test-${uid()}` exempting the test from subject dedup, post-enqueue delivery lookup, and the `WEBHOOK_TEST_TOKEN`-gated fetch/lookup/now test hooks (`tokenOk` guards at server.js:6527-6529) all intact. No regression surface introduced by the one-line swap.
+
+_Reviewed: 2026-11-16 (incremental pass, post-67-05)_
+_Reviewer: the agent (gsd-code-reviewer)_
