@@ -5,7 +5,74 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 1.2.0 milestone notes (draft)
+## [Unreleased]
+
+### Fixed
+
+- **Subtask tree indentation now adds to each surface's CSS base.** The shared recursive
+  renderer emitted an inline `padding-left` that **replaced** the surface's base padding
+  instead of stacking on it: in the list view (`.subrow`, 64px base) a depth-1 child
+  rendered 48px **left** of its root parent, and in the drawer (`.subt`, 6px base) the
+  first indent step was only +10px. The renderer now emits an inline `--ind` custom
+  property and every surface computes `padding-left: calc(<base> + var(--ind))`. The
+  render e2e now asserts the child's real content box sits strictly right of its
+  parent's — the visual assertion that was missing and let this ship (65-05).
+
+## [2.4.0] — 2026-11-16 — Automation & Productivity
+
+4 phases (63–66), 17 plans. Highlights:
+
+- **Multi-level subtask trees, end to end.** The flat `{ id, parentId, position }`
+  storage shape is proven byte-identical through the doc-PUT funnel; legacy docs heal
+  lazily; the server rejects cycle/depth-violating restructures wholesale with
+  localized `subtaskCycle`/`subtaskDepth` errors. Completion cascades at every level,
+  deletion removes whole subtrees, parent progress is a leaf-only rollup. The tree is
+  visible everywhere — drawer checklist, list/table subrows, board open-leaf badge
+  popover, collapsible timeline bars with date inheritance — through one shared
+  recursive renderer.
+- **Subtasks everywhere else too.** Titles are searchable on both backends, exports
+  walk the tree with per-level keys and true MSPDI OutlineLevel, and the MCP `writeDoc`
+  mirror faces the same subtree gate.
+- **Task & Project templates.** User-managed templates in Settings (two tabs, task and
+  project kinds) stored in the workspace document, with offset-based scheduling
+  (absolute due/start offsets anchored to the instantiation day), save-as-template from
+  any live task/project, one-click instantiation from the new task/project modals, and
+  a server funnel that whitelists, heals and validates every template body on every
+  write.
+- **Exactly-once webhooks.** Unique dedup-key claim, SSRF-guarded HMAC-signed delivery
+  with retry/backoff and a 7-day purge; 8 event types formatted for Teams, generic
+  JSON, with real AAD mentions; owner-gated hook CRUD with a send-test endpoint.
+- **Notification & digest emails** moved to the same claim-then-delivery outbox
+  machinery (transport-claim table on SQLite+pg, webhook-identical backoff).
+- **Mobile cards completed**: priority/due/estimate/progress render on the ≤900px card
+  stack as a pure function of view state, proven by a dedicated 390×844 e2e.
+
+## [2.3.0] — 2026-11-15 — Consolidation & Hardening
+
+3 phases (62–64), 9 plans. Race-free e2e readiness (`/api/health` sole owner), the 9
+drifted specs repaired against the lazy-chunk Settings contract, the VIEW-02 popover
+flake fixed at both sites (semantic Escape dismissal + arm-before-act waits), and the
+honestly usable mobile card stack (zero horizontal overflow at 390×844, proven
+red→green) — all under the untouched 500 kB chunk gate. Close: 115/115 e2e, 0 flaky.
+
+## [2.2.0] — 2026-11-14 — Notifications, Search & Delivery
+
+6 phases, 19 plans. Push notifications, full-text search across backends, delivery
+passes and the notification center.
+
+## [2.1.0] — 2026-11-11 — Member & Project Experience, Export, Multi-assignee parity
+
+3 phases, 18 plans. Per-team permission levels enforced server-side through the
+doc-PUT funnel, invite flows with guest = exactly-one-project invariant, project
+exports and multi-assignee parity across every surface.
+
+## [2.0.0] — 2026-11-09 — Project-level Permissions & Invitations
+
+4 phases, 17 plans. Collapsed visibility to boolean-private ∨ access list across
+server + MCP mirror, retired every scope writer, and rewrote the suites to the
+collapsed model — 1079 pass / 0 fail with canaries unmodified.
+
+## [1.2.0 milestone notes (historical draft)]
 
 The 1.2.0 tag is cut at milestone close; these are the release notes text.
 
