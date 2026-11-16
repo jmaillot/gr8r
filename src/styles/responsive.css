@@ -99,12 +99,11 @@
      D-07: .page.flush is a fixed-height flex column — without flex-shrink:0 the
      wrapped 390px toolbar is squeezed to 44px and its tabs clip under the list.
      Phase 68 D-09: scoped to .page.flush — other toolbars (board, settings…) are
-     not in a fixed-height flex column and never had the bug. */
+     not in a fixed-height flex column and never had the bug.
+     Phase 68 D-02: the cols popover is re-enabled ≤900px — the card stack now
+     honors the same hidden[] view state the popover toggles. */
   .page.flush .toolbar {
     flex-shrink: 0;
-  }
-  [data-pop='cols'] {
-    display: none !important;
   }
   .only-m {
     display: block;
