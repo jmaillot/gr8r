@@ -1,8 +1,8 @@
 {
   "importBtn": "Import .md",
   "importTip": "Import from a Markdown file — review before saving.",
-  "importTaskTip": "Download the example task-template .md",
-  "importProjectTip": "Download the example project-template .md",
+  "importTaskLabel": "Example: task",
+  "importProjectLabel": "Example: project",
   "importEmpty": "No template found — check the name and ## headings.",
   "importFailed": "The file could not be read.",
   "hideStarters": "Hide built-in starters",

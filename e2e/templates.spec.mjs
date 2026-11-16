@@ -286,6 +286,8 @@ test('md import: a Markdown file opens the editor draft and saves through the fu
       toolbar.locator('button[data-a="tplImportExample"][data-v="task"]').click(),
     ]);
     expect(d1.suggestedFilename()).toBe('template-example-task.md');
+    expect(toolbar.locator('button[data-a="tplImportExample"][data-v="task"]')).toContainText(mdLabels.importTaskLabel);
+    expect(toolbar.locator('button[data-a="tplImportExample"][data-v="project"]')).toContainText(mdLabels.importProjectLabel);
     const [d2] = await Promise.all([
       page.waitForEvent('download'),
       toolbar.locator('button[data-a="tplImportExample"][data-v="project"]').click(),

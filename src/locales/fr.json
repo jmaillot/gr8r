@@ -2065,6 +2065,6 @@
   "webhook.disable": "Désactiver",
   "webhook.del": "Supprimer",
   "templates.importBtn": "Importer .md",
-  "templates.importTaskTip": "Télécharger l’exemple de gabarit de tâche (.md)",
-  "templates.importProjectTip": "Télécharger l’exemple de gabarit de projet (.md)"
+  "templates.importTaskLabel": "Exemple : tâche",
+  "templates.importProjectLabel": "Exemple : projet"
 }
