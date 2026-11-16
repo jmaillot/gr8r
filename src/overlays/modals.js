@@ -213,10 +213,18 @@ export function settingsGeneralFields(m) {
    template picker. Editing a project opens the unified projectSettings
    modal (53-03) — this renderer is create-only. */
 export function projectCreateModal(m, H) {
+  /* 67-05 favourites-first: the user's star-marked project templates lead
+     the template field (block rendered by the lazy template-ui chunk —
+     registered like templatePickModal, to keep the entry chunk under the
+     500 kB gate). Clicking one instantiates immediately (tplPick). With no
+     favourites the section collapses to a one-line hint. */
+  const favBlock = S.ui.tplUi?.projectFavBlock
+    ? S.ui.tplUi.projectFavBlock()
+    : `<p class="hint" style="margin:0 0 8px">${t('templates.favEmptyHint')}</p>`;
   return `${H(t('act.newProject'), t('modal.projectHint'))}
   <form class="modal-b" data-submit="submitProject">
     ${settingsGeneralFields(m)}
-    <div class="field"><span class="label">${t('modal.template')}</span><div class="row" style="margin-bottom:8px"><button type="button" class="btn btn-secondary btn-sm" data-a="openTemplatePicker" data-kind="project">${ic('layers', 14)}${t('modal.fromTemplate')}</button><span class="hint">${t('modal.fromTemplateHint')}</span></div><div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${S.ui.pform.tmpl === tp.id}" class="opt ${S.ui.pform.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>
+    <div class="field"><span class="label">${t('modal.template')}</span><div class="row" style="margin-bottom:8px"><button type="button" class="btn btn-secondary btn-sm" data-a="openTemplatePicker" data-kind="project">${ic('layers', 14)}${t('modal.fromTemplate')}</button><span class="hint">${t('modal.fromTemplateHint')}</span></div>${favBlock}<div class="tmpls" role="radiogroup">${TEMPLATES.map(tp => `<button type="button" role="radio" aria-checked="${S.ui.pform.tmpl === tp.id}" class="opt ${S.ui.pform.tmpl === tp.id ? 'on' : ''}" data-a="pformSet" data-f="tmpl" data-v="${tp.id}" style="padding:10px">${ic(tp.icon, 16)}<b style="font-size:12.5px">${t(`project.template.${tp.id}.name`)}</b><span>${tp.tasks ? t('common.starterTasks', { n: tp.tasks }) : t(`project.template.${tp.id}.desc`)}</span></button>`).join('')}</div></div>
   </form>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitProject">${t('palette.createProject')}</button></div>`;
 }

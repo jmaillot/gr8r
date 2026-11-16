@@ -51,6 +51,7 @@ test('sanitizeTemplate rebuilds exactly the D-02 key set; unknown fields drop by
     'color',
     'createdAt',
     'createdBy',
+    'fav',
     'icon',
     'id',
     'kind',
@@ -58,6 +59,7 @@ test('sanitizeTemplate rebuilds exactly the D-02 key set; unknown fields drop by
     'position',
     'updatedAt',
   ]);
+  assert.equal(out.fav, false); /* default off */
   assert.equal(out.id, 'tpl1');
   assert.equal(out.kind, 'task');
   assert.equal(out.name, 'Weekly report');
@@ -75,8 +77,16 @@ test('sanitizeTemplate rebuilds exactly the D-02 key set; unknown fields drop by
   assert.ok(!('customFields' in out));
 });
 
-test('sanitizeTemplate: missing id is generated through the factory; invalid kind falls back to task', () => {
-  const out = sanitizeTemplate({ kind: 'widget', name: 'X' }, fakeUid, 2);
+test('sanitizeTemplate: the fav favourite flag whitelists only true (67-05)', () => {
+  const on = sanitizeTemplate({ id: 't1', kind: 'task', name: 'a', fav: true }, fakeUid, 0);
+  assert.equal(on.fav, true);
+  const junk = sanitizeTemplate({ id: 't2', kind: 'task', name: 'b', fav: 'yes' }, fakeUid, 0);
+  assert.equal(junk.fav, false);
+  const absent = sanitizeTemplate({ id: 't3', kind: 'task', name: 'c' }, fakeUid, 0);
+  assert.equal(absent.fav, false);
+});
+
+test('sanitizeTemplate: missing id is generated through the factory; invalid kind falls back to task', () => {  const out = sanitizeTemplate({ kind: 'widget', name: 'X' }, fakeUid, 2);
   assert.equal(out.id, 'gen1');
   assert.equal(out.kind, 'task');
   /* position fallback = the array index (D-03 tie rule) */

@@ -116,6 +116,7 @@ export function sanitizeTemplate(record, uidFactory, index = 0) {
   out.icon = typeof src.icon === 'string' ? src.icon : '';
   out.color = typeof src.color === 'string' ? src.color : '';
   out.body = kind === 'project' ? sanitizeProjectBody(src.body) : sanitizeTaskBody(src.body);
+  out.fav = src.fav === true;
   out.position = Number.isSafeInteger(src.position) ? src.position : index;
   out.createdBy = typeof src.createdBy === 'string' && src.createdBy ? src.createdBy : null;
   out.createdAt = typeof src.createdAt === 'number' && Number.isFinite(src.createdAt) ? src.createdAt : null;
@@ -128,7 +129,8 @@ export function sanitizeTemplate(record, uidFactory, index = 0) {
    server.js's normalizeSubtasksData, run at every doc write/read site
    (mergeClientDoc, normalizeDoc, and the MCP writeDoc mirror — one
    validator, several call sites, T-65-11 precedent). Per record:
-     1. sanitizeTemplate rebuilds the D-02 whitelisted shape (D-04);
+     1. sanitizeTemplate rebuilds the D-02 whitelisted shape (D-04)
+        plus the persistent `fav` favourite flag;
      2. (gate on) every embedded subtask tree is wholesale-validated
         BEFORE the heal — a raw self-parenting or cyclic template body
         must be REJECTED, never silently normalized (the 65-02 lesson:

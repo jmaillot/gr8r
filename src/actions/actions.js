@@ -1673,6 +1673,16 @@ A.newProject = () => {
   S.ui.errors = {};
   S.ui.pop = null;
   openModal({ type: 'projectCreate' });
+  /* 67-05: the create modal's favourites block dispatches A.tplPick, whose
+     bytes ride the lazy template-ui chunk — pre-warm it the same way
+     openTemplatePicker does, so a fast click can never hit a dead action. */
+  if (!S.ui.tplUi)
+    import('../features/template-ui.js').then(mod => {
+      S.ui.tplUi = mod;
+      /* the create modal is already open — re-render so the favourites
+         block replaces the fallback hint once the chunk lands */
+      render();
+    });
 };
 A.editProject = el => {
   /* [53-03 D-05] The gear (and the context-menu Edit entry) opens the unified

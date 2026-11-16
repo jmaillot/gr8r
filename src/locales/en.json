@@ -1998,6 +1998,9 @@
   "templates.addTask": "Add task",
   "templates.deleteTitle": "Delete template “{name}”?",
   "templates.deleteBody": "Tasks and projects already created from it are not affected.",
-  "templates.pickerEmpty": "No templates yet."
-
+  "templates.pickerEmpty": "No templates yet.",
+  "templates.favToggle": "Mark as favorite",
+  "templates.favOn": "Favorite",
+  "templates.favSection": "Favorites",
+  "templates.favEmptyHint": "Star a template in Settings → Templates to pin it here."
 }

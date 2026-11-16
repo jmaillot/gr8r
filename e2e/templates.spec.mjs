@@ -13,9 +13,12 @@
    API (helpers/setup.mjs doc PUT through the funnel), labels read from
    the EN catalogue (never transcribed), web-first auto-retrying
    assertions, no sleeps, no image capture.
+
+   (3) 67-05 favourites: the star persists through the funnel and the
+       create-modal favourites block leads and instantiates on click.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, createAccount, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, createAccount, newRunId, openSettings } from './helpers/setup.mjs';
 import en from '../src/locales/en.json' with { type: 'json' };
 
 const RUN = newRunId();
@@ -176,6 +179,52 @@ test('project template instantiation lands the embedded tree with remapped paren
     expect(subs).toHaveLength(1);
     expect(subs[0].parentId).toBe(null);
     expect(subs[0].id).not.toBe('pst_1');
+  } finally {
+    await context.close();
+  }
+});
+
+/* (3) 67-05 favourites: star the project template in Settings, then the
+   create-modal favourites block leads and instantiates on click. */
+test('favourite template: the star persists and the create-modal favourites block instantiates', async ({ browser }) => {
+  const { context, page } = await signIn(browser);
+  try {
+    /* Star the project template in Settings → Templates (EN tab). */
+    await openSettings(page);
+    await page.getByRole('button', { name: en['settings.nav.templates'] }).click();
+    await page.locator('button[data-a="tplTab"][data-v="project"]').click();
+    const row = page.locator('.srow').filter({ hasText: `Project template ${RUN}` });
+    await expect(row).toBeVisible();
+    const star = row.locator('button[data-a="tplFav"]');
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+    await star.click();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    /* The flag round-trips through the funnel (sanitizeTemplate whitelists fav). */
+    await expect
+      .poll(async () => {
+        const data = await readDoc();
+        return (data.templates || []).find(x => x.id === 'tpl_proj_seed')?.fav;
+      })
+      .toBe(true);
+
+    /* The create-modal favourites block leads with the starred template. */
+    await page.goto(`/w/${acct.slug}/projects`);
+    await page.locator('button[data-a="newProject"]').first().click();
+    const modal = page.locator('.modal');
+    const favOpt = modal.locator('.opt').filter({ hasText: `Project template ${RUN}` });
+    await expect(favOpt).toBeVisible();
+    await expect(favOpt).toContainText(en['templates.previewTasks'].replace('{n}', '2'));
+    /* It precedes the built-in catalogue block. */
+    const builtIn = modal.locator('.opt').filter({ hasText: en['project.template.web.name'] });
+    await expect(builtIn).toBeVisible();
+    const favY = (await favOpt.boundingBox()).y;
+    const builtY = (await builtIn.boundingBox()).y;
+    expect(favY).toBeLessThan(builtY);
+    /* Clicking a favourite instantiates immediately (tplPick semantics). */
+    await favOpt.click();
+    await expect(page).toHaveURL(new RegExp(`/w/${acct.slug}/project/`), { timeout: 10000 });
+    const data = await readDoc();
+    expect((data.projects || []).filter(x => x.name === `Templated project ${RUN}`)).toHaveLength(2);
   } finally {
     await context.close();
   }

@@ -74,7 +74,7 @@ export function renderTemplateSettings() {
       return `<div class="srow"><div class="row" style="cursor:default">${ic(x.icon || 'layers', 15)}<div><div class="t">${esc(x.name)}</div><div class="d">${kind} · ${preview(x)}</div></div></div><div class="row">${
         del === x.id
           ? `<span class="hint">${t('templates.deleteBody')}</span><button class="btn btn-danger btn-sm" data-a="tplDeleteConfirm" data-id="${esc(x.id)}">${t('act.delete')}</button><button class="btn btn-secondary btn-sm" data-a="tplDeleteCancel">${t('common.cancel')}</button>`
-          : `${i > 0 ? `<button class="ibtn ibtn-sm" data-a="tplUp" data-id="${esc(x.id)}" data-tip="${t('act.moveUpSidebar')}" aria-label="${t('act.moveUpSidebar')}">${ic('arrow-up', 14)}</button>` : ''}${i < list.length - 1 ? `<button class="ibtn ibtn-sm" data-a="tplDown" data-id="${esc(x.id)}" data-tip="${t('act.moveDownSidebar')}" aria-label="${t('act.moveDownSidebar')}">${ic('arrow-down', 14)}</button>` : ''}<button class="ibtn ibtn-sm" data-a="tplEdit" data-id="${esc(x.id)}" data-tip="${t('act.edit')}" aria-label="${t('act.edit')}">${ic('pencil', 14)}</button><button class="ibtn ibtn-sm" data-a="tplDelete" data-id="${esc(x.id)}" data-tip="${t('act.delete')}" aria-label="${t('act.delete')}">${ic('trash-2', 14)}</button>`
+          : `<button class="ibtn ibtn-sm" data-a="tplFav" data-id="${esc(x.id)}" data-tip="${t('templates.favToggle')}" aria-pressed="${x.fav === true}" aria-label="${t('templates.favToggle')}" style="${x.fav === true ? 'color:var(--amber)' : ''}">${ic('star', 14)}</button>${i > 0 ? `<button class="ibtn ibtn-sm" data-a="tplUp" data-id="${esc(x.id)}" data-tip="${t('act.moveUpSidebar')}" aria-label="${t('act.moveUpSidebar')}">${ic('arrow-up', 14)}</button>` : ''}${i < list.length - 1 ? `<button class="ibtn ibtn-sm" data-a="tplDown" data-id="${esc(x.id)}" data-tip="${t('act.moveDownSidebar')}" aria-label="${t('act.moveDownSidebar')}">${ic('arrow-down', 14)}</button>` : ''}<button class="ibtn ibtn-sm" data-a="tplEdit" data-id="${esc(x.id)}" data-tip="${t('act.edit')}" aria-label="${t('act.edit')}">${ic('pencil', 14)}</button><button class="ibtn ibtn-sm" data-a="tplDelete" data-id="${esc(x.id)}" data-tip="${t('act.delete')}" aria-label="${t('act.delete')}">${ic('trash-2', 14)}</button>`
       }</div></div>`;
     })
     .join('');
@@ -87,19 +87,37 @@ export function renderTemplateSettings() {
   }</div>`;
 }
 
-/* ---------- the picker modal (D-11) ---------- */
+/* ---------- the new-project modal's favourites block (67-05) ---------- */
+/* Rendered from the entry chunk's projectCreateModal via the S.ui.tplUi
+   registry (the templatePickModal pattern) — the bytes ride the lazy chunk
+   to keep the entry under the 500 kB gate. Star-marked project templates
+   lead; clicking one instantiates immediately (tplPick semantics). */
+export function projectFavBlock() {
+  const favs = (D().templates || []).filter(x => x.kind === 'project' && x.fav === true).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  if (!favs.length) return `<p class="hint" style="margin:0 0 8px">${t('templates.favEmptyHint')}</p>`;
+  return `<div class="tmpls" role="radiogroup" style="margin-bottom:8px">${favs
+    .map(x => `<button type="button" class="opt" data-a="tplPick" data-id="${esc(x.id)}" style="padding:10px">${ic(x.icon || 'layers', 16)}<b style="font-size:12.5px">${esc(x.name)}</b><span>${t('templates.previewTasks', { n: x.body?.tasks?.length || 0 })}</span><span style="color:var(--amber)">${ic('star', 12)}</span></button>`)
+    .join('')}</div>`;
+}
+
+/* ---------- the picker modal (D-11) ----------
+   Favourites first (67-05): the fav-flagged records lead their kind-list,
+   then the rest in position order — one list, two visual tiers, star badge
+   on the flagged rows. */
 export function templatePickModal(m, H) {
   const kind = m?.kind === 'project' ? 'project' : 'task';
-  const list = [...(D().templates || [])].filter(x => x.kind === kind).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const all = [...(D().templates || [])].filter(x => x.kind === kind).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const ordered = [...all.filter(x => x.fav === true), ...all.filter(x => x.fav !== true)];
+  const row = x => {
+    const n = kind === 'project' ? (x.body?.tasks?.length || 0) : (x.body?.subtasks?.length || 0);
+    return `<button class="mi" data-a="tplPick" data-id="${esc(x.id)}">${ic(x.icon || 'layers', 15)}${esc(x.name)}${x.fav === true ? `<span style="color:var(--amber)" data-tip="${t('templates.favOn')}">${ic('star', 12)}</span>` : ''}<span class="r">${kind === 'project' ? t('templates.previewTasks', { n: n }) : t('templates.previewSubtasks', { n: n })}</span></button>`;
+  };
   return `${H(t('modal.fromTemplate'))}
   <div class="modal-b" style="gap:2px">${
-    list.length
-      ? list
-          .map(x => {
-            const n = kind === 'project' ? (x.body?.tasks?.length || 0) : (x.body?.subtasks?.length || 0);
-            return `<button class="mi" data-a="tplPick" data-id="${esc(x.id)}">${ic(x.icon || 'layers', 15)}${esc(x.name)}<span class="r">${kind === 'project' ? t('templates.previewTasks', { n: n }) : t('templates.previewSubtasks', { n: n })}</span></button>`;
-          })
-          .join('')
+    all.length
+      ? (all.some(x => x.fav === true)
+          ? `<div class="mh" style="padding:4px 10px">${t('templates.favSection')}</div>${ordered.map(row).join('')}`
+          : ordered.map(row).join(''))
       : `<div class="mi faint" style="cursor:default">${t('templates.pickerEmpty')}</div>`
   }</div>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button></div>`;
@@ -494,6 +512,25 @@ A.tplDown = el => {
 A.tplTab = el => {
   S.ui.tplTab = el.dataset.v === 'project' ? 'project' : 'task';
   S.ui.tplDelId = null;
+  render();
+};
+
+/* ---------- actions: the favourite flag (67-05) ---------- */
+/* One-field mutate on the record — the same optimistic snapshot/pushNow
+   discipline as tplSwap; the funnel's sanitizeTemplate whitelists `fav`
+   so the flag round-trips byte-identically. */
+A.tplFav = async el => {
+  const tm = (D().templates || []).find(x => x.id === el.dataset.id);
+  if (!tm) return;
+  const snap = snapshot();
+  if (!mutate(() => { tm.fav = tm.fav !== true; })) return;
+  const res = await pushNow();
+  if (!res.ok) {
+    restore(snap);
+    render();
+    toast(res.status === 409 ? t('modal.settingsConflict') : t('err.templateSaveFailed'), { kind: 'err' });
+    return;
+  }
   render();
 };
 

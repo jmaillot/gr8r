@@ -941,12 +941,13 @@ test('66-01: MCP writeDoc runs the templates sink — junk drops, D-02 fields su
     assert.equal(tpls.length, 1);
     const t = tpls[0];
     assert.deepEqual(Object.keys(t).sort(), [
-      'body', 'color', 'createdAt', 'createdBy', 'icon', 'id', 'kind', 'name', 'position', 'updatedAt',
+      'body', 'color', 'createdAt', 'createdBy', 'fav', 'icon', 'id', 'kind', 'name', 'position', 'updatedAt',
     ]);
     assert.equal(t.id, 'tplmcp1');
     assert.equal(t.kind, 'task');
     assert.equal(t.name, 'MCP template');
     assert.equal(t.createdBy, 'm1');
+    assert.equal(t.fav, false); /* absent fav sanitizes to false (67-05) */
     assert.ok(!('junk' in t), 'the junk record field must not survive');
     assert.ok(!('assignees' in t), 'assignees are never whitelisted in template bodies');
     assert.ok(!('junk' in t.body));
