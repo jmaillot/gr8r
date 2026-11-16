@@ -7,6 +7,20 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Template favourites (67-05).** A persistent star on every template row in
+  Settings → Templates; favourites lead both "From template…" pickers, and the
+  project-create modal gains a Favourites block above the built-in catalogue that
+  instantiates on click. The `fav` flag rides the template sanitizer.
+- **Template import from a Markdown file (67-06).** Settings → Templates gains an
+  **Import .md** control (plus a downloadable example): the pure parser
+  (`src/core/template-md.js`) turns front matter (`kind`/`name`/`icon`/`color`),
+  `##` headings (subtasks for task kind, embedded tasks for project kind, `###`
+  nesting) and `+Nd` due offsets into a draft that opens the **ordinary editor** —
+  nothing saves until the user reviews and hits Save. Format documented in
+  `docs/project-templates.md` §3.
+
 ### Fixed
 
 - **Subtask tree indentation now adds to each surface's CSS base.** The shared recursive
