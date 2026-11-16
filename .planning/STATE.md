@@ -5,14 +5,14 @@ milestone_name: Automation & Productivity
 current_phase: 68
 current_phase_name: Backlog Polish
 status: executing
-stopped_at: Completed 68-02-PLAN.md
-last_updated: "2026-11-16T09:46:37.373Z"
-state_head: cf614b6eab49e2d0fec100f357a660a57a87932d
+stopped_at: Completed 68-03-PLAN.md
+last_updated: "2026-11-16T10:05:00.000Z"
+state_head: 66d7911
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
 ---
 
 # STATE.md
@@ -52,6 +52,7 @@ progress:
 | Phase 66 P03 | 75min | 3 tasks | 18 files |
 | Phase 68 P01 | 10min | 2 tasks | 3 files |
 | Phase 68 P02 | ~55min | 3 tasks | 5 files |
+| Phase 68 P03 | ~35min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -81,12 +82,12 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-16T09:46:37.228Z
-**Stopped at:** Completed 68-02-PLAN.md
+**Last session:** 2026-11-16T10:05:00.000Z
+**Stopped at:** Completed 68-03-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
-**Next step:** `/gsd-discuss-phase 65` or `/gsd-plan-phase 65` (with research).
+**Next step:** `/gsd-execute-phase 68` (remaining: 68-04 phase gate) or `/gsd-verify-work`
 
 ## Decisions
 
@@ -106,3 +107,4 @@ None.
 - [Phase 66]: 66-02: template actions ride a lazy prewarm chunk (main.js dynamic import) after a static import blew the 500 kB entry gate; templateUi.openEditor registry is stub-safe until 66-03
 - [Phase 66]: 66-03: template surfaces are chunk-backed modals (templatePick/templateEdit) cached in S.ui.tplUi; editor edits a DRAFT via Phase 65 subtree validators; entry-gate remedy = assigneePick/filePreview moved to lazy chunks loaded before openModal
 - [Phase 68]: POL-02: email_outbox claims ride the semantic-claim txs (doc-PUT + reminders_sent); MAILER-disabled producers skip claiming; retry math shared from webhook-retry.js
+- [Phase 68]: POL-01: .mcard hideable fields are a pure render-time read of v.hidden keyed on TCOLS ids (priority/due/estimate/progress verified verbatim); D-01 exemption is structural (.mch row + assignees sit outside every gate); A3 confirmed — the 899px popover-hidden assertion was inverted deliberately per D-02

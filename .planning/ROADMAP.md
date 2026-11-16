@@ -98,7 +98,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 per the 68-VALIDATION per-task map; no file overlap between 02 and 03)*
 - [x] 68-02-PLAN.md — POL-02: email_outbox claim table (SQLite+pg same commit) + notif/digest claim-then-deliver + runEmailDeliveryPass on the 30 s tick + Wave-0 test/email-outbox.test.mjs
-- [ ] 68-03-PLAN.md — POL-01: .mcard fields driven by hidden[] via cols popover (D-02 unhide), minimum-identity exempt (D-01), e2e at 390×844
+- [x] 68-03-PLAN.md — POL-01: .mcard fields driven by hidden[] via cols popover (D-02 unhide), minimum-identity exempt (D-01), e2e at 390×844
 
 **Wave 3** *(blocked on Waves 1-2)*
 - [ ] 68-04-PLAN.md — Phase gate: full npm test + npm run e2e (POL-03 non-regression proof + Wave-0 presence)
@@ -119,10 +119,10 @@ Plans:
 | WHK-03 | Phase 67 | Pending |
 | WHK-04 | Phase 67 | Pending |
 | WHK-05 | Phase 67 | Pending |
-| POL-01 | Phase 68 | Pending |
-| POL-02 | Phase 68 | Pending |
-| POL-03 | Phase 68 | Pending |
-| POL-04 | Phase 68 | Pending |
+| POL-01 | Phase 68 | Complete |
+| POL-02 | Phase 68 | Complete |
+| POL-03 | Phase 68 | Complete |
+| POL-04 | Phase 68 | Complete |
 
 Coverage: 16/16 requirements mapped ✓
 
