@@ -2438,38 +2438,53 @@ async function runReminderPass({ now: at = new Date() } = {}) {
              fires exactly one new legitimate claim (re-window allowed). No
              ledger reset on tz change. */
           claimed = res.changes !== 0; // D-03: user_id id space, exactly-once
+          /* POL-02 (Phase 68, D-07): the reminders_sent ledger stays the
+             SEMANTIC claim (WHAT to send, who-was-notified history);
+             email_outbox is the TRANSPORT claim (HOW to deliver). Exactly one
+             outbox row per digest claim, inside THIS same tx — a re-run
+             collides on the dedup_key (INSERT OR IGNORE), so no double-send
+             is possible. MAILER-disabled producers skip claiming entirely
+             (same producer gate as the notif path). Fail-absent: outbox
+             plumbing never rolls back the semantic claim. */
+          if (claimed && MAILER.enabled) {
+            try {
+              const logo = logoShape(ws, docLogo(ws));
+              const unsubscribe = unsubscribeHmacKey() && APP_URL.startsWith('https://')
+                ? unsubscribeUrl(unsubscribeHmacKey(), APP_URL, ws.id, r.user_id)
+                : null;
+              await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
+                uid(),
+                ws.id,
+                `digest:${ws.id}:${r.user_id}:${localDate}`,
+                'digest',
+                r.email,
+                JSON.stringify({
+                  type: 'digest',
+                  to: r.email,
+                  locale: r.locale === 'fr' ? 'fr' : 'en',
+                  workspace: ws.name || 'Projects Studio',
+                  wsSlug: ws.slug,
+                  appUrl: APP_URL,
+                  /* Phase 43 (D-07): absolute versioned logo URL — omitted when unset (D-10). */
+                  ...(logo ? { logoUrl: `${APP_URL}${logo.url}` } : {}),
+                  /* Phase 41 (UNSUB-01, D-05): MASTER_KEY + https APP_URL gates live server-side (Pitfall 6). */
+                  ...(unsubscribe ? { unsubscribeUrl: unsubscribe } : {}),
+                  dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
+                  overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
+                }),
+                now(),
+              ]);
+            } catch (err) {
+              logWarn(`email outbox enqueue (digest): ${err.message}`);
+            }
+          }
         });
         if (!claimed) continue;
         digests++;
-        /* Post-commit fire-and-forget — NEVER inside the transaction. */
-        if (MAILER.enabled) {
-          /* Phase 43 (D-07/D-10/D-11): the digest header embeds the workspace
-             logo as an ABSOLUTE versioned URL — composed exactly like the
-             taskUrl deep links (Pitfall 8, never relative). Omitted entirely
-             when no logo is set (D-10 — the template renders no img, no
-             placeholder URL probing). An <img> URL is not a security-header
-             contract, so unlike the Phase 41 unsubscribe gating there is no
-             https-only condition (RESEARCH open question 1). */
-          const logo = logoShape(ws, docLogo(ws));
-          MAILER.sendDigest({
-            to: r.email,
-            locale: r.locale === 'fr' ? 'fr' : 'en',
-            workspace: ws.name || 'Projects Studio',
-            wsSlug: ws.slug,
-            appUrl: APP_URL,
-            /* Phase 43 (D-07): absolute versioned logo URL — omitted when unset (D-10). */
-            ...(logo ? { logoUrl: `${APP_URL}${logo.url}` } : {}),
-            /* Phase 41 (UNSUB-01, D-05): first gate layer — the URL is only
-               built when MASTER_KEY is set AND APP_URL is https; the mailer's
-               https check is the second layer. Existing fields untouched
-               (Pitfall 6: byte-identical claim key above). */
-            ...(unsubscribeHmacKey() && APP_URL.startsWith('https://')
-              ? { unsubscribeUrl: unsubscribeUrl(unsubscribeHmacKey(), APP_URL, ws.id, r.user_id) }
-              : {}),
-            dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
-            overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
-          }).catch(err => logWarn(`digest email → ${r.email}: ${err.message}`));
-        }
+        /* POL-02: post-commit delivery kick — NEVER inside the transaction.
+           The delivery pass rebuilds the digest email from the claim's ctx;
+           sendDigest is never called directly here anymore (D-07). */
+        if (MAILER.enabled) runEmailDeliveryPass().catch(err => logWarn(`email post-commit pass: ${err.message}`));
       }
     } catch (err) {
       logWarn(`reminder pass ${ws.id}: ${err.message}`);

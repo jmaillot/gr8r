@@ -25,6 +25,7 @@ before(async () => {
   server = await startServer({
     env: {
       EMAIL_TEST_TOKEN: TOKEN,
+      REMINDER_TEST_TOKEN: TOKEN,
       SMTP_HOST: '127.0.0.1',
       SMTP_PORT: '1', // dead port — never contacted; the pass send is injected
       SMTP_REQUIRE_TLS: 'false',
@@ -82,6 +83,36 @@ const emailRow = (id, srv = server) => withDb(srv.dbPath, db => db.prepare('sele
 const outboxCount = (where = '1=1', params = [], srv = server) =>
   withDb(srv.dbPath, db => db.prepare(`select count(*) as n from email_outbox where ${where}`).get(...params).n);
 const callsOf = r => (Array.isArray(r.data?.calls) ? r.data.calls : []);
+
+/* Digest fixture: overwrite the workspace doc with a London-tz member and a
+   task due `dueDate` assigned to that member; opt the owner into the digest.
+   Clock injection via /api/internal/reminder-pass (REMINDER_TEST_TOKEN). */
+async function makeDigestFixture(dueDate, prefs = {}) {
+  const mem = withDb(server.dbPath, db => db.prepare('select member_id, user_id from memberships where workspace_id = ? order by rowid limit 1').get(ws.id));
+  const read = await owner.get(`/api/workspaces/${ws.slug}`);
+  const doc = read.data.doc;
+  doc.data.projects = [{ id: 'p1', name: 'P1' }];
+  doc.data.members = [{ id: mem.member_id, name: 'Outbox Owner', email: 'outbox-owner@test.local', tz: '(GMT+00:00) London' }];
+  doc.data.tasks = [{ id: 't-dig', key: 'P1-9', title: 'Digest task', status: 'todo', project: 'p1', assignees: [mem.member_id], due: dueDate }];
+  const saved = await owner.put(`/api/workspaces/${ws.slug}`, { revision: read.data.revision, doc });
+  assert.equal(saved.status, 200, `digest fixture PUT ${saved.status} ${JSON.stringify(saved.data)}`);
+  if (Object.keys(prefs).length) {
+    withDb(server.dbPath, db =>
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, mem.user_id, JSON.stringify(prefs)),
+    );
+  }
+  return mem;
+}
+
+const triggerReminders = nowIso =>
+  fetch(`${server.base}/api/internal/reminder-pass`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-reminder-token': TOKEN },
+    body: JSON.stringify({ now: nowIso }),
+  }).then(async r => {
+    assert.equal(r.status, 200, `reminder pass ${r.status}`);
+    return r.json();
+  });
 
 /* -------------------------------- tests --------------------------------- */
 
@@ -205,4 +236,56 @@ test('MAILER disabled: producers skip claiming and the pass leaves rows untouche
   const row = emailRow('off-row', mailerOff);
   assert.equal(row.status, 'pending', 'the row is untouched — no dead/skip marking');
   assert.equal(row.attempt, 0);
+});
+
+/* ------------------- Task 2: digest claim articulation (D-07) ------------------- */
+
+test('digest: one outbox row per claimed digest, committed inside the reminders_sent claim tx', async () => {
+  const mem = await makeDigestFixture('2026-01-15', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
+  const result = await triggerReminders('2026-01-15T08:00:00Z');
+  assert.equal(result.digests, 1, 'one digest claimed');
+  const ledger = withDb(server.dbPath, db => db.prepare('select dedup_key from reminders_sent where workspace_id = ?').all(ws.id).map(x => x.dedup_key).filter(k => k.includes(':digest:')));
+  assert.equal(ledger.length, 1, 'exactly one semantic claim (D-12 preserved)');
+  const rows = withDb(server.dbPath, db => db.prepare("select * from email_outbox where dedup_key = ?").all(`digest:${ws.id}:${mem.user_id}:2026-01-15`));
+  assert.equal(rows.length, 1, 'exactly ONE transport claim per digest');
+  assert.equal(rows[0].kind, 'digest');
+  assert.equal(rows[0].recipient, 'outbox-owner@test.local');
+  const ctx = JSON.parse(rows[0].ctx);
+  assert.equal(ctx.type, 'digest');
+  assert.equal(ctx.workspace, 'Outbox Ws');
+  assert.equal(ctx.appUrl, 'http://app.test');
+  assert.deepEqual(
+    ctx.dueToday.map(t => t.title),
+    ['Digest task'],
+    'the digest content snapshot rides the ctx (rebuilt at delivery time)',
+  );
+
+  /* Re-run the same clock — the ledger claim collides, nothing is claimed,
+     no second outbox row (Phase 38 no-double-send, D-07). */
+  const replay = await triggerReminders('2026-01-15T08:00:00Z');
+  assert.equal(replay.digests, 0, 'the re-run claims nothing');
+  assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent where workspace_id = ?').get(ws.id).n), 1, 'ledger unchanged');
+  assert.equal(outboxCount("dedup_key like 'digest:%'"), 1, 'still exactly one outbox row');
+
+  /* Delivery rides the pass — the ctx rebuilds into a sendDigest call.
+     The post-commit kick already consumed attempt 1 against the dead SMTP
+     port, so drain past the scheduled retry (D-06 backoff[0]). */
+  const pass = await trigger({ now: Date.now() + 120_000, send: { ok: true } });
+  assert.equal(pass.data.delivered, 1);
+  const call = callsOf(pass).find(c => c.type === 'digest');
+  assert.ok(call, 'the pass rebuilt the digest email');
+  assert.equal(call.to, 'outbox-owner@test.local');
+  assert.equal(call.wsSlug, 'outbox-ws');
+  assert.deepEqual(call.dueToday.map(t => t.title), ['Digest task']);
+  assert.equal(emailRow(rows[0].id).status, 'delivered');
+});
+
+test('digest: an empty digest claims nothing and writes no outbox row (D-12 guard preserved)', async () => {
+  const mem = await makeDigestFixture('2027-03-05', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
+  const before = outboxCount("dedup_key like 'digest:%'");
+  const ledgerBefore = withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent').get().n);
+  const result = await triggerReminders('2027-03-01T08:00:00Z');
+  assert.equal(result.digests, 0, 'no digest claimed for an empty digest');
+  assert.equal(outboxCount("dedup_key like 'digest:%'"), before, 'no transport claim either');
+  assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent').get().n), ledgerBefore, 'no ledger claim (D-12)');
 });
