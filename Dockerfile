@@ -28,6 +28,10 @@ COPY --from=build /app/export ./export
 COPY --from=build /app/oidc.js ./oidc.js
 COPY --from=build /app/totp.js ./totp.js
 COPY --from=build /app/mailer.js ./mailer.js
+# Phase 67: server.js imports the webhook delivery modules — all three must ship in the runtime stage.
+COPY --from=build /app/webhook-ssrf.js ./webhook-ssrf.js
+COPY --from=build /app/webhook-retry.js ./webhook-retry.js
+COPY --from=build /app/webhook-formats.js ./webhook-formats.js
 COPY --from=build /app/seed.json ./seed.json
 COPY --from=build /app/dist ./dist
 
