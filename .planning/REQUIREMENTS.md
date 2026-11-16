@@ -30,10 +30,10 @@
 
 ### v2.3 Backlog Polish (POL)
 
-- [ ] **POL-01**: Mobile card fields are driven by the existing `hidden[]` column contract — popover hides/shows card fields, minimum-identity fields always visible, proven by a dedicated 390×844 e2e
+- [x] **POL-01**: Mobile card fields are driven by the existing `hidden[]` column contract — popover hides/shows card fields, minimum-identity fields always visible, proven by a dedicated 390×844 e2e
 - [x] **POL-02**: Email notification retry semantics when SMTP is down — claim-state machine (never mark-then-send, never blanket re-drive) honoring the Phase 38 no-double-send invariant
-- [ ] **POL-03**: WR-01 CSS scoping — `.toolbar { flex-shrink: 0 }` scoped to `.page.flush .toolbar` at ≤900px, board toolbar behavior proven unchanged by the existing suite
-- [ ] **POL-04**: 64-VALIDATION Nyquist reconciliation — phase 64 validation draft reconciled or formally accepted per audit-milestone §5.5
+- [x] **POL-03**: WR-01 CSS scoping — `.toolbar { flex-shrink: 0 }` scoped to `.page.flush .toolbar` at ≤900px, board toolbar behavior proven unchanged by the existing suite
+- [x] **POL-04**: 64-VALIDATION Nyquist reconciliation — phase 64 validation draft reconciled or formally accepted per audit-milestone §5.5
 
 ## Future Requirements (deferred)
 
@@ -65,9 +65,9 @@
 | WHK-03 | Phase 67 | Pending |
 | WHK-04 | Phase 67 | Pending |
 | WHK-05 | Phase 67 | Pending |
-| POL-01 | Phase 68 | Pending |
+| POL-01 | Phase 68 | Complete |
 | POL-02 | Phase 68 | Complete |
-| POL-03 | Phase 68 | Pending |
-| POL-04 | Phase 68 | Pending |
+| POL-03 | Phase 68 | Complete |
+| POL-04 | Phase 68 | Complete |
 
 Coverage: 16/16 requirements mapped ✓
