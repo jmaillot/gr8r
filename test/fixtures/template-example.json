@@ -1,0 +1,4 @@
+{
+  "en": "---\nkind: task\nname: Weekly report\nicon: clipboard\ncolor: blue\n---\nThe template notes. For a task template this becomes the task description.\n\n## +2d Collect the numbers\n  Pull the dashboard metrics before Friday.\n## +3d Write the summary\n## +5d Send it out\n",
+  "fr": "---\nkind: task\nname: Rapport hebdo\nicon: clipboard\ncolor: blue\n---\nLes notes du gabarit. Pour un gabarit de tâche, ceci devient la description de la tâche.\n\n## +2d Collecter les chiffres\n  Extraire les métriques du tableau de bord avant vendredi.\n## +3d Rédiger le résumé\n## +5d Envoyer\n"
+}

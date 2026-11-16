@@ -263,3 +263,68 @@ test('task template instantiation lands the task with its subtask tree and opens
     await context.close();
   }
 });
+
+/* (4) 67-06 MD import: the Settings toolbar's file input parses to a draft
+   and opens the ORDINARY editor — nothing saves until the user reviews and
+   hits Save; the funnel then sanitizes like anything typed by hand. The EN
+   labels ride the lazy table (template-md-labels.json), not en.json. */
+import mdLabels from '../src/features/template-md-labels.json' with { type: 'json' };
+
+test('md import: a Markdown file opens the editor draft and saves through the funnel', async ({ browser }) => {
+  const { context, page } = await signIn(browser);
+  try {
+    await openSettings(page);
+    await page.getByRole('button', { name: en['settings.nav.templates'] }).click();
+    const toolbar = page.locator('.sblock').first();
+    const importBtn = toolbar.locator('label').filter({ hasText: mdLabels.importBtn });
+    await expect(importBtn).toBeVisible();
+
+    /* The example download works client-side (Blob, no server route). */
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      toolbar.locator('button[data-a="tplImportExample"]').click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('template-example.md');
+
+    /* Import the example file itself: parse → editor modal, never a blind save. */
+    const md = [
+      '---',
+      'kind: task',
+      `name: Imported ${RUN}`,
+      'icon: clipboard',
+      '---',
+      '## +2d First imported subtask',
+      '  with a note',
+      '## Imported plain',
+    ].join('\n');
+    await importBtn.locator('input[type=file]').setInputFiles({
+      name: `import-${RUN}.md`,
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(md, 'utf8'),
+    });
+    /* The editor opens on the draft — a fresh draft renders the
+       templates.editorNew header; the parsed rows live in the editor's
+       inline inputs (values, not text), so assert by input value. */
+    const editor = page.locator('.modal');
+    await expect(editor.locator('#tpl-title')).toHaveValue(`Imported ${RUN}`, { timeout: 10000 });
+    await expect(editor.locator('input[data-in="tplTitle"]').first()).toHaveValue('First imported subtask');
+    await expect(editor.locator('input[data-in="tplOffset"]').first()).toHaveValue('2');
+
+    /* Review, then Save — the funnel writes the record. */
+    await page.locator('button[data-a="tplSave"]').click();
+    await expect(page.locator('.modal')).not.toBeVisible({ timeout: 10000 });
+
+    const data = await readDoc();
+    const tm = (data.templates || []).find(x => x.name === `Imported ${RUN}`);
+    expect(tm, 'the imported template was saved').toBeTruthy();
+    expect(tm.kind).toBe('task');
+    expect(tm.icon).toBe('clipboard');
+    const subs = tm.body.subtasks || [];
+    expect(subs.map(s => s.title)).toEqual(['First imported subtask', 'Imported plain']);
+    expect(subs[0].dueOffsetDays).toBe(2);
+    expect(subs[0].note).toBe('with a note');
+    expect('dueOffsetDays' in subs[1]).toBe(false);
+  } finally {
+    await context.close();
+  }
+});

@@ -88,8 +88,10 @@ test('the French catalogue is still a strict subset of the English one', () => {
      The webhook.* namespace is the 67-04 exception too: fr-only by design —
      the EN twins live in src/overlays/webhooks-labels.json (the lazy chunk's
      label table) so the 500,000-byte entry-chunk gate is not blown; parity
-     with that table is asserted by test/build-locales.test.mjs. */
-  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !k.startsWith('webhook.') && !Object.hasOwn(en, k));
+     with that table is asserted by test/build-locales.test.mjs. The
+     templates.import* namespace is the 67-06 exception on the same terms —
+     the EN twins live in src/features/template-md-labels.json. */
+  const extra = Object.keys(fr).filter(k => !k.startsWith('contract.') && !k.startsWith('webhook.') && !k.startsWith('templates.import') && !Object.hasOwn(en, k));
   assert.deepEqual(extra, [], `every French key exists in English (${extra.join(', ')})`);
 });
 

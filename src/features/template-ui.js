@@ -34,6 +34,7 @@ import { canSee, D, proj, S, pushNow, teamsList } from '../core/store.js';
 import { closeModal, openModal } from '../overlays/modals.js';
 import { go, render } from '../shell/render.js';
 import { descendantsOf, nextPosition, orderedSiblings, validateMove } from '../core/subtree.js';
+import { parseTemplateMarkdown, templateExampleText } from '../core/template-md.js';
 import { templateUi } from '../actions/templates.js';
 
 /* ---------- draft node addressing ---------- */
@@ -80,7 +81,7 @@ export function renderTemplateSettings() {
     .join('');
   return `<div class="sblock" style="margin-top:0"><div class="row" style="margin-bottom:12px"><div class="seg" style="flex:1">${['task', 'project']
     .map(k => `<button class="${tab === k ? 'on' : ''}" style="flex:1;justify-content:center" data-a="tplTab" data-v="${k}" aria-pressed="${tab === k}">${t(k === 'project' ? 'templates.kindProject' : 'templates.kindTask')}</button>`)
-    .join('')}</div><button class="btn btn-primary" data-a="tplNew">${ic('plus', 14)}${t('templates.new')}</button></div>${
+    .join('')}</div><button class="btn btn-primary" data-a="tplNew">${ic('plus', 14)}${t('templates.new')}</button><label class="btn btn-secondary" style="cursor:pointer" data-tip="${mdt('importTip')}" aria-label="${mdt('importBtn')}"><input type="file" hidden accept=".md,.markdown,.txt" data-in="tplImportFile">${ic('upload', 14)}${mdt('importBtn')}</label><button class="btn btn-secondary" data-a="tplImportExample" aria-label="${mdt('importExample')}">${ic('download', 14)}</button></div>${
     list.length
       ? rows
       : `<p class="hint">${t('templates.emptyTab', { kind: t(tab === 'project' ? 'templates.kindProject' : 'templates.kindTask').toLowerCase() })}</p>`
@@ -250,6 +251,49 @@ templateUi.openEditor = openTemplateEditor;
 A.tplNew = () => {
   S.ui.tplEditor = { id: null, kind: 'task', name: '', icon: '', color: '', body: { title: '', subtasks: [] }, position: null };
   openModal({ type: 'templateEdit' });
+};
+
+/* ---------- actions: the MD import (67-06) ---------- */
+/* The section's bilingual labels ride the 67-04 Rule-3 split (the 500 kB
+   entry-chunk gate has no headroom): EN rides the lazy table below
+   (template-md-labels.json — English bytes are legal in a lazy chunk),
+   FR rides fr.json under the templates.import* keys. EN↔FR parity is
+   asserted by test/build-locales.test.mjs. */
+import MD_LABELS from './template-md-labels.json' with { type: 'json' };
+import { getLocale } from '../core/i18n.js';
+const mdt = key => (getLocale() === 'fr' ? t('templates.' + key) : MD_LABELS[key] ?? key);
+/* The file input's change handler (IN dispatch, the uploadLogo pattern):
+   read the .md/.markdown/.txt file, parse to a draft (core/template-md —
+   pure), then open the ORDINARY editor on it. Nothing saves until the
+   user reviews and hits Save — the draft rides the same funnel
+   sanitization as anything typed by hand. */
+IN.tplImportFile = el => {
+  const file = el.files?.[0];
+  el.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const draft = parseTemplateMarkdown(String(reader.result || ''));
+    if (!draft.name && !(draft.body.subtasks || []).length && !(draft.body.tasks || []).length) {
+      toast(mdt('importEmpty'), { kind: 'err' });
+      return;
+    }
+    openTemplateEditor(draft);
+  };
+  reader.onerror = () => toast(mdt('importFailed'), { kind: 'err' });
+  reader.readAsText(file);
+};
+
+/* The example download: a client-side blob (no server route, no new
+   endpoint) carrying the documented format. */
+A.tplImportExample = () => {
+  const lang = document.documentElement.lang === 'fr' ? 'fr' : 'en';
+  const blob = new Blob([templateExampleText(lang)], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'template-example.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
 A.tplEdit = el => {
   const tm = (D().templates || []).find(x => x.id === el.dataset.id);

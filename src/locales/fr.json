@@ -2028,6 +2028,10 @@
   "templates.favOn": "Favori",
   "templates.favSection": "Favoris",
   "templates.favEmptyHint": "Étoilez un modèle dans Réglages → Modèles pour l’épingler ici.",
+  "templates.importTip": "Importer depuis un fichier Markdown — vérifier avant d’enregistrer.",
+  "templates.importExample": "Exemple",
+  "templates.importEmpty": "Aucun modèle trouvé — vérifiez le nom et les titres ##.",
+  "templates.importFailed": "Le fichier n’a pas pu être lu.",
   "webhook.serverOnly": "Nécessite un serveur.",
   "webhook.addTitle": "Nouveau webhook",
   "webhook.url": "URL",
@@ -2058,5 +2062,6 @@
   "webhook.testFail": "Échec (HTTP {code})",
   "webhook.enable": "Activer",
   "webhook.disable": "Désactiver",
-  "webhook.del": "Supprimer"
+  "webhook.del": "Supprimer",
+  "templates.importBtn": "Importer .md"
 }

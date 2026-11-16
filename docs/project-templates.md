@@ -107,6 +107,50 @@ Exemple « event » :
 "project.template.event.task.5": "Day-of checklist"
 ```
 
+## 3. Import depuis un fichier MD (67-06)
+
+La toolbar Réglages → Modèles porte deux contrôles : **Importer .md** (input fichier,
+filtre `.md/.markdown/.txt`) et **Exemple** (télécharge un fichier d'exemple via Blob
+client — aucune route serveur). Le parseur (`src/core/template-md.js`, pur et sans DOM)
+transforme le fichier en **draft** qui s'ouvre dans l'éditeur ordinaire : rien n'est
+enregistré avant review + Save, et le funnel re-valide comme pour une saisie manuelle.
+
+### Format
+
+```markdown
+---
+kind: task              ← ou `project` (défaut : task)
+name: Rapport hebdo
+icon: clipboard         ← nom Lucide, défaut : layers
+color: blue             ← clé de palette, optionnel
+---
+Notes du gabarit.       ← task : notes de la tâche / project : description
+
+## +2d Collecter les chiffres    ← ## = sous-tâche ; +Nd = dueOffsetDays
+  Note de la sous-tâche.         ← ligne indentée sous le titre
+## +3d Rédiger le résumé
+## Envoyer                       ← pas d'offset = pas de date (D-08)
+```
+
+Kind **project** : les `##` sont les tâches intégrées, les `###` leurs sous-tâches,
+la prose devient la description ; chaque tâche accepte le même préfixe `+Nd`.
+
+### Sémantique des offsets
+
+- `+3d` / `-1d` / `7` → `dueOffsetDays` relatif (ancrage absolu à l'instanciation,
+  D-05/D-07) ; le même préfixe marche sur `##` et `###`.
+- Offset absent → **aucune date** (D-08 — jamais de défaut inventé).
+- Titre `##` vide → la ligne est abandonnée (best-effort, jamais de nœud vide).
+
+### Extension : ne pas casser la gate 500 kB
+
+Les libellés d'import sont EN dans la table lazy `src/features/template-md-labels.json`
+(consumée par le `mdt()` de `template-ui.js`) et FR sous les clés `templates.import*` de
+`fr.json` — le split Rule-3 de 67-04 (parité assertée par `test/build-locales.test.mjs`).
+⚠️ Le scanner d'icônes (`scripts/icons.mjs`) capture tout token quoted kebab-lowercase
+qui existe dans Lucide : la clé d'label **ne doit pas** s'appeler `import` (nom d'icône
+Lucide → l'icône entière entre dans l'entry chunk). D'où `importBtn`.
+
 ## Pièges à éviter
 
 - **Oublier une locale** (catalogue intégré) : le nom s'affiche comme clé brute dans la

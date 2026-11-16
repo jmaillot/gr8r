@@ -1,0 +1,7 @@
+{
+  "importBtn": "Import .md",
+  "importTip": "Import from a Markdown file — review before saving.",
+  "importExample": "Example",
+  "importEmpty": "No template found — check the name and ## headings.",
+  "importFailed": "The file could not be read."
+}

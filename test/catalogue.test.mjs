@@ -61,6 +61,11 @@ const CONTRACT_NAMESPACE = 'contract.';
    the wt() FR branch routes through t('webhook.' + key). Parity between the two
    tables is asserted by test/build-locales.test.mjs (the 67-04 parity test). */
 const WEBHOOK_NAMESPACE = 'webhook.';
+/* The templates.import* labels are FR-ONLY BY DESIGN (67-06): the EN twins
+   live in the src/features/template-md-labels.json table shipped with the
+   lazy template-ui chunk — same Rule-3 split as webhook.* above, same
+   parity contract in test/build-locales.test.mjs. */
+const TEMPLATE_MD_NAMESPACE = 'templates.import';
 
 /* ---------- the lint ---------- */
 
@@ -151,6 +156,7 @@ function lintAgainstBase(name, data, base) {
     /* webhook.* is the 67-04 fr-only-by-design namespace (EN twins live in the
        webhooks-labels.json lazy table — see the constant above). */
     if (name !== BASE_FILE && key.startsWith(WEBHOOK_NAMESPACE)) continue;
+    if (name !== BASE_FILE && key.startsWith(TEMPLATE_MD_NAMESPACE)) continue;
     if (!Object.hasOwn(base, key)) {
       out.push(violation(name, key, 'english-base', 'the key', `the English catalogue carries no ${key}`));
     }
@@ -475,7 +481,7 @@ test('the French catalogue carries no fr-only key outside the contract and webho
   /* webhook.* is fr-only by design (67-04): the EN twins live in
      src/overlays/webhooks-labels.json so the 500,000-byte entry-chunk gate is not
      blown — parity with that table is asserted by test/build-locales.test.mjs. */
-  const stray = Object.keys(fr).filter(key => !key.startsWith(CONTRACT_NAMESPACE) && !key.startsWith(WEBHOOK_NAMESPACE) && !Object.hasOwn(en, key));
+  const stray = Object.keys(fr).filter(key => !key.startsWith(CONTRACT_NAMESPACE) && !key.startsWith(WEBHOOK_NAMESPACE) && !key.startsWith(TEMPLATE_MD_NAMESPACE) && !Object.hasOwn(en, key));
   assert.deepEqual(stray, [], `fr-only keys outside contract.* are a bug (${stray.map(key => `fr-only key: ${key}`).join(', ')})`);
 });
 
