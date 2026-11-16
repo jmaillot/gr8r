@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.4
-milestone_name: Automation & Productivity
+milestone: v2.5
+milestone_name: Template Polish & Import
 status: Awaiting next milestone
-stopped_at: Phase 66 complete — all phases complete
-last_updated: "2026-11-16T13:58:21.550Z"
+stopped_at: v2.5 complete — quick work 67-05/06/07 shipped
+last_updated: "2026-11-16T20:50:00.000Z"
 last_activity: 2026-11-16
-last_activity_desc: Milestone v2.4 completed and archived
-state_head: 52ecd932552d861bd1e9dae3c8cf69a946864070
+last_activity_desc: Milestone v2.5 audited (passed), archived and tagged v2.5.0
+state_head: f99359c
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
-current_phase: 66
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+current_phase: none
 ---
 
 # STATE.md
@@ -22,19 +22,19 @@ current_phase: 66
 
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core value:** one workspace document pushed client→server through the `mergeClientDoc` funnel; every feature is an extension of that spine, zero new dependencies.
-**Milestone:** v2.4 Automation & Productivity — SHIPPED 2026-11-16 (see `.planning/milestones/v2.4-ROADMAP.md`).
+**Milestone:** v2.5 Template Polish & Import — SHIPPED 2026-11-16 (see `.planning/milestones/v2.5-ROADMAP.md`).
 **Current focus:** Next milestone — not yet planned; run `/gsd-new-milestone`. Open backlog: Phase 999.1 (Phase 65 UAT Test 11 — exports/MS Project).
 
 ## Current Position
 
-Phase: Milestone v2.4 complete
+Phase: Milestone v2.5 complete (owner-directed quick work, no GSD phases)
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-11-16 — Milestone v2.4 completed and archived
+Last activity: 2026-11-16 — Milestone v2.5 audited (passed, 4/4 requirements), archived and tagged v2.5.0
 
 ## Performance Metrics
 
-**Unit tests:** 1524 baseline (grow, never shrink) · **e2e:** 115/115 baseline (0 flaky) · **lint:** clean · **chunk gate:** 498.11 kB < 500 kB (~2 kB headroom — lazy-load all new UI) · **i18n:** EN+FR gate green
+**Unit tests:** 1705 pass / 1718 (grow, never shrink) · **e2e:** 132/132 (0 flaky) · **lint:** 15 pre-existing baseline errors · **chunk gate:** 499940/500000 bytes (~60 bytes headroom — the gate is tight; lazy-load all new UI, no bare quoted Lucide-name label keys) · **i18n:** EN+FR gate green
 **Per-Plan Metrics:**
 
 | Plan | Duration | Tasks | Files |

@@ -1,5 +1,23 @@
 # Milestones
 
+## v2.5 Template Polish & Import (Shipped: 2026-11-16)
+
+**Type:** owner-directed quick work (no formal GSD phases — 67-05/67-06/67-07)
+**Closeout:** verified_closeout (2026-11-16) — milestone audit PASSED (4/4 requirements, all gates green, UAT verified on the Docker server)
+**Git range:** `v2.4..f99359c` — 8 commits, 27 files, +1068/−88
+
+**Key accomplishments:**
+- Subtask tree indent fixed at the root: the shared renderer now emits `--ind` and every surface ADDS it to its CSS base (`calc(base + var(--ind))`) — the list view's 64px base no longer pulls children left of their parent; the e2e asserts real content-box geometry (65-05).
+- Template favourites shipped end-to-end: persistent `fav` flag through the sanitizer, star buttons in Settings, favourites-first in both "From template…" pickers, and a create-modal Favourites block that instantiates on one click (67-05).
+- Template import from Markdown: a pure DOM-free parser (front matter, `##`/`###`/`####` nesting for both kinds, `+Nd` offsets honoring D-05/D-07/D-08) lands a draft in the ORDINARY editor — review before Save, funnel re-validation on save (67-06).
+- Two complete downloadable per-kind examples (task: 3-level tree, offsets, priority; project: 4 tasks with 3-level nesting), each parse-verified; visible labels after owner UAT flagged the icon-only buttons (67-07).
+- The six built-in starter projects became hideable via a `prefs.hideStarters` workspace toggle; Projet vierge (blank) always shows; onboarding untouched by design (67-07).
+- Gate discipline discoveries documented: the icon scanner captures any bare quoted Lucide name (label keys must not collide — `importBtn`), and examples stay EN-only (no-French-byte build gate).
+
+**Deferred:** Phase 65 UAT Test 11 (exports/MS Project real import) carried to backlog; lint baseline 15 pre-existing errors unchanged.
+
+---
+
 ## v2.4 Automation & Productivity (Shipped: 2026-11-16)
 
 **Phases completed:** 4 phases, 17 plans, 1 tasks

@@ -2,11 +2,23 @@
 
 ## Milestones
 
+- ✅ **v2.5 Template Polish & Import** — 67-05/06/07 quick work: favourites, MD import with complete per-kind examples, starters toggle, 65-05 indent fix (shipped 2026-11-16) — [archive](milestones/v2.5-ROADMAP.md)
 - ✅ **v2.4 Automation & Productivity** — Phases 65-68 (shipped 2026-11-16) — [archive](milestones/v2.4-ROADMAP.md)
 - ✅ **v2.3** — shipped (see `.planning/milestones/`)
 - 🚧 **Next** — not yet planned
 
 ## Phases
+
+<details>
+<summary>✅ v2.5 Template Polish & Import (quick work 67-05/06/07) — SHIPPED 2026-11-16</summary>
+
+- [x] 67-05: Template favourites — persistent star, favourites-first pickers, create-modal block
+- [x] 67-06: Template import from Markdown — pure parser, editor-review flow, lazy label split
+- [x] 67-07: Complete per-kind MD examples, nested task parsing, hideStarters toggle
+
+Full details: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md) · Audit: [v2.5-MILESTONE-AUDIT.md](v2.5-MILESTONE-AUDIT.md)
+
+</details>
 
 <details>
 <summary>✅ v2.4 Automation & Productivity (Phases 65-68) — SHIPPED 2026-11-16</summary>

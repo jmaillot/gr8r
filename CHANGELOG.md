@@ -5,7 +5,7 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0] — 2026-11-16 — Template Polish & Import
 
 ### Added
 
@@ -14,26 +14,28 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   project-create modal gains a Favourites block above the built-in catalogue that
   instantiates on click. The `fav` flag rides the template sanitizer.
 - **Template import from a Markdown file (67-06).** Settings → Templates gains an
-  **Import .md** control (plus a downloadable example): the pure parser
+  **Import .md** control (plus downloadable examples): the pure parser
   (`src/core/template-md.js`) turns front matter (`kind`/`name`/`icon`/`color`/`priority`),
   `##` headings and `+Nd` due offsets into a draft that opens the **ordinary editor** —
   nothing saves until the user reviews and hits Save. `###`/`####` headings nest (2 levels
-  for task kind, 3 for project kind; orphan deep headings drop). Two complete examples
-  download client-side, one per kind. Format documented in `docs/project-templates.md` §3.
+  for task kind, 3 for project kind; orphan deep headings drop; consecutive `####`s are
+  siblings). Two complete examples download client-side, one per kind. Format documented
+  in `docs/project-templates.md` §3.
 - **Hide the built-in starter projects (67-07).** A workspace-level toggle in
   Settings → Templates (`prefs.hideStarters`) removes the six themed starters from the
   create-project modal; "Blank project" always stays.
 
 ### Fixed
 
-- **Subtask tree indentation now adds to each surface's CSS base.** The shared recursive
-  renderer emitted an inline `padding-left` that **replaced** the surface's base padding
-  instead of stacking on it: in the list view (`.subrow`, 64px base) a depth-1 child
-  rendered 48px **left** of its root parent, and in the drawer (`.subt`, 6px base) the
-  first indent step was only +10px. The renderer now emits an inline `--ind` custom
-  property and every surface computes `padding-left: calc(<base> + var(--ind))`. The
-  render e2e now asserts the child's real content box sits strictly right of its
-  parent's — the visual assertion that was missing and let this ship (65-05).
+- **Subtask tree indentation now adds to each surface's CSS base (65-05).** The shared
+  recursive renderer emitted an inline `padding-left` that **replaced** the surface's
+  base padding instead of stacking on it: in the list view (`.subrow`, 64px base) a
+  depth-1 child rendered 48px **left** of its root parent, and in the drawer (`.subt`,
+  6px base) the first indent step was only +10px. The renderer now emits an inline
+  `--ind` custom property and every surface computes
+  `padding-left: calc(<base> + var(--ind))`. The render e2e now asserts the child's
+  real content box sits strictly right of its parent's — the visual assertion that was
+  missing and let this ship.
 
 ## [2.4.0] — 2026-11-16 — Automation & Productivity
 
