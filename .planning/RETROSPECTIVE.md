@@ -429,12 +429,55 @@
 - Sessions: ~8 substantive sessions over 3 days (2026-11-12 → 11-14).
 - Notable: 1524-test suite stayed green through all 6 phases; only post-close additions were the notifyMembers refresh fix + lint cleanup.
 
+## Milestone: v2.4 — Automation & Productivity
+
+**Shipped:** 2026-11-16
+**Phases:** 4 | **Plans:** 17
+
+### What Was Built
+
+- Subtask tree (65): multi-level `{id, parentId, position}` trees; cycle/depth rejected at the mergeClientDoc funnel; completion cascade + leaf-only rollups; tree survives views, FTS, exports, MCP writeDoc.
+- Templates (66): workspace-wide task/project templates with `dueOffsetDays`, pure `instantiateTemplate` builder on the normal doc-PUT, lazy-chunk picker/editor UI.
+- Webhooks (67): 8-event vocabulary, claim-once delivery, SSRF-guarded HMAC-signed pinned fetch, 5-strike Retry-After retry, Teams adaptive/messagecard/raw-json under 28 KB, AAD mentions from `users.oid`.
+- Backlog polish (68): mobile hidden[] card fields (cols popover ≤900px), email claim-then-deliver on the webhook machinery, WR-01 CSS scoping, 64-VALIDATION reconciliation.
+
+### What Worked
+
+- Parallel verifier subagents at close re-verified phases 66–68 fresh against the 54827ed audit-fix commit (3 stale digests → all passed, no override needed): the v1.7 recipe held.
+- Milestone audit BEFORE close (12/12 requirements, 5/5 seams, 4/4 flows) surfaced CR-01/WR-01/WR-05 while they were still cheap to fix.
+- Lazy-chunk discipline absorbed three new UI surfaces (templates, webhooks settings) without breaching the 500 kB entry gate.
+
+### What Was Inefficient
+
+- Digest fingerprinting is still tool-clunky: subagents hand-wrote `v4:` digests (unknown version → fail-closed `stale`/`missing`); close had to recompute via `verification.fingerprint` and patch the stored digests to `v2:`.
+- A resolved-in-66-03 deferred item (chunk gate) lingered as an open audit item until close.
+- Post-verification commit 54827ed staled 3 of 4 phase verifications — final fixes should land before per-phase verification, or verification should run last.
+
+### Patterns Established
+
+- Claim-then-deliver is the house pattern for async outbound (webhooks and now email share one backoff/dead/purge shape).
+- Server-side funnel diffing (`diffWebhookEvents(storedDoc, next)`) is the single emission point for event vocabularies.
+- Lazy prewarm registries (`S.ui.*Mod`) are the standard way to add heavy UI without entry-gate cost.
+
+### Key Lessons
+
+1. Re-verify with fresh subagents at close instead of overriding: it turned a would-be `override_closeout` into `verified_closeout` in one round.
+2. Never hand-write a `covered_digest` — recompute it with `verification.fingerprint <phaseDir> <files...>` and store the CLI's exact `v2:` output.
+3. Run the milestone audit early enough that its tech-debt fixes precede final verification.
+
+### Cost Observations
+
+- Model mix: not tracked this milestone.
+- Sessions: ~10 substantive sessions over 2 days (2026-11-15 → 11-16).
+- Notable: 1707 tests, 1694 pass / 13 env skips / 0 fail at HEAD; full suite re-run twice at close.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
 
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
+| v2.4 Automation & Productivity | 2 days | 4 | First fully verified closeout at HEAD: parallel verifier subagents refreshed 3 stale digests after the audit-fix commit (54827ed), audit run BEFORE close let tech debt land early. Recurring lesson again: hand-written covered digests (v4:) fail closed — always recompute via verification.fingerprint. |
 | v2.2 Notifications, Search & Delivery | 3 days | 6 | Override closeout again over stale bookkeeping (56-60 `open/stale` vs STATE.md 6/6 Complete); live browse-MCP UAT diffed server truth against the UI and turned a false major issue into a pre-existing-bug diagnosis. Lesson confirmed: keep the STATE.md phase table fresh per phase; closeout verification overrides are now the expected shape with shared server.js. |
 | v1.1 Multitenant | 2 days | 4 | Phase verification was produced for phase 4 only; the audit backfilled phases 1–3. Next milestone: verify every phase before it closes. |
 | v1.2 Localization | 2 days | 8 | Every phase verified before close (50/50 plans); the close still re-verified all 8 after close-out commits staled the digests. Next milestone: finish close-out edits BEFORE running verifiers, and never hand-write a covered digest. |
