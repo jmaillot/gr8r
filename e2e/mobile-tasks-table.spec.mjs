@@ -1,8 +1,10 @@
 /* =====================================================================
    PHASE 64 MOBILE TASKS TABLE (MOB-01; D-01..D-04, D-09..D-11): the
-   Columns button is hidden at ≤900px by one generic pure-CSS rule, the
-   641–900px band shows the card stack (D-04 Option B), and desktop is
-   unchanged. Boundary pinned just under the breakpoint (899px) and one
+   card stack shows in the 641–900px band (D-04 Option B) and desktop is
+   unchanged. Phase 68 D-02 re-enabled the Columns button ≤900px — the
+   cols popover is now visible at mobile viewports and drives both the
+   table and the card stack through the same hidden[] view state.
+   Boundary pinned just under the breakpoint (899px) and one
    desktop-unchanged proof at 1280×720.
 
    Conventions follow french-overflow.spec.mjs: the context `viewport`
@@ -136,14 +138,16 @@ async function openTasksTable(page, account) {
 }
 
 /* D-04 Option B boundary: at 899px (just under the 900px breakpoint) the
-   Columns button is hidden (CSS-only — it stays in the DOM, so we assert
-   hidden, never count 0), the card stack is visible, and the desktop
-   table is hidden. */
-test('at 899px the Columns button is hidden, the card stack shows, and the desktop table is hidden', async ({ browser }) => {
+   Columns button is VISIBLE (Phase 68 D-02 re-enabled the popover on
+   mobile — the card stack and the table now share the same hidden[] view
+   state), the card stack is visible, and the desktop table is hidden.
+   The Phase 64 hidden assertion was inverted by D-02 — the contract
+   changed deliberately, nothing was weakened. */
+test('at 899px the Columns button is visible, the card stack shows, and the desktop table is hidden', async ({ browser }) => {
   const { context, page } = await signIn(browser, acct, { width: 899, height: 844 });
   try {
     await openTasksTable(page, acct);
-    await expect(page.locator('[data-pop="cols"]')).toBeHidden();
+    await expect(page.locator('[data-pop="cols"]')).toBeVisible();
     await expect(page.locator('.only-m .panel').first()).toBeVisible();
     await expect(page.locator('.tbl-wrap')).toBeHidden();
   } finally {
