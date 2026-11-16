@@ -1,7 +1,7 @@
 ---
 phase: 68-backlog-polish
 verified: 2026-11-16T14:20:00Z
-status: human_needed
+status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -23,6 +23,7 @@ covered_files:
   - test/email-outbox.test.mjs
   - e2e/mobile-card-hidden.spec.mjs
   - .planning/milestones/v2.3-phases/64-mobile-tasks-table-suite-green/64-VALIDATION.md
+
 covered_digest: v2:sha256:9521bb4d8a38ea2c65cfdce3785b520d5f20f0640f28b020112b97f861864fab
 human_verification:
   - test: "Open the board at a 390×844 mobile viewport, toggle priority/due/estimate/progress in the cols popover"
