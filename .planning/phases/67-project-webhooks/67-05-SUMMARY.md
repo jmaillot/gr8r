@@ -107,3 +107,8 @@ None - no external service configuration required.
 ---
 *Phase: 67-project-webhooks*
 *Completed: 2026-11-16*
+
+## Self-Check: PASSED
+- SUMMARY.md exists on disk with frontmatter `status: complete`.
+- Task commit `c7a27ca` verified in git log.
+- Metadata commits `ee0a497` (SUMMARY) and `280877f` (STATE/ROADMAP) verified in git log.
