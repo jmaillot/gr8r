@@ -20,8 +20,10 @@ findings:
     disposition: open
     title: "Priority select displays `medium` for a stored unset priority — UI state diverges from what is saved"
   - id: WR-05
+    resolved_commit: 54827ed
+    resolution: "normalizeTemplatesData now skips the wholesale validateSubtree walk for unchanged sanitized bodies (subSig65 semantics); the heal still runs, so a resend of a stored cyclic tree is healed in place instead of permanently 400ing doc PUTs"
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Templates write gate lacks the Phase 65 \"unchanged tree\" skip — one poisoned stored template permanently 400s every doc PUT"
   - id: WR-06
     severity: warning
@@ -51,7 +53,7 @@ findings:
     severity: info
     disposition: open
     title: "e2e offsets recomputed with a private copy of `offsetIso`"
-open: 12
+open: 11
 total: 12
 recorded: 2026-11-15T18:27:35.445Z
 ---
@@ -64,7 +66,7 @@ recorded: 2026-11-15T18:27:35.445Z
 | WR-02 | warning | open | - |
 | WR-03 | warning | open | - |
 | WR-04 | warning | open | - |
-| WR-05 | warning | open | - |
+| WR-05 | warning | fixed | 54827ed — unchanged-body skip in normalizeTemplatesData + heal preserved |
 | WR-06 | warning | open | - |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |

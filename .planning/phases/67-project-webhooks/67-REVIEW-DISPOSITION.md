@@ -5,11 +5,15 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
+    resolved_commit: 54827ed
+    resolution: "dedup_key carries the diff's occurredAt as the occurrence component for doc-PUT events; same-occurrence replays stay exactly-once (test/webhook-delivery.test.mjs occurrence test)"
     title: "Repeat real-world events for the same subject are permanently dropped (dedup_key has no occurrence component)"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
+    resolved_commit: 54827ed
+    resolution: "ssrfOk returns the VERIFIED address set; the default delivery transport is pinnedFetch — the TLS connect resolves through the validated set (fail-closed), closing the within-attempt rebinding window"
     title: "SSRF guard is vulnerable to within-attempt DNS rebinding (TOCTOU between resolution and fetch)"
   - id: WR-02
     severity: warning
@@ -39,7 +43,7 @@ findings:
     severity: info
     disposition: open
     title: "send-test route can block the HTTP response up to ~10 s per call"
-open: 9
+open: 7
 total: 9
 recorded: 2026-11-16T12:12:47.126Z
 ---
@@ -48,8 +52,8 @@ recorded: 2026-11-16T12:12:47.126Z
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| WR-01 | warning | open | - |
+| CR-01 | critical | fixed | 54827ed — occurrence component in the dedup key (occurredAt) |
+| WR-01 | warning | fixed | 54827ed — pinnedFetch: connect resolves through the validated set |
 | WR-02 | warning | open | - |
 | WR-03 | warning | open | - |
 | WR-04 | warning | open | - |
