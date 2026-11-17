@@ -288,3 +288,35 @@ test('the board card popover keeps its compact output — no columns leakage (AD
   assert.ok(!boardCall.includes('columns'), 'the board consumer leaks the columns opt');
   assert.ok(!boardCall.includes('c-meta'), 'the board popover template emits meta-cell markup');
 });
+
+/* ---------- 6. phase 71 — the subrow alignment pins (71-02 gap closure) ---------- */
+
+const LIST_CSS = fs.readFileSync(path.join(ROOT, 'src/styles/views/list.css'), 'utf8');
+
+const subrowBlock = LIST_CSS.slice(LIST_CSS.indexOf('.subrow {'), LIST_CSS.indexOf('/* Phase 71 (ADR-5)'));
+const subheadRule = LIST_CSS.slice(LIST_CSS.indexOf('.subrow > .subhead {'), LIST_CSS.indexOf('.subrow > .subhead .s'));
+
+test('the subrow grid shares the parent rows\u2019 zero inter-track gap (CR-01, D-71-1)', () => {
+  assert.ok(subrowBlock.includes('display: grid'), 'the subrow is not a grid');
+  assert.ok(subrowBlock.includes('grid-template-columns: var(--cols'), 'the subrow does not join the parent template via --cols');
+  assert.ok(subrowBlock.includes('gap: 0'), 'the subrow keeps a non-zero inter-track gap');
+  assert.ok(!subrowBlock.includes('gap: 8px'), 'the subrow still carries the legacy flex gap');
+});
+
+test('the tree indent rides the grid item, not the container (WR-02)', () => {
+  assert.ok(!subrowBlock.includes('var(--ind'), 'the indent custom property still shifts the grid container');
+  assert.ok(subrowBlock.includes('padding-left: 64px'), 'the subrow lost its fixed tree base');
+  assert.ok(subheadRule.includes('margin-left: var(--ind, 0px)'), 'the depth indent does not ride the .subhead grid item');
+});
+
+test('the status chip shows a visible keyboard focus indicator (WR-01, WCAG 2.4.7)', () => {
+  const focusRule = LIST_CSS.match(/\.stchip:focus-within\s*\{[^}]*\}/);
+  assert.ok(focusRule, 'no :focus-within rule targets .stchip');
+  assert.ok(focusRule[0].includes('outline'), 'the focus rule does not declare an outline');
+  assert.ok(focusRule[0].includes('var(--accent)'), 'the focus outline does not use the accent token');
+});
+
+test('the --cols fallback documents LCOLS as its sync source (IN-01)', () => {
+  const fallbackComment = LIST_CSS.slice(LIST_CSS.indexOf('.subrow {'), LIST_CSS.lastIndexOf('grid-template-columns'));
+  assert.ok(fallbackComment.includes('LCOLS') && fallbackComment.includes('task-list.js'), 'the fallback template does not reference LCOLS / task-list.js as the sync source');
+});
