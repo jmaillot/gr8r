@@ -132,10 +132,12 @@
      forwards the ACTUAL template string onto --cols, so cells align under
      whatever tracks the parent shows on every call site. */
   display: grid;
-  /* KEEP IN SYNC with LCOLS in src/components/task-list.js (the JS map is the
-     single source of truth) — this fallback exists only for call sites that
-     render .subrow without --cols (IN-01 drift note). */
-  grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr) 126px 150px 108px 104px 168px 40px);
+  /* WR-01 (71-REVIEW): this fallback is deliberately MINIMAL (handle/check/
+     title tracks only) — never bake LCOLS widths into it: a stale copy
+     misaligns silently, while a minimal fallback makes a missing --cols
+     loud. Every live call site forwards --cols (task-list.js); LCOLS in
+     src/components/task-list.js remains the single source of truth. */
+  grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr));
   align-items: center;
   gap: 0;
   height: auto;
@@ -150,7 +152,7 @@
 }
 /* Phase 71 (ADR-5): in columns mode the renderer wraps the head content
    (caret + toggle + title) in one .subhead item spanning the three leading
-   tracks, so the 4 meta cells land on the tracks after the title track. */
+   tracks, so the meta cells land on the tracks after the title track. */
 .subrow > .subhead {
   grid-column: 1 / 4;
   display: flex;
