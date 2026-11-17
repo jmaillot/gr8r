@@ -5,9 +5,21 @@
 - ✅ **v2.5 Template Polish & Import** — 67-05/06/07 quick work: favourites, MD import with complete per-kind examples, starters toggle, 65-05 indent fix (shipped 2026-11-16) — [archive](milestones/v2.5-ROADMAP.md)
 - ✅ **v2.4 Automation & Productivity** — Phases 65-68 (shipped 2026-11-16) — [archive](milestones/v2.4-ROADMAP.md)
 - ✅ **v2.3** — shipped (see `.planning/milestones/`)
+- 🚧 **v2.6 Exports Verification (Test 11)** — Phase 69: automated 3-level structural pre-screen, owner UAT with real MS Project, verdict + A1 closure — [requirements](REQUIREMENTS.md)
 - 🚧 **Next** — not yet planned
 
 ## Phases
+
+### Phase 69: Exports Verification (Test 11)
+**Goal**: Prove the multi-level subtask tree survives a REAL round-trip with MS Project — close Phase 65 item A1 (REQ-EXP-01/02/03).
+**Depends on**: Nothing (verification-only; Phase 65 shipped in v2.4)
+**Requirements**: REQ-EXP-01, REQ-EXP-02, REQ-EXP-03; NFR-01, NFR-02, NFR-03
+**Success Criteria** (what must be TRUE):
+  1. Automated pre-screen: the existing `node:test` suites assert a 3-level fixture (task → subtask → sub-subtask) for each format — MSPDI `OutlineLevel = depth + 1` at every level with Summary re-derived from the serialized XML, no upward level skip, DFS row order; xlsx/CSV rows in DFS order with dotted-key hierarchy; all assertions use existing tooling, zero new dependencies, all standing gates stay green (1705+ unit grow-only, chunk ≤500 kB, EN+FR i18n, e2e 132/132).
+  2. Owner UAT per `.planning/research/VERIFICATION.md`: the owner imports each export of the 3-level fixture into real MS Project — MSPDI via XML Import Wizard "as new project" (primary verdict), xlsx via Excel paste (flat expected, recorded as such), CSV via import wizard (flat expected, recorded as such) — with evidence captured (wizard/repair dialogs verbatim, 3-level Gantt screenshot).
+  3. Verdict (pass/fail per format) recorded in the phase verification doc; item A1 checked off and Phase 999.1 backlog entry closed.
+  4. **Conditional (in-phase, only if UAT fails):** any MSPDI import defect (or repair dialog) is fixed within this milestone and re-verified through criteria 1+2 before closure — while staying in scope (no new export formats, no CSV/xlsx hierarchy enrichment, no incoming-import feature, no round-trip automation; NFR-03: existing 2-level export behavior unchanged).
+**Plans**: TBD
 
 <details>
 <summary>✅ v2.5 Template Polish & Import (quick work 67-05/06/07) — SHIPPED 2026-11-16</summary>
@@ -34,13 +46,7 @@ Full phase details: [milestones/v2.4-ROADMAP.md](milestones/v2.4-ROADMAP.md) · 
 
 ## Backlog
 
-### Phase 999.1: Follow-up — Phase 65 deferred UAT follow-up: Test 11 (BACKLOG)
-
-**Goal:** Resolve the UAT checkpoint deferred during Phase 65 verification
-**Source phase:** 65
-**Deferred at:** 2026-11-15 during /gsd-verify-work 65 session completion
-**Follow-ups:**
-- [ ] Test 11: Vérifier les exports (xlsx/CSV en ordre d'arbre, MSPDI OutlineLevel/summary) — reporté à la fin du milestone, idéalement avec un import dans MS Project réel pour clore l'item A1 (deferred 2026-11-15)
+_(empty — Phase 999.1 (Test 11) promoted to Phase 69, the v2.6 milestone core.)_
 
 ## Standing Constraints (all phases)
 
