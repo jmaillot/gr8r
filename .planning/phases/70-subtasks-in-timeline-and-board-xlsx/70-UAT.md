@@ -55,6 +55,13 @@ skipped: 0
 - **Blast radius:** model-level fix → all channels (xlsx Tasks/Timeline/Board AND MSPDI rows derive dates from `row.due`). Pin `test/export-model.test.mjs` (due inheritance from top-level task) must be UPDATED to the new rule; Phase 69's "subtask end = parent end" MSPDI criterion stays true for subtasks WITHOUT their own due (the `|| t.due` fallback).
 - **Status:** ✅ FIXED — commit `368e35f` (70-02 gap closure, TDD): model.js:227 `due: s.due || t.due || ''` (mirror of :226 start). Pins rewritten with inherited + manual-override cases (nested included). Phase 69 fallback preserved (`|| t.due`). Tests 1725/1738 grow-only (+2 override pins, RED confirmed first), lint 15, chunk 499.94 kB, frozen files byte-identical. **Owner re-test pending.**
 
+### G-3 — Board cards missing the start date (owner, 2026-11-17)
+- **Symptom:** la feuille Board n'affiche pas la date de début des tâches (ni parents ni sous-tâches).
+- **Not a Phase 70 regression:** the Board never had a start column — Phase 54 design (`headers.board` = lane/count/key/title/assignees/priority/due/progress, cards in C..H).
+- **Fix scope:** model.js — `headers.board` gains 'start' before 'due', card projection gains `start: r.start`; export/xlsx.js — Board cards write start (real date, SHORT_DATE_CODE) shifting due→H, progress→I. WIDTHS.start already exists; i18n `export.col.start` exists in EN+FR already.
+- **Pins to update:** test/export-xlsx.test.mjs :450 (card fields), :498-512 (due column G→H), :515-528 (progress H→I), :962 (child cards).
+- **Status:** fix plan pending (gap closure 70-03).
+
 ### G-2 — Excel repair prompt on open (owner, 2026-11-17) — BLOCKER
 - **Symptom:** « Désolé… Nous avons trouvé un problème dans le contenu de ".xlsx"… récupérer le maximum de contenu ». Content correct after repair, but the file is not clean OOXML.
 - **Regression introduced by:** Phase 70 (file opened fine in Phase 69 owner UAT).
