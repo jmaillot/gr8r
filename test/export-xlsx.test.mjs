@@ -858,7 +858,7 @@ test('the exact-cap fixture draws all 400 shapes with no note row (R13 inclusive
   assert.ok(list.some(a => a.connector), 'at least one cxnSp exists');
 });
 
-test('WR-01: the Timeline status column keeps the top-level row status — child rows never overwrite it (54-05 review)', async () => {
+test('WR-01 (rewritten, D-70-5): the Timeline status column reads the PER-BAR status — the id-keyed label map is retired', async () => {
   const doc = makeDoc();
   const t = doc.tasks.find(x => x.id === 't_a9');
   t.start = '2026-02-02';
@@ -868,10 +868,127 @@ test('WR-01: the Timeline status column keeps the top-level row status — child
   const lastChild = [...model.rows].reverse().find(r => r.parent === 't_a9');
   assert.ok(parent && lastChild && parent.status !== lastChild.status, 'fixture sanity: the parent status differs from the last child status');
   const { parts } = await buildZip(model);
-  const values = sheetValues(parts.get('xl/worksheets/sheet4.xml'), parseSharedStrings(parts.get('xl/sharedStrings.xml')));
-  const barRow = [...values.entries()].find(([, v]) => v === 'Subtasked task')?.[0].slice(1);
-  assert.ok(barRow, 'the subtasked parent has a bar row on the Timeline');
-  assert.equal(values.get('C' + barRow), parent.status, 'the status cell shows the parent status, not the last child status');
+  const sheet = parts.get('xl/worksheets/sheet4.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(sheet, shared);
+  const rowOf = v => Number([...values.entries()].find(([, x]) => x === v)?.[0]?.slice(1));
+  const parentRow = rowOf('Subtasked task');
+  const childOneRow = rowOf('ALPHA-9.1');
+  const childTwoRow = rowOf('ALPHA-9.2');
+  assert.ok(parentRow > 0 && childOneRow === parentRow + 1 && childTwoRow === parentRow + 2, 'the child bar rows follow their parent on the Timeline table');
+  assert.equal(values.get('C' + parentRow), parent.status, 'the parent bar row shows the parent status');
+  assert.equal(values.get('C' + childOneRow), 'task.status.done', 'the done child bar row shows its OWN status');
+  assert.equal(values.get('C' + childTwoRow), 'task.status.todo', 'the last child bar row shows its OWN status — the retired id-keyed map would have shown the parent label here (WR-01 landmine)');
+  /* D-70-3: child titles carry the real-depth indent (depth 0 → 1 level);
+     the parent title is bold and unindented. Column B only. */
+  const xfs = cellXfs(parts.get('xl/styles.xml'));
+  const indentOf = ref => {
+    const s = Number((STYLE_INDEX.exec(cellAttrs(sheet, ref) || '') || [])[1] || 0);
+    return Number(xfAttr(xfs[s] || '', 'indent') || 0);
+  };
+  assert.equal(indentOf(`B${childOneRow}`), 1, 'root child title: one indent level');
+  assert.equal(indentOf(`B${parentRow}`), 0, 'parent title unindented');
+});
+
+test('Phase 70 (D-70-3): Timeline child rows indent by REAL DEPTH (depth+1) under their parent in DFS order; parents bold, A/C unstyled', async () => {
+  const doc = makeMspdiDoc();
+  const model = modelOf(doc, 'p_msp', { options: { subtasks: true } });
+  const { parts } = await buildZip(model);
+  const sheet = parts.get('xl/worksheets/sheet4.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(sheet, shared);
+  const rowOf = v => Number([...values.entries()].find(([, x]) => x === v)?.[0]?.slice(1));
+  const titles = ['Deep tree task', 'Sub A', 'Sub A.1 (deepest)', 'Sub A.2', 'Sub B'];
+  const rows = titles.map(rowOf);
+  assert.ok(rows.every(n => n > 0), 'all tree rows render on the Timeline');
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1] < rows[i], `DFS order: ${titles[i - 1]} precedes ${titles[i]}`);
+  const xfs = cellXfs(parts.get('xl/styles.xml'));
+  const indentOf = ref => {
+    const s = Number((STYLE_INDEX.exec(cellAttrs(sheet, ref) || '') || [])[1] || 0);
+    return Number(xfAttr(xfs[s] || '', 'indent') || 0);
+  };
+  assert.equal(indentOf(`B${rows[0]}`), 0, 'parent title unindented');
+  assert.equal(indentOf(`B${rows[1]}`), 1, 'Sub A (depth 0) → 1 level');
+  assert.equal(indentOf(`B${rows[2]}`), 2, 'Sub A.1 (depth 1) → 2 levels (A2 verified: indentCell accepts level > 1)');
+  assert.equal(indentOf(`B${rows[3]}`), 2, 'Sub A.2 (depth 1 — a child of Sub A) → 2 levels');
+  assert.equal(indentOf(`B${rows[4]}`), 1, 'Sub B (depth 0) → 1 level');
+  const allFonts = fonts(parts.get('xl/styles.xml'));
+  const fontOf = ref => {
+    const s = Number((STYLE_INDEX.exec(cellAttrs(sheet, ref) || '') || [])[1] || 0);
+    return Number(xfAttr(xfs[s] || '', 'fontId') || 0);
+  };
+  assert.ok(isBoldFont(allFonts[fontOf(`B${rows[0]}`)]), 'the parent title font is bold');
+  assert.ok(!isBoldFont(allFonts[fontOf(`B${rows[1]}`)]), 'child titles are not bold');
+  assert.equal(indentOf(`A${rows[1]}`), 0, 'column A (key) stays unstyled');
+  assert.equal(indentOf(`C${rows[1]}`), 0, 'column C (status) stays unstyled');
+});
+
+test('Phase 70 (D-70-4): child bars draw identical to parent bars at their inherited dates, anchored on their own table rows', async () => {
+  const doc = makeMspdiDoc();
+  const model = modelOf(doc, 'p_msp', { options: { subtasks: true } });
+  const g = buildGantt(model);
+  const { parts } = await buildZip(model);
+  const rels = parts.get('xl/worksheets/_rels/sheet4.xml.rels') || '';
+  const target = /Target="([^"]*drawings\/[^"]*)"/.exec(rels)?.[1];
+  const drawing = parts.get('xl/drawings/' + target.split('/').pop());
+  const list = anchors(drawing);
+  const sps = list.filter(a => !a.connector);
+  assert.equal(sps.length, g.bars.length, 'one roundRect per bar, child bars included');
+  assert.equal(list.filter(a => a.connector).length, g.links.length, 'connector count unchanged');
+  for (const [i, bar] of g.bars.entries()) {
+    const a = list.find(x => x.name === 'bar-' + i);
+    assert.deepEqual([a.from.row, a.to.row], [bar.row + 2, bar.row + 3], `${bar.key} anchors its own table row (ROW BASIS holds with child bars)`);
+  }
+  const child = g.bars.find(b => b.key === 'MSP-13.1.1');
+  const childAnchor = list.find(x => x.name === 'bar-' + child.row);
+  assert.equal(childAnchor.prst, 'roundRect', 'a child bar is the same preset shape as a parent bar (D-70-4: visually identical)');
+  assert.deepEqual(
+    [childAnchor.from.col, childAnchor.to.col],
+    [3 + g.axis.columnOf(child.start), 4 + g.axis.columnOf(child.due)],
+    'the nested child bar spans its inherited dates (top-level task start..due)',
+  );
+});
+
+test('Phase 70 (D-70-1): Board child cards flow through the sheet — dotted-key rows in the right lane, counts include children', async () => {
+  const doc = makeDoc();
+  doc.tasks.find(t => t.id === 't_a5').subtasks = [
+    { title: 'Child A', done: true },
+    { title: 'Child B', done: true },
+  ];
+  const model = modelOf(doc, 'p_alpha', { options: { subtasks: true } });
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet3.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  const rowOf = v => Number([...values.entries()].find(([, x]) => x === v)?.[0]?.slice(1));
+  const doneLane = model.board.lanes.find(l => l.id === 'done');
+  const doneRow = rowOf(doneLane.label);
+  assert.equal(Number(values.get('B' + doneRow)), doneLane.count, 'lane B count includes the child cards');
+  const cardKeys = ['ALPHA-3', 'ALPHA-3.1', 'ALPHA-3.2', 'ALPHA-6', 'ALPHA-9.1', 'ALPHA-13.1.1'];
+  cardKeys.forEach((key, i) => assert.equal(values.get('C' + (doneRow + 1 + i)), key, `done lane card row ${i + 1} carries ${key}`));
+  assert.equal(values.get('D' + (doneRow + 2)), 'Child A', 'the child card carries its own title');
+});
+
+test('Phase 70: an empty lane BELOW a lane that gained child cards still shows its label with count 0 and the next lane directly below', async () => {
+  const doc = makeEmptyLaneDoc();
+  /* A child card always lands in done/todo (D-70-2): an undone child of
+     the backlog parent enlarges the TODO lane; the empty PROGRESS lane
+     sits directly below it. */
+  doc.tasks.find(t => t.id === 't_l1').subtasks = [{ title: 'Backlog child', done: false }];
+  const model = modelOf(doc, 'p_lane', { options: { subtasks: true } });
+  const todoLane = model.board.lanes.find(l => l.id === 'todo');
+  assert.equal(todoLane.count, 1, 'fixture sanity: the todo lane gained the child card');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet3.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  const rowOf = v => Number([...values.entries()].find(([, x]) => x === v)?.[0]?.slice(1));
+  const todoRow = rowOf(todoLane.label);
+  assert.equal(values.get('C' + (todoRow + 1)), 'LANE-2.1', 'the child card renders as its own dotted-key row under its parent (t_l1 is keyed LANE-2)');
+  const progressIdx = model.board.lanes.findIndex(l => l.id === 'progress');
+  const progressRow = rowOf(model.board.lanes[progressIdx].label);
+  assert.equal(Number(values.get('B' + progressRow)), 0, 'the empty progress lane still shows count 0 below the enlarged todo lane');
+  assert.equal(values.get('A' + (progressRow + 1)), model.board.lanes[progressIdx + 1].label, 'the next lane label sits directly below the empty lane');
 });
 
 test('65-05: nested rows render on the Tasks sheet in model order (SUB-04)', async () => {
@@ -895,11 +1012,12 @@ test('65-05: nested rows render on the Tasks sheet in model order (SUB-04)', asy
 });
 
 /* =====================================================================
-   Phase 69 (69-01 Task 3): the 3-level fixture tree on the Tasks sheet
-   — DFS order, dotted keys, and the PINNED CURRENT fixed-1 indent
-   (depth-blind per export/xlsx.js:336; no depth channel — deferred by
-   the scope guards). Verified via unzip (never the @office-kit reader).
-   Add-only (NFR-03), zero new deps (NFR-01).
+   Phase 69 (69-01 Task 3): the 3-level tree on the Tasks sheet — DFS
+   order, dotted keys, and the PINNED fixed-1 indent. Phase 70 note:
+   the TIMELINE is now enriched (real-depth indent per D-70-3, per-bar
+   status per D-70-5); the TASKS sheet stays depth-blind fixed-1 by
+   decision (writeTaskRow untouched, NFR-03). Verified via unzip (never
+   the @office-kit reader). Add-only (NFR-03), zero new deps (NFR-01).
    ===================================================================== */
 import { makeMspdiDoc } from './fixtures/export-fixtures.mjs';
 
@@ -918,7 +1036,8 @@ test('69-01: the 3-level tree renders on the Tasks sheet in DFS order with dotte
   const keys = ['MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2'];
   keys.forEach((key, i) => assert.equal(values.get('A' + rows[i + 1]), key, `row ${titles[i + 1]} carries dotted key ${key}`));
   /* PINNED CURRENT SHAPE: every child row's title cell (B) uses the fixed
-     1-level indent — depth-blind today, asserted as-is, NOT enriched. */
+     1-level indent — depth-blind on the TASKS sheet by decision (the
+     Timeline carries the real-depth indent since Phase 70). */
   const xfs = cellXfs(parts.get('xl/styles.xml'));
   for (const r of rows.slice(1)) {
     const s = Number((STYLE_INDEX.exec(cellAttrs(sheetXml, `B${r}`) || '') || [])[1] || 0);

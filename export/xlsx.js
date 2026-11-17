@@ -193,14 +193,26 @@ function fillTimeline(wb, ws, model) {
 
   /* ---- rows from row 2: bars first, then milestones, in buildGantt
      order. No cell here is a formula. */
-  /* WR-01 (54-05 review): top-level rows only — child rows carry the
-     parent's id and would overwrite its status label. */
-  const statusLabelById = new Map(model.rows.filter(r => !r.parent).map(r => [r.id, r.status]));
+  /* Phase 70 (D-70-5): the status rides the bar (`bar.status` — the
+     row's already-translated label). The former statusLabelById map is
+     RETIRED: it was top-level-only (WR-01 landmine — depth-0 child
+     rows share the parent's id and would overwrite its label), and
+     with child bars present the per-bar status is the only correct
+     source. */
   let tableRow = 3; /* row 1 = months, row 2 = dates, table from row 3 */
   for (const bar of gantt.bars) {
     setCell(ws, tableRow, 1, bar.key);
     setCell(ws, tableRow, 2, bar.title);
-    setCell(ws, tableRow, 3, statusLabelById.get(bar.taskId) || '');
+    setCell(ws, tableRow, 3, bar.status || '');
+    /* Phase 70 (D-70-3): the Timeline table indents by REAL DEPTH —
+       child rows (indentLevels > 0) indent their TITLE cell by
+       depth + 1 levels via the cell style (indentCell accepts 0..255,
+       verified against @office-kit/xlsx), never leading spaces; parent
+       rows stay bold and unindented, matching the Tasks-sheet pattern
+       (writeTaskRow). Only column B is styled — A (key) and C (status)
+       stay unstyled. */
+    if (bar.indentLevels > 0) indentCell(wb, getCell(ws, tableRow, 2), bar.indentLevels);
+    else setBold(wb, getCell(ws, tableRow, 2), true);
     tableRow += 1;
   }
   const lastTable = tableRow - 1;
