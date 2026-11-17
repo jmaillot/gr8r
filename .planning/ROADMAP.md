@@ -72,9 +72,9 @@ Plans:
 ### Phase 71: Subtask columns in List view
 
 **Goal:** Subtask rows in the List view display Status (done/todo chip), Assignees, Priority (inherited from parent) and Due (s.due || parent due, inherited tooltip) aligned to the parent column grid
-**Requirements**: TBD
+**Requirements**: TBD (coverage derived from D-71-1…D-71-7)
 **Depends on:** Phase 70
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 71 to break down)
+- [ ] 71-01-PLAN.md — subtask meta columns in List view: opt-in `columns` opt, tpl forwarding, status chip, test pins
