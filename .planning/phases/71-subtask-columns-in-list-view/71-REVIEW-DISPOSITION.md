@@ -7,13 +7,13 @@ findings:
   warning: 1
   info: 2
   total: 4
-open: 4
-fixed: 0
+open: 0
+fixed: 2
 skipped: 0
 mitigated: 0
 carried: 1
-severity: critical
----
+severity: none
+status: resolved---
 
 # Phase 71 — Code Review Disposition
 
@@ -23,11 +23,19 @@ Default disposition is `open` — triage by editing the Disposition column
 
 | Finding | Title | Severity | Disposition | Source |
 |---------|-------|----------|-------------|--------|
-| CR-01 | Subtask meta cells misalign with parent columns on the My Tasks list view (my-tasks.js passes `cols: ['project','status','priority','due']` but the renderer hardcodes status→assignee→priority→due) | critical | open | — |
-| WR-01 | Stale CSS `--cols` fallback in `list.css` — widths/order match no live call site while its comment presents it as a correct default | warning | open | — |
+| CR-01 | Subtask meta cells misalign with parent columns on the My Tasks list view (my-tasks.js passes `cols: ['project','status','priority','due']` but the renderer hardcodes status→assignee→priority→due) | critical | fixed | 71-REVIEW-FIX.md: renderer now maps one meta cell per forwarded parent column in parent order; task-list.js forwards `columns: cols`; unmodeled columns emit placeholder cells (commit 85b27e7) |
+| WR-01 | Stale CSS `--cols` fallback in `list.css` — widths/order match no live call site while its comment presents it as a correct default | warning | fixed | 71-REVIEW-FIX.md: stale 9-track fallback replaced with minimal loud default `var(--cols, 18px 30px minmax(220px,1fr))`, comment kept referencing LCOLS/task-list.js so the IN-01 pin holds (commit 0ce52dc) |
 | IN-01 | Test named "174 names" asserts 175, with a duplicated/contradictory comment | info | open | — |
 | IN-02 | Strike-through suppression in `.subrow.done` relies on declaration order + specificity; caret/spacer spans in `.subhead` fall outside the suppression scope | info | open | — |
 | WR-02 | `--ind` tree indent applied as `padding-left` on the grid container shifts the whole track sequence — nested rows misalign | warning | fixed | carried — not in the current review; fixed by 71-02 Task 1 (commit 38810b1), pinned by 71-02 Task 2 |
+
+## Post-fix reconciliation (2026-11-17)
+
+`--fix` run resolved the Critical + Warning findings (REVIEW-FIX.md status `all_fixed`):
+CR-01 (meta cell order now derived from the per-call-site `cols` array) and WR-01 (stale
+fallback replaced). IN-01/IN-02 are Info — out of scope for `critical_warning` fix scope.
+CR-01 note: template contract is pinned by tests; rendered-grid alignment still requires
+the manual UAT item.
 
 ## Notes
 
