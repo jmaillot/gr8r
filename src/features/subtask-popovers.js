@@ -49,8 +49,14 @@ export function subTreeChecklistHtml(task0, opt = {}) {
         const due = s.due || task0.due;
         const st = s.start || task0.start;
         const et = esc(s.title);
+        /* Phase 71 (D-71-2, ADR-3): the toggle input keeps the exact
+           toggleSub / data-id / data-sid contract — in columns mode it
+           moves INTO the status cell inside a <label> wrapping the done/todo
+           pill (stPill), so clicking the chip toggles through the same
+           delegated change with no new wiring. */
+        const toggle = `<input type="checkbox" class="check" ${s.done ? 'checked' : ''} data-a="toggleSub" data-id="${tid}" data-sid="${sid}" aria-label="${s.done ? t('a11y.subtaskReopen', { title: et }) : t('a11y.subtaskComplete', { title: et })}">`;
         const head =
-          `${caret}<input type="checkbox" class="check" ${s.done ? 'checked' : ''} data-a="toggleSub" data-id="${tid}" data-sid="${sid}" aria-label="${s.done ? t('a11y.subtaskReopen', { title: et }) : t('a11y.subtaskComplete', { title: et })}"><button class="s" data-a="openSub" data-id="${tid}" data-sid="${sid}">${et}</button>` +
+          `${caret}${opt.columns ? '' : toggle}<button class="s" data-a="openSub" data-id="${tid}" data-sid="${sid}">${et}</button>` +
           (opt.compact
             ? ''
             : `${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}${st ? `<span class="due"${s.start ? '' : ` data-tip="${esc(t('page.subtask.inheritedStart'))}"`}>${ic('calendar-arrow-up', 12)}${relDate(st)}</span>` : ''}${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : ''}<button class="ibtn ibtn-xs x" data-a="openSub" data-id="${tid}" data-sid="${sid}" aria-label="${t('a11y.openSubtaskDetails')}" tabindex="-1">${ic('chevron-right', 14)}</button>`);
@@ -65,7 +71,7 @@ export function subTreeChecklistHtml(task0, opt = {}) {
            non-compact expression verbatim — inherited tooltip + .over
            (D-71-5). */
         const meta = opt.columns
-          ? `<div class="c-meta c-status"><span class="faint">—</span></div>` +
+          ? `<div class="c-meta c-status"><label class="stchip">${toggle}${stPill(s.done ? 'done' : 'todo')}</label></div>` +
             `<div class="c-meta c-assignee">${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : `<span class="faint">${t('common.unassigned')}</span>`}</div>` +
             `<div class="c-meta c-priority inh">${prPill(task0.priority)}</div>` +
             `<div class="c-meta c-due">${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}</div>`

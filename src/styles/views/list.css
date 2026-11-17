@@ -162,6 +162,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Phase 71 (D-71-2, ADR-3): the done/todo status chip — the toggleSub
+   checkbox is visually subsumed into the pill so the whole chip region
+   toggles. */
+.subrow .c-status .stchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.subrow .c-status .stchip .check {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+/* Phase 71 (D-71-4, ADR-4): the inherited priority pill renders dimmed —
+   the dimming IS the inheritance signal (no tooltip key added). */
+.subrow .c-priority.inh {
+  opacity: 0.55;
+}
+/* Phase 71 (RESEARCH 2.6): scope the done-strike bleed — pill text and
+   avatars keep the dim color but are never struck through; the done state
+   is already expressed by the status chip. */
+.subrow.done .c-meta span {
+  text-decoration: none;
+}
 .subrow.done span {
   color: var(--text-3);
   text-decoration: line-through;
