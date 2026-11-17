@@ -78,4 +78,4 @@ Plans:
 
 Plans:
 - [x] 71-01-PLAN.md — subtask meta columns in List view: opt-in `columns` opt, tpl forwarding, status chip, test pins
-- [ ] 71-02-PLAN.md — gap closure: subrow grid alignment (CR-01 gap:0 + WR-02 indent-on-item), WR-01 focus indicator, IN-01 drift note
+- [x] 71-02-PLAN.md — gap closure: subrow grid alignment (CR-01 gap:0 + WR-02 indent-on-item), WR-01 focus indicator, IN-01 drift note

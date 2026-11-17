@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v2.6
 milestone_name: Exports Verification (Test 11)
 current_phase: 71
-current_phase_name: subtask-columns-in-list-view
+current_phase_name: Subtask columns in List view
 status: executing
-stopped_at: Completed 71-01-PLAN.md
-last_updated: "2026-11-17T15:56:27.548Z"
+stopped_at: Completed 71-02-PLAN.md (gap closure)
+last_updated: "2026-11-17T16:05:45.122Z"
 last_activity: 2026-11-17
 last_activity_desc: Phase 71 execution started
-state_head: 4c0a74539169da672920a9c951780779cc66dd47
+state_head: 6403a181d96fc5db74c1d375a2b6c9e7caa40fb4
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # STATE.md
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 71 (subtask-columns-in-list-view) — READY TO EXECUTE
-Plan: 1 of 1
-Status: Ready to execute
-Last activity: 2026-11-17 — Phase 71 execution started
+Phase: 71 (Subtask columns in List view) — EXECUTING
+Plan: 2 of 2 — COMPLETE
+Status: Phase 71 executed (71-02 gap closure complete)
+Last activity: 2026-11-17 — 71-02 gap closure executed (CR-01/WR-01/WR-02 fixed, IN-01 mitigated)
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Last activity: 2026-11-17 — Phase 71 execution started
 | Phase 69 P01 | 25m | 3 tasks | 5 files |
 | Phase 69 P02 | ~7min | 2 tasks | 3 files |
 | Phase 71 P01 | ~55min | 3 tasks | 4 files |
+| Phase 71 P02 | ~35 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -91,8 +92,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-17T15:26:43.560Z
-**Stopped at:** Completed 71-01-PLAN.md
+**Last session:** 2026-11-17T16:05:45.075Z
+**Stopped at:** Completed 71-02-PLAN.md (gap closure)
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -122,6 +123,8 @@ None.
 - [Phase 69]: 69-01: 3-level export pre-screen pinned to ACTUAL model/writer contracts (CR-01 row ids, writer-depth Summary walk); indent/flat shapes pinned as-is, no enrichment
 - [Phase 69]: 69-02: generator opts.subtasks:true is load-bearing (DEFAULT_OPTIONS false) and the inline self-check pins the 3-level signals; model progress pins follow the fixture growth 2/12
 - [Phase 71]: 71-01: opt-in columns:true on subTreeChecklistHtml; tpl forwarded via --cols (ADR-2); status chip = label-wrapped toggleSub + stPill; inherited priority dimmed .inh, no new i18n keys
+- [Phase 71]: 71-02 indent mechanism: fixed 64px container base, --ind rides .subhead as margin-left (WR-02)
+- [Phase 71]: 71-02 IN-01 mitigated-by-documentation: --cols fallback kept with LCOLS keep-in-sync note
 
 ## Operator Next Steps
 
