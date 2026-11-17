@@ -227,3 +227,64 @@ test('the icon baseline holds at 174 names', () => {
   const names = Array.isArray(baseline) ? baseline : baseline.icons || Object.keys(baseline);
   assert.equal(names.length, 175, 'the icon baseline moved'); // +1: corner-down-right (the 65-04 re-parent menu/picker glyph); prior: +1: gauge (the admin dashboard nav entry, 60-02; shield-check was already in the set — it returns for the Settings › My access nav entry); prior: +1: network (the Timeline connector/dependency legend, 54-04) // +1: gauge (the admin dashboard nav entry, 60-02; shield-check was already in the set — it returns for the Settings › My access nav entry); prior: +1: network (the Timeline connector/dependency legend, 54-04) // +1: percent (the Summary KPI rows, 54-03) // +2: align-left (export scope selector) + view (the export modal icon) — the export entry points and modal (54-01) // +1: plug for the API-keys nav entry (MCP-01); shield-check returns for the 2FA login screen (17-02); −1: the apple glyph left with the demo social buttons
 });
+
+/* ---------- 5. phase 71 — the List subrow columns pins (71-01) ---------- */
+
+/* The renderer lives in the lazy chunk that reaches a Vite virtual module,
+   so bare Node cannot import it — the same constraint the i18n-format suite
+   documents. The pins below assert the renderer's emitted TEMPLATE
+   CONTRACTS on the source: the exact expressions the columns branch
+   interpolates are static, so each pin holds for every render. */
+
+const RENDERER_SRC = fs.readFileSync(path.join(ROOT, 'src/features/subtask-popovers.js'), 'utf8');
+const LIST_SRC = fs.readFileSync(path.join(ROOT, 'src/components/task-list.js'), 'utf8');
+
+const columnsBranch = RENDERER_SRC.slice(RENDERER_SRC.indexOf('const meta = opt.columns'), RENDERER_SRC.indexOf("walk(sid, depth + 1)"));
+
+test('the columns branch emits the four meta cells (D-71-1)', () => {
+  for (const cell of ['c-meta c-status', 'c-meta c-assignee', 'c-meta c-priority', 'c-meta c-due'])
+    assert.ok(columnsBranch.includes(`<div class="${cell}${cell === 'c-meta c-priority' ? ' inh' : ''}">`), `the ${cell} cell is missing`);
+  /* the cells are display divs — no pop action attributes (D-71-7) */
+  assert.ok(!columnsBranch.includes('data-a'), 'the meta cells must not carry action attributes');
+  /* the List forwards the parent grid template onto the subrows container */
+  assert.ok(LIST_SRC.includes('<div class="subrows" style="--cols:${tpl}">'), 'the subrows container does not receive --cols');
+  assert.ok(LIST_SRC.includes("rowClass: 'subrow', columns: true"), 'the List opt does not enable columns');
+});
+
+test('the toggleSub contract survives the columns branch (D-71-2, T-71-01 XSS)', () => {
+  const toggleDecl = RENDERER_SRC.match(/const toggle = `<input type="checkbox" class="check"[^`]*`;/);
+  assert.ok(toggleDecl, 'the toggleSub input template is missing');
+  const toggle = toggleDecl[0];
+  for (const attr of ['data-a="toggleSub"', 'data-id="${tid}"', 'data-sid="${sid}"'])
+    assert.ok(toggle.includes(attr), `the toggle input lost ${attr}`);
+  assert.ok(toggle.includes('${s.done ? \'checked\' : \'\'}'), 'the checked state is not derived from s.done');
+  assert.ok(toggle.includes("t('a11y.subtaskReopen'") && toggle.includes("t('a11y.subtaskComplete'"), 'the aria labels are not the catalogue lookups');
+  /* the chip composes the pill next to the SAME input, inside the status cell */
+  assert.ok(columnsBranch.includes('${toggle}${stPill(s.done ? \'done\' : \'todo\')}'), 'the status chip does not wrap the toggleSub input with the done/todo pill');
+  /* user-controlled strings escape: the title goes through esc(), the empty-assignees fallback is a catalogue key */
+  assert.ok(RENDERER_SRC.includes('const et = esc(s.title);'), 'the subtask title is not escaped');
+  assert.ok(columnsBranch.includes(`t('common.unassigned')`), 'the empty-assignees fallback is not the catalogue key');
+});
+
+test('the priority cell inherits the PARENT priority, dimmed (D-71-4)', () => {
+  assert.ok(columnsBranch.includes('prPill(task0.priority)'), 'the priority pill is not the parent task0.priority');
+  assert.ok(columnsBranch.includes('c-meta c-priority inh'), 'the priority cell does not carry the .inh dim modifier');
+  /* the subtask never renders an own priority (it has none in the model) */
+  assert.ok(!columnsBranch.includes('s.priority'), 'the columns branch must not read an own subtask priority');
+});
+
+test('the due cell keeps the inherited tooltip and the overdue class (D-71-5)', () => {
+  const dueCell = columnsBranch.slice(columnsBranch.indexOf('c-meta c-due'));
+  assert.ok(RENDERER_SRC.includes('const due = s.due || task0.due;'), 'the due value does not fall back to the parent');
+  assert.ok(dueCell.includes('page.subtask.inheritedDue'), 'the inherited tooltip key is missing');
+  assert.ok(dueCell.includes("s.due ? '' : ` data-tip="), 'the tooltip is not gated on !s.due');
+  assert.ok(dueCell.includes("!s.done && diffD(parse(due), TODAY) < 0 ? 'over'"), 'the overdue class is not gated on !s.done + past due');
+  assert.ok(dueCell.includes('relDate(due)'), 'the due label is not the relative date helper');
+});
+
+test('the board card popover keeps its compact output — no columns leakage (ADR-1 regression)', () => {
+  const boardCall = RENDERER_SRC.slice(RENDERER_SRC.indexOf('subPop.subs = p =>'), RENDERER_SRC.indexOf('subPop.subParent'));
+  assert.ok(boardCall.includes('subTreeChecklistHtml(st, { compact: true })'), 'the board consumer no longer passes bare compact');
+  assert.ok(!boardCall.includes('columns'), 'the board consumer leaks the columns opt');
+  assert.ok(!boardCall.includes('c-meta'), 'the board popover template emits meta-cell markup');
+});
