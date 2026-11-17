@@ -412,7 +412,7 @@ export async function buildWorkbook(model) {
      plan 04 fills Timeline content. Summary's A1 is the project name
      (styled below); Board/Members headers are the model's. */
   initSheet(wb, byName.Summary, []);
-  initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignees', 'priority', 'due', 'progress']);
+  initSheet(wb, byName.Board, model.headers.board, ['lane', 'count', 'key', 'title', 'assignees', 'priority', 'start', 'due', 'progress']);
   initSheet(wb, byName.Timeline, []);
   fillTimeline(wb, byName.Timeline, model);
   await yieldToLoop();
@@ -483,10 +483,10 @@ export async function buildWorkbook(model) {
      BOARD sheet (R7): a static snapshot of the five locked lanes.
      Row 1 is the model's header; each lane writes one lane row
      (label + count — an empty lane still shows count 0) followed by
-     one row per card (C..H). Values are the SAME ones the Tasks
-     sheet writes for that task: due as a real date under the builtin
-     short-date format, progress as the raw 0-100 number under the
-     literal-percent format.
+     one row per card (C..I). Values are the SAME ones the Tasks
+     sheet writes for that task: start and due as real dates under the
+     builtin short-date format, progress as the raw 0-100 number under
+     the literal-percent format.
      =================================================================== */
   const boardWs = byName.Board;
   let boardRow = 2;
@@ -501,13 +501,18 @@ export async function buildWorkbook(model) {
       setCell(boardWs, boardRow, 4, card.title);
       setCell(boardWs, boardRow, 5, card.assigneeName);
       setCell(boardWs, boardRow, 6, card.priorityLabel);
-      const dueDate = utcDate(card.due);
-      if (dueDate) {
-        setCell(boardWs, boardRow, 7, dueDate);
+      const startDate = utcDate(card.start);
+      if (startDate) {
+        setCell(boardWs, boardRow, 7, startDate);
         setCellNumberFormat(wb, getCell(boardWs, boardRow, 7), SHORT_DATE_CODE);
       }
-      setCell(boardWs, boardRow, 8, Number(card.progress) || 0);
-      setCellNumberFormat(wb, getCell(boardWs, boardRow, 8), LITERAL_PERCENT_CODE);
+      const dueDate = utcDate(card.due);
+      if (dueDate) {
+        setCell(boardWs, boardRow, 8, dueDate);
+        setCellNumberFormat(wb, getCell(boardWs, boardRow, 8), SHORT_DATE_CODE);
+      }
+      setCell(boardWs, boardRow, 9, Number(card.progress) || 0);
+      setCellNumberFormat(wb, getCell(boardWs, boardRow, 9), LITERAL_PERCENT_CODE);
       boardRow += 1;
       boardRowsWritten += 1;
       if (boardRowsWritten % 200 === 0) await yieldToLoop();

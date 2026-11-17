@@ -390,6 +390,7 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
         title: r.title,
         assigneeName: r.assigneeName,
         priorityLabel: r.priority,
+        start: r.start,
         due: r.due,
         progress: r.progress,
       }));
@@ -437,7 +438,7 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   /* ---- localized headers for the Board, Members and Milestones sheets. */
   const hcol = name => translate('export.col.' + name);
   const headers = {
-    board: ['lane', 'count', 'key', 'title', 'assignees', 'priority', 'due', 'progress'].map(hcol),
+    board: ['lane', 'count', 'key', 'title', 'assignees', 'priority', 'start', 'due', 'progress'].map(hcol),
     members: ['member', 'open', 'done', 'total'].map(hcol),
     milestones: ['name', 'date', 'state'].map(hcol),
     /* 54-04: the Timeline task block (columns A..C). */
