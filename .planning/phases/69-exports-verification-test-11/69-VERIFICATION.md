@@ -1,6 +1,6 @@
 # 69-VERIFICATION.md — Owner UAT verdicts (Test 11)
 
-Phase: 69-exports-verification-test-11 · Plan: 03 · Date: 2026-11-17
+Phase: 69-exports-verification-test-11 · Plan: 03 · Date: 2026-11-17 (verdict final)
 UAT target (D-69-6): MS Project Desktop XML Import Wizard, "As a new project".
 Verdict criterion (D-69-8): the hierarchy SURVIVING is the criterion, not zero dialogs — repair dialog + correct 3-level Gantt = PASS (with note); flat/lost/shifted hierarchy = FAIL.
 
@@ -8,9 +8,27 @@ Verdict criterion (D-69-8): the hierarchy SURVIVING is the criterion, not zero d
 
 | Format | Status | Verdict / Observation |
 |--------|--------|----------------------|
-| MSPDI (project-en.xml) | **Verdict — FAIL on dates (hierarchy PASS)** | 3-level hierarchy rendered correctly (D-69-8 hierarchy criterion met), BUT MS Project zeroed Duration/Finish on ALL 5 subtask rows despite correct PT56H/PT240H in the XML → canonical fix landed (1589095), **re-UAT pending** |
+| MSPDI (project-en.xml) | **Verdict — PASS (re-UAT criteria 1+2 met, round 5)** | 3-level hierarchy rendered correctly (D-69-8) AND all 18 rows carry the exact expected dates/durations — owner's rule "subtask end = parent end" honored. Canonical-sequence fix (1589095) + auto-scheduled Type=0 subtask fix (85115e4) landed and re-verified end-to-end |
 | xlsx (project-en.xlsx) | N/A (observation) | Not an MS Project import channel — marked non-applicable (owner confirmation); expected-flat by design, cell-style indent is not a Project import channel |
 | CSV (project-en.csv) | N/A (observation) | Wizard CSV mapping is expected FLAT by design; marked non-applicable (owner confirmation) — xlsx/CSV are not REQ-EXP-02 verdict channels |
+
+## Test 11 FAIL → fix → re-UAT history (D-69-9, 2026-11-17)
+
+**Initial evidence (gant.png, line-by-line):** hierarchy 3-level PASS, but the 5 subtask rows imported Duration 0 / Finish=Start despite correct PT56H/PT240H in the XML (all other 13 rows exact). 100% correlated with the presence of OutlineLevel.
+
+**Root cause (proven by a 8-variant diagnostic matrix imported by the owner):** the decisive field is `Type`. On OutlineLevel rows, MS Project re-derives auto-scheduled **Fixed-Duration (Type=1)** rows from zero (V1 PC=0, V2 PC=100, V7 PC=50, V3 +Work, V4 no-constraint, V5 +Estimated=0, V8 dates-omitted ALL zeroed); **Fixed Units (Type=0)** rows keep the emitted duration (V6 = 7 jours). Manual schedules on child rows never survive (R1, R4). Canonical element ORDER was necessary (R1 → R2 fix) but not sufficient.
+
+**Fix trail:**
+- `1589095` — canonical Task element sequence (Manual before Type; WBS+OutlineNumber+OutlineLevel trio before Start; Manual* after Duration; Notes before PredecessorLink/ExtendedAttribute); plan-01 positional pins updated
+- `2e28ead` — subtask rows auto-scheduled (Manual=0, no Manual* block; SNET pin kept)
+- `bbe7005`, `b069491` — PC/Manual explorations (superseded by the diagnostic evidence)
+- `85115e4` — **final: subtask rows Type=0 Fixed Units + Manual=0 + real PercentComplete; top-level rows unchanged (Manual=1 + Type=1)**
+
+**Re-verification (D-69-9 closure gate):**
+1. ✅ Automated pre-screen: export suites 142/142; `npm test` 1713 pass / 0 fail; lint 15 = baseline; chunk 499.94 kB ≤ 500 kB; zero new deps; samples regenerated with the final shape
+2. ✅ **Owner re-UAT round 5 (2026-11-17): 18/18 rows exact** — Child one/two 7 j fin 14/01; Sub A.1/A.2/Sub B 30 j fin 20/02; hierarchy 3-level intact; all other rows unchanged from the pre-fix exact baseline
+
+## MSPDI evidence (D-69-7)
 
 ## Test 11 FAIL fix (D-69-9, executed 2026-11-17)
 
@@ -27,7 +45,7 @@ Verdict criterion (D-69-8): the hierarchy SURVIVING is the criterion, not zero d
 | Sub A.2 (17) | 12/01 → 20/02, PT240H | 12/01 → 12/01, **0 jour** ❌ |
 | Sub B (18) | 12/01 → 20/02, PT240H | 12/01 → 12/01, **0 jour** ❌ |
 
-All other rows matched the XML exactly (incl. Done task 0,38 j = PT3H, In progress 17 j) — the capture came from the current sample (owner-confirmed). 100% correlation: honored durations = rows WITHOUT OutlineLevel; zeroed = rows WITH OutlineLevel.
+All other rows matched the XML exactly (incl. Done task 0,38 j = PT3H, In progress 17 j) — the capture came from the current sample (owner-confirmed). 100% correlation: honored durations = rows WITHOUT OutlineLevel; zeroed = rows WITH OutlineLevel. (Superseded by the "FAIL → fix → re-UAT history" section above — kept as the round-1 evidence record.)
 
 **Root cause:** gr8r's Task emission violated the canonical Project element sequence four ways (verified against a real Project 2016 export in MPXJ ground truth + the 2007 XSD): `Manual` emitted last instead of right after Name/before Type; `OutlineLevel` right after Type without the canonical `WBS`/`OutlineNumber` pairing; `ManualStart/ManualFinish/ManualDuration` after `DurationFormat` instead of after `Duration`; `Notes` after `ExtendedAttribute` instead of before `PredecessorLink*`/`ExtendedAttribute*`. MS Project honors Manual* dates only in canonical order for OutlineLevel rows.
 
@@ -61,9 +79,9 @@ Observed in the capture (vision analysis, model outside the session):
 
 ## Item A1 closure (REQ-EXP-03)
 
-- [ ] **Phase 65 item A1 (Test 11): OPEN — pending owner re-UAT** after the D-69-9 canonical fix (1589095). Hierarchy criterion passed; dates criterion failed on subtask rows; fix landed and pre-screen green. A1 closes ONLY on the re-UAT pass (criteria 1+2, D-69-9).
-- [ ] Phase 999.1 backlog entry: stays open until the re-UAT pass.
+- [x] **Phase 65 item A1 (Test 11): CLOSED** — owner UAT executed per `.planning/research/VERIFICATION.md` Part 2; initial FAIL on subtask dates fixed through the D-69-9 branch (5 rounds, diagnostic-matrix-driven, final shape Type=0 Fixed Units on child rows); owner re-UAT round 5 = 18/18 rows exact (criteria 1+2 met). MSPDI verdict = **PASS**.
+- [x] Phase 999.1 backlog entry: closed — the real MS Project round-trip passes end-to-end (hierarchy AND dates).
 
 ## Task 3 disposition (D-69-9)
 
-**EXECUTED (FAIL branch triggered)** — the initial read of gant.png suggested a hierarchy-only PASS, but the owner's line-by-line date check exposed a real MSPDI defect (subtask Duration/Finish zeroed). Owner directed FAIL → fix now. The fix is the canonical Task element sequence realignment of `export/mspdi.js` per D-69-9, re-verified against the MSPDI-SPEC citations and a real Project 2016 export; plan-01 positional assertions updated; suites green. **69-VERIFICATION.md finalization and A1 closure wait for the owner re-UAT pass.**
+**EXECUTED (FAIL branch) — COMPLETE.** The initial read of gant.png suggested a hierarchy-only PASS; the owner's line-by-line date checks exposed the real MSPDI defect (subtask Duration/Finish zeroed) and directed FAIL → fix now. Five rounds: canonical order (1589095), auto-scheduling (2e28ead), PC explorations (bbe7005, b069491), then a 8-variant diagnostic matrix imported by the owner isolating `Type` as the decisive field — final fix 85115e4 (child rows Type=0 Fixed Units + Manual=0 + real PercentComplete). Pre-screen green at every step; owner re-UAT round 5 = 18/18 exact. Diagnostic tooling kept: `test/make-diagnostic-xml.mjs` + `test-results/export-samples/diagnostic-children.xml`.
