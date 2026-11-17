@@ -194,7 +194,7 @@ test('project summary carries meta, lead name and rounded progress over exported
   const m = build(makeDoc(), 'p_alpha', { scope: 'all' });
   assert.deepEqual(
     { ...m.project, statusLabel: m.project.statusLabel },
-    { id: 'p_alpha', key: 'alpha', name: 'Alpha Project', statusLabel: 'project.status.active', leadName: 'Léa Lead', start: '2026-01-05', due: '2026-03-31', progress: Math.round((2 / 11) * 100) },
+    { id: 'p_alpha', key: 'alpha', name: 'Alpha Project', statusLabel: 'project.status.active', leadName: 'Léa Lead', start: '2026-01-05', due: '2026-03-31', progress: Math.round((2 / 12) * 100) },
   );
   const empty = buildExportModel(makeEmptyProjectDoc(), 'p_empty', {}, deps());
   assert.equal(empty.project.progress, 0, 'progress is 0, never NaN, for zero rows');
@@ -348,7 +348,7 @@ test('summary meta: name, lead, status, start, due, progress in order with kinds
   assert.equal(meta[2].value, 'T:project.status.active', 'statusLabel is already a translator output');
   assert.equal(meta[3].value, '2026-01-05');
   assert.equal(meta[4].value, '2026-03-31');
-  assert.equal(meta[5].value, Math.round((2 / 11) * 100), 'progress is the raw 0-100 number, never divided by 100');
+  assert.equal(meta[5].value, Math.round((2 / 12) * 100), 'progress is the raw 0-100 number, never divided by 100');
 });
 
 test('summary kpis: four labelled entries equal to the row counts', () => {

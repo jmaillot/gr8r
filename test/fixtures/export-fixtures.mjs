@@ -223,6 +223,33 @@ export function makeDoc() {
       deps: [],
       order: 120,
     },
+    /* Phase 69 (69-02, D-69-1): ONE rich 3-level task in the p_alpha sample
+       tree — the same flat { id, parentId, position, title, done } shape
+       proven in 69-01 (model.js groups by parentId, sorts by position;
+       nested `subtasks` arrays are ignored by the walker). Grow-only: no
+       existing task shape was modified. */
+    {
+      id: 't_a13',
+      project: 'p_alpha',
+      key: 'ALPHA-13',
+      title: 'Deep tree task',
+      status: 'progress',
+      priority: 'medium',
+      assignees: ['m_plain'],
+      labels: [],
+      estimate: '',
+      start: '2026-01-12',
+      due: '2026-02-20',
+      desc: 'Owner note for the 3-level UAT samples',
+      subtasks: [
+        { id: 's13a', parentId: null, position: 0, title: 'Sub A', done: false },
+        { id: 's13a1', parentId: 's13a', position: 0, title: 'Sub A.1 (deepest)', done: true },
+        { id: 's13a2', parentId: 's13a', position: 1, title: 'Sub A.2', done: false },
+        { id: 's13b', parentId: null, position: 1, title: 'Sub B', done: false },
+      ],
+      deps: [],
+      order: 130,
+    },
     /* The foreign task — must never be selectable into a p_alpha export. */
     {
       id: 't_b1',

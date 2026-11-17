@@ -15,6 +15,7 @@ import path from 'node:path';
 
 import { buildWorkbook } from '../export/xlsx.js';
 import { buildMspdi } from '../export/mspdi.js';
+import { toCsv } from '../src/export/csv.js';
 import { buildExportModel } from '../src/export/model.js';
 import { tFor } from '../src/core/i18n.js';
 import { makeDoc } from './fixtures/export-fixtures.mjs';
@@ -29,8 +30,11 @@ const deps = locale => ({
 });
 
 /* Descriptions and comments on: the samples show every surface the human
-   checklist inspects (Notes in Project, the Tasks sheet thread column). */
-const opts = { descriptions: true, comments: true };
+   checklist inspects (Notes in Project, the Tasks sheet thread column).
+   Subtasks on (69-02, D-69-5): the owner's UAT needs the 3-level tree —
+   DEFAULT_OPTIONS.subtasks is false, so it must be enabled explicitly or
+   the samples silently flatten (the generator self-check would then fail). */
+const opts = { descriptions: true, comments: true, subtasks: true };
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -48,7 +52,12 @@ for (const locale of ['en', 'fr']) {
   const xmlPath = path.join(OUT_DIR, `project-${locale}.xml`);
   fs.writeFileSync(xmlPath, xml, 'utf8');
 
-  for (const p of [xlsxPath, xmlPath]) {
+  /* 69-02 (D-69-5, research open question 2): the CSV rides the same
+     model through the zero-dep toCsv writer (src/export/csv.js). */
+  const csvPath = path.join(OUT_DIR, `project-${locale}.csv`);
+  fs.writeFileSync(csvPath, toCsv(model), 'utf8');
+
+  for (const p of [xlsxPath, xmlPath, csvPath]) {
     const size = fs.statSync(p).size;
     if (size === 0) throw new Error(`empty sample written: ${p}`);
     console.log(`${p} (${size} bytes)`);
