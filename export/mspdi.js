@@ -233,6 +233,31 @@ export function buildMspdi(model) {
   const tasksXml = [];
   let uid = 0;
   let rowIndex65 = -1;
+  /* Canonical outline paths (Test 11 FAIL fix, D-69-9): Project's own
+     exports pair WBS + OutlineNumber + OutlineLevel. The rows are a DFS
+     walk: task rows (depth -1) number 1..n; child rows number
+     task.sibling(.sub)*. counters[d] tracks the last sibling index at
+     depth d and is truncated whenever a shallower row appears. */
+  const outlineNumbers = new Array(rows.length);
+  let taskSeq = 0;
+  let taskPath = '';
+  const counters = [];
+  const lastPathAtDepth = {};
+  rows.forEach((row, i) => {
+    const d = typeof row?.depth === 'number' ? row.depth : -1;
+    if (d < 0) {
+      taskSeq += 1;
+      taskPath = String(taskSeq);
+      counters.length = 0;
+      outlineNumbers[i] = taskPath;
+    } else {
+      counters.length = d + 1;
+      counters[d] = (counters[d] || 0) + 1;
+      const parentPath = d === 0 ? taskPath : lastPathAtDepth[d - 1];
+      lastPathAtDepth[d] = `${parentPath}.${counters[d]}`;
+      outlineNumbers[i] = lastPathAtDepth[d];
+    }
+  });
   for (const row of rows) {
     uid += 1;
     rowIndex65 += 1;
@@ -274,13 +299,27 @@ export function buildMspdi(model) {
        ManualDuration are honored verbatim, and a manual SUMMARY keeps
        its own dates instead of rolling up from its children — exactly
        the owner's rule (parent end = its due, subtask end = parent
-       end). Manual* elements sit between DurationFormat and Milestone
-       per the pj15 Task sequence (ManualStart, ManualFinish,
-       ManualDuration, Manual). The SNET constraint stays as a fallback
-       in case a Project version ignores the Manual flag. */
+       end).
+       Test 11 UAT FAIL (owner 2026-11-17, gant.png): every OutlineLevel
+       row imported with Duration 0 and Finish = Start even though the
+       XML carried the parent's PT56H/PT240H span — MS Project only
+       honors the Manual* values when the elements sit in the CANONICAL
+       Task order (D-69-9): a real Project 2016 export emits
+       UID, ID, Name, Active, Manual, Type, WBS, OutlineNumber,
+       OutlineLevel, Priority, Start, Finish, Duration, ManualStart,
+       ManualFinish, ManualDuration, DurationFormat, …, Milestone,
+       Summary, …, PercentComplete, ConstraintType, ConstraintDate, …,
+       Notes, PredecessorLink*, ExtendedAttribute*. gr8r's emission
+       violated that sequence four ways (Manual last, OutlineLevel right
+       after Type without WBS/OutlineNumber, Manual* after
+       DurationFormat, Notes after ExtendedAttribute). The template
+       below is aligned on the FULL canonical sequence for the emitted
+       subset. The SNET constraint stays as a fallback in case a Project
+       version ignores the Manual flag. */
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
-    const manual = dated
-      ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration><Manual>1</Manual>`
+    const manualFlag = dated ? `<Manual>1</Manual>` : '';
+    const manualDates = dated
+      ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration>`
       : '';
 
     /* SNET pin (owner report "all lines 20/11"): only rows whose start
@@ -296,11 +335,17 @@ export function buildMspdi(model) {
        a nested row at depth n emits n+1 (1-based; the existing contract
        pins <OutlineLevel>1</OutlineLevel> on first-level child rows and is
        preserved). Task rows emit nothing (top level, Project default 1).
-       Summary is the positional adjacency set computed above. */
-    const outline = typeof row.depth === 'number' ? `<OutlineLevel>${row.depth + 1}</OutlineLevel>` : '';
+       Test 11 FAIL fix: child rows now also carry WBS and OutlineNumber
+       in the canonical slot BEFORE Start — Project's own exports always
+       pair the three, and the gant.png zero-duration defect hit exactly
+       the OutlineLevel rows. Summary is the positional adjacency set
+       computed above. */
+    const outline = typeof row.depth === 'number'
+      ? `<WBS>${esc(outlineNumbers[rowIndex65])}</WBS><OutlineNumber>${esc(outlineNumbers[rowIndex65])}</OutlineNumber><OutlineLevel>${row.depth + 1}</OutlineLevel>`
+      : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name><Type>1</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration><DurationFormat>7</DurationFormat>${manual}<Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${links}${attrs}${notes}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name>${manualFlag}<Type>1</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration>${manualDates}<DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${notes}${links}${attrs}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

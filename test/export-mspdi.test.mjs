@@ -127,8 +127,9 @@ test('task-level children appear in the documented schema order', () => {
       assert.ok(at > last, `${el} in order inside ${name}`);
       last = at;
     }
-    /* PredecessorLink / ExtendedAttribute / Notes come after PercentComplete when present. */
-    for (const el of ['PredecessorLink', 'ExtendedAttribute', 'Notes']) {
+    /* Canonical Test 11 order (D-69-9): Notes BEFORE PredecessorLink /
+       ExtendedAttribute, everything after PercentComplete when present. */
+    for (const el of ['Notes', 'PredecessorLink', 'ExtendedAttribute']) {
       const at = slice.indexOf(`<${el}`);
       if (at !== -1) assert.ok(at > slice.indexOf('<PercentComplete>'), `${el} after PercentComplete in ${name}`);
     }
@@ -183,11 +184,22 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
     const slice = taskSlice(subXml, name);
-    /* OutlineLevel sits exactly between Type and Start on a child row */
+    /* Canonical position (real Project 2016 export, D-69-9): Manual right
+       after Name, BEFORE Type; WBS + OutlineNumber + OutlineLevel between
+       Type and Start; Manual* between Duration and DurationFormat. */
+    const nameAt = slice.indexOf('<Name>');
+    const manualAt = slice.indexOf('<Manual>1</Manual>');
     const typeAt = slice.indexOf('<Type>');
     const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');
     const startAt = slice.indexOf('<Start>');
+    assert.ok(manualAt > nameAt && manualAt < typeAt, `${name}: Manual after Name, before Type`);
     assert.ok(olAt > typeAt && olAt < startAt, `${name}: OutlineLevel after Type, before Start`);
+    /* The canonical trio WBS + OutlineNumber + OutlineLevel, all before Start */
+    const wbsMatch = /<WBS>([^<]*)<\/WBS>/.exec(slice);
+    const onMatch = /<OutlineNumber>([^<]*)<\/OutlineNumber>/.exec(slice);
+    assert.ok(wbsMatch && onMatch, `${name} carries WBS and OutlineNumber`);
+    assert.equal(wbsMatch[1], onMatch[1], `${name}: WBS equals OutlineNumber`);
+    assert.match(onMatch[1], /^\d+\.\d+$/, `${name}: OutlineNumber is a dotted parent.child path`);
     /* Children inherit the PARENT's start/due: dateless children make
        Project roll the whole summary back to the project start. */
     assert.ok(slice.includes('<Start>2026-03-04T08:00:00</Start>'), `${name} starts with the parent task's start`);
@@ -199,9 +211,9 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
     assert.ok(slice.includes('<ManualStart>2026-03-04T08:00:00</ManualStart>'), `${name} pins ManualStart to the inherited start`);
     assert.ok(slice.includes('<ManualFinish>2026-03-10T17:00:00</ManualFinish>'), `${name} pins ManualFinish to the inherited due`);
     const msAt = slice.indexOf('<ManualStart>');
+    const duAt = slice.indexOf('<Duration>');
     const dfAt = slice.indexOf('<DurationFormat>');
-    const miAt = slice.indexOf('<Milestone>');
-    assert.ok(msAt > dfAt && msAt < miAt, `${name}: Manual* block between DurationFormat and Milestone`);
+    assert.ok(msAt > duAt && msAt < dfAt, `${name}: Manual* block between Duration and DurationFormat (canonical)`);
   }
   /* the parent keeps its OWN dates, plus the SNET pin and manual mode */
   const parent = taskSlice(subXml, 'Subtasked task');
@@ -552,14 +564,17 @@ test('69-01: OutlineLevel = depth+1 at every level of the 3-level tree; the top 
   for (const name of ['Sub A.1 (deepest)', 'Sub A.2']) {
     assert.ok(slice69(name).includes('<OutlineLevel>2</OutlineLevel>'), `${name}: depth-1 row OutlineLevel 2`);
   }
-  /* Positional pin (D-69-4, D-69-9): the writer emits Type→OutlineLevel→Start
-     — asserted as-is, NOT pre-fixed toward canonical order. */
+  /* Positional pin (D-69-9, UPDATED by the Test 11 FAIL fix): the writer
+     emits the canonical trio WBS→OutlineNumber→OutlineLevel between Type
+     and Start (real Project 2016 export order). */
   for (const name of ['Sub A', 'Sub A.1 (deepest)', 'Sub A.2', 'Sub B']) {
     const row = slice69(name);
     const typeAt = row.indexOf('<Type>1</Type>');
+    const wbsAt = row.indexOf('<WBS>');
+    const onAt = row.indexOf('<OutlineNumber>');
     const olAt = row.indexOf('<OutlineLevel>');
     const startAt = row.indexOf('<Start>');
-    assert.ok(olAt === typeAt + '<Type>1</Type>'.length && olAt < startAt, `${name}: OutlineLevel sits directly after Type, before Start`);
+    assert.ok(wbsAt === typeAt + '<Type>1</Type>'.length && onAt > wbsAt && olAt > onAt && olAt < startAt, `${name}: WBS→OutlineNumber→OutlineLevel after Type, before Start`);
   }
 });
 
