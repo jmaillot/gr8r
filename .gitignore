@@ -19,3 +19,4 @@ blob-report/
 
 # GSD research scratch cache (tooling artifacts)
 .planning/research/.cache/
+.~lock.*
