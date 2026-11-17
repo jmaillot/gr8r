@@ -3,17 +3,17 @@ status: testing
 phase: 70-subtasks-in-timeline-and-board-xlsx
 source: [70-01-SUMMARY.md]
 started: 2026-11-17T00:00:00Z
-updated: 2026-11-17T00:00:00Z
+updated: 2026-11-17T01:30:00Z
 ---
 
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-number: 4
-name: Régression — sans sous-tâches et autres canaux
+number: 0
+name: (session complete)
 expected: |
-  Avec l'option `subtasks` désactivée, le workbook est identique à avant (aucune ligne enfant) ; les feuilles Tasks, MSPDI et CSV sont inchangés ; la dégradation SHAPE_CAP au-delà de 400 formes (enfants compris) fonctionne comme avant.
-awaiting: user response
+  G-1 fix shipped (70-02), G-2 fixed (c63017a). Owner re-test pending on real exports.
+awaiting: none
 
 ## Tests
 
@@ -53,7 +53,7 @@ skipped: 0
 - **Expected rule (owner):** default = inherit parent task's due; manual value wins → `due: s.due || t.due || ''`.
 - **Evidence of the UI contract:** subtasks carry their own `due` (`S.ui` field `subdue`, popovers.js:66/191, subtask-detail.js:27 with `page.subtask.inheritedDue` tooltip shown only when `s.due` is empty).
 - **Blast radius:** model-level fix → all channels (xlsx Tasks/Timeline/Board AND MSPDI rows derive dates from `row.due`). Pin `test/export-model.test.mjs` (due inheritance from top-level task) must be UPDATED to the new rule; Phase 69's "subtask end = parent end" MSPDI criterion stays true for subtasks WITHOUT their own due (the `|| t.due` fallback).
-- **Status:** fix plan pending (gap closure).
+- **Status:** ✅ FIXED — commit `368e35f` (70-02 gap closure, TDD): model.js:227 `due: s.due || t.due || ''` (mirror of :226 start). Pins rewritten with inherited + manual-override cases (nested included). Phase 69 fallback preserved (`|| t.due`). Tests 1725/1738 grow-only (+2 override pins, RED confirmed first), lint 15, chunk 499.94 kB, frozen files byte-identical. **Owner re-test pending.**
 
 ### G-2 — Excel repair prompt on open (owner, 2026-11-17) — BLOCKER
 - **Symptom:** « Désolé… Nous avons trouvé un problème dans le contenu de ".xlsx"… récupérer le maximum de contenu ». Content correct after repair, but the file is not clean OOXML.
