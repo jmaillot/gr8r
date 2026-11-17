@@ -2,16 +2,14 @@
 phase: 71-subtask-columns-in-list-view
 reviewed: 2026-11-17T00:00:00Z
 depth: standard
-files_reviewed: 4
+files_reviewed: 2
 files_reviewed_list:
-  - src/features/subtask-popovers.js
-  - src/components/task-list.js
   - src/styles/views/list.css
   - test/i18n-core-features.test.mjs
 findings:
   critical: 1
-  warning: 2
-  info: 1
+  warning: 1
+  info: 2
   total: 4
 status: issues_found
 ---
@@ -20,86 +18,79 @@ status: issues_found
 
 **Reviewed:** 2026-11-17
 **Depth:** standard
-**Files Reviewed:** 4
+**Files Reviewed:** 2
 **Status:** issues_found
 
 ## Summary
 
-Phase 71 adds an opt-in `columns` mode to the shared subtask tree renderer, forwards the parent grid template onto `--cols` from `taskRow`, converts `.subrow` from flex to grid, and pins the behavior with 5 source-contract tests. The escaping posture is solid (T-71-01 verified clean), the board-card compact branch is provably byte-identical, `--cols` is composed only from the fixed `LCOLS` constants (T-71-02), no new keys were added (1944 gate holds), and the `task-list.js` delta is a single line (chunk gate respected). However, the flex→grid conversion kept the old `gap: 8px` while the parent grid uses `gap: 0`, which arithmetically breaks the column alignment that is the phase's stated goal (ADR-2).
+Reviewed the phase 71 CSS (list subrow grid alignment) and the contract test suite at standard depth, cross-referencing both against the actual renderer (`src/features/subtask-popovers.js`) and the parent row renderer (`src/components/task-list.js`), plus every `listHtml` call site.
+
+The core columns mechanism works for the Tasks/Project list views (parent cols start `['status','assignee','priority','due',…]`, matching the renderer's hardcoded cell order). However, one live call site passes a different column order and the subtask meta cells silently land on the wrong tracks there. The CSS fallback template is also stale against both real call sites. The test file is largely sound (it correctly pins escaping, the toggle contract, and grid alignment), but contains a name/assertion mismatch and a self-contradictory comment that will mislead future maintainers.
 
 ## Critical Issues
 
-### CR-01: `.subrow` grid keeps `gap: 8px` while the parent row/thead grid uses `gap: 0` — meta cells do not align under the parent tracks
+### CR-01: Subtask meta cells misalign with parent columns on the My Tasks list view
 
-**File:** `src/styles/views/list.css:137` (vs. the `.thead, .trow` rule at `src/styles/views/list.css:8-15`)
+**File:** `src/features/subtask-popovers.js:73-78` (consumed via `src/styles/views/list.css:130-163` and `test/i18n-core-features.test.mjs:244-252`)
+**Issue:** The columns branch hardcodes the four meta cells in the order `status → assignee → priority → due`, but the parent track order comes from `listHtml`'s `cols` option, which varies per call site. `src/pages/my-tasks.js:59` calls:
 
-**Issue:** The whole point of Phase 71 (D-71-1, ADR-2, and the comment at list.css:131-133: "cells align under whatever tracks the parent shows on every call site") is that the subrow joins the parent's exact grid template. `.trow` and `.thead` set `gap: 0` (line 14), but the converted `.subrow` kept its legacy flex `gap: 8px` (line 137). With the same 9-track template, the subrow's grid consumes 8 × 8px = 64px of extra inter-track space that the parent does not have. The leading `18px`/`30px` tracks stay put (they sit before the first gap), but every track after the fr title track is shifted left relative to the parent: the status/assignee/priority/due/labels cells land ~56–64px off their parent columns and header cells. This defeats the phase's core deliverable for every row where the `minmax(220px, 1fr)` floor is not binding (the common case on wide list views).
-
-**Fix:**
-```css
-.subrow {
-  display: grid;
-  grid-template-columns: var(--cols, ...);
-  align-items: center;
-  gap: 0; /* match .thead/.trow — identical track template must use identical gaps */
-  ...
-}
+```js
+listHtml(groups, key, { cols: ['project', 'status', 'priority', 'due'], complete: true, ... })
 ```
-If spacing inside the head/title cell is wanted, keep `gap: 8px` on `.subrow > .subhead` (already present at line 154), not on the grid itself.
+
+so the parent template is `18px 30px minmax(220px,1fr) 160px 126px 108px 104px 40px` (project, status, priority, due). The `.subhead` spans tracks 1/4 correctly, but the emitted cells then land as:
+
+- `c-status` (done/todo pill) on the **project** track
+- `c-assignee` on the **status** track
+- `c-priority` on the **priority** track (accidentally correct)
+- `c-due` on the **due** track (accidentally correct)
+
+Users on My Tasks see the status chip under the "Project" header and assignee avatars under the "Status" header. The phase test (line 251) only pins `rowClass: 'subrow', columns: true` and the `--cols` forwarding — it never pins cell order against track order, so this regression is invisible to the suite. The Tasks page (`tasks.js:28`) and Project page (`project.js:113`) happen to align only because their first four cols are `status, assignee, priority, due`; any future column reorder re-triggers the bug silently.
+
+**Fix:** Either (a) emit the meta cells in parent-column order by passing the `cols` array through to the renderer and mapping cells per column:
+
+```js
+// task-list.js:83
+treeChecklist.fn(t, { compact: true, rowClass: 'subrow', columns: cols })
+// subtask-popovers.js columns branch
+const meta = opt.columns
+  ? opt.columns.map(c => CELL_SUB[c] ? `<div class="c-meta c-${c}">${CELL_SUB[c](s, task0)}</div>` : '').join('')
+  : '';
+```
+
+or (b) minimally, reject/misalign-proof by reordering the hardcoded cells to match the dominant call sites and adding a test pin asserting the cell class sequence equals the first four entries of every `listHtml` call site's `cols` array.
 
 ## Warnings
 
-### WR-01: Keyboard focus indicator is invisible on the subtask status chip toggle
+### WR-01: CSS fallback grid template is stale — matches no live call site
 
-**File:** `src/styles/views/list.css:174-179`
+**File:** `src/styles/views/list.css:138`
+**Issue:** The fallback `grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr) 126px 150px 108px 104px 168px 40px)` bakes in the order status/assignee/priority/due/labels (126/150/108/104/168px). Neither real `listHtml` call site uses that sequence: `tasks.js:28` uses `['status','assignee','priority','due','project']` (project = 160px, not 168px) and `my-tasks.js:59` uses `['project','status','priority','due']`. Any future call site that renders `.subrow` without `--cols` inherits a template that is wrong in both widths and order — worse than having no fallback, because the comment (lines 135-137) presents it as a correct default. Note also the test at `test/i18n-core-features.test.mjs:319-322` only checks that the comment *mentions* LCOLS, not that the widths actually match `LCOLS`.
 
-**Issue:** In columns mode the `toggleSub` checkbox is the only focusable control in the status cell, and it is rendered as `position: absolute; width: 1px; height: 1px; opacity: 0`. No `:focus-visible` style is applied to the wrapping `.stchip`, so a keyboard user tabbing through the list gets no visible indication that the subtask toggle is focused (a WCAG 2.4.7 focus-visible failure). Also note `.stchip` has no `position: relative`, so the 1px checkbox positions against `.trow` (the nearest positioned ancestor) — harmless now, but fragile if the box is ever made visible.
+**Fix:** Either keep the fallback but generate/verify it from `LCOLS` (e.g. a build-time check test comparing the CSS literal to `LCOLS` defaults), or drop the fallback to a simpler sane default (title track + 1fr) so misalignment is loud rather than subtly wrong:
 
-**Fix:**
 ```css
-.subrow .c-status .stchip { position: relative; }
-.subrow .c-status .stchip:has(.check:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--r-sm, 6px);
-}
+grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr));
 ```
-
-### WR-02: Tree indent padding shifts the entire grid — nested subtasks' meta cells misalign with depth-0 rows and the header
-
-**File:** `src/features/subtask-popovers.js:45,80` + `src/styles/views/list.css:143`
-
-**Issue:** `indent = \`--ind:${depth * 16}px;\`` is applied as inline `style` on the whole row div, and `.subrow` consumes it as `padding-left: calc(64px + var(--ind, 0px))` on the grid **container**. In the old flex layout that only indented content; in the grid layout it compresses/offsets the entire track sequence, so a depth-1 subtask's status/assignee/priority/due cells sit 16px right of a depth-0 subtask's cells and of the header cells. If the phase intends "every meta cell lands on the same track on every row" (ADR-2's claim), nested rows violate it. If hierarchical shifting of the meta cells is accepted, it should be pinned as an explicit decision — today the CSS comment and the renderer comment assert alignment "on every call site" without qualification.
-
-**Fix:** Apply the indent only to the head item instead of the row container:
-```css
-.subrow { padding-left: 64px; }
-.subrow { --ind-over: var(--ind, 0px); }
-.subrow > .subhead { margin-left: var(--ind, 0px); } /* or padding-left on .subhead */
-```
-and stop emitting the inline `--ind` on the row's own `style` (or keep it and move the base `64px` onto `.subhead` as well) — the choice should be recorded in the phase notes.
 
 ## Info
 
-### IN-01: CSS fallback track template hand-duplicates the `LCOLS` constants — silent drift risk (T-71-02 adjacency)
+### IN-01: Test name contradicts its assertion (174 vs 175)
 
-**File:** `src/styles/views/list.css:135`
+**File:** `test/i18n-core-features.test.mjs:225-229`
+**Issue:** The test is named `the icon baseline holds at 174 names` but asserts `assert.equal(names.length, 175, ...)`. The trailing comment on line 228 also contains duplicated, self-contradictory history fragments (`+1: gauge … prior: +1: gauge …`) from copy-paste accretion. Future maintainers reading the test name will "fix" the assertion down to 174 and break CI.
 
-**Issue:** `var(--cols, 18px 30px minmax(220px, 1fr) 126px 150px 108px 104px 168px 40px)` hard-copies the widths defined in `task-list.js:18-25` (`LCOLS`). The runtime `--cols` is always set by `taskRow` (task-list.js:83), so the fallback is near-dead code, but if an `LCOLS` width ever changes, the fallback drifts silently and no test guards it. T-71-02's spirit ("composed only from fixed LCOLS constants") is met at runtime, but not in this CSS literal.
+**Fix:** Rename the test to `the icon baseline holds at 175 names` and clean the duplicated comment history.
 
-**Fix:** Either delete the fallback (`var(--cols)` alone — the container always sets it) or add a comment pinning the literal to the default `opt.cols` set and note that any `LCOLS` width change must update it.
+### IN-02: Strike-through suppression relies on class-order specificity, and caret icons in the subhead get struck on done subrows
 
-## Verified clean (no findings)
+**File:** `src/styles/views/list.css:202-208`
+**Issue:** `.subrow.done .c-meta span { text-decoration: none; }` (line 202) is declared *before* the broader `.subrow.done span { text-decoration: line-through; }` (line 205) and only wins because of higher specificity — a re-order or specificity refactor silently re-enables strike-through on pill text and avatars, exactly the bleed RESEARCH 2.6 scoped out. Additionally, spans inside `.subhead` (caret `<span class="ibtn">`, the 22px spacer) sit outside `.c-meta`, so on a done subrow their icon spans get `line-through` (cosmetic no-op for SVG, but it hits the `<span style="width:22px">` spacer's text-decoration inheritance chain).
 
-- **T-71-01 (escaping):** every dynamic string in the columns meta cells passes through `esc()`, `relDate`, or a pill/stack helper (`stPill`, `prPill`, `avStack`); the inherited-due tooltip uses `esc(t('page.subtask.inheritedDue'))` (subtask-popovers.js:77); the empty-assignees fallback is the catalogue key `t('common.unassigned')` (line 75).
-- **ADR-1 / byte-identical popover:** the compact branch is untouched — `head` composes `${opt.columns ? '' : toggle}` and the row emits `${opt.columns ? `<div class="subhead">${head}</div>` : head}${meta}` with `meta = ''` when `columns` is unset (lines 59, 73-80); `subPop.subs` still calls `{ compact: true }` with no columns opt (line 94), and the test pins it (i18n-core-features.test.mjs:285-290).
-- **D-71-7:** the four meta cells carry no `data-a` attributes (line 74-77; pinned at test line 248).
-- **Drawer unaffected:** `drawer.js:122` calls the renderer without `rowClass: 'subrow'` (default `.subt`), so the flex→grid change cannot leak there.
-- **Chunk gate:** `task-list.js` delta is exactly one line (83); no new dependencies; i18n keys unchanged (the columns mode reuses existing keys, so the 1944 gate holds).
-- **Test quality:** the 5 new pins are source-template contract assertions with a documented rationale for why runtime import is impossible (Vite virtual module); each assertion is specific and non-trivial.
+**Fix:** Invert the declaration order (generic rule first, suppression last) and extend the suppression to `.subrow.done .subhead span`, or scope the strike rule to `.subrow.done .subhead .s` (the title only).
 
 ---
 
-_Reviewed: 2026-11-17T00:00:00Z_
+_Reviewed: 2026-11-17_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
