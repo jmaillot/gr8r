@@ -53,17 +53,27 @@ skipped: 0
 - **Expected rule (owner):** default = inherit parent task's due; manual value wins → `due: s.due || t.due || ''`.
 - **Evidence of the UI contract:** subtasks carry their own `due` (`S.ui` field `subdue`, popovers.js:66/191, subtask-detail.js:27 with `page.subtask.inheritedDue` tooltip shown only when `s.due` is empty).
 - **Blast radius:** model-level fix → all channels (xlsx Tasks/Timeline/Board AND MSPDI rows derive dates from `row.due`). Pin `test/export-model.test.mjs` (due inheritance from top-level task) must be UPDATED to the new rule; Phase 69's "subtask end = parent end" MSPDI criterion stays true for subtasks WITHOUT their own due (the `|| t.due` fallback).
-- **Status:** ✅ FIXED — commit `368e35f` (70-02 gap closure, TDD): model.js:227 `due: s.due || t.due || ''` (mirror of :226 start). Pins rewritten with inherited + manual-override cases (nested included). Phase 69 fallback preserved (`|| t.due`). Tests 1725/1738 grow-only (+2 override pins, RED confirmed first), lint 15, chunk 499.94 kB, frozen files byte-identical. **Owner re-test pending.**
+### G-1 — Subtask due inheritance ignores a manually-set due date (owner, 2026-11-17)
+- **Symptom:** exported subtask rows always carry the TOP-LEVEL task's due date, even when the subtask has its own.
+- **Root cause:** `src/export/model.js:227` — `due: t.due || ''` (never reads `s.due`). The start field on line 226 already does the right thing: `s.start || t.start || ''`.
+- **Expected rule (owner):** default = inherit parent task's due; manual value wins → `due: s.due || t.due || ''`.
+- **Evidence of the UI contract:** subtasks carry their own `due` (`S.ui` field `subdue`, popovers.js:66/191, subtask-detail.js:27 with `page.subtask.inheritedDue` tooltip shown only when `s.due` is empty).
+- **Blast radius:** model-level fix → all channels (xlsx Tasks/Timeline/Board AND MSPDI rows derive dates from `row.due`). Pin `test/export-model.test.mjs` (due inheritance from top-level task) must be UPDATED to the new rule; Phase 69's "subtask end = parent end" MSPDI criterion stays true for subtasks WITHOUT their own due (the `|| t.due` fallback).
+- **Status:** ✅ FIXED — commit `368e35f` (70-02 gap closure, TDD): model.js:227 `due: s.due || t.due || ''` (mirror of :226 start). Pins rewritten with inherited + manual-override cases (nested included). Phase 69 fallback preserved (`|| t.due`). Tests 1725/1738 grow-only (+2 override pins, RED confirmed first), lint 15, chunk 499.94 kB, frozen files byte-identical. **Owner re-test: PASS (2026-11-17).**
 
 ### G-3 — Board cards missing the start date (owner, 2026-11-17)
 - **Symptom:** la feuille Board n'affiche pas la date de début des tâches (ni parents ni sous-tâches).
 - **Not a Phase 70 regression:** the Board never had a start column — Phase 54 design (`headers.board` = lane/count/key/title/assignees/priority/due/progress, cards in C..H).
 - **Fix scope:** model.js — `headers.board` gains 'start' before 'due', card projection gains `start: r.start`; export/xlsx.js — Board cards write start (real date, SHORT_DATE_CODE) shifting due→H, progress→I. WIDTHS.start already exists; i18n `export.col.start` exists in EN+FR already.
 - **Pins to update:** test/export-xlsx.test.mjs :450 (card fields), :498-512 (due column G→H), :515-528 (progress H→I), :962 (child cards).
-- **Status:** ✅ FIXED — commits `6f118f6` (RED pins) + `bb51726` (fix, 70-03 gap closure, TDD): model headers.board gains 'start' + card projection `start: r.start`; writer cards C..I (start@G real date SHORT_DATE_CODE, due→H, progress→I); initSheet keys mirror. 2 minor deviations documented in 70-03-SUMMARY.md (walker ISO-date skip extended to start; initSheet keys). Tests 1726/1739 grow-only, lint 15, chunk 499.94 kB, frozen files byte-identical, G-1/G-2 preserved. **Owner re-test pending.**
+- **Status:** ✅ FIXED — commits `6f118f6` (RED pins) + `bb51726` (fix, 70-03 gap closure, TDD): model headers.board gains 'start' + card projection `start: r.start`; writer cards C..I (start@G real date SHORT_DATE_CODE, due→H, progress→I); initSheet keys mirror. 2 minor deviations documented in 70-03-SUMMARY.md (walker ISO-date skip extended to start; initSheet keys). Tests 1726/1739 grow-only, lint 15, chunk 499.94 kB, frozen files byte-identical, G-1/G-2 preserved. **Owner re-test: PASS (2026-11-17).**
+
+### UAT verdict — session complete (2026-11-17)
+- G-1 ✅, G-2 ✅, G-3 ✅ — owner confirmation « G-1 ok G-2 OK G-3 OK ».
+- UAT score: 4/4 checkpoints passed + 3 gaps found and closed (70-02, c63017a, 70-03).
 
 ### G-2 — Excel repair prompt on open (owner, 2026-11-17) — BLOCKER
 - **Symptom:** « Désolé… Nous avons trouvé un problème dans le contenu de ".xlsx"… récupérer le maximum de contenu ». Content correct after repair, but the file is not clean OOXML.
 - **Regression introduced by:** Phase 70 (file opened fine in Phase 69 owner UAT).
 - **Suspects:** indentCell multi-level style on Timeline child rows (style index out of range?), child bar drawing anchors, Board child card cells (date/percent codes on child rows?).
-- **Status:** ✅ FIXED — commit `c63017a`. Root cause: LINK_ROW_OFF_PRED/SUCC (700000/300000 EMU) overshoot the 15pt = 190500 EMU default row height; Excel repairs the out-of-bounds drawing anchor. Sample files had no connectors, so it survived 54-05/69 UAT. Fix: offsets 150000/40000 (visual intent kept) + guard test pinning every Timeline rowOff ≤ 190500 EMU. Suite 1723/1736, lint 15, chunk 499.94 kB, frozen files untouched. **Owner re-test pending** (regenerate a real export, expect no repair prompt).
+- **Status:** ✅ FIXED — commit `c63017a`. Root cause: LINK_ROW_OFF_PRED/SUCC (700000/300000 EMU) overshoot the 15pt = 190500 EMU default row height; Excel repairs the out-of-bounds drawing anchor. Sample files had no connectors, so it survived 54-05/69 UAT. Fix: offsets 150000/40000 (visual intent kept) + guard test pinning every Timeline rowOff ≤ 190500 EMU. Suite 1723/1736, lint 15, chunk 499.94 kB, frozen files untouched. **Owner re-test: PASS (2026-11-17).**
