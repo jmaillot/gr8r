@@ -68,3 +68,13 @@ _(empty — Phase 999.1 (Test 11) promoted to Phase 69, the v2.6 milestone core.
 
 Plans:
 - [x] 70-01-PLAN.md — model/gantt/writer subtask lift + test pins
+
+### Phase 71: Subtask columns in List view
+
+**Goal:** Subtask rows in the List view display Status (done/todo chip), Assignees, Priority (inherited from parent) and Due (s.due || parent due, inherited tooltip) aligned to the parent column grid
+**Requirements**: TBD
+**Depends on:** Phase 70
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 71 to break down)
