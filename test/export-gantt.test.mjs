@@ -22,7 +22,7 @@ import {
 import { buildExportModel } from '../src/export/model.js';
 import {
   makeDailyGanttDoc, makeWeeklyGanttDoc, makeBoundaryDocs,
-  makeZeroDatedDoc, makeCapDoc, makeFutureDoc,
+  makeZeroDatedDoc, makeCapDoc, makeFutureDoc, makeMspdiDoc,
 } from './fixtures/export-fixtures.mjs';
 
 const NOW_DAILY = new Date('2026-03-15T12:00:00Z');
@@ -254,4 +254,83 @@ test('a future project yields axis.today null and untouched bars', () => {
   assert.equal(g.axis.today, null);
   assert.equal(g.bars.length, 2);
   assert.equal(g.links.length, 0);
+});
+
+/* =====================================================================
+   Phase 70: the T-54-15 filter is lifted — child rows become bars,
+   parent-grouped DFS (D-70-7), per-bar status/depth/indentLevels
+   (D-70-3, D-70-5), parent-only link map (CR-01) and child-inclusive
+   SHAPE_CAP accounting (D-70-6).
+   ===================================================================== */
+const subModel = (doc, now = NOW_DAILY) =>
+  buildExportModel(doc, 'p_msp', { scope: 'all', options: { subtasks: true } }, { now });
+
+test('Phase 70: bars are parent-grouped DFS — sorted parents each followed immediately by their dotted-key subtree, rows gapless (D-70-7, A1)', () => {
+  const g = buildGantt(subModel(makeMspdiDoc()));
+  /* Parents sort by start then title then key (unchanged rule): MSP-1
+     (03-02), then the two 03-04 parents by title (Deep tree task <
+     Subtasked task), then MSP-2 (03-05), MSP-9 (03-06), MSP-4 (03-09).
+     Each parent is followed by its whole subtree in lexicographic
+     dotted-key order — codepoint order IS DFS within a parent group. */
+  assert.deepEqual(g.bars.map(b => b.key), [
+    'MSP-1',
+    'MSP-13', 'MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2',
+    'MSP-3', 'MSP-3.1', 'MSP-3.2',
+    'MSP-2', 'MSP-9', 'MSP-4',
+  ]);
+  assert.deepEqual(g.bars.map(b => b.row), g.bars.map((_, i) => i), 'row indexes are gapless 0..n-1 in emission order (ROW BASIS)');
+  assert.deepEqual(g.milestones.map(m => m.row), [g.bars.length, g.bars.length + 1], 'milestones continue after the bars with no gap');
+});
+
+test('Phase 70: each bar carries status (the row label), depth and indentLevels = depth+1 (D-70-3, D-70-5)', () => {
+  const g = buildGantt(subModel(makeMspdiDoc()));
+  const parent = g.bars.find(b => b.key === 'MSP-13');
+  assert.equal(parent.depth, -1, 'parent rows have no depth field — normalised to -1');
+  assert.equal(parent.indentLevels, 0);
+  assert.equal(parent.statusId, 'todo');
+  assert.equal(parent.status, 'task.status.todo', 'the bar carries the row’s already-translated label');
+  const rootChild = g.bars.find(b => b.key === 'MSP-13.1');
+  assert.equal(rootChild.depth, 0);
+  assert.equal(rootChild.indentLevels, 1);
+  assert.equal(rootChild.status, 'task.status.todo');
+  const nested = g.bars.find(b => b.key === 'MSP-13.1.1');
+  assert.equal(nested.depth, 1);
+  assert.equal(nested.indentLevels, 2);
+  assert.equal(nested.status, 'task.status.done', 'a done subtask carries its own done label (D-70-2)');
+  /* Child bars draw at their inherited dates — the TOP-LEVEL task's
+     due (model.js:227), start = own start or the task start. */
+  for (const key of ['MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2']) {
+    const b = g.bars.find(x => x.key === key);
+    assert.equal(b.due, '2026-03-20', `${key} inherits the top-level due`);
+    assert.equal(b.start, '2026-03-04', `${key} inherits the top-level start`);
+  }
+});
+
+test('Phase 70: a dep into a subtask id produces no link; a dep between parents still anchors the PARENT bar rows (CR-01)', () => {
+  const doc = makeMspdiDoc();
+  doc.tasks.find(t => t.id === 't_x2').deps = ['t_x1', 's13a'];
+  const g = buildGantt(subModel(doc));
+  assert.equal(g.links.length, 1, 'the subtask-id dep is dropped (child rows carry no resolvable bar endpoint)');
+  const link = g.links[0];
+  const succBar = g.bars.find(b => b.key === 'MSP-2');
+  const predBar = g.bars.find(b => b.key === 'MSP-1');
+  assert.equal(link.succRow, succBar.row);
+  assert.equal(link.predRow, predBar.row, 'the connector anchors the parent bar — depth-0 child bars sharing the task id never overwrite the map entry');
+});
+
+test('Phase 70: child bars count toward SHAPE_CAP 400 strict — 399 parents + 1 child draws, 400 + 1 truncates (D-70-6)', () => {
+  const subCap = (parents) => {
+    const doc = makeCapDoc(parents, 0);
+    doc.tasks[0].subtasks = [{ parentId: null, position: 0, title: 'Cap child', done: false }];
+    return buildGantt(buildExportModel(doc, 'p_g', { scope: 'all', options: { subtasks: true } }, { now: NOW_DAILY }));
+  };
+  const exact = subCap(399);
+  assert.equal(exact.bars.length, 400);
+  assert.equal(exact.links.length, 0);
+  assert.equal(exact.bars[0].key, 'K-0', 'the parent keeps the first table row');
+  assert.equal(exact.bars[1].key, 'K-0.1', 'the child bar follows its parent immediately');
+  assert.equal(exact.truncated, false, 'exactly 400 shapes (child bar included) still draw');
+  const over = subCap(400);
+  assert.equal(over.bars.length, 401);
+  assert.equal(over.truncated, true, '401 shapes degrade to the note row');
 });

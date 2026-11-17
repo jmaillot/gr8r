@@ -114,21 +114,30 @@ const plainCmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
  * @returns {axis, bars, milestones, links, truncated}
  */
 export function buildGantt(model) {
-  /* Only top-level rows reach the Timeline — child rows, archived,
-     completed-off and foreign-project rows were already filtered by
-     the model (T-54-15: the Gantt must not re-add a row). */
-  const top = model.rows.filter(r => !r.parent);
+  /* Phase 70: the T-54-15 top-level filter is lifted — dated child rows
+     become bars too (undated children fail the dated rule exactly like
+     an undated parent). Archived, completed-off and foreign-project rows
+     were already filtered by the model. */
+  const all = model.rows;
 
   /* A row is dated when it has a due; its bar start is its start when
      start is present and not after due, otherwise its due (the
-     timeline rule, src/views/timeline.js). */
-  const dated = top
+     timeline rule, src/views/timeline.js). Phase 70: each bar also
+     carries the row's already-translated status label (`status` — never
+     re-translated in export/, D-54-12) and its indent geometry
+     (`depth` normalised to -1 for parents, `indentLevels` = depth + 1
+     per D-70-3). Key — not taskId — identifies a bar once children
+     exist (depth-0 child rows share the task's id, CR-01). */
+  const dated = all
     .filter(r => r.due)
     .map(r => ({
       taskId: r.id,
       key: r.key || '',
       title: r.title || '',
       statusId: r.statusId,
+      status: r.status,
+      depth: r.depth ?? -1,
+      indentLevels: (r.depth ?? -1) + 1,
       start: r.start && r.start <= r.due ? r.start : r.due,
       due: r.due,
     }));
@@ -152,11 +161,36 @@ export function buildGantt(model) {
   const padded = padToWeek(firstDate, lastDate);
   const axis = makeAxis({ paddedStart: padded.start, paddedEnd: padded.end, exportDate: model.exportDateISO });
 
-  /* Bars sort by start then title then key; row is the 0-based table
-     index (ROW BASIS above). */
-  const bars = [...dated]
-    .sort((a, b) => plainCmp(a.start, b.start) || plainCmp(a.title, b.title) || plainCmp(a.key, b.key))
-    .map((b, i) => ({ ...b, row: i }));
+  /* Phase 70 (D-70-7): bars are written PARENT-GROUPED. Parents keep
+     the existing sort (start, then title, then key); after each parent
+     its whole subtree follows in lexicographic dotted-key order —
+     codepoint order IS DFS order within a parent group (P < P.1 <
+     P.1.1 < P.2), so no recursion is needed: group child bars by their
+     depth-0 ancestor key (the first dotted segment) and splice each
+     group after its parent. `row` is reassigned 0..n-1 AFTER the
+     splice — gapless, ROW BASIS above. */
+  const barCmp = (a, b) => plainCmp(a.start, b.start) || plainCmp(a.title, b.title) || plainCmp(a.key, b.key);
+  const parentBars = dated.filter(b => b.indentLevels === 0).sort(barCmp);
+  const childBars = dated.filter(b => b.indentLevels > 0);
+  const subtreeOf = new Map();
+  for (const b of childBars) {
+    const rootKey = String(b.key).split('.')[0];
+    if (!subtreeOf.has(rootKey)) subtreeOf.set(rootKey, []);
+    subtreeOf.get(rootKey).push(b);
+  }
+  for (const group of subtreeOf.values()) group.sort((a, b) => plainCmp(a.key, b.key));
+  const parentKeys = new Set(parentBars.map(b => b.key));
+  const bars = [];
+  for (const parent of parentBars) {
+    bars.push(parent);
+    for (const child of subtreeOf.get(parent.key) || []) bars.push(child);
+  }
+  /* Defensive: a child bar whose depth-0 ancestor never produced a
+     dated parent bar keeps dotted-key order after all parents. */
+  for (const b of childBars.filter(b => !parentKeys.has(String(b.key).split('.')[0])).sort((a, b) => plainCmp(a.key, b.key))) {
+    bars.push(b);
+  }
+  bars.forEach((b, i) => { b.row = i; });
 
   /* After the bars, one milestone per dated model milestone, sorted by
      date then name, with consecutive row indexes continuing after the
@@ -171,11 +205,16 @@ export function buildGantt(model) {
      arithmetic. An equal-day pair (predDue equal to succStart) is a
      legitimate, expected link that must survive to the writer rather
      than being dropped as degenerate (D-54-6). A dependency to a row
-     outside the exported set, a child row or a milestone is dropped. */
-  const barByTaskId = new Map(bars.map(b => [b.taskId, b]));
+     outside the exported set, a child row or a milestone is dropped.
+     Phase 70 (CR-01 landmine): barByTaskId is built from PARENT bars
+     only — depth-0 child bars share the task's id and would overwrite
+     the parent's entry, anchoring connectors on the wrong row — and
+     the deps lookup skips child rows (they carry deps: [] by contract
+     and their id can collide with the task id). */
+  const barByTaskId = new Map(bars.filter(b => b.indentLevels === 0).map(b => [b.taskId, b]));
   const links = [];
   for (const succ of bars) {
-    for (const depId of model.rows.find(r => r.id === succ.taskId)?.deps || []) {
+    for (const depId of model.rows.find(r => r.id === succ.taskId && !r.parent)?.deps || []) {
       const pred = barByTaskId.get(depId);
       if (!pred) continue;
       links.push({ predRow: pred.row, succRow: succ.row, predDue: pred.due, succStart: succ.start });
@@ -186,7 +225,9 @@ export function buildGantt(model) {
   /* R13 / T-54-13: the cap counts bars plus connectors only —
      milestone diamonds are outside the budget (the fixture and the
      acceptance criterion agree). Inclusive at the cap: exactly 400
-     shapes still draw, 401 degrades to the note row. */
+     shapes still draw, 401 degrades to the note row. Phase 70
+     (D-70-6): the count is child-inclusive — bars now contains child
+     bars, so no separate accounting is needed. */
   const truncated = bars.length + links.length > SHAPE_CAP;
 
   return { axis, bars, milestones, links, truncated };
