@@ -266,7 +266,15 @@ export function buildMspdi(model) {
     const start = formatDateTime(startISO, '08:00:00');
     const finish = formatDateTime(finishISO, '17:00:00');
     const duration = isoDuration(minutes);
+    /* Test 11 round 3 (owner 2026-11-17 re-UAT #2): on auto-scheduled
+       OutlineLevel rows, an EXPLICIT PercentComplete=0 makes Project
+       re-derive the task from zero (duration 0, finish=start) while
+       PercentComplete=100 rows keep their duration — owner table 100%
+       correlated with done. Omit the element when 0 (optional in the
+       XSD); Project then defaults it without rescheduling. */
     const percent = Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)));
+    const isTopLevel = typeof row.depth !== 'number';
+    const percentXml = percent > 0 || isTopLevel ? `<PercentComplete>${percent}</PercentComplete>` : '';
 
     /* One finish-to-start link per dependency that resolves to an
        exported UID; an unresolved dep emits nothing (Pitfall 11). */
@@ -325,7 +333,6 @@ export function buildMspdi(model) {
        Top-level rows KEEP the manual schedule, which the real Project
        round-trip honors (Phase 54-05 + this phase's parents). */
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
-    const isTopLevel = typeof row.depth !== 'number';
     const manualFlag = dated && isTopLevel ? `<Manual>1</Manual>` : '<Manual>0</Manual>';
     const manualDates = dated && isTopLevel
       ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration>`
@@ -354,7 +361,7 @@ export function buildMspdi(model) {
       : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name>${manualFlag}<Type>1</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration>${manualDates}<DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary><PercentComplete>${percent}</PercentComplete>${constraint}${notes}${links}${attrs}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name>${manualFlag}<Type>1</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration>${manualDates}<DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary>${percentXml}${constraint}${notes}${links}${attrs}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';
