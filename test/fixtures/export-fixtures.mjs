@@ -750,6 +750,22 @@ export function makeMspdiDoc() {
       T('t_x10', 'MSP-10', 'A & <B>', 10),
       T('t_x11', 'MSP-11', 'Quote "task" title', 11),
       T('t_x12', 'MSP-12', 'Données — naïve café 日本語', 12),
+      /* Phase 69 (69-01, D-69-2): ONE rich 3-level task — nested subtasks
+         use the flat { id, parentId, position, title, done } shape the
+         model walker groups by parentId (model.js emit walk). The single
+         tree carries dates, partial completion and notes; edge behavior
+         stays in unit tests. */
+      T('t_x13', 'MSP-13', 'Deep tree task', 13, {
+        start: '2026-03-04',
+        due: '2026-03-20',
+        desc: 'Owner note for the 3-level UAT',
+        subtasks: [
+          { id: 's13a', parentId: null, position: 0, title: 'Sub A', done: false },
+          { id: 's13a1', parentId: 's13a', position: 0, title: 'Sub A.1 (deepest)', done: true },
+          { id: 's13a2', parentId: 's13a', position: 1, title: 'Sub A.2', done: false },
+          { id: 's13b', parentId: null, position: 1, title: 'Sub B', done: false },
+        ],
+      }),
     ],
     comments: [],
     members,

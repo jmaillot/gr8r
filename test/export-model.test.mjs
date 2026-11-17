@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { buildExportModel, DEFAULT_OPTIONS, STATUS_IDS, PRIORITY_IDS, taskProgress, plainText } from '../src/export/model.js';
-import { makeDoc, makeEmptyProjectDoc, makeZeroChartDoc, makeEmptyLaneDoc, makeChartDoc, makeMilestoneDoc, makeMultiAssigneeDoc } from './fixtures/export-fixtures.mjs';
+import { makeDoc, makeEmptyProjectDoc, makeZeroChartDoc, makeEmptyLaneDoc, makeChartDoc, makeMilestoneDoc, makeMultiAssigneeDoc, makeMspdiDoc } from './fixtures/export-fixtures.mjs';
 
 /* Deterministic injected deps: a translator that just echoes the key so
    assertions can pin exact catalogue keys, and a fixed export date whose
@@ -588,4 +588,50 @@ test('taskProgress matches the subtree rollupProgress rule on a nested fixture (
   assert.equal(taskProgress(t), rollupProgress(t, { backlog: 0, todo: 5, progress: 45, review: 80 }));
   assert.equal(taskProgress({ status: 'done', subtasks: [] }), 100);
   assert.equal(taskProgress({ status: 'todo' }), 5);
+});
+
+/* =====================================================================
+   Phase 69 (69-01 Task 1): the 3-level fixture tree flows through
+   buildExportModel as DFS rows — depth 0/1/2, dotted keys, per-level
+   parent ids, top-level-due inheritance. Add-only (NFR-03).
+   ===================================================================== */
+const buildMspModel = (opts = {}) =>
+  buildExportModel(makeMspdiDoc(), 'p_msp', { scope: 'all', options: { subtasks: true, descriptions: true } }, deps(opts));
+
+test('69-01: the t_x13 3-level tree emits DFS rows with depth 0/1/2, dotted keys and per-level parent ids', () => {
+  const m = buildMspModel();
+  const titles = m.rows.map(r => r.title);
+  const at = i => titles.indexOf(i);
+  assert.ok(at('Deep tree task') !== -1, 'the t_x13 task row exists');
+  const slice = titles.slice(at('Deep tree task'), at('Deep tree task') + 5);
+  assert.deepEqual(
+    slice.map(t => m.rows.find(r => r.title === t)).map(r => [r.key, r.depth, r.parent, r.id]),
+    [
+      ['MSP-13', undefined, undefined, 't_x13'],
+      ['MSP-13.1', 0, 't_x13', 't_x13'],
+      ['MSP-13.1.1', 1, 't_x13', 's13a1'],
+      ['MSP-13.1.2', 1, 't_x13', 's13a2'],
+      ['MSP-13.2', 0, 't_x13', 't_x13'],
+    ],
+    'DFS order after t_x13: Sub A, Sub A.1, Sub A.2, Sub B with dotted keys, depth and parent ids (parent = the task id, per the pinned 65-05 contract)',
+  );
+});
+
+test('69-01: nested rows inherit the TOP-LEVEL task due, not the immediate parent (model.js uses t.due)', () => {
+  const m = buildMspModel();
+  for (const key of ['MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2']) {
+    const row = m.rows.find(r => r.key === key);
+    assert.equal(row.due, '2026-03-20', `${key} carries the top-level t_x13 due`);
+  }
+  const taskRow = m.rows.find(r => r.id === 't_x13' && !r.key.startsWith('MSP-13.'));
+  assert.equal(taskRow.due, '2026-03-20');
+});
+
+test('69-01: row id contract holds on the 3-level tree (depth-0 task row keeps t_x13; nested rows carry own ids)', () => {
+  const m = buildMspModel();
+  const taskRow = m.rows.find(r => r.title === 'Deep tree task');
+  assert.equal(taskRow.id, 't_x13');
+  assert.equal(m.rows.find(r => r.key === 'MSP-13.1').id, 't_x13', 'depth-0 rows keep the CR-01 contract');
+  assert.equal(m.rows.find(r => r.key === 'MSP-13.1.1').id, 's13a1');
+  assert.equal(m.rows.find(r => r.key === 'MSP-13.2').id, 't_x13', 'depth-0 rows keep the CR-01 contract');
 });
