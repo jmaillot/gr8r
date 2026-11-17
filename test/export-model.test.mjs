@@ -96,11 +96,13 @@ test('default columns and rows omit description, comments and thread; toggles ad
   assert.deepEqual(children.map(c => c.key), ['ALPHA-9.1', 'ALPHA-9.2']);
   assert.deepEqual(children.map(c => c.progress), [100, 0]);
   assert.deepEqual(children.map(c => c.statusId), ['done', 'todo']);
-  /* Owner request 2026-11-10: a subtask carries its PARENT task's start
-     and due — never blank (a blank start made MS Project fall back to the
-     PROJECT start on every subtask line). */
+  /* Owner rule 2026-11-17 (gap G-1), supersedes the 2026-11-10 rule: a
+     subtask due DEFAULTS to the parent task's due, but a manually-set
+     subtask due WINS. Start stays per the 2026-11-10 request (never
+     blank — MS Project falls back to the PROJECT start). This fixture's
+     subtasks carry no own due, so both fields are the inherited case. */
   assert.deepEqual(children.map(c => c.start), ['2026-01-06', '2026-01-06'], 'subtask start = parent task start');
-  assert.deepEqual(children.map(c => c.due), ['2026-01-14', '2026-01-14'], 'subtask due = parent task due');
+  assert.deepEqual(children.map(c => c.due), ['2026-01-14', '2026-01-14'], 'subtask due defaults to the parent task due (manual values win — owner 2026-11-17, gap G-1; supersedes the 2026-11-10 rule)');
   assert.equal(topRows(sub).length, topRows(def).length, 'children are not extra top rows');
 });
 
@@ -666,14 +668,44 @@ test('69-01: the t_x13 3-level tree emits DFS rows with depth 0/1/2, dotted keys
   );
 });
 
-test('69-01: nested rows inherit the TOP-LEVEL task due, not the immediate parent (model.js uses t.due)', () => {
+test('69-01: nested rows inherit the TOP-LEVEL task due by default, but a manually-set subtask due wins (owner 2026-11-17, gap G-1 — supersedes the t.due-only contract)', () => {
   const m = buildMspModel();
   for (const key of ['MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2']) {
     const row = m.rows.find(r => r.key === key);
-    assert.equal(row.due, '2026-03-20', `${key} carries the top-level t_x13 due`);
+    assert.equal(row.due, '2026-03-20', `${key} carries the top-level t_x13 due (inherited default — fixture subtrees are due-less)`);
   }
   const taskRow = m.rows.find(r => r.id === 't_x13' && !r.key.startsWith('MSP-13.'));
   assert.equal(taskRow.due, '2026-03-20');
+
+  /* Manual-override section: Sub A carries its OWN due → it wins on Sub
+     A's row; the due-less descendants (Sub A.1/A.2) and sibling (Sub B)
+     still inherit the TOP-LEVEL task due. */
+  const doc = makeMspdiDoc();
+  doc.tasks.find(t => t.id === 't_x13').subtasks[0].due = '2026-03-12';
+  const mOver = build(doc, 'p_msp', { scope: 'all', options: { subtasks: true, descriptions: true } });
+  const due = k => mOver.rows.find(r => r.key === k).due;
+  assert.equal(due('MSP-13.1'), '2026-03-12', 'Sub A: its own due wins (owner 2026-11-17)');
+  assert.equal(due('MSP-13.1.1'), '2026-03-20', 'Sub A.1: due-less → still inherits the TOP-LEVEL task due');
+  assert.equal(due('MSP-13.1.2'), '2026-03-20', 'Sub A.2: due-less → still inherits the TOP-LEVEL task due');
+  assert.equal(due('MSP-13.2'), '2026-03-20', 'Sub B: due-less → still inherits the TOP-LEVEL task due');
+});
+
+test('70-02: a depth-0 subtask with its own due exports that due; its due-less sibling still inherits the top-level due (gap G-1, t_a9 shape)', () => {
+  /* Local doc — never mutate the shared makeDoc() fixture other suites read. */
+  const doc = makeDoc();
+  doc.tasks.find(t => t.id === 't_a9').subtasks[0].due = '2026-01-10';
+  const m = build(doc, 'p_alpha', { scope: 'all', options: { subtasks: true } });
+  const children = m.rows.filter(r => r.parent === 't_a9');
+  assert.equal(children.find(c => c.key === 'ALPHA-9.1').due, '2026-01-10', "the subtask's own due wins on its exported row");
+  assert.equal(children.find(c => c.key === 'ALPHA-9.2').due, '2026-01-14', 'the due-less sibling still inherits the top-level task due');
+});
+
+test('70-02: a subtask with no own due under an UNDATED top-level task emits an empty due (no bar draws — gantt dated filter unchanged)', () => {
+  const doc = makeDoc();
+  doc.tasks.find(t => t.id === 't_a9').due = '';
+  const m = build(doc, 'p_alpha', { scope: 'all', options: { subtasks: true } });
+  const children = m.rows.filter(r => r.parent === 't_a9');
+  assert.deepEqual(children.map(c => c.due), ['', ''], 'no inherited due when the top-level task carries none');
 });
 
 test('69-01: row id contract holds on the 3-level tree (depth-0 task row keeps t_x13; nested rows carry own ids)', () => {

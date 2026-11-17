@@ -224,7 +224,10 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
             assigneeName: sjoined,
             assigneeIds: [...sids],
             start: s.start || t.start || '',
-            due: t.due || '',
+            /* Gap G-1 (owner 2026-11-17): a subtask due defaults to the
+               parent task's due; a manually-set subtask due wins. Mirror
+               of the start inheritance above. */
+            due: s.due || t.due || '',
             progress: done ? 100 : 0,
             labels: '',
             estimate: '',
