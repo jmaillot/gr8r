@@ -132,15 +132,19 @@
      forwards the ACTUAL template string onto --cols, so cells align under
      whatever tracks the parent shows on every call site. */
   display: grid;
+  /* KEEP IN SYNC with LCOLS in src/components/task-list.js (the JS map is the
+     single source of truth) — this fallback exists only for call sites that
+     render .subrow without --cols (IN-01 drift note). */
   grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr) 126px 150px 108px 104px 168px 40px);
   align-items: center;
-  gap: 8px;
+  gap: 0;
   height: auto;
   min-height: 32px;
-  /* Tree indent rides --ind (set inline by the renderer) ON TOP of the base —
-     an inline padding-left would REPLACE the 64px base and pull children left
-     of their parent. */
-  padding-left: calc(64px + var(--ind, 0px));
+  /* Tree indent: the fixed 64px base stays on the container; the depth indent
+     (--ind, set inline by the renderer) rides the .subhead grid ITEM below as
+     margin-left — an indent on the grid CONTAINER would shift the whole track
+     sequence and misalign nested rows against the header (WR-02). */
+  padding-left: 64px;
   border-bottom: 1px solid var(--divider);
   font-size: var(--fs-sm);
 }
@@ -153,6 +157,9 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* Tree indent rides the grid ITEM (margin-left), not the container — the
+     meta cells stay pinned to their tracks at any nesting depth (WR-02). */
+  margin-left: var(--ind, 0px);
 }
 .subrow > .subhead .s {
   flex: 1;
@@ -176,6 +183,13 @@
   width: 1px;
   height: 1px;
   opacity: 0;
+}
+/* Phase 71 (D-71-2, WR-01): the hidden checkbox must not swallow the keyboard
+   focus indicator — surface a visible ring on the chip when the checkbox has
+   focus (WCAG 2.4.7). */
+.subrow .c-status .stchip:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 /* Phase 71 (D-71-4, ADR-4): the inherited priority pill renders dimmed —
    the dimming IS the inheritance signal (no tooltip key added). */
