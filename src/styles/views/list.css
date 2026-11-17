@@ -128,16 +128,39 @@
   background: var(--sunken);
 }
 .subrow {
-  display: flex;
+  /* Phase 71 (D-71-1, ADR-2): the row joins the parent's grid — taskRow
+     forwards the ACTUAL template string onto --cols, so cells align under
+     whatever tracks the parent shows on every call site. */
+  display: grid;
+  grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr) 126px 150px 108px 104px 168px 40px);
   align-items: center;
   gap: 8px;
-  height: 32px;
+  height: auto;
+  min-height: 32px;
   /* Tree indent rides --ind (set inline by the renderer) ON TOP of the base —
      an inline padding-left would REPLACE the 64px base and pull children left
      of their parent. */
   padding-left: calc(64px + var(--ind, 0px));
   border-bottom: 1px solid var(--divider);
   font-size: var(--fs-sm);
+}
+/* Phase 71 (ADR-5): in columns mode the renderer wraps the head content
+   (caret + toggle + title) in one .subhead item spanning the three leading
+   tracks, so the 4 meta cells land on the tracks after the title track. */
+.subrow > .subhead {
+  grid-column: 1 / 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.subrow > .subhead .s {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .subrow.done span {
   color: var(--text-3);

@@ -80,7 +80,7 @@ export function taskRow(t, cols, tpl, opt = {}) {
     ${cols.map(c => `<div class="c-meta c-${c === 'labels' ? 'lbl' : c}">${CELL[c](t)}</div>`).join('')}
     <div class="c-more"><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="task" data-id="${t.id}" aria-label="${tMsg('a11y.moreActions')}">${ic('ellipsis', 15)}</button></div>
   </div>
-  ${open ? `<div class="subrows">${treeChecklist.fn ? treeChecklist.fn(t, { compact: true, rowClass: 'subrow' }) : ''}</div>` : ''}`;
+  ${open ? `<div class="subrows" style="--cols:${tpl}">${treeChecklist.fn ? treeChecklist.fn(t, { compact: true, rowClass: 'subrow', columns: true }) : ''}</div>` : ''}`;
 }
 export function listHtml(groups, key, opt = {}) {
   const cols = opt.cols || ['status', 'assignee', 'priority', 'due', 'labels'];
