@@ -243,6 +243,11 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
             archived: !!t.archived,
             parent: parentRowId,
             depth,
+            /* Phase 70 (D-70-1): child rows carry the parent task's order —
+               the same value the parent row holds — so Board cards sort
+               "order then dotted key" with children following their parent
+               (dotted-key codepoint order IS DFS order within a parent). */
+            order: t.order ?? 0,
           });
           emit(s.id, key, depth === 0 ? t.id : (s.id ?? `${t.id}${key}`), depth + 1);
         });
@@ -366,9 +371,15 @@ export function buildExportModel(doc, projectId, opts = {}, deps = {}) {
   };
 
   /* ---- BOARD (R7): five lanes in the locked STATUS_IDS order. An empty
-     lane still exists with count 0. Cards sort by order then key. */
+     lane still exists with count 0. Cards sort by order then key.
+     Phase 70 (D-70-1): the lanes include child rows as FLAT cards —
+     each subtask lands in the lane of its own status (done/todo per the
+     model contract, D-70-2) carrying its dotted key and own fields, and
+     lane counts include parents + children. Cards are distinguished by
+     dotted key, NEVER by row id (depth-0 child rows share the task's id
+     — the CR-01 landmine). Nothing is keyed off row.id here. */
   const boardLanes = STATUS_IDS.map(id => {
-    const cards = topRows
+    const cards = rows
       .filter(r => r.statusId === id)
       .sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)) || plainCmp(String(a.key), String(b.key)))
       .map(r => ({

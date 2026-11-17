@@ -421,6 +421,55 @@ test('board lanes are exactly the five ids in order, counts match, cards sort by
     assert.equal(lane.count, lane.cards.length);
     assert.equal(lane.label, 'T:task.status.' + lane.id);
   }
+  /* Phase 70 (D-70-1): with a subtasked fixture the counts include the
+     child cards, and a parent is followed by its own children in
+     dotted-key (DFS) order within the order-tiebreak group. */
+  const doc = makeDoc();
+  doc.tasks.find(t => t.id === 't_a5').subtasks = [
+    { title: 'Child A', done: true },
+    { title: 'Child B', done: true },
+  ];
+  const sub = buildExportModel(doc, 'p_alpha', { scope: 'all', options: { subtasks: true } }, prefixedDeps());
+  const doneLane = sub.board.lanes.find(l => l.id === 'done');
+  assert.deepEqual(
+    doneLane.cards.map(c => c.key),
+    ['ALPHA-3', 'ALPHA-3.1', 'ALPHA-3.2', 'ALPHA-6', 'ALPHA-9.1', 'ALPHA-13.1.1'],
+    'done lane: parent ALPHA-3 (order 50) then its dotted-key children, then ALPHA-6 (60), then the other subtasked parents\' done children in order-key order (9 then 13)',
+  );
+  for (const lane of sub.board.lanes) {
+    const expected = sub.rows.filter(r => r.statusId === lane.id).length;
+    assert.equal(lane.count, expected, `lane ${lane.id} counts parents + children`);
+    assert.equal(lane.count, lane.cards.length);
+  }
+});
+
+test('Phase 70: board child cards are flat cards keyed by dotted key carrying their OWN fields (D-70-1, D-70-2)', () => {
+  const m = build(makeDoc(), 'p_alpha', { scope: 'all', options: { subtasks: true } });
+  /* t_a9 fixture: 'Child one' done → done lane, 'Child two' todo → todo
+     lane, while the parent 'Subtasked task' stays in progress (D-70-2:
+     done/todo per the child's own flag, no parent-status inheritance). */
+  const doneLane = m.board.lanes.find(l => l.id === 'done');
+  const todoLane = m.board.lanes.find(l => l.id === 'todo');
+  const progressLane = m.board.lanes.find(l => l.id === 'progress');
+  const childOne = doneLane.cards.find(c => c.key === 'ALPHA-9.1');
+  const childTwo = todoLane.cards.find(c => c.key === 'ALPHA-9.2');
+  assert.ok(childOne && childTwo, 'each subtask is its own flat card in the lane of its status');
+  assert.equal(childOne.title, 'Child one');
+  assert.equal(childTwo.title, 'Child two');
+  assert.equal(progressLane.cards.some(c => c.key === 'ALPHA-9'), true, 'the parent card stays in its own lane');
+  /* D-55-5 pin companion: child cards carry the child's OWN assignee fields. */
+  assert.equal(childOne.assigneeName, 'export.unassigned');
+  assert.equal(childTwo.assigneeName, 'export.unassigned');
+  assert.equal(childOne.progress, 100);
+  assert.equal(childTwo.progress, 0);
+  /* The children inherit the top-level task's due (model.js:227 contract). */
+  assert.equal(childOne.due, '2026-01-14');
+  /* Regression guard on the SAME model: kpis/charts stay child-free (D-54-10). */
+  assert.equal(m.kpis.total, topRows(m).length, 'kpis tally top rows only');
+  const statusTally = STATUS_IDS.map(id => topRows(m).filter(r => r.statusId === id).length);
+  assert.deepEqual(m.charts.status.counts, statusTally, 'the status chart tallies top rows only');
+  const memberTotal = m.members.reduce((s, e) => s + e.total, 0);
+  assert.equal(memberTotal, topRows(m).length, 'member totals never include child rows');
 });
 
 test('an empty lane still renders: count 0 and an empty cards array (R7 empty)', () => {
