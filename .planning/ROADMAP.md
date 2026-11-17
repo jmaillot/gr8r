@@ -67,4 +67,4 @@ _(empty — Phase 999.1 (Test 11) promoted to Phase 69, the v2.6 milestone core.
 **Plans:** 1 plan
 
 Plans:
-- [ ] 70-01-PLAN.md — model/gantt/writer subtask lift + test pins
+- [x] 70-01-PLAN.md — model/gantt/writer subtask lift + test pins
