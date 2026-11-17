@@ -248,7 +248,20 @@ test('the columns branch emits the four meta cells (D-71-1)', () => {
   assert.ok(!columnsBranch.includes('data-a'), 'the meta cells must not carry action attributes');
   /* the List forwards the parent grid template onto the subrows container */
   assert.ok(LIST_SRC.includes('<div class="subrows" style="--cols:${tpl}">'), 'the subrows container does not receive --cols');
-  assert.ok(LIST_SRC.includes("rowClass: 'subrow', columns: true"), 'the List opt does not enable columns');
+  assert.ok(LIST_SRC.includes("rowClass: 'subrow', columns: cols"), 'the List does not forward the call-site cols to the renderer');
+});
+
+test('the meta cells follow the call site\u2019s column order, not a hardcoded sequence (CR-01 71-REVIEW)', () => {
+  /* my-tasks.js reorders to ['project','status','priority','due'] — the
+     renderer must map one cell per FORWARDED column so the cells land on
+     the parent's own tracks, never a hardcoded status→assignee→priority→due
+     sequence. */
+  assert.ok(LIST_SRC.includes("rowClass: 'subrow', columns: cols"), 'the List does not forward the call-site cols to the renderer');
+  assert.ok(columnsBranch.includes('opt.columns'), 'the columns branch does not consume the forwarded cols');
+  assert.ok(columnsBranch.includes('.map(c =>'), 'the columns branch does not map one cell per forwarded column');
+  /* a column the renderer does not model (project, labels) emits an empty
+     placeholder div so the supported cells keep their parent tracks */
+  assert.ok(columnsBranch.includes('`<div class="c-meta"></div>`'), 'unsupported columns do not emit an alignment placeholder');
 });
 
 test('the toggleSub contract survives the columns branch (D-71-2, T-71-01 XSS)', () => {

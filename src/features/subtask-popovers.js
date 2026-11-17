@@ -60,21 +60,33 @@ export function subTreeChecklistHtml(task0, opt = {}) {
           (opt.compact
             ? ''
             : `${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}${st ? `<span class="due"${s.start ? '' : ` data-tip="${esc(t('page.subtask.inheritedStart'))}"`}>${ic('calendar-arrow-up', 12)}${relDate(st)}</span>` : ''}${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : ''}<button class="ibtn ibtn-xs x" data-a="openSub" data-id="${tid}" data-sid="${sid}" aria-label="${t('a11y.openSubtaskDetails')}" tabindex="-1">${ic('chevron-right', 14)}</button>`);
-        /* Phase 71 (D-71-6/ADR-1): opt-in columns mode — the List view subrows
-           join the parent's grid template (tpl forwarded by task-list onto
-           --cols) and each row appends 4 display cells after the head. The
-           board card popover keeps { compact: true } with NO columns opt, so
-           its output shape is untouched (ADR-1). Cells are non-clickable
-           divs — no pop action attributes (D-71-7); assignees are the
+        /* Phase 71 (D-71-6/ADR-1; CR-01 71-REVIEW): opt-in columns mode — the
+           List view subrows join the parent's grid template (tpl forwarded by
+           task-list onto --cols) and the row appends ONE display cell per
+           forwarded parent column, in the parent's OWN order (task-list now
+           passes the call-site cols array, not a flag — the My Tasks call site
+           reorders to project→status→priority→due, so a hardcoded
+           status→assignee→priority→due sequence lands cells on the wrong
+           tracks). A column the subtask renderer does not model (project,
+           labels) emits an empty placeholder div so the supported cells stay
+           pinned to their tracks. The board card popover keeps
+           { compact: true } with NO columns opt, so its output shape is
+           untouched (ADR-1). Cells are non-clickable divs — no pop action
+           attributes (D-71-7); assignees are the
            subtask's OWN
            (D-71-3); priority inherits the parent's (D-71-4); due reuses the
            non-compact expression verbatim — inherited tooltip + .over
            (D-71-5). */
         const meta = opt.columns
-          ? `<div class="c-meta c-status"><label class="stchip">${toggle}${stPill(s.done ? 'done' : 'todo')}</label></div>` +
-            `<div class="c-meta c-assignee">${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : `<span class="faint">${t('common.unassigned')}</span>`}</div>` +
-            `<div class="c-meta c-priority inh">${prPill(task0.priority)}</div>` +
-            `<div class="c-meta c-due">${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}</div>`
+          ? opt.columns
+              .map(c => {
+                if (c === 'status') return `<div class="c-meta c-status"><label class="stchip">${toggle}${stPill(s.done ? 'done' : 'todo')}</label></div>`;
+                if (c === 'assignee') return `<div class="c-meta c-assignee">${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : `<span class="faint">${t('common.unassigned')}</span>`}</div>`;
+                if (c === 'priority') return `<div class="c-meta c-priority inh">${prPill(task0.priority)}</div>`;
+                if (c === 'due') return `<div class="c-meta c-due">${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}</div>`;
+                return `<div class="c-meta"></div>`;
+              })
+              .join('')
           : '';
         return (
           `<div class="${cls} ${s.done ? 'done' : ''}${fx('added', sid)}${fx('done', sid)}" data-ctx="sub" data-id="${tid}" data-sid="${sid}" style="${indent}">${opt.columns ? `<div class="subhead">${head}</div>` : head}${meta}</div>` +
