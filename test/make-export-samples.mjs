@@ -12,6 +12,7 @@
    ===================================================================== */
 import fs from 'node:fs';
 import path from 'node:path';
+import assert from 'node:assert/strict';
 
 import { buildWorkbook } from '../export/xlsx.js';
 import { buildMspdi } from '../export/mspdi.js';
@@ -42,6 +43,15 @@ for (const locale of ['en', 'fr']) {
   const model = buildExportModel(makeDoc(), 'p_alpha', { scope: 'all', options: opts }, deps(locale));
   if (!model) throw new Error('the fixture project vanished — check test/fixtures/export-fixtures.mjs');
 
+  /* 69-02 self-check: a silently flat sample set would waste the owner's
+     UAT session, so the generator fails loudly (exit non-zero) unless the
+     model actually carries the 3-level tree (a 3-segment dotted key) and
+     the MSPDI serializes OutlineLevel 2 for the nested level. */
+  assert.ok(
+    model.rows.some(r => /\.\d+\.\d+$/.test(r.key)),
+    `no 3-segment dotted key in the ${locale} model rows — the 3-level tree flattened`,
+  );
+
   /* The workbook writer is async (cooperative yields); it fails loudly
      here rather than writing an empty file. */
   const workbook = await buildWorkbook(model);
@@ -49,6 +59,10 @@ for (const locale of ['en', 'fr']) {
   fs.writeFileSync(xlsxPath, workbook);
 
   const xml = buildMspdi(model);
+  assert.ok(
+    xml.includes('<OutlineLevel>2</OutlineLevel>'),
+    `no OutlineLevel 2 in the ${locale} MSPDI — the nested level is missing from the XML`,
+  );
   const xmlPath = path.join(OUT_DIR, `project-${locale}.xml`);
   fs.writeFileSync(xmlPath, xml, 'utf8');
 
