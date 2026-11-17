@@ -1,0 +1,20 @@
+﻿Key;Title;Status;Priority;Assignees;Start;Due;Progress;Labels;Estimate;Description;Comments;Latest comment;Thread
+ALPHA-1;Todo task;To Do;Urgent;Léa Lead;;;5;;4h;;0;;
+ALPHA-2;In progress task;In Progress;High;Pat Plain;2026-01-10;2026-02-01;45;Backend;1d;;1;Guest question;"Gus Guest, 2023-11-14, Guest question"
+ALPHA-4;Backlog idea;Backlog;Low;Pat Plain;;;0;Design;2d;;0;;
+ALPHA-5;Review task;Review;Medium;Léa Lead;;;80;;;;0;;
+ALPHA-3;Done task;Done;Medium;Pat Plain;;;100;;3h;;2;"Second, latest note";"Léa Lead, 2023-11-14, Second, latest note
+Pat Plain, 2023-11-14, First note"
+ALPHA-6;Second done task;Done;No priority;Unassigned;;;100;;;;0;;
+ALPHA-8;Overdue task;To Do;High;Pat Plain;;2026-01-01;5;;;;0;;
+ALPHA-9;Subtasked task;In Progress;Medium;Léa Lead;2026-01-06;2026-01-14;45;;;;0;;
+ALPHA-9.1;Child one;Done;No priority;Unassigned;2026-01-06;2026-01-14;100;;;Child one;0;;
+ALPHA-9.2;Child two;To Do;No priority;Unassigned;2026-01-06;2026-01-14;0;;;Child two;0;;
+ALPHA-10;'=1+1;To Do;No priority;Unassigned;;;5;;;;0;;
+ALPHA-11;A & <B>;To Do;No priority;Unassigned;;;5;;;;0;;
+ALPHA-12;Données — naïve café 日本語;To Do;No priority;Unassigned;;;5;;;Bonjour & naïve café 日本語;0;;
+ALPHA-13;Deep tree task;In Progress;Medium;Pat Plain;2026-01-12;2026-02-20;33;;;Owner note for the 3-level UAT samples;0;;
+ALPHA-13.1;Sub A;To Do;No priority;Unassigned;2026-01-12;2026-02-20;0;;;Sub A;0;;
+ALPHA-13.1.1;Sub A.1 (deepest);Done;No priority;Unassigned;2026-01-12;2026-02-20;100;;;Sub A.1 (deepest);0;;
+ALPHA-13.1.2;Sub A.2;To Do;No priority;Unassigned;2026-01-12;2026-02-20;0;;;Sub A.2;0;;
+ALPHA-13.2;Sub B;To Do;No priority;Unassigned;2026-01-12;2026-02-20;0;;;Sub B;0;;
