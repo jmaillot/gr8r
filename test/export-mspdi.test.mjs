@@ -184,15 +184,14 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
     const slice = taskSlice(subXml, name);
-    /* Test 11 round 2 (owner 2026-11-17, re-UAT still zero): the canonical
-       ORDER fix was not the cause — MS Project zeroes the MANUAL schedule
-       of any OutlineLevel row. Subtask rows are therefore AUTO-scheduled
-       (Manual=0, no Manual* block): Type=1 fixed duration + Start +
-       Duration + the SNET pin — the pattern that already fixed top-level
-       rows. Duration must survive on the child row. */
-    assert.ok(slice.includes('<Manual>0</Manual>'), `${name} is auto-scheduled (manual subtasks zero out on import)`);
-    assert.ok(!slice.includes('<ManualStart>'), `${name} carries no Manual* block`);
+    /* Test 11 round 4: back to Manual=1 with Manual* dates (canonical
+       shape from a real Project 2016 export — Manual subtasks under a
+       manual summary), order and trio pins unchanged. */
+    assert.ok(slice.includes('<Manual>1</Manual>'), `${name} is manually scheduled (canonical real-export shape)`);
+    assert.ok(slice.includes('<ManualStart>2026-03-04T08:00:00</ManualStart>'), `${name} pins ManualStart to the inherited start`);
+    assert.ok(slice.includes('<ManualFinish>2026-03-10T17:00:00</ManualFinish>'), `${name} pins ManualFinish to the inherited due`);
     assert.ok(!/<Duration>PT0H0M0S<\/Duration>/.test(slice), `${name} keeps a non-zero Duration (the parent's working-day span)`);
+    assert.ok(slice.includes('<PercentComplete>'), `${name} always carries PercentComplete (real-export shape)`);
     /* Canonical trio WBS + OutlineNumber + OutlineLevel, all before Start */
     const typeAt = slice.indexOf('<Type>');
     const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');

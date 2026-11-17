@@ -266,15 +266,13 @@ export function buildMspdi(model) {
     const start = formatDateTime(startISO, '08:00:00');
     const finish = formatDateTime(finishISO, '17:00:00');
     const duration = isoDuration(minutes);
-    /* Test 11 round 3 (owner 2026-11-17 re-UAT #2): on auto-scheduled
-       OutlineLevel rows, an EXPLICIT PercentComplete=0 makes Project
-       re-derive the task from zero (duration 0, finish=start) while
-       PercentComplete=100 rows keep their duration — owner table 100%
-       correlated with done. Omit the element when 0 (optional in the
-       XSD); Project then defaults it without rescheduling. */
+    /* Test 11 round 4: PercentComplete is emitted ALWAYS again (real
+       Project exports include it on every task; R2 showed explicit 0
+       behaves like absent when the row is auto, but manual rows carried
+       explicit PC in every round-trip that ever worked — 54-05 and this
+       phase's parents). Round 3's omit-when-0 special case is dropped. */
     const percent = Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)));
-    const isTopLevel = typeof row.depth !== 'number';
-    const percentXml = percent > 0 || isTopLevel ? `<PercentComplete>${percent}</PercentComplete>` : '';
+    const percentXml = `<PercentComplete>${percent}</PercentComplete>`;
 
     /* One finish-to-start link per dependency that resolves to an
        exported UID; an unresolved dep emits nothing (Pitfall 11). */
@@ -323,18 +321,18 @@ export function buildMspdi(model) {
        NOT fix the zeroed subtask durations — MS Project zeroes the MANUAL
        schedule of any OutlineLevel row while honoring top-level manual
        rows. Child rows therefore go AUTO-scheduled: Manual=0, no Manual*
-    /* Test 11 round 2 (owner 2026-11-17 re-UAT): the canonical order did
-       NOT fix the zeroed subtask durations — MS Project zeroes the MANUAL
-       schedule of any OutlineLevel row while honoring top-level manual
-       rows. Child rows therefore go AUTO-scheduled: Manual=0, no Manual*
-       block; Type=1 (fixed duration) + Start + Duration + the SNET pin
-       make Project place the task at its inherited start and derive
-       Finish = Start + Duration = the parent's due (the owner's rule).
-       Top-level rows KEEP the manual schedule, which the real Project
-       round-trip honors (Phase 54-05 + this phase's parents). */
+    /* Test 11 round 4 (owner 2026-11-17): rounds 2-3 (auto-scheduled
+       subtasks, PC omitted at 0) did NOT fix the zeroed children — the
+       only surviving differentiator is PercentComplete=100 (done rows
+       survive, everything else zeroes). Re-reading the evidence: R1's
+       failure is fully explained by the four canonical-order violations;
+       canonical order + MANUAL subtasks was never tested. A real Project
+       2016 export (MPXJ ground truth) ships its subtasks Manual=1 under
+       a manual summary — that IS the canonical shape. Subtasks go back
+       to manual with their Manual* dates; top-level rows unchanged. */
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
-    const manualFlag = dated && isTopLevel ? `<Manual>1</Manual>` : '<Manual>0</Manual>';
-    const manualDates = dated && isTopLevel
+    const manualFlag = dated ? `<Manual>1</Manual>` : '<Manual>0</Manual>';
+    const manualDates = dated
       ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration>`
       : '';
 
