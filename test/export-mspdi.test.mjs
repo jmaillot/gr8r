@@ -515,3 +515,80 @@ test('65-05: OutlineLevel follows row depth; a nested subtask parent is a Summar
   assert.ok(nested.includes('<Summary>0</Summary>'), 'a leaf subtask is not');
   assert.ok(two.includes('<Summary>0</Summary>'), 'a childless subtask is not');
 });
+
+/* =====================================================================
+   Phase 69 (69-01 Task 2): the 3-level fixture tree on the SERIALIZED
+   XML — OutlineLevel 1/2, positional Summary walk, DFS order, escaping.
+   Assertions target buildMspdi output only (never the model). Add-only
+   (NFR-03), zero new deps (NFR-01).
+   ===================================================================== */
+const subXml69 = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true, descriptions: true }));
+const taskRows69 = [...subXml69.slice(subXml69.indexOf('<Tasks>') + 7, subXml69.indexOf('</Tasks>')).matchAll(/<Task>([\s\S]*?)<\/Task>/g)].map(m => m[1]);
+const level69 = row => {
+  /* DEVIATION (Rule 1): RESEARCH Pattern 2 says "default 1 when absent",
+     but the writer (export/mspdi.js:214-219) computes Summary adjacency on
+     the MODEL depth where a top-level row is -1 and OutlineLevel rides
+     depth+1 — so absent OutlineLevel maps to depth -1, not 1. Top-level
+     task rows with children (t_x3) are Summary 1 even though their first
+     child serializes OutlineLevel 1; the faithful walk reproduces the
+     writer's arithmetic, not the research sketch. */
+  const m = /<OutlineLevel>(\d+)<\/OutlineLevel>/.exec(row);
+  return m ? Number(m[1]) - 1 : -1;
+};
+const summary69 = row => {
+  const m = /<Summary>(\d)<\/Summary>/.exec(row);
+  assert.ok(m, 'every task row emits a Summary element');
+  return Number(m[1]);
+};
+const titles69 = taskRows69.map(row => /<Name>([^<]*)<\/Name>/.exec(row)[1]);
+const slice69 = name => taskRows69[titles69.indexOf(name)];
+
+test('69-01: OutlineLevel = depth+1 at every level of the 3-level tree; the top row emits none', () => {
+  assert.ok(slice69('Deep tree task') !== undefined, 'the t_x13 row exists');
+  assert.ok(!slice69('Deep tree task').includes('<OutlineLevel>'), 'the top-level t_x13 row emits no OutlineLevel (Project default 1)');
+  for (const name of ['Sub A', 'Sub B']) {
+    assert.ok(slice69(name).includes('<OutlineLevel>1</OutlineLevel>'), `${name}: depth-0 row OutlineLevel 1`);
+  }
+  for (const name of ['Sub A.1 (deepest)', 'Sub A.2']) {
+    assert.ok(slice69(name).includes('<OutlineLevel>2</OutlineLevel>'), `${name}: depth-1 row OutlineLevel 2`);
+  }
+  /* Positional pin (D-69-4, D-69-9): the writer emits Type→OutlineLevel→Start
+     — asserted as-is, NOT pre-fixed toward canonical order. */
+  for (const name of ['Sub A', 'Sub A.1 (deepest)', 'Sub A.2', 'Sub B']) {
+    const row = slice69(name);
+    const typeAt = row.indexOf('<Type>1</Type>');
+    const olAt = row.indexOf('<OutlineLevel>');
+    const startAt = row.indexOf('<Start>');
+    assert.ok(olAt === typeAt + '<Type>1</Type>'.length && olAt < startAt, `${name}: OutlineLevel sits directly after Type, before Start`);
+  }
+});
+
+test('69-01: positional Summary re-derivation walk generalizes to any depth (no upward level skip)', () => {
+  assert.ok(taskRows69.length > 0, 'the Tasks block holds rows');
+  for (let i = 0; i < taskRows69.length; i++) {
+    const level = level69(taskRows69[i]);
+    if (i > 0) {
+      assert.ok(level <= level69(taskRows69[i - 1]) + 1, `row ${i} (${titles69[i]}): no upward level skip`);
+    }
+    const nextLevel = i + 1 < taskRows69.length ? level69(taskRows69[i + 1]) : null;
+    const expected = nextLevel === level + 1 ? 1 : 0;
+    assert.equal(summary69(taskRows69[i]), expected, `row ${i} (${titles69[i]}): Summary ${expected} by positional adjacency (level ${level}, next ${nextLevel})`);
+  }
+  /* The 3-level shape specifically: Sub A (parent of A.1) is a Summary,
+     its leaf siblings are not, and the t_x13 parent row is a Summary. */
+  assert.equal(summary69(slice69('Deep tree task')), 1, 't_x13 is a Summary (Sub A follows at level 2)');
+  assert.equal(summary69(slice69('Sub A')), 1, 'Sub A is a Summary (Sub A.1 follows at level 2)');
+  assert.equal(summary69(slice69('Sub A.1 (deepest)')), 0);
+  assert.equal(summary69(slice69('Sub A.2')), 0);
+  assert.equal(summary69(slice69('Sub B')), 0, 'Sub B is the last row, nothing follows it');
+});
+
+test('69-01: DFS order and the notes channel on the serialized 3-level XML', () => {
+  const order = ['Deep tree task', 'Sub A', 'Sub A.1 (deepest)', 'Sub A.2', 'Sub B'].map(t => titles69.indexOf(t));
+  assert.ok(order.every(i => i !== -1), 'all 3-level rows exist in the Tasks block');
+  for (let i = 1; i < order.length; i++) assert.ok(order[i - 1] < order[i], 'DFS order: t_x13 before Sub A before A.1, A.2, then Sub B');
+  /* Notes channel (descriptions:true): the desc round-trips through the
+     model's plainText and the writer's escapeXml — plain text survives verbatim. */
+  const notes = /<Notes>([\s\S]*?)<\/Notes>/.exec(slice69('Deep tree task'));
+  assert.ok(notes && notes[1].includes('Owner note for the 3-level UAT'), 'the t_x13 desc reaches Notes escaped');
+});
