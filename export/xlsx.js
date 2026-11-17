@@ -101,9 +101,14 @@ const GANTT_TODAY_FILL = 'FEF3C7';
 const GANTT_TODAY_HEADER_FILL = 'FDE68A';
 /* Drawing row offsets: the predecessor end sits low in its row, the
    successor start sits high in its own row, so a clamped connector
-   still reads as a vertical step down across rows (D-54-6). */
-const LINK_ROW_OFF_PRED = 700000;
-const LINK_ROW_OFF_SUCC = 300000;
+   still reads as a vertical step down across rows (D-54-6).
+   G-2 (owner 2026-11-17): Timeline data rows are the sheet default
+   height, 15pt = 190500 EMU — offsets must stay WITHIN the row or
+   Excel shows a repair prompt ("Repaired Records: Drawing shape").
+   150000 ≈ 11.8pt (near bottom), 40000 ≈ 3.1pt (near top); the guard
+   test pins both against the 190500 EMU ceiling (G-2). */
+const LINK_ROW_OFF_PRED = 150000;
+const LINK_ROW_OFF_SUCC = 40000;
 /* Line width 1pt in EMU. */
 const LINK_WIDTH_EMU = 12700;
 

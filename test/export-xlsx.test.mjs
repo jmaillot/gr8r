@@ -753,8 +753,8 @@ test('Timeline connectors: predecessor finish to successor start, clamped so non
   assert.equal(normal.prst, 'bentConnector3');
   assert.equal(normal.widthEmu, 12700);
   assert.equal(normal.tailEnd, 'triangle');
-  assert.equal(normal.from.rowOff, 700000, 'the predecessor end sits low in its drawing row');
-  assert.equal(normal.to.rowOff, 300000, 'the successor end sits high in its drawing row');
+  assert.equal(normal.from.rowOff, 150000, 'the predecessor end sits low in its drawing row (within the 190500 EMU row height — G-2)');
+  assert.equal(normal.to.rowOff, 40000, 'the successor end sits high in its drawing row (within the 190500 EMU row height — G-2)');
 
   const equalDay = links.find(l => l.from.col === 22);
   assert.ok(equalDay, 'the equal-day pair (predDue = succStart = 03-20) survives');
@@ -763,6 +763,16 @@ test('Timeline connectors: predecessor finish to successor start, clamped so non
 
   for (const link of links) {
     assert.ok(link.to.col >= link.from.col, `connector ${link.name} never points leftward`);
+  }
+});
+
+test('G-2: every Timeline drawing rowOff stays within the default row height (Excel repair guard)', async () => {
+  const { drawing } = await timelineParts(makeDailyGanttDoc());
+  const MAX = 190500; // 15pt sheet defaultRowHeight in EMU
+  for (const a of anchors(drawing)) {
+    assert.ok(a.from.rowOff <= MAX, `${a.name}: from rowOff ${a.from.rowOff} fits the row`);
+    assert.ok(a.to.rowOff <= MAX, `${a.name}: to rowOff ${a.to.rowOff} fits the row`);
+    assert.ok(a.from.rowOff >= 0 && a.to.rowOff >= 0, `${a.name}: no negative rowOff`);
   }
 });
 
