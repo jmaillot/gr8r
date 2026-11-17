@@ -19,7 +19,7 @@
   2. Owner UAT per `.planning/research/VERIFICATION.md`: the owner imports each export of the 3-level fixture into real MS Project — MSPDI via XML Import Wizard "as new project" (primary verdict), xlsx via Excel paste (flat expected, recorded as such), CSV via import wizard (flat expected, recorded as such) — with evidence captured (wizard/repair dialogs verbatim, 3-level Gantt screenshot).
   3. Verdict (pass/fail per format) recorded in the phase verification doc; item A1 checked off and Phase 999.1 backlog entry closed.
   4. **Conditional (in-phase, only if UAT fails):** any MSPDI import defect (or repair dialog) is fixed within this milestone and re-verified through criteria 1+2 before closure — while staying in scope (no new export formats, no CSV/xlsx hierarchy enrichment, no incoming-import feature, no round-trip automation; NFR-03: existing 2-level export behavior unchanged).
-**Plans**: TBD
+**Plans**: 3 — 69-01 (automated 3-level pre-screen), 69-02 (owner UAT evidence), 69-03 (verdict/A1 closure; conditional fix wave per D-69-9)
 
 <details>
 <summary>✅ v2.5 Template Polish & Import (quick work 67-05/06/07) — SHIPPED 2026-11-16</summary>
