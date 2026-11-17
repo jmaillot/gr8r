@@ -12,7 +12,7 @@ updated: 2026-11-17T01:30:00Z
 number: 0
 name: (session complete)
 expected: |
-  G-1 fix shipped (70-02), G-2 fixed (c63017a). Owner re-test pending on real exports.
+  G-1 (70-02), G-2 (c63017a), G-3 (70-03) all shipped. Owner re-test pending on real exports.
 awaiting: none
 
 ## Tests
@@ -60,7 +60,7 @@ skipped: 0
 - **Not a Phase 70 regression:** the Board never had a start column — Phase 54 design (`headers.board` = lane/count/key/title/assignees/priority/due/progress, cards in C..H).
 - **Fix scope:** model.js — `headers.board` gains 'start' before 'due', card projection gains `start: r.start`; export/xlsx.js — Board cards write start (real date, SHORT_DATE_CODE) shifting due→H, progress→I. WIDTHS.start already exists; i18n `export.col.start` exists in EN+FR already.
 - **Pins to update:** test/export-xlsx.test.mjs :450 (card fields), :498-512 (due column G→H), :515-528 (progress H→I), :962 (child cards).
-- **Status:** fix plan pending (gap closure 70-03).
+- **Status:** ✅ FIXED — commits `6f118f6` (RED pins) + `bb51726` (fix, 70-03 gap closure, TDD): model headers.board gains 'start' + card projection `start: r.start`; writer cards C..I (start@G real date SHORT_DATE_CODE, due→H, progress→I); initSheet keys mirror. 2 minor deviations documented in 70-03-SUMMARY.md (walker ISO-date skip extended to start; initSheet keys). Tests 1726/1739 grow-only, lint 15, chunk 499.94 kB, frozen files byte-identical, G-1/G-2 preserved. **Owner re-test pending.**
 
 ### G-2 — Excel repair prompt on open (owner, 2026-11-17) — BLOCKER
 - **Symptom:** « Désolé… Nous avons trouvé un problème dans le contenu de ".xlsx"… récupérer le maximum de contenu ». Content correct after repair, but the file is not clean OOXML.
