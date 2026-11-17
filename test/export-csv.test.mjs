@@ -134,3 +134,21 @@ test('65-05: nested rows appear in model order with per-level keys on the CSV (S
   assert.ok(nestedRow === rootRow + 1, 'the nested row directly follows its parent in model order');
   assert.ok(lines[nestedRow].includes('Nested child'), 'the nested row carries its own title');
 });
+
+/* =====================================================================
+   Phase 69 (69-01 Task 3): the 3-level fixture tree on the CSV — flat
+   DFS rows, dotted keys, NO outline column (flat by design, scope
+   guards: recorded as-is, no enrichment). Add-only (NFR-03).
+   ===================================================================== */
+import { makeMspdiDoc } from './fixtures/export-fixtures.mjs';
+
+test('69-01: the 3-level tree exports flat DFS rows with dotted keys and no outline column (CSV)', () => {
+  const m = buildExportModel(makeMspdiDoc(), 'p_msp', { scope: 'all', options: { subtasks: true, descriptions: true } }, { translate: k => k, labelName: id => id, now: NOW });
+  const lines = parseLines(toCsv(m));
+  const rowOf = key => lines.findIndex(l => l.startsWith(key + ';'));
+  const order = ['MSP-13', 'MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2'].map(rowOf);
+  assert.ok(order.every(i => i > 0), 'all 3-level rows are present');
+  for (let i = 1; i < order.length; i++) assert.ok(order[i - 1] < order[i], 'DFS order: t_x13, Sub A, Sub A.1, Sub A.2, Sub B');
+  assert.ok(lines[order[2]].includes('Sub A.1 (deepest)'), 'the deepest row carries its own title');
+  assert.ok(!/outline|level/i.test(lines[0]), 'the CSV header carries no outline/level column (flat by design)');
+});

@@ -893,3 +893,35 @@ test('65-05: nested rows render on the Tasks sheet in model order (SUB-04)', asy
   assert.ok(nestedRow === rootRow + 1, 'the nested row directly follows its parent in model order');
   assert.equal(values.get(`B${nestedRow}`), 'Nested child', 'the nested row carries its own title');
 });
+
+/* =====================================================================
+   Phase 69 (69-01 Task 3): the 3-level fixture tree on the Tasks sheet
+   — DFS order, dotted keys, and the PINNED CURRENT fixed-1 indent
+   (depth-blind per export/xlsx.js:336; no depth channel — deferred by
+   the scope guards). Verified via unzip (never the @office-kit reader).
+   Add-only (NFR-03), zero new deps (NFR-01).
+   ===================================================================== */
+import { makeMspdiDoc } from './fixtures/export-fixtures.mjs';
+
+test('69-01: the 3-level tree renders on the Tasks sheet in DFS order with dotted keys and the pinned fixed-1 indent', async () => {
+  const model69 = buildExportModel(makeMspdiDoc(), 'p_msp', { scope: 'all', options: { subtasks: true, descriptions: true } }, { translate: k => k, labelName: id => id, now: NOW });
+  const { parts } = await buildZip(model69);
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const sheetXml = parts.get('xl/worksheets/sheet2.xml');
+  const values = sheetValues(sheetXml, shared);
+  const rowOf = v => Number([...values.entries()].find(([, x]) => x === v)?.[0]?.slice(1));
+  const titles = ['Deep tree task', 'Sub A', 'Sub A.1 (deepest)', 'Sub A.2', 'Sub B'];
+  const rows = titles.map(rowOf);
+  assert.ok(rows.every(n => n > 0), 'all 3-level rows render on the Tasks sheet');
+  for (let i = 1; i < rows.length; i++) assert.ok(rows[i - 1] < rows[i], `DFS order: ${titles[i - 1]} precedes ${titles[i]}`);
+  /* Dotted keys land in the key column (A) of the child rows. */
+  const keys = ['MSP-13.1', 'MSP-13.1.1', 'MSP-13.1.2', 'MSP-13.2'];
+  keys.forEach((key, i) => assert.equal(values.get('A' + rows[i + 1]), key, `row ${titles[i + 1]} carries dotted key ${key}`));
+  /* PINNED CURRENT SHAPE: every child row's title cell (B) uses the fixed
+     1-level indent — depth-blind today, asserted as-is, NOT enriched. */
+  const xfs = cellXfs(parts.get('xl/styles.xml'));
+  for (const r of rows.slice(1)) {
+    const s = Number((STYLE_INDEX.exec(cellAttrs(sheetXml, `B${r}`) || '') || [])[1] || 0);
+    assert.equal(Number(xfAttr(xfs[s] || '', 'indent') || 0), 1, `row ${r} title cell carries the current fixed-1 indent (pinned, depth-blind)`);
+  }
+});
