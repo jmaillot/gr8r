@@ -184,17 +184,20 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
     const slice = taskSlice(subXml, name);
-    /* Canonical position (real Project 2016 export, D-69-9): Manual right
-       after Name, BEFORE Type; WBS + OutlineNumber + OutlineLevel between
-       Type and Start; Manual* between Duration and DurationFormat. */
-    const nameAt = slice.indexOf('<Name>');
-    const manualAt = slice.indexOf('<Manual>1</Manual>');
+    /* Test 11 round 2 (owner 2026-11-17, re-UAT still zero): the canonical
+       ORDER fix was not the cause — MS Project zeroes the MANUAL schedule
+       of any OutlineLevel row. Subtask rows are therefore AUTO-scheduled
+       (Manual=0, no Manual* block): Type=1 fixed duration + Start +
+       Duration + the SNET pin — the pattern that already fixed top-level
+       rows. Duration must survive on the child row. */
+    assert.ok(slice.includes('<Manual>0</Manual>'), `${name} is auto-scheduled (manual subtasks zero out on import)`);
+    assert.ok(!slice.includes('<ManualStart>'), `${name} carries no Manual* block`);
+    assert.ok(!/<Duration>PT0H0M0S<\/Duration>/.test(slice), `${name} keeps a non-zero Duration (the parent's working-day span)`);
+    /* Canonical trio WBS + OutlineNumber + OutlineLevel, all before Start */
     const typeAt = slice.indexOf('<Type>');
     const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');
     const startAt = slice.indexOf('<Start>');
-    assert.ok(manualAt > nameAt && manualAt < typeAt, `${name}: Manual after Name, before Type`);
     assert.ok(olAt > typeAt && olAt < startAt, `${name}: OutlineLevel after Type, before Start`);
-    /* The canonical trio WBS + OutlineNumber + OutlineLevel, all before Start */
     const wbsMatch = /<WBS>([^<]*)<\/WBS>/.exec(slice);
     const onMatch = /<OutlineNumber>([^<]*)<\/OutlineNumber>/.exec(slice);
     assert.ok(wbsMatch && onMatch, `${name} carries WBS and OutlineNumber`);
@@ -206,14 +209,6 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
     assert.ok(slice.includes('<Finish>2026-03-10T17:00:00</Finish>'), `${name} finishes with the parent task's due`);
     assert.ok(slice.includes('<ConstraintType>4</ConstraintType>'), `${name} is SNET-pinned so Project keeps the dates`);
     assert.ok(slice.includes('<ConstraintDate>2026-03-04T08:00:00</ConstraintDate>'), `${name} pins the inherited start`);
-    /* Manual scheduling pins the dates verbatim (no calendar re-derivation) */
-    assert.ok(slice.includes('<Manual>1</Manual>'), `${name} is manually scheduled`);
-    assert.ok(slice.includes('<ManualStart>2026-03-04T08:00:00</ManualStart>'), `${name} pins ManualStart to the inherited start`);
-    assert.ok(slice.includes('<ManualFinish>2026-03-10T17:00:00</ManualFinish>'), `${name} pins ManualFinish to the inherited due`);
-    const msAt = slice.indexOf('<ManualStart>');
-    const duAt = slice.indexOf('<Duration>');
-    const dfAt = slice.indexOf('<DurationFormat>');
-    assert.ok(msAt > duAt && msAt < dfAt, `${name}: Manual* block between Duration and DurationFormat (canonical)`);
   }
   /* the parent keeps its OWN dates, plus the SNET pin and manual mode */
   const parent = taskSlice(subXml, 'Subtasked task');

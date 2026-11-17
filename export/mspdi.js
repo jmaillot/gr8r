@@ -302,23 +302,32 @@ export function buildMspdi(model) {
        end).
        Test 11 UAT FAIL (owner 2026-11-17, gant.png): every OutlineLevel
        row imported with Duration 0 and Finish = Start even though the
-       XML carried the parent's PT56H/PT240H span — MS Project only
-       honors the Manual* values when the elements sit in the CANONICAL
-       Task order (D-69-9): a real Project 2016 export emits
+       XML carried the parent's PT56H/PT240H span. A real Project 2016
+       export (MPXJ ground truth) pins the canonical sequence
        UID, ID, Name, Active, Manual, Type, WBS, OutlineNumber,
        OutlineLevel, Priority, Start, Finish, Duration, ManualStart,
        ManualFinish, ManualDuration, DurationFormat, …, Milestone,
        Summary, …, PercentComplete, ConstraintType, ConstraintDate, …,
-       Notes, PredecessorLink*, ExtendedAttribute*. gr8r's emission
-       violated that sequence four ways (Manual last, OutlineLevel right
-       after Type without WBS/OutlineNumber, Manual* after
-       DurationFormat, Notes after ExtendedAttribute). The template
-       below is aligned on the FULL canonical sequence for the emitted
-       subset. The SNET constraint stays as a fallback in case a Project
-       version ignores the Manual flag. */
+       Notes, PredecessorLink*, ExtendedAttribute* — gr8r's emission
+       violated it four ways and the template below IS the canonical
+       order for the emitted subset.
+       Test 11 round 2 (owner 2026-11-17 re-UAT): the canonical order did
+       NOT fix the zeroed subtask durations — MS Project zeroes the MANUAL
+       schedule of any OutlineLevel row while honoring top-level manual
+       rows. Child rows therefore go AUTO-scheduled: Manual=0, no Manual*
+    /* Test 11 round 2 (owner 2026-11-17 re-UAT): the canonical order did
+       NOT fix the zeroed subtask durations — MS Project zeroes the MANUAL
+       schedule of any OutlineLevel row while honoring top-level manual
+       rows. Child rows therefore go AUTO-scheduled: Manual=0, no Manual*
+       block; Type=1 (fixed duration) + Start + Duration + the SNET pin
+       make Project place the task at its inherited start and derive
+       Finish = Start + Duration = the parent's due (the owner's rule).
+       Top-level rows KEEP the manual schedule, which the real Project
+       round-trip honors (Phase 54-05 + this phase's parents). */
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
-    const manualFlag = dated ? `<Manual>1</Manual>` : '';
-    const manualDates = dated
+    const isTopLevel = typeof row.depth !== 'number';
+    const manualFlag = dated && isTopLevel ? `<Manual>1</Manual>` : '<Manual>0</Manual>';
+    const manualDates = dated && isTopLevel
       ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration>`
       : '';
 
