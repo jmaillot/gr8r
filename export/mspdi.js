@@ -266,11 +266,8 @@ export function buildMspdi(model) {
     const start = formatDateTime(startISO, '08:00:00');
     const finish = formatDateTime(finishISO, '17:00:00');
     const duration = isoDuration(minutes);
-    /* Test 11 round 4: PercentComplete is emitted ALWAYS again (real
-       Project exports include it on every task; R2 showed explicit 0
-       behaves like absent when the row is auto, but manual rows carried
-       explicit PC in every round-trip that ever worked — 54-05 and this
-       phase's parents). Round 3's omit-when-0 special case is dropped. */
+    /* Test 11 round 5: PercentComplete is emitted ALWAYS (V6 proves PC=0
+       is harmless on Type=0 rows; the real 0-100 progress rides the row). */
     const percent = Math.max(0, Math.min(100, Math.round(Number(row.progress) || 0)));
     const percentXml = `<PercentComplete>${percent}</PercentComplete>`;
 
@@ -321,20 +318,22 @@ export function buildMspdi(model) {
        NOT fix the zeroed subtask durations — MS Project zeroes the MANUAL
        schedule of any OutlineLevel row while honoring top-level manual
        rows. Child rows therefore go AUTO-scheduled: Manual=0, no Manual*
-    /* Test 11 round 4 (owner 2026-11-17): rounds 2-3 (auto-scheduled
-       subtasks, PC omitted at 0) did NOT fix the zeroed children — the
-       only surviving differentiator is PercentComplete=100 (done rows
-       survive, everything else zeroes). Re-reading the evidence: R1's
-       failure is fully explained by the four canonical-order violations;
-       canonical order + MANUAL subtasks was never tested. A real Project
-       2016 export (MPXJ ground truth) ships its subtasks Manual=1 under
-       a manual summary — that IS the canonical shape. Subtasks go back
-       to manual with their Manual* dates; top-level rows unchanged. */
+    /* Test 11 round 5 (diagnostic matrix, owner 2026-11-17): the decisive
+       field is TYPE, not PercentComplete. V6 (Type=0 Fixed Units) kept
+       PT56H with PC=0 while V2 (PC=100, Type=1) and V7 (PC=50) bracket
+       the effect; Work/constraint/Estimated changes all failed. On
+       OutlineLevel rows MS Project re-derives Fixed-Duration (Type=1)
+       auto rows from zero; Fixed Units rows keep the emitted duration.
+       Child rows: Manual=0 + Type=0 (Project's own default mode) + real
+       PercentComplete — data-faithful, no fake 100%. Top-level rows keep
+       Manual=1 + Type=1, honored by every round so far. */
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(String(row.start)) || /^\d{4}-\d{2}-\d{2}$/.test(String(row.due));
-    const manualFlag = dated ? `<Manual>1</Manual>` : '<Manual>0</Manual>';
-    const manualDates = dated
+    const isTopLevel = typeof row.depth !== 'number';
+    const manualFlag = dated && isTopLevel ? `<Manual>1</Manual>` : '<Manual>0</Manual>';
+    const manualDates = dated && isTopLevel
       ? `<ManualStart>${start}</ManualStart><ManualFinish>${finish}</ManualFinish><ManualDuration>${duration}</ManualDuration>`
       : '';
+    const typeXml = isTopLevel ? 1 : 0;
 
     /* SNET pin (owner report "all lines 20/11"): only rows whose start
        resolves from their own (or parent-inherited) ISO start. Undated
@@ -359,7 +358,7 @@ export function buildMspdi(model) {
       : '';
 
     tasksXml.push(
-      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name>${manualFlag}<Type>1</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration>${manualDates}<DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary>${percentXml}${constraint}${notes}${links}${attrs}</Task>`,
+      `<Task><UID>${uid}</UID><ID>${uid}</ID><Name>${esc(row.title)}</Name>${manualFlag}<Type>${typeXml}</Type>${outline}<Start>${start}</Start><Finish>${finish}</Finish><Duration>${duration}</Duration>${manualDates}<DurationFormat>7</DurationFormat><Milestone>${isMilestone ? 1 : 0}</Milestone><Summary>${summaryAt.has(rowIndex65) ? 1 : 0}</Summary>${percentXml}${constraint}${notes}${links}${attrs}</Task>`,
     );
   }
   const tasksBlock = tasksXml.length ? `<Tasks>${tasksXml.join('')}</Tasks>` : '';

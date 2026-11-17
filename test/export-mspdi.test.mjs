@@ -184,14 +184,14 @@ test('child tasks carry the PARENT span + SNET pin so the summary rollup lands o
   const subXml = buildMspdi(buildModel(makeMspdiDoc(), { subtasks: true }));
   for (const name of ['Child one', 'Child two']) {
     const slice = taskSlice(subXml, name);
-    /* Test 11 round 4: back to Manual=1 with Manual* dates (canonical
-       shape from a real Project 2016 export — Manual subtasks under a
-       manual summary), order and trio pins unchanged. */
-    assert.ok(slice.includes('<Manual>1</Manual>'), `${name} is manually scheduled (canonical real-export shape)`);
-    assert.ok(slice.includes('<ManualStart>2026-03-04T08:00:00</ManualStart>'), `${name} pins ManualStart to the inherited start`);
-    assert.ok(slice.includes('<ManualFinish>2026-03-10T17:00:00</ManualFinish>'), `${name} pins ManualFinish to the inherited due`);
+    /* Test 11 round 5 (diagnostic matrix): child rows are auto-scheduled
+       with Type=0 (Fixed Units) — the ONLY shape MS Project honors on an
+       OutlineLevel row at PC=0 (V6 vs V1/V2/V7). PC always emitted. */
+    assert.ok(slice.includes('<Manual>0</Manual>'), `${name} is auto-scheduled`);
+    assert.ok(slice.includes('<Type>0</Type>'), `${name} is Fixed Units (Type=0) — the honored subtask shape`);
+    assert.ok(slice.includes('<PercentComplete>'), `${name} always carries PercentComplete`);
+    assert.ok(!slice.includes('<ManualStart>'), `${name} carries no Manual* block`);
     assert.ok(!/<Duration>PT0H0M0S<\/Duration>/.test(slice), `${name} keeps a non-zero Duration (the parent's working-day span)`);
-    assert.ok(slice.includes('<PercentComplete>'), `${name} always carries PercentComplete (real-export shape)`);
     /* Canonical trio WBS + OutlineNumber + OutlineLevel, all before Start */
     const typeAt = slice.indexOf('<Type>');
     const olAt = slice.indexOf('<OutlineLevel>1</OutlineLevel>');
@@ -563,12 +563,12 @@ test('69-01: OutlineLevel = depth+1 at every level of the 3-level tree; the top 
      and Start (real Project 2016 export order). */
   for (const name of ['Sub A', 'Sub A.1 (deepest)', 'Sub A.2', 'Sub B']) {
     const row = slice69(name);
-    const typeAt = row.indexOf('<Type>1</Type>');
+    const typeAt = row.indexOf('<Type>0</Type>');
     const wbsAt = row.indexOf('<WBS>');
     const onAt = row.indexOf('<OutlineNumber>');
     const olAt = row.indexOf('<OutlineLevel>');
     const startAt = row.indexOf('<Start>');
-    assert.ok(wbsAt === typeAt + '<Type>1</Type>'.length && onAt > wbsAt && olAt > onAt && olAt < startAt, `${name}: WBS→OutlineNumber→OutlineLevel after Type, before Start`);
+    assert.ok(wbsAt === typeAt + '<Type>0</Type>'.length && onAt > wbsAt && olAt > onAt && olAt < startAt, `${name}: WBS→OutlineNumber→OutlineLevel after Type, before Start`);
   }
 });
 
