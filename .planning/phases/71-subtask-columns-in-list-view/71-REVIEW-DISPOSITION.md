@@ -6,10 +6,13 @@ findings:
   critical: 1
   warning: 2
   info: 1
+  fixed: 3
+  mitigated: 1
   total: 4
-open: 4
-fixed: 0
+open: 0
+fixed: 3
 skipped: 0
+mitigated: 1
 severity: critical
 ---
 
@@ -32,7 +35,7 @@ Default disposition is `open` — triage by editing the Disposition column
 
 | Finding | Title | Severity | Disposition | Source |
 |---------|-------|----------|-------------|--------|
-| CR-01 | `.subrow` keeps legacy flex `gap: 8px` on a grid — meta cells land ~56–64px off the parent columns (defeats ADR-2 alignment) | critical | open | confirmed blocking by 71-VERIFICATION.md → gap closure via `/gsd-plan-phase 71 --gaps` |
-| WR-02 | `--ind` tree indent applied as `padding-left` on the grid container shifts the whole track sequence — nested rows misalign | warning | open | confirmed as compounding CR-01 by 71-VERIFICATION.md → same gap-closure plan |
-| WR-01 | Columns-mode toggle checkbox visually hidden with no `:focus-visible` on `.stchip` — keyboard focus indicator lost | warning | open | — |
-| IN-01 | CSS `--cols` fallback hand-duplicates `LCOLS` widths — silent drift risk | info | open | — |
+| CR-01 | `.subrow` keeps legacy flex `gap: 8px` on a grid — meta cells land ~56–64px off the parent columns (defeats ADR-2 alignment) | critical | fixed | 71-02 Task 1: `.subrow` `gap: 0` (commit 38810b1), pinned by 71-02 Task 2 |
+| WR-01 | Columns-mode toggle checkbox visually hidden with no `:focus-visible` on `.stchip` — keyboard focus indicator lost | warning | fixed | 71-02 Task 1: `.stchip:focus-within` outline with `var(--accent)` (commit 38810b1), pinned by 71-02 Task 2 |
+| WR-02 | `--ind` tree indent applied as `padding-left` on the grid container shifts the whole track sequence — nested rows misalign | warning | fixed | 71-02 Task 1: fixed 64px base on the container, `--ind` rides `.subhead` as `margin-left` (commit 38810b1), pinned by 71-02 Task 2 |
+| IN-01 | CSS `--cols` fallback hand-duplicates `LCOLS` widths — silent drift risk | info | mitigated | 71-02 Task 1: fallback kept (unstyled-row guard) with a keep-in-sync comment naming LCOLS / task-list.js as the single source of truth — mitigated-by-documentation (commit 38810b1), pinned by 71-02 Task 2 |
