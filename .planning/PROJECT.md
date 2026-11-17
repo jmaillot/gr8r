@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-16 after v2.4 milestone — Automation & Productivity shipped (subtask tree, task/project templates, per-project webhooks → MS Teams, v2.3 backlog polish)*
+*Last updated: 2026-11-17 starting v2.6 — v2.5 Template Polish & Import shipped (template favourites, MD import with complete per-kind examples, hideStarters toggle, 65-05 indent fix)*
 
 
 <details>
@@ -128,6 +128,48 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 _Not yet defined — start with `/gsd-new-milestone`. Deferred backlog candidates are
 listed in ROADMAP.md (mobile hidden[] card fields, SMTP retry semantics, WR-01 CSS
 scoping, Nyquist reconciliation)._
+
+## Current Milestone: v2.6 Exports Verification (Test 11) — ACTIVE
+
+**Goal:** close Phase 65 item A1 — prove the subtask tree survives a REAL round-trip
+with MS Project. Owner-directed verification milestone: export a 3-level tree in all
+three formats (xlsx, CSV, MSPDI), verify structure (tree order, OutlineLevel/summary
+tasks), then the owner imports the files into actual MS Project; any divergence found
+gets fixed within the milestone.
+
+**Verification targets:**
+- EXP — xlsx/CSV tree order: parents strictly before children, hierarchy recoverable
+  from row order/indentation alone
+- MSP — MSPDI OutlineLevel/summary: every nesting level carries the right OutlineLevel,
+  summary rows marked, dates map to the offset semantics (D-05/D-07)
+- FIX — any defect found by the real MS Project import is fixed and re-verified
+
+**Constraints (standing):** zero new runtime or dev dependencies; gates intact
+(500 kB chunk gate — currently 499940/500000, ~60 bytes headroom; EN+FR i18n gate;
+lint 15-error baseline; 1705-test unit suite; e2e 132/132).
+
+**Out of scope:** new export formats, incoming-file generalization beyond what fixing
+Test 11 requires, feature work unrelated to exports.
+
+<details>
+<summary>v2.5 Template Polish & Import — SHIPPED (2026-11-16) — shipped record</summary>
+
+**Shipped:** owner-directed quick work (67-05/06/07 + 65-05 fix), 8 commits, audit
+passed 4/4. Archived to `.planning/milestones/v2.5-ROADMAP.md`.
+
+- 65-05 fix: subtask indent now ADDS (`--ind` var + `calc(base + var(--ind))`) —
+  list view pulled depth-1 children 48px LEFT of root; e2e asserts real content-box geometry
+- 67-05: template favourites — persistent `fav` flag, favourites-first pickers, create-modal block
+- 67-06: template import from Markdown — pure parser, editor-review flow, lazy EN-label split
+- 67-07: complete per-kind downloadable examples (nesting for both kinds, `priority`),
+  `prefs.hideStarters` toggle; Projet vierge always shows
+
+**Notable decisions:** hideStarters is display-only (code catalogue stays — onboarding
+needs it); examples EN-only (no-French-byte build gate); label keys must not collide
+with Lucide icon names (`importBtn`, the icon-scanner trap documented in
+docs/project-templates.md §3).
+
+</details>
 
 ## Current Milestone: v2.4 Automation & Productivity — SHIPPED (2026-11-16)
 

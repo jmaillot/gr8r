@@ -1,19 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.5
-milestone_name: Template Polish & Import
-status: Awaiting next milestone
-stopped_at: v2.5 complete — quick work 67-05/06/07 shipped
-last_updated: "2026-11-16T20:50:00.000Z"
-last_activity: 2026-11-16
-last_activity_desc: Milestone v2.5 audited (passed), archived and tagged v2.5.0
-state_head: f99359c
+milestone: v2.6
+milestone_name: Exports Verification (Test 11)
+status: planning
+last_updated: "2026-11-17T07:45:50.716Z"
+last_activity: 2026-11-17
 progress:
   total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-current_phase: none
+  percent: 0
 ---
 
 # STATE.md
@@ -27,10 +24,10 @@ current_phase: none
 
 ## Current Position
 
-Phase: Milestone v2.5 complete (owner-directed quick work, no GSD phases)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-16 — Milestone v2.5 audited (passed, 4/4 requirements), archived and tagged v2.5.0
+Status: Defining requirements
+Last activity: 2026-11-17 — Milestone v2.6 started
 
 ## Performance Metrics
 
