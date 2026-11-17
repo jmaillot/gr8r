@@ -4,17 +4,17 @@ milestone: v2.6
 milestone_name: Exports Verification (Test 11)
 current_phase: 71
 current_phase_name: Subtask columns in List view
-status: executing
-stopped_at: Phase 71 context gathered
-last_updated: "2026-11-17T14:58:04.149Z"
+status: verifying
+stopped_at: Completed 71-01-PLAN.md
+last_updated: "2026-11-17T15:26:43.595Z"
 last_activity: 2026-11-17
-last_activity_desc: Phase 69 complete — Test 11 verdict PASS, A1 closed
-state_head: f2b704916e22295ad54af215c06dd778104ecb20
+last_activity_desc: Phase 71 execution started
+state_head: e58360333b5838e5932d1afaa35c93313d88f293
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # STATE.md
@@ -24,14 +24,14 @@ progress:
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core value:** one workspace document pushed client→server through the `mergeClientDoc` funnel; every feature is an extension of that spine, zero new dependencies.
 **Milestone:** v2.5 Template Polish & Import — SHIPPED 2026-11-16 (see `.planning/milestones/v2.5-ROADMAP.md`).
-**Current focus:** Phase 69 — Exports Verification (Test 11)
+**Current focus:** Phase 71 — Subtask columns in List view
 
 ## Current Position
 
-Phase: 71 (Subtask columns in List view) — READY TO EXECUTE
-Plan: 3 of 3 — complete
-Status: Ready to execute
-Last activity: 2026-11-17 — Test 11 verdict PASS (owner re-UAT 18/18 rows exact), Phase 65 item A1 + Phase 999.1 backlog closed
+Phase: 71 (Subtask columns in List view) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-11-17 — Phase 71 execution started
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Last activity: 2026-11-17 — Test 11 verdict PASS (owner re-UAT 18/18 rows exac
 | Phase 67 P05 | 3min | 1 tasks | 1 files |
 | Phase 69 P01 | 25m | 3 tasks | 5 files |
 | Phase 69 P02 | ~7min | 2 tasks | 3 files |
+| Phase 71 P01 | ~55min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,9 +91,9 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-17T14:47:17.510Z
-**Stopped at:** Phase 71 context gathered
-**Resume file:** .planning/phases/71-subtask-columns-in-list-view/71-CONTEXT.md
+**Last session:** 2026-11-17T15:26:43.560Z
+**Stopped at:** Completed 71-01-PLAN.md
+**Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
 **Next step:** `/gsd-execute-phase 68` (remaining: 68-04 phase gate) or `/gsd-verify-work`
@@ -120,6 +121,7 @@ None.
 - [Phase 67]: G-67-2 gap closure: test webhook payload body rebranded to Projects Studio; x-gr8r-signature protocol header intentionally unchanged
 - [Phase 69]: 69-01: 3-level export pre-screen pinned to ACTUAL model/writer contracts (CR-01 row ids, writer-depth Summary walk); indent/flat shapes pinned as-is, no enrichment
 - [Phase 69]: 69-02: generator opts.subtasks:true is load-bearing (DEFAULT_OPTIONS false) and the inline self-check pins the 3-level signals; model progress pins follow the fixture growth 2/12
+- [Phase 71]: 71-01: opt-in columns:true on subTreeChecklistHtml; tpl forwarded via --cols (ADR-2); status chip = label-wrapped toggleSub + stPill; inherited priority dimmed .inh, no new i18n keys
 
 ## Operator Next Steps
 
