@@ -516,7 +516,7 @@ test('milestones sort by date then name and derive state from the injected expor
 
 test('headers carry the localized labels for board, members and milestones', () => {
   const m = build(makeDoc(), 'p_alpha', { scope: 'all' }, prefixedDeps());
-  assert.deepEqual(m.headers.board, ['T:export.col.lane', 'T:export.col.count', 'T:export.col.key', 'T:export.col.title', 'T:export.col.assignees', 'T:export.col.priority', 'T:export.col.due', 'T:export.col.progress']);
+  assert.deepEqual(m.headers.board, ['T:export.col.lane', 'T:export.col.count', 'T:export.col.key', 'T:export.col.title', 'T:export.col.assignees', 'T:export.col.priority', 'T:export.col.start', 'T:export.col.due', 'T:export.col.progress']);
   assert.deepEqual(m.headers.members, ['T:export.col.member', 'T:export.col.open', 'T:export.col.done', 'T:export.col.total']);
   assert.deepEqual(m.headers.milestones, ['T:export.col.name', 'T:export.col.date', 'T:export.col.state']);
 });
@@ -531,7 +531,7 @@ test('every exporter-authored string comes from the injected translator (D-54-12
         /* machine keys and user-authored meta values (project name, lead,
            status label) are not exporter-authored display strings */
         if (k === 'key' || k === 'kind' || k === 'id' || k === 'value' || k === 'assigneeName') continue;
-        if ((k === 'date') && /^\d{4}-\d{2}-\d{2}$/.test(v ?? '')) continue;
+        if ((k === 'date' || k === 'start') && /^\d{4}-\d{2}-\d{2}$/.test(v ?? '')) continue;
         walk(v);
       }
     }

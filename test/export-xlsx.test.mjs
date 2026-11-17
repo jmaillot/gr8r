@@ -471,6 +471,11 @@ test('Board lane rows appear in the locked order with the model counts, cards ca
       assert.equal(values.get(`D${row + 1}`), card.title, 'card title');
       assert.equal(values.get(`E${row + 1}`), card.assigneeName, 'card assignee');
       assert.equal(values.get(`F${row + 1}`), card.priorityLabel, 'card priority');
+      if (card.start) {
+        const [sy, smo, sd] = card.start.split('-').map(Number);
+        const startSerial = Math.round((Date.UTC(sy, smo - 1, sd) - Date.UTC(1899, 11, 30)) / 86_400_000);
+        assert.equal(Number(values.get(`G${row + 1}`)), startSerial, 'card start serial');
+      }
     }
   });
 });
@@ -505,11 +510,28 @@ test('a dated Board card stores a real date serial under numFmtId 14 (D-54-13)',
   const values = sheetValues(xml, shared);
   const [y, mo, d] = dated.due.split('-').map(Number);
   const expected = Math.round((Date.UTC(y, mo - 1, d) - Date.UTC(1899, 11, 30)) / 86_400_000);
-  const rowRef = [...values.entries()].find(([ref, v]) => /^G\d+$/.test(ref) && Number(v) === expected);
-  assert.ok(rowRef, `the due serial ${expected} appears in the Board due column`);
+  const rowRef = [...values.entries()].find(([ref, v]) => /^H\d+$/.test(ref) && Number(v) === expected);
+  assert.ok(rowRef, `the due serial ${expected} appears in the Board due column H`);
   const attrs = cellAttrs(xml, rowRef[0]);
   const xf = cellXfs(parts.get('xl/styles.xml'))[Number((STYLE_INDEX.exec(attrs) || [])[1] || 0)] || '';
   assert.equal(xfAttr(xf, 'numFmtId'), '14', 'the Board due cell carries the builtin short-date format');
+});
+
+test('a dated Board card stores its start serial under numFmtId 14 in column G (G-3)', async () => {
+  const model = modelOf(makeDoc(), 'p_alpha');
+  const dated = model.board.lanes.flatMap(l => l.cards).find(c => c.start);
+  assert.ok(dated, 'fixture sanity: a card with a start date exists');
+  const { parts } = await buildZip(model);
+  const xml = parts.get('xl/worksheets/sheet3.xml');
+  const shared = parseSharedStrings(parts.get('xl/sharedStrings.xml'));
+  const values = sheetValues(xml, shared);
+  const [sy, smo, sd] = dated.start.split('-').map(Number);
+  const expected = Math.round((Date.UTC(sy, smo - 1, sd) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  const rowRef = [...values.entries()].find(([ref, v]) => /^G\d+$/.test(ref) && Number(v) === expected);
+  assert.ok(rowRef, `the start serial ${expected} appears in the Board start column G`);
+  const attrs = cellAttrs(xml, rowRef[0]);
+  const xf = cellXfs(parts.get('xl/styles.xml'))[Number((STYLE_INDEX.exec(attrs) || [])[1] || 0)] || '';
+  assert.equal(xfAttr(xf, 'numFmtId'), '14', 'the Board start cell carries the builtin short-date format');
 });
 
 test('Board card progress stores the same number AND format as that task\'s Tasks-sheet cell', async () => {
@@ -523,8 +545,8 @@ test('Board card progress stores the same number AND format as that task\'s Task
   const tasks = sheetValues(tasksXml, shared);
   const taskRow = Number(Object.entries(Object.fromEntries(tasks)).find(([ref, v]) => /^A\d+$/.test(ref) && v === task.key)?.[0]?.slice(1));
   assert.ok(taskRow, 'the task row found by its key on Tasks');
-  /* progress on Board sits in column H under the card's lane row */
-  const boardRef = [...board.entries()].find(([ref, v]) => /^H\d+$/.test(ref) && v === String(task.progress));
+  /* progress on Board sits in column I under the card's lane row */
+  const boardRef = [...board.entries()].find(([ref, v]) => /^I\d+$/.test(ref) && v === String(task.progress));
   assert.ok(boardRef, `progress ${task.progress} appears on the Board progress column`);
   const boardAttrs = cellAttrs(parts.get('xl/worksheets/sheet3.xml'), boardRef[0]);
   const taskAttrs = cellAttrs(tasksXml, `H${taskRow}`);
