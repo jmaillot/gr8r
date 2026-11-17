@@ -282,13 +282,14 @@ for (let i = 0; i < rows.length; i++) {
 | A3 | Generator can be extended to also emit a CSV sample without breaking its standalone contract | Code Examples | If wrong, owner takes the CSV from the running app instead (fallback documented) |
 | A4 | `test-results/export-samples/` is gitignored and suitable to hand files to the owner | Generator section | Minor — files could be written elsewhere in test-results |
 
-## Open Questions
+## Open Questions (RESOLVED — see plans 69-01/02/03)
 
 1. **Which fixture factory feeds the UAT samples — makeDoc (p_alpha) or makeMspdiDoc (p_msp)?**
+   - **RESOLVED:** 3-level tree lives in `makeDoc()`'s p_alpha (69-02 T1); the MSPDI suite tests the same model path via 69-01 T1's fixture entries — no duplicated tree. NOTE: fixture entries are FLAT `{ id, parentId, position, title, done }` grouped by `parentId` in the walker (model.js:201-247), not nested `subtasks` arrays as sketched below.
    - What we know: The generator imports and uses `makeDoc()` with project `p_alpha` [VERIFIED: make-export-samples.mjs:20,38]; `makeMspdiDoc()` feeds only the test suite.
    - Recommendation: Put the 3-level branch in `makeDoc()`'s p_alpha tree (so samples carry it) AND let the MSPDI suite test either the same factory or `makeMspdiDoc` — planner should pick one consistent home per D-69-1 ("the Phase 54 fixture tree") and avoid duplicating the tree.
-2. **CSV sample file for the UAT** — the generator currently emits only xlsx+xml. Recommendation: add `toCsv` output to the generator (trivial, zero-dep) so the owner has all three files from one run.
-3. **Exact canonical Task sequence for the contingent fix (D-69-9)** — the canonical slice is documented in MSPDI-SPEC.md (`…OutlineNumber, OutlineLevel, Priority, Start…`); if the fix triggers, re-verify against the MicrosoftDocs repo before editing `mspdi.js`.
+2. **CSV sample file for the UAT** — **RESOLVED:** generator emits `toCsv` output alongside xlsx+xml (69-02 must_haves names it; zero-dep).
+3. **Exact canonical Task sequence for the contingent fix (D-69-9)** — **RESOLVED (as disposition):** structured as the conditional FAIL branch in 69-03 Task 3 — skip on PASS; if the fix triggers, re-verify against the MicrosoftDocs repo before editing `mspdi.js`.
 
 ## Environment Availability
 
