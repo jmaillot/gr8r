@@ -318,8 +318,9 @@ test('the subrow grid shares the parent rows\u2019 zero inter-track gap (CR-01, 
 
 test('the tree indent rides the grid item, not the container (WR-02)', () => {
   assert.ok(!subrowBlock.includes('var(--ind'), 'the indent custom property still shifts the grid container');
-  assert.ok(subrowBlock.includes('padding-left: 64px'), 'the subrow lost its fixed tree base');
-  assert.ok(subheadRule.includes('margin-left: var(--ind, 0px)'), 'the depth indent does not ride the .subhead grid item');
+  assert.ok(!subrowBlock.includes('padding-left'), 'a padding-left on the grid container shifts the meta tracks (G-71-2: the tree base rides the item)');
+  assert.ok(subheadRule.includes('margin-left: calc(64px + var(--ind, 0px))'), 'the tree base + depth indent do not ride the .subhead grid item');
+  assert.ok(!subheadRule.includes('margin-left: var(--ind, 0px);'), 'the subhead margin lost the fixed 64px tree base');
 });
 
 test('the status chip shows a visible keyboard focus indicator (WR-01, WCAG 2.4.7)', () => {
@@ -343,8 +344,9 @@ test('the subrow meta cells carry the parent cells\u2019 horizontal padding (G-7
   // Geometry guards (grow-only reinforcement of the 71-02 pins): the new rule
   // must not silently displace the verified subrow geometry.
   assert.ok(subrowBlock.includes('gap: 0'), 'the subrow lost its zero inter-track gap');
-  assert.ok(subrowBlock.includes('padding-left: 64px'), 'the subrow lost its fixed tree base');
-  assert.ok(subheadRule.includes('margin-left: var(--ind, 0px)'), 'the depth indent does not ride the .subhead grid item');
+  assert.ok(!subrowBlock.includes('padding-left'), 'a padding-left on the grid container shifts the meta tracks (G-71-2: the tree base rides the item)');
+  assert.ok(subheadRule.includes('margin-left: calc(64px + var(--ind, 0px))'), 'the tree base + depth indent do not ride the .subhead grid item');
+  assert.ok(!subheadRule.includes('margin-left: var(--ind, 0px);'), 'the subhead margin lost the fixed 64px tree base');
   // Decoy pin: count the ANCHORED full declaration, not the substring — the
   // .grp rule carries `padding: 0 8px 0 22px` and must not be miscounted.
   const anchored = LIST_CSS.match(/^[ \t]*padding: 0 8px;[ \t]*$/gm) || [];

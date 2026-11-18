@@ -142,11 +142,13 @@
   gap: 0;
   height: auto;
   min-height: 32px;
-  /* Tree indent: the fixed 64px base stays on the container; the depth indent
-     (--ind, set inline by the renderer) rides the .subhead grid ITEM below as
+  /* Tree indent (G-71-2): BOTH the fixed 64px base and the depth indent
+     (--ind, set inline by the renderer) ride the .subhead grid ITEM below as
      margin-left — an indent on the grid CONTAINER would shift the whole track
-     sequence and misalign nested rows against the header (WR-02). */
-  padding-left: 64px;
+     sequence and misalign nested rows against the header (WR-02). The 64px
+     base rode this container until the UAT vision audit measured every
+     subrow meta cell ~57px right of the parent cells (container padding
+     moves the tracks, not just the title). */
   border-bottom: 1px solid var(--divider);
   font-size: var(--fs-sm);
 }
@@ -169,8 +171,10 @@
   gap: 8px;
   min-width: 0;
   /* Tree indent rides the grid ITEM (margin-left), not the container — the
-     meta cells stay pinned to their tracks at any nesting depth (WR-02). */
-  margin-left: var(--ind, 0px);
+     meta cells stay pinned to their tracks at any nesting depth (WR-02).
+     The fixed 64px tree base rides here too (G-71-2): on the container it
+     shifted every meta track right of the parent grid. */
+  margin-left: calc(64px + var(--ind, 0px));
 }
 .subrow > .subhead .s {
   flex: 1;
