@@ -66,8 +66,11 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 
 ## Traceability
 
-_Filled by the roadmapper: REQ-ID → phase mapping._
-
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| _(pending)_ | | |
+| PWA-01 | Phase 72 | Pending |
+| PWA-02 | Phase 72 | Pending |
+| PWA-03 | Phase 74 | Pending |
+| PWA-04 | Phase 73 | Pending |
+
+Coverage: 4/4 v1 requirements mapped, no orphans, no duplicates.
