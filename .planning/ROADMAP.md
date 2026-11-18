@@ -93,6 +93,9 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 - [x] 73-02-PLAN.md — Platform degradation (iOS static hint, Firefox silence) + e2e spec stubbing beforeinstallprompt (EN/FR, prompt trigger, dismissal persistence)
 
+**Wave 1** *(gap closure, after verification)*
+- [x] 73-03-PLAN.md — Gap closure: onBip bounded rAF retry (CR-01 pre-hydration race), pre-hydration e2e scenario (WR-03), deterministic cooldown boundary test
+
 **UI hint**: yes
 
 ### Phase 74: Service Worker Verification & Milestone Acceptance
@@ -123,5 +126,5 @@ end-to-end on real devices.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 72. Manifest, Icons & Head Integration | 2/2 | Complete    | 2026-11-18 |
-| 73. Install Hint Banner | 2/2 | In Progress|  |
+| 73. Install Hint Banner | 3/3 | Executed | Verification re-run pending (73-03 closed CR-01/WR-03; real-Chromium human verify carried) |
 | 74. Service Worker Verification & Milestone Acceptance | 0/? | Not started | - |

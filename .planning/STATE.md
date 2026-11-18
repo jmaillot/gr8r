@@ -4,14 +4,14 @@ milestone: v2.7
 milestone_name: Installable App (PWA)
 current_phase: 73
 current_phase_name: Install Hint Banner
-status: verifying
-stopped_at: Completed 73-02-PLAN.md
-last_updated: "2026-11-18T20:48:45.512Z"
-state_head: 921d841fb6692222c07928f5aa29f9b543bc5902
+status: executing
+stopped_at: Completed 73-03-PLAN.md
+last_updated: "2026-11-18T21:35:00Z"
+state_head: 2573fd1c6d9484ceb04ddf953ec6af1c1c71a69c
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 4
+  total_plans: 5
   completed_plans: 4
 last_activity: 2026-11-18
 ---
@@ -28,8 +28,8 @@ last_activity: 2026-11-18
 ## Current Position
 
 Phase: 73 (Install Hint Banner) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Plan: 1 of 3
+Status: Executing Phase 73
 Progress: [███░░░░░░░] 33%
 
 ```
@@ -50,6 +50,7 @@ _(none yet this milestone)_
 |------|----------|-------|-------|
 | Phase 73 P01 | 21min | 2 tasks | 8 files |
 | Phase 73 P02 | 16min | 2 tasks | 3 files |
+| Phase 73 P03 | 14min | 2 tasks | 3 files |
 
 ## Milestone Decisions (v2.7)
 
@@ -101,8 +102,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T20:48:45.467Z
-**Stopped at:** Completed 73-02-PLAN.md
+**Last session:** 2026-11-18T21:35:00Z
+**Stopped at:** Completed 73-03-PLAN.md
 **Resume file:** None
 
 **Last action:** Derived 3 phases from PWA-01..04, wrote ROADMAP.md + STATE.md + REQUIREMENTS.md traceability.
@@ -115,6 +116,8 @@ _(v2.6 decisions preserved in git history and milestone archive; v2.7 decisions 
 - [Phase 73]: D-03 guard signals (api.enabled/S.ui.auth/pathname) read through a setGuardSource() live seam so node tests can pin them; api.enabled is getter-bound in the harness. — push.js setPushWorkspace precedent; production default unchanged.
 - [Phase 73]: checkIos() boot-hydration race fixed frame-based: rAF retry only while api.init() is pending (enabled false, no auth screen); final once guard signals are live
 - [Phase 73]: e2e stub markers __bipPrompted/__bipDispatched live only in e2e/install-banner.spec.mjs (T-73-02 verified clean in src/ and public/)
+- [Phase 73]: onBip retry mirrors checkIos exactly (synchronous first attempt, 300-frame budget, final auth decline, decide-once) — one pre-existing unit pin ("nothing renders before the rAF recheck") updated to match the mandated shape
+- [Phase 73]: e2e pre-hydration stub dispatches on the first rAF AFTER listener registration (addEventListener patch) — measured: a bare document-start rAF fires before the deferred module script evaluates, so the event would be lost; /api/config hydration held at route level because localhost resolves faster than a frame (RED/GREEN measured distinguishable)
 
 ## Operator Next Steps
 
