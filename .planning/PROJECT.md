@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-18 — v2.7 milestone started: Installable App (PWA)*
+*Last updated: 2026-11-18 after Phase 73 — PWA-04 validated*
 
 
 <details>
@@ -865,6 +865,11 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   Phase 70 (goal-backward verification, all criteria traced in live code)
 - ✓ **REQ-71-COLUMNS** (D-71-1..7) — Subtask meta columns in List view aligned to the
   parent grid — Phase 71 (12/12 must-haves, standing visual UAT passed)
+- ✓ PWA-04 — Honest install hint banner: lazy install-banner chunk, `beforeinstallprompt`
+  capture with bounded rAF retry surviving pre-hydration boot (CR-01 closure), 14-day
+  dismissal cooldown, gesture-bound native prompt, iOS static hint / Firefox silence
+  (Phase 73; verification 4/4, UAT real-Chromium pass, security SECURED, review CR-01/WR-03
+  fixed — WR-01/WR-02/IN-01..05 open as advisory carryovers)
 
 ### Active
 

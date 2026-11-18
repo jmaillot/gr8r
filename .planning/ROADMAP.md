@@ -11,7 +11,7 @@
 ## Phases
 
 - [x] **Phase 72: Manifest, Icons & Head Integration** - Inert static install assets: web manifest, PNG icon set from the brand mark, index.html head tags (completed 2026-11-18)
-- [ ] **Phase 73: Install Hint Banner** - Honest install affordance on `beforeinstallprompt` browsers with graceful iOS/Firefox degradation (the only JS surface)
+- [x] **Phase 73: Install Hint Banner** - Honest install affordance on `beforeinstallprompt` browsers with graceful iOS/Firefox degradation (the only JS surface) (completed 2026-11-18)
 - [ ] **Phase 74: Service Worker Verification & Milestone Acceptance** - Verify the existing push SW satisfies installability untouched, plus end-to-end acceptance and real-device UAT
 
 ## Backlog
@@ -84,7 +84,7 @@ banner silently never fires)
      fake or dead prompt on any platform
   4. Banner logic is a lazy chunk (entry delta < 200 bytes, chunk gate green) and every
      banner string is catalogued EN+FR in the same commit (i18n gate green)
-**Plans:** 2/2 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -126,5 +126,5 @@ end-to-end on real devices.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 72. Manifest, Icons & Head Integration | 2/2 | Complete    | 2026-11-18 |
-| 73. Install Hint Banner | 3/3 | Executed | Verification re-run pending (73-03 closed CR-01/WR-03; real-Chromium human verify carried) |
+| 73. Install Hint Banner | 3/3 | Complete    | 2026-11-18 |
 | 74. Service Worker Verification & Milestone Acceptance | 0/? | Not started | - |
