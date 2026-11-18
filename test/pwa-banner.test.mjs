@@ -26,9 +26,13 @@
    the stub order is load-bearing (browser-push.test.mjs precedent).
    ===================================================================== */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { register } from 'node:module';
-import { test } from 'node:test';
+import { after, before, test } from 'node:test';
+import { ROOT } from './helpers/server.mjs';
 
 register(new URL('./helpers/virtual-icons-loader.mjs', import.meta.url));
 
@@ -389,4 +393,69 @@ test('both locale files catalogue the banner keys in the same commit (D-08)', ()
     assert.ok(typeof cat['pwa.install.iosHint'] === 'string' && cat['pwa.install.iosHint'], `${f}: pwa.install.iosHint present`);
     assert.ok(cat['a11y.dismiss'], `${f}: a11y.dismiss exists for the X aria-label`);
   }
+});
+
+/* ---------- build contract: the D-09 lazy chunk + entry delta ----------
+   Proven on the REAL bundle, the build-chunk-size.test.mjs way: the suite
+   runs the same `vite build` CI runs, into a temporary out directory, and
+   asserts on the produced bytes. Nothing is written into dist/. */
+
+const VITE_BIN = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+/* The D-09 entry-delta budget: the entry chunk may grow by at most 200
+   bytes over the pinned pre-banner baseline. */
+const MAX_ENTRY_DELTA = 200;
+
+let outDir = null;
+let buildErr = '';
+
+before(() => {
+  try {
+    outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-banner-gate-'));
+    const result = spawnSync(process.execPath, [VITE_BIN, 'build', '--outDir', outDir, '--emptyOutDir'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    if (result.status !== 0) {
+      buildErr = `the vite build failed\n${result.stdout || ''}\n${result.stderr || ''}`;
+      outDir = null;
+    }
+  } catch (e) {
+    buildErr = String(e);
+    outDir = null;
+  }
+});
+
+after(() => {
+  if (outDir) fs.rmSync(outDir, { recursive: true, force: true });
+});
+
+/* Every .js chunk under assets/, with its real byte size on disk. */
+function builtChunks() {
+  const dir = path.join(outDir, 'assets');
+  return fs
+    .readdirSync(dir)
+    .filter(name => name.endsWith('.js'))
+    .sort()
+    .map(name => ({ name, bytes: fs.statSync(path.join(dir, name)).size }));
+}
+
+test('a real vite build emits exactly one lazy install-banner chunk (D-09)', () => {
+  assert.equal(buildErr, '', buildErr || 'build ok');
+  const hits = builtChunks().filter(c => /install-banner/.test(c.name));
+  assert.equal(hits.length, 1, `exactly one install-banner chunk expected, got:\n${hits.map(c => c.name).join('\n') || '(none)'}`);
+});
+
+test('the entry chunk grew by at most 200 bytes over the pre-banner baseline (D-09)', () => {
+  assert.equal(buildErr, '', buildErr || 'build ok');
+  const baseline = JSON.parse(
+    fs.readFileSync(new URL('./fixtures/banner-entry-baseline.json', import.meta.url), 'utf8'),
+  );
+  const entry = builtChunks().filter(c => /^index-/.test(c.name));
+  assert.ok(entry.length === 1, `one index-* entry chunk expected:\n${entry.map(c => c.name).join('\n')}`);
+  const delta = entry[0].bytes - baseline.baseline;
+  assert.ok(
+    delta <= MAX_ENTRY_DELTA,
+    `entry delta ${delta} bytes exceeds the ${MAX_ENTRY_DELTA}-byte budget ` +
+      `(entry ${entry[0].bytes} vs baseline ${baseline.baseline}) — the banner must stay in the lazy chunk`,
+  );
 });

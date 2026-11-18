@@ -1,0 +1,7 @@
+{
+  "comment": "D-09 baseline: the entry chunk's real byte size on disk BEFORE the 73-01 banner landed. Captured by running `node node_modules/vite/bin/vite.js build --outDir <tmp>` at commit 0fb7be1 (HEAD before the 73-01 task-1 commit) and stat-ing assets/index-*.js. The assertion in test/pwa-banner.test.mjs requires: current entry size - baseline <= 200 bytes.",
+  "baseline": 499995,
+  "captured": "2026-11-18",
+  "entryPattern": "assets/index-*.js",
+  "headBefore73_01": "0fb7be1"
+}
