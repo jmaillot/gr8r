@@ -9,11 +9,31 @@
    an Event named 'beforeinstallprompt' whose prompt() sets
    window.__bipPrompted = true (a test-only marker that lives ONLY in this
    spec, never in src/) and whose userChoice resolves { outcome:
-   'accepted' }, dispatched ~150 ms after load. The iOS scenario is the
-   inverse proof: a faked navigator (iPhone UA) with NO stubbed event —
-   the boot-time checkIos() call wired in plan 01 must render the static
-   iosHint strip with no Install button, entirely on its own (D-06,
-   runtime reachability — not just a unit seam).
+   'accepted' }. TWO dispatch orderings are exercised (plan 73-03):
+
+   1. Delayed post-hydration dispatch (BIP_STUB, scenarios 1-3): the event
+      lands ~150 ms after load, well past /api/boot hydration — the settled
+      ordering, easy to stub but not the one production Chromium races.
+
+   2. rAF-timed pre-hydration dispatch (BIP_PRE_HYDRATION_STUB, scenario 5):
+      the init script schedules the dispatch with requestAnimationFrame —
+      ZERO setTimeout, no wall-clock delay. A synchronous document-start
+      dispatch would be structurally lost: Playwright init scripts run
+      BEFORE any page script, so the event would fire before src/main.js
+      registers its beforeinstallprompt listener (module-eval time) and
+      nothing would ever receive it. And a bare document-start rAF fires
+      before the listener too here: the deferred module script is fetched
+      over the network and first paint precedes its evaluation. So the
+      stub dispatches on the first rAF AFTER the app's listener
+      registration (via an addEventListener patch) — still before
+      /api/boot hydration resolves (a network fetch pending across the
+      first frames) — exactly the race window CR-01 concerns, the same
+      one checkIos's 300-frame budget documents.
+
+   The iOS scenario is the inverse proof: a faked navigator (iPhone UA) with
+   NO stubbed event — the boot-time checkIos() call wired in plan 01 must
+   render the static iosHint strip with no Install button, entirely on its
+   own (D-06, runtime reachability — not just a unit seam).
 
    Shape follows e2e/manifest.spec.mjs (header contract, webServer fixture
    booting e2e/server.mjs on built dist) and reuses the phase-62 Settings
@@ -38,6 +58,37 @@ const BIP_STUB = `
   };
   ev.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
   setTimeout(() => { window.__bipDispatched = true; window.dispatchEvent(ev); }, 150);
+`;
+
+/* The PRE-HYDRATION stub (plan 73-03, WR-03/CR-01): identical to BIP_STUB
+   except the dispatch timing — ZERO setTimeout, no wall-clock delay. A
+   synchronous document-start dispatch would be structurally lost (init
+   scripts run before any page script), and a bare document-start rAF fires
+   BEFORE the listener too in this app: the deferred module script is
+   fetched over the network and first paint precedes its evaluation
+   (measured: rAF dispatch → listener registration, probe evidence
+   73-03). So the stub patches addEventListener and dispatches on the first
+   rAF AFTER main.js registers its beforeinstallprompt listener — still
+   before /api/boot hydration resolves (the fetch is pending across the
+   first frames). That is exactly the race window CR-01 concerns, the same
+   one checkIos's 300-frame budget documents. */
+const BIP_PRE_HYDRATION_STUB = `
+  const orig = EventTarget.prototype.addEventListener;
+  const ev = new Event('beforeinstallprompt');
+  ev.prompt = () => {
+    ev.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
+    window.__bipPrompted = true;
+  };
+  ev.userChoice = Promise.resolve({ outcome: 'accepted', platform: 'web' });
+  let fired = false;
+  EventTarget.prototype.addEventListener = function (type, ...rest) {
+    if (this === window && type === 'beforeinstallprompt' && !fired) {
+      fired = true;
+      EventTarget.prototype.addEventListener = orig;
+      requestAnimationFrame(() => { window.__bipDispatched = true; window.dispatchEvent(ev); });
+    }
+    return orig.call(this, type, ...rest);
+  };
 `;
 
 /* iOS navigator fakery: override the UA on the Navigator prototype inside
@@ -159,4 +210,47 @@ test('a faked iOS navigator renders the boot-time iosHint strip with no Install 
   await expect(strip.locator('button.ibtn-xs')).toHaveCount(1); /* the dismiss X is still present */
   const prompted = await page.evaluate(() => window.__bipPrompted);
   expect(prompted, 'no prompt ever triggered on the iOS path').toBeUndefined();
+});
+
+/* ---------- 5. pre-hydration dispatch (plan 73-03, CR-01/WR-03): the real
+   Chromium race — the event fires before /api/boot hydration resolves, so
+   onBip's single-frame decision would see api.enabled === false and never
+   retry; the bounded rAF budget renders the strip as soon as hydration
+   lands. The boot response is held at the route level so hydration is
+   DEFINITELY still pending when the rAF-timed dispatch lands — on
+   localhost it resolves faster than a frame, which would let the old
+   one-shot recheck win too (measured during 73-03). The browser-side
+   dispatch stays delay-free. NOTE: this stub proves ORDERING robustness,
+   not the real event — real-Chromium confirmation remains a human verify
+   item post-execution (73-VERIFICATION.md, Human Verification #1). */
+
+test('a pre-hydration beforeinstallprompt (rAF-timed, no delay) still shows the strip and triggers the prompt', async ({ page }) => {
+  const run = newRunId();
+  await signIn(page, 'pre', run);
+
+  /* hold the hydration response (api.init() GET /api/config) long enough
+     that hydration is still pending across the dispatch frames — the
+     pending-fetch shape the plan assumed ("/api/boot" in the verification
+     doc is shorthand for this boot call) */
+  await page.route('**/api/config', async route => {
+    await new Promise(r => setTimeout(r, 150));
+    await route.continue();
+  });
+
+  /* the reload boots into the signed-in workspace and dispatches the event
+     via rAF right after listener registration — before the held hydration
+     resolves; the 300-frame retry budget (~5 s at 60 fps) comfortably
+     covers hydration, so the default expect timeout suffices */
+  await page.addInitScript(BIP_PRE_HYDRATION_STUB);
+  await page.reload();
+
+  const strip = page.locator('.install-banner');
+  await expect(strip).toBeVisible();
+  await expect(strip.locator('.grow')).toHaveText(EN_CTA);
+  await expect(strip.locator('button.install-cta')).toHaveText(EN_CTA);
+
+  await strip.locator('button.install-cta').click();
+  await expect.poll(() => page.evaluate(() => window.__bipPrompted), { timeout: 5_000 }).toBe(true);
+  /* the native-prompt gesture hides the strip (accepted outcome, D-04) */
+  await expect(strip).toBeHidden();
 });
