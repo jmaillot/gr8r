@@ -2066,5 +2066,7 @@
   "webhook.del": "Supprimer",
   "templates.importBtn": "Importer .md",
   "templates.importTaskLabel": "Exemple : tâche",
-  "templates.importProjectLabel": "Exemple : projet"
+  "templates.importProjectLabel": "Exemple : projet",
+  "pwa.install.cta": "Installer l’application",
+  "pwa.install.iosHint": "Partager → Sur l’écran d’accueil"
 }

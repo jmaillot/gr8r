@@ -1,0 +1,182 @@
+/* The install banner (Phase 73, D-01..D-05) — a lazy feature chunk: the entry
+   (main.js) carries only two window listeners and one boot-time pre-check;
+   every render/detect/persist decision lives here.
+
+   D-01: fixed bottom strip with an Install button and a dismiss X — not a
+   toast, not inline. Mounted on document.body OUTSIDE the app root so a
+   shell render() never wipes it. D-02: boot-only, event-driven — onBip is
+   handed the captured beforeinstallprompt event; prompt() is called ONLY
+   from the Install button's click handler (one shot per event: the reference
+   is nulled immediately, prompt() twice is forbidden). D-04: suppressed on
+   appinstalled, in standalone display mode, and on explicit dismissal.
+   D-05: the X dismissal persists in localStorage under 'pwa.installDismissedAt'
+   with a 14-day cooldown — per-browser, never the workspace doc, never
+   server state. userChoice 'dismissed' hides without writing the key: that
+   key is reserved for the explicit X dismissal.
+
+   localStorage discipline (push.js convention): fail-absent reads, silently
+   tolerant writes. The stored value is never rendered or interpolated — only
+   compared against Date.now() (T-73-01: Number coercion with || 0 fallback). */
+import { t } from '../core/i18n.js';
+import { S } from '../core/store.js';
+import { api } from '../core/api.js';
+import { esc } from '../core/utils.js';
+import { ic } from '../core/icons.js';
+
+const KEY = 'pwa.installDismissedAt';
+const COOLDOWN_MS = 14 * 864e5;
+
+/* The currently mounted strip (either flavour) — onInstalled() and the
+   outcome handlers hide through this reference. */
+let strip = null;
+/* The captured beforeinstallprompt event: one shot per event (D-02). */
+let deferred = null;
+
+/* PURE (test seam): true when no active 14-day cooldown at nowMs (D-05). */
+export function cooldownExpired(nowMs) {
+  let v = 0;
+  try {
+    v = Number(localStorage.getItem(KEY)) || 0;
+  } catch {
+    /* storage blocked or absent key: no cooldown is assumed */
+  }
+  return nowMs - v > COOLDOWN_MS;
+}
+
+/* PURE (test seam): feature-based iOS detection (D-06, research Pitfall 4).
+   Never timeout-based: no setTimeout/setInterval anywhere in the detection
+   path. iPadOS 13+ reports platform 'MacIntel' — the maxTouchPoints clause
+   catches it. */
+export function isIos() {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+function standalone() {
+  try {
+    return matchMedia('(display-mode: standalone)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/* Route/auth/demo/cooldown guard (D-03/D-04/D-05) — the same signals as
+   main.js's 30s poll guard. Not exported: canShow() is decided inside the
+   chunk, never by the entry. The guard reads through a live seam
+   (push.js setPushWorkspace pattern) because api.enabled is getter-bound
+   and the node harness pins it there. */
+const defaultGuard = () => ({
+  auth: S.ui.auth,
+  enabled: api.enabled,
+  path: (typeof location !== 'undefined' && location.pathname) || '/',
+});
+export let guardSource = defaultGuard;
+export function setGuardSource(fn) {
+  guardSource = fn || defaultGuard;
+}
+function canShow() {
+  if (standalone()) return false; /* D-04 */
+  const g = guardSource();
+  if (g.auth) return false; /* login/join/auth screens (D-03) */
+  if (!g.enabled) return false; /* demo mode (D-03) */
+  if (/^\/join\//.test(g.path)) return false; /* join routes (D-03) */
+  return cooldownExpired(Date.now());
+}
+
+/* Exit animation then remove (toast.js kill() shape). */
+function hide(el) {
+  el.classList.add('out');
+  setTimeout(() => el.remove(), 160);
+  if (strip === el) strip = null;
+}
+
+function writeCooldown() {
+  try {
+    localStorage.setItem(KEY, String(Date.now()));
+  } catch {
+    /* storage blocked or full: the dismissal stays for the session only */
+  }
+}
+
+/* Build and mount the strip on document.body (outside the app root).
+   flavour 'cta': text + Install button + dismiss X (Chromium path).
+   flavour 'ios': dismiss X + static one-line hint — NEVER an Install
+   button, never a fake prompt (D-06). */
+function renderStrip(flavour) {
+  if (strip) return strip;
+  const el = document.createElement('div');
+  el.className = 'install-banner';
+  el.setAttribute('role', 'status');
+  const text = flavour === 'ios' ? t('pwa.install.iosHint') : t('pwa.install.cta');
+  el.innerHTML = `<span class="grow">${esc(text)}</span>`;
+  if (flavour === 'cta') {
+    const btn = document.createElement('button');
+    btn.className = 'ibtn install-cta';
+    btn.textContent = t('pwa.install.cta');
+    /* The ONLY prompt() call site — inside a user-gesture click handler
+       (research Pitfall 2). One shot per captured event. */
+    btn.onclick = async () => {
+      const ev = deferred;
+      deferred = null;
+      if (!ev) return hide(el);
+      try {
+        ev.prompt();
+      } catch {
+        return hide(el);
+      }
+      try {
+        /* accepted and dismissed both hide (D-04); an unexpected outcome
+           hides defensively too. Only the X writes the cooldown key. */
+        await ev.userChoice;
+      } catch {
+        hide(el);
+      }
+      hide(el);
+    };
+    el.appendChild(btn);
+  }
+  const x = document.createElement('button');
+  x.className = 'ibtn ibtn-xs';
+  x.setAttribute('aria-label', t('a11y.dismiss'));
+  x.innerHTML = ic('x', 13);
+  x.onclick = () => {
+    writeCooldown();
+    hide(el);
+  };
+  el.appendChild(x);
+  document.body.appendChild(el);
+  strip = el;
+  return el;
+}
+
+/* Chromium captured the install event (D-02): store it, then defer the
+   visibility decision past boot's hydration with a one-shot
+   requestAnimationFrame re-check (research Pitfall 6 — the event can fire
+   before the first render, and canShow() must not judge a login screen). */
+export function onBip(e) {
+  deferred = e || null;
+  requestAnimationFrame(() => {
+    if (deferred && canShow()) renderStrip('cta');
+  });
+}
+
+/* Installed (D-04): hide unconditionally — belt + suspenders alongside the
+   'accepted' outcome hide. */
+export function onInstalled() {
+  deferred = null;
+  if (strip) hide(strip);
+}
+
+/* Boot-time iOS pre-check (D-06), called once from main.js at boot: on iOS
+   neither beforeinstallprompt nor appinstalled ever fires, so without this
+   call the hint strip would only ever render in test seams. Feature-based:
+   iOS AND not standalone AND the route/cooldown guard passes → the static
+   one-liner strip. Everything else (Firefox, unqualified Chromium, desktop)
+   renders nothing and schedules nothing — total silence (D-07). */
+export function checkIos() {
+  if (!isIos() || standalone()) return;
+  if (!canShow()) return;
+  renderStrip('ios');
+}

@@ -40,7 +40,13 @@ import './overlays/palette.js';
 import './pages/auth.js';
 import './actions/actions.js';
 import './actions/events.js';
-import './actions/keyboard.js';
+/* [73-01 Rule 3] the keyboard shortcuts ride a pre-warmed lazy chunk — the
+   67-04/66-02 remedy, applied here to buy back the entry bytes the banner
+   listeners need (the 500 kB gate had 5 bytes of headroom, and the D-09
+   lazy chunk cannot come from the entry). keyboard.js is self-contained:
+   it registers its document keydown listener on arrival, long before the
+   first user input, and exports GO_MAP/gPending to no other module. */
+import('./actions/keyboard.js').catch(() => {});
 import './actions/drag-drop.js';
 import './features/teams.js';
 import './features/subtasks.js';
@@ -64,6 +70,22 @@ import { t as tk, LOCALES, getLocale, negotiate, primeLocale, readStoredLocale }
 /* notifyNewEvents/permChanged ride the lazy push chunk (DELIV-02 index gate):
    both call sites sit inside the async 30s poll, never on the boot path. */
 const pushMod = () => import('./core/push.js');
+
+/* [73-01] the install banner rides a lazy chunk (D-02/D-09) — the entry
+   carries ONLY these two listeners plus one boot-time iOS pre-check; no
+   detection logic, no strings, no cooldown math (D-06). preventDefault
+   suppresses Chrome's own mini-infobar so the in-app strip is the only
+   affordance. Boot-time checkIos() is the runtime entry point for the iOS
+   degradation path: on iOS neither event ever fires (D-06). */
+const bannerMod = () => import('./features/install-banner.js');
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault?.();
+  bannerMod().then(m => m.onBip(e)).catch(() => {});
+});
+addEventListener('appinstalled', () => {
+  bannerMod().then(m => m.onInstalled()).catch(() => {});
+});
+bannerMod().then(m => m.checkIos()).catch(() => {});
 
 /* The locale change re-renders the app: one listener, one re-render, never
    batched or debounced (D-01). The loop guard in applyPrefs() keeps this from
