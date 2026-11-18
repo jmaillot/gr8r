@@ -174,9 +174,27 @@ export function onInstalled() {
    call the hint strip would only ever render in test seams. Feature-based:
    iOS AND not standalone AND the route/cooldown guard passes → the static
    one-liner strip. Everything else (Firefox, unqualified Chromium, desktop)
-   renders nothing and schedules nothing — total silence (D-07). */
+   renders nothing and schedules nothing — total silence (D-07).
+
+   Boot race (research Pitfall 6, same as onBip): the entry's
+   bannerMod().then(m => m.checkIos()) can resolve BEFORE api.init() has
+   set enabled — proven by e2e (plan 73-02) — so the guard decision retries
+   across a bounded rAF budget while hydration is still pending
+   (enabled false and no auth screen). Once the guard signals are live the
+   decision is final: no further frames are scheduled on any path. */
 export function checkIos() {
   if (!isIos() || standalone()) return;
-  if (!canShow()) return;
-  renderStrip('ios');
+  let frames = 0;
+  const attempt = () => {
+    if (strip || !isIos() || standalone()) return;
+    const g = guardSource();
+    if (g.auth) return; /* login/join screens: the decision is final (D-03) */
+    if (!g.enabled) {
+      /* boot still hydrating: retry within the frame budget, never a timeout */
+      if (++frames < 300) requestAnimationFrame(attempt);
+      return;
+    }
+    if (canShow()) renderStrip('ios');
+  };
+  attempt();
 }

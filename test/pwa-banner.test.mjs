@@ -381,6 +381,23 @@ test('checkIos invoked the way main.js invokes it at boot renders the iosHint st
   await settle();
 });
 
+test('checkIos during boot hydration (enabled false) retries frames and renders once the guard resolves', async () => {
+  await reset({ enabled: false });
+  setUA(IOS_UA);
+  B.checkIos();
+  assert.equal(banner(), undefined, 'nothing renders while api.init() is still pending');
+  assert.equal(pendingFrames.length, 1, 'one retry frame is scheduled — frame-based, never a timeout');
+  /* hydration lands: flip the guard seam in place (reset() would clear the
+     scheduled retry frames) and pump — the strip mounts as soon as it does */
+  B.setGuardSource(() => ({ auth: null, enabled: true, path: '/' }));
+  pumpFrame();
+  const el = banner();
+  assert.ok(el, 'the strip renders once enabled flips true');
+  assert.ok(!ctaBtn(el), 'still no Install button');
+  B.onInstalled();
+  await settle();
+});
+
 test('iPadOS 13+ (MacIntel + maxTouchPoints > 1) renders the same iOS strip (Pitfall 4)', async () => {
   await reset();
   setNav({
