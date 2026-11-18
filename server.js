@@ -8035,8 +8035,9 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
 };
-const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.map', '.svg', '.txt']);
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.map', '.svg', '.txt', '.webmanifest']);
 const gzipCache = new Map();
 
 function securityHeaders(req) {
@@ -8094,7 +8095,7 @@ function sendFile(req, res, file, stat) {
 
 function cacheControl(file) {
   if (file.includes(`${path.sep}assets${path.sep}`)) return 'public, max-age=31536000, immutable';
-  if (path.basename(file) === 'index.html' || path.basename(file) === 'sw.js') return 'no-cache';
+  if (path.basename(file) === 'index.html' || path.basename(file) === 'sw.js' || path.basename(file) === 'manifest.webmanifest') return 'no-cache';
   return 'public, max-age=3600';
 }
 
