@@ -34,6 +34,7 @@
 ## Phase Details
 
 ### Phase 72: Manifest, Icons & Head Integration
+
 **Goal**: The app presents itself as an installable web app — a valid manifest, a complete
 icon set derived from the existing brand mark, and the HTML head integration every platform
 reads — all as inert static assets with zero JS and zero gate risk.
@@ -54,11 +55,16 @@ reads — all as inert static assets with zero JS and zero gate risk.
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 72-01-PLAN.md — Manifest file + 3-touch server.js diff + index.html head tags, pinned by contract test and e2e live header check
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 72-02-PLAN.md — Five-PNG icon set rendered from favicon.svg (D-07 owner approval) + icon contract test
+
 **UI hint**: yes
 
 ### Phase 73: Install Hint Banner
+
 **Goal**: On browsers that can install the app, users get an honest in-app install
 affordance that triggers the real native prompt; on browsers that cannot (iOS, Firefox),
 they either see nothing or platform-appropriate manual instructions — never a broken or
@@ -82,6 +88,7 @@ banner silently never fires)
 **UI hint**: yes
 
 ### Phase 74: Service Worker Verification & Milestone Acceptance
+
 **Goal**: Installability's service-worker requirement is proven satisfied by the EXISTING
 push service worker with zero code changes, and the whole milestone is accepted
 end-to-end on real devices.
