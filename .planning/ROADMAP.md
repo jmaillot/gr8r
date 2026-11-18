@@ -74,7 +74,7 @@ Plans:
 **Goal:** Subtask rows in the List view display Status (done/todo chip), Assignees, Priority (inherited from parent) and Due (s.due || parent due, inherited tooltip) aligned to the parent column grid
 **Requirements**: TBD (coverage derived from D-71-1…D-71-7)
 **Depends on:** Phase 70
-**Plans:** 5/5 plans executed (71-01 executed; 71-02/71-04 gap closures)
+**Plans:** 5/5 plans complete (71-01 executed; 71-02/71-04 gap closures)
 
 Plans:
 - [x] 71-05-PLAN.md
