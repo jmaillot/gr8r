@@ -127,6 +127,7 @@ None.
 - [Phase 71]: 71-02 indent mechanism: fixed 64px container base, --ind rides .subhead as margin-left (WR-02)
 - [Phase 71]: 71-02 IN-01 mitigated-by-documentation: --cols fallback kept with LCOLS keep-in-sync note
 - [Phase 71]: Subtask meta cells aligned to parent px offset (G-71-1) — Pinned grow-only because the offset contract is cosmetic and easily regressed; anchored full-declaration counting defeats the .grp substring decoy
+- [Phase 71]: G-71-2 (UAT vision audit, 5-model consensus): the fixed 64px tree base rode the .subrow grid CONTAINER, shifting meta tracks ~57px right of the parent grid — moved to .subhead margin-left calc(64px + var(--ind)); pin tests now forbid container padding-left
 
 ## Operator Next Steps
 
