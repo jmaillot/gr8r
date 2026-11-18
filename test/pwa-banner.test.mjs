@@ -109,8 +109,13 @@ globalThis.document = {
 let ua = 'node';
 const setUA = u => {
   ua = u;
+  setNav({ platform: 'Linux', userAgent: u, maxTouchPoints: 0 });
+};
+/* Per-test navigator override — the iPadOS case needs platform + touch
+   overrides beyond the UA (research Pitfall 4). */
+const setNav = props => {
   Object.defineProperty(globalThis, 'navigator', {
-    value: { platform: 'Linux', userAgent: u, maxTouchPoints: 0 },
+    value: { platform: 'Linux', userAgent: ua, maxTouchPoints: 0, ...props },
     configurable: true,
     writable: true,
   });
@@ -358,6 +363,67 @@ test('checkIos with iOS UA + active cooldown renders nothing (D-05 beats D-06)',
   assert.equal(banner(), undefined);
 });
 
+/* ---------- degradation matrix hardening (plan 02, D-06/D-07) ---------- */
+
+const IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15';
+
+test('checkIos invoked the way main.js invokes it at boot renders the iosHint strip (D-06 runtime shape)', async () => {
+  await reset();
+  setUA(IOS_UA);
+  /* The entry's exact boot shape: bannerMod().then(m => m.checkIos()) — a
+     promise-resolution hop sits between boot and the render. */
+  await Promise.resolve(B).then(m => m.checkIos());
+  const el = banner();
+  assert.ok(el, 'the strip renders through the promise-hop invocation');
+  assert.ok(!ctaBtn(el), 'no Install button on the iOS path (D-06)');
+  assert.ok(xBtn(el), 'the dismiss X is present');
+  B.onInstalled();
+  await settle();
+});
+
+test('iPadOS 13+ (MacIntel + maxTouchPoints > 1) renders the same iOS strip (Pitfall 4)', async () => {
+  await reset();
+  setNav({
+    platform: 'MacIntel',
+    maxTouchPoints: 5,
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15',
+  });
+  assert.equal(B.isIos(), true, 'the MacIntel+touch clause catches iPadOS');
+  B.checkIos();
+  const el = banner();
+  assert.ok(el, 'the iOS strip renders for iPadOS');
+  assert.ok(!ctaBtn(el), 'no Install button on the iPadOS path');
+  B.onInstalled();
+  await settle();
+});
+
+test('Firefox: isIos() false, no render side effect, nothing scheduled (D-07)', async () => {
+  await reset();
+  setUA('Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0');
+  assert.equal(B.isIos(), false, 'Firefox is never feature-detected as iOS');
+  const framesBefore = pendingFrames.length;
+  B.checkIos();
+  assert.equal(banner(), undefined, 'no render side effect');
+  assert.equal(pendingFrames.length, framesBefore, 'no rAF scheduled by the Firefox path');
+  await settle();
+  assert.equal(banner(), undefined, 'still nothing after the animation window');
+});
+
+test('the iOS strip honors the shared suppression: its dismiss X writes the cooldown and checkIos() stays silent', async () => {
+  await reset();
+  setUA(IOS_UA);
+  B.checkIos();
+  const el = banner();
+  assert.ok(el, 'the iOS strip renders first');
+  xBtn(el).onclick();
+  await settle();
+  assert.ok(ls.has('pwa.installDismissedAt'), 'the iOS X dismissal writes the SAME cooldown key (D-05)');
+  assert.equal(banner(), undefined, 'the strip hides');
+  B.checkIos();
+  await settle();
+  assert.equal(banner(), undefined, 'a re-checkIos() during the cooldown renders nothing');
+});
+
 /* ---------- static contract pins ---------- */
 
 test('main.js wires the banner through the [73-01] lazy-import block only', () => {
@@ -368,6 +434,10 @@ test('main.js wires the banner through the [73-01] lazy-import block only', () =
   assert.ok(main.includes("addEventListener('appinstalled'"), 'the entry captures appinstalled');
   assert.ok(main.includes('m.onBip(e)') && main.includes('m.onInstalled()'), 'the listeners delegate to the module');
   assert.ok(main.includes('m.checkIos()'), 'one boot-time iOS pre-check call (D-06)');
+  assert.ok(
+    main.includes('bannerMod().then(m => m.checkIos())'),
+    'the boot-time call is the exact bannerMod().then(m => m.checkIos()) shape (D-06 runtime reachability, plan-02 pin)',
+  );
   assert.ok(!main.includes('pwa.install'), 'no banner strings in the entry (D-09)');
   assert.ok(!main.includes('installDismissedAt'), 'no cooldown key in the entry (D-09)');
 });
