@@ -341,16 +341,10 @@ const res = await request.get('/manifest.webmanifest');
 | A4 | Headless Chromium defaults to light color-scheme (so favicon.svg renders with light vars without forcing) | Pattern 4 | Wrong-scheme PNGs caught immediately at D-07 review |
 | A5 | `apple-mobile-web-app-capable` legacy name still universally supported | State of the Art | None for this phase; iOS install still works |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Where does the live e2e header check live?**
-   - What we know: D-13 mandates it; e2e/ harness exists with playwright.config.mjs and helpers.
-   - What's unclear: new spec file vs. adding to an existing one.
-   - Recommendation: new small spec (e.g. `e2e/manifest.spec.mjs`) — planner decides against existing harness conventions.
-
-2. **Commit the maskable variant SVG as a source file?**
-   - What we know: D-06 forbids rasterization tooling, not SVG sources; favicon.svg stays untouched.
-   - Recommendation: commit `public/icon-maskable.svg`-style source for future re-rendering, or keep throwaway — either satisfies D-06; planner picks.
+1. **Where does the live e2e header check live?** — **RESOLVED:** new small spec `e2e/manifest.spec.mjs` per the recommendation; adopted by plan 72-01 Task 1.
+2. **Commit the maskable variant SVG as a source file?** — **RESOLVED:** commit `public/icon-maskable.svg` as the re-render source; adopted by plan 72-02 Task 1.
 
 ## Environment Availability
 
