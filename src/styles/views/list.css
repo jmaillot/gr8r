@@ -186,11 +186,18 @@
 }
 /* Phase 71 (D-71-2, ADR-3): the done/todo status chip — the toggleSub
    checkbox is visually subsumed into the pill so the whole chip region
-   toggles. */
+   toggles.
+   Phase 71 (G-71-3): the chip also carries the .pillbtn visual contract
+   (padding/height/radius, components.css .pillbtn) so its visible content
+   starts at the parent task's status pill content x-position — alignment,
+   not restyle: no background/hover copied. */
 .subrow .c-status .stchip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  height: var(--h-sm);
+  padding: 0 7px;
+  border-radius: var(--r-sm);
   cursor: pointer;
 }
 .subrow .c-status .stchip .check {
