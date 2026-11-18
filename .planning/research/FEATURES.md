@@ -1,155 +1,159 @@
-# Feature Research — v2.4: Subtask Tree, Templates, Per-Project Webhooks (MS Teams)
+# Feature Landscape — Installable PWA (v2.7)
 
-**Domain:** self-hosted PM workspace (gr8r / Projects Studio) — hierarchical subtasks, task/project templates, per-project outbound webhooks delivering MS Teams cards
-**Researched:** 2026-11-15
-**Confidence:** HIGH (Teams card format & connector retirement verified against Microsoft Learn + developer-blog sources; tool conventions verified against Vikunja/OpenProject docs)
+**Domain:** PWA installability for an existing self-hosted PM tool (Projects Studio)
+**Researched:** 2026-11-18
+**Mode:** Features (ecosystem scan, scoped to PWA install support only)
+**Overall confidence:** HIGH (Chromium criteria, iOS behavior, Firefox stance all cross-checked against Chrome devrel docs, MDN, Apple support docs, and community references)
 
-## Feature Landscape
+---
 
-### Table Stakes (Users Expect These)
+## Repo dependency check: the existing service worker (HIGH confidence)
 
-**SUB — Subtask tree**
+The browser-push feature already shipped `public/sw.js` (Phase 48, v1.10) and it is
+**directly reusable for install purposes — no second service worker**:
+
+- It is a minimal click/push router: `notificationclick` + `push` handlers only, **no
+  fetch handler, no caching, no lifecycle handlers** (`test/browser-push.test.mjs`
+  structurally forbids `fetch|install|activate|import` tokens in the file).
+- Registered from `src/main.js:~105-108` (`navigator.serviceWorker.register('/sw.js')`,
+  absolute path, `.catch(() => {})`) and from `src/core/push.js:163` behind `api.enabled`.
+- Served `no-cache` by `server.js:8097`; Vite copies `public/*` → `dist/` verbatim.
+
+**Implication:** the "pass-through service worker with no precache/no runtime caching"
+requirement (PWA-03) is **already satisfied** by the existing SW — its no-fetch-handler
+design IS the pass-through behavior. The only questions for the new milestone are:
+(1) whether registration should be unconditional (currently the main.js registration is
+unconditional but `push.js` re-registers only when push enabled — verify the actual gate
+during planning; a registered-but-idle SW is harmless), and (2) whether Chromium's
+`beforeinstallprompt` still needs a fetch handler (see below — the menu-install path
+does not, and that's the path the install banner uses).
+
+One caution: the structural test (`test/browser-push.test.mjs`) bans `install`/`activate`/
+`fetch` tokens in sw.js. PWA-03 must be implemented as "SW already exists, verify it serves
+install criteria" — NOT "add install/activate handlers", which would break that test and
+re-open the cache-poisoning surface T-48-02 closed.
+
+---
+
+## What "installable" means per platform (2026 state)
+
+| Platform | Installable? | Mechanism | What the app gets |
+|----------|--------------|-----------|-------------------|
+| **Chrome/Edge desktop** (Chromium) | Yes | Omnibox install icon or ⋮ menu → "Install page as app"; **`beforeinstallprompt` fires** when criteria met (see nuance below) | Standalone window, own taskbar/dock icon, app menu entry, `display: standalone` honored, richer install dialog if `screenshots` + `description` present |
+| **Android Chrome** | Yes | Omnibox install banner + menu; installs as **WebAPK** (real app entry in launcher) | Standalone, home-screen icon from manifest, `beforeinstallprompt` fires |
+| **iOS / iPadOS Safari** | Yes, always (any site) | Share sheet → **Add to Home Screen** (with "Open as Web App" toggle, iOS 26 wording) | Standalone web-app context; **no `beforeinstallprompt` ever**, no install criteria; icons from manifest **and** `apple-touch-icon` (Safari still prefers the link tag in many versions) |
+| **Firefox desktop** | **No** | No site-to-app install path (removed 2022); community extension workarounds only | Tab-only experience — honest no-op |
+| **Firefox Android** | Partially | Menu → "Install" / "Add to Home Screen" — often a **plain shortcut**, not always a WebAPK/standalone; **`beforeinstallprompt` does NOT fire** | Shortcut or standalone depending on manifest detection; unreliable |
+
+**Chromium criteria nuance (2026, HIGH confidence):** Chrome removed the
+"SW with a fetch handler" requirement for **menu installation** in Chrome 108 (mobile) /
+112 (desktop), and Chrome supplies a default offline page for installed apps without one.
+The *automatic* install-prompt algorithm historically still looked for a fetch handler;
+Chrome has been migrating it to engagement-based signals. Practical consequence for this
+project: **the existing no-fetch-handler SW is fine for the omnibox install path and for
+`beforeinstallprompt` on current Chromium**, but if `beforeinstallprompt` proves flaky in
+UAT, the fallback is the user using the ⋮ menu — the install-hint banner must handle both
+(segments below).
+
+Chromium criteria checklist (what gates `beforeinstallprompt` + omnibox icon):
+1. HTTPS / secure context (already true — self-hosted behind Traefik)
+2. Manifest with `name` (or `short_name`), `start_url`, `display: standalone|fullscreen|minimal-ui`
+3. Icons: **192×192 and 512×512** PNG (the checker above matches what Chromium enforces)
+4. SW registered (any SW; no fetch handler needed for menu install)
+5. Not already installed; ~30s engagement heuristics for the *automatic* prompt
+
+---
+
+## Table Stakes
+
+Missing any of these = the milestone doesn't deliver "installable".
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Multi-level nesting (unlimited or capped depth) | Every reference tool ships it; Jira's 1-level cap is a well-known complaint | MEDIUM | gr8r subtasks are flat today. Model: `parentId` + `order` (sibling sort key) on each task; one recursive render, no adjacency-list SQL gymnastics needed at expected scale. Cap display depth is not a substitute for real parentId chains. |
-| Aggregated progress rollup (parent % done = f(children)) | OpenProject, Vikunja, Asana, Azure DevOps all roll up; a parent that says 0% with all children done feels broken | MEDIUM | Convention: parent progress = weighted mean of children (Vikunja: percent-done or completed/total when unset). Recompute on completion toggle, walking up the chain. Store nothing derived or compute on read — gr8r's `progressOf` already computes progress from tasks, so extend that funnel. |
-| Indented tree rendering in list/table views | OpenProject & Atlassian render child rows indented with disclosure carets | LOW-MEDIUM | Row indent via padding-left(depth×step), expand/collapse caret per parent. gr8r board/table/list views need a consistent indent contract. |
-| Drag to reorder siblings | Standard in every tool | LOW-MEDIUM | Reorder within same parent only for v1 is acceptable; keep the `order` fractional/LexoRank-style key so inserts don't renumber siblings. |
-| Drag to reparent (move under another parent) | OpenProject & Jira Cloud support drag-reparent; users expect it once hierarchy exists | HIGH | Needs cycle detection (can't drop a node into its own subtree), permission check on target parent, and updated rollup on both old and new ancestor chains. Deferrable to a later plan within the phase. |
-| Promote/demote (indent/outdent) via keyboard or context menu | Cheap alternative to free drag-reparent; Taiga/Vikunja offer "move" affordances | LOW | Add-sibling/add-subtask buttons on hover are the minimal convention. |
-| Tree-aware notifications & permissions | A subtask is a task: assignees, reminders, notifs, redaction must keep working | LOW | gr8r multi-assignee subtasks already exist (v2.1); `parentId` must ride the same redaction/permission funnel (`memberCanReadProject`); deleting a parent must cascade or re-parent children explicitly (decide and pin). |
+| `manifest.webmanifest` in `public/` (name "Projects Studio", `short_name`, `start_url`, `scope: "/"`, `display: "standalone"`, `theme_color`, `background_color`) | The single gate for every platform; iOS reads `start_url`/`scope`/`display` from it | **Low** | Static JSON outside the Vite bundle — no chunk-gate impact. `scope: "/"` is load-bearing on iOS (omitting it makes in-app links pop out to Safari). `start_url: "/"` — no `?source=pwa` needed unless you want analytics (you don't). Add `id` so future reinstalls dedupe to one app entry. |
+| `<link rel="manifest">` in index.html head | Discovery | **Low** | One line in `index.html`. |
+| Icon set: 192×192 + 512×512 `purpose: "any"`, and a **maskable** variant (separate entries or `purpose: "any maskable"` per file) | Chromium requires 192+512; maskable prevents the circle-crop chop on Android; iOS needs 180×180 `apple-touch-icon` PNG (SVG won't do) | **Low-Med** | Derived from the existing brand mark (`public/favicon.svg`, `logo-*.svg`). Rasterizing an SVG at 3 sizes is a one-off script or hand export — zero deps. PWA-02. Add `<link rel="apple-touch-icon">` (180×180) — Safari ignores manifest icons for the home screen in practice. |
+| SW registered unconditionally at boot | Chromium install criteria + iOS standalone "Open as Web App" behavior benefits; already done | **Zero (done)** | `public/sw.js` already registered from `main.js`. Verify the registration gate isn't push-only; if it is, make the boot registration unconditional (SW does nothing without a push anyway). |
+| HTTPS | Secure context gate | **Zero (done)** | Self-hosted behind Traefik. localhost dev is a secure context too. |
+| Honest iOS degradation in the install hint | iOS never fires `beforeinstallprompt`; users must use Share → Add to Home Screen | **Low** | Copy-only: detect iOS Safari (`navigator.userAgent` or feature-absence: no `beforeinstallprompt` + is-mobile + standalone not detected), show manual instructions. EN+FR i18n keys per the standing gate. PWA-04. |
+| Honest Firefox-desktop degradation | No install path at all | **Low** | Same banner logic: if no `beforeinstallprompt` and not iOS → either hide the banner or show "not supported in this browser". Hiding is more honest for desktop Firefox; the iOS copy is worth showing because install DOES work there manually. |
 
-**TMPL — Task & project templates**
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Task template with a predefined subtask checklist | The killer use of templates in PM tools: "onboarding a client" spawns 8 named subtasks. With a subtask tree shipping in the same milestone, checklists are natural | LOW-MEDIUM | Template = saved task shape: title, description, assignee hints, due-offset days, ordered subtask list (title + offsets). Apply → instantiate real tasks. |
-| Project template (structure + starter tasks) | OpenProject/Taiga/Leantime all offer project-from-template; gr8r has repeatable project shapes (client onboarding, sprints) | MEDIUM | Template carries project name pattern, columns/labels if gr8r has them, and a task tree. Apply creates the project (respecting lead-on-create + permCreate rules from v2.0/v2.1). |
-| Template gallery / picker at creation time | Convention: templates offered in the "New task"/"New project" flow, not buried in settings | LOW | A section in the creation modal listing templates (name, task count). No separate admin page needed at v1. |
-| Template storage & CRUD | Templates are data, not document hacks | LOW | Server table (v2.2 `saved_views` precedent) or a document section behind the existing merge/normalize machinery. Create/edit/duplicate/delete; scope: workspace-wide list, creator-tagged. |
-| Placeholders / due-date offsets | Users expect `{+N days}` or "due = creation date + N" semantics | MEDIUM | Minimal convention: per-task/subtask `dueOffsetDays`; absolute dates in a template are a known trap (stale dates when applied months later). |
-
-**WHK — Per-project outbound webhooks**
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Per-project webhook targets (URL + event filter) | Vikunja: webhook targets attached to a project with per-target event selection; Taiga similar. gr8r requirement already scopes this way (project-scoped, not team) | MEDIUM | New server table `webhooks(project_id, url, secret, events[], enabled)`; CRUD routes gated to owner/admin/project-leader (gr8r's `projectPermFor` funnel). |
-| Event catalog: task.created / task.updated / task.deleted / task.assignee / comment.created | These exact names are the Vikunja convention; Taiga uses `task.created`-style slugs too. Users wiring n8n/Power Automate recognize them | LOW | Map onto gr8r's existing server-side notification event points (assign/mention/comment/update paths already emit rows) — hook the same moments, don't invent a second event bus. |
-| HMAC signature header + per-hook secret | Standard (Vikunja signs with the target secret; GitHub-style `X-Signature` conventions are the ecosystem default) | LOW | `X-Gr8r-Signature: sha256=<hmac(secret, body)>`; secret shown once at creation, hash-stored like gr8r's `psk_live_` API keys. |
-| Payload envelope: event name, timestamp, project, task snapshot | Consumers (Power Automate parse-JSON) need a stable shape | LOW | `{ event, workspace, project: {id,key,name}, data: {task fields}, occurredAt }`. Deterministic field whitelist — see the Vikunja CVE pitfall in PITFALLS: never serialize with the triggering user's view. |
-| Send with retry/backoff + failure visibility | Fire-and-forget silently losing deliveries is the #1 webhook complaint | MEDIUM | gr8r already owns an SMTP retry semantics backlog item (v2.3 POL) — mirror the same fail-absent + logged-failure pattern; a per-hook "last delivery / last error" readback beats a dead-letter queue at this scale. |
-| Rate limiting per hook | Requirement already pinned (fail-absent + per-hook secret + rate-limit) | LOW | Simple token bucket or min-interval per target; skip-and-log on excess, never queue-bound. |
-
-**MS Teams specifics (verified HIGH confidence):**
-
-- The legacy Office 365 **incoming-webhook connector format (`MessageCard`, `@type: "MessageCard"` / `MessageOffice365`) is retired** — creation blocked Aug 2024, connectors disabled May 18–22 2026. Any "Teams webhook" feature built on MessageCard today is DOA for new setups.
-- The current path is a **Teams Workflows webhook** (Power Automate "Post to a channel when a webhook request is received"), which expects an **Adaptive Card**: `{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","contentUrl":null,"content":{...adaptive card...}}]}`. All native Adaptive Card schema elements are supported **except `Action.Submit`**.
-- However, per Microsoft message-center update **MC1181996**, Workflows webhooks also accept legacy **MessageCard payloads** for migration compatibility — so supporting BOTH envelopes is cheap and maximally compatible: detect target type per hook (a `format: teams-adaptive | teams-messagecard | raw-json` field on the webhook row) rather than hardcoding one.
-- Card content conventions: `TextBlock` heading + `FactSet` (Assignee, Due, Priority) + `Action.OpenUrl` deep link to `/w/:slug/task/:key` (gr8r already has deep links from emails — reuse the same URL builder). No HTML in Adaptive Cards — use markdown subset (`**bold**`, links). Keep cards ≤ ~28 KB (Teams card size limit).
-- Because payloads are raw JSON and any URL is user-supplied, gr8r's SSRF posture matters: the hand-rolled outbound fetch must be scheme-validated (https), and per the deployment profile the instance is self-hosted so internal-network policy is the operator's — document it in DEPLOY.md (Vikunja documents exactly this in its security-hardening page).
-
-### Differentiators (Competitive Advantage)
+## Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Tree + templates + webhooks all zero-dependency | No self-hosted PM tool offers this trio without a plugin/queue service; gr8r's hard constraint (no new runtime deps) is itself a differentiator | — | Pure `node:crypto` HMAC + `fetch` (undici) with AbortController timeout. |
-| Raw-JSON hook format alongside Teams formats | Lets gr8r webhooks feed n8n/Home Assistant/scripts, not just Teams — Vikunja users' top automation ask | LOW | The `format` field above costs one switch statement. |
-| Template apply preserves subtask tree structure | Templates instantiating nested hierarchies (not just flat checklists) are rare outside Jira/Asana | LOW | Falls out free once templates store `parentId` references among their subtask list. |
-| Per-hook delivery log + "send test event" button | Best-in-class webhook UX (Stripe-style); trivially buildable on the delivery log | LOW | One `POST …/test` route + a small read-only log panel in project settings. |
+| **Install hint banner driven by `beforeinstallprompt`** (deferred prompt capture → own in-app banner button calls `prompt()`, then hide; hide forever on `appinstalled` or dismissal, persisted in localStorage) | The core UX of PWA-04: don't rely on the omnibox icon users never notice | **Low-Med** | Listen on `window`'s `beforeinstallprompt`, `e.preventDefault()`, stash the event, render banner; call `deferredPrompt.prompt()` on click; check `userChoice` outcome. Suppress when `window.matchMedia('(display-mode: standalone)')` or `navigator.standalone` (iOS) — already installed. ~40 lines, zero deps. |
+| `display: standalone` polish — verify the card-stack layout works in the standalone window and there's no dead space where browser chrome used to be; handle `theme_color` for the Android status bar | The whole point of installing: app-shaped window | **Low** | Mostly QA + one meta tag. Android colors the task switcher/status bar from `theme_color`; iOS uses `apple-mobile-web-app-status-bar-style` (default/black/black-translucent) — `black-translucent` pairs with `viewport-fit=cover` + safe-area insets. Check whether the existing CSS already uses safe-area vars. |
+| `apple-mobile-web-app-capable` / `apple-mobile-web-app-title` meta tags | iOS standalone mode + home-screen label without using the page `<title>` | **Low** | Two meta tags. iOS 17+ honors `display: standalone` from the manifest, but the meta tags are still the reliable path. |
+| `shortcuts` in the manifest (e.g. "My tasks", "Inbox", "Search") | Long-press/dock context menu jumps straight into the app's hottest surfaces | **Low** | Pure manifest JSON, static URLs (`/w/...` is workspace-scoped so shortcuts must use non-scoped routes — check what `/` and existing top-level routes resolve to; shortcuts to `/w/:slug` would hardcode a slug, which is wrong for multi-tenant users). Keep to 2–3 generic targets or defer. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+## Anti-Features (explicitly NOT for this milestone)
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|--------------|-----------------|-------------|
-| Per-team webhooks | Teams already scope many things in gr8r | Explicitly out of scope this milestone (PROJECT.md); team→project is many-to-many so event scoping gets ambiguous | Project-scoped only; revisit when a real request exists. |
-| Bi-directional Teams (approve tasks from a card) | Looks magical | Requires bot framework, OAuth, and Interactive `Action.Submit` — which Teams incoming webhooks explicitly do NOT support | `Action.OpenUrl` deep links only. |
-| Nested-subtask progress edited by hand on parents | Users want to override rollup | Two sources of truth conflict constantly (OpenProject has the same fight with manual vs computed progress) | Computed-only rollup in v1; manual-override flag only if requested post-launch. |
-| Unlimited-depth drag-and-drop tree in board view | Kanban cards with subtrees | Board cards are compact; dragging nested trees across columns breaks the swimlane model in every tool that tried it (Trello only does flat checklists on cards) | Tree lives in list/table views; board cards show a child-count badge + progress bar, click-through to the tree. |
-| Template versioning/audit | Enterprise instinct | Overkill for a single-tenant-ish self-hosted workspace | Duplicate-then-edit is the convention (OpenProject does the same). |
-| Generic webhook plugin/transform system (arbitrary templating of payloads) | Power-user appeal | Template injection = XSS-adjacent payload bugs; Vikunja's CVE-2026-123524 class of webhook information disclosure comes from exactly this complexity | Fixed envelope + fixed card renderers (adaptive/messagecard/raw). |
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Offline caching / precache / runtime fetch handler** (Workbox, service-worker toolkit, anything intercepting `fetch`) | The owner's decision: strictly online. Adding a fetch handler re-opens the cache-poisoning surface T-48-02 eliminated, risks stale-bundle bugs with a rolling self-hosted deploy, and the existing test suite structurally forbids fetch/install/activate handlers in sw.js | Keep the existing no-fetch SW untouched; Chrome ships a default offline page for installed apps without one |
+| **`share_target`** (receive shares from the OS) | Requires the OS to hand off to a form/POST endpoint; multi-workspace scoping is ambiguous (which workspace receives the share?), and it's a mobile-only nicety | Revisit only if someone asks to "send this link to Projects Studio" |
+| **Protocol handlers (`registerProtocolHandler`)** | No PM-tool use case; modal-permission noise | Skip |
+| **`window-controls-overlay` / `display_override`** | Desktop-only window-chrome customization; the standard standalone window is already the goal; WCO adds CSS safe-area complexity for zero user value | Standard `standalone` only |
+| **Splash screens / `apple-touch-startup-image`** | iOS startup images need a matrix of exact device resolutions (dozens of PNGs) for a sub-second flash; Chrome desktop/Android don't use them | Rely on the fast SPA boot + `background_color` fill (Chrome/Android generate a splash from `background_color` + icon automatically — free) |
+| **`screenshots` in manifest** | Only enriches Chrome's richer install dialog; requires maintaining marketing screenshots in the repo, and they go stale | Defer; the standard install dialog is fine |
+| **`file_handlers`, `launch_handler`, badges, `related_applications`** | No use case here | Skip |
+| **Second service worker for install** | Two SWs on one origin = scope/claim race with the push SW | One SW serves push AND install (see dependency check) |
+| **Push rework** | Browser push already shipped; iOS standalone push exists on iOS 16.4+ but only for installed web apps and reuses the existing VAPID path — out of scope per milestone | Note as future bonus, don't touch |
+
+---
+
+## The honest install hint banner, per platform (PWA-04 behavior spec)
+
+| Environment | Detection | Banner behavior |
+|-------------|-----------|-----------------|
+| Chromium desktop/Android, criteria met | `beforeinstallprompt` fired, not standalone | Show in-app banner ("Install Projects Studio"); click → `prompt()`; hide on `appinstalled`, on dismissal (persisted), or `userChoice !== 'accepted'` |
+| Chromium already installed | `display-mode: standalone` / `display-mode: window-controls-overlay` | No banner (suppress at boot) |
+| iOS / iPadOS Safari | No `beforeinstallprompt` + iOS UA + not `navigator.standalone` | Show banner with manual copy: Share → Add to Home Screen → Open as Web App (EN+FR) |
+| iOS already installed (`navigator.standalone` true) | | No banner |
+| Firefox desktop | No `beforeinstallprompt`, not iOS | No banner (or nothing — install genuinely impossible) |
+| Firefox Android / Samsung Internet edge cases | No `beforeinstallprompt`, mobile UA, not iOS | Optional: generic "install from browser menu" copy; safe to omit — menu install still works without our help |
+| Other/unknown | No event within N seconds | No banner — silent honest no-op |
+
+Key correctness points: `beforeinstallprompt` may fire before or after app code runs
+(register the listener in `main.js` at boot, before `load`); the captured event is
+single-use (`prompt()` consumes it); never call `prompt()` without a user gesture;
+`appinstalled` is the reliable "done" signal on Chromium.
+
+---
 
 ## Feature Dependencies
 
 ```
-[SUB parentId + order model]
-    └──requires──> [tree render + indent]
-    └──requires──> [cycle-safe reparent]  (can ship after v1 render)
-    └──enables──> [progress rollup]  (extend existing progressOf)
-    └──enables──> [TMPL subtask-checklist templates]
-
-[TMPL templates storage]
-    └──requires──> [server-side template CRUD]  (saved_views table precedent)
-    └──requires──> SUB model  (checklist templates instantiate subtasks)
-
-[WHK webhooks]
-    └──requires──> [existing server event points]  (notification emit sites: assign/mention/comment/update)
-    └──requires──> [memberCanReadProject permission funnel]  (payload whitelisting)
-    └──independent of──> SUB and TMPL  (except: does deleting a task emit task.deleted? decide once)
+manifest.webmanifest + icons ─┬─→ Chromium installable (omnibox/menu) ─→ beforeinstallprompt banner
+existing sw.js (no change) ───┘        │
+apple-touch-icon + iOS meta ──→ iOS Add to Home Screen works ─→ iOS manual-instructions copy
+HTTPS (done) ─────────────────→ everything
+i18n keys (EN+FR) ────────────→ banner copy (standing gate)
 ```
 
-### Dependency Notes
+The banner depends on the manifest being correct — an incomplete manifest = no
+`beforeinstallprompt` = banner silently never appears (which is also the graceful
+failure mode, but check DevTools Application panel during UAT).
 
-- **SUB is the foundation:** templates that include subtask checklists only make sense once `parentId` exists; do SUB first.
-- **WHK is independent** and the lowest-risk feature — it hooks gr8r's existing server-side emit moments. Good candidate for a parallel phase.
-- **SUB conflicts with board-view UX** unless the board shows only flat cards + child badges (see anti-feature above).
-- **POL backlog items are fully independent** — schedule them anywhere.
+## MVP Recommendation
 
-## MVP Definition
+Prioritize:
+1. Manifest + icon set + index.html head links (PWA-01, PWA-02) — everything gates on this
+2. Verify/extend SW registration so it's unconditional (PWA-03 is ~a verification task, not a build task)
+3. `beforeinstallprompt` banner with iOS manual-instructions fallback (PWA-04)
 
-### Launch With (v2.4)
+Defer: manifest `shortcuts` (needs a non-workspace-scoped route decision), manifest
+`screenshots` (stale-asset maintenance), safe-area/status-bar polish beyond `theme_color`
+(one follow-up if the standalone window shows a regression).
 
-- [ ] SUB: `parentId`+`order`, indented tree in list/table, add-subtask/sibling, aggregated progress, tree-aware delete policy — the core hierarchy
-- [ ] SUB: sibling drag-reorder; **reparent via drag OR promote/demote** (promote/demote is the cheaper honest v1)
-- [ ] TMPL: task templates with ordered subtask checklists + due offsets; project templates with starter task tree; picker in the creation flows
-- [ ] WHK: project-scoped CRUD (owner/admin/leader), event filter, HMAC-signed delivery, **Teams Adaptive Card + MessageCard + raw JSON formats**, rate limit, delivery-log readback, test-send
-- [ ] POL: the four v2.3 backlog items (mobile hidden[] fields, SMTP retry semantics — which the webhook retry design should mirror, WR-01 CSS, Nyquist reconciliation)
-
-### Add After Validation (v2.5+)
-
-- [ ] Full drag-reparent with cycle detection UI polish — trigger: reparent demand from real usage
-- [ ] Manual progress override on parents — trigger: user complaint that computed-only feels rigid
-- [ ] Per-team webhooks — trigger: explicit owner request
-- [ ] Template marketplace/import-export (JSON copy) — trigger: multi-workspace users
-
-### Future Consideration
-
-- [ ] Bi-directional Teams bot interactions — blocked on Adaptive Cards' Action.Submit being unsupported for incoming webhooks
-- [ ] Webhook dead-letter queue with replay — trigger: delivery volume that makes the log insufficient
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| SUB parentId + tree render + rollup | HIGH | MEDIUM | P1 |
-| SUB reparent (promote/demote first, drag second) | MEDIUM-HIGH | LOW→HIGH | P1 (demote) / P2 (drag) |
-| TMPL task + project templates w/ checklists | HIGH | MEDIUM | P1 |
-| WHK Teams webhooks (adaptive + messagecard) | HIGH | MEDIUM | P1 |
-| WHK raw-JSON format | MEDIUM | LOW | P2 |
-| WHK delivery log + test send | MEDIUM | LOW | P2 |
-| Board-view child badges | MEDIUM | LOW | P2 |
-| Drag-reparent full UX | MEDIUM | HIGH | P2/P3 |
-
-## Competitor Feature Analysis
-
-| Feature | Vikunja | OpenProject | Taiga | gr8r approach |
-|---------|---------|-------------|-------|----------------|
-| Subtask hierarchy | Unlimited nesting, aggregated percent-done | Work-package parent/child, drag-reparent, rollup, roadmap-level | Tree list, reorder | `parentId`+`order`, computed rollup via `progressOf` |
-| Templates | Saved filter views only (weak) | Work-package templates (Enterprise), project templates | Issue templates via plugins | Native task + project templates with subtask checklists — a real differentiator vs Vikunja |
-| Webhooks | Project-level targets, event filter, HMAC-signed, raw JSON | Enterprise webhooks (paid tier) | Webhooks on most objects (paid in some tiers) | Free in core, three payload formats incl. Teams cards |
-| Teams format | Raw JSON only (user wires their own flow) | MessageCard-era (legacy) | Legacy MessageCard | **Adaptive Card first** (connectors retired May 2026), MessageCard + raw JSON as alternates |
+Defer (likely forever, per owner decision): everything in Anti-Features.
 
 ## Sources
 
-- Microsoft Learn — *Types of Cards & their Usage* (Teams): Adaptive Cards via incoming webhooks; Action.Submit unsupported — learn.microsoft.com/en-us/microsoftteams/platform/task-modules-and-cards/what-are-cards (HIGH)
-- Microsoft 365 dev blog — *Retirement of Office 365 connectors within Microsoft Teams* (Aug 2024) + message-center MC1181996 (connectors disabled May 18–22, 2026; Workflows webhooks accept MessageCard payloads) (HIGH)
-- Microsoft Support — *Send messages in Teams using incoming webhooks* (Workflows webhook, Adaptive Card envelope) (HIGH)
-- Vikunja docs — Webhooks API & help pages: project-level targets, per-target events, HMAC signing, raw payloads; security-hardening page on outbound requests (HIGH)
-- Rapid7 CVE-2026-123524 — Vikunja webhook payload built with the triggering user's permission context (information disclosure) (HIGH — pitfall evidence)
-- OpenProject community roadmap — child work-package progress rollup, drag & drop ordering/reparenting features (MEDIUM)
-- Atlassian Cloud changelogs — drag-reparent convention for hierarchical work items (MEDIUM)
-- gr8r `.planning/PROJECT.md` — v2.4 scope, constraints (zero deps), existing systems (progressOf, memberCanReadProject, notification emit sites, saved_views precedent)
-
----
-*Feature research for: gr8r v2.4 Automation & Productivity*
-*Researched: 2026-11-15*
+- Chrome devrel — "Revisiting Chrome's installability criteria" (fetch-handler removal, Chrome 108/112) — HIGH
+- web.dev — install criteria + installation-prompt guidance (`beforeinstallprompt` lifecycle) — HIGH
+- MDN — Making PWAs installable — HIGH
+- Apple support + Safari Web Content docs — Add to Home Screen, `apple-touch-icon`, iOS standalone meta — HIGH
+- whatpwacando.today / OpenPWA — Firefox (no desktop install, no `beforeinstallprompt` even on Android) — MEDIUM-HIGH
+- Repo evidence: `public/sw.js`, `src/main.js`, `src/core/push.js`, `server.js:8097`, `test/browser-push.test.mjs`, Phase 48 RESEARCH/REVIEW artifacts — VERIFIED (local)

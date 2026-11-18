@@ -1,104 +1,348 @@
-# Stack Research
+# Stack Research — PWA Installability (v2.7 Installable App)
 
-**Domain:** Self-hosted PM workspace — hierarchical subtasks, task/project templates, per-project outbound webhooks (Microsoft Teams format)
-**Researched:** 2026-11-15
-**Confidence:** HIGH (payload/transport) · MEDIUM (template storage choice)
-**Hard constraint honored:** zero new runtime or dev dependencies — every recommendation below is Node 24 stdlib, browser platform APIs, or a pattern already proven in this repo.
+**Domain:** PWA installability for an existing zero-dependency Vite + Node 24 self-hosted app
+**Researched:** 2026-11-18
+**Confidence:** HIGH (Chromium criteria cross-checked across web.dev, MDN, Chrome for Developers and a Sept-2026 browser survey; repo integration points read from source)
 
-## Recommended Stack
+## Executive verdict
 
-### Core Technologies
+**The entire milestone needs ZERO new dependencies and almost zero new build machinery.** The
+critical 2026 finding: **Chromium no longer requires a service worker with a fetch handler to
+install** — the fetch-handler requirement was removed in Chrome 108 (Android) / 112 (desktop),
+and current Chromium source has no SW check in the promotion pipeline at all (a registered SW
+*is* still the safest bet for the `beforeinstallprompt` heuristic and for older Android
+Chromium — and this repo **already registers one** at `/sw.js`). So the deliverable collapses to:
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Node.js built-in `fetch` / undici | Node 24 global | Outbound webhook POST delivery | Native since Node 18; `AbortSignal.timeout(ms)` for the per-delivery deadline. This is the web-push precedent (server.js:1693 dynamically imports a dep only because VAPID crypto is nontrivial — Teams delivery has no such complexity: it is a plain JSON POST). Zero packages. |
-| `node:crypto` | Node 24 built-in | Per-hook secret generation (`randomBytes`), HMAC signing if a non-Teams target is ever added, `timingSafeEqual` for any secret comparison | The repo already uses it for TOTP, OIDC RS256/JWKS, scrypt and HMAC digest tokens (v1.9 UNSUB). No new dependency needed for secrets. |
-| Workspace-document JSON tree | existing doc-PUT funnel | Subtask hierarchy + templates storage | Subtasks are ALREADY `t.subtasks[]` in the doc (server.js:887 normalizes them; src/actions/subtasks.js mutates them through doc PUT). A multi-level tree is a schema evolution of existing JSON, not new infrastructure: `mergeClientDoc` normalization and revision-based optimistic concurrency work unchanged. Zero migration, works identically on SQLite and pg because both store the same JSON document. |
-| Server-side authority table (`project_webhooks` + delivery log) | additive migration, both backends | Webhook definitions, per-hook secrets, delivery history | Follows the exact `push_subscriptions` precedent (v2.2: "SQLite+pg mirror") and the `saved_views` table precedent (v2.2 D). Secrets must NOT ride the client-visible doc — `redactDoc()` would need yet another sweep and the doc PUT merge funnel is hostile to secret-bearing fields. A table keeps secrets server-only, gives an auditable delivery log, and needs the standard additive-migration machinery already proven (`test/migration.test.mjs`, byte-identical second boot, pre-backup). |
+1. a hand-written `public/manifest.json` (static file, never enters the bundle),
+2. PNG icons generated from `public/favicon.svg` (raster export is a one-time asset job, not code),
+3. reusing the **existing** `sw.js` + its existing `/sw.js` registration in `src/core/push.js`,
+4. ~1–2 kB of install-hint code listening for `beforeinstallprompt`.
 
-### Supporting Libraries
+Nothing touches the 500 kB chunk gate: manifest, icons and sw.js are static `public/` assets
+copied verbatim by Vite; the only JS added is the banner logic (see chunk-gate section).
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| Adaptive Card / MessageCard JSON (hand-built objects, no schema lib) | Adaptive Card schema 1.4–1.6; MessageCard legacy | Teams message payload | **Critical current-state finding:** Microsoft permanently retired Office 365 Connectors (the classic `webhook.office.com` incoming webhooks) in the May 18–22, 2026 rollout. As of Nov 2026 the only webhook transport for Teams is the **Power Automate "Workflows"** webhook (`*.logic.azure.com/workflows/...` URLs), which accepts BOTH legacy MessageCard payloads (renders, but no interactive buttons) and Adaptive Card payloads (`{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{...}}]}`). Build payloads as plain JS objects — no library. Target MessageCard for the simple case (title, text, facts→sections, OpenUri link) since it is the literal "MS Teams incoming-webhook format" the requirement names and Workflows still accepts it; keep the payload builder one small pure module so an Adaptive Card builder can be added later without touching delivery code. |
-| Plain-JSON tree traversal (client + server, hand-rolled DFS) | — | Multi-level subtask rendering, aggregated progress, cycle guards | A 3-line recursive walk over `subtasks[].subtasks`. No tree library: the data lives in the doc, the client already renders flat subtasks in the drawer (src/actions/subtasks.js), and aggregation is `progress = doneLeaves/totalLeaves` via memoized DFS. Server-side aggregation is only needed for the FTS5/pg `task_search_projection` sync — extend the existing projection updater (db-adapter.mjs:514–537) to fold child titles into the folded text. |
-| Template instantiation as pure doc-mutation functions | — | Task & project creation from templates | The app ALREADY has i18n `project.template.*` seed templates (src/actions/actions.js:1693, 4389) creating a project with predefined tasks. v2.4 templates = the same instantiation path, but definitions stored as editable data instead of i18n literals. Store template definitions as normalized fields in the workspace doc (or a `templates` table — see Variants below); instantiation clones them through the existing `normalizeTaskAssignees`/normalize pipeline so new docs are automatically valid. |
+---
 
-### Development Tools
+## Browser install criteria, verified current for 2026
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| Node built-in `node:test` + existing harness | Unit tests for tree/normalize/payload/webhook-queue logic | 1524-test suite; webhook delivery tests mock `fetch` via a module seam exactly like `sendPushFor` has a documented test seam (server.js:1779 comment "real web-push sender" swap). |
-| Playwright e2e (existing) | Tree render, template flows, webhook config UI | No new tooling; existing 115-spec baseline. |
-| Additive-migration scripts (existing pattern) | `project_webhooks` + `webhook_deliveries` tables on both backends | Copy the `push_subscriptions` migration shape: guarded, pre-backup, byte-identical second boot, dual SQLite/pg schema. |
+### Chrome / Edge / Samsung Internet (Chromium)
 
-## Installation
+| Criterion | Detail (2026) |
+|---|---|
+| Secure context | HTTPS (localhost exempt) |
+| Manifest linked | `<link rel="manifest">` on the page; parses cleanly |
+| `name` **or** `short_name` | Either satisfies |
+| `icons` | A **192×192 and a 512×512** entry for promotion; install dialog needs one icon ≥144 px in PNG/SVG/WebP with `sizes` declared. Both sizes checked — one 512 alone fails. `sizes` uses lowercase `x` |
+| `start_url` | Must be inside scope and return a document |
+| `display` | `standalone`, `fullscreen` or `minimal-ui` (or a `display_override` entry resolving to one). `browser` = never installable |
+| `prefer_related_applications` | Absent or `false` |
+| **Service worker** | **NOT required** since Chrome 108 (mobile) / 112 (desktop) for menu installs; the `beforeinstallprompt` heuristic no longer gates on a fetch handler in current Chromium. **Keep a registered no-cache SW anyway** (older Android Chromium, belt-and-braces for the prompt heuristic — and it already exists here) |
+| Engagement heuristics | User has tapped the page at some point + ~30 s viewed (cumulative, any session); Chrome delays `beforeinstallprompt` until these are met — "DevTools says installable but no event yet" is expected behavior |
+| Not already installed | Per profile |
 
-```bash
-# NOTHING to install. Zero new dependencies is achievable and is the plan.
-# Everything ships in Node 24 stdlib + the existing Vite browser bundle.
+Chrome's own promo UI is rate-limited (90 days after dismissal on Android, 7 days after
+ignore; ML classifier on Android); **`beforeinstallprompt` itself is not rate-limited** — your
+in-app banner is the reliable surface, which is exactly PWA-04.
 
-# Verify the two existing runtime deps remain the only ones:
-node -e "const p=require('./package.json'); console.log(Object.keys(p.dependencies))"
-# → expect ['pg', 'web-push'] unchanged after this milestone.
+Debug authority: DevTools → Application → Manifest → Installability (Lighthouse's PWA category
+is retired — do not chase it).
+
+### Safari / iOS / iPadOS
+
+- **No installability criteria at all.** Since iOS/iPadOS 26, *every* site added via
+  Share → Add to Home Screen opens as a web app by default; macOS Add to Dock works for any site.
+- **`beforeinstallprompt` is never fired on iOS — not supported, not "coming".** The honest
+  degradation path is: either show nothing, or show a static instruction hint ("Share → Add to
+  Home Screen" / FR "Partager → Sur l'écran d'accueil") when iOS Safari is detected. Decide
+  which in the phase plan; research recommends the static hint (it is honest and cheap).
+- iOS ignores `display` for install gating but **honors `display: standalone` at launch** and
+  uses the manifest name/icons. **`apple-touch-icon` (180×180 PNG) is still required** — iOS
+  does not read the manifest `icons` for the home-screen icon reliably (it does since iOS 15+
+  in many cases, but the `apple-touch-icon` link remains the dependable route).
+- `theme-color` meta is honored in recent Safari standalone tabs.
+- Startup images (`apple-touch-startup-image`) are unnecessary on modern iOS — skip them.
+
+### Firefox
+
+- **Never fires `beforeinstallprompt`.** No custom in-app banner is possible.
+- Android: installs manifest-based apps as home-screen shortcuts (HTTPS, display ≠ browser,
+  an icon ≥192 px).
+- Desktop: Firefox 143+ (Sept 2025) can pin a site as a Windows taskbar web app — manifest
+  driven, no criteria published, no prompt API. No code needed from us; the manifest is the
+  whole integration.
+
+---
+
+## Recommended stack additions
+
+### Core (everything)
+
+| Technology | Version | Purpose | Why |
+|---|---|---|---|
+| `public/manifest.json` (hand-written) | — | Web app manifest | Static JSON in `public/` is copied verbatim by Vite, never hashed, never bundled, zero chunk-gate impact. No plugin needed — there is no dynamic content in a manifest |
+| `public/icon-192.png`, `icon-512.png`, `icon-192-maskable.png`, `icon-512-maskable.png`, `apple-touch-icon.png` (180) | — | Icon set | Chromium checks 192+512 explicitly; separate maskable files (see icon section); 180 PNG for iOS. All rasterized once from `public/favicon.svg` |
+| `public/sw.js` (existing, unchanged semantics) | — | Pass-through SW | Already exists (Phase 48 push click-router), already registered at `/sw.js`, already served `no-cache` by `server.js:8097`. **Has no fetch handler by deliberate T-48-02 decision — which is fine for installability in 2026** |
+| Install-hint module (~1–2 kB, new) | — | `beforeinstallprompt` banner | The only real JS written this milestone |
+
+### Supporting: nothing
+
+No library, dev dependency, or Vite plugin is warranted. See "What NOT to Use".
+
+## Recommended manifest (exact members and values)
+
+```json
+{
+  "id": "/",
+  "name": "Projects Studio",
+  "short_name": "Projects",
+  "description": "A calm, structured project management workspace.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#…existing app background…",
+  "theme_color": "#…existing brand color…",
+  "icons": [
+    { "src": "/icon-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
 ```
+
+Member-by-member rationale:
+
+- **`id: "/"`** — permanent app identity, resolved against the start_url origin. Fix it now so
+  a future `start_url` change doesn't silently create a second installed app. (HIGH confidence.)
+- **`start_url: "/"` + `scope: "/"`** — the app is multi-tenant (`/w/:slug/…`), so the only
+  scope-safe start URL is `/` (existing boot flow already redirects to the last workspace).
+  Root-relative paths; relative URLs resolve against the manifest URL, absolute paths avoid
+  all ambiguity.
+- **`display: "standalone"`** — the milestone goal; one of the three Chromium-accepted values.
+  Do not use `window-controls-overlay` in `display` (ignored/blocks install) — it would go in
+  `display_override`, which this app doesn't need.
+- **`short_name`** — Chromium prepends `short_name`/`name` to the standalone window title
+  (anti-disguise measure); don't repeat the app name in `<title>`.
+- **Separate `any` and `maskable` files** — `"purpose": "any maskable"` on one padded file is
+  valid syntax but makes the padded image look shrunken in unmasked contexts. Ship separate
+  files (W3C spec + manifest-cheatsheet guidance).
+- **No `shortcuts`, `screenshots`, `prefer_related_applications`, `lang`, `dir`** — optional;
+  shortcuts/screenshots are richer-UI polish that can come later. `prefer_related_applications`
+  is simply absent (absent == false).
+
+### Icon set (PWA-02)
+
+| File | Size | Purpose | Notes |
+|---|---|---|---|
+| `icon-192.png` | 192×192 | `any` | Chromium hard requirement |
+| `icon-512.png` | 512×512 | `any` | Chromium hard requirement |
+| `icon-192-maskable.png` | 192×192 | `maskable` | Opaque full-bleed background; logo inside the central 80% circle (safe zone) |
+| `icon-512-maskable.png` | 512×512 | `maskable` | Same design rule |
+| `apple-touch-icon.png` | 180×180 | — (link tag) | iOS home-screen icon; no transparency quirks to manage (iOS flattens anyway) — opaque background recommended |
+
+All rasterized once from the existing `public/favicon.svg` (source of truth stays the SVG;
+PNGs are build-time-generated assets checked into `public/`, e.g. via a one-off `sharp`/
+`rsvg-convert` run — **not** a build step, to keep zero dev dependencies). The maskable variant
+needs a padded redesign of the mark (favicon is almost certainly not safe-zone-aware), so the
+icon job includes a maskable-specific layout, not blind padding.
+
+`type` always declared; `sizes` lowercase `x`. No SVG in the manifest `icons` (Chromium supports
+it but raster fallback is required anyway — PNG-only is simpler and universal).
+
+## Service worker: what a no-cache SW needs (PWA-03)
+
+**Good news: the existing `public/sw.js` is already the correct shape.** It has no fetch
+handler (T-48-02 — structurally eliminates the cache-poisoning surface), holds push +
+notificationclick handlers, and `server.js:8097` serves it `no-cache`. In 2026 this SW:
+
+- does **not** block install (no fetch-handler requirement anymore),
+- does **not** intercept any request → app stays strictly online,
+- satisfies the "registered SW" belt-and-braces for older Android Chromium and the
+  `beforeinstallprompt` heuristic.
+
+Two things to add/decide:
+
+1. **Lifecycle handlers — deliberate, small deviation from the T-48-02 comment.** The current
+   SW deliberately omits `install`/`activate` handlers. For a *no-cache* SW this is the one
+   place the omission bites: without `skipWaiting`, a new sw.js version waits for every tab
+   to close before activating, so a push-handler fix can lag days. Add:
+
+   ```js
+   self.addEventListener('install', () => self.skipWaiting());
+   self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+   ```
+
+   These are safe precisely because there is no fetch handler — `clients.claim()` cannot
+   change how any page load is served. Document the amendment to the Phase 48 comment.
+2. **Registration — move to unconditional.** `src/core/push.js` registers `/sw.js` only when
+   `api.enabled`. For installability the SW must register in all server deployments regardless
+   of push enabled-state (and `chrome://web-apk`/WebAPK creation on Android keys off the SW
+   controlling `start_url`). Shape:
+
+   ```js
+   if ('serviceWorker' in navigator) {
+     window.addEventListener('load', () => {
+       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+     });
+   }
+   ```
+
+   Recommend a tiny `src/core/pwa.js` owning: unconditional registration + updatecheck via
+   `registration.update()` on `visibilitychange`/`pageshow` (browsers already auto-check on
+   navigations and push events — an explicit update call is optional polish), +
+   `beforeinstallprompt`/`appinstalled` banner logic. `push.js` keeps `getRegistration()` and
+   drops its own register (or keeps it — registration is idempotent same-scope).
+
+**Update lifecycle honesty:** with no precache and no runtime caching there is literally
+nothing to invalidate — a new deploy is picked up by the next navigation. `sw.js` served
+`no-cache` (already true) + skipWaiting/claim = the whole update story. No update toast needed;
+the app is online-first by construction.
+
+### Registration timing note
+
+Registering on `window.load` (not immediately at module eval) avoids competing with the
+initial render and the Vite chunk fetch — this matters with ~2 kB of entry headroom.
+
+## Install hint banner (PWA-04) — code shape
+
+```js
+// src/core/pwa.js (excerpt)
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  if (installedOrDismissedRecently()) return;      // localStorage, 90-day mirror of Chrome's rule
+  if (matchMedia('(display-mode: standalone)').matches) return;
+  deferredPrompt = e;
+  showInstallHint();                                // small UI affordance, EN+FR i18n keys
+});
+
+hintButton?.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;   // 'accepted' | 'dismissed'
+  deferredPrompt = null;
+  if (outcome === 'dismissed') storeDismissal();          // suppress ~90 days
+  hideInstallHint();
+});
+
+window.addEventListener('appinstalled', () => {         // fires for ALL install paths
+  deferredPrompt = null;
+  hideInstallHint();
+});
+```
+
+- `beforeinstallprompt` fires on Chrome/Edge/Samsung Internet **only**; Firefox and iOS never
+  fire it → those platforms get the honest no-op (iOS optionally gets the static
+  "Share → Add to Home Screen" hint, and only when NOT already standalone).
+- Standalone detection: `matchMedia('(display-mode: standalone)')` + `navigator.standalone`
+  (iOS). Installed apps must never see their own install banner.
+- **i18n gate applies**: every banner string gets EN+FR catalogue keys (i18n-scan will fail
+  otherwise). Small key count (~3–5).
+- Chrome delays the event behind engagement heuristics — for a daily-use self-hosted tool that
+  resolves within a session or two; no workaround exists or is needed.
+
+## index.html changes (exact)
+
+```html
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#…brand…" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+```
+
+Existing `<link rel="icon" … /favicon.svg">` stays. Every page must reference the manifest —
+this is a SPA with one `index.html`, so one tag suffices. Optional: `"dark mode" media-scoped
+theme-color` — defer; one color is fine for v2.7.
+
+## server.js / mime consideration
+
+Check the static mime map: if the server serves `.json` as `application/json`, that works for
+`manifest.json` (Chrome does not require `application/manifest+json`; it sniffs). If you
+prefer the `.webmanifest` extension + canonical MIME, add one map entry
+(`application/manifest+json`). Either is correct — pick `.json` for zero server change unless
+a test wants the canonical type.
+
+## Chunk-gate impact (the ~2 kB headroom)
+
+- `manifest.json`, all PNGs, `sw.js`: **static `public/` files — copied verbatim, never
+  hashed, never enter the JS bundle or the `.vite/manifest.json` hash** that the e2e
+  staleness guard reads. Zero gate impact. (Do NOT let any Vite plugin inject/transform the
+  manifest — see What NOT to Use.)
+- New JS: keep install-banner logic inside one small module imported by the existing boot
+  (not a new lazy chunk, not its own route chunk). Estimated <1.5 kB minified — within the
+  498→500 kB headroom, but **verify with the chunk-gate report in the phase**; if it nudges
+  the entry over, fold the listener block into an existing always-loaded module (e.g.
+  `src/core/` next to `push.js`) rather than splitting a new chunk.
+- The `skipWaiting`/`claim` addition to sw.js is ~120 bytes of static file — irrelevant to the
+  gate.
+
+## Integration points (verified in repo)
+
+| Point | File | Status |
+|---|---|---|
+| SW source | `public/sw.js` | Exists; add 2 lifecycle listeners only |
+| SW registration | `src/core/push.js:163` (`register('/sw.js')`, gated on `api.enabled`) | Make unconditional / relocate to `src/core/pwa.js` |
+| SW serving | `server.js:8097` — `sw.js` already `no-cache` | No change |
+| Static assets | `public/` (Vite copies verbatim) | Add manifest + 5 PNGs |
+| HTML head | `index.html` | Add 3 tags |
+| Brand mark | `public/favicon.svg` (+ `favicon-v4.svg`, `logo-*.svg`) | Rasterize + maskable redesign |
+| i18n | `src/locales/` + `scripts/i18n-scan.mjs` gate | Add banner keys EN+FR |
+| CSP | `server.js` securityHeaders | Worker registration is same-origin; verify `worker-src`/`script-src` allows `'self'` workers (should already, given push shipped) |
+
+---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| Subtask tree as nested JSON in the workspace doc | Adjacency in SQL tables (`tasks.parent_id`) + `WITH RECURSIVE` queries | Only if tasks ever move out of the doc into their own table. Not now: the doc-PUT funnel, redaction, revision concurrency, export (xlsx/MSPDI/CSV), FTS projection and MCP mirror all read the doc; splitting tasks into SQL would be a rewrite, not a feature. Nested JSON keeps SQLite/pg parity trivially (both store the same document). |
-| Nested `subtasks[]` arrays | Flat `flatSubtasks[]` with `parentId` + client tree-builder | Flat+parentId is friendlier to doc-PUT merge (smaller diffs on reorder) but breaks the existing `t.subtasks` shape every renderer, normalizer and export module already consumes. Choose nested arrays; handle reorder inside one parent locally. |
-| Webhooks in a server table | Webhook config in the workspace doc | Only if hooks must be visible/redactable through the client doc copy. Rejected: secrets in the doc are a redaction hazard and doc-PUT merge (client-can-delete-what-it-can't-see) risks accidental hook deletion by stale clients. |
-| Hand-rolled rate limit (token bucket per hook in memory) | Dependency-based limiter / Redis | Never for this app — single-process server, self-hosted, zero-dep constraint. An in-memory bucket with a config cap (e.g. max N deliveries per hook per minute, burst absorbed by a bounded retry queue) matches the "rate-limit" requirement and the existing fire-and-forget discipline. |
-| Adaptive Card payloads first | MessageCard payloads first | Use Adaptive Card only if interactive buttons become a requirement (they need bot-backed Action.Submit — out of scope). MessageCard is simpler, matches the named requirement format, and Workflows still renders it. |
+| Recommended | Alternative | Why Not |
+|---|---|---|
+| Hand-written `public/manifest.json` | **vite-plugin-pwa** | Adds a dev dependency (violates the standing zero-dependency constraint), generates a *hashed* SW and injects Workbox precache/runtime caching — the exact thing the milestone forbids — and writes the manifest through the bundler, entangling it with the chunk-gate machinery. The manifest is 20 static lines; a plugin is pure overhead here |
+| Bare `navigator.serviceWorker.register` | **Workbox / workbox-window** | Runtime caching is explicitly out of scope; a no-cache SW needs zero abstractions. Workbox would also be a dependency |
+| Reuse existing `public/sw.js` | New dedicated `sw-pwa.js` | Two SW registrations can't share the top-level scope — the push SW already owns `/`; a second worker would need a sub-scope and would double the surface for zero benefit. One SW with push + install-support listeners is the correct shape (and matches how push shipped in Phase 48) |
+| PNG icons in `public/` | SVG-only manifest icons | Chromium accepts SVG icons, but a raster fallback is required for correctness elsewhere anyway, and SVG install icons freeze at install time. PNG-only is simpler and universally consumed |
+| `"purpose": "any maskable"` combined icons | Separate files | Combined padded icons look shrunken wherever the mask isn't applied; spec-adjacent guidance and every 2026 reference recommend separate files |
+| Optional: `registration.update()` on visibility | Browsers' automatic update checks | Navigations + push events already trigger SW update checks; explicit calls are optional polish, not required for a no-cache SW |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Any npm tree/nested-set library (nestedsets, tree-model, etc.) | The tree lives in a JSON document inside a JSON column; SQL tree libs are meaningless there and every one is a new dependency (hard constraint) | Hand-rolled recursive walk, ~20 lines |
-| `webhook.office.com` URL support as the primary target | Retired May 18–22, 2026 — Microsoft's endpoints reject these requests now. Shipping "incoming webhook format" against the dead endpoint produces an integration that cannot work on current Teams | Accept any HTTPS POST URL (Workflows endpoints are `*.logic.azure.com/workflows/...`), validate it is https, keep the MessageCard body format |
-| A Teams SDK / `teams-notification` package | The delivery is one `fetch` POST of a JSON object; an SDK adds a dependency and nothing else | ~60-line `sendTeamsCard()` module mirroring `sendPushFor()` structure |
-| Cron/queue dependency for webhook retries | The scheduler precedent (zero-dependency `runReminderPass()` with transactional `reminders_sent` claim, v1.5) already exists in-repo | Extend the same pass pattern: delivery rows with `status`, `attempts`, `next_attempt_at`; the unref'd tick retries with capped backoff |
-| Storing webhook secrets or delivery logs in the workspace doc | Redaction/merge funnel hazard + doc churn bumps revisions for every delivery write — a delivery log write must NOT charge a doc revision (the same reason reminders "never write off-hour or bump revisions") | Server-only tables; hook CRUD endpoints bump nothing; delivery writes are table-only |
-| `Intl.MessageFormat` or any ICU template engine for Teams message text | Doesn't exist in Node 24, and the app's `t()` + JSON catalogues already cover EN/FR with an i18n-scan build gate | Existing `tFor()` server catalogue for message strings (Phase 36 precedent) |
-
-## Stack Patterns by Variant
-
-**Subtask tree (SUB):**
-- Keep `t.subtasks` as nested arrays: `subtasks[i].subtasks[]` recursively.
-- Extend `normalizeTaskAssignees`-style normalization (server.js:887) into a `normalizeSubtree()`: clamp depth (recommend max 5 levels), dedupe ids, guard cycles (a child id may not appear as an ancestor — fail the PUT with a stable error code per the ERR-01 pattern), filter assignees per the existing sweep (server.js:2585).
-- Aggregated progress computed on read (client) and in the search-projection updater (server) — never stored on the parent, or doc-PUT merge will fight over it.
-- Export modules (export-xlsx/MSPDI/CSV/gantt) need a shared `flattenTaskTree()` helper so all four flatten identically (the export-model precedent).
-
-**Templates (TMPL):**
-- Recommended storage: normalized workspace-doc fields (`templates[]` with `{id, kind: 'task'|'project', name, tasks[]}`), because template CRUD then rides the existing doc-PUT funnel + revision concurrency for free and needs no dual-backend migration. Validate with a `normalizeTemplate()` in `mergeClientDoc`.
-- Variant: a `templates` server table (saved_views precedent) if the owner wants templates decoupled from doc revision churn or shared across workspaces later.
-- Instantiation reuses the existing project-from-template code path (src/actions/actions.js:4389) generalized to data-driven definitions.
-
-**Webhooks (WHK):**
-- Tables: `project_webhooks(id, workspace_id, project_key, url, secret, events, enabled, created_at)` + `webhook_deliveries(id, hook_id, event_id, status, http_status, attempts, next_attempt_at, last_error, created_at)`. Dual schema in db-adapter.mjs (SQLite + pg), additive migration with pre-backup.
-- Delivery module: `sendWebhookFor(wsRow, nextDoc, event)` called from the same notification sites that call `sendPushFor` (server.js:2121, 5882) — reuse the gate order (permission → prefs → send) and the fail-absent rule (hook rows fetched per project; missing/deleted hook = no-op).
-- Payload: MessageCard JSON with `@type "MessageCard"`, `summary`, `title`, `text`, `sections[].facts`, `potentialAction[].OpenUri` deep-linking to `/w/:slug/task/:key` (the existing APP_URL deep-link builder). Content-type `application/json`.
-- Security: URL must be https; secret used to sign an `Authorization`/`X-GR8R-Signature` HMAC-SHA256 header (Workflows ignores unknown headers; useful if the hook is later pointed at non-Teams receivers); `AbortSignal.timeout(5000)`; fire-and-forget with the delivery row as the audit trail; rate limit per hook in-memory token bucket; retry with capped exponential backoff through the existing unref'd tick, exactly-once via a delivery-claim like `reminders_sent`.
-- Fail-absent semantics: a hook that fails N consecutive deliveries auto-disables with an owner-visible flag (prevents retry storms against dead endpoints).
-
-**SMTP-down email retry (POL)** — already in scope of the same delivery-retry work: the capped-backoff delivery queue above is the natural place to give email sends a retry row too, without touching nodemailer itself.
+|---|---|---|
+| vite-plugin-pwa | Dev dependency + Workbox precache injection (forbidden) + manifest-through-bundler coupling | Hand-written `public/manifest.json` |
+| workbox-* (any package) | Runtime caching is explicitly out of scope; the SW must stay a pass-through | Bare SW lifecycle listeners |
+| A fetch handler "just to satisfy old install rules" | 2026 Chromium doesn't require it; reintroduces a network interception surface (T-48-02 violation) for zero gain | No fetch handler; existing push-only SW |
+| `purpose: "any maskable"` single icons | Shrunken appearance in unmasked contexts | Separate `any` + `maskable` files |
+| `display: "window-controls-overlay"` (in `display`) | Chromium ignores it and won't install | `"display": "standalone"` |
+| `apple-touch-startup-image` | Unnecessary on modern iOS; image-set maintenance burden | Skip |
+| Lighthouse PWA audits as CI gate | Category retired by Chrome; checks a different list than runtime | DevTools Application → Manifest → Installability; optionally `Page.getInstallabilityErrors` via CDP in Playwright |
+| Caching `manifest.json`/icons long-term | Icon/manifest staleness after deploy mirrors the dist-staleness bug class the project already guards against | Same `no-cache`/short cache policy as `index.html` (verify server static cache headers for the new files) |
 
 ## Version Compatibility
 
 | Component | Compatible With | Notes |
-|-----------|-----------------|-------|
-| Node 24 `fetch` + `AbortSignal.timeout` | Node ≥ 18.17 / ≥ 17.3 | Both stable globals in Node 24. No polyfill needed. |
-| Workflows webhook endpoints | MessageCard (renders, no buttons) + Adaptive Card ≤ 1.6 | ~28 KB message size limit — truncate task text server-side (the `truncate` helper from Phase 40 is exported already). |
-| Existing doc schema | nested `subtasks` are backward-compatible | Old clients/tests reading `t.subtasks[i]` flat still work for level 1; seed data and old docs need no migration (a boot-normalization sweep like the Phase 33 "update-only boot sweep" is optional). |
-| `pg` + `node:sqlite` dual backend | both get identical new tables | Follow `push_subscriptions` mirror + `POSTGRES_TEST_URL` matrix. |
-| Vite chunk gate (500 kB) | unaffected | Tree recursion + payload builder are server-side and small client-side helpers; keep new client code out of the entry chunk per the D-02 lazy-chunk pattern. |
+|---|---|---|
+| Existing `sw.js` (no fetch handler) | Chrome 108+/112+, Edge, Samsung Internet | Installable since those floors; before 108/112 a fetch handler was required — irrelevant for a self-hosted app in 2026 |
+| `skipWaiting`/`clients.claim` | All browsers with SW | Safe here only because no fetch handler exists |
+| `beforeinstallprompt` | Chromium family only | Never Firefox, never iOS — by design |
+| iOS 26 standalone launch | Any site | Manifest refines (name, standalone), `apple-touch-icon` still the dependable icon route |
+| Firefox 143+ desktop web apps | Windows | Manifest-driven, no API, no code needed |
+
+## Installation
+
+```bash
+# Nothing to install. Zero dependencies is the deliverable.
+# Icons are a one-time rasterization from public/favicon.svg (any local tool),
+# committed as static files.
+```
 
 ## Sources
 
-- learn.microsoft.com — "Create & Send Actionable Messages" + "Retirement of Office 365 connectors within Microsoft Teams" (devblogs.microsoft.com, updated 2026-04-14): O365 connectors dead May 18–22, 2026; Workflows webhooks accept MessageCard + Adaptive Card payloads — **HIGH**
-- learn.microsoft.com — Adaptive Card via incoming webhook payload shape (`type:"message"`, `attachments`, `contentType`) — **HIGH**
-- epifive.com + github.com/nicholas-fedor/shoutrrr PR #887 (2026): real-world migrations confirm `*.logic.azure.com/workflows/` endpoints, 28 KB limit, Flow-bot identity limits — **MEDIUM**
-- Repo evidence: server.js:887/2585 (subtask normalization), server.js:1693–1798 (sendPushFor + test seam), db-adapter.mjs:470–567 (FTS5 + pg projection parity), v1.5 reminder scheduler precedent (exactly-once claim, unref'd tick, no revision bumps), v1.9 UNSUB HMAC tokens, PROJECT.md standing zero-dependency constraint (owner-validated every milestone since v1.1) — **HIGH**
+- developer.chrome.com — "Revisiting Chrome's installability criteria" (SW requirement removed: Chrome 108 mobile / 112 desktop; default offline page for installed apps) — HIGH
+- web.dev/articles/install-criteria + web.dev/learn/pwa/installation (current criteria list, no SW mention; engagement heuristics) — HIGH
+- MDN — Making PWAs installable; Manifest `icons`/`display` reference; Define app icons (maskable safe-zone guidance) — HIGH
+- W3C Web Application Manifest TR (2026-10) — `purpose` token semantics (`any`/`maskable`/`monochrome`), member list — HIGH
+- progressivewebapps.com/fundamentals/installability (2026-09) + openpwa.net installability-criteria (2026-06) — per-browser 2026 matrix: Safari/iOS 26 no criteria, Firefox 143 Windows web apps, BIP never fires on either — MEDIUM-HIGH (consistent with primary sources)
+- Repo source: `public/sw.js`, `src/core/push.js`, `server.js:8097`, `index.html`, `vite.config.js` — verified integration points, HIGH
+- Not independently verified: exact iOS version boundary where manifest icons fully supersede `apple-touch-icon` (kept `apple-touch-icon` as the dependable route regardless)
+
+---
+*Stack research for: Projects Studio v2.7 — Installable App (PWA)*
+*Researched: 2026-11-18*
