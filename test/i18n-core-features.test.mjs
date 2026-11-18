@@ -333,3 +333,20 @@ test('the --cols fallback documents LCOLS as its sync source (IN-01)', () => {
   const fallbackComment = LIST_CSS.slice(LIST_CSS.indexOf('.subrow {'), LIST_CSS.lastIndexOf('grid-template-columns'));
   assert.ok(fallbackComment.includes('LCOLS') && fallbackComment.includes('task-list.js'), 'the fallback template does not reference LCOLS / task-list.js as the sync source');
 });
+
+test('the subrow meta cells carry the parent cells\u2019 horizontal padding (G-71-1)', () => {
+  const cmetaRule = LIST_CSS.match(/\.subrow > \.c-meta\s*\{[^}]*\}/);
+  assert.ok(cmetaRule, 'no .subrow > .c-meta rule in list.css');
+  assert.ok(/^\.subrow > \.c-meta\s*\{[^}]*padding: 0 8px;/m.test(cmetaRule[0]), 'the subrow meta cells lack the parent cells\u2019 8px horizontal padding');
+  assert.ok(cmetaRule[0].includes('display: flex'), 'the subrow meta rule does not keep display: flex');
+  assert.ok(cmetaRule[0].includes('align-items: center'), 'the subrow meta rule does not keep align-items: center');
+  // Geometry guards (grow-only reinforcement of the 71-02 pins): the new rule
+  // must not silently displace the verified subrow geometry.
+  assert.ok(subrowBlock.includes('gap: 0'), 'the subrow lost its zero inter-track gap');
+  assert.ok(subrowBlock.includes('padding-left: 64px'), 'the subrow lost its fixed tree base');
+  assert.ok(subheadRule.includes('margin-left: var(--ind, 0px)'), 'the depth indent does not ride the .subhead grid item');
+  // Decoy pin: count the ANCHORED full declaration, not the substring — the
+  // .grp rule carries `padding: 0 8px 0 22px` and must not be miscounted.
+  const anchored = LIST_CSS.match(/^[ \t]*padding: 0 8px;[ \t]*$/gm) || [];
+  assert.strictEqual(anchored.length, 3, `expected exactly 3 anchored "padding: 0 8px;" declarations (.thead > div, .trow > div, .subrow > .c-meta), found ${anchored.length}`);
+});
