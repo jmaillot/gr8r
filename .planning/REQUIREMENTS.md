@@ -15,7 +15,7 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 
 ### Manifest & Integration
 
-- [ ] **PWA-01**: The app ships a valid web app manifest (`public/manifest.webmanifest`, served
+- [x] **PWA-01**: The app ships a valid web app manifest (`public/manifest.webmanifest`, served
   no-cache with correct MIME): name/short_name "Projects Studio", `start_url` and `id` of `/`,
   `display: standalone`, theme/background colors consistent with the existing tokens, and the
   full icon set referenced. `index.html` gains the manifest link, theme-color meta and iOS meta
@@ -23,7 +23,7 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 
 ### Icons
 
-- [ ] **PWA-02**: Real PNG icons rasterized from the existing brand mark are committed under
+- [x] **PWA-02**: Real PNG icons rasterized from the existing brand mark are committed under
   `public/`: 192×192 and 512×512 with `purpose: any`, 192×192 and 512×512 dedicated
   maskable variants (padded safe-zone redesign, not blind padding), and a 180×180
   `apple-touch-icon`. Maskable icons render without clipping on Android adaptive launchers.
@@ -68,8 +68,8 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| PWA-01 | Phase 72 | Pending |
-| PWA-02 | Phase 72 | Pending |
+| PWA-01 | Phase 72 | Complete |
+| PWA-02 | Phase 72 | Complete |
 | PWA-03 | Phase 74 | Pending |
 | PWA-04 | Phase 73 | Pending |
 

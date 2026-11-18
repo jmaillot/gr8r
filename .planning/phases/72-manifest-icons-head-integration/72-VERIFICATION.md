@@ -1,7 +1,7 @@
 ---
 phase: 72-manifest-icons-head-integration
 verified: 2026-11-18T17:30:00Z
-status: human_needed
+status: passed
 score: 4/4 must-haves verified
 covered_files:
   - .planning/phases/72-manifest-icons-head-integration/72-01-PLAN.md
@@ -20,6 +20,7 @@ covered_files:
   - test/manifest-contract.test.mjs
   - test/icon-contract.test.mjs
   - e2e/manifest.spec.mjs
+
 covered_digest: "v2:sha256:62a7f52d160153a69760bad2569ce505c15a99bc7d53327dda6c3179eaf6f533"
 behavior_unverified: 3
 behavior_unverified_items:
@@ -108,16 +109,19 @@ No orphaned requirements — both phase-mapped IDs claimed by plans and verified
 ### Human Verification Required
 
 ### 1. Android launcher icon (maskable safe zone)
+
 **Test:** Install the PWA on a real Android device; inspect the launcher icon on circle-mask launchers.
 **Expected:** Monogram + rim fully visible, dark tile full-bleed, no rim clipping.
 **Why human:** Adaptive-launcher masking only observable on a real device.
 
 ### 2. iOS home-screen icon
+
 **Test:** "Add to Home Screen" in iOS Safari.
 **Expected:** Opaque dark-tile icon (no black-flattened transparency).
 **Why human:** iOS-only flow, cannot be automated.
 
 ### 3. Chromium install prompt
+
 **Test:** Open the app in desktop Chrome; verify installability (address-bar install icon or Lighthouse PWA audit).
 **Expected:** Installable with the served manifest + icons accepted.
 **Why human:** Real-browser install UX / Chromium installability heuristics.

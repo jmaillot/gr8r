@@ -10,7 +10,7 @@
 
 ## Phases
 
-- [ ] **Phase 72: Manifest, Icons & Head Integration** - Inert static install assets: web manifest, PNG icon set from the brand mark, index.html head tags
+- [x] **Phase 72: Manifest, Icons & Head Integration** - Inert static install assets: web manifest, PNG icon set from the brand mark, index.html head tags (completed 2026-11-18)
 - [ ] **Phase 73: Install Hint Banner** - Honest install affordance on `beforeinstallprompt` browsers with graceful iOS/Firefox degradation (the only JS surface)
 - [ ] **Phase 74: Service Worker Verification & Milestone Acceptance** - Verify the existing push SW satisfies installability untouched, plus end-to-end acceptance and real-device UAT
 
@@ -52,7 +52,7 @@ reads — all as inert static assets with zero JS and zero gate risk.
      theme/background colors consistent with the existing design tokens
   4. The per-workspace logo favicon swap (Phase 43 D-06 boundary) is unaffected — every
      existing favicon test stays green; unit + lint + i18n + chunk gates all pass unmodified
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -114,6 +114,6 @@ end-to-end on real devices.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 72. Manifest, Icons & Head Integration | 2/2 | In Progress | - |
+| 72. Manifest, Icons & Head Integration | 2/2 | Complete    | 2026-11-18 |
 | 73. Install Hint Banner | 0/? | Not started | - |
 | 74. Service Worker Verification & Milestone Acceptance | 0/? | Not started | - |
