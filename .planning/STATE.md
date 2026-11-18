@@ -5,16 +5,16 @@ milestone_name: Exports Verification (Test 11)
 current_phase: 71
 current_phase_name: Subtask columns in List view
 status: executing
-stopped_at: Completed 71-02-PLAN.md (gap closure)
-last_updated: "2026-11-17T16:05:45.122Z"
-last_activity: 2026-11-17
+stopped_at: Completed 71-03-PLAN.md
+last_updated: "2026-11-18T06:15:05.817Z"
+last_activity: 2026-11-18
 last_activity_desc: Phase 71 execution started
-state_head: 6403a181d96fc5db74c1d375a2b6c9e7caa40fb4
+state_head: a182b003a8d0e12d9d100620669b4c8ee7845a62
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # STATE.md
@@ -29,9 +29,9 @@ progress:
 ## Current Position
 
 Phase: 71 (Subtask columns in List view) — EXECUTING
-Plan: 2 of 2 — COMPLETE
-Status: Phase 71 executed (71-02 gap closure complete)
-Last activity: 2026-11-17 — 71-02 gap closure executed (CR-01/WR-01/WR-02 fixed, IN-01 mitigated)
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-11-18 — Phase 71 execution started
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Last activity: 2026-11-17 — 71-02 gap closure executed (CR-01/WR-01/WR-02 fixe
 | Phase 69 P02 | ~7min | 2 tasks | 3 files |
 | Phase 71 P01 | ~55min | 3 tasks | 4 files |
 | Phase 71 P02 | ~35 min | 2 tasks | 3 files |
+| Phase 71 P03 | 15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,8 +93,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-17T16:05:45.075Z
-**Stopped at:** Completed 71-02-PLAN.md (gap closure)
+**Last session:** 2026-11-18T06:14:55.840Z
+**Stopped at:** Completed 71-03-PLAN.md
 **Resume file:** None
 
 **Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
@@ -125,6 +126,7 @@ None.
 - [Phase 71]: 71-01: opt-in columns:true on subTreeChecklistHtml; tpl forwarded via --cols (ADR-2); status chip = label-wrapped toggleSub + stPill; inherited priority dimmed .inh, no new i18n keys
 - [Phase 71]: 71-02 indent mechanism: fixed 64px container base, --ind rides .subhead as margin-left (WR-02)
 - [Phase 71]: 71-02 IN-01 mitigated-by-documentation: --cols fallback kept with LCOLS keep-in-sync note
+- [Phase 71]: Subtask meta cells aligned to parent px offset (G-71-1) — Pinned grow-only because the offset contract is cosmetic and easily regressed; anchored full-declaration counting defeats the .grp substring decoy
 
 ## Operator Next Steps
 
