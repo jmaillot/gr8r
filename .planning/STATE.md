@@ -5,16 +5,16 @@ milestone_name: Exports Verification (Test 11)
 current_phase: 71
 current_phase_name: Subtask columns in List view
 status: executing
-stopped_at: Completed 71-04-PLAN.md
-last_updated: "2026-11-18T10:05:54.437Z"
+stopped_at: Completed 71-05-PLAN.md
+last_updated: "2026-11-18T10:50:18.204Z"
 last_activity: 2026-11-18
 last_activity_desc: Phase 71 execution started
-state_head: 45e8b72f47ba33e5c12df4fc63a0a3cdb5773220
+state_head: 8bc6096987ee6069b50fe259e8cfda06bb4f4693
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 11
+  completed_plans: 11
 ---
 
 # STATE.md
@@ -29,13 +29,13 @@ progress:
 ## Current Position
 
 Phase: 71 (Subtask columns in List view) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 71
-Last activity: 2026-11-18 — Phase 71 execution started
+Plan: 5 of 5
+Status: Ready to verify (all plans executed; human cosmetic check pending)
+Last activity: 2026-11-18 — 71-05 complete (G-71-4 gap closure)
 
 ## Performance Metrics
 
-**Unit tests:** 1713 pass / 1726 (grow, never shrink) · **e2e:** 132/132 (0 flaky) · **lint:** 15 pre-existing baseline errors · **chunk gate:** 499940/500000 bytes (~60 bytes headroom — the gate is tight; lazy-load all new UI, no bare quoted Lucide-name label keys) · **i18n:** EN+FR gate green
+**Unit tests:** 1737 pass / 1750 (grow, never shrink) · **e2e:** subtask-align 9/9 (incl. 3 new G-71-4 tests) · **lint:** 16 pre-existing baseline errors (71-04 deviation 1) · **chunk gate:** 499995/500000 bytes
 **Per-Plan Metrics:**
 
 | Plan | Duration | Tasks | Files |
@@ -59,6 +59,7 @@ Last activity: 2026-11-18 — Phase 71 execution started
 | Phase 71 P02 | ~35 min | 2 tasks | 3 files |
 | Phase 71 P03 | 15min | 2 tasks | 2 files |
 | Phase 71 P04 | ~12min | 2 tasks | 2 files |
+| Phase 71 P05 | 11min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -94,12 +95,12 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T10:15:00Z
-**Stopped at:** 71-04 complete (02fb2dc, 3fedacb) — G-71-3 closed, e2e 6/6, unit 1737/0 fail
+**Last session:** 2026-11-18T10:50:18.159Z
+**Stopped at:** Completed 71-05-PLAN.md
 **Resume file:** None
 
-**Last action:** test(71): DOM-measured pixel-alignment spec for subrow meta cells (G-71-1/G-71-2) — fixed the spec's own cross-column baseline bug (parentX captured from c-status, compared against all columns).
-**Next step:** `/gsd-verify-work` or `/gsd-new-milestone`
+**Last action:** 71-05 G-71-4 gap closure — subrow assignee/priority/due content wrapped in .stpill pill contract; e2e inner-content pins extended grow-only to all three cells (my-tasks: priority/due).
+**Next step:** human cosmetic check (subrow meta content under parent pill content), then `/gsd-verify-work`
 
 ### Operator preferences
 
@@ -135,6 +136,7 @@ None.
 - [Phase 71]: G-71-2 (UAT vision audit, 5-model consensus): the fixed 64px tree base rode the .subrow grid CONTAINER, shifting meta tracks ~57px right of the parent grid — moved to .subhead margin-left calc(64px + var(--ind)); pin tests now forbid container padding-left
 - [Phase 71]: 71-04 G-71-3 closed alignment-only: .stchip takes .pillbtn padding/height/radius, NOT background/hover (visual weight preserved); chipInnerLeftX excludes the out-of-flow .check toggle
 - [Phase 71]: lint pre-existing baseline is 16 (not 15) — webhook-ssrf.js 'process' no-undef predates 71-04; e2e requires fresh `npm run build` after CSS changes (stale dist masked the fix)
+- [Phase 71]: 71-05 G-71-4 closed: .stpill shared wrapper (mirrors .stchip contract, no bg/hover); my-tasks e2e restricted to priority/due (call site has no assignee column)
 
 ## Operator Next Steps
 
