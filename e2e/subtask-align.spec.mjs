@@ -154,3 +154,110 @@ test('my-tasks subrow meta cells align pixel-exactly with the parent row cells A
     expect(Math.abs(subX - headX), `${col}: subrow vs header`).toBeLessThanOrEqual(1);
   }
 });
+
+/* =====================================================================
+   G-71-3 (71-04): the chip's INNER content left edge — the .check
+   toggle is position:absolute (out of flow), so the first in-flow
+   element child of .stchip is the rendered stPill; its rect.left is
+   the chip content the user actually sees. The parent side is the
+   .pillbtn content-box edge (rect.left + border + padding) — the
+   padding contract the chip must match.
+   ===================================================================== */
+async function chipInnerLeftX(loc) {
+  return loc.evaluate(el => {
+    const child = Array.from(el.children).find(c => !c.classList.contains('check'));
+    if (!child) throw new Error('stchip has no in-flow content child');
+    return child.getBoundingClientRect().left;
+  });
+}
+
+async function chipDiag(page, selChip, selPill) {
+  const diag = await page.evaluate(([chip, pill]) => {
+    const c = document.querySelector(chip);
+    const p = document.querySelector(pill);
+    const cs = getComputedStyle(c), ps = getComputedStyle(p);
+    return {
+      chip: { left: c.getBoundingClientRect().left, pad: cs.paddingLeft, height: cs.height },
+      pill: { left: p.getBoundingClientRect().left, pad: ps.paddingLeft, height: ps.height },
+    };
+  }, [selChip, selPill]);
+  console.log('DIAG chip-content vs pill-content:', JSON.stringify(diag));
+}
+
+test('subrow status chip inner content aligns with the parent status pill content (list view)', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('button[data-a="setViewMode"][data-v="list"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  const subrow = page.locator(`.subrows [data-ctx="sub"][data-id="${T1}"]`).first();
+  await expect(subrow).toBeVisible();
+
+  const pillX = await contentLeftX(row.locator('.c-status .pillbtn').first());
+  const chipX = await chipInnerLeftX(subrow.locator('.stchip').first());
+  const measured = Math.abs(chipX - pillX);
+  if (measured > 1) {
+    await chipDiag(page, `.subrows [data-ctx="sub"][data-id="${T1}"] .stchip`, `[data-task-row="${T1}"] .c-status .pillbtn`);
+  }
+  expect(measured, 'G-71-3: chip inner content vs parent pill content').toBeLessThanOrEqual(1);
+});
+
+test('my-tasks subrow status chip inner content aligns with the parent status pill content', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('nav.side [data-r="mytasks"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+  await expect(page.locator(`[data-task-row="${T1}"]`)).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  const subrow = page.locator(`.subrows [data-ctx="sub"][data-id="${T1}"]`).first();
+  await expect(subrow).toBeVisible();
+
+  const pillX = await contentLeftX(row.locator('.c-status .pillbtn').first());
+  const chipX = await chipInnerLeftX(subrow.locator('.stchip').first());
+  const measured = Math.abs(chipX - pillX);
+  if (measured > 1) {
+    await chipDiag(page, `.subrows [data-ctx="sub"][data-id="${T1}"] .stchip`, `[data-task-row="${T1}"] .c-status .pillbtn`);
+  }
+  expect(measured, 'G-71-3 (my-tasks): chip inner content vs parent pill content').toBeLessThanOrEqual(1);
+});
+
+test('depth-2 subrow status chip inner content aligns with the parent status pill content', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('button[data-a="setViewMode"][data-v="list"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  await expect(row.locator('.c-status').first()).toBeVisible();
+
+  const sub = page.locator(`.subrows div[data-sid="st_a1"]`);
+  await expect(sub).toBeVisible();
+  await sub.locator('[data-a="toggleSubNode"]').click();
+  const grand = page.locator(`.subrows div[data-sid="st_a3"]`);
+  await expect(grand).toBeVisible();
+
+  const pillX = await contentLeftX(row.locator('.c-status .pillbtn').first());
+  const chipX = await chipInnerLeftX(grand.locator('.stchip').first());
+  const measured = Math.abs(chipX - pillX);
+  if (measured > 1) {
+    await chipDiag(page, `.subrows div[data-sid="st_a3"] .stchip`, `[data-task-row="${T1}"] .c-status .pillbtn`);
+  }
+  expect(measured, 'G-71-3 (depth-2): chip inner content vs parent pill content').toBeLessThanOrEqual(1);
+});
