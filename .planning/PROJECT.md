@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-17 starting v2.6 — v2.5 Template Polish & Import shipped (template favourites, MD import with complete per-kind examples, hideStarters toggle, 65-05 indent fix)*
+*Last updated: 2026-11-18 after v2.6 milestone — Exports Verification (Test 11) shipped (A1 closed, subtasks in Timeline/Board XLSX, subtask columns in List view)*
 
 
 <details>
@@ -129,27 +129,32 @@ _Not yet defined — start with `/gsd-new-milestone`. Deferred backlog candidate
 listed in ROADMAP.md (mobile hidden[] card fields, SMTP retry semantics, WR-01 CSS
 scoping, Nyquist reconciliation)._
 
-## Current Milestone: v2.6 Exports Verification (Test 11) — ACTIVE
+## Current Milestone: v2.6 Exports Verification (Test 11) — SHIPPED (2026-11-18)
 
-**Goal:** close Phase 65 item A1 — prove the subtask tree survives a REAL round-trip
-with MS Project. Owner-directed verification milestone: export a 3-level tree in all
-three formats (xlsx, CSV, MSPDI), verify structure (tree order, OutlineLevel/summary
-tasks), then the owner imports the files into actual MS Project; any divergence found
-gets fixed within the milestone.
+**Shipped:** 3 phases (69–71), 9 plans, 8/8 requirements, all phases verified; milestone
+audit PASSED (14 surfaces wired, 7/7 E2E flows, gates re-run during audit: unit 1737/0,
+e2e 140 + 1 pre-existing env flake, chunk ≤500 kB, lint 16 = documented baseline, zero new
+deps). Archived to `.planning/milestones/v2.6-ROADMAP.md` and `v2.6-REQUIREMENTS.md`.
 
-**Verification targets:**
-- EXP — xlsx/CSV tree order: parents strictly before children, hierarchy recoverable
-  from row order/indentation alone
-- MSP — MSPDI OutlineLevel/summary: every nesting level carries the right OutlineLevel,
-  summary rows marked, dates map to the offset semantics (D-05/D-07)
-- FIX — any defect found by the real MS Project import is fixed and re-verified
+- EXP — Exports verification ✓: real MS Project round-trip proven — MSPDI re-UAT round 5
+  PASS (18/18 rows exact, 3-level Gantt preserved, repair dialog benign); xlsx/CSV recorded
+  non-applicable per owner ruling; backlog item A1 checked off (Phase 999.1 closed)
+- SUB-XLSX — Subtasks in Timeline & Board ✓: DFS child bars grouped under parents with
+  real-depth indent and per-bar status; flat dotted-key child cards in Board status lanes
+  (counts = parents + children); SHAPE_CAP 400 child-inclusive; CSV/MSPDI/Tasks sheet/route
+  untouched (frozen-file diff empty)
+- LIST-COLUMNS — Subtask columns in List view ✓: opt-in `columns` meta for status
+  (done/todo chip), assignees, priority (inherited), due (`s.due || parent due` with
+  inherited tooltip) — aligned to the parent column grid (G-71-1..4 closed, e2e-pinned on
+  List + My Tasks + depth-2)
 
-**Constraints (standing):** zero new runtime or dev dependencies; gates intact
-(500 kB chunk gate — currently 499940/500000, ~60 bytes headroom; EN+FR i18n gate;
-lint 15-error baseline; 1705-test unit suite; e2e 132/132).
+**Notable decisions:** subtask due inheritance fixed model-wide (`due: s.due || t.due || ''`,
+manual value wins in every channel); Excel repair-prompt blocker fixed at the drawing-anchor
+level (LINK_ROW_OFF 150000/40000 EMU inside the 190500 EMU row height, guard test pinning
+every Timeline rowOff); export-modal `subtasks` stays an opt-in checkbox (R3 design
+confirmed); lint baseline re-documented at 16 pre-existing errors.
 
-**Out of scope:** new export formats, incoming-file generalization beyond what fixing
-Test 11 requires, feature work unrelated to exports.
+**Next milestone:** goals not yet defined — start with `/gsd-new-milestone`.
 
 <details>
 <summary>v2.5 Template Polish & Import — SHIPPED (2026-11-16) — shipped record</summary>
@@ -863,6 +868,15 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   — Phase 60 (3/3 plans incl. gap closure 60-03; verification 14/14 re-run passed with the
   CR-01/WR-01/WR-02 gaps closed test-first; review disposition ledger 3 fixed, WR-03 + info
   advisories open)
+- ✓ **REQ-EXP-01..03** — Exports verification: automated 3-level pre-screen in the existing
+  node:test suites (MSPDI OutlineLevel/Summary re-derived from serialized XML, DFS order,
+  zero new deps); owner UAT per format with real MS Project (MSPDI PASS, evidence captured);
+  verdict recorded, A1 closed, conditional fix wave (MSPDI duration zeroing for Type=0
+  Fixed Units) re-verified — Phase 69 (verification passed; milestone audit 8/8)
+- ✓ **REQ-70-*** (D-70-1..7) — Subtask rows in Timeline/Board XLSX per D-70 decisions —
+  Phase 70 (goal-backward verification, all criteria traced in live code)
+- ✓ **REQ-71-COLUMNS** (D-71-1..7) — Subtask meta columns in List view aligned to the
+  parent grid — Phase 71 (12/12 must-haves, standing visual UAT passed)
 
 ### Active
 
@@ -896,6 +910,11 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ## Context
 
+- Shipped v2.6 (2026-11-18) with 3 phases, 8/8 requirements; unit 1737/0, e2e 140
+  (+1 pre-existing env flake), chunk ≤500 kB, zero new runtime dependencies. Exports
+  ground truth: subtask tree rides every channel — xlsx Timeline (DFS child bars),
+  Board (flat lane cards), MSPDI (`OutlineLevel = depth+1`, re-derived Summary), CSV
+  (dotted key); due inheritance `s.due || t.due || ''` model-wide in `src/export/model.js`.
 - Shipped v2.2 (2026-11-14) with 6 phases, 24/24 requirements; full suite 1524 tests
   / 0 fail; e2e 111 (+1 pre-existing flaky); lint fully clean; chunk gate 11/11 green.
 - ~25k+ lines of JavaScript across `server.js`, `mcp.js`, `db-adapter.mjs`, `oidc.js`,

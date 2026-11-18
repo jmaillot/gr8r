@@ -22,8 +22,8 @@ current_phase: 71
 
 **Project:** Projects Studio (gr8r) — self-hosted PM workspace
 **Core value:** one workspace document pushed client→server through the `mergeClientDoc` funnel; every feature is an extension of that spine, zero new dependencies.
-**Milestone:** v2.5 Template Polish & Import — SHIPPED 2026-11-16 (see `.planning/milestones/v2.5-ROADMAP.md`).
-**Current focus:** Phase 71 — Subtask columns in List view
+**Milestone:** v2.6 Exports Verification (Test 11) — SHIPPED 2026-11-18 (see `.planning/milestones/v2.6-ROADMAP.md`).
+**Current focus:** Planning next milestone — start with `/gsd-new-milestone`
 
 ## Current Position
 

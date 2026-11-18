@@ -471,12 +471,54 @@
 - Sessions: ~10 substantive sessions over 2 days (2026-11-15 → 11-16).
 - Notable: 1707 tests, 1694 pass / 13 env skips / 0 fail at HEAD; full suite re-run twice at close.
 
+## Milestone: v2.6 — Exports Verification (Test 11)
+
+**Shipped:** 2026-11-18
+**Phases:** 3 (69–71) | **Plans:** 9
+
+### What Was Built
+
+- Exports verification (69): A1 closed — real MS Project round-trip proven (MSPDI re-UAT round 5, 18/18 rows exact, 3-level Gantt preserved); xlsx/CSV recorded non-applicable per owner; automated 3-level pre-screen in the existing node:test suites.
+- Subtasks in Timeline & Board XLSX (70): DFS child bars under parents (real-depth indent, per-bar status), flat dotted-key child cards in Board lanes, model-wide due inheritance fix, Excel repair-prompt blocker fixed at the drawing-anchor level.
+- Subtask columns in List view (71): opt-in `columns` meta (status chip, assignees, priority, due) aligned to the parent column grid; four cosmetic gaps (G-71-1..4) closed with e2e pins on List + My Tasks + depth-2.
+
+### What Worked
+
+- The v2.4 recipe held again: milestone audit BEFORE close (PASSED — gates re-run during audit, not trusted from SUMMARYs) turned verification staleness into a pre-close checklist instead of a close-time override.
+- Owner UAT verdicts recorded per format with verbatim evidence (repair dialog = benign, hierarchy-survival is the criterion) — no relitigating at close.
+- Frozen-file discipline: Phase 70 proved 2-level export behavior unchanged via empty frozen-file diffs.
+
+### What Was Inefficient
+
+- Two VERIFICATION.md files (69, 70) existed since 2026-11-17 but lacked frontmatter, so init.manager read them `missing` until milestone close added it — the verifier contract (frontmatter `status:`) should be part of the report template, not retrofitted.
+- 70-UAT.md and the g-71-3 debug session were resolved in reality (all gaps fixed, owner re-tested PASS) but their file statuses stayed `testing`/`investigating` — the audit flagged both at close.
+- Lint baseline drifted 15 → 16 between planning and execution (webhook-ssrf.js no-undef predates the phase) — plans assumed a stale number.
+
+### Patterns Established
+
+- Frontmatter contract for every `*-VERIFICATION.md`: `phase`, `verified`, `status`, `score` — machine-readable at close.
+- Drawing-anchor EMU guard: every Timeline rowOff pinned ≤ 190500 EMU by test (the Excel repair-prompt class of bug is now structurally prevented).
+- `.pillbtn` visual contract (padding/height/radius) is the alignment unit for List-view cells — subrow content inherits it, never hand-pads.
+
+### Key Lessons
+
+1. Verification reports must carry YAML frontmatter — a human-readable verdict alone is invisible to the tooling.
+2. Close artifacts (UAT status, debug-session resolution) at the moment the owner confirms, not "later" — staleness compounds into close-time decisions.
+3. Re-derive baselines (lint, test counts) from the tree at plan time instead of copying from a previous milestone's docs.
+
+### Cost Observations
+
+- Model mix: not tracked this milestone.
+- Sessions: 2 days (2026-11-17 → 11-18), 48 commits, 64 files (+5915/−115).
+- Notable: unit 1737/0, e2e 140 (+1 pre-existing env flake), chunk ≤500 kB, zero new deps.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
 
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
+| v2.6 Exports Verification (Test 11) | 2 days | 3 | Verified closeout with a PASSED pre-close audit (8/8 requirements, 14 surfaces, 7/7 flows). New lesson: VERIFICATION.md files without YAML frontmatter read `missing` to init.manager even when the verdict is written — the frontmatter contract is now explicit. Close also cleaned 2 stale-but-resolved artifacts (70-UAT.md, g-71-3 debug session). |
 | v2.4 Automation & Productivity | 2 days | 4 | First fully verified closeout at HEAD: parallel verifier subagents refreshed 3 stale digests after the audit-fix commit (54827ed), audit run BEFORE close let tech debt land early. Recurring lesson again: hand-written covered digests (v4:) fail closed — always recompute via verification.fingerprint. |
 | v2.2 Notifications, Search & Delivery | 3 days | 6 | Override closeout again over stale bookkeeping (56-60 `open/stale` vs STATE.md 6/6 Complete); live browse-MCP UAT diffed server truth against the UI and turned a false major issue into a pre-existing-bug diagnosis. Lesson confirmed: keep the STATE.md phase table fresh per phase; closeout verification overrides are now the expected shape with shared server.js. |
 | v1.1 Multitenant | 2 days | 4 | Phase verification was produced for phase 4 only; the audit backfilled phases 1–3. Next milestone: verify every phase before it closes. |
@@ -491,6 +533,7 @@
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
+| v2.6 Exports Verification (Test 11) | 1737 node:test + 140 e2e | 3-level export fixture suite (MSPDI OutlineLevel/Summary/DFS, xlsx/CSV), Timeline rowOff EMU guard (≤190500), inner-chip-content alignment e2e (List/My Tasks/depth-2), frozen-file 2-level regression diffs | 0 |
 | v2.2 Notifications, Search & Delivery | 1524 node:test + 111 e2e | chunk-size gate (11/11 real-build), dist staleness spawn test, FTS pg parity suite (byte-identical), push payload budget + sweep, burst coalescing suite, burst UAT 7/7 live | 1 (runtime: `web-push@4.0.0`, owner-approved) |
 | v1.1 Multitenant | 48 node:test + 5 Chromium | server contract, migration, privacy matrix, browser tenancy | 1 (dev only: `@playwright/test`) |
 | v1.2 Localization | 446 node:test + 45 Chromium e2e | catalogue contract (23 pins), locale selector, 21-route fr sweep + build gate, uploads/previews byte-serving | 0 (runtime) / 1 (dev only: `@playwright/test`) |
