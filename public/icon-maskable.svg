@@ -1,0 +1,78 @@
+<svg class="ps-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 152" role="img" aria-label="Projects Studio" width="152" height="152">
+  <style>
+  .ps-logo{--ps-ink:#14111F;--ps-ink-soft:#6A6580;
+      --ps-tile-a:#1D1338;--ps-tile-b:#0A0714;
+      --ps-rim-a:#8B63F5;--ps-rim-b:#FFB86B;--ps-rim-w:1.5;}
+  @media (prefers-color-scheme: dark){ .ps-logo{--ps-ink:#F7F5FF;--ps-ink-soft:#B3ADC9;
+      --ps-tile-a:#33245F;--ps-tile-b:#1A1035;
+      --ps-rim-a:#D6C4FF;--ps-rim-b:#FFDCB8;--ps-rim-w:1.75;} }
+  .ps-logo.ps-theme-dark{--ps-ink:#F7F5FF;--ps-ink-soft:#B3ADC9;
+      --ps-tile-a:#33245F;--ps-tile-b:#1A1035;
+      --ps-rim-a:#D6C4FF;--ps-rim-b:#FFDCB8;--ps-rim-w:1.75;}
+  .ps-logo.ps-theme-light{--ps-ink:#14111F;--ps-ink-soft:#6A6580;
+      --ps-tile-a:#1D1338;--ps-tile-b:#0A0714;
+      --ps-rim-a:#8B63F5;--ps-rim-b:#FFB86B;--ps-rim-w:1.5;}
+  .ps-word{fill:var(--ps-ink)}
+  .ps-sub{fill:var(--ps-ink-soft)}
+  .ps-rim{stroke-width:var(--ps-rim-w)}
+</style>
+
+  <defs>
+    <linearGradient id="psm-tile" x1="76" y1="0" x2="76" y2="152" gradientUnits="userSpaceOnUse">
+      <stop offset="0" style="stop-color:var(--ps-tile-a)"/><stop offset="1" style="stop-color:var(--ps-tile-b)"/>
+    </linearGradient>
+    <linearGradient id="psm-rim" x1="12" y1="140" x2="140" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" style="stop-color:var(--ps-rim-a)"/><stop offset="1" style="stop-color:var(--ps-rim-b)"/>
+    </linearGradient>
+    <linearGradient id="psm-p0" x1="34" y1="12" x2="118" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5F5CF5"/><stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <clipPath id="psm-c0"><path d="M76 12L118 36L76 60L34 36Z"/></clipPath>
+    <linearGradient id="psm-p1" x1="34" y1="46" x2="118" y2="94" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B45CF2"/><stop offset="1" stop-color="#E04BEF"/>
+    </linearGradient>
+    <clipPath id="psm-c1"><path d="M76 46L118 70L76 94L34 70Z"/></clipPath>
+    <linearGradient id="psm-p2" x1="34" y1="80" x2="118" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC46B"/><stop offset="1" stop-color="#FB7185"/>
+    </linearGradient>
+    <clipPath id="psm-c2"><path d="M76 80L118 104L76 128L34 104Z"/></clipPath>
+  </defs>
+
+    <!-- Maskable variant: dark tile full-bleed to the square edges (no rounded corners);
+         monogram + rim group scaled to 62% of the canvas about the center so the gradient
+         rim (75.25u radius as-is) sits at ~46.7u — well inside the ~80% safe zone
+         (60.8u radius from center 76,76). Light-scheme values are the frozen render (D-05). -->
+    <rect x="0" y="0" width="152" height="152" fill="url(#psm-tile)"/>
+    <g transform="translate(76 76) scale(0.62) translate(-76 -76)">
+    <ellipse cx="76" cy="139" rx="46" ry="8" fill="#000" fill-opacity=".30"/>
+    <g transform="rotate(0 76 76)">
+      <g>
+      <path d="M32 36L76 62L76 76L32 50Z" fill="#4036B8"/>
+      <path d="M120 36L76 62L76 76L120 50Z" fill="#322A96"/>
+      <path d="M76 10L120 36L76 62L32 36Z" fill="url(#psm-p0)"/>
+
+      <path d="M32 36L76 10L120 36" fill="none" stroke="#fff" stroke-opacity=".34" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M32 36L76 62L120 36" fill="none" stroke="#000" stroke-opacity=".20" stroke-width=".9"/>
+    </g>
+    <g>
+      <path d="M32 70L76 96L76 110L32 84Z" fill="#8A2FC4"/>
+      <path d="M120 70L76 96L76 110L120 84Z" fill="#6E249F"/>
+      <path d="M76 44L120 70L76 96L32 70Z" fill="url(#psm-p1)"/>
+
+      <path d="M32 70L76 44L120 70" fill="none" stroke="#fff" stroke-opacity=".34" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M32 70L76 96L120 70" fill="none" stroke="#000" stroke-opacity=".20" stroke-width=".9"/>
+    </g>
+    <g>
+      <path d="M32 104L76 130L76 144L32 118Z" fill="#C4661F"/>
+      <path d="M120 104L76 130L76 144L120 118Z" fill="#A34E1D"/>
+      <path d="M76 78L120 104L76 130L32 104Z" fill="url(#psm-p2)"/>
+
+      <path d="M32 104L76 78L120 104" fill="none" stroke="#fff" stroke-opacity=".34" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="M32 104L76 130L120 104" fill="none" stroke="#000" stroke-opacity=".20" stroke-width=".9"/>
+    </g>
+    </g>
+    <rect x="3.5" y="3.5" width="145" height="145" rx="28.5" fill="none" stroke="#fff" stroke-opacity=".07" stroke-width="1"/>
+    <rect class="ps-rim" x=".75" y=".75" width="150.5" height="150.5" rx="31.25" fill="none" stroke="url(#psm-rim)"/>
+    </g>
+
+</svg>
