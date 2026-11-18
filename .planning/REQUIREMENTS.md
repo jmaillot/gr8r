@@ -38,7 +38,7 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 
 ### Install Hint Banner
 
-- [ ] **PWA-04**: On browsers that fire `beforeinstallprompt` (Chromium desktop/Android), the
+- [x] **PWA-04**: On browsers that fire `beforeinstallprompt` (Chromium desktop/Android), the
   app shows an honest install affordance (banner or Settings entry, EN+FR catalogued) whose
   activation triggers the native install prompt; accepting installs the standalone app.
   On iOS and Firefox, which never fire the event, the affordance either does not appear or
@@ -71,6 +71,6 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 | PWA-01 | Phase 72 | Complete |
 | PWA-02 | Phase 72 | Complete |
 | PWA-03 | Phase 74 | Pending |
-| PWA-04 | Phase 73 | Pending |
+| PWA-04 | Phase 73 | Complete |
 
 Coverage: 4/4 v1 requirements mapped, no orphans, no duplicates.

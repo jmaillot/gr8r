@@ -5,14 +5,14 @@ milestone_name: Installable App (PWA)
 current_phase: 73
 current_phase_name: Install Hint Banner
 status: executing
-stopped_at: Phase 73 context gathered
-last_updated: "2026-11-18T20:06:14.179Z"
-state_head: 481a29c3d7a881b0bf493141122331c325b608cf
+stopped_at: Completed 73-01-PLAN.md
+last_updated: "2026-11-18T20:29:51.984Z"
+state_head: f7942e5114b45d239e34bebfbaae74e86f823201
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
 last_activity: 2026-11-18
 ---
 
@@ -28,8 +28,8 @@ last_activity: 2026-11-18
 ## Current Position
 
 Phase: 73 (Install Hint Banner) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 73
+Plan: 2 of 2
+Status: Ready to execute
 Progress: [███░░░░░░░] 33%
 
 ```
@@ -44,6 +44,11 @@ the binding constraint for Phase 73)
 **Per-Plan Metrics:**
 
 _(none yet this milestone)_
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 73 P01 | 21min | 2 tasks | 8 files |
 
 ## Milestone Decisions (v2.7)
 
@@ -95,9 +100,9 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T19:42:35.877Z
-**Stopped at:** Phase 73 context gathered
-**Resume file:** .planning/phases/73-install-hint-banner/73-CONTEXT.md
+**Last session:** 2026-11-18T20:29:42.399Z
+**Stopped at:** Completed 73-01-PLAN.md
+**Resume file:** None
 
 **Last action:** Derived 3 phases from PWA-01..04, wrote ROADMAP.md + STATE.md + REQUIREMENTS.md traceability.
 **Next step:** owner reviews/approves roadmap → `/gsd-plan-phase 72`
@@ -105,6 +110,8 @@ None.
 ## Decisions
 
 _(v2.6 decisions preserved in git history and milestone archive; v2.7 decisions accumulate above under Milestone Decisions.)_
+- [Phase 73]: Converted actions/keyboard.js to a pre-warmed lazy chunk (Rule 3): the 500 kB entry gate had 5 bytes of headroom, not ~2 kB; banner block rides the freed bytes. — Entry budget remedy: banner listeners cost ~390 minified bytes; keyboard.js (self-contained, one keydown listener) moved to import().catch with pre-warm comment — entry 495,560 bytes.
+- [Phase 73]: D-03 guard signals (api.enabled/S.ui.auth/pathname) read through a setGuardSource() live seam so node tests can pin them; api.enabled is getter-bound in the harness. — push.js setPushWorkspace precedent; production default unchanged.
 
 ## Operator Next Steps
 

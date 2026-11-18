@@ -84,11 +84,11 @@ banner silently never fires)
      fake or dead prompt on any platform
   4. Banner logic is a lazy chunk (entry delta < 200 bytes, chunk gate green) and every
      banner string is catalogued EN+FR in the same commit (i18n gate green)
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 73-01-PLAN.md — Chromium happy path: main.js listener pair, lazy install-banner chunk (suppression + 14-day cooldown + prompt-from-gesture), EN+FR keys, CSS strip, contract/unit tests incl. entry-delta pin
+- [x] 73-01-PLAN.md — Chromium happy path: main.js listener pair, lazy install-banner chunk (suppression + 14-day cooldown + prompt-from-gesture), EN+FR keys, CSS strip, contract/unit tests incl. entry-delta pin
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 73-02-PLAN.md — Platform degradation (iOS static hint, Firefox silence) + e2e spec stubbing beforeinstallprompt (EN/FR, prompt trigger, dismissal persistence)
@@ -123,5 +123,5 @@ end-to-end on real devices.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 72. Manifest, Icons & Head Integration | 2/2 | Complete    | 2026-11-18 |
-| 73. Install Hint Banner | 0/? | Not started | - |
+| 73. Install Hint Banner | 1/2 | In Progress|  |
 | 74. Service Worker Verification & Milestone Acceptance | 0/? | Not started | - |

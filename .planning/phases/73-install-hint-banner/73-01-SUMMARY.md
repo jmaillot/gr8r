@@ -230,3 +230,11 @@ None - no external service configuration required.
 ---
 *Phase: 73-install-hint-banner*
 *Completed: 2026-11-18*
+
+## Self-Check: PASSED
+
+- All key files exist on disk (install-banner.js, pwa-banner.test.mjs, banner-entry-baseline.json, SUMMARY.md)
+- All 4 commits found in git log (7c3664f feat, 3d88016 test, f7942e5 docs, e826a79 state sync)
+- `git diff 0fb7be1..HEAD` touches no public/sw.js, server.js, or index.html file
+- Acceptance criteria re-run: all 9 Task-1 criteria and all 5 Task-2 criteria verified PASS (18/18 unit cases, 20/20 banner suite, 50/50 combined, npm test 1777 pass / 0 fail)
+
