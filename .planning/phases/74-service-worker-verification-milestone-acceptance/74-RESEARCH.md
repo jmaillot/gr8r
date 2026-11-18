@@ -293,9 +293,9 @@ Known threat pattern to preserve in §18 prose: no caching ⇒ no stale/offline-
 
 All discrete in-repo values (hash, manifest fields, pin lines) are `[VERIFIED: …]` with verbatim quotes — no assumed values enter any code example.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-None blocking. One plan-time nicety: decide whether sw-contract.test.mjs cross-checks `server.js`'s `sw.js` no-cache branch (recommended: one substring assertion, not ownership).
+None blocking. The one plan-time nicety — whether `sw-contract.test.mjs` cross-checks `server.js`'s `sw.js` no-cache branch — was RESOLVED at plan time: adopted as a substring assertion in 74-01 Task 1 (assertion 4).
 
 ## Sources
 
