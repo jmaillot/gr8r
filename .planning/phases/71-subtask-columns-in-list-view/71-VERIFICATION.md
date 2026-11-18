@@ -18,7 +18,7 @@ covered_files:
   - src/pages/my-tasks.js
   - test/i18n-core-features.test.mjs
   - e2e/subtask-align.spec.mjs
-covered_digest: "v5:sha256:c8f748832e806fa1d74e016b8282f41967ba36bb740654b117e60eb9f0b0b89c"
+covered_digest: "v2:sha256:294a58dffa7f647a2021ce151a3713ddc5c2a92b2799af6d4b71e2ad0cc9ad09"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
