@@ -1,3 +1,14 @@
+---
+phase: 70-subtasks-in-timeline-and-board-xlsx
+verified: 2026-11-17T12:00:00Z
+status: passed
+score: goal-backward, all D-70 criteria traced in live code; gaps G-1/G-2/G-3 closed and owner re-tested PASS
+note: >
+  Frontmatter added at milestone close (v2.6): the report existed since 2026-11-17
+  but lacked machine-readable status. Evidence cross-checked by
+  .planning/v2.6-MILESTONE-AUDIT.md (status: passed, gates re-run during audit).
+---
+
 # Phase 70 Verification: Subtasks in Timeline and Board XLSX
 
 **Verified:** 2026-11-17 (goal-backward, live codebase)

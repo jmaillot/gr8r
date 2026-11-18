@@ -1,3 +1,14 @@
+---
+phase: 69-exports-verification-test-11
+verified: 2026-11-17T12:00:00Z
+status: passed
+score: MSPDI PASS (re-UAT round 5, 18/18 rows exact); xlsx/CSV non-applicable (owner-confirmed); A1 closed
+note: >
+  Frontmatter added at milestone close (v2.6): the report existed since 2026-11-17
+  but lacked machine-readable status. Evidence cross-checked by
+  .planning/v2.6-MILESTONE-AUDIT.md (status: passed, gates re-run during audit).
+---
+
 # 69-VERIFICATION.md — Owner UAT verdicts (Test 11)
 
 Phase: 69-exports-verification-test-11 · Plan: 03 · Date: 2026-11-17 (verdict final)
