@@ -93,12 +93,16 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T06:14:55.840Z
-**Stopped at:** Completed 71-03-PLAN.md
+**Last session:** 2026-11-18T09:25:21Z
+**Stopped at:** 71 alignment spec committed (682a94d), 3/3 green
 **Resume file:** None
 
-**Last action:** v2.4 ROADMAP.md created (Phases 65–68), REQUIREMENTS.md traceability updated.
-**Next step:** `/gsd-execute-phase 68` (remaining: 68-04 phase gate) or `/gsd-verify-work`
+**Last action:** test(71): DOM-measured pixel-alignment spec for subrow meta cells (G-71-1/G-71-2) — fixed the spec's own cross-column baseline bug (parentX captured from c-status, compared against all columns).
+**Next step:** `/gsd-verify-work` or `/gsd-new-milestone`
+
+### Operator preferences
+
+- Image generation: always use `gemini 4 argon` on inferhub (never default model).
 
 ## Decisions
 
