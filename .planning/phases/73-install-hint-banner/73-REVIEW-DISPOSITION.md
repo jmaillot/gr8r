@@ -5,7 +5,7 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "onBip() judges `canShow()` before hydration — the real Chromium banner never renders"
   - id: WR-01
     severity: warning
@@ -17,7 +17,7 @@ findings:
     title: "`renderStrip()` early-return ignores flavour and can stack strips during the exit window"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "e2e stub's 150 ms dispatch couples the suite to localhost boot latency, masking CR-01"
   - id: IN-01
     severity: info
@@ -31,22 +31,32 @@ findings:
     severity: info
     disposition: open
     title: "Silent chunk-load failures swallow the whole feature"
+  - id: IN-04
+    severity: info
+    disposition: open
+    title: "300-frame retry budget is frame-count-based (~2.5 s at 120 Hz, stalls in background tabs)"
+  - id: IN-05
+    severity: info
+    disposition: open
+    title: "Unit test header comment still describes the pre-73-03 one-shot shape"
 open: 7
-total: 7
-recorded: 2026-11-18T20:55:37.658Z
+total: 9
+recorded: 2026-11-18T23:25:00.000Z
 ---
 
 # Phase 73: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| IN-01 | info | open | - |
-| IN-02 | info | open | - |
-| IN-03 | info | open | - |
+| CR-01 | critical | fixed | 73-03 commit f6661c5 — onBip bounded rAF retry; verified fixed in re-review |
+| WR-01 | warning | open | re-reported (carryover) |
+| WR-02 | warning | open | re-reported (carryover; reachability reduced by 73-03 caller guards) |
+| WR-03 | warning | fixed | 73-03 commit 769b1b8 — rAF-timed pre-hydration e2e scenario; verified fixed in re-review |
+| IN-01 | info | open | re-reported (carryover) |
+| IN-02 | info | open | re-reported (carryover) |
+| IN-03 | info | open | re-reported (carryover; matches pushMod house pattern) |
+| IN-04 | info | open | new in 73-03 re-review |
+| IN-05 | info | open | new in 73-03 re-review |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.
 Set `deferred` by hand and put the reason in the Source cell; both are preserved. A `|` in the reason is kept as prose and escaped on the next run.

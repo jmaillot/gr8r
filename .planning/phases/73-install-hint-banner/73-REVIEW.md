@@ -1,139 +1,89 @@
 ---
 phase: 73-install-hint-banner
-reviewed: 2026-11-18T22:05:00Z
+reviewed: 2026-11-18T23:20:00Z
 depth: standard
-files_reviewed: 8
+files_reviewed: 7
 files_reviewed_list:
-  - src/features/install-banner.js
   - src/main.js
+  - src/features/install-banner.js
   - src/locales/en.json
   - src/locales/fr.json
   - src/styles/overlays.css
   - test/pwa-banner.test.mjs
-  - test/fixtures/banner-entry-baseline.json
   - e2e/install-banner.spec.mjs
 findings:
-  critical: 1
-  warning: 3
-  info: 3
+  critical: 0
+  warning: 2
+  info: 5
   total: 7
 status: issues_found
 ---
 
-# Phase 73: Code Review Report
+# Phase 73: Code Review Report (re-review after 73-03 gap closure)
 
-**Reviewed:** 2026-11-18T22:05:00Z
+**Reviewed:** 2026-11-18T23:20:00Z
 **Depth:** standard
-**Files Reviewed:** 8
+**Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-The install-banner slice is well-structured: lazy chunk with a clean seam (`guardSource`), one-shot `prompt()` discipline, fail-absent localStorage handling, token-only CSS, and a genuinely adversarial test suite (build contract, static pins, degradation matrix). No security findings — the stored cooldown value is never rendered, all interpolated text goes through `esc()`, and the `prompt()` call site is gesture-bound as designed.
+Re-review covering the full phase scope, with focus on the two 73-03 commits (`f6661c5`, `769b1b8`) that postdate the previous review pass (73-REVIEW.md, 22:05Z). Both prior blockers were verified fixed:
 
-However, the plan-02 boot-hydration race fix was applied **only to `checkIos()`**. `onBip()` — the primary Chromium path — still makes its render decision one animation frame after the event, which in real Chrome fires before `api.init()` has resolved `/api/boot`. The unit/e2e suites mask this with artificially delayed event dispatch; the production path is likely dead. Secondary findings concern duplicated CTA copy and module-state races around the exit-animation window.
+- **CR-01 (closed):** `onBip()` now mirrors `checkIos()`'s bounded 300-frame rAF retry (`src/features/install-banner.js:163-179`) — sync first attempt, retry while `!enabled`, final auth decline, decide-once. The pre-hydration race that made the real Chromium banner unreachable is closed.
+- **WR-03 (closed):** `e2e/install-banner.spec.mjs:75-92,215-256` adds the rAF-timed pre-hydration stub (addEventListener patch + route-level 150 ms `/api/config` hold), exercising exactly the CR-01 ordering with zero wall-clock delay in the browser.
 
-## Critical Issues
+Verification performed: full `node --test test/pwa-banner.test.mjs` run — **28/28 pass**, including the real-build chunk gate (one lazy `install-banner` chunk; entry delta within the 200-byte budget) and the new CR-01 retry tests. No security findings: the stored cooldown value is never rendered, all interpolated text goes through `esc()`, the single `prompt()` call site stays gesture-bound, and the unit pin (`promptSites.length === 1`) still enforces it.
 
-### CR-01: onBip() judges `canShow()` before hydration — the real Chromium banner never renders
-
-**File:** `src/features/install-banner.js:158-163` (with `src/core/api.js:12,172`, `src/main.js:79-81`)
-**Issue:** `onBip()` defers its decision by exactly **one** `requestAnimationFrame`:
-
-```js
-export function onBip(e) {
-  deferred = e || null;
-  requestAnimationFrame(() => {
-    if (deferred && canShow()) renderStrip('cta');
-  });
-}
-```
-
-`canShow()` requires `g.enabled` (line 83), and `api.enabled` starts `false` (`src/core/api.js:12`) and only flips after the `/api/boot` network fetch resolves (`api.js:172`). In a real Chrome session, `beforeinstallprompt` fires early during page load — before that fetch resolves — so the single-frame re-check evaluates `enabled === false`, `canShow()` returns false, and the strip never mounts. The event is captured in `deferred` but nothing ever re-examines it.
-
-Commit 486b402 explicitly proved this exact race for `checkIos()` ("bannerMod().then(m => m.checkIos()) resolves before api.init() sets enabled, so canShow() bailed forever") and fixed it with the bounded rAF retry budget. `onBip()` was left with the pre-fix shape. The e2e suite cannot catch it because `BIP_STUB` dispatches the event 150 ms *after* load (`e2e/install-banner.spec.mjs:40`) on a fast localhost boot — the fetch happens to have won by then. Real-device Chromium loses that race deterministically.
-
-**Fix:** give `onBip()` the same bounded retry `checkIos()` received — re-evaluate until the guard signals are live, then decide finally:
-
-```js
-export function onBip(e) {
-  deferred = e || null;
-  let frames = 0;
-  const attempt = () => {
-    if (!deferred) return; /* consumed or installed */
-    const g = guardSource();
-    if (g.auth) { deferred = null; return; } /* auth screen: final (D-03) */
-    if (!g.enabled) {
-      if (++frames < 300) requestAnimationFrame(attempt); /* hydration pending */
-      return;
-    }
-    if (canShow()) renderStrip('cta');
-    else deferred = null;
-  };
-  requestAnimationFrame(attempt);
-}
-```
-
-(The first frame is kept so the happy path still never renders on a login screen judged mid-frame.)
+Remaining findings: the two prior warnings (WR-01, WR-02) and three prior infos were never dispositioned (`73-REVIEW-DISPOSITION.md` shows all 7 rows still `open`) and are still present in source — re-reported below so the record stays honest. Two new info-level observations concern the 73-03 retry budget and a stale test-header comment.
 
 ## Warnings
 
-### WR-01: CTA strip renders the same string twice — text span and button are identical copy
+### WR-01: CTA strip renders the same string twice — text span and button are identical copy (carryover, still open)
 
 **File:** `src/features/install-banner.js:112-117`
-**Issue:** for the `cta` flavour, the grow-span and the button both render `t('pwa.install.cta')`:
+**Issue:** for the `cta` flavour, the grow-span and the button both render `t('pwa.install.cta')` — the user sees "Install app  Install app  ✕". The e2e suite still enshrines the duplication (`e2e/install-banner.spec.mjs:249-250` asserts both equal `EN_CTA`).
+**Fix:** add a dedicated hint key (`pwa.install.hint`) to EN+FR in the same commit (D-08 discipline) and render it in the grow-span, or drop the span and keep only the button.
 
-```js
-const text = flavour === 'ios' ? t('pwa.install.iosHint') : t('pwa.install.cta');
-el.innerHTML = `<span class="grow">${esc(text)}</span>`;
-...
-btn.textContent = t('pwa.install.cta');
-```
+### WR-02: renderStrip/hide module-state races — wrong-flavour early-return and exit-window double mount (carryover, still open; reachability reduced by 73-03)
 
-The user sees "Install app  Install app  ✕" — the descriptive line duplicates the button label, which is both a UX defect and a wasted ~20 bytes of the tight entry/lazy-chunk budget. The e2e suite enshrines the duplication (`e2e/install-banner.spec.mjs:87-88` asserts both elements equal `EN_CTA`), so it is locked in rather than caught.
-**Fix:** add a dedicated hint key (e.g. `pwa.install.hint`: "Install this app for one-tap access") to EN+FR in the same commit (D-08 discipline, catalogue pin 1946→1948), and render it in the grow-span; or drop the span and keep only the button if the strip is meant to be minimal.
-
-### WR-02: `renderStrip()` early-return ignores flavour and can stack strips during the exit window
-
-**File:** `src/features/install-banner.js:89-93,107-108`
-**Issue:** two related module-state problems:
-1. `renderStrip(flavour)` starts with `if (strip) return strip;` — if the iOS strip is mounted and a `beforeinstallprompt` later arrives (desktop Safari/iPad edge), `renderStrip('cta')` returns the *iOS* strip with no Install button; the CTA affordance silently never appears.
-2. `hide()` sets `strip = null` immediately but the element stays in the DOM for 160 ms (`.out` transition, line 91). A second render during that window mounts a *second* strip while the first is still animating out — two overlapping fixed-bottom strips for 160 ms.
-**Fix:** track flavour (`let stripEl = null, stripFlavour = ''`), re-render only when the flavour differs; in `hide()`, keep the reference until `el.remove()` fires:
-
-```js
-function hide(el) {
-  strip = null;               /* free the slot but… */
-  setTimeout(() => { el.remove(); }, 160);
-}
-```
-…combined with a `mounting` guard, or clear `strip` only inside the timeout and have `renderStrip` reuse an exiting element by removing it synchronously before mounting.
-
-### WR-03: e2e stub's 150 ms dispatch couples the suite to localhost boot latency, masking CR-01
-
-**File:** `e2e/install-banner.spec.mjs:33-41,80-83`
-**Issue:** the `beforeinstallprompt` stub is dispatched on a `setTimeout(…, 150)` after load, and the suite passes only because `/api/boot` resolves faster than that on localhost. This timing coincidence is precisely why CR-01 is invisible to CI: the stub *inverts* the real-world ordering (event before boot-fetch). Any CI slowdown (cold server, slower runner) makes test 1 flaky in the other direction too.
-**Fix:** after fixing CR-01, dispatch the stub event immediately (`setTimeout(…, 0)`) in at least one scenario — that is the ordering that reproduces real Chromium and proves the retry logic. Optionally add a second, delayed-dispatch case to cover the late-event path.
+**File:** `src/features/install-banner.js:89-93,107-108,168`
+**Issue:** two related latent problems:
+1. `renderStrip(flavour)` starts with `if (strip) return strip;` (line 108) — if called while an iOS strip is mounted, it returns the *iOS* strip with no Install button. After 73-03 this path is guarded in both callers (`onBip` and `checkIos` both bail on `if (strip …)` first), so it is currently unreachable — but the guard lives at the call sites, not in `renderStrip`; a future third caller reintroduces the bug silently.
+2. `hide()` sets `strip = null` immediately (line 92) while the element stays in the DOM for 160 ms (`.out` transition, overlays.css:789-791). A render scheduled in that window mounts a second overlapping strip. New in 73-03: `onBip`'s retry loop also **strands a captured event** — `if (strip || !deferred) return;` (line 168) stops retrying without clearing `deferred`, so a `beforeinstallprompt` that arrives while any strip is mounted is captured but never examined again (relevant on the iOS-strip-mounted edge, where the strip has no Install button to consume it).
+**Fix:** track flavour alongside the element (`stripEl`/`stripFlavour`), keep the reference until `el.remove()` fires inside the 160 ms timeout, and clear `deferred` in the same early-return path that gives up retrying.
 
 ## Info
 
-### IN-01: Double `hide(el)` on the unexpected-outcome path
+### IN-01: Double `hide(el)` on the unexpected-outcome path (carryover, still open)
 
-**File:** `src/features/install-banner.js:129-136`
-**Issue:** when `await ev.userChoice` rejects, `hide(el)` runs in the catch and then falls through to the unconditional `hide(el)` — two `classList.add('out')` and two 160 ms timeouts per click. Harmless today (idempotent-ish) but a latent trap if `hide` ever accumulates state.
-**Fix:** `catch { /* fall through */ }` and let the single trailing `hide(el)` cover every path, or `return hide(el)` in the catch.
+**File:** `src/features/install-banner.js:129-137`
+**Issue:** when `await ev.userChoice` rejects, `hide(el)` runs in the catch and then falls through to the unconditional `hide(el)` — two `classList.add('out')` and two 160 ms timeouts per click.
+**Fix:** empty catch (fall through) and let the single trailing `hide(el)` cover every path.
 
-### IN-02: 160 ms exit constant duplicated between CSS and JS
+### IN-02: 160 ms exit constant duplicated between CSS and JS (carryover, still open)
 
 **File:** `src/features/install-banner.js:91` and `src/styles/overlays.css:789-791`
-**Issue:** the removal timeout (160 ms) hard-codes the same duration as the `.install-banner.out` CSS transition. Changing either side alone breaks the animation (premature removal or a lingering invisible strip).
-**Fix:** accept the coupling with a comment on both sides, or expose the duration as a CSS custom property read via `getComputedStyle` before scheduling removal.
+**Issue:** the removal timeout hard-codes the same duration as the `.install-banner.out` transition. Changing either side alone breaks the animation.
+**Fix:** couple them explicitly via a comment on both sides, or read the duration from `getComputedStyle` before scheduling removal.
 
-### IN-03: Silent chunk-load failures swallow the whole feature
+### IN-03: Silent chunk-load failures swallow the whole feature (carryover, still open)
 
-**File:** `src/main.js:80-88`
-**Issue:** all three `bannerMod()…catch(() => {})` sites drop chunk-load errors with no signal — if the lazy chunk ever fails to fetch (flaky CDN, aggressive proxy), the user silently gets neither banner nor diagnostics, while `preventDefault` has already suppressed Chrome's own mini-infobar. This matches the established `pushMod`/keyboard.js pattern, so it is noted as an observation, not a defect to fix in-phase.
-**Fix (optional, follow-up):** route the catch through the existing toast/error channel in a later phase, or skip `preventDefault` until the module has loaded.
+**File:** `src/main.js:81-88`
+**Issue:** all three `bannerMod()…catch(() => {})` sites drop chunk-load errors with no signal, while `preventDefault` has already suppressed Chrome's own mini-infobar. Matches the established `pushMod` pattern; noted as a follow-up observation, not an in-phase defect.
+**Fix (optional):** route the catch through the toast/error channel in a later phase, or defer `preventDefault` until the module loads.
+
+### IN-04: 300-frame retry budget is frame-count-based, not wall-clock (new, 73-03)
+
+**File:** `src/features/install-banner.js:173` and `src/features/install-banner.js:210`
+**Issue:** the budget is ~5 s at 60 fps, but only ~2.5 s on 120 Hz displays, and rAF stalls entirely in hidden/background tabs. If hydration takes longer than the effective budget (slow network + throttled tab), the banner silently forfeits — the same final-decline shape as auth. Acceptable as a designed bound (mirrors `checkIos`), but the display-refresh sensitivity is undocumented.
+**Fix:** note the refresh-rate caveat in the header comment, or budget against a coarse wall-clock sample (`performance.now()` compared across frames) if the ~2.5 s ceiling is judged too tight.
+
+### IN-05: Unit test header comment still describes the pre-73-03 one-shot shape (new, 73-03)
+
+**File:** `test/pwa-banner.test.mjs:5-8`
+**Issue:** the header says "onBip … defers the canShow() decision one rAF past hydration" — stale after 73-03 changed the shape to sync-first + bounded retry. The individual test comments (lines 202-203, 329-333) are correct; only the file header drifted. 73-03-SUMMARY even documents a header-comment rename for a case test, but this one was missed.
+**Fix:** reword the header bullet to "defers the canShow() decision past hydration with a bounded rAF retry (CR-01 closure)".
 
 ## Structural Findings (fallow)
 
@@ -141,6 +91,6 @@ None provided in the review request.
 
 ---
 
-_Reviewed: 2026-11-18T22:05:00Z_
+_Reviewed: 2026-11-18T23:20:00Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
