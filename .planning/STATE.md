@@ -1,19 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.6
-milestone_name: Exports Verification (Test 11)
-status: Awaiting next milestone
-stopped_at: Phase 71 complete — all phases complete
-last_updated: "2026-11-18T11:37:42.815Z"
+milestone: v2.7
+milestone_name: Installable App (PWA)
+status: planning
+last_updated: "2026-11-18T14:21:01.210Z"
 last_activity: 2026-11-18
-last_activity_desc: Milestone v2.6 completed and archived
-state_head: aa297da37158f1c8fce5bc7856a1ea2e0dbebb8b
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
-current_phase: 71
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -27,10 +24,10 @@ current_phase: 71
 
 ## Current Position
 
-Phase: Milestone v2.6 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-18 — Milestone v2.6 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-18 — Milestone v2.7 started
 
 ## Performance Metrics
 

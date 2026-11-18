@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-18 after v2.6 milestone — Exports Verification (Test 11) shipped (A1 closed, subtasks in Timeline/Board XLSX, subtask columns in List view)*
+*Last updated: 2026-11-18 — v2.7 milestone started: Installable App (PWA)*
 
 
 <details>
@@ -125,34 +125,22 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 
 ### Next Milestone Goals
 
-_Not yet defined — start with `/gsd-new-milestone`. Deferred backlog candidates are
-listed in ROADMAP.md (mobile hidden[] card fields, SMTP retry semantics, WR-01 CSS
-scoping, Nyquist reconciliation)._
+_Se v2.7 below — started 2026-11-18._
 
-## Current Milestone: v2.6 Exports Verification (Test 11) — SHIPPED (2026-11-18)
+## Current Milestone: v2.7 Installable App (PWA)
 
-**Shipped:** 3 phases (69–71), 9 plans, 8/8 requirements, all phases verified; milestone
-audit PASSED (14 surfaces wired, 7/7 E2E flows, gates re-run during audit: unit 1737/0,
-e2e 140 + 1 pre-existing env flake, chunk ≤500 kB, lint 16 = documented baseline, zero new
-deps). Archived to `.planning/milestones/v2.6-ROADMAP.md` and `v2.6-REQUIREMENTS.md`.
+**Goal:** make the self-hosted app installable on desktop and mobile as a real app — the
+browser tab experience in a standalone window, with no offline cache.
 
-- EXP — Exports verification ✓: real MS Project round-trip proven — MSPDI re-UAT round 5
-  PASS (18/18 rows exact, 3-level Gantt preserved, repair dialog benign); xlsx/CSV recorded
-  non-applicable per owner ruling; backlog item A1 checked off (Phase 999.1 closed)
-- SUB-XLSX — Subtasks in Timeline & Board ✓: DFS child bars grouped under parents with
-  real-depth indent and per-bar status; flat dotted-key child cards in Board status lanes
-  (counts = parents + children); SHAPE_CAP 400 child-inclusive; CSV/MSPDI/Tasks sheet/route
-  untouched (frozen-file diff empty)
-- LIST-COLUMNS — Subtask columns in List view ✓: opt-in `columns` meta for status
-  (done/todo chip), assignees, priority (inherited), due (`s.due || parent due` with
-  inherited tooltip) — aligned to the parent column grid (G-71-1..4 closed, e2e-pinned on
-  List + My Tasks + depth-2)
+**Target features:**
+- PWA-01 — Web app manifest: name "Projects Studio", theme/display colors, standalone display
+- PWA-02 — Icon set derived from the existing brand mark (maskable + regular PNGs in `public/`)
+- PWA-03 — Pass-through service worker: registered, no precache, no runtime caching — strictly online
+- PWA-04 — Install hint banner for browsers exposing the install event; honest no-op elsewhere (iOS)
 
-**Notable decisions:** subtask due inheritance fixed model-wide (`due: s.due || t.due || ''`,
-manual value wins in every channel); Excel repair-prompt blocker fixed at the drawing-anchor
-level (LINK_ROW_OFF 150000/40000 EMU inside the 190500 EMU row height, guard test pinning
-every Timeline rowOff); export-modal `subtasks` stays an opt-in checkbox (R3 design
-confirmed); lint baseline re-documented at 16 pre-existing errors.
+**Key context:** no offline cache by decision; zero new dependencies; manifest/SW live outside
+the Vite bundle (chunk gate headroom ~2 kB); iOS install/push limitations accepted with honest
+degradation.
 
 **Next milestone:** goals not yet defined — start with `/gsd-new-milestone`.
 
