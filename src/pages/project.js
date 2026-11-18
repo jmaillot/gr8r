@@ -71,7 +71,7 @@ export function pageProject() {
         <button class="pillbtn bordered" data-a="pop" data-pop="pstatus" data-id="${p.id}" aria-label="${t('a11y.projectStatus')}" style="height:24px"><span class="pdot" style="--c:${PSTAT[p.status].c};border-radius:50%;width:7px;height:7px"></span>${PSTAT[p.status].name}${ic('chevron-down', 12)}</button>
         <span class="sp"></span>
         <div class="row" style="gap:4px">
-          ${canManageProject(p) ? `<button class="ibtn ibtn-sm" data-a="exportOpen" data-id="${p.id}" data-tip="${t('export.action')}" aria-label="${t('export.action')}">${ic('download', 15)}</button>` : ''}
+          ${canManageProject(p) ? `<button class="pillbtn bordered" data-a="exportOpen" data-id="${p.id}" data-tip="${t('export.action')}" aria-label="${t('export.action')}">${ic('download', 14)}${t('export.action')}</button>` : ''}
           <button class="ibtn ibtn-sm" data-a="editProject" data-id="${p.id}" data-tip="${t('a11y.projectSettings')}" aria-label="${t('a11y.projectSettings')}">${ic('settings', 15)}</button>
           <button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="project" data-id="${p.id}" aria-label="${t('a11y.more')}">${ic('ellipsis', 15)}</button>
         </div>
