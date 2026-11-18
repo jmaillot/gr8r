@@ -52,11 +52,11 @@ reads — all as inert static assets with zero JS and zero gate risk.
      theme/background colors consistent with the existing design tokens
   4. The per-workspace logo favicon swap (Phase 43 D-06 boundary) is unaffected — every
      existing favicon test stays green; unit + lint + i18n + chunk gates all pass unmodified
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 72-01-PLAN.md — Manifest file + 3-touch server.js diff + index.html head tags, pinned by contract test and e2e live header check
+- [x] 72-01-PLAN.md — Manifest file + 3-touch server.js diff + index.html head tags, pinned by contract test and e2e live header check
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 72-02-PLAN.md — Five-PNG icon set rendered from favicon.svg (D-07 owner approval) + icon contract test
@@ -114,6 +114,6 @@ end-to-end on real devices.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 72. Manifest, Icons & Head Integration | 0/? | Not started | - |
+| 72. Manifest, Icons & Head Integration | 1/2 | In Progress | - |
 | 73. Install Hint Banner | 0/? | Not started | - |
 | 74. Service Worker Verification & Milestone Acceptance | 0/? | Not started | - |
