@@ -1,18 +1,18 @@
 ---
-status: testing
+status: complete
 phase: 70-subtasks-in-timeline-and-board-xlsx
 source: [70-01-SUMMARY.md]
 started: 2026-11-17T00:00:00Z
-updated: 2026-11-17T01:30:00Z
+updated: 2026-11-18T00:00:00Z
 ---
 
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
 number: 0
-name: (session complete)
+name: (session complete — verdict recorded 2026-11-17)
 expected: |
-  G-1 (70-02), G-2 (c63017a), G-3 (70-03) all shipped. Owner re-test pending on real exports.
+  G-1, G-2, G-3 all fixed and owner re-tested PASS. UAT verdict 4/4.
 awaiting: none
 
 ## Tests
@@ -33,9 +33,9 @@ result: pass
 
 ### 4. Régression — sans sous-tâches et autres canaux
 expected: Avec l'option `subtasks` désactivée, le workbook est identique à avant (aucune ligne enfant) ; les feuilles Tasks, MSPDI et CSV sont inchangés ; la dégradation SHAPE_CAP au-delà de 400 formes (enfants compris) fonctionne comme avant.
-result: issue
+result: pass
 note: |
-  Owner 2026-11-17 — à l'ouverture Excel affiche « Désolé… problème dans le contenu de .xlsx, nous pouvons essayer de récupérer le maximum de contenu ». Sinon le contenu a l'air correct après réparation. = XML invalide quelque part (souvent : id dupliqué, attribut hors plage, ou cellule/style incohérent). Suspects principaux : indentCell multi-niveaux (style id) sur les lignes enfants Timeline, ancres de formes child bars, ou cartes Board enfants. Diagnostic en cours (G-2).
+  Initial run 2026-11-17 flagged the Excel repair prompt (gap G-2). FIXED — commit `c63017a` (70-02 gap closure): LINK_ROW_OFF_PRED/SUCC anchors out of the 190500 EMU row height; offsets corrected to 150000/40000 + guard pin. **Owner re-test: PASS (2026-11-17).** With `subtasks` disabled the workbook is unchanged (frozen-file diff empty, re-verified in v2.6 audit).
 
 ## Summary
 

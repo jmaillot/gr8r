@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "the subtasks status are not aligned with parent task status column"
 created: 2026-11-18
 updated: 2026-11-18
@@ -36,7 +36,7 @@ started: after 71-01/71-02 fixes
 
 ## Resolution
 
-root_cause: subrow status chip visual offset — parent .pillbtn has 0 7px padding, subrow .stchip has none
-fix:
-verification:
-files_changed: []
+root_cause: subrow status chip visual offset — parent .pillbtn has 0 7px padding, subrow .stchip had none
+fix: commit `02fb2dc` (fix 71-04) — `.subrow .c-status .stchip` now carries the .pillbtn padding/height/radius contract (alignment, not restyle). G-71-4 follow-up (`bdd73d5`) wrapped assignee/priority/due content in the same contract.
+verification: pin added in 71-04 (`3fedacb`, inner-chip-content alignment vs parent pill content); human re-check UAT after closure (`d9bc7fc`, `8bf5a08`) — passed; confirmed in v2.6 milestone audit (71 visual UAT passed post G-71-3/G-71-4 closure).
+files_changed: [src/styles/views/list.css]
