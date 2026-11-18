@@ -1,5 +1,18 @@
 # Milestones
 
+## v2.6 Exports Verification (Test 11) (Shipped: 2026-11-18)
+
+**Phases completed:** 3 phases, 11 plans, 9 tasks
+
+**Key accomplishments:**
+- Lifted the three subtask exclusions — Board lanes gain flat dotted-key child cards (counts = parents + children), Timeline gains parent-grouped DFS child bars with real-depth indent (depth+1) and per-bar status (statusLabelById retired), SHAPE_CAP 400 stays strict child-inclusive; CSV/MSPDI/Tasks-sheet/route untouched.
+- one-line model fix (`due: s.due || t.due || ''`, exact mirror of the start inheritance on the previous line) + TDD pin rewrites so a manually-set subtask due wins in every export channel while due-less subtasks still inherit the top-level task due.
+- Subtask meta cells now sit at the same horizontal px offset as the parent task's cells under each column header: one CSS rule (`padding: 0 8px` on `.subrow > .c-meta`) plus a grow-only source-contract pin, closing the cosmetic gap G-71-1 reported in 71-UAT.
+- .subrow .c-status .stchip now carries the .pillbtn padding/height/radius contract (0 7px / var(--h-sm) / var(--r-sm)) so chip content sits at the parent pill's content x-position, pinned by 3 new grow-only e2e tests measuring inner chip content vs pill content-box edge on List, My Tasks, and depth-2.
+- Wrapped the subrow assignee/priority/due cell content in a `.stpill` element carrying the parent `.pillbtn` padding/height/radius contract, and pinned the inner-content alignment metric for all three cells in the e2e spec on both call sites.
+
+---
+
 ## v2.5 Template Polish & Import (Shipped: 2026-11-16)
 
 **Type:** owner-directed quick work (no formal GSD phases — 67-05/67-06/67-07)
