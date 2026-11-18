@@ -1,7 +1,7 @@
 ---
 phase: 71-subtask-columns-in-list-view
 verified: 2026-11-18T11:05:00Z
-status: human_needed
+status: passed
 score: 12/12 must-haves verified
 covered_files:
   - .planning/phases/71-subtask-columns-in-list-view/71-01-PLAN.md
@@ -20,6 +20,7 @@ covered_files:
   - src/pages/my-tasks.js
   - test/i18n-core-features.test.mjs
   - e2e/subtask-align.spec.mjs
+
 covered_digest: "v2:sha256:adebcdc340044932ebfac888fc5121f3145500cd0d7c2e1573d3939a5a43dd4a"
 behavior_unverified: 0
 overrides_applied: 0
