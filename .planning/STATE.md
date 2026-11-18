@@ -4,15 +4,15 @@ milestone: v2.7
 milestone_name: Installable App (PWA)
 current_phase: 73
 current_phase_name: Install Hint Banner
-status: executing
-stopped_at: Completed 73-01-PLAN.md
-last_updated: "2026-11-18T20:29:51.984Z"
-state_head: f7942e5114b45d239e34bebfbaae74e86f823201
+status: verifying
+stopped_at: Completed 73-02-PLAN.md
+last_updated: "2026-11-18T20:48:45.512Z"
+state_head: 921d841fb6692222c07928f5aa29f9b543bc5902
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 last_activity: 2026-11-18
 ---
 
@@ -29,7 +29,7 @@ last_activity: 2026-11-18
 
 Phase: 73 (Install Hint Banner) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Progress: [███░░░░░░░] 33%
 
 ```
@@ -49,6 +49,7 @@ _(none yet this milestone)_
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 73 P01 | 21min | 2 tasks | 8 files |
+| Phase 73 P02 | 16min | 2 tasks | 3 files |
 
 ## Milestone Decisions (v2.7)
 
@@ -100,8 +101,8 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-11-18T20:29:42.399Z
-**Stopped at:** Completed 73-01-PLAN.md
+**Last session:** 2026-11-18T20:48:45.467Z
+**Stopped at:** Completed 73-02-PLAN.md
 **Resume file:** None
 
 **Last action:** Derived 3 phases from PWA-01..04, wrote ROADMAP.md + STATE.md + REQUIREMENTS.md traceability.
@@ -112,6 +113,8 @@ None.
 _(v2.6 decisions preserved in git history and milestone archive; v2.7 decisions accumulate above under Milestone Decisions.)_
 - [Phase 73]: Converted actions/keyboard.js to a pre-warmed lazy chunk (Rule 3): the 500 kB entry gate had 5 bytes of headroom, not ~2 kB; banner block rides the freed bytes. — Entry budget remedy: banner listeners cost ~390 minified bytes; keyboard.js (self-contained, one keydown listener) moved to import().catch with pre-warm comment — entry 495,560 bytes.
 - [Phase 73]: D-03 guard signals (api.enabled/S.ui.auth/pathname) read through a setGuardSource() live seam so node tests can pin them; api.enabled is getter-bound in the harness. — push.js setPushWorkspace precedent; production default unchanged.
+- [Phase 73]: checkIos() boot-hydration race fixed frame-based: rAF retry only while api.init() is pending (enabled false, no auth screen); final once guard signals are live
+- [Phase 73]: e2e stub markers __bipPrompted/__bipDispatched live only in e2e/install-banner.spec.mjs (T-73-02 verified clean in src/ and public/)
 
 ## Operator Next Steps
 
