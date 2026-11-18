@@ -119,7 +119,11 @@ end-to-end on real devices.
   4. Real-device UAT passed (human_needed): the app installs and launches standalone on
      desktop Chrome and Android Chrome; iOS shows the honest manual-install path; push
      notifications still work after all changes
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 74-01-PLAN.md — sw-contract.test.mjs: hash pin, handler-line pins, registration call-site pins, manifest↔SW scope agreement (D-01, D-04)
+- [ ] 74-02-PLAN.md — DEPLOY.md §18 PWA posture (D-02) + 74-UAT.md real-device acceptance (D-03, blocking human checkpoint)
 
 ## Progress Table
 
