@@ -150,6 +150,15 @@
   border-bottom: 1px solid var(--divider);
   font-size: var(--fs-sm);
 }
+/* Phase 71 (G-71-1): subrow meta cells mirror the parent cells' horizontal
+   padding contract (D-71-1) — .thead > div / .trow > div use `padding: 0 8px`,
+   so the .c-meta cells (including empty placeholders, where the padding is
+   inert) share the same 8px inset to align content under each column header. */
+.subrow > .c-meta {
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+}
 /* Phase 71 (ADR-5): in columns mode the renderer wraps the head content
    (caret + toggle + title) in one .subhead item spanning the three leading
    tracks, so the meta cells land on the tracks after the title track. */
