@@ -261,3 +261,120 @@ test('depth-2 subrow status chip inner content aligns with the parent status pil
   }
   expect(measured, 'G-71-3 (depth-2): chip inner content vs parent pill content').toBeLessThanOrEqual(1);
 });
+
+/* =====================================================================
+   G-71-4 (71-05): the same inner-content metric extended to the
+   assignee/priority/due cells. Their content is wrapped in one
+   .stpill element carrying the .pillbtn padding/height/radius
+   contract (mirroring G-71-3's .stchip), so the wrapper's first
+   element child (avStack / prPill / .due span / faint fallback) is
+   the visible content — measured against the parent cell's
+   .pillbtn content-box edge.
+   ===================================================================== */
+const META_COLS = ['c-assignee', 'c-priority', 'c-due'];
+
+async function stpillInnerLeftX(loc) {
+  return loc.evaluate(el => {
+    const wrap = el.querySelector('.stpill');
+    if (!wrap) throw new Error('cell has no .stpill wrapper');
+    /* First element child (avStack / prPill / .due / faint fallback) sits at
+       the wrapper's content-box edge; when the wrapper is empty (no due), the
+       content-box edge itself is the measurement — same math either way. */
+    const cs = getComputedStyle(wrap);
+    const r = wrap.getBoundingClientRect();
+    return r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
+  });
+}
+
+async function stpillDiag(page, selCell, selPill) {
+  const diag = await page.evaluate(([cell, pill]) => {
+    const c = document.querySelector(`${cell} .stpill`);
+    const p = document.querySelector(pill);
+    const cs = getComputedStyle(c), ps = getComputedStyle(p);
+    return {
+      stpill: { left: c.getBoundingClientRect().left, pad: cs.paddingLeft, height: cs.height },
+      pill: { left: p.getBoundingClientRect().left, pad: ps.paddingLeft, height: ps.height },
+    };
+  }, [selCell, selPill]);
+  console.log('DIAG stpill-content vs pill-content:', JSON.stringify(diag));
+}
+
+async function assertStpillAligned(page, row, subrow, label, cols = META_COLS) {
+  for (const col of cols) {
+    const pillX = await contentLeftX(row.locator(`.${col} .pillbtn`).first());
+    const innerX = await stpillInnerLeftX(subrow.locator(`.${col}`).first());
+    const measured = Math.abs(innerX - pillX);
+    if (measured > 1) {
+      await stpillDiag(page, `.subrows [data-ctx="sub"][data-id="${T1}"] .${col}`, `[data-task-row="${T1}"] .${col} .pillbtn`);
+    }
+    expect(measured, `G-71-4${label}: ${col} inner content vs parent pill content`).toBeLessThanOrEqual(1);
+  }
+}
+
+test('subrow assignee/priority/due inner content aligns with the parent pill content (list view)', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('button[data-a="setViewMode"][data-v="list"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  const subrow = page.locator(`.subrows [data-ctx="sub"][data-id="${T1}"]`).first();
+  await expect(subrow).toBeVisible();
+
+  await assertStpillAligned(page, row, subrow, '');
+});
+
+test('my-tasks subrow assignee/priority/due inner content aligns with the parent pill content', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('nav.side [data-r="mytasks"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+  await expect(page.locator(`[data-task-row="${T1}"]`)).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  const subrow = page.locator(`.subrows [data-ctx="sub"][data-id="${T1}"]`).first();
+  await expect(subrow).toBeVisible();
+
+  /* My Tasks forwards project→status→priority→due (no assignee column),
+     so only the priority/due pills exist on the parent row to measure. */
+  await assertStpillAligned(page, row, subrow, ' (my-tasks)', ['c-priority', 'c-due']);
+});
+
+test('depth-2 subrow priority inner content aligns with the parent priority pill content', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('button[data-a="setViewMode"][data-v="list"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  await expect(row.locator('.c-status').first()).toBeVisible();
+
+  const sub = page.locator(`.subrows div[data-sid="st_a1"]`);
+  await expect(sub).toBeVisible();
+  await sub.locator('[data-a="toggleSubNode"]').click();
+  const grand = page.locator(`.subrows div[data-sid="st_a3"]`);
+  await expect(grand).toBeVisible();
+
+  const pillX = await contentLeftX(row.locator('.c-priority .pillbtn').first());
+  const innerX = await stpillInnerLeftX(grand.locator('.c-priority').first());
+  const measured = Math.abs(innerX - pillX);
+  if (measured > 1) {
+    await stpillDiag(page, `.subrows div[data-sid="st_a3"] .c-priority`, `[data-task-row="${T1}"] .c-priority .pillbtn`);
+  }
+  expect(measured, 'G-71-4 (depth-2): priority inner content vs parent pill content').toBeLessThanOrEqual(1);
+});
