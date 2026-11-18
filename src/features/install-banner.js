@@ -152,14 +152,30 @@ function renderStrip(flavour) {
 }
 
 /* Chromium captured the install event (D-02): store it, then defer the
-   visibility decision past boot's hydration with a one-shot
-   requestAnimationFrame re-check (research Pitfall 6 — the event can fire
-   before the first render, and canShow() must not judge a login screen). */
+   visibility decision past boot's hydration with a bounded
+   requestAnimationFrame re-check budget — the SAME boot race checkIos()
+   documents below (research Pitfall 6: the event can fire before the first
+   render, and canShow() must not judge a login screen or an un-hydrated
+   api.enabled). The guard decision retries across the frame budget while
+   hydration is pending; once the signals are live the decision is final —
+   no further frames are scheduled on any path (render, auth decline, or
+   budget exhaustion), and canShow() alone judges standalone/cooldown/route. */
 export function onBip(e) {
   deferred = e || null;
-  requestAnimationFrame(() => {
-    if (deferred && canShow()) renderStrip('cta');
-  });
+  if (!deferred) return; /* nothing captured: nothing scheduled */
+  let frames = 0;
+  const attempt = () => {
+    if (strip || !deferred) return; /* mounted, or onInstalled() nulled the event */
+    const g = guardSource();
+    if (g.auth) return; /* login/join screens: the decision is final (D-03) */
+    if (!g.enabled) {
+      /* boot still hydrating: retry within the frame budget, never a timeout */
+      if (++frames < 300) requestAnimationFrame(attempt);
+      return;
+    }
+    if (canShow()) renderStrip('cta');
+  };
+  attempt();
 }
 
 /* Installed (D-04): hide unconditionally — belt + suspenders alongside the

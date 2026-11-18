@@ -195,11 +195,12 @@ async function reset({ enabled = true, auth = null, path = '/' } = {}) {
 
 /* ---------- onBip: render + prompt-from-gesture (D-01/D-02) ---------- */
 
-test('onBip renders the strip one frame after the event, without prompting', async () => {
+test('onBip renders the strip on the first guard-resolved frame, without prompting', async () => {
   await reset();
   const ev = fakeBip('accepted');
   B.onBip(ev);
-  assert.equal(banner(), undefined, 'nothing renders before the rAF recheck');
+  /* the first attempt judges synchronously when the guards are already live
+     (same shape as checkIos); the retry loop covers the pending case (CR-01) */
   assert.equal(ev.promptCalled, 0, 'prompt() is never called outside the click handler');
   pumpFrame();
   const el = banner();
@@ -266,13 +267,18 @@ test('a stored recent timestamp suppresses rendering; a backdated one (>14d) all
 
 test('cooldownExpired(nowMs) is a pure seam: absent key, fresh key, stale key', async () => {
   await reset();
-  assert.equal(B.cooldownExpired(Date.now()), true, 'absent key: no cooldown');
-  ls.set('pwa.installDismissedAt', String(Date.now()));
-  assert.equal(B.cooldownExpired(Date.now()), false, 'fresh dismissal: cooldown active');
-  assert.equal(B.cooldownExpired(Date.now() + 15 * 864e5), true, 'past the 14-day window');
-  assert.equal(B.cooldownExpired(Date.now() + 14 * 864e5), false, 'exactly 14 days: still cooling');
+  /* ONE captured clock base: the boundary assertions must not depend on two
+     Date.now() reads landing in the same millisecond (the 73-VERIFICATION
+     boundary flake at the old :273 line). */
+  const base = Date.now();
+  assert.equal(B.cooldownExpired(base + 864e5), true, 'absent key: no cooldown');
+  ls.set('pwa.installDismissedAt', String(base));
+  assert.equal(B.cooldownExpired(base + 864e5), false, 'fresh dismissal: cooldown active');
+  assert.equal(B.cooldownExpired(base + 15 * 864e5), true, 'past the 14-day window');
+  assert.equal(B.cooldownExpired(base + 14 * 864e5), false, 'exactly 14 days: still cooling');
+  assert.equal(B.cooldownExpired(base + 14 * 864e5 + 1), true, '1 ms past the window: expired');
   ls.set('pwa.installDismissedAt', 'garbage');
-  assert.equal(B.cooldownExpired(Date.now()), true, 'garbage coerces via Number()||0 → 0 → no cooldown');
+  assert.equal(B.cooldownExpired(base + 864e5), true, 'garbage coerces via Number()||0 → 0 → no cooldown');
 });
 
 /* ---------- onInstalled + standalone suppression (D-04) ---------- */
@@ -318,6 +324,56 @@ test('join route: onBip renders nothing (D-03)', async () => {
   pumpFrame();
   await settle();
   assert.equal(banner(), undefined);
+});
+
+/* ---------- onBip pre-hydration retry (CR-01 closure, plan 73-03) ----------
+   The real Chromium race: beforeinstallprompt fires BEFORE /api/boot
+   hydration resolves, so api.enabled is still false on the first frames.
+   onBip must retry across a bounded rAF budget — the same shape checkIos()
+   already ships — and decide ONCE once the guards resolve. */
+
+test('onBip during boot hydration retries frames and renders once enabled resolves (CR-01)', async () => {
+  await reset({ enabled: false });
+  /* the guard reports enabled:false for the first 5 reads, then hydration
+     "lands" — well inside the 300-frame budget the implementation ships */
+  let reads = 0;
+  B.setGuardSource(() => ({ auth: null, enabled: ++reads > 5, path: '/' }));
+  const ev = fakeBip('accepted');
+  B.onBip(ev);
+  assert.equal(banner(), undefined, 'nothing renders while api.init() is still pending');
+  assert.equal(pendingFrames.length, 1, 'a retry frame is scheduled — frame-based, never a timeout');
+  /* pump well past the flip point: the one-shot implementation would have
+     already declined on its single early frame and never renders */
+  for (let i = 0; i < 10; i++) pumpFrame();
+  const el = banner();
+  assert.ok(el, 'the strip renders once enabled flips true (bounded retry, not one-shot)');
+  assert.ok(ctaBtn(el), 'the Chromium strip carries an Install button');
+  assert.equal(ev.promptCalled, 0);
+  await settle();
+});
+
+test('onBip decides once: no further frames are scheduled after the strip renders', async () => {
+  await reset();
+  B.onBip(fakeBip('accepted'));
+  pumpFrame();
+  assert.ok(banner(), 'the strip rendered');
+  for (let i = 0; i < 20; i++) pumpFrame();
+  const count = globalThis.document.body.children.filter(c => c._classes.has('install-banner')).length;
+  assert.equal(count, 1, 'no second strip mounts after additional frames');
+  assert.equal(pendingFrames.length, 0, 'the decision scheduled no further frames');
+  await settle();
+});
+
+test('auth screen decline is final: onBip renders nothing even after auth clears later (D-03)', async () => {
+  await reset({ auth: 'login' });
+  B.onBip(fakeBip('accepted'));
+  for (let i = 0; i < 5; i++) pumpFrame();
+  assert.equal(banner(), undefined, 'no render on the auth screen');
+  /* auth flips false later — the decline stays final, mirroring checkIos */
+  B.setGuardSource(() => ({ auth: null, enabled: true, path: '/' }));
+  for (let i = 0; i < 5; i++) pumpFrame();
+  assert.equal(banner(), undefined, 'the auth decline is final — no late render');
+  await settle();
 });
 
 /* ---------- checkIos: feature-based degradation (D-06/D-07) ---------- */
