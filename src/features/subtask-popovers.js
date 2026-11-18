@@ -81,9 +81,9 @@ export function subTreeChecklistHtml(task0, opt = {}) {
           ? opt.columns
               .map(c => {
                 if (c === 'status') return `<div class="c-meta c-status"><label class="stchip">${toggle}${stPill(s.done ? 'done' : 'todo')}</label></div>`;
-                if (c === 'assignee') return `<div class="c-meta c-assignee">${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : `<span class="faint">${t('common.unassigned')}</span>`}</div>`;
-                if (c === 'priority') return `<div class="c-meta c-priority inh">${prPill(task0.priority)}</div>`;
-                if (c === 'due') return `<div class="c-meta c-due">${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}</div>`;
+                if (c === 'assignee') return `<div class="c-meta c-assignee"><span class="stpill">${(s.assignees || []).length ? avStack(s.assignees, 3, 'sm') : `<span class="faint">${t('common.unassigned')}</span>`}</span></div>`;
+                if (c === 'priority') return `<div class="c-meta c-priority inh"><span class="stpill">${prPill(task0.priority)}</span></div>`;
+                if (c === 'due') return `<div class="c-meta c-due"><span class="stpill">${due ? `<span class="due ${!s.done && diffD(parse(due), TODAY) < 0 ? 'over' : ''}"${s.due ? '' : ` data-tip="${esc(t('page.subtask.inheritedDue'))}"`}>${ic('calendar', 12)}${relDate(due)}</span>` : ''}</span></div>`;
                 return `<div class="c-meta"></div>`;
               })
               .join('')
