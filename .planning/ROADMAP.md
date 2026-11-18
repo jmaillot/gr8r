@@ -51,7 +51,11 @@ reads — all as inert static assets with zero JS and zero gate risk.
      theme/background colors consistent with the existing design tokens
   4. The per-workspace logo favicon swap (Phase 43 D-06 boundary) is unaffected — every
      existing favicon test stays green; unit + lint + i18n + chunk gates all pass unmodified
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 72-01-PLAN.md — Manifest file + 3-touch server.js diff + index.html head tags, pinned by contract test and e2e live header check
+- [ ] 72-02-PLAN.md — Five-PNG icon set rendered from favicon.svg (D-07 owner approval) + icon contract test
 **UI hint**: yes
 
 ### Phase 73: Install Hint Banner
