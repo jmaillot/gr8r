@@ -1,96 +1,84 @@
 ---
 phase: 71-subtask-columns-in-list-view
-reviewed: 2026-11-17T00:00:00Z
+plan: 03
+reviewed: 2026-11-18T00:00:00Z
 depth: standard
+scope: fc1f88c..a182b00 (71-03 gap closure only)
 files_reviewed: 2
 files_reviewed_list:
   - src/styles/views/list.css
   - test/i18n-core-features.test.mjs
 findings:
-  critical: 1
-  warning: 1
-  info: 2
-  total: 4
+  critical: 0
+  high: 0
+  medium: 0
+  low: 1
+  nit: 1
+  total: 2
 status: issues_found
 ---
 
-# Phase 71: Code Review Report
+# Phase 71, Plan 03: Code Review Report (gap closure G-71-1)
 
-**Reviewed:** 2026-11-17
+**Reviewed:** 2026-11-18
 **Depth:** standard
-**Files Reviewed:** 2
-**Status:** issues_found
+**Files Reviewed:** 2 (`src/styles/views/list.css`, `test/i18n-core-features.test.mjs`)
+**Diff base:** commits `fc1f88c` (CSS fix) + `a182b00` (test pins)
+**Status:** issues_found (minor only — no blockers)
 
 ## Summary
 
-Reviewed the phase 71 CSS (list subrow grid alignment) and the contract test suite at standard depth, cross-referencing both against the actual renderer (`src/features/subtask-popovers.js`) and the parent row renderer (`src/components/task-list.js`), plus every `listHtml` call site.
+The 71-03 diff is a one-rule CSS change plus grow-only test pins, and it does exactly what plan 71-03 specified. Verified against the live codebase:
 
-The core columns mechanism works for the Tasks/Project list views (parent cols start `['status','assignee','priority','due',…]`, matching the renderer's hardcoded cell order). However, one live call site passes a different column order and the subtask meta cells silently land on the wrong tracks there. The CSS fallback template is also stale against both real call sites. The test file is largely sound (it correctly pins escaping, the toggle contract, and grid alignment), but contains a name/assertion mismatch and a self-contradictory comment that will mislead future maintainers.
+- `.subrow > .c-meta` (list.css:157-161) correctly mirrors the parent-cell convention `.thead > div` (:27-33) / `.trow > div` (:54-60): `padding: 0 8px`, `display: flex`, `align-items: center`. No specificity conflict — grep confirms this is the only `.subrow > .c-meta` rule, and the later `.subrow.done .c-meta span` rule (:213) is untouched.
+- The renderer (src/features/subtask-popovers.js:80-92) emits `.c-meta` cells as direct children of the `.subrow` element, so the `>` child selector matches every live call site, including the empty placeholder `<div class="c-meta"></div>` (line 87) where padding is inert as the comment claims.
+- The `.grp` decoy (`padding: 0 8px 0 22px`, list.css:110) is correctly excluded by the anchored test regex (`^[ \t]*padding: 0 8px;[ \t]*$/gm`), which counts exactly the 3 intended declarations (:28, :55, :158).
+- Existing 71-02 pins (`gap: 0`, `padding-left: 64px`, `--ind` on `.subhead`) are intact and re-asserted grow-only; no prior coverage deleted.
+- `node --test test/i18n-core-features.test.mjs` verified live: 25 pass / 0 fail.
 
-## Critical Issues
+No security surface (no new input paths, no injection risk). No correctness defects found. The two items below are minor consistency nits.
 
-### CR-01: Subtask meta cells misalign with parent columns on the My Tasks list view
+## Findings
 
-**File:** `src/features/subtask-popovers.js:73-78` (consumed via `src/styles/views/list.css:130-163` and `test/i18n-core-features.test.mjs:244-252`)
-**Issue:** The columns branch hardcodes the four meta cells in the order `status → assignee → priority → due`, but the parent track order comes from `listHtml`'s `cols` option, which varies per call site. `src/pages/my-tasks.js:59` calls:
+### LOW-01: `.subrow > .c-meta` omits the `min-width: 0` / `gap` / `white-space` siblings of the parent-cell rules it mirrors
 
-```js
-listHtml(groups, key, { cols: ['project', 'status', 'priority', 'due'], complete: true, ... })
-```
-
-so the parent template is `18px 30px minmax(220px,1fr) 160px 126px 108px 104px 40px` (project, status, priority, due). The `.subhead` spans tracks 1/4 correctly, but the emitted cells then land as:
-
-- `c-status` (done/todo pill) on the **project** track
-- `c-assignee` on the **status** track
-- `c-priority` on the **priority** track (accidentally correct)
-- `c-due` on the **due** track (accidentally correct)
-
-Users on My Tasks see the status chip under the "Project" header and assignee avatars under the "Status" header. The phase test (line 251) only pins `rowClass: 'subrow', columns: true` and the `--cols` forwarding — it never pins cell order against track order, so this regression is invisible to the suite. The Tasks page (`tasks.js:28`) and Project page (`project.js:113`) happen to align only because their first four cols are `status, assignee, priority, due`; any future column reorder re-triggers the bug silently.
-
-**Fix:** Either (a) emit the meta cells in parent-column order by passing the `cols` array through to the renderer and mapping cells per column:
-
-```js
-// task-list.js:83
-treeChecklist.fn(t, { compact: true, rowClass: 'subrow', columns: cols })
-// subtask-popovers.js columns branch
-const meta = opt.columns
-  ? opt.columns.map(c => CELL_SUB[c] ? `<div class="c-meta c-${c}">${CELL_SUB[c](s, task0)}</div>` : '').join('')
-  : '';
-```
-
-or (b) minimally, reject/misalign-proof by reordering the hardcoded cells to match the dominant call sites and adding a test pin asserting the cell class sequence equals the first four entries of every `listHtml` call site's `cols` array.
-
-## Warnings
-
-### WR-01: CSS fallback grid template is stale — matches no live call site
-
-**File:** `src/styles/views/list.css:138`
-**Issue:** The fallback `grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr) 126px 150px 108px 104px 168px 40px)` bakes in the order status/assignee/priority/due/labels (126/150/108/104/168px). Neither real `listHtml` call site uses that sequence: `tasks.js:28` uses `['status','assignee','priority','due','project']` (project = 160px, not 168px) and `my-tasks.js:59` uses `['project','status','priority','due']`. Any future call site that renders `.subrow` without `--cols` inherits a template that is wrong in both widths and order — worse than having no fallback, because the comment (lines 135-137) presents it as a correct default. Note also the test at `test/i18n-core-features.test.mjs:319-322` only checks that the comment *mentions* LCOLS, not that the widths actually match `LCOLS`.
-
-**Fix:** Either keep the fallback but generate/verify it from `LCOLS` (e.g. a build-time check test comparing the CSS literal to `LCOLS` defaults), or drop the fallback to a simpler sane default (title track + 1fr) so misalignment is loud rather than subtly wrong:
-
+**File:** `src/styles/views/list.css:157-161`
+**Issue:** The rule deliberately mirrors `.thead > div` / `.trow > div`, but the parent rules also carry `min-width: 0` (.trow only, :56), `gap: 6px` (.trow, :59) / `gap: 4px` (.thead, :31), and `white-space: nowrap` (.thead, :32). Two consequences for subrow meta cells: (a) without `min-width: 0`, the grid item keeps its `auto` minimum — long unbreakable content (e.g. many assignee chips or a long label) can overflow the track instead of shrinking; (b) cells holding multiple inline items (e.g. `avStack(...)` assignees at subtask-popovers.js:84) render with no inter-item gap, a slightly different look from the parent row's meta cells.
+**Fix (suggested):**
 ```css
-grid-template-columns: var(--cols, 18px 30px minmax(220px, 1fr));
+.subrow > .c-meta {
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;          /* match .trow > div */
+  white-space: nowrap;
+}
 ```
+Purely cosmetic hardening; not required to close G-71-1. If applied, extend the section-6 pin (a182b00) accordingly — note `white-space`/`gap` values must match what UAT shows for the parent row.
 
-## Info
+### NIT-01: Test error message hardcodes the declaration count independently of the assertion value
 
-### IN-01: Test name contradicts its assertion (174 vs 175)
+**File:** `test/i18n-core-features.test.mjs:352`
+**Issue:** `assert.strictEqual(anchored.length, 3, \`expected exactly 3 anchored ... found ${anchored.length}\`)` — the message repeats the expected count as literal text. Harmless today, but a future legitimate grow (e.g. a 4th rule intentionally carrying `padding: 0 8px`) requires editing both the literal and the message.
+**Fix:** Derive from a constant: `const EXPECTED_PADDED = 3; assert.strictEqual(anchored.length, EXPECTED_PADDED, \`expected exactly ${EXPECTED_PADDED} anchored "padding: 0 8px;" declarations, found ${anchored.length}\`);`
 
-**File:** `test/i18n-core-features.test.mjs:225-229`
-**Issue:** The test is named `the icon baseline holds at 174 names` but asserts `assert.equal(names.length, 175, ...)`. The trailing comment on line 228 also contains duplicated, self-contradictory history fragments (`+1: gauge … prior: +1: gauge …`) from copy-paste accretion. Future maintainers reading the test name will "fix" the assertion down to 174 and break CI.
+## Verification performed
 
-**Fix:** Rename the test to `the icon baseline holds at 175 names` and clean the duplicated comment history.
+- Read full diff of `fc1f88c` and `a182b00`.
+- Read list.css:1-180 in full; grepped `c-meta` across css/js to confirm selector coverage and no conflicting rules.
+- Confirmed renderer contract in src/features/subtask-popovers.js (meta cells are direct children of `.subrow`).
+- Ran `node --test test/i18n-core-features.test.mjs` → 25 pass / 0 fail.
 
-### IN-02: Strike-through suppression relies on class-order specificity, and caret icons in the subhead get struck on done subrows
+## Non-findings (checked, clean)
 
-**File:** `src/styles/views/list.css:202-208`
-**Issue:** `.subrow.done .c-meta span { text-decoration: none; }` (line 202) is declared *before* the broader `.subrow.done span { text-decoration: line-through; }` (line 205) and only wins because of higher specificity — a re-order or specificity refactor silently re-enables strike-through on pill text and avatars, exactly the bleed RESEARCH 2.6 scoped out. Additionally, spans inside `.subhead` (caret `<span class="ibtn">`, the 22px spacer) sit outside `.c-meta`, so on a done subrow their icon spans get `line-through` (cosmetic no-op for SVG, but it hits the `<span style="width:22px">` spacer's text-decoration inheritance chain).
-
-**Fix:** Invert the declaration order (generic rule first, suppression last) and extend the suppression to `.subrow.done .subhead span`, or scope the strike rule to `.subrow.done .subhead .s` (the title only).
+- Empty placeholder cells share the rule safely (padding inert on empty flex cells) — confirmed against renderer output shape.
+- The anchored count regex is the correct discriminator vs the `.grp` decoy; substring counting was correctly avoided.
+- Grow-only constraint respected: no existing assertions removed or weakened (diff is +17 lines, all additive).
+- No secrets, debug artifacts, empty catches, or dangerous-function patterns in the diff.
 
 ---
 
-_Reviewed: 2026-11-17_
+_Reviewed: 2026-11-18_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
