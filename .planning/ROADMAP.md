@@ -74,9 +74,10 @@ Plans:
 **Goal:** Subtask rows in the List view display Status (done/todo chip), Assignees, Priority (inherited from parent) and Due (s.due || parent due, inherited tooltip) aligned to the parent column grid
 **Requirements**: TBD (coverage derived from D-71-1…D-71-7)
 **Depends on:** Phase 70
-**Plans:** 3/3 plans executed (71-01 executed; 71-02 gap closure)
+**Plans:** 4/4 plans executed (71-01 executed; 71-02/71-04 gap closures)
 
 Plans:
+- [x] 71-04-PLAN.md — gap closure: G-71-3 subrow status chip pill-contract alignment + inner-chip-content e2e metric
 - [x] 71-03-PLAN.md
 - [x] 71-01-PLAN.md — subtask meta columns in List view: opt-in `columns` opt, tpl forwarding, status chip, test pins
 - [x] 71-02-PLAN.md — gap closure: subrow grid alignment (CR-01 gap:0 + WR-02 indent-on-item), WR-01 focus indicator, IN-01 drift note
