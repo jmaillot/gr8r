@@ -84,7 +84,11 @@ banner silently never fires)
      fake or dead prompt on any platform
   4. Banner logic is a lazy chunk (entry delta < 200 bytes, chunk gate green) and every
      banner string is catalogued EN+FR in the same commit (i18n gate green)
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 73-01-PLAN.md — Chromium happy path: main.js listener pair, lazy install-banner chunk (suppression + 14-day cooldown + prompt-from-gesture), EN+FR keys, CSS strip, contract/unit tests incl. entry-delta pin
+- [ ] 73-02-PLAN.md — Platform degradation (iOS static hint, Firefox silence) + e2e spec stubbing beforeinstallprompt (EN/FR, prompt trigger, dismissal persistence)
 **UI hint**: yes
 
 ### Phase 74: Service Worker Verification & Milestone Acceptance
