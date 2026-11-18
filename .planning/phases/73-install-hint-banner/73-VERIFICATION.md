@@ -1,6 +1,6 @@
 ---
 phase: 73-install-hint-banner
-verified: 2026-11-19T13:45:00Z
+verified: 2026-11-18T23:59:00Z
 status: passed
 score: 4/4 must-haves verified
 behavior_unverified: 0
@@ -19,7 +19,7 @@ covered_files:
   - src/styles/overlays.css
   - test/pwa-banner.test.mjs
   - e2e/install-banner.spec.mjs
-covered_digest: "v2:sha256:946b48232311d722744a4620d780017b18cb7cd25a19775e4a1d97d13d0b31ab"
+covered_digest: "v2:sha256:0d17b1737aed7e048ffdfce05591c248daafc51dfaafacdcabbc1e96254a9060"
 re_verification:
   previous_status: human_needed
   previous_score: 4/4
