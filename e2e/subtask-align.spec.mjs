@@ -1,0 +1,156 @@
+/* =====================================================================
+   PHASE 71 PIXEL-ALIGNMENT SPEC (G-71-1/G-71-2) — DOM-measured, not
+   vision-guessed. The Vite virtual module blocks unit-level layout
+   tests (71-VALIDATION: manual-only), but a real browser DOM can be
+   measured exactly: every subrow meta cell's content-box left edge
+   must sit within 1px of its parent task row's corresponding cell,
+   which itself must sit within 1px of its column header edge.
+
+   Fixtures through the real API (helpers/setup.mjs doc PUT through
+   the funnel); labels read from the EN catalogue; no sleeps.
+   ===================================================================== */
+import { test, expect } from '@playwright/test';
+import { BASE_URL, createAccount, newRunId } from './helpers/setup.mjs';
+
+const RUN = newRunId();
+const WS = `align-${RUN}`;
+const PROJ = 'p_align';
+const T1 = 't_align_main';
+
+const mkTask = () => ({
+  id: T1,
+  project: PROJ,
+  title: `Align task ${RUN}`,
+  key: 'ALN-1',
+  status: 'todo',
+  assignees: [],
+  priority: 'high',
+  due: null,
+  start: null,
+  labels: [],
+  subtasks: [
+    { id: 'st_a1', parentId: null, position: 0, title: `Sub one ${RUN}`, done: false, assignees: [], priority: null, due: null },
+    { id: 'st_a2', parentId: null, position: 1, title: `Sub two ${RUN}`, done: false, assignees: [], priority: null, due: null },
+    { id: 'st_a3', parentId: 'st_a1', position: 0, title: `Grandchild ${RUN}`, done: false, assignees: [], priority: null, due: null },
+  ],
+  attachments: [],
+  deps: [],
+  comments: [],
+});
+
+test.beforeAll(async () => {
+  const { createAccountAndSeed } = await import('./helpers/align-fixture.mjs');
+  await createAccountAndSeed(BASE_URL, RUN, WS, PROJ, T1, mkTask());
+});
+
+/* The x-contract: for each meta column (status/priority/due), the subrow
+   cell's content-box left edge must match BOTH the parent task row's
+   corresponding cell AND the header cell at the same grid column (±1px
+   rounding). The header check is the one the UAT vision audit caught
+   missing — the subrow grid container's padding shifted every track. */
+const COLS = ['c-status', 'c-priority', 'c-due'];
+
+async function contentLeftX(loc) {
+  return loc.evaluate(el => {
+    const cs = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
+  });
+}
+
+test('subrow meta cells align pixel-exactly with the parent row cells AND the header', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('button[data-a="setViewMode"][data-v="list"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+
+  const thead = page.locator('.thead');
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  const subrow = page.locator(`.subrows [data-ctx="sub"][data-id="${T1}"]`).first();
+  await expect(subrow).toBeVisible();
+
+  for (const col of COLS) {
+    const fname = col.replace('c-', '');
+    const headX = await contentLeftX(thead.locator(`> div[data-f="${fname}"]`));
+    const parentX = await contentLeftX(row.locator(`.${col}`).first());
+    const subX = await contentLeftX(subrow.locator(`.${col}`).first());
+    expect(Math.abs(subX - parentX), `${col}: subrow vs parent`).toBeLessThanOrEqual(1);
+    expect(Math.abs(parentX - headX), `${col}: parent vs header`).toBeLessThanOrEqual(1);
+    expect(Math.abs(subX - headX), `${col}: subrow vs header`).toBeLessThanOrEqual(1);
+  }
+});
+
+/* Depth-2: the grandchild's meta cells must ALSO land on the shared column
+   grid — only the title indent may grow with depth. */
+test('depth-2 subrow meta cells stay on the shared column grid', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('button[data-a="setViewMode"][data-v="list"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  await expect(row.locator('.c-status').first()).toBeVisible();
+
+  const sub = page.locator(`.subrows div[data-sid="st_a1"]`);
+  await expect(sub).toBeVisible();
+  await sub.locator('[data-a="toggleSubNode"]').click();
+  const grand = page.locator(`.subrows div[data-sid="st_a3"]`);
+  await expect(grand).toBeVisible();
+
+  for (const col of COLS) {
+    const parentX = await contentLeftX(row.locator(`.${col}`).first());
+    const grandX = await contentLeftX(grand.locator(`.${col}`).first());
+    const measured = Math.abs(grandX - parentX);
+    /* Diagnostic artifact: dump the measured geometry for the failure report. */
+    if (measured > 1) {
+      const diag = await page.evaluate(([sid, col]) => {
+        const g = document.querySelector(`.subrows div[data-sid="${sid}"] .${col}`);
+        const p = document.querySelector(`[data-task-row="t_align_main"] .${col}`);
+        const gs = getComputedStyle(g), ps = getComputedStyle(p);
+        return {
+          grand: { left: g.getBoundingClientRect().left, pad: gs.paddingLeft, bl: gs.borderLeftWidth, ind: gs.getPropertyValue('--ind') || '(none)' },
+          parent: { left: p.getBoundingClientRect().left, pad: ps.paddingLeft, bl: ps.borderLeftWidth },
+        };
+      }, ['st_a3', col]);
+      console.log(`DIAG ${col}:`, JSON.stringify(diag));
+    }
+    expect(measured, `${col}: depth-2 vs parent`).toBeLessThanOrEqual(1);
+  }
+});
+test('my-tasks subrow meta cells align pixel-exactly with the parent row cells AND the header', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  await page.goto('/');
+  const { loginByForm } = await import('./helpers/align-fixture.mjs');
+  await loginByForm(page, BASE_URL, RUN);
+  await page.goto(`/w/${WS}/tasks`);
+  await page.locator('nav.side [data-r="mytasks"]').click();
+  await expect(page.locator('.tlist').first()).toBeVisible();
+  await expect(page.locator(`[data-task-row="${T1}"]`)).toBeVisible();
+
+  const thead = page.locator('.thead');
+  const row = page.locator(`[data-task-row="${T1}"]`);
+  await row.locator('[data-a="expandRow"]').click();
+  const subrow = page.locator(`.subrows [data-ctx="sub"][data-id="${T1}"]`).first();
+  await expect(subrow).toBeVisible();
+
+  for (const col of COLS) {
+    const fname = col.replace('c-', '');
+    const headX = await contentLeftX(thead.locator(`> div[data-f="${fname}"]`));
+    const parentX = await contentLeftX(row.locator(`.${col}`).first());
+    const subX = await contentLeftX(subrow.locator(`.${col}`).first());
+    expect(Math.abs(subX - parentX), `${col}: subrow vs parent`).toBeLessThanOrEqual(1);
+    expect(Math.abs(parentX - headX), `${col}: parent vs header`).toBeLessThanOrEqual(1);
+    expect(Math.abs(subX - headX), `${col}: subrow vs header`).toBeLessThanOrEqual(1);
+  }
+});
