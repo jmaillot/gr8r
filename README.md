@@ -41,6 +41,25 @@ what [gr8r-studio](https://gr8rstudio/gr8r-studio) ships, and it still works her
   [`integrations/`](integrations/) — see [`docs/MCP.md`](docs/MCP.md) for the full manual.
 - **Bilingual interface.** English and French, chosen per account. A browser sweep and a
   build-time scan guarantee no untranslated string ships.
+- **Subtask trees.** Tasks take multi-level subtasks with completion cascades and leaf-based
+  progress rollups — visible in the drawer, list/table subrows, board, timeline and exports.
+- **Task & project templates.** Manage reusable templates in Settings (with favourites), import
+  them from a Markdown file, or save any live task/project as one; hideable built-in starters.
+- **Automation webhooks — Microsoft Teams only for now.** Per-project outbound webhooks deliver
+  8 event types to Microsoft Teams (Workflows incoming webhooks; adaptive card, MessageCard or
+  raw-JSON payload formats) with exactly-once delivery, SSRF-guarded HMAC-signed requests and
+  retry/backoff. There is no generic third-party target yet — raw JSON is for advanced Teams
+  setups, not a supported Slack/n8n integration.
+- **Browser push & emails that get through.** Real browser push notifications, and notification,
+  reminder and digest emails delivered through a claim-then-deliver outbox with retry/backoff.
+- **Full-text search.** Fuzzy-friendly task search across both backends, merged into the
+  Ctrl-K command palette.
+- **Saved views & column control.** Per-project column show/hide and named saved views shared
+  via an access granularity of your choice.
+- **Exports.** A project exports to Excel (six sheets with charts and Gantt), MS Project
+  (ordered MSPDI XML, round-trip verified) and CSV; subtask trees are included.
+- **Admin oversight.** A power-admin dashboard over the raw stored document and a per-member
+  access self-view, plus a transparency view of exactly what any member can access.
 
 Run it in five minutes with the bundled compose file — see
 [`docs/DEPLOY.md`](docs/DEPLOY.md).
@@ -71,6 +90,9 @@ self-hostable product:
 | Tenancy | One local workspace | Multiple workspaces per instance, role-based access (owner/admin/member/guest) |
 | Privacy | Everything visible | Private projects filtered server-side from every response |
 | Files | Records only, no binary | Real uploads on disk with previews and workspace-scoped links |
+| Automation | — | Multi-level subtask trees, task/project templates (with Markdown import), per-project webhooks — Microsoft Teams only for now |
+| Notifications | — | Per-type emails with an outbox retry, due-date reminders, digests and real browser push |
+| Search & views | Basic | Full-text search in the Ctrl-K palette, saved views and column show/hide |
 | AI | — | MCP server (35 tools), API keys per agent, integration bundles for OpenCode, [CC] and [DSH] |
 | CLI | — | Account/workspace management, backups, key rotation (`node server.js …`) |
 | Operations | Static hosting | Docker image, Traefik guide, backups and restore, updates and rollback runbook |

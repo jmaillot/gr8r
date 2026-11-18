@@ -5,6 +5,21 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] — 2026-11-18 — Exports Verification & Subtask Exports
+
+3 phases (69–71), 9 plans. Highlights:
+
+- **Real MS Project round-trip proven.** The MSPDI export re-passed owner UAT round 5
+  (18/18 rows exact, 3-level Gantt structure preserved) and the Excel repair-prompt blocker
+  was fixed at the drawing-anchor level (drawing rowOff inside the row height), with a guard
+  test pinning every Timeline row offset.
+- **Subtasks in exports.** Timeline XLSX gains parent-grouped child bars with real-depth
+  indent and per-bar status; Board XLSX gains flat dotted-key child cards in status lanes
+  (counts = parents + children); the subtask due field now inherits the parent task's due
+  in every export channel (a manually-set due still wins).
+- **Subtask columns in List view.** Opt-in per-view columns for subtask status, assignees,
+  priority (inherited) and due, aligned to the parent column grid.
+
 ## [2.5.0] — 2026-11-16 — Template Polish & Import
 
 ### Added
@@ -58,9 +73,10 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any live task/project, one-click instantiation from the new task/project modals, and
   a server funnel that whitelists, heals and validates every template body on every
   write.
-- **Exactly-once webhooks.** Unique dedup-key claim, SSRF-guarded HMAC-signed delivery
-  with retry/backoff and a 7-day purge; 8 event types formatted for Teams, generic
-  JSON, with real AAD mentions; owner-gated hook CRUD with a send-test endpoint.
+- **Exactly-once webhooks (Microsoft Teams).** Unique dedup-key claim, SSRF-guarded HMAC-signed
+  delivery with retry/backoff and a 7-day purge; 8 event types delivered to Microsoft Teams
+  incoming webhooks (adaptive card, MessageCard or raw-JSON payload formats — Teams is the only
+  supported target), with real AAD mentions; owner-gated hook CRUD with a send-test endpoint.
 - **Notification & digest emails** moved to the same claim-then-delivery outbox
   machinery (transport-claim table on SQLite+pg, webhook-identical backoff).
 - **Mobile cards completed**: priority/due/estimate/progress render on the ≤900px card

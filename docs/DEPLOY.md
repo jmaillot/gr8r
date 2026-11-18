@@ -1364,3 +1364,34 @@ The key-file custody assumes the documented single-instance deployment: two
 server instances booting simultaneously against one `/data` could race the
 first-time key generation. Deploy exactly one instance per `/data` volume, as
 with the SQLite database itself.
+
+## 17. Outbound webhooks (Microsoft Teams)
+
+Per-project outbound webhooks (Settings on a project, owner/admin/project-leader
+gated) deliver 8 event types to **Microsoft Teams incoming webhooks — that is the
+only supported target right now.** Create a Teams Workflows webhook
+("Post to a channel when a webhook request is received"), paste the URL, pick the
+events and a payload format: Teams adaptive card, Teams MessageCard, or raw JSON
+(for advanced setups feeding other tooling — there is no supported generic
+Slack/n8n integration).
+
+Operational notes for the operator:
+
+- No environment configuration is required. Hook configuration and deliveries
+  live in server tables (`webhook_hooks`, `webhook_deliveries`) inside `/data`,
+  created automatically on boot on both SQLite and Postgres.
+- Delivery is exactly-once via a claim table, out of the request path (a hanging
+  or dead webhook never delays a document save). Failures retry with backoff
+  honoring `Retry-After` for 5 attempts, then go dead; dead deliveries purge
+  silently after 7 days. Hook health is visible in the project's hook settings
+  (never the URL itself — Teams webhook URLs are secrets).
+- Outbound POSTs are HMAC-signed (`x-gr8r-signature` header) with a per-hook
+  secret shown exactly once at creation. Payloads are capped at 28 KB with
+  truncate-and-deliver; Teams enforces ~4 requests/second per hook, which the
+  backoff respects.
+- URLs are SSRF-guarded: https-only, with resolved-IP deny-listing
+  (loopback, private, link-local and metadata ranges) re-validated at every
+  delivery attempt. Behind a strict egress firewall, allow-list the Power
+  Automate / Teams endpoints your Workflows webhook uses (typically
+  `*.logic.azure.com`) or webhooks will fail to deliver.
+- MCP clients cannot manage webhooks — hook CRUD is UI-only by design.
