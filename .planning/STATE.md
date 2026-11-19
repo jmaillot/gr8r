@@ -1,19 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v2.7
-milestone_name: Installable App (PWA)
-status: Awaiting next milestone
-stopped_at: Phase 74 complete — all phases complete
-last_updated: "2026-11-19T08:35:37.225Z"
+milestone: v3.0
+milestone_name: Access Control & Hardening
+status: planning
+last_updated: "2026-11-19T10:31:01.626Z"
 last_activity: 2026-11-19
-last_activity_desc: Milestone v2.7 completed and archived
-state_head: 79737727b80a4716a1932c26d5ee6e537b8cbff7
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
-current_phase: 74
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE.md
@@ -27,10 +24,10 @@ current_phase: 74
 
 ## Current Position
 
-Phase: Milestone v2.7 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-19 — Milestone v2.7 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-19 — Milestone v3.0 started
 
 ## Performance Metrics
 

@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-19 after v2.7 milestone — Installable App (PWA) shipped*
+*Last updated: 2026-11-19 — v3.0 Access Control & Hardening started*
 
 <details>
 <summary>Milestone v2.7 Installable App (PWA) — shipped record (2026-11-19)</summary>
@@ -164,12 +164,24 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 - D-04 (Phase 64): hide-the-button mobile contract — no second Playwright project,
   no chunk-gate edits, zero waivers at close
 
+## Current Milestone: v3.0 Access Control & Hardening
+
+**Goal:** instance-level domain admission rules plus the accumulated maintenance debt.
+
+**Target features:**
+- Domain admission rules (SEED-261119-f3w): `ALLOW_SIGNUP_DOMAINS` + `ALLOW_INVITE_DOMAINS` —
+  door matrix, unset-inherits-signup, fail-closed accept-time re-validation, existing-member
+  immunity, exact-domain matching, keyed localized refusals
+- Lint cleanup: resolve the 17 pre-existing `no-unused-vars` errors
+- Translation spot-check: verify nl/de/es render correctly in the real app
+- Review carryovers: WR-01/WR-02/IN-01..05 advisories from 73/74 reviews
+
+**Key context:** seed design owner-validated — no re-litigation; zero new dependencies;
+package.json bumps to 3.0.0 at ship time.
+
 ### Next Milestone Goals
 
-_Not yet planned — start with `/gsd-new-milestone`. Language selector now offers
-EN, FR, NL, DE, ES; candidate next-milestone items: real-device spot-check of the
-three new translations, 17 pre-existing lint errors (unused vars), WR-01/WR-02/IN
-advisory carryovers from 73/74 reviews._
+_Scoped into v3.0 above._
 
 ## Current Milestone: v2.7 Installable App (PWA) — SHIPPED (2026-11-19)
 
