@@ -137,7 +137,6 @@ async function toggleCol(page, id) {
 }
 
 const rich = page => page.locator('.only-m .panel[data-id="t_mcard_rich"]');
-const plain = page => page.locator('.only-m .panel[data-id="t_mcard_plain"]');
 
 /* D-01 minimum identity: the .mch row (status icon + title + key) and the
    assignee name render unconditionally, whatever the toggle state. */

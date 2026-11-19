@@ -74,7 +74,7 @@ const fakeEl = tag => {
       el.children.push(c);
       return c;
     },
-    removeChild(c) {},
+    removeChild() {},
     remove() {
       el.removed = true;
     },

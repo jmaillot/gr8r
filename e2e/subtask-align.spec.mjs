@@ -10,7 +10,7 @@
    the funnel); labels read from the EN catalogue; no sleeps.
    ===================================================================== */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, createAccount, newRunId } from './helpers/setup.mjs';
+import { BASE_URL, newRunId } from './helpers/setup.mjs';
 
 const RUN = newRunId();
 const WS = `align-${RUN}`;

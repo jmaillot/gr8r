@@ -281,7 +281,7 @@ test('digest: one outbox row per claimed digest, committed inside the reminders_
 });
 
 test('digest: an empty digest claims nothing and writes no outbox row (D-12 guard preserved)', async () => {
-  const mem = await makeDigestFixture('2027-03-10', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
+  await makeDigestFixture('2027-03-10', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
   const before = outboxCount("dedup_key like 'digest:%'");
   const ledgerBefore = withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent').get().n);
   const result = await triggerReminders('2027-03-05T08:00:00Z');

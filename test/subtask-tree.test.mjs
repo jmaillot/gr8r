@@ -7,7 +7,7 @@
    House style: node:test + assert/strict over the isolated-server harness. */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ADMIN, client, login, startServer } from './helpers/server.mjs';
+import { ADMIN, client, startServer } from './helpers/server.mjs';
 import {
   MAX_SUBTASK_DEPTH,
   cascadeDoneIds,

@@ -74,7 +74,7 @@ async function teamRpc(method, params) {
   }
   const out = data?.result;
   const text = out?.content?.[0]?.text;
-  let parsed = null;
+  let parsed;
   try {
     parsed = text ? JSON.parse(text) : null;
   } catch {

@@ -75,7 +75,7 @@ const callTool = async (key, name, args = {}, session = sid) => {
   assert.equal(res.status, 200);
   const out = res.data?.result;
   const text = out?.content?.[0]?.text;
-  let data = null;
+  let data;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
@@ -1064,7 +1064,7 @@ const parCall = async (mid, name, args = {}) => {
   const res = await parRpc(mid, 'tools/call', { name, arguments: args });
   const out = res.result;
   const text = out?.content?.[0]?.text;
-  let data = null;
+  let data;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
