@@ -11,8 +11,9 @@ export default [
   {
     /* e2e specs are Node at the module level (the Playwright import and the
        fixture plumbing) and browser inside the test bodies, so they carry
-       both environments' globals. */
-    files: ['vite.config.js', 'eslint.config.js', 'server.js', 'domains.js', 'mailer.js', 'totp.js', 'oidc.js', 'mcp.js', 'db-adapter.mjs', 'export/**/*.js', 'scripts/**/*.mjs', 'test/**/*.mjs'],
+       both environments' globals. webhook-formats.js and webhook-ssrf.js
+       are standalone root-level scripts run directly by node. */
+    files: ['vite.config.js', 'eslint.config.js', 'server.js', 'domains.js', 'mailer.js', 'totp.js', 'oidc.js', 'mcp.js', 'db-adapter.mjs', 'export/**/*.js', 'scripts/**/*.mjs', 'test/**/*.mjs', 'webhook-formats.js', 'webhook-ssrf.js'],
     languageOptions: { globals: { ...globals.node } },
   },
   {
