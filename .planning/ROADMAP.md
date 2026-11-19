@@ -27,7 +27,7 @@ semantics (re-minting = invite create = DP-2). No route is invented; covered by 
 - Integer phases (75, 76, 77): planned milestone work (continuous numbering from v2.7's Phase 74)
 - Decimal phases (75.1, …): urgent insertions (marked INSERTED)
 
-- [ ] **Phase 75: Domain Admission Core** - Shared canonicalizing validator + signup, invite-create and fail-closed invite-accept doors with 5-locale keyed refusals
+- [x] **Phase 75: Domain Admission Core** - Shared canonicalizing validator + signup, invite-create and fail-closed invite-accept doors with 5-locale keyed refusals ✅ COMPLETE (2026-11-19 — UAT passed, verification passed) (completed 2026-11-19)
 - [ ] **Phase 76: OIDC/SSO Doors & Immunity Hardening** - JIT SSO gate, SSO invite reconciliation, existing-account immunity contract tests, boot door-matrix log
 - [ ] **Phase 77: Maintenance Debt** - Lint cleanup, nl/de/es refusal-path locale spot-check, WR/IN carryover dispositions
 
@@ -59,7 +59,7 @@ refusals — before any SSO surface exists.
      exact `Set` membership (never `endsWith`), subdomains are NOT implicitly admitted, and
      adversarial parsing cases are pinned by a table-driven unit suite (tri-state env matrix:
      unset / `''` / whitespace / `'a,,b'` / `' a , B '`).
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -131,6 +131,6 @@ Phases execute in numeric order: 75 → 76 → 77
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 75. Domain Admission Core | 2/2 | In Progress|  |
+| 75. Domain Admission Core | 2/2 | Complete    | 2026-11-19 |
 | 76. OIDC/SSO Doors & Immunity Hardening | 0/? | Not started | - |
 | 77. Maintenance Debt | 0/? | Not started | - |

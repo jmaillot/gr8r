@@ -13,7 +13,7 @@ Instance-level email-domain admission rules via two env vars, per the owner-vali
 SEED-261119-f3w door matrix. Zero new dependencies; one shared canonicalizing validator in
 server.js (funnel-shaped, mirroring `validateGuestInviteShape`).
 
-- [ ] **DOM-01**: Owner can restrict account creation to specific email domains via
+- [x] **DOM-01**: Owner can restrict account creation to specific email domains via
   `ALLOW_SIGNUP_DOMAINS` (comma-separated env var; unset = all domains allowed — fail-open)
 - [x] **DOM-02**: Owner can restrict invite creation via `ALLOW_INVITE_DOMAINS`; unset
   inherits `ALLOW_SIGNUP_DOMAINS`, explicitly set it stands alone (may be wider)
@@ -64,7 +64,7 @@ Filled by roadmap creation (2026-11-19):
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOM-01 | Phase 75 | Pending |
+| DOM-01 | Phase 75 | Complete |
 | DOM-02 | Phase 75 | Complete |
 | DOM-03 | Phase 75 | Complete |
 | DOM-04 | Phase 75 | Complete |
