@@ -64,15 +64,6 @@ function assetsOf(outDir) {
     .map(name => ({ name, text: fs.readFileSync(path.join(dir, name), 'utf8') }));
 }
 
-function entryChunkName(outDir) {
-  const html = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
-  const tag = [...html.matchAll(/<script\b[^>]*>/g)].map(m => m[0]).find(s => /\btype="module"/.test(s));
-  assert.ok(tag, `the built page carries a module script tag\n${html}`);
-  const src = /\bsrc="([^"]+)"/.exec(tag);
-  assert.ok(src, `the module script tag carries a src\n${tag}`);
-  return path.basename(src[1]);
-}
-
 /* ---------- clause 1: auto-ship (D-09) ---------- */
 
 test('the fixture locale ships from the default build with no LOCALES env', () => {
@@ -92,12 +83,18 @@ test('the fixture chunk carries the fixture string and the derived registry offe
     'the fixture chunk carries the fixture’s own translated string, not an empty stub',
   );
   /* The registry is DERIVED in the bundle: `Object.keys(glob).map(code).sort()` builds the
-     registry, so the proof that xx is offered is the glob key itself reaching the entry —
-     plus the name-map entry the registry's native names come from. */
-  const entry = assets.find(a => a.name === entryChunkName(OUT_DIR));
-  assert.ok(entry, 'the entry chunk is one of the built assets');
-  assert.ok(entry.text.includes(`"../locales/${FIXTURE_CODE}.json"`), 'the entry’s locale glob matches the fixture file — the derived registry offers xx');
-  assert.ok(entry.text.includes(`${FIXTURE_CODE}:"${FIXTURE_CODE}"`), 'the name map carries the xx entry (native name falls back to the raw code)');
+     registry, so the proof that xx is offered is the glob key itself reaching the bundle —
+     plus the name-map entry the registry's native names come from. Under Vite 8 the glob
+     keys ride the `i18n-*` chunk (statically imported by the entry) rather than the entry
+     file itself, so both proofs are read across the full shipped set. */
+  const bundled = assets.map(a => a.text).join('\n');
+  assert.ok(bundled.includes(`"../locales/${FIXTURE_CODE}.json"`), 'the bundle’s locale glob matches the fixture file — the derived registry offers xx');
+  /* The name-map value is quoted singly — `"xx"` on the esbuild chain up to Vite 6, a
+     template literal `` `xx` `` under Vite 8. */
+  assert.ok(
+    bundled.includes(`${FIXTURE_CODE}:"${FIXTURE_CODE}"`) || bundled.includes(`${FIXTURE_CODE}:\`${FIXTURE_CODE}\``),
+    'the name map carries the xx entry (native name falls back to the raw code)',
+  );
 });
 
 /* ---------- clause 3: plain-Node parity (Pitfall 3 guard) ---------- */

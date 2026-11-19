@@ -110,6 +110,16 @@ function variants(marker) {
       return `\\u${cp.toString(16).padStart(4, '0')}`;
     })
     .join('');
+  /* Vite 8 (esbuild ≥0.25) escapes U+00A0 (no-break space) as \xA0 inside template
+     literals, where the previous chain emitted it raw. A marker carrying an NBSP is
+     therefore searched in a third form: every NBSP rewritten to the \xA0 escape, the
+     rest of the characters left as the minifier leaves them. */
+  if (marker.includes('\u00a0')) {
+    const nbspEscaped = [...marker]
+      .map(ch => (ch.codePointAt(0) === 0xa0 ? '\\xA0' : ch))
+      .join('');
+    return nbspEscaped === marker ? [marker] : [marker, escaped, nbspEscaped];
+  }
   return escaped === marker ? [marker] : [marker, escaped];
 }
 
@@ -121,11 +131,13 @@ function carries(text, marker) {
 
 /* The minifier does NOT serialise the ICONS map as JSON: it rewrites it as an object literal
    whose key is BARE when it is a valid identifier (activity:'<path …) and DOUBLE-QUOTED
-   otherwise ("chevron-down":'<path …), with a SINGLE-quoted value, and whose first tag is
-   <path, <rect, <circle, <line, <polyline or <polygon — never <svg. The value quote is NOT
-   loosened to a double quote: the bundle carries an unrelated desc:"<p>Low-fidelity …" seed
-   payload whose bare key would match and would break the count by one. */
-const ICON_ENTRY = /(?:[a-z][a-z0-9]*|"[a-z0-9-]+"):'<[a-z]/g;
+   otherwise ("chevron-down":'<path …), with a value quoted singly — `'` on the esbuild chain
+   up to Vite 6, a backtick under Vite 8 (rolldown/esbuild ≥0.25 emits template literals) —
+   and whose first tag is <path, <rect, <circle, <line, <polyline or <polygon — never <svg.
+   The value quote is NOT loosened to a double quote: the bundle carries an unrelated
+   desc:"<p>Low-fidelity …" seed payload whose bare key would match and would break the
+   count by one. */
+const ICON_ENTRY = /(?:[a-z][a-z0-9]*|"[a-z0-9-]+"):('|`)<(?:path|rect|circle|line|polyline|polygon)\b/g;
 
 function shippedIconKeys(assets) {
   const keys = new Set();
@@ -201,6 +213,24 @@ after(() => {
   for (const outDir of Object.values(BUILDS)) if (outDir) fs.rmSync(outDir, { recursive: true, force: true });
 });
 
+/* The INITIAL module graph: the entry chunk plus every chunk the built HTML modulepreloads
+   (Vite 8 emits the base catalogue as its own `i18n-*` chunk, statically imported by the
+   entry — same synchronous first load, different file). Tests that ask "does the first load
+   carry X" read this concatenation, not the entry file alone. */
+function initialChunksText(outDir) {
+  const html = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
+  const names = [entryChunkName(outDir)];
+  for (const m of html.matchAll(/<link\b[^>]*rel="modulepreload"[^>]*href="([^"]+)"/g)) {
+    names.push(path.basename(m[1]));
+  }
+  const assets = assetsOf(outDir);
+  return names
+    .map(n => assets.find(a => a.name === n))
+    .filter(Boolean)
+    .map(a => a.text)
+    .join('\n');
+}
+
 /* ---------- the contract ---------- */
 
 test('the marker sets are not empty: a marker must be able to prove something', () => {
@@ -216,12 +246,10 @@ test('the French catalogue is a chunk of its own, and not the entry chunk', () =
   assert.notEqual(carrying[0].name, entry, `the French catalogue is not the entry chunk (${entry})`);
 });
 
-test('the English catalogue is inlined in the entry chunk of the default build', () => {
-  const assets = assetsOf(BUILDS.default);
-  const entry = assets.find(a => a.name === entryChunkName(BUILDS.default));
-  assert.ok(entry, 'the entry chunk is one of the built assets');
+test('the English catalogue ships in the initial chunk graph of the default build', () => {
+  const text = initialChunksText(BUILDS.default);
   for (const marker of ENGLISH_MARKERS) {
-    assert.ok(carries(entry.text, marker), `the entry chunk carries the English marker ${JSON.stringify(marker)}`);
+    assert.ok(carries(text, marker), `the initial chunk graph carries the English marker ${JSON.stringify(marker)}`);
   }
 });
 
@@ -235,20 +263,16 @@ test('an English-only build carries no French byte at all', () => {
 });
 
 test('the English-only build still carries the English catalogue', () => {
-  const assets = assetsOf(BUILDS.en);
-  const entry = assets.find(a => a.name === entryChunkName(BUILDS.en));
-  assert.ok(entry, 'the entry chunk is one of the built assets');
+  const text = initialChunksText(BUILDS.en);
   for (const marker of ENGLISH_MARKERS) {
-    assert.ok(carries(entry.text, marker), `the entry chunk carries the English marker ${JSON.stringify(marker)}`);
+    assert.ok(carries(text, marker), `the initial chunk graph carries the English marker ${JSON.stringify(marker)}`);
   }
 });
 
 test('the base catalogue ships in every build, so the interface is never without a language', () => {
-  const assets = assetsOf(BUILDS.fr);
-  const entry = assets.find(a => a.name === entryChunkName(BUILDS.fr));
-  assert.ok(entry, 'the entry chunk is one of the built assets');
+  const text = initialChunksText(BUILDS.fr);
   for (const marker of ENGLISH_MARKERS) {
-    assert.ok(carries(entry.text, marker), `the entry chunk carries the English marker ${JSON.stringify(marker)}`);
+    assert.ok(carries(text, marker), `the initial chunk graph carries the English marker ${JSON.stringify(marker)}`);
   }
 });
 
@@ -264,11 +288,9 @@ test('no catalogue key added an icon: the shipped bundle carries exactly that ba
 });
 
 test('the catalogue is importable by the browser build and by plain Node', async () => {
-  const assets = assetsOf(BUILDS.default);
-  const entry = assets.find(a => a.name === entryChunkName(BUILDS.default));
-  assert.ok(entry, 'the entry chunk is one of the built assets');
+  const text = initialChunksText(BUILDS.default);
   for (const marker of ENGLISH_MARKERS) {
-    assert.ok(carries(entry.text, marker), `the browser build carries the English marker ${JSON.stringify(marker)}`);
+    assert.ok(carries(text, marker), `the browser build carries the English marker ${JSON.stringify(marker)}`);
   }
   const mod = await import(pathToFileURL(path.join(ROOT, 'src', 'locales', 'en.json')).href, { with: { type: 'json' } });
   assert.deepEqual(mod.default, readCatalogue('en'), 'bare Node loads the English catalogue, key for key');
