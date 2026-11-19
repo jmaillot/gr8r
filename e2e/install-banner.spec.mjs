@@ -104,6 +104,10 @@ const IOS_UA_INIT = `
 const EN_CTA = en['pwa.install.cta'];
 const FR_CTA = frCatalogue['pwa.install.cta'];
 const EN_HINT = en['pwa.install.iosHint'];
+/* WR-01 (77-02): the cta flavour's grow-span renders the dedicated
+   pwa.install.hint key — the button keeps the CTA string. */
+const EN_BIP_HINT = en['pwa.install.hint'];
+const FR_BIP_HINT = frCatalogue['pwa.install.hint'];
 const DISMISS_LABEL = en['a11y.dismiss'];
 
 /* Sign in through the real UI into a fresh throwaway account + workspace.
@@ -188,7 +192,7 @@ test('after switching the language to FR the strip shows the FR catalogue string
 
   const strip = page.locator('.install-banner');
   await expect(strip).toBeVisible();
-  await expect(strip.locator('.grow')).toHaveText(FR_CTA);
+  await expect(strip.locator('.grow')).toHaveText(FR_BIP_HINT);
   await expect(strip.locator('button.install-cta')).toHaveText(FR_CTA);
 });
 
@@ -246,7 +250,7 @@ test('a pre-hydration beforeinstallprompt (rAF-timed, no delay) still shows the 
 
   const strip = page.locator('.install-banner');
   await expect(strip).toBeVisible();
-  await expect(strip.locator('.grow')).toHaveText(EN_CTA);
+  await expect(strip.locator('.grow')).toHaveText(EN_BIP_HINT);
   await expect(strip.locator('button.install-cta')).toHaveText(EN_CTA);
 
   await strip.locator('button.install-cta').click();

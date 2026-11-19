@@ -148,11 +148,13 @@ test('switching the selector to Français re-renders without a reload and settle
     await page.evaluate(() => {
       window.__survived = 'no-reload';
     });
-    /* The honest selector: two options, labelled in their own names — read
-       from the native select the enhanced menu is built from. The change
-       persists through the account PATCH, awaited below. */
+    /* The honest selector: the full registry, labelled in their own names —
+       read from the native select the enhanced menu is built from. The
+       registry grew from two to five in phase 75 (nl/de/es joined); the
+       native names are locale-independent, so this list is pinned data.
+       The change persists through the account PATCH, awaited below. */
     const optionLabels = await page.evaluate(() => [...document.querySelectorAll('select[data-in="langSel"] option')].map(o => o.text));
-    expect(optionLabels, 'the language select exposes both languages').toEqual(['English', 'Français']);
+    expect(optionLabels, 'the language select exposes all five registry languages').toEqual(['English', 'Deutsch', 'Español', 'Français', 'Nederlands']);
     /* The render-loop observer is installed BEFORE the option click (07-
        RESEARCH risk 1, restructured sleep-free per phase 62 Pitfall 3): the
        re-render itself lands in the counter, which is reset after the French

@@ -133,11 +133,12 @@ test('the selector switches the interface instantly without a reload and the cho
        click and the PATCH /api/auth/me wait — no sleeps. */
     await openSettings(page, { tab: 'language' });
 
-    /* The honest selector: exactly two options, labelled in their own names —
-       read from the native select the enhanced menu is built from (D-13, D-14).
-       The change persists through the account PATCH, awaited below. */
+    /* The honest selector: all five registry languages, labelled in their
+       own names — read from the native select the enhanced menu is built
+       from (D-13, D-14; the registry grew in phase 75). The change persists
+       through the account PATCH, awaited below. */
     const optionLabels = await page.evaluate(() => [...document.querySelectorAll('select[data-in="langSel"] option')].map(o => o.text));
-    expect(optionLabels, 'the language select exposes both languages').toEqual(['English', 'Français']);
+    expect(optionLabels, 'the language select exposes all five registry languages').toEqual(['English', 'Deutsch', 'Español', 'Français', 'Nederlands']);
 
     await page.evaluate(() => {
       window.__survived = 'no-reload';
