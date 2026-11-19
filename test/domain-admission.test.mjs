@@ -211,3 +211,164 @@ test('boot logs one source-tagged line per admission var (D-06)', async () => {
     await server.stop();
   }
 });
+
+/* ---------- DOM-02: the invite-create door (DP-2, plan 02) ---------- */
+/* Per-email invite-list refusal (D-03/D-04) riding the emailOk loop, before
+   db.tx — a refused batch leaves zero invite rows (zero-side-effect). */
+
+const ownerAndWs = async base => {
+  const owner = (await login(base, 'owner@test.local', 'owner-password-1')).client;
+  const slug = (await owner.get('/api/workspaces')).data.workspaces[0].slug;
+  return { owner, slug };
+};
+
+test('DP-2: an out-of-list email is refused per-email with inviteDomainNotAllowed and zero invite rows', async () => {
+  const server = await startServer({ env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const res = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@x.com'], role: 'member' });
+    assert.equal(res.status, 400, `must refuse, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'inviteDomainNotAllowed');
+    /* D-03: the refused email rides the flat extra payload for inline rendering */
+    assert.equal(res.data.email, 'b@x.com');
+    /* D-04: the refusal copy must not reveal the allowed domain */
+    assert.ok(!/a\.com/.test(res.data.error || ''), 'the refusal copy must not reveal the allowed domain');
+    /* zero-side-effect: the refused batch left no invite rows */
+    const count = withDb(server.dbPath, db => db.prepare('select count(*) as n from invites').get().n);
+    assert.equal(count, 0, 'a refused batch must leave zero invite rows');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('DP-2: a batch with one refused email refuses with that email and zero rows — valid emails proceed only when all valid', async () => {
+  const server = await startServer({ env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const res = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['good@a.com', 'bad@x.com'], role: 'member' });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'inviteDomainNotAllowed');
+    assert.equal(res.data.email, 'bad@x.com', 'the refusal must name the refused email');
+    const count = withDb(server.dbPath, db => db.prepare('select count(*) as n from invites').get().n);
+    assert.equal(count, 0, 'the batch must leave zero invite rows (refusal before db.tx)');
+    /* all-valid batch proceeds */
+    const ok = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['good@a.com'], role: 'member' });
+    assert.equal(ok.status, 201, `an all-valid batch must succeed, got ${ok.status}: ${JSON.stringify(ok.data)}`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('DP-2 inheritance: unset ALLOW_INVITE_DOMAINS reads the signup list through the invite door (DOM-02)', async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: undefined } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const inList = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@a.com'], role: 'member' });
+    assert.equal(inList.status, 201, `inherited list must admit b@a.com, got ${inList.status}: ${JSON.stringify(inList.data)}`);
+    const outList = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@x.com'], role: 'member' });
+    assert.equal(outList.status, 400);
+    assert.equal(outList.data.code, 'inviteDomainNotAllowed');
+  } finally {
+    await server.stop();
+  }
+});
+
+test("DP-2 standalone: ALLOW_INVITE_DOMAINS='' denies all invites while a signup list exists (D-01); an own list may be wider", async () => {
+  const denyAll = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: '' } });
+  try {
+    const { owner, slug } = await ownerAndWs(denyAll.base);
+    const res = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@a.com'], role: 'member' });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'inviteDomainNotAllowed', 'explicit-empty must deny even a signup-listed domain');
+  } finally {
+    await denyAll.stop();
+  }
+  const standalone = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'b.com' } });
+  try {
+    const { owner, slug } = await ownerAndWs(standalone.base);
+    const wide = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@b.com'], role: 'member' });
+    assert.equal(wide.status, 201, `the own list must admit b.com even though the signup list is narrower, got ${wide.status}: ${JSON.stringify(wide.data)}`);
+    const refused = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@a.com'], role: 'member' });
+    assert.equal(refused.status, 400, 'the signup list must never widen the invite door');
+    assert.equal(refused.data.code, 'inviteDomainNotAllowed');
+  } finally {
+    await standalone.stop();
+  }
+});
+
+/* ---------- DOM-07/MCP: the fourth admission door (T-75-16) ---------- */
+/* invite_member through the real /mcp transport: the same canonicalizing
+   funnel + boot-frozen INVITE_DOMAINS — no bypass lane. */
+import { withDb } from './helpers/server.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const MCP_INIT = { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'domain-admission-test', version: '0.0.0' } };
+
+test('MCP invite_member composes the same funnel: in-list inserts, out-of-list refuses, fullwidth ＠ refused like the UI door', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-dom-mcp-'));
+  const server = await startServer({ dataDir: tempDir, env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const owner = (await login(server.base, 'owner@test.local', 'owner-password-1')).client;
+    const wsId = (await owner.get('/api/workspaces')).data.workspaces[0].id;
+    const keyRes = await owner.post('/api/keys', { label: 'DomMcp', scope: 'write', workspaceId: wsId, days: 30 });
+    assert.equal(keyRes.status, 201, `key creation failed: ${JSON.stringify(keyRes.data)}`);
+    const key = keyRes.data.key;
+
+    const mcpPost = (body, session) =>
+      fetch(`${server.base}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${key}`, ...(session ? { 'mcp-session-id': session } : {}) },
+        body: JSON.stringify(body),
+      });
+    const rpc = async (method, params, session) => {
+      const res = await mcpPost({ jsonrpc: '2.0', id: Math.floor(Math.random() * 1e9), method, params }, session);
+      assert.equal(res.status, 200);
+      const type = res.headers.get('content-type') || '';
+      let result;
+      if (type.includes('text/event-stream')) {
+        const raw = await res.text();
+        const line = raw.split('\n').filter(l => l.startsWith('data:')).map(l => JSON.parse(l.slice(5).trim())).find(m => m.id !== undefined && m.result);
+        result = line.result;
+      } else {
+        result = (await res.json()).result;
+      }
+      return { session: res.headers.get('mcp-session-id'), result };
+    };
+    const session = (await rpc('initialize', MCP_INIT, null)).session;
+    assert.ok(session, 'the MCP initialize must bind a session');
+    await mcpPost({ jsonrpc: '2.0', method: 'notifications/initialized' }, session);
+    const callTool = async (name, args) => {
+      const { result: out } = await rpc('tools/call', { name, arguments: args }, session);
+      const text = out?.content?.[0]?.text;
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text;
+      }
+      return { isError: !!out?.isError, data };
+    };
+
+    /* in-list email inserts */
+    const inv = await callTool('invite_member', { email: 'newbie@a.com', role: 'member' });
+    assert.equal(inv.isError, false, `in-list email must be admitted, got ${JSON.stringify(inv.data)}`);
+    assert.ok(inv.data.joinPath.startsWith('/join/'));
+    /* out-of-list email refuses with the generic message — no list reveal (D-04) */
+    const refused = await callTool('invite_member', { email: 'newbie@x.com' });
+    assert.equal(refused.isError, true, 'out-of-list email must be refused through MCP too');
+    assert.ok(!/a\.com/.test(String(refused.data)), 'the MCP refusal must not reveal the allowed domain');
+    /* fullwidth ＠: the shape gate refuses it — the SAME verdict the UI
+       invite door's emailOk gives (parity, T-75-16); the funnel's NFKC still
+       canonicalizes anything that reaches membership. */
+    const fullwidth = await callTool('invite_member', { email: 'user\uff20a.com' });
+    assert.equal(fullwidth.isError, true, 'fullwidth ＠ must be refused through MCP');
+    /* exactly one insert landed */
+    const count = withDb(server.dbPath, db => db.prepare('select count(*) as n from invites').get().n);
+    assert.equal(count, 1, `only the in-list email must have inserted, got ${count} rows`);
+  } finally {
+    await server.stop();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

@@ -338,6 +338,7 @@
   "err.accountCreatedLoadFailed": "Compte créé, mais l’espace de travail n’a pas pu être chargé.",
   "err.signupDisabled": "Les inscriptions sont désactivées. Demandez un compte à un admin de l’espace de travail.",
   "err.signupDomainNotAllowed": "Cet e-mail est en dehors des domaines autorisés à créer un compte",
+  "err.inviteDomainNotAllowed": "Cet e-mail est en dehors des domaines autorisés pour les invitations",
   "err.accountCreateFailed": "Impossible de créer le compte",
   "err.tfaCode": "Saisissez le code à 6 chiffres de votre application",
   "err.teamNameRequired": "Donnez un nom à l’équipe",

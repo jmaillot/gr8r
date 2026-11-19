@@ -35,6 +35,10 @@ import { normalizeTaskSubtasks, validateSubtree } from './src/core/subtree.js';
    mergeClientDoc/normalizeDoc run; MCP-authored docs are not a trusted
    bypass for doc.templates[] either (T-66-02). */
 import { normalizeTemplatesData } from './src/core/templates.js';
+/* [T-75-16, Phase 75] The ONE canonicalizing domain funnel + the boot-frozen
+   invite list — the MCP door composes the same exact-membership pipeline as
+   the server doors; it is NOT a trusted bypass for ALLOW_INVITE_DOMAINS. */
+import { INVITE_DOMAINS, emailDomainRefusal } from './domains.js';
 
 /* The stored vocabulary (src/core/constants.js STATUSES / PRIOS ids). The ids
    are what the document holds — this module reads and writes them verbatim,
@@ -936,6 +940,13 @@ export function createMcp(deps) {
         }
         const email = String(a.email).trim().toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw toolError(`Invalid email: ${email}`);
+        /* [T-75-16, Phase 75] Fourth admission door: the same canonicalizing
+           exact-membership funnel as the server doors, against the same
+           boot-frozen INVITE_DOMAINS — the MCP gate can never admit a domain
+           the UI invite-create door would refuse. Generic copy (D-04): no
+           list reveal. */
+        const domainRefusal = emailDomainRefusal(email, INVITE_DOMAINS, 'inviteDomainNotAllowed', 'This email is outside the domains allowed for invites');
+        if (domainRefusal) throw toolError(domainRefusal.message);
         const doc = await loadDoc(ctx.ws);
         const knownTeams = new Set((Array.isArray(doc?.data?.teams) ? doc.data.teams : []).map(t => t?.id).filter(Boolean));
         const teams = Array.isArray(a.teams) ? [...new Set(a.teams.map(t => String(t).slice(0, 40)))] : [];

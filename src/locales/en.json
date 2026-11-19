@@ -337,6 +337,7 @@
   "err.accountCreatedLoadFailed": "Account created, but the workspace could not be loaded.",
   "err.signupDisabled": "Sign-ups are disabled. Ask a workspace admin for an account.",
   "err.signupDomainNotAllowed": "This email is outside the domains allowed to create an account",
+  "err.inviteDomainNotAllowed": "This email is outside the domains allowed for invites",
   "err.accountCreateFailed": "Could not create the account",
   "err.tfaCode": "Enter the 6-digit code from your app",
   "err.teamNameRequired": "Give the team a name",

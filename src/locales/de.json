@@ -337,6 +337,7 @@
   "err.accountCreatedLoadFailed": "Konto erstellt, aber der Arbeitsbereich konnte nicht geladen werden.",
   "err.signupDisabled": "Registrierungen sind deaktiviert. Fragen Sie eine Arbeitsbereich-Admin nach einem Konto.",
   "err.signupDomainNotAllowed": "Diese E-Mail gehört nicht zu den Domänen, die ein Konto erstellen dürfen",
+  "err.inviteDomainNotAllowed": "Diese E-Mail gehört nicht zu den Domänen, für die Einladungen erlaubt sind",
   "err.accountCreateFailed": "Das Konto konnte nicht erstellt werden",
   "err.tfaCode": "Geben Sie den 6-stelligen Code aus Ihrer App ein",
   "err.teamNameRequired": "Geben Sie dem Team einen Namen",
