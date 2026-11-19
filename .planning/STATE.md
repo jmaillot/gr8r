@@ -5,11 +5,11 @@ milestone_name: Access Control & Hardening
 current_phase: 76
 current_phase_name: OIDC/SSO Doors & Immunity Hardening
 status: planning
-stopped_at: Phase 75 complete, ready to plan Phase 76
-last_updated: "2026-11-19T16:37:47.314Z"
+stopped_at: Phase 76 context gathered
+last_updated: "2026-11-19T16:45:18.302Z"
 last_activity: 2026-11-19
 last_activity_desc: Phase 75 complete, transitioned to Phase 76
-state_head: ad7784a718fb99d037b21b11bc0a0bedcf6ffa68
+state_head: 8de4daf85e53c642124d4a7d3b466ae813d08801
 progress:
   total_phases: 3
   completed_phases: 1
@@ -96,6 +96,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-19T11:34:35.329Z
-Stopped at: Phase 75 complete, ready to plan Phase 76
-Resume file: .planning/phases/75-domain-admission-core/75-CONTEXT.md
+Last session: 2026-11-19T16:45:18.255Z
+Stopped at: Phase 76 context gathered
+Resume file: .planning/phases/76-oidc-sso-doors-immunity-hardening/76-CONTEXT.md
