@@ -181,6 +181,7 @@ import {
   SIGNUP_DOMAINS,
   INVITE_DOMAINS,
   emailDomainRefusal,
+  isWildcardList,
 } from './domains.js';
 
 /* D-05: the AES-256 master key material comes from the environment. Missing or
@@ -8903,7 +8904,7 @@ async function main() {
     logInfo(`due reminders: from 08:00 workspace-local, catch-up window all day · daily digest: opt-in, 08:00`);
     /* D-06 (Phase 75): one grep-able, source-tagged line per admission var —
        `docker logs` answers "how are the doors configured". */
-    const domainListLog = list => (list === null ? 'off' : list.size === 0 ? 'deny-all' : [...list].sort().join(', '));
+    const domainListLog = list => (list === null ? 'off' : isWildcardList(list) ? '*' : list.size === 0 ? 'deny-all' : [...list].sort().join(', '));
     logInfo(`domains: ALLOW_SIGNUP_DOMAINS: ${domainListLog(SIGNUP_DOMAINS)} (source: own)`);
     logInfo(`domains: ALLOW_INVITE_DOMAINS: ${domainListLog(INVITE_DOMAINS)} (source: ${'ALLOW_INVITE_DOMAINS' in process.env ? 'own' : 'inherit'})`);
   });

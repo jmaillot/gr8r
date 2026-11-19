@@ -30,7 +30,11 @@ services:
     # Phase 75: passes the whole .env (incl. ALLOW_SIGNUP_DOMAINS /
     # ALLOW_INVITE_DOMAINS) so an absent var stays truly unset (fail-open),
     # `VAR=` stays set-but-empty (deny-all), and a list stays a list.
-    env_file: .env
+    # required:false — a bare checkout with only the required `:?` vars set
+    # via the shell environment still composes (test/dependencies gates).
+    env_file:
+      - path: .env
+        required: false
     environment:
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}

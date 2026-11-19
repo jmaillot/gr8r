@@ -7,11 +7,19 @@
 
    Tri-state resolver: raw === undefined → null (door off/fail-open; strict
    presence, never falsiness — Pitfall 4); an empty or whitespace-resolving
-   raw value parses to an EMPTY Set (deny-all, D-01/D-02). Matching is exact
-   Set.has on the canonicalized domain — never suffix/endsWith (verified
-   bypass vector). Malformed entries are warn-and-clean (D-05): dropped with
-   a boot warning, boot never aborts.
+   raw value parses to an EMPTY Set (deny-all, D-01/D-02); a lone '*' (after
+   trim/NFKC, case-insensitive) parses to the WILDCARD Set (allow-all, UAT
+   G-75-5 follow-up — user-requested explicit "every domain" that is wider
+   than unset-inherit). Matching is exact Set.has on the canonicalized domain
+   — never suffix/endsWith (verified bypass vector). Malformed entries are
+   warn-and-clean (D-05): dropped with a boot warning, boot never aborts.
    ===================================================================== */
+
+/* Wildcard sentinel: the single-member Set emailDomainRefusal treats as
+   allow-all. Never produced by domain parsing (a bare '*' fails DOMAIN_SHAPE),
+   so a user list can never collide with it. */
+const WILDCARD = new Set(['*']);
+export const isWildcardList = list => list !== null && list !== undefined && list.size === 1 && list.has('*');
 
 export const canonicalizeDomain = domain =>
   String(domain || '')
@@ -44,6 +52,11 @@ const DOMAIN_SHAPE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-
    comparison). Idempotent: the same raw always yields an equal Set. */
 export const parseDomainList = (raw, name) => {
   if (raw === undefined) return null;
+  /* Wildcard: a lone '*' (trim/NFKC/case-tolerant) = explicit allow-all
+     (UAT G-75-5). Checked before per-entry parsing — mixed lists like
+     '*,a.com' keep per-entry semantics: '*' fails DOMAIN_SHAPE and is
+     dropped warn-and-clean, so the list stays an exact allowlist. */
+  if (canonicalizeDomain(String(raw)) === '*') return WILDCARD;
   const domains = new Set();
   for (const entry of String(raw).split(',')) {
     const domain = canonicalizeDomain(entry);
@@ -72,6 +85,7 @@ export const INVITE_DOMAINS = parseDomainList(process.env.ALLOW_INVITE_DOMAINS, 
    invite list — one door, one rule). An unparseable email refuses, never throws. */
 export function emailDomainRefusal(email, domains, code = 'signupDomainNotAllowed', message = 'This email is outside the domains allowed to create an account') {
   if (!domains) return null; // door off — fail-open (unset)
+  if (isWildcardList(domains)) return null; // explicit '*' — allow-all
   const domain = emailFromEmail(email);
   if (domain === null || !domains.has(domain)) return { code, message }; // exact membership only
   return null;

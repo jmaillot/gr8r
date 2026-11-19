@@ -33,6 +33,7 @@ test('unset ALLOW_SIGNUP_DOMAINS keeps signup fail-open — behavior unchanged',
   const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: undefined, ALLOW_INVITE_DOMAINS: undefined } });
   try {
     const res = await signup(server.base, { name: 'Anyone', email: 'anyone@any-domain.example' });
+
     assert.equal(res.status, 201, `unset must stay fail-open, got ${res.status}: ${JSON.stringify(res.data)}`);
   } finally {
     await server.stop();
@@ -45,6 +46,63 @@ test("set-but-empty ALLOW_SIGNUP_DOMAINS='' denies all signups (D-02 deny-all, n
     const res = await signup(server.base, { name: 'Blocked', email: 'blocked@a.com' });
     assert.equal(res.status, 400);
     assert.equal(res.data.code, 'signupDomainNotAllowed');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- wildcard allow-all (UAT G-75-5 follow-up) ---------- */
+
+test("ALLOW_SIGNUP_DOMAINS='*' admits every domain — explicit allow-all wider than unset-inherit", async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: '*', ALLOW_INVITE_DOMAINS: undefined } });
+  try {
+    for (const email of ['one@any-domain.example', 'two@other.test']) {
+      const res = await signup(server.base, { name: 'Wild', email });
+      assert.equal(res.status, 201, `wildcard must admit ${email}, got ${res.status}: ${JSON.stringify(res.data)}`);
+    }
+  } finally {
+    await server.stop();
+  }
+});
+
+test("wildcard is case/whitespace/NFKC-tolerant and mixed '*,a.com' stays an exact allowlist (no wildcard leakage)", async () => {
+  for (const raw of [ ' * ', '＊', '*', ]) {
+    const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: raw } });
+    try {
+      const res = await signup(server.base, { name: 'Wild', email: 'any@whatever.example' });
+      assert.equal(res.status, 201, `raw=${JSON.stringify(raw)} must parse as wildcard allow-all, got ${res.status}: ${JSON.stringify(res.data)}`);
+    } finally {
+      await server.stop();
+    }
+  }
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: '*,a.com' } });
+  try {
+    const inList = await signup(server.base, { name: 'In', email: 'in@a.com' });
+    assert.equal(inList.status, 201, "in a mixed list '*' fails DOMAIN_SHAPE and is dropped — a.com still admits");
+    const outList = await signup(server.base, { name: 'Out', email: 'out@b.org' });
+    assert.equal(outList.status, 400, "mixed '*,a.com' must NOT become allow-all — exact membership survives");
+  } finally {
+    await server.stop();
+  }
+});
+
+test("ALLOW_INVITE_DOMAINS='*' allows invites from every domain independently of the signup list", async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: '*' } });
+  try {
+    const { owner } = await ownerAndWs(server.base);
+    const res = await owner.post(`/api/workspaces/${(await owner.get('/api/workspaces')).data.workspaces[0].slug}/invites`, { emails: ['anyone@outside.example'] });
+    assert.ok([200, 201].includes(res.status), `wildcard invite door must admit an out-of-signup-list email, got ${res.status}: ${JSON.stringify(res.data)}`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("wildcard boot log prints '*' for the resolved list", async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: '*', ALLOW_INVITE_DOMAINS: undefined } });
+  try {
+    const line = server.output().split('\n').find(l => l.includes('domains: ALLOW_SIGNUP_DOMAINS:'));
+    assert.ok(line, 'the D-06 source-tagged boot line exists');
+    assert.match(line, /domains: ALLOW_SIGNUP_DOMAINS: \* \(source: own\)/);
   } finally {
     await server.stop();
   }
