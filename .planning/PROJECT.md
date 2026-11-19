@@ -8,19 +8,21 @@
 workspace on the instance — no shadow workspaces.
 
 **Target features:**
-- `WORKSPACE_CREATION=open|admins|owners` tri-state env (default `admins`, boot-logged
-  D-11-style) gating `POST /api/workspaces` — replacing the implicit `ALLOW_SIGNUP` coupling
-  (today: any signed-up user creates a workspace and becomes its owner when signup is open,
-  server.js:6807)
-- Instance-owner identity seeded from bootstrap admins (first admin at DB bootstrap +
-  `--add-user` accounts), manageable in-app
-- Owner-scoped workspace-management page: list ALL workspaces (creator, member count, created
+- `WORKSPACE_CREATION=true|false` boolean env (strict tokens; invalid = boot-refuse; unset =
+  `false` fail-closed) gating `POST /api/workspaces` via `isInstanceAdmin` — replacing the
+  implicit `ALLOW_SIGNUP` coupling (today: any signed-up user creates a workspace and becomes
+  its owner when signup is open, server.js:6811). *(D-78-1: owner collapsed the original
+  tri-state to boolean.)*
+- Instance-operator identity: the existing `users.is_instance_admin` flag (D-112), multi-seat,
+  seeded by `stampInstanceAdmin()`; promote/demote from the operator console with last-operator
+  demotion refused; D-114 manual DB update kept as break-glass fallback *(D-78-2)*
+- Operator-scoped workspace-management page: list ALL workspaces (creator, member count, created
   date), full management (delete/archive empty or shadow workspaces, reassign orphaned
-  members), promote/demote instance owners — no shadow workspaces, no env edits to change owners
-- Client: regular signups (non-owners, when creation is closed for them) land on an
-  **"await access" page stating they need to be invited to a workspace to get access** — no
-  workspace-creation surface; create button follows `/api/config`'s `workspaceCreation` +
-  instance role for those who do have rights
+  members) — no shadow workspaces, no env edits
+- Client: regular signups (non-operators, when creation is closed) land on a **standalone
+  "await access" page stating they need to be invited to a workspace to get access**, with
+  15 s visible-tab-only auto-poll entry once invited; create button follows `/api/config`'s
+  gate value + `isInstanceAdmin`
 - Creator remains workspace `owner`; admins promoted afterward (optional, not enforced)
 
 **Key context:** zero new dependencies; same keyed-refusal/5-locale pattern as phase 75

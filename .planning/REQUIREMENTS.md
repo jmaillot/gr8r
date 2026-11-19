@@ -18,15 +18,17 @@ workspace on the instance — no shadow workspaces.
 
 ### Workspace creation gate (WSG)
 
-- [ ] **WSG-01**: `WORKSPACE_CREATION` env parsed tri-state at boot: `open` (any authenticated
-  user may create a workspace), `admins` (instance admins only), `owners` (instance owners
-  only). Default when unset: `admins` (fail-closed relative to today's `open`). Empty/whitespace
-  string = invalid, boot refuses to start or falls back to `admins` with a loud log — ratify
-  exact semantics at discuss-phase. Invalid values never silently behave as `open`.
-- [ ] **WSG-02**: `POST /api/workspaces` enforces the gate: `open` = any user; `admins` =
-  instance admins; `owners` = instance owners only. Rejected users get a keyed, localized
-  refusal (never a generic error). The `ALLOW_SIGNUP`-derived implicit coupling
-  (server.js:6811) is replaced — `ALLOW_SIGNUP` keeps governing **account** signup only.
+- [ ] **WSG-01**: `WORKSPACE_CREATION` env parsed boolean at boot: `true` (any authenticated
+  user may create a workspace), `false` (instance operators only). Only the exact tokens
+  `true`/`false` are accepted — anything else (typo, empty string, whitespace, other casing)
+  **refuses to boot** with a clear error naming the variable and valid values. Default when
+  unset: `false` (fail-closed; upgrade note must call out the behavior change).
+  *(Amended by D-78-1 — tri-state collapsed to boolean, owner decision 2026-11-19.)*
+- [ ] **WSG-02**: `POST /api/workspaces` enforces the gate: `true` = any user; `false` =
+  instance operators only (`isInstanceAdmin`, the `users.is_instance_admin` flag — workspace
+  roles never pass, D-112). Rejected users get a keyed, localized refusal (never a generic
+  error). The `ALLOW_SIGNUP`-derived implicit coupling (server.js:6811) is replaced —
+  `ALLOW_SIGNUP` keeps governing **account** signup only.
 - [ ] **WSG-03**: The resolved mode is exposed via `/api/config` (`workspaceCreation`:
   `open|admins|owners`) and logged at boot alongside the existing door-matrix log so an
   operator can read the effective state from the log.
@@ -36,40 +38,54 @@ workspace on the instance — no shadow workspaces.
 
 ### Instance owner identity (WSG)
 
-- [ ] **WSG-05**: Instance owners are seeded from bootstrap admins (the first admin created at
-  DB bootstrap + accounts created via `--add-user`). The identity persists in the database
-  (no re-derivation drift) and survives restarts.
-- [ ] **WSG-06**: Instance owners can promote/demote other instance owners from the management
-  UI — no server-side env edit needed to change who holds instance-owner rights. Demoting the
-  last instance owner is refused (keyed error, same pattern as `needOwner`).
+- [ ] **WSG-05**: Instance operators are seeded from bootstrap (the `ADMIN_EMAIL` stamp at DB
+  bootstrap via `stampInstanceAdmin()`). Multiple operators allowed; the identity persists in
+  the database (no re-derivation drift) and survives restarts. `--add-user` does not flag.
+  *(Amended by D-78-1/D-78-2 — multi-operator + console management, bootstrap-stamp seeding only.)*
+- [ ] **WSG-06**: Instance operators can promote/demote other instance operators from the
+  operator console (Settings) — no server-side env edit or manual DB update needed. Demoting
+  the last remaining operator is refused (keyed error, same pattern as `needOwner`). The
+  documented manual DB update (D-114) remains as break-glass fallback. *(Amended by D-78-2.)*
 
 ### Workspace management page (WSG)
 
 - [ ] **WSG-07**: A new owner-scoped page lists ALL workspaces on the instance — name, slug,
-  member count, creator, created date — with workspace-existence invisible to non-owners
-  (the listing endpoint is owner-scoped; non-owners get an empty/forbidden payload, never a
-  partial leak).
-- [ ] **WSG-08**: From the same page, instance owners can manage workspaces they didn't
+  member count, creator, created date — with workspace-existence invisible to non-operators
+  (the listing endpoint is operator-scoped, `isInstanceAdmin`; non-operators get an
+  empty/forbidden payload, never a partial leak).
+- [ ] **WSG-08**: From the same page, instance operators can manage workspaces they didn't
   create: delete or archive empty/shadow workspaces and reassign (or release) orphaned
   members. Destructive actions require confirmation and are audit-logged.
-- [ ] **WSG-09**: The page includes instance-owner management (WSG-06) — one governance
-  surface, owner-scoped.
+- [ ] **WSG-09**: The page includes instance-operator management (WSG-06) — one governance
+  surface, operator-scoped. *(WSG-06's console UI ships in Phase 78; Phase 79 links or
+  relocates it into the governance page — ratify shape at discuss-phase 79.)*
 
 ### Client behavior (WSG)
 
-- [ ] **WSG-10**: When workspace creation is closed for the current user (mode `admins`/`owners`
-  and the user lacks the role), the create-workspace surface is hidden and the post-signup
-  flow lands on an **"await access" page stating they need to be invited to a workspace to get
-  access** — no creation form, no creation redirect. Users WITH rights keep the existing flow.
+- [ ] **WSG-10**: When workspace creation is closed for the current user (gate `false` and the
+  user is not an instance operator), the create-workspace surface is hidden and the post-signup
+  flow lands on a **standalone "await access" page stating they need to be invited to a
+  workspace to get access** — no creation form, no creation redirect, no app shell. The page
+  auto-polls (15 s, visible-tab only) and enters the app automatically once a membership or
+  rights appear. Users WITH rights keep the existing flow.
 - [ ] **WSG-11**: Every user-facing refusal added by this milestone is keyed and present in all
   5 locale catalogues (en/fr/nl/de/es) in the same commit as the gate that emits it.
 
 ## Out of Scope (this milestone)
 
-- Workspace settings editing (name/slug rename by instance owners) — deferred unless trivial
+- Workspace settings editing (name/slug rename by instance operators) — deferred unless trivial
   once WSG-07/08 exist; ratify at discuss-phase
 - Per-workspace creation quotas or approval workflows
 - Changes to the domain admission doors (v3.0) — orthogonal, untouched
+
+## Discussion Amendments
+
+- **D-78-1** (2026-11-19): tri-state `WORKSPACE_CREATION` collapsed to boolean `true|false`;
+  closed = operator-only via `isInstanceAdmin`; unset = false (fail-closed); invalid = boot-refuse;
+  strict tokens only. Affects WSG-01/02/03 wording above.
+- **D-78-2** (2026-11-19): multiple instance operators allowed; promote/demote in the operator
+  console (Phase 78); last-operator demotion refused; D-114 manual DB update kept as
+  break-glass fallback. Affects WSG-05/06.
 
 ## Future Requirements
 
