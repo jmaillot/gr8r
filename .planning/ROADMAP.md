@@ -93,7 +93,7 @@ changes, with operators able to see the resolved matrix at boot.
      so an operator can read from the log exactly which doors admit which domains.
   5. Full-matrix contract tests cover both inherit directions and all five decision points —
      including the three existing-account immunity rows — as a permanent suite.
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -136,5 +136,5 @@ Phases execute in numeric order: 75 → 76 → 77
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 75. Domain Admission Core | 2/2 | Complete    | 2026-11-19 |
-| 76. OIDC/SSO Doors & Immunity Hardening | 2/2 | Complete | - |
+| 76. OIDC/SSO Doors & Immunity Hardening | 2/2 | Complete    | 2026-11-19 |
 | 77. Maintenance Debt | 0/? | Not started | - |
