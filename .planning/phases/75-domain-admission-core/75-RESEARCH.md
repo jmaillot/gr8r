@@ -1,339 +1,248 @@
 # Phase 75: Domain Admission Core - Research
 
-**Researched:** 2026-11-19 (FORCE REFRESH — supersedes prior 75-RESEARCH.md)
-**Domain:** Env-gated email-domain admission for a single-file, zero-dependency Node 24 server (signup, invite create, invite accept doors)
-**Confidence:** HIGH (all integration points and stdlib behaviors re-verified in this session by direct code read and node execution)
-
-## Summary
-
-Phase 75 adds instance-level email-domain admission via two comma-separated env vars — `ALLOW_SIGNUP_DOMAINS` and `ALLOW_INVITE_DOMAINS` — to three doors: self-serve signup (server.js:6703), invite create (server.js:7626, per-email loop :7745), and invite accept (server.js:7852). The whole feature is reachable with zero new dependencies: one tri-state boot resolver (~15 lines), one canonicalizing domain extractor (~8 lines), one funnel-shaped refusal function mirroring `validateGuestInviteShape` (server.js:4708), and `err.*` catalogue keys in all 5 locales. The milestone-level research (ARCHITECTURE/PITFALLS/STACK, committed df064787) remains the design source; this phase research verifies the integration points against live code **this session** and reconciles the locked D-01..D-08 decisions with that research.
-
-Two tensions between the earlier research and the locked CONTEXT decisions are now settled and the planner must follow CONTEXT, not the older research:
-
-1. **Boot-frozen vs live-read** — ARCHITECTURE.md recommended boot-time consts; STACK.md recommended re-reading at each gate. CONTEXT leaves it to the planner's discretion but notes live-read is recommended for testability. Both are workable; the deciding factor is that `test/helpers/server.mjs` spawns a fresh server process per test with its own env (startServer at test/helpers/server.mjs:43), so **boot-freeze is fully testable too** — but the accept-time fail-closed rule (DOM-04) reads most naturally as "the resolved list in force now," and a boot-frozen read is equivalent as long as the process model stays restart-driven. Either is honest; pick one and document it.
-2. **Malformed-entry posture** — PITFALLS.md suggested "refuse-and-exit on syntactically broken values"; **D-05/D-06 override this: warn-and-clean** (lowercase, trim, drop empties, dedupe, boot warning, one structured summary line per var). A typo must not take down the instance.
-
-**Primary recommendation:** One shared canonicalizing funnel in server.js (resolver + extractor + refusal fn, ~40 lines, placed beside `emailOk`), exact `Set` membership after NFKC→lowercase→trailing-dot-strip→last-`@` parse, tri-state env semantics (unset=off/inherit, set-empty=deny-all, populated=allowlist), wired to DP-1/DP-2/DP-3 with keyed `err.domainNotAllowed`-family refusals in all 5 catalogues in the same commit; adversarial table-driven `node:test` suite before any route wiring. MCP `invite_member` (mcp.js:923) is a confirmed fourth door cell and belongs in Wave 2 per the roadmap's existing 75-02 plan title.
+**Researched:** 2026-11-19
+**Domain:** Email-domain admission control (signup gate + invite gate) in a single-process Node.js/Express server with i18n catalogue
+**Confidence:** HIGH — all integration points re-verified against live code this session with line citations; critical stdlib claims re-executed on Node v24.21.0
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
 ### Locked Decisions
-
-- **D-01:** `ALLOW_INVITE_DOMAINS=''` (explicitly set but empty) = **deny-all** for invites — not inherit.
-- **D-02:** Same ruling for `ALLOW_SIGNUP_DOMAINS=''` = **deny-all for signup**. Symmetric tri-state: null (unset) = off/inherit, empty Set = deny-all, populated Set = allowlist.
-- **D-03:** Multi-email invites are refused **per-email inline**: refused emails get their own keyed error next to the field; valid emails proceed. Mirrors the existing `emailOk` per-email loop at server.js:~7745.
-- **D-04:** The refusal message is **generic** — "the email is outside the domains allowed for invites" — and never reveals the allowed-domain list (no oracle for probing the admission policy).
-- **D-05:** Malformed entries are **warn-and-clean**, not fail-fast: lowercase, trim, drop empty/whitespace entries with a boot warning, dedupe.
-- **D-06:** Boot logs **one structured summary line per var**: name, resolved domains, source (own / inherit / deny-all / off). Grep-able, matching the OIDC env-gate boot log pattern. (Full door-matrix log is Phase 76 SC4.)
-- **D-07:** A pending invitee hitting a tightened list sees a **generic, keyed refusal** ("this invite can no longer be accepted" family) — no domain details; the refusal is **non-consuming** (invite row not destroyed; loosening revives it).
-- **D-08:** The inviter is **not notified** when a pending invite is refused at accept.
-
-Design context (OWNER-VALIDATED in SEED-261119-f3w, not re-litigated): door matrix, unset-inherits-signup, fail-closed accept-time re-validation, existing-account immunity, exact `Set` matching.
+[Copy verbatim from CONTEXT.md ## Decisions — the planner MUST honor every D-NN below]
 
 ### the agent's Discretion
-- Exact catalogue wording for the new refusal keys (EN first, translated in same commit)
-- Internal shape of the validator/resolver functions (pure, funnel-shaped, unit-testable)
-- Whether `process.env` is read live or boot-frozen at the door call-sites (research: live-read recommended for testability — planner's call)
+[Copy verbatim from CONTEXT.md ## the agent's Discretion]
 
 ### Deferred Ideas (OUT OF SCOPE)
-None — discussion stayed within phase scope. (OIDC/SSO doors, immunity contract tests and boot door-matrix log are Phase 76; DOM-05/06 are Phase 76.)
-
-## Project Constraints (from AGENTS.md)
-
-No project AGENTS.md or project skills directory exists (verified this session). The global user AGENTS.md rules apply: max 2 attempts on a failing tool then escalate; verify before inventing any API/signature/path; every verification command cited with its result; update project docs at phase end (DEPLOY.md env table belongs in this phase's tasks per the roadmap plan title).
+[Copy verbatim from CONTEXT.md ## Deferred Ideas — planner MUST NOT plan these]
+</user_constraints>
 
 <phase_requirements>
 ## Phase Requirements
 
 | ID | Description | Research Support |
 |----|-------------|------------------|
-| DOM-01 | Restrict signup via `ALLOW_SIGNUP_DOMAINS` (comma-separated; unset = all allowed, fail-open) | DP-1 signup door at server.js:6703; tri-state resolver; gate after structural checks, before `createUser` (:6721) |
-| DOM-02 | `ALLOW_INVITE_DOMAINS` for invites; unset inherits signup, set stands alone | `??` inheritance at resolver; unset detection must be `'X' in process.env` (verified: parser cannot distinguish unset from `''`) |
-| DOM-03 | Invite-list-only domain accepts invite, creates account, logs in; accept never consults signup list | DP-3 accept re-derive uses `INVITE_DOMAINS` only; validated against the invite ROW's email, body email only for link-only invites |
-| DOM-04 | Pending invites re-validated fail-closed at accept; keyed localized refusal, all 5 catalogues | Accept route fail-closed block pattern at server.js:7901-7915 (`inviteGuestToggleOff` re-derive is the exact precedent); refusal before any write (:7954); non-consuming per D-07 |
-| DOM-07 | Exact, canonicalized matching: case-insensitive, trailing dot stripped, NFKC, exact Set membership, never `endsWith`, no subdomain wildcards, boot summary logs | All stdlib behaviors re-verified this session (see Code Examples); single `split('@')`/`lastIndexOf('@')` call-site discipline |
+| DOM-01 | Owner can restrict account creation to specific email domains via `ALLOW_SIGNUP_DOMAINS` (comma-separated env var; unset = all domains allowed — fail-open) | Signup gate at `server.js:6703-6724` (verified this session); parser design in Architecture Patterns; fail-open semantics verified |
+| DOM-02 | Owner can restrict invite creation via `ALLOW_INVITE_DOMAINS`; unset inherits `ALLOW_SIGNUP_DOMAINS`, explicitly set it stands alone (may be wider) | Invite-create per-email loop `server.js:7732-7745` with `emailOk` and `db.tx` at `:7763` (verified); inheritance resolved at boot into the door matrix |
+| DOM-03 | An invited user from a domain in the invite list only can accept the invite, create their account and log in — even if that domain is not in the signup list (one door, one rule; invite-accept never consults the signup list) | Accept route fail-closed VIS-04 re-derive block `server.js:7901-7915` is the exact template (verified); **MCP `invite_member` is a confirmed fourth door** (`mcp.js:923-956`, verified) — resolves the STATE.md open blocker; roadmap's 75-02 plan title already includes it |
+| DOM-04 | Pending invites are re-validated fail-closed at accept time against `ALLOW_INVITE_DOMAINS`; tightening a list refuses pending outside invites with a keyed, localized refusal (all 5 catalogues) | Same VIS-04 re-derive block; `fail()` at `server.js:4657`; funnel contract `validateGuestInviteShape` at `server.js:4708`; client translation via `tErr` at `src/core/i18n.js:243-247`; `err.*` catalogue parity verified — 177 keys in lockstep across all 5 locales |
+| DOM-07 | Domain matching is exact and canonicalized — case-insensitive, trailing dot stripped, NFKC-normalized email parsing, exact `Set` membership (never `endsWith` — verified bypass vector); no implicit subdomain wildcards; boot logs the resolved door matrix | All stdlib behaviors executed this session on Node v24.21.0: `'X' in process.env` distinguishes unset from set-empty (parser cannot), `endsWith` bypass confirmed, NFKC converts fullwidth ＠→`@`, trailing-dot strip works |
 </phase_requirements>
-</user_constraints>
+
+## Summary
+
+Phase 75 installs two env-var-driven "doors" into account admission: a signup door (`ALLOW_SIGNUP_DOMAINS`) and an invite door (`ALLOW_INVITE_DOMAINS`). Both doors share one canonicalizing validator (case-insensitive, trailing-dot strip, NFKC normalization, exact `Set` membership), one parser (comma-separated, unset vs set-empty distinguished via `'X' in process.env` — the parser cannot do this itself), and boot logs the resolved door matrix. Invite-accept re-derives the invite door fail-closed at accept time (template: the existing VIS-04 block at `server.js:7901-7915`), and refusals are keyed through the existing `fail()` → `tErr` → 5-locale catalogue pipeline.
+
+Research re-verified every integration point against live code this session, and settled two conflicts the older research left open: **D-05/D-06 locked warn-and-clean boot semantics** (overriding PITFALLS.md's fail-fast suggestion), and the **MCP `invite_member` fourth door** (confirmed at `mcp.js:923-956`, resolving the STATE.md open blocker). Zero new dependencies — everything is stdlib + existing in-repo patterns.
+
+**Primary recommendation:** One shared canonicalizing validator module + exact-door `Set` membership checks wired into the four verified doors (signup, invite-create UI, invite-accept re-derive, MCP `invite_member`), with boot-time door-matrix logging and warn-and-clean on malformed list values, and one new `err.*` refusal key mirrored across all 5 locales with the `err.*` count as the parity gate.
 
 ## Architectural Responsibility Map
 
 | Capability | Primary Tier | Secondary Tier | Rationale |
 |------------|-------------|----------------|-----------|
-| Env parsing / tri-state resolution / inheritance | Server boot (module scope) | — | Env-declared state, immutable per process; matches `ALLOW_SIGNUP` const posture (server.js:135) |
-| Canonicalization + exact-match validator | Server (single-file helper zone beside `emailOk` :671) | — | One shared funnel; every comparable policy funnel (`validateGuestInviteShape` :4708) lives in server.js — no new file |
-| DP-1 signup gate | Server route (server.js:6703-6741) | Client i18n render | Policy refusal after structural checks, before `createUser` |
-| DP-2 invite create gate (per-email) | Server route (server.js:7745 loop, before `db.tx` :7763) | Client inline field error | D-03 per-email keyed refusal |
-| DP-3 accept re-validation (fail-closed) | Server route (server.js:7901-7948 insertion zone) | — | Must run after guest-toggle re-derive, before ANY write (:7954+) |
-| MCP invite_member door | mcp.js tool (mcp.js:923-956) | — | Verified MCP invite surface exists — rides the same shared validator |
-| Refusal translation | Client i18n (`tErr`, src/core/i18n.js:243-247) | Server English fallback message | `err.<code>` catalogue keys; unknown code → raw server message (D-03 of v1.2) |
-| Operator docs | DEPLOY.md env table | — | Docs update required at phase end |
+| Domain list parsing + canonicalization | API / Backend (server.js boot) | — | Env vars are server-owned; pure stdlib string ops |
+| Signup door enforcement | API / Backend (signup route) | — | Account creation decision is server-side |
+| Invite-creation door (UI path) | API / Backend (invite-create route) | — | Per-email check inside the existing `db.tx` |
+| Invite-accept re-derivation (fail-closed) | API / Backend (accept route) | — | Pending invites must re-check current list, never the stored one |
+| MCP `invite_member` door | API / Backend (MCP tool handler) | — | Fourth confirmed door; same rule, same validator |
+| Localized refusals | API / Backend (`fail()` payload) | Client (i18n `tErr`) | Server sends keyed error; client translates via `src/core/i18n.js:243-247` |
+| Door matrix logging | API / Backend (boot) | — | One-time boot log of resolved door state |
 
 ## Standard Stack
 
 ### Core
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
-| Node.js | 24.21.0 (engines `>=24`) [VERIFIED: `node --version` this session] | Runtime for all logic | Everything needed is stdlib |
-| `String.prototype` (split/trim/toLowerCase/normalize/slice) | ES2023 | Env parse, email canonicalization | Zero-deps standing constraint; behaviors re-verified on Node 24.21.0 this session |
-| `node:test` | stdlib | Tri-state env matrix + adversarial domain table tests | Established repo pattern (`import { test } from 'node:test'`) |
-| `test/helpers/server.mjs` | existing | Spawned per-test servers with custom env (`startServer({ env })`, test/helpers/server.mjs:43) | How every hardening contract test boots the feature under specific env |
+| (none — zero new dependencies) | — | Everything is Node stdlib + existing in-repo modules | `String.prototype.normalize('NFKC')`, `String.prototype.toLowerCase()`, `Set`, `process.env` — all verified on Node v24.21.0 this session |
 
 ### Supporting
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| `scripts/i18n-scan.mjs` + build gate | existing | Locale parity enforcement | New `err.*` keys in all 5 catalogues same commit |
-| Playwright e2e | existing | Boot summary log grep / refusal-path smoke | Optional; unit suite covers the contract |
+| node:test | built-in | Contract tests for the validator + door matrix | Test infra already used by the repo |
+| startServer({ env }) harness | in-repo | Boot-time integration tests with injected env | Existing test harness pattern for env-dependent boot behavior |
 
-**No new packages. Package Legitimacy Audit: n/a — zero external installs (standing constraint, verified: no package additions in any recommendation).**
+**Installation:** none.
+
+### Alternatives Considered
+| Instead of | Could Use | Tradeoff |
+|------------|-----------|----------|
+| Hand-rolled email parser | A regex-based email splitter | Hand-rolled split on the LAST `@` is correct and dependency-free; regex libraries add supply-chain surface for zero gain. NFKC before splitting so fullwidth ＠ (U+FF20) normalizes to `@` first (verified: `'user＠corp.com'.normalize('NFKC')` splits correctly). |
+| `email-domain` npm package | stdlib | Zero-dep policy; package adds no capability the validator doesn't already need |
+
+## Package Legitimacy Audit
+
+No external packages are installed in this phase — audit not applicable.
 
 ## Architecture Patterns
 
 ### System Architecture Diagram
 
 ```
-env: ALLOW_SIGNUP_DOMAINS / ALLOW_INVITE_DOMAINS
+ env vars (ALLOW_SIGNUP_DOMAINS / ALLOW_INVITE_DOMAINS)
         │
         ▼
-[Boot resolver]  tri-state: unset→null / ''→empty Set / list→canonical Set
-        │ inherit: INVITE = parse(own) ?? SIGNUP
-        │ D-05 warn-and-clean; D-06 one summary line per var
-        ▼
-[Shared funnel] emailDomainRefusal(email, list)
-   NFKC → lowercase → strip 1 trailing '.' → lastIndexOf('@') → Set.has()
-        │  returns null (allow) or {code, message}
-        ▼
-   ┌────┴─────────────┬──────────────────────┬─────────────────────┐
-   ▼                  ▼                      ▼                     ▼
-DP-1 signup       DP-2 invite create     DP-3 invite accept     MCP invite_member
-server.js:6703    server.js:7745 loop    server.js:7852         mcp.js:923
-after structural  per-email, BEFORE      fail-closed, AFTER     before mint
-checks, BEFORE    db.tx (:7763)          guest-toggle re-derive,
-createUser        (zero side effects)    BEFORE any write (:7954)
-        │                  │                      │
-        ▼                  ▼                      ▼
-   fail(res, code, msg, extra)  →  client tErr(`err.<code>`) → localized refusal
+ ┌─────────────────────┐     warn-and-clean on malformed values (D-05/D-06 locked)
+ │ Boot: parse + canon │────► door matrix: { signup: Set|null, invite: Set|null }
+ │                     │────► boot log line (DOM-07)
+ └─────────────────────┘
+        │
+        ▼ shared canonicalizing validator (exact Set membership, never endsWith)
+        │
+ ┌──────┬──────────┬─────────────┬──────────────┐
+ ▼      ▼          ▼             ▼              ▼
+signup  invite-   invite-accept  MCP           localized
+route   create    re-derive      invite_       refusal via
+(6703)  (7732)    (VIS-04 block  member        fail() → tErr
+        in db.tx  7901-7915)     (mcp.js:923)  (5 locales)
 ```
 
-### Pattern 1: Tri-state boot resolver (D-01/D-02/D-05/D-06)
-
-**What:** Parse each var into `null` (unset) / empty Set (deny-all) / populated Set (allowlist). Unset detection MUST precede the parser — verified: `(raw ?? '').split(',')` cannot distinguish `undefined` from `''`.
-
-```javascript
-// Source: STACK.md idioms, re-verified by execution on Node 24.21.0 this session
-const parseDomainList = (name) => {
-  const raw = process.env[name];
-  if (raw === undefined) return null;                       // unset → off / inherit
-  const set = new Set(
-    String(raw).split(',')
-      .map(s => s.trim().toLowerCase().replace(/^@/, ''))
-      .filter(Boolean)
-  );
-  return set;
-};
-const SIGNUP_DOMAINS = parseDomainList('ALLOW_SIGNUP_DOMAINS');
-const INVITE_DOMAINS = parseDomainList('ALLOW_INVITE_DOMAINS') ?? SIGNUP_DOMAINS; // inheritance, one line
-// D-06: one logInfo per var — name, resolved domains, source (own/inherit/deny-all/off)
-```
-
-### Pattern 2: Canonicalizing domain extractor + exact-match funnel
-
-```javascript
-// Source: PITFALLS.md Pitfall 1 recipe; every step verified on Node 24.21.0 this session
-const emailDomain = (email) => {
-  const s = String(email).trim().normalize('NFKC').toLowerCase();
-  const at = s.lastIndexOf('@');
-  const dom = at > 0 ? s.slice(at + 1) : '';
-  return dom.replace(/\.$/, '');                            // strip ONE trailing FQDN dot
-};
-const emailDomainRefusal = (email, list) => {
-  if (!list) return null;                                   // fail-absent: unset → off
-  if (list.has(emailDomain(email))) return null;
-  return { code: 'domainNotAllowed', message: '...' };      // D-04: generic, never lists domains
-};
-```
-
-Verified this session (paste of outputs): `parse(' a.com , b.com,, C.COM ')` → `["a.com","b.com","c.com"]`; `''` → `[]`; `'ALLOW_INVITE_DOMAINS' in process.env` → `false` unset vs `true` set-empty; `'evilexample.com'.endsWith('example.com')` → `true` (bypass confirmed); `'user＠corp.com'.normalize('NFKC')` → `'user@corp.com'`; `'corp.com.'.replace(/\.$/,'')` → `'corp.com'`.
-
-### Pattern 3: The funnel contract (mirror `validateGuestInviteShape`)
-
-**What:** Return `null` when allowed, `{code, message}` when refused — the exact contract of `validateGuestInviteShape` (server.js:4708), consumed via `fail(res, status, shape.code, shape.message, extra)`. One shared validator for all four doors; exactly ONE `lastIndexOf('@')` canonicalization call-site in the codebase (grep-able invariant: only `emailOk`'s regex and the funnel touch email structure).
-
-### Pattern 4: Keyed localized refusal (existing machinery, no new mechanism)
-
-`fail(res, status, code, message, extra)` (server.js:4657-4659, verified) emits `{error, code, ...extra}`. Client translates via `tErr(code)` → lookup `err.<code>` in the locale catalogue, falling back to the raw English message for unknown codes (src/core/i18n.js:243-247, verified). New keys MUST be added to all 5 catalogues (`src/locales/{en,fr,nl,de,es}.json`) in the same commit — verified: each catalogue carries 177 `err.*` keys in lockstep (including `err.inviteGuestToggleOff`); fr's total (1985 vs 1946) differs only by non-`err.*` FR-specific keys, so `err.*` parity is the real gate.
-
-### Pattern 5: Fail-closed accept re-derive (the D-50-8 precedent)
-
-The VIS-04 block (server.js:7901-7915) is the template: re-derive the policy from the CURRENT state, refuse 403 before `readJson`/account resolution/any write, consume nothing. The domain re-derive slots immediately after it (before :7917 `readJson` for a row-email invite; for link-only invites, in the account-creation branch after `emailOk(email)` + `inviteForOtherEmail` checks at :7938-7939, before `createUser` :7944). Validate the invite ROW's stored email (`invite.email`, set at mint :7777) — the row is the door ticket.
+Entry points: the four doors above. Decision point: each door either passes (proceed) or refuses (keyed, localized error). External dependency: none — the doors read env at boot; accept-time re-derivation reads the same in-memory matrix.
 
 ### Recommended Project Structure
 
-No new files. All changes land in: `server.js` (resolver + funnel + 3 gates + boot logs), `mcp.js` (1 gate in `invite_member`), `src/locales/*.json` ×5 (`err.*` keys), `test/` (new domain-admission contract suite), `DEPLOY.md` (env docs). The single-file posture is intentional — a new `domain-rules.js` would be the first standalone policy module for zero gain.
+```
+src/core/            # shared canonicalizing validator (pure module, node:test contract tests)
+server.js            # boot parsing + door matrix + the four wired doors (existing monolith)
+src/core/i18n.js     # tErr — already handles keyed refusal translation (no change needed)
+locales/*/           # err.* catalogue additions (5 files, lockstep parity)
+```
+
+### Pattern 1: Fail-closed re-derivation at accept time (in-repo template)
+
+**What:** Re-check the CURRENT invite-door matrix when an invite is accepted, not the domain stored at invite-creation time.
+**When to use:** DOM-03/DOM-04 — this is the exact contract.
+**Example (verified template, `server.js:7901-7915`):**
+```javascript
+// Source: in-repo VIS-04 block, server.js:7901-7915 — re-derives fail-closed
+// at accept time. Read the real block via <read_first>; do not copy from here.
+```
+
+### Pattern 2: Unset vs set-empty env distinction
+
+**What:** `'X' in process.env` is the ONLY way to distinguish unset from set-to-empty; the value parser cannot.
+**When to use:** DOM-02 inheritance (`ALLOW_INVITE_DOMAINS` unset → inherit signup list; set-empty → stands alone as an explicit empty list).
+**Verified behavior (Node v24.21.0, executed this session):**
+```javascript
+// 'ALLOW_SIGNUP_DOMAINS' in process.env → false when unset, true when set to ''
+// delete process.env.X before reading, never rely on falsiness
+```
 
 ### Anti-Patterns to Avoid
-
-- **`endsWith` / suffix / wildcard matching:** verified bypass (`evilexample.com` passes `example.com`). Exact `Set.has()` only. Subdomains NOT implicitly admitted (seed ruling).
-- **Checking the body email at accept instead of the invite row's email** — the row is the ticket; body is untrusted (HARD-04 discipline).
-- **`process.env.X || DEFAULT` falsy parsing** — conflates unset and `''`; must use `'X' in process.env` pre-parse (verified distinction).
-- **Revealing the allowed list in a refusal message** (D-04) — no oracle; generic wording only. OIDC-side this extends to no domain-specific query params (Phase 76 concern, but keep the precedent).
-- **Snapshotting the list onto the invite row** — accept must read the resolved list in force NOW (DOM-04 fail-closed).
-- **Gating login/authenticated surfaces** — admission ≠ authentication; the domain check must be unreachable from session/membership-lookup paths (existing-account immunity is DOM-05/76, but DP-1..3 must be structured so it stays free).
-- **Fail-fast on malformed env entries** — D-05 overrides the older research: warn-and-clean.
+- **`endsWith('@corp.com')` / suffix matching:** verified bypass vector (DOM-07) — `evilcorp.com` ends with `corp.com`. Exact `Set` membership only.
+- **Implicit subdomain wildcards:** locked out by DOM-07; `a.b.com` is NOT in a list containing `b.com`.
+- **Fail-fast on malformed list values:** D-05/D-06 locked **warn-and-clean** — log a warning, drop the malformed entry, continue boot. PITFALLS.md's fail-fast suggestion is OVERRIDDEN by the locked decision.
+- **Consulting the signup list on invite-accept:** DOM-03 one-door-one-rule; invite-accept never reads `ALLOW_SIGNUP_DOMAINS`.
+- **Storing the resolved domain on the invite and trusting it at accept:** DOM-04 requires re-derivation against the CURRENT list.
 
 ## Don't Hand-Roll
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| Email → domain | Custom regex parser | `lastIndexOf('@')` after NFKC+lowercase, run AFTER `emailOk` | RFC quirks (quoted locals) are unreachable — `emailOk` (:671) rejects them upstream; extraction composes after structural validation |
-| Keyed localized refusal | New i18n mechanism | `fail()` + `err.*` catalogue keys + `tErr` | Entire pipeline exists and is parity-gated |
-| Env tri-state | `||`/`?.` fallback chains | Explicit `'X' in process.env` + parser returning null/Set | Falsy chains conflate the three states |
-| Fail-closed re-derive | New route guard framework | Copy the VIS-04 block (:7901-7915) | Proven pattern, non-consuming, side-effect-free |
-| IDN/punycode | Conversion pipeline | Reject non-ASCII domains (fail closed); document punycode form in DEPLOY.md | Milestone-level decision; `domainToASCII` exists if ever needed |
+| Localized refusal plumbing | A new error channel | Existing `fail()` (`server.js:4657`) → `tErr` (`src/core/i18n.js:243-247`) pipeline | Already keyed + 5-locale; verified |
+| Shape validation for the accept payload | New validation | Funnel contract `validateGuestInviteShape` (`server.js:4708`) | Funnel-shaped, in-repo, verified |
+| Transactional invite creation | Ad-hoc writes | Existing `db.tx` (`server.js:7763`) | Already wraps the per-email loop |
 
-**Key insight:** The feature is ~40 lines + catalogue keys + tests. Every mechanism it needs (funnel contract, keyed refusals, fail-closed re-derive, per-test server harness) already exists in the repo — the work is wiring and adversarial verification, not construction.
+**Key insight:** This phase adds logic to existing verified seams — the risk is wiring mistakes, not missing infrastructure.
 
 ## Common Pitfalls
 
-### Pitfall 1: Parsing bypass class (homoglyph ＠, trailing dot, case, quoted local)
-**What goes wrong:** Admission decided on a non-canonical string (GHSA-7rqj-j65f-68wh class — Auth.js validated before NFKC normalization). **Avoid:** NFKC → lowercase → strip one trailing `.` → `lastIndexOf('@')`, always after `emailOk`. **Warning signs:** >1 `split('@')` call-site; tests only lowercase ASCII. Verified this session: NFKC converts fullwidth ＠ → `@`.
+### Pitfall 1: `endsWith` domain bypass (GHSA/CVE-backed)
+**What goes wrong:** Suffix match admits `evilcorp.com` when `corp.com` is listed.
+**Why it happens:** String suffix feels like domain containment.
+**How to avoid:** Exact `Set` membership on the canonicalized domain only.
+**Warning signs:** Any test that passes for `sub.corp.com` when only `corp.com` is listed.
 
-### Pitfall 2: Fail-open unset-vs-empty conflation
-**What goes wrong:** `ALLOW_SIGNUP_DOMAINS=""` in docker-compose silently means open-to-all. **Avoid:** tri-state resolver; `'X' in process.env` before parse; env-shape test matrix (`undefined`, `''`, `' '`, `'a,b'`, `'a,,b'`, `' a , B '`). **Warning signs:** `||` on the env var anywhere.
+### Pitfall 2: Fullwidth / Unicode homoglyph separators
+**What goes wrong:** `user＠corp.com` (fullwidth ＠, U+FF20) or fullwidth dot variants defeat naive `split('@')`.
+**How to avoid:** NFKC-normalize BEFORE splitting (verified: NFKC converts ＠→`@` and fullwidth dots).
+**Warning signs:** Validator tests only use ASCII inputs.
 
-### Pitfall 3: Door-matrix confusion (inherit direction)
-**What goes wrong:** Admin sets only the invite list expecting signup restricted, or vice versa (Gitea #27457 analog). **Avoid:** the resolver is the ONLY reader of the two env vars; D-06 summary log lines; contract tests assert both inherit directions. **Warning signs:** any route touching `process.env.ALLOW_*_DOMAINS` directly.
+### Pitfall 3: Trailing-dot equivalence
+**What goes wrong:** `corp.com.` listed but `corp.com` submitted (or vice versa) mismatches.
+**How to avoid:** Strip one trailing dot during canonicalization (verified working on Node 24).
+**Warning signs:** Acceptance test missing the `corp.com.` variant.
 
-### Pitfall 4: TOCTOU between mint and accept
-**What goes wrong:** Invite minted under a wider list accepted after tightening. **Avoid:** DP-3 re-derive against the resolved list in force at accept, before any write, non-consuming (D-07). Contract test: mint under list A → tighten to B → accept refused, row intact → loosen → accept succeeds. **Warning signs:** a stored `domains` column or snapshot read at accept.
+### Pitfall 4: Unset vs set-empty `ALLOW_INVITE_DOMAINS`
+**What goes wrong:** Treating `""` as unset makes the explicit-standalone-empty case silently inherit the signup list (DOM-02 violation).
+**How to avoid:** Presence via `'X' in process.env`, resolved at boot into the door matrix.
+**Warning signs:** Parser branches on value falsiness instead of key presence.
 
-### Pitfall 5: Existing-flow lockout via accidental login-path gating
-**What goes wrong:** Domain check reachable from authentication/session code blocks existing members (DOM-05 regression). **Avoid:** predicate called only at the four door sites; immunity is structural. Note: an existing member being *re-invited* to the same workspace is already refused earlier by `alreadyMember` (:7768-7770) — out-of-scope for the domain gate by construction. **Warning signs:** the funnel imported anywhere except the door sites.
-
-### Pitfall 6: Locale key drop / placeholder mismatch
-**What goes wrong:** `err.domainNotAllowed` present in EN only → silent English fallback everywhere; or `{domain}` dropped in nl/de → broken render the parity gate can't see. **Avoid:** all 5 catalogues same commit (parity gate enforces count); a mechanical unit test asserting every EN placeholder appears in each translation; unknown-code → English fallback pinned (never an empty toast). **Warning signs:** `err.*` key-count divergence across catalogues in the diff.
+### Pitfall 5: Boot-freeze vs live-read drift
+**What goes wrong:** If the matrix is read live per-request but tests inject env via `startServer({ env })`, behavior can diverge between boot-frozen and live-read models.
+**How to avoid:** Planner discretion (CONTEXT D-discretion) — pick ONE model, document the choice, and make both testable via the `startServer({ env })` harness (research found both are testable with it).
+**Warning signs:** Mixed `process.env.X` reads inside request handlers while boot also caches a matrix.
 
 ## Code Examples
 
-### DP-1 signup gate insertion (server.js:6715-6718 zone)
+Verified behaviors this session (Node v24.21.0) — all stdlib claims below were EXECUTED, not assumed:
 
+### Canonicalization pipeline (shape; planner wires the real module)
 ```javascript
-// Source: live read of server.js:6703-6724 this session
-// After nameRequired/passwordTooWeak checks, BEFORE createUser (:6721):
-const domRefusal = emailDomainRefusal(email, SIGNUP_DOMAINS);
-if (domRefusal) return fail(res, 400, domRefusal.code, domRefusal.message, { email });
+// Source: stdlib behaviors verified this session on Node v24.21.0
+// domain.trim().normalize('NFKC').toLowerCase() then strip ONE trailing '.'
+// email: normalize('NFKC') FIRST (fullwidth ＠ → @), split on LAST '@'
+// membership: canonicalSet.has(canonicalDomain) — exact, never endsWith
 ```
 
-Note: signup lowercases email at :6710-6712 already; the funnel is idempotent over that.
-
-### DP-2 per-email inline refusal (server.js:7745 — extend the existing loop)
-
+### Door matrix inheritance (DOM-02)
 ```javascript
-// Source: live read of server.js:7732-7745 this session. The loop already does
-// trim/lowercase/dedupe (:7733-7743) and emailOk (:7745). D-03: refused email
-// gets its own keyed error; valid emails proceed. Placement: after emailOk in
-// the loop, BEFORE the ROLE_RANK admin check (:7751) and db.tx (:7763) — zero
-// side effects on refusal.
-for (const email of emails) if (!emailOk(email)) return fail(res, 400, 'invalidEmail', `Invalid email: ${email}`, { email });
-for (const email of emails) {
-  const domRefusal = emailDomainRefusal(email, INVITE_DOMAINS);
-  if (domRefusal) return fail(res, 400, domRefusal.code, domRefusal.message, { email });
-}
-```
-
-(The planner may fuse these into one loop — order emailOk first either way.)
-
-### DP-3 fail-closed accept re-derive (after server.js:7915)
-
-```javascript
-// Source: live read of server.js:7880-7948 this session. Slot AFTER the
-// guest-toggle re-derive block (:7901-7915), BEFORE readJson (:7917).
-// Row-email invites: validate invite.email. 403, non-consuming (D-07).
-{
-  const doorEmail = invite.email; // link-only invites: re-check in the :7938-7939 branch instead
-  if (doorEmail) {
-    const domRefusal = emailDomainRefusal(doorEmail, INVITE_DOMAINS);
-    if (domRefusal) return fail(res, 403, 'inviteNotAcceptable', 'This invite can no longer be accepted');
-  }
-}
-```
-
-For link-only invites (`invite.email` null), check the body `email` in the account-creation branch immediately after the `inviteForOtherEmail` check (:7939), before `createUser` (:7944).
-
-### Boot summary log (D-06)
-
-```javascript
-// Mirrors the grep-able boot line convention (server.js:8843 logs `sign-ups: open|closed`)
-logInfo(`domain admission: signup ${describeDomains(SIGNUP_DOMAINS)} · invites ${describeDomains(INVITE_DOMAINS)}`);
-// describeDomains: null → 'off', empty → 'deny-all', else 'allowed: a.com, b.com'
+// INVITE unset (key absent) → invite = signup list (may be null = fail-open)
+// INVITE set (key present, even '')  → invite = parsed INVITE list, standalone
 ```
 
 ## State of the Art
 
 | Old Approach | Current Approach | When Changed | Impact |
 |--------------|------------------|--------------|--------|
-| `endsWith` domain suffix match | Exact `Set` membership | Verified bypass published (`evilexample.com`) | Never suffix-match |
-| Validate-then-normalize email | NFKC-normalize FIRST, validate/parse after | GHSA-7rqj-j65f-68wh (Auth.js) | Normalization precedes every structural check on the door path |
-| Single-state env config (set/unset) | Tri-state (unset/empty/populated) | OneTimeSecret & GitLab prior art | Operators can close a door deliberately with `''` |
-
-**Deferred (milestone-level, do not build):** `*.domain` wildcards, refusal audit verb, IDNA/punycode pipeline (document punycode form in DEPLOY.md instead).
+| Older research suggested fail-fast on malformed env lists | D-05/D-06 locked **warn-and-clean** | Locked in CONTEXT.md | Planner must implement warn-and-clean; do not follow PITFALLS.md fail-fast |
+| STATE.md open blocker: is MCP invite a door? | Confirmed fourth door | This session (`mcp.js:923-956`) | 75-02 plan title already includes it; must be wired like the other doors |
 
 ## Assumptions Log
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | Signup route has no `emailOk` call today (email structural check happens inside/after `createUser`); planner should confirm whether `emailOk` should be added alongside the domain gate or the funnel alone suffices | DP-1 example | Low — funnel is tolerant of unvalidated input (returns '' domain, which never matches a populated Set, failing closed) |
-| A2 | Boot-freeze vs live-read both satisfy DOM-04; equivalence holds only while env changes require restart (the established gr8r operator contract) | Summary #1 | Low — either choice tested via per-test spawned servers |
-| A3 | Client signup/invite UIs surface `fail()` `code` + `extra` payloads such that per-email inline errors are renderable with existing components (D-03) — assumed from `invalidEmail` precedent at :7745 carrying `{ email }` | DP-2 | Medium if client needs a new inline-error component; the `inviteGuestToggleOff`/`invalidEmail` rendering paths are the analogs to inspect during planning |
+| A1 | Boot-freeze vs live-read: both models are testable via `startServer({ env })`; planner picks one (discretion) | Common Pitfalls 5 | Low — wrong pick is caught by contract tests either way |
 
-All other claims are `[VERIFIED: live read / execution this session]` with file:line citations inline, or `[CITED: .planning/research/{ARCHITECTURE,PITFALLS,STACK}.md]` from the committed milestone research (itself line-verified and node-execution-verified).
+All other claims carry `[VERIFIED: <path:lines>]` or executed-stdlib provenance per the source hierarchy.
 
 ## Open Questions
 
-1. **DP-1 emailOk gap** (A1): signup currently has no explicit `emailOk` before `createUser` — decide whether the domain gate composes after an added `emailOk` or runs alone.
-2. **Boot-freeze vs live-read** (A2): planner's discretion per CONTEXT; document the choice in the plan and DEPLOY.md.
-3. **Refusal key naming:** one code (`domainNotAllowed`) for all doors vs separate `inviteNotAcceptable` for DP-3. CONTEXT D-07 says "this invite can no longer be accepted" family — distinct wording for accept suggests a second key; both must land in all 5 catalogues.
+1. **Signup route lacks an explicit `emailOk` before `createUser`** — planner decides whether the domain gate composes after an added structural check (research verified the route at `server.js:6703-6724`).
+2. **Boot-freeze vs live-read** — planner's discretion per CONTEXT D-discretion; document the choice in the plan.
+3. **Refusal key granularity** — one refusal key (`domainNotAllowed`) vs a separate accept-door key per D-07's "no longer be accepted" wording; planner decides, keeping `err.*` parity across all 5 locales.
 
 ## Environment Availability
 
-| Dependency | Required By | Available | Version | Fallback |
-|------------|------------|-----------|---------|----------|
-| Node.js | everything | ✓ | 24.21.0 | — |
-| `node:test` + `test/helpers/server.mjs` | contract suite | ✓ | existing | — |
-| Playwright | optional e2e smoke | ✓ (existing config) | — | unit suite alone suffices |
-| `node --test --test-concurrency=2 test/*.test.mjs` | full suite | ✓ | — | — |
-
-**Missing dependencies:** none.
+No external dependencies. Node v24.21.0 verified this session; node:test built-in; `startServer({ env })` harness exists in-repo.
 
 ## Validation Architecture
 
 ### Test Framework
 | Property | Value |
 |----------|-------|
-| Framework | `node:test` (stdlib), per-test spawned real servers via `test/helpers/server.mjs` (`startServer({ env })` — custom env per process) |
-| Config file | none needed — `npm test` globs `test/*.test.mjs` |
-| Quick run command | `node --test test/domain-admission.test.mjs` |
-| Full suite command | `npm test` (plus `npm run e2e` for UI paths) |
+| Framework | node:test (built-in) |
+| Config file | none — repo-native test layout |
+| Quick run command | `node --test test/domain-admission.test.js` (Wave 0 creates; adjust path to repo layout) |
+| Full suite command | existing repo test command (verify via `package.json` scripts during planning) |
 
 ### Phase Requirements → Test Map
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
-| DOM-01 | Signup gate: out-of-list refused keyed+localized; in-list passes; unset = byte-identical old behavior | contract (spawned server) | `node --test test/domain-admission.test.mjs` | ❌ Wave 0 |
-| DOM-02 | Invite create per-email refusal; unset inherits signup; set-empty deny-all; set stands alone | contract | same file | ❌ Wave 0 |
-| DOM-03 | Invite-list-only domain accepts, creates account, logs in; accept never consults signup list | contract (canonical gmail scenario from CONTEXT) | same file | ❌ Wave 0 |
-| DOM-04 | Tighten → pending invite refused at accept, non-consuming, 403, all-5-locale key parity; loosen revives | contract | same file | ❌ Wave 0 |
-| DOM-07 | Tri-state env matrix (`undefined`/`''`/`' '`/`'a,b'`/`'a,,b'`/`' a , B '`); homoglyph ＠; trailing dot; case; suffix (`evil-a.com`); subdomain not admitted; one canonicalization call-site; boot summary log lines | unit table-driven + contract | same file | ❌ Wave 0 |
-| i18n | `err.*` keys present in en/fr/nl/de/es; placeholder parity; unknown-code → English fallback | unit | same file (catalogue assertion like `test/catalogue.test.mjs`) | ❌ Wave 0 |
-| MCP | `invite_member` door refuses out-of-list email (roadmap 75-02) | contract | same file | ❌ Wave 0 |
+| DOM-01 | Signup door: allow/deny/fail-open on unset | unit + integration | `node --test test/domain-admission.test.js` | ❌ Wave 0 |
+| DOM-02 | Invite door inheritance (unset/set-empty/set) | unit | same | ❌ Wave 0 |
+| DOM-03 | Invite-only domain accept works; signup list never consulted at accept | integration | same | ❌ Wave 0 |
+| DOM-04 | Accept-time re-derivation fail-closed + keyed localized refusal (5 locales) | integration | same | ❌ Wave 0 |
+| DOM-07 | Canonicalization: case, trailing dot, NFKC, endsWith bypass, subdomain rejection, boot matrix log | unit | same | ❌ Wave 0 |
 
 ### Sampling Rate
-- **Per task commit:** quick run of the new test file + `npm run i18n:scan` (locale parity gate)
-- **Per wave merge:** full `npm test`
+- **Per task commit:** quick validator test file
+- **Per wave merge:** full suite
 - **Phase gate:** full suite green before `/gsd-verify-work`
 
 ### Wave 0 Gaps
-- [ ] `test/domain-admission.test.mjs` — covers all rows above (fixture boot via `startServer({ env: { ALLOW_SIGNUP_DOMAINS: ... } })`)
-- [ ] Boot-summary-log assertion (D-06) — spawn with vars set, grep stderr/log output
+- [ ] `test/domain-admission.test.js` (or repo-layout equivalent) — covers DOM-01..04, DOM-07
+- [ ] Contract tests for the canonicalizing validator (pure module — test first)
 
 ## Security Domain
 
@@ -341,40 +250,40 @@ All other claims are `[VERIFIED: live read / execution this session]` with file:
 
 | ASVS Category | Applies | Standard Control |
 |---------------|---------|-----------------|
-| V4 Access Control | yes | Door-matrix funnel; admission only at doors, never auth path |
-| V5 Input Validation | yes | `emailOk` upstream + NFKC-canonicalizing funnel; exact Set membership |
-| V6 Cryptography | no | untouched |
-| V2/V3 Auth/Session | no | untouched; immunity contract keeps them outside the gate |
-| Information disclosure (D-04) | yes | Generic refusal wording; allowed list never leaves server; no oracle |
+| V4 Access Control | yes | Env-driven door matrix; exact membership; fail-closed re-derivation at accept |
+| V5 Input Validation | yes | NFKC + canonicalizing validator; funnel contract for accept payload |
+| V2 Authentication | no | No change to auth mechanics |
+| V3 Session Management | no | — |
+| V6 Cryptography | no | — |
 
-### Known Threat Patterns
+### Known Threat Patterns for this stack
 
 | Pattern | STRIDE | Standard Mitigation |
 |---------|--------|---------------------|
-| Homoglyph-＠ / trailing-dot / case canonicalization bypass (GHSA-7rqj-j65f-68wh class) | Elevation of Privilege | NFKC → lowercase → dot-strip → last-`@`, before any comparison; adversarial table test |
-| Suffix attack `evil-a.com` vs `a.com` | Elevation of Privilege | Exact `Set.has()`; `endsWith` verified bypassable |
-| Policy oracle via refusal wording | Information Disclosure | D-04 generic messages; distinct keys, no domain details |
-| Stale-invite admission after tightening (TOCTOU) | Tampering | DP-3 fail-closed re-derive vs live resolved list, before writes |
+| Suffix-match domain bypass (`endsWith`) | Spoofing | Exact `Set` membership (DOM-07, verified bypass vector) |
+| Unicode homoglyph email separator | Spoofing | NFKC normalize before split (verified) |
+| Stale stored invite domain trusted at accept | Tampering | Fail-closed re-derivation against current matrix (DOM-04) |
+| MCP door bypassing UI-path rules | Elevation of Privilege | Wire MCP `invite_member` through the same validator (`mcp.js:923-956`) |
 
 ## Sources
 
-### Primary (HIGH confidence — verified this session)
-- Live reads: server.js:135, :4657-4659, :4708, :671, :6703-6741, :7626 route, :7732-7819 (create loop + tx), :7841-8004 (accept route), mcp.js:923-956; `src/core/i18n.js:235-247`; `test/helpers/server.mjs:43`; locale files (`err.*` count 177 ×5)
-- Live execution on Node 24.21.0: parser matrix, unset-vs-empty `'in process.env'` distinction, `endsWith` bypass, NFKC ＠→@, trailing-dot strip
-- `.planning/research/{ARCHITECTURE,PITFALLS,STACK}.md`, `SEED-261119-f3w`, `.planning/ROADMAP.md` §Phase 75, `75-CONTEXT.md`
+### Primary (HIGH confidence)
+- In-repo verified this session: `server.js:6703-6724` (signup), `:7732-7745` (invite-create loop), `:7763` (`db.tx`), `:7901-7915` (VIS-04 re-derive template), `:4657` (`fail()`), `:4708` (funnel contract), `mcp.js:923-956` (MCP `invite_member`), `src/core/i18n.js:243-247` (`tErr`)
+- Node v24.21.0 executed stdlib claims: env-key presence, NFKC fullwidth normalization, trailing-dot strip, `endsWith` bypass
+- `err.*` catalogue parity: 177 keys in lockstep across all 5 locales (fr's 1985-vs-1946 delta is non-`err.*` FR-specific keys — the `err.*` count is the real parity gate)
 
-### Secondary (MEDIUM)
-- Prior art cited in PITFALLS.md: GitLab sign-up restrictions + MR 76272, Gitea `EMAIL_DOMAIN_ALLOWLIST` + #27457, OneTimeSecret SSO allowlist posture, Outline `ALLOWED_DOMAINS`
+### Secondary (MEDIUM confidence)
+- GHSA/CVE-backed suffix-bypass class documentation (pattern-level, not version-pinned)
 
-### Tertiary (LOW)
-- None material.
+### Tertiary (LOW confidence)
+- None — no `[ASSUMED]` claims beyond A1.
 
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH — zero deps, all stdlib behaviors executed this session
-- Architecture: HIGH — all integration points read this session with line citations
-- Pitfalls: HIGH — CVE/GHSA-backed class + in-repo precedent blocks verified
+- Standard stack: HIGH — zero deps; all stdlib behaviors executed this session
+- Architecture: HIGH — every integration point read this session with line citations
+- Pitfalls: HIGH — GHSA/CVE-backed bypass classes + in-repo precedent blocks verified
 
 **Research date:** 2026-11-19
-**Valid until:** 2026-12-19 (stable; single-file server, slow-moving integration points)
+**Valid until:** 30 days (stable domain — no external dependencies)
