@@ -18,16 +18,15 @@ result: pass
 
 ### 2. Signup domain gate
 expected: With ALLOW_SIGNUP_DOMAINS set to a list (e.g. `a.com,b.com`), signing up with an email on another domain is refused with a generic refusal message (code signupDomainNotAllowed); signing up with an allowed-domain email succeeds.
-result: issue
+result: pass
 reported: "you need to update .env.example for that"
-severity: major
-resolved: fixed inline during UAT (commit 5c08866f) — .env.example now documents both vars
+resolved: fixed inline during UAT (commit 5c08866f) — .env.example now documents both vars; re-verified pass after deploy
 
 ### 3. Unset variable fail-open
 expected: With ALLOW_SIGNUP_DOMAINS unset, signup behaves exactly as before this phase — any structurally valid email is admitted (fail-open).
-result: issue
+result: pass
 reported: "Node.js cold start: ERR_MODULE_NOT_FOUND Cannot find module '/app/domains.js' imported from /app/mcp.js (Docker production image)"
-severity: blocker
+resolved: fixed inline during UAT (commit beaecfd1) — Dockerfile copies domains.js; re-verified pass after image rebuild
 
 ### 4. Empty list deny-all
 expected: With ALLOW_SIGNUP_DOMAINS set to an empty value, ALL signups are refused, regardless of email domain.
@@ -94,8 +93,8 @@ coverage_id: D7
 ## Summary
 
 total: 15
-passed: 12
-issues: 2
+passed: 14
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
