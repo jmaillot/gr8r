@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-19 — v3.0 Access Control & Hardening started*
+*Last updated: 2026-11-19 — v3.0 Access Control & Hardening shipped*
 
 <details>
 <summary>Milestone v2.7 Installable App (PWA) — shipped record (2026-11-19)</summary>
@@ -164,7 +164,45 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 - D-04 (Phase 64): hide-the-button mobile contract — no second Playwright project,
   no chunk-gate edits, zero waivers at close
 
-## Current Milestone: v3.0 Access Control & Hardening
+## Current Milestone: v3.0 Access Control & Hardening — SHIPPED (2026-11-19)
+
+**Shipped:** 3 phases (75–77), 7 plans, 10/10 requirements, all phases verified
+(verified_closeout). Domain admission (75): one shared canonicalizing funnel
+(`domains.js` — `parseDomainList`/`emailDomainRefusal`/`canonicalizeDomain`), exact
+`Set` matching (never `endsWith` — verified bypass vector), tri-state env parse
+(unset = inherit/fail-open, empty = deny-all — ratified with the owner), boot-frozen
+`SIGNUP_DOMAINS`/`INVITE_DOMAINS` with `??` inheritance, `'*'` wildcard allow-all
+added during UAT (commit 968a475); doors DP-1 signup (server.js:6774), DP-2
+per-email invite-create (:7803), DP-3 fail-closed non-consuming invite-accept
+(:7991–8042, INVITE list only — one-door-one-rule), MCP `invite_member` fourth door
+(mcp.js:948); every refusal key landed in all 5 locale catalogues in the same commit.
+SSO hardening (76): DP-4 JIT gate (fresh-provision arm only, after `email_verified`,
+generic `sso=error` redirect — no domain-revealing param), DP-5 reconcile filter
+(mirrors DP-3 verbatim), three named existing-account immunity rows (authentication
+never consults the lists; tightening never locks out members), D-11 combined 5-door
+boot-matrix log; TRUTH AMENDED Option B (owner-approved): accept-time re-validation
+applies to ALL admits, immunity covers authentication/logins only. Maintenance debt
+(77): lint exit 0 with zero suppressions added (15 code fixes + 2 config-only
+no-undef files, hazard-safe restructures per typescript-eslint #3456), 9/9 carried
+review advisories fixed with regression pins (ledger open: 0), nl/de/es refusal
+rendering verified end-to-end in the built app — which uncovered and fixed a real
+production bug (server `LOCALE_CODES` was still `['en','fr']`; now derived from
+`src/locales/*.json`, commit 0b660e76). Gates at close: lint exit 0, 1854 unit pass
+/ 0 fail, 152 e2e / 0 fail, all 3 phases verification-passed. Full record:
+`milestones/v3.0-ROADMAP.md`, `milestones/v3.0-REQUIREMENTS.md`,
+`milestones/v3.0-phases/`.
+
+### v3.0 milestone decisions
+
+- One door, one rule — the accept path never consults the signup list (gmail-only-in-
+  invite-list scenario canonical)
+- Exact-domain Set matching only; `*.domain` wildcards explicitly deferred
+- Set-but-empty = deny-all (set semantics differ from unset inheritance)
+- Existing-account immunity covers authentication only, never invite acceptance (Option B)
+- File-grouped lint commits with suite green per group; zero eslint-disable as a policy
+
+<details>
+<summary>Milestone v3.0 planning context (pre-ship)</summary>
 
 **Goal:** instance-level domain admission rules plus the accumulated maintenance debt.
 
@@ -179,9 +217,9 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 **Key context:** seed design owner-validated — no re-litigation; zero new dependencies;
 package.json bumps to 3.0.0 at ship time.
 
-### Next Milestone Goals
+</details>
 
-_Scoped into v3.0 above._
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 
 ## Current Milestone: v2.7 Installable App (PWA) — SHIPPED (2026-11-19)
 

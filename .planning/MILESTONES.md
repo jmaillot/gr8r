@@ -1,5 +1,17 @@
 # Milestones
 
+## v3.0 Access Control & Hardening (Shipped: 2026-11-19)
+
+**Phases completed:** 3 phases, 7 plans, 10/10 requirements
+
+**Key accomplishments:**
+- Instance-level email-domain admission per the owner-validated SEED-261119-f3w door matrix — one shared canonicalizing funnel (`domains.js`), exact `Set` matching (never `endsWith` — verified bypass vector), tri-state env parse (unset = inherit/fail-open, empty = deny-all), `'*'` wildcard allow-all, zero new dependencies.
+- Five decision points (DP-1..DP-5) across signup, invite create, fail-closed non-consuming invite accept, MCP invite, and OIDC JIT — each door checks exactly one list (invite-crosses-domains preserved); every refusal key landed in all 5 locale catalogues (en/fr/nl/de/es) in the same commit as the first emitting gate.
+- Existing-account immunity proven by named contract rows: authentication never consults the lists, tightening never locks out members, and accept-time re-validation applies to ALL admits (Option B, owner-approved) with non-consuming refusals revived by loosening.
+- Standing gates made honestly clean: lint exits 0 with zero suppressions added (hazard-safe per typescript-eslint #3456), 9/9 carried review advisories fixed with regression pins (ledger open: 0), and nl/de/es refusal rendering verified end-to-end in the built app — uncovering and fixing a real `LOCALE_CODES` production bug.
+
+---
+
 ## v2.7 Installable App (PWA) (Shipped: 2026-11-19)
 
 **Phases completed:** 3 phases, 7 plans, 9 tasks

@@ -1,21 +1,21 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.0
-milestone_name: Access Control & Hardening
-current_phase: 77
-current_phase_name: Maintenance Debt
-status: milestone_complete
-stopped_at: Phase 77 complete — verification passed (all 3 v3.0 phases done)
-last_updated: "2026-11-19T20:30:00.000Z"
+milestone: none
+milestone_name: "(next milestone not started — run /gsd-new-milestone)"
+current_phase: none
+current_phase_name: none
+status: milestone_archived
+stopped_at: v3.0 archived + tagged — ready for /gsd-new-milestone
+last_updated: "2026-11-19T21:45:00.000Z"
 last_activity: 2026-11-19
-last_activity_desc: Phase 77 executed and verified — v3.0 milestone complete
+last_activity_desc: v3.0 milestone archived (3 phases, 7 plans, 10/10 requirements) and tagged
 state_head: 9833cac36a6274f3ea8fa69d04a9ac721f59554d
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-11-19)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** v3.0 milestone complete — all 3 phases verified
+**Current focus:** Between milestones — v3.0 shipped; next milestone not started
 
 ## Current Position
 
-Phase: 77 (Maintenance Debt) — COMPLETE (verified 2026-11-19)
-Plan: All 7 plans complete
-Status: Milestone complete
-Last activity: 2026-11-19 — Phase 77 verified (lint 0 errors, 1854 unit + 152 e2e green, ledger open: 0)
+Phase: none (v3.0 archived 2026-11-19)
+Plan: none
+Status: Between milestones — run /gsd-new-milestone to start the next cycle
+Last activity: 2026-11-19 — v3.0 archived (3 phases, 7 plans, 10/10 requirements) and tagged
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0% (new milestone not started)
 
 ## Performance Metrics
 
