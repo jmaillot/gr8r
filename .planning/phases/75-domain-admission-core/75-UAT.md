@@ -1,19 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 75-domain-admission-core
 source: [75-01-SUMMARY.md, 75-02-SUMMARY.md]
 started: 2026-11-19T13:32:43Z
-updated: 2026-11-19T14:05:00Z
+updated: 2026-11-19T14:25:00Z
 ---
 
 ## Current Test
-<!-- OVERWRITE each test - shows where we are -->
 
-number: 4
-name: Empty list deny-all
-expected: |
-  With ALLOW_SIGNUP_DOMAINS set to an empty value, ALL signups are refused, regardless of email domain.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -36,23 +31,23 @@ severity: blocker
 
 ### 4. Empty list deny-all
 expected: With ALLOW_SIGNUP_DOMAINS set to an empty value, ALL signups are refused, regardless of email domain.
-result: [pending]
+result: pass
 
 ### 5. Canonicalization (case, trailing dot, fullwidth)
 expected: Emails that canonicalize into an allowed domain are admitted: `User@A.COM.`, fullwidth ＠ (user＠a.com), and U+FF0E fullwidth dot variants all sign up successfully like their ASCII equivalent.
-result: [pending]
+result: pass
 
 ### 6. No suffix / subdomain bypass
 expected: With list `a.com`: `evil-a.com` and `sub.a.com` emails are refused — matching is exact, never suffix-based.
-result: [pending]
+result: pass
 
 ### 7. Boot logs and warn-and-clean
 expected: On boot, source-tagged log lines show the resolved lists (`domains: ALLOW_SIGNUP_DOMAINS: ... (source: own|inherit)`); malformed list entries (empty/whitespace) log a warning at boot but the server still starts.
-result: [pending]
+result: pass
 
 ### 8. Refusal localized in 5 locales
 expected: The signup refusal message renders in the active UI language (en/fr/nl/de/es) — each locale has the err.signupDomainNotAllowed key.
-result: [pending]
+result: pass
 
 ### 9. Invite-create per-email gate (DP-2)
 expected: With ALLOW_INVITE_DOMAINS set, creating invites for an out-of-list email is refused per-email (code inviteDomainNotAllowed) and the batch leaves zero invite rows; in-list emails are inserted normally. (Auto-covered by passing integration tests D1/D2.)
@@ -99,9 +94,9 @@ coverage_id: D7
 ## Summary
 
 total: 15
-passed: 8
+passed: 12
 issues: 2
-pending: 5
+pending: 0
 skipped: 0
 blocked: 0
 
