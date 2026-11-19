@@ -18,6 +18,7 @@ ENV NODE_ENV=production \
 COPY --from=build /app/server.js ./server.js
 COPY --from=build /app/tz.js ./tz.js
 COPY --from=build /app/mcp.js ./mcp.js
+COPY --from=build /app/domains.js ./domains.js
 # Phase 45 (2026-11-07, D-03): single pg-enabled image — node_modules + db-adapter.mjs join the runtime stage so DB_URL postgres mode works; SQLite default unchanged.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/db-adapter.mjs ./db-adapter.mjs
