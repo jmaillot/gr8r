@@ -288,6 +288,83 @@ test('DP-5: two in-list invites across two workspaces survive the filter and dri
   }
 });
 
+/* ---------- immunity (DOM-05, D-12): existing accounts vs the doors ---------- */
+
+/* The three named immunity rows live here so a reader can point at them.
+   Admission ≠ authentication: the doors gate NEW admissions (JIT provision,
+   invite create/accept/reconcile) — never the authentication of an
+   already-linked identity or the existing membership of an existing account.
+   Immunity is by construction (the already-linked resolution at server.js
+   short-circuits before the DP-4 gate; the SSO-07 reconcile is skipped for
+   users with memberships) — these rows PIN it, they do not implement it. */
+
+test('immunity 1 — a linked identity re-logs in after mid-life tightening: the tightened signup list never blocks repeat SSO logins (SC2, DOM-05)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-imm1-'));
+  /* Boot 1: permissive signup door — the SSO login provisions and links. */
+  let server = await startServer({ dataDir, env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com' } });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-imm1', email: 'linked@a.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/', 'boot 1: the permissive door provisions normally');
+    withDb(server.dbPath, db => {
+      assert.equal(db.prepare('select count(*) as n from users where email = ?').get('linked@a.com').n, 1, 'boot 1: the account exists');
+    });
+  } finally {
+    await server.stop();
+  }
+  /* Boot 2: SAME dataDir, the signup list tightened to exclude the domain.
+     The identity is already linked, so the already-linked resolution
+     short-circuits BEFORE the DP-4 gate — admission ≠ authentication. */
+  server = await startServer({ dataDir, env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'tightened.example' } });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-imm1', email: 'linked@a.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/', 'boot 2: the repeat login succeeds identically to the permissive run');
+    assert.ok(sessionCookieOf(callback.cookies), 'boot 2: a session was minted');
+    assert.ok(!server.output().includes('sso signup domain refused'), 'boot 2: NO DP-4 refusal logged for the linked identity');
+    withDb(server.dbPath, db => {
+      assert.equal(db.prepare('select count(*) as n from users where email = ?').get('linked@a.com').n, 1, 'the user row is unchanged — no second account');
+      assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-imm1').n, 1, 'the identity row is unchanged — no re-link churn');
+    });
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('immunity 2 — a pre-seeded linked identity logs in under a list that excludes it: the lists are never consulted for an established identity (SC2, DOM-05)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-imm2-'));
+  /* Boot 1: doors off — exists only so the database file exists for the
+     direct withDb seed (startServer owns the schema). Nothing is provisioned
+     through the doors here; the identity link is seeded, not earned. */
+  let server = await startServer({ dataDir, env: { ...oidcEnv() } });
+  try {
+    withDb(server.dbPath, db => {
+      db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run('u_imm2', 'seeded@x.com', 'Seeded User', 'not-a-real-scrypt-hash', Date.now());
+      db.prepare('insert into oidc_identities (id, user_id, issuer, subject, created_at) values (?,?,?,?,?)').run('i_imm2', 'u_imm2', idp.issuer, 'sub-imm2', Date.now());
+    });
+  } finally {
+    await server.stop();
+  }
+  /* Boot 2: the signup door is TIGHTENED to exclude x.com before the very
+     first SSO login attempt of this identity. */
+  server = await startServer({ dataDir, env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com' } });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-imm2', email: 'seeded@x.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/', 'the very first login under the tightened list succeeds');
+    assert.ok(sessionCookieOf(callback.cookies), 'a session was minted');
+    assert.ok(!server.output().includes('sso signup domain refused'), 'no DP-4 refusal logged — the lists never reach the linked path');
+    withDb(server.dbPath, db => {
+      assert.equal(db.prepare('select count(*) as n from users where email = ?').get('seeded@x.com').n, 1, 'no new user row minted');
+      assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-imm2').n, 1, 'no second identity minted');
+    });
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 /* ---------- D-11: the combined five-door matrix boot log (SC4) ---------- */
 
 const matrixLineOf = out => out.split('\n').find(l => l.includes('domains: door matrix'));
