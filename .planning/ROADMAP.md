@@ -12,7 +12,7 @@
 
 - [x] **Phase 72: Manifest, Icons & Head Integration** - Inert static install assets: web manifest, PNG icon set from the brand mark, index.html head tags (completed 2026-11-18)
 - [x] **Phase 73: Install Hint Banner** - Honest install affordance on `beforeinstallprompt` browsers with graceful iOS/Firefox degradation (the only JS surface) (completed 2026-11-18)
-- [ ] **Phase 74: Service Worker Verification & Milestone Acceptance** - Verify the existing push SW satisfies installability untouched, plus end-to-end acceptance and real-device UAT
+- [x] **Phase 74: Service Worker Verification & Milestone Acceptance** - Verify the existing push SW satisfies installability untouched, plus end-to-end acceptance and real-device UAT (completed 2026-11-19)
 
 ## Backlog
 
@@ -119,11 +119,11 @@ end-to-end on real devices.
   4. Real-device UAT passed (human_needed): the app installs and launches standalone on
      desktop Chrome and Android Chrome; iOS shows the honest manual-install path; push
      notifications still work after all changes
-**Plans**: 2 plans
+**Plans**: 2/2 plans complete
 
 Plans:
-- [ ] 74-01-PLAN.md — sw-contract.test.mjs: hash pin, handler-line pins, registration call-site pins, manifest↔SW scope agreement (D-01, D-04)
-- [ ] 74-02-PLAN.md — DEPLOY.md §18 PWA posture (D-02) + 74-UAT.md real-device acceptance (D-03, blocking human checkpoint)
+- [x] 74-01-PLAN.md — sw-contract.test.mjs: hash pin, handler-line pins, registration call-site pins, manifest↔SW scope agreement (D-01, D-04)
+- [x] 74-02-PLAN.md — DEPLOY.md §18 PWA posture (D-02) + 74-UAT.md real-device acceptance (D-03, blocking human checkpoint)
 
 ## Progress Table
 
@@ -131,4 +131,4 @@ Plans:
 |-------|----------------|--------|-----------|
 | 72. Manifest, Icons & Head Integration | 2/2 | Complete    | 2026-11-18 |
 | 73. Install Hint Banner | 3/3 | Complete    | 2026-11-18 |
-| 74. Service Worker Verification & Milestone Acceptance | 0/? | Not started | - |
+| 74. Service Worker Verification & Milestone Acceptance | 2/2 | Complete    | 2026-11-19 |
