@@ -23,7 +23,7 @@
        any name-based count), the '/sw.js' literal, the api.enabled
        gate in push.js, and both main.js boot paths (the load listener
        and the enterApp 59-UAT re-fire).
-     → (appended by Task 2 of plan 74-01 — the blocks below this note.)
+     - (D-04 pins appended by Task 2 — the registration contract block.)
 
    Pattern: test/manifest-contract.test.mjs source-as-text +
    assert-substring (and test/browser-push.test.mjs's forbidden-token
@@ -107,6 +107,61 @@ describe('server.js sw.js no-cache branch cross-check (D-01, light touch)', () =
   });
 });
 
-/* D-04 registration call-site pins land in the same file (Task 2 of
-   plan 74-01) — appended below the D-01 blocks. */
+/* =====================================================================
+   Registration call-site contract (D-04) — appended by Task 2 of
+   plan 74-01. Counts the exact expression navigator.serviceWorker.register
+   (never the registerSw wrapper name — src/main.js defines a local
+   registerSw arrow that would inflate any name-based count, RESEARCH
+   Pitfall 1). All pins are quoted substrings, not line numbers
+   (RESEARCH Pitfall 2).
+   ===================================================================== */
+
+describe('registration call-site contract (D-04)', () => {
+  test('exactly ONE navigator.serviceWorker.register call site repo-wide (expression count, not the registerSw name)', () => {
+    const files = [...jsFiles('src'), ...jsFiles('public')];
+    const combined = files.map(source).join('\n');
+    const calls = combined.match(/navigator\.serviceWorker\.register/g) || [];
+    assert.equal(
+      calls.length,
+      1,
+      `expected exactly one navigator.serviceWorker.register call site across ${files.length} files, found ${calls.length}`,
+    );
+  });
+
+  test('the register call is the /sw.js literal with default (root) scope — inside src/core/push.js', () => {
+    const push = source('src/core/push.js');
+    assert.ok(
+      push.includes("navigator.serviceWorker.register('/sw.js')"),
+      "src/core/push.js must contain navigator.serviceWorker.register('/sw.js') verbatim (default root scope)",
+    );
+  });
+
+  test('the api.enabled gate is intact inside the registerSw registration path', () => {
+    const push = source('src/core/push.js');
+    assert.ok(
+      push.includes("if (!('serviceWorker' in navigator) || !api.enabled) return;"),
+      'registerSw must gate registration on the api.enabled check — the push-gated registration contract',
+    );
+    /* the gate lives on the registerSw export, before the register call */
+    const exportIdx = push.indexOf('export const registerSw');
+    const gateIdx = push.indexOf('!api.enabled');
+    assert.ok(exportIdx !== -1, 'registerSw export must exist in src/core/push.js');
+    assert.ok(
+      gateIdx > exportIdx && gateIdx < push.indexOf('navigator.serviceWorker.register'),
+      'the api.enabled gate must sit inside the registerSw export, before the register call',
+    );
+  });
+
+  test('both boot paths intact: the load listener and the enterApp 59-UAT re-fire', () => {
+    const main = source('src/main.js');
+    assert.ok(
+      main.includes("addEventListener('load', registerSw);"),
+      "src/main.js must boot the SW via addEventListener('load', registerSw)",
+    );
+    assert.ok(
+      main.includes('registerSw(); // 59-UAT fix'),
+      'src/main.js enterApp must re-fire registerSw() with the 59-UAT fix marker (SPA login path)',
+    );
+  });
+});
 
