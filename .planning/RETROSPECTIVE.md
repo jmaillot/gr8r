@@ -512,12 +512,65 @@
 - Sessions: 2 days (2026-11-17 → 11-18), 48 commits, 64 files (+5915/−115).
 - Notable: unit 1737/0, e2e 140 (+1 pre-existing env flake), chunk ≤500 kB, zero new deps.
 
+## Milestone: v2.7 — Installable App (PWA)
+
+**Shipped:** 2026-11-19
+**Phases:** 3 | **Plans:** 7
+
+### What Was Built
+
+- Phase 72 — manifest.webmanifest + head tags + five-PNG icon set, contract tests + live e2e header check
+- Phase 73 — honest install banner as a lazy chunk, with the pre-hydration `beforeinstallprompt` race closed by a bounded rAF retry
+- Phase 74 — SW installability proven with ZERO production code changes (sha256 pin), DEPLOY.md §18, 4/4 real-device UAT, milestone accepted
+
+### What Worked
+
+- The verification-only phase design (74): pinning existing behavior with hash + call-site
+  contract tests gave the milestone an honest end-to-end proof at near-zero risk.
+- The one-JSON-file-one-locale registry (built in 56) paid off: adding nl/de/es was three
+  catalogue files, no code, with the scan gate validating parity mechanically.
+- The contract-test layer (icon IHDR bytes, manifest fields, banner DOM) caught every
+  dependency-upgrade regression the vite 8 / eslint 10 / lucide 1.76 bumps introduced.
+
+### What Was Inefficient
+
+- Post-ship owner feedback (transparent icon corners, banner CTA styling) staled all three
+  phase verification digests right before close — cosmetic edits in covered files carry the
+  same digest cost as feature edits; refresh digests immediately before close, not before ship.
+- Vite 6→8 changed chunking shape (base catalogue own chunk, template-literal icon values),
+  requiring three test-contract migrations; the build contract tests were written against
+  minifier output shape, which is not a stable API.
+
+### Patterns Established
+
+- Post-milestone owner feedback loop: ship → real-device look → immediate polish commit,
+  recorded in PROJECT.md as owner rulings outside the milestone scope.
+- Transparent `any` icons + opaque maskable/apple-touch as the frozen icon contract.
+
+### Key Lessons
+
+- Pin behavior, not bundler output: tests asserting minifier serialization shape (icon
+  entry regex, marker escaping) break on every toolchain bump. Pin semantics instead where
+  possible; where output shape is the contract, centralize the matcher in one helper.
+- The digest-staleness lesson repeated: recompute via `verification.fingerprint` over the
+  exact covered_files list immediately before `phase.complete`/close.
+
+### Cost Observations
+
+- 2 sessions, 1 day (2026-11-18 → 2026-11-19)
+- 1809 node:test at close (1796 pass / 0 fail / 13 skipped); zero new dependencies in the
+  milestone itself; post-milestone maintenance bumped the toolchain (vite 8, eslint 10) with
+  the suite held green at every step.
+
 ## Cross-Milestone Trends
+
+
 
 ### Process Evolution
 
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
+| v2.7 Installable App (PWA) | 1 day | 3 | Verified closeout — all 3 phases passed at close after mechanical `verification.fingerprint` refresh (digests staled twice: once pre-UAT, once from post-ship owner polish). Verification-only phase design (hash + call-site pins) proved installability at zero risk. Recurring lesson: refresh digests immediately before close, not before ship. |
 | v2.6 Exports Verification (Test 11) | 2 days | 3 | Verified closeout with a PASSED pre-close audit (8/8 requirements, 14 surfaces, 7/7 flows). New lesson: VERIFICATION.md files without YAML frontmatter read `missing` to init.manager even when the verdict is written — the frontmatter contract is now explicit. Close also cleaned 2 stale-but-resolved artifacts (70-UAT.md, g-71-3 debug session). |
 | v2.4 Automation & Productivity | 2 days | 4 | First fully verified closeout at HEAD: parallel verifier subagents refreshed 3 stale digests after the audit-fix commit (54827ed), audit run BEFORE close let tech debt land early. Recurring lesson again: hand-written covered digests (v4:) fail closed — always recompute via verification.fingerprint. |
 | v2.2 Notifications, Search & Delivery | 3 days | 6 | Override closeout again over stale bookkeeping (56-60 `open/stale` vs STATE.md 6/6 Complete); live browse-MCP UAT diffed server truth against the UI and turned a false major issue into a pre-existing-bug diagnosis. Lesson confirmed: keep the STATE.md phase table fresh per phase; closeout verification overrides are now the expected shape with shared server.js. |
@@ -533,6 +586,7 @@
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
+| v2.7 Installable App (PWA) | 1809 node:test + e2e (banner matrix) | sw.js sha256 + call-site contract pins, PNG IHDR dimension/alpha contract, manifest field freeze, banner DOM/cooldown/boundary suite (real-build entry-delta gate), fixture-locale auto-ship proof | 0 |
 | v2.6 Exports Verification (Test 11) | 1737 node:test + 140 e2e | 3-level export fixture suite (MSPDI OutlineLevel/Summary/DFS, xlsx/CSV), Timeline rowOff EMU guard (≤190500), inner-chip-content alignment e2e (List/My Tasks/depth-2), frozen-file 2-level regression diffs | 0 |
 | v2.2 Notifications, Search & Delivery | 1524 node:test + 111 e2e | chunk-size gate (11/11 real-build), dist staleness spawn test, FTS pg parity suite (byte-identical), push payload budget + sweep, burst coalescing suite, burst UAT 7/7 live | 1 (runtime: `web-push@4.0.0`, owner-approved) |
 | v1.1 Multitenant | 48 node:test + 5 Chromium | server contract, migration, privacy matrix, browser tenancy | 1 (dev only: `@playwright/test`) |
