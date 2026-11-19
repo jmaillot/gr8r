@@ -342,7 +342,7 @@ test('MCP invite_member composes the same funnel: in-list inserts, out-of-list r
     const callTool = async (name, args) => {
       const { result: out } = await rpc('tools/call', { name, arguments: args }, session);
       const text = out?.content?.[0]?.text;
-      let data = null;
+      let data;
       try {
         data = text ? JSON.parse(text) : null;
       } catch {
@@ -491,7 +491,7 @@ test('DP-3 link-only invite: the body email is re-derived against the live list 
     const wsId = (await owner.get('/api/workspaces')).data.workspaces[0].id;
     const createdBy = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('owner@test.local').id);
     const t = Date.now();
-    const mintLinkOnly = email => {
+    const mintLinkOnly = () => {
       const token = crypto.randomBytes(24).toString('base64url');
       withDb(server.dbPath, db =>
         db.prepare(
@@ -516,4 +516,97 @@ test('DP-3 link-only invite: the body email is re-derived against the live list 
   } finally {
     await server.stop();
   }
+});
+
+/* ---------- cross-door invariants (plan 02 task 3) ---------- */
+/* Contracts that only exist once all four doors are wired: MCP parity
+   (no bypass lane, T-75-16), accept/signup mutual exclusion (DOM-03), and
+   the accept-region source assertion. */
+
+test('cross-door parity: the MCP door and the UI invite-create door agree on every adversarial row (T-75-16)', async () => {
+  const server = await startServer({ env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const owner = (await login(server.base, 'owner@test.local', 'owner-password-1')).client;
+    const wsId = (await owner.get('/api/workspaces')).data.workspaces[0].id;
+    const key = (await owner.post('/api/keys', { label: 'Parity75', scope: 'write', workspaceId: wsId, days: 30 })).data.key;
+    const mcpPost = (body, session) =>
+      fetch(`${server.base}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${key}`, ...(session ? { 'mcp-session-id': session } : {}) },
+        body: JSON.stringify(body),
+      });
+    const rpc = async (method, params, session) => {
+      const res = await mcpPost({ jsonrpc: '2.0', id: Math.floor(Math.random() * 1e9), method, params }, session);
+      assert.equal(res.status, 200);
+      const type = res.headers.get('content-type') || '';
+      let result;
+      if (type.includes('text/event-stream')) {
+        const raw = await res.text();
+        const line = raw.split('\n').filter(l => l.startsWith('data:')).map(l => JSON.parse(l.slice(5).trim())).find(m => m.id !== undefined && m.result);
+        result = line.result;
+      } else {
+        result = (await res.json()).result;
+      }
+      return { session: res.headers.get('mcp-session-id'), result };
+    };
+    const session = (await rpc('initialize', MCP_INIT, null)).session;
+    assert.ok(session, 'the MCP initialize must bind a session');
+    await mcpPost({ jsonrpc: '2.0', method: 'notifications/initialized' }, session);
+    const mcpInvite = async email => {
+      const { result: out } = await rpc('tools/call', { name: 'invite_member', arguments: { email } }, session);
+      return out?.isError ? 'refuse' : 'admit';
+    };
+    const uiInvite = async email => {
+      const res = await owner.post(`/api/workspaces/${(await owner.get('/api/workspaces')).data.workspaces[0].slug}/invites`, { emails: [email], role: 'member' });
+      return res.status === 201 ? 'admit' : 'refuse';
+    };
+
+    /* the adversarial rows from the Plan 01 DOM-07 table */
+    const rows = [
+      ['b@evil-a.com', 'refuse', 'suffix-adjacent bypass'],
+      ['b@sub.a.com', 'refuse', 'subdomain'],
+      ['user\uff20a.com', 'refuse', 'fullwidth ＠ (shape gate, both doors)'],
+      ['b@a.com.', 'admit', 'trailing dot'],
+      ['B@A.COM', 'admit', 'case'],
+      ['b@zzz.io', 'refuse', 'unlisted control'],
+    ];
+    for (const [email, expected, why] of rows) {
+      const mcp = await mcpInvite(email);
+      const ui = await uiInvite(email);
+      assert.equal(mcp, expected, `MCP verdict for ${email} (${why}) must be ${expected}, got ${mcp}`);
+      assert.equal(ui, expected, `UI invite-create verdict for ${email} (${why}) must be ${expected}, got ${ui}`);
+      assert.equal(mcp, ui, `the MCP door must never diverge from the UI door on ${email} (${why})`);
+    }
+  } finally {
+    await server.stop();
+  }
+});
+
+test('accept-path isolation: with a.com signup / b.com invites, the accept route admits b.com in the same process where signup refuses b.com (DOM-03)', async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'b.com' } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['b@b.com'], role: 'member' });
+    assert.equal(inv.status, 201, `the invite door must admit b.com, got ${inv.status}: ${JSON.stringify(inv.data)}`);
+    const token = inviteToken(inv.data.invites[0].url);
+    /* the accept route creates the b.com account (signup would refuse it) */
+    const accepter = client(server.base);
+    const res = await accepter.post(`/api/invites/${token}/accept`, { name: 'B', email: 'b@b.com', password: 'password-1234' });
+    assert.ok([200, 201].includes(res.status), `accept must succeed for b.com, got ${res.status}: ${JSON.stringify(res.data)}`);
+    /* SAME process: the signup route refuses the very same email */
+    const again = await signup(server.base, { name: 'B', email: 'b@b.com' });
+    assert.equal(again.status, 400);
+    assert.equal(again.data.code, 'signupDomainNotAllowed', 'the signup door refuses what the invite door admitted (mutual exclusion)');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('source invariant: the accept-route region never references the signup-list const (DOM-03, one door one rule)', async () => {
+  const source = fs.readFileSync(path.join(import.meta.dirname, '..', 'server.js'), 'utf8');
+  const marker = source.indexOf("const acceptMatch = pathname.match(/^\\/api\\/invites\\/([A-Za-z0-9_-]{16,128})\\/accept$/);");
+  assert.ok(marker !== -1, 'the accept-route marker moved');
+  const region = source.slice(marker, source.indexOf('/* HARD-03 (D-05): resolve explicitly', marker));
+  assert.ok(region.includes('inviteDomainNoLonger'), 'the DP-3 gate must live inside the accept region');
+  assert.ok(!region.includes('SIGNUP_DOMAINS'), 'the accept route must never consult the signup list (DOM-03)');
 });

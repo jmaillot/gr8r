@@ -181,7 +181,6 @@ import {
   SIGNUP_DOMAINS,
   INVITE_DOMAINS,
   emailDomainRefusal,
-  emailFromEmail,
 } from './domains.js';
 
 /* D-05: the AES-256 master key material comes from the environment. Missing or
@@ -7950,7 +7949,7 @@ async function handleApi(req, res, url) {
        stored/resolved domain. The refusal is BEFORE any write and
        non-consuming (loosening the list revives the pending invite). When
        INVITE_DOMAINS is null (both doors unset) the gate is absent — the
-       unset contract stays fail-open. SIGNUP_DOMAINS is deliberately never
+       unset contract stays fail-open. The signup list is deliberately never
        consulted here (one door, one rule — DOM-03). */
     if (invite.email && INVITE_DOMAINS) {
       const acceptRefusal = emailDomainRefusal(invite.email, INVITE_DOMAINS, 'inviteDomainNoLonger', 'This invite can no longer be accepted');
