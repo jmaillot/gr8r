@@ -213,3 +213,8 @@ None — no external service configuration required.
 ---
 *Phase: 76-oidc-sso-doors-immunity-hardening*
 *Completed: 2026-11-19*
+
+## Self-Check: PASSED
+- key-files exist on disk: test/helpers/oidc-idp.mjs, test/domain-admission-sso.test.mjs ✓
+- commits verified in history: 4edca91d, 04c578fa, 3fefd070, 665f2734 ✓
+- acceptance criteria re-run: emailFromEmail import ✓, single emailDomainRefusal DP-4 call before createUser ✓, no `Set.has` anywhere in server.js ✓, no src/locales/* changes ✓, all 15 D-12 rows pass ✓, oidc-sso 47/47 ✓, domain-admission 32/32 ✓, npm test 1843 pass / 0 fail ✓

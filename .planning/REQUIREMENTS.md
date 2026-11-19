@@ -25,8 +25,8 @@ server.js (funnel-shaped, mirroring `validateGuestInviteShape`).
   localized refusal (all 5 catalogues)
 - [ ] **DOM-05**: Existing accounts are immune: list changes never block logins, re-invites
   of existing out-of-list members, or repeat SSO logins of already-linked identities
-- [ ] **DOM-06**: OIDC JIT account creation honors `ALLOW_SIGNUP_DOMAINS` (fresh-provision
-  branch only, after the `email_verified` gate) so SSO cannot bypass the rule
+- [x] **DOM-06**: OIDC JIT account creation honors `ALLOW_SIGNUP_DOMAINS` (fresh-provision
+  branch only, after the `email_verified` gate) so SSO cannot bypass the rule *(76-01)*
 - [x] **DOM-07**: Domain matching is exact and canonicalized — case-insensitive, trailing
   dot stripped, NFKC-normalized email parsing, exact `Set` membership (never `endsWith` —
   verified bypass vector); no implicit subdomain wildcards; boot logs the resolved door matrix
@@ -69,7 +69,7 @@ Filled by roadmap creation (2026-11-19):
 | DOM-03 | Phase 75 | Complete |
 | DOM-04 | Phase 75 | Complete |
 | DOM-05 | Phase 76 | Pending |
-| DOM-06 | Phase 76 | Pending |
+| DOM-06 | Phase 76 | Complete (76-01) |
 | DOM-07 | Phase 75 | Complete |
 | MAINT-01 | Phase 77 | Pending |
 | MAINT-02 | Phase 77 | Pending |

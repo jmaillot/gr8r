@@ -136,5 +136,5 @@ Phases execute in numeric order: 75 → 76 → 77
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 75. Domain Admission Core | 2/2 | Complete    | 2026-11-19 |
-| 76. OIDC/SSO Doors & Immunity Hardening | 0/? | Not started | - |
+| 76. OIDC/SSO Doors & Immunity Hardening | 1/2 | In Progress | - |
 | 77. Maintenance Debt | 0/? | Not started | - |
