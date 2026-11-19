@@ -6,9 +6,12 @@
    one combined five-door matrix line (D-11). All rows drive the REAL
    authorize → callback 302 flow through the shared fake IdP harness. */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { idp, startMockIdp } from './helpers/oidc-idp.mjs';
-import { startServer, withDb } from './helpers/server.mjs';
+import { login, startServer, withDb } from './helpers/server.mjs';
 
 /* ------------------------------ helpers ------------------------------ */
 
@@ -153,6 +156,133 @@ test('DP-4 placement guard: an EXISTING user with a verified email still LINKS w
       assert.equal(identity.user_id, user.id, 'the identity links to the EXISTING account — no refusal, no second user');
     });
     assert.ok(!server.output().includes('sso signup domain refused'), 'no DP-4 refusal logged for the link path');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- DP-5: the SSO invite-reconciliation door (DOM-05/SC3, D-10) ---------- */
+
+/* Owner login against the harness bootstrap account (same idiom as
+   test/domain-admission.test.mjs ownerAndWs). */
+const ownerAndWs = async base => {
+  const owner = (await login(base, 'owner@test.local', 'owner-password-1')).client;
+  const slug = (await owner.get('/api/workspaces')).data.workspaces[0].slug;
+  return { owner, slug };
+};
+
+test('DP-5: a refused invite is silently filtered — normal login to /, invite NOT consumed (D-10, Pitfall 2)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-dp5-'));
+  /* Boot 1: both doors unset — the owner can invite the future SSO user. */
+  let server = await startServer({ dataDir, env: { ...oidcEnv() } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['x@x.com'], role: 'member' });
+    assert.equal(inv.status, 201, `invite creation must succeed with the door off, got ${inv.status}: ${JSON.stringify(inv.data)}`);
+  } finally {
+    await server.stop();
+  }
+  /* Boot 2: the invite list is tightened — the pending invite no longer fits. */
+  server = await startServer({ dataDir, env: { ...oidcEnv(), ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    /* Fresh identity, zero memberships: JIT provisioning rides the signup
+       door (unset here → fail-open), then SSO-07 reconciliation runs. */
+    const { callback } = await runFlow(server, { sub: 'sub-dp5-refused', email: 'x@x.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/', 'D-10: a fully-filtered reconcile is a NORMAL login — no special redirect');
+    assert.ok(sessionCookieOf(callback.cookies), 'the user IS signed in');
+    withDb(server.dbPath, db => {
+      const invite = db.prepare('select * from invites where email = ?').get('x@x.com');
+      assert.ok(invite, 'the pending invite row exists');
+      assert.equal(invite.used_at, null, 'Pitfall 2 non-consumption: the refused invite keeps used_at IS NULL');
+    });
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('DP-5: loosening the list revives the refused invite — the next SSO login auto-accepts it', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-dp5-'));
+  /* Boot 1: invite created with the door off. */
+  let server = await startServer({ dataDir, env: { ...oidcEnv() } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['revive@x.com'], role: 'member' });
+    assert.equal(inv.status, 201);
+  } finally {
+    await server.stop();
+  }
+  /* Boot 2: tightened — refused-only reconcile, nothing consumed. */
+  server = await startServer({ dataDir, env: { ...oidcEnv(), ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-dp5-revive', email: 'revive@x.com', email_verified: true });
+    assert.equal(callback.location, '/', 'boot 2: the refused invite is filtered');
+    withDb(server.dbPath, db => assert.equal(db.prepare('select used_at from invites where email = ?').get('revive@x.com').used_at, null));
+  } finally {
+    await server.stop();
+  }
+  /* Boot 3: loosened — the same invite revives and the single pending invite
+     auto-accepts (the filter consumed NOTHING on boot 2). */
+  server = await startServer({ dataDir, env: { ...oidcEnv() } });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-dp5-revive', email: 'revive@x.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/', 'boot 3: the revived single invite auto-accepts');
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select * from users where email = ?').get('revive@x.com');
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 1, 'the membership was granted');
+      assert.ok(db.prepare('select * from security_log where user_id = ? and verb = ?').get(user.id, 'sso_invite_accepted'), 'the sso_invite_accepted verb fired');
+    });
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('DP-5: an in-list invite reconciles exactly as before — single invite auto-accepts', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['in@a.com'], role: 'member' });
+    assert.equal(inv.status, 201, 'an in-list invite is created normally');
+    const { callback } = await runFlow(server, { sub: 'sub-dp5-in', email: 'in@a.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/', 'the in-list reconcile auto-accepts and lands on /');
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select * from users where email = ?').get('in@a.com');
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 1, 'the membership was granted');
+      assert.ok(db.prepare('select used_at from invites where email = ?').get('in@a.com').used_at, 'the accepted invite was consumed');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Adapted partial-filter row (deviation, see SUMMARY): the pendingInvites
+   fetch is keyed by the row's email, so two pending invites for one SSO user
+   ALWAYS share one email and one refusal verdict — a literal "one in-list,
+   one refused" pair is unobservable. The row instead proves the >1 branching
+   consumes ONLY the filtered array: two in-list invites in two workspaces
+   survive the filter, drive the surface-don't-guess redirect, and stay
+   unconsumed. */
+test('DP-5: two in-list invites across two workspaces survive the filter and drive the /#invitations branching — none consumed', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { owner, slug } = await ownerAndWs(server.base);
+    const second = await owner.post('/api/workspaces', { name: 'Second' });
+    assert.equal(second.status, 201, `the second workspace must be created, got ${second.status}: ${JSON.stringify(second.data)}`);
+    for (const wsSlug of [slug, second.data.workspace?.slug || second.data.slug]) {
+      const inv = await owner.post(`/api/workspaces/${wsSlug}/invites`, { emails: ['multi@a.com'], role: 'member' });
+      assert.equal(inv.status, 201);
+    }
+    const { callback } = await runFlow(server, { sub: 'sub-dp5-multi', email: 'multi@a.com', email_verified: true });
+    assert.equal(callback.status, 302);
+    assert.equal(callback.location, '/#invitations', 'both filtered-in invites drive the surface-don-t-guess redirect');
+    withDb(server.dbPath, db => {
+      const unconsumed = db.prepare('select count(*) as n from invites where email = ? and used_at is null').get('multi@a.com').n;
+      assert.equal(unconsumed, 2, 'both invites stay pending — the branching consumed nothing');
+    });
   } finally {
     await server.stop();
   }

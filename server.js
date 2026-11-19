@@ -5175,7 +5175,18 @@ async function handleApi(req, res, url) {
          auto-accept. */
       let ssoRedirect = '/';
       if (!(await db.get('select 1 from memberships where user_id = ?', [row.id]))) {
-        const pendingInvites = await db.all('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?', [row.email, now()]);
+        /* DP-5 (Phase 76, DOM-05/SC3): refuse invites the accept door would
+           refuse — the ROW's stored invite.email against the live boot-frozen
+           INVITE_DOMAINS, verbatim DP-3 semantics (the SQL already matches
+           the row's email; the row is the ticket, never client input). The
+           filter produces a NEW array and the branching below consumes ONLY
+           the filtered one. Silent per D-10: no log verb, no redirect change,
+           no used_at write on refusal — a filtered invite is neither consumed
+           nor messaged, and loosening the list revives it. The signup list is
+           deliberately never consulted here (one door, one rule — DOM-03). */
+        const pendingInvites = (await db.all('select * from invites where email = ? collate nocase and used_at is null and expires_at > ?', [row.email, now()])).filter(
+          invite => emailDomainRefusal(invite.email, INVITE_DOMAINS) === null,
+        );
         if (pendingInvites.length === 1) {
           /* Exactly one pending invite: auto-accept with the acceptance
              recipe VERBATIM from the accept route — addMembership with the
