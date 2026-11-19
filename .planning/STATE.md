@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-11-19)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 76 — OIDC/SSO Doors & Immunity Hardening
+**Current focus:** v3.0 milestone complete — all 3 phases verified
 
 ## Current Position
 
-Phase: 77 (Maintenance Debt) — EXECUTING
-Plan: 77-02 complete (77-03 next)
-Status: Executing
-Last activity: 2026-11-19 — Plan 77-02 executed (9 advisories fixed with pins, ledger complete, suite green)
+Phase: 77 (Maintenance Debt) — COMPLETE (verified 2026-11-19)
+Plan: All 7 plans complete
+Status: Milestone complete
+Last activity: 2026-11-19 — Phase 77 verified (lint 0 errors, 1854 unit + 152 e2e green, ledger open: 0)
 
-Progress: [██████░░░░] 57%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
