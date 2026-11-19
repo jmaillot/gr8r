@@ -34,6 +34,7 @@ semantics (re-minting = invite create = DP-2). No route is invented; covered by 
 ## Phase Details
 
 ### Phase 75: Domain Admission Core
+
 **Goal**: Instance operators can restrict who enters through signup and invitations by email
 domain — with one shared canonicalizing validator, exact-domain matching, and localized
 refusals — before any SSO surface exists.
@@ -61,7 +62,10 @@ refusals — before any SSO surface exists.
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 75-01-PLAN.md — Resolver + funnel + DP-1 signup door tracer, adversarial DOM-07 suite, D-06 boot logs, DEPLOY.md docs
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 75-02-PLAN.md — DP-2 per-email invite gate, MCP invite_member door, DP-3 fail-closed accept, inheritance matrix + gmail/TCTOU scenarios
 
 **Set-but-empty semantics (flagged for phase decision):** research recommends explicit-set =
@@ -69,6 +73,7 @@ deny-all (empty Set) vs unset = inherit/off. The tri-state boot resolver support
 planner ratifies with the owner before wiring DP-2/DP-3.
 
 ### Phase 76: OIDC/SSO Doors & Immunity Hardening
+
 **Goal**: The SSO surface honors the same door matrix — JIT provisioning is gated, SSO invite
 reconciliation filters refused invites — and existing accounts are provably immune to list
 changes, with operators able to see the resolved matrix at boot.
@@ -94,6 +99,7 @@ Plans:
 - [ ] 76-01: TBD
 
 ### Phase 77: Maintenance Debt
+
 **Goal**: The repo's standing gates are honestly clean — lint exits 0 with no suppressions,
 nl/de/es render real refusal paths (including the new DOM keys) in the actual app, and every
 carried review advisory has a recorded disposition.
