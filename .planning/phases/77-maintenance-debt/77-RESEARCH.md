@@ -22,7 +22,19 @@ carries no interpolated placeholder in any locale catalogue** —
 signup client path renders it as an *inline form field error*, not a toast.
 Decision D-77-6 ("assert the substituted value, e.g. rejected domain") has
 nothing to substitute on the signup path; the planner must reconcile this (see
-Open Questions). D-77-5's "localized toast" wording likewise needs adjusting to
+Open Questions).
+
+> **D-77-6 reconciliation (OWNER DECISION, 2026-11-19):** The signup DP-1
+> refusal is a static catalogue string with no placeholder. Placeholder parity
+> is interpreted as: **assert no raw `{tokens}` remain AND rendered text
+> equals the catalogue entry exactly** (D-77-7 full-string equality — the
+> strongest available cross-check). D-77-5's "toast" wording adjusts to the
+> actual render surface: inline form-field error (`ferr('email')` in
+> src/pages/auth.js). Note this in the disposition ledger.
+
+> **e2e env (OWNER DECISION):** Run-wide `ALLOW_SIGNUP_DOMAINS=e2e.local` with
+> a Wave-0 dry run to confirm no fixture breakage. No second Playwright config.
+
 "rendered inline error" (or a different refusal path chosen — but D-77-5 locks
 signup-only).
 
