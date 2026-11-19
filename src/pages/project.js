@@ -43,7 +43,7 @@ export function pageProject() {
   if (!canSee(p)) return api.enabled ? page404() : stateDenied(p);
   const tab = S.ui.params.tab || 'board';
   const views = D().savedViews.filter(v => v.project === p.id);
-  let body = '';
+  let body;
   const key = 'p:' + p.id;
   const ts = tasksOf(p.id);
   if (tab.startsWith('v:')) {

@@ -1621,7 +1621,7 @@ export function main(argv = process.argv.slice(2), options = {}) {
      findings join the same stream, so the exit-code contract below holds. */
   const serverFiles = options.serverFiles ?? [path.join(REPO_ROOT, 'server.js'), path.join(REPO_ROOT, 'mailer.js')];
   for (const serverFile of serverFiles) {
-    let text = null;
+    let text;
     try {
       text = fs.readFileSync(serverFile, 'utf8');
     } catch {

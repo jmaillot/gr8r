@@ -25,7 +25,7 @@ export default [
     /* Vendored third-party dist source (D-15): linted as Node but its
        packaging quirks (unused vars) are upstream's, not ours. */
     files: ['src/lib/vendor/**/*.js'],
-    rules: { 'no-unused-vars': 'off' },
+    rules: { 'no-unused-vars': 'off', 'no-useless-assignment': 'off' },
   },
   {
     files: ['e2e/**/*.mjs'],

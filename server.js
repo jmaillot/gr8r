@@ -2756,7 +2756,7 @@ async function webhookCtxFromDoc(workspaceId, event, subjectId) {
 }
 
 async function webhookBodyFor(hook, d) {
-  let ctx = null;
+  let ctx;
   try {
     ctx = d.ctx ? JSON.parse(d.ctx) : null;
   } catch {
@@ -2830,7 +2830,7 @@ async function deliverWebhook(d, atMs, fetchFn, lookup) {
     return await webhookFailDelivery(d, newAttempt, atMs, null, `ssrf refused (${guard.reason})`, null, null);
   }
 
-  let bodyStr = '';
+  let bodyStr;
   try {
     bodyStr = await webhookBodyFor(hook, d);
   } catch (err) {
@@ -2894,7 +2894,7 @@ async function runWebhookDeliveryPass({ now: at, fetch: fetchFn, lookup } = {}) 
   } catch (err) {
     logWarn(`webhook purge: ${err.message}`);
   }
-  let due = [];
+  let due;
   try {
     due = await db.all("select * from webhook_deliveries where status in ('pending', 'failed') and (next_attempt_at is null or next_attempt_at <= ?) order by created_at", [atMs]);
   } catch (err) {
@@ -2954,7 +2954,7 @@ async function deliverEmail(d, atMs, sendFn) {
   const claimed = await db.run('update email_outbox set attempt = attempt + 1 where id = ? and attempt = ? and status in (?, ?)', [d.id, d.attempt, 'pending', 'failed']);
   if (!claimed.changes) return { skipped: 1 };
   const newAttempt = d.attempt + 1;
-  let ctx = null;
+  let ctx;
   try {
     ctx = d.ctx ? JSON.parse(d.ctx) : null;
   } catch {
@@ -3005,7 +3005,7 @@ async function runEmailDeliveryPass({ now: at, send: sendFn } = {}) {
   } catch (err) {
     logWarn(`email outbox purge: ${err.message}`);
   }
-  let due = [];
+  let due;
   try {
     due = await db.all("select * from email_outbox where status in ('pending', 'failed') and (next_attempt_at is null or next_attempt_at <= ?) order by created_at", [atMs]);
   } catch (err) {
@@ -3565,7 +3565,7 @@ async function bootstrap(opts) {
   /* T-34-05 discipline: a corrupt doc blob is skipped, never crashing the
      boot — the same per-row guard the prefs backfill pins. */
   for (const ws of await dbAll('select id, doc from workspaces')) {
-    let doc = null;
+    let doc;
     try {
       doc = JSON.parse(ws.doc);
     } catch {
@@ -3681,7 +3681,7 @@ async function migrateUserNotifPrefs() {
      any per-user row the user already set. */
   const eligible = [];
   for (const row of await db.all('select id, doc from workspaces')) {
-    let doc = {};
+    let doc;
     try {
       doc = JSON.parse(row.doc);
     } catch {
@@ -3746,7 +3746,7 @@ async function migrateUserNotifPrefs() {
 async function migrateUserViews() {
   const eligible = [];
   for (const row of await db.all('select id, doc from workspaces')) {
-    let doc = {};
+    let doc;
     try {
       doc = JSON.parse(row.doc);
     } catch {
@@ -4326,7 +4326,7 @@ async function restoreTeamLinks() {
   const candidates = [];
   for (const row of await db.all('select id, doc from workspaces')) {
     if (!preSweep.has(row.id)) continue;
-    let doc = {};
+    let doc;
     try {
       doc = JSON.parse(row.doc);
     } catch {
@@ -4369,7 +4369,7 @@ async function restoreTeamLinks() {
       // In-tx re-read — the candidate scan is a hint, the tx state is the
       // authority (Phase 49 template mechanics).
       const row = await db.get('select doc from workspaces where id = ?', [wsId]);
-      let doc = {};
+      let doc;
       try {
         doc = JSON.parse(row?.doc);
       } catch {
@@ -5571,7 +5571,7 @@ async function handleApi(req, res, url) {
       const rows = await db.all("select name, blob, schema_version from saved_views where workspace_id = ? and user_id = ? and key = ? and name != ''", [wsId, userId, key]);
       for (const row of rows) {
         let blob = {};
-        let changed = false;
+        let changed;
         try {
           const parsed = JSON.parse(row.blob);
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -6862,7 +6862,7 @@ async function handleApi(req, res, url) {
        the 200 response — a whole-PUT 403 would break unrelated concurrent
        edits (Pitfall 1). */
     const createRefusals = [];
-    let outcome = null;
+    let outcome;
     try {
       outcome = await db.tx(async scope => {
         const row = await db.get('select * from workspaces where id = ?', [ctx.ws.id]);
@@ -7901,7 +7901,7 @@ async function handleApi(req, res, url) {
     {
       const wsRow = invite.workspace_id ? await db.get('select doc from workspaces where id = ?', [invite.workspace_id]) : null;
       if (invite.project) {
-        let project = null;
+        let project;
         try {
           const currentDoc = JSON.parse(wsRow?.doc || 'null');
           project = (Array.isArray(currentDoc?.data?.projects) ? currentDoc.data.projects : []).find(p => p?.id === invite.project) || null;

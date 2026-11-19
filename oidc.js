@@ -106,7 +106,7 @@ export function verifyIdToken(idToken, jwkByKey, { issuer, audience, nonce, now 
   } catch {
     return { ok: false, reason: 'kid' };
   }
-  let okSig = false;
+  let okSig;
   try {
     okSig = crypto.verify('RSA-SHA256', Buffer.from(`${h}.${p}`), key, Buffer.from(s, 'base64url'));
   } catch {

@@ -38,7 +38,7 @@ export async function assertServerUp(base = BASE_URL) {
   try {
     res = await fetch(`${base}/api/health`);
   } catch (e) {
-    throw new Error(`e2e server not ready at ${base}/api/health (webServer.url should have gated this): ${e.message}`);
+    throw new Error(`e2e server not ready at ${base}/api/health (webServer.url should have gated this): ${e.message}`, { cause: e });
   }
   if (!res.ok) throw new Error(`e2e server /api/health answered HTTP ${res.status} — server not ready`);
   _serverAsserted = true;

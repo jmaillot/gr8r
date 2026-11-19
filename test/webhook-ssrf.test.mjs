@@ -93,7 +93,7 @@ test('pinnedFetch pins the TLS connect to the validated set: the lookup yields O
 });
 
 test('pinnedFetch surfaces transport errors and honors an already-aborted signal', async () => {
-  const requestImpl = (url, opts, cb) => ({ on() {}, write() {}, end() {}, destroy() {} });
+  const requestImpl = () => ({ on() {}, write() {}, end() {}, destroy() {} });
   await assert.rejects(
     () => pinnedFetch('https://host.example/hook', { addresses: ['20.42.0.1'], request: () => { throw new Error('ECONNREFUSED'); } }),
     /ECONNREFUSED/,

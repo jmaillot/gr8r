@@ -50,7 +50,7 @@ async function demoBootedIn(page, lang, route = 'home') {
    Probe status-based: the real API answers /api/config < 500; a dead proxy
    target answers 5xx or refuses the connection (request throws). */
 test.beforeEach(async ({ request }) => {
-  let apiPresent = false;
+  let apiPresent;
   try {
     const res = await request.get('/api/config');
     apiPresent = res.status() < 500;
