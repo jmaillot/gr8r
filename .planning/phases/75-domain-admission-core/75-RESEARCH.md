@@ -243,14 +243,11 @@ Canonical acceptance scenario to pin (SC3 / DOM-03): `ALLOW_INVITE_DOMAINS=gmail
 | A3 | Exact catalogue wording is at the agent's discretion; placeholder `{domain}`/`{email}` interpolation follows existing keys | User Constraints | Cosmetic; parity gate catches structural misses (LOW) |
 | A4 | MCP `invite_member` gating can ride `toolError` refusal semantics analogous to `fail()` | Pitfall 6 | If the planner defers it, DOM-02 is porous via MCP — must be a recorded decision, not an omission |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **MCP `invite_member` door — in Phase 75 or Phase 76?**
-   - What we know: it mints invites bypassing any domain rule [VERIFIED: mcp.js:923-970]; the phase covers "three doors" but DOM-02 says "owner can restrict invite creation" without qualification.
-   - Recommendation: include it in Phase 75 (~3 lines, same funnel, `toolError` refusal) — deferring it leaves a live bypass for the milestone's core guarantee. Needs an owner checkpoint if deferred.
-2. **Boot-freeze vs live-read (planner's call per CONTEXT discretion).**
-   - Recommendation: boot-freeze consts with `??` inheritance — matches `ALLOW_SIGNUP`/`SESSION_DAYS` posture (server.js:133-146), makes D-06's boot log natural, and the spawned-server harness makes every tri-state cell testable despite freezing.
-3. **Whether the existing `i18n-core-features` count test or the build-chunk-size gate needs the 500 kB envelope re-checked when 5 catalogue keys land** — Pitfall 5; suite will surface it at execution.
+1. **MCP `invite_member` door — in Phase 75 or Phase 76?** — **RESOLVED: Phase 75.** Included in 75-02-PLAN (MCP `invite_member` gate rides the shared funnel with `toolError` refusal), closing the bypass.
+2. **Boot-freeze vs live-read (planner's call per CONTEXT discretion).** — **RESOLVED: boot-freeze.** 75-01-PLAN Task 1 freezes `SIGNUP_DOMAINS`/`INVITE_DOMAINS` consts in the :135 zone with `??` inheritance, matching the `ALLOW_SIGNUP` posture and making D-06 boot logs natural; tri-state cells remain testable via the spawned-server harness.
+3. **Whether the `i18n-core-features` count test / build-chunk-size gate needs the 500 kB envelope re-checked when 5 catalogue keys land** — **RESOLVED: handled in plan.** 75-01-PLAN Task 1 step 4 updates the count test in the same commit as the new key (Pitfall 5); the chunk-size gate is suite-gated and will surface at execution if hit.
 
 ## Environment Availability
 
