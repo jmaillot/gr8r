@@ -518,6 +518,56 @@ test('DP-3 link-only invite: the body email is re-derived against the live list 
   }
 });
 
+test('CR-01 regression: a signed-in user accepting a link-only invite is gated on the SESSION email (DP-3)', async () => {
+  const server = await startServer({ env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    /* an off-list user signs up in the same process (signup door unset → fail-open) */
+    const intruder = await signup(server.base, { name: 'Off', email: 'off@x.com', password: 'password-1234' });
+    assert.ok([200, 201].includes(intruder.status), `off-list signup must succeed with the invite door only, got ${intruder.status}`);
+    const intruderClient = (await login(server.base, 'off@x.com', 'password-1234')).client;
+    const { owner } = await ownerAndWs(server.base);
+    const wsId = (await owner.get('/api/workspaces')).data.workspaces[0].id;
+    const createdBy = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('owner@test.local').id);
+    const t = Date.now();
+    const token = crypto.randomBytes(24).toString('base64url');
+    withDb(server.dbPath, db =>
+      db.prepare(
+        'insert into invites (token_hash, email, role, teams, workspace_id, created_by, created_at, expires_at) values (?,null,?,?,?,?,?,?)',
+      ).run(sha256hex(token), 'member', '[]', wsId, createdBy, t, t + 7 * 86400 * 1000),
+    );
+    const res = await intruderClient.post(`/api/invites/${token}/accept`, {});
+    assert.equal(res.status, 403, `a signed-in off-list email must be refused on a link-only invite, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'inviteDomainNoLonger');
+    assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from memberships where user_id = ?').get(
+      withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('off@x.com').id),
+    ).n), 0, 'no membership may be granted to the off-list session email');
+    /* the row survives — non-consuming (D-07) */
+    assert.ok(withDb(server.dbPath, db => db.prepare('select 1 as ok from invites where token_hash = ?').get(sha256hex(token))), 'the invite row survives the refusal');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('WR-01 regression: malformed non-empty entries (@example.com, .example.com, example .com) are warn-and-dropped, never admitted to the Set (D-05)', async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com, @example.com, .example.com, example .com' } });
+  try {
+    /* each malformed entry must produce its D-05 warning */
+    const warnings = server.output().split('\n').filter(l => l.includes('ALLOW_SIGNUP_DOMAINS: dropping invalid entry'));
+    assert.ok(warnings.length >= 3, `each malformed entry must warn (D-05), got ${warnings.length}`);
+    assert.ok(warnings.some(l => l.includes('@example.com')), 'the @-prefixed entry must be named in a warning');
+    assert.ok(warnings.some(l => l.includes('.example.com')), 'the leading-dot entry must be named in a warning');
+    assert.ok(warnings.some(l => l.includes('example .com')), 'the internal-space entry must be named in a warning');
+    /* and the door still works for the one valid entry */
+    const out = await signup(server.base, { name: 'Blocked', email: 'blocked@example.com' });
+    assert.equal(out.status, 400);
+    assert.equal(out.data.code, 'signupDomainNotAllowed', '@example.com must be a dead door, not an admitted domain');
+    const inList = await signup(server.base, { name: 'In', email: 'in@a.com' });
+    assert.ok([200, 201].includes(inList.status), 'the valid entry must still admit');
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ---------- cross-door invariants (plan 02 task 3) ---------- */
 /* Contracts that only exist once all four doors are wired: MCP parity
    (no bypass lane, T-75-16), accept/signup mutual exclusion (DOM-03), and

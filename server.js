@@ -7993,6 +7993,16 @@ async function handleApi(req, res, url) {
       } catch (err) {
         return json(res, err.status || 500, { error: err.message, code: err.code });
       }
+    } else if (!invite.email && INVITE_DOMAINS) {
+      /* DP-3 session-accept (Phase 75, CR-01 review fix): a LINK-ONLY invite
+         accepted by a signed-in user must re-derive the SESSION email against
+         the live invite list — the review found the two gates above (row gate
+         needs invite.email; linkRefusal lives inside if (!user)) both skip
+         this path. Same ticket (the user's email), same non-consuming
+         posture (D-07). Email-targeted invites are already covered by the
+         row gate above. */
+      const sessionRefusal = emailDomainRefusal(user.email, INVITE_DOMAINS, 'inviteDomainNoLonger', 'This invite can no longer be accepted');
+      if (sessionRefusal) return fail(res, 403, 'inviteDomainNoLonger', sessionRefusal.message);
     }
 
     /* HARD-03 (D-05): resolve explicitly — no firstWorkspace() fallback. A

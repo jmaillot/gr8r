@@ -31,6 +31,14 @@ export const emailFromEmail = email => {
   return canonicalizeDomain(raw.slice(at + 1));
 };
 
+/* Valid canonicalized domain shape: labels of [a-z0-9-] (single label allowed
+   — the tri-state matrix pins ' a , B ' → {a, b}) — no '@', no whitespace, no
+   leading dot left over after the trailing-dot strip (WR-01 review fix:
+   entries like '@example.com' or 'example .com' used to enter the Set
+   silently, never matched, and printed as valid in the D-06 boot log — a
+   dead door with no warning). */
+const DOMAIN_SHAPE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
+
 /* Pure parser (raw + name in, null-or-Set out, no process.env reads — the
    unset/set-empty distinction is made by the caller's strict undefined
    comparison). Idempotent: the same raw always yields an equal Set. */
@@ -39,7 +47,7 @@ export const parseDomainList = (raw, name) => {
   const domains = new Set();
   for (const entry of String(raw).split(',')) {
     const domain = canonicalizeDomain(entry);
-    if (!domain) {
+    if (!domain || !DOMAIN_SHAPE.test(domain)) {
       /* D-05 warn-and-clean: printed straight to stderr so the observable
          survives regardless of the host's log-level plumbing. */
       console['warn'](`${name}: dropping invalid entry "${entry}" (warn-and-clean, D-05)`);
