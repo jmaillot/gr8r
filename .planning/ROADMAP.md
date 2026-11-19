@@ -88,7 +88,7 @@ experience instead of a creation surface.
      flow unchanged.
   6. Every refusal key introduced by this phase exists in all 5 locale catalogues
      (en/fr/nl/de/es) in the same commit as the gate that emits it; the parity gate is green.
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
 
 ### Phase 79: Governance Surface
