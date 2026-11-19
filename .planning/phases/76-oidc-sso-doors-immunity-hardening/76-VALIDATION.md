@@ -40,10 +40,11 @@ created: "2026-11-19"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | DOM-05 | T-76-01 / — | Existing accounts immune to list changes (linked-identity short-circuit) | integration | `node --test test/oidc-sso.test.mjs` | ✅ | ⬜ pending |
-| TBD | TBD | TBD | DOM-05 | T-76-02 / — | JIT provisioning gated by DP-4 door matrix | integration | `node --test test/oidc-sso.test.mjs` | ✅ | ⬜ pending |
-| TBD | TBD | TBD | DOM-06 | T-76-03 / — | SSO invite reconciliation filters refused invites (DP-5) | integration | `node --test test/oidc-sso.test.mjs` | ✅ | ⬜ pending |
-| TBD | TBD | TBD | DOM-05/06 | — | Resolved matrix visible at boot | integration | `npm test` | ✅ | ⬜ pending |
+| 76-01 / Task 1 | 76-01 | 1 | DOM-06 | T-76-01 / T-76-02 / T-76-03 | JIT provisioning gated by DP-4 door matrix, generic redirect, domain-only refusal log | integration | `node --test test/domain-admission-sso.test.mjs` | ✅ | ⬜ pending |
+| 76-01 / Task 2 | 76-01 | 1 | DOM-05 | T-76-05 | SSO invite reconciliation filters refused invites (DP-5, non-consuming) | integration | `node --test test/domain-admission-sso.test.mjs` | ✅ | ⬜ pending |
+| 76-01 / Task 3 | 76-01 | 1 | DOM-05/06 | T-76-01 | Resolved matrix visible at boot (D-11) | integration | `node --test test/domain-admission-sso.test.mjs` | ✅ | ⬜ pending |
+| 76-02 / Task 1 | 76-02 | 2 | DOM-05 | T-76-06 | Existing accounts immune to list changes (three named immunity rows) | integration | `node --test test/domain-admission-sso.test.mjs` | ✅ | ⬜ pending |
+| 76-02 / Task 2 | 76-02 | 2 | DOM-05/06 | — | Operator docs for SSO doors + matrix line | CLI | `grep -c 'door matrix\|sso-jit\|ALLOW_SIGNUP_DOMAINS\|ALLOW_INVITE_DOMAINS' docs/DEPLOY.md` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

@@ -93,10 +93,11 @@ changes, with operators able to see the resolved matrix at boot.
      so an operator can read from the log exactly which doors admit which domains.
   5. Full-matrix contract tests cover both inherit directions and all five decision points —
      including the three existing-account immunity rows — as a permanent suite.
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 76-01: TBD
+- [ ] 76-01-PLAN.md — DP-4 JIT gate + DP-5 reconcile filter + D-11 door-matrix boot log, pinned by the core D-12 contract suite rows (Wave 1)
+- [ ] 76-02-PLAN.md — three named immunity rows (DOM-05) + DEPLOY.md operator docs (Wave 2)
 
 ### Phase 77: Maintenance Debt
 
