@@ -87,6 +87,17 @@ describe('apple-touch-icon opacity (Pitfall 3 — iOS flattens transparency to b
   });
 });
 
+describe('any-purpose icon transparency (owner decision 2026-11-19)', () => {
+  /* The purpose:"any" icons render the rounded-rect tile over TRANSPARENT corners —
+     the launcher/taskbar color shows through, no baked-in white frame. The maskable
+     variants and apple-touch-icon stay full-bleed opaque. */
+  for (const rel of ['public/icon-192.png', 'public/icon-512.png']) {
+    test(`${rel} carries an alpha channel (color-type 6, RGBA)`, () => {
+      assert.equal(parsePNGHeader(PNG(rel)).colorType, 6, `${rel} must be RGBA (color-type 6) — corners transparent, never flattened to white`);
+    });
+  }
+});
+
 describe('manifest cross-check: icon srcs resolve to real committed files', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/manifest.webmanifest'), 'utf8'));
 
