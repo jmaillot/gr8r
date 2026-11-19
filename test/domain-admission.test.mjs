@@ -299,7 +299,7 @@ test("DP-2 standalone: ALLOW_INVITE_DOMAINS='' denies all invites while a signup
 /* ---------- DOM-07/MCP: the fourth admission door (T-75-16) ---------- */
 /* invite_member through the real /mcp transport: the same canonicalizing
    funnel + boot-frozen INVITE_DOMAINS — no bypass lane. */
-import { withDb } from './helpers/server.mjs';
+import { client, inviteToken, withDb } from './helpers/server.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -370,5 +370,150 @@ test('MCP invite_member composes the same funnel: in-list inserts, out-of-list r
   } finally {
     await server.stop();
     fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+/* ---------- DOM-04: the accept door (DP-3, plan 02 — TDD) ---------- */
+/* Fail-closed re-derivation against the LIVE invite list, validating the
+   invite ROW's email — never a stored snapshot. Non-consuming (D-07),
+   no inviter notification (D-08). */
+import crypto from 'node:crypto';
+
+const sha256hex = s => crypto.createHash('sha256').update(s).digest('hex');
+
+test('DP-3 tighten/loosen: a pending invite refused after the list tightens keeps its row and is revived by loosening (SC4, D-07)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-dom-accept-'));
+  const mint = await startServer({ dataDir, env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  let token;
+  try {
+    await signup(mint.base, { name: 'Pending', email: 'x@a.com' });
+    const { owner, slug } = await ownerAndWs(mint.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['x@a.com'], role: 'member' });
+    assert.equal(inv.status, 201);
+    token = inviteToken(inv.data.invites[0].url);
+    assert.ok(token, 'the mint returned a join token');
+  } finally {
+    await mint.stop();
+  }
+
+  /* tighten: the same DB rebooted with the list narrowed to b.com */
+  const tight = await startServer({ dataDir, env: { ALLOW_INVITE_DOMAINS: 'b.com' } });
+  let outboxBefore;
+  try {
+    const { client: accepter } = await login(tight.base, 'x@a.com', 'password-1234');
+    outboxBefore = withDb(tight.dbPath, db => db.prepare('select count(*) as n from email_outbox').get().n);
+    const res = await accepter.post(`/api/invites/${token}/accept`, {});
+    assert.equal(res.status, 403, `the tightened list must refuse the stale invite, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'inviteDomainNoLonger');
+    /* D-07: generic copy — never reveals the list, its width, or its history */
+    assert.ok(!/domain|allow|a\.com|b\.com/i.test(res.data.error || ''), `the refusal copy must stay generic, got: ${res.data.error}`);
+    /* non-consuming: the invite row survives untouched */
+    const row = withDb(tight.dbPath, db => db.prepare('select used_at, email from invites where email = ?').get('x@a.com'));
+    assert.ok(row, 'the invite row must survive the refusal (D-07)');
+    assert.equal(row.used_at, null, 'the refusal must not consume the invite');
+    /* D-08: the inviter was not notified — no new email_outbox rows */
+    const outboxAfter = withDb(tight.dbPath, db => db.prepare('select count(*) as n from email_outbox').get().n);
+    assert.equal(outboxAfter, outboxBefore, 'the refusal must write no notification rows (D-08)');
+  } finally {
+    await tight.stop();
+  }
+
+  /* loosen: the SAME invite now accepts (revival, D-07) */
+  const loose = await startServer({ dataDir, env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { client: accepter } = await login(loose.base, 'x@a.com', 'password-1234');
+    const res = await accepter.post(`/api/invites/${token}/accept`, {});
+    assert.ok([200, 201].includes(res.status), `loosening must revive the same invite, got ${res.status}: ${JSON.stringify(res.data)}`);
+    const used = withDb(loose.dbPath, db => db.prepare('select used_at from invites where email = ?').get('x@a.com'));
+    assert.ok(used.used_at, 'the revived accept consumed the invite');
+  } finally {
+    await loose.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('DP-3 row-email invariant: the refusal validates the ROW email even when the body carries an in-list email', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-dom-row-'));
+  const mint = await startServer({ dataDir, env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  let token;
+  try {
+    await signup(mint.base, { name: 'Row', email: 'x@a.com' });
+    const { owner, slug } = await ownerAndWs(mint.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['x@a.com'], role: 'member' });
+    token = inviteToken(inv.data.invites[0].url);
+  } finally {
+    await mint.stop();
+  }
+  const tight = await startServer({ dataDir, env: { ALLOW_INVITE_DOMAINS: 'b.com' } });
+  try {
+    /* the body email IS in the tightened list — the row's email is not */
+    const res = await client(tight.base).post(`/api/invites/${token}/accept`, { name: 'Sneak', email: 'sneak@b.com', password: 'password-1234' });
+    assert.equal(res.status, 403, `the ROW email governs, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'inviteDomainNoLonger', 'the refusal must be the accept-door key, not the body-email shape checks');
+  } finally {
+    await tight.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('DOM-03 gmail scenario (SC3): an invited gmail user accepts and logs in; the same email can never self-register', async () => {
+  const server = await startServer({ env: { ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'gmail.com' } });
+  try {
+    /* control: direct signup of the gmail address is refused by the signup door */
+    const direct = await signup(server.base, { name: 'Gmail', email: 'g@gmail.com' });
+    assert.equal(direct.status, 400);
+    assert.equal(direct.data.code, 'signupDomainNotAllowed');
+
+    const { owner, slug } = await ownerAndWs(server.base);
+    const inv = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['g@gmail.com'], role: 'member' });
+    assert.equal(inv.status, 201, `the invite door admits gmail, got ${inv.status}: ${JSON.stringify(inv.data)}`);
+    const token = inviteToken(inv.data.invites[0].url);
+
+    /* accept creates the account (the invite path never consulted the signup list) */
+    const accepter = client(server.base);
+    const res = await accepter.post(`/api/invites/${token}/accept`, { name: 'Gmail', email: 'g@gmail.com', password: 'password-1234' });
+    assert.ok([200, 201].includes(res.status), `the invited gmail user must accept, got ${res.status}: ${JSON.stringify(res.data)}`);
+    const logged = await login(server.base, 'g@gmail.com', 'password-1234');
+    assert.equal(logged.status, 200, 'the created account logs in normally');
+    /* self-registration stays closed for the same email */
+    const again = await signup(server.base, { name: 'Gmail', email: 'g@gmail.com' });
+    assert.equal(again.status, 400);
+    assert.equal(again.data.code, 'signupDomainNotAllowed', 'accepting an invite never opens the signup door for that email');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('DP-3 link-only invite: the body email is re-derived against the live list before createUser', async () => {
+  const server = await startServer({ env: { ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { owner } = await ownerAndWs(server.base);
+    const wsId = (await owner.get('/api/workspaces')).data.workspaces[0].id;
+    const createdBy = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('owner@test.local').id);
+    const t = Date.now();
+    const mintLinkOnly = email => {
+      const token = crypto.randomBytes(24).toString('base64url');
+      withDb(server.dbPath, db =>
+        db.prepare(
+          'insert into invites (token_hash, email, role, teams, workspace_id, created_by, created_at, expires_at) values (?,null,?,?,?,?,?,?)',
+        ).run(sha256hex(token), 'member', '[]', wsId, createdBy, t, t + 7 * 86400 * 1000),
+      );
+      return token;
+    };
+    const refusedToken = mintLinkOnly();
+    const refused = await client(server.base).post(`/api/invites/${refusedToken}/accept`, { name: 'Out', email: 'out@x.com', password: 'password-1234' });
+    assert.equal(refused.status, 403, `an out-of-list body email must be refused on a link-only invite, got ${refused.status}: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'inviteDomainNoLonger');
+    const created = withDb(server.dbPath, db => db.prepare('select count(*) as n from users where email = ?').get('out@x.com').n);
+    assert.equal(created, 0, 'the refusal must fire before createUser');
+    /* the row survives (non-consuming) */
+    assert.ok(withDb(server.dbPath, db => db.prepare('select 1 as ok from invites where token_hash = ?').get(sha256hex(refusedToken))), 'the link-only invite row survives');
+
+    const acceptedToken = mintLinkOnly();
+    const accepted = await client(server.base).post(`/api/invites/${acceptedToken}/accept`, { name: 'In', email: 'in@a.com', password: 'password-1234' });
+    assert.ok([200, 201].includes(accepted.status), `an in-list body email is accepted, got ${accepted.status}: ${JSON.stringify(accepted.data)}`);
+    assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from users where email = ?').get('in@a.com').n), 1);
+  } finally {
+    await server.stop();
   }
 });
