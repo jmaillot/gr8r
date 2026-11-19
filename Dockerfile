@@ -3,7 +3,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install -g npm@12.2.3 && npm ci
 
 COPY . .
 RUN npm run build && node scripts/export-seed.mjs > seed.json
