@@ -1,13 +1,13 @@
 /* =====================================================================
    OVERLAYS: drawer, modals, popovers, context menus, command palette
    ===================================================================== */
-import { TODAY, ago, diffD, esc, fmtDate, modKey, parse, relDate } from '../core/utils.js';
+import { TODAY, ago, diffD, esc, fmtDate, modKey, parse } from '../core/utils.js';
 /* drawerHtml's task parameter is named t, so the catalogue lookup is imported under an alias. */
 import { t as tMsg, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task, taskProg, teamsList } from '../core/store.js';
 import { leafEntries } from '../core/subtree.js';
-import { FT, av, avStack, filePrev, fileType, fileTypeName, fmtComment, lbl, progBar } from '../ui/helpers.js';
+import { FT, av, filePrev, fileType, fileTypeName, fmtComment, lbl, progBar } from '../ui/helpers.js';
 import { fxc, render } from '../shell/render.js';
 import { actExtraHtml, cellAssignee, cellDue, cellPrio, cellProject, cellStatus, verbLabel } from '../components/task-list.js';
 import { modalHtml } from './modals.js';

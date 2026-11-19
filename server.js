@@ -2625,7 +2625,6 @@ function logDocChanges(ws, storedDoc, next, actorName) {
    - Fail-absent: every delivery error is caught inside the pass; one bad
      row never kills the tick, and the pass never throws to its callers.
    ===================================================================== */
-const WEBHOOK_MAX_ATTEMPTS = 5;
 /* D-07: deliveries older than 7 days are purged by the pass (piggybacks
    the 30 s tick — no new timer; CONTEXT.md leaves the purge mechanism to
    discretion). */

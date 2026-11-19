@@ -5,7 +5,7 @@
    import and renders it from the cached module. The shared recursive tree
    renderer stays in features/subtasks.js (the drawer's synchronous first
    paint needs it). */
-import { TODAY, diffD, esc, parse, relDate } from '../core/utils.js';
+import { esc, relDate } from '../core/utils.js';
 import { t } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { mem } from '../core/store.js';

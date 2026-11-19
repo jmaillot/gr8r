@@ -7,7 +7,7 @@ import { t as tMsg, formatDate, fmtEstimate } from '../core/i18n.js';
 import { ic } from '../core/icons.js';
 import { PR, ST } from '../core/constants.js';
 import { D, S, commentsOf, isOver, mem, pColor, proj, task, taskProg } from '../core/store.js';
-import { leafEntries, orderedSiblings } from '../core/subtree.js';
+import { leafEntries } from '../core/subtree.js';
 import { treeChecklist } from '../features/subtasks.js';
 import { av, avStack, dueHtml, empty, lbl, prIcon, prPill, progBar, stIcon, stPill } from '../ui/helpers.js';
 import { fxc } from '../shell/render.js';
