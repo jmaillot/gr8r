@@ -424,22 +424,10 @@ repo pins `engines: ">=24"` so the D-77-16 fallback is defensive only.
 | A3 | Signup form selectors in `src/pages/auth.js` (beyond line 90) can drive a signup submit from the browser; not exhaustively read | Locale e2e | Low — executor reads the file anyway |
 | A4 | `tErr` maps error codes to `err.<code>` catalogue keys | Locale e2e | Low — api.js:86 shape verified; tErr definition itself not opened |
 
-## Open Questions
+## Open Questions (RESOLVED 2026-11-19, owner decisions — implemented in 77-03)
 
-1. **D-77-6 placeholder parity vs. a placeholder-less signup refusal** — the
-   locked decision says assert the substituted value (rejected domain / list
-   name), but `err.signupDomainNotAllowed` is static in all 5 catalogues and
-   the server passes no interpolation payload for signup (invite path's
-   `inviteDomainNotAllowed` does carry `{ email }` extra — server.js:7802 —
-   but D-77-5 locks signup-only). Recommendation: interpret D-77-6 as "assert
-   no raw `{token}` tokens + full catalogue-string equality", which is fully
-   satisfiable today, and note the discrepancy in `77-REVIEW-DISPOSITION.md`
-   or the plan header. Alternative (if the user insists on a real placeholder):
-   an owner checkpoint to amend D-77-5/D-77-6.
-2. **Run-wide `ALLOW_SIGNUP_DOMAINS` vs second playwright config** — single
-   shared server makes run-wide env the pragmatic choice (A2); a dedicated
-   config would double server boots. Recommendation: run-wide env + Wave-0 dry
-   run.
+1. **D-77-6 placeholder parity vs. a placeholder-less signup refusal** — RESOLVED: owner accepted the recommendation to interpret D-77-6 as "assert no raw `{token}` tokens + full catalogue-string equality"; no server interpolation payload added. Implemented in 77-03 and noted in `77-REVIEW-DISPOSITION.md`.
+2. **Run-wide `ALLOW_SIGNUP_DOMAINS` vs second playwright config** — RESOLVED: owner chose run-wide env (`ALLOW_SIGNUP_DOMAINS=e2e.local`) with a Wave-0 dry run, per A2; no second playwright config. Implemented in 77-03.
 
 ## Environment Availability
 
