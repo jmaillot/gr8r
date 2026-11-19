@@ -6769,6 +6769,7 @@ async function handleApi(req, res, url) {
     if (tooMany(`signup|${clientIp(req)}`, 5, 60 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     const body = await readJson(req);
     const email = String(body?.email || '')
+      .normalize('NFKC') // DOM-07: fullwidth ＠ (U+FF20) becomes a real '@' before any check
       .trim()
       .toLowerCase();
     const name = String(body?.name || '').trim();
