@@ -19,8 +19,14 @@ import { createHash } from 'node:crypto';
 import { expect } from '@playwright/test';
 import en from '../../src/locales/en.json' with { type: 'json' };
 import frCatalogue from '../../src/locales/fr.json' with { type: 'json' };
+/* Phases 75/77: the registry grew to five locales, so the label-from-catalogue
+   lookups below must resolve for any language the document may render —
+   nl/de/es joined the map (same file imports the specs use, D-77-7). */
+import nlCatalogue from '../../src/locales/nl.json' with { type: 'json' };
+import deCatalogue from '../../src/locales/de.json' with { type: 'json' };
+import esCatalogue from '../../src/locales/es.json' with { type: 'json' };
 
-const cat = (lang, key) => ({ en, fr: frCatalogue })[lang]?.[key];
+const cat = (lang, key) => ({ en, fr: frCatalogue, nl: nlCatalogue, de: deCatalogue, es: esCatalogue })[lang]?.[key];
 
 export const BASE_URL = `http://127.0.0.1:${process.env.E2E_PORT || 4317}`;
 
