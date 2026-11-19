@@ -26,6 +26,7 @@ expected: With ALLOW_SIGNUP_DOMAINS set to a list (e.g. `a.com,b.com`), signing 
 result: issue
 reported: "you need to update .env.example for that"
 severity: major
+resolved: fixed inline during UAT (commit 5c08866f) — .env.example now documents both vars
 
 ### 3. Unset variable fail-open
 expected: With ALLOW_SIGNUP_DOMAINS unset, signup behaves exactly as before this phase — any structurally valid email is admitted (fail-open).
@@ -106,7 +107,9 @@ blocked: 0
 
 - gap_id: G-75-2
   truth: "With ALLOW_SIGNUP_DOMAINS set to a list, out-of-list signups are refused and allowed-domain signups succeed"
-  status: failed
+  status: resolved
+  resolved_by: inline fix during UAT
+  resolved_at: 2026-11-19
   reason: "User reported: you need to update .env.example for that"
   severity: major
   test: 2
