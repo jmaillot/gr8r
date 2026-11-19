@@ -96,7 +96,10 @@ changes, with operators able to see the resolved matrix at boot.
 **Plans:** 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 76-01-PLAN.md — DP-4 JIT gate + DP-5 reconcile filter + D-11 door-matrix boot log, pinned by the core D-12 contract suite rows (Wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 76-02-PLAN.md — three named immunity rows (DOM-05) + DEPLOY.md operator docs (Wave 2)
 
 ### Phase 77: Maintenance Debt
