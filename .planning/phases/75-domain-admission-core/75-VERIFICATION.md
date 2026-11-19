@@ -1,10 +1,10 @@
 ---
 phase: 75-domain-admission-core
 verified: 2026-11-19T14:30:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 covered_files: [".planning/phases/75-domain-admission-core/75-01-PLAN.md", ".planning/phases/75-domain-admission-core/75-01-SUMMARY.md", ".planning/phases/75-domain-admission-core/75-02-PLAN.md", ".planning/phases/75-domain-admission-core/75-02-SUMMARY.md", "domains.js", "server.js", "mcp.js", "eslint.config.js", "docs/DEPLOY.md", "src/locales/en.json", "src/locales/fr.json", "src/locales/nl.json", "src/locales/de.json", "src/locales/es.json", "test/domain-admission.test.mjs", "test/i18n-core-features.test.mjs"]
-covered_digest: "v2:sha256:097d2ee57f61c40f5b916809880f7ddba6898e4791a80dc69466076325483198"
+covered_digest: "v2:sha256:8881949a730459007e47521a934c0b0fcc8aad3c52c14d97f9f1e059554fec9b"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
