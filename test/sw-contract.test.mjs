@@ -37,9 +37,13 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, test } from 'node:test';
 
-const ROOT = path.join(import.meta.dirname, '..');
+/* 74-IN-02 (D-77-16): defensive ROOT derivation — import.meta.dirname needs
+   Node >= 20.11/21.2; fileURLToPath(import.meta.url) works on every Node
+   this suite could ever boot on. Purely defensive (engines pins >=24). */
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 /* Phase 48/59 contract: byte-identical proof. Recomputed on every run. */
@@ -138,18 +142,38 @@ describe('registration call-site contract (D-04)', () => {
 
   test('the api.enabled gate is intact inside the registerSw registration path', () => {
     const push = source('src/core/push.js');
+    const GATE_LINE = "if (!('serviceWorker' in navigator) || !api.enabled) return;";
     assert.ok(
-      push.includes("if (!('serviceWorker' in navigator) || !api.enabled) return;"),
+      push.includes(GATE_LINE),
       'registerSw must gate registration on the api.enabled check — the push-gated registration contract',
     );
-    /* the gate lives on the registerSw export, before the register call */
+    /* the gate lives on the registerSw export, before the register call.
+       74-IN-01 (D-77-15): the anchor is the FULL quoted gate line already
+       asserted verbatim above — never a first-substring indexOf (which
+       would silently match an earlier !api.enabled mention elsewhere in
+       the file). The !== -1 assert is distinct from the includes assert. */
     const exportIdx = push.indexOf('export const registerSw');
-    const gateIdx = push.indexOf('!api.enabled');
+    const gateIdx = push.indexOf(GATE_LINE);
     assert.ok(exportIdx !== -1, 'registerSw export must exist in src/core/push.js');
+    assert.ok(gateIdx !== -1, 'the full gate line must be locatable as the anchor (74-IN-01: full-line anchor, not first-substring)');
     assert.ok(
       gateIdx > exportIdx && gateIdx < push.indexOf('navigator.serviceWorker.register'),
       'the api.enabled gate must sit inside the registerSw export, before the register call',
     );
+  });
+
+  test('74-IN-02: the ROOT derivation survives without import.meta.dirname (fileURLToPath fallback)', () => {
+    const self = source('test/sw-contract.test.mjs');
+    assert.ok(
+      self.includes("path.dirname(fileURLToPath(import.meta.url))"),
+      'the ROOT derivation uses the defensive fileURLToPath fallback (D-77-16)',
+    );
+    assert.ok(self.includes("import { fileURLToPath } from 'node:url';"), 'fileURLToPath is imported from node:url');
+    assert.ok(!/\bpath\w*\.\w+\(import\.meta\.dirname/.test(self) && !/= import\.meta\.dirname/.test(self), 'no bare import.meta.dirname usage remains in this file (74-IN-02)');
+    /* smoke recompute: the fallback yields the same ROOT the old derivation did */
+    const recomputed = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+    assert.equal(path.join(recomputed, 'public', 'sw.js'), path.join(ROOT, 'public', 'sw.js'), 'the fallback ROOT equals the module ROOT');
+    assert.ok(fs.existsSync(path.join(ROOT, 'server.js')), 'ROOT resolves to the repo root (server.js present)');
   });
 
   test('both boot paths intact: the load listener and the enterApp 59-UAT re-fire', () => {
