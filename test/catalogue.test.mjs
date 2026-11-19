@@ -411,8 +411,11 @@ test('the project declares exactly the approved runtime dependencies { pg, @offi
      blocking-human package-legitimacy checkpoint (T-54-SC) — the only writer that can
      produce real charts and connectors. Phase 59 (2026-11-13, D-12 amended ×2): web-push
      joins at the EXACT pin 4.0.0 — RFC 8292 VAPID signing + RFC 8291 payload encryption
-     for browser push, legitimacy pre-locked on record (STATE.md D-12 amendment). The
-     devDependencies are build-time tools and stay: this guard says nothing about them. */
+     for browser push, legitimacy pre-locked on record (STATE.md D-12 amendment).
+     Post-milestone-v2.7 maintenance (2026-11-19, owner-approved): @office-kit/xlsx
+     re-pinned to 0.27.0 — same publisher, minor release, legitimacy inherited from the
+     T-54-SC approval with the owner's explicit sign-off on the bump.
+     The devDependencies are build-time tools and stay: this guard says nothing about them. */
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const dependencies = manifest.dependencies || {};
   assert.deepEqual(
@@ -422,8 +425,8 @@ test('the project declares exactly the approved runtime dependencies { pg, @offi
   );
   assert.equal(
     dependencies['@office-kit/xlsx'],
-    '0.26.1',
-    'the workbook writer stays at the exact approved pin 0.26.1 (T-54-SC) — no caret/tilde drift',
+    '0.27.0',
+    'the workbook writer stays at the exact approved pin 0.27.0 (T-54-SC, re-approved 2026-11-19) — no caret/tilde drift',
   );
   assert.equal(
     dependencies['web-push'],

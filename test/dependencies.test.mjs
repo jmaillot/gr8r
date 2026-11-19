@@ -19,6 +19,11 @@
    imported only from the repository-root export/ directory, never from
    src/. The runtime image ships export/ beside src/.
 
+   Post-milestone-v2.7 maintenance (2026-11-19, owner-approved): the
+   @office-kit/xlsx pin advances 0.26.1 → 0.27.0 (same publisher, minor
+   release, legitimacy inherited from T-54-SC with the owner's explicit
+   sign-off on the bump).
+
    Phase 59 (2026-11-13, D-12 amended ×2): web-push joins the runtime
    dependencies as an EXACT pin (4.0.0, no caret) — the second runtime
    dependency — for RFC 8292 VAPID signing and RFC 8291 payload
@@ -50,8 +55,8 @@ test('package.json runtime dependencies are exactly { @office-kit/xlsx, pg, web-
   assert.match(pkg.dependencies.pg, /^\^8\./, 'pg must stay on the 8.x line (D-01 pin)');
   assert.equal(
     pkg.dependencies['@office-kit/xlsx'],
-    '0.26.1',
-    '@office-kit/xlsx must be pinned EXACTLY at 0.26.1 (Phase 54 T-54-SC): no caret range — the approved version was human-verified; a floating range would silently pull an unvetted release',
+    '0.27.0',
+    '@office-kit/xlsx must be pinned EXACTLY at 0.27.0 (Phase 54 T-54-SC, re-approved 2026-11-19): no caret range — the approved version was human-verified; a floating range would silently pull an unvetted release',
   );
   assert.equal(
     pkg.dependencies['web-push'],

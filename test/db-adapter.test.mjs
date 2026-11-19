@@ -535,8 +535,8 @@ pgMaybe('FTS parity on pg: same scenario, same results as SQLite (SEARCH-03/04, 
 /* ---- dependencies pin (D-02 amendment of D-12, 54-02 amendment, 59-01 web-push) -------- */test('package.json runtime dependencies are exactly { pg, @office-kit/xlsx, web-push } (D-12 as amended)', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies, 'dependencies key required — pg presence is fail-closed (D-04)');
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@office-kit/xlsx', 'pg', 'web-push']); // +@office-kit/xlsx: the workbook writer, exact pin 0.26.1 (54-02, T-54-SC); +web-push: browser push, exact pin 4.0.0 (Phase 59, owner pre-lock)
-  assert.equal(pkg.dependencies['@office-kit/xlsx'], '0.26.1'); // exact approved pin — no range drift
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['@office-kit/xlsx', 'pg', 'web-push']); // +@office-kit/xlsx: the workbook writer, exact pin 0.27.0 (54-02 T-54-SC, re-approved 2026-11-19); +web-push: browser push, exact pin 4.0.0 (Phase 59, owner pre-lock)
+  assert.equal(pkg.dependencies['@office-kit/xlsx'], '0.27.0'); // exact approved pin — no range drift
   assert.equal(pkg.dependencies['web-push'], '4.0.0'); // exact approved pin — no range drift
   assert.match(pkg.dependencies.pg, /^\^8\./);
 });
