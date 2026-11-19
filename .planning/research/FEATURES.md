@@ -1,159 +1,164 @@
-# Feature Landscape — Installable PWA (v2.7)
+# Feature Research
 
-**Domain:** PWA installability for an existing self-hosted PM tool (Projects Studio)
-**Researched:** 2026-11-18
-**Mode:** Features (ecosystem scan, scoped to PWA install support only)
-**Overall confidence:** HIGH (Chromium criteria, iOS behavior, Firefox stance all cross-checked against Chrome devrel docs, MDN, Apple support docs, and community references)
+**Domain:** Instance-level domain admission rules for a self-hosted PM workspace (v3.0 Access Control & Hardening)
+**Researched:** 2026-11-19
+**Confidence:** HIGH for verified prior art (GitLab/Gitea official docs fetched directly); MEDIUM/LOW where noted (Mattermost/Outline/Authelia from model knowledge — search infrastructure was rate-limited; flag for phase-specific re-verification)
 
----
+> Scope note: the seed design (two env vars, door matrix, unset-inherits, fail-closed accept-time re-validation, existing-member immunity, exact-domain matching, keyed localized refusals) is owner-validated and NOT re-litigated here. This file maps the feature landscape around it, with complexity and dependencies on the existing Phase 30 (OIDC JIT), Phase 33 (hardened accept route) and Phase 50 (invite refusals) code.
 
-## Repo dependency check: the existing service worker (HIGH confidence)
+## Feature Landscape
 
-The browser-push feature already shipped `public/sw.js` (Phase 48, v1.10) and it is
-**directly reusable for install purposes — no second service worker**:
+### Table Stakes (Users Expect These)
 
-- It is a minimal click/push router: `notificationclick` + `push` handlers only, **no
-  fetch handler, no caching, no lifecycle handlers** (`test/browser-push.test.mjs`
-  structurally forbids `fetch|install|activate|import` tokens in the file).
-- Registered from `src/main.js:~105-108` (`navigator.serviceWorker.register('/sw.js')`,
-  absolute path, `.catch(() => {})`) and from `src/core/push.js:163` behind `api.enabled`.
-- Served `no-cache` by `server.js:8097`; Vite copies `public/*` → `dist/` verbatim.
-
-**Implication:** the "pass-through service worker with no precache/no runtime caching"
-requirement (PWA-03) is **already satisfied** by the existing SW — its no-fetch-handler
-design IS the pass-through behavior. The only questions for the new milestone are:
-(1) whether registration should be unconditional (currently the main.js registration is
-unconditional but `push.js` re-registers only when push enabled — verify the actual gate
-during planning; a registered-but-idle SW is harmless), and (2) whether Chromium's
-`beforeinstallprompt` still needs a fetch handler (see below — the menu-install path
-does not, and that's the path the install banner uses).
-
-One caution: the structural test (`test/browser-push.test.mjs`) bans `install`/`activate`/
-`fetch` tokens in sw.js. PWA-03 must be implemented as "SW already exists, verify it serves
-install criteria" — NOT "add install/activate handlers", which would break that test and
-re-open the cache-poisoning surface T-48-02 closed.
-
----
-
-## What "installable" means per platform (2026 state)
-
-| Platform | Installable? | Mechanism | What the app gets |
-|----------|--------------|-----------|-------------------|
-| **Chrome/Edge desktop** (Chromium) | Yes | Omnibox install icon or ⋮ menu → "Install page as app"; **`beforeinstallprompt` fires** when criteria met (see nuance below) | Standalone window, own taskbar/dock icon, app menu entry, `display: standalone` honored, richer install dialog if `screenshots` + `description` present |
-| **Android Chrome** | Yes | Omnibox install banner + menu; installs as **WebAPK** (real app entry in launcher) | Standalone, home-screen icon from manifest, `beforeinstallprompt` fires |
-| **iOS / iPadOS Safari** | Yes, always (any site) | Share sheet → **Add to Home Screen** (with "Open as Web App" toggle, iOS 26 wording) | Standalone web-app context; **no `beforeinstallprompt` ever**, no install criteria; icons from manifest **and** `apple-touch-icon` (Safari still prefers the link tag in many versions) |
-| **Firefox desktop** | **No** | No site-to-app install path (removed 2022); community extension workarounds only | Tab-only experience — honest no-op |
-| **Firefox Android** | Partially | Menu → "Install" / "Add to Home Screen" — often a **plain shortcut**, not always a WebAPK/standalone; **`beforeinstallprompt` does NOT fire** | Shortcut or standalone depending on manifest detection; unreliable |
-
-**Chromium criteria nuance (2026, HIGH confidence):** Chrome removed the
-"SW with a fetch handler" requirement for **menu installation** in Chrome 108 (mobile) /
-112 (desktop), and Chrome supplies a default offline page for installed apps without one.
-The *automatic* install-prompt algorithm historically still looked for a fetch handler;
-Chrome has been migrating it to engagement-based signals. Practical consequence for this
-project: **the existing no-fetch-handler SW is fine for the omnibox install path and for
-`beforeinstallprompt` on current Chromium**, but if `beforeinstallprompt` proves flaky in
-UAT, the fallback is the user using the ⋮ menu — the install-hint banner must handle both
-(segments below).
-
-Chromium criteria checklist (what gates `beforeinstallprompt` + omnibox icon):
-1. HTTPS / secure context (already true — self-hosted behind Traefik)
-2. Manifest with `name` (or `short_name`), `start_url`, `display: standalone|fullscreen|minimal-ui`
-3. Icons: **192×192 and 512×512** PNG (the checker above matches what Chromium enforces)
-4. SW registered (any SW; no fetch handler needed for menu install)
-5. Not already installed; ~30s engagement heuristics for the *automatic* prompt
-
----
-
-## Table Stakes
-
-Missing any of these = the milestone doesn't deliver "installable".
+What comparable self-hosted products treat as the baseline for domain admission.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| `manifest.webmanifest` in `public/` (name "Projects Studio", `short_name`, `start_url`, `scope: "/"`, `display: "standalone"`, `theme_color`, `background_color`) | The single gate for every platform; iOS reads `start_url`/`scope`/`display` from it | **Low** | Static JSON outside the Vite bundle — no chunk-gate impact. `scope: "/"` is load-bearing on iOS (omitting it makes in-app links pop out to Safari). `start_url: "/"` — no `?source=pwa` needed unless you want analytics (you don't). Add `id` so future reinstalls dedupe to one app entry. |
-| `<link rel="manifest">` in index.html head | Discovery | **Low** | One line in `index.html`. |
-| Icon set: 192×192 + 512×512 `purpose: "any"`, and a **maskable** variant (separate entries or `purpose: "any maskable"` per file) | Chromium requires 192+512; maskable prevents the circle-crop chop on Android; iOS needs 180×180 `apple-touch-icon` PNG (SVG won't do) | **Low-Med** | Derived from the existing brand mark (`public/favicon.svg`, `logo-*.svg`). Rasterizing an SVG at 3 sizes is a one-off script or hand export — zero deps. PWA-02. Add `<link rel="apple-touch-icon">` (180×180) — Safari ignores manifest icons for the home screen in practice. |
-| SW registered unconditionally at boot | Chromium install criteria + iOS standalone "Open as Web App" behavior benefits; already done | **Zero (done)** | `public/sw.js` already registered from `main.js`. Verify the registration gate isn't push-only; if it is, make the boot registration unconditional (SW does nothing without a push anyway). |
-| HTTPS | Secure context gate | **Zero (done)** | Self-hosted behind Traefik. localhost dev is a secure context too. |
-| Honest iOS degradation in the install hint | iOS never fires `beforeinstallprompt`; users must use Share → Add to Home Screen | **Low** | Copy-only: detect iOS Safari (`navigator.userAgent` or feature-absence: no `beforeinstallprompt` + is-mobile + standalone not detected), show manual instructions. EN+FR i18n keys per the standing gate. PWA-04. |
-| Honest Firefox-desktop degradation | No install path at all | **Low** | Same banner logic: if no `beforeinstallprompt` and not iOS → either hide the banner or show "not supported in this browser". Hiding is more honest for desktop Firefox; the iOS copy is worth showing because install DOES work there manually. |
+| Allowlist gates new doors, never existing accounts | GitLab documents this explicitly: restrictions apply "only during new account creation by an external user"; admins can add disallowed-domain users, and users can later change their email to a disallowed domain. Gitea's `EMAIL_DOMAIN_ALLOWLIST` applies to registration only. | LOW | gr8r plan already states "existing accounts never touched". Implement as pure gate functions at the door matrix points; no membership scan, no migration. |
+| Comma-separated env-var list, tolerant parsing | Gitea: comma-separated list. GitLab accepts whitespace/semicolon/comma/newline. Operators copy-paste lists from mail/notes; whitespace and empty entries (`a.com,,b.com`, `a.com, ,b.com`) are routine. | LOW | Parse at boot once: split on `,`, trim each entry, drop empties, lowercase both sides at comparison time (see edge cases below). Tolerant parsing is table stakes; strict parsing produces "why is my list ignored?" bug reports. |
+| Case-insensitive matching | Email domains are case-insensitive per RFC 5321 (`User@EXAMPLE.com` == `user@example.com`). Every comparable implementation normalizes case; none treat `Example.com` and `example.com` as different entries. | LOW | Lowercase the parsed list once at boot; lowercase the email's domain part at check time. Do NOT lowercase the local part. |
+| Exact-domain matching as the default semantics | No major product silently admits `sub.example.com` when `example.com` is allowed — wildcard admission is opt-in syntax (`*.company.com` in GitLab and Gitea), never implicit. | LOW | Matches the seed ruling. Compare the email's domain string exactly against the list; document that subdomains must be listed explicitly. |
+| Localized refusal to the person at the door | Comparable products return a specific error at signup ("email domain not allowed" class) rather than a generic failure. gr8r has the ERR-01 keyed-code precedent plus Phase 50 keyed invite refusals — this is the established house pattern. | LOW | New leaf i18n keys in all 5 catalogues (EN base; full nl/de/es catalogues exist since v2.7, parity-gated). Server returns a stable code; client translates; unknown codes fall back to the English message (ERR-02). |
+| Fail-closed behavior when state changed between invite and accept | The hardened Phase 33 accept route and the Phase 50 guest re-derivation already establish the fail-closed-at-accept pattern; operators of self-hosted tools expect policy re-checked at use time, not just at issue time. | MEDIUM | Re-validate `invite.email` (and the body email when creating a new account) against the invite list inside the accept route, after the existing guest-shape re-derivation block and before any account/membership write. |
+| Unset variable = feature off (no behavior change) | Every env-based allowlist in this class (Gitea `EMAIL_DOMAIN_ALLOWLIST: **empty**`, Outline, Authelia) is a no-op when unset. | LOW | Empty/whitespace-only value should also be treated as "feature off" (an operator setting the var but leaving it blank must not lock everyone out). A explicitly-set-but-every-entry-invalid value is a boot-time warning, not a lockout. |
 
-## Differentiators
+### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Install hint banner driven by `beforeinstallprompt`** (deferred prompt capture → own in-app banner button calls `prompt()`, then hide; hide forever on `appinstalled` or dismissal, persisted in localStorage) | The core UX of PWA-04: don't rely on the omnibox icon users never notice | **Low-Med** | Listen on `window`'s `beforeinstallprompt`, `e.preventDefault()`, stash the event, render banner; call `deferredPrompt.prompt()` on click; check `userChoice` outcome. Suppress when `window.matchMedia('(display-mode: standalone)')` or `navigator.standalone` (iOS) — already installed. ~40 lines, zero deps. |
-| `display: standalone` polish — verify the card-stack layout works in the standalone window and there's no dead space where browser chrome used to be; handle `theme_color` for the Android status bar | The whole point of installing: app-shaped window | **Low** | Mostly QA + one meta tag. Android colors the task switcher/status bar from `theme_color`; iOS uses `apple-mobile-web-app-status-bar-style` (default/black/black-translucent) — `black-translucent` pairs with `viewport-fit=cover` + safe-area insets. Check whether the existing CSS already uses safe-area vars. |
-| `apple-mobile-web-app-capable` / `apple-mobile-web-app-title` meta tags | iOS standalone mode + home-screen label without using the page `<title>` | **Low** | Two meta tags. iOS 17+ honors `display: standalone` from the manifest, but the meta tags are still the reliable path. |
-| `shortcuts` in the manifest (e.g. "My tasks", "Inbox", "Search") | Long-press/dock context menu jumps straight into the app's hottest surfaces | **Low** | Pure manifest JSON, static URLs (`/w/...` is workspace-scoped so shortcuts must use non-scoped routes — check what `/` and existing top-level routes resolve to; shortcuts to `/w/:slug` would hardcode a slug, which is wrong for multi-tenant users). Keep to 2–3 generic targets or defer. |
+| Two independent doors (signup list vs invite list) with unset-inherits | GitLab/Gitea/Mattermost have ONE domain knob; separating self-serve admission from admin-mediated admission is finer-grained than any of them. Admins can invite contractors from outside the company while signup stays company-only. | LOW (already the validated design) | Implementation is one extra parse + a validator parameterized by which list applies. Inheritance resolved at boot: `ALLOW_INVITE_DOMAINS` unset → use the signup list; set (even empty after cleaning) → use as-is. Decide and document set-but-empty = deny-all-invites vs inherit; recommend set-but-empty = explicit deny-all (the operator wrote the var deliberately). |
+| Zero-dependency, env-only configuration | Outline and Mattermost put domain restriction behind admin-UI or SSO-provider settings; a pure env var matches gr8r's zero-runtime-dependency constraint and Docker/DEPLOY.md posture. | LOW | No config table, no migration, no admin UI. Boot-parsed constants following the existing `ALLOW_SIGNUP` pattern. |
+| Exact-domain (no wildcard syntax) | GitLab/Gitea accept wildcards; supporting `*.corp.com` invites regex-adjacent parsing, IDN-wildcard interactions, and confusion about whether bare `corp.com` also matches. Exact matching keeps the validator ~10 lines and auditable. | LOW | Anti-differentiator on purpose: document "no subdomain matching" in DEPLOY.md and the refusal copy if feasible. |
+| Refusal at the earliest door point (invite CREATE, not just accept) | Comparable products validate at account creation only; gr8r can refuse at invite create/edit so the admin learns immediately that the email is inadmissible — better UX than a silent invite that fails at accept. | LOW | New check in the invite create route next to the existing email-shape check (Phase 50 keyed-refusal precedent, e.g. `invalidEmail` with `{email}` extra). Also covered at accept per fail-closed ruling. |
+| OIDC JIT admission consistent with password signup | GitLab gates SSO signups under the same allowlist; gr8r's Phase 30 JIT provisioning is a signup door and should honor `ALLOW_SIGNUP_DOMAINS` — many self-hosted tools forgot the SSO door and had to retrofit (Mattermost's domain restriction applies to email signup but SSO behavior historically needed separate configuration). | MEDIUM | Gate the JIT provision branch (bare-account creation) in the OIDC callback after the existing `emailOk` + verified-email checks. Existing linked accounts keep logging in (immunity). Refusal is a browser redirect surface, not JSON — reuse the existing OIDC error-redirect pattern. |
 
-## Anti-Features (explicitly NOT for this milestone)
+### Anti-Features (Commonly Requested, Often Problematic)
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Offline caching / precache / runtime fetch handler** (Workbox, service-worker toolkit, anything intercepting `fetch`) | The owner's decision: strictly online. Adding a fetch handler re-opens the cache-poisoning surface T-48-02 eliminated, risks stale-bundle bugs with a rolling self-hosted deploy, and the existing test suite structurally forbids fetch/install/activate handlers in sw.js | Keep the existing no-fetch SW untouched; Chrome ships a default offline page for installed apps without one |
-| **`share_target`** (receive shares from the OS) | Requires the OS to hand off to a form/POST endpoint; multi-workspace scoping is ambiguous (which workspace receives the share?), and it's a mobile-only nicety | Revisit only if someone asks to "send this link to Projects Studio" |
-| **Protocol handlers (`registerProtocolHandler`)** | No PM-tool use case; modal-permission noise | Skip |
-| **`window-controls-overlay` / `display_override`** | Desktop-only window-chrome customization; the standard standalone window is already the goal; WCO adds CSS safe-area complexity for zero user value | Standard `standalone` only |
-| **Splash screens / `apple-touch-startup-image`** | iOS startup images need a matrix of exact device resolutions (dozens of PNGs) for a sub-second flash; Chrome desktop/Android don't use them | Rely on the fast SPA boot + `background_color` fill (Chrome/Android generate a splash from `background_color` + icon automatically — free) |
-| **`screenshots` in manifest** | Only enriches Chrome's richer install dialog; requires maintaining marketing screenshots in the repo, and they go stale | Defer; the standard install dialog is fine |
-| **`file_handlers`, `launch_handler`, badges, `related_applications`** | No use case here | Skip |
-| **Second service worker for install** | Two SWs on one origin = scope/claim race with the push SW | One SW serves push AND install (see dependency check) |
-| **Push rework** | Browser push already shipped; iOS standalone push exists on iOS 16.4+ but only for installed web apps and reuses the existing VAPID path — out of scope per milestone | Note as future bonus, don't touch |
-
----
-
-## The honest install hint banner, per platform (PWA-04 behavior spec)
-
-| Environment | Detection | Banner behavior |
-|-------------|-----------|-----------------|
-| Chromium desktop/Android, criteria met | `beforeinstallprompt` fired, not standalone | Show in-app banner ("Install Projects Studio"); click → `prompt()`; hide on `appinstalled`, on dismissal (persisted), or `userChoice !== 'accepted'` |
-| Chromium already installed | `display-mode: standalone` / `display-mode: window-controls-overlay` | No banner (suppress at boot) |
-| iOS / iPadOS Safari | No `beforeinstallprompt` + iOS UA + not `navigator.standalone` | Show banner with manual copy: Share → Add to Home Screen → Open as Web App (EN+FR) |
-| iOS already installed (`navigator.standalone` true) | | No banner |
-| Firefox desktop | No `beforeinstallprompt`, not iOS | No banner (or nothing — install genuinely impossible) |
-| Firefox Android / Samsung Internet edge cases | No `beforeinstallprompt`, mobile UA, not iOS | Optional: generic "install from browser menu" copy; safe to omit — menu install still works without our help |
-| Other/unknown | No event within N seconds | No banner — silent honest no-op |
-
-Key correctness points: `beforeinstallprompt` may fire before or after app code runs
-(register the listener in `main.js` at boot, before `load`); the captured event is
-single-use (`prompt()` consumes it); never call `prompt()` without a user gesture;
-`appinstalled` is the reliable "done" signal on Chromium.
-
----
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Subdomain wildcards (`*.example.com`) | "Our subsidiaries have subdomains" | Adds parser complexity, IDN interactions, ambiguity with bare-domain entries; GitLab/Gitea needed wildcards only because they also have denylists/regex use-cases gr8r doesn't | Exact-domain matching; operators list the subdomains explicitly (seed ruling) |
+| Admin-UI editable allowlist | "Nicer than editing docker-compose" | Needs a config table, migration, cache invalidation, admin permission surface — violates the zero-migration/env-only posture of this milestone | Env vars documented in DEPLOY.md; change = restart |
+| Denylist in addition to allowlist | Spam blocking | Doubles the decision matrix (allow∧deny interactions, precedence debates); gr8r is private-workspace oriented, not open-registration | Allowlist only; an unset allowlist = open door remains the operator's choice |
+| Retroactive enforcement against existing members | "Kick out people whose domain changed" | Breaks the owner-validated "existing accounts never touched" ruling; GitLab explicitly does NOT retro-enforce either | Immunity for existing accounts; policy applies only at doors |
+| Per-email validation beyond the domain (MX checks, disposable-email lists) | Anti-spam | Network calls in the signup path, external list dependencies, nondeterministic failures | Exact domain list; refuse fast and locally |
 
 ## Feature Dependencies
 
 ```
-manifest.webmanifest + icons ─┬─→ Chromium installable (omnibox/menu) ─→ beforeinstallprompt banner
-existing sw.js (no change) ───┘        │
-apple-touch-icon + iOS meta ──→ iOS Add to Home Screen works ─→ iOS manual-instructions copy
-HTTPS (done) ─────────────────→ everything
-i18n keys (EN+FR) ────────────→ banner copy (standing gate)
+[Env parsing + validator (shared module)]
+    └──requires──> nothing new (node built-ins only)
+
+[Signup gate (ALLOW_SIGNUP_DOMAINS)]
+    └──requires──> [Env parsing + validator], [i18n keys]
+
+[Invite create/edit gate (ALLOW_INVITE_DOMAINS, inherit)]
+    └──requires──> [Env parsing + validator], [Phase 50 keyed-refusal pattern]
+
+[Fail-closed accept-time re-validation]
+    └──requires──> [Env parsing + validator], [Phase 33 hardened accept route]
+
+[OIDC JIT admission gate]
+    └──requires──> [Env parsing + validator], [Phase 30 JIT branch]
+
+[i18n localized refusals] ──enhances──> all four gates
 ```
 
-The banner depends on the manifest being correct — an incomplete manifest = no
-`beforeinstallprompt` = banner silently never appears (which is also the graceful
-failure mode, but check DevTools Application panel during UAT).
+### Dependency Notes
+
+- **All gates require the shared validator:** one module (e.g. `parseDomainList()` + `domainRefusal(email, list, kind)`) used by signup, invite create, accept and OIDC JIT. D-50-2's lesson applies: one shared validator, not per-route logic.
+- **Accept re-validation requires the Phase 33 route structure:** it slots into the existing re-derivation block after token/expiry checks, before account creation or membership writes.
+- **OIDC JIT gate depends on Phase 30's verified-email ordering:** the check must run after `email_verified` is established (a provider-supplied unverified email must not satisfy the allowlist).
+- **i18n keys land with the first gate:** the i18n-scan build gate fails any uncatalogued literal, so refusal keys must be added (all 5 catalogues) in the same phase as the first user-facing refusal.
+
+## MVP Definition
+
+### Launch With (v1 — this milestone)
+
+- [ ] Shared env parser + exact-domain validator (tolerant parsing, lowercase, drop empties, boot warning for invalid entries) — the single source of truth
+- [ ] `ALLOW_SIGNUP_DOMAINS` gate on self-serve signup — simplest door, no dependencies
+- [ ] `ALLOW_INVITE_DOMAINS` gate on invite create (and edit if a PUT path exists) with unset-inherits — Phase 50 keyed-refusal pattern
+- [ ] Fail-closed re-validation at accept — the owner-validated security invariant
+- [ ] OIDC JIT gate — closes the second signup door; without it the feature is bypassable via SSO
+- [ ] Keyed localized refusals in all 5 catalogues — table stakes + build-gate requirement
+- [ ] DEPLOY.md section documenting the door matrix, exact-domain semantics and edge-case parsing
+
+### Add After Validation (v1.x)
+
+- [ ] Boot log summarizing the effective door matrix (which doors are gated, inherited lists resolved) — trigger: operator confusion reports
+- [ ] Allowlist-aware admin UI hint in the invite modal — trigger: admins complaining about refused invites
+
+### Future Consideration (v2+)
+
+- [ ] Wildcard support — only if a real operator asks; exact matching is the documented contract
+- [ ] Per-workspace domain lists — current need is instance-level only
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Shared validator + env parsing | HIGH | LOW | P1 |
+| Signup gate | HIGH | LOW | P1 |
+| Invite create gate + inheritance | HIGH | LOW | P1 |
+| Accept-time fail-closed re-validation | HIGH | MEDIUM | P1 |
+| OIDC JIT gate | HIGH | MEDIUM | P1 |
+| Localized refusals (5 catalogues) | MEDIUM | LOW | P1 |
+| Boot-time door-matrix log | LOW | LOW | P3 |
+| Wildcards / per-workspace lists | LOW | HIGH | P3 |
+
+## Competitor Feature Analysis
+
+| Feature | GitLab (self-managed) | Gitea | Mattermost* | Outline* | gr8r v3.0 plan |
+|---------|----------------------|-------|-------------|----------|----------------|
+| Allowlist + denylist | Both (admin UI) | Both (env) | Allowlist only (admin UI) | Allowlist via SSO domain config | Allowlist only (env) |
+| Wildcards | Yes (`*.company.com`) | Yes | Yes (documented) | Provider-dependent | No (exact, deliberate) |
+| List separators | whitespace / semicolon / comma / newline | comma | comma | n/a | comma, tolerant of whitespace/empties |
+| When enforced | Account creation only; admin adds + later email changes bypass | Registration only | Signup (+ email-change in recent versions) | SSO account provisioning | All doors: signup, invite create, accept (fail-closed), OIDC JIT; existing accounts immune |
+| SSO door covered | Yes (same restriction) | Partially (external registration flag separate) | Historically separate config | Via provider domain restriction | Yes, via JIT gate |
+| Refusal feedback | Error at signup form | Registration error page | Form error | Provider-level error | Keyed localized refusal (toast/form), 5 languages |
+| Case sensitivity | Normalized | Not documented* | Normalized* | n/a | Normalized both sides |
+
+\* Mattermost/Outline rows from model knowledge (docs unreachable during research — search rate-limited); confidence LOW/MEDIUM. GitLab and Gitea rows verified directly against official docs on 2026-11-19.
+
+## Edge-Case Behavior Recommendations
+
+Concrete recommended behavior per edge case (these are recommendations, to be ratified at phase planning — not owner-validated rulings):
+
+| Edge case | Recommendation | Rationale |
+|-----------|----------------|-----------|
+| Case sensitivity | Lowercase list entries at boot; lowercase the email's domain part at check; keep local part untouched | RFC 5321 domains are case-insensitive; matches competitor normalization |
+| Trailing dot (`example.com.`) | Normalize: strip one trailing dot from list entries AND from the checked domain before comparing | FQDN vs relative form ambiguity; a trailing dot is never a distinct registrable domain |
+| IDN / Unicode domains | No IDN conversion in the validator (zero-dep); if the env var contains Unicode, normalize with the IDN-mapped form being the operator's responsibility — document in DEPLOY.md; the check compares the email's raw domain string | `URL.parse()` / `URLDomainToASCII` exist in Node but adding IDNA semantics invites homograph confusion; document punycode (`xn--…`) as the canonical entry form |
+| Empty entries in comma lists (`a.com,,b.com`) | Dropped silently at parse | Tolerant parsing is table stakes; empty string must never become "match nothing" or "match everything" |
+| Whitespace (` a.com , b.com`) | Trimmed at parse; list-level whitespace around commas tolerated | GitLab accepts multiple separators for exactly this reason |
+| Whitespace INSIDE an entry (`ex ample.com`) | Invalid entry → boot-time warning + dropped (do NOT silently keep as an unmatchable literal) | An unmatchable literal entry = silent policy hole; loud boot warning surfaces typos |
+| Entire list invalid / set-but-empty-after-clean | Warning + treated as... decision point: recommend "deny-all" for explicitly-set-but-empty (deliberate), "feature-off" for unset/whitespace-only | Distinguishes "operator wrote nothing" from "operator wrote an empty deny-all" |
+| Multiple email domains per user | Irrelevant at gr8r's doors — each door sees exactly one email (signup email, invite email, OIDC verified email). No per-user multi-domain concept exists | GitLab-style "user later changes email to a disallowed domain" is accepted behavior in gr8r too: existing-account immunity covers it |
+| Sub-addressing (`user+tag@domain`) | Transparent: domain check reads only the part after the LAST `@`; `user+tag@example.com` matches allowlist entry `example.com` | Domain-level checks are inherently sub-address-agnostic; do NOT strip or reject `+tag` — that's an email-shape concern already handled by the existing email validation |
+| Email with no `@` / multiple `@` | Refused by the existing email-shape check BEFORE the domain check runs (ordering matters) | Keeps the domain validator simple; ordering: shape check → domain check |
+| Bare domain in email (`user@localhost`, `user@internal`) | Valid domain string for matching purposes — if `localhost` is on the allowlist it passes | Don't add registrable-domain (PSL) logic; zero-dep and deterministic |
+
+## Admin-facing feedback in comparable products (when an invite/signup is refused)
+
+- **GitLab:** the signup form rejects inline with a domain-specific validation error; the admin sees nothing special (no per-refusal audit). Admin-facing feedback is limited to the settings UI itself.
+- **Gitea:** registration fails with a generic error page; the admin learns from the log, not from structured feedback.
+- **Mattermost:** inline form error at signup; admins get no refusal event stream.
+- **Pattern conclusion (MEDIUM confidence):** inline, immediate, user-facing refusal at the door is table stakes; server-side admin telemetry (audit verbs, boot logs) is the differentiator. gr8r already has the audit-verb infrastructure (Phase 24) — a `signup_domain_refused`-class activity verb at invite-create refusals would exceed competitor practice at LOW cost; recommend as optional polish (P3), not MVP.
+- **For gr8r specifically:** the admin who creates the invite gets the keyed refusal toast immediately at invite create (better than GitLab/Gitea, which only check at account creation). The invitee gets the localized refusal at accept if the list changed between create and accept (fail-closed) — this asymmetry should be documented in DEPLOY.md so admins aren't surprised.
 
 ## MVP Recommendation
 
 Prioritize:
-1. Manifest + icon set + index.html head links (PWA-01, PWA-02) — everything gates on this
-2. Verify/extend SW registration so it's unconditional (PWA-03 is ~a verification task, not a build task)
-3. `beforeinstallprompt` banner with iOS manual-instructions fallback (PWA-04)
+1. Shared env parser + exact-domain validator (single funnel, D-50-2 pattern)
+2. The four doors in order: signup → invite create → accept (fail-closed) → OIDC JIT
+3. Keyed localized refusals in all 5 catalogues
 
-Defer: manifest `shortcuts` (needs a non-workspace-scoped route decision), manifest
-`screenshots` (stale-asset maintenance), safe-area/status-bar polish beyond `theme_color`
-(one follow-up if the standalone window shows a regression).
-
-Defer (likely forever, per owner decision): everything in Anti-Features.
+Defer: wildcards, per-workspace lists, denylists, admin-UI editing, refusal-audit verbs (P3, none block the milestone).
 
 ## Sources
 
-- Chrome devrel — "Revisiting Chrome's installability criteria" (fetch-handler removal, Chrome 108/112) — HIGH
-- web.dev — install criteria + installation-prompt guidance (`beforeinstallprompt` lifecycle) — HIGH
-- MDN — Making PWAs installable — HIGH
-- Apple support + Safari Web Content docs — Add to Home Screen, `apple-touch-icon`, iOS standalone meta — HIGH
-- whatpwacando.today / OpenPWA — Firefox (no desktop install, no `beforeinstallprompt` even on Android) — MEDIUM-HIGH
-- Repo evidence: `public/sw.js`, `src/main.js`, `src/core/push.js`, `server.js:8097`, `test/browser-push.test.mjs`, Phase 48 RESEARCH/REVIEW artifacts — VERIFIED (local)
+- GitLab "New user account restrictions" — https://docs.gitlab.com/administration/settings/sign_up_restrictions/ (fetched 2026-11-19; allow/denylist, wildcards, separators, creation-time-only enforcement — HIGH confidence, direct read)
+- Gitea Configuration Cheat Sheet — https://docs.gitea.com/administration/config-cheat-sheet (`EMAIL_DOMAIN_ALLOWLIST`/`EMAIL_DOMAIN_BLOCKLIST`, comma-separated, wildcard supported — HIGH confidence, direct read)
+- Outline `.env.sample` — https://github.com/outline/outline (SSO-provider env vars inspected; domain restriction via provider config — MEDIUM confidence)
+- Mattermost configuration docs — unreachable during research (404s/rate limits); `RestrictCreationToDomains` behavior from model knowledge — LOW confidence, re-verify at phase research if load-bearing
+- Authelia sub-addressing semantics — model knowledge — LOW confidence
+- gr8r internal: PROJECT.md (Phases 30/33/50 records), existing email-shape and keyed-refusal patterns — HIGH confidence

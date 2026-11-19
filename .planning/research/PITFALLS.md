@@ -1,136 +1,275 @@
-# Domain Pitfalls — Adding PWA Installability to Projects Studio
+# Pitfalls Research
 
-**Domain:** bolting PWA installability (manifest, icons, pass-through SW, install banner) onto an existing self-hosted PM SPA
-**Researched:** 2026-11-18
-**Repo state verified this session:** `public/sw.js` is the existing minimal push/click-router SW (Phase 48 + 59); `registerSw()` in `src/core/push.js:161` registers it gated on `'serviceWorker' in navigator && api.enabled`; server serves `sw.js` and `index.html` **no-cache** (server.js:8097); CSP is `default-src 'self'; script-src 'self'; … frame-ancestors 'none'` (server.js:8048-8049); SPA routes are `/w/:slug/...` with popstate mirroring (v1.5); static-contract tests in `test/browser-push.test.mjs:123-142` pin sw.js byte-substrings and forbid `fetch|install|activate|import` tokens; chunk gate 498 kB / 500 kB (~2 kB headroom); i18n build gate (`scripts/i18n-scan.mjs`); e2e dist-staleness guard + 115 Playwright specs; `index.html` currently has **no** manifest link, no `apple-touch-icon`, no `theme-color` meta.
+**Domain:** Instance-level email-domain admission (env-gated allowlists) added to an existing multi-tenant invite system with OIDC JIT, hardened invite-accept, i18n parity gate and contract tests — plus lint cleanup and locale verification.
+**Researched:** 2026-11-19
+**Confidence:** HIGH (prior-art from GitLab, Gitea, Outline, OneTimeSecret; CVE/GHSA-backed email-parsing findings; ESLint rule documentation) with project-specific analysis from `PROJECT.md` and the codebase.
 
----
+> Scope note: this milestone's features are exactly where the historical bugs live. Every
+> "prior art" reference below shipped a real bypass or lockout that v3.0 must not repeat.
 
 ## Critical Pitfalls
 
-### Pitfall 1: Extending `public/sw.js` breaks the pinned static contract (and tempts skipWaiting/claim)
-**What goes wrong:** The existing sw.js is contract-frozen: `test/browser-push.test.mjs:123-142` asserts byte-identical pinned substrings (`u.origin === self.location.origin`, `openWindow(url)`, the URL constructor line) and a token regex forbidding `fetch|install|activate|import` **including comments**. Two failure modes when adding PWA installability:
-1. Someone adds `install`/`activate`/`skipWaiting`/`clients.claim` handlers → the token test goes red, and — worse — skipWaiting+claim on a *pass-through* SW creates update races the app never had (a freshly-claimed SW mid-session with new behavior).
-2. Someone writes a comment containing the word "import" or "activate" → red test for a non-code reason (regex is token-based; documented in 59-RESEARCH Pitfall 7).
+### Pitfall 1: Raw `split('@')` email parsing — the door the attacker walks through
 
-A no-cache SW with **no fetch handler** needs **no lifecycle machinery at all**: the browser's default update flow (byte-diff on navigation, new SW waits, takes over on next reload) is exactly the honest "strictly online" behavior PWA-03 wants. skipWaiting/clients.claim would make a newly-deployed SW take control of already-open tabs mid-session — with no fetch handler this is nearly harmless today, but it is a footgun the moment anyone ever adds a handler, and it breaks the "no lifecycle machinery" precedent (59-03-PLAN explicitly forbids it).
-**Warning signs:** browser-push.test.mjs static contract failing; code review seeing `skipWaiting`, `clients.claim`, or `addEventListener('install'|'activate'|'fetch')` in the diff.
-**Prevention:** PWA installability needs **zero edits to sw.js** — the SW already exists and already satisfies "registered, no precache, no runtime caching." The only possible legitimate change is the `showNotification` icon if brand icons change (touches one pinned-adjacent line — do consciously, update tests deliberately). Keep the forbidden-token test as the enforcement boundary; add a phase-plan guard note that any sw.js diff is a STOP-and-justify event.
-**Phase:** SW/registration phase (PWA-03) — decide "no sw.js changes" up front as a plan constraint.
+**What goes wrong:**
+The domain check is implemented as `email.split('@').pop()` or a naive regex, and admission is decided on whatever string arrives. RFC 5321/5322 allow quoted local parts (`"a@b"@corp.com`), comments (`user@(comment)corp.com`), and — critically for an allowlist — the *domain* side itself can arrive in non-canonical forms:
 
-### Pitfall 2: Second SW registration racing the first / scope collision
-**What goes wrong:** One SW per scope — `public/sw.js` at `/sw.js` already owns the **root scope `/`** (registration uses absolute `'/sw.js'`, push.js:163). Common mistakes when adding installability:
-1. Registering a *new* `pwa-sw.js` at the same scope → the two registrations clobber each other; push subscriptions attached to the old SW worker survive only until the new one replaces it, and `getRegistration()` (push.js:132) can return either.
-2. Registering with a relative path (`register('sw.js')`) from a page at `/w/:slug/task/x` → resolves to `/w/:slug/task/sw.js` → 404 → registration silently fails (the `.catch(() => {})` at push.js:163 **swallows it**) and `serviceWorker.ready` then hangs — which is exactly the CR-02 dead-lock class Phase 59 already fixed once (`swReady()` 8s bound exists because of it).
-3. Setting manifest `scope` narrower than `/` while the SW registration stays `/` → inconsistent control (SW controls pages the manifest considers out of app scope); or setting `scope`/`start_url` to `/w/` while push SW sits at `/` → the login page (`/login`, `/?next=`) is outside app scope but inside SW scope.
-**Warning signs:** push subscriptions silently stop working after the PWA phase ships (404/410 sweep in `sendPushFor` clears them); console "A service worker already exists at scope"; e2e push-related specs flaking.
-**Prevention:** **One SW, reused.** The existing `/sw.js` is already registered on every login path via `registerSw()` (CR-02 fix: boot + `enterApp`). The PWA milestone adds nothing to registration; it may only *verify* it (e.g., a static test asserting exactly one `serviceWorker.register` call site exists in `src/`). Manifest `scope` must be `"/"` (or omitted — same default) so installable pages and SW control agree. Any new registration code must use the absolute `'/sw.js'` path and ride `registerSw()`, never its own call site.
-**Phase:** PWA-03 (SW) + manifest phase (PWA-01) jointly — scope/start_url decision must be made against the existing registration, not in isolation.
+- **Unicode homoglyph separators:** a fullwidth `＠` (U+FF0E / U+FF20 class) that normalizes to `@` under NFKC. Auth.js shipped exactly this bug (GHSA-7rqj-j65f-68wh, Critical): "Email normalizer validates the address *before* Unicode normalization, allowing a homoglyph `@` bypass." A check run on the raw string sees `user@corp.com` where mail libraries later see a different domain — or vice versa: a hostile domain that *renders* like `corp.com` passes a length/shape check and then canonicalizes INTO the allowed domain on the wrong side of the comparison.
+- **Trailing dot FQDN:** `user@corp.com.` is a fully equivalent DNS name per RFC 1034/1035, so mail actually delivers to corp.com — but `String.endsWith('corp.com')` or a Set lookup on the raw string misses it. The trailing-dot trick is a documented origin/allowlist bypass class (soltanali0 write-up; the same trick broke GitLab and Express origin checks).
+- **Case:** `CORP.COM`, `Corp.Com` — Set lookups are case-sensitive.
+- **Quoted local parts / multiple `@`:** `"evil@corp.com"@attacker.io` — splitting on the first or last `@` naively yields the *wrong* domain either way.
 
-### Pitfall 3: `registerSw()` never fires in demo/static mode — install banner silently absent (or present in dev with a SW pointing at nothing)
-**What goes wrong:** `registerSw()` is gated on `api.enabled` (push.js:162). In demo/seed mode (`!api.enabled`) no SW registers. If the install-banner logic keys off `navigator.serviceWorker.getRegistration()` or a `beforeinstallprompt` event that only fires with a SW+manifest satisfying install criteria, the banner appears in production but **never in demo mode** — and Chrome won't fire `beforeinstallprompt` at all without an active SW, so half-wired dev setups show *nothing* and someone "fixes" it by adding a dev-only registration that diverges from production. Conversely, in `vite dev` the SW registers from `/sw.js` served by Vite (public dir) — but the server-mode nuances (no-cache headers from server.js:8097) don't apply, so a dev SW can be cached by the browser with default heuristics and go stale across edits, producing "my change didn't take effect" ghosts.
-**Warning signs:** banner works on the Docker deploy but not locally; stale SW surviving hard reloads in dev; `applicationServerKey`-style console warnings about no active SW.
-**Prevention:** Single source of truth: banner code checks the same `api.enabled` + `registerSw()` seam push uses. For dev, rely on Vite serving `public/sw.js` and DevTools "Update on reload" — never add a dev-only registration path. Serve-header verification: a unit test pinning that server.js keeps sw.js/index.html in the no-cache branch (the existing line 8097) so nobody later "optimizes" caching of the SW.
-**Phase:** PWA-03/PWA-04 — registration + banner must be specified against `api.enabled` semantics explicitly.
+**Why it happens:**
+The check is written against the happy-path email the invite modal produces, and unit tests only cover lowercase ASCII. The PortSwigger paper "Splitting the email atom" documents parser-discrepancy access-control bypasses as a whole class: the validation parser and the *delivery* parser are different programs.
 
-### Pitfall 4: `start_url` / `scope` vs `/w/:slug` — deep links and multi-workspace reality
-**What goes wrong:** The SPA lives at `/w/:slug/...` (and `/login`, `/join`, `/` → redirect or workspace picker). Common manifest mistakes:
-1. `start_url: "/w/"` or a hardcoded slug (`/w/demo`) → every install opens a workspace that may not exist for that user (404 or wrong tenant). Multi-workspace users (v1.1 core feature) with several installs/share targets get stranded.
-2. `scope: "/w"` → the login page (`/login`, used by every logged-out deep link with `?next=`) and `/join` fall **outside** the installed app's scope: opening a notification email link in the installed window bounces to a *browser tab* for login, then the standalone app and the tab fight over the session flow.
-3. `start_url` with a query string (`start_url: "/?source=pwa"`) — fine per spec, but `id` must then be stable and distinct; browsers key installed-app identity on `id` (fallback `start_url`). Changing `start_url` later without a stable `id` can create a *second* installed app on users' devices.
-4. `display: "standalone"` + v1.5's popstate history mirroring: standalone windows have **no back button**. The app's history mirroring means `history.back()` works programmatically, but users who relied on browser back in a tab have no gesture in the installed window — iOS especially (Pitfall 7). Also: standalone deep-links opened from emails (`/w/:slug/task/:key`) land in the installed window only if within scope; `display_override`/`display` mismatch can make notification clicks (`openWindow(url)` in sw.js) open a *browser tab* instead of the installed window on some platforms.
-**Warning signs:** installed app opens to 404 or wrong workspace; notification email links open outside the standalone window; `id` absent from manifest; two icons in an OS launcher after a start_url change.
-**Prevention:** `start_url: "/"` (the app's own root handles workspace routing/session carry already — it's the same target sw.js's click router falls back to), `scope: "/"`, `id: "/"` set explicitly and frozen. Verify with e2e: from a clean profile, install → launch → login → navigate; and a pinned test asserting manifest `start_url`/`scope`/`id` values (static contract style, matching `test/browser-push.test.mjs` precedent). Document the "no back button in standalone" consequence in DEPLOY.md; consider an in-app back affordance decision in the banner phase rather than silently accepting it.
-**Phase:** PWA-01 (manifest) — these are manifest-phase decisions; e2e verification belongs with PWA-04 acceptance.
+**How to avoid:**
+One shared canonicalization funnel, used by every door (JIT, signup, invite create/edit/accept — exactly the gr8r pattern of one shared validator like D-53-2):
 
-### Pitfall 5: Icon mistakes — missing maskable, wrong sizes, `purpose` typo, SVG-only
-**What goes wrong:** Chrome's install criteria require a 192×192 and a 512×512 (any) icon; `maskable` icons need a safe zone (~80% inner area) or the OS crops the brand mark into a circle/squircle and clips it. Classic failures: reusing the existing `favicon.svg` as the only icon (many platforms won't accept SVG in manifest icons, especially iOS/older Chromium); declaring `"purpose": "maskable any"` on one entry (the OS picks maskable rendering with the favicon's tight artwork → clipped logo); PNGs generated without padding for the safe zone; sizes declared but file actually different dimensions. Repo-specific: PWA-02 says icons derive from "the existing brand mark" — but the workspace **logo** feature (Phase 43) deliberately swaps the favicon per workspace client-side (layout.js `applyWsFavicon`, "no service-worker/manifest involvement" D-06). Do not wire workspace logos into the manifest: manifest is static, workspace logos are per-tenant — mixing them means the installed icon changes per logged-in user and the SW's `showNotification` icon (`'/favicon.svg'` hardcoded, sw.js:44) drifts from the manifest icons.
-**Warning signs:** Lighthouse/DevTools "Installability: no icon ≥192px"; installed icon clipped on Android; per-workspace icon inconsistency.
-**Prevention:** Ship real PNGs (192, 512, plus 512 maskable with padded safe zone) in `public/`, static manifest entries; keep Phase 43's D-06 boundary intact (client favicon swap stays untouched; manifest icons are the brand mark, not workspace logos). A static test can pin the manifest's icon block (paths + sizes + purpose) so edits are conscious. Keep sw.js's notification icon as-is or consciously update the pinned test.
-**Phase:** PWA-02 (icons) — plus a one-line decision record re-affirming D-06 separation.
+1. Normalize FIRST: `String(email).trim().normalize('NFKC').toLowerCase()` — then reject any residual non-ASCII in the domain part (gr8r is not an IDN deployment; refuse `xn--` and non-ASCII domains outright rather than punycoding them).
+2. Parse LAST: take the substring after the LAST `@`, and if the local part contains a quoted section (starts with `"`), reject or parse strictly — do not hand-roll.
+3. Strip one trailing `.` from the domain before lookup.
+4. Compare against an allowlist that was itself normalized at boot (lowercase, trailing dots stripped, no whitespace entries) with **exact equality** — the seed design says exact-domain matching, so resist any temptation to add `endsWith`/suffix or wildcard matching "for convenience": `notcorp.com` and `evilcorp.com` both end with `corp.com`.
+5. Store the canonical email at account/invite creation, never the raw string.
 
-### Pitfall 6: i18n gate and chunk gate vs the banner and manifest
-**What goes wrong:** Two gates can go red in surprising ways:
-1. **i18n gate** (`scripts/i18n-scan.mjs` fails the build on uncatalogued literals): the install banner's strings ("Install Projects Studio", "Install", "Not now") are new UI literals — they must enter `en.json` + `fr.json` via the catalogue or the build fails. Sub-traps: writing the strings in `src/` as template literals before cataloguing; adding a key that the dead-key sweep later flags as stale if the banner is refactored; the `importBtn`-style Lucide icon-name collision documented in the v2.5 notes (label keys colliding with icon names). Also sw.js strings are forbidden by contract (T-48-02 zero-strings) — banner text must never move into the SW.
-2. **Chunk gate** (entry at 498.11 kB of 500 kB — **~2 kB headroom**): install-detection + banner logic added to the eager entry path (`main.js` → shell) can push the entry over 500 kB and fail the build. Manifest/SW/icon files in `public/` are outside the bundle (safe), but the banner UI and `beforeinstallprompt` handling are not. Sub-trap: `deferredPrompt.prompt()` handling importing anything non-trivial eagerly.
-**Warning signs:** `npm run build` fails on chunk-size or i18n-scan; review diff showing banner JSX/strings inline in an eager module.
-**Prevention:** Catalogue all banner strings EN+FR in the same commit (the gate runs at build). Keep banner logic minimal and, if it approaches even 1 kB, lazy — the codebase already has the lazy-chunk pattern (settings/push chunk) and an eager-vs-lazy registration split precedent ("SW registration stays eager, settings UI rides the lazy chunk", 59-PATTERNS). The manifest itself, `public/*.png`, and sw.js edits add **zero** bundle bytes — say so in the plan so nobody over-engineers. A banner-only tiny chunk is an acceptable fallback; a second eager registration site is not (Pitfall 2).
-**Phase:** PWA-04 (banner) owns both gates; PWA-01/02/03 are bundle-neutral by design — pin that in plans.
+**Warning signs:**
+Contract tests that only use `alice@corp.com`; any `endsWith`, `includes('.')` or non-lowercased comparison in the diff; the canonicalizer existing but not being the single call site (grep for `split('@')` — it must appear once).
+
+**Phase to address:**
+Domain-admission phase — the canonicalization funnel + an adversarial table-driven contract test (`＠`, trailing dot, mixed case, quoted local, subdomain, `notcorp.com`) is the first task, before any route is wired to it.
 
 ---
 
-## Moderate Pitfalls
+### Pitfall 2: Fail-open on unset vs empty, and on config-parse errors
 
-### Pitfall 7: iOS — no `beforeinstallprompt`, apple-touch-icon, standalone quirks
-**What goes wrong:** Safari iOS never fires `beforeinstallprompt`; install is manual (Share → Add to Home Screen) and requires `apple-touch-icon` (a PNG, referenced by `<link rel="apple-touch-icon">`, 180×180 — **not** read from the web manifest). Mistakes: showing the banner on iOS (milestone says "honest no-op elsewhere" — detection must be UA/feature-based, not "no event after N seconds" which also fires on browsers that installed already); omitting apple-touch-icon so iOS installs with a screenshot-of-page icon; forgetting `apple-mobile-web-app-capable`/`mobile-web-app-capable` meta + `apple-mobile-web-app-status-bar-style` (the viewport already has `viewport-fit=cover` — good — but the status-bar style and `theme-color` interplay decide whether content sits under the notch); and the standalone **no-back-button** problem (see Pitfall 4) which on iOS is most acute — users swipe from the edge expecting browser-back and get nothing or a wrong view. The v1.5 history mirroring means an in-app back affordance is feasible but is a product decision.
-**Warning signs:** banner rendered on an iPhone; iOS home-screen icon is a page screenshot; standalone app has content under the status bar; edge-swipe does nothing.
-**Prevention:** Banner shows only when `'BeforeInstallPromptEvent' in window` + event received + not `display-mode: standalone` + not iOS UA; honest fallback copy ("iOS: use Share → Add to Home Screen") is a *catalogued* EN+FR string if shown. Ship `apple-touch-icon` link + iOS meta tags in `index.html` (static, zero bytes to the bundle). `theme_color` in the manifest must match the app's actual background color (also Pitfall 8). Decide the standalone back-navigation stance explicitly (accept + document, or add an affordance) — do not leave it implicit.
-**Phase:** PWA-04 (banner honesty + detection) and PWA-01/02 (meta tags, apple-touch-icon). The back-navigation decision belongs in the milestone discussion, not discovered in UAT.
+**What goes wrong:**
+The gate answers "allowed" when the env var is missing *or malformed or empty*, and those are not the same state. Documented cases: OneTimeSecret's SSO docs state "an explicitly empty, readable allowlist is the configured allow-all state, not a fallback for missing or corrupt configuration" — i.e. they had to distinguish three states. The classic accident: `ALLOW_SIGNUP_DOMAINS=""` in docker-compose (set-but-empty) silently means open-to-all, while the operator believes the variable's *presence* means restricted. The other classic: `"corp.com, corp.com "` or a stray newline from a YAML fold produces a list containing `""` and `" corp.com"`, and depending on implementation the whole check throws (fail-open via catch) or matches nothing (silent total lockout).
 
-### Pitfall 8: `theme_color`/`background_color` vs the real UI
-**What goes wrong:** Wrong `theme_color` paints the title bar/status bar a color that clashes with the app chrome (and `theme-color` meta vs manifest value can disagree); `background_color` shows only during launch splash — a white flash on a dark app (or vice versa) reads as broken. The app has a dark/light theme consideration — one static value cannot be right for both; pick the chrome color of the default theme and accept it.
-**Warning signs:** screenshot of installed launch showing a white splash on the dark app; title bar color visibly off-brand.
-**Prevention:** Extract the values from the existing CSS variables of the default theme; add `<meta name="theme-color">` in `index.html` consistent with the manifest; pin the two hex values in a static test so theme refactors notice.
-**Phase:** PWA-01.
+**Why it happens:**
+`process.env.X || DEFAULT_OPEN` and `env.X?.split(',')` both quietly conflate undefined/empty/whitespace, and JavaScript's falsy `""` does the rest.
 
-### Pitfall 9: CSP / headers traps for manifest and SW fetch
-**What goes wrong:** (a) The CSP (`default-src 'self'; script-src 'self'` — server.js:8048) has no `manifest-src` or `worker-src` directive: manifest falls back to `default-src 'self'` (fine, same-origin) and worker falls back to `script-src 'self'` (fine) — but if anyone later serves the manifest from a CDN, renames it with a query-param busting scheme, or relaxes CSP, the silent fallback behavior changes. (b) The **manifest response headers**: server.js serves static files with a caching policy — a cached manifest (or one served with `Content-Type: application/json` vs `application/manifest+json`) can delay icon/theme updates for weeks; `X-Content-Type-Options: nosniff` (securityHeaders) will block a manifest served with a wrong Content-Type. (c) Traefik subpath deployments: if a deployment runs under a path prefix (`/gr8r/`), every absolute path in `index.html` (`/sw.js`, `/manifest.webmanifest`, icon hrefs, `start_url`, `scope`) silently 404s — the same absolute-path assumption sw.js's registration already makes (there is a precedent: it uses absolute '/sw.js' and works only at root deployments).
-**Warning signs:** DevTools Application panel: "Manifest fetch failed" or "No matching service worker"; icons 404 on one deployment but not another; installed app broken only on a subpath instance.
-**Prevention:** Serve the manifest with `Content-Type: application/manifest+json` (or `application/json`) + short `Cache-Control` (e.g. `no-cache` alongside index.html — extend the server.js:8097 branch consciously) and run it through the existing `securityHeaders()`. Add a server route/static-file test asserting manifest + icons are served with correct content-type and no-cache. For subpath deployments: either document root-only as a deployment constraint in DEPLOY.md (consistent with how `/w/:slug` and sw.js already assume root) or make the manifest paths relative (`scope: "./"`, relative icon/start_url) — decide once in planning; half-relative manifests are worse than either extreme.
-**Phase:** PWA-01 (manifest serving + headers) with a DEPLOY.md note; subpath decision is a milestone-level discussion item.
+**How to avoid:**
+- Parse env once at boot into an explicit tri-state: `unset` (per seed design: inherit — signup list for invites; signup unset = open), `set-and-empty` (owner decision: what does the seed design say? — document it in code as a named constant with a comment, never an accident), `set-with-values`.
+- Boot-time validation: strip whitespace/empties, dedupe, lowercase, log the effective resolved list at startup ("signup doors restricted to: corp.com, corp.dev; invite doors inherit"), and refuse-and-exit on a syntactically broken value (e.g. a `*` or `http://` prefix) rather than failing open at request time. gr8r already has loud boot validation precedent (D-K2 for MASTER_KEY) — reuse that posture.
+- Fail-closed at *accept* time is already the seed design: accept-time re-validation must treat "cannot determine list" as refuse, never as allow. The `firstWorkspace()` fail-closed twins (v1.7 HARD) are the in-house pattern.
 
-### Pitfall 10: Playwright/e2e traps — SW interception, install event, stale dist guard
-**What goes wrong:** (a) A SW registered in the e2e browser context persists across tests within a worker and intercepts nothing today (no fetch handler) — but its *registration state* affects tests that assert push settings UI (`swReady()` timeouts, notification permission flows). If the PWA work adds anything SW-related to boot, push-settings specs can flake or the 8s `swUnavailable` bound starts firing. (b) Chrome's `beforeinstallprompt` doesn't fire under default Playwright conditions; testing the banner requires stubbing the event (dispatch a fake `BeforeInstallPromptEvent` on `window`) — asserting on a real event produces a spec that never runs its body. (c) The e2e dist-staleness guard hashes `dist/.vite/manifest.json` — a **different** manifest (the web app manifest in `public/`) is unrelated and safe, but adding files to `public/` changes dist contents; make sure no test or fixture hashes `dist/` wholesale. (d) Tests asserting the manifest JSON must read it from `public/` (source of truth) or via a served fetch — not from the Vite build output, where it does not exist.
-**Warning signs:** push-settings specs timing out after PWA phase lands; banner spec passing vacuously; staleness-guard test red on CI only.
-**Prevention:** Stub `beforeinstallprompt` + `navigator.serviceWorker` in banner specs (the repo already has the stub-globals harness pattern in `test/browser-push.test.mjs:87-109` to copy). Keep banner e2e minimal (one EN + one FR spec, matching the codebase's EN+FR e2e discipline); verify SW registration state via `getRegistration()` with the existing `swReady()`-style bounding, never bare `serviceWorker.ready` awaits in specs.
-**Phase:** PWA-04 acceptance; the registration-state risk belongs to PWA-03's verification plan.
+**Warning signs:**
+A `try/catch` around the list parse that returns `true`; `.split(',')` with no trim/filter(Boolean); tests that never boot with the var absent, empty, and whitespace-padded.
 
-### Pitfall 11: Manifest `id` / `start_url` churn across milestones
-**What goes wrong:** No `id` today (no manifest at all). Once installed users exist, any later change to `start_url` without a frozen `id` re-keys the installed app identity → duplicate launcher entries / lost installed state on update. Conversely setting `id` to something path-derived and later moving the deployment breaks it.
-**Warning signs:** users report a second icon after an update; installed app loses its window/state after redeploy.
-**Prevention:** Set `"id": "/"` in the first manifest and treat it as frozen contract; pin it with a static test (same style as the sw.js contract tests).
-**Phase:** PWA-01.
+**Phase to address:**
+Domain-admission phase — boot resolver as its own unit with a test matrix of env shapes (`undefined`, `''`, `' '`, `'a,b'`, `'a,,b'`, `' a , B '`), plus a DEPLOY.md section pinning the semantics.
 
 ---
 
-## Minor Pitfalls
+### Pitfall 3: Door-matrix confusion — admin sets only `ALLOW_INVITE_DOMAINS` expecting signup to be restricted (or vice versa)
 
-### Pitfall 12: Dev-mode double registration vs Vite HMR
-**What goes wrong:** Registering the SW inside a module that HMR re-executes → duplicate `register()` calls (harmless per spec — idempotent — but noisy) or a module-scope `await navigator.serviceWorker.ready` that re-runs on every HMR update. The repo's pattern already avoids this (`registerSw()` is idempotent and called from boot + `enterApp`, not module top-level await).
-**Prevention:** Keep registration behind the existing `registerSw()`; never await SW state at module top level.
-**Phase:** PWA-03/04 review checklist item.
+**What goes wrong:**
+Two variables × four doors (OIDC JIT, direct signup, invite create/edit, invite accept) = an eight-cell matrix, and operators — and developers — fill in cells from intuition. The specific surprise named in the seed design: **unset-inherits-signup** means `ALLOW_INVITE_DOMAINS` unset does NOT mean "invites unrestricted" — it means "invites follow the signup list". An admin who sets only the invite list while signup is open gets: invites restricted to corp.com, but anyone with any email can self-signup through the signup door (and then... is already in). Conversely, an admin who tightens `ALLOW_SIGNUP_DOMAINS` after onboarding and expects OIDC JIT to be "invite-adjacent" may leave JIT governed by the signup list and lock out a partner domain that invites were still allowed to bring in. Gitea's docs record the sibling trap: `EMAIL_DOMAIN_ALLOWLIST` applies to *registration* only, and issue #27457 is exactly the confusion when an admin-created (invite-like) user path behaved differently from registration.
 
-### Pitfall 13: `display: standalone` breaking OAuth/2FA popups and window sizing
-**What goes wrong:** The Entra SSO flow (v1.6) and TOTP flows were built for tab browsing; in a standalone window, popups/redirects behave slightly differently per platform, and a narrow standalone window triggers the ≤900px mobile band (Phase 64 contract) on desktop installs — the installed desktop window can silently render the mobile card stack.
-**Warning signs:** installed desktop app shows mobile layout; SSO redirect feels broken on mobile standalone.
-**Prevention:** Verify SSO login + 2FA from an installed context in UAT; set a sensible `display_override` if needed; note the viewport-band interaction in the phase verification checklist.
-**Phase:** PWA-04 UAT checklist.
+**Why it happens:**
+"Signup" and "invite" sound like one policy; the inheritance rule is invisible in the env var name. Nobody re-reads the door matrix after the first route works.
 
-### Pitfall 14: Forgetting `Permissions-Policy` interplay / notifications in installed context
-**What goes wrong:** The server sends `Permissions-Policy: camera=(), microphone=(), geolocation=()` (server.js:8047) — notifications are not restricted, fine; but a future "add `notifications=()`" "cleanup" would kill the existing push feature from installed windows where there is no visible tab prompt context.
-**Prevention:** Static test already exists for headers? If not, pin that `notifications` is absent from the Permissions-Policy deny list.
-**Phase:** PWA-03 verification (one assertion, cheap).
+**How to avoid:**
+- Write the door matrix as a **literal table in code and in DEPLOY.md** (rows: JIT / signup / invite create / invite edit / invite accept; columns: which list, which fallback), and make the resolver the only place that reads the two env vars.
+- A boot-time advisory log when the lists diverge ("signup open, invites restricted to X — is that intended?"), like GitLab surfaces sign-up restrictions in admin settings.
+- Contract tests assert every cell of the matrix, including both inherit directions and the accept-time re-validation cell — the seed design already demands a contract suite; make the matrix the suite's table of contents.
+- DEPLOY.md gets one worked example per confusion ("I set only ALLOW_INVITE_DOMAINS and signup is still open — why") because this is an operator-education bug as much as a code bug.
+
+**Warning signs:**
+Any route checking the list inline (`if (ALLOW_SIGNUP_DOMAINS...)`) instead of calling the resolver; contract tests that cover signup and invite-accept but not JIT or invite-edit.
+
+**Phase to address:**
+Domain-admission phase — resolver + matrix table + full-matrix contract tests are the milestone's spine; DEPLOY.md section in the same phase.
 
 ---
 
-## Phase-Specific Warnings
+### Pitfall 4: Timing-of-check — the list changes between invite send and accept (TOCTOU)
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| PWA-01 manifest | start_url/scope vs `/w/:slug` + subpath deployments (P4, P9) | `start_url: "/"`, `scope: "/"`, `id: "/"` frozen; static contract test; DEPLOY.md root-only note |
-| PWA-01 manifest | CSP/Content-Type on manifest response (P9) | manifest rides the no-cache branch (server.js:8097 extension), `application/manifest+json`, header test |
-| PWA-01 manifest | theme_color vs real UI (P8) | values extracted from default-theme CSS vars, pinned by test |
-| PWA-02 icons | maskable safe-zone clipping; SVG-only; workspace-logo mixing (P5) | real PNGs 192/512 + padded maskable; D-06 boundary re-affirmed; pinned icon-block test |
-| PWA-02 icons | iOS apple-touch-icon missing (P7) | `<link rel="apple-touch-icon">` 180×180 PNG in index.html |
-| PWA-03 SW | editing sw.js breaks pinned contract / skipWaiting temptation (P1) | zero sw.js edits; forbidden-token test stays the enforcement boundary |
-| PWA-03 SW | second registration / relative path / scope collision (P2) | reuse `registerSw()` only; absolute '/sw.js'; scope = "/" |
-| PWA-03 SW | demo-mode (`!api.enabled`) never registers; dev staleness (P3) | banner keyed on same seam; no-cache pin test for server headers |
-| PWA-04 banner | i18n gate on banner strings (P6) | EN+FR catalogue keys in same commit; no strings in sw.js |
-| PWA-04 banner | chunk gate: banner logic in 498 kB entry (P6) | minimal code or lazy chunk; manifest/icons are bundle-neutral — pin that |
-| PWA-04 banner | iOS false-positive banner; standalone back-nav (P7, P4) | feature-detect `BeforeInstallPromptEvent` + `display-mode`; back-nav decision made in discussion |
-| PWA-04 e2e | `beforeinstallprompt` never fires in Playwright; SW state flakes (P10) | stub-event specs; bounded `getRegistration()` waits |
-| PWA-04 UAT | SSO/2FA + mobile band inside standalone window (P13) | installed-context UAT items |
+**What goes wrong:**
+Invite created when `corp.com` was allowed; list tightened (or rotated to a new corporate domain) a week later; invitee clicks the token and gets admitted to a domain that is now forbidden. If the check lives only at invite-create, the tightened list is a lie. The reverse also bites: list *loosened* so a re-invite passes create, but a stale pending invite from the strict era is accepted — fine, but the audit trail then shows a member whose admission contradicts the list in force at their signup. This is why the seed design mandates **fail-closed accept-time re-validation**.
+
+**Why it happens:**
+Invites are long-lived tokens; the natural implementation validates once at issuance. The hardened accept route (sameOrigin-first, silent body whitelist) already treats accept as an untrusted re-entry point — but the domain check must be added *to that re-validation pass*, not only to create.
+
+**How to avoid:**
+- Accept-time re-validation as the authority (seed-mandated): the pending invite is checked against the list *in force at accept*, with a **keyed localized refusal** (`inviteDomainRevoked`-class key, not a generic error) so the invitee understands the invite expired by policy.
+- Invite **edit** also re-validates (changing the email on a pending invite to a now-forbidden domain must refuse).
+- Decide and document the existing-member-immunity interaction at accept: re-validation applies to the *admission email*, not to the inviter or to already-members (seed: existing-member immunity). A test proving immunity survives accept-time re-validation is essential — it is the easiest invariant to accidentally break by reusing one helper on both sides.
+- Contract test: create invite under list A, tighten to list B, accept → refused with the keyed reason; loosen, accept → admitted.
+
+**Warning signs:**
+A `domains` snapshot stored on the invite row "for audit" that the accept path reads back *instead of* the live list; the accept handler importing only the create-time validator.
+
+**Phase to address:**
+Domain-admission phase — the re-validation branch of the hardened accept route, with the tighten/loosen contract tests.
+
+---
+
+### Pitfall 5: Breaking existing flows — pre-existing members blocked from re-invite, and SSO-linked accounts locked out after tightening
+
+**What goes wrong:**
+Two documented lockout modes:
+
+1. **Re-invite of a pre-existing member refused.** Admin invites `alice@oldpartner.com` (already a member from before the list existed, or with an out-of-list email) → invite-create refuses even though the target is already in the workspace and the invite is really just a re-share. GitLab's MR 76272 is the canonical *adjacent* bug: "a user can bypass the domain allowlist by creating an account with an allowed email, then *changing* their email" — meaning GitLab had to add email-change re-validation, i.e. the *account-update* door must be in the matrix too, and it must not be confused with re-invite.
+2. **SSO-linked accounts locked out after list tightening.** The signup list now excludes a domain whose OIDC accounts already exist. If JIT/allowlist logic accidentally gates *login* rather than *account creation*, existing members can't sign in. OneTimeSecret documents the correct stance explicitly: "Restrictions apply to **new account creation only** — existing linked accounts can still log in" and "Do not clear or bypass an allowlist for returning accounts." Also: their "missing email yields `missing_email`; malformed yields `invalid_email`; disallowed yields `domain_not_allowed`" — distinct keyed refusals, never one generic error.
+
+**Why it happens:**
+The check gets attached to "user with this email appears" rather than "new admission event". OIDC JIT's existing gate (tenant pin + `email_verified`) is a natural place to bolt on the domain check — and the wrong variable (invite list) or wrong semantics (login-blocking) gets bolted on.
+
+**How to avoid:**
+- One predicate: `isAdmissible(domain, door)` where door ∈ {jit, signup, inviteCreate, inviteEdit, inviteAccept}; **membership lookup short-circuits before the predicate** for re-invite and for login — the allowlist never applies to authentication of an existing account.
+- Invite-create: check the *new-admission* semantics — if a membership row already exists for that email in that workspace, the domain check is skipped (re-share), and the UI copy stays the existing "already a member" path.
+- Email-change on an account (if gr8r supports it) re-validates the *new* email against the signup list — the GitLab MR 76272 lesson; if email change isn't supported, add a contract test documenting the door is absent.
+- OIDC JIT keeps its existing gate order (tenant pin → email_verified → admissible) and refuses with a **keyed localized refusal** distinct from the tenant-pin refusal, so logs and support can tell the two apart.
+- Contract tests: pre-existing member + out-of-list email re-invite → succeeds; existing SSO account of a now-forbidden domain logs in → succeeds; new JIT on forbidden domain → refused with key.
+
+**Warning signs:**
+The domain check reachable from the login/session code path; an `await membershipLookup` that happens *after* `isAdmissible`; a single refusal key for both JIT-tenant and JIT-domain failures.
+
+**Phase to address:**
+Domain-admission phase — predicate + door wiring with the three "existing account" contract tests; this is also the phase's primary regression risk against the pinned contract suite (any pre-existing contract test that pins un-restricted behavior on these routes must be consciously updated, never loosened).
+
+---
+
+### Pitfall 6: eslint `no-unused-vars` cleanup — deleting code that had side effects
+
+**What goes wrong:**
+The 17 pre-existing unused-vars errors get "fixed" by deleting the variable *and its initializer*, and the initializer was load-bearing: `const server = startServer()` (never started), `const rev = bumpRevision(doc)` (mutation skipped), a destructured import whose module had side-effectful top-level code, or a function parameter removed from a callback whose arity the caller depends on. ESLint itself does not autofix this rule for precisely this reason — the typescript-eslint maintainers' stance on issue #3456: "No-unused-vars does not have an autofixer. It's not safe to remove random variables from code automatically. Side effects are everywhere." Write-only reads are another trap Oxlint documents: `y = 5` counts as unused (self-increment `z = z + 1` too), so "cleanup" of an accumulator or counter silently removes state transitions.
+
+**Why it happens:**
+The errors accumulated across 17 sites and get batch-fixed mechanically; each fix looks locally harmless and the diff reads as noise.
+
+**How to avoid:**
+- One commit per site (or per cluster), never one sweep — gr8r's atomic-commit discipline applies to lint debt too.
+- For each site, classify before touching: dead local (delete all of it including any call), intentional discard (rename `_x` per the `argsIgnorePattern`/`varsIgnorePattern` convention), or side-effectful initializer (keep the call, drop the binding: `{ startServer(); }`).
+- The standing gates are the safety net and must run per commit: full unit suite (1809 tests), e2e, build. A deletion that breaks a contract test is the suite doing its job — investigate the side effect, don't update the test to match.
+- Beware the second-order case: a variable becomes "unused" only *because* an earlier cleanup removed its last consumer — chain removals one at a time.
+
+**Warning signs:**
+A single commit touching multiple unrelated files "lint cleanup"; any `--fix`-style bulk change; test counts that shift between commits.
+
+**Phase to address:**
+Maintenance phase (lint/translation phase) — but the rule "one commit per site, suite per commit" belongs in the plan's task breakdown.
+
+---
+
+### Pitfall 7: Locale verification — missing keys falling back silently, and the three spots where the parity gate can't see
+
+**What goes wrong:**
+The nl/de/es spot-check passes a screenshot review, but real failures hide in three blind spots of a static parity scan:
+
+1. **Silent fallback-to-key or fallback-to-EN:** `t('inviteDomainRevoked')` on a missing key renders the raw key or English, with no error — users see `"inviteDomainRevoked"` (or unexplained English) in Dutch. The existing i18n gate catches *uncatalogued new literals* in EN/FR; it does not by itself guarantee nl/de/es have the *new* domain-refusal keys, unless the catalogue scan is key-parity across all locales (gr8r's post-v2.7 full catalogues are parity-gated — confirm the new keys join that parity, not just EN+FR).
+2. **Server-side keys vs client-side catalogues:** the refusal keys are emitted by the *server* (`tFor()` core, v1.8 precedent) and rendered by the client's code-translation layer (ERR-01/02). A key present in the server catalogue but missing from a client locale catalogue falls back to the English server message — by design — which *is* correct behavior but must be *verified*, not assumed: a typo'd key (EN exists, `inviteDomainRevoke` emitted) shows English everywhere and the parity gate stays green on both sides.
+3. **Interpolation differences:** `{domain}` in "…is not allowed for {door}" — the Dutch/German/Spanish word order puts the variable elsewhere; a translation that drops `{domain}` renders the placeholder literally or empty, and no parity scan catches it (same key count, wrong content).
+
+**Why it happens:**
+Parity scans count keys; they don't validate placeholders or rendered output. Spot-checking is done on happy-path screens, not on refusal states that only appear behind an env-gated feature.
+
+**How to avoid:**
+- Emit the refusal keys server-side through `tFor()` (established funnel), and add the new keys to the parity scan's catalogue in the same commit as the routes — the "no-French-byte" style gate pattern from v2.5 (label keys) generalizes: no refusal key ships without all-locale entries.
+- A unit test per new key asserting all locales resolve AND every `{placeholder}` present in EN is present in each translation (mechanical placeholder-diff — cheap and catches the word-order drop).
+- The translation spot-check phase drives the *refusal path* in the real app per locale (e.g. set `ALLOW_INVITE_DOMAINS=corp.com`, attempt an out-of-domain invite with locale=de) — screenshot the refusal toast, not just nav labels. That makes the pitfall 3/5 refusals and the locale check the same UAT flow.
+- Client fallback posture is already pinned (ERR-02: unknown code → server English message): add one contract test asserting the unknown-code fallback still fires for the new keys so "missing key" degrades to readable English, never an empty toast (v1.2 decision: "No toast is ever empty").
+
+**Warning signs:**
+Spot-check limited to Settings/dashboard; new keys added to EN+FR only; any `{` count mismatch between locales in the diff.
+
+**Phase to address:**
+Maintenance/translation phase for the spot-check — but the placeholder-parity unit test belongs in the domain-admission phase's i18n task, not deferred.
+
+---
+
+## Technical Debt Patterns
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Inline domain check per route instead of one resolver | Faster wiring | Door matrix drifts; Gitea #27457-style inconsistency; untestable cells | Never — the resolver IS the feature |
+| Suffix/wildcard matching instead of exact-domain | Operators ask for `*.corp.com` | `notcorp.com` matches; seed design says exact — ambiguity | Never in v3.0; document as a future opt-in if ever needed |
+| Snapshotting the allowed list onto the invite row | "Audit trail" | Accept reads the snapshot → TOCTOU hole returns | Never for the gate; a *log* line is fine |
+| `_`-prefix ignore pattern for all 17 lint errors | One commit, lint green | Side-effectful initializers survive undeleted; debt re-accumulates | Only for genuine discard params, case by case |
+| Skipping placeholder-parity test ("translators are careful") | Zero extra code | Broken Dutch refusal string ships; silent fallback masks it | Never — it's 10 lines |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| OIDC JIT (Entra) | Gating JIT with `ALLOW_INVITE_DOMAINS` (wrong list) or blocking *login* of existing linked accounts | JIT uses the signup list (or its own resolved cell of the matrix); existing linked accounts authenticate unconditionally (OneTimeSecret stance) |
+| Hardened invite-accept route | Domain check added *before* the sameOrigin/whitelist hardening so a refusals' error shape leaks whether the token exists | Keep the silent-body-whitelist posture: refusal for bad token and revoked-by-domain indistinguishable externally, keyed reason only for the legitimate holder |
+| Env/config (docker-compose, Traefik stack) | `ALLOW_SIGNUP_DOMAINS=""` believed to mean "restrict" | Boot resolver tri-state + DEPLOY.md examples + startup log of the effective matrix |
+| i18n parity gate | New server refusal keys only in EN+FR catalogues | All-locale parity in same commit; `tFor()` is the only emission path |
+| MCP mirror | MCP invite tools forget the domain gate (v1.10 MCP has invite-like ops) | Same shared predicate; the MCP mirror is a fifth row of the door matrix |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Re-splitting/re-normalizing the env list on every request | Immeasurable at small scale but per-request string churn in hot invite paths | Parse once at boot; resolver reads a frozen normalized Set | Only stylistic — no real scale risk here |
+| Unbounded allowlist acceptance (no validation) | Operator pastes 5,000 domains; Set is fine but the boot log floods | Cap size, log count not full list above N | Large operators |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Exact-match done with `endsWith` "for robustness" | `evil-corp.com` / `notcorp.com` admitted | Strict Set membership on the canonical domain |
+| No Unicode normalization before the check | Homoglyph `@`/domain bypass (GHSA-7rqj-j65f-68wh class, Critical) | NFKC normalize → reject non-ASCII domain → parse |
+| Trailing dot not stripped | `corp.com.` delivered as corp.com but refused-or-missed inconsistently across doors | Strip one trailing dot in the canonicalizer |
+| Refusal message lists the allowed domains | Instance policy disclosure to attackers (OneTimeSecret explicitly never reveals them) | Keyed localized refusal, generic wording; allowed list stays server-side |
+| Domain check on the login path "for defense in depth" | Legitimate existing members locked out after tightening; availability incident | Admission ≠ authentication; immunity for existing accounts is a tested invariant |
+| Accept-time re-validation reading a stored snapshot | List tightening defeated by pre-tightening invites | Read the live list at accept (seed-mandated fail-closed) |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Generic "Invite failed" for domain refusal | Admin can't tell policy refusal from bug | Keyed localized refusal per door (`inviteDomainNotAllowed`-class) |
+| Invitee gets raw English on a tightened list | Looks like a broken link | Recipient-locale `tFor()` message; suggest contacting the admin |
+| No operator feedback at boot | Misconfigured list discovered via a failed invite weeks later | Startup log of the resolved door matrix (Pitfall 3) |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Canonicalization funnel:** verify exactly ONE `split('@')` call site exists; adversarial table test covers `＠`, trailing dot, case, quoted local, `notcorp.com`, whitespace-padded env entries
+- [ ] **Door matrix:** every cell (JIT / signup / invite create / edit / accept / MCP) has a contract test, including both inherit directions of unset `ALLOW_INVITE_DOMAINS`
+- [ ] **Existing-member immunity:** re-invite of out-of-list pre-existing member succeeds; existing SSO account of a removed domain still logs in
+- [ ] **Timing:** tighten-between-create-and-accept contract test refuses with keyed reason; loosen-then-accept admits
+- [ ] **Fail-closed accept:** "cannot determine list" state refuses at accept; unset/empty semantics pinned by boot-resolver tests
+- [ ] **Refusal i18n:** every new key exists in en/fr/nl/de/es AND placeholder sets match across locales; unknown-key fallback shows English, never an empty toast
+- [ ] **Contract suite integrity:** any pre-existing pinned test touched by the new gates was consciously re-approved, not weakened
+- [ ] **Lint cleanup:** one commit per site; unit suite + e2e green per commit; no bulk `--fix`
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Bypass discovered (homoglyph/trailing dot) | LOW | Fix canonicalizer, rotate/re-validate: audit accounts+invites created since the hole opened, deny/delete the rogue admissions |
+| Operator lockout (existing members blocked) | MEDIUM | Correct env, restart; memberships were never deleted — access restored immediately; audit whether any invite deletes happened |
+| Admitted under stale list after tightening | MEDIUM | Remove members via existing admin revocation tier (audited); consider listing `inviteDomainRevoked` audit verb |
+| Lint cleanup broke a flow | LOW | `git revert` that commit; re-classify the site (side-effectful initializer) |
+| Locale string broken/missing | LOW | Fix catalogue; ERR-02 fallback meant users saw English meanwhile — no data harm |
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| 1 Parsing/normalization bypass | Domain-admission phase (funnel first) | Adversarial contract table green; single `split('@')` site |
+| 2 Fail-open config | Domain-admission phase (boot resolver) | Env-shape test matrix; DEPLOY.md doc-parity test (v1.9 KEY-03 pattern) |
+| 3 Door-matrix confusion | Domain-admission phase | Full-matrix contract tests; startup log e2e |
+| 4 TOCTOU invite lifecycle | Domain-admission phase (accept re-validation) | Tighten/loosen contract tests |
+| 5 Existing-flow lockouts | Domain-admission phase | Re-invite immunity + SSO-login immunity contract tests |
+| 6 Lint side-effect deletion | Maintenance phase | Per-commit suite; test counts stable |
+| 7 Locale silent fallback | Both (test in admission phase, spot-check in maintenance) | Placeholder-parity unit test; per-locale refusal-path UAT screenshot |
 
 ## Sources
-- Repo-verified (HIGH): `public/sw.js`, `src/core/push.js:141-172`, `src/main.js:105`, `server.js:8040-8060, 8097`, `index.html`, `vite.config.js`, `test/browser-push.test.mjs`, `.planning/milestones/v2.2-phases/59-browser-push/*` (RESEARCH Pitfall 12, REVIEW CR-02, VERIFICATION), `.planning/milestones/v1.9-phases/43-workspace-logo/43-RESEARCH.md` (D-06), PROJECT.md (v1.5 popstate mirroring, /w/:slug, chunk gate, i18n gate, Traefik deploy).
-- Platform knowledge (MEDIUM, stable, spec-level): service worker update/claim semantics, Chrome install criteria (manifest + SW + 192/512 icons), iOS Safari `beforeinstallprompt` absence and apple-touch-icon requirements, manifest `id`/`start_url`/`scope` interplay, maskable-icon safe zone. Phase-specific hardware/device UAT (real iOS install) still required.
+
+- GHSA-7rqj-j65f-68wh — Auth.js email normalizer validated before Unicode normalization (homoglyph `@` bypass), Critical — HIGH confidence
+- Birch, "HostSplit: Exploitable Antipatterns in Unicode Normalization" (BlackHat USA 2019) — HIGH confidence
+- PortSwigger, "Splitting the email atom: exploiting parsers to bypass access controls" — HIGH confidence
+- "Bypassing Origin Checks Using Trailing Dot Trick" (soltanali0) — MEDIUM confidence (write-up, technique sound)
+- GitLab docs: Sign-up restrictions (email domain allowlist/denylist) + MR 76272 "Prevent user from bypassing domain signup restrictions" via post-signup email change — HIGH confidence
+- Gitea docs: Configuration Cheat Sheet `EMAIL_DOMAIN_ALLOWLIST`/`BLOCKLIST` (registration-only semantics, wildcard support) + issue #27457 (admin registration vs allowlist) — HIGH confidence
+- OneTimeSecret docs: per-install SSO `ALLOWED_SIGNUP_DOMAIN` — new-account-only semantics, distinct keyed refusals (`missing_email`/`invalid_email`/`domain_not_allowed`), never reveal allowed domains, empty-vs-unset distinction — HIGH confidence (directly citable design posture)
+- Outline self-host docs: `ALLOWED_DOMAINS` restricting signups — MEDIUM confidence (third-party setup guide)
+- ESLint docs + typescript-eslint #3456 ("not safe to remove random variables… side effects are everywhere"), Oxlint `no-unused-vars` (write-only/self-increment reads) — HIGH confidence
+- Project context: `PROJECT.md` (seed design SEED-261119-f3w, hardened accept route HARD-01..05, D-53-2 shared validator, `tFor()` server i18n, ERR-01/02, i18n parity gates, 17 lint errors, standing gates)
+
+---
+*Pitfalls research for: v3.0 Access Control & Hardening (domain admission + maintenance debt)*
+*Researched: 2026-11-19*
