@@ -249,8 +249,18 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
 const RESERVED_SLUGS = new Set(['api', 'w', 'join', 'assets', 'static', 'health', 'login', 'signup', 'onboarding', 'settings', 'admin']);
 const MAILER = createMailer();
 const OIDC = createOidc();
-/* Registry codes the interface actually renders (src/core/i18n.js LOCALES). */
-const LOCALE_CODES = ['en', 'fr'];
+/* Registry codes the interface actually renders — derived from the same
+   source of truth as the client's import.meta.glob (D-07): the build's own
+   src/locales/*.json files. Was a hardcoded ['en','fr'] pair until phase 77
+   exposed it: phases 75's nl/de/es catalogues shipped client-side, the
+   select offered them, and the PATCH /api/auth/me write 400'd
+   (unknownLocale) — the language silently failed to persist. A future
+   locale file lands in the gate automatically, no second list to forget. */
+const LOCALE_CODES = fs
+  .readdirSync(path.join(HERE, 'src', 'locales'))
+  .filter(f => f.endsWith('.json'))
+  .map(f => f.replace(/\.json$/, ''))
+  .sort();
 
 /* ------------------------------- database ------------------------------ */
 const SCHEMA = `

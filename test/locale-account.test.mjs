@@ -47,7 +47,9 @@ test('a fresh account has a null locale', async () => {
 });
 
 test('PATCH round-trips every supported code through the users table and the payload', async () => {
-  for (const code of ['fr', 'en']) {
+  /* The registry the build ships (src/locales/*.json, phase 75 added
+     nl/de/es) — every catalogue the interface offers must persist. */
+  for (const code of ['de', 'en', 'es', 'fr', 'nl']) {
     const res = await bob.patch('/api/auth/me', { locale: code });
     assert.equal(res.status, 200, `patch ${code}`);
     assert.equal(res.data.user.locale, code, 'response carries the code');
@@ -59,7 +61,7 @@ test('PATCH round-trips every supported code through the users table and the pay
 
 test('an unknown code is rejected with 400 and nothing is written', async () => {
   await bob.patch('/api/auth/me', { locale: 'fr' });
-  for (const bad of ['de', '', 'Français', 'FR', null, 42]) {
+  for (const bad of ['xx', '', 'Français', 'FR', null, 42]) {
     const res = await bob.patch('/api/auth/me', { locale: bad });
     assert.equal(res.status, 400, `rejects ${JSON.stringify(bad)}`);
   }
