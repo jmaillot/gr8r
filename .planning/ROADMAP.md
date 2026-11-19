@@ -58,10 +58,11 @@ refusals — before any SSO surface exists.
      exact `Set` membership (never `endsWith`), subdomains are NOT implicitly admitted, and
      adversarial parsing cases are pinned by a table-driven unit suite (tri-state env matrix:
      unset / `''` / whitespace / `'a,,b'` / `' a , B '`).
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 75-01: TBD (planner derives — validator + adversarial tests first, then doors)
+- [ ] 75-01-PLAN.md — Resolver + funnel + DP-1 signup door tracer, adversarial DOM-07 suite, D-06 boot logs, DEPLOY.md docs
+- [ ] 75-02-PLAN.md — DP-2 per-email invite gate, MCP invite_member door, DP-3 fail-closed accept, inheritance matrix + gmail/TCTOU scenarios
 
 **Set-but-empty semantics (flagged for phase decision):** research recommends explicit-set =
 deny-all (empty Set) vs unset = inherit/off. The tri-state boot resolver supports it; the
