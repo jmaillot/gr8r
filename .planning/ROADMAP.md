@@ -28,7 +28,7 @@ semantics (re-minting = invite create = DP-2). No route is invented; covered by 
 - Decimal phases (75.1, …): urgent insertions (marked INSERTED)
 
 - [x] **Phase 75: Domain Admission Core** - Shared canonicalizing validator + signup, invite-create and fail-closed invite-accept doors with 5-locale keyed refusals ✅ COMPLETE (2026-11-19 — UAT passed, verification passed) (completed 2026-11-19)
-- [ ] **Phase 76: OIDC/SSO Doors & Immunity Hardening** - JIT SSO gate, SSO invite reconciliation, existing-account immunity contract tests, boot door-matrix log
+- [x] **Phase 76: OIDC/SSO Doors & Immunity Hardening** - JIT SSO gate, SSO invite reconciliation, existing-account immunity contract tests, boot door-matrix log
 - [ ] **Phase 77: Maintenance Debt** - Lint cleanup, nl/de/es refusal-path locale spot-check, WR/IN carryover dispositions
 
 ## Phase Details
@@ -97,10 +97,10 @@ changes, with operators able to see the resolved matrix at boot.
 
 Plans:
 **Wave 1**
-- [ ] 76-01-PLAN.md — DP-4 JIT gate + DP-5 reconcile filter + D-11 door-matrix boot log, pinned by the core D-12 contract suite rows (Wave 1)
+- [x] 76-01-PLAN.md — DP-4 JIT gate + DP-5 reconcile filter + D-11 door-matrix boot log, pinned by the core D-12 contract suite rows (Wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 76-02-PLAN.md — three named immunity rows (DOM-05) + DEPLOY.md operator docs (Wave 2)
+- [x] 76-02-PLAN.md — three named immunity rows (DOM-05) + DEPLOY.md operator docs (Wave 2) — truth #1 amended to Option B (accept-time re-validation applies to ALL admits)
 
 ### Phase 77: Maintenance Debt
 
@@ -136,5 +136,5 @@ Phases execute in numeric order: 75 → 76 → 77
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 75. Domain Admission Core | 2/2 | Complete    | 2026-11-19 |
-| 76. OIDC/SSO Doors & Immunity Hardening | 1/2 | In Progress | - |
+| 76. OIDC/SSO Doors & Immunity Hardening | 2/2 | Complete | - |
 | 77. Maintenance Debt | 0/? | Not started | - |

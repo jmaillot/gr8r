@@ -5,17 +5,17 @@ milestone_name: Access Control & Hardening
 current_phase: 76
 current_phase_name: OIDC/SSO Doors & Immunity Hardening
 status: executing
-stopped_at: Completed 76-01-PLAN.md
-last_updated: "2026-11-19T17:26:39Z"
+stopped_at: Completed 76-02-PLAN.md
+last_updated: "2026-11-19T18:05:00Z"
 last_activity: 2026-11-19
-last_activity_desc: 76-01 complete — DP-4/DP-5 doors + D-11 matrix log + D-12 suite (15 rows)
+last_activity_desc: 76-02 complete — three named immunity rows (truth #1 amended to Option B) + DEPLOY.md SSO door docs
 state_head: ac1f26bdf476da61ac51fc2b4394a830f121f521
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -32,10 +32,10 @@ before features.
 
 Phase: 76 (OIDC/SSO Doors & Immunity Hardening) — EXECUTING
 Plan: 2 of 2
-Status: Executing Phase 76 (76-01 complete)
-Last activity: 2026-11-19 — Completed 76-01-PLAN.md (DP-4, DP-5, D-11 + D-12 suite)
+Status: Phase 76 plans complete — ready for verification
+Last activity: 2026-11-19 — Completed 76-02-PLAN.md (immunity rows + DEPLOY.md docs, Option B amendment)
 
-Progress: [███████░░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -49,7 +49,7 @@ Progress: [███████░░░] 75%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 75 | 2 | - | - |
-| 76 | 1 | 12 min | 12 min |
+| 76 | 2 | 44 min | 22 min |
 | 77 | 0 | - | - |
 
 *Updated after each plan completion*
@@ -77,6 +77,11 @@ Recent decisions affecting current work:
   ⇒ one verdict per email); suite pins two-in-list-invites '/#invitations' branching instead
 - 76-01: Open Q1/Q2/Q3 resolved — no DP-2 change; fake IdP extracted to test/helpers/oidc-idp.mjs;
   invites listing API confirmed un-gated
+- 76-02: TRUTH AMENDED (Option B, owner-approved) — accept-time re-validation applies to ALL admits,
+  including existing accounts; existing-account immunity covers authentication/logins only (SC2),
+  never invite acceptance. Existing out-of-list member re-invited under a tightened list gets
+  403 inviteDomainNoLonger, invite not consumed, loosening revives it
+- 76-02: immunity is test-only proof (zero production diffs in plan 02) — prohibition enforced
 
 ### Pending Todos
 
@@ -102,6 +107,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-19T17:26:39Z
-Stopped at: Completed 76-01-PLAN.md
-Resume file: None — ready for 76-02-PLAN.md
+Last session: 2026-11-19T18:05:00Z
+Stopped at: Completed 76-02-PLAN.md
+Resume file: None — Phase 76 plans complete, ready for /gsd-verify-work
