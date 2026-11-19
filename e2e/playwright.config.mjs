@@ -33,6 +33,13 @@ export default defineConfig({
     command: 'node e2e/server.mjs',
     cwd: ROOT,
     url: `${BASE_URL}/api/health`,
+    /* MAINT-02 (phase 77, owner decision): run-wide signup-domain gate. The
+       value is e2e.local-inclusive, so every @e2e.local fixture (the whole
+       suite's account scheme) keeps signing up normally, while any other
+       domain hits the DP-1 refusal the locale-refusal spec drives. Playwright
+       merges this over process.env, so e2e/server.mjs's passthrough semantics
+       are unchanged. */
+    env: { ALLOW_SIGNUP_DOMAINS: 'e2e.local' },
     reuseExistingServer: process.env.E2E_REUSE_SERVER === 'true',
     timeout: 120_000,
     /* Without this Playwright SIGKILLs the group, skipping the wrapper's temp-dir cleanup. */

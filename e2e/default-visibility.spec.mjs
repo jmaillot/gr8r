@@ -90,8 +90,8 @@ test('owner default-visibility setting seeds private creations and hides them fr
   const run = newRunId();
   const slug = `dv-${run}`;
   const { account, client: owner } = await createAccount(BASE_URL, run, 'dv-owner', 'DV Owner', { locale: 'en', workspace: slug });
-  const maker = await joinMember(BASE_URL, owner, slug, `dv-maker-${run}@dv.local`, run, 'DV Maker');
-  const outsider = await joinMember(BASE_URL, owner, slug, `dv-out-${run}@dv.local`, run, 'DV Out');
+  const maker = await joinMember(BASE_URL, owner, slug, `dv-maker-${run}@e2e.local`, run, 'DV Maker');
+  const outsider = await joinMember(BASE_URL, owner, slug, `dv-out-${run}@e2e.local`, run, 'DV Out');
   await addProject(owner, slug, { id: 'p_dv_fixture', key: 'dv-fix', name: `DV Fixture ${run}` });
 
   const ownerCtx = await browser.newContext({ baseURL: BASE_URL, extraHTTPHeaders: { 'x-forwarded-for': account.ip } });
