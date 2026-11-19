@@ -60,9 +60,19 @@ server.js (funnel-shaped, mirroring `validateGuestInviteShape`).
 
 ## Traceability
 
-Filled by roadmap creation:
+Filled by roadmap creation (2026-11-19):
 
-| Requirement | Phase |
-|-------------|-------|
-| DOM-01..07 | — |
-| MAINT-01..03 | — |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DOM-01 | Phase 75 | Pending |
+| DOM-02 | Phase 75 | Pending |
+| DOM-03 | Phase 75 | Pending |
+| DOM-04 | Phase 75 | Pending |
+| DOM-05 | Phase 76 | Pending |
+| DOM-06 | Phase 76 | Pending |
+| DOM-07 | Phase 75 | Pending |
+| MAINT-01 | Phase 77 | Pending |
+| MAINT-02 | Phase 77 | Pending |
+| MAINT-03 | Phase 77 | Pending |
+
+Coverage: 10/10 v1 requirements mapped — no orphans, no duplicates.
