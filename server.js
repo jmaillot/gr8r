@@ -8934,6 +8934,13 @@ async function main() {
     const domainListLog = list => (list === null ? 'off' : isWildcardList(list) ? '*' : list.size === 0 ? 'deny-all' : [...list].sort().join(', '));
     logInfo(`domains: ALLOW_SIGNUP_DOMAINS: ${domainListLog(SIGNUP_DOMAINS)} (source: own)`);
     logInfo(`domains: ALLOW_INVITE_DOMAINS: ${domainListLog(INVITE_DOMAINS)} (source: ${'ALLOW_INVITE_DOMAINS' in process.env ? 'own' : 'inherit'})`);
+    /* D-11 (Phase 76, SC4): ONE combined line answering exactly which of the
+       five doors admit which domains — no assembly by the reader. The
+       door→list mapping is structural: signup + sso-jit ride SIGNUP_DOMAINS;
+       invite-create + invite-accept + sso-reconcile ride INVITE_DOMAINS
+       (already inherit-resolved via ?? in domains.js). Source attribution
+       stays on the two D-06 lines above, which are deliberately untouched. */
+    logInfo(`domains: door matrix — signup: ${domainListLog(SIGNUP_DOMAINS)} | invite-create: ${domainListLog(INVITE_DOMAINS)} | invite-accept: ${domainListLog(INVITE_DOMAINS)} | sso-jit: ${domainListLog(SIGNUP_DOMAINS)} | sso-reconcile: ${domainListLog(INVITE_DOMAINS)}`);
   });
 
   const shutdown = signal => {

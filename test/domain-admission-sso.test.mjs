@@ -287,3 +287,91 @@ test('DP-5: two in-list invites across two workspaces survive the filter and dri
     await server.stop();
   }
 });
+
+/* ---------- D-11: the combined five-door matrix boot log (SC4) ---------- */
+
+const matrixLineOf = out => out.split('\n').find(l => l.includes('domains: door matrix'));
+
+test('D-11: boot logs ONE combined line carrying all five door labels (SC4 — no reader assembly)', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'b.com' } });
+  try {
+    const lines = server.output().split('\n').filter(l => l.includes('domains: door matrix'));
+    assert.equal(lines.length, 1, `exactly one combined matrix line, got ${lines.length}`);
+    for (const door of ['signup:', 'invite-create:', 'invite-accept:', 'sso-jit:', 'sso-reconcile:']) {
+      assert.ok(lines[0].includes(door), `the combined line must carry the ${door} label, got: ${lines[0]}`);
+    }
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-11: the own-lists matrix shows each door riding its structural list (signup/sso-jit ← SIGNUP, invite-* ← INVITE)', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'b.com' } });
+  try {
+    const line = matrixLineOf(server.output());
+    assert.ok(line, 'the combined matrix line is missing');
+    assert.ok(line.includes('signup: a.com'), `signup door: ${line}`);
+    assert.ok(line.includes('sso-jit: a.com'), `sso-jit door: ${line}`);
+    assert.ok(line.includes('invite-create: b.com'), `invite-create door: ${line}`);
+    assert.ok(line.includes('invite-accept: b.com'), `invite-accept door: ${line}`);
+    assert.ok(line.includes('sso-reconcile: b.com'), `sso-reconcile door: ${line}`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-11: unset ALLOW_INVITE_DOMAINS inherits the signup list on all three invite doors (D-02 inherit direction 1)', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: undefined } });
+  try {
+    const line = matrixLineOf(server.output());
+    assert.ok(line, 'the combined matrix line is missing');
+    assert.ok(line.includes('invite-create: a.com') && line.includes('invite-accept: a.com') && line.includes('sso-reconcile: a.com'), `inherit direction 1: ${line}`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-11: an own wider invite list stands alone on the invite doors (D-03/D-04 one door, one rule — inherit direction 2)', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'b.com,c.com' } });
+  try {
+    const line = matrixLineOf(server.output());
+    assert.ok(line, 'the combined matrix line is missing');
+    assert.ok(line.includes('signup: a.com') && line.includes('sso-jit: a.com'), `signup doors keep their own list: ${line}`);
+    assert.ok(line.includes('invite-create: b.com, c.com') && line.includes('invite-accept: b.com, c.com') && line.includes('sso-reconcile: b.com, c.com'), `invite doors show the wider own list: ${line}`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("D-11: set-but-empty shows 'deny-all' on the signup doors; a fully absent env shows 'off' for all five", async () => {
+  const denyAll = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: '', ALLOW_INVITE_DOMAINS: undefined } });
+  try {
+    const line = matrixLineOf(denyAll.output());
+    assert.ok(line, 'the combined matrix line is missing');
+    assert.ok(line.includes('signup: deny-all') && line.includes('sso-jit: deny-all'), `deny-all row: ${line}`);
+    assert.ok(line.includes('invite-create: deny-all'), `deny-all inherits into the invite doors: ${line}`);
+  } finally {
+    await denyAll.stop();
+  }
+  const off = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: undefined, ALLOW_INVITE_DOMAINS: undefined } });
+  try {
+    const line = matrixLineOf(off.output());
+    assert.ok(line, 'the combined matrix line is missing');
+    assert.ok(line.includes('signup: off') && line.includes('invite-create: off') && line.includes('invite-accept: off') && line.includes('sso-jit: off') && line.includes('sso-reconcile: off'), `off row: ${line}`);
+  } finally {
+    await off.stop();
+  }
+});
+
+test('D-11: the two Phase 75 D-06 per-var lines remain byte-identical in shape with their source tags (SC4)', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'a.com', ALLOW_INVITE_DOMAINS: 'b.com' } });
+  try {
+    const out = server.output();
+    const signupLine = out.split('\n').find(l => l.includes('domains: ALLOW_SIGNUP_DOMAINS:'));
+    const inviteLine = out.split('\n').find(l => l.includes('domains: ALLOW_INVITE_DOMAINS:'));
+    assert.ok(signupLine && signupLine.includes('a.com') && signupLine.includes('(source: own)'), `signup D-06 line: ${signupLine}`);
+    assert.ok(inviteLine && inviteLine.includes('b.com') && inviteLine.includes('(source: own)'), `invite D-06 line: ${inviteLine}`);
+  } finally {
+    await server.stop();
+  }
+});
