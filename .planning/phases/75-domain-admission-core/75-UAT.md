@@ -9,10 +9,10 @@ updated: 2026-11-19T13:37:00Z
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-number: 3
-name: Unset variable fail-open
+number: 4
+name: Empty list deny-all
 expected: |
-  With ALLOW_SIGNUP_DOMAINS unset, signup behaves exactly as before this phase — any structurally valid email is admitted (fail-open).
+  With ALLOW_SIGNUP_DOMAINS set to an empty value, ALL signups are refused, regardless of email domain.
 awaiting: user response
 
 ## Tests
@@ -30,7 +30,9 @@ resolved: fixed inline during UAT (commit 5c08866f) — .env.example now documen
 
 ### 3. Unset variable fail-open
 expected: With ALLOW_SIGNUP_DOMAINS unset, signup behaves exactly as before this phase — any structurally valid email is admitted (fail-open).
-result: [pending]
+result: issue
+reported: "Node.js cold start: ERR_MODULE_NOT_FOUND Cannot find module '/app/domains.js' imported from /app/mcp.js (Docker production image)"
+severity: blocker
 
 ### 4. Empty list deny-all
 expected: With ALLOW_SIGNUP_DOMAINS set to an empty value, ALL signups are refused, regardless of email domain.
@@ -98,8 +100,8 @@ coverage_id: D7
 
 total: 15
 passed: 8
-issues: 1
-pending: 6
+issues: 2
+pending: 5
 skipped: 0
 blocked: 0
 
@@ -115,3 +117,17 @@ blocked: 0
   test: 2
   artifacts: []
   missing: []
+
+- gap_id: G-75-3
+  truth: "Server boots in the production Docker image (cold start smoke test)"
+  status: resolved
+  resolved_by: inline fix during UAT — Dockerfile now copies domains.js (commit beaecfd1)
+  resolved_at: 2026-11-19
+  reason: "User reported: ERR_MODULE_NOT_FOUND /app/domains.js in Docker container"
+  severity: blocker
+  test: 3
+  artifacts:
+    - path: "Dockerfile"
+      issue: "production stage copies root JS files individually; domains.js omitted"
+  missing:
+    - "COPY --from=build /app/domains.js ./domains.js"
