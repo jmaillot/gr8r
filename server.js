@@ -181,6 +181,7 @@ import {
   SIGNUP_DOMAINS,
   INVITE_DOMAINS,
   emailDomainRefusal,
+  emailFromEmail,
   isWildcardList,
 } from './domains.js';
 
@@ -5123,6 +5124,21 @@ async function handleApi(req, res, url) {
              fail closed BEFORE any users/oidc_identities write. */
           return errorRedirect();
         } else {
+          /* DP-4 (Phase 76, DOM-06): the signup door gates JIT provisioning —
+             fresh-provision branch ONLY, AFTER the email_verified gate; an
+             already-linked identity never reaches this arm (immunity, DOM-05)
+             and an existing verified-email account links above without being
+             gated. Refusal logs the domain only, never the full email (D-09,
+             V7 PII ban), and the client sees the ONE generic sso=error
+             surface — no domain-revealing query param. */
+          const signupRefusal = emailDomainRefusal(email, SIGNUP_DOMAINS);
+          if (signupRefusal) {
+            /* D-09 (V7 PII ban): the domain only — never the full email.
+               logInfo is single-argument here, so the domain rides the
+               message string (the surrounding interpolated-log style). */
+            logInfo(`sso signup domain refused — domain: ${emailFromEmail(email)}`);
+            return errorRedirect();
+          }
           /* Pitfall 5: JIT accounts get a RANDOM unusable scrypt hash — never
              a constant — into the password_hash NOT NULL column. Bare account,
              no workspace (D-05); the onboarding flow lands them next. */
