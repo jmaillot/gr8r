@@ -140,3 +140,9 @@ blocked: 0
       issue: "production stage copies root JS files individually; domains.js omitted"
   missing:
     - "COPY --from=build /app/domains.js ./domains.js"
+
+## Deferred Follow-Ups
+
+- test: 4
+  idea: "Wildcard '*' = allow-all for the domain doors — implemented inline during UAT (commit 968a475): parseDomainList resolves a lone '*' to a wildcard list, emailDomainRefusal admits everything, mixed '*,x.com' stays an exact allowlist, boot log prints '*'. Documented in .env.example"
+  deferred_at: 2026-11-19
