@@ -113,7 +113,7 @@ function renderStrip(flavour) {
   el.innerHTML = `<span class="grow">${esc(text)}</span>`;
   if (flavour === 'cta') {
     const btn = document.createElement('button');
-    btn.className = 'ibtn install-cta';
+    btn.className = 'btn btn-primary install-cta';
     btn.textContent = t('pwa.install.cta');
     /* The ONLY prompt() call site — inside a user-gesture click handler
        (research Pitfall 2). One shot per captured event. */

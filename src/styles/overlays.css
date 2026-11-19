@@ -795,6 +795,14 @@
 }
 .install-banner .install-cta {
   flex: none;
+  /* Solid primary CTA — a real button on the dark strip, not a ghost icon
+     button (owner feedback 2026-11-19: the grey .ibtn text was illegible on
+     the dark background). .btn/.btn-primary give accent bg + on-accent text;
+     only the size is trimmed to strip scale. */
+  height: auto;
+  min-height: 30px;
+  padding: 4px 14px;
+  font-size: var(--fs-sm);
 }
 .toast {
   pointer-events: auto;
