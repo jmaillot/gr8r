@@ -1,6 +1,15 @@
 ---
-gsd_state_version: '1.0'  # placeholder; syncStateFrontmatter overwrites on first state.* call
+gsd_state_version: "1.0"
+milestone: v3.0
+milestone_name: Access Control & Hardening
+current_phase: 75
+current_phase_name: first phase of milestone v3.0
 status: planning
+stopped_at: Phase 75 context gathered
+last_updated: "2026-11-19T11:34:35.353Z"
+last_activity: 2026-11-19
+last_activity_desc: ROADMAP.md created (v3.0, phases 75-77, 10/10 requirements mapped)
+state_head: 534a547acc6267a559922f9f1184d7fe4b2bb991
 progress:
   total_phases: 3
   completed_phases: 0
@@ -87,6 +96,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-19
-Stopped at: Roadmap created — next step `/gsd-plan-phase 75` (optionally `/gsd-discuss-phase 75` first)
-Resume file: None
+Last session: 2026-11-19T11:34:35.329Z
+Stopped at: Phase 75 context gathered
+Resume file: .planning/phases/75-domain-admission-core/75-CONTEXT.md
