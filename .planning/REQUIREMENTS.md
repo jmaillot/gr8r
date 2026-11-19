@@ -23,8 +23,11 @@ server.js (funnel-shaped, mirroring `validateGuestInviteShape`).
 - [x] **DOM-04**: Pending invites are re-validated fail-closed at accept time against
   `ALLOW_INVITE_DOMAINS`; tightening a list refuses pending outside invites with a keyed,
   localized refusal (all 5 catalogues)
-- [ ] **DOM-05**: Existing accounts are immune: list changes never block logins, re-invites
+- [x] **DOM-05**: Existing accounts are immune: list changes never block logins, re-invites
   of existing out-of-list members, or repeat SSO logins of already-linked identities
+  *(76-02 — truth amended per owner Option B: logins/repeat-SSO-logins immune; accept-time
+  re-validation applies to ALL admits — re-invite acceptance of an out-of-list member under a
+  tightened list is refused non-consumingly and revived by loosening)*
 - [x] **DOM-06**: OIDC JIT account creation honors `ALLOW_SIGNUP_DOMAINS` (fresh-provision
   branch only, after the `email_verified` gate) so SSO cannot bypass the rule *(76-01)*
 - [x] **DOM-07**: Domain matching is exact and canonicalized — case-insensitive, trailing
@@ -68,7 +71,7 @@ Filled by roadmap creation (2026-11-19):
 | DOM-02 | Phase 75 | Complete |
 | DOM-03 | Phase 75 | Complete |
 | DOM-04 | Phase 75 | Complete |
-| DOM-05 | Phase 76 | Pending |
+| DOM-05 | Phase 76 | Complete *(Option B amendment — see 76-02-SUMMARY)* |
 | DOM-06 | Phase 76 | Complete (76-01) |
 | DOM-07 | Phase 75 | Complete |
 | MAINT-01 | Phase 77 | Pending |
