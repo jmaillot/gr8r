@@ -36,7 +36,7 @@ server.js (funnel-shaped, mirroring `validateGuestInviteShape`).
 
 ### Maintenance (MAINT)
 
-- [ ] **MAINT-01**: `npx eslint .` exits clean — 15 unused-var/useless-assignment sites
+- [x] **MAINT-01**: `npx eslint .` exits clean — 15 unused-var/useless-assignment sites
   fixed in code, 2 `no-undef` files (webhook-formats.js, webhook-ssrf.js) added to the
   eslint.config.js Node-globals block, zero `eslint-disable` comments
 - [ ] **MAINT-02**: nl/de/es catalogues verified in the real app — the refusal-path
@@ -74,7 +74,7 @@ Filled by roadmap creation (2026-11-19):
 | DOM-05 | Phase 76 | Complete *(Option B amendment — see 76-02-SUMMARY)* |
 | DOM-06 | Phase 76 | Complete (76-01) |
 | DOM-07 | Phase 75 | Complete |
-| MAINT-01 | Phase 77 | Pending |
+| MAINT-01 | Phase 77 | Complete |
 | MAINT-02 | Phase 77 | Pending |
 | MAINT-03 | Phase 77 | Pending |
 
