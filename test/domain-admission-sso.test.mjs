@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { idp, startMockIdp } from './helpers/oidc-idp.mjs';
-import { login, startServer, withDb } from './helpers/server.mjs';
+import { inviteToken, login, signup, startServer, withDb } from './helpers/server.mjs';
 
 /* ------------------------------ helpers ------------------------------ */
 
@@ -365,8 +365,77 @@ test('immunity 2 — a pre-seeded linked identity logs in under a list that excl
   }
 });
 
-/* ---------- D-11: the combined five-door matrix boot log (SC4) ---------- */
+test('immunity 3 — an existing member re-invited to another workspace under a tightened list is refused at accept, invite NOT consumed, loosening revives it (SC3/AMENDED, DOM-05)', async () => {
+  /* AMENDED truth (Option B, plan 76-02 deviation log): accept-time
+     re-validation applies to ALL admits, including existing accounts —
+     existing-account immunity covers authentication/logins only (SC2
+     scope), never invite acceptance. An existing member whose email sits
+     outside the tightened invite list gets 403 inviteDomainNoLonger on the
+     accept route; the invite row is NOT consumed; loosening revives it. */
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-imm3-'));
+  /* Boot 1: doors off — the member account exists, joins workspace A by
+     accepting an invite (earning its membership), and is then invited to a
+     SECOND workspace B while the door is still off (so the invite row
+     exists without touching DP-2 create-time semantics). */
+  let server = await startServer({ dataDir, env: { ...oidcEnv() } });
+  let tokenB;
+  try {
+    await signup(server.base, { name: 'Immunity Member', email: 'member@x.com' });
+    const { owner, slug } = await ownerAndWs(server.base);
+    const invA = await owner.post(`/api/workspaces/${slug}/invites`, { emails: ['member@x.com'], role: 'member' });
+    assert.equal(invA.status, 201, `workspace A invite must mint with the door off, got ${invA.status}`);
+    const { client: member } = await login(server.base, 'member@x.com', 'password-1234');
+    const accA = await member.post(`/api/invites/${inviteToken(invA.data.invites[0].url)}/accept`, {});
+    assert.ok([200, 201].includes(accA.status), `workspace A accept must succeed with the door off, got ${accA.status}: ${JSON.stringify(accA.data)}`);
+    const second = await owner.post('/api/workspaces', { name: 'Immunity Second' });
+    assert.equal(second.status, 201, `workspace B must be created, got ${second.status}`);
+    const slugB = second.data.workspace?.slug || second.data.slug;
+    const invB = await owner.post(`/api/workspaces/${slugB}/invites`, { emails: ['member@x.com'], role: 'member' });
+    assert.equal(invB.status, 201, `workspace B invite must mint with the door off, got ${invB.status}`);
+    tokenB = inviteToken(invB.data.invites[0].url);
+    assert.ok(tokenB, 'the workspace B join token was minted');
+  } finally {
+    await server.stop();
+  }
+  /* Boot 2: the invite list TIGHTENED to exclude x.com — the member's
+     re-invite to workspace B is refused at ACCEPT time; their existing
+     membership and logins are untouched (auth immunity ≠ accept immunity). */
+  server = await startServer({ dataDir, env: { ...oidcEnv(), ALLOW_INVITE_DOMAINS: 'a.com' } });
+  try {
+    const { client: member } = await login(server.base, 'member@x.com', 'password-1234');
+    assert.ok(member, 'boot 2: the existing member still LOGS IN — immunity covers authentication (SC2)');
+    const res = await member.post(`/api/invites/${tokenB}/accept`, {});
+    assert.equal(res.status, 403, `the tightened list must refuse the accept even for an existing member, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'inviteDomainNoLonger', 'the refusal is the accept-door key');
+    withDb(server.dbPath, db => {
+      const invite = db.prepare('select used_at from invites where email = ?').get('member@x.com');
+      /* Two invite rows exist (A consumed, B pending) — assert on the B row via its token-time email and used_at IS NULL count. */
+      assert.equal(db.prepare('select count(*) as n from invites where email = ? and used_at is null').get('member@x.com').n, 1, 'exactly one invite (B) stays pending — the refusal consumed NOTHING');
+      const user = db.prepare('select * from users where email = ?').get('member@x.com');
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 1, 'the existing membership in A is untouched');
+      assert.ok(invite, 'the invite rows survive the refusal');
+    });
+  } finally {
+    await server.stop();
+  }
+  /* Boot 3: loosened — the SAME invite revives and the accept succeeds. */
+  server = await startServer({ dataDir, env: { ...oidcEnv() } });
+  try {
+    const { client: member } = await login(server.base, 'member@x.com', 'password-1234');
+    const res = await member.post(`/api/invites/${tokenB}/accept`, {});
+    assert.ok([200, 201].includes(res.status), `loosening must revive the re-invite, got ${res.status}: ${JSON.stringify(res.data)}`);
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select * from users where email = ?').get('member@x.com');
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 2, 'the membership in B was granted on revival');
+      assert.equal(db.prepare('select count(*) as n from invites where email = ? and used_at is null').get('member@x.com').n, 0, 'the revived accept consumed the pending invite');
+    });
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
 
+/* ---------- D-11: the combined five-door matrix boot log (SC4) ---------- */
 const matrixLineOf = out => out.split('\n').find(l => l.includes('domains: door matrix'));
 
 test('D-11: boot logs ONE combined line carrying all five door labels (SC4 — no reader assembly)', async () => {
