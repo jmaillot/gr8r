@@ -76,16 +76,21 @@ const pushMod = () => import('./core/push.js');
    detection logic, no strings, no cooldown math (D-06). preventDefault
    suppresses Chrome's own mini-infobar so the in-app strip is the only
    affordance. Boot-time checkIos() is the runtime entry point for the iOS
-   degradation path: on iOS neither event ever fires (D-06). */
+   degradation path: on iOS neither event ever fires (D-06).
+   73-IN-03: chunk-load failures are surfaced, not swallowed (D-77-12) — a
+   deliberate exception to the house .catch(() => {}) convention. The
+   prefix is a static string; the error object rides as a separate console
+   argument, never interpolated into user-visible text (ASVS V5). */
 const bannerMod = () => import('./features/install-banner.js');
+const bannerChunkFailed = err => console.warn('install banner chunk failed', err);
 addEventListener('beforeinstallprompt', e => {
   e.preventDefault?.();
-  bannerMod().then(m => m.onBip(e)).catch(() => {});
+  bannerMod().then(m => m.onBip(e)).catch(bannerChunkFailed);
 });
 addEventListener('appinstalled', () => {
-  bannerMod().then(m => m.onInstalled()).catch(() => {});
+  bannerMod().then(m => m.onInstalled()).catch(bannerChunkFailed);
 });
-bannerMod().then(m => m.checkIos()).catch(() => {});
+bannerMod().then(m => m.checkIos()).catch(bannerChunkFailed);
 
 /* The locale change re-renders the app: one listener, one re-render, never
    batched or debounced (D-01). The loop guard in applyPrefs() keeps this from

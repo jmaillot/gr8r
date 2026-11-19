@@ -788,7 +788,10 @@
 }
 .install-banner.out {
   opacity: 0;
-  transition: opacity 160ms ease-out;
+  /* 73-IN-02: duration derives from install-banner.js's EXIT_MS constant
+     via the --install-banner-exit-ms variable set at mount (single source
+     of truth — no independent 160 literal pairs CSS↔JS). */
+  transition: opacity var(--install-banner-exit-ms, 160ms) ease-out;
 }
 .install-banner .grow {
   flex: 1;

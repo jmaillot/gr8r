@@ -25,10 +25,23 @@ import { ic } from '../core/icons.js';
 
 const KEY = 'pwa.installDismissedAt';
 const COOLDOWN_MS = 14 * 864e5;
+/* 73-IN-02 (D-77-11): the exit animation duration is ONE named constant.
+   overlays.css derives the opacity transition from this module's CSS
+   variable (--install-banner-exit-ms, set at mount) — no independent
+   literal pairs the CSS and the JS anymore. */
+export const EXIT_MS = 160;
+/* 73-IN-04 (D-77-13): the pre-hydration rAF retry budget, in wall-clock
+   milliseconds (≈ the 300-frame budget it replaces at 60fps). */
+export const RETRY_BUDGET_MS = 5000;
 
 /* The currently mounted strip (either flavour) — onInstalled() and the
    outcome handlers hide through this reference. */
 let strip = null;
+/* The flavour the current strip was mounted with (WR-02/73-REVIEW): tracked
+   alongside `strip` so renderStrip() can distinguish "same flavour already
+   mounted" (reuse) from "different flavour" (rebuild). Cleared with `strip`
+   inside hide()'s removal timeout — never before the node is actually gone. */
+let stripFlavour = null;
 /* The captured beforeinstallprompt event: one shot per event (D-02). */
 let deferred = null;
 
@@ -85,11 +98,22 @@ function canShow() {
   return cooldownExpired(Date.now());
 }
 
-/* Exit animation then remove (toast.js kill() shape). */
+/* Exit animation then remove (toast.js kill() shape). EXIT_MS (above) is
+   the single source of truth for the exit duration — overlays.css derives
+   its transition from the same constant via the CSS variable set at mount
+   (73-IN-02; toast.js keeps its own literal — unifying it later must not
+   foreclose on this constant). The strip/flavour references survive until
+   the node is actually removed (WR-02): the DOM node stays live for the
+   full animation, so the "is a strip mounted" check must stay true too. */
 function hide(el) {
   el.classList.add('out');
-  setTimeout(() => el.remove(), 160);
-  if (strip === el) strip = null;
+  setTimeout(() => {
+    el.remove();
+    if (strip === el) {
+      strip = null;
+      stripFlavour = null;
+    }
+  }, EXIT_MS);
 }
 
 function writeCooldown() {
@@ -105,11 +129,20 @@ function writeCooldown() {
    flavour 'ios': dismiss X + static one-line hint — NEVER an Install
    button, never a fake prompt (D-06). */
 function renderStrip(flavour) {
-  if (strip) return strip;
+  /* WR-02 flavour-aware early return: reuse only when the SAME flavour is
+     already mounted; a different flavour rebuilds (the iOS hint must not
+     inherit the Chromium strip's button and vice versa). */
+  if (strip && stripFlavour === flavour) return strip;
   const el = document.createElement('div');
   el.className = 'install-banner';
   el.setAttribute('role', 'status');
-  const text = flavour === 'ios' ? t('pwa.install.iosHint') : t('pwa.install.cta');
+  /* 73-IN-02: the CSS exit transition derives its duration from the JS
+     constant — the variable is set at mount, so the stylesheet never
+     carries an independent 160 literal. */
+  el.style.setProperty('--install-banner-exit-ms', `${EXIT_MS}ms`);
+  /* WR-01: the grow-span carries the dedicated hint key — never the CTA
+     label duplicated above the Install button (D-77-8). */
+  const text = flavour === 'ios' ? t('pwa.install.iosHint') : t('pwa.install.hint');
   el.innerHTML = `<span class="grow">${esc(text)}</span>`;
   if (flavour === 'cta') {
     const btn = document.createElement('button');
@@ -128,10 +161,13 @@ function renderStrip(flavour) {
       }
       try {
         /* accepted and dismissed both hide (D-04); an unexpected outcome
-           hides defensively too. Only the X writes the cooldown key. */
+           hides defensively too. Only the X writes the cooldown key.
+           73-IN-01: exactly ONE hide on this path — the fall-through call
+           below covers every outcome, so the catch must not hide again
+           (a second hide would double-schedule the removal timeout). */
         await ev.userChoice;
       } catch {
-        hide(el);
+        /* the fall-through hide() below runs for every outcome */
       }
       hide(el);
     };
@@ -148,6 +184,7 @@ function renderStrip(flavour) {
   el.appendChild(x);
   document.body.appendChild(el);
   strip = el;
+  stripFlavour = flavour;
   return el;
 }
 
@@ -163,14 +200,19 @@ function renderStrip(flavour) {
 export function onBip(e) {
   deferred = e || null;
   if (!deferred) return; /* nothing captured: nothing scheduled */
-  let frames = 0;
+  /* 73-IN-04: wall-clock retry budget — a 5s deadline measured with
+     performance.now(), not a frame counter (frames ≠ time under a stalled
+     or throttled rAF). The give-up path clears `deferred` (WR-02): a
+     dropped capture must not linger as a stale one-shot reference. */
+  const deadline = performance.now() + RETRY_BUDGET_MS;
   const attempt = () => {
     if (strip || !deferred) return; /* mounted, or onInstalled() nulled the event */
     const g = guardSource();
     if (g.auth) return; /* login/join screens: the decision is final (D-03) */
     if (!g.enabled) {
-      /* boot still hydrating: retry within the frame budget, never a timeout */
-      if (++frames < 300) requestAnimationFrame(attempt);
+      /* boot still hydrating: retry within the wall-clock budget, never a timeout */
+      if (performance.now() < deadline) requestAnimationFrame(attempt);
+      else deferred = null;
       return;
     }
     if (canShow()) renderStrip('cta');
@@ -200,14 +242,18 @@ export function onInstalled() {
    decision is final: no further frames are scheduled on any path. */
 export function checkIos() {
   if (!isIos() || standalone()) return;
-  let frames = 0;
+  /* 73-IN-04: the same wall-clock budget as onBip (D-77-13) — the give-up
+     path schedules nothing further; the boot-time pre-check leaves no
+     residual state. */
+  const deadline = performance.now() + RETRY_BUDGET_MS;
   const attempt = () => {
     if (strip || !isIos() || standalone()) return;
     const g = guardSource();
     if (g.auth) return; /* login/join screens: the decision is final (D-03) */
     if (!g.enabled) {
-      /* boot still hydrating: retry within the frame budget, never a timeout */
-      if (++frames < 300) requestAnimationFrame(attempt);
+      /* boot still hydrating: retry within the wall-clock budget, never a timeout */
+      if (performance.now() < deadline) requestAnimationFrame(attempt);
+      else deferred = null;
       return;
     }
     if (canShow()) renderStrip('ios');

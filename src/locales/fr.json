@@ -2071,5 +2071,6 @@
   "templates.importTaskLabel": "Exemple : tâche",
   "templates.importProjectLabel": "Exemple : projet",
   "pwa.install.cta": "Installer l’application",
+  "pwa.install.hint": "Installez l’application pour un accès en un geste",
   "pwa.install.iosHint": "Partager → Sur l’écran d’accueil"
 }

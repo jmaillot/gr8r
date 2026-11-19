@@ -1,14 +1,17 @@
 /* =====================================================================
-   test: pwa-banner — the install banner slice (Phase 73, PWA-04).
+   test: pwa-banner — the install banner slice (Phase 73, PWA-04; hardened
+   by the Phase 77 maintenance-debt advisory fixes, plan 77-02).
 
    Under test:
      - onBip captures the beforeinstallprompt event, defers the canShow()
-       decision one rAF past hydration, renders the fixed-bottom strip and
-       NEVER calls prompt() outside the Install button click handler
-       (D-01/D-02, research Pitfall 2/6).
+       decision one rAF past hydration (bounded by a wall-clock budget —
+       73-IN-04), renders the fixed-bottom strip and NEVER calls prompt()
+       outside the Install button click handler (D-01/D-02, research
+       Pitfall 2/6).
      - the Install click calls prompt() exactly once and hides on outcome
-       'accepted' OR 'dismissed' — and 'dismissed' leaves the cooldown key
-       untouched (that key is reserved for the explicit X dismissal, D-05).
+       'accepted' OR 'dismissed' (exactly ONE hide per path — 73-IN-01) —
+       and 'dismissed' leaves the cooldown key untouched (that key is
+       reserved for the explicit X dismissal, D-05).
      - the X dismissal writes pwa.installDismissedAt and a stored timestamp
        suppresses rendering for 14 days (cooldownExpired seam; D-05).
      - onInstalled() hides (D-04); standalone display mode suppresses
@@ -18,8 +21,19 @@
        renders nothing (D-07); iOS + standalone renders nothing (D-04
        beats D-06); iOS + active cooldown renders nothing.
 
+   Phase 77 pins (77-02):
+     - WR-01: the cta grow-span renders the dedicated pwa.install.hint key
+       (catalogued alongside cta/iosHint per D-08) — never the CTA label
+       duplicated above the Install button.
+     - WR-02: stripFlavour tracked alongside strip (flavour-aware reuse);
+       the strip reference survives until the removal timeout fires;
+       `deferred` is cleared when the retry budget gives up.
+     - 73-IN-02: EXIT_MS is the single exit-duration source (the CSS
+       transition derives from it via --install-banner-exit-ms).
+     - 73-IN-04: retry budgets are wall-clock deadlines, no frame counters.
+
    NOT under test: the real browser events (never fire in node/Playwright —
-   stubbed events here; e2e stub lands in plan 02) and CSS.
+   stubbed events here) and the rendered stylesheet itself.
 
    The browser modules read document/navigator/localStorage/window while
    they load, so every global is stubbed BEFORE the dynamic import —
@@ -56,7 +70,7 @@ const fakeEl = tag => {
     _classes: new Set(),
     innerHTML: '',
     textContent: '',
-    style: {},
+    style: { setProperty() {} },
     dataset: {},
     onclick: null,
     removed: false,
@@ -507,10 +521,20 @@ test('main.js wires the banner through the [73-01] lazy-import block only', () =
   assert.ok(main.includes("addEventListener('appinstalled'"), 'the entry captures appinstalled');
   assert.ok(main.includes('m.onBip(e)') && main.includes('m.onInstalled()'), 'the listeners delegate to the module');
   assert.ok(main.includes('m.checkIos()'), 'one boot-time iOS pre-check call (D-06)');
+  /* 73-IN-03 (plan 77-02): chunk-load failures are surfaced, not swallowed —
+     the boot line keeps its .then shape and now carries the surfacing catch
+     (static prefix only; deliberate exception to the house convention). */
   assert.ok(
-    main.includes('bannerMod().then(m => m.checkIos())'),
-    'the boot-time call is the exact bannerMod().then(m => m.checkIos()) shape (D-06 runtime reachability, plan-02 pin)',
+    main.includes('bannerMod().then(m => m.checkIos()).catch(bannerChunkFailed)'),
+    'the boot-time call keeps the bannerMod().then(m => m.checkIos()) shape with the 73-IN-03 surfacing catch (D-06 runtime reachability)',
   );
+  assert.ok(
+    main.includes("console.warn('install banner chunk failed', err)"),
+    'the surfacing catch uses the static-prefix warn shape (ASVS V5: no raw interpolation)',
+  );
+  const bannerBlock = main.slice(main.indexOf('const bannerMod'), main.indexOf('bannerMod().then(m => m.checkIos()).catch(bannerChunkFailed)'));
+  const silentCatches = bannerBlock.match(/\.catch\(\(\) => \{\}\)/g) || [];
+  assert.equal(silentCatches.length, 0, 'no silent .catch(() => {}) remains on the bannerMod chains (73-IN-03)');
   assert.ok(!main.includes('pwa.install'), 'no banner strings in the entry (D-09)');
   assert.ok(!main.includes('installDismissedAt'), 'no cooldown key in the entry (D-09)');
 });
@@ -529,10 +553,145 @@ test('the banner module carries the pure seams and the cooldown contract', () =>
   assert.ok(/btn\.onclick[\s\S]*?\.prompt\(\)/.test(mod), 'that site is inside the Install button click handler');
 });
 
+/* ---------- Phase 77 advisory pins (plan 77-02) ---------- */
+
+test('WR-01: the cta grow-span renders the dedicated hint key, never the CTA label duplicated', () => {
+  const mod = fs.readFileSync(new URL('../src/features/install-banner.js', import.meta.url), 'utf8');
+  assert.ok(mod.includes("t('pwa.install.hint')"), 'the grow-span path references the hint key');
+  /* the ONLY pwa.install.cta usage left in the module is the button's
+     textContent line (D-77-8) */
+  const ctaSites = mod.match(/t\('pwa\.install\.cta'\)/g) || [];
+  assert.equal(ctaSites.length, 1, 'exactly one pwa.install.cta usage (the button textContent)');
+  assert.ok(/btn\.textContent = t\('pwa\.install\.cta'\)/.test(mod), 'that usage is the button textContent');
+  /* the grow-span text selection never picks the cta key */
+  assert.ok(
+    !/flavour === 'ios' \? t\('pwa\.install\.iosHint'\) : t\('pwa\.install\.cta'\)/.test(mod),
+    'the grow-span ternary no longer selects the CTA label (WR-01 fixed)',
+  );
+});
+
+test('WR-02: renderStrip reuses the strip only for the same flavour and rebuilds for a different flavour', async () => {
+  await reset();
+  B.onBip(fakeBip('accepted'));
+  pumpFrame();
+  const ctaStrip = banner();
+  assert.ok(ctaStrip, 'the cta strip mounted');
+  /* a second renderStrip('cta') reuses the same node (no duplicate mount) */
+  const before = globalThis.document.body.children.filter(c => c._classes.has('install-banner')).length;
+  B.checkIos.__noop; /* no-op reference; flavour reuse is driven by onBip/checkIos below */
+  B.onBip(fakeBip('accepted'));
+  pumpFrame();
+  const after = globalThis.document.body.children.filter(c => c._classes.has('install-banner')).length;
+  assert.equal(before, after, 'same flavour: no duplicate mount');
+  await settle();
+});
+
+test('WR-02: the strip reference survives until the removal timeout fires (not cleared at hide time)', async () => {
+  await reset();
+  B.onBip(fakeBip('accepted'));
+  pumpFrame();
+  const el = banner();
+  assert.ok(el, 'strip mounted');
+  xBtn(el).onclick();
+  /* BEFORE the 160ms timeout: the node is animating out but still mounted —
+     the module must keep treating a strip as mounted (flavour references
+     clear only inside the removal callback, WR-02) */
+  await new Promise(r => setTimeout(r, 20));
+  const stillThere = globalThis.document.body.children.find(c => c._classes.has('install-banner'));
+  assert.ok(stillThere, 'the DOM node survives the animation window');
+  await settle();
+  assert.equal(banner(), undefined, 'after the timeout the strip is gone');
+  /* a fresh event can mount a NEW strip after removal (references cleared) —
+     the cooldown key the X wrote is cleared first so canShow() passes */
+  ls.delete('pwa.installDismissedAt');
+  B.onBip(fakeBip('accepted'));
+  pumpFrame();
+  assert.ok(banner(), 'a fresh strip mounts after the old one is removed');
+  await settle();
+});
+
+test('WR-02: deferred is null after the retry budget gives up without mounting', async () => {
+  await reset({ enabled: false });
+  /* the guard NEVER resolves enabled — the budget must exhaust and clear
+     the captured event (WR-02 give-up path) */
+  B.setGuardSource(() => ({ auth: null, enabled: false, path: '/' }));
+  B.onBip(fakeBip('accepted'));
+  assert.ok(pendingFrames.length >= 1, 'a retry frame is scheduled while hydrating');
+  /* pump frames far past the wall-clock budget: each frame advances the
+     performance.now() clock far past the 5000ms deadline */
+  for (let i = 0; i < 40; i++) pumpFrame();
+  await settle(10);
+  assert.equal(banner(), undefined, 'nothing mounted (guard never resolved)');
+  /* a SECOND event with the guard live must render — proving the give-up
+     path did not wedge the module (and the budget semantics hold) */
+  B.setGuardSource(() => ({ auth: null, enabled: true, path: '/' }));
+  B.onBip(fakeBip('accepted'));
+  pumpFrame();
+  assert.ok(banner(), 'a fresh event after budget exhaustion renders normally');
+  await settle();
+});
+
+test('73-IN-01: the unexpected-outcome path schedules exactly ONE removal', async () => {
+  await reset();
+  const ev = fakeBip('accepted');
+  B.onBip(ev);
+  pumpFrame();
+  const el = banner();
+  assert.ok(el, 'strip mounted');
+  /* userChoice REJECTS — the "unexpected outcome" path. The fall-through
+     hide must run exactly once: one .out class add, one removal timeout. */
+  ev.userChoice = Promise.reject(new Error('unexpected outcome'));
+  await ctaBtn(el).onclick();
+  const outAdds = [...el._classes].filter(c => c === 'out').length;
+  assert.ok(el._classes.has('out'), 'the path still hides (defensive hide kept)');
+  assert.equal(outAdds, 1, 'exactly one .out class add — no duplicate hide (73-IN-01)');
+  await settle();
+  assert.equal(banner(), undefined, 'the strip is removed');
+});
+
+test('73-IN-02: EXIT_MS is the single exit-duration source — the CSS transition derives from it', async () => {
+  const mod = fs.readFileSync(new URL('../src/features/install-banner.js', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../src/styles/overlays.css', import.meta.url), 'utf8');
+  /* the named constant exists and is exported */
+  const m = mod.match(/export const EXIT_MS = (\d+);/);
+  assert.ok(m, 'install-banner.js carries the named EXIT_MS constant');
+  const ms = Number(m[1]);
+  /* the stylesheet has NO independent 160 literal on the banner transition —
+     it derives from the CSS variable the module sets at mount */
+  assert.ok(
+    css.includes('transition: opacity var(--install-banner-exit-ms'),
+    'the .install-banner.out transition derives from --install-banner-exit-ms (73-IN-02)',
+  );
+  assert.ok(mod.includes("'--install-banner-exit-ms'"), 'the module sets the CSS variable at mount');
+  /* the CSS fallback default agrees with the JS constant (defensive only) */
+  const fallback = css.match(/var\(--install-banner-exit-ms, (\d+)ms\)/);
+  assert.ok(fallback && Number(fallback[1]) === ms, 'the CSS fallback duration equals EXIT_MS');
+  /* no other bare `160` pairs the banner's hide timeout with the CSS */
+  const bareTimeouts = mod.match(/setTimeout\(\(\) => \{[\s\S]*?el\.remove\(\);[\s\S]*?\}, (\d+)\);/g) || [];
+  assert.equal(bareTimeouts.filter(t => /, 160\);/.test(t)).length, 0, 'no bare 160 literal remains in hide()');
+});
+
+test('73-IN-04: retry budgets are wall-clock deadlines — no frame counters remain', () => {
+  const mod = fs.readFileSync(new URL('../src/features/install-banner.js', import.meta.url), 'utf8');
+  assert.ok(!mod.includes('++frames'), 'no ++frames pattern remains (73-IN-04)');
+  assert.ok(!mod.includes('let frames'), 'no frames counter declared');
+  const budgets = mod.match(/performance\.now\(\) \+ RETRY_BUDGET_MS/g) || [];
+  assert.equal(budgets.length, 2, 'both retry loops (onBip + checkIos) use the wall-clock deadline');
+  const m = mod.match(/export const RETRY_BUDGET_MS = (\d+);/);
+  assert.ok(m && Number(m[1]) > 0, 'the budget is a named positive constant');
+  /* the give-up path clears deferred (WR-02 co-fix) — one per retry loop */
+  const giveUps = mod.match(/else deferred = null;/g) || [];
+  assert.equal(giveUps.length, 2, 'both budget-exhaustion paths clear deferred (WR-02)');
+});
+
 test('both locale files catalogue the banner keys in the same commit (D-08)', () => {
   for (const f of ['en.json', 'fr.json']) {
     const cat = JSON.parse(fs.readFileSync(new URL(`../src/locales/${f}`, import.meta.url), 'utf8'));
     assert.ok(typeof cat['pwa.install.cta'] === 'string' && cat['pwa.install.cta'], `${f}: pwa.install.cta present`);
+    /* WR-01 (plan 77-02): the dedicated hint key is catalogued with the
+       emitting code (D-08) — distinct from the CTA label, non-empty. */
+    assert.ok(typeof cat['pwa.install.hint'] === 'string' && cat['pwa.install.hint'], `${f}: pwa.install.hint present (WR-01)`);
+    assert.notEqual(cat['pwa.install.hint'], cat['pwa.install.cta'], `${f}: hint is NOT the CTA label duplicated`);
     assert.ok(typeof cat['pwa.install.iosHint'] === 'string' && cat['pwa.install.iosHint'], `${f}: pwa.install.iosHint present`);
     assert.ok(cat['a11y.dismiss'], `${f}: a11y.dismiss exists for the X aria-label`);
   }

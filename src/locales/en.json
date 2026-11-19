@@ -2007,5 +2007,6 @@
   "templates.favSection": "Favorites",
   "templates.favEmptyHint": "Star a template in Settings → Templates to pin it here.",
   "pwa.install.cta": "Install app",
+  "pwa.install.hint": "Install the app for one-tap access",
   "pwa.install.iosHint": "Share → Add to Home Screen"
 }
