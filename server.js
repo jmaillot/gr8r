@@ -169,6 +169,67 @@ const logDebug = msg => logLine('debug', msg);
 const logInfo = msg => logLine('info', msg);
 const logWarn = msg => logLine('warn', msg);
 const logError = msg => logLine('error', msg);
+
+/* ---------------------- domain admission (Phase 75) --------------------- */
+/* DOM-01/DOM-02/DOM-07: the shared canonicalizing domain machinery behind the
+   two admission doors. Tri-state resolver: raw === undefined → null (door
+   off/fail-open; strict presence, never falsiness — Pitfall 4); an empty or
+   whitespace-resolving raw value parses to an EMPTY Set (deny-all, D-01/D-02).
+   Matching is exact Set.has on the canonicalized domain — never suffix/endsWith
+   (verified bypass vector). Malformed entries are warn-and-clean (D-05):
+   dropped with a boot warning, boot never aborts. */
+const canonicalizeDomain = domain =>
+  String(domain || '')
+    .trim()
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\.$/, '');
+
+/* NFKC-normalize BEFORE splitting on the LAST '@' (Pitfall 2): a fullwidth ＠
+   (U+FF20) becomes a real separator, and a fullwidth full stop (U+FF0E) in the
+   domain part becomes '.' before the trailing-dot strip. Returns null for an
+   email with no separator or an empty domain part. */
+const emailFromEmail = email => {
+  const raw = String(email || '').normalize('NFKC');
+  const at = raw.lastIndexOf('@');
+  if (at === -1 || at === raw.length - 1) return null;
+  return canonicalizeDomain(raw.slice(at + 1));
+};
+
+/* Pure parser (raw + name in, null-or-Set out, no process.env reads — the
+   unset/set-empty distinction is made by the caller's strict undefined
+   comparison). Idempotent: the same raw always yields an equal Set. */
+const parseDomainList = (raw, name) => {
+  if (raw === undefined) return null;
+  const domains = new Set();
+  for (const entry of String(raw).split(',')) {
+    const domain = canonicalizeDomain(entry);
+    if (!domain) {
+      logWarn(`${name}: dropping invalid entry "${entry}" (warn-and-clean, D-05)`);
+      continue;
+    }
+    domains.add(domain); // Set dedupe — idempotent re-parse
+  }
+  return domains;
+};
+
+/* Boot-frozen door matrix (artifacts decision): tightening takes effect on
+   restart. DOM-02 inheritance rides ?? — null (unset) inherits; an explicitly
+   set value, including '', parses to a Set that ?? never overrides. */
+const SIGNUP_DOMAINS = parseDomainList(process.env.ALLOW_SIGNUP_DOMAINS, 'ALLOW_SIGNUP_DOMAINS');
+const INVITE_DOMAINS = parseDomainList(process.env.ALLOW_INVITE_DOMAINS, 'ALLOW_INVITE_DOMAINS') ?? SIGNUP_DOMAINS;
+
+/* The {code,message}|null funnel contract (mirrors validateGuestInviteShape):
+   null = admitted, object = keyed generic refusal (D-04 — no policy reveal).
+   The caller picks the door's list (DP-1 passes SIGNUP_DOMAINS, never the
+   invite list — one door, one rule). An unparseable email refuses, never throws. */
+function emailDomainRefusal(email, domains, code = 'signupDomainNotAllowed', message = 'This email is outside the domains allowed to create an account') {
+  if (!domains) return null; // door off — fail-open (unset)
+  const domain = emailFromEmail(email);
+  if (domain === null || !domains.has(domain)) return { code, message }; // exact membership only
+  return null;
+}
+
 /* D-05: the AES-256 master key material comes from the environment. Missing or
    unusable on the enable path → fail-closed 503 naming MASTER_KEY (D-06/D-58). */
 const MASTER_KEY = String(process.env.MASTER_KEY || '');
@@ -6716,6 +6777,11 @@ async function handleApi(req, res, url) {
     if (password.length < 10 || !/[0-9\W]/.test(password)) {
       return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
     }
+    /* DP-1 (Phase 75, DOM-01): the signup door — one canonicalizing funnel,
+       exact Set membership against the boot-frozen signup list. Inserted
+       between passwordTooWeak and createUser; never reorders the guard chain. */
+    const domainRefusal = emailDomainRefusal(email, SIGNUP_DOMAINS);
+    if (domainRefusal) return fail(res, 400, 'signupDomainNotAllowed', domainRefusal.message);
     let user;
     try {
       user = await createUser(email, name, password);
@@ -8843,6 +8909,11 @@ async function main() {
     logInfo(`sessions: ${SESSION_DAYS}d ttl · sign-ups: ${ALLOW_SIGNUP ? 'open' : 'closed'} · secure cookie: ${SECURE_COOKIE} · trust proxy: ${TRUST_PROXY}`);
     logInfo(`sso: ${OIDC.enabled ? `enabled via ${OIDC.config?.issuer || 'configured issuer'}${OIDC.ssoOnly ? ' (sso-only)' : ''}` : 'disabled'}`);
     logInfo(`due reminders: from 08:00 workspace-local, catch-up window all day · daily digest: opt-in, 08:00`);
+    /* D-06 (Phase 75): one grep-able, source-tagged line per admission var —
+       `docker logs` answers "how are the doors configured". */
+    const domainListLog = list => (list === null ? 'off' : list.size === 0 ? 'deny-all' : [...list].sort().join(', '));
+    logInfo(`domains: ALLOW_SIGNUP_DOMAINS: ${domainListLog(SIGNUP_DOMAINS)} (source: own)`);
+    logInfo(`domains: ALLOW_INVITE_DOMAINS: ${domainListLog(INVITE_DOMAINS)} (source: ${'ALLOW_INVITE_DOMAINS' in process.env ? 'own' : 'inherit'})`);
   });
 
   const shutdown = signal => {
