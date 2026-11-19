@@ -57,3 +57,32 @@ file-grouped commit discipline).
    SC3 is satisfied on the enumerated list (every named advisory carries a
    fixed disposition with a regression pin); the "10" was a planning-tally
    arithmetic slip, documented rather than padded with a synthetic row.
+
+## Reconciliations (plan 77-03, recorded 2026-11-19)
+
+(a) **D-77-6 placeholder parity re-interpreted per the owner decision
+(2026-11-19):** `err.signupDomainNotAllowed` is a static catalogue string on
+the signup path with no placeholder, so parity = the rendered text equals the
+imported catalogue entry exactly (`e2e/locale-refusal.spec.mjs` full-string
+`toHaveText` per locale) — which subsumes "no raw `{token}` tokens remain".
+(b) **D-77-5's "toast" wording reconciled to the actual render surface:** the
+refusal renders as an inline form-field error — the `ferr('email')` span
+(`#email-err`, `aria-describedby="email-err"`) in `src/pages/auth.js` — not a
+toast; the spec asserts that element.
+(c) **74-IN-02 broader surface observation:** ~24 other `import.meta.dirname`
+sites exist repo-wide (test/ + e2e/); out of scope per D-77-16 (pinned file
+only), unchanged by this plan.
+
+### 77-03 execution notes (deviations recorded in 77-03-SUMMARY.md)
+
+- The new refusal spec exposed a live product bug: the server's
+  `LOCALE_CODES` gate was still the pre-phase-75 `['en','fr']` pair, so
+  nl/de/es account-locale writes 400'd (`unknownLocale`) and never persisted.
+  Fixed by deriving the gate from the shipped `src/locales/*.json` registry
+  (commit `0b660e76`), regression pin in `test/locale-account.test.mjs`.
+- Three stale e2e assertions (pre-dating this plan) were aligned with
+  already-shipped behavior so the standing e2e gate can hold: install-banner
+  grow-span expectations (77-02's WR-01 hint key), the language-select
+  registry size in french-overflow/locale specs (phase 75's five locales),
+  and default-visibility's `@dv.local` fixture emails (the run-wide signup
+  gate refuses them — `INVITE_DOMAINS` inherits `SIGNUP_DOMAINS`).
