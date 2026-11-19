@@ -27,6 +27,10 @@ services:
     container_name: projects-studio
     restart: unless-stopped
     stop_grace_period: 10s
+    # Phase 75: passes the whole .env (incl. ALLOW_SIGNUP_DOMAINS /
+    # ALLOW_INVITE_DOMAINS) so an absent var stays truly unset (fail-open),
+    # `VAR=` stays set-but-empty (deny-all), and a list stays a list.
+    env_file: .env
     environment:
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
@@ -38,6 +42,9 @@ services:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      # Phase 75 domain doors passed via env_file — environment: interpolation
+      # (${VAR:-}) would coerce "unset" to "", flipping fail-open to deny-all.
+      # With env_file, a var absent from .env stays undefined (fail-open).
       SEED_DATA: ${SEED_DATA:-true}
       SESSION_DAYS: ${SESSION_DAYS:-30}
       INVITE_DAYS: ${INVITE_DAYS:-7}
