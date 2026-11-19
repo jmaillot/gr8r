@@ -1,6 +1,47 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-18 after Phase 73 — PWA-04 validated*
+*Last updated: 2026-11-19 after v2.7 milestone — Installable App (PWA) shipped*
+
+<details>
+<summary>Milestone v2.7 Installable App (PWA) — shipped record (2026-11-19)</summary>
+
+**Shipped:** 3 phases (72–74), 7 plans, 4/4 requirements, all phases verified
+(closeout: verified_closeout). Manifest & head (72): hand-written
+`manifest.webmanifest` served `application/manifest+json` + no-cache (3-touch
+server.js diff), index.html head tags (single theme-color, iOS metas, D-06 favicon
+swap boundary intact), contract test + live e2e header check; five PNG install icons
+rendered from the brand mark (any 192/512, maskable 192/512, apple-touch 180×180) —
+post-milestone owner feedback re-rendered the `any` icons with TRANSPARENT corners
+(RGBA, contract-pinned) to kill the baked-in white launcher frame. Install banner
+(73): lazy `install-banner` chunk — `beforeinstallprompt` capture with bounded
+300-frame rAF retry surviving pre-hydration boot, gesture-bound native prompt,
+14-day localStorage dismissal cooldown, iOS static hint / Firefox total silence;
+post-milestone owner feedback promoted the CTA from a ghost icon-button to a solid
+`.btn-primary` (the grey text was illegible on the dark strip). SW verification (74):
+`public/sw.js` proven installability-satisfying with ZERO production code changes —
+sha256 pin to the Phase 48/59 contract, single `navigator.serviceWorker.register`
+call site, `/sw.js` literal, `api.enabled` gate, both boot paths, manifest↔SW scope
+agreement; DEPLOY.md §18 operator posture (root-domain-only, iOS manual A2HS,
+strictly-online, no-custom-SW rationale, Lighthouse troubleshooting); 4/4 real-device
+UAT PASS — milestone accepted end-to-end. Gates at close: 1809 tests / 1796 pass /
+0 fail (13 skipped), build green, lint at its pre-existing 17 (unused-vars, outside
+milestone scope). Post-milestone maintenance in the same window (owner-directed,
+not part of v2.7 scope): dependency upgrades (prettier, playwright, xlsx 0.27.0 with
+T-54-SC re-approval, globals, lucide 1.76, vite 8, eslint 10) and full Dutch/German/
+Spanish catalogues (1946 keys each, parity-gated). Full record:
+`milestones/v2.7-ROADMAP.md`, `milestones/v2.7-REQUIREMENTS.md`,
+`milestones/v2.7-phases/`.
+
+</details>
+
+### v2.7 milestone decisions
+
+- Zero edits to `public/sw.js` — the existing root-scope push SW IS the install SW
+  (no fetch handler needed since Chrome 108/112 removed the requirement); any sw.js
+  diff is STOP-and-justify
+- Manifest icons: `any` variants transparent-cornered (owner ruling 2026-11-19), maskable
+  + apple-touch stay fully opaque (iOS flattens transparency to black)
+- Banner CTA is a real solid button, not a text/icon affordance (owner ruling 2026-11-19)
 
 
 <details>
@@ -125,24 +166,17 @@ CSS-scope follow-up deferred; 64-VALIDATION draft (Nyquist not reconciled). Full
 
 ### Next Milestone Goals
 
-_Se v2.7 below — started 2026-11-18._
+_Not yet planned — start with `/gsd-new-milestone`. Language selector now offers
+EN, FR, NL, DE, ES; candidate next-milestone items: real-device spot-check of the
+three new translations, 17 pre-existing lint errors (unused vars), WR-01/WR-02/IN
+advisory carryovers from 73/74 reviews._
 
-## Current Milestone: v2.7 Installable App (PWA)
+## Current Milestone: v2.7 Installable App (PWA) — SHIPPED (2026-11-19)
 
-**Goal:** make the self-hosted app installable on desktop and mobile as a real app — the
-browser tab experience in a standalone window, with no offline cache.
-
-**Target features:**
-- PWA-01 — Web app manifest: name "Projects Studio", theme/display colors, standalone display
-- PWA-02 — Icon set derived from the existing brand mark (maskable + regular PNGs in `public/`)
-- PWA-03 — Pass-through service worker: registered, no precache, no runtime caching — strictly online
-- PWA-04 — Install hint banner for browsers exposing the install event; honest no-op elsewhere (iOS)
-
-**Key context:** no offline cache by decision; zero new dependencies; manifest/SW live outside
-the Vite bundle (chunk gate headroom ~2 kB); iOS install/push limitations accepted with honest
-degradation.
-
-**Next milestone:** goals not yet defined — start with `/gsd-new-milestone`.
+**Shipped:** 3 phases, 7 plans, 4/4 requirements (PWA-01..04), verified_closeout.
+Archived to `.planning/milestones/v2.7-ROADMAP.md` (details) and
+`v2.7-REQUIREMENTS.md` (outcomes). Post-ship owner polish in the same window:
+transparent `any` icon corners, solid banner CTA button.
 
 <details>
 <summary>v2.5 Template Polish & Import — SHIPPED (2026-11-16) — shipped record</summary>
@@ -870,6 +904,14 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
   dismissal cooldown, gesture-bound native prompt, iOS static hint / Firefox silence
   (Phase 73; verification 4/4, UAT real-Chromium pass, security SECURED, review CR-01/WR-03
   fixed — WR-01/WR-02/IN-01..05 open as advisory carryovers)
+- ✓ PWA-01 — Web app manifest served with correct MIME/no-cache, frozen identity fields,
+  head tags integrated, favicon-swap boundary intact — Phase 72 (verification 4/4)
+- ✓ PWA-02 — Five-PNG install icon set from the brand mark with maskable safe-zone redesign;
+  post-ship owner ruling: `any` icons re-rendered with transparent corners (contract-pinned
+  RGBA) — Phase 72 (verification 4/4; icon transparency pinned post-milestone)
+- ✓ PWA-03 — Service-worker installability proven by the EXISTING push SW with zero code
+  changes: sha256 pin, registration call-site pins, scope agreement, DEPLOY.md §18, 4/4
+  real-device UAT — Phase 74 (verification 7/7 passed)
 
 ### Active
 
@@ -887,8 +929,9 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 - File storage hardening beyond Phase 12: upload quotas per workspace/user, antivirus
   scanning, and external object storage (real binary uploads under `DATA_DIR/files/`
   shipped in Phase 12).
-- Translating the four remaining languages (Deutsch, Español, 日本語, English UK). The selector
-  will not offer a language that is not translated.
+- Translating the remaining languages (日本語, English UK). The selector will not offer a
+  language that is not translated. (Dutch, German and Spanish shipped 2026-11-19 — full
+  1946-key catalogues, parity-gated; they left this list.)
 - The invitation email in the user's language — the server image ships no catalogue, so it would
   need a Dockerfile change and `Accept-Language` negotiation.
 - A translation-management UI or machine-translation pipeline: the catalogues are files in the

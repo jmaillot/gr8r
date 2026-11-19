@@ -1,5 +1,20 @@
 # Milestones
 
+## v2.7 Installable App (PWA) (Shipped: 2026-11-19)
+
+**Phases completed:** 3 phases, 7 plans, 9 tasks
+
+**Key accomplishments:**
+- Installable-app wire contract shipped: hand-written manifest.webmanifest served with `application/manifest+json` + `no-cache` via a 3-touch server.js diff, head tags in index.html, everything double-pinned by a static contract test and a live e2e header check.
+- Five owner-approved opaque PNG install icons (any 192/512, maskable 192/512, apple-touch 180×180) rendered from favicon.svg's light-scheme palette plus the maskable SVG re-render source, frozen by a byte-level PNG contract test (exact IHDR dimensions, apple-touch opacity, manifest cross-check).
+- Chromium install banner end-to-end as a lazy chunk — captured-event strip with prompt-from-gesture, 14-day localStorage cooldown, iOS boot-time hint pre-check, Firefox silence — proven by 20 node:test unit/contract cases plus a real-vite-build entry-delta gate (entry 495,560 vs 499,995 baseline, delta −4,435).
+- Platform degradation matrix proven (iPadOS clause, Firefox silence, boot-shape pin) plus four Playwright journeys — stubbed-event EN→prompt, dismissal persistence across reload, FR after a real language switch, and an iOS-simulated boot that exposed and fixed a real checkIos() hydration race — 25 unit cases + 4 e2e green, zero new dependencies, entry untouched.
+- onBip now survives the pre-hydration `beforeinstallprompt` race with a checkIos-shaped 300-frame rAF retry, proven end-to-end by a delay-free e2e scenario that is measurably RED against the old one-shot code, plus a single-clock-base cooldown boundary test.
+- Automated sw-contract test proves `public/sw.js` is byte-identical to the Phase 48/59 contract (sha256 pin) and locks the single `navigator.serviceWorker.register` call site, `/sw.js` literal, `api.enabled` gate, both boot paths, and manifest↔SW scope agreement — zero production code changes.
+- DEPLOY.md §18 documents the full PWA operator posture (root-domain-only, iOS manual A2HS, no-back-button stance, strictly-online, no-custom-SW rationale, Lighthouse troubleshooting) and 74-UAT.md carries 4 passed real-device test results — PWA-03 complete, v2.7 milestone accepted end-to-end.
+
+---
+
 ## v2.6 Exports Verification (Test 11) (Shipped: 2026-11-18)
 
 **Phases completed:** 3 phases, 11 plans, 9 tasks

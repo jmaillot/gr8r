@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v2.7
 milestone_name: Installable App (PWA)
-current_phase: 74
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 74 complete — all phases complete
-last_updated: "2026-11-19T07:21:33.557Z"
-state_head: 0fc56e06b7e337f13f3218eb72174dffc4f140c3
+last_updated: "2026-11-19T08:35:37.225Z"
+last_activity: 2026-11-19
+last_activity_desc: Milestone v2.7 completed and archived
+state_head: 79737727b80a4716a1932c26d5ee6e537b8cbff7
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 7
   completed_plans: 7
-  percent: 100
-last_activity: 2026-11-18
+current_phase: 74
 ---
 
 # STATE.md
@@ -27,14 +27,10 @@ last_activity: 2026-11-18
 
 ## Current Position
 
-Phase: 74
-Plan: Not started
-Status: All phases complete
-Progress: [██████████] 100%
-
-```
-[..........] 0%  (0/3 phases)
-```
+Phase: Milestone v2.7 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-19 — Milestone v2.7 completed and archived
 
 ## Performance Metrics
 
@@ -121,4 +117,4 @@ _(v2.6 decisions preserved in git history and milestone archive; v2.7 decisions 
 
 ## Operator Next Steps
 
-- Approve the v2.7 roadmap, then `/gsd-plan-phase 72`
+- Start the next milestone with /gsd-new-milestone
