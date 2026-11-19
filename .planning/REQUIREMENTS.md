@@ -30,7 +30,7 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 
 ### Service Worker Verification (no build work)
 
-- [ ] **PWA-03**: Installability's service-worker requirement is met by the EXISTING push
+- [x] **PWA-03**: Installability's service-worker requirement is met by the EXISTING push
   service worker (`public/sw.js`, root scope, registered from `src/core/push.js`) with zero
   code changes. Verification pins: sw.js served at `/sw.js` with no-cache, registered with
   `scope === '/'`, registration not broken by the push-gated path, and sw.js byte-identical
@@ -70,7 +70,7 @@ install SW); root-domain deployments only (absolute manifest paths frozen).
 |--------|-------|--------|
 | PWA-01 | Phase 72 | Complete |
 | PWA-02 | Phase 72 | Complete |
-| PWA-03 | Phase 74 | Pending |
+| PWA-03 | Phase 74 | Complete |
 | PWA-04 | Phase 73 | Complete |
 
 Coverage: 4/4 v1 requirements mapped, no orphans, no duplicates.
