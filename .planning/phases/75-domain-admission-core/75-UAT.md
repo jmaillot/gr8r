@@ -3,7 +3,7 @@ status: testing
 phase: 75-domain-admission-core
 source: [75-01-SUMMARY.md, 75-02-SUMMARY.md]
 started: 2026-11-19T13:32:43Z
-updated: 2026-11-19T13:37:00Z
+updated: 2026-11-19T14:05:00Z
 ---
 
 ## Current Test
@@ -106,6 +106,20 @@ skipped: 0
 blocked: 0
 
 ## Gaps
+
+- gap_id: G-75-4
+  truth: "ALLOW_SIGNUP_DOMAINS set-but-empty denies all signups even under docker compose"
+  status: resolved
+  resolved_by: inline fix during UAT — docker-compose.yml now passes .env via env_file (commit 65f94703)
+  resolved_at: 2026-11-19
+  reason: "User reported: with ALLOW_SIGNUP_DOMAINS= empty, signup still succeeded (env var never reached the container, undefined = fail-open)"
+  severity: major
+  test: 4
+  artifacts:
+    - path: "docker-compose.yml"
+      issue: "explicit environment: allowlist never passed the new domain vars; ${VAR:-} interpolation would also coerce unset to empty (deny-all), so env_file is required"
+  missing:
+    - "env_file: .env on the projects service"
 
 - gap_id: G-75-2
   truth: "With ALLOW_SIGNUP_DOMAINS set to a list, out-of-list signups are refused and allowed-domain signups succeed"
