@@ -317,13 +317,12 @@ No missing dependencies. No external services.
 | A2 | Playwright visibility can be driven by dispatching `visibilitychange` events / hidden-state mocking; if flaky, poll-pause covered by unit-level assertion of the guard condition instead | Validation | e2e flake — fallback documented |
 | A3 | `createWorkspace` assigns creator role 'owner' unchanged (server.js:4640 area; WSG-04 says "behavior unchanged" — I did not re-read the exact owner-assignment line) | WSG-04 | low — no code change planned there |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Await-page entry after poll success: full reload vs soft-enter?**
-   - What we know: soft-enter path exists (hydrateFromServer + enterApp in finishLogin).
-   - Recommendation: soft-enter (mirrors finishLogin); full reload is simpler fallback — planner picks.
-2. **Refusal key naming** — `workspaceCreationClosed` proposed; planner/user may prefer shorter. Discretion per CONTEXT.
-3. **Idempotent promote/demote on already-flagged target** — 200 no-op vs 409. Recommend 200 no-op (harmless, console stays honest). Planner picks.
+   - **Resolved: soft-enter** (mirrors finishLogin) — picked in 78-02 Task 2; full reload kept as documented fallback.
+2. **Refusal key naming** — **Resolved: `workspaceCreationClosed`** (78-01 Task 2).
+3. **Idempotent promote/demote on already-flagged target** — **Resolved: 200 no-op with current state** (78-01 Task 3).
 
 ## Estimation Basis
 
