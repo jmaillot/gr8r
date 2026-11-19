@@ -1,6 +1,35 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-19 — v3.0 Access Control & Hardening shipped*
+*Last updated: 2026-11-19 — v3.1 Workspace Governance started*
+
+## Current Milestone: v3.1 Workspace Governance
+
+**Goal:** Instance operators control who can create workspaces and can see and manage every
+workspace on the instance — no shadow workspaces.
+
+**Target features:**
+- `WORKSPACE_CREATION=open|admins|owners` tri-state env (default `admins`, boot-logged
+  D-11-style) gating `POST /api/workspaces` — replacing the implicit `ALLOW_SIGNUP` coupling
+  (today: any signed-up user creates a workspace and becomes its owner when signup is open,
+  server.js:6807)
+- Instance-owner identity seeded from bootstrap admins (first admin at DB bootstrap +
+  `--add-user` accounts), manageable in-app
+- Owner-scoped workspace-management page: list ALL workspaces (creator, member count, created
+  date), full management (delete/archive empty or shadow workspaces, reassign orphaned
+  members), promote/demote instance owners — no shadow workspaces, no env edits to change owners
+- Client: regular signups (non-owners, when creation is closed for them) land on an
+  **"await access" page stating they need to be invited to a workspace to get access** — no
+  workspace-creation surface; create button follows `/api/config`'s `workspaceCreation` +
+  instance role for those who do have rights
+- Creator remains workspace `owner`; admins promoted afterward (optional, not enforced)
+
+**Key context:** zero new dependencies; same keyed-refusal/5-locale pattern as phase 75
+(all new refusal keys in en/fr/nl/de/es in the same commit); owner-scoped endpoints must not
+leak workspace existence to non-owners; package.json bumps to 3.1.0 at ship time.
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+
+## Current Milestone: v3.0 Access Control & Hardening — SHIPPED (2026-11-19)
 
 <details>
 <summary>Milestone v2.7 Installable App (PWA) — shipped record (2026-11-19)</summary>
@@ -218,8 +247,6 @@ production bug (server `LOCALE_CODES` was still `['en','fr']`; now derived from
 package.json bumps to 3.0.0 at ship time.
 
 </details>
-
-<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 
 ## Current Milestone: v2.7 Installable App (PWA) — SHIPPED (2026-11-19)
 

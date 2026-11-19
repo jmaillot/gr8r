@@ -1,15 +1,10 @@
 ---
 gsd_state_version: "1.0"
-milestone: none
-milestone_name: "(next milestone not started — run /gsd-new-milestone)"
-current_phase: none
-current_phase_name: none
-status: milestone_archived
-stopped_at: v3.0 archived + tagged — ready for /gsd-new-milestone
-last_updated: "2026-11-19T21:45:00.000Z"
+milestone: v3.1
+milestone_name: Workspace Governance
+status: planning
+last_updated: "2026-11-19T21:48:00.796Z"
 last_activity: 2026-11-19
-last_activity_desc: v3.0 milestone archived (3 phases, 7 plans, 10/10 requirements) and tagged
-state_head: 9833cac36a6274f3ea8fa69d04a9ac721f59554d
 progress:
   total_phases: 0
   completed_phases: 0
@@ -30,12 +25,10 @@ before features.
 
 ## Current Position
 
-Phase: none (v3.0 archived 2026-11-19)
-Plan: none
-Status: Between milestones — run /gsd-new-milestone to start the next cycle
-Last activity: 2026-11-19 — v3.0 archived (3 phases, 7 plans, 10/10 requirements) and tagged
-
-Progress: [░░░░░░░░░░] 0% (new milestone not started)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-19 — Milestone v3.1 started
 
 ## Performance Metrics
 
