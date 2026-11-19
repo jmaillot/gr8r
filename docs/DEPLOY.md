@@ -1395,3 +1395,56 @@ Operational notes for the operator:
   Automate / Teams endpoints your Workflows webhook uses (typically
   `*.logic.azure.com`) or webhooks will fail to deliver.
 - MCP clients cannot manage webhooks — hook CRUD is UI-only by design.
+
+## 18. Installable app (PWA)
+
+gr8r ships a web app manifest and is installable as a standalone app on
+Chromium browsers (desktop Chrome/Edge, Android Chrome). This section
+documents the deployment posture and its constraints — there is no custom
+service worker beyond the existing push one, and that is deliberate.
+
+### Root-domain-only deployment
+
+The manifest's `start_url`, `scope` and `id` are all frozen to `/`. The app
+must be served at the domain root. Deploying under a subpath (e.g.
+`https://example.com/gr8r/`) will break installability: the manifest paths
+are absolute and the service worker registers at root scope only. Multi-tenant
+`/w/:slug`-style subpath deployments are outside manifest scope by design —
+see the milestone decision record for the rationale.
+
+### iOS limitations
+
+Safari on iOS never fires `beforeinstallprompt`, so no install prompt or
+banner appears there. Installation is manual: Share → Add to Home Screen.
+Once launched from the home screen the app runs in standalone mode, which has
+**no back button** — this is a documented, accepted stance, not a bug. Expect
+users to navigate with in-app controls only.
+
+### Strictly online / no caching
+
+The app requires connectivity. There is **no offline caching** — this is a
+milestone decision, not an oversight: no cache-first handlers, no offline
+fallback page, no second service worker. If the network is down, the app is
+unavailable like any plain web page.
+
+### Why no custom service worker
+
+The existing push service worker (`public/sw.js`, registered at root scope
+and served no-cache) already satisfies Chromium's installability criteria.
+Chrome removed the fetch-handler requirement for installability in Chrome 108
+(mobile) and 112 (desktop), so a separate "install" SW would add nothing but
+risk. Consequently, `public/sw.js` is pinned by `test/sw-contract.test.mjs`
+(sha256 content hash + structural pins): **any diff to that file is a
+STOP-and-justify event** — update the pin only after documenting why the
+change is necessary.
+
+### Lighthouse troubleshooting
+
+To check installability on a deployment, run Lighthouse (Chrome DevTools →
+Lighthouse → category "PWA") against the deployed root URL. If the
+installability audit fails, check in order: the manifest
+(`site.webmanifest`) is served with the `application/manifest+json` MIME type
+and no-cache headers; all manifest icons resolve over the network (200s, no
+404s); and the service worker registers successfully at root scope
+(`/sw.js`, no-cache). Fix whichever of those three is failing — the app code
+itself needs no changes.
