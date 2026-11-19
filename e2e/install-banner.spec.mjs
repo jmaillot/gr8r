@@ -139,7 +139,7 @@ test('the stubbed beforeinstallprompt shows the strip with EN text and the Insta
 
   const strip = page.locator('.install-banner');
   await expect(strip).toBeVisible();
-  await expect(strip.locator('.grow')).toHaveText(EN_CTA);
+  await expect(strip.locator('.grow')).toHaveText(EN_BIP_HINT);
   await expect(strip.locator('button.install-cta')).toHaveText(EN_CTA);
 
   await strip.locator('button.install-cta').click();
