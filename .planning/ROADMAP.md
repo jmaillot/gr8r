@@ -129,7 +129,7 @@ Plans:
 - [x] 77-01-PLAN.md — Lint cleanup: 15 unused-var/useless-assignment sites (file-grouped commits per D-77-1), no-undef pair via eslint.config.js (D-77-3), delete-outright with side-effect restructures (D-77-2), full suite per commit-group (D-77-18)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 77-02-PLAN.md — Advisory fixes with regression pins: WR-01/WR-02, 73-IN-01..05, 74-IN-01/02 (all FIX per D-77-8..16), carryover ledger 77-REVIEW-DISPOSITION.md
+- [x] 77-02-PLAN.md — Advisory fixes with regression pins: WR-01/WR-02, 73-IN-01..05, 74-IN-01/02 (all FIX per D-77-8..16), carryover ledger 77-REVIEW-DISPOSITION.md
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 77-03-PLAN.md — Locale refusal e2e ×3 (nl/de/es signup DP-1, catalogue-imported full-string equality per D-77-4..7 + owner reconciliations), run-wide ALLOW_SIGNUP_DOMAINS=e2e.local with Wave-0 dry run
@@ -144,4 +144,4 @@ Phases execute in numeric order: 75 → 76 → 77
 |-------|----------------|--------|-----------|
 | 75. Domain Admission Core | 2/2 | Complete    | 2026-11-19 |
 | 76. OIDC/SSO Doors & Immunity Hardening | 2/2 | Complete    | 2026-11-19 |
-| 77. Maintenance Debt | 1/3 | In progress | - |
+| 77. Maintenance Debt | 2/3 | In progress | - |

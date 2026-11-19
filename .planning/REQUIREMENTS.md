@@ -42,7 +42,7 @@ server.js (funnel-shaped, mirroring `validateGuestInviteShape`).
 - [ ] **MAINT-02**: nl/de/es catalogues verified in the real app — the refusal-path
   rendering checked per locale (placeholder parity, incl. new DOM refusal keys), not just
   navigation labels
-- [ ] **MAINT-03**: WR-01/WR-02/IN-01..05 advisory carryovers from the 73/74 reviews
+- [x] **MAINT-03**: WR-01/WR-02/IN-01..05 advisory carryovers from the 73/74 reviews
   dispositioned — fixed or explicitly waived with recorded reasons
 
 ## Future Requirements
@@ -76,6 +76,6 @@ Filled by roadmap creation (2026-11-19):
 | DOM-07 | Phase 75 | Complete |
 | MAINT-01 | Phase 77 | Complete |
 | MAINT-02 | Phase 77 | Pending |
-| MAINT-03 | Phase 77 | Pending |
+| MAINT-03 | Phase 77 | Complete |
 
 Coverage: 10/10 v1 requirements mapped — no orphans, no duplicates.
