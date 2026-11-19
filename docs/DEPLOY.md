@@ -150,6 +150,9 @@ WORKSPACE_SLUG=projects-studio
 PUID=1000
 PGID=1000
 ALLOW_SIGNUP=false
+# Optional admission doors (Phase 75). Comma-separated email-domain allowlists.
+ALLOW_SIGNUP_DOMAINS=
+ALLOW_INVITE_DOMAINS=
 SEED_DATA=true
 SESSION_DAYS=30
 SECURE_COOKIE=auto
@@ -161,6 +164,22 @@ MAX_UPLOAD_MB=25
 `PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
 The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
 restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
+
+`ALLOW_SIGNUP_DOMAINS` and `ALLOW_INVITE_DOMAINS` are the two admission doors (Phase 75).
+Each takes a comma-separated list of email domains and is tri-state: **unset** = door off
+(signup behaves as before, fail-open; `ALLOW_INVITE_DOMAINS` unset **inherits**
+`ALLOW_SIGNUP_DOMAINS`), **set-but-empty** = deny-all for that door — a deliberate,
+reversible switch (remember to blank the value in `.env`, since a commented-out line means
+unset), a **list** = allowlist. Entries are canonicalized case-insensitively with trailing
+dots stripped, and matched by **exact membership**: `sub.example.com` is NOT admitted when
+`example.com` is listed — subdomains are never implicitly admitted, and no suffix or
+wildcard matching is performed. Malformed entries (empty or whitespace-only) are
+warn-and-clean: logged at boot, the entry is dropped, and the instance keeps running. Both
+vars are read once at boot, so tightening a list takes effect on restart; the boot log
+prints one summary line per var naming the resolved domains and their source
+(`own` / `inherit`). Tightening `ALLOW_INVITE_DOMAINS` also refuses pending invites at
+accept time with a generic, localized refusal (non-consuming — loosening the list revives
+them).
 
 The code default is `TRUST_PROXY=false`: by default the app reads NO `X-Forwarded-*` header,
 so a directly exposed client cannot spoof its address and escape the per-IP throttles. Set
