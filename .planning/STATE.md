@@ -2,11 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v3.1
 milestone_name: Workspace Governance
+current_phase_name: defining requirements
 status: planning
-last_updated: "2026-11-19T21:48:00.796Z"
+stopped_at: Phase 78 context gathered
+last_updated: "2026-11-19T22:06:24.084Z"
 last_activity: 2026-11-19
+last_activity_desc: Milestone v3.1 started
+state_head: bdcf656f8264078d6d64fb782b2c1dabf9cfb401
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -100,6 +104,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-19T18:10:42.363Z
-Stopped at: Phase 77 context gathered
-Resume file: .planning/phases/77-maintenance-debt/77-CONTEXT.md
+Last session: 2026-11-19T22:06:24.059Z
+Stopped at: Phase 78 context gathered
+Resume file: .planning/phases/78-creation-gate-instance-owner-identity/78-CONTEXT.md
