@@ -7945,6 +7945,18 @@ async function handleApi(req, res, url) {
       }
     }
 
+    /* DP-3 (Phase 75, DOM-04/D-07): fail-closed re-derivation against the
+       LIVE boot-frozen invite list — the ROW's email is the ticket, never a
+       stored/resolved domain. The refusal is BEFORE any write and
+       non-consuming (loosening the list revives the pending invite). When
+       INVITE_DOMAINS is null (both doors unset) the gate is absent — the
+       unset contract stays fail-open. SIGNUP_DOMAINS is deliberately never
+       consulted here (one door, one rule — DOM-03). */
+    if (invite.email && INVITE_DOMAINS) {
+      const acceptRefusal = emailDomainRefusal(invite.email, INVITE_DOMAINS, 'inviteDomainNoLonger', 'This invite can no longer be accepted');
+      if (acceptRefusal) return fail(res, 403, 'inviteDomainNoLonger', acceptRefusal.message);
+    }
+
     const body = await readJson(req);
     const session = await currentUser(req);
     const account = invite.email ? await db.get('select * from users where email = ?', [invite.email]) : null;
@@ -7968,6 +7980,12 @@ async function handleApi(req, res, url) {
       if (!name) return fail(res, 400, 'nameRequired', 'Enter your name');
       if (!emailOk(email)) return fail(res, 400, 'enterValidEmail', 'Enter a valid email address');
       if (invite.email && invite.email !== email) return fail(res, 400, 'inviteForOtherEmail', `This invite is for ${invite.email}`, { email: invite.email });
+      /* DP-3 link-only (Phase 75, DOM-04): a null-email invite is a live
+         ticket for WHOMEVER holds the link — the body email (already
+         trimmed+lowercased) is re-derived against the live invite list
+         BEFORE createUser. Same code, same non-consuming posture (D-07). */
+      const linkRefusal = emailDomainRefusal(email, INVITE_DOMAINS, 'inviteDomainNoLonger', 'This invite can no longer be accepted');
+      if (linkRefusal) return fail(res, 403, 'inviteDomainNoLonger', linkRefusal.message);
       if (password.length < 10 || !/[0-9\W]/.test(password)) {
         return fail(res, 400, 'passwordTooWeak', 'Use at least 10 characters, including a number or symbol');
       }

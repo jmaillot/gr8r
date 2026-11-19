@@ -338,6 +338,7 @@
   "err.signupDisabled": "Registratie is uitgeschakeld. Vraag een werkruimtebeheerder om een account.",
   "err.signupDomainNotAllowed": "Dit e-mailadres valt buiten de domeinen die een account mogen aanmaken",
   "err.inviteDomainNotAllowed": "Dit e-mailadres valt buiten de domeinen waarvoor uitnodigingen zijn toegestaan",
+  "err.inviteDomainNoLonger": "Deze uitnodiging kan niet meer worden geaccepteerd",
   "err.accountCreateFailed": "Het account kon niet worden aangemaakt",
   "err.tfaCode": "Voer de 6-cijferige code uit je app in",
   "err.teamNameRequired": "Geef het team een naam",

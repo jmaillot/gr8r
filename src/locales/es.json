@@ -338,6 +338,7 @@
   "err.signupDisabled": "Los registros están desactivados. Pide una cuenta a un administrador del espacio de trabajo.",
   "err.signupDomainNotAllowed": "Este correo electrónico está fuera de los dominios autorizados para crear una cuenta",
   "err.inviteDomainNotAllowed": "Este correo electrónico está fuera de los dominios autorizados para invitaciones",
+  "err.inviteDomainNoLonger": "Esta invitación ya no puede aceptarse",
   "err.accountCreateFailed": "No se pudo crear la cuenta",
   "err.tfaCode": "Introduce el código de 6 dígitos de tu aplicación",
   "err.teamNameRequired": "Ponle un nombre al equipo",
