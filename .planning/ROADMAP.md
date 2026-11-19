@@ -59,14 +59,14 @@ refusals — before any SSO surface exists.
      exact `Set` membership (never `endsWith`), subdomains are NOT implicitly admitted, and
      adversarial parsing cases are pinned by a table-driven unit suite (tri-state env matrix:
      unset / `''` / whitespace / `'a,,b'` / `' a , B '`).
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 **Wave 1**
 - [x] 75-01-PLAN.md — Tri-state resolver + canonicalizing funnel + DP-1 signup door tracer, adversarial DOM-07 suite, D-05/D-06 boot logs, 5-locale signup key, DEPLOY.md docs
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 75-02-PLAN.md — DP-2 per-email invite gate, MCP invite_member fourth door, DP-3 fail-closed accept re-derive (non-consuming), gmail one-door-one-rule + tighten/loosen matrix, cross-door invariants
+- [x] 75-02-PLAN.md — DP-2 per-email invite gate, MCP invite_member fourth door, DP-3 fail-closed accept re-derive (non-consuming), gmail one-door-one-rule + tighten/loosen matrix, cross-door invariants
 
 **Set-but-empty semantics (flagged for phase decision):** research recommends explicit-set =
 deny-all (empty Set) vs unset = inherit/off. The tri-state boot resolver supports it; the
@@ -131,6 +131,6 @@ Phases execute in numeric order: 75 → 76 → 77
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 75. Domain Admission Core | 1/2 | In Progress|  |
+| 75. Domain Admission Core | 2/2 | In Progress|  |
 | 76. OIDC/SSO Doors & Immunity Hardening | 0/? | Not started | - |
 | 77. Maintenance Debt | 0/? | Not started | - |
