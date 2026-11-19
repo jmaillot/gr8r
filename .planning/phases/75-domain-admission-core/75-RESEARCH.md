@@ -206,11 +206,11 @@ Verified behaviors this session (Node v24.21.0) — all stdlib claims below were
 
 All other claims carry `[VERIFIED: <path:lines>]` or executed-stdlib provenance per the source hierarchy.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Signup route lacks an explicit `emailOk` before `createUser`** — planner decides whether the domain gate composes after an added structural check (research verified the route at `server.js:6703-6724`).
-2. **Boot-freeze vs live-read** — planner's discretion per CONTEXT D-discretion; document the choice in the plan.
-3. **Refusal key granularity** — one refusal key (`domainNotAllowed`) vs a separate accept-door key per D-07's "no longer be accepted" wording; planner decides, keeping `err.*` parity across all 5 locales.
+1. **Signup route lacks an explicit `emailOk` before `createUser`** — (RESOLVED in 75-01-PLAN.md, Task 1 action step 4) the DP-1 gate composes on the route's already-trimmed+lowercased email (:6710-6712) and is inserted between passwordTooWeak (:6716-6718) and createUser (:6721); no added structural check is introduced.
+2. **Boot-freeze vs live-read** — (RESOLVED in 75-01-PLAN.md, artifacts decision) planner discretion chose boot-frozen consts (`SIGNUP_DOMAINS`/`INVITE_DOMAINS` at the server.js:135 zone); tightening takes effect on restart, and DOM-04 tighten/loosen tests use the reboot-same-DB harness pattern (test/helpers/server.mjs:40-42).
+3. **Refusal key granularity** — (RESOLVED in 75-01-PLAN.md Task 1 step 5 + 75-02-PLAN.md Tasks 1/3 step 3) separate keys per door: `err.signupDomainNotAllowed` (signup, Plan 01), `err.inviteDomainNotAllowed` (invite-create, Plan 02), `err.inviteDomainNoLonger` (accept, Plan 02) — `err.*` parity across all 5 locales maintained, each key landing in the same commit as its first emitting gate.
 
 ## Environment Availability
 
