@@ -29,7 +29,7 @@ semantics (re-minting = invite create = DP-2). No route is invented; covered by 
 
 - [x] **Phase 75: Domain Admission Core** - Shared canonicalizing validator + signup, invite-create and fail-closed invite-accept doors with 5-locale keyed refusals ✅ COMPLETE (2026-11-19 — UAT passed, verification passed) (completed 2026-11-19)
 - [x] **Phase 76: OIDC/SSO Doors & Immunity Hardening** - JIT SSO gate, SSO invite reconciliation, existing-account immunity contract tests, boot door-matrix log
-- [ ] **Phase 77: Maintenance Debt** - Lint cleanup, nl/de/es refusal-path locale spot-check, WR/IN carryover dispositions
+- [x] **Phase 77: Maintenance Debt** - Lint cleanup, nl/de/es refusal-path locale spot-check, WR/IN carryover dispositions ✅ COMPLETE (2026-11-19 — verification passed, 8/8 must-haves)
 
 ## Phase Details
 
