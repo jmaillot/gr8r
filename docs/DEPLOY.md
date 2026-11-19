@@ -181,6 +181,27 @@ prints one summary line per var naming the resolved domains and their source
 accept time with a generic, localized refusal (non-consuming — loosening the list revives
 them).
 
+**SSO and the doors.** When OIDC is enabled the same two doors cover the SSO surface.
+JIT provisioning (a brand-new account created from an SSO login) is gated by
+`ALLOW_SIGNUP_DOMAINS` on the fresh-provision path only, after the `email_verified`
+check: an out-of-list SSO email is refused with the generic `?sso=error` redirect and a
+`sso signup domain refused` boot-style log line carrying the domain only (never the full
+email address). Two properties matter to operators:
+
+- **Existing SSO users are never locked out.** An identity that is already linked is
+  never re-checked against the lists — tightening `ALLOW_SIGNUP_DOMAINS` never breaks
+  the repeat logins of accounts that already exist (admission ≠ authentication).
+- **SSO invite reconciliation respects the invite door.** At SSO login, pending invites
+  for a brand-new SSO account whose email falls outside `ALLOW_INVITE_DOMAINS` are
+  silently skipped — they are **not consumed**, and loosening the list revives them on
+  the next login (same non-consuming semantics as the accept-time refusal above).
+
+**Reading the boot log.** Alongside the two per-var lines, the boot prints one combined
+`domains: door matrix` line listing every door with its resolved list — `signup:`,
+`invite-create:`, `invite-accept:`, `sso-jit:`, `sso-reconcile:` — so you can read from
+a single line exactly which door admits which domains (`off` = variable unset,
+`deny-all` = set-but-empty, otherwise the canonicalized list).
+
 The code default is `TRUST_PROXY=false`: by default the app reads NO `X-Forwarded-*` header,
 so a directly exposed client cannot spoof its address and escape the per-IP throttles. Set
 `TRUST_PROXY=true` only when a proxy that overwrites these headers (e.g. Traefik) sits in
