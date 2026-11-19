@@ -21,7 +21,7 @@ covered_files:
   - test/icon-contract.test.mjs
   - e2e/manifest.spec.mjs
 
-covered_digest: "v2:sha256:62a7f52d160153a69760bad2569ce505c15a99bc7d53327dda6c3179eaf6f533"
+covered_digest: "v2:sha256:32f4e2e34c4d0cc1c0cbd582bddfe825f1c0bfb097d62c1e66afb4685701488f"
 behavior_unverified: 3
 behavior_unverified_items:
   - truth: "Maskable icons render without clipping on Android adaptive launchers"

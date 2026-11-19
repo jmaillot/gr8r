@@ -18,7 +18,7 @@ covered_files:
   - src/core/push.js
   - src/main.js
   - test/sw-contract.test.mjs
-covered_digest: "v2:sha256:815e35d0f78d821f3cd6ec61ebb66ab40f1fc60fc87efc3b84304616bcde8ded"
+covered_digest: "v2:sha256:ddd80065f449dc7f7ac2309f9175f7122f1e515cc5680b982d14bcf20d6cdaaf"
 behavior_unverified: 0
 overrides_applied: 0
 ---

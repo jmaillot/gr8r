@@ -19,7 +19,7 @@ covered_files:
   - src/styles/overlays.css
   - test/pwa-banner.test.mjs
   - e2e/install-banner.spec.mjs
-covered_digest: "v2:sha256:0d17b1737aed7e048ffdfce05591c248daafc51dfaafacdcabbc1e96254a9060"
+covered_digest: "v2:sha256:041aabb46458a54bfad655bad71cded8aa1173cd610fb2e87356298a853b1b95"
 re_verification:
   previous_status: human_needed
   previous_score: 4/4
