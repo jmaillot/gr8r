@@ -13,9 +13,15 @@ covered_files:
   - "test/domain-admission-sso.test.mjs"
   - "test/helpers/oidc-idp.mjs"
   - "test/oidc-sso.test.mjs"
-covered_digest: "v2:sha256:87a3b0eae8e2d5363d4e97e1ee1349a1a296ed4ec5d2a695150a7784c492b005"
+covered_digest: "v2:sha256:62d840928e18379e66b1b3e31e86a57d3416e205c928d6bfb4687116c13c40cf"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 9/9
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 76: OIDC/SSO Doors & Immunity Hardening Verification Report
@@ -23,47 +29,62 @@ overrides_applied: 0
 **Phase Goal:** The SSO surface honors the same door matrix — JIT provisioning is gated, SSO invite reconciliation filters refused invites — and existing accounts are provably immune to list changes, with operators able to see the resolved matrix at boot.
 **Verified:** 2026-11-19
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after phase 77 modified covered source files (server.js dead-code removal, including WEBHOOK_MAX_ATTEMPTS)
 
 ## Goal Achievement
 
 ### Observable Truths
 
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| 1 | Out-of-list SSO email refused JIT provisioning after email_verified gate, fresh-provision arm only, generic `/login?sso=error` redirect (SC1/DOM-06) | ✓ VERIFIED | DP-4 gate at server.js:5134 (`emailDomainRefusal(email, SIGNUP_DOMAINS)`), inside the `!verifiedEmail → return errorRedirect()` else-arm; suite DP-4 section drives the real authorize→callback flow (test/domain-admission-sso.test.mjs) |
-| 2 | In-list / wildcard emails provision normally; unset ALLOW_SIGNUP_DOMAINS stays fail-open | ✓ VERIFIED | 18/18 pass on `node --test test/domain-admission-sso.test.mjs`, including in-list provision rows; unset-var fail-open rows in the suite |
-| 3 | Out-of-list pending invite filtered BEFORE branching (DP-5): normal `/` redirect, invite not consumed, loosening revives (SC3/DOM-05) | ✓ VERIFIED | server.js:5188 `.filter(invite => emailDomainRefusal(invite.email, INVITE_DOMAINS) === null)` on pendingInvites, branching consumes only filtered array; suite rows "DP-5: loosening the list revives..." (boot 1/2/3 flow: used_at IS NULL after tightened login, auto-accept after loosening) |
-| 4 | Boot logs ONE combined 5-door matrix line; D-06 per-var lines unchanged (SC4/D-11) | ✓ VERIFIED | server.js:8943 single logInfo line with signup/invite-create/invite-accept/sso-jit/sso-reconcile; suite D-11 section (line 438-444) asserts the line and per-var source lines |
-| 5 | DP-4 refusal log carries domain only, never full email (D-09) | ✓ VERIFIED | server.js:5139 `logInfo(\`sso signup domain refused — domain: ${emailFromEmail(email)}\`)`; suite line 85 asserts the log line format |
-| 6 | Every new gate composes emailDomainRefusal — no inline Set.has bypass (T-75-16) | ✓ VERIFIED | grep: no `Set.has` anywhere in server.js; both DP-4 (:5134) and DP-5 (:5188) call the funnel imported at server.js:183 |
-| 7 | Three named immunity rows exist and pass (DOM-05/D-12) | ✓ VERIFIED | test/domain-admission-sso.test.mjs:301, 335, 368 — all three names contain 'immunity', all pass |
-| 8 | Admission ≠ authentication: tightening never blocks repeat linked-identity logins (SC2) | ✓ VERIFIED | immunity rows 1-2: reboot-same-dataDir with tightened list, login succeeds, no 'sso signup domain refused' in output, no new user row; short-circuit at server.js:5112-5115 |
-| 9 | DEPLOY.md documents SSO doors + boot matrix line for operators | ✓ VERIFIED | docs/DEPLOY.md:184-201 — SSO door behavior, linked-identity carve-out, silent reconcile/revival, `domains: door matrix` line listing all five doors |
+| # | Truth | Status | Evidence (current tree) |
+|---|-------|--------|--------------------------|
+| 1 | Out-of-list SSO email refused JIT provisioning after email_verified gate, fresh-provision arm only, generic `/login?sso=error` redirect (SC1/DOM-06) | ✓ VERIFIED | DP-4 gate intact at server.js:5143 (`emailDomainRefusal(email, SIGNUP_DOMAINS)`), inside the `!verifiedEmail → return errorRedirect()` else-arm (comment block DP-4 at :5136); generic redirect at :5064; suite DP-4 section drives the real authorize→callback flow |
+| 2 | In-list / wildcard emails provision normally; unset ALLOW_SIGNUP_DOMAINS stays fail-open | ✓ VERIFIED | domain-admission-sso suite green (re-run this verification), including in-list provision rows and unset-var fail-open rows |
+| 3 | Out-of-list pending invite filtered BEFORE branching (DP-5): normal `/` redirect, invite not consumed, loosening revives (SC3/DOM-05) | ✓ VERIFIED | server.js:5197 `.filter(invite => emailDomainRefusal(invite.email, INVITE_DOMAINS) === null)` on pendingInvites, `pendingInvites.length === 1` branches on the filtered array only; DP-5 comment block at :5187; suite rows "DP-5: loosening the list revives…" green |
+| 4 | Boot logs ONE combined 5-door matrix line; D-06 per-var lines unchanged (SC4/D-11) | ✓ VERIFIED | server.js:8952 single combined `domains: door matrix` line with signup/invite-create/invite-accept/sso-jit/sso-reconcile; D-11 suite section (test/domain-admission-sso.test.mjs:438-512) green |
+| 5 | DP-4 refusal log carries domain only, never full email (D-09) | ✓ VERIFIED | server.js:5148 `logInfo(\`sso signup domain refused — domain: ${emailFromEmail(email)}\`)`; emailFromEmail import at :184; suite asserts the log format |
+| 6 | Every new gate composes emailDomainRefusal — no inline Set.has bypass (T-75-16) | ✓ VERIFIED | grep: 0 `Set.has` hits in server.js; DP-4 (:5143) and DP-5 (:5197) plus all Phase 75 doors (:6774, :7810, :7992, :8023, :8041) compose the funnel |
+| 7 | Three named immunity rows exist and pass (DOM-05/D-12) | ✓ VERIFIED | test/domain-admission-sso.test.mjs:301, 335, 368 — all three 'immunity' rows pass in the re-run |
+| 8 | Admission ≠ authentication: tightening never blocks repeat linked-identity logins (SC2) | ✓ VERIFIED | immunity rows 1-2 green; short-circuit for established (issuer, subject) identity at server.js:5122-5125 precedes all doors |
+| 9 | DEPLOY.md documents SSO doors + boot matrix line for operators | ✓ VERIFIED | docs/DEPLOY.md SSO door section intact (unchanged by phase 77) |
 
-**Option B amendment note:** immunity row 3 (line 368) pins the AMENDED truth — accept-time re-validation applies to ALL admits, so an existing out-of-list member re-invited under a tightened list gets 403 `inviteDomainNoLonger`, invite NOT consumed (used_at IS NULL count asserted), existing membership and logins untouched. This matches the owner decision in 76-02-SUMMARY / execution notes; the amendment itself is not a gap. The amended truth is what's pinned, with behavioral evidence.
+**Option B amendment note (carried from initial verification):** immunity row 3 (:368) pins the AMENDED truth — accept-time re-validation applies to ALL admits; an existing out-of-list member re-invited under a tightened list gets 403 `inviteDomainNoLonger`, invite NOT consumed, membership and logins untouched. Owner-approved amendment, not a gap.
 
 **Score:** 9/9 truths verified (0 present, behavior-unverified)
+
+### Phase-77 Interaction Check
+
+Phase 77 deleted dead code in server.js (including WEBHOOK_MAX_ATTEMPTS). Verified this did not touch any phase-76 artifact:
+
+| Artifact | Previous line | Current line | Intact? |
+|----------|--------------|--------------|---------|
+| DP-4 comment + gate | :5134 | :5136 / :5143 | ✓ |
+| DP-4 refusal log (D-09) | :5139 | :5148 | ✓ |
+| DP-5 filter | :5188 | :5197 | ✓ |
+| D-11 combined matrix line | :8943 | :8952 | ✓ |
+| emailDomainRefusal import | :183 | :183 | ✓ |
+| Generic sso=error redirect | :5053 | :5064 | ✓ |
+
+WEBHOOK_MAX_ATTEMPTS: 0 references remain in server.js (dead-code removal complete, no dangling dependency on phase-76 code).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| server.js DP-4 gate | Fresh-provision arm, after email_verified | ✓ VERIFIED | :5134, comment block DP-4 (Phase 76, DOM-06) |
-| server.js DP-5 filter | pendingInvites filter before branching | ✓ VERIFIED | :5188, silent/non-consuming, filters on stored invite.email |
-| server.js D-11 matrix line | Combined 5-door boot log | ✓ VERIFIED | :8943 |
-| server.js emailFromEmail import | Added to domains.js import block | ✓ VERIFIED | :184, used at :5139 |
-| test/helpers/oidc-idp.mjs | Extracted fake IdP harness | ✓ VERIFIED | exists, used by domain-admission-sso suite |
-| test/domain-admission-sso.test.mjs | D-12 contract suite, DP-4/DP-5/D-11 + immunity sections | ✓ VERIFIED | 18 tests, all sections present, 18/18 pass |
-| docs/DEPLOY.md | SSO doors + matrix doc | ✓ VERIFIED | lines 184-201 |
+| server.js DP-4 gate | Fresh-provision arm, after email_verified | ✓ VERIFIED | :5136-5152 |
+| server.js DP-5 filter | pendingInvites filter before branching | ✓ VERIFIED | :5187-5197, silent/non-consuming |
+| server.js D-11 matrix line | Combined 5-door boot log | ✓ VERIFIED | :8952 |
+| server.js emailFromEmail import | domains.js import block | ✓ VERIFIED | :184, used at :5148 |
+| test/helpers/oidc-idp.mjs | Fake IdP harness | ✓ VERIFIED | used by domain-admission-sso suite |
+| test/domain-admission-sso.test.mjs | D-12 contract suite | ✓ VERIFIED | all sections present, green in re-run |
+| docs/DEPLOY.md | SSO doors + matrix doc | ✓ VERIFIED | intact |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| server.js OIDC callback | domains.js emailDomainRefusal | funnel composition at :5134 | WIRED | import at :183; no reimplement (no Set.has) |
-| server.js SSO-07 reconciliation | emailDomainRefusal filter | :5188 filter, branching consumes filtered array only | WIRED | `pendingInvites.length === 1` branches on filtered result |
-| test/domain-admission-sso.test.mjs | oidc-idp.mjs → server.js callback | full authorize→callback 302 flow | WIRED | suite drives real HTTP flows (runFlow helpers), passes |
+| server.js OIDC callback | domains.js emailDomainRefusal | :5143 funnel composition | WIRED | import :183; no inline Set.has bypass |
+| server.js SSO-07 reconciliation | emailDomainRefusal filter | :5197 filter; branching consumes filtered array | WIRED | silent per D-10 |
+| test/domain-admission-sso.test.mjs | oidc-idp.mjs → server.js callback | real authorize→callback 302 flow | WIRED | green in re-run |
 
 ### Data-Flow Trace (Level 4)
 
@@ -77,12 +98,9 @@ overrides_applied: 0
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| D-12 contract suite (DP-4/DP-5/D-11 + immunity) | `node --test test/domain-admission-sso.test.mjs` | 18 pass / 0 fail | ✓ PASS |
-| OIDC SSO regression suite | `node --test test/oidc-sso.test.mjs` | 47 pass / 0 fail | ✓ PASS |
-| Phase 75 domain-admission regression | `node --test test/domain-admission.test.mjs` | 32 pass / 0 fail | ✓ PASS |
-| Commits exist | `git cat-file -e` on 4edca91d, 04c578fa, 3fefd070, e42e9c72, b14d4fe7, 80ab89f4 | all 6 present | ✓ PASS |
-
-Full-suite claim (1846 pass / 13 env skips) not independently re-run; the three phase-relevant suites were run directly and are green.
+| Phase-relevant targeted suites | `node --test test/domain-admission-sso.test.mjs test/oidc-sso.test.mjs test/domain-admission.test.mjs` | 97 pass / 0 fail | ✓ PASS |
+| Full workspace suite | `npm test` | 1854 pass / 0 fail / 13 env skips (exit 0) | ✓ PASS |
+| Lint gate | `npm run lint` | exit 0, no findings | ✓ PASS |
 
 ### Probe Execution
 
@@ -92,34 +110,36 @@ None declared — no probe scripts in PLAN files or scripts/*/tests for this pha
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-----------|-------------|--------|----------|
-| DOM-05 | 76-01, 76-02 | Existing accounts immune: list changes never block logins / re-invites per owner decision | ✓ SATISFIED | Immunity rows 1-3 green; DP-5 filter verbatim DP-3 semantics; DEPLOY.md documents |
-| DOM-06 | 76-01 | OIDC JIT creation honors ALLOW_SIGNUP_DOMAINS (fresh-provision only) | ✓ SATISFIED | DP-4 gate at :5134 in fresh-provision arm after email_verified; contract rows green |
+| DOM-05 | 76-01, 76-02 | Existing accounts immune: list changes never block logins / re-invites per owner decision | ✓ SATISFIED | Immunity rows 1-3 green; DP-5 filter verbatim DP-3 semantics; DEPLOY.md intact |
+| DOM-06 | 76-01 | OIDC JIT creation honors ALLOW_SIGNUP_DOMAINS (fresh-provision only) | ✓ SATISFIED | DP-4 gate at :5143 in fresh-provision arm after email_verified; contract rows green |
 
-No orphaned requirements — REQUIREMENTS.md maps exactly DOM-05, DOM-06 to Phase 76, both claimed by plans.
+No orphaned requirements.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| (none) | — | No TBD/FIXME/XXX/placeholder markers in phase-modified files; no locale edits in diff | — | — |
+| (none) | — | No TBD/FIXME/XXX/placeholder markers in phase-modified files; no Set.has bypass; no locale edits | — | — |
+
+**Note on a transient environmental issue during re-verification:** the first `npm test` run reported 8 failures, all traced to an uncommitted leftover i18n-scan fixture line (`export const probe = 'A literal that was never extracted';`) in `src/views/table.js` — contamination from a crashed earlier test run, not production code and not a phase-76 or phase-77 regression. The line was reverted via `git checkout` (restoring committed state); the subsequent full run was 1854/1854 green. `test/inbox-burst.test.mjs` and `test/workspace-logo.test.mjs` also pass in isolation, confirming the rest were pollution effects.
 
 ### Human Verification Required
 
-None. Every truth — including the behavior-dependent ones (DP-4 refusal transition, DP-5 silent/non-consuming/revivable invariant, immunity state transitions across reboots) — is exercised by passing behavioral tests in test/domain-admission-sso.test.mjs, which drive the real server over HTTP with reboot-same-DB idiom. No judgment-tier prohibition was left unverified: the five PLAN prohibitions were each checked directly (no Set.has; domain-only log line; exact `/login?sso=error` Location in errorRedirect at :5053-5056; fresh-provision-arm-only gating with immunity rows green; no src/locales changes).
+None. Every truth — including the behavior-dependent ones (DP-4 refusal transition, DP-5 silent/non-consuming/revivable invariant, immunity state transitions across reboots) — is exercised by passing behavioral tests in test/domain-admission-sso.test.mjs. All five PLAN prohibitions re-checked directly against the current tree (no Set.has; domain-only log line; exact `/login?sso=error` Location at :5064; fresh-provision-arm-only gating; no src/locales changes).
 
 ### Prohibitions (must-NOTs)
 
 | Prohibition | Verification | Status |
 |-------------|-------------|--------|
 | No inline Set.has bypass in DP-4/DP-5 | grep server.js: 0 hits; both compose emailDomainRefusal | ✓ VERIFIED |
-| Never log full email on DP-4 refusal | :5139 logs `emailFromEmail(email)` only | ✓ VERIFIED |
-| No domain-revealing query param | errorRedirect Location is exactly `/login?sso=error` (:5053-5056); suite asserts 302 | ✓ VERIFIED |
+| Never log full email on DP-4 refusal | :5148 logs `emailFromEmail(email)` only | ✓ VERIFIED |
+| No domain-revealing query param | errorRedirect Location is exactly `/login?sso=error` (:5064) | ✓ VERIFIED |
 | Never gate already-linked / existing-account link arm | DP-4 lives only in fresh-provision else-arm; immunity rows 1-2 pass | ✓ VERIFIED |
-| No catalogue/locale edits | git diff shows no src/locales changes | ✓ VERIFIED |
+| No catalogue/locale edits | git status: no src/locales changes | ✓ VERIFIED |
 
 ### Gaps Summary
 
-None. Phase goal achieved: both SSO doors (DP-4 JIT gate, DP-5 reconcile filter) are present, wired, and behaviorally pinned by a passing contract suite; existing-account immunity is provable via three named reboot-same-DB rows (row 3 pins the owner-approved Option B amended truth); the combined five-door matrix boot log exists and is asserted; operator documentation is in DEPLOY.md. All six claimed commits exist. Code review reported 0 critical / 0 warning (2 advisory info items open in 76-REVIEW.md — advisory only, do not block).
+None. Phase goal achieved in the current tree: both SSO doors (DP-4 JIT gate :5143, DP-5 reconcile filter :5197) survived phase 77's dead-code removal intact (line numbers shifted only), immunity rows are green, the combined five-door matrix boot log (:8952) is asserted, and operator documentation is intact. All gates re-run green: lint 0 findings, full suite 1854 pass / 0 fail / 13 env skips, targeted phase suites 97/97.
 
 ---
 

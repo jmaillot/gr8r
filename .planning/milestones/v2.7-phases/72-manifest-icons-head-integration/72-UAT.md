@@ -1,5 +1,5 @@
 ---
-status: passed
+status: complete
 phase: 72-manifest-icons-head-integration
 source: [72-VERIFICATION.md]
 started: 2026-11-18T00:00:00Z
@@ -8,13 +8,7 @@ updated: 2026-11-18T17:52:00Z
 
 ## Current Test
 
-number: 3
-name: Chromium install prompt — installability criteria met end-to-end
-expected: |
-  Open the app in desktop Chrome; the install prompt is available
-  (manifest + icons accepted). Lighthouse PWA installability may be used
-  as a proxy.
-awaiting: none — all tests complete
+[testing complete]
 
 ## Tests
 

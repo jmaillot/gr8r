@@ -1,6 +1,6 @@
 ---
 id: SEED-261119-f3w
-status: dormant
+status: implemented (v3.0 Phases 75-76, shipped 2026-11-19 — door matrix DP-1..DP-5, owner-validated design realized)
 planted: 2026-11-19
 planted_during: post-v2.7 (between milestones)
 trigger_when: when the next milestone includes access control, invitations, or OIDC/SSO work
