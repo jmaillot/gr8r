@@ -371,6 +371,97 @@ test('grant-path throw lands on /login?sso=error with no session and no partial 
 
 /* ------------------------------ tests ------------------------------ */
 
+/* Phase 82 Plan 02 Task 1 (GS-03, T-82-05): mapped-lower downgrades apply ONLY
+   to group-derived rows; manual rows with the identical shape are immune.
+   Part (a): group admin row + mapping lowered admin→member → downgraded with
+   provenance re-stamped to the driving group and ONE mapped-lower audit row.
+   Part (b): identical admin row with provenance 'manual' + same remap →
+   row UNCHANGED, zero delta rows. */
+test('mapped-lower downgrades a group-derived row with mapped-lower audit; identical manual row immune (GS-03)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-gs03', slug: 'gs03ws', name: 'GS03 WS' });
+      seedWorkspace(db, { id: 'ws-gs03m', slug: 'gs03mws', name: 'GS03 Manual WS' });
+      seedMapping(db, { guid: '72111111-2222-3333-4444-555555555555', workspaceId: 'ws-gs03', role: 'admin' });
+    });
+    // JIT-create the user with an unmapped login, then seed the two rows.
+    const first = await runFlow(server, { sub: 'sub-gs03', email: 'gs03@example.com', email_verified: true }, 'code-gs03-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('gs03@example.com').id;
+      db.prepare("insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values ('ws-gs03', ?, 'admin', ?, null, null, 'group:72111111-2222-3333-4444-555555555555')").run(uid, `m_${uid}`);
+      db.prepare("insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values ('ws-gs03m', ?, 'admin', ?, null, null, 'manual')").run(uid, `m2_${uid}`);
+    });
+    // Login 1 — mapping matches: first login on ws-gs03 is mapped==existing
+    // no-op (D-81-5); ws-gs03m has no mapping and a manual row → immune.
+    const second = await runFlow(server, { sub: 'sub-gs03', email: 'gs03@example.com', email_verified: true, groups: ['72111111-2222-3333-4444-555555555555'] }, 'code-gs03-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('gs03@example.com').id;
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 0, 'mapped==existing login wrote zero delta rows (D-81-5 no-op pin)');
+    });
+    // Remap admin→member, then login → the group row downgrades; manual immune.
+    withDb(server.dbPath, db => db.prepare('update group_mappings set role = ? where group_guid = ?').run('member', '72111111-2222-3333-4444-555555555555'));
+    const third = await runFlow(server, { sub: 'sub-gs03', email: 'gs03@example.com', email_verified: true, groups: ['72111111-2222-3333-4444-555555555555'] }, 'code-gs03-3');
+    assert.equal(third.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('gs03@example.com').id;
+      const g = db.prepare('select * from memberships where workspace_id = ?').get('ws-gs03');
+      assert.equal(g.role, 'member', 'the group-derived row was downgraded');
+      assert.equal(g.provenance, 'group:72111111-2222-3333-4444-555555555555', 'provenance follows the driving group (D-82-7 role-source)');
+      const m = db.prepare('select * from memberships where workspace_id = ?').get('ws-gs03m');
+      assert.equal(m.role, 'admin', 'the identical manual row was NOT downgraded (GS-03 immunity)');
+      assert.equal(m.provenance, 'manual');
+      const audits = db.prepare("select * from audit_log where actor_id = ? and action like 'group_%'").all(uid);
+      assert.equal(audits.length, 1, 'exactly one delta audit row');
+      assert.equal(audits[0].action, 'group_role_downgraded:group:72111111-2222-3333-4444-555555555555:mapped-lower');
+      assert.equal(audits[0].workspace_id, 'ws-gs03');
+      assert.equal(audits[0].target_id, uid);
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Phase 82 Plan 02 Task 1 step 4 (GS-02 owner-downgrade arm, research A5):
+   downgrading the SOLE owner removes the only owner — the guard arm routes
+   through the SAME guardRefuse funnel as deletion: row intact, login proceeds,
+   loud PII-free warn, guard-refused audit row. */
+test('sole-owner downgrade refused: row intact, login proceeds, guard-refused audit row (GS-02 funnel arm)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-gs03o', slug: 'gs03ows', name: 'GS03 Owner WS' });
+      seedMapping(db, { guid: '82111111-2222-3333-4444-555555555555', workspaceId: 'ws-gs03o', role: 'owner' });
+    });
+    // Login 1 — mapped claim grants the JIT user as OWNER (group provenance).
+    const first = await runFlow(server, { sub: 'sub-gs03o', email: 'gs03o@example.com', email_verified: true, groups: ['82111111-2222-3333-4444-555555555555'] }, 'code-gs03o-1');
+    assert.equal(first.callback.location, '/');
+    // Remap owner→member; the user is now the SOLE owner with a lower mapping.
+    withDb(server.dbPath, db => db.prepare('update group_mappings set role = ? where group_guid = ?').run('member', '82111111-2222-3333-4444-555555555555'));
+    const second = await runFlow(server, { sub: 'sub-gs03o', email: 'gs03o@example.com', email_verified: true, groups: ['82111111-2222-3333-4444-555555555555'] }, 'code-gs03o-2');
+    assert.equal(second.callback.location, '/', 'the refused downgrade login still lands on /');
+    assert.ok(sessionCookieOf(second.callback.cookies), 'the refused login still mints a session');
+    const out = server.output();
+    assert.ok(out.includes('sso group removal refused — last workspace owner'), 'the same loud refusal line fires through the shared funnel');
+    assert.ok(!/82111111|gs03o@example/.test(out.slice(out.indexOf('removal refused'))), 'no GUID or email in the refusal line (T-82-03)');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('gs03o@example.com').id;
+      const row = db.prepare('select * from memberships where workspace_id = ?').get('ws-gs03o');
+      assert.ok(row, 'the membership row is INTACT');
+      assert.equal(row.role, 'owner', 'role untouched by the refused downgrade');
+      assert.equal(row.provenance, 'group:82111111-2222-3333-4444-555555555555', 'provenance untouched');
+      const audits = db.prepare("select * from audit_log where actor_id = ? and action like 'group_%:guard-refused'").all(uid);
+      assert.equal(audits.length, 1, 'exactly one guard-refused audit row');
+      assert.equal(audits[0].action, 'group_role_downgraded:group:82111111-2222-3333-4444-555555555555:guard-refused');
+      assert.equal(audits[0].workspace_id, 'ws-gs03o');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* Phase 82 Task 3 (SC5 / D-82-4): an overage login removes NOTHING and grants
    NOTHING — the whole reconcile lives inside the mapped else-branch, so a
    pre-seeded (claim-granted) group-derived row SURVIVES the overage login

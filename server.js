@@ -5258,9 +5258,10 @@ async function handleApi(req, res, url) {
          to the resolved row), inside the existing try so ANY throw funnels
          to errorRedirect (D-81-11 fail closed). One pass per workspace over
          the union of grant targets and existing group-derived rows: delete
-         (no mapping + group provenance, owner-guarded) / upgrade (mapped >
-         existing, Phase 81 rule) / no-op. Downgrade cells, the encoded
-         grant-trail conversion and the byte-identical gate land in Plan 02. */
+         (no mapping + group provenance, owner-guarded) / downgrade (mapped <
+         existing, group provenance ONLY — GS-03) / upgrade (mapped >
+         existing, Phase 81 rule) / no-op. The encoded grant-trail conversion
+         and the byte-identical gate land in Plan 02 Task 2/3. */
       const claimState = resolveGroupsClaim(claims);
       if (claimState.state === 'unmapped') {
         /* D-81-10: ONE fixed logWarn on overage — never claim content, GUIDs,
@@ -5357,12 +5358,46 @@ async function handleApi(req, res, url) {
             logWarn('sso group grant skipped — workspace missing or archived');
             continue;
           }
-          /* D-81-2 upgrade-only re-assert: addMembership's on-conflict is an
-             UNCONDITIONAL write, so pre-compare the existing row FIRST — a
-             same-role or lower mapped role must write NOTHING anywhere
-             (D-81-5 changes-only: no-op logins write zero rows/logs).
-             Downgrades are Phase 82 Plan 02. */
-          if (existing && !(ROLE_RANK_WITH_VIEWER[mapped.role] > ROLE_RANK_WITH_VIEWER[existing.role])) continue;
+          if (existing) {
+            const curRank = ROLE_RANK_WITH_VIEWER[existing.role];
+            const mappedRank = ROLE_RANK_WITH_VIEWER[mapped.role];
+            /* D-81-5 changes-only: mapped == existing → no-op, zero writes. */
+            if (mappedRank === curRank) continue;
+            if (mappedRank < curRank) {
+              /* GS-03 downgrade cell: ONLY a group-derived row may be lowered —
+                 manual/invite/NULL provenance rows are immune (zero writes, zero
+                 audit rows; T-82-05). D-82-7 role-source semantics: the write
+                 goes through addMembership so the conditional conflict clause
+                 stamps the DRIVING group's provenance `group:<guid>` (a row
+                 originally from group A demoted per group B now carries B's
+                 provenance — the same predicate key the next delete pass uses). */
+              if (!String(existing.provenance || '').startsWith('group:')) continue;
+              const guid = mapped.groupGuid;
+              /* GS-02 owner-downgrade guard arm: demoting the SOLE owner removes
+                 the only owner (research A5) — mirror the PATCH route guard
+                 template (:7653: row.role === 'owner' && nextRole !== 'owner' &&
+                 ownerCount(...) === 0) and route through the SAME guardRefuse
+                 funnel. Refusal = skip + loud logWarn + guard-refused audit row,
+                 login proceeds. */
+              if (existing.role === 'owner' && mapped.role !== 'owner' && (await ownerCount(wsId, row.id)) === 0) {
+                await guardRefuse(wsId, guid, 'role_downgraded');
+                continue;
+              }
+              await addMembership(ws, row, mapped.role, [], 'group:' + guid);
+              /* GS-04/D-82-9: the mapped-lower delta is audit-logged in its own
+                 db.tx (addMembership owns its internal tx — db.tx does not
+                 nest), encoded action per D-82-9, actor=target=self. */
+              await db.tx(async () => {
+                await db.run(
+                  'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                  [uid(), row.id, row.id, `group_role_downgraded:group:${guid}:mapped-lower`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+                );
+              });
+              continue;
+            }
+            /* mappedRank > curRank → upgrade: fall through to the grant/upgrade
+               write below (Phase 81 rule, D-81-2). */
+          }
           await addMembership(ws, row, mapped.role, [], 'group:' + mapped.groupGuid);
           /* D-81-4/5 changes-only verbs: a genuine upgrade of an existing row
              logs sso_group_role_change, a fresh insert logs sso_group_grant,
