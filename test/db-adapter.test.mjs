@@ -265,9 +265,10 @@ const TABLES = [
   'reminders_sent',
   'user_notif_prefs',
   'push_subscriptions',
+  'group_mappings',
 ];
 
-test('pgSchemaVariant: all 15 tables, zero collate nocase, zero pragma, functional nocase index', () => {
+test('pgSchemaVariant: all 16 tables, zero collate nocase, zero pragma, functional nocase index', () => {
   const variant = adapter.pgSchemaVariant();
   for (const table of TABLES) {
     assert.match(variant, new RegExp(`create table if not exists ${table} \\(`), `table ${table} missing from pg variant`);
@@ -300,9 +301,45 @@ test('pgSchemaVariant: epoch-ms columns become bigint; booleans/counters stay in
   assert.match(adapter.SQLITE_SCHEMA, /created_at\s+integer not null/);
 });
 
+/* ---- GROUP-MAPPING (Phase 80, GM-01): in-memory DDL proof -------------- */
+
+test('group_mappings DDL: insert round-trip, 3-token role CHECK, unique (guid, workspace) pair', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(adapter.SQLITE_SCHEMA);
+  db.prepare(
+    "insert into users (id, email, name, password_hash, created_at) values ('u1', 'op@example.com', 'Op', 'x', 1)",
+  ).run();
+  const guid = 'a1b2c3d4-e5f6-4789-9abc-def012345678';
+  const insert = db.prepare(
+    "insert into group_mappings (id, group_guid, workspace_id, role, label, created_by, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+  );
+  insert.run('m1', guid, 'ws1', 'member', 'display only', 'u1', 1, 1);
+  const got = db.prepare('select role, kind, workspace_id, label from group_mappings where id = ?').get('m1');
+  assert.deepEqual({ ...got }, { role: 'member', kind: 'workspace', workspace_id: 'ws1', label: 'display only' });
+  // T-80-03: role CHECK enforces the locked 3-token set — viewer must fail.
+  assert.throws(
+    () => insert.run('m2', guid, 'ws1', 'viewer', null, 'u1', 1, 1),
+    /CHECK constraint failed/,
+    "role 'viewer' must be refused by the table CHECK",
+  );
+  // T-80-02: the (group_guid, workspace_id) unique index fires on a duplicate pair.
+  assert.throws(
+    () => insert.run('m3', guid, 'ws1', 'admin', null, 'u1', 1, 1),
+    /UNIQUE constraint failed/,
+    'duplicate (group_guid, workspace_id) pair must be refused',
+  );
+  // A different workspace with the same GUID is a legal row (per-workspace grants).
+  insert.run('m4', guid, 'ws2', 'admin', null, 'u1', 1, 1);
+  assert.equal(db.prepare('select count(*) as n from group_mappings').get().n, 2);
+  // pg-incompatible DDL must never enter the new table (mirror discipline).
+  const tableSql = db.prepare("select sql from sqlite_master where type = 'table' and name = 'group_mappings'").get().sql;
+  assert.equal(/collate nocase/i.test(tableSql), false, 'group_mappings must carry zero collate nocase');
+  db.close();
+});
+
 /* ---- runSchema (D-10): dialect-owned schema execution ----------------- */
 
-test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 15 tables)', async () => {
+test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 16 tables)', async () => {
   const dbPath = tmpDbPath();
   await adapter.connectDb({ dbPath });
   assert.equal(adapter.backendKind, 'sqlite');
@@ -376,7 +413,7 @@ test('the invites scalar→teams backfill is sqliteOnly-gated (D-09: SQLite-only
 
 /* ---- seed portability (D-07) ------------------------------------------ */
 
-test('seed is portable: two fresh boots produce identical row counts across all 15 tables (D-07)', async () => {
+test('seed is portable: two fresh boots produce identical row counts across all 16 tables (D-07)', async () => {
   const bootCounts = async () => {
     const server = await startServer({ env: { SEED_DATA: 'true' } });
     try {
