@@ -221,6 +221,154 @@ test('already-operator with operator mapping logs in with zero writes (D-81-5 bi
   }
 });
 
+/* Phase 81 Task 3 (D-81-10): overage claim → ONE fixed logWarn naming no GUID,
+   count, or claim content — zero grant writes, login proceeds. */
+test('overage claim logs the fixed message and writes nothing (D-81-10)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-over', slug: 'overws', name: 'Over WS' });
+      seedMapping(db, { guid: '91111111-2222-3333-4444-555555555555', workspaceId: 'ws-over', role: 'member' });
+    });
+    const { callback } = await runFlow(server, { sub: 'sub-overage', email: 'overage@example.com', email_verified: true, _claim_names: { groups: 'src1' } }, 'code-overage');
+    assert.equal(callback.location, '/', 'overage login proceeds as unmapped');
+    const out = server.output();
+    assert.ok(out.includes('sso groups claim overage — treating as unmapped'), 'the fixed overage line is present');
+    assert.ok(!/91111111|src1|overage@example|count/.test(out.slice(out.indexOf('overage'))), 'no GUID, claim key, email, or count in the overage line');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('overage@example.com').id;
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0, 'zero grant writes');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0);
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* D-81-8: dead/archived target → skip + logWarn, never fatal; remaining
+   grants still apply. */
+test('archived or missing workspace skips that grant with logWarn — other grants unaffected (D-81-8)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-live', slug: 'livews', name: 'Live WS' });
+      seedWorkspace(db, { id: 'ws-dead', slug: 'deadws', name: 'Dead WS' });
+      seedWorkspace(db, { id: 'ws-gone', slug: 'gonews', name: 'Gone WS' });
+      seedMapping(db, { guid: 'a1111111-2222-3333-4444-555555555555', workspaceId: 'ws-dead', role: 'member' });
+      seedMapping(db, { guid: 'b1111111-2222-3333-4444-555555555555', workspaceId: 'ws-live', role: 'member' });
+      seedMapping(db, { guid: 'c1111111-2222-3333-4444-555555555555', workspaceId: 'ws-never-existed', role: 'member' });
+      db.prepare('update workspaces set archived = 1 where id = ?').run('ws-dead');
+    });
+    const { callback } = await runFlow(server, {
+      sub: 'sub-deadws',
+      email: 'deadws@example.com',
+      email_verified: true,
+      groups: ['a1111111-2222-3333-4444-555555555555', 'b1111111-2222-3333-4444-555555555555', 'c1111111-2222-3333-4444-555555555555'],
+    }, 'code-deadws');
+    assert.equal(callback.location, '/', 'dead targets never fail the login');
+    const out = server.output();
+    assert.ok(out.includes('sso group grant skipped — workspace missing or archived'), 'fixed self-describing skip line present');
+    assert.ok(!/a1111111|c1111111|deadws@example/.test(out.slice(out.indexOf('workspace missing or archived'))), 'no GUID or email in the skip line');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('deadws@example.com').id;
+      const rows = db.prepare('select * from memberships where user_id = ?').all(uid);
+      assert.equal(rows.length, 1, 'only the live workspace was granted');
+      assert.equal(rows[0].workspace_id, 'ws-live');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_group_grant'").get(uid).n, 1, 'one grant verb — skips log nothing to security_log');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* GW-03 (success criterion 2): DP-4 is structural — the signup door returns
+   BEFORE identity resolution, so a domain-refused email can never be
+   provisioned, mapped or not. Pinned e2e. */
+test('DP-4 pin: mapped group + domain-refused email → generic error redirect, zero provisioning (GW-03)', async () => {
+  const server = await startServer({ env: { ...oidcEnv(), ALLOW_SIGNUP_DOMAINS: 'allowed.com' } });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-dp4', slug: 'dp4ws', name: 'DP4 WS' });
+      seedMapping(db, { guid: 'd1111111-2222-3333-4444-555555555555', workspaceId: 'ws-dp4', role: 'member' });
+    });
+    const { callback } = await runFlow(server, {
+      sub: 'sub-dp4',
+      email: 'refused@blocked.org',
+      email_verified: true,
+      groups: ['d1111111-2222-3333-4444-555555555555'],
+    }, 'code-dp4');
+    assert.equal(callback.location, '/login?sso=error', 'the ONE generic refusal surface — no new params');
+    assert.ok(!sessionCookieOf(callback.cookies), 'no session minted');
+    withDb(server.dbPath, db => {
+      assert.equal(db.prepare('select count(*) as n from users where email = ?').get('refused@blocked.org').n, 0, 'no users row');
+      assert.equal(db.prepare('select count(*) as n from oidc_identities where subject = ?').get('sub-dp4').n, 0, 'no identity row');
+      assert.equal(db.prepare('select count(*) as n from memberships m join users u on u.id = m.user_id where u.email = ?').get('refused@blocked.org').n, 0, 'no membership row — the door precedes the grant block');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Success criterion 5 regression pin: groups claim present but no mapping
+   match → byte-identical to pre-milestone: same redirect, sso_login verb,
+   zero group verbs, zero writes. */
+test('regression pin: mapped-shape claim with no matching mapping is byte-identical (criterion 5)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-reg', email: 'regression@example.com', email_verified: true, groups: ['e1111111-2222-3333-4444-555555555555'] }, 'code-reg');
+    assert.equal(callback.location, '/', 'same redirect as pre-milestone');
+    assert.ok(sessionCookieOf(callback.cookies), 'session minted as usual');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('regression@example.com').id;
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_login'").get(uid).n, 1, 'sso_login fires as today');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0, 'zero group verbs');
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0);
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* D-81-11 fail-closed pin: a grant-path throw lands on the ONE generic
+   /login?sso=error redirect — no session, no partial membership row, no new
+   redirect params — and a healthy retry with the same mapping succeeds.
+   Fault mechanism: a SQLite trigger that aborts the group-provenance
+   membership insert; the test drops it between attempts so the retry is
+   clean. */
+test('grant-path throw lands on /login?sso=error with no session and no partial writes; retry succeeds (D-81-11)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-fault', slug: 'faultws', name: 'Fault WS' });
+      seedMapping(db, { guid: 'f1111111-2222-3333-4444-555555555555', workspaceId: 'ws-fault', role: 'member' });
+      db.prepare(
+        "create trigger groups_fault before insert on memberships when new.provenance like 'group:%' and new.workspace_id = 'ws-fault' begin select raise(abort, 'fault'); end",
+      ).run();
+    });
+    const claims = { sub: 'sub-fault', email: 'fault@example.com', email_verified: true, groups: ['f1111111-2222-3333-4444-555555555555'] };
+    const failed = await runFlow(server, claims, 'code-fault-1');
+    assert.equal(failed.callback.location, '/login?sso=error', 'the throw funnels to the ONE generic surface');
+    assert.ok(!sessionCookieOf(failed.callback.cookies), 'no session cookie minted');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('fault@example.com').id;
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0, 'no partial membership row');
+    });
+    // Remove the fault, retry with the same mapping — succeeds (retryability).
+    withDb(server.dbPath, db => db.prepare('drop trigger groups_fault').run());
+    const retry = await runFlow(server, claims, 'code-fault-2');
+    assert.equal(retry.callback.location, '/', 'healthy retry lands on /');
+    assert.ok(sessionCookieOf(retry.callback.cookies), 'retry mints a session');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('fault@example.com').id;
+      const row = db.prepare('select * from memberships where user_id = ?').get(uid);
+      assert.equal(row.role, 'member');
+      assert.equal(row.provenance, 'group:f1111111-2222-3333-4444-555555555555');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ------------------------------ tests ------------------------------ */
 
 /* Phase 81 Task 1 (D-81-2/D-81-3/D-81-5): upgrade-only re-assert. A viewer row
