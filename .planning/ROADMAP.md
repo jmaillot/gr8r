@@ -83,7 +83,10 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
 - [ ] 83-01-PLAN.md — Wave 0 server test suite + operator rename route + on-read dead-mappings route + api client methods (tracer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 83-02-PLAN.md — governance Edit modal + D-03 confirm fork + dead-mapping warning card + 5-locale keys + client assertions
 
 **UI hint**: yes
