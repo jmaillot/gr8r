@@ -1062,15 +1062,27 @@ async function fillLogin(page, account, lang) {
 
 /* Submit the second factor and wait for the workspace landing; returns
    false if the challenge rejected the code while still alive, so the
-   caller can retry once with the next step's code (D-04). */
+   caller can retry once with the next step's code (D-04). The landing
+   timeout is widened (8 s) — under worker load the login POST can land
+   after the 4 s the original pin allowed, which reads as a flake. */
 async function submitTfaCode(page, slug, code) {
   await page.locator('#tfa-login-code').fill(code);
   await page.locator('#tfa-login-btn').click();
   try {
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}$`), { timeout: 4000 });
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}$`), { timeout: 8000 });
     return true;
   } catch {
     return false;
+  }
+}
+
+/* Wait until the server-side 30s window has moved strictly past the step
+   consumed at lastStepSec (the D-04 replay guard refuses s <= lastStep).
+   Deterministic — never submits a code whose step can be refused.
+   Same helper as the operator-revoke-cycle precedent (IN-03). */
+async function nextWindow(lastStepSec) {
+  while (Math.floor(Date.now() / 1000 / 30) <= Math.floor(lastStepSec / 30)) {
+    await new Promise(r => setTimeout(r, 500));
   }
 }
 
@@ -1105,11 +1117,18 @@ test.describe('phase 18 auth flows', () => {
            guard can never refuse the login code. */
         const enabledStep = Math.floor((Date.now() / 1000 + 1) / 30);
         const nowStep = Math.floor(Date.now() / 1000 / 30);
-        const ok = await submitTfaCode(page, acct.account.slug, tfaCode(secret, nowStep <= enabledStep ? 31 : 1));
+        const firstAttemptSec = Math.floor(Date.now() / 1000) + (nowStep <= enabledStep ? 31 : 1);
+        const ok = await submitTfaCode(page, acct.account.slug, totpAt(secret, firstAttemptSec));
         if (!ok) {
-          /* One retry with the NEXT step's code — challenge still alive. */
+          /* One retry with the NEXT step's code — challenge still alive.
+             The honest rejection toast is asserted first, then the retry
+             clears the D-04 replay baseline with a fresh Date.now() code
+             after nextWindow (the operator-revoke-cycle precedent, IN-03):
+             a retry minted while the first attempt's 30s step is still
+             current can be refused again under load. */
           await expect(page.getByText(fmt('err.invalidTfaCode', {}, lang))).toBeVisible();
-          await expect(submitTfaCode(page, acct.account.slug, tfaCode(secret, 31)), 'retry with the next step code').toBe(true);
+          await nextWindow(firstAttemptSec);
+          await expect(submitTfaCode(page, acct.account.slug, totpAt(secret, Math.floor(Date.now() / 1000) + 1)), 'retry with the next step code').toBe(true);
         }
 
         /* Landed signed in on the account's workspace, in the account's
