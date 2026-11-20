@@ -8,10 +8,10 @@ updated: 2026-11-20T16:10:00Z
 
 ## Current Test
 
-number: 2
-name: Confirm fork — name-only vs slug change (D-03)
+number: 3
+name: 409 slugTaken → suggestion + one-click adopt (D-07)
 expected: |
-  Edit a workspace changing only the name → direct save + success toast (governanceRenamed). Then edit again changing the slug → danger dialog appears with the bold esc() old slug and type-to-confirm on the old slug
+  Rename a workspace to a slug already taken by another workspace → modal stays open, shows slugTakenHint with suggested slug and an Adopt button that fills the slug field
 awaiting: user response
 
 ## Tests
@@ -22,7 +22,7 @@ result: [passed]
 
 ### 2. Confirm fork — name-only vs slug change (D-03)
 expected: Edit a workspace changing only the name → direct save + success toast (governanceRenamed). Then edit again changing the slug → danger dialog appears with the bold esc() old slug and type-to-confirm on the old slug
-result: [pending]
+result: [passed]
 
 ### 3. 409 slugTaken → suggestion + one-click adopt (D-07)
 expected: Rename a workspace to a slug already taken by another workspace → modal stays open, shows slugTakenHint with suggested slug and an Adopt button that fills the slug field
@@ -43,9 +43,9 @@ result: [pending]
 ## Summary
 
 total: 6
-passed: 1
+passed: 2
 issues: 0
-pending: 5
+pending: 4
 skipped: 0
 blocked: 0
 
