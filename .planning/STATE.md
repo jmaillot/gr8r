@@ -2,14 +2,14 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-current_phase: 80
-current_phase_name: Group Mapping Core — Parser, Resolver, Overage Detection
-status: executing
-stopped_at: Completed 80-02-PLAN.md — Phase 80 fully executed, ready for /gsd-verify-work 80
-last_updated: "2026-11-20T10:50:00.000Z"
+current_phase: 81
+current_phase_name: Group Grant Path — Callback Wiring + Provenance
+status: planning
+stopped_at: Phase 80 complete, ready to plan Phase 81
+last_updated: "2026-11-20T10:58:03.875Z"
 last_activity: 2026-11-20
-last_activity_desc: Phase 80 plan 80-02 executed (3 tasks, 3 commits) — phase plans 2/2 complete
-state_head: 41de3b30
+last_activity_desc: Phase 80 complete, transitioned to Phase 81
+state_head: ee13add6ca2a33ec2c13c3e847e2b444fb226d8e
 progress:
   total_phases: 5
   completed_phases: 1
@@ -30,12 +30,12 @@ before features.
 
 ## Current Position
 
-Phase: 80 (Group Mapping Core — Parser, Resolver, Overage Detection) — EXECUTING
-Plan: 2 of 2 — COMPLETE
-Status: Ready for /gsd-verify-work 80
-Last activity: 2026-11-20 — 80-02 executed (save route, boot warning, Dockerfile contract)
+Phase: 81 — Group Grant Path — Callback Wiring + Provenance
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-20 — Phase 80 complete, transitioned to Phase 81
 
-Progress: [██........] 20%
+Progress: [██░░░░░░░░] 20%
 
 ## Milestone v3.2 Phase Map
 
@@ -60,7 +60,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 80 | 2 | 14 min | 7 min |
+| 80 | 2 | - | - |
 | 81 | 0 | - | - |
 | 82 | 0 | - | - |
 | 83 | 0 | - | - |
@@ -120,7 +120,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-20T10:50:00.000Z
-Stopped at: Completed 80-02-PLAN.md — Phase 80 fully executed
+Stopped at: Phase 80 complete, ready to plan Phase 81
 Resume file: None
 
 ## Operator Next Steps

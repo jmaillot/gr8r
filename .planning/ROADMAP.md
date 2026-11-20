@@ -31,7 +31,7 @@
   3. Malformed GUIDs or unknown workspace IDs in the mapping config are refused or warned as dead mappings at boot; display labels are never used as match keys
   4. With no mapping env set, the server boots and behaves byte-identically to today (all existing suites green, no behavior change)
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 - [x] 80-01-PLAN.md — groups.js core (validators, four-outcome overage detector, D-82-1 resolver) + dual-schema group_mappings table with fixture tests
@@ -96,7 +96,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 80. Group Mapping Core | 1/2 | In Progress|  |
+| 80. Group Mapping Core | 2/2 | Complete    | 2026-11-20 |
 | 81. Group Grant Path | 0/? | Not started | - |
 | 82. Removal Sync + Guards | 0/? | Not started | - |
 | 83. Governance Rename/Slug | 0/? | Not started | - |
