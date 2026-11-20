@@ -346,6 +346,61 @@ Users → the account → contact info) before debugging the app config.
 6. Negative check: with `OIDC_ENABLED=false` (or the three vars blank), the button must
    disappear and `/api/auth/oidc/start` must answer 404 after a restart.
 
+#### Entra group mapping
+
+Group-to-workspace mapping is configured **in the app**, not through environment
+variables: operators manage the mapping table on the **/governance** page. Each row ties
+one Entra group to one workspace and a role. Save-time validation refuses malformed
+GUIDs, unknown workspace IDs and invalid role tokens with a keyed error — nothing half
+valid ever reaches the database.
+
+**ApplicationGroup claim prerequisites.** The Entra side must be configured before any
+mapping can match:
+
+- Set the app registration's manifest property `groupMembershipClaims` to
+  `"ApplicationGroup"` (Entra admin center → App registrations → your app → Manifest).
+  In this mode the `groups` claim carries **only** the groups explicitly assigned to the
+  app (Enterprise applications → your app → Users and groups → Add user/group).
+- The claim arrives as **Object-ID GUIDs**. The app matches mappings by GUID, never by
+  the group's display name — a display label is opaque and is never guessed client-side.
+- ApplicationGroup membership is **direct**: the claim lists groups assigned to the app,
+  with no app-side nesting resolution. A user inside a group that contains an assigned
+  group does not inherit the mapping. If you need transitive membership instead, the
+  alternative is `groupMembershipClaims = "SecurityGroup"` — but that emits every group
+  the user belongs to and makes the overage limit below far easier to hit.
+
+**When the groups claim is too large (overage).** A token carries at most ~200 group
+GUIDs. Beyond that limit Microsoft Entra omits the `groups` claim entirely and replaces
+it with an `_claim_names` overage pointer. The app detects this and treats the sign-in as
+**unmapped**: no grants, no removals, the login itself succeeds, and a warning is logged.
+The user keeps whatever memberships and roles they already had.
+
+Resolving overage server-side requires a Microsoft Graph fallback
+(`getMemberObjects` via client-credentials). A recipe exists in
+`.planning/research/STACK.md` (§ claims ingestion / overage); it is **documentation
+only** — the fallback is not implemented, and ApplicationGroup mode is the recommended
+posture precisely because it sidesteps the limit.
+
+**Dead mappings — runbook.** A mapping goes dead when the Entra group it points at is
+deleted, or the workspace ID it targets disappears. Dead rows do not break sign-in; they
+surface in two places:
+
+1. The **/governance** page shows a warning section listing every dead mapping (the
+   section is hidden entirely when there are none).
+2. The boot log prints a warning naming the same rows.
+
+The warning card is display-only. Cleanup is done where the mappings live: open the
+group-mapping editor on /governance and remove the dead row, or re-point it at the
+correct workspace if the target merely moved.
+
+**Old URLs after a slug rename.** Renaming a workspace's slug (governance page → edit →
+save; a slug change is destructive and requires explicit confirm) changes the workspace's
+URL. The old address `https://<host>/w/<old-slug>` then answers **404 permanently —
+there is no redirect**. Users reach the renamed workspace via the new slug, which every
+operator can look up on the /governance page. Bookmarks and links to the old slug stay
+dead by design; nothing is rendered from a client-side guess about where the old slug
+"meant" to go.
+
 ## 6. Start it
 
 ```sh
