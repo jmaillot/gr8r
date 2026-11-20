@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-20 — v3.1 Workspace Governance complete (Phase 79 shipped the Governance Surface; WSG-07/08/09 validated)*
+*Last updated: 2026-11-20 after v3.1 milestone*
 
 ## Current Milestone: v3.1 Workspace Governance
 
