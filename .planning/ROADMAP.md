@@ -26,7 +26,7 @@
 **Requirements**: GM-01, GM-02, GM-03
 **Success Criteria** (what must be TRUE):
   1. Group mapping config lives in the DB: mappings (group Object ID → workspace ID → role) are stored via a validated save path (malformed GUID / unknown workspace / invalid role token = keyed refusal, nothing invalid stored); the boot log warns about mappings that became dead
-  2. The server reads the `groups` claim from the ID token; an `_claim_names` overage pointer is detected and resolved as UNMAPPED (never as an empty group list), proven by a fixture-token test
+  2. The server reads the `groups` claim from the ID token; an `_claim_names` overage pointer is detected and resolved as UNMAPPED (never as an empty group list), proven by claim-object fixture tests on `resolveGroupsClaim` (the decoded-claims object `verifyIdToken()` hands over — full token integration lands in Phase 81)
   3. Malformed GUIDs or unknown workspace IDs in the mapping config are refused or warned as dead mappings at boot; display labels are never used as match keys
   4. With no mapping env set, the server boots and behaves byte-identically to today (all existing suites green, no behavior change)
 **Plans**: 2 plans
