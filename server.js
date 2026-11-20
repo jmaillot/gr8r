@@ -383,6 +383,8 @@ const SCHEMA = `
     user_id      text not null references users(id) on delete cascade,
     role         text not null check (role in ('owner','admin','member','viewer')),
     member_id    text,
+    /* Phase 81 (D-81-6): membership origin — group:<guid> | invite | manual | null(legacy). */
+    provenance   text,
     primary key (workspace_id, user_id)
   );
   /* TEAM-01: the single authority for team membership (Phase 28, D-01/D-03).
@@ -661,6 +663,9 @@ async function initDb() {
   await adapterEnsureColumn('memberships', 'member_id', 'text');
   // P4-c fix: the team picked at invite time must survive into the profile seed.
   await adapterEnsureColumn('memberships', 'team', 'text');
+  /* Phase 81 (D-81-6): membership origin — group:<guid> | invite | manual | null(legacy).
+     Selection key for Phase 82 removal-sync; never backfilled. */
+  await adapterEnsureColumn('memberships', 'provenance', 'text');
   await adapterEnsureColumn('invites', 'workspace_id', 'text');
   // Phase 28 D-07: invites carry a JSON array of teams. The scalar `team`
   // column above stays on disk as backfill-only legacy (D-04) — never read.

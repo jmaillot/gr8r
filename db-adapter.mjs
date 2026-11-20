@@ -216,6 +216,8 @@ export const SQLITE_SCHEMA = `
     user_id      text not null references users(id) on delete cascade,
     role         text not null check (role in ('owner','admin','member','viewer')),
     member_id    text,
+    /* Phase 81 (D-81-6): membership origin — group:<guid> | invite | manual | null(legacy). */
+    provenance   text,
     primary key (workspace_id, user_id)
   );
   create table if not exists team_members (
