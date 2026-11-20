@@ -1901,14 +1901,38 @@
   "notif.taskDueToday": "vence hoy",
   "notif.dueReminder": "está por vencer",
   "notif.pastDue": "tiene retraso",
-  "notif.burst.mention": { "one": "{n} mención —", "other": "{n} menciones —" },
-  "notif.burst.assign": { "one": "{n} asignación —", "other": "{n} asignaciones —" },
-  "notif.burst.assignRemoved": { "one": "{n} eliminación —", "other": "{n} eliminaciones —" },
-  "notif.burst.comment": { "one": "{n} comentario nuevo —", "other": "{n} comentarios nuevos —" },
-  "notif.burst.update": { "one": "{n} actualización —", "other": "{n} actualizaciones —" },
-  "notif.burst.dueReminder": { "one": "{n} recordatorio de vencimiento —", "other": "{n} recordatorios de vencimiento —" },
-  "notif.burst.pastDue": { "one": "{n} aviso de retraso —", "other": "{n} avisos de retraso —" },
-  "notif.burst.generic": { "one": "{n} notificación —", "other": "{n} notificaciones —" },
+  "notif.burst.mention": {
+    "one": "{n} mención —",
+    "other": "{n} menciones —"
+  },
+  "notif.burst.assign": {
+    "one": "{n} asignación —",
+    "other": "{n} asignaciones —"
+  },
+  "notif.burst.assignRemoved": {
+    "one": "{n} eliminación —",
+    "other": "{n} eliminaciones —"
+  },
+  "notif.burst.comment": {
+    "one": "{n} comentario nuevo —",
+    "other": "{n} comentarios nuevos —"
+  },
+  "notif.burst.update": {
+    "one": "{n} actualización —",
+    "other": "{n} actualizaciones —"
+  },
+  "notif.burst.dueReminder": {
+    "one": "{n} recordatorio de vencimiento —",
+    "other": "{n} recordatorios de vencimiento —"
+  },
+  "notif.burst.pastDue": {
+    "one": "{n} aviso de retraso —",
+    "other": "{n} avisos de retraso —"
+  },
+  "notif.burst.generic": {
+    "one": "{n} notificación —",
+    "other": "{n} notificaciones —"
+  },
   "notif.burst.expand": "Expandir grupo",
   "notif.burst.collapse": "Contraer grupo",
   "notif.reminder.morningOf": "Vence hoy: {title}",
@@ -2023,8 +2047,7 @@
   "templates.favSection": "Favoritas",
   "templates.favEmptyHint": "Marca una plantilla con estrella en Ajustes → Plantillas para fijarla aquí.",
   "pwa.install.cta": "Instalar aplicación",
-  "pwa.install.iosHint": "Compartir → Añadir a la pantalla de inicio"
-,
+  "pwa.install.iosHint": "Compartir → Añadir a la pantalla de inicio",
   "nav.route.governance": "Gobernanza",
   "common.instance": "Instancia",
   "page.governance.subtitle": "Cada espacio de trabajo de esta instancia. Solo tú puedes ver esta página.",
@@ -2046,6 +2069,7 @@
   "page.governance.colCreated": "Creado",
   "page.governance.colStatus": "Estado",
   "page.governance.archivedBadge": "Archivado",
+  "page.governance.activeBadge": "Activo",
   "page.governance.archive": "Archivar",
   "page.governance.unarchive": "Desarchivar",
   "page.governance.delete": "Eliminar",

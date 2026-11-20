@@ -60,7 +60,7 @@ const wsRow = w => {
     <td>${esc(String(w.memberCount ?? 0))}</td>
     <td>${w.creator ? `<span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(w.creator.name)}</span>` : '<span class="faint">—</span>'}</td>
     <td class="faint">${esc(ago(w.createdAt))}</td>
-    <td>${w.archived ? `<span class="badge amber">${t('page.governance.archivedBadge')}</span>` : '<span class="faint">—</span>'}</td>
+    <td>${w.archived ? `<span class="badge amber">${t('page.governance.archivedBadge')}</span>` : `<span class="badge green">${t('page.governance.activeBadge')}</span>`}</td>
     <td><span class="row" style="gap:8px;justify-content:flex-end">${w.archived ? `<button class="btn btn-secondary btn-sm" data-a="govUnarchive" data-id="${esc(w.id)}">${t('page.governance.unarchive')}</button>` : `<button class="btn btn-secondary btn-sm" data-a="govArchiveAsk" data-id="${esc(w.id)}">${t('page.governance.archive')}</button>`}<button class="btn btn-danger btn-sm" data-a="govDeleteAsk" data-id="${esc(w.id)}">${t('page.governance.delete')}</button></span></td>
   </tr>`;
 };

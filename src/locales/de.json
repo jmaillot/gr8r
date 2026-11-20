@@ -1901,14 +1901,38 @@
   "notif.taskDueToday": "ist heute fällig",
   "notif.dueReminder": "wird bald fällig",
   "notif.pastDue": "ist überfällig",
-  "notif.burst.mention": { "one": "{n} Erwähnung –", "other": "{n} Erwähnungen –" },
-  "notif.burst.assign": { "one": "{n} Zuweisung –", "other": "{n} Zuweisungen –" },
-  "notif.burst.assignRemoved": { "one": "{n} Entfernung –", "other": "{n} Entfernungen –" },
-  "notif.burst.comment": { "one": "{n} neuer Kommentar –", "other": "{n} neue Kommentare –" },
-  "notif.burst.update": { "one": "{n} Aktualisierung –", "other": "{n} Aktualisierungen –" },
-  "notif.burst.dueReminder": { "one": "{n} Fälligkeits-Erinnerung –", "other": "{n} Fälligkeits-Erinnerungen –" },
-  "notif.burst.pastDue": { "one": "{n} Überfälligkeits-Hinweis –", "other": "{n} Überfälligkeits-Hinweise –" },
-  "notif.burst.generic": { "one": "{n} Benachrichtigung –", "other": "{n} Benachrichtigungen –" },
+  "notif.burst.mention": {
+    "one": "{n} Erwähnung –",
+    "other": "{n} Erwähnungen –"
+  },
+  "notif.burst.assign": {
+    "one": "{n} Zuweisung –",
+    "other": "{n} Zuweisungen –"
+  },
+  "notif.burst.assignRemoved": {
+    "one": "{n} Entfernung –",
+    "other": "{n} Entfernungen –"
+  },
+  "notif.burst.comment": {
+    "one": "{n} neuer Kommentar –",
+    "other": "{n} neue Kommentare –"
+  },
+  "notif.burst.update": {
+    "one": "{n} Aktualisierung –",
+    "other": "{n} Aktualisierungen –"
+  },
+  "notif.burst.dueReminder": {
+    "one": "{n} Fälligkeits-Erinnerung –",
+    "other": "{n} Fälligkeits-Erinnerungen –"
+  },
+  "notif.burst.pastDue": {
+    "one": "{n} Überfälligkeits-Hinweis –",
+    "other": "{n} Überfälligkeits-Hinweise –"
+  },
+  "notif.burst.generic": {
+    "one": "{n} Benachrichtigung –",
+    "other": "{n} Benachrichtigungen –"
+  },
   "notif.burst.expand": "Gruppe ausklappen",
   "notif.burst.collapse": "Gruppe einklappen",
   "notif.reminder.morningOf": "Heute fällig: {title}",
@@ -2023,8 +2047,7 @@
   "templates.favSection": "Favoriten",
   "templates.favEmptyHint": "Markieren Sie eine Vorlage in den Einstellungen → Vorlagen mit einem Stern, um sie hier anzupinnen.",
   "pwa.install.cta": "App installieren",
-  "pwa.install.iosHint": "Teilen → Zum Home-Bildschirm"
-,
+  "pwa.install.iosHint": "Teilen → Zum Home-Bildschirm",
   "nav.route.governance": "Governance",
   "common.instance": "Instanz",
   "page.governance.subtitle": "Jeder Workspace dieser Instanz. Nur du kannst diese Seite sehen.",
@@ -2046,6 +2069,7 @@
   "page.governance.colCreated": "Erstellt",
   "page.governance.colStatus": "Status",
   "page.governance.archivedBadge": "Archiviert",
+  "page.governance.activeBadge": "Aktiv",
   "page.governance.archive": "Archivieren",
   "page.governance.unarchive": "Dearchivieren",
   "page.governance.delete": "Löschen",

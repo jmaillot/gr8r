@@ -1901,14 +1901,38 @@
   "notif.taskDueToday": "vervalt vandaag",
   "notif.dueReminder": "vervalt binnenkort",
   "notif.pastDue": "is te laat",
-  "notif.burst.mention": { "one": "{n} vermelding —", "other": "{n} vermeldingen —" },
-  "notif.burst.assign": { "one": "{n} toewijzing —", "other": "{n} toewijzingen —" },
-  "notif.burst.assignRemoved": { "one": "{n} verwijdering —", "other": "{n} verwijderingen —" },
-  "notif.burst.comment": { "one": "{n} nieuwe opmerking —", "other": "{n} nieuwe opmerkingen —" },
-  "notif.burst.update": { "one": "{n} update —", "other": "{n} updates —" },
-  "notif.burst.dueReminder": { "one": "{n} herinnering —", "other": "{n} herinneringen —" },
-  "notif.burst.pastDue": { "one": "{n} aanmaning —", "other": "{n} aanmaningen —" },
-  "notif.burst.generic": { "one": "{n} melding —", "other": "{n} meldingen —" },
+  "notif.burst.mention": {
+    "one": "{n} vermelding —",
+    "other": "{n} vermeldingen —"
+  },
+  "notif.burst.assign": {
+    "one": "{n} toewijzing —",
+    "other": "{n} toewijzingen —"
+  },
+  "notif.burst.assignRemoved": {
+    "one": "{n} verwijdering —",
+    "other": "{n} verwijderingen —"
+  },
+  "notif.burst.comment": {
+    "one": "{n} nieuwe opmerking —",
+    "other": "{n} nieuwe opmerkingen —"
+  },
+  "notif.burst.update": {
+    "one": "{n} update —",
+    "other": "{n} updates —"
+  },
+  "notif.burst.dueReminder": {
+    "one": "{n} herinnering —",
+    "other": "{n} herinneringen —"
+  },
+  "notif.burst.pastDue": {
+    "one": "{n} aanmaning —",
+    "other": "{n} aanmaningen —"
+  },
+  "notif.burst.generic": {
+    "one": "{n} melding —",
+    "other": "{n} meldingen —"
+  },
   "notif.burst.expand": "Groep uitklappen",
   "notif.burst.collapse": "Groep inklappen",
   "notif.reminder.morningOf": "Vervalt vandaag: {title}",
@@ -2023,8 +2047,7 @@
   "templates.favSection": "Favorieten",
   "templates.favEmptyHint": "Markeer een template in Instellingen → Templates als favoriet om die hier vast te zetten.",
   "pwa.install.cta": "App installeren",
-  "pwa.install.iosHint": "Deel → Zet op beginscherm"
-,
+  "pwa.install.iosHint": "Deel → Zet op beginscherm",
   "nav.route.governance": "Bestuur",
   "common.instance": "Instantie",
   "page.governance.subtitle": "Elke workspace op deze instantie. Alleen jij kunt deze pagina zien.",
@@ -2046,6 +2069,7 @@
   "page.governance.colCreated": "Aangemaakt",
   "page.governance.colStatus": "Status",
   "page.governance.archivedBadge": "Gearchiveerd",
+  "page.governance.activeBadge": "Actief",
   "page.governance.archive": "Archiveren",
   "page.governance.unarchive": "De-archiveren",
   "page.governance.delete": "Verwijderen",

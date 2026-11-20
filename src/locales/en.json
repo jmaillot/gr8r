@@ -1901,14 +1901,38 @@
   "notif.taskDueToday": "is due today",
   "notif.dueReminder": "is coming due",
   "notif.pastDue": "is overdue",
-  "notif.burst.mention": { "one": "{n} mention —", "other": "{n} mentions —" },
-  "notif.burst.assign": { "one": "{n} assignment —", "other": "{n} assignments —" },
-  "notif.burst.assignRemoved": { "one": "{n} removal —", "other": "{n} removals —" },
-  "notif.burst.comment": { "one": "{n} new comment —", "other": "{n} new comments —" },
-  "notif.burst.update": { "one": "{n} update —", "other": "{n} updates —" },
-  "notif.burst.dueReminder": { "one": "{n} due reminder —", "other": "{n} due reminders —" },
-  "notif.burst.pastDue": { "one": "{n} overdue nudge —", "other": "{n} overdue nudges —" },
-  "notif.burst.generic": { "one": "{n} notification —", "other": "{n} notifications —" },
+  "notif.burst.mention": {
+    "one": "{n} mention —",
+    "other": "{n} mentions —"
+  },
+  "notif.burst.assign": {
+    "one": "{n} assignment —",
+    "other": "{n} assignments —"
+  },
+  "notif.burst.assignRemoved": {
+    "one": "{n} removal —",
+    "other": "{n} removals —"
+  },
+  "notif.burst.comment": {
+    "one": "{n} new comment —",
+    "other": "{n} new comments —"
+  },
+  "notif.burst.update": {
+    "one": "{n} update —",
+    "other": "{n} updates —"
+  },
+  "notif.burst.dueReminder": {
+    "one": "{n} due reminder —",
+    "other": "{n} due reminders —"
+  },
+  "notif.burst.pastDue": {
+    "one": "{n} overdue nudge —",
+    "other": "{n} overdue nudges —"
+  },
+  "notif.burst.generic": {
+    "one": "{n} notification —",
+    "other": "{n} notifications —"
+  },
   "notif.burst.expand": "Expand group",
   "notif.burst.collapse": "Collapse group",
   "notif.reminder.morningOf": "Due today: {title}",
@@ -2024,8 +2048,7 @@
   "templates.favEmptyHint": "Star a template in Settings → Templates to pin it here.",
   "pwa.install.cta": "Install app",
   "pwa.install.hint": "Install the app for one-tap access",
-  "pwa.install.iosHint": "Share → Add to Home Screen"
-,
+  "pwa.install.iosHint": "Share → Add to Home Screen",
   "nav.route.governance": "Governance",
   "common.instance": "Instance",
   "page.governance.subtitle": "Every workspace on this instance. Only you can see this page.",
@@ -2047,6 +2070,7 @@
   "page.governance.colCreated": "Created",
   "page.governance.colStatus": "Status",
   "page.governance.archivedBadge": "Archived",
+  "page.governance.activeBadge": "Active",
   "page.governance.archive": "Archive",
   "page.governance.unarchive": "Unarchive",
   "page.governance.delete": "Delete",

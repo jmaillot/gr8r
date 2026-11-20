@@ -2110,6 +2110,7 @@
   "page.governance.colCreated": "Créé",
   "page.governance.colStatus": "Statut",
   "page.governance.archivedBadge": "Archivé",
+  "page.governance.activeBadge": "Actif",
   "page.governance.archive": "Archiver",
   "page.governance.unarchive": "Désarchiver",
   "page.governance.delete": "Supprimer",
