@@ -205,10 +205,11 @@ test.describe('phase 22 operator revoke cycle', () => {
         await fillLogin(opPage, { email: OWNER.email, password: OWNER.password }, lang);
         await expect(opPage).toHaveURL(new RegExp('/w/acme$'));
 
-        /* The operator card (D-120) lives on the settings sessions tab,
-           rendered only for the flagged viewer; it lists the instance's
-           users (D-121) from the server. */
-        await openSettingsSec(opPage, 'sessions');
+        /* The operator card (D-120) lives on the governance page since
+           Phase 79 moved it off the settings sessions tab; rendered only
+           for the flagged viewer, it lists the instance's users (D-121)
+           from the server. */
+        await opPage.locator(`[data-a='go'][data-r='governance']`).first().click();
         await expect(opPage.getByText(fmt('settings.operator.title', {}, lang))).toBeVisible();
         await expect(opPage.getByText(acct.account.email)).toBeVisible();
         /* UI-side defense-in-depth (D-120/D-119): the operator's own
@@ -233,8 +234,9 @@ test.describe('phase 22 operator revoke cycle', () => {
         await expect(victimPage.getByLabel(fmt('common.email', {}, lang), { exact: true })).toBeVisible();
 
         /* The operator's session survives (success criterion: the
-           operator can still load settings — the card answers again). */
-        await openSettingsSec(opPage, 'sessions');
+           operator can still load the governance page — the card
+           answers again). */
+        await opPage.locator(`[data-a='go'][data-r='governance']`).first().click();
         await expect(opPage.getByText(fmt('settings.operator.title', {}, lang))).toBeVisible();
       } finally {
         await victimCtx.close();
