@@ -14,6 +14,8 @@
    ===================================================================== */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { ADMIN, client, login, signup, startServer, withDb } from './helpers/server.mjs';
 
@@ -158,5 +160,72 @@ test('every new refusal code has a non-empty err.<code> entry in ALL FIVE locale
       assert.equal(typeof catalogue[`err.${code}`], 'string', `${locale} is missing err.${code}`);
       assert.ok(catalogue[`err.${code}`].length > 0, `${locale} err.${code} is empty`);
     }
+  }
+});
+
+/* ---------- D-82-6: dead mappings survive + boot warns ---------- */
+
+/* Boot logs flush asynchronously after listen() (the group-mapping block
+   awaits its DB reads); poll the captured output instead of racing it. */
+async function bootLog(srv, regex, ms = 3000) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    const m = srv.output().match(regex);
+    if (m) return m;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  assert.fail(`boot log never matched ${regex}:\n${srv.output().slice(-2000)}`);
+}
+
+test('dead-mapping survival: the mapping row SURVIVES workspace deletion and the reboot WARNS naming the pair (D-82-6)', async () => {
+  // this test owns the dataDir lifecycle: the SAME database must be booted twice
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'groups-config-'));
+  const server = await startServer({ dataDir: dir });
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+
+    // a fresh workspace mapped to a group, then deleted via the operator route
+    const joined = await signup(server.base, { name: 'Doomed Owner', email: 'doomed-owner@test.local' });
+    assert.equal(joined.status, 201);
+    const created = await joined.client.post('/api/workspaces', { name: 'Doomed Co' });
+    assert.equal(created.status, 201, `workspace create must succeed: ${JSON.stringify(created.data)}`);
+    const wsId = created.data.workspace.id;
+    const saved = await operator.post('/api/governance/group-mappings', { groupGuid: GUID_OK, workspaceId: wsId, role: 'member' });
+    assert.equal(saved.status, 200, `mapping save must succeed: ${JSON.stringify(saved.data)}`);
+
+    const ownerId = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('doomed-owner@test.local').id);
+    const del = await operator.post(`/api/auth/operator/workspaces/${wsId}/delete`, { dispositions: [{ userId: ownerId, type: 'release' }] });
+    assert.equal(del.status, 200, `operator delete must succeed: ${JSON.stringify(del.data)}`);
+
+    // the non-cascading FK: the mapping row STAYS after the workspace is gone
+    const survivors = withDb(server.dbPath, db => db.prepare('select * from group_mappings where workspace_id = ?').all(wsId));
+    assert.equal(survivors.length, 1, 'the dead mapping row must survive workspace deletion (D-82-6)');
+    await server.stop();
+
+    // reboot on the SAME database: boot warns naming guid → workspace, and does NOT refuse
+    const reboot = await startServer({ dataDir: dir });
+    try {
+      await bootLog(reboot, /group mappings: 1/);
+      await bootLog(reboot, new RegExp(`group mapping dead: group ${GUID_OK.toLowerCase()} → missing workspace ${wsId}`));
+      const probe = await fetch(`${reboot.base}/api/config`);
+      assert.ok(probe.ok, 'boot did not refuse on the dead mapping');
+    } finally {
+      await reboot.stop();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('empty-config boot: exactly one `group mappings: off` line, no dead-mapping warnings', async () => {
+  const server = await startServer({});
+  try {
+    await bootLog(server, /group mappings: off/);
+    assert.doesNotMatch(server.output(), /group mapping dead/);
+    assert.equal((server.output().match(/group mappings:/g) || []).length, 1, 'exactly one grep-able group-mappings line');
+    const probe = await fetch(`${server.base}/api/config`);
+    assert.ok(probe.ok, 'behavior is unchanged');
+  } finally {
+    await server.stop();
   }
 });

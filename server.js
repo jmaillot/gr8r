@@ -9365,7 +9365,7 @@ async function main() {
     }
   }, 30_000).unref();
 
-  server.listen(PORT, HOST, () => {
+  server.listen(PORT, HOST, async () => {
     logInfo(`Projects Studio listening on http://${HOST}:${PORT}`);
     logInfo(backendKind === 'pg' ? 'database: Postgres (DB_URL set — path log shows the SQLite rollback file only)' : `database: ${DB_PATH}`);
     if (MAILER.enabled) logInfo(`invite email: enabled via ${MAILER.host}:${MAILER.port} as ${MAILER.from}`);
@@ -9392,6 +9392,26 @@ async function main() {
     /* Phase 78 (WSG-03, D-11 style): one grep-able line answering how the
        creation gate resolved — docker logs answers "who can create". */
     logInfo(`workspace creation: ${WORKSPACE_CREATION ? 'open (any authenticated user)' : 'closed (instance operators only)'}`);
+    /* Phase 80 (GM-01, D-82-6 boot half): one grep-able line answering how
+       much group-mapping config exists — docker logs answers "is group
+       mapping in use". Zero rows → exactly this ONE line and no
+       dead-mapping query (byte-identical boot, Pitfall 6). With rows → an
+       N summary line plus one logWarn per DEAD mapping: a workspace_id no
+       longer present in workspaces (the non-cascading FK deliberately
+       leaves the row behind — D-82-6 detection; the operator-console
+       section that renders these is Phase 83). */
+    const groupMappings = await db.all('select group_guid, workspace_id from group_mappings');
+    if (groupMappings.length === 0) {
+      logInfo('group mappings: off');
+    } else {
+      logInfo(`group mappings: ${groupMappings.length}`);
+      const wsIds = new Set((await db.all('select id from workspaces')).map(r => r.id));
+      for (const m of groupMappings) {
+        if (!wsIds.has(m.workspace_id)) {
+          logWarn(`group mapping dead: group ${m.group_guid} → missing workspace ${m.workspace_id}`);
+        }
+      }
+    }
   });
 
   const shutdown = signal => {
