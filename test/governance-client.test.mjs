@@ -105,6 +105,49 @@ test('a 200-char workspace name and a long email cannot break the .perm-t row (b
   assert.doesNotMatch(row[0], /\$\{w\.(name|slug|creator\.name|createdAt|id|memberCount)\}/, 'a payload string escapes escaping in wsRow');
 });
 
+/* =====================================================================
+   79-03 RELOCATION PINS (WSG-09/D-01): operatorCard lives ONLY in the
+   governance page — Settings carries zero remnants (no card, no mount
+   call, no D-90 stage references), the dead sessions-tab fetch is gone,
+   and the operator api methods are wired exclusively through the
+   governance path (Pitfall 9 dead-wiring guard).
+   ===================================================================== */
+
+/* settings.js is clean: no card function, no mount, no stage references */
+test('settings.js carries zero operatorCard/refreshOperatorUsers/operator-stage remnants (D-01)', () => {
+  const settings = src('src/pages/settings.js');
+  assert.doesNotMatch(settings, /operatorCard/, 'settings.js still defines or mounts operatorCard');
+  assert.doesNotMatch(settings, /refreshOperatorUsers/, 'settings.js still references the dead sessions-tab fetch');
+  assert.doesNotMatch(settings, /S\.ui\.operator(Revoke|Demote)/, 'settings.js still touches the D-90 inline-confirm stage state');
+  assert.doesNotMatch(settings, /operator(Users|Promote|Revoke|Demote)/, 'a pointer remnant survives in settings.js (Pitfall 9)');
+});
+
+/* governance.js carries the relocated markup, keys reused verbatim */
+test('governance.js mounts the Operators sblock: settings.operator.title + promote/demote/revoke rows', () => {
+  const p = page();
+  assert.match(p, /export function operatorCard\(\)/, 'operatorCard did not relocate into governance.js');
+  assert.match(p, /t\('settings\.operator\.title'\)/, 'the Operators section heading key is not reused verbatim');
+  assert.match(p, /t\('settings\.operator\.lead'\)/, 'the Operators section lead is not reused verbatim');
+  for (const a of ['operatorPromote', 'operatorDemoteAsk', 'operatorDemote', 'operatorDemoteCancel', 'operatorRevokeAsk', 'operatorRevokeConfirm', 'operatorRevokeCancel']) {
+    assert.match(p, new RegExp(`data-a="${a}"`), `the ${a} control did not relocate`);
+  }
+  assert.match(p, /S\.ui\.operatorDemote === u\.id/, 'the demote D-90 stage gate moved');
+  assert.match(p, /S\.ui\.operatorRevoke === u\.id/, 'the revoke D-90 stage gate moved');
+});
+
+/* the api operator methods are wired ONLY through the governance path */
+test('the operator api methods are called only from the governance path (actions.js), never from Settings', () => {
+  const api = src('src/core/api.js');
+  assert.match(api, /async operatorUsers\(\)/);
+  assert.match(api, /async operatorPromote\(userId\)/);
+  assert.match(api, /async operatorDemote\(userId\)/);
+  assert.match(api, /async operatorRevokeSessions\(userId\)/);
+  const a = actions();
+  assert.match(a, /api\.operatorUsers\(\)/, 'actions.js lost the operator users fetch');
+  const settings = src('src/pages/settings.js');
+  assert.doesNotMatch(settings, /operatorUsers/, 'settings.js still touches the operator users state/fetch');
+});
+
 /* (h) honest 403 fullstate for a non-operator deep link */
 test('a non-operator deep link renders the 403 fullstate (lock, err.code403, err.operatorOnly, home)', () => {
   const p = page();
