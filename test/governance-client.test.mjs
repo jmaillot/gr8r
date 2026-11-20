@@ -161,7 +161,7 @@ test('the governance page renders the Operators section only for isInstanceAdmin
   assert.match(p, /api\.user\?\.isInstanceAdmin && !S\.ui\.operatorUsers\) refreshOperatorUsers\(\)/, 'the operator users fetch is not gated on the server payload');
   const card = p.match(/export function operatorCard\(\) \{[\s\S]*?\n\}/);
   assert.ok(card, 'operatorCard not found in governance.js');
-  assert.match(card[0], /if \(!rows\) return '';/, 'the empty-state null guard moved');
+  assert.match(card[0], /if \(!all\) return '';/, 'the empty-state null guard moved');
 });
 
 /* (b) promote/demote/revoke still call the SAME Phase 78 api methods — no endpoint drift */

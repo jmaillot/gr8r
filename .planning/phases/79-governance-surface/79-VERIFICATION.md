@@ -24,7 +24,7 @@ covered_files:
   - src/locales/es.json
   - test/governance.test.mjs
   - test/governance-client.test.mjs
-covered_digest: "v2:sha256:5890cc8ec61d160e91dbc4dae8e8c49e7e767ed2da64882739061712e36d972b"
+covered_digest: "v2:sha256:506e9ffe04f579efe4b56d8e4adf33914272698453a0846284a18e2329075f65"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
