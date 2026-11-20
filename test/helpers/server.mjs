@@ -17,6 +17,11 @@ const BASE_ENV = Object.freeze({
   HOST: '127.0.0.1',
   SEED_DATA: 'false',
   ALLOW_SIGNUP: 'true',
+  /* Phase 78 (WSG-01): the creation gate is unset=false (fail-closed) in
+     production, so the shield pins 'true' here — every pre-existing suite
+     (dozens of signup→create fixture flows) keeps today's open-creation
+     behavior. Dedicated suites override this key per server. */
+  WORKSPACE_CREATION: 'true',
   ADMIN_EMAIL: ADMIN.email,
   ADMIN_PASSWORD: ADMIN.password,
   ADMIN_NAME: ADMIN.name,
