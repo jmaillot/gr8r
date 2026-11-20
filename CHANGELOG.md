@@ -5,6 +5,55 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] — 2026-11-20 — Entra Group Mapping & Governance Backlog
+
+5 phases (80–84). Highlights:
+
+- **Entra group mapping at SSO login.** Mapped Entra groups grant workspace
+  membership and operator rights at sign-in (highest mapped role wins, the group
+  re-asserts at each login); lost membership removes only group-derived access —
+  owners, last operators and manual grants stay protected, and every group-driven
+  delta is audit-logged. Mappings are managed in-app on the /governance page;
+  an overage (>~200 groups) is treated as unmapped; dead mappings surface as a
+  console warning card.
+- **Workspace rename & slug edit.** Operators edit a workspace's name and slug
+  from /governance, with dead-mapping warnings; the old slug 404s permanently by
+  design (no redirect).
+- **Searchable member/team pickers.** Both team-selection surfaces (invite form,
+  member editor) become searchable multi-select pickers matching the assignee
+  picker's modal and keyboard contract.
+- **e2e suite green without waivers.** The 56-02 drift fully repaired; the full
+  suite passes with zero `test.skip`/`test.fixme` debt waivers.
+- **Mobile follow-ups.** Tasks-table columns-button truncation fixed on phone,
+  plus a phone-viewport sweep of dashboard/members/governance.
+- **Operator docs.** DEPLOY.md documents Entra group mapping: claim prerequisites,
+  overage behavior, dead-mapping runbook, old-slug 404 policy.
+
+## [3.1.0] — 2026-11-20 — Workspace Governance
+
+2 phases (78–79). Highlights:
+
+- **Workspace creation gate.** `WORKSPACE_CREATION=true|false` (unset = false)
+  replaces the `ALLOW_SIGNUP` coupling; only instance admins create workspaces,
+  and non-operators see an "await access" page that auto-polls.
+- **Instance-owner console.** Operator promote/demote with the last-operator
+  guard (demoting the final owner is refused).
+- **Governance surface.** Operator-scoped all-workspaces listing — archive and
+  delete with member reassignment; no shadow workspaces.
+
+## [3.0.0] — 2026-11-19 — Access Control & Hardening
+
+3 phases (75–77). Highlights:
+
+- **Email-domain admission doors.** `ALLOW_SIGNUP_DOMAINS` /
+  `ALLOW_INVITE_DOMAINS` exact-domain allowlists (never suffix matching) with
+  fail-closed accept-time re-validation, existing-account immunity, and 5-locale
+  keyed refusals.
+- **OIDC/SSO doors & immunity.** JIT SSO gate, SSO invite reconciliation,
+  existing-account immunity contract tests, boot door-matrix log.
+- **Maintenance debt.** Lint cleanup, nl/de/es refusal-path locale spot-check,
+  review carryover dispositions.
+
 ## [2.6.0] — 2026-11-18 — Exports Verification & Subtask Exports
 
 3 phases (69–71), 9 plans. Highlights:
