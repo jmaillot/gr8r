@@ -27,6 +27,12 @@ test('operator rename with valid {name, slug} → 200, workspace payload, DB row
     const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
     const { ws } = await plainWorkspace(server.base, 'Old Name Co', 'old-name-co');
 
+    /* IN-01 (D-10): the rename UPDATE stamps updated_at = now() — integer
+       epoch (server.js :7760 convention), never left at the creation-time
+       value. Baseline read from the pre-rename row (old slug). */
+    const before = wsRow(server, 'old-name-co');
+    assert.ok(before, 'pre-rename row present');
+
     const res = await operator.post(`/api/auth/operator/workspaces/${ws.id}/rename`, { name: 'New Name Co', slug: 'new-name-co' });
     assert.equal(res.status, 200, `expected 200, got ${res.status}: ${JSON.stringify(res.data)}`);
     assert.deepEqual(res.data.workspace, { id: ws.id, slug: 'new-name-co', name: 'New Name Co' });
@@ -35,6 +41,9 @@ test('operator rename with valid {name, slug} → 200, workspace payload, DB row
     assert.ok(row, 'the DB row carries the new slug');
     assert.equal(row.name, 'New Name Co');
     assert.ok(!wsRow(server, 'old-name-co'), 'the old slug row is gone');
+    assert.ok(Number.isInteger(row.updated_at), `updated_at is an integer epoch: ${row.updated_at}`);
+    assert.ok(row.updated_at >= before.updated_at, `rename stamps updated_at (${row.updated_at} >= ${before.updated_at})`);
+    assert.ok(row.updated_at > 0, 'updated_at is a positive epoch');
   } finally {
     await server.stop();
   }

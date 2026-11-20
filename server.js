@@ -7180,7 +7180,7 @@ async function handleApi(req, res, url) {
     if (next !== ws.slug && (await wsBySlug(next))) {
       return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: await uniqueSlug(next, ws.id) });
     }
-    await db.run('update workspaces set name = ?, slug = ? where id = ?', [name, next, ws.id]);
+    await db.run('update workspaces set name = ?, slug = ?, updated_at = ? where id = ?', [name, next, now(), ws.id]);
     // D-06: logInfo only — NO audit_log row (the `workspace deleted
     // (governance)` precedent). Old→new slug visible per the convention.
     logInfo(`workspace renamed "${ws.name}" (${ws.slug}) → "${name}" (${next}) (governance) by ${operator.email}`);
