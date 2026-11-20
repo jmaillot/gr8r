@@ -319,6 +319,51 @@ test('standalone release: member with no other workspace ends with an empty work
   }
 });
 
+/* WR-02: the server is the control (D-11) — an archived destination is refused
+   even though the GET-members targets payload already excludes it. */
+test('reassign into an ARCHIVED destination workspace → 409 targetArchived, no mutation (delete-path dispositions too)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const { owner, ws } = await plainWorkspace(server.base, 'Mover Co', 'mover-co');
+    const joined = await signup(server.base, { name: 'Mover', email: 'mover@test.local' });
+    const invite = await owner.post(`/api/workspaces/${ws.slug}/invites`, { emails: ['mover@test.local'], role: 'member' });
+    assert.equal(invite.status, 201);
+    await joined.client.post(`/api/invites/${invite.data.invites[0].url.split('/join/')[1]}/accept`, {
+      name: 'Mover', email: 'mover@test.local', password: 'password-1234',
+    });
+    const { ws: shelved } = await plainWorkspace(server.base, 'Shelved Co', 'shelved-co');
+    const arch = await operator.post(`/api/auth/operator/workspaces/${shelved.id}/archive`);
+    assert.equal(arch.status, 200);
+    const moverId = userRow(server, 'mover@test.local').id;
+
+    // standalone reassign path
+    const res = await operator.post(`/api/auth/operator/workspaces/${ws.id}/members/${moverId}/reassign`, {
+      targetWorkspaceId: shelved.id, role: 'member',
+    });
+    assert.equal(res.status, 409, `expected 409, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'targetArchived');
+    assert.ok(membershipsOfWs(server, ws.id).some(m => m.user_id === moverId), 'the membership stayed put');
+    assert.equal(membershipsOfWs(server, shelved.id).some(m => m.user_id === moverId), false, 'no membership landed in the archived ws');
+
+    // delete-path disposition reassign hits the same refusal (both members disposed)
+    const ownerId = userRow(server, 'mover-co-owner@test.local').id;
+    const del = await operator.post(`/api/auth/operator/workspaces/${ws.id}/delete`, {
+      confirmSlug: 'mover-co',
+      dispositions: [
+        { userId: moverId, type: 'reassign', targetWorkspaceId: shelved.id, role: 'member' },
+        { userId: ownerId, type: 'release' },
+      ],
+    });
+    assert.equal(del.status, 409);
+    assert.equal(del.data.code, 'targetArchived');
+    assert.ok(wsRow(server, 'mover-co'), 'the workspace is intact');
+    assert.ok(membershipsOfWs(server, ws.id).some(m => m.user_id === moverId), 'the membership is intact');
+  } finally {
+    await server.stop();
+  }
+});
+
 test('standalone reassign to a target where the member already holds a membership → 409 memberAlreadyMember, no mutation', async () => {
   const server = await startServer({});
   try {

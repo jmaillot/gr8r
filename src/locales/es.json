@@ -1777,6 +1777,7 @@
   "err.workspaceArchived": "Este espacio de trabajo está archivado. Contacta con el operador de la instancia para restaurarlo.",
   "err.workspaceNotEmpty": "Este espacio de trabajo tiene proyectos y no se puede eliminar. Archívalo en su lugar.",
   "err.dispositionRequired": "Cada miembro necesita un destino o una liberación antes de eliminar.",
+  "err.targetArchived": "El espacio de trabajo de destino está archivado. Elige un destino activo.",
   "err.memberAlreadyMember": "Ese miembro ya está en el espacio de trabajo de destino. Elige otro destino.",
   "err.invalidRole": "El rol debe ser owner, admin o member.",
   "err.invalidBody": "Cuerpo de solicitud no válido.",

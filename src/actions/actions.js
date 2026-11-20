@@ -4645,7 +4645,7 @@ const govWsById = id => (S.ui.govWs || []).find(w => w.id === id);
 const govRefusalToast = res => {
   if (res.status === 401) return; // D-28: the central intercept owns the teardown
   const code = res.data?.code;
-  const keyed = ['workspaceNotEmpty', 'dispositionRequired', 'memberAlreadyMember'].includes(code);
+  const keyed = ['workspaceNotEmpty', 'dispositionRequired', 'memberAlreadyMember', 'targetArchived'].includes(code);
   return toast(keyed ? t('err.' + code) : tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
 };
 A.govArchiveAsk = el => {

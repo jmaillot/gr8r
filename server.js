@@ -6960,8 +6960,12 @@ async function handleApi(req, res, url) {
       if (d.type === 'reassign') {
         const role = String(d.role || '');
         if (!GOV_ROLES.includes(role)) return fail(res, 400, 'invalidRole', 'Role must be owner, admin or member');
-        const target = await db.get('select id, name, slug from workspaces where id = ?', [String(d.targetWorkspaceId || '')]);
+        const target = await db.get('select id, name, slug, archived from workspaces where id = ?', [String(d.targetWorkspaceId || '')]);
         if (!target) return fail(res, 404, 'notFound', 'Reassign target workspace not found');
+        // WR-02: an archived destination lands the member somewhere requireWorkspace
+        // refuses — worse than release (the documented await-access state). The
+        // server is the control (D-11): refuse regardless of what the client offers.
+        if (target.archived) return fail(res, 409, 'targetArchived', 'The destination workspace is archived. Pick an active destination.');
         const dup = await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [target.id, m.user_id]);
         if (dup) return fail(res, 409, 'memberAlreadyMember', 'That member is already a member of the destination workspace. Pick another destination.');
         planned.push({ type: 'reassign', userId: m.user_id, targetId: target.id, targetName: target.name, targetSlug: target.slug, role });
@@ -7069,8 +7073,10 @@ async function handleApi(req, res, url) {
     const body = await readJson(req);
     const role = String(body?.role || '');
     if (!['owner', 'admin', 'member'].includes(role)) return fail(res, 400, 'invalidRole', 'Role must be owner, admin or member');
-    const target = await db.get('select id, name, slug from workspaces where id = ?', [String(body?.targetWorkspaceId || '')]);
+    const target = await db.get('select id, name, slug, archived from workspaces where id = ?', [String(body?.targetWorkspaceId || '')]);
     if (!target) return fail(res, 404, 'notFound', 'Reassign target workspace not found');
+    // WR-02: same archived-destination refusal as the delete-path dispositions.
+    if (target.archived) return fail(res, 409, 'targetArchived', 'The destination workspace is archived. Pick an active destination.');
     // Pitfall 6: the memberships PK is (workspace_id,user_id) — refuse before
     // any write instead of tripping the UNIQUE constraint.
     const dup = await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [target.id, targetUserId]);

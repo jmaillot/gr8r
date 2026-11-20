@@ -8,7 +8,7 @@
    (b) S.ui.govDispositions entries keyed by userId: {type:'reassign',wsId,role}|{type:'release'}
    (c) the modal Delete button is disabled while any member lacks a disposition
    (d) the dispositions array rides the operatorWsDelete request body
-   (e) workspaceNotEmpty / dispositionRequired / memberAlreadyMember → three DISTINCT keyed err toasts
+   (e) workspaceNotEmpty / dispositionRequired / memberAlreadyMember / targetArchived → DISTINCT keyed err toasts
    (f) confirmModal typeName exact-match gates the archive/delete OK (mixed-case slug does not enable it)
    (g) long names/emails ride .trunc — the .perm-t row layout never breaks
    (h) a non-operator deep link renders the 403 fullstate (lock + err.code403 + err.operatorOnly)
@@ -66,13 +66,13 @@ test('govOrphanSubmit sends the per-member dispositions array through operatorWs
   assert.match(api, /async operatorWsDelete\(id, dispositions\) \{\s*return call\('POST', `\/api\/auth\/operator\/workspaces\/\$\{encodeURIComponent\(id\)\}\/delete`, \{ dispositions \}\);/, 'the delete body does not carry dispositions');
 });
 
-/* (e) three refusals → three distinct keys */
-test('the three delete-path refusal codes map to three DISTINCT keyed err toasts (Pitfall 5)', () => {
+/* (e) four refusals → four distinct keys (WR-02 added targetArchived) */
+test('the delete-path refusal codes map to DISTINCT keyed err toasts (Pitfall 5)', () => {
   const a = actions();
   const m = a.match(/const keyed = \[([^\]]+)\]\.includes\(code\);/);
   assert.ok(m, 'the keyed refusal list is missing');
   const keys = m[1].split(',').map(s => s.trim().replace(/'/g, ''));
-  assert.deepEqual(keys.sort(), ['dispositionRequired', 'memberAlreadyMember', 'workspaceNotEmpty'], 'the keyed list is not the three refusal codes');
+  assert.deepEqual(keys.sort(), ['dispositionRequired', 'memberAlreadyMember', 'targetArchived', 'workspaceNotEmpty'], 'the keyed list is not the four refusal codes');
   assert.match(a, /t\('err\.' \+ code\)/, 'the keyed lookup is missing');
   for (const k of keys) {
     assert.ok(en[`err.${k}`] && fr[`err.${k}`] && nl[`err.${k}`] && de[`err.${k}`] && es[`err.${k}`], `err.${k} missing from a catalogue`);

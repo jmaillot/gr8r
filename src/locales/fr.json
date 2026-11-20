@@ -1777,6 +1777,7 @@
   "err.workspaceArchived": "Cet espace de travail est archivé. Contactez l’opérateur de l’instance pour le restaurer.",
   "err.workspaceNotEmpty": "Cet espace de travail contient des projets et ne peut pas être supprimé. Archivez-le plutôt.",
   "err.dispositionRequired": "Chaque membre doit recevoir une destination ou être libéré avant la suppression.",
+  "err.targetArchived": "L'espace de travail de destination est archivé. Choisissez une destination active.",
   "err.memberAlreadyMember": "Ce membre est déjà dans l'espace de travail de destination. Choisissez une autre destination.",
   "err.invalidRole": "Le rôle doit être owner, admin ou member.",
   "err.invalidBody": "Corps de requête invalide.",
