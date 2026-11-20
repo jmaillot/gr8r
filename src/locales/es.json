@@ -2056,9 +2056,6 @@
   "page.governance.confirmUnarchiveTitle": "¿Desarchivar {name}?",
   "page.governance.confirmUnarchiveBody": "Los miembros recuperan el acceso de inmediato.",
   "page.governance.okUnarchive": "Desarchivar",
-  "page.governance.confirmReleaseTitle": "¿Liberar a {name}?",
-  "page.governance.confirmReleaseBody": "{email} perderá el acceso a esta instancia si no tiene otro espacio de trabajo y llegará a la página de espera. Escribe {email} para confirmar.",
-  "page.governance.okRelease": "Liberar miembro",
   "page.governance.orphanTitle": "Resuelve {n} miembros de {name}",
   "page.governance.orphanBody": "Elige un destino para cada miembro antes de eliminar. Reasignar los traslada con el rol que elijas; liberar los quita de los espacios de trabajo de esta instancia.",
   "page.governance.reassign": "Reasignar",
@@ -2068,6 +2065,5 @@
   "page.governance.unresolvedHint": "Elige un destino o libera a este miembro.",
   "toast.governanceArchived": "Espacio de trabajo archivado.",
   "toast.governanceUnarchived": "Espacio de trabajo desarchivado.",
-  "toast.governanceDeleted": "Espacio de trabajo eliminado.",
-  "toast.governanceReleased": "{name} liberado."
+  "toast.governanceDeleted": "Espacio de trabajo eliminado."
 }

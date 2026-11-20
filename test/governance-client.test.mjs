@@ -87,9 +87,9 @@ test('confirmModal typeName exact-match gates archive/delete OK — mixed-case s
   assert.match(act, /A\.confirmOk = \(\) => \{\s*const m = S\.ui\.modals\[S\.ui\.modals\.length - 1\];\s*if \(m\.typeName && S\.ui\.confirmText !== m\.typeName\) return;/, 'the confirmOk exact-match guard moved');
   // no case-insensitive shortcut anywhere on the confirm path
   assert.doesNotMatch(modals + act, /confirmText[\s\S]{0,80}toLowerCase\(\)/, 'a case-insensitive confirm bypass exists');
-  // archive + delete asks carry the slug as typeName; release carries the email
+  // archive + delete asks carry the slug as typeName (IN-01: the standalone
+  // release ask was deleted — release rides the orphan dispositions path)
   assert.match(act, /typeName: ws\.slug,[\s\S]{0,200}?run: async \(\) => \{\s*const res = await api\.operatorWsArchive/ , 'archive ask misses the slug typeName');
-  assert.match(act, /typeName: email/, 'release ask misses the email typeName');
 });
 
 /* (g) long-text backstop: the row keeps .trunc on name/slug/creator cells */

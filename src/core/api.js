@@ -378,12 +378,6 @@ export const api = {
   async operatorWsDelete(id, dispositions) {
     return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/delete`, { dispositions });
   },
-  async operatorWsReassign(id, userId, targetWorkspaceId, role) {
-    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/reassign`, { targetWorkspaceId, role });
-  },
-  async operatorWsRelease(id, userId) {
-    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/release`);
-  },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.
      D-52-3: the caller refetches on every open; nothing is cached here. */

@@ -2120,9 +2120,6 @@
   "page.governance.confirmUnarchiveTitle": "Désarchiver {name} ?",
   "page.governance.confirmUnarchiveBody": "Les membres retrouvent l’accès immédiatement.",
   "page.governance.okUnarchive": "Désarchiver",
-  "page.governance.confirmReleaseTitle": "Libérer {name} ?",
-  "page.governance.confirmReleaseBody": "{email} perdra l’accès à cette instance s’il n’a aucun autre espace de travail et arrivera sur la page d’attente. Tapez {email} pour confirmer.",
-  "page.governance.okRelease": "Libérer le membre",
   "page.governance.orphanTitle": "Résoudre {n} membres de {name}",
   "page.governance.orphanBody": "Choisissez une destination pour chaque membre avant de supprimer. La réaffectation les déplace avec le rôle choisi ; la libération les retire des espaces de travail de cette instance.",
   "page.governance.reassign": "Réaffecter",
@@ -2132,6 +2129,5 @@
   "page.governance.unresolvedHint": "Choisissez une destination ou libérez ce membre.",
   "toast.governanceArchived": "Espace de travail archivé.",
   "toast.governanceUnarchived": "Espace de travail désarchivé.",
-  "toast.governanceDeleted": "Espace de travail supprimé.",
-  "toast.governanceReleased": "{name} libéré."
+  "toast.governanceDeleted": "Espace de travail supprimé."
 }

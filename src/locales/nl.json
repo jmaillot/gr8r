@@ -2056,9 +2056,6 @@
   "page.governance.confirmUnarchiveTitle": "{name} de-archiveren?",
   "page.governance.confirmUnarchiveBody": "Leden krijgen direct weer toegang.",
   "page.governance.okUnarchive": "De-archiveren",
-  "page.governance.confirmReleaseTitle": "{name} vrijgeven?",
-  "page.governance.confirmReleaseBody": "{email} verliest de toegang tot deze instantie als er geen andere workspace is en komt op de wachtpagina. Typ {email} om te bevestigen.",
-  "page.governance.okRelease": "Lid vrijgeven",
   "page.governance.orphanTitle": "Los {n} leden van {name} op",
   "page.governance.orphanBody": "Kies voor elk lid een bestemming voordat je verwijdert. Herplaatsing verplaatst hen met de rol die je kiest; vrijgave haalt hen uit de workspaces van deze instantie.",
   "page.governance.reassign": "Herplaatsen",
@@ -2068,6 +2065,5 @@
   "page.governance.unresolvedHint": "Kies een bestemming of geef dit lid vrij.",
   "toast.governanceArchived": "Workspace gearchiveerd.",
   "toast.governanceUnarchived": "Workspace gede-archiveerd.",
-  "toast.governanceDeleted": "Workspace verwijderd.",
-  "toast.governanceReleased": "{name} vrijgegeven."
+  "toast.governanceDeleted": "Workspace verwijderd."
 }

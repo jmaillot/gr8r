@@ -2057,9 +2057,6 @@
   "page.governance.confirmUnarchiveTitle": "Unarchive {name}?",
   "page.governance.confirmUnarchiveBody": "Members regain access immediately.",
   "page.governance.okUnarchive": "Unarchive",
-  "page.governance.confirmReleaseTitle": "Release {name}?",
-  "page.governance.confirmReleaseBody": "{email} will lose access to this instance if they have no other workspace and will land on the awaiting-access page. Type {email} to confirm.",
-  "page.governance.okRelease": "Release member",
   "page.governance.orphanTitle": "Resolve {n} members of {name}",
   "page.governance.orphanBody": "Choose a destination for each member before deleting. Reassignment moves them with the role you pick; release removes them from this instance's workspaces.",
   "page.governance.reassign": "Reassign",
@@ -2069,6 +2066,5 @@
   "page.governance.unresolvedHint": "Pick a destination or release this member.",
   "toast.governanceArchived": "Workspace archived.",
   "toast.governanceUnarchived": "Workspace unarchived.",
-  "toast.governanceDeleted": "Workspace deleted.",
-  "toast.governanceReleased": "{name} released."
+  "toast.governanceDeleted": "Workspace deleted."
 }

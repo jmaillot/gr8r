@@ -4782,23 +4782,3 @@ A.govOrphanSubmit = async () => {
   const dispositions = o.members.map(m => ({ userId: m.userId, ...S.ui.govDispositions[m.userId] }));
   await govDelete(o.ws.id, dispositions);
 };
-/* D-04: standalone member release — type-to-confirm with the member's EMAIL
-   as the identifier ("or equivalent identifier" per D-04). Consumed by the
-   operator-management surface landing in plan 03. */
-A.govReleaseAsk = el => {
-  const email = el.dataset.email || '';
-  confirmDlg({
-    title: t('page.governance.confirmReleaseTitle', { name: el.dataset.name || email }),
-    body: t('page.governance.confirmReleaseBody', { email: `<b>${esc(email)}</b>` }),
-    ok: t('page.governance.okRelease'),
-    icon: 'trash-2',
-    danger: true,
-    typeName: email,
-    run: async () => {
-      const res = await api.operatorWsRelease(el.dataset.id, el.dataset.uid);
-      if (!res.ok) return govRefusalToast(res);
-      await refreshGovernanceWorkspaces();
-      toast(t('toast.governanceReleased', { name: el.dataset.name || email }));
-    },
-  });
-};

@@ -2056,9 +2056,6 @@
   "page.governance.confirmUnarchiveTitle": "{name} dearchivieren?",
   "page.governance.confirmUnarchiveBody": "Mitglieder erhalten sofort wieder Zugriff.",
   "page.governance.okUnarchive": "Dearchivieren",
-  "page.governance.confirmReleaseTitle": "{name} entlassen?",
-  "page.governance.confirmReleaseBody": "{email} verliert den Zugriff auf diese Instanz, falls kein weiterer Workspace vorhanden ist, und landet auf der Warteseite. Tippe {email} zur Bestätigung.",
-  "page.governance.okRelease": "Mitglied entlassen",
   "page.governance.orphanTitle": "{n} Mitglieder von {name} auflösen",
   "page.governance.orphanBody": "Wähle für jedes Mitglied ein Ziel, bevor du löschst. Eine Zuweisung verschiebt es mit der von dir gewählten Rolle; eine Entlassung entfernt es aus den Workspaces dieser Instanz.",
   "page.governance.reassign": "Zuweisen",
@@ -2068,6 +2065,5 @@
   "page.governance.unresolvedHint": "Wähle ein Ziel oder entlasse dieses Mitglied.",
   "toast.governanceArchived": "Workspace archiviert.",
   "toast.governanceUnarchived": "Workspace dearchiviert.",
-  "toast.governanceDeleted": "Workspace gelöscht.",
-  "toast.governanceReleased": "{name} entlassen."
+  "toast.governanceDeleted": "Workspace gelöscht."
 }
