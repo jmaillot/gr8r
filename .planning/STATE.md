@@ -5,16 +5,16 @@ milestone_name: Entra Group Mapping & Governance Backlog
 current_phase: 81
 current_phase_name: Group Grant Path — Callback Wiring + Provenance
 status: planning
-stopped_at: Phase 81 context gathered
-last_updated: "2026-11-20T11:42:14.215Z"
+stopped_at: Phase 81 executed + verified (5/5 criteria MET)
+last_updated: "2026-11-20T12:37:18.095Z"
 last_activity: 2026-11-20
 last_activity_desc: Phase 80 complete, transitioned to Phase 81
-state_head: 555db0055630d04661d13fc02f344c10dbb98357
+state_head: e8ecbde6bfa0d5cd4f5d5a4c7afc0dc2ac5a8b03
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 4
   percent: 20
 ---
 
@@ -119,9 +119,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T11:42:14.173Z
-Stopped at: Phase 81 context gathered
-Resume file: .planning/phases/81-group-grant-path-callback-wiring-provenance/81-CONTEXT.md
+Last session: 2026-11-20T12:37:18.052Z
+Stopped at: Phase 81 executed + verified (5/5 criteria MET)
+Resume file: .planning/phases/81-group-grant-path-callback-wiring-provenance/81-VERIFICATION.md
 
 ## Operator Next Steps
 

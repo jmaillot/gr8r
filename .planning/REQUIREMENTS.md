@@ -25,15 +25,15 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 
 ### Group Mapping — Grant Path (GW)
 
-- [ ] **GW-01**: At SSO login, a user whose groups map to a workspace gains membership automatically (JIT-provisioned or existing account), with role = highest mapped role (D-82-1).
-- [ ] **GW-02**: Group-derived role re-asserts over an existing invite/manual grant at each login (D-82-2), while manual grants survive removal-sync (see GS-01 provenance).
-- [ ] **GW-03**: Group mapping runs strictly after the DP-4 signup door and before DP-5 invite reconciliation — group membership can never JIT-provision a domain-refused email.
-- [ ] **GW-04**: Membership rows created by groups carry provenance `group:<guid>` (new `memberships.provenance` column via `adapterEnsureColumn`); invite/manual rows carry their own provenance and are never touched by group logic.
+- [x] **GW-01**: At SSO login, a user whose groups map to a workspace gains membership automatically (JIT-provisioned or existing account), with role = highest mapped role (D-82-1).
+- [x] **GW-02**: Group-derived role re-asserts over an existing invite/manual grant at each login (D-82-2), while manual grants survive removal-sync (see GS-01 provenance).
+- [x] **GW-03**: Group mapping runs strictly after the DP-4 signup door and before DP-5 invite reconciliation — group membership can never JIT-provision a domain-refused email.
+- [x] **GW-04**: Membership rows created by groups carry provenance `group:<guid>` (new `memberships.provenance` column via `adapterEnsureColumn`); invite/manual rows carry their own provenance and are never touched by group logic.
 
 ### Group Mapping — Operator Mapping (GO)
 
-- [ ] **GO-01**: Members of an Entra group mapped to operator are granted `is_instance_admin` at login; groups grant the flag, never revoke it (demoted-then-mapped users are re-granted at next login, D-82-3).
-- [ ] **GO-02**: Group-derived operator grants are audit-logged like console promote/demote actions.
+- [x] **GO-01**: Members of an Entra group mapped to operator are granted `is_instance_admin` at login; groups grant the flag, never revoke it (demoted-then-mapped users are re-granted at next login, D-82-3).
+- [x] **GO-02**: Group-derived operator grants are audit-logged like console promote/demote actions.
 
 ### Group Mapping — Removal Sync (GS)
 
@@ -75,12 +75,12 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | GM-01 | Phase 80 | Complete (storage/validation half; editor UI in Phase 83) |
 | GM-02 | Phase 80 | Complete |
 | GM-03 | Phase 80 | Complete |
-| GW-01 | Phase 81 | Pending |
-| GW-02 | Phase 81 | Pending |
-| GW-03 | Phase 81 | Pending |
-| GW-04 | Phase 81 | Pending |
-| GO-01 | Phase 81 | Pending |
-| GO-02 | Phase 81 | Pending |
+| GW-01 | Phase 81 | Complete |
+| GW-02 | Phase 81 | Complete |
+| GW-03 | Phase 81 | Complete |
+| GW-04 | Phase 81 | Complete |
+| GO-01 | Phase 81 | Complete |
+| GO-02 | Phase 81 | Complete |
 | GS-01 | Phase 82 | Pending |
 | GS-02 | Phase 82 | Pending |
 | GS-03 | Phase 82 | Pending |

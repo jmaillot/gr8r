@@ -13,7 +13,7 @@
 ## Phases
 
 - [x] **Phase 80: Group Mapping Core — Parser, Resolver, Overage Detection** - Inert `groups.js` module: tri-state env parse of mapping config, GUID-keyed validation, overage detector (2026-11-20)
-- [ ] **Phase 81: Group Grant Path — Callback Wiring + Provenance** - Groups grant workspace membership and operator rights at SSO login (grants only, no removals)
+- [x] **Phase 81: Group Grant Path — Callback Wiring + Provenance** - Groups grant workspace membership and operator rights at SSO login (grants only, no removals)
 - [ ] **Phase 82: Removal Sync + Guards + Audit** - Removed-from-group users lose only group-derived grants at login, through the shared guard funnel
 - [ ] **Phase 83: Governance — Workspace Rename & Slug Edit** - Operator edits workspace name/slug from /governance, with dead-mapping warnings
 - [ ] **Phase 84: Backlog Polish & Ship** - Token-chip pickers, e2e debt, mobile follow-ups, DEPLOY.md, version bump
