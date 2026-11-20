@@ -5256,7 +5256,7 @@ async function handleApi(req, res, url) {
         if (claimState.reason === 'overage') logWarn('sso groups claim overage — treating as unmapped');
       } else {
         const mappings = await db.all('select group_guid, workspace_id, role, kind from group_mappings');
-        const { grants } = resolve(claimState.groups, mappings);
+        const { grants, operatorFlag } = resolve(claimState.groups, mappings);
         /* D-81-3: viewer ranks 0 — ANY mapped role upgrades a viewer row. This
            map is callback-local ON PURPOSE: groups.js ROLE_RANK is test-locked
            Phase 80 surface and mappings can never map TO viewer (PATTERNS
@@ -5282,6 +5282,25 @@ async function handleApi(req, res, url) {
              a skip logs nothing. Provenance keeps the row's ORIGINAL creation
              origin (D-81-7 — the conflict-update never touches it). */
           await logSecurity(row.id, existing ? 'sso_group_role_change' : 'sso_group_grant');
+        }
+        /* Phase 81 (GO-01/GO-02, D-81-4): operator self-grant — mirror the console
+           promote tx EXACTLY (:6879–6898 shape) with actor = target = the granted
+           user (self-grant) and the audit row in the SAME db.tx (AUD-01: a forced
+           audit failure rolls back the promotion — never a write un-logged). The
+           console route's lastOperator count guard is structurally unreachable
+           here: a grant only INCREASES the operator count, so the guard would
+           never fire — deliberately not duplicated. D-82-3 re-grant is automatic:
+           a demoted user's next login flips 0→1, which IS a change (audit row);
+           already-operator + operator-mapping match = no write, no audit
+           (D-81-5 changes-only). */
+        if (operatorFlag && row.is_instance_admin !== 1) {
+          await db.tx(async () => {
+            await db.run('update users set is_instance_admin = ? where id = ?', [1, row.id]);
+            await db.run(
+              'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+              [uid(), row.id, row.id, 'operator_promoted', 0, clientIp(req), null, row.name, row.email, row.name, row.email, now()],
+            );
+          });
         }
       }
 

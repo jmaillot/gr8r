@@ -152,6 +152,75 @@ test('empty/absent groups claim and zero mappings write nothing — login procee
   }
 });
 
+/* Phase 81 Task 2 (GO-01/GO-02, D-81-4/D-81-5): operator self-grant — the flag
+   flip and the operator_promoted audit row share ONE db.tx (actor = target =
+   the granted user); already-operator re-login writes nothing; a demoted
+   operator's next login re-grants with a fresh audit row (D-82-3). */
+test('operator-mapped login grants is_instance_admin atomically with an audit row; re-login no-op; re-grant after demotion (GO-01/GO-02/D-82-3)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => seedMapping(db, { guid: '81111111-2222-3333-4444-555555555555', workspaceId: 'ws-none', role: 'member', kind: 'operator' }));
+    const claims = { sub: 'sub-op', email: 'operator@example.com', email_verified: true, groups: ['81111111-2222-3333-4444-555555555555'] };
+    // Login 1 — flag flip + exactly one audit row.
+    const first = await runFlow(server, claims, 'code-op-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select * from users where email = ?').get('operator@example.com');
+      assert.equal(user.is_instance_admin, 1, 'the operator mapping flipped the flag');
+      const audits = db.prepare("select * from audit_log where action = 'operator_promoted'").all();
+      assert.equal(audits.length, 1, 'exactly one audit row');
+      assert.equal(audits[0].actor_id, user.id, 'actor = the granted user (self-grant)');
+      assert.equal(audits[0].target_id, user.id, 'target = the granted user');
+      assert.ok(audits[0].ip, 'ip captured from the request');
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(user.id).n, 0, 'operator-kind mapping grants no workspace membership');
+    });
+    // Login 2 — already-operator: no write, no audit (D-81-5).
+    const second = await runFlow(server, claims, 'code-op-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('operator@example.com').id;
+      assert.equal(db.prepare("select count(*) as n from audit_log where action = 'operator_promoted'").get().n, 1, 're-login added ZERO audit rows');
+      assert.equal(db.prepare('select is_instance_admin as f from users where id = ?').get(uid).f, 1);
+    });
+    // Demote, then login → re-granted with a fresh audit row (D-82-3).
+    withDb(server.dbPath, db => db.prepare('update users set is_instance_admin = 0 where email = ?').run('operator@example.com'));
+    const third = await runFlow(server, claims, 'code-op-3');
+    assert.equal(third.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const user = db.prepare('select * from users where email = ?').get('operator@example.com');
+      assert.equal(user.is_instance_admin, 1, 're-grant after demotion');
+      const audits = db.prepare("select * from audit_log where action = 'operator_promoted'").all();
+      assert.equal(audits.length, 2, 'the re-grant IS a change → one new audit row');
+      assert.ok(audits.every(a => a.target_id === user.id));
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+test('already-operator with operator mapping logs in with zero writes (D-81-5 binding consequence)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => seedMapping(db, { guid: '81111111-2222-3333-4444-555555555555', workspaceId: 'ws-none', role: 'member', kind: 'operator' }));
+    const claims = { sub: 'sub-op-pre', email: 'preop@example.com', email_verified: true, groups: ['81111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-preop-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('preop@example.com').id;
+      assert.equal(db.prepare("select count(*) as n from audit_log where action = 'operator_promoted'").get().n, 1, 'login 1 granted + audited');
+      return uid;
+    });
+    const second = await runFlow(server, claims, 'code-preop-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('preop@example.com').id;
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ?").get(uid).n, 1, 'already-operator login wrote nothing (changes-only)');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ------------------------------ tests ------------------------------ */
 
 /* Phase 81 Task 1 (D-81-2/D-81-3/D-81-5): upgrade-only re-assert. A viewer row
