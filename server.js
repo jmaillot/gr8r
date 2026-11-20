@@ -4657,9 +4657,18 @@ async function addMembership(ws, user, role, teams = [], provenance = null) {
      and cleared the columns, so new rows are written with a NULL scope and
      legacy coalescing is gone. */
   await db.tx(async () => {
+    /* Phase 82 (D-82-7, amends D-81-7): provenance follows role for GROUP
+       writers — a group-shaped excluded value owns the role it set, so the
+       row's provenance flips to `group:<guid>` and becomes the removal/
+       downgrade selection key (GS-01/GS-03). The conditional is REQUIRED:
+       a literal `provenance = excluded.provenance` would let the DP-5
+       invite auto-accept (provenance 'invite') clobber group provenance —
+       Pin C (test/groups-sso.test.mjs:105). Manual/invite writers keep
+       preserving creation origin. */
     await db.run(
       `insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values (?,?,?,?,?,null,?)
-       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
+       on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id,
+         provenance = case when excluded.provenance like 'group:%' then excluded.provenance else memberships.provenance end`,
       [ws.id, user.id, role, memberId, null, provenance],
     );
     /* TEAM-01: the teams picked at invite time land in the authority rows too —

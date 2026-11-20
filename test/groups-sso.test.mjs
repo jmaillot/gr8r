@@ -371,6 +371,39 @@ test('grant-path throw lands on /login?sso=error with no session and no partial 
 
 /* ------------------------------ tests ------------------------------ */
 
+/* Phase 82 Task 3 (SC5 / D-82-4): an overage login removes NOTHING and grants
+   NOTHING — the whole reconcile lives inside the mapped else-branch, so a
+   pre-seeded (claim-granted) group-derived row SURVIVES the overage login
+   byte-identically, with the fixed overage warn and zero delta audit rows. */
+test('overage login removes nothing and grants nothing — group row survives (SC5/D-82-4)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-sc5', slug: 'sc5ws', name: 'SC5 WS' });
+      seedMapping(db, { guid: '52111111-2222-3333-4444-555555555555', workspaceId: 'ws-sc5', role: 'member' });
+    });
+    // Login 1 — mapped claim grants the group-derived row.
+    const first = await runFlow(server, { sub: 'sub-sc5', email: 'sc5@example.com', email_verified: true, groups: ['52111111-2222-3333-4444-555555555555'] }, 'code-sc5-1');
+    assert.equal(first.callback.location, '/');
+    // Login 2 — _claim_names overage: treated as unmapped, whole pass skipped.
+    const second = await runFlow(server, { sub: 'sub-sc5', email: 'sc5@example.com', email_verified: true, _claim_names: { groups: 'src1' } }, 'code-sc5-2');
+    assert.equal(second.callback.location, '/', 'overage login proceeds as unmapped');
+    const out = server.output();
+    assert.ok(out.includes('sso groups claim overage — treating as unmapped'), 'the fixed overage warn is present');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sc5@example.com').id;
+      const row = db.prepare('select * from memberships where workspace_id = ?').get('ws-sc5');
+      assert.ok(row, 'the group-derived row SURVIVES the overage login');
+      assert.equal(row.role, 'member', 'role untouched by the overage login');
+      assert.equal(row.provenance, 'group:52111111-2222-3333-4444-555555555555', 'provenance untouched');
+      assert.equal(db.prepare('select count(*) as n from audit_log where actor_id = ?').get(uid).n, 0, 'zero delta audit rows for the overage login');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 1, 'no new group verbs after login 1');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* Phase 82 Task 2 (GS-02, D-82-8): sole-owner removal is refused
    count-before-write — the row survives INTACT, the login still succeeds and
    mints a session (skip-and-audit), ONE loud fixed logWarn with no GUID/email
@@ -460,12 +493,12 @@ test('lost-claim login removes ONLY the group:<guid> row — manual rows immune 
   }
 });
 
-/* Phase 81 Task 1 (D-81-2/D-81-3/D-81-5): upgrade-only re-assert. A viewer row
-   (provenance invite, seeded through the real DP-5 auto-accept on an unmapped
-   first login) is upgraded to the mapped member role on the second login —
-   provenance keeps its ORIGINAL invite origin (D-81-7), and the verb is
-   sso_group_role_change, not sso_group_grant. */
-test('viewer row is upgraded to the mapped role — provenance origin preserved, role_change verb (D-81-2/D-81-3/D-81-7)', async () => {
+/* Phase 81 Task 1 (D-81-2/D-81-3/D-81-5), updated by Phase 82 D-82-7: upgrade-
+   only re-assert. A viewer row (provenance invite, seeded directly) is upgraded
+   to the mapped member role on the second login — a GROUP writer owns the role
+   it sets, so provenance FLIPS to group:<guid> (D-82-7 amends D-81-7), and the
+   verb is sso_group_role_change, not sso_group_grant. */
+test('viewer row is upgraded to the mapped role — group writer flips provenance to group:<guid> (D-81-2/D-81-3, D-82-7)', async () => {
   const server = await startServer({ env: oidcEnv() });
   try {
     withDb(server.dbPath, db => seedWorkspace(db, { id: 'ws-viewer-up', slug: 'viewerup', name: 'Viewer Up WS' }));
@@ -487,7 +520,7 @@ test('viewer row is upgraded to the mapped role — provenance origin preserved,
       const uid = db.prepare('select id from users where email = ?').get('viewer-up@example.com').id;
       const row = db.prepare('select * from memberships where user_id = ?').get(uid);
       assert.equal(row.role, 'member', 'the viewer row was upgraded to the mapped role');
-      assert.equal(row.provenance, 'invite', 'provenance keeps the ORIGINAL creation origin (D-81-7 — conflict-update never touches it)');
+      assert.equal(row.provenance, 'group:21111111-2222-3333-4444-555555555555', 'the GROUP writer owns the role it set — provenance flips to group:<guid> (D-82-7)');
       const verbs = db.prepare("select verb from security_log where user_id = ? and verb like 'sso_group%'").all(uid).map(r => r.verb);
       assert.deepEqual(verbs.sort(), ['sso_group_role_change'], 'exactly one role_change verb (login 2 — login 1 was unmapped, no group verbs)');
     });
