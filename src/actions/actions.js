@@ -4691,8 +4691,20 @@ A.govDeleteAsk = el => {
   if (ws.memberCount > 0) {
     S.ui.govOrphan = { ws, members: null, targets: null };
     S.ui.govDispositions = {};
-    openModal({ type: 'govOrphan' });
-    refreshGovOrphanMembers(ws.id);
+    /* Chunk-backed like the assignee picker (66-03 precedent): the orphan
+       body renderer lives in the lazy governance page module — preloaded
+       before the modal opens so the generic 'custom' host renders the real
+       body, never a stranded stub (the members fetch refreshes in behind). */
+    import('../pages/governance.js')
+      .then(m => {
+        openModal({ type: 'custom', cls: 'sm', render: () => m.govOrphanBody(S.ui.govOrphan) });
+        refreshGovOrphanMembers(ws.id);
+      })
+      .catch(e => {
+        console.error(e);
+        S.ui.govOrphan = null;
+        toast(t('err.serverUnreachable'), { kind: 'err' });
+      });
     return;
   }
   confirmDlg({

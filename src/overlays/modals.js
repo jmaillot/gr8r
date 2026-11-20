@@ -61,6 +61,11 @@ export function modalHtml(m) {
       return wrap('sm', S.ui.apMod ? S.ui.apMod.assigneePickModal(m, H) : `${H(t('act.assignTo'))}${lazyStub()}`);
     case 'confirm':
       return wrap('sm', confirmModal(m, H));
+    /* 79-02: ONE generic host for chunk-built modal bodies — the opener
+       supplies its own render(m) closure (lazily imported). Additive and
+       generic: no page-specific branch ever lands in this switch. */
+    case 'custom':
+      return wrap(m.cls || 'sm', (typeof m.render === 'function' ? m.render(m) : '') || lazyStub());
     case 'recovery':
       /* D-53/T-16-10: the one-time recovery-codes modal. The codes live ONLY
          in the transient S.ui.recoveryCodes render state — cleared by
