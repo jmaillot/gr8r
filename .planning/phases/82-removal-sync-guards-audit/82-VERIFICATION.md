@@ -4,13 +4,13 @@ verified: 2026-11-20T13:48:26Z
 status: passed
 score: 5/5 must-haves verified
 covered_files:
-  - server.js
-  - test/groups-sso.test.mjs
   - .planning/phases/82-removal-sync-guards-audit/82-01-PLAN.md
   - .planning/phases/82-removal-sync-guards-audit/82-01-SUMMARY.md
   - .planning/phases/82-removal-sync-guards-audit/82-02-PLAN.md
   - .planning/phases/82-removal-sync-guards-audit/82-02-SUMMARY.md
-covered_digest: "v2:sha256:ffe3a9d17ea7c1390cca05b84535c59e94028cfdf57553ca8ccd6c7a5fe8e216"
+  - server.js
+  - test/groups-sso.test.mjs
+covered_digest: "v2:sha256:a608a5c3fb67137b8395e09add239e18ac15650358d45341e4d9757de43cd8b9"
 behavior_unverified: 0
 overrides_applied: 0
 gaps: []
