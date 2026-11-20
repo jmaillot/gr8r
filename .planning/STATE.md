@@ -5,16 +5,16 @@ milestone_name: Entra Group Mapping & Governance Backlog
 current_phase: 82
 current_phase_name: Removal Sync + Guards + Audit
 status: executing
-stopped_at: Phase 82 plan 01 complete (SUMMARY written)
-last_updated: "2026-11-20T14:20:00.000Z"
+stopped_at: Phase 82 plan 02 complete (SUMMARY written)
+last_updated: "2026-11-20T14:45:00.000Z"
 last_activity: 2026-11-20
-last_activity_desc: Phase 82 execution started
-state_head: c9cc398bba72edbf6cd5c3a3f995fb10fd791c04
+last_activity_desc: Phase 82 execution complete
+state_head: 062c210fdc7886417cbd495fe2a9ea2db8052e13
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 20
 ---
 
@@ -31,9 +31,9 @@ before features.
 ## Current Position
 
 Phase: 82 (Removal Sync + Guards + Audit) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 82
-Last activity: 2026-11-20 — Phase 82 plan 01 executed (3 tasks, 3 commits)
+Plan: 2 of 2
+Status: Phase 82 execution complete
+Last activity: 2026-11-20 — Phase 82 plan 02 executed (3 tasks, 3 commits)
 
 Progress: [██░░░░░░░░] 20%
 
@@ -62,7 +62,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 |-------|-------|-------|----------|
 | 80 | 2 | - | - |
 | 81 | 0 | - | - |
-| 82 | 1 | - | - |
+| 82 | 2 | - | - |
 | 83 | 0 | - | - |
 | 84 | 0 | - | - |
 
@@ -73,6 +73,8 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 |------|----------|-------|-------|
 | Phase 80 P01 | 8 min | 3 tasks | 5 files |
 | Phase 80 P02 | 6 min | 3 tasks | 10 files |
+| Phase 82 P01 | ~35 min | 3 tasks | 2 files |
+| Phase 82 P02 | ~40 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -97,6 +99,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
 - [Phase 80, 80-02]: Boot group-mappings line is D-11 vocabulary (zero rows → exactly one off-line, no dead-mapping query); save route audits via logSecurity('group_mapping_saved') now to avoid the Phase 83 retrofit
 - [Phase 82, 82-01]: GS-02 sole-owner e2e uses groups: [] (genuinely-empty = reconcile-bearing shape) — a missing groups key skips the whole else-branch and never reaches the guard
 - [Phase 82, 82-01]: guardRefuse(wsId, guid, delta) is the shared owner-guard funnel — Plan 02's owner-downgrade arm must route through it, not fork a second guard
+- [Phase 82, 82-02]: downgrade writes go through addMembership so the D-82-7 conditional clause re-stamps the DRIVING group's provenance (role-source semantics)
+- [Phase 82, 82-02]: delta audit rows use their OWN db.tx — addMembership owns an internal tx and db.tx does not nest (no savepoints)
+- [Phase 82, 82-02]: D-82-11 uniform trail live — zero sso_group% security verbs remain; grant-side skips carry dead-workspace/archived-workspace reasons, removal-side dead-workspace stays vocabulary-only (FK cascade)
 
 ### Pending Todos
 
@@ -121,9 +126,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T13:07:29.963Z
-Stopped at: Completed 82-01-PLAN.md — reconcile + guard funnel + conditional provenance shipped (2005 pass / 0 fail)
-Resume file: .planning/phases/82-removal-sync-guards-audit/82-02-PLAN.md
+Last session: 2026-11-20T13:50:00.000Z
+Stopped at: Completed 82-02-PLAN.md — downgrade cells + uniform delta trail + byte-identical gate shipped (2009 pass / 0 fail / 13 pg-skips)
+Resume file: None — Phase 82 plans all complete; verify next (/gsd-verify-work)
 
 ## Operator Next Steps
 
